@@ -27,6 +27,7 @@ server-*.php
 !/boot/@interfaces
 !/boot/@traits
 !/boot/__array
+!/boot/__class
 !/boot/__iterable
 !/boot/__string
 !/boot/debugger
