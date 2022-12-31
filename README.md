@@ -19,9 +19,8 @@ _ | _ | [Response (WIP)](/nodes/Web/HTTP/Server/Response.php) | _
 
 ## Requirements
 
-PHP 8.2+
-
-Apache Rewrite compatibility in Non-CLI Web Servers
+- PHP 8.2+
+- Apache Rewrite compatibility in Non-CLI Web Servers
 
 ## Usage
 
