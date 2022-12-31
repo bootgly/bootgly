@@ -1,0 +1,11 @@
+<?php
+namespace Bootgly\Web;
+
+
+use Bootgly\Debugger;
+
+
+$Server = $this->Server = new \Bootgly\Web\HTTP\Server($this);
+$Request = $this->Request = &$this->Server->Request;
+$Response = $this->Response = &$this->Server->Response;
+$Router = $this->Router = &$this->Server->Router;

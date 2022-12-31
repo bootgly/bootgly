@@ -1,0 +1,42 @@
+{
+    "name": "bootgly/bootgly-php-framework",
+    "type": "project",
+    "description": "The Bootgly PHP Framework.",
+    "keywords": ["bootgly", "php", "framework"],
+    "license": "MIT",
+    "authors":[
+        {
+            "name":"Rodrigo Vieira",
+            "email":"rodrigo@bootgly.org",
+            "homepage":"https://www.bootgly.org/"
+        }
+    ],
+    "config": {
+        "vendor-dir": "./@/imports/"
+    },
+
+    "require": {
+        "php": "^8.0",
+
+        "firebase/php-jwt": "^6.3",
+        "guzzlehttp/guzzle": "^7.2",
+
+        "doctrine/orm": "^2.11.0",
+        "doctrine/dbal": "^3.2",
+        "doctrine/annotations": "^1.13.2",
+
+        "symfony/yaml": "^5.4",
+        "symfony/cache": "^5.4",
+        "workerman/workerman": "^4.1",
+        "react/event-loop": "^1.3",
+        "react/http": "^1.8"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^9"
+    },
+    "autoload": {
+        "psr-4": {
+            "Bootgly\\Examples\\Doctrine\\": "projects/@bootgly/examples/app-doctrine/"
+        }
+    }
+}

@@ -1,0 +1,12 @@
+* text=auto
+
+*.template.php diff=html
+*.css diff=css
+*.html diff=html
+*.md diff=markdown
+*.php diff=php
+
+*.template.php linguist-language=html
+
+/.github export-ignore
+CHANGELOG.md export-ignore

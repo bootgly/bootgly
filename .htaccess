@@ -1,0 +1,23 @@
+<IfModule mod_rewrite.c>
+    <IfModule mod_negotiation.c>
+        Options -MultiViews -Indexes
+    </IfModule>
+
+   RewriteEngine On
+
+   RewriteBase /
+
+   ### OpenLiteSpeed: add this rule below in Virtual Host -> Rewrite -> Rewrite Rules
+   #RewriteCond %{REQUEST_URI} ^/(projects|public|workspace) [NC]
+   #RewriteRule .* - [F,L]
+
+   # ! /public
+   # @wordpress
+   RewriteCond %{DOCUMENT_ROOT}/public/%{HTTP_HOST}/wp-config.php -f
+   RewriteCond %{REQUEST_URI} !^/(public|app|api) [NC]
+   #RewriteRule ^ /public/%{HTTP_HOST}/%{REQUEST_URI} [L]
+   RewriteRule ^(.*)$ /public/%{HTTP_HOST}/$1 [L]
+
+   # ! /projects
+   RewriteRule ^ index.php [L]
+</IfModule>

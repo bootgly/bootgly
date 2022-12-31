@@ -1,0 +1,71 @@
+### * Globals
+# Ignore IDEs folders...
+.idea/
+.vscode/
+# Ignore locks, bin, envs...
+composer
+composer.lock
+cli-config.php
+server-*.php
+
+### @Bootgly
+## Short folders
+# Ignore #doc folders
+**/#
+# Ignore &xcluded folders
+**/&
+# Ignore test (✓) folders
+**/✓
+
+### Bootstrap
+## /@
+# Ignore imported packages (equivalent to vendor)
+@/imports/*
+## /core
+/boot/*
+!/boot/..php
+!/boot/@interfaces
+!/boot/@traits
+!/boot/__array
+!/boot/__iterable
+!/boot/__string
+!/boot/debugger
+!/boot/dir
+!/boot/exception
+!/boot/file
+!/boot/logger
+!/boot/path
+## core
+/core/*
+!/core/@loader.php
+!/core/Bootgly.php
+!/core/Events.php
+!/core/Project.php
+!/core/Template.php
+!/core/Template
+
+### Resources
+## /interfaces
+## /modules
+## /platforms
+/platforms/CLI/*
+/platforms/Web/*
+!/platforms/Web/API.php
+!/platforms/Web/App.php
+## /plugins
+
+### Sources
+## /projects
+# Ignore projects except bootgly subdirectory
+/projects/*
+!/projects
+!/projects/web.constructor.php.example
+!/projects/@bootgly
+## /public
+/public/*
+## /workspace
+/workspace/*
+!/workspace/tests
+!/workspace/tests/*
+!/workspace/cache
+/workspace/cache/*

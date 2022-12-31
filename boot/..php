@@ -1,0 +1,84 @@
+<?php
+require '@interfaces/Requestable.php';
+require '@traits/Configuring.php';
+
+// * .Constructors
+// ! .Types
+// ? __Array
+require '__array/.php';
+require '__array/~functions.php';
+// ? __Iterable
+require '__iterable/.php';
+// ? __String
+#require '__String.functions.php';
+require '__string/.php';
+require '__string/~functions.php';
+// ! Exception
+require 'exception/.php';
+// ? Error
+require 'exception/error/.php';
+// ? Notice
+require 'exception/notice/.php';
+// ? Warning
+require 'exception/warning/.php';
+// ! .Streams
+// ? Path
+#require 'Path.constants.php';
+#require 'Path.functions.php';
+#require 'Path.globals.php';
+
+require 'path/.php';
+// ? Dir
+require 'dir/.php';
+// ? File
+require 'file/.php';
+
+#require 'Path~constants.php';
+#require 'Path~functions.php';
+// ! __Class
+require '__class/adopted/.php';
+require '__class/nulled/.php';
+#require '__Class.functions.php';
+
+#require '__Class.php';
+// ? Index
+#require '__Class@Index.php';
+// ? Index/Handlers
+#require '__Class@Index@Handlers.php';
+// ? Index/Permissions
+#require '__Class@Index@Permissions.php';
+// ? Index/Status
+#require '__Class@Index@Status.php';
+// ! Autoloader
+#require 'Autoloader.php';
+
+// ? __Class
+#require 'Autoloader@__Class.php';
+
+
+// * .Controllers
+// ! Output
+#require 'Output.php';
+// ? Output/Buffer
+#require 'Output@Buffer.php';
+
+
+// * .Helpers
+// ! Benchmark
+#require 'Benchmark.constants.php';
+#require 'Benchmark.php';
+// ! Debugger
+require 'debugger/.php';
+
+// ? BackTrace
+require 'debugger/backtrace/.php';
+
+require 'debugger/~function.php';
+// ! Logger
+require 'logger/logs.php';    // @interface
+require 'logger/.php';
+require 'logger/logging.php'; // @trait
+
+require 'logger/~functions.php';
+// ! Tester
+    #require 'Tester.php';
