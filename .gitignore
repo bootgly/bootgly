@@ -65,6 +65,8 @@ server-*.php
 !/projects/@bootgly
 ## /public
 /public/*
+!/public
+!/public/example.com
 ## /workspace
 /workspace/*
 !/workspace/tests
