@@ -1,19 +1,33 @@
 # Bootgly PHP Framework (v0.0.1-pre-alpha)
-Fullstack PHP Framework (WIP)
 
-Do not use it in production environments.
-The alpha version hasn't even been released yet.
-Temporary repository created for Github Accelerator.
+**Full Stack PHP Framework to Multi Projects (WIP)**
 
-First release forecast is mid-year 2023.
+Do not use it in production environments. The alpha version hasn't even been released yet.
 
-Server | Database | Backend | Front-end
+*Temporary repository created for Github Accelerator.*
+
+First beta release is planned for mid-year 2023.
+
+Documentation and Website will be released alongside the beta.
+
+Servers | Database | Back-end | Front-end
 --- | --- | --- | ---
 [TCP Server (WIP)](/interfaces/Web/TCP/Server.php) | ORM (TODO) | [Router (WIP)](/nodes/Web/HTTP/Server/Router.php) | [Templating Engine (WIP)](/core/Template.php)
 [HTTP Server (WIP)](/nodes/Web/HTTP/Server.php) | _ | [Router/Route (WIP)](/nodes/Web/HTTP/Server/Router/Route.php) | _
 _ | _ | [Request (WIP)](/nodes/Web/HTTP/Server/Request.php) | _
 _ | _ | [Response (WIP)](/nodes/Web/HTTP/Server/Response.php) | _
 
+## Requirements
+
+PHP 8.2+
+
+Apache Rewrite compatibility in Non-CLI Web Servers
+
+## Usage
+
+1) git clone https://github.com/rodrigoslayertech/bootgly-php-framework
+2) rename `projects/web.constructor.php.example` to `projects/web.constructor.php`
+3) active Apache Rewrite in SAPI !== CLI
 
 ## License
 
