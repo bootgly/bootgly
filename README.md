@@ -1,5 +1,8 @@
-# Bootgly PHP Framework
+# Bootgly PHP Framework (v0.0.1-pre-alpha)
 The mostly flexible PHP Framework
+
+Do not use in production.
+The alpha version hasn't even been released yet.
 
 ## License
 
