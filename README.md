@@ -6,8 +6,8 @@ The alpha version hasn't even been released yet.
 
 Server | Database | Backend | Front-end
 --- | --- | --- | ---
-[TCP Server (WIP)](/blob/master/interfaces/Web/TCP/Server.php) | ORM (TODO) | Router | -
-[HTTP Server (WIP)](/blob/master/nodes/Web/HTTP/Server.php) | - | Request | -
+[TCP Server (WIP)](/interfaces/Web/TCP/Server.php) | ORM (TODO) | Router | -
+[HTTP Server (WIP)](/nodes/Web/HTTP/Server.php) | - | Request | -
 
 ## License
 
