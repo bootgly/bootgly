@@ -26,7 +26,7 @@ _ | _ | [Response (WIP)](/nodes/Web/HTTP/Server/Response.php) | _
 
 1) git clone https://github.com/rodrigoslayertech/bootgly-php-framework
 2) rename `projects/web.constructor.php.example` to `projects/web.constructor.php`
-3) active Apache Rewrite in SAPI !== CLI
+3) active Rewrite if you are using any server other than native CLI like Apache, LiteSpeed, Nginx, etc.
 
 ## License
 
