@@ -174,7 +174,7 @@ class Select // TODO implements Events
 
          if ($write) {
             foreach ($read as $Socket) {
-               $this->Connection->Data->read($Socket);
+               $this->Connection->Data->write($Socket);
             }
          }
 
