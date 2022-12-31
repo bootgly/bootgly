@@ -1,13 +1,19 @@
 # Bootgly PHP Framework (v0.0.1-pre-alpha)
-The mostly flexible PHP Framework
+Fullstack PHP Framework (WIP)
 
-Do not use in production.
+Do not use it in production environments.
 The alpha version hasn't even been released yet.
+Temporary repository created for Github Accelerator.
+
+First release forecast is mid-year 2023.
 
 Server | Database | Backend | Front-end
 --- | --- | --- | ---
-[TCP Server (WIP)](/interfaces/Web/TCP/Server.php) | ORM (TODO) | Router | -
-[HTTP Server (WIP)](/nodes/Web/HTTP/Server.php) | - | Request | -
+[TCP Server (WIP)](/interfaces/Web/TCP/Server.php) | ORM (TODO) | [Router (WIP)](/nodes/Web/HTTP/Server/Router.php) | [Templating Engine (WIP)](/core/Template.php)
+[HTTP Server (WIP)](/nodes/Web/HTTP/Server.php) | _ | [Router/Route (WIP)](/nodes/Web/HTTP/Server/Router/Route.php) | _
+_ | _ | [Request (WIP)](/nodes/Web/HTTP/Server/Request.php) | _
+_ | _ | [Response (WIP)](/nodes/Web/HTTP/Server/Response.php) | _
+
 
 ## License
 
