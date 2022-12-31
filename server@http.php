@@ -39,8 +39,11 @@ $HTTPServer->configure(
       // $Request->protocol;  // HTTP/1.1
 
       return <<<HTML
-      {$Request->method}
+      Hello World!
       HTML;
    }
 );
 $HTTPServer->start();
+
+// Benchmark test suggestion:
+// wrk -t5 -c300 -d10s http://localhost:8080
