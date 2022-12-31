@@ -40,6 +40,7 @@ server-*.php
 /core/*
 !/core/@loader.php
 !/core/Bootgly.php
+!/core/Database.php
 !/core/Events.php
 !/core/Project.php
 !/core/Template.php
