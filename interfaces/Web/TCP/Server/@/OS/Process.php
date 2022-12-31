@@ -32,7 +32,7 @@ class Process
    public static int $master;
    public static array $children = [];
 
-   public static $pidFile = '/srv/@bootgly/bootgly/workspace/server.pid';
+   public static $pidFile = '/workspace/server.pid';
 
 
    public function __construct (Server &$Server)
@@ -68,7 +68,7 @@ class Process
    {
       static $file;
 
-      $lock_file = static::$pidFile . '.lock';
+      $lock_file = $_SERVER['PWD'] . static::$pidFile . '.lock';
 
       $file = $file ? : \fopen($lock_file, 'a+');
 
@@ -209,8 +209,8 @@ class Process
 
    protected static function saveMasterPid () // Save process master id to file
    {
-      if (file_put_contents(static::$pidFile, static::$master) === false) {
-         throw new \Exception('Can not save pid to ' . static::$pidFile);
+      if (file_put_contents($_SERVER['PWD'] . static::$pidFile, static::$master) === false) {
+         throw new \Exception('Can not save pid to ' . $_SERVER['PWD'] . static::$pidFile);
       }
    }
 }
