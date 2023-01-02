@@ -36,16 +36,16 @@ class Console
 
    public function interact () : bool // If return true -> interact imediatily in the next loop otherwise wait for output...
    {
-      #$this->log('>_: ');
-
-      #$input = fgets(STDIN);
       $input = readline('>_: ');
 
       $command = trim($input);
 
       return match ($command) {
          // TODO 'status'
-         'stop', 'exit', 'quit' => $this->Server->Process->kill(SIGINT) && false,
+         'stop', 'exit', 'quit' => 
+            $this->log("@\;Stopping {$this->Server->Process->children} worker(s)... ", 2)
+            && $this->Server->Process->kill(SIGINT)
+            && false,
          'pause' => $this->Server->Process->kill(SIGTSTP) && false,
          'resume' => $this->Server->Process->kill(SIGUSR1) && false,
 

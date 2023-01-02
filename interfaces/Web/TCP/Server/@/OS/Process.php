@@ -124,10 +124,10 @@ class Process
       switch ($signal) {
          // ! Server
          // @ Stop server
-         case \SIGINT:
-         case \SIGTERM:
          case \SIGHUP:
+         case \SIGINT:
          case \SIGQUIT:
+         case \SIGTERM:
             $this->Server->stop();
             break;
          // @ Pause server
@@ -175,9 +175,11 @@ class Process
       $script = $_SERVER['PWD'] . '/' . $_SERVER['PHP_SELF'];
 
       for ($i = 0; $i < $workers; $i++) {
-         self::$children[$i] = pcntl_fork();
+         $pid = pcntl_fork();
 
-         if (self::$children[$i] === 0) {
+         self::$children[$i] = $pid;
+
+         if ($pid === 0) {
             // Child process
             self::$index = $i + 1; // Set child index
 
@@ -190,10 +192,10 @@ class Process
 
             $this->Server->stop();
             #exit(1);
-         } else if (self::$children[$i] > 0) {
+         } else if ($pid > 0) {
             // Master process
             cli_set_process_title("BootglyWebServer: master process ($script)");
-         } else if (self::$children[$i] === -1) {
+         } else if ($pid === -1) {
             die("Could not fork process!"); 
          }
       }
