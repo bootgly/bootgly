@@ -31,6 +31,7 @@ class Response
    public ? string $type;   //! move to Content->type or Header->Content->type?
    public ? array $resources;
    // ! HTTP
+   public object $Meta;
    public object $Header;
    public object $Content;
    // * Meta
@@ -59,77 +60,277 @@ class Response
       $this->resources = $resources !== null ? $resources : ['JSON', 'JSONP', 'View', 'HTML/pre'];
       // ! HTTP
       // TODO move to file class
-      $this->Header = new class ()
+      $this->Meta = new class ()
       {
-         private array $fields;
+         // * Config
+         // * Data
+         private string $raw;
+         private string $protocol;
+         // * Meta
+         // @ status
+         private const PHRASES = [
+            100 => 'Continue',
+            101 => 'Switching Protocols',
+            102 => 'Processing',
+            200 => 'OK',
+            201 => 'Created',
+            202 => 'Accepted',
+            203 => 'Non-Authoritative Information',
+            204 => 'No Content',
+            205 => 'Reset Content',
+            206 => 'Partial Content',
+            207 => 'Multi-status',
+            208 => 'Already Reported',
+            300 => 'Multiple Choices',
+            301 => 'Moved Permanently',
+            302 => 'Found',
+            303 => 'See Other',
+            304 => 'Not Modified',
+            305 => 'Use Proxy',
+            306 => 'Switch Proxy',
+            307 => 'Temporary Redirect',
+            400 => 'Bad Request',
+            401 => 'Unauthorized',
+            402 => 'Payment Required',
+            403 => 'Forbidden',
+            404 => 'Not Found',
+            405 => 'Method Not Allowed',
+            406 => 'Not Acceptable',
+            407 => 'Proxy Authentication Required',
+            408 => 'Request Time-out',
+            409 => 'Conflict',
+            410 => 'Gone',
+            411 => 'Length Required',
+            412 => 'Precondition Failed',
+            413 => 'Request Entity Too Large',
+            414 => 'Request-URI Too Large',
+            415 => 'Unsupported Media Type',
+            416 => 'Requested range not satisfiable',
+            417 => 'Expectation Failed',
+            418 => 'I\'m a teapot',
+            422 => 'Unprocessable Entity',
+            423 => 'Locked',
+            424 => 'Failed Dependency',
+            425 => 'Unordered Collection',
+            426 => 'Upgrade Required',
+            428 => 'Precondition Required',
+            429 => 'Too Many Requests',
+            431 => 'Request Header Fields Too Large',
+            451 => 'Unavailable For Legal Reasons',
+            500 => 'Internal Server Error',
+            501 => 'Not Implemented',
+            502 => 'Bad Gateway',
+            503 => 'Service Unavailable',
+            504 => 'Gateway Time-out',
+            505 => 'HTTP Version not supported',
+            506 => 'Variant Also Negotiates',
+            507 => 'Insufficient Storage',
+            508 => 'Loop Detected',
+            511 => 'Network Authentication Required',
+         ];
+         private int|string $status;
 
 
          public function __construct ()
          {
-            if ( empty($this->fields) )
-               $fields = false;
+            // * Config
+            // * Data
+            $this->protocol = 'HTTP/1.1';
+            // * Meta
+            $this->status = '200 OK';
 
-            if (\PHP_SAPI !== 'cli')
-               $fields = apache_response_headers();
-
-            if ($fields !== false) {
-               $fields = array_change_key_case($fields, CASE_LOWER);
-            } else {
-               $fields = [];
-            }
-
-            $this->fields = $fields;
+            $this->raw = $this->protocol . ' ' . $this->status;
          }
-         public function __get (string $name) {
+         public function __get ($name)
+         {
+            switch ($name) {
+               case 'raw':
+                  if (@$this->raw) {
+                     return $this->raw;
+                  }
+
+                  return $this->raw = $this->protocol . ' ' . $this->status;
+               default:
+                  return $this->$name;
+            }
+         }
+         public function __set ($name, $value)
+         {
+            switch ($name) {
+               case 'raw':
+                  break;
+               case 'status':
+                  (string) $this->status = match ($value) {
+                     (int) $value => $value . ' ' . self::PHRASES[$value],
+                     (string) $value => array_search($value, self::PHRASES) . ' ' . $value
+                  };
+
+                  break;
+               default:
+                  $this->$name = $value;
+            }
+         }
+         public function __unset ($name)
+         {
+            unset($this->$name);
+         }
+      };
+      $this->Content = new class ()
+      {
+         // * Config
+         // * Data
+         private string $raw;
+         // * Meta
+         private string $length;
+
+
+         public function __construct ()
+         {
+            // * Config
+            // * Data
+            $this->raw = '';
+            // * Meta
+            $this->length = 0;
+         }
+         public function __get ($name)
+         {
+            switch ($name) {
+               case 'raw':
+                  return $this->raw;
+               case 'length':
+                  return $this->length;
+            }
+         }
+         public function __set ($name, $value)
+         {
+            switch ($name) {
+               case 'raw':
+                  $this->raw = $value;
+                  break;
+               case 'length':
+                  $this->length = (string) $value;
+                  break;
+            }
+         }
+      };
+      $this->Header = new class ()
+      {
+         // * Data
+         private array $fields;
+         // * Meta
+         private string $raw;
+
+
+         public function __construct ()
+         {
+            // * Data
+            $this->fields = [
+               'Server' => 'Bootgly',
+               'Content-Type' => 'text/plain; charset=UTF-8'
+            ];
+            // * Meta
+            $this->raw = '';
+
+            $this->_init();
+         }
+         public function _init ()
+         {
+            if (\PHP_SAPI !== 'cli') {
+               $fields = apache_response_headers();
+               $this->fields = $fields;
+            }
+         }
+         public function __get (string $name)
+         {
             switch ($name) {
                case 'fields':
                case 'headers':
-                  $this->__construct();
+                  if (\PHP_SAPI !== 'cli') {
+                     $this->_init();
+                  }
+
                   return $this->fields;
 
                case 'raw':
+                  if ($this->raw !== '') {
+                     return $this->raw;
+                  }
+                  
                   $raw = '';
+
                   foreach ($this->fields as $name => $value) {
                      $raw .= "$name: $value\r\n";
                   }
-                  return $raw;
 
-               case 'sent':
-                  return headers_sent();
+                  return $this->raw = $raw;
+
+               case 'sent': // TODO refactor
+                  if (\PHP_SAPI !== 'cli') {
+                     return headers_sent();
+                  }
+
+                  return null;
 
                default:
                   return $this->get($name);
             }
          }
+         public function __set ($name, $value)
+         {
+            $this->$name = $value;
+         }
+         public function __unset ($name)
+         {
+            unset($this->fields[$name]);
+         }
 
-         public function get (string $name) {
-            $name = strtolower($name);
+         public function get (string $name)
+         {
             return @$this->fields[$name];
          }
-         public function set (string $fieldName, ?string $fieldValue = null) {
-            if ($fieldValue === null) {
-               $this->fields[$fieldName] = true;
-               header($fieldName, true);
+         public function set (string $field, ? string $value = null) // TODO refactor
+         {
+            if ($value === null) {
+               [$name, $value] = explode(':', $field);
+
+               $this->fields[$name] = $value ?? true;
+
+               if (\PHP_SAPI !== 'cli') {
+                  header($field, true);
+               }
             } else {
-               $this->fields[strtolower($fieldName)] = $fieldValue;
-               header($fieldName.': '.$fieldValue, true);
+               $this->fields[$field] = $value ?? true;
+
+               if (\PHP_SAPI !== 'cli') {
+                  header($field . ': ' . $value, true);
+               }
             }
          }
-         public function append (string $fieldName, ?string $fieldValue = null) {
-            if ($fieldValue === null) {
-               $this->fields[$fieldName] = true;
-               header($fieldName, false);
+         public function append (string $field, ? string $value = null) // TODO refactor
+         {
+            if ($value === null) {
+               [$name, $value] = explode(':', $field);
+
+               $this->fields[$name] = $value ?? true;
+
+               if (\PHP_SAPI !== 'cli') {
+                  header($field, false);
+               }
             } else {
-               $this->fields[strtolower($fieldName)] = $fieldValue;
-               header($fieldName.': '.$fieldValue, false);
+               $this->fields[$field] = $value ?? true;
+
+               if (\PHP_SAPI !== 'cli') {
+                  header($field . ': ' . $value, false);
+               }
             }
          }
-         public function list (array $headers) {
-            foreach ($headers as $fieldName => $fieldValue) {
-               if (is_int($fieldName)) {
-                  $this->set($fieldValue);
+         public function list (array $headers)
+         {
+            foreach ($headers as $field => $value) {
+               if ( is_int($field) ) {
+                  $this->set($value);
                } else {
-                  $this->set($fieldName, $fieldValue);
+                  $this->set($field, $value);
                }
             }
          }
