@@ -11,14 +11,8 @@
 namespace Bootgly\Web\HTTP\Server\_\Connections;
 
 
-use Bootgly\Web\Servers;
-use Bootgly\Web\TCP\Server;
 use Bootgly\Web\TCP\Server\Connection;
 use Bootgly\Web\TCP\Server\Connections\Data as TCPData;
-
-use Bootgly\Web\HTTP\Server\Request;
-use Bootgly\Web\HTTP\Server\Response;
-use Bootgly\Web\HTTP\Server\Router;
 
 
 class Data extends TCPData
@@ -32,6 +26,7 @@ class Data extends TCPData
 
    public function __construct (Connection &$Connection)
    {
+      // * Meta
       parent::__construct($Connection);
    }
 
@@ -46,45 +41,82 @@ class Data extends TCPData
       // Do something...?
 
       if ($write === false) {
-         #Server::$Event->add($Socket, Server::$Event::EV_WRITE, [$this, 'write']);
-
+         #Server::$Event->add($Socket, Server::$Event::EVENT_WRITE, 'write');
          $this->write($Socket);
       }
 
       return true;
    }
-   public function write (&$Socket, bool $handle = false) : bool
+   public function write (&$Socket, bool $handle = false, ? int $length = null) : bool
    {
-      // TODO pass to Response, implement file upload, etc.
-      $contents = [];
-      $contents['raw'] = ($this->Connection->Server->handler)(...$this->callbacks);
-      $contents['length'] = strlen($contents['raw']);
-
-      $this->output = <<<HTTP_RAW
-      HTTP/1.1 200 OK
-      Server: Test Server
-      Content-Type: text/plain; charset=UTF-8
-      Content-Length: {$contents['length']}
-
-      {$contents['raw']}
-      HTTP_RAW;
-
-      $writed = parent::write($Socket, $handle);
-
-      // Reset Request properties
-      $Request = $this->callbacks[0];
-      $Request->reset();
-
-      if ($writed === false) {
-         // Try to write again?
+      if (self::$input === '') {
          return false;
       }
 
-      self::$input = '';
-      // @ Parser
-      self::$parsed = false;
-      self::$parsing = false;
-      self::$pointer = 0;
+      // @ Check cache
+      // TODO Response cache (dynamic response)
+      $writed = false;
+      #if ($this->changed === false && $this->output !== '') {
+      #   parent::write($Socket, $handle);
+      #   @fflush($Socket);
+      #   return true;
+      #}
+
+      // @ Instance callbacks
+      $Request = $this->callbacks[0];
+      $Response = $this->callbacks[1];
+      $Router = $this->callbacks[2];
+
+      // @ Set HTTP Data
+      // ! HTTP
+      // ? Response Content
+      $Response->Content->raw = ($this->Connection->Server->handler)(
+         $Request,
+         $Response,
+         $Router
+      );
+      $Response->Content->length = strlen($Response->Content->raw);
+      // ? Response Header
+      // ...
+      $Response->Header->set('Content-Length', $Response->Content->length);
+      // ? Response Meta
+      // ...
+
+      // TODO implement Timer Event loop with tick to update this every 1 second
+      #$date = gmdate('D, d M Y H:i:s T');
+
+      // @ Set Buffer output
+      $this->output = <<<HTTP_RAW
+      {$Response->Meta->raw}
+      {$Response->Header->raw}
+      {$Response->Content->raw}
+      HTTP_RAW;
+
+      #$this->log($this->output . PHP_EOL);
+
+      // @ Send data to client
+      $writed ?: $writed = parent::write($Socket, $handle, strlen($this->output));
+      if ($writed === false) {
+         return false;
+      }
+
+      // @ On success
+      // Delete event from loop
+      #Server::$Event->del($Socket, Server::$Event::EVENT_WRITE);
+      // Reset Request data
+      if ($this->changed) {
+         $Request->reset();
+         $Response->Header->raw = '';
+      }
+      // Reset Buffer I/O
+      #self::$input = '';
+      #$this->output = '';
+      // Reset Parser
+      if ($this->changed) {
+         self::$parsed = false;
+         self::$parsing = false;
+         self::$pointer = 0;
+      }
 
       return true;
    }
