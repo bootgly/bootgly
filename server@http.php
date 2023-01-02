@@ -31,12 +31,12 @@ $HTTPServer = new HTTP\Server($Web);
 $HTTPServer->configure(
    host: '0.0.0.0',
    port: 8080,
-   workers: 6,
+   workers: 14,
 
    handler: function (Request $Request, Response $Response, Router $Router) {
-      // $Request->method;    // GET
-      // $Request->uri;       // /path/to?query1=value2...
-      // $Request->protocol;  // HTTP/1.1
+      #$Request->method;    // GET
+      #$Request->uri;       // /path/to?query1=value2...
+      #$Request->protocol;  // HTTP/1.1
 
       return <<<HTML
       Hello World!
@@ -46,4 +46,4 @@ $HTTPServer->configure(
 $HTTPServer->start();
 
 // Benchmark test suggestion:
-// wrk -t5 -c300 -d10s http://localhost:8080
+// wrk -t10 -c512 -d10s http://localhost:8080

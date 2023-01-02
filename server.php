@@ -24,7 +24,7 @@ $TCPServer = new TCP\Server;
 $TCPServer->configure(
    host: '0.0.0.0',
    port: 8080,
-   workers: 6,
+   workers: 14,
 
    handler: function ($request) {
       $date = gmdate('D, d M Y H:i:s T');
