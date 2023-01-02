@@ -27,9 +27,13 @@ class Data implements Connections
 
    public Connection $Connection;
 
+   // * Config
+   public bool $cache;
    // * Data
-   public static string|array|false $input = '';
+   // @ Buffer
+   public static string $input = '';
    public string $output;
+   public bool $changed;
    // * Meta
    public int $read;
    public int|false $written;
@@ -45,9 +49,13 @@ class Data implements Connections
    {
       $this->Connection = $Connection;
 
+      // * Config
+      $this->cache = true;
       // * Data
-      self::$input = '';
+      // @ Buffer
+      #self::$input = '';
       $this->output = '';
+      $this->changed = false;
       // * Meta
       $this->read = 0;            // Input Data length (bytes read).
       $this->written = 0;         // Output Data length (bytes written).
@@ -62,11 +70,9 @@ class Data implements Connections
 
    public function read (&$Socket, bool $write = true) : bool
    {
-      #self::$input = '';
-
       try {
          $input = @fread($Socket, 65535);
-      } catch (\Throwable $Throwable) {}
+      } catch (\Throwable) {}
 
       // Close connection if input data is empty
       if ($input === '') {
@@ -76,12 +82,13 @@ class Data implements Connections
 
       // @ Check issues
       if ($input === false) {
-         if (feof($Socket)) {
-            $this->errors['read']++;
-            #$this->log('Failed to read buffer: End-of-file!' . PHP_EOL);
-            $this->Connection->close($Socket);
-            return false;
-         }
+         try {
+            if (@feof($Socket)) {
+               #$this->log('Failed to read buffer: End-of-file!' . PHP_EOL);
+               $this->Connection->close($Socket);
+               return false;
+            }
+         } catch (\Throwable) {}
 
          if (is_resource($Socket) === false || get_resource_type($Socket) !== 'stream') {
             $this->errors['read']++;
@@ -91,65 +98,104 @@ class Data implements Connections
          }
       }
 
-      // @ On success
-      self::$input .= $input;
+      // @ Set Buffer input
+      self::$input !== $input ? $this->changed = true : $this->changed = false;
+      if ($this->cache === false || $this->changed === true) {
+         #self::$input .= $input;
+         self::$input = $input;
+      }
 
-      // @ Write stats
-      // Global
+      // @ On success
+      // Global stats
       $this->reads++;
-      $this->read += strlen(self::$input);
-      // Per client
-      $this->Connection->peers[(int) $Socket]['stats']['reads']++;
+      $this->read += strlen($input);
+      // Per client stats
+      @$this->Connection->peers[(int) $Socket]['stats']['reads']++;
 
       // TODO test it
       if ($write) {
-         #Server::$Event->add($Socket, Server::$Event::EVENT_WRITE, [$this, 'write']);
+         #Server::$Event->add($Socket, Server::$Event::EVENT_WRITE, 'write');
          $this->write($Socket);
       }
 
       return true;
    }
-   public function write (&$Socket, bool $handle = true) : bool
+   public function write (&$Socket, bool $handle = true, ? int $length = null) : bool
    {
+      // @ Set Buffer output
       if ($handle) {
          $this->output = ($this->Connection->Server->handler)(...$this->callbacks);
       }
 
       $written = 0;
       try {
-         $written = @fwrite($Socket, $this->output);
-      } catch (\Throwable $Throwable) {}
+         while (true) {
+            $written = @fwrite($Socket, $this->output, $length);
+
+            if ($written === false) {
+               break;
+            }
+
+            // Check if the entire message has been sented
+            if ($written < $length) { // If not sent the entire message 
+               // Get the part of the message that has not yet been sented as message
+               $this->output = substr($this->output, $written);
+               // Get the length of the not sented part
+               $length -= $written;
+            } else {
+               break;
+            }
+         }
+
+         #$written = @fwrite($Socket, $this->output, $length);
+
+         #@fflush($Socket);
+      } catch (\Throwable) {}
 
       // @ Check issues
       if ($written === 0 || $written === false) {
-         if (feof($Socket)) {
-            $this->errors['write']++;
-            #$this->log('Failed to write data: End-of-file!' . PHP_EOL);
+         try {
+            if (@feof($Socket)) {
+               #$this->log('Failed to write data: End-of-file!' . PHP_EOL);
+               $this->Connection->close($Socket);
+               return false;
+            }
+         } catch (\Throwable) {}
+
+         if (is_resource($Socket) === false || get_resource_type($Socket) !== 'stream') {
+            #$this->log('Failed to write data: resource is not a stream!' . PHP_EOL);
             $this->Connection->close($Socket);
             return false;
          }
 
-         if (is_resource($Socket) === false || get_resource_type($Socket) !== 'stream') {
+         if ($written === 0) {
             $this->errors['write']++;
-            $this->log('Failed to write data!' . PHP_EOL);
+            #$this->log('Failed to write data: 0 bytes written!' . PHP_EOL);
+            $this->Connection->close($Socket);
+            return false;
+         }
+
+         if ($written === false) {
+            $this->errors['write']++;
+            #$this->log('Failed to write data: unknown error!' . PHP_EOL);
             $this->Connection->close($Socket);
             return false;
          }
       }
 
       // @ On success
-      #Server::$Event->del($Socket, Server::$Event::EVENT_WRITE);
-
       if ($handle) {
+         #Server::$Event->del($Socket, Server::$Event::EVENT_WRITE);
+         // Reset Buffer
          self::$input = '';
       }
 
       // @ Write Stats
       // Global
       $this->writes++;
-      $this->written += strlen($this->output);
+      $this->written += $written;
       // Per client
-      $this->Connection->peers[(int) $Socket]['stats']['writes']++;
+      @$this->Connection->peers[(int) $Socket]['stats']['writes']++;
 
       return true;
    }
