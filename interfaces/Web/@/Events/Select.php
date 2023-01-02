@@ -32,14 +32,14 @@ class Select // TODO implements Events
    const EVENT_WRITE = 2;
    const EVENT_EXCEPT = 3;
 
-   protected $timeout = 100000000; // 100s
+   protected int $timeout = 100000000; // 100s
    // * Data
    // @ Sockets
-   protected $reads = [];
-   protected $writes = [];
-   protected $excepts = [];
+   private array $reads = [];
+   private array $writes = [];
+   private array $excepts = [];
    // * Meta
-   public $events = [];
+   private array $events = [];
 
 
    public function __construct (Connection &$Connection)
@@ -53,10 +53,8 @@ class Select // TODO implements Events
 
       switch ($flag) {
          case self::EVENT_READ:
-            $count = count($this->reads);
-
             // System call select exceeded the maximum number of connections 1024, please install event/libevent extension for more connections.
-            if ($count >= 1000) {
+            if (count($this->reads) >= 1000) {
                return false;
             }
 
@@ -66,10 +64,8 @@ class Select // TODO implements Events
 
             return true;
          case self::EVENT_WRITE:
-            $count = count($this->writes);
-
             // System call select exceeded the maximum number of connections 1024, please install event/libevent extension for more connections.
-            if ($count >= 1000) {
+            if (count($this->writes) >= 1000) {
                return false;
             }
 
@@ -79,10 +75,8 @@ class Select // TODO implements Events
 
             return true;
          case self::EVENT_EXCEPT:
-            $count = count($this->excepts);
-
             // System call select exceeded the maximum number of connections 1024, please install event/libevent extension for more connections.
-            if ($count >= 1000) {
+            if (count($this->excepts) >= 1000) {
                return false;
             }
 
@@ -137,7 +131,7 @@ class Select // TODO implements Events
    {
       #$this->log('Event loop started!' . PHP_EOL);
 
-      while (1) {
+      while (true) {
          pcntl_signal_dispatch();
 
          $read   = $this->reads;
@@ -165,15 +159,16 @@ class Select // TODO implements Events
          if ($read) {
             foreach ($read as $Socket) {
                // @ Select action
-               match ($this->events[(int) $Socket][self::EVENT_READ]) {
+               match (@$this->events[(int) $Socket][self::EVENT_READ]) {
                   'accept' => $this->Connection->accept($Socket),
-                  'read' => $this->Connection->Data->read($Socket)
+                  'read' => $this->Connection->Data->read($Socket),
+                  default => null
                };
             }
          }
 
          if ($write) {
-            foreach ($read as $Socket) {
+            foreach ($write as $Socket) {
                $this->Connection->Data->write($Socket);
             }
          }
