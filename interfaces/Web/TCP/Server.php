@@ -162,8 +162,6 @@ class Server
       }
 
       // @ Continue to master process:
-      $this->log('Ok.' . PHP_EOL, 1);
-
       switch ($this->mode) {
          case self::MODE_DAEMON:
             $this->daemonize();
@@ -189,24 +187,30 @@ class Server
             'so_reuseport' => true,
 
             // Setting this option to true will set SOL_TCP,NO_DELAY=1 appropriately, thus disabling the TCP Nagle algorithm.
-            'tcp_nodelay' => true,
+            'tcp_nodelay' => false,
 
             // Enables sending and receiving data to/from broadcast addresses.
-            // 'so_broadcast' => false
+            'so_broadcast' => false
          ]
       ]);
 
-      $this->Socket = stream_socket_server(
-         'tcp://' . $this->host . ':' . $this->port,
-         $error_code, $error_message,
-         STREAM_SERVER_BIND | STREAM_SERVER_LISTEN,
-         $context
-      );
+      $this->Socket = false;
+      try {
+         $this->Socket = @stream_socket_server(
+            'tcp://' . $this->host . ':' . $this->port,
+            $error_code, $error_message,
+            STREAM_SERVER_BIND | STREAM_SERVER_LISTEN,
+            $context
+         );
+      } catch (\Throwable) {};
 
       if ($this->Socket === false) {
-         throw new \Exception("[$error_code] - " . 'Could not create socket: ' . $error_message);
-         exit;
+         $this->log(PHP_EOL . 'Could not create socket: ' . $error_message, self::LOG_ERROR_LEVEL);
+         exit(1);
       }
+
+      $Socket = socket_import_stream($this->Socket);
+      socket_set_option($Socket, SOL_SOCKET, SO_KEEPALIVE, 1);
 
       self::$status = self::STATUS_RUNNING;
    }
@@ -223,7 +227,7 @@ class Server
    {
       self::$status = self::STATUS_RUNNING;
 
-      $this->log('Entering in CLI interaction mode...' . PHP_EOL, 4);
+      $this->log(PHP_EOL . 'Entering in CLI interaction mode...' . PHP_EOL, 4);
       $this->log('>_ Type `stop` to stop the Server or `help` to list commands.' . PHP_EOL . PHP_EOL);
 
       while (1) {
@@ -242,14 +246,14 @@ class Server
             if ($interact === false) {
                $this->log(PHP_EOL);
 
-               usleep(300000 * $this->workers); // @ wait 0.3 s * qt workers
+               usleep(100000 * $this->workers); // @ wait 0.1 s * qt workers
             }
 
             continue;
          } else if ($pid > 0) { // If a child has already exited?
-            $this->log(PHP_EOL . 'Child exited!' . PHP_EOL);
-
-            #break;
+            $this->log(PHP_EOL . 'Child exited!' . PHP_EOL, self::LOG_ERROR_LEVEL);
+            $this->stop();
+            break;
          } else if ($pid === -1) { // If error
             break;
          }
@@ -259,23 +263,23 @@ class Server
    private function close ()
    {
       if ($this->Socket === null || $this->Socket === false) {
-         $this->log(PHP_EOL . '$this->Socket is false or null!' . PHP_EOL);
+         #$this->log(PHP_EOL . '$this->Socket is false or null!' . PHP_EOL);
          exit(1);
       }
 
       $resource = get_resource_type($this->Socket);
       if ($resource !== 'stream') {
-         $this->log(PHP_EOL . 'Resource type of $this->Socket is not a stream!');
+         #$this->log(PHP_EOL . 'Resource type of $this->Socket is not a stream!');
          exit(1);
       }
 
       $closed = false;
       try {
          $closed = @fclose($this->Socket);
-      } catch (\Throwable $Throwable) {}
+      } catch (\Throwable) {}
 
       if ($closed === false) {
-         $this->log(PHP_EOL . 'Failed to close $this->Socket!');
+         #$this->log(PHP_EOL . 'Failed to close $this->Socket!');
       } else {
          #$this->log(PHP_EOL . 'Sockets closed successful.', 4);
       }
@@ -328,7 +332,7 @@ class Server
       self::$status = self::STATUS_STOPING;
 
       match ($this->Process->level) {
-         'master' => $this->log("Stopping {$this->Process->children} worker(s)... " . PHP_EOL . PHP_EOL, 2),
+         'master' => $this->log("{$this->Process->children} worker(s) stopped!" . PHP_EOL . PHP_EOL, 2),
          'child' => $this->close()
       };
 
