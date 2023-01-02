@@ -82,7 +82,6 @@ class Request
    // ...
    // * Meta
    // ...
-   private array $resources;
 
    public Session $Session;
 
@@ -98,7 +97,6 @@ class Request
       // * Data
       /* ... dynamically ... */
       // * Meta
-      $this->resources = [];
 
       $this->Session = new Session;
    }
@@ -461,41 +459,10 @@ class Request
             return true;
          case 'stale':
             return !$this->fresh;
-
-         // * Custom resources (HTTP Request API)
-         default:
-            // @ ($Request->SomeAPI->..., $Request->Test->...)
-            return @$this->resources[$name];
       }
    }
    public function __set ($name, $value)
    {
-      // TODO check if start with upper using __String
-      if (strtoupper($name[0]) === $name[0]) {
-         switch ($name) {
-            // * Data
-            // ! Resource
-            case 'URL':
-            case 'URN':
-            case 'URI':
-            case 'Path':
-            // ! HTTP
-            case 'Content':
-            case 'Uploaded':
-            case 'Header':
-            case 'Cookie':
-               return $this->$name = $value;
-            // * Meta
-            default:
-               // TODO Set Resource of HTTP Request API
-               if ($value instanceof Requestable) {
-                  $this->resources[$name] = $value;
-               }
-               return;
-         }
-      }
-
-      // ? Reset related
       switch ($name) {
          case 'base': // TODO refactor
             unSet($this->url);
@@ -506,7 +473,7 @@ class Request
       }
    }
 
-   private function parse (string $name)
+   private function parse (string $name) // TODO (WIP)
    {
       if (Data::$parsed || ! Data::$input)
          return false;
@@ -537,14 +504,22 @@ class Request
 
             switch ($name) {
                case 'method':
-                  return $this->method = $method;
+                  $this->method = $method;
+                  break;
                case 'uri':
-                  return $this->uri = $uri ?? '/';
+                  $this->uri = $uri ?? '/';
+                  break;
                case 'protocol':
-                  return $this->protocol = $procotol;
+                  $this->protocol = $procotol;
+                  break;
             }
       }
 
+      Data::$parsing = false;
+      Data::$parsed = true;
+
+      return $this->$name;
+      /*
       if ( is_string(Data::$input) ) {
          Data::$input = preg_split("/\r\n|\n|\r/", Data::$input);
       }
@@ -587,18 +562,19 @@ class Request
          // @ HTTP Content
          $this->Content->raw .= $text . "\n";
       }
-
-      Data::$parsed = true;
+      */
 
       return true;
    }
-   public function reset () {
+   public function reset ()
+   {
       unset($this->method);
       unset($this->uri);
       unset($this->protocol);
 
-      unset($this->Header);
-      unset($this->Content);
+      // ? Content
+      #unset($this->Content->length);
+      #unset($this->Content);
    }
 
    // TODO implement https://www.php.net/manual/pt_BR/ref.filter.php
