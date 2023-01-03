@@ -4,6 +4,8 @@ require 'CLI.php';
 require 'CLI/@/Logger/Logging.php'; // @traits
 // ? Command
 require 'CLI/Command.php';
+// ? Console
+require 'CLI/Console.php';
 // ? Output
 #require 'CLI/Output.php';
 // ? Router

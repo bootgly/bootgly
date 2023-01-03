@@ -52,6 +52,10 @@ trait Logging
             echo self::LOG_GREEN_BOLD_COLOR;
             break;
 
+         case self::LOG_NOTICE_LEVEL:
+            echo self::LOG_YELLOW_BOLD_COLOR;
+            break;
+
          case self::LOG_INFO_LEVEL:
             echo self::LOG_CYAN_BOLD_COLOR;
             break;
