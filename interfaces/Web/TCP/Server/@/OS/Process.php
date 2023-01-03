@@ -92,85 +92,95 @@ class Process
    // @ Signal
    public function installSignal ()
    {
-      $signalHandler = [$this, 'signalHandler'];
+      $signalHandler = [$this, 'handleSignal'];
 
-      // stop
-      \pcntl_signal(\SIGINT, $signalHandler, false); // @ CTRL + C
-      // stop
-      \pcntl_signal(\SIGTERM, $signalHandler, false);
-      // stop
-      \pcntl_signal(\SIGHUP, $signalHandler, false);
-      // stop
-      \pcntl_signal(\SIGQUIT, $signalHandler, false);
-      // pause
-      \pcntl_signal(\SIGTSTP, $signalHandler, false); // @ CTRL + Z
-      // resume
-      \pcntl_signal(\SIGUSR1, $signalHandler, false);
+      // ! Server
+      // @ stop()
+      pcntl_signal(SIGHUP, $signalHandler, false);  // 1
+      pcntl_signal(SIGINT, $signalHandler, false);  // 2 (CTRL + C)
+      pcntl_signal(SIGQUIT, $signalHandler, false); // 3
+      pcntl_signal(SIGTERM, $signalHandler, false); // 15
+      // @ pause()
+      pcntl_signal(SIGTSTP, $signalHandler, false); // 20 (CTRL + Z)
+      // @ resume()
+      pcntl_signal(SIGUSR1, $signalHandler, false); // 10
 
-      // status
-      \pcntl_signal(\SIGUSR2, $signalHandler, false);
-      // stats
-      \pcntl_signal(\SIGIOT, $signalHandler, false);
-      // peers
-      \pcntl_signal(\SIGIO, $signalHandler, false);
+      // ? @Info
+      // @ $status
+      pcntl_signal(SIGUSR2, $signalHandler, false); // 12
+
+      // ! \Connection
+      // @ $stats
+      pcntl_signal(SIGIOT, $signalHandler, false);  // 6
+      // @ $peers
+      pcntl_signal(SIGIO, $signalHandler, false);   // 29
 
       // ignore
-      \pcntl_signal(\SIGPIPE, \SIG_IGN, false);
+      pcntl_signal(SIGPIPE, SIG_IGN, false);
    }
-   public function signalHandler ($signal)
+   public function handleSignal ($signal)
    {
       #$this->log($signal . PHP_EOL);
 
       switch ($signal) {
          // ! Server
-         // @ Stop server
-         case \SIGHUP:
-         case \SIGINT:
-         case \SIGQUIT:
-         case \SIGTERM:
+         // @ stop()
+         case SIGHUP:  // 1
+         case SIGINT:  // 2 (CTRL + C)
+         case SIGQUIT: // 3
+         case SIGTERM: // 15
             $this->Server->stop();
             break;
-         // @ Pause server
-         case \SIGTSTP:
+         // @ pause()
+         case SIGTSTP: // 20 (CTRL + Z)
             $this->Server->pause();
             break;
-         // @ Resume server
-         case \SIGUSR1:
+         // @ resume()
+         case SIGUSR1: // 10
             $this->Server->resume();
             break;
-
-         // @ Show server status
-         case \SIGUSR2: // TODO
+         // ? @Info
+         // @ $status
+         // Show info about status of server (uptime, ...)
+         case SIGUSR2: // 12
+            $this->Server->{'@status'};
             break;
 
-         // ! Server -> Connection
-         // @ Show peers connections (Remote)
-         case \SIGIOT:
-            $this->Server->Connection->{'@peers'}; // Show Server Connection peers (connections accepted info [remote ip + remote port]).
+         // ! \Connection
+         // ? @Info
+         // @ $peers
+         // Show info of active remote accepted connections (remote ip + remote port, ...)
+         case SIGIOT:  // 6
+            $this->Server->Connection->{'@peers'};
             break;
-         // @ Show stats of connections
-         case \SIGIO:
-            $this->Server->Connection->{'@stats'}; // Show Server Connection status.
+         // @ $stats
+         // Show stats of server socket connections (reads, writes, errors...)
+         case SIGIO:   // 29
+            $this->Server->Connection->{'@stats'};
             break;
       }
    }
-   public function kill (int $signal, bool $master = true) // Send a signal to a process
+   public function sendSignal (int $signal, bool $master = true, bool $children = true)
    {
       if ($master) {
          // Send signal to master process
          posix_kill(static::$master, $signal);
       }
 
-      // Send signal to children process
-      foreach (self::$children as $id) {
-         posix_kill($id, $signal);
-         usleep(100000); // Wait 0,1 s
+      if ($children) {
+         // Send signal to children process
+         foreach (self::$children as $id) {
+            posix_kill($id, $signal);
+            usleep(100000); // Wait 0,1 s
+         }
       }
+
+      return true;
    }
 
    public function fork (int $workers)
    {
-      $this->log("forking $workers workers... ", 1);
+      $this->log("forking $workers workers... ", self::LOG_INFO_LEVEL);
 
       $script = $_SERVER['PWD'] . '/' . $_SERVER['PHP_SELF'];
 
