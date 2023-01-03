@@ -11,20 +11,30 @@
 namespace Bootgly\Web\TCP\_\CLI;
 
 
-use Bootgly\CLI\_\ {
-   Logger\Logging
-};
+use Bootgly\CLI;
 use Bootgly\Web\TCP\ {
    Server
 };
 
 
-class Console
+class Console extends CLI\Console
 {
-   use Logging;
-
-
    public Server $Server;
+
+   // ! Command
+   // * Data
+   public static array $commands = [
+      'stop', 'exit', 'quit',
+      'pause',
+      'resume',
+
+      'status',
+      'stats',
+      'peers', 'connections',
+
+      'clear',
+      'help'
+   ];
 
    // ***
 
@@ -34,49 +44,77 @@ class Console
       $this->Server = $Server;
    }
 
-   public function interact () : bool // If return true -> interact imediatily in the next loop otherwise wait for output...
+   // If return true -> interact imediatily in the next loop otherwise wait for output...
+   public function interact () : bool
    {
+      // @ Register CLI autocomplete function
+      // Use TAB key as trigger
+      readline_completion_function([$this, 'autocomplete']);
+
+      // @ Get user input (read line)
       $input = readline('>_: ');
 
+      // @ Sanitize user input
       $command = trim($input);
 
+      if ($command === '') return true;
+
+      // @ Clear last used command (returned by autocomplete function)
+      self::$command = [];
+
+      // @ Enable command history and add the last command to history
+      // Use UP/DOWN key to access the history
+      readline_add_history($command);
+
+      // @ Execute command
       return match ($command) {
-         // TODO 'status'
+         // ! Server
          'stop', 'exit', 'quit' => 
-            $this->log("@\;Stopping {$this->Server->Process->children} worker(s)... ", 2)
-            && $this->Server->Process->kill(SIGINT)
+            $this->log("@\;Stopping {$this->Server->Process->children} worker(s)... ", self::LOG_WARNING_LEVEL)
+            && $this->Server->Process->sendSignal(SIGINT)
             && false,
-         'pause' => $this->Server->Process->kill(SIGTSTP) && false,
-         'resume' => $this->Server->Process->kill(SIGUSR1) && false,
+         'pause' =>
+            $this->Server->Process->sendSignal(SIGTSTP) && false,
+         'resume' =>
+            $this->Server->Process->sendSignal(SIGUSR1) && false,
 
-         'stats' => $this->Server->Process->kill(SIGIO, false) && false, // $this->Server->Process->Signals->send(SIGIO, ['master', 'children'])
-         'peers', 'connections' => $this->Server->Process->kill(SIGIOT, false) && false,
+         'status' =>
+            $this->Server->Process->sendSignal(SIGUSR2, children: false) && true,
+         // ! \Connection
+         'stats' =>
+            // $this->Server->Process->Signal->send(SIGIO, ...)
+            $this->Server->Process->sendSignal(SIGIO, master: false) && false,
+         'peers', 'connections' =>
+            $this->Server->Process->sendSignal(SIGIOT, master: false) && false,
 
-         'clear' => $this->clear() && true, // TODO move to CLI\Console context ($this->clear())
-
-         // @ Help command
-         'help' => $this->log(<<<'OUTPUT'
-         ========================================================
-         `stop`   = Stop the Server and all workers;
-         `pause`  = Pause the Server and all workers;
-         `resume` = Resume the Server and all workers;
-
-         `stats`  = Show stats about connections and data;
-         `peers`  = Show info about active connections remote peers;
-
-         `clear`  = Clear the console screen;
-         ========================================================
-
-         OUTPUT) && true,
-
-         default => $this->log(PHP_EOL . "Error: Command $command not accepted!" . PHP_EOL) && true // TODO help command output
+         'clear' =>
+            $this->clear() && true,
+         'help' =>
+            $this->help() && true,
+         default =>
+            $this->log(PHP_EOL . "Error: Command `$command` not found! Available commands:" . PHP_EOL)
+            && $this->help()
+            && true
       };
    }
 
-   // TODO move to CLI\Console global
-   public function clear ()
+   public function help ()
    {
-      $this->log(chr(27).chr(91).'H'.chr(27).chr(91).'J');
+      $this->log(<<<'OUTPUT'
+      @\;============================================================
+      @:i: `stop` @;   = Stop the Server and all workers;
+      @:i: `pause` @;  = Pause the Server and all workers;
+      @:i: `resume` @; = Resume the Server and all workers;
+
+      @:i: `status` @; = Show info about status of server;
+      @:i: `stats` @;  = Show stats about connections / data per worker;
+      @:i: `peers` @;  = Show info about active connections remote peers;
+
+      @:i: `clear` @;  = Clear this console screen;
+      ============================================================
+
+      OUTPUT);
+
       return true;
    }
 }

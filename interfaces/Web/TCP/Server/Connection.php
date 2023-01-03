@@ -56,6 +56,7 @@ class Connection
    {
       // TODO use @/resources pattern folder
       switch ($name) {
+         // TODO move to Info class?
          case '@stats':
             $worker = sprintf("%02d", $this->Server->Process::$index);
 
@@ -87,7 +88,7 @@ class Connection
                Data Writes Errors   | @:error: {$errors[2]} error(s) @;@\;
                OUTPUT);
             } else {
-               $this->log(' --------------------- No data -------------------- @\;', 2);
+               $this->log(' -------------------- No data. -------------------- @\;', 2);
             }
             $this->log("====================================================@\\;");
 
@@ -121,7 +122,8 @@ class Connection
       }
    }
 
-   public function accept ($Socket) // Accept connection from client / Open connection with client / Connect with client
+   // Accept connection from client / Open connection with client / Connect with client
+   public function accept ($Socket)
    {
       $Connection = false;
 
