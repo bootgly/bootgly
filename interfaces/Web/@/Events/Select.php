@@ -89,7 +89,6 @@ class Select // TODO implements Events
 
       return false;
    }
-
    public function del ($Socket, int $flag)
    {
       $SocketID = (int) $Socket;
@@ -144,9 +143,9 @@ class Select // TODO implements Events
             try {
                // Waiting $this->timeout for read / write / excepts events.
                $connections = @stream_select($read, $write, $except, 0, $this->timeout);
-            } catch (\Throwable $Throwable) {}
+            } catch (\Throwable) {}
          } else {
-            // @ Sleep for 1 second and continue (Used to Server pause)
+            // @ Sleep for 1 second and continue (Used to pause the Server)
             sleep(1);
             continue;
          }
@@ -176,7 +175,6 @@ class Select // TODO implements Events
          // if ($except) {}
       }
    }
-
    public function destroy ()
    {}
 }

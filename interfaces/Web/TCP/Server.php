@@ -49,6 +49,7 @@ class Server
    protected const MODE_INTERACTIVE = 1;
    protected const MODE_DAEMON = 2;
    // * Meta
+   public const VERSION = '0.0.1';
    protected static int $started = 0;
    // @ Status
    protected static int $status = 0;
@@ -111,6 +112,55 @@ class Server
 
          case 'handler':
             return $this->handler;
+
+         // TODO move to Info class?
+         case '@status':
+            // ! Server
+            // @
+            $server = (new \ReflectionClass($this))->getName();
+            $version = self::VERSION;
+            $php = PHP_VERSION;
+            // Runtime
+            $runtime = [];
+            $uptime = time() - static::$started;
+            $runtime['started'] = date('Y-m-d H:i:s', static::$started);
+            // @ uptime (d = days, h = hours, m = minutes)
+            if ($uptime > 60) $uptime += 30;
+            $runtime['d'] = (int) ($uptime / (24 * 60 * 60)) . 'd ';
+            $uptime %= (24 * 60 * 60);
+            $runtime['h'] = (int) ($uptime / (60 * 60)) . 'h ';
+            $uptime %= (60 * 60);
+            $runtime['m'] = (int) ($uptime / 60) . 'm ';
+            $uptime %= 60;
+            $runtime['s'] = (int) ($uptime) . 's ';
+            $uptimes = $runtime['d'] . $runtime['h'] . $runtime['m'] . $runtime['s'];
+            // Load Average
+            $load = ['-', '-', '-'];
+            if ( function_exists('sys_getloadavg') ) {
+               $load = array_map('round', sys_getloadavg(), [2, 2, 2]);
+            }
+            $load = "{$load[0]}, {$load[1]}, {$load[2]}";
+            // Workers
+            $workers = $this->workers;
+            // Socket
+            $address = 'tcp://' . $this->host . ':' . $this->port;
+            // Event-loop
+            $event = (new \ReflectionClass(self::$Event))->getName();
+
+            $this->log(<<<OUTPUT
+            =========================== Server Status ===========================
+            @:i: Bootgly Server: @; {$server}
+            @:i: Bootgly Server version: @; {$version}\t\t@:i: PHP version: @; {$php}
+
+            @:i: Started time: @; {$runtime['started']}\t@:i: Uptime: @; {$uptimes}
+            @:i: Load average: @; $load\t\t@:i: Workers count: @; {$workers}
+            @:i: Socket address: @; {$address}
+
+            @:i: Event-loop: @; {$event}
+            =====================================================================@\\\;
+            OUTPUT);
+
+            break;
       }
    }
    public function __call (string $name, array $arguments)
@@ -146,7 +196,7 @@ class Server
    {
       self::$status = self::STATUS_STARTING;
 
-      $this->log('Starting Server... ', 1);
+      $this->log('Starting Server... ', self::LOG_INFO_LEVEL);
 
       // ! Process
       // $this->Process->Signal->install();
@@ -157,7 +207,7 @@ class Server
       $this->Process->fork($this->workers);
 
       if ($this->Process->level === 'child') {
-         #$this->log('Ops, child exited!' . PHP_EOL);
+         #$this->log('Ops, child exited!@\;');
          #exit;
       }
 
@@ -186,7 +236,8 @@ class Server
             // Allows multiple bindings to a same ip:port pair, even from separate processes.
             'so_reuseport' => true,
 
-            // Setting this option to true will set SOL_TCP,NO_DELAY=1 appropriately, thus disabling the TCP Nagle algorithm.
+            // Setting this option to true will set SOL_TCP, NO_DELAY=1 appropriately, 
+            // thus disabling the TCP Nagle algorithm.
             'tcp_nodelay' => false,
 
             // Enables sending and receiving data to/from broadcast addresses.
@@ -205,7 +256,7 @@ class Server
       } catch (\Throwable) {};
 
       if ($this->Socket === false) {
-         $this->log(PHP_EOL . 'Could not create socket: ' . $error_message, self::LOG_ERROR_LEVEL);
+         $this->log('@\;Could not create socket: ' . $error_message, self::LOG_ERROR_LEVEL);
          exit(1);
       }
 
@@ -227,8 +278,9 @@ class Server
    {
       self::$status = self::STATUS_RUNNING;
 
-      $this->log(PHP_EOL . 'Entering in CLI interaction mode...' . PHP_EOL, 4);
-      $this->log('>_ Type `stop` to stop the Server or `help` to list commands.' . PHP_EOL . PHP_EOL);
+      $this->log('@\\\;Entering in CLI interaction mode...@\;', self::LOG_SUCCESS_LEVEL);
+      $this->log('>_ Type `CTRL+C`[2x] to stop the Server or `help` to list commands.@\;');
+      $this->log('>_ Autocompletation and history enabled.@\\\;', self::LOG_NOTICE_LEVEL);
 
       while (1) {
          // Calls signal handlers for pending signals
@@ -242,16 +294,16 @@ class Server
          if ($pid === 0) {
             $interact = $this->Console->interact();
 
+            $this->log('@\;');
+
             // Wait for command output before looping
             if ($interact === false) {
-               $this->log(PHP_EOL);
-
                usleep(100000 * $this->workers); // @ wait 0.1 s * qt workers
             }
 
             continue;
          } else if ($pid > 0) { // If a child has already exited?
-            $this->log(PHP_EOL . 'Child exited!' . PHP_EOL, self::LOG_ERROR_LEVEL);
+            $this->log('@\;Child exited!@\;', self::LOG_ERROR_LEVEL);
             $this->stop();
             break;
          } else if ($pid === -1) { // If error
@@ -263,13 +315,13 @@ class Server
    private function close ()
    {
       if ($this->Socket === null || $this->Socket === false) {
-         #$this->log(PHP_EOL . '$this->Socket is false or null!' . PHP_EOL);
+         #$this->log('@\;$this->Socket is false or null!@\;');
          exit(1);
       }
 
       $resource = get_resource_type($this->Socket);
       if ($resource !== 'stream') {
-         #$this->log(PHP_EOL . 'Resource type of $this->Socket is not a stream!');
+         #$this->log('@\;Resource type of $this->Socket is not a stream!');
          exit(1);
       }
 
@@ -279,9 +331,9 @@ class Server
       } catch (\Throwable) {}
 
       if ($closed === false) {
-         #$this->log(PHP_EOL . 'Failed to close $this->Socket!');
+         #$this->log('@\;Failed to close $this->Socket!');
       } else {
-         #$this->log(PHP_EOL . 'Sockets closed successful.', 4);
+         #$this->log('@\;Sockets closed successful.', 5);
       }
 
       $this->Socket = null;
@@ -291,7 +343,7 @@ class Server
    {
       if (self::$status !== self::STATUS_PAUSED) {
          match ($this->Process->level) {
-            'master' => $this->log("Server needs to be paused to resume!" . PHP_EOL . PHP_EOL, 3),
+            'master' => $this->log("Server needs to be paused to resume!@\\;", 4),
             'child' => null
          };
          
@@ -301,7 +353,7 @@ class Server
       self::$status = self::STATUS_RUNNING;
 
       match ($this->Process->level) {
-         'master' => $this->log("Resuming {$this->Process->children} worker(s)... " . PHP_EOL . PHP_EOL, 2),
+         'master' => $this->log("Resuming {$this->Process->children} worker(s)... @\\;", 3),
          'child' => self::$Event->add($this->Socket, self::$Event::EVENT_READ, 'accept')
       };
 
@@ -311,7 +363,7 @@ class Server
    {
       if (self::$status !== self::STATUS_RUNNING) {
          match ($this->Process->level) {
-            'master' => $this->log("Server needs to be running to pause!" . PHP_EOL . PHP_EOL, 3),
+            'master' => $this->log("Server needs to be running to pause!@\\;", 4),
             'child' => null
          };
 
@@ -321,7 +373,7 @@ class Server
       self::$status = self::STATUS_PAUSED;
 
       match ($this->Process->level) {
-         'master' => $this->log("Pausing {$this->Process->children} worker(s)... " . PHP_EOL . PHP_EOL, 2),
+         'master' => $this->log("Pausing {$this->Process->children} worker(s)... @\\;", 3),
          'child' => self::$Event->del($this->Socket, self::$Event::EVENT_READ)
       };
 
@@ -332,7 +384,7 @@ class Server
       self::$status = self::STATUS_STOPING;
 
       match ($this->Process->level) {
-         'master' => $this->log("{$this->Process->children} worker(s) stopped!" . PHP_EOL . PHP_EOL, 2),
+         'master' => $this->log("{$this->Process->children} worker(s) stopped!@\\;", 3),
          'child' => $this->close()
       };
 
