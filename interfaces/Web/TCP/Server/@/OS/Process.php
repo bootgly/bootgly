@@ -11,6 +11,7 @@
 namespace Bootgly\Web\TCP\_\OS;
 
 
+use const Bootgly\HOME_DIR;
 use Bootgly\CLI\_\ {
    Logger\Logging
 };
@@ -31,8 +32,9 @@ class Process
    public static int $index;
    public static int $master;
    public static array $children = [];
-
-   public static $pidFile = '/workspace/server.pid';
+   // File
+   public static $pidFile = HOME_DIR . '/workspace/server.pid';
+   public static $pidLockFile = HOME_DIR . '/workspace/server.pid.lock';
 
 
    public function __construct (Server &$Server)
@@ -68,7 +70,7 @@ class Process
    {
       static $file;
 
-      $lock_file = $_SERVER['PWD'] . static::$pidFile . '.lock';
+      $lock_file = static::$pidLockFile;
 
       $file = $file ? : \fopen($lock_file, 'a+');
 
@@ -182,7 +184,7 @@ class Process
    {
       $this->log("forking $workers workers... ", self::LOG_INFO_LEVEL);
 
-      $script = $_SERVER['PWD'] . '/' . $_SERVER['PHP_SELF'];
+      $script = HOME_DIR . $_SERVER['PHP_SELF'];
 
       for ($i = 0; $i < $workers; $i++) {
          $pid = pcntl_fork();
@@ -221,8 +223,16 @@ class Process
 
    protected static function saveMasterPid () // Save process master id to file
    {
-      if (file_put_contents($_SERVER['PWD'] . static::$pidFile, static::$master) === false) {
-         throw new \Exception('Can not save pid to ' . $_SERVER['PWD'] . static::$pidFile);
+      if (file_put_contents(static::$pidFile, static::$master) === false) {
+         throw new \Exception('Can not save master pid to ' . static::$pidFile);
+      }
+   }
+
+   public function __destruct()
+   {
+      if ($this->level === 'master') {
+         unlink(static::$pidFile);
+         unlink(static::$pidLockFile);
       }
    }
 }
