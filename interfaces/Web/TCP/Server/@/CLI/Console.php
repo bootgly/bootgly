@@ -70,7 +70,7 @@ class Console extends CLI\Console
       return match ($command) {
          // ! Server
          'stop', 'exit', 'quit' => 
-            $this->log("@\;Stopping {$this->Server->Process->children} worker(s)... ", self::LOG_WARNING_LEVEL)
+            $this->log('@\;Stopping '. $this->Server->Process->children . ' worker(s)... ', self::LOG_WARNING_LEVEL)
             && $this->Server->Process->sendSignal(SIGINT)
             && false,
          'pause' =>
@@ -91,10 +91,8 @@ class Console extends CLI\Console
             $this->clear() && true,
          'help' =>
             $this->help() && true,
-         default =>
-            $this->log(PHP_EOL . "Error: Command `$command` not found! Available commands:" . PHP_EOL)
-            && $this->help()
-            && true
+
+         default => passthru($command) !== false && true
       };
    }
 
