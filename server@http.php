@@ -10,12 +10,8 @@
 
 namespace Bootgly;
 
-const HOME_DIR = __DIR__.DIRECTORY_SEPARATOR;
 
-require_once 'boot/..php';
-require_once 'core/@loader.php';
-require_once 'interfaces/@loader.php';
-require_once 'nodes/@loader.php';
+require_once '@/autoload.php';
 
 
 #use Bootgly\Web\TCP;
@@ -24,8 +20,6 @@ use Bootgly\Web\HTTP\Server\Request;
 use Bootgly\Web\HTTP\Server\Response;
 use Bootgly\Web\HTTP\Server\Router;
 
-$Bootgly = new Bootgly;
-$Web = new Web($Bootgly);
 
 $HTTPServer = new HTTP\Server($Web);
 $HTTPServer->configure(

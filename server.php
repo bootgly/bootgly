@@ -11,9 +11,7 @@
 namespace Bootgly;
 
 
-require_once 'boot/..php';
-require_once 'core/@loader.php';
-require_once 'interfaces/@loader.php';
+require_once '@/autoload.php';
 
 
 use Bootgly\Web\TCP;
