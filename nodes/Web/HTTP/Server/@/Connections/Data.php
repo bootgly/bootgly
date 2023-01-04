@@ -70,7 +70,7 @@ class Data extends TCPData
       // @ Set HTTP Data
       // ! HTTP
       // ? Response Content
-      $Response->Content->raw = ($this->Connection->Server->handler)(
+      $Response->Content->raw = ($this->Connection->handler)(
          $Request,
          $Response,
          $Router

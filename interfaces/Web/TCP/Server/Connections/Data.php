@@ -72,10 +72,13 @@ class Data implements Connections
    {
       try {
          $input = @fread($Socket, 65535);
-      } catch (\Throwable) {}
+      } catch (\Throwable) {
+         $input = false;
+      }
 
-      // Close connection if input data is empty
+      // Close connection if input data is empty to avoid unnecessary loop
       if ($input === '') {
+         // $this->log('Failed to read buffer: input data is empty!' . PHP_EOL);
          $this->Connection->close($Socket);
          return false;
       }
@@ -84,38 +87,42 @@ class Data implements Connections
       if ($input === false) {
          try {
             if (@feof($Socket)) {
-               #$this->log('Failed to read buffer: End-of-file!' . PHP_EOL);
+               // $this->log('Failed to read buffer: End-of-file!' . PHP_EOL);
                $this->Connection->close($Socket);
                return false;
             }
          } catch (\Throwable) {}
 
-         if (is_resource($Socket) === false || get_resource_type($Socket) !== 'stream') {
-            $this->errors['read']++;
-            #$this->log('Failed to read buffer!' . PHP_EOL);
+         if (is_resource($Socket) && get_resource_type($Socket) === 'stream') {
+            // $this->log('Failed to read buffer: closing connection...' . PHP_EOL);
             $this->Connection->close($Socket);
-            return false;
          }
+
+         $this->errors['read']++;
+
+         return false;
       }
 
+      // @ On success
+      (self::$input !== $input) ? ($this->changed = true) : ($this->changed = false);
+
       // @ Set Buffer input
-      self::$input !== $input ? $this->changed = true : $this->changed = false;
       if ($this->cache === false || $this->changed === true) {
          #self::$input .= $input;
          self::$input = $input;
       }
 
-      // @ On success
-      // Global stats
+      // @ Write Stats
+      // Global
       $this->reads++;
       $this->read += strlen($input);
-      // Per client stats
+      // Per client
       @$this->Connection->peers[(int) $Socket]['stats']['reads']++;
 
       // TODO test it
       if ($write) {
          #Server::$Event->add($Socket, Server::$Event::EVENT_WRITE, 'write');
-         $this->write($Socket);
+         return $this->write($Socket);
       }
 
       return true;
@@ -124,10 +131,9 @@ class Data implements Connections
    {
       // @ Set Buffer output
       if ($handle) {
-         $this->output = ($this->Connection->Server->handler)(...$this->callbacks);
+         $this->output = ($this->Connection->handler)(...$this->callbacks);
       }
 
-      $written = 0;
       try {
          while (true) {
             $written = @fwrite($Socket, $this->output, $length);
@@ -150,42 +156,40 @@ class Data implements Connections
          #$written = @fwrite($Socket, $this->output, $length);
 
          #@fflush($Socket);
-      } catch (\Throwable) {}
+      } catch (\Throwable) {
+         $written = false;
+      }
 
       // @ Check issues
       if ($written === 0 || $written === false) {
          try {
             if (@feof($Socket)) {
-               #$this->log('Failed to write data: End-of-file!' . PHP_EOL);
+               // $this->log('Failed to write data: End-of-file!' . PHP_EOL);
                $this->Connection->close($Socket);
                return false;
             }
          } catch (\Throwable) {}
 
-         if (is_resource($Socket) === false || get_resource_type($Socket) !== 'stream') {
-            #$this->log('Failed to write data: resource is not a stream!' . PHP_EOL);
-            $this->Connection->close($Socket);
-            return false;
-         }
-
          if ($written === 0) {
-            $this->errors['write']++;
-            #$this->log('Failed to write data: 0 bytes written!' . PHP_EOL);
-            $this->Connection->close($Socket);
-            return false;
+            // $this->log('Failed to write data: 0 bytes written!' . PHP_EOL);
+         } else if ($written === false) {
+            // $this->log('Failed to write data: unknown error!' . PHP_EOL);
          }
 
-         if ($written === false) {
-            $this->errors['write']++;
-            #$this->log('Failed to write data: unknown error!' . PHP_EOL);
+         if (is_resource($Socket) && get_resource_type($Socket) === 'stream') {
+            // $this->log('Failed to write data: closing connection...' . PHP_EOL);
             $this->Connection->close($Socket);
-            return false;
          }
+
+         $this->errors['write']++;
+
+         return false;
       }
 
       // @ On success
       if ($handle) {
          #Server::$Event->del($Socket, Server::$Event::EVENT_WRITE);
+
          // Reset Buffer
          self::$input = '';
       }

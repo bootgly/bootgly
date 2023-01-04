@@ -23,10 +23,11 @@ class Connection
    use Logging;
 
 
-   public Server $Server;
+   public ? Server $Server;
 
    // * Config
    public ? float $timeout;
+   public ? \Closure $handler;
    // * Data
    public $Socket;
    // * Meta
@@ -39,12 +40,14 @@ class Connection
    public Connections $Data;
 
 
-   public function __construct (Server &$Server)
+   public function __construct (? Server &$Server = null, $Socket = null)
    {
       $this->Server = $Server;
 
       // * Config
       $this->timeout = 5;
+      // * Data
+      $this->Socket = $Socket;
       // * Meta
       // @ Remote
       $this->peers = [];      // Connections peers
@@ -58,6 +61,10 @@ class Connection
       switch ($name) {
          // TODO move to Info class?
          case '@stats':
+            if ($this->Server === null) {
+               return false;
+            }
+
             $worker = sprintf("%02d", $this->Server->Process::$index);
 
             $connections = $this->connections;
@@ -73,7 +80,7 @@ class Connection
             $errors[1] = $this->Data->errors['read'];
             $errors[2] = $this->Data->errors['write'];
 
-            $this->log("@\;==================== Worker #{$worker} ====================@\;");
+            $this->log("@\;==================== @:success: Worker #{$worker} @; ====================@\;");
             if ($connections > 0) {
                $this->log(<<<OUTPUT
                Connections Accepted | @:info: {$connections} connection(s) @;
@@ -94,6 +101,10 @@ class Connection
 
             break;
          case '@peers':
+            if ($this->Server === null) {
+               return false;
+            }
+
             $worker = $this->Server->Process::$index;
 
             $this->log(PHP_EOL . "Worker #{$worker}:" . PHP_EOL);
@@ -109,7 +120,13 @@ class Connection
                         $this->log('  ' . $key2 . ' : ' . $value2 . PHP_EOL);
                      }
                   } else {
-                     $this->log($key . ': ' . $value . PHP_EOL);
+                     switch ($key) {
+                        case 'started':
+                           $this->log($key . ': ' . date('Y-m-d H:i:s', $value) . PHP_EOL);
+                           break;
+                        default:
+                           $this->log($key . ': ' . $value . PHP_EOL);
+                     }
                   }
                }
             }

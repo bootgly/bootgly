@@ -42,8 +42,6 @@ class Server
    protected ? string $host;
    protected ? int $port;
    protected int $workers;
-
-   protected ? \Closure $handler;
    // @ Mode
    protected int $mode;
    protected const MODE_INTERACTIVE = 1;
@@ -109,9 +107,6 @@ class Server
             return $this->Connection;
          case 'Process':
             return $this->Process;
-
-         case 'handler':
-            return $this->handler;
 
          // TODO move to Info class?
          case '@status':
@@ -188,7 +183,7 @@ class Server
       $this->port = $port;
       $this->workers = $workers;
 
-      $this->handler = $handler;
+      $this->Connection->handler = $handler;
 
       return $this;
    }
@@ -260,8 +255,10 @@ class Server
          exit(1);
       }
 
-      $Socket = socket_import_stream($this->Socket);
-      socket_set_option($Socket, SOL_SOCKET, SO_KEEPALIVE, 1);
+      if (function_exists('socket_import_stream')) {
+         $Socket = socket_import_stream($this->Socket);
+         socket_set_option($Socket, SOL_SOCKET, SO_KEEPALIVE, 1);
+      }
 
       self::$status = self::STATUS_RUNNING;
    }
@@ -279,7 +276,7 @@ class Server
       self::$status = self::STATUS_RUNNING;
 
       $this->log('@\\\;Entering in CLI interaction mode...@\;', self::LOG_SUCCESS_LEVEL);
-      $this->log('>_ Type `CTRL+C`[2x] to stop the Server or `help` to list commands.@\;');
+      $this->log('>_ Type `quit` to stop the Server or `help` to list commands.@\;');
       $this->log('>_ Autocompletation and history enabled.@\\\;', self::LOG_NOTICE_LEVEL);
 
       while (1) {
