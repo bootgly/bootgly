@@ -31,7 +31,7 @@ class Data implements Connections
    public bool $cache;
    // * Data
    // @ Buffer
-   public static string $input = '';
+   public static string $input;
    public string $output;
    public bool $changed;
    // * Meta
@@ -53,9 +53,9 @@ class Data implements Connections
       $this->cache = true;
       // * Data
       // @ Buffer
-      #self::$input = '';
+      self::$input = '';
       $this->output = '';
-      $this->changed = false;
+      $this->changed = true;
       // * Meta
       $this->read = 0;            // Input Data length (bytes read).
       $this->written = 0;         // Output Data length (bytes written).
@@ -76,9 +76,11 @@ class Data implements Connections
          $input = false;
       }
 
+      // @ Check connection close intention by peer?
       // Close connection if input data is empty to avoid unnecessary loop
       if ($input === '') {
          // $this->log('Failed to read buffer: input data is empty!' . PHP_EOL);
+         // Server::$Event->del($Socket, Server::$Event::EVENT_WRITE);
          $this->Connection->close($Socket);
          return false;
       }
@@ -86,15 +88,19 @@ class Data implements Connections
       // @ Check issues
       if ($input === false) {
          try {
-            if (@feof($Socket)) {
-               // $this->log('Failed to read buffer: End-of-file!' . PHP_EOL);
-               $this->Connection->close($Socket);
-               return false;
-            }
-         } catch (\Throwable) {}
+            $eof = @feof($Socket);
+         } catch (\Throwable) {
+            $eof = false;
+         }
+
+         if ($eof) {
+            // $this->log('Failed to read buffer: End-of-file!' . PHP_EOL);
+            $this->Connection->close($Socket);
+            return false;
+         }
 
          if (is_resource($Socket) && get_resource_type($Socket) === 'stream') {
-            // $this->log('Failed to read buffer: closing connection...' . PHP_EOL);
+            $this->log('Failed to read buffer: closing connection...' . PHP_EOL);
             $this->Connection->close($Socket);
          }
 
@@ -119,10 +125,12 @@ class Data implements Connections
       // Per client
       @$this->Connection->peers[(int) $Socket]['stats']['reads']++;
 
-      // TODO test it
+      // @ Write Data
       if ($write) {
+         // TODO implement this data write by default?
          #Server::$Event->add($Socket, Server::$Event::EVENT_WRITE, 'write');
-         return $this->write($Socket);
+
+         $this->write($Socket);
       }
 
       return true;
@@ -135,8 +143,10 @@ class Data implements Connections
       }
 
       try {
+         $buffer = $this->output;
+
          while (true) {
-            $written = @fwrite($Socket, $this->output, $length);
+            $written = @fwrite($Socket, $buffer, $length);
 
             if ($written === false) {
                break;
@@ -145,17 +155,13 @@ class Data implements Connections
             // Check if the entire message has been sented
             if ($written < $length) { // If not sent the entire message 
                // Get the part of the message that has not yet been sented as message
-               $this->output = substr($this->output, $written);
+               $buffer = substr($buffer, $written);
                // Get the length of the not sented part
                $length -= $written;
             } else {
                break;
             }
          }
-
-         #$written = @fwrite($Socket, $this->output, $length);
-
-         #@fflush($Socket);
       } catch (\Throwable) {
          $written = false;
       }
@@ -163,21 +169,25 @@ class Data implements Connections
       // @ Check issues
       if ($written === 0 || $written === false) {
          try {
-            if (@feof($Socket)) {
-               // $this->log('Failed to write data: End-of-file!' . PHP_EOL);
-               $this->Connection->close($Socket);
-               return false;
-            }
-         } catch (\Throwable) {}
+            $eof = @feof($Socket);
+         } catch (\Throwable) {
+            $eof = false;
+         }
 
+         // @ Check connection reset by peer?
+         if ($eof) {
+            $this->log('Failed to write data: End-of-file!' . PHP_EOL);
+            $this->Connection->close($Socket);
+            return false;
+         }
+
+         // @ Check connection close intention by server?
          if ($written === 0) {
-            // $this->log('Failed to write data: 0 bytes written!' . PHP_EOL);
-         } else if ($written === false) {
-            // $this->log('Failed to write data: unknown error!' . PHP_EOL);
+            $this->log('Failed to write data: 0 bytes written!' . PHP_EOL);
          }
 
          if (is_resource($Socket) && get_resource_type($Socket) === 'stream') {
-            // $this->log('Failed to write data: closing connection...' . PHP_EOL);
+            $this->log('Failed to write data: closing connection...' . PHP_EOL);
             $this->Connection->close($Socket);
          }
 
@@ -190,7 +200,7 @@ class Data implements Connections
       if ($handle) {
          #Server::$Event->del($Socket, Server::$Event::EVENT_WRITE);
 
-         // Reset Buffer
+         // Reset Input Buffer
          self::$input = '';
       }
 
