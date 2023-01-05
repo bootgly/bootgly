@@ -23,17 +23,20 @@ class Response
    public Web $Web;
    public HTTP\Server $Server;
 
-   // * Config
-   public bool $debugger;
-   // * Data
-   public $body;
-   public ? string $source; //! move to Content->source? join with type?
-   public ? string $type;   //! move to Content->type or Header->Content->type?
-   public ? array $resources;
    // ! HTTP
    public object $Meta;
    public object $Header;
    public object $Content;
+
+   // * Config
+   public bool $debugger;
+   // * Data
+   public $body;
+
+   public ? string $source; //! move to Content->source? join with type?
+   public ? string $type;   //! move to Content->type or Header->Content->type?
+
+   public ? array $resources;
    // * Meta
    private ? string $resource;
    // @ Buffer Status
@@ -48,26 +51,10 @@ class Response
       $this->Web = &$Web;
       $this->Server = &$Server;
 
-      // * Config
-      $this->debugger = true;
-      // * Data
-      $this->body = null;
-
-      $this->source = null; // TODO rename to resource?
-      $this->type = null;
-
-      // TODO rename to sources?
-      $this->resources = $resources !== null ? $resources : ['JSON', 'JSONP', 'View', 'HTML/pre'];
       // ! HTTP
       // TODO move to file class
       $this->Meta = new class ()
       {
-         // * Config
-         // * Data
-         private string $raw;
-         private string $protocol;
-         // * Meta
-         // @ status
          private const PHRASES = [
             100 => 'Continue',
             101 => 'Switching Protocols',
@@ -128,7 +115,13 @@ class Response
             508 => 'Loop Detected',
             511 => 'Network Authentication Required',
          ];
+
+         // * Config
+         // * Data
+         private string $protocol;
          private int|string $status;
+         // * Meta
+         private string $raw;
 
 
          public function __construct ()
@@ -136,43 +129,37 @@ class Response
             // * Config
             // * Data
             $this->protocol = 'HTTP/1.1';
-            // * Meta
             $this->status = '200 OK';
-
-            $this->raw = $this->protocol . ' ' . $this->status;
+            // * Meta
+            // @ raw
+            $this->reset();
          }
-         public function __get ($name)
+         public function __get (string $name)
          {
-            switch ($name) {
-               case 'raw':
-                  if (@$this->raw) {
-                     return $this->raw;
-                  }
-
-                  return $this->raw = $this->protocol . ' ' . $this->status;
-               default:
-                  return $this->$name;
-            }
+            return $this->$name;
          }
-         public function __set ($name, $value)
+         public function __set (string $name, $value)
          {
             switch ($name) {
                case 'raw':
                   break;
                case 'status':
-                  (string) $this->status = match ($value) {
+                  $this->status = match ($value) {
                      (int) $value => $value . ' ' . self::PHRASES[$value],
                      (string) $value => array_search($value, self::PHRASES) . ' ' . $value
                   };
+
+                  $this->reset();
 
                   break;
                default:
                   $this->$name = $value;
             }
          }
-         public function __unset ($name)
+
+         public function reset () // @ raw
          {
-            unset($this->$name);
+            $this->raw = $this->protocol . ' ' . $this->status;
          }
       };
       $this->Content = new class ()
@@ -226,19 +213,10 @@ class Response
             // * Data
             $this->fields = [
                'Server' => 'Bootgly',
-               'Content-Type' => 'text/plain; charset=UTF-8'
+               'Content-Type' => 'text/html; charset=UTF-8'
             ];
             // * Meta
             $this->raw = '';
-
-            $this->_init();
-         }
-         public function _init ()
-         {
-            if (\PHP_SAPI !== 'cli') {
-               $fields = apache_response_headers();
-               $this->fields = $fields;
-            }
          }
          public function __get (string $name)
          {
@@ -246,7 +224,7 @@ class Response
                case 'fields':
                case 'headers':
                   if (\PHP_SAPI !== 'cli') {
-                     $this->_init();
+                     $this->fields = apache_response_headers();
                   }
 
                   return $this->fields;
@@ -255,14 +233,10 @@ class Response
                   if ($this->raw !== '') {
                      return $this->raw;
                   }
-                  
-                  $raw = '';
 
-                  foreach ($this->fields as $name => $value) {
-                     $raw .= "$name: $value\r\n";
-                  }
+                  $this->reset();
 
-                  return $this->raw = $raw;
+                  return $this->raw;
 
                case 'sent': // TODO refactor
                   if (\PHP_SAPI !== 'cli') {
@@ -279,50 +253,33 @@ class Response
          {
             $this->$name = $value;
          }
-         public function __unset ($name)
+
+         public function reset () // @ raw
          {
-            unset($this->fields[$name]);
+            foreach ($this->fields as $name => $value) {
+               $this->raw .= "$name: $value\r\n";
+            }
+
+            $this->raw = rtrim($this->raw);
          }
 
          public function get (string $name)
          {
             return @$this->fields[$name];
          }
-         public function set (string $field, ? string $value = null) // TODO refactor
+         public function set (string $field, string $value = '') // TODO refactor
          {
-            if ($value === null) {
-               [$name, $value] = explode(':', $field);
+            $this->fields[$field] = $value;
 
-               $this->fields[$name] = $value ?? true;
-
-               if (\PHP_SAPI !== 'cli') {
-                  header($field, true);
-               }
-            } else {
-               $this->fields[$field] = $value ?? true;
-
-               if (\PHP_SAPI !== 'cli') {
-                  header($field . ': ' . $value, true);
-               }
-            }
+            if (\PHP_SAPI !== 'cli')
+               header($field . ': ' . $value, true);
          }
-         public function append (string $field, ? string $value = null) // TODO refactor
+         public function append (string $field, string $value = '') // TODO refactor
          {
-            if ($value === null) {
-               [$name, $value] = explode(':', $field);
+            $this->fields[$field] = $value;
 
-               $this->fields[$name] = $value ?? true;
-
-               if (\PHP_SAPI !== 'cli') {
-                  header($field, false);
-               }
-            } else {
-               $this->fields[$field] = $value ?? true;
-
-               if (\PHP_SAPI !== 'cli') {
-                  header($field . ': ' . $value, false);
-               }
-            }
+            if (\PHP_SAPI !== 'cli')
+               header($field . ': ' . $value, false);
          }
          public function list (array $headers)
          {
@@ -335,6 +292,17 @@ class Response
             }
          }
       };
+
+      // * Config
+      $this->debugger = true;
+      // * Data
+      $this->body = null;
+
+      $this->source = null; // TODO rename to resource?
+      $this->type = null;
+
+      // TODO rename to sources?
+      $this->resources = $resources !== null ? $resources : ['JSON', 'JSONP', 'View', 'HTML/pre'];
       // * Meta
       $this->resource = null;
 
@@ -412,7 +380,7 @@ class Response
             return $this->$name(...$arguments);
       }
    }
-   public function __invoke ($x = null, string $raw = '')
+   public function __invoke ($x = null, string $raw = '', int $status = 200)
    {
       if ($x === null && $raw) {
          $this->resource = 'raw';
@@ -421,6 +389,35 @@ class Response
 
       $this->prepare();
       return $this->process($x);
+   }
+
+   public function parse ($handler, $callbacks)
+   {
+      // ? Response Content
+      try {
+         $this->Content->raw = $handler(...$callbacks);
+      } catch (\Throwable) {
+         // $this->Content->raw = '';
+         $this->Meta->status = 500; // @ 500 HTTP Server Error
+      }
+
+      $this->Content->length = strlen($this->Content->raw);
+      // ? Response Header
+      $this->Header->set('Content-Length', $this->Content->length);
+      // ? Response Meta
+      // ...
+
+      return <<<HTTP_RAW
+      {$this->Meta->raw}
+      {$this->Header->raw}
+
+      {$this->Content->raw}
+      HTTP_RAW;
+   }
+   public function reset ()
+   {
+      $this->Meta->__construct();
+      $this->Header->__construct();
    }
 
    public function prepare (? string $resource = null)
@@ -565,14 +562,18 @@ class Response
       }
 
       // Set variables
+      /**
+       * @var \Bootgly\Web $Web
+       */
       $Web = &$this->Web;
       $Request = &$this->Server->Request;
       $Response = &$this->Server->Response;
       $Route = &$this->Server->Router->Route;
       // TODO add variables dinamically according to loaded modules and loaded web classes
-      $API = &$this->Web->API ?? null;
-      $App = &$this->Web->App ?? null;
-      $System = &$this->Web->System ?? null;
+
+      $API = &$Web->API ?? null;
+      $App = &$Web->App ?? null;
+      $System = &$Web->System ?? null;
 
       // Output/Buffer start()
       ob_start();
