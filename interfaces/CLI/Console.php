@@ -37,6 +37,7 @@ class Console
 
       if ($search || count(self::$command) === 0) {
          $commands = array_filter(static::$commands, function ($command) use ($search) {
+            $command = preg_quote($command, '/');
             return preg_match("/$search/i", $command);
          });
       }
