@@ -109,6 +109,7 @@ class Request
          return $parsed;
       }
 
+      // TODO move to @/resources
       switch ($name) {
          // * Config
          case 'base':
@@ -475,7 +476,7 @@ class Request
 
    private function parse (string $name) // TODO (WIP)
    {
-      if (Data::$parsed || ! Data::$input)
+      if (Data::$parsed)
          return false;
 
       Data::$parsing = true;
@@ -502,17 +503,9 @@ class Request
 
             [$method, $uri, $procotol] = explode(' ', $meta, 3);
 
-            switch ($name) {
-               case 'method':
-                  $this->method = $method;
-                  break;
-               case 'uri':
-                  $this->uri = $uri ?? '/';
-                  break;
-               case 'protocol':
-                  $this->protocol = $procotol;
-                  break;
-            }
+            $this->method = $method;
+            $this->uri = $uri ?? '/';
+            $this->protocol = $procotol;
       }
 
       Data::$parsing = false;
