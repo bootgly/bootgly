@@ -14,6 +14,7 @@ namespace Bootgly\Web\TCP\Server;
 use Bootgly\CLI\_\ {
    Logger\Logging
 };
+use Bootgly\Event;
 use Bootgly\Web\TCP\Server;
 use Bootgly\Web\TCP\Server\Connections;
 
@@ -24,6 +25,8 @@ class Connection
 
 
    public ? Server $Server;
+
+   public Event\On $On;
 
    // * Config
    public ? float $timeout;
@@ -43,6 +46,8 @@ class Connection
    public function __construct (? Server &$Server = null, $Socket = null)
    {
       $this->Server = $Server;
+
+      $this->On = new Event\On;
 
       // * Config
       $this->timeout = 5;
@@ -160,8 +165,6 @@ class Connection
       }
 
       // @ On success
-      // TODO call handler event on Connect here
-
       // Peer stats
       $this->peers[(int) $Connection] = [
          'peer' => $peer,
@@ -175,7 +178,10 @@ class Connection
       // Connection Status
       $this->connections++;
 
+      // TODO call handler event $this->On->accept here
+      // $this->On->accept($Connection);
       Server::$Event->add($Connection, Server::$Event::EVENT_READ, 'read');
+      // TODO implement this data write by default?
       #Server::$Event->add($Connection, Server::$Event::EVENT_WRITE, 'write');
 
       return true;
@@ -202,6 +208,7 @@ class Connection
       }
 
       // @ On success
+      // Remove active connection from @peers
       unset($this->peers[(int) $Connection]);
 
       return true;

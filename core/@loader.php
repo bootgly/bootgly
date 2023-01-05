@@ -4,8 +4,11 @@ require 'Bootgly.php';
 
 // ? Database
 require 'Database.php';
-// ? Events
-require 'Events.php';
+// ? Event
+require 'Event.php';
+require 'Event/Loops.php'; // @interface
+// On
+require 'Event/On.php';
 // ? Project
 require 'Project.php';
 // ? Template
