@@ -11,16 +11,16 @@
 namespace Bootgly\Web\_\Events;
 
 
+use Bootgly\Event;
+
 use Bootgly\CLI\_\ {
    Logger\Logging
 };
 
-use Bootgly\Web\TCP\Server;
 use Bootgly\Web\TCP\Server\Connection;
-use Bootgly\Web\TCP\Server\Connections;
 
 
-class Select // TODO implements Events
+class Select implements Event\Loops
 {
    use Logging;
 
@@ -47,10 +47,8 @@ class Select // TODO implements Events
       $this->Connection = $Connection;
    }
 
-   public function add ($Socket, int $flag, $action)
+   public function add ($Socket, int $flag, $action, ? array $arguments = null)
    {
-      $SocketID = (int) $Socket;
-
       switch ($flag) {
          case self::EVENT_READ:
             // System call select exceeded the maximum number of connections 1024, please install event/libevent extension for more connections.
@@ -58,9 +56,9 @@ class Select // TODO implements Events
                return false;
             }
 
-            $this->events[$SocketID][$flag] = $action;
-
-            $this->reads[$SocketID] = $Socket;
+            $SocketId = (int) $Socket;
+            $this->events[$SocketId][$flag] = $action;
+            $this->reads[$SocketId] = $Socket;
 
             return true;
          case self::EVENT_WRITE:
@@ -69,9 +67,9 @@ class Select // TODO implements Events
                return false;
             }
 
-            $this->events[$SocketID][$flag] = $action;
-
-            $this->writes[$SocketID] = $Socket;
+            $SocketId = (int) $Socket;
+            $this->events[$SocketId][$flag] = $action;
+            $this->writes[$SocketId] = $Socket;
 
             return true;
          case self::EVENT_EXCEPT:
@@ -80,9 +78,9 @@ class Select // TODO implements Events
                return false;
             }
 
-            $this->events[$SocketID][$flag] = $action;
-
-            $this->excepts[$SocketID] = $Socket;
+            $SocketId = (int) $Socket;
+            $this->events[$SocketId][$flag] = $action;
+            $this->excepts[$SocketId] = $Socket;
 
             return true;
       }
@@ -91,10 +89,10 @@ class Select // TODO implements Events
    }
    public function del ($Socket, int $flag)
    {
-      $SocketID = (int) $Socket;
-
       switch ($flag) {
          case self::EVENT_READ:
+            $SocketID = (int) $Socket;
+
             unset($this->events[$SocketID][$flag]);
             unset($this->reads[$SocketID]);
 
@@ -104,6 +102,8 @@ class Select // TODO implements Events
 
             return true;
          case self::EVENT_WRITE:
+            $SocketID = (int) $Socket;
+
             unset($this->events[$SocketID][$flag]);
             unset($this->writes[$SocketID]);
 
@@ -113,6 +113,8 @@ class Select // TODO implements Events
 
             return true;
          case self::EVENT_EXCEPT:
+            $SocketID = (int) $Socket;
+
             unset($this->events[$SocketID][$flag]);
             unset($this->excepts[$SocketID]);
 
