@@ -19,6 +19,7 @@ server-*.php
 
 ### Bootstrap
 ## /@
+@/php.ini
 # Ignore imported packages (equivalent to vendor)
 @/imports/*
 ## /core
