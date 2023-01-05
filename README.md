@@ -1,6 +1,6 @@
 # Bootgly PHP Framework (v0.0.1-pre-alpha)
 
-**Full Stack PHP Framework to Multi Projects (WIP)**
+**Full Stack PHP Framework for Multi Projects (WIP)**
 
 Do not use it in production environments. The alpha version hasn't even been released yet.
 
