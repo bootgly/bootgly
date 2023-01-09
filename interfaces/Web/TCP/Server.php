@@ -229,14 +229,7 @@ class Server
             'backlog' => 102400,
 
             // Allows multiple bindings to a same ip:port pair, even from separate processes.
-            'so_reuseport' => true,
-
-            // Setting this option to true will set SOL_TCP, NO_DELAY=1 appropriately, 
-            // thus disabling the TCP Nagle algorithm.
-            'tcp_nodelay' => false,
-
-            // Enables sending and receiving data to/from broadcast addresses.
-            'so_broadcast' => false
+            'so_reuseport' => true
          ]
       ]);
 
@@ -255,6 +248,7 @@ class Server
          exit(1);
       }
 
+      // @ On success
       if (function_exists('socket_import_stream')) {
          $Socket = socket_import_stream($this->Socket);
          socket_set_option($Socket, SOL_SOCKET, SO_KEEPALIVE, 1);
@@ -312,13 +306,7 @@ class Server
    private function close ()
    {
       if ($this->Socket === null || $this->Socket === false) {
-         #$this->log('@\;$this->Socket is false or null!@\;');
-         exit(1);
-      }
-
-      $resource = get_resource_type($this->Socket);
-      if ($resource !== 'stream') {
-         #$this->log('@\;Resource type of $this->Socket is not a stream!');
+         #$this->log('@\;$this->Socket is already closed?@\;');
          exit(1);
       }
 

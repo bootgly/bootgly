@@ -30,13 +30,13 @@ class Data implements Connections
    // * Config
    public bool $cache;
    // * Data
+   public bool $changed;
    // @ Buffer
    public static string $input;
-   public string $output;
-   public bool $changed;
+   public static string $output;
    // * Meta
    public int $read;
-   public int|false $written;
+   public int $written;
    // @ Stats
    public int $reads;
    public int $writes;
@@ -52,10 +52,10 @@ class Data implements Connections
       // * Config
       $this->cache = true;
       // * Data
+      $this->changed = true;
       // @ Buffer
       self::$input = '';
-      $this->output = '';
-      $this->changed = true;
+      self::$output = '';
       // * Meta
       $this->read = 0;            // Input Data length (bytes read).
       $this->written = 0;         // Output Data length (bytes written).
@@ -75,6 +75,8 @@ class Data implements Connections
       } catch (\Throwable) {
          $input = false;
       }
+
+      // $this->log($input);
 
       // @ Check connection close intention by peer?
       // Close connection if input data is empty to avoid unnecessary loop
@@ -110,9 +112,13 @@ class Data implements Connections
       }
 
       // @ On success
-      (self::$input !== $input) ? ($this->changed = true) : ($this->changed = false);
+      if (self::$input !== $input) {
+         $this->changed = true;
+      } else {
+         $this->changed = false;
+      }
 
-      // @ Set Buffer input
+      // @ Set Input
       if ($this->cache === false || $this->changed === true) {
          #self::$input .= $input;
          self::$input = $input;
@@ -137,13 +143,12 @@ class Data implements Connections
    }
    public function write (&$Socket, bool $handle = true, ? int $length = null) : bool
    {
-      // @ Set Buffer output
-      if ($handle) {
-         $this->output = ($this->Connection->handler)(...$this->callbacks);
-      }
+      // @ Set Output
+      if ($handle)
+         self::$output = ($this->Connection->handler)(...$this->callbacks);
 
       try {
-         $buffer = $this->output;
+         $buffer = self::$output;
 
          while (true) {
             $written = @fwrite($Socket, $buffer, $length);
@@ -152,11 +157,8 @@ class Data implements Connections
                break;
             }
 
-            // Check if the entire message has been sented
-            if ($written < $length) { // If not sent the entire message 
-               // Get the part of the message that has not yet been sented as message
+            if ($written < $length) {
                $buffer = substr($buffer, $written);
-               // Get the length of the not sented part
                $length -= $written;
             } else {
                break;
@@ -187,8 +189,9 @@ class Data implements Connections
          }
 
          if (is_resource($Socket) && get_resource_type($Socket) === 'stream') {
-            $this->log('Failed to write data: closing connection...' . PHP_EOL);
+            // $this->log('Failed to write data: closing connection...' . PHP_EOL);
             $this->Connection->close($Socket);
+            return false;
          }
 
          $this->errors['write']++;

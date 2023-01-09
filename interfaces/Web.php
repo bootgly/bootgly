@@ -40,4 +40,8 @@ class Web
       // Load Web constructor
       @include $Project::PROJECT_DIR . 'web.constructor.php';
    }
+   public function __get($name)
+   {
+      return $this->$name;
+   }
 }
