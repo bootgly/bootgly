@@ -82,6 +82,9 @@ class Request
    // ...
    // * Meta
    // ...
+   private bool $meta;
+   private bool $header;
+   private bool $content;
 
    public Session $Session;
 
@@ -97,6 +100,9 @@ class Request
       // * Data
       /* ... dynamically ... */
       // * Meta
+      $this->meta = false;
+      $this->header = false;
+      $this->content = false;
 
       $this->Session = new Session;
    }
@@ -149,7 +155,10 @@ class Request
          case 'uri':
          case 'URI': // TODO with __String/URI?
          case 'identifier': // @ base
-            $identifier = $_SERVER['REQUEST_URI'];
+            if (\PHP_SAPI !== 'cli')
+               $identifier = @$_SERVER['REQUEST_URI'];
+            else
+               $identifier = $this->uri ?? '';
 
             $this->uri = $identifier;
             // $this->URI = $identifier;
@@ -474,9 +483,9 @@ class Request
       }
    }
 
-   private function parse (string $name) // TODO (WIP)
+   public function parse (string $name = '') // TODO (WIP)
    {
-      if (Data::$parsed)
+      if (Data::$parsed || Data::$parsing)
          return false;
 
       Data::$parsing = true;
@@ -494,6 +503,7 @@ class Request
        * 
        */
 
+      /*
       // Parse meta only
       switch ($name) {
          case 'method':
@@ -508,66 +518,75 @@ class Request
             $this->protocol = $procotol;
       }
 
-      Data::$parsing = false;
-      Data::$parsed = true;
-
       return $this->$name;
-      /*
-      if ( is_string(Data::$input) ) {
-         Data::$input = preg_split("/\r\n|\n|\r/", Data::$input);
-      }
+      */
 
-      $header = false;
-      foreach (Data::$input as $line => $text) {
-         if ($line < Data::$pointer) continue;
+      foreach (preg_split("/\r\n|\n|\r/", Data::$input) as $line => $text) {
+         // if ($line < Data::$pointer) continue;
 
-         Data::$pointer = $line;
+         // Data::$pointer = $line;
 
          // @ HTTP Meta
-         if ($line === 0) {
-            [$this->method, $this->uri, $this->procotol] = explode(' ', $text, 3);
-
-            switch ($name) {
-               case 'method':
-                  return $this->method;
-               case 'uri':
-                  return $this->uri;
-               case 'protocol':
-                  return $this->protocol;
+         if ($this->meta === false) {
+            if ($line === 0) {
+               @[$method, $uri, $procotol] = explode(' ', $text, 3);
+   
+               if ($method) $this->method = $method;
+               if ($uri) $this->uri = $uri ?? '/';
+               if ($procotol) $this->protocol = $procotol;
+   
+               $this->meta = true;
+   
+               continue;
             }
          }
 
          // @ HTTP Header
-         if ($header === false) {
-            if ($text !== '' && $line > 0) { // @ Request Header
-               if ($line === 1)
-                  $this->Header; // @ Create Request Header object
+         if ($this->header === false) {
+            if ($line > 0 && $text !== '') { // @ Request Header
+               if ($line === 1) {
+                  $this->__get('Header'); // @ Create Request Header object
+               }
    
-               [$fieldName, $fieldValue] = explode(': ', $text);
+               @[$fieldName, $fieldValue] = explode(': ', $text);
 
-               $this->Header->$fieldName = $fieldValue;
+               if ($fieldName) {
+                  $this->Header->$fieldName = $fieldValue ?? '';
+               }
             } else if ($line > 1) {
-               $this->Content; // @ Create Request Content object
-               $header = true;
+               $this->__get('Content'); // @ Create Request Content object
+               $this->header = true;
             }
+
+            continue;
          }
 
          // @ HTTP Content
-         $this->Content->raw .= $text . "\n";
+         if ($this->content === false) {
+            $this->Content->raw .= $text . "\n";
+         }
       }
-      */
+
+      $this->content = true;
+
+      Data::$parsing = false;
+      Data::$parsed = true;
 
       return true;
    }
    public function reset ()
    {
+      // ? Meta
       unset($this->method);
       unset($this->uri);
       unset($this->protocol);
-
+      $this->meta = false;
+      // ? Header
+      $this->Header->__construct();
+      $this->header = false;
       // ? Content
-      #unset($this->Content->length);
-      #unset($this->Content);
+      $this->Content->__construct();
+      $this->content = false;
    }
 
    // TODO implement https://www.php.net/manual/pt_BR/ref.filter.php

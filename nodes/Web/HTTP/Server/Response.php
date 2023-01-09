@@ -391,28 +391,14 @@ class Response
       return $this->process($x);
    }
 
-   public function parse ($handler, $callbacks)
+   public function parse ()
    {
       // ? Response Content
-      try {
-         $this->Content->raw = $handler(...$callbacks);
-      } catch (\Throwable) {
-         // $this->Content->raw = '';
-         $this->Meta->status = 500; // @ 500 HTTP Server Error
-      }
-
       $this->Content->length = strlen($this->Content->raw);
       // ? Response Header
       $this->Header->set('Content-Length', $this->Content->length);
       // ? Response Meta
       // ...
-
-      return <<<HTTP_RAW
-      {$this->Meta->raw}
-      {$this->Header->raw}
-
-      {$this->Content->raw}
-      HTTP_RAW;
    }
    public function reset ()
    {

@@ -40,13 +40,33 @@ class Data extends TCPData
       // @ Instance callbacks
       $Request = $this->callbacks[0];
       $Response = $this->callbacks[1];
-      // $Router = $this->callbacks[2];
+      $Router = $this->callbacks[2];
 
-      // @ Set HTTP Request/Response Data and Output Buffer
-      $this->output = $Response->parse($this->Connection->handler, $this->callbacks);
+      // @ Set HTTP Request/Response data
+      // $Request->input();
+      $Request->parse();
 
-      // @ Send data to client
-      $writed = parent::write($Socket, $handle, strlen($this->output));
+      try {
+         $Response->Content->raw = ($this->Connection->handler)($Request, $Response, $Router);
+      } catch (\Throwable) {
+         // $this->Content->raw = '';
+         $Response->Meta->status = 500; // @ 500 HTTP Server Error
+      }
+
+      $Response->parse();
+
+      // @ Set HTTP raw output
+      self::$output = <<<HTTP_RAW
+      {$Response->Meta->raw}
+      {$Response->Header->raw}
+
+      {$Response->Content->raw}
+      HTTP_RAW;
+
+      #$this->log(self::$output . PHP_EOL . PHP_EOL . PHP_EOL);
+
+      // @ Send HTTP raw output to client
+      $writed = parent::write($Socket, $handle, strlen(self::$output));
       if ($writed === false) {
          return false;
       }
@@ -62,8 +82,9 @@ class Data extends TCPData
 
          // Reset Buffer I/O
          #self::$input = '';
-         #$this->output = '';
+         #self::$output = '';
 
+         // TODO move to Request
          // Reset Parser
          self::$parsed = false;
          self::$parsing = false;
