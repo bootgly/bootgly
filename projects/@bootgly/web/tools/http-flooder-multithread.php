@@ -11,16 +11,13 @@
 namespace Bootgly;
 
 
-#require_once '@/autoload.php';
-
-
 use parallel\Runtime;
 use parallel\Channel;
+
 use Bootgly\Web\TCP;
 #use Bootgly\Web\HTTP;
 
 
-// this function will be the threads
 $thread = function (int $id, Channel $Channel, string $host, int $port) {
    $TCPClient = new TCP\Client;
    $TCPClient->configure(
@@ -56,7 +53,7 @@ try {
 
    // channel where the date will be sharead
    $Channel = new Channel();
-   // args that will be sent to $thread_function
+   // args that will be sent to $thread
    $args = [];
    $args[0] = null;
    $args[1] = $Channel;
@@ -71,7 +68,7 @@ try {
    // @ Creating threads
    $runtimes = [];
    for ($index = 0; $index < $threads; $index++) {
-      $runtimes[$index] = new Runtime('@/autoload.php');
+      $runtimes[$index] = new Runtime(HOME_DIR . '@/autoload.php');
    }
    // @ Run all threads
    $futures = [];
