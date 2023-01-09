@@ -105,6 +105,16 @@ class Connection
             $this->log("====================================================@\\;");
 
             break;
+         case '@stats reset':
+            $this->connections = 0;
+            $this->Data->reads = 0;
+            $this->Data->writes = 0;
+            $this->Data->read = 0;
+            $this->Data->written = 0;
+            $this->Data->errors['read'] = 0;
+            $this->Data->errors['write'] = 0;
+            break;
+
          case '@peers':
             if ($this->Server === null) {
                return false;
