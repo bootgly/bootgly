@@ -11,6 +11,7 @@
 namespace Bootgly\Web\TCP\_\CLI;
 
 
+use const Bootgly\HOME_DIR;
 use Bootgly\CLI;
 use Bootgly\Web\TCP\ {
    Server
@@ -34,6 +35,11 @@ class Console extends CLI\Console
 
       'clear',
       'help'
+   ];
+   public static array $subcommands = [
+      'stats' => [
+         'reset'
+      ]
    ];
 
    // ***
@@ -70,13 +76,16 @@ class Console extends CLI\Console
       return match ($command) {
          // ! Server
          'stop', 'exit', 'quit' => 
-            $this->log('@\;Stopping '. $this->Server->Process->children . ' worker(s)... ', self::LOG_WARNING_LEVEL)
+            $this->log(
+               '@\;Stopping '. $this->Server->Process->children . ' worker(s)... ',
+               self::LOG_WARNING_LEVEL
+            )
             && $this->Server->Process->sendSignal(SIGINT)
             && false,
          'pause' =>
             $this->Server->Process->sendSignal(SIGTSTP) && false,
          'resume' =>
-            $this->Server->Process->sendSignal(SIGUSR1) && false,
+            $this->Server->Process->sendSignal(SIGCONT) && false,
 
          'status' =>
             $this->Server->Process->sendSignal(SIGUSR2, children: false) && true,
@@ -84,6 +93,10 @@ class Console extends CLI\Console
          'stats' =>
             // $this->Server->Process->Signal->send(SIGIO, ...)
             $this->Server->Process->sendSignal(SIGIO, master: false) && false,
+         'stats reset' =>
+            $this->save('@' . $command, 'Connection')
+            && $this->Server->Process->sendSignal(SIGUSR1, master: false) && true,
+
          'peers', 'connections' =>
             $this->Server->Process->sendSignal(SIGIOT, master: false) && false,
 
@@ -112,6 +125,19 @@ class Console extends CLI\Console
       ============================================================
 
       OUTPUT);
+
+      return true;
+   }
+
+   public function save (string $command, string $object = '') : bool
+   {
+      $filename = HOME_DIR . '/workspace/server.command';
+      $data = $command;
+      #$data = $object . '|' . $command;
+
+      if (file_put_contents($filename, $data) === false) {
+         return false;
+      }
 
       return true;
    }

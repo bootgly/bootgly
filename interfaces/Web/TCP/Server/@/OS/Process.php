@@ -96,6 +96,9 @@ class Process
    {
       $signalHandler = [$this, 'handleSignal'];
 
+      // * Custom command
+      pcntl_signal(SIGUSR1, $signalHandler, false); // 10
+
       // ! Server
       // @ stop()
       pcntl_signal(SIGHUP, $signalHandler, false);  // 1
@@ -105,8 +108,7 @@ class Process
       // @ pause()
       pcntl_signal(SIGTSTP, $signalHandler, false); // 20 (CTRL + Z)
       // @ resume()
-      pcntl_signal(SIGUSR1, $signalHandler, false); // 10
-
+      pcntl_signal(SIGCONT, $signalHandler, false); // 18
       // ? @Info
       // @ $status
       pcntl_signal(SIGUSR2, $signalHandler, false); // 12
@@ -125,6 +127,12 @@ class Process
       #$this->log($signal . PHP_EOL);
 
       switch ($signal) {
+         // * Custom command
+         case SIGUSR1:  // 10
+            $command = file_get_contents(HOME_DIR . '/workspace/server.command');
+            $this->Server->Connection->{$command};
+            break;
+
          // ! Server
          // @ stop()
          case SIGHUP:  // 1
@@ -138,7 +146,7 @@ class Process
             $this->Server->pause();
             break;
          // @ resume()
-         case SIGUSR1: // 10
+         case SIGCONT: // 18
             $this->Server->resume();
             break;
          // ? @Info
