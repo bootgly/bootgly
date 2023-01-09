@@ -20,6 +20,7 @@ require 'Web/@/Events/Select.php';
 // ? TCP
 // ? TCP\Client
 require 'Web/TCP/Client.php';
+require 'Web/TCP/Client/Data.php';
 // ? TCP\Server
 require 'Web/TCP/Server.php';
 require 'Web/TCP/Server/@/OS/Process.php'; // @ OS\Process
