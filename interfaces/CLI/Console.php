@@ -24,6 +24,7 @@ class Console
    // ! Command
    // * Data
    public static array $commands = [];
+   public static array $subcommands = [];
    // * Meta
    public static array $command = []; // @ Last command used (returned by autocomplete)
 
@@ -31,22 +32,28 @@ class Console
 
 
    // TODO support to multiple subcommands (command1 subcommand1 subcommand2...)
-   public function autocomplete (string $search) : array
+   public function autocomplete (string $search) : array // return commands found
    {
-      $commands = [];
+      $found = [];
 
+      // TODO refactor
       if ($search || count(self::$command) === 0) {
-         $commands = array_filter(static::$commands, function ($command) use ($search) {
+         $found = array_filter(static::$commands, function ($command) use ($search) {
+            $command = preg_quote($command, '/');
+            return preg_match("/$search/i", $command);
+         });
+      } else if (count(self::$command) === 1) {
+         $found = array_filter(static::$subcommands[self::$command[0]], function ($command) use ($search) {
             $command = preg_quote($command, '/');
             return preg_match("/$search/i", $command);
          });
       }
 
-      if (count($commands) === 1 && count(self::$command) === 0) {
-         array_push(self::$command, $commands);
+      if (count($found) === 1) {
+         array_push(self::$command, ...$found);
       }
 
-      return $commands;
+      return $found;
    }
 
    public function clear ()
