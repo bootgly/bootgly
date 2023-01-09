@@ -32,12 +32,12 @@ $HTTPServer->configure(
       #$Request->uri;       // /path/to?query1=value2...
       #$Request->protocol;  // HTTP/1.1
 
-      return <<<HTML
-      Hello World!
-      HTML;
+      #return $Response(raw: 'Hello World!');
+
+      return 'Hello World!';
    }
 );
 $HTTPServer->start();
 
-// Benchmark test suggestion:
-// wrk -t10 -c512 -d10s http://localhost:8080
+// Benchmark test suggestion with 512 connections:
+// wrk -t10 -c514 -d10s http://localhost:8080
