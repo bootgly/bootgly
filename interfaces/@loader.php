@@ -11,6 +11,8 @@ require 'CLI/Console.php';
 // ? Router
 #require 'CLI/Router.php';
 
+// ! OS
+require 'OS/Process/Timer.php';
 
 // ! Web
 require 'Web.php';
@@ -28,3 +30,5 @@ require 'Web/TCP/Server/@/CLI/Console.php'; // @ CLI\Console
 // ? TCP\Server\Connection(s)
 require 'Web/TCP/Server/Connection.php';
 require 'Web/TCP/Server/Connections.php';
+// ? TCP\Server\Peer
+require 'Web/TCP/Server/Peer.php';

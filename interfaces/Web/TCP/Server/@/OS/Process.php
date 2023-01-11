@@ -11,14 +11,18 @@
 namespace Bootgly\Web\TCP\_\OS;
 
 
+// use
 use const Bootgly\HOME_DIR;
-use Bootgly\CLI\_\ {
-   Logger\Logging
-};
+use Bootgly\OS\Process\Timer;
+use Bootgly\Web\_\Events\Select;
+// 
 use Bootgly\Web\TCP\ {
    Server
 };
-
+// extend
+use Bootgly\CLI\_\ {
+   Logger\Logging
+};
 
 class Process
 {
@@ -46,6 +50,9 @@ class Process
 
       static::lock();
       static::saveMasterPid();
+
+      // @ Init Process Timer
+      Timer::init([$this, 'handleSignal']);
    }
    public function __get ($name)
    {
@@ -127,6 +134,11 @@ class Process
       #$this->log($signal . PHP_EOL);
 
       switch ($signal) {
+         // * Timer
+         case SIGALRM:
+            Timer::tick();
+            break;
+
          // * Custom command
          case SIGUSR1:  // 10
             $command = file_get_contents(HOME_DIR . '/workspace/server.command');
@@ -143,7 +155,10 @@ class Process
             break;
          // @ pause()
          case SIGTSTP: // 20 (CTRL + Z)
-            $this->Server->pause();
+            match ($this->Server->mode) {
+               Server::MODE_MONITOR => $this->Server->mode = Server::MODE_INTERACTIVE,
+               Server::MODE_INTERACTIVE => $this->Server->pause()
+            };
             break;
          // @ resume()
          case SIGCONT: // 18
@@ -199,21 +214,22 @@ class Process
 
          self::$children[$i] = $pid;
 
-         if ($pid === 0) {
-            // Child process
-            self::$index = $i + 1; // Set child index
+         if ($pid === 0) { // Child process
+            // @ Set child index
+            self::$index = $i + 1;
 
             cli_set_process_title('BootglyWebServer: child process (Worker #' . self::$index . ')');
 
+            // @ Create stream socket server
             $this->Server->instance();
 
-            $this->Server::$Event->add($this->Server->Socket, $this->Server::$Event::EVENT_READ, 'accept');
+            // Event Loop
+            $this->Server::$Event->add($this->Server->Socket, Select::EVENT_READ, 'accept');
             $this->Server::$Event->loop();
 
             $this->Server->stop();
             #exit(1);
-         } else if ($pid > 0) {
-            // Master process
+         } else if ($pid > 0) { // Master process
             cli_set_process_title("BootglyWebServer: master process ($script)");
          } else if ($pid === -1) {
             die("Could not fork process!"); 
