@@ -124,12 +124,12 @@ class Data implements Connections
          self::$input = $input;
       }
 
-      // @ Write Stats
+      // @ Set Stats (disable to max performance)
       // Global
       $this->reads++;
       $this->read += strlen($input);
       // Per client
-      @$this->Connection->peers[(int) $Socket]['stats']['reads']++;
+      #@$this->Connection->peers[(int) $Socket]['reads']++;
 
       // @ Write Data
       if ($write) {
@@ -207,12 +207,12 @@ class Data implements Connections
          self::$input = '';
       }
 
-      // @ Write Stats
+      // @ Set Stats (disable to max performance)
       // Global
       $this->writes++;
       $this->written += $written;
       // Per client
-      @$this->Connection->peers[(int) $Socket]['stats']['writes']++;
+      @$this->Connection->peers[(int) $Socket]->writes++;
 
       return true;
    }

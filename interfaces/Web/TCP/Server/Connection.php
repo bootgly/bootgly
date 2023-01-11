@@ -11,6 +11,7 @@
 namespace Bootgly\Web\TCP\Server;
 
 
+use Bootgly\OS\Process\Timer;
 use Bootgly\CLI\_\ {
    Logger\Logging
 };
@@ -125,23 +126,21 @@ class Connection
             $this->log(PHP_EOL . "Worker #{$worker}:" . PHP_EOL);
 
             foreach (@$this->peers as $Connection => $info) {
-               $this->log('Connection ID #' . $Connection . ':' . PHP_EOL, self::LOG_WARNING_LEVEL);
+               $this->log('Connection ID #' . $Connection . ':' . PHP_EOL, self::LOG_INFO_LEVEL);
 
                foreach ($info as $key => $value) {
-                  if ( is_array($value) ) {
-                     $this->log($key . ': ' . PHP_EOL);
+                  switch ($key) {
+                     case 'timers':
+                        $this->log($key . ': ' . count($value) . PHP_EOL);
+                        break;
 
-                     foreach ($value as $key2 => $value2) {
-                        $this->log('  ' . $key2 . ' : ' . $value2 . PHP_EOL);
-                     }
-                  } else {
-                     switch ($key) {
-                        case 'started':
-                           $this->log($key . ': ' . date('Y-m-d H:i:s', $value) . PHP_EOL);
-                           break;
-                        default:
-                           $this->log($key . ': ' . $value . PHP_EOL);
-                     }
+                     case 'used':
+                     case 'started':
+                        $this->log($key . ': ' . date('Y-m-d H:i:s', $value) . PHP_EOL);
+                        break;
+
+                     default:
+                        $this->log($key . ': ' . $value . PHP_EOL);
                   }
                }
             }
@@ -175,21 +174,17 @@ class Connection
       }
 
       // @ On success
-      // Peer stats
-      $this->peers[(int) $Connection] = [
-         'peer' => $peer,
-         'started' => time(),
-         'status' => 'opened',
-         'stats' => [
-            'reads' => 0,
-            'writes' => 0
-         ]
-      ];
-      // Connection Status
+      $Peer = new Peer($Connection, $peer);
+
+      // @ Set stats
+      // Global
       $this->connections++;
+      // Per client
+      $this->peers[(int) $Connection] = $Peer;
 
       // TODO call handler event $this->On->accept here
       // $this->On->accept($Connection);
+      $Peer->timers[] = Timer::add(interval: 5, handler: [$this, 'expire'], args: [$Peer, 5]);
       Server::$Event->add($Connection, Server::$Event::EVENT_READ, 'read');
       // TODO implement this data write by default?
       #Server::$Event->add($Connection, Server::$Event::EVENT_WRITE, 'write');
@@ -197,25 +192,20 @@ class Connection
       return true;
    }
 
+   public function expire (Peer $Peer, int $timeout = 5) 
+   {
+      $expired = $Peer->expire($timeout);
+
+      if ($expired) {
+         return $this->close($Peer->Socket);
+      }
+
+      return false;
+   }
+
    public function close ($Connection)
    {
-      Server::$Event->del($Connection, Server::$Event::EVENT_READ);
-      Server::$Event->del($Connection, Server::$Event::EVENT_WRITE);
-
-      if ($Connection === null || $Connection === false) {
-         #$this->log('$Connection Socket is false or null on close!');
-         return false;
-      }
-
-      $closed = false;
-      try {
-         $closed = @fclose($Connection);
-      } catch (\Throwable) {}
-
-      if ($closed === false) {
-         #$this->log('Connection failed to close!' . PHP_EOL);
-         return false;
-      }
+      $this->peers[(int) $Connection]->close($Connection);
 
       // @ On success
       // Remove active connection from @peers
