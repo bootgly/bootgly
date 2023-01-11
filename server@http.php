@@ -25,7 +25,7 @@ $HTTPServer = new HTTP\Server($Web);
 $HTTPServer->configure(
    host: '0.0.0.0',
    port: 8080,
-   workers: 14,
+   workers: round( ((int) shell_exec('nproc')) * 0.6 ),
 
    handler: function (Request $Request, Response $Response, Router $Router) {
       #$Request->method;    // GET
