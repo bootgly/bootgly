@@ -13,19 +13,20 @@ namespace Bootgly\Web\TCP;
 
 // use
 use Bootgly\Debugger\Backtrace;
+use Bootgly\OS\Process\Timer;
 // extend
-use Bootgly\CLI\_\ {
+use Bootgly\CLI\_\{
    Logger\Logging
 };
-use Bootgly\Web\_\ {
+use Bootgly\Web\_\{
    Events\Select
 };
-use Bootgly\Web\TCP\_\ {
+use Bootgly\Web\TCP\_\{
    CLI\Console,
    OS\Process
 };
 // inherit
-use Bootgly\Web\TCP\ {
+use Bootgly\Web\TCP\{
    Server\Connection
 };
 
@@ -39,13 +40,14 @@ class Server
 
    // * Config
    #protected string $resource;
-   protected ? string $host;
-   protected ? int $port;
+   protected ?string $host;
+   protected ?int $port;
    protected int $workers;
    // @ Mode
    protected int $mode;
-   protected const MODE_INTERACTIVE = 1;
-   protected const MODE_DAEMON = 2;
+   public const MODE_DAEMON = 1;
+   public const MODE_INTERACTIVE = 2;
+   public const MODE_MONITOR = 3;
    // * Meta
    public const VERSION = '0.0.1';
    protected static int $started = 0;
@@ -76,7 +78,7 @@ class Server
 
       // * Config
       // @ Mode
-      $this->mode = self::MODE_INTERACTIVE;
+      $this->mode = self::MODE_MONITOR;
       // * Data
       // * Meta
       static::$started = time();
@@ -108,7 +110,10 @@ class Server
          case 'Process':
             return $this->Process;
 
-         // TODO move to Info class?
+         case 'mode':
+            return $this->mode;
+
+            // TODO move to Info class?
          case '@status':
             // ! Server
             // @
@@ -158,6 +163,14 @@ class Server
             break;
       }
    }
+   public function __set (string $name, $value)
+   {
+      switch ($name) {
+         case 'mode':
+            $this->mode = $value;
+            break;
+      }
+   }
    public function __call (string $name, array $arguments)
    {
       switch ($name) {
@@ -173,7 +186,7 @@ class Server
       }
    }
 
-   public function configure (string $host, int $port, int $workers, ? \Closure $handler = null)
+   public function configure (string $host, int $port, int $workers, ?\Closure $handler = null)
    {
       self::$status = self::STATUS_CONFIGURING;
 
@@ -213,18 +226,22 @@ class Server
             break;
          case self::MODE_INTERACTIVE:
             $this->interact();
+            break;
+         case self::MODE_MONITOR:
+            $this->monitor();
+            break;
       }
 
       return true;
    }
 
-   private function instance ()
+   private function instance()
    {
       $error_code = 0;
       $error_message = '';
 
       $context = stream_context_create([
-         'socket' => [ 
+         'socket' => [
             // Used to limit the number of outstanding connections in the socket's listen queue.
             'backlog' => 102400,
 
@@ -237,11 +254,13 @@ class Server
       try {
          $this->Socket = @stream_socket_server(
             'tcp://' . $this->host . ':' . $this->port,
-            $error_code, $error_message,
+            $error_code,
+            $error_message,
             STREAM_SERVER_BIND | STREAM_SERVER_LISTEN,
             $context
          );
-      } catch (\Throwable) {};
+      } catch (\Throwable) {
+      };
 
       if ($this->Socket === false) {
          $this->log('@\;Could not create socket: ' . $error_message, self::LOG_ERROR_LEVEL);
@@ -273,7 +292,7 @@ class Server
       $this->log('>_ Type `quit` to stop the Server or `help` to list commands.@\;');
       $this->log('>_ Autocompletation and history enabled.@\\\;', self::LOG_NOTICE_LEVEL);
 
-      while (1) {
+      while ($this->mode === self::MODE_INTERACTIVE) {
          // Calls signal handlers for pending signals
          pcntl_signal_dispatch();
 
@@ -301,6 +320,43 @@ class Server
             break;
          }
       }
+
+      if ($this->mode === self::MODE_MONITOR) {
+         $this->monitor();
+      }
+   }
+   private function monitor ()
+   {
+      self::$status = self::STATUS_RUNNING;
+
+      $this->log('@\\\;Entering in Monitor mode...@\;', self::LOG_SUCCESS_LEVEL);
+      $this->log('>_ Type `CTRL + Z` to enter in Interactive mode or `CTRL + C` to stop the Server.@\;');
+
+      while ($this->mode === self::MODE_MONITOR) {
+         // Calls signal handlers for pending signals
+         pcntl_signal_dispatch();
+
+         // Suspends execution of the current process until a child has exited, or until a signal is delivered
+         $pid = pcntl_wait($status, WUNTRACED);
+
+         // Calls signal handlers for pending signals again
+         pcntl_signal_dispatch();
+
+         // If child is running?
+         if ($pid === 0) {
+            continue;
+         } else if ($pid > 0) { // If a child has already exited?
+            $this->log('@\;Child exited!@\;', self::LOG_ERROR_LEVEL);
+            $this->stop();
+            break;
+         } else if ($pid === -1) { // If error ignore
+            continue;
+         }
+      }
+
+      if ($this->mode === self::MODE_INTERACTIVE) {
+         $this->interact();
+      }
    }
 
    private function close ()
@@ -313,7 +369,8 @@ class Server
       $closed = false;
       try {
          $closed = @fclose($this->Socket);
-      } catch (\Throwable) {}
+      } catch (\Throwable) {
+      }
 
       if ($closed === false) {
          #$this->log('@\;Failed to close $this->Socket!');
@@ -331,7 +388,7 @@ class Server
             'master' => $this->log("Server needs to be paused to resume!@\\;", 4),
             'child' => null
          };
-         
+
          return false;
       }
 

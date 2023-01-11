@@ -29,6 +29,8 @@ class Console extends CLI\Console
       'pause',
       'resume',
 
+      'monitor',
+
       'status',
       'stats',
       'peers', 'connections',
@@ -73,11 +75,16 @@ class Console extends CLI\Console
       readline_add_history($command);
 
       // @ Execute command
+      return $this->command($command);
+   }
+
+   public function command ($command) : bool
+   {
       return match ($command) {
          // ! Server
-         'stop', 'exit', 'quit' => 
+         'stop', 'exit', 'quit' =>
             $this->log(
-               '@\;Stopping '. $this->Server->Process->children . ' worker(s)... ',
+               '@\;Stopping ' . $this->Server->Process->children . ' worker(s)... ',
                self::LOG_WARNING_LEVEL
             )
             && $this->Server->Process->sendSignal(SIGINT)
@@ -89,9 +96,12 @@ class Console extends CLI\Console
 
          'status' =>
             $this->Server->Process->sendSignal(SIGUSR2, children: false) && true,
+         'monitor' =>
+            $this->Server->mode = Server::MODE_MONITOR,
+
          // ! \Connection
          'stats' =>
-            // $this->Server->Process->Signal->send(SIGIO, ...)
+         // $this->Server->Process->Signal->send(SIGIO, ...)
             $this->Server->Process->sendSignal(SIGIO, master: false) && false,
          'stats reset' =>
             $this->save('@' . $command, 'Connection')
@@ -113,15 +123,17 @@ class Console extends CLI\Console
    {
       $this->log(<<<'OUTPUT'
       @\;============================================================
-      @:i: `stop` @;   = Stop the Server and all workers;
-      @:i: `pause` @;  = Pause the Server and all workers;
-      @:i: `resume` @; = Resume the Server and all workers;
+      @:i: `stop` @;    = Stop the Server and all workers;
+      @:i: `pause` @;   = Pause the Server and all workers;
+      @:i: `resume` @;  = Resume the Server and all workers;
 
-      @:i: `status` @; = Show info about status of server;
-      @:i: `stats` @;  = Show stats about connections / data per worker;
-      @:i: `peers` @;  = Show info about active connections remote peers;
+      @:i: `monitor` @; = Enter in monitor mode;
 
-      @:i: `clear` @;  = Clear this console screen;
+      @:i: `status` @;  = Show info about status of server;
+      @:i: `stats` @;   = Show stats about connections / data per worker;
+      @:i: `peers` @;   = Show info about active connections remote peers;
+
+      @:i: `clear` @;   = Clear this console screen;
       ============================================================
 
       OUTPUT);
@@ -129,7 +141,7 @@ class Console extends CLI\Console
       return true;
    }
 
-   public function save (string $command, string $object = '') : bool
+   public function save (string $command, string $object = ''): bool
    {
       $filename = HOME_DIR . '/workspace/server.command';
       $data = $command;
