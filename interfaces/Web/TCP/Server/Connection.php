@@ -36,7 +36,7 @@ class Connection
    public $Socket;
    // * Meta
    // @ Remote
-   public array $peers;
+   public static array $peers;
    // @ Stats
    public int $connections;
    public int $errors;
@@ -48,7 +48,13 @@ class Connection
    {
       $this->Server = $Server;
 
-      $this->On = new Event\On;
+      /**
+       * @property \Closure $accept
+       */
+      $this->On = new class extends Event\On
+      {
+         private \Closure $accept;
+      };
 
       // * Config
       $this->timeout = 5;
@@ -56,7 +62,7 @@ class Connection
       $this->Socket = $Socket;
       // * Meta
       // @ Remote
-      $this->peers = [];      // Connections peers
+      self::$peers = [];      // Connections peers
       // @ Stats
       $this->connections = 0; // Connections count
       $this->errors = 0;
@@ -125,7 +131,7 @@ class Connection
 
             $this->log(PHP_EOL . "Worker #{$worker}:" . PHP_EOL);
 
-            foreach (@$this->peers as $Connection => $info) {
+            foreach (self::$peers as $Connection => $info) {
                $this->log('Connection ID #' . $Connection . ':' . PHP_EOL, self::LOG_INFO_LEVEL);
 
                foreach ($info as $key => $value) {
@@ -145,7 +151,7 @@ class Connection
                }
             }
 
-            if ( empty($this->peers) ) {
+            if ( empty(self::$peers) ) {
                $this->log('No active connection.' . PHP_EOL, self::LOG_WARNING_LEVEL);
             }
 
@@ -174,17 +180,15 @@ class Connection
       }
 
       // @ On success
-      $Peer = new Peer($Connection, $peer);
 
       // @ Set stats
       // Global
       $this->connections++;
       // Per client
-      $this->peers[(int) $Connection] = $Peer;
+      self::$peers[(int) $Connection] = new Peer($Connection, $peer);
 
       // TODO call handler event $this->On->accept here
       // $this->On->accept($Connection);
-      $Peer->timers[] = Timer::add(interval: 5, handler: [$this, 'expire'], args: [$Peer, 5]);
       Server::$Event->add($Connection, Server::$Event::EVENT_READ, 'read');
       // TODO implement this data write by default?
       #Server::$Event->add($Connection, Server::$Event::EVENT_WRITE, 'write');
@@ -192,25 +196,18 @@ class Connection
       return true;
    }
 
-   public function expire (Peer $Peer, int $timeout = 5) 
+   public function close ($Connection)
    {
-      $expired = $Peer->expire($timeout);
+      $closed = self::$peers[(int) $Connection]->close();
 
-      if ($expired) {
-         return $this->close($Peer->Socket);
+      // @ On success
+      if ($closed) {
+         // Remove closed connection from @peers
+         #unset(self::$peers[(int) $Connection]);
+
+         return true;
       }
 
       return false;
-   }
-
-   public function close ($Connection)
-   {
-      $this->peers[(int) $Connection]->close($Connection);
-
-      // @ On success
-      // Remove active connection from @peers
-      unset($this->peers[(int) $Connection]);
-
-      return true;
    }
 }
