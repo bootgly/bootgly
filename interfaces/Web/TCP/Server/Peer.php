@@ -24,8 +24,9 @@ class Peer
    // * Data
    public string $peer;
    // * Meta
+   // @ status
    public string $status;
-   // @ handled
+   // @ handling
    public int $started;
    public int $used;
    // @ stats
@@ -49,6 +50,9 @@ class Peer
       // @ stats
       $this->reads = 0;
       $this->writes = 0;
+
+      // @ Set Connection timeout expiration
+      $this->timers[] = Timer::add(interval: 15, handler: [$this, 'expire'], args: [15]);
    }
 
    public function expire (int $timeout = 5) 
@@ -64,7 +68,7 @@ class Peer
       }
 
       if (time() - $this->used >= $timeout) {
-         return true;
+         return $this->close();
       }
 
       $writes = $this->writes;
@@ -98,6 +102,8 @@ class Peer
       foreach ($this->timers as $id) {
          Timer::del($id);
       }
+
+      unset(Connection::$peers[(int) $this->Socket]); // @ destroy itself
 
       return true;
    }

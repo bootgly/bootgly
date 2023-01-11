@@ -71,7 +71,9 @@ class Data implements Connections
    public function read (&$Socket, bool $write = true) : bool
    {
       try {
-         $input = @fread($Socket, 65535);
+         #$input = @fread($Socket, 65535);
+         #$input = @stream_socket_recvfrom($Socket, 65535, STREAM_PEEK);
+         $input = @stream_socket_recvfrom($Socket, 65535);
       } catch (\Throwable) {
          $input = false;
       }
@@ -129,7 +131,7 @@ class Data implements Connections
       $this->reads++;
       $this->read += strlen($input);
       // Per client
-      #@$this->Connection->peers[(int) $Socket]['reads']++;
+      #@$this->Connection::$peers[(int) $Socket]['reads']++;
 
       // @ Write Data
       if ($write) {
@@ -151,11 +153,11 @@ class Data implements Connections
          $buffer = self::$output;
 
          while (true) {
-            $written = @fwrite($Socket, $buffer, $length);
+            #$written = @fwrite($Socket, $buffer, $length);
+            $written = @stream_socket_sendto($Socket, $buffer);
 
-            if ($written === false) {
+            if ($written === false)
                break;
-            }
 
             if ($written < $length) {
                $buffer = substr($buffer, $written);
@@ -212,7 +214,7 @@ class Data implements Connections
       $this->writes++;
       $this->written += $written;
       // Per client
-      @$this->Connection->peers[(int) $Socket]->writes++;
+      Connection::$peers[(int) $Socket]->writes++;
 
       return true;
    }
