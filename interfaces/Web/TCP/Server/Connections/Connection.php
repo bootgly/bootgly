@@ -33,11 +33,11 @@ class Connection
    public int $started;
    public int $used;
    // @ stats
-   public int $reads;
+   #public int $reads;
    public int $writes;
 
 
-   public function __construct (&$Socket, $peer)
+   public function __construct (&$Socket, string $peer)
    {
       $this->Socket = $Socket;
 
@@ -52,7 +52,7 @@ class Connection
       $this->started = time();
       $this->used = time();
       // @ stats
-      $this->reads = 0;
+      #$this->reads = 0;
       $this->writes = 0;
 
       // @ Set Connection timeout expiration

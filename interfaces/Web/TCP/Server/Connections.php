@@ -141,18 +141,24 @@ class Connections implements Web\Connections
                $this->log('Connection ID #' . $Connection . ':' . PHP_EOL, self::LOG_INFO_LEVEL);
 
                foreach ($info as $key => $value) {
+                  $this->log('@:notice: ' . $key . ': @; ');
+
                   switch ($key) {
+                     case 'expiration':
+                        $this->log($value . ' second(s)' . PHP_EOL);
+                        break;
+
                      case 'timers':
-                        $this->log($key . ': ' . count($value) . PHP_EOL);
+                        $this->log(count($value) . PHP_EOL);
                         break;
 
                      case 'used':
                      case 'started':
-                        $this->log($key . ': ' . date('Y-m-d H:i:s', $value) . PHP_EOL);
+                        $this->log(date('Y-m-d H:i:s', $value) . PHP_EOL);
                         break;
 
                      default:
-                        $this->log($key . ': ' . $value . PHP_EOL);
+                        $this->log($value . PHP_EOL);
                   }
                }
             }
