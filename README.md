@@ -2,7 +2,7 @@
 
 **Full Stack PHP Framework for Multi Projects (WIP)**
 
-Do not use it in production environments. The alpha version hasn't even been released yet.
+🚧 Do not use it in production environments. The alpha version hasn't even been released yet. 🚧
 
 *Temporary repository created for Github Accelerator.*
 
