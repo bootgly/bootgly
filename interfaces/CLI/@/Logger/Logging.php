@@ -85,6 +85,7 @@ trait Logging
       $message = preg_replace_callback('/@(:[a-z]+):/m', function ($matches) {
          return match ($matches[1]) {
             ':i', ':info' => self::LOG_CYAN_BOLD_COLOR,
+            ':n', ':notice' => self::LOG_YELLOW_BOLD_COLOR,
             ':e', ':error' => self::LOG_RED_BOLD_COLOR,
             ':s', ':success' => self::LOG_GREEN_BOLD_COLOR
          };
