@@ -190,7 +190,8 @@ class Connections implements Web\Connections
       // @ Set stats
       // Global
       $this->connections++;
-      // Per client
+
+      // @ Set Connection
       self::$Connections[(int) $Connection] = new Connection($Connection, $peer);
 
       // TODO call handler event $this->On->accept here
