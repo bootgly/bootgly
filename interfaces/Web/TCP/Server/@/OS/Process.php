@@ -37,6 +37,7 @@ class Process
    public static int $master;
    public static array $children = [];
    // File
+   public static $commandFile = HOME_DIR . '/workspace/server.command';
    public static $pidFile = HOME_DIR . '/workspace/server.pid';
    public static $pidLockFile = HOME_DIR . '/workspace/server.pid.lock';
 
@@ -141,7 +142,7 @@ class Process
 
          // * Custom command
          case SIGUSR1:  // 10
-            $command = file_get_contents(HOME_DIR . '/workspace/server.command');
+            $command = file_get_contents(static::$commandFile);
             $this->Server->Connection->{$command};
             break;
 
@@ -252,11 +253,12 @@ class Process
       }
    }
 
-   public function __destruct()
+   public function __destruct ()
    {
       if ($this->level === 'master') {
-         unlink(static::$pidFile);
-         unlink(static::$pidLockFile);
+         @unlink(static::$commandFile);
+         @unlink(static::$pidFile);
+         @unlink(static::$pidLockFile);
       }
    }
 }
