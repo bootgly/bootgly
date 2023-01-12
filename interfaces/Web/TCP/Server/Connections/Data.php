@@ -132,7 +132,7 @@ class Data implements Packages
       $this->reads++;
       $this->read += strlen($input);
       // Per client
-      #@$this->Connection::$peers[(int) $Socket]['reads']++;
+      #@$this->Connection::$Connections[(int) $Socket]['reads']++;
 
       // @ Write Data
       if ($write) {
@@ -215,7 +215,7 @@ class Data implements Packages
       $this->writes++;
       $this->written += $written;
       // Per client
-      Connections::$peers[(int) $Socket]->writes++;
+      Connections::$Connections[(int) $Socket]->writes++;
 
       return true;
    }

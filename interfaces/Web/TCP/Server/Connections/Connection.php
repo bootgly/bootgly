@@ -111,7 +111,7 @@ class Connection
          Timer::del($id);
       }
       // Destroy itself
-      unset(Connections::$peers[(int) $this->Socket]);
+      unset(Connections::$Connections[(int) $this->Socket]);
 
       return true;
    }

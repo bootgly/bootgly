@@ -16,8 +16,9 @@ require 'OS/Process/Timer.php';
 
 // ! Web
 require 'Web.php';
-require 'Web/Packages.php'; // @interface
-require 'Web/Servers.php';  // @interface
+require 'Web/Connections.php'; // @interface
+require 'Web/Packages.php';    // @interface
+require 'Web/Servers.php';     // @interface
 // @Events
 require 'Web/@/Events/Select.php';
 // ? TCP

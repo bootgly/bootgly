@@ -15,6 +15,7 @@ use Bootgly\Event;
 
 use Bootgly\OS\Process\Timer;
 
+use Bootgly\Web;
 use Bootgly\Web\Packages; // @interface
 
 use Bootgly\CLI\_\ {
@@ -25,7 +26,7 @@ use Bootgly\Web\TCP\Server;
 use Bootgly\Web\TCP\Server\Connections\Connection;
 
 
-class Connections
+class Connections implements Web\Connections
 {
    use Logging;
 
@@ -41,7 +42,7 @@ class Connections
    public $Socket;
    // * Meta
    // @ Remote
-   public static array $peers;
+   public static array $Connections;
    // @ Stats
    public int $connections;
    public int $errors;
@@ -67,7 +68,7 @@ class Connections
       $this->Socket = $Socket;
       // * Meta
       // @ Remote
-      self::$peers = [];      // Connections peers
+      self::$Connections = [];      // Connections peers
       // @ Stats
       $this->connections = 0; // Connections count
       $this->errors = 0;
@@ -136,7 +137,7 @@ class Connections
 
             $this->log(PHP_EOL . "Worker #{$worker}:" . PHP_EOL);
 
-            foreach (self::$peers as $Connection => $info) {
+            foreach (self::$Connections as $Connection => $info) {
                $this->log('Connection ID #' . $Connection . ':' . PHP_EOL, self::LOG_INFO_LEVEL);
 
                foreach ($info as $key => $value) {
@@ -156,7 +157,7 @@ class Connections
                }
             }
 
-            if ( empty(self::$peers) ) {
+            if ( empty(self::$Connections) ) {
                $this->log('No active connection.' . PHP_EOL, self::LOG_WARNING_LEVEL);
             }
 
@@ -190,7 +191,7 @@ class Connections
       // Global
       $this->connections++;
       // Per client
-      self::$peers[(int) $Connection] = new Connection($Connection, $peer);
+      self::$Connections[(int) $Connection] = new Connection($Connection, $peer);
 
       // TODO call handler event $this->On->accept here
       // $this->On->accept($Connection);
@@ -203,12 +204,12 @@ class Connections
 
    public function close ($Connection)
    {
-      $closed = self::$peers[(int) $Connection]->close();
+      $closed = self::$Connections[(int) $Connection]->close();
 
       // @ On success
       if ($closed) {
          // Remove closed connection from @peers
-         #unset(self::$peers[(int) $Connection]);
+         #unset(self::$Connections[(int) $Connection]);
 
          return true;
       }
