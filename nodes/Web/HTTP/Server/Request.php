@@ -16,6 +16,12 @@ use Bootgly\Web\HTTP;
 use Bootgly\Path;
 use Bootgly\Requestable;
 use Bootgly\Web\HTTP\Server\_\Connections\Data;
+
+use Bootgly\Web\HTTP\Server\_\ {
+   Content,
+   Header
+};
+
 use Bootgly\Web\HTTP\Server\Request\Session;
 
 
@@ -30,7 +36,13 @@ use Bootgly\Web\HTTP\Server\Request\Session;
  * @property string $subdomain     v1.lab
  * @property array $subdomains     ['lab', 'v1']
  * 
- * ! Resource
+ * ! HTTP
+ * @property string $raw
+ * ? Meta
+ * @property string $method        GET, POST, ...
+ * @property string $uri           /test/foo?query=abc&query2=xyz
+ * @property string $protocol      HTTP/1.1
+ * ? Meta / Resource
  * @property string $identifier    (URI) /test/foo?query=abc&query2=xyz
  * @property string $locator       (URL) /test/foo
  * @property string $name          (URN) foo
@@ -42,17 +54,13 @@ use Bootgly\Web\HTTP\Server\Request\Session;
  * @property object $Query
  * @property string $query          query=abc&query2=xyz
  * @property array $queries        ['query' => 'abc', 'query2' => 'xyz']
- * 
- * ! HTTP
- * @property string $method        GET, POST, ...
- * @property string $protocol      HTTP/1.1
- * @property string $language      pt-BR
+ * ? Meta / Authentication
  * @property string $user          slayer
  * @property string $password      tech
- * @property string $raw
  * ? Header
  * @property object Header         ->{'X-Header'}
- * ? Header/Cookie
+ * @property string $language      pt-BR
+ * ? Header / Cookie
  * @property object $Cookie
  * @property array $cookies
  * ? Content
@@ -60,14 +68,14 @@ use Bootgly\Web\HTTP\Server\Request\Session;
  * @property string $input
  * @property array $post
  * @property array $files
- * ? Content/Uploaded
- * @property object Uploaded
+ * ? Content / Downloader
+ * @property object Downloader
  * 
  * 
  * * Meta
  * @property string $on            2020-03-10 (Y-m-d)
  * @property string $at            17:16:18 (H:i:s)
- * @property int $time             1586496524
+ * @property int $timestamp        1586496524
  * @property bool $secure          true
  * @property bool $fresh           true
  * @property bool $stale           false
@@ -150,8 +158,28 @@ class Request
             return $this->subdomains = explode('.', $this->subdomain);
          // TODO Domain with __String/Domain
          // TODO Domain->sub, Domain->second (second-level), Domain->top (top-level), Domain->root, tld, ...
-         // ! Resource
-         // ? URI
+
+         // ! HTTP
+         case 'raw': // TODO refactor
+            $raw = "$this->method $this->uri $this->protocol\r\n";
+
+            $raw .= $this->Header->raw;
+            $raw .= "\r\n";
+
+            $raw .= $this->input;
+
+            $this->raw = $raw;
+
+            return $raw;
+         // ? Meta
+         case 'method':
+            return $_SERVER['REQUEST_METHOD'];
+         // case 'uri': break;
+         case 'protocol':
+            return $_SERVER['SERVER_PROTOCOL'];
+
+         // ? Meta / Resource
+         // @ URI
          case 'uri':
          case 'URI': // TODO with __String/URI?
          case 'identifier': // @ base
@@ -166,7 +194,7 @@ class Request
 
             return $identifier;
 
-         // ? URL
+         // @ URL
          case 'url':
          case 'URL': // TODO with __String/URL?
          case 'locator':
@@ -186,25 +214,28 @@ class Request
 
             return $locator;
 
-         // ? URN
+         // @ URN
          case 'urn':
          case 'URN':
          case 'name':
             $name = $this->Path->current;
+
             $this->urn = $name;
+
             // $this->URN = $name;
             $this->name = $name;
+
             return $name;
          // TODO dir, directory, Dir, Directories, ... ?
          // TODO file, File ?
-         // ? URL/Path
+         // @ Path
          case 'path':
             return $this->locator;
          case 'Path':
             return new Path($this->locator);
          case 'paths':
             return $this->Path->paths;
-         // ? URI/Query
+         // @ Query
          case 'parameters': // TODO move to $Route->params ?
          case 'params':     // TODO move to $Route->params ?
          case 'query':
@@ -212,12 +243,23 @@ class Request
          case 'queries':
             parse_str($this->query, $queries);
             return $this->queries = $queries;
+         // ? Meta / Authentication
+         case 'user':
+            return $this->user = $_SERVER['PHP_AUTH_USER'] ?? null;
+         case 'username':
+            return $this->user;
 
-         // ! HTTP
-         case 'method':
-            return $_SERVER['REQUEST_METHOD'];
-         case 'protocol':
-            return $_SERVER['SERVER_PROTOCOL'];
+         case 'password':
+            return $this->password = $_SERVER['PHP_AUTH_PW'] ?? null;
+         case 'pass':
+            return $this->password;
+         case 'pw':
+            return $this->password;
+         // ? Header
+         case 'Header':
+            return $this->Header = new Header;
+         case 'headers':
+            return $this->Header->fields;
          case 'language': // TODO refactor
             $httpAcceptLanguage = @$_SERVER['HTTP_ACCEPT_LANGUAGE'];
 
@@ -246,116 +288,15 @@ class Request
             }
 
             return $this->language = $language;
-         case 'user':
-            return $this->user = $_SERVER['PHP_AUTH_USER'] ?? null;
-         case 'username':
-            return $this->user;
-
-         case 'password':
-            return $this->password = $_SERVER['PHP_AUTH_PW'] ?? null;
-         case 'pass':
-            return $this->password;
-         case 'pw':
-            return $this->password;
-
-         case 'raw':
-            $raw = "$this->method $this->uri $this->protocol\r\n";
-            $raw .= $this->Header->raw;
-            $raw .= "\r\n";
-            $raw .= $this->input;
-            $this->raw = $raw;
-            return $raw;
-         // ? Header
-         case 'Header':
-            return $this->Header = new class {
-               public array $fields;
-
-
-               public function __construct () {
-                  $fields = false;
-
-                  if (\PHP_SAPI !== 'cli') {
-                     $fields = apache_request_headers();
-                  }
-
-                  if ($fields !== false) {
-                     $fields = array_change_key_case($fields, CASE_LOWER);
-                  } else {
-                     $fields = [];
-                  }
-
-                  $this->fields = $fields;
-               }
-               public function __get (string $name) {
-                  switch ($name) {
-                     case 'raw':
-                        $raw = '';
-                        foreach ($this->fields as $name => $value) {
-                           $raw .= "$name: $value\r\n";
-                        }
-                        return $raw;
-                     default:
-                        $name = strtolower($name);
-                        return @$this->fields[$name];
-                  }
-               }
-               public function __set (string $fieldName, ?string $fieldValue = null)
-               {
-                  $fieldName = strtolower($fieldName);
-
-                  if ($fieldValue === null) {
-                     $this->fields[$fieldName] = true;
-                  } else {
-                     $this->fields[$fieldName] = $fieldValue;
-                  }
-               }
-
-               public function get (string $name) {
-                  return @$this->$name;
-               }
-            };
-         case 'headers':
-            return $this->Header->fields;
          // case 'ips': // TODO ips based in Header X-Forwarded-For
-         // ? Header/Cookie
+         // ? Header / Cookie
          case 'Cookie':
-            return $this->Cookie = new class
-            {
-               public array $cookies;
-
-
-               public function __construct () {
-                  $this->cookies = $_COOKIE;
-               }
-
-               public function __get (string $name) {
-                  switch ($name) {
-                     default:
-                        return @$this->cookies[$name];
-                  }
-               }
-            };
+            return $this->Header->Cookie;
          case 'cookies':
             return $this->Cookie->cookies;
          // ? Content
          case 'Content':
-            return $this->Content = new class
-            {
-               public string $input;
-               public string $raw;
-
- 
-               public function __construct ()
-               {
-                  $this->input = '';
-                  $this->raw = '';
-
-                  if (\PHP_SAPI !== 'cli') {
-                     $this->input = file_get_contents('php://input');
-                  }
-               }
-            };
-
+            return $this->Content = new Content;
          case 'contents':
          case 'input':
             return $this->Content->input;
@@ -366,21 +307,22 @@ class Request
             if ( $this->method === 'POST' && empty($_POST) ) {
                return $this->inputs;
             }
+
             return $_POST;
          case 'posts':
             return json_encode($this->post);
-
          case 'files':
             return $_FILES;
-         // ? Content/Uploaded
-         case 'Uploaded':
-            break; // TODO implement
+         // ? Content / Downloader
+         case 'Downloader':
+            // TODO implement
+            return $this->Content->Downloader;
          // * Meta
          case 'on':
             return $this->on = date("Y-m-d");
          case 'at':
             return $this->at = date("H:i:s");
-         case 'time':
+         case 'timestamp':
             return $this->time = $_SERVER['REQUEST_TIME'];
 
          case 'secure':
