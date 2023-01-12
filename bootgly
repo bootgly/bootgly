@@ -13,16 +13,8 @@ namespace Bootgly;
 
 #error_reporting(E_ALL); ini_set('display_errors', 'On');
 
-const HOME_DIR = __DIR__.DIRECTORY_SEPARATOR;
-
 #phpinfo(); exit;
 
 require '@/autoload.php';
-require 'boot/..php';
-require 'core/@loader.php';
-
-require 'interfaces/@loader.php';
-#require 'modules/@loader.php';
-require 'platforms/@loader.php';
 
 $CLI = new CLI;
