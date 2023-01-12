@@ -8,19 +8,22 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\Web\TCP\Server;
+namespace Bootgly\Web\TCP\Server\Connections;
 
 
 use Bootgly\OS\Process\Timer;
+
 use Bootgly\Web\TCP\Server;
+use Bootgly\Web\TCP\Server\Connections;
 
 
-class Peer
+class Connection
 {
    public $Socket;
 
    // * Config
    public array $timers;
+   public int $expiration;
    // * Data
    public string $peer;
    // * Meta
@@ -34,12 +37,13 @@ class Peer
    public int $writes;
 
 
-   public function __construct (&$Connection, $peer)
+   public function __construct (&$Socket, $peer)
    {
-      $this->Socket = $Connection;
+      $this->Socket = $Socket;
 
       // * Config
       $this->timers = [];
+      $this->expiration = 15;
       // * Data
       $this->peer = $peer;
       // * Meta
@@ -52,7 +56,11 @@ class Peer
       $this->writes = 0;
 
       // @ Set Connection timeout expiration
-      $this->timers[] = Timer::add(interval: 15, handler: [$this, 'expire'], args: [15]);
+      $this->timers[] = Timer::add(
+         interval: $this->expiration,
+         handler: [$this, 'expire'],
+         args: [$this->expiration]
+      );
    }
 
    public function expire (int $timeout = 5) 
@@ -98,12 +106,12 @@ class Peer
 
       // @ On success
       $this->status = 'closed';
-
+      // Delete timers
       foreach ($this->timers as $id) {
          Timer::del($id);
       }
-
-      unset(Connection::$peers[(int) $this->Socket]); // @ destroy itself
+      // Destroy itself
+      unset(Connections::$peers[(int) $this->Socket]);
 
       return true;
    }

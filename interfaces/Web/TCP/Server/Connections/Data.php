@@ -12,20 +12,21 @@ namespace Bootgly\Web\TCP\Server\Connections;
 
 
 use Bootgly\CLI\_\ {
-   Logger\Logging
+   Logger\Logging // @trait
 };
 
+use Bootgly\Web\Packages; // @interface
+
 use Bootgly\Web\TCP\Server;
-use Bootgly\Web\TCP\Server\Connection;
 use Bootgly\Web\TCP\Server\Connections;
 
 
-class Data implements Connections
+class Data implements Packages
 {
    use Logging;
 
 
-   public Connection $Connection;
+   public Connections $Connections;
 
    // * Config
    public bool $cache;
@@ -45,9 +46,9 @@ class Data implements Connections
    public array $callbacks;
 
 
-   public function __construct (Connection &$Connection)
+   public function __construct (Connections &$Connections)
    {
-      $this->Connection = $Connection;
+      $this->Connections = $Connections;
 
       // * Config
       $this->cache = true;
@@ -85,7 +86,7 @@ class Data implements Connections
       if ($input === '') {
          // $this->log('Failed to read buffer: input data is empty!' . PHP_EOL);
          // Server::$Event->del($Socket, Server::$Event::EVENT_WRITE);
-         $this->Connection->close($Socket);
+         $this->Connections->close($Socket);
          return false;
       }
 
@@ -99,13 +100,13 @@ class Data implements Connections
 
          if ($eof) {
             // $this->log('Failed to read buffer: End-of-file!' . PHP_EOL);
-            $this->Connection->close($Socket);
+            $this->Connections->close($Socket);
             return false;
          }
 
          if (is_resource($Socket) && get_resource_type($Socket) === 'stream') {
             $this->log('Failed to read buffer: closing connection...' . PHP_EOL);
-            $this->Connection->close($Socket);
+            $this->Connections->close($Socket);
          }
 
          $this->errors['read']++;
@@ -126,7 +127,7 @@ class Data implements Connections
          self::$input = $input;
       }
 
-      // @ Set Stats (disable to max performance)
+      // @ Set Stats (disable to max performance in benchmarks)
       // Global
       $this->reads++;
       $this->read += strlen($input);
@@ -147,7 +148,7 @@ class Data implements Connections
    {
       // @ Set Output
       if ($handle)
-         self::$output = ($this->Connection->handler)(...$this->callbacks);
+         self::$output = ($this->Connections->handler)(...$this->callbacks);
 
       try {
          $buffer = self::$output;
@@ -181,7 +182,7 @@ class Data implements Connections
          // @ Check connection reset by peer?
          if ($eof) {
             $this->log('Failed to write data: End-of-file!' . PHP_EOL);
-            $this->Connection->close($Socket);
+            $this->Connections->close($Socket);
             return false;
          }
 
@@ -192,7 +193,7 @@ class Data implements Connections
 
          if (is_resource($Socket) && get_resource_type($Socket) === 'stream') {
             // $this->log('Failed to write data: closing connection...' . PHP_EOL);
-            $this->Connection->close($Socket);
+            $this->Connections->close($Socket);
             return false;
          }
 
@@ -209,15 +210,15 @@ class Data implements Connections
          self::$input = '';
       }
 
-      // @ Set Stats (disable to max performance)
+      // @ Set Stats (disable to max performance in benchmarks)
       // Global
       $this->writes++;
       $this->written += $written;
       // Per client
-      Connection::$peers[(int) $Socket]->writes++;
+      Connections::$peers[(int) $Socket]->writes++;
 
       return true;
    }
 }
 
-return new Data($this->Connection);
+return new Data($this->Connections);

@@ -11,8 +11,8 @@
 namespace Bootgly\Web;
 
 
-interface Servers
+interface Packages
 {
-   public function configure (string $host, int $port, int $workers, ?\Closure $handler = null);
-   public function start ();
+   public function read (&$Socket);
+   public function write (&$Socket);
 }

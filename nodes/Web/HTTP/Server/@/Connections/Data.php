@@ -12,7 +12,7 @@ namespace Bootgly\Web\HTTP\Server\_\Connections;
 
 
 use Bootgly\Web\TCP\Server;
-use Bootgly\Web\TCP\Server\Connection;
+use Bootgly\Web\TCP\Server\Connections;
 use Bootgly\Web\TCP\Server\Connections\Data as TCPData;
 
 
@@ -25,10 +25,10 @@ class Data extends TCPData
    public static int $pointer = 0; // @ Current Line of parser read
 
 
-   public function __construct (Connection &$Connection)
+   public function __construct (Connections &$Connections)
    {
       // * Meta
-      parent::__construct($Connection);
+      parent::__construct($Connections);
    }
 
    public function write (&$Socket, bool $handle = false, ? int $length = null) : bool
@@ -47,7 +47,7 @@ class Data extends TCPData
       $Request->parse();
 
       try {
-         $Response->Content->raw = ($this->Connection->handler)($Request, $Response, $Router);
+         $Response->Content->raw = ($this->Connections->handler)($Request, $Response, $Router);
       } catch (\Throwable) {
          // $this->Content->raw = '';
          $Response->Meta->status = 500; // @ 500 HTTP Server Error
@@ -95,4 +95,4 @@ class Data extends TCPData
    }
 }
 
-return new Data($this->Connection);
+return new Data($this->Connections);

@@ -17,7 +17,7 @@ use Bootgly\CLI\_\ {
    Logger\Logging
 };
 
-use Bootgly\Web\TCP\Server\Connection;
+use Bootgly\Web\TCP\Server\Connections;
 
 
 class Select implements Event\Loops
@@ -25,7 +25,7 @@ class Select implements Event\Loops
    use Logging;
 
 
-   public Connection $Connection;
+   public Connections $Connections;
 
    // * Config
    const EVENT_READ = 1;
@@ -42,9 +42,9 @@ class Select implements Event\Loops
    private array $events = [];
 
 
-   public function __construct (Connection &$Connection)
+   public function __construct (Connections &$Connections)
    {
-      $this->Connection = $Connection;
+      $this->Connections = $Connections;
    }
 
    public function add ($Socket, int $flag, $action, ? array $arguments = null)
@@ -161,8 +161,8 @@ class Select implements Event\Loops
             foreach ($read as $Socket) {
                // @ Select action
                match (@$this->events[(int) $Socket][self::EVENT_READ]) {
-                  'accept' => $this->Connection->accept($Socket),
-                  'read' => $this->Connection->Data->read($Socket),
+                  'accept' => $this->Connections->accept($Socket),
+                  'read' => $this->Connections->Data->read($Socket),
                   default => null
                };
             }
@@ -170,7 +170,7 @@ class Select implements Event\Loops
 
          if ($write) {
             foreach ($write as $Socket) {
-               $this->Connection->Data->write($Socket);
+               $this->Connections->Data->write($Socket);
             }
          }
 

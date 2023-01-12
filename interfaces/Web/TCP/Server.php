@@ -21,17 +21,18 @@ use Bootgly\CLI\_\{
 use Bootgly\Web\_\{
    Events\Select
 };
+use Bootgly\Web\Servers;
 use Bootgly\Web\TCP\_\{
    CLI\Console,
    OS\Process
 };
 // inherit
 use Bootgly\Web\TCP\{
-   Server\Connection
+   Server\Connections
 };
 
 
-class Server
+class Server implements Servers
 {
    use Logging;
 
@@ -60,8 +61,8 @@ class Server
    protected const STATUS_PAUSED = 16;
    protected const STATUS_STOPING = 32;
 
-   // ! Connection
-   protected Connection $Connection;
+   // ! Connection(s)
+   protected Connections $Connections;
    // ! Event
    public static $Event = null;
    // ! Process
@@ -86,14 +87,14 @@ class Server
       self::$status = self::STATUS_BOOTING;
 
       // ! Connection(s)
-      $this->Connection = new Connection($this);
-      $this->Connection->Data = require __DIR__ . '/Server/Connections/Data.php';
+      $this->Connections = new Connections($this);
+      $this->Connections->Data = require __DIR__ . '/Server/Connections/Data.php';
       if (__CLASS__ !== static::class) {
-         $this->Connection->Data = require (new Backtrace)->dir . '/Server/@/Connections/Data.php';
+         $this->Connections->Data = require (new Backtrace)->dir . '/Server/@/Connections/Data.php';
       }
 
       // ! Web\@\Events
-      static::$Event = new Select($this->Connection);
+      static::$Event = new Select($this->Connections);
       // ! @\CLI\Console
       $this->Console = new Console($this);
       // ! @\OS\Process
@@ -105,8 +106,8 @@ class Server
          case 'Socket':
             return $this->Socket;
 
-         case 'Connection':
-            return $this->Connection;
+         case 'Connections':
+            return $this->Connections;
          case 'Process':
             return $this->Process;
 
@@ -196,7 +197,7 @@ class Server
       $this->port = $port;
       $this->workers = $workers;
 
-      $this->Connection->handler = $handler;
+      $this->Connections->handler = $handler;
 
       return $this;
    }
@@ -205,6 +206,11 @@ class Server
       self::$status = self::STATUS_STARTING;
 
       $this->log('Starting Server... ', self::LOG_INFO_LEVEL);
+
+      // @ Reset Opcache?
+      if (function_exists('opcache_reset')) {
+         #opcache_reset();
+      }
 
       // ! Process
       // $this->Process->Signal->install();
