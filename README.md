@@ -30,7 +30,7 @@ _ | _ | [Response (WIP)](/nodes/Web/HTTP/Server/Response.php) | _
 
 ### HTTP Server CLI
 
-php server@http.php
+php server.http.php
 
 ## License
 
