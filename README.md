@@ -28,6 +28,10 @@ _ | _ | [Response (WIP)](/nodes/Web/HTTP/Server/Response.php) | _
 2) rename `projects/web.constructor.php.example` to `projects/web.constructor.php`
 3) active Rewrite if you are using any server other than native CLI like Apache, LiteSpeed, Nginx, etc.
 
+### HTTP Server CLI
+
+php server@http.php
+
 ## License
 
 The Bootgly PHP Framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
