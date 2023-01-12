@@ -143,7 +143,7 @@ class Process
          // * Custom command
          case SIGUSR1:  // 10
             $command = file_get_contents(static::$commandFile);
-            $this->Server->Connection->{$command};
+            $this->Server->Connections->{$command};
             break;
 
          // ! Server
@@ -177,12 +177,12 @@ class Process
          // @ $peers
          // Show info of active remote accepted connections (remote ip + remote port, ...)
          case SIGIOT:  // 6
-            $this->Server->Connection->{'@peers'};
+            $this->Server->Connections->{'@peers'};
             break;
          // @ $stats
          // Show stats of server socket connections (reads, writes, errors...)
          case SIGIO:   // 29
-            $this->Server->Connection->{'@stats'};
+            $this->Server->Connections->{'@stats'};
             break;
       }
    }

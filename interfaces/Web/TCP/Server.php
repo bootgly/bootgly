@@ -87,6 +87,7 @@ class Server implements Servers
       self::$status = self::STATUS_BOOTING;
 
       // ! Connection(s)
+      // @ New design pattern?
       $this->Connections = new Connections($this);
       $this->Connections->Data = require __DIR__ . '/Server/Connections/Data.php';
       if (__CLASS__ !== static::class) {

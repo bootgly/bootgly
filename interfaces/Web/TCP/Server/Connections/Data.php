@@ -132,7 +132,7 @@ class Data implements Packages
       $this->reads++;
       $this->read += strlen($input);
       // Per client
-      #@$this->Connection::$Connections[(int) $Socket]['reads']++;
+      #Connections::$Connections[(int) $Socket]['reads']++;
 
       // @ Write Data
       if ($write) {
