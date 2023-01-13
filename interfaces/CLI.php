@@ -32,6 +32,7 @@ class CLI
 
       $this->Command = new Command($this);
 
+      // @ Load CLI constructor
       @include $Project::PROJECT_DIR . 'cli.constructor.php';
    }
 }

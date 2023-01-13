@@ -45,7 +45,7 @@ class Web
       $Response = $this->Response = &$this->Server->Response;
       $Router = $this->Router = &$this->Server->Router;
 
-      // Load Web constructor
+      // @ Load Web constructor
       @include Bootgly::$Project::PROJECT_DIR . 'web.constructor.php';
    }
 }
