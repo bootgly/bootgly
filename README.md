@@ -17,7 +17,7 @@ Servers | Database | Back-end | Front-end
 _ | _ | [Request (WIP)](/nodes/Web/HTTP/Server/Request.php) | _
 _ | _ | [Response (WIP)](/nodes/Web/HTTP/Server/Response.php) | _
 
-## Requirements
+## ❗️ Requirements
 
 - PHP 8.2+
 - Apache Rewrite compatibility in Non-CLI Web Servers
@@ -32,6 +32,6 @@ _ | _ | [Response (WIP)](/nodes/Web/HTTP/Server/Response.php) | _
 
 php server.http.php
 
-## License
+## 📃 License
 
 The Bootgly PHP Framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
