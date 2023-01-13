@@ -11,6 +11,7 @@
 namespace Bootgly\Web\HTTP\Server;
 
 
+use Bootgly\Bootgly;
 use Bootgly\Web;
 use Bootgly\Web\HTTP;
 
@@ -469,7 +470,7 @@ class Response
       switch ($resource) {
          // @ File
          case 'views':
-            $File = new File($this->Web->Project->path . 'views/' . $data);
+            $File = new File(Bootgly::$Project->path . 'views/' . $data);
             $this->body   = $File;
             $this->source = 'file';
             $this->type   = $File->extension;
@@ -506,7 +507,7 @@ class Response
                      } else if ($data[0] === '@') {
                         $File = new File(HOME_DIR . 'projects/' . $data);
                      } else {
-                        $File = new File($this->Web->Project->path . $data);
+                        $File = new File(Bootgly::$Project->path . $data);
                      }
 
                      $this->body   = $File;
@@ -559,7 +560,6 @@ class Response
 
       $API = &$Web->API ?? null;
       $App = &$Web->App ?? null;
-      $System = &$Web->System ?? null;
 
       // Output/Buffer start()
       ob_start();
@@ -567,7 +567,7 @@ class Response
       try {
          // Isolate context with anonymous static function
          (static function (string $__file__, ?array $__data__)
-            use ($Web, $Request, $Response, $Route, $API, $App, $System) {
+            use ($Web, $Request, $Response, $Route, $API, $App) {
             if ($__data__ !== null) {
                extract($__data__);
             }
@@ -647,11 +647,10 @@ class Response
                   // TODO add variables dinamically according to loaded modules and loaded web classes
                   $API = &$this->Web->API ?? null;
                   $App = &$this->Web->App ?? null;
-                  $System = &$this->Web->System ?? null;
 
                   // Isolate context with anonymous static function
                   (static function (string $__file__)
-                     use ($Web, $Request, $Response, $Route, $API, $App, $System) {
+                     use ($Web, $Request, $Response, $Route, $API, $App) {
                      require $__file__;
                   })($File);
             }
@@ -681,7 +680,7 @@ class Response
       if ($content instanceof File) {
          $File = $content;
       } else {
-         $File = new File($this->Web->Project->path . $content);
+         $File = new File(Bootgly::$Project->path . $content);
       }
 
       if ($File->readable) {

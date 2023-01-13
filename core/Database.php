@@ -104,7 +104,7 @@ class Database
    {
       // TODO validate / parse $instance
       try {
-         $configFile = $this->Bootgly->Project . '/database/' . $instance . '.config.php';
+         $configFile = Bootgly::$Project . '/database/' . $instance . '.config.php';
          if ( is_file($configFile) ) {
             require $configFile;
          } else {
