@@ -11,37 +11,41 @@
 namespace Bootgly;
 
 
-use Bootgly\{
-   Project,
-};
+use Bootgly\Web\HTTP;
+use Bootgly\Web\HTTP\Server\Request;
+use Bootgly\Web\HTTP\Server\Response;
+use Bootgly\Web\HTTP\Server\Router;
+
+use Bootgly\Web\App;
+use Bootgly\Web\API;
 
 
 class Web
 {
-   public Bootgly $Bootgly;
-   public Project $Project;
+   // @ Nodes
+   public HTTP\Server $Server;
+
+   public Request $Request;
+   public Response $Response;
+   public Router $Router;
+   // @ Platforms
+   public App $App;
+   public API $API;
 
 
-   public function __construct (Bootgly $Bootgly)
+   public function __construct ()
    {
       if (@$_SERVER['REDIRECT_URL'] === NULL) {
          return;
       }
 
-      // Instance parents
-      // @ core
-      $this->Bootgly = &$Bootgly;
-      $this->Project = &$Bootgly->Project;
+      $Server = $this->Server = new HTTP\Server($this);
 
-      // Export variables
-      $Bootgly  = &$this->Bootgly;
-      $Project  = &$this->Bootgly->Project;
+      $Request = $this->Request = &$this->Server->Request;
+      $Response = $this->Response = &$this->Server->Response;
+      $Router = $this->Router = &$this->Server->Router;
 
       // Load Web constructor
-      @include $Project::PROJECT_DIR . 'web.constructor.php';
-   }
-   public function __get($name)
-   {
-      return $this->$name;
+      @include Bootgly::$Project::PROJECT_DIR . 'web.constructor.php';
    }
 }
