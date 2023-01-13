@@ -8,21 +8,21 @@ composer.lock
 cli-config.php
 server-*.php
 
-### @Bootgly
+### @Bootgly ###
 ## Short folders
 # Ignore #doc folders
 **/#
 # Ignore &xcluded folders
 **/&
-# Ignore test (✓) folders
-**/✓
 
-### Bootstrap
+### Bootstrap ###
+
 ## /@
 @/php.ini
 # Ignore imported packages (equivalent to vendor)
 @/imports/*
-## /core
+
+## /boot
 /boot/*
 !/boot/..php
 !/boot/@interfaces
@@ -37,7 +37,8 @@ server-*.php
 !/boot/file
 !/boot/logger
 !/boot/path
-## core
+
+## /core
 /core/*
 !/core/@loader.php
 !/core/Bootgly.php
@@ -48,17 +49,23 @@ server-*.php
 !/core/Template.php
 !/core/Template
 
-### Resources
+### Resources ###
+
 ## /interfaces
+
 ## /modules
+
+## /nodes
+
 ## /platforms
 /platforms/CLI/*
 /platforms/Web/*
 !/platforms/Web/API.php
 !/platforms/Web/App.php
-## /plugins
 
-### Sources
+
+### Sources ###
+
 ## /projects
 # Ignore projects except bootgly subdirectory
 /projects/*
@@ -67,10 +74,12 @@ server-*.php
 !/projects/cli.constructor.php.example
 !/projects/web.constructor.php.example
 !/projects/@bootgly
+
 ## /public
 /public/*
 !/public
 !/public/example.com
+
 ## /workspace
 # Ignore workspace folders
 /workspace/@*
