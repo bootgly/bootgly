@@ -12,5 +12,6 @@ require_once __DIR__ . '/../interfaces/@loader.php';
 require_once __DIR__ . '/../nodes/@loader.php';
 require_once __DIR__ . '/../platforms/@loader.php';
 
-$Bootgly = new Bootgly;
-$Web = new Web($Bootgly);
+Bootgly::boot();
+
+require HOME_DIR . 'projects/bootgly.constructor.php';
