@@ -72,8 +72,4 @@ server-*.php
 !/public
 !/public/example.com
 ## /workspace
-/workspace/*
-!/workspace/tests
-!/workspace/tests/*
-!/workspace/cache
-/workspace/cache/*
+/workspace/@*
