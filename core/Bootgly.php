@@ -11,17 +11,18 @@
 namespace Bootgly;
 
 
-class Bootgly
+abstract class Bootgly
 {
-   // ***
+   // * Meta
+   public readonly bool $booted;
 
-   public Project $Project;
-   public Template $Template;
+   public static Project $Project;
+   public static Template $Template;
 
 
-   public function __construct ()
+   public static function boot ()
    {
-      $this->Project = new Project($this);
-      $this->Template = new Template($this);
+      self::$Project = new Project;
+      self::$Template = new Template;
    }
 }

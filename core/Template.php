@@ -19,8 +19,6 @@ use Bootgly\Template\Config;
 
 class Template
 {
-   public Bootgly $Bootgly;
-
    // * Config
    private array $compilables;
    private array $parameters;
@@ -33,10 +31,8 @@ class Template
    public ? File $Output;
 
 
-   public function __construct (Bootgly $Bootgly)
+   public function __construct ()
    {
-      $this->Bootgly = &$Bootgly;
-
       // if ($_SERVER['HTTP_HOST'] === 'bootgly.slayer.tech') {
          // Debugger::$debug = true;
          // Debug(Config::get());
@@ -89,7 +85,7 @@ class Template
       $File = new File;
       $File->construct = false;
       $File->convert = false;
-      $File($this->Bootgly->Project . $view . '.template.php');
+      $File(Bootgly::$Project . $view . '.template.php');
 
       if ($File->File) {
          $this->raw = $File->contents;

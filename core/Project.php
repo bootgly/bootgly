@@ -18,8 +18,6 @@ class Project
 {
   public const PROJECT_DIR = HOME_DIR . 'projects/';
 
-  public Bootgly $Bootgly;
-
   // * Config
   public bool $cache;
   // * Data
@@ -37,10 +35,8 @@ class Project
   private array $paths;
 
 
-  public function __construct (Bootgly $Bootgly)
+  public function __construct ()
   {
-    $this->Bootgly = $Bootgly;
-
     // * Config
     $this->cache = true;
     // * Data
