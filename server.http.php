@@ -13,6 +13,7 @@ namespace Bootgly;
 
 require_once '@/autoload.php';
 
+$Web = new Web;
 
 #use Bootgly\Web\TCP;
 use Bootgly\Web\HTTP;
