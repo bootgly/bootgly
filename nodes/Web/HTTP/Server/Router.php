@@ -11,6 +11,7 @@
 namespace Bootgly\Web\HTTP\Server;
 
 
+use Bootgly\Bootgly;
 use Bootgly\Web;
 use Bootgly\Web\HTTP;
 
@@ -97,8 +98,6 @@ class Router
 
    public function boot (string|array $instances = ['routes'])
    {
-      $Bootgly = &$this->Web->Bootgly;
-
       $Web = &$this->Web;
 
       $Request = &$this->Request;
@@ -107,16 +106,16 @@ class Router
       $Route = &$this->Route;
 
       (static function (string $__default__)
-      use ($Bootgly, $Web, $Request, $Router, $Route) {
+      use ($Web, $Request, $Router, $Route) {
          include_once $__default__;
-      })( (string) new File($this->Web->Project->path . 'router/' . 'index.php') );
+      })( (string) new File(Bootgly::$Project->path . 'router/' . 'index.php') );
 
       $instances = (array) $instances;
       foreach ($instances as $instance) {
          (static function (string $__routes__)
-         use ($Bootgly, $Web, $Request, $Router, $Route) {
+         use ($Web, $Request, $Router, $Route) {
             @include_once $__routes__;
-         })( (string) new File($this->Web->Project->path . 'router/' . $instance . '.php') );
+         })( (string) new File(Bootgly::$Project->path . 'router/' . $instance . '.php') );
       }
    }
    public function pause ()
