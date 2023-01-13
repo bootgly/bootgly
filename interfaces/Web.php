@@ -36,6 +36,9 @@ class Web
    public function __construct ()
    {
       if (@$_SERVER['REDIRECT_URL'] === NULL) {
+         if (\PHP_SAPI !== 'cli') {
+            echo 'Missing Rewrite!';
+         }
          return;
       }
 
