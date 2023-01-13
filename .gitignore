@@ -72,4 +72,7 @@ server-*.php
 !/public
 !/public/example.com
 ## /workspace
+# Ignore workspace folders
 /workspace/@*
+# Ignore all files in this folder
+/workspace/*.*
