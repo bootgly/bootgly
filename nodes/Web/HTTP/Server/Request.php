@@ -10,7 +10,7 @@
 
 namespace Bootgly\Web\HTTP\Server;
 
-
+use AllowDynamicProperties;
 use Bootgly\Web\HTTP;
 
 use Bootgly\Path;
@@ -80,6 +80,8 @@ use Bootgly\Web\HTTP\Server\Request\Session;
  * @property bool $fresh           true
  * @property bool $stale           false
  */
+
+#[AllowDynamicProperties]
 class Request
 {
    public HTTP\Server $Server;
@@ -117,7 +119,11 @@ class Request
 
    public function __get ($name)
    {
-      $parsed = $this->parse($name);
+      $parsed = false;
+
+      if (\PHP_SAPI === 'cli') {
+         $parsed = $this->parse($name);
+      }
 
       if ($parsed) {
          return $parsed;
