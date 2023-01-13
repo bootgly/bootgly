@@ -43,6 +43,7 @@ server-*.php
 !/core/Bootgly.php
 !/core/Database.php
 !/core/Event.php
+!/core/Event
 !/core/Project.php
 !/core/Template.php
 !/core/Template
