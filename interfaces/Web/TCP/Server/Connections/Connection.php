@@ -192,4 +192,12 @@ class Connection # extends Data
 
       return true;
    }
+
+   public function __destruct ()
+   {
+      // Delete timers
+      foreach ($this->timers as $id) {
+         Timer::del($id);
+      }
+   }
 }
