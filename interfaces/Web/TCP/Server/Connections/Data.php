@@ -37,12 +37,6 @@ class Data implements Packages
    public static string $input;
    public static string $output;
    // * Meta
-   public int $read;
-   public int $written;
-   // @ Stats
-   public int $reads;
-   public int $writes;
-   public array $errors;
    // @ Handler
    public array $callbacks;
 
@@ -59,13 +53,6 @@ class Data implements Packages
       self::$input = '';
       self::$output = '';
       // * Meta
-      $this->read = 0;            // Input Data length (bytes read).
-      $this->written = 0;         // Output Data length (bytes written).
-      // @ Stats
-      $this->reads = 0;           // Socket Read count
-      $this->writes = 0;          // Socket Write count
-      $this->errors['read'] = 0;  // Socket Reading errors
-      $this->errors['write'] = 0; // Socket Writing errors
       // @ Handler
       $this->callbacks = [&self::$input];
    }
@@ -110,7 +97,7 @@ class Data implements Packages
             $this->Connections->close($Socket);
          }
 
-         $this->errors['read']++;
+         Connections::$errors['read']++;
 
          return false;
       }
@@ -129,11 +116,13 @@ class Data implements Packages
       }
 
       // @ Set Stats (disable to max performance in benchmarks)
-      // Global
-      $this->reads++;
-      $this->read += strlen($input);
-      // Per client
-      #Connections::$Connections[(int) $Socket]['reads']++;
+      if (Connections::$stats) {
+         // Global
+         Connections::$reads++;
+         Connections::$read += strlen($input);
+         // Per client
+         #Connections::$Connections[(int) $Socket]['reads']++;
+      }
 
       // @ Write Data
       if ($write) {
@@ -198,7 +187,7 @@ class Data implements Packages
             return false;
          }
 
-         $this->errors['write']++;
+         Connections::$errors['write']++;
 
          return false;
       }
@@ -212,11 +201,13 @@ class Data implements Packages
       }
 
       // @ Set Stats (disable to max performance in benchmarks)
-      // Global
-      $this->writes++;
-      $this->written += $written;
-      // Per client
-      Connections::$Connections[(int) $Socket]->writes++;
+      if (Connections::$stats) {
+         // Global
+         Connections::$writes++;
+         Connections::$written += $written;
+         // Per client
+         Connections::$Connections[(int) $Socket]->writes++;
+      }
 
       return true;
    }

@@ -38,10 +38,18 @@ class Connections implements Web\Connections
    // * Meta
    // @ Remote
    public static array $Connections;
+   // @ Limiter
    public static array $blacklist;
    // @ Stats
+   public static bool $stats;
    public int $connections;
-   public int $errors;
+   // Errors
+   public static array $errors;
+   // Data
+   public static int $reads;
+   public static int $writes;
+   public static int $read;
+   public static int $written;
 
    public Packages $Data;
 
@@ -57,10 +65,23 @@ class Connections implements Web\Connections
       // * Meta
       // @ Remote
       self::$Connections = []; // Connections peers
+      // @ Limiter
       self::$blacklist = [];   // Connections blacklist defined by limit methods
       // @ Stats
+      self::$stats = true;
       $this->connections = 0;  // Connections count
-      $this->errors = 0;
+      // Errors
+      self::$errors = [
+         'connection' => 0,  // Socket Connection errors
+         'read' => 0,        // Socket Reading errors
+         'write' => 0        // Socket Writing errors
+         // 'except' => 0
+      ];
+      // Data
+      self::$reads = 0;        // Socket Read count
+      self::$writes = 0;       // Socket Write count
+      self::$read = 0;         // Socket Reads in bytes
+      self::$written = 0;      // Socket Writes in bytes
    }
    public function __get ($name)
    {
@@ -82,8 +103,8 @@ class Connections implements Web\Connections
       }
 
       if ($Connection === false) {
-         $this->errors++;
          #$this->log('Socket connection is false!' . PHP_EOL);
+         self::$errors['connection']++;
          return false;
       }
 
@@ -91,7 +112,8 @@ class Connections implements Web\Connections
       $Peer = new Connection($Connection);
 
       // @ Check connection
-      if ( $Peer->check() === false ) return false;
+      if ( $Peer->check() === false )
+         return false;
 
       // @ Set stats
       // Global
