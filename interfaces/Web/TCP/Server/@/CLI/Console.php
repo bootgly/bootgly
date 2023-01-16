@@ -93,6 +93,10 @@ class Console extends CLI\Console
             $this->Server->Process->sendSignal(SIGTSTP) && false,
          'resume' =>
             $this->Server->Process->sendSignal(SIGCONT) && false,
+         'reload' => // Failed attempt to create [hot] reload command :\
+            clearstatcache()
+            && function_exists('opcache_reset') && opcache_reset()
+            && true,
 
          'status' =>
             $this->Server->Process->sendSignal(SIGUSR2, children: false) && true,
@@ -103,8 +107,8 @@ class Console extends CLI\Console
             error_reporting(E_ALL) && ini_set('display_errors', 'On') && true,
          'debug off' =>
             error_reporting(0) && ini_set('display_errors', 'Off') && true,
-         // 'benchmark' => ...,
-         // 'test'
+         // TODO 'benchmark' => ...,
+         // TODO 'test' response of 1 request
 
          'check jit' => $this->log(
             (function_exists('opcache_get_status') && opcache_get_status()['jit']['enabled'])
