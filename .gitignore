@@ -19,6 +19,7 @@ server-*.php
 
 ## /@
 @/php.ini
+@/certificates/*
 # Ignore imported packages (equivalent to vendor)
 @/imports/*
 

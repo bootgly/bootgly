@@ -41,9 +41,10 @@ class Server implements Servers
 
    // * Config
    #protected string $resource;
-   protected ?string $host;
-   protected ?int $port;
+   protected ? string $host;
+   protected ? int $port;
    protected int $workers;
+   protected ? array $ssl; // SSL Stream Context
    // @ Mode
    protected int $mode;
    public const MODE_DAEMON = 1;
@@ -142,7 +143,7 @@ class Server implements Servers
       }
    }
 
-   public function configure (string $host, int $port, int $workers)
+   public function configure (string $host, int $port, int $workers, ? array $ssl = null)
    {
       self::$status = self::STATUS_CONFIGURING;
 
@@ -151,6 +152,8 @@ class Server implements Servers
       $this->host = $host;
       $this->port = $port;
       $this->workers = $workers;
+
+      $this->ssl = $ssl;
 
       return $this;
    }
@@ -207,20 +210,28 @@ class Server implements Servers
       $error_code = 0;
       $error_message = '';
 
-      $context = stream_context_create([
-         'socket' => [
-            // Used to limit the number of outstanding connections in the socket's listen queue.
-            'backlog' => 102400,
+      // @ Set context options
+      $options = [];
+      // Socket
+      $options['socket'] = [
+         // Used to limit the number of outstanding connections in the socket's listen queue.
+         'backlog' => 102400,
 
-            // Allows multiple bindings to a same ip:port pair, even from separate processes.
-            'so_reuseport' => true,
+         // Allows multiple bindings to a same ip:port pair, even from separate processes.
+         'so_reuseport' => true,
 
-            // Overrides the OS default regarding mapping IPv4 into IPv6.
-            'ipv6_v6only' => false
-         ]
-      ]);
+         // Overrides the OS default regarding mapping IPv4 into IPv6.
+         'ipv6_v6only' => false
+      ];
+      // SSL
+      if ( ! empty($this->ssl) ) {
+         $options['ssl'] = $this->ssl;
+      }
 
-      $this->Socket = false;
+      // @ Create context
+      $context = stream_context_create($options);
+
+      // @ Create server socket
       try {
          $this->Socket = @stream_socket_server(
             'tcp://' . $this->host . ':' . $this->port,
@@ -230,6 +241,7 @@ class Server implements Servers
             $context
          );
       } catch (\Throwable) {
+         $this->Socket = false;
       };
 
       if ($this->Socket === false) {
@@ -238,6 +250,10 @@ class Server implements Servers
       }
 
       // @ On success
+      if ( ! empty($this->ssl) ) {
+         stream_socket_enable_crypto($this->Socket, false);
+      }
+
       if (function_exists('socket_import_stream')) {
          $Socket = socket_import_stream($this->Socket);
          socket_set_option($Socket, SOL_SOCKET, SO_KEEPALIVE, 1);

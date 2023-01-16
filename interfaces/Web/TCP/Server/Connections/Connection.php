@@ -61,6 +61,10 @@ class Connection # extends Data
       #$this->reads = 0;
       $this->writes = 0;
 
+      #$context = stream_context_get_options($Socket);
+      #if ( isSet($context['ssl']) && $this->handshake() === false)
+      #   return false;
+
       // @ Set Connection timeout expiration
       $this->timers[] = Timer::add(
          interval: $this->expiration,
@@ -75,6 +79,34 @@ class Connection # extends Data
          args: [6]
       );
       */
+   }
+
+   public function handshake ()
+   {
+      try {
+         $negotiation = @stream_socket_enable_crypto(
+            $this->Socket,
+            true,
+            STREAM_CRYPTO_METHOD_SSLv2_SERVER |
+            STREAM_CRYPTO_METHOD_SSLv23_SERVER |
+            STREAM_CRYPTO_METHOD_TLSv1_1_SERVER |
+            STREAM_CRYPTO_METHOD_TLSv1_2_SERVER |
+            STREAM_CRYPTO_METHOD_TLSv1_3_SERVER
+         );
+      } catch (\Throwable) {
+         $negotiation = -1;
+      }
+
+      // @ Check negotiation
+      if ($negotiation === false) {
+         $this->close();
+         return false;
+      } elseif ($negotiation === 0) {
+         // TODO Need try again
+         return 0;
+      }
+
+      return true;
    }
 
    public function expire (int $timeout = 5) 

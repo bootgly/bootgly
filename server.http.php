@@ -27,6 +27,17 @@ $HTTPServer->configure(
    host: '0.0.0.0',
    port: 8080,
    workers: round( ((int) shell_exec('nproc')) * 0.55 ), // Without JIT: * 0.6
+   /*
+   ssl: [
+      // SSL Certificate
+      'local_cert'  => __DIR__ . '/@/certificates/localhost.cert.pem', 
+      // SSL Keyfile
+      'local_pk'    => __DIR__ . '/@/certificates/localhost.key.pem',
+      'disable_compression' => true, // TLS compression attack vulnerability
+      'verify_peer' => false,        // Set this to true if acting as an SSL client
+      'ssltransport' => 'tlsv1.3',   // Transport Methods such as 'tlsv1.2', 'tlsv1.3', ...
+   ]
+   */
 );
 $HTTPServer->on('data', function (Request $Request, Response $Response, Router $Router) {
    #$Request->method;    // GET
