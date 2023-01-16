@@ -250,10 +250,12 @@ class Server implements Servers
       }
 
       // @ On success
+
+      // @ Disable Crypto in Main Socket
       if ( ! empty($this->ssl) ) {
          stream_socket_enable_crypto($this->Socket, false);
       }
-
+      // @ Enable Keep Alive if possible
       if (function_exists('socket_import_stream')) {
          $Socket = socket_import_stream($this->Socket);
          socket_set_option($Socket, SOL_SOCKET, SO_KEEPALIVE, 1);
@@ -417,5 +419,13 @@ class Server implements Servers
       };
 
       exit(0);
+   }
+
+   public function __destruct ()
+   {
+      // @ Reset Opcache?
+      if (function_exists('opcache_reset') && $this->Process->level === 'master') {
+         opcache_reset();
+      }
    }
 }
