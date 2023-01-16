@@ -26,7 +26,7 @@ class CLI
 
    public function __construct ()
    {
-      if ($_SERVER['_'] === NULL) {
+      if (@$_SERVER['TERM'] === NULL) {
          return;
       }
 
