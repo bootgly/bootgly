@@ -84,7 +84,7 @@ class Connections implements Web\Connections
       try {
          $Connection = @stream_socket_accept($Socket, $this->timeout, $peer);
 
-         #stream_set_blocking($Connection, false);
+         stream_set_blocking($Connection, false);
 
          #stream_set_read_buffer($Connection, 65535);
          #stream_set_write_buffer($Connection, 65535);
