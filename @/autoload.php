@@ -5,6 +5,7 @@ namespace Bootgly;
 
 const HOME_DIR = __DIR__ . DIRECTORY_SEPARATOR . '../';
 
+// TODO load with autoloader
 require_once __DIR__ . '/../boot/..php';
 require_once __DIR__ . '/../core/@loader.php';
 require_once __DIR__ . '/../interfaces/@loader.php';
