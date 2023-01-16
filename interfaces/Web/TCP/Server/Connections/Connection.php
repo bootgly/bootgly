@@ -12,12 +12,11 @@ namespace Bootgly\Web\TCP\Server\Connections;
 
 
 use Bootgly\OS\Process\Timer;
-
 use Bootgly\Web\TCP\Server;
 use Bootgly\Web\TCP\Server\Connections;
 
 
-class Connection
+class Connection # extends Data
 {
    public $Socket;
 
@@ -28,7 +27,12 @@ class Connection
    public string $peer;
    // * Meta
    // @ status
-   public string $status;
+   const STATUS_INITIAL = 0;
+   const STATUS_CONNECTING = 1;
+   const STATUS_ESTABLISHED = 2;
+   const STATUS_CLOSING = 4;
+   const STATUS_CLOSED = 8;
+   public int $status;
    // @ handling
    public int $started;
    public int $used;
@@ -47,7 +51,7 @@ class Connection
       // * Data
       $this->peer = $peer;
       // * Meta
-      $this->status = 'opened';
+      $this->status = self::STATUS_ESTABLISHED;
       // @ handled
       $this->started = time();
       $this->used = time();
@@ -67,7 +71,7 @@ class Connection
    {
       static $writes = 0;
 
-      if ($this->status === 'closed') {
+      if ($this->status === self::STATUS_CLOSED) {
          return true;
       }
 
@@ -105,7 +109,7 @@ class Connection
       }
 
       // @ On success
-      $this->status = 'closed';
+      $this->status = self::STATUS_CLOSED;
       // Delete timers
       foreach ($this->timers as $id) {
          Timer::del($id);
