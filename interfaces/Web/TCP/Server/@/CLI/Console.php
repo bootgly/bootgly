@@ -98,11 +98,17 @@ class Console extends CLI\Console
             $this->Server->Process->sendSignal(SIGUSR2, children: false) && true,
          'monitor' =>
             $this->Server->mode = Server::MODE_MONITOR,
+
          'debug on' =>
             error_reporting(E_ALL) && ini_set('display_errors', 'On') && true,
          'debug off' =>
             error_reporting(0) && ini_set('display_errors', 'Off') && true,
          // 'benchmark' => ...,
+         // 'test'
+
+         'check jit' => $this->log(
+            (function_exists('opcache_get_status') && opcache_get_status()['jit']['enabled'])
+            ? 'JIT enabled' : 'JIT disabled') && true,
 
          // ! \Connection
          'stats' =>
