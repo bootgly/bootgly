@@ -11,6 +11,7 @@
 namespace Bootgly\Event;
 
 
+#[\AllowDynamicProperties]
 class On
 {
    public function __get ($name) : \Closure
@@ -21,10 +22,5 @@ class On
    public function __set ($name, \Closure $value)
    {
       $this->$name = $value;
-   }
-
-   public function __call ($name, array $arguments)
-   {
-      return ($this->$name)(...$arguments);
    }
 }
