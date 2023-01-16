@@ -22,22 +22,18 @@ $TCPServer = new TCP\Server;
 $TCPServer->configure(
    host: '0.0.0.0',
    port: 8080,
-   workers: 13,
-
-   handler: function ($request) {
-      $date = gmdate('D, d M Y H:i:s T');
-
-      $response = <<<HTTP_RAW
-      HTTP/1.1 200 OK
-      Server: Test Server
-      Content-Type: text/plain; charset=UTF-8
-      Content-Length: 12
-      Date: $date
-
-      Hello World!
-      HTTP_RAW;
-
-      return $response;
-   }
+   workers: 13
 );
+$TCPServer->on('data', function ($request) {
+   $response = <<<HTTP_RAW
+   HTTP/1.1 200 OK
+   Server: Test Server
+   Content-Type: text/plain; charset=UTF-8
+   Content-Length: 12
+
+   Hello World!
+   HTTP_RAW;
+
+   return $response;
+});
 $TCPServer->start();
