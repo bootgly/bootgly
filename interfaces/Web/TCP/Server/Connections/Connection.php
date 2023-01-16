@@ -42,9 +42,12 @@ class Connection # extends Data
    public int $writes;
 
 
-   public function __construct (&$Socket, string $ip, int $port)
+   public function __construct (&$Socket)
    {
       $this->Socket = $Socket;
+
+      $peer = stream_socket_get_name($Socket, true);
+      @[$ip, $port] = explode(':', $peer, 2); // TODO IPv6
 
       // * Config
       $this->timers = [];
@@ -76,7 +79,7 @@ class Connection # extends Data
       $this->timers[] = Timer::add(
          interval: 5,
          handler: [$this, 'limit'],
-         args: [6]
+         args: [1000]
       );
       */
    }
@@ -109,6 +112,17 @@ class Connection # extends Data
       return true;
    }
 
+   public function check () : bool
+   {
+      // @ Check blacklist
+      // Block IP
+      if ( isSet(Connections::$blacklist[$this->ip]) ) {
+         // TODO add timer to unblock
+         return false;
+      }
+
+      return true;
+   }
    public function expire (int $timeout = 5) 
    {
       static $writes = 0;

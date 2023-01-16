@@ -67,22 +67,11 @@ class Connections implements Web\Connections
       require __DIR__ . '/Connections/@/info.php';
    }
 
-   public function check (string $ip)
-   {
-      // @ Check blacklist
-      // Block IP
-      if ( isSet(self::$blacklist[$ip]) && self::$blacklist[$ip] === true) {
-         // TODO add timer to unblock
-         return false;
-      }
-
-      return true;
-   }
    // Accept connection from client / Open connection with client / Connect with client
    public function accept ($Socket)
    {
       try {
-         $Connection = @stream_socket_accept($Socket, $this->timeout, $peer);
+         $Connection = @stream_socket_accept($Socket, $this->timeout);
 
          stream_set_blocking($Connection, false);
 
@@ -99,17 +88,17 @@ class Connections implements Web\Connections
       }
 
       // @ On success
-      @[$ip, $port] = explode(':', $peer, 2); // TODO IPv6
+      $Peer = new Connection($Connection);
 
       // @ Check connection
-      #if ( $this->check($ip) ) return false;
+      if ( $Peer->check() === false ) return false;
 
       // @ Set stats
       // Global
       $this->connections++;
 
       // @ Set Connection
-      self::$Connections[(int) $Connection] = new Connection($Connection, $ip, $port);
+      self::$Connections[(int) $Connection] = $Peer;
 
       // TODO call handler event $this->On->accept here
       // $this->On->accept($Connection);
