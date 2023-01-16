@@ -13,6 +13,6 @@ namespace Bootgly\Web;
 
 interface Servers
 {
-   public function configure (string $host, int $port, int $workers, ?\Closure $handler = null);
+   public function configure (string $host, int $port, int $workers);
    public function start ();
 }

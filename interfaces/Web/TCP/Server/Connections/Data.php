@@ -29,6 +29,7 @@ class Data implements Packages
    public Connections $Connections;
 
    // * Config
+   public ? \Closure $handler;
    public bool $cache;
    // * Data
    public bool $changed;
@@ -148,7 +149,7 @@ class Data implements Packages
    {
       // @ Set Output
       if ($handle)
-         self::$output = ($this->Connections->handler)(...$this->callbacks);
+         self::$output = ($this->handler)(...$this->callbacks);
 
       try {
          $buffer = self::$output;

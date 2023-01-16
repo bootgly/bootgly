@@ -63,6 +63,7 @@ class Server implements Servers
 
    // ! Connection(s)
    protected Connections $Connections;
+
    // ! Event
    public static $Event = null;
    // ! Process
@@ -114,56 +115,9 @@ class Server implements Servers
 
          case 'mode':
             return $this->mode;
-
-            // TODO move to Info class?
-         case '@status':
-            // ! Server
-            // @
-            $server = (new \ReflectionClass($this))->getName();
-            $version = self::VERSION;
-            $php = PHP_VERSION;
-            // Runtime
-            $runtime = [];
-            $uptime = time() - static::$started;
-            $runtime['started'] = date('Y-m-d H:i:s', static::$started);
-            // @ uptime (d = days, h = hours, m = minutes)
-            if ($uptime > 60) $uptime += 30;
-            $runtime['d'] = (int) ($uptime / (24 * 60 * 60)) . 'd ';
-            $uptime %= (24 * 60 * 60);
-            $runtime['h'] = (int) ($uptime / (60 * 60)) . 'h ';
-            $uptime %= (60 * 60);
-            $runtime['m'] = (int) ($uptime / 60) . 'm ';
-            $uptime %= 60;
-            $runtime['s'] = (int) ($uptime) . 's ';
-            $uptimes = $runtime['d'] . $runtime['h'] . $runtime['m'] . $runtime['s'];
-            // Load Average
-            $load = ['-', '-', '-'];
-            if ( function_exists('sys_getloadavg') ) {
-               $load = array_map('round', sys_getloadavg(), [2, 2, 2]);
-            }
-            $load = "{$load[0]}, {$load[1]}, {$load[2]}";
-            // Workers
-            $workers = $this->workers;
-            // Socket
-            $address = 'tcp://' . $this->host . ':' . $this->port;
-            // Event-loop
-            $event = (new \ReflectionClass(self::$Event))->getName();
-
-            $this->log(<<<OUTPUT
-            =========================== Server Status ===========================
-            @:i: Bootgly Server: @; {$server}
-            @:i: Bootgly Server version: @; {$version}\t\t@:i: PHP version: @; {$php}
-
-            @:i: Started time: @; {$runtime['started']}\t@:i: Uptime: @; {$uptimes}
-            @:i: Load average: @; $load\t\t@:i: Workers count: @; {$workers}
-            @:i: Socket address: @; {$address}
-
-            @:i: Event-loop: @; {$event}
-            =====================================================================@\\\;
-            OUTPUT);
-
-            break;
       }
+
+      require __DIR__ . '/Server/@/info.php';
    }
    public function __set (string $name, $value)
    {
@@ -188,7 +142,7 @@ class Server implements Servers
       }
    }
 
-   public function configure (string $host, int $port, int $workers, ?\Closure $handler = null)
+   public function configure (string $host, int $port, int $workers)
    {
       self::$status = self::STATUS_CONFIGURING;
 
@@ -197,8 +151,6 @@ class Server implements Servers
       $this->host = $host;
       $this->port = $port;
       $this->workers = $workers;
-
-      $this->Connections->handler = $handler;
 
       return $this;
    }
@@ -210,7 +162,7 @@ class Server implements Servers
 
       // @ Reset Opcache?
       if (function_exists('opcache_reset')) {
-         #opcache_reset();
+         opcache_reset();
       }
 
       // ! Process
@@ -241,6 +193,14 @@ class Server implements Servers
 
       return true;
    }
+   public function on (string $name, \Closure $handler)
+   {
+      switch ($name) {
+         case 'data':
+            $this->Connections->Data->handler = $handler;
+            break;
+      }
+   }
 
    private function instance()
    {
@@ -253,7 +213,10 @@ class Server implements Servers
             'backlog' => 102400,
 
             // Allows multiple bindings to a same ip:port pair, even from separate processes.
-            'so_reuseport' => true
+            'so_reuseport' => true,
+
+            // Overrides the OS default regarding mapping IPv4 into IPv6.
+            'ipv6_v6only' => false
          ]
       ]);
 

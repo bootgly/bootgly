@@ -42,12 +42,15 @@ class Data extends TCPData
       $Response = $this->callbacks[1];
       $Router = $this->callbacks[2];
 
-      // @ Set HTTP Request/Response data
+      // @ Set HTTP Request data
       // $Request->input();
       $Request->parse();
 
+      #$Request->raw;
+
+      // @ Set HTTP Response data
       try {
-         $Response->Content->raw = ($this->Connections->handler)($Request, $Response, $Router);
+         $Response->Content->raw = ($this->handler)($Request, $Response, $Router);
       } catch (\Throwable) {
          // $this->Content->raw = '';
          $Response->Meta->status = 500; // @ 500 HTTP Server Error
