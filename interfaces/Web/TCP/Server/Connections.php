@@ -38,6 +38,7 @@ class Connections implements Web\Connections
    // * Meta
    // @ Remote
    public static array $Connections;
+   public static array $blacklist;
    // @ Stats
    public int $connections;
    public int $errors;
@@ -56,6 +57,7 @@ class Connections implements Web\Connections
       // * Meta
       // @ Remote
       self::$Connections = []; // Connections peers
+      self::$blacklist = [];   // Connections blacklist defined by limit methods
       // @ Stats
       $this->connections = 0;  // Connections count
       $this->errors = 0;
@@ -65,19 +67,30 @@ class Connections implements Web\Connections
       require __DIR__ . '/Connections/@/info.php';
    }
 
+   public function check (string $ip)
+   {
+      // @ Check blacklist
+      // Block IP
+      if ( isSet(self::$blacklist[$ip]) && self::$blacklist[$ip] === true) {
+         // TODO add timer to unblock
+         return false;
+      }
+
+      return true;
+   }
    // Accept connection from client / Open connection with client / Connect with client
    public function accept ($Socket)
    {
-      $Connection = false;
-
       try {
          $Connection = @stream_socket_accept($Socket, $this->timeout, $peer);
 
-         stream_set_blocking($Connection, false);
+         #stream_set_blocking($Connection, false);
 
          #stream_set_read_buffer($Connection, 65535);
          #stream_set_write_buffer($Connection, 65535);
-      } catch (\Throwable) {}
+      } catch (\Throwable) {
+         $Connection = false;
+      }
 
       if ($Connection === false) {
          $this->errors++;
@@ -86,13 +99,17 @@ class Connections implements Web\Connections
       }
 
       // @ On success
+      @[$ip, $port] = explode(':', $peer, 2); // TODO IPv6
+
+      // @ Check connection
+      #if ( $this->check($ip) ) return false;
 
       // @ Set stats
       // Global
       $this->connections++;
 
       // @ Set Connection
-      self::$Connections[(int) $Connection] = new Connection($Connection, $peer);
+      self::$Connections[(int) $Connection] = new Connection($Connection, $ip, $port);
 
       // TODO call handler event $this->On->accept here
       // $this->On->accept($Connection);

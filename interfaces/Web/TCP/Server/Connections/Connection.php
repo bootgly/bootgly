@@ -24,7 +24,8 @@ class Connection # extends Data
    public array $timers;
    public int $expiration;
    // * Data
-   public string $peer;
+   public string $ip;
+   public int $port;
    // * Meta
    // @ status
    const STATUS_INITIAL = 0;
@@ -41,7 +42,7 @@ class Connection # extends Data
    public int $writes;
 
 
-   public function __construct (&$Socket, string $peer)
+   public function __construct (&$Socket, string $ip, int $port)
    {
       $this->Socket = $Socket;
 
@@ -49,7 +50,8 @@ class Connection # extends Data
       $this->timers = [];
       $this->expiration = 15;
       // * Data
-      $this->peer = $peer;
+      $this->ip = $ip;
+      $this->port = $port;
       // * Meta
       $this->status = self::STATUS_ESTABLISHED;
       // @ handled
@@ -65,6 +67,14 @@ class Connection # extends Data
          handler: [$this, 'expire'],
          args: [$this->expiration]
       );
+      /*
+      // @ Set Connection limit
+      $this->timers[] = Timer::add(
+         interval: 5,
+         handler: [$this, 'limit'],
+         args: [6]
+      );
+      */
    }
 
    public function expire (int $timeout = 5) 
@@ -80,6 +90,23 @@ class Connection # extends Data
       }
 
       if (time() - $this->used >= $timeout) {
+         return $this->close();
+      }
+
+      $writes = $this->writes;
+
+      return false;
+   }
+   public function limit (int $packages)
+   {
+      static $writes = 0;
+
+      if ($this->status === self::STATUS_CLOSED) {
+         return true;
+      }
+
+      if (($this->writes - $writes) >= $packages) {
+         Connections::$blacklist[$this->ip] = true;
          return $this->close();
       }
 
