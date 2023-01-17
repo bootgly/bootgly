@@ -28,10 +28,12 @@ class Console extends CLI\Console
       'stop', 'exit', 'quit',
       'pause',
       'resume',
-
-      'monitor',
+      'reload',
 
       'status',
+      'monitor',
+      'check',
+
       'stats',
       'peers', 'connections',
 
@@ -41,6 +43,9 @@ class Console extends CLI\Console
    public static array $subcommands = [
       'stats' => [
          'reset'
+      ],
+      'check' => [
+         'jit'
       ]
    ];
 
