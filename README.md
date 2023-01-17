@@ -20,21 +20,23 @@ _ | _ | [Response (WIP)](/nodes/Web/HTTP/Server/Response.php) | _
 ## ❗️ Dependencies
 
 - PHP 8.2+ *[Required]*
-- Apache Rewrite enabled *[Required for Non-CLI Web Servers only]*
+- Apache Rewrite enabled *[Required for Non-CLI SAPI only]*
 - Opcache with JIT enabled (+50% performance) *[Optional]*
-- Debian based OS (Debian, Ubuntu...) *[Required]*
+- Linux OS (Debian based OS is recommended: Debian, Ubuntu...) *[Required]*
 
 ## Usage
 
-### Non-CLI SAPI (Apache, LiteSpeed, Nginx, etc)
+### **Non-CLI SAPI (Apache, LiteSpeed, Nginx, etc)**
 
 1) Clone this repository
 2) Rename `projects/web.constructor.php.example` to `projects/web.constructor.php`
 3) Enable Rewrite
 
-### CLI SAPI
+### **CLI SAPI**
 
-1) Check `server.http.php` file
+Debian based OS:
+
+1) Check `server.http.php` file;
 2) php -a > opcache_reset() > quit;
 3) Input in terminal:
 
