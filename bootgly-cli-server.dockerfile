@@ -21,4 +21,5 @@ RUN composer install --optimize-autoloader --classmap-authoritative --no-dev --q
 
 EXPOSE 8080
 
+ADD projects/sapi.constructor.php.example projects/sapi.constructor.php
 CMD php /bootgly/server.http.php
