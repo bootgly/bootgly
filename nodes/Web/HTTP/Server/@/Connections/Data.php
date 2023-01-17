@@ -11,6 +11,7 @@
 namespace Bootgly\Web\HTTP\Server\_\Connections;
 
 
+use Bootgly\SAPI;
 use Bootgly\Web\TCP\Server;
 use Bootgly\Web\TCP\Server\Connections;
 use Bootgly\Web\TCP\Server\Connections\Data as TCPData;
@@ -50,7 +51,7 @@ class Data extends TCPData
 
       // @ Set HTTP Response data
       try {
-         $Response->Content->raw = ($this->handler)($Request, $Response, $Router);
+         $Response->Content->raw = (SAPI::$Handler)($Request, $Response, $Router);
       } catch (\Throwable) {
          // $this->Content->raw = '';
          $Response->Meta->status = 500; // @ 500 HTTP Server Error

@@ -38,10 +38,10 @@ _ | _ | [Response (WIP)](/nodes/Web/HTTP/Server/Response.php) | _
 
 ### **CLI SAPI**
 
-in Linux OS *(step 2 is optional)*:
+in Linux OS:
 
 1) Check `server.http.php` file;
-2) `php -a` > `opcache_reset()` > `quit`;
+2) Rename `projects\sapi.constructor.php.example` to `projects\sapi.constructor.php`;
 3) Input in terminal:
 
 `php server.http.php`

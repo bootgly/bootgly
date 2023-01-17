@@ -93,13 +93,12 @@ class Console extends CLI\Console
             $this->Server->Process->sendSignal(SIGTSTP) && false,
          'resume' =>
             $this->Server->Process->sendSignal(SIGCONT) && false,
-         'reload' => // Failed attempt to create [hot] reload command :\
-            clearstatcache()
-            && function_exists('opcache_reset') && opcache_reset()
+         'reload' =>
+            $this->Server->Process->sendSignal(SIGUSR2, master: false)
             && true,
 
          'status' =>
-            $this->Server->Process->sendSignal(SIGUSR2, children: false) && true,
+            $this->Server->{'@status'} && true,
          'monitor' =>
             $this->Server->mode = Server::MODE_MONITOR,
 

@@ -13,6 +13,7 @@ namespace Bootgly\Web\TCP\_\OS;
 
 // use
 use const Bootgly\HOME_DIR;
+use Bootgly\SAPI;
 use Bootgly\OS\Process\Timer;
 use Bootgly\Web\_\Events\Select;
 // 
@@ -23,6 +24,7 @@ use Bootgly\Web\TCP\ {
 use Bootgly\CLI\_\ {
    Logger\Logging
 };
+
 
 class Process
 {
@@ -165,11 +167,9 @@ class Process
          case SIGCONT: // 18
             $this->Server->resume();
             break;
-         // ? @Info
-         // @ $status
-         // Show info about status of server (uptime, ...)
+         // @ reload()
          case SIGUSR2: // 12
-            $this->Server->{'@status'};
+            SAPI::boot(true);
             break;
 
          // ! \Connection

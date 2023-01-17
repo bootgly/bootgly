@@ -1,0 +1,15 @@
+<?php
+use Bootgly\Web\HTTP\Server\Request;
+use Bootgly\Web\HTTP\Server\Response;
+use Bootgly\Web\HTTP\Server\Router;
+
+return static function (Request $Request, Response $Response, Router $Router) {
+   #$Request->method;    // GET
+   #$Request->uri;       // /path/to?query1=value2...
+   #$Request->protocol;  // HTTP/1.1
+
+   // TODO
+   #return $Response(raw: 'Hello World!');
+
+   return 'Hello World!';
+};

@@ -39,15 +39,7 @@ $HTTPServer->configure(
    ]
    */
 );
-$HTTPServer->on('data', function (Request $Request, Response $Response, Router $Router) {
-   #$Request->method;    // GET
-   #$Request->uri;       // /path/to?query1=value2...
-   #$Request->protocol;  // HTTP/1.1
-
-   #return $Response(raw: 'Hello World!');
-
-   return 'Hello World!';
-});
+// on Data -> projects/sapi.constructor.php
 $HTTPServer->start();
 
 // Benchmark test suggestion with 512 connections:

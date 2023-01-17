@@ -11,13 +11,13 @@
 namespace Bootgly\Web\TCP\Server\Connections;
 
 
+use Bootgly\SAPI;
+
 use Bootgly\CLI\_\ {
    Logger\Logging // @trait
 };
-
 use Bootgly\Web\Packages; // @interface
 
-use Bootgly\Web\TCP\Server;
 use Bootgly\Web\TCP\Server\Connections;
 
 
@@ -29,7 +29,6 @@ class Data implements Packages
    public Connections $Connections;
 
    // * Config
-   public ? \Closure $handler; // TODO move
    public bool $cache;
    // * Data
    public bool $changed;
@@ -55,6 +54,8 @@ class Data implements Packages
       // * Meta
       // @ Handler
       $this->callbacks = [&self::$input];
+
+      SAPI::boot(true);
    }
 
    public function read (&$Socket, bool $write = true) : bool
@@ -138,7 +139,7 @@ class Data implements Packages
    {
       // @ Set Output
       if ($handle)
-         self::$output = ($this->handler)(...$this->callbacks);
+         self::$output = (SAPI::$Handler)(...$this->callbacks);
 
       try {
          $buffer = self::$output;

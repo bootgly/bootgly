@@ -53,6 +53,7 @@ class Server implements Servers
    // * Meta
    public const VERSION = '0.0.1';
    protected static int $started = 0;
+   public static $Context;
    // @ Status
    protected static int $status = 0;
    protected const STATUS_BOOTING = 1;
@@ -199,8 +200,7 @@ class Server implements Servers
    public function on (string $name, \Closure $handler)
    {
       switch ($name) {
-         case 'data':
-            $this->Connections->Data->handler = $handler;
+         case 'data': // DEPRECATED -> moved to projects/sapi.constructor.php
             break;
       }
    }
@@ -229,7 +229,7 @@ class Server implements Servers
       }
 
       // @ Create context
-      $context = stream_context_create($options);
+      self::$Context = stream_context_create($options);
 
       // @ Create server socket
       try {
@@ -238,7 +238,7 @@ class Server implements Servers
             $error_code,
             $error_message,
             STREAM_SERVER_BIND | STREAM_SERVER_LISTEN,
-            $context
+            self::$Context
          );
       } catch (\Throwable) {
          $this->Socket = false;

@@ -115,7 +115,7 @@ class Connection # extends Data
    public function check () : bool
    {
       // @ Check blacklist
-      // Block IP
+      // Blocked IP
       if ( isSet(Connections::$blacklist[$this->ip]) ) {
          // TODO add timer to unblock
          return false;

@@ -11,6 +11,7 @@
 namespace Bootgly;
 
 
+use Closure;
 use Bootgly\{
   SAPI\Environment
 };
@@ -18,28 +19,32 @@ use Bootgly\{
 
 class SAPI
 {
+  // * Config
+  public static string $sapi = HOME_DIR . 'projects/sapi.constructor.php';
   // * Data
   // * Meta
+  public static Closure $Handler;
 
   public object $Environment;
 
 
   public function __construct ()
   {
-    $this->Environment = new Environment($this);
+    // TODO
+    #$this->Environment = new Environment($this);
 
-    $Environment  = &$this->Environment;
+    #$Environment  = &$this->Environment;
   }
 
-  public function __get($name)
+  public static function boot ($reset = false)
   {
-    switch ($name) {
-      case 'name':
-        return $this->name = php_sapi_name();
-        break;
-      default:
-        return $this->name;
-        break;
+    if ($reset) {
+      if ( function_exists('opcache_invalidate') )
+        opcache_invalidate(self::$sapi, true);
+
+      self::$Handler = require(self::$sapi);
     }
+
+    return self::$Handler;
   }
 }

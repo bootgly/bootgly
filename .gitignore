@@ -73,6 +73,7 @@ server-*.php
 !/projects
 !/projects/bootgly.constructor.php
 !/projects/cli.constructor.php.example
+!/projects/sapi.constructor.php.example
 !/projects/web.constructor.php.example
 !/projects/@bootgly
 

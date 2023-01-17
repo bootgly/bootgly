@@ -14,6 +14,11 @@ require 'CLI/Console.php';
 // ! OS
 require 'OS/Process/Timer.php';
 
+// ! SAPI
+require 'SAPI.php';
+// ? Environment
+require 'SAPI/Environment.php';
+
 // ! Web
 require 'Web.php';
 require 'Web/Connections.php'; // @interface
