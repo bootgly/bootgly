@@ -12,7 +12,6 @@ namespace Bootgly\Web\HTTP\Server\_\Connections;
 
 
 use Bootgly\SAPI;
-use Bootgly\Web\TCP\Server;
 use Bootgly\Web\TCP\Server\Connections;
 use Bootgly\Web\TCP\Server\Connections\Data as TCPData;
 

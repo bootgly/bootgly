@@ -61,9 +61,7 @@ class Data implements Packages
    public function read (&$Socket, bool $write = true) : bool
    {
       try {
-         #$input = @fread($Socket, 65535);
-         #$input = @stream_socket_recvfrom($Socket, 65535, STREAM_PEEK);
-         $input = @stream_socket_recvfrom($Socket, 65535);
+         $input = @fread($Socket, 65535);
       } catch (\Throwable) {
          $input = false;
       }
@@ -145,8 +143,7 @@ class Data implements Packages
          $buffer = self::$output;
 
          while (true) {
-            #$written = @fwrite($Socket, $buffer, $length);
-            $written = @stream_socket_sendto($Socket, $buffer);
+            $written = @fwrite($Socket, $buffer, $length);
 
             if ($written === false)
                break;

@@ -13,7 +13,6 @@ namespace Bootgly\Web\TCP;
 
 // use
 use Bootgly\Debugger\Backtrace;
-use Bootgly\OS\Process\Timer;
 // extend
 use Bootgly\CLI\_\{
    Logger\Logging
@@ -164,11 +163,6 @@ class Server implements Servers
 
       $this->log('Starting Server... ', self::LOG_INFO_LEVEL);
 
-      // @ Reset Opcache?
-      if (function_exists('opcache_reset')) {
-         opcache_reset();
-      }
-
       // ! Process
       // $this->Process->Signal->install();
       $this->Process->installSignal();
@@ -276,7 +270,7 @@ class Server implements Servers
    {
       self::$status = self::STATUS_RUNNING;
 
-      $this->log('@\\\;Entering in CLI interaction mode...@\;', self::LOG_SUCCESS_LEVEL);
+      $this->log('@\\\;Entering in CLI mode...@\;', self::LOG_SUCCESS_LEVEL);
       $this->log('>_ Type `quit` to stop the Server or `help` to list commands.@\;');
       $this->log('>_ Autocompletation and history enabled.@\\\;', self::LOG_NOTICE_LEVEL);
 
