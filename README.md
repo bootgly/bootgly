@@ -40,15 +40,21 @@ _ | _ | [Response (WIP)](/nodes/Web/HTTP/Server/Response.php) | _
 
 in Linux OS:
 
-1) Check `server.http.php` file;
-2) Rename `projects\sapi.constructor.php.example` to `projects\sapi.constructor.php`;
-3) Input in terminal:
+- Check `server.http.php` file;
+- Rename `projects\sapi.constructor.php.example` to `projects\sapi.constructor.php`;
+- Run the server:
 
 `php server.http.php`
 
+--
+
 or with Docker *(-10% performance)*:
 
-1) Input in terminal:
+- Build local image:
+
+`docker build --pull --rm -f "bootgly-cli-server.dockerfile" -t bootglyphpframework:latest "."`
+
+- Run the Docker image:
 
 `docker run -it --network host bootglyphpframework`
 
