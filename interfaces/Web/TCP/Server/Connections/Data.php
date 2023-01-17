@@ -29,7 +29,7 @@ class Data implements Packages
    public Connections $Connections;
 
    // * Config
-   public ? \Closure $handler;
+   public ? \Closure $handler; // TODO move
    public bool $cache;
    // * Data
    public bool $changed;
@@ -38,7 +38,7 @@ class Data implements Packages
    public static string $output;
    // * Meta
    // @ Handler
-   public array $callbacks;
+   public array $callbacks; // TODO move
 
 
    public function __construct (Connections &$Connections)
