@@ -17,14 +17,18 @@ Servers | Database | Back-end | Front-end
 _ | _ | [Request (WIP)](/nodes/Web/HTTP/Server/Request.php) | _
 _ | _ | [Response (WIP)](/nodes/Web/HTTP/Server/Response.php) | _
 
-## ❗️ Dependencies
+---
 
-- PHP 8.2+ *[Required]*
-- Apache Rewrite enabled *[Required for Non-CLI SAPI only]*
-- Opcache with JIT enabled (+50% performance) *[Optional]*
-- Linux OS (Debian based OS is recommended: Debian, Ubuntu...) *[Required]*
+## ⚙️ Dependencies
 
-## Usage
+- PHP 8.2+ `[Required]`
+- Apache Rewrite enabled `[Required for Non-CLI SAPI only]`
+- Opcache with JIT enabled (+50% performance) `[Optional]`
+- Linux OS (Debian based OS is recommended: Debian, Ubuntu...) `[Required]`
+
+---
+
+## 🔧 Usage
 
 ### **Non-CLI SAPI (Apache, LiteSpeed, Nginx, etc)**
 
@@ -34,19 +38,21 @@ _ | _ | [Response (WIP)](/nodes/Web/HTTP/Server/Response.php) | _
 
 ### **CLI SAPI**
 
-Debian based OS:
+in Linux OS *(step 2 is optional)*:
 
 1) Check `server.http.php` file;
-2) php -a > opcache_reset() > quit;
+2) `php -a` > `opcache_reset()` > `quit`;
 3) Input in terminal:
 
 `php server.http.php`
 
-or with Docker (-10% performance):
+or with Docker *(-10% performance)*:
 
 1) Input in terminal:
 
 `docker run -it --network host bootglyphpframework`
+
+---
 
 ## 📃 License
 
