@@ -21,6 +21,7 @@ _ | _ | [Response (WIP)](/nodes/Web/HTTP/Server/Response.php) | _
 
 - PHP 8.2+
 - Apache Rewrite enabled (Non-CLI Web Servers only)
+- Opcache with JIT enabled (+ ~50% performance)
 
 ## Usage
 
@@ -33,9 +34,16 @@ _ | _ | [Response (WIP)](/nodes/Web/HTTP/Server/Response.php) | _
 ### CLI HTTP Server
 
 1) Check `server.http.php` file
-2) Input in terminal:
+2) php -a > opcache_reset() > quit;
+3) Input in terminal:
 
 `php server.http.php`
+
+or with Docker (-10% performance):
+
+1) Input in terminal:
+
+`docker run -it --network host bootglyphpframework`
 
 ## 📃 License
 
