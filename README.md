@@ -17,21 +17,22 @@ Servers | Database | Back-end | Front-end
 _ | _ | [Request (WIP)](/nodes/Web/HTTP/Server/Request.php) | _
 _ | _ | [Response (WIP)](/nodes/Web/HTTP/Server/Response.php) | _
 
-## ❗️ Requirements
+## ❗️ Dependencies
 
-- PHP 8.2+
-- Apache Rewrite enabled (Non-CLI Web Servers only)
-- Opcache with JIT enabled (+ ~50% performance)
+- PHP 8.2+ *[Required]*
+- Apache Rewrite enabled *[Required for Non-CLI Web Servers only]*
+- Opcache with JIT enabled (+50% performance) *[Optional]*
+- Debian based OS (Debian, Ubuntu...) *[Required]*
 
 ## Usage
 
-### Non-CLI HTTP Server (Apache, LiteSpeed, Nginx, etc)
+### Non-CLI SAPI (Apache, LiteSpeed, Nginx, etc)
 
 1) Clone this repository
 2) Rename `projects/web.constructor.php.example` to `projects/web.constructor.php`
 3) Enable Rewrite
 
-### CLI HTTP Server
+### CLI SAPI
 
 1) Check `server.http.php` file
 2) php -a > opcache_reset() > quit;
