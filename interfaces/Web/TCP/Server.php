@@ -14,19 +14,19 @@ namespace Bootgly\Web\TCP;
 // use
 use Bootgly\Debugger\Backtrace;
 // extend
-use Bootgly\CLI\_\{
+use Bootgly\CLI\_\ {
    Logger\Logging
 };
-use Bootgly\Web\_\{
+use Bootgly\Web\_\ {
    Events\Select
 };
 use Bootgly\Web\Servers;
-use Bootgly\Web\TCP\_\{
+use Bootgly\Web\TCP\_\ {
    CLI\Console,
    OS\Process
 };
 // inherit
-use Bootgly\Web\TCP\{
+use Bootgly\Web\TCP\ {
    Server\Connections
 };
 
@@ -198,7 +198,7 @@ class Server implements Servers
       }
    }
 
-   private function instance()
+   private function instance ()
    {
       $error_code = 0;
       $error_message = '';

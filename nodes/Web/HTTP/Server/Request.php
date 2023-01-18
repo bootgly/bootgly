@@ -10,7 +10,7 @@
 
 namespace Bootgly\Web\HTTP\Server;
 
-use AllowDynamicProperties;
+
 use Bootgly\Web\HTTP;
 
 use Bootgly\Path;
@@ -81,7 +81,7 @@ use Bootgly\Web\HTTP\Server\Request\Session;
  * @property bool $stale           false
  */
 
-#[AllowDynamicProperties]
+#[\AllowDynamicProperties]
 class Request
 {
    public HTTP\Server $Server;
