@@ -40,6 +40,7 @@ class Connections implements Web\Connections
    public static array $blacklist;
    // @ Stats
    public static bool $stats;
+   // Connections
    public int $connections;
    // Errors
    public static array $errors;
@@ -67,6 +68,7 @@ class Connections implements Web\Connections
       self::$blacklist = [];   // Connections blacklist defined by limit methods
       // @ Stats
       self::$stats = true;
+      // Connections
       $this->connections = 0;  // Connections count
       // Errors
       self::$errors = [
@@ -87,30 +89,30 @@ class Connections implements Web\Connections
    }
 
    // Accept connection from client / Open connection with client / Connect with client
-   public function accept ($Socket)
+   public function accept ($_Socket) : bool
    {
       try {
-         $Connection = @stream_socket_accept($Socket, $this->timeout);
+         $Socket = @stream_socket_accept($_Socket, null);
 
-         stream_set_blocking($Connection, false); // +15% performance
+         stream_set_blocking($Socket, false); // +15% performance
 
-         #stream_set_read_buffer($Connection, 65535);
-         #stream_set_write_buffer($Connection, 65535);
+         #stream_set_read_buffer($Socket, 65535);
+         #stream_set_write_buffer($Socket, 65535);
       } catch (\Throwable) {
-         $Connection = false;
+         $Socket = false;
       }
 
-      if ($Connection === false) {
+      if ($Socket === false) {
          #$this->log('Socket connection is false!' . PHP_EOL);
          self::$errors['connection']++;
          return false;
       }
 
       // @ On success
-      $Peer = new Connection($Connection);
+      $Connection = new Connection($Socket);
 
       // @ Check connection
-      if ( $Peer->check() === false )
+      if ( $Connection->check() === false )
          return false;
 
       // @ Set stats
@@ -118,18 +120,15 @@ class Connections implements Web\Connections
       $this->connections++;
 
       // @ Set Connection
-      self::$Connections[(int) $Connection] = $Peer;
+      self::$Connections[(int) $Socket] = $Connection;
 
-      // TODO call handler event $this->On->accept here
-      // $this->On->accept($Connection);
-      Server::$Event->add($Connection, Server::$Event::EVENT_READ, 'read');
-      // TODO implement this data write by default?
-      #Server::$Event->add($Connection, Server::$Event::EVENT_WRITE, 'write');
+      // @ Add Connection Data read to Event loop
+      Server::$Event->add($Socket, Server::$Event::EVENT_READ, 'read');
 
       return true;
    }
 
-   public function close ($Connection)
+   public function close ($Connection) : bool
    {
       $closed = self::$Connections[(int) $Connection]->close();
 
