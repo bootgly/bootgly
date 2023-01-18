@@ -71,6 +71,11 @@ switch ($name) {
          $this->log('Connection ID #' . $Connection . ':' . PHP_EOL, self::LOG_INFO_LEVEL);
 
          foreach ($info as $key => $value) {
+            switch ($key) {
+               case 'Socket':
+                  continue 2;
+            }
+
             $this->log('@:notice: ' . $key . ': @; ');
 
             switch ($key) {
