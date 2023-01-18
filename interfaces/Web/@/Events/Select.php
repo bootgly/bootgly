@@ -160,7 +160,7 @@ class Select implements Event\Loops
          if ($read) {
             foreach ($read as $id => $Socket) {
                // @ Select action
-               match (@$this->reading[$id][self::EVENT_READ]) {
+               match (@$this->reading[$id]) {
                   'accept' => $this->Connections->accept($Socket),
                   'read' => $this->Connections->Data->read($Socket),
                   default => null
