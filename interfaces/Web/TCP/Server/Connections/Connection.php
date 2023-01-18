@@ -27,17 +27,18 @@ class Connection
    public string $ip;
    public int $port;
    // * Meta
-   // @ status
+   public int $id;
+   // @ Status
    const STATUS_INITIAL = 0;
    const STATUS_CONNECTING = 1;
    const STATUS_ESTABLISHED = 2;
    const STATUS_CLOSING = 4;
    const STATUS_CLOSED = 8;
    public int $status;
-   // @ handling
+   // @ Handler
    public int $started;
    public int $used;
-   // @ stats
+   // @ Stats
    #public int $reads;
    public int $writes;
 
@@ -56,11 +57,13 @@ class Connection
       $this->ip = $ip;
       $this->port = $port;
       // * Meta
+      $this->id = (int) $Socket;
+      // @ Status
       $this->status = self::STATUS_ESTABLISHED;
-      // @ handled
+      // @ Handler
       $this->started = time();
       $this->used = time();
-      // @ stats
+      // @ Stats
       #$this->reads = 0;
       $this->writes = 0;
 
@@ -188,7 +191,7 @@ class Connection
          Timer::del($id);
       }
       // Destroy itself
-      unset(Connections::$Connections[(int) $this->Socket]);
+      unset(Connections::$Connections[$this->id]);
 
       return true;
    }
