@@ -83,7 +83,9 @@ server-*.php
 !/public/example.com
 
 ## /workspace
-# Ignore workspace folders
-/workspace/@*
-# Ignore all files in this folder
+# Ignore all files here
 /workspace/*.*
+# Ignore all folder here
+/workspace/*/*
+# Preserve existence of folders with .gitkeep here
+!/workspace/*/.gitkeep
