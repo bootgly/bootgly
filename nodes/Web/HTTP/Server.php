@@ -42,7 +42,7 @@ class Server extends TCP\Server
       $this->Response = new Response($Web, $this);
       $this->Router = new Router($Web, $this);
 
-      if (self::$status === self::STATUS_BOOTING) {
+      if ($this->status === self::STATUS_BOOTING) {
          $this->Connections->Data->callbacks = [
             &$this->Request,
             &$this->Response,

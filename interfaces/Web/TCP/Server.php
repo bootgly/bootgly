@@ -39,7 +39,6 @@ class Server implements Servers
    protected $Socket;
 
    // * Config
-   #protected string $resource;
    protected ? string $host;
    protected ? int $port;
    protected int $workers;
@@ -51,10 +50,10 @@ class Server implements Servers
    public const MODE_MONITOR = 3;
    // * Meta
    public const VERSION = '0.0.1';
-   protected static int $started = 0;
-   public static $Context;
+   protected int $started = 0;
+   protected $Context;
    // @ Status
-   protected static int $status = 0;
+   protected int $status = 0;
    protected const STATUS_BOOTING = 1;
    protected const STATUS_CONFIGURING = 2;
    protected const STATUS_STARTING = 4;
@@ -66,7 +65,7 @@ class Server implements Servers
    protected Connections $Connections;
 
    // ! Event
-   public static $Event = null;
+   public static $Event = null; // TODO refactor
    // ! Process
    protected Process $Process;
    // ! Console
@@ -84,9 +83,9 @@ class Server implements Servers
       $this->mode = self::MODE_MONITOR;
       // * Data
       // * Meta
-      static::$started = time();
+      $this->started = time();
       // @ Status
-      self::$status = self::STATUS_BOOTING;
+      $this->status = self::STATUS_BOOTING;
 
       // ! Connection(s)
       // @ New design pattern?
@@ -145,7 +144,7 @@ class Server implements Servers
 
    public function configure (string $host, int $port, int $workers, ? array $ssl = null)
    {
-      self::$status = self::STATUS_CONFIGURING;
+      $this->status = self::STATUS_CONFIGURING;
 
       // TODO validate configuration user data inputs
 
@@ -159,7 +158,7 @@ class Server implements Servers
    }
    public function start ()
    {
-      self::$status = self::STATUS_STARTING;
+      $this->status = self::STATUS_STARTING;
 
       $this->log('Starting Server... ', self::LOG_INFO_LEVEL);
 
@@ -223,7 +222,7 @@ class Server implements Servers
       }
 
       // @ Create context
-      self::$Context = stream_context_create($options);
+      $this->Context = stream_context_create($options);
 
       // @ Create server socket
       try {
@@ -232,7 +231,7 @@ class Server implements Servers
             $error_code,
             $error_message,
             STREAM_SERVER_BIND | STREAM_SERVER_LISTEN,
-            self::$Context
+            $this->Context
          );
       } catch (\Throwable) {
          $this->Socket = false;
@@ -255,12 +254,12 @@ class Server implements Servers
          socket_set_option($Socket, SOL_SOCKET, SO_KEEPALIVE, 1);
       }
 
-      self::$status = self::STATUS_RUNNING;
+      $this->status = self::STATUS_RUNNING;
    }
 
    private function daemonize ()
    {
-      self::$status = self::STATUS_RUNNING;
+      $this->status = self::STATUS_RUNNING;
 
       // TODO
 
@@ -268,7 +267,7 @@ class Server implements Servers
    }
    private function interact ()
    {
-      self::$status = self::STATUS_RUNNING;
+      $this->status = self::STATUS_RUNNING;
 
       $this->log('@\\\;Entering in CLI mode...@\;', self::LOG_SUCCESS_LEVEL);
       $this->log('>_ Type `quit` to stop the Server or `help` to list commands.@\;');
@@ -309,7 +308,7 @@ class Server implements Servers
    }
    private function monitor ()
    {
-      self::$status = self::STATUS_RUNNING;
+      $this->status = self::STATUS_RUNNING;
 
       $this->log('@\\\;Entering in Monitor mode...@\;', self::LOG_SUCCESS_LEVEL);
       $this->log('>_ Type `CTRL + Z` to enter in Interactive mode or `CTRL + C` to stop the Server.@\;');
@@ -365,7 +364,7 @@ class Server implements Servers
 
    private function resume ()
    {
-      if (self::$status !== self::STATUS_PAUSED) {
+      if ($this->status !== self::STATUS_PAUSED) {
          match ($this->Process->level) {
             'master' => $this->log("Server needs to be paused to resume!@\\;", 4),
             'child' => null
@@ -374,7 +373,7 @@ class Server implements Servers
          return false;
       }
 
-      self::$status = self::STATUS_RUNNING;
+      $this->status = self::STATUS_RUNNING;
 
       match ($this->Process->level) {
          'master' => $this->log("Resuming {$this->Process->children} worker(s)... @\\;", 3),
@@ -385,7 +384,7 @@ class Server implements Servers
    }
    private function pause ()
    {
-      if (self::$status !== self::STATUS_RUNNING) {
+      if ($this->status !== self::STATUS_RUNNING) {
          match ($this->Process->level) {
             'master' => $this->log("Server needs to be running to pause!@\\;", 4),
             'child' => null
@@ -394,7 +393,7 @@ class Server implements Servers
          return false;
       }
 
-      self::$status = self::STATUS_PAUSED;
+      $this->status = self::STATUS_PAUSED;
 
       match ($this->Process->level) {
          'master' => $this->log("Pausing {$this->Process->children} worker(s)... @\\;", 3),
@@ -405,7 +404,7 @@ class Server implements Servers
    }
    private function stop ()
    {
-      self::$status = self::STATUS_STOPING;
+      $this->status = self::STATUS_STOPING;
 
       match ($this->Process->level) {
          'master' => $this->log("{$this->Process->children} worker(s) stopped!@\\;", 3),
