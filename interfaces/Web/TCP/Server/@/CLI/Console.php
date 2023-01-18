@@ -102,10 +102,11 @@ class Console extends CLI\Console
             $this->Server->Process->sendSignal(SIGUSR2, master: false)
             && true,
 
-         'status' =>
-            $this->Server->{'@status'} && true,
          'monitor' =>
             $this->Server->mode = Server::MODE_MONITOR,
+
+         'status' =>
+            $this->Server->{'@status'} && true,
 
          'debug on' =>
             error_reporting(E_ALL) && ini_set('display_errors', 'On') && true,
@@ -145,6 +146,7 @@ class Console extends CLI\Console
       @:i: `stop` @;    = Stop the Server and all workers;
       @:i: `pause` @;   = Pause the Server and all workers;
       @:i: `resume` @;  = Resume the Server and all workers;
+      @:i: `reload` @;  = Reload the Server and all workers;
 
       @:i: `monitor` @; = Enter in monitor mode;
 
