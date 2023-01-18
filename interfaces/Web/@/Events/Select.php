@@ -28,18 +28,21 @@ class Select implements Event\Loops
    public Connections $Connections;
 
    // * Config
+   const EVENT_ACCEPT = 0;
+
    const EVENT_READ = 1;
    const EVENT_WRITE = 2;
    const EVENT_EXCEPT = 3;
-
-   protected int $timeout = 100000000; // 100s
    // * Data
    // @ Sockets
    private array $reads = [];
    private array $writes = [];
    private array $excepts = [];
    // * Meta
-   private array $events = [];
+   // @ Actions
+   private array $reading = [];
+   private array $writing = [];
+   private array $excepting = [];
 
 
    public function __construct (Connections &$Connections)
@@ -56,9 +59,11 @@ class Select implements Event\Loops
                return false;
             }
 
-            $SocketId = (int) $Socket;
-            $this->events[$SocketId][$flag] = $action;
-            $this->reads[$SocketId] = $Socket;
+            $id = (int) $Socket;
+
+            $this->reads[$id] = $Socket;
+
+            $this->reading[$id] = $action;
 
             return true;
          case self::EVENT_WRITE:
@@ -67,9 +72,11 @@ class Select implements Event\Loops
                return false;
             }
 
-            $SocketId = (int) $Socket;
-            $this->events[$SocketId][$flag] = $action;
-            $this->writes[$SocketId] = $Socket;
+            $id = (int) $Socket;
+
+            $this->writes[$id] = $Socket;
+
+            $this->writing[$id] = $action;
 
             return true;
          case self::EVENT_EXCEPT:
@@ -78,9 +85,11 @@ class Select implements Event\Loops
                return false;
             }
 
-            $SocketId = (int) $Socket;
-            $this->events[$SocketId][$flag] = $action;
-            $this->excepts[$SocketId] = $Socket;
+            $id = (int) $Socket;
+
+            $this->excepts[$id] = $Socket;
+
+            $this->excepting[$id] = $action;
 
             return true;
       }
@@ -91,36 +100,27 @@ class Select implements Event\Loops
    {
       switch ($flag) {
          case self::EVENT_READ:
-            $SocketID = (int) $Socket;
+            $id = (int) $Socket;
 
-            unset($this->events[$SocketID][$flag]);
-            unset($this->reads[$SocketID]);
+            unset($this->reading[$id]);
 
-            if (empty($this->events[$SocketID])) {
-               unset($this->events[$SocketID]);
-            }
+            unset($this->reads[$id]);
 
             return true;
          case self::EVENT_WRITE:
-            $SocketID = (int) $Socket;
+            $id = (int) $Socket;
 
-            unset($this->events[$SocketID][$flag]);
-            unset($this->writes[$SocketID]);
+            unset($this->writing[$id]);
 
-            if (empty($this->events[$SocketID])) {
-               unset($this->events[$SocketID]);
-            }
+            unset($this->writes[$id]);
 
             return true;
          case self::EVENT_EXCEPT:
-            $SocketID = (int) $Socket;
+            $id = (int) $Socket;
 
-            unset($this->events[$SocketID][$flag]);
-            unset($this->excepts[$SocketID]);
+            unset($this->excepting[$id]);
 
-            if (empty($this->events[$SocketID])) {
-               unset($this->events[$SocketID]);
-            }
+            unset($this->excepts[$id]);
 
             return true;
       }
@@ -139,13 +139,13 @@ class Select implements Event\Loops
          $write  = $this->writes;
          $except = $this->excepts;
 
-         $connections = false;
-
          if ($read || $write || $except) {
             try {
                // Waiting $this->timeout for read / write / excepts events.
-               $connections = @stream_select($read, $write, $except, 0, $this->timeout);
-            } catch (\Throwable) {}
+               $connections = @stream_select($read, $write, $except, null);
+            } catch (\Throwable) {
+               $connections = false;
+            }
          } else {
             // @ Sleep for 1 second and continue (Used to pause the Server)
             sleep(1);
@@ -158,9 +158,9 @@ class Select implements Event\Loops
 
          // @ Call
          if ($read) {
-            foreach ($read as $Socket) {
+            foreach ($read as $id => $Socket) {
                // @ Select action
-               match (@$this->events[(int) $Socket][self::EVENT_READ]) {
+               match (@$this->reading[$id][self::EVENT_READ]) {
                   'accept' => $this->Connections->accept($Socket),
                   'read' => $this->Connections->Data->read($Socket),
                   default => null
@@ -174,6 +174,7 @@ class Select implements Event\Loops
             }
          }
 
+         // TODO add timer ticks?
          // if ($except) {}
       }
    }
