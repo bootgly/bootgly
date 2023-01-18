@@ -63,7 +63,7 @@ class Client
       ];
       static::$started = time();
       // @ Status
-      self::$status = self::STATUS_BOOTING;
+      $this->status = self::STATUS_BOOTING;
 
       // ! Data
       $this->Data = new Data($this);
@@ -71,7 +71,7 @@ class Client
 
    public function configure (string $host, int $port)
    {
-      self::$status = self::STATUS_CONFIGURING;
+      $this->status = self::STATUS_CONFIGURING;
 
       // TODO validate configuration user data inputs
 
@@ -119,7 +119,7 @@ class Client
       // @ On success
       stream_set_blocking($this->Socket, false);
       
-      self::$status = self::STATUS_RUNNING;
+      $this->status = self::STATUS_RUNNING;
 
       return true;
    }
