@@ -11,6 +11,9 @@
 namespace Bootgly\CLI\_\Logger;
 
 
+use Bootgly\Logger;
+
+
 trait Logging
 {
    use \Bootgly\Logging;
@@ -45,34 +48,61 @@ trait Logging
    public const LOG_END_OF_DECORATOR = "\033[0m";
 
 
-   protected function log ($message, int $level = self::LOG_DEFAULT_LEVEL)
+   protected function log ($message, int $level = self::LOG_DEFAULT_LEVEL) : true
    {
+      if (Logger::$display === Logger::DISPLAY_NONE) {
+         return true;
+      }
+
       switch ($level) {
          case self::LOG_SUCCESS_LEVEL:
-            echo self::LOG_GREEN_BOLD_COLOR;
+            $level = 'SUCCESS';
+            $color = self::LOG_GREEN_BOLD_COLOR;
             break;
 
          case self::LOG_NOTICE_LEVEL:
-            echo self::LOG_YELLOW_BOLD_COLOR;
+            $level = 'NOTICE';
+            $color = self::LOG_YELLOW_BOLD_COLOR;
             break;
 
          case self::LOG_INFO_LEVEL:
-            echo self::LOG_CYAN_BOLD_COLOR;
+            $level = 'INFO';
+            $color = self::LOG_CYAN_BOLD_COLOR;
             break;
          case self::LOG_WARNING_LEVEL:
-            echo self::LOG_MAGENTA_BOLD_COLOR;
+            $level = 'WARNING';
+            $color = self::LOG_MAGENTA_BOLD_COLOR;
             break;
          case self::LOG_ERROR_LEVEL:
-            echo self::LOG_RED_BOLD_COLOR;
+            $level = 'ERROR';
+            $color = self::LOG_RED_BOLD_COLOR;
             break;
 
          default:
-            echo self::LOG_DEFAULT_TRANSPARENT_COLOR;
+            $level = 'LOG';
+            $color = self::LOG_DEFAULT_TRANSPARENT_COLOR;
       }
 
-      echo $this->format($message);
+      // @ Set level in string
+      if (Logger::$display >= Logger::DISPLAY_MESSAGE_DATETIME_LEVEL) {
+         $level = '[' . $level . '] ';
+      } else {
+         $level = '';
+      }
 
-      echo self::LOG_END_OF_DECORATOR;
+      // @ Set datetime
+      $datetime = '';
+      if (Logger::$display >= Logger::DISPLAY_MESSAGE_DATETIME) {
+         $datetime = date(DATE_ATOM) . ': ';
+      }
+
+      // @ Format and set message
+      $message = $this->format($message);
+
+      // @ Output log
+      echo <<<LOG
+      {$color}{$level}\033[0m{$datetime}{$color}{$message}\033[0m
+      LOG;
 
       return true;
    }

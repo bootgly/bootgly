@@ -13,6 +13,7 @@ namespace Bootgly\Web\TCP\_\OS;
 
 // use
 use const Bootgly\HOME_DIR;
+use Bootgly\Logger;
 use Bootgly\SAPI;
 use Bootgly\OS\Process\Timer;
 use Bootgly\Web\_\Events\Select;
@@ -119,11 +120,11 @@ class Process
       pcntl_signal(SIGTSTP, $signalHandler, false); // 20 (CTRL + Z)
       // @ resume()
       pcntl_signal(SIGCONT, $signalHandler, false); // 18
-      // ? @Info
-      // @ $status
+      // @ reload()
       pcntl_signal(SIGUSR2, $signalHandler, false); // 12
 
       // ! \Connection
+      // ? @info
       // @ $stats
       pcntl_signal(SIGIOT, $signalHandler, false);  // 6
       // @ $peers
@@ -139,7 +140,7 @@ class Process
       switch ($signal) {
          // * Timer
          case SIGALRM:
-            Timer::tick();
+            Timer::tick(); // TODO move to Event-loop ?
             break;
 
          // * Custom command
@@ -173,7 +174,7 @@ class Process
             break;
 
          // ! \Connection
-         // ? @Info
+         // ? @info
          // @ $peers
          // Show info of active remote accepted connections (remote ip + remote port, ...)
          case SIGIOT:  // 6
@@ -220,6 +221,9 @@ class Process
             self::$index = $i + 1;
 
             cli_set_process_title('BootglyWebServer: child process (Worker #' . self::$index . ')');
+
+            // @ Set Logging display
+            Logger::$display = Logger::DISPLAY_MESSAGE_DATETIME_LEVEL;
 
             // @ Create stream socket server
             $this->Server->instance();

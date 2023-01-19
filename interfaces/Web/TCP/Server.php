@@ -19,6 +19,7 @@ use Bootgly\OS\Process\Timer;
 use Bootgly\CLI\_\ {
    Logger\Logging
 };
+use Bootgly\Logger;
 use Bootgly\Web\_\ {
    Events\Select
 };
@@ -54,7 +55,7 @@ class Server implements Servers
    // * Meta
    public const VERSION = '0.0.1';
    protected int $started = 0;
-   protected $Context;
+   protected $Context; // TODO make static?
    // @ Status
    protected int $status = 0;
    protected const STATUS_BOOTING = 1;
@@ -164,6 +165,8 @@ class Server implements Servers
    public function start ()
    {
       $this->status = self::STATUS_STARTING;
+
+      Logger::$display = Logger::DISPLAY_MESSAGE;
 
       $this->log('Starting Server... ', self::LOG_INFO_LEVEL);
 
@@ -326,6 +329,9 @@ class Server implements Servers
          }
       });
 
+      // @ Set Logger to display messages, datetime and level
+      Logger::$display = Logger::DISPLAY_MESSAGE_DATETIME_LEVEL;
+
       // @ Loop
       while ($this->mode === self::MODE_MONITOR) {
          // @ Calls signal handlers for pending signals
@@ -422,6 +428,8 @@ class Server implements Servers
    private function stop ()
    {
       $this->status = self::STATUS_STOPING;
+
+      Logger::$display = Logger::DISPLAY_MESSAGE;
 
       match ($this->Process->level) {
          'master' => $this->log("{$this->Process->children} worker(s) stopped!@\\;", 3),
