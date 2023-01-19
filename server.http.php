@@ -13,13 +13,11 @@ namespace Bootgly;
 
 require_once '@/autoload.php';
 
+
 $Web = new Web;
 
-#use Bootgly\Web\TCP;
+
 use Bootgly\Web\HTTP;
-use Bootgly\Web\HTTP\Server\Request;
-use Bootgly\Web\HTTP\Server\Response;
-use Bootgly\Web\HTTP\Server\Router;
 
 
 $HTTPServer = new HTTP\Server($Web);
