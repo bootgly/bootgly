@@ -41,6 +41,7 @@ class Server implements Servers
    protected $Socket;
 
    // * Config
+   #protected ? string $domain;
    protected ? string $host;
    protected ? int $port;
    protected int $workers;
@@ -149,6 +150,8 @@ class Server implements Servers
       $this->status = self::STATUS_CONFIGURING;
 
       // TODO validate configuration user data inputs
+
+      #$this->domain = $domain;
 
       $this->host = $host;
       $this->port = $port;
@@ -276,12 +279,11 @@ class Server implements Servers
       $this->log('>_ Autocompletation and history enabled.@\\\;', self::LOG_NOTICE_LEVEL);
 
       while ($this->mode === self::MODE_INTERACTIVE) {
-         // Calls signal handlers for pending signals
+         // @ Calls signal handlers for pending signals
          pcntl_signal_dispatch();
 
-         // Suspends execution of the current process until a child has exited, or until a signal is delivered
+         // @ Suspends execution of the current process until a child has exited, or until a signal is delivered
          $pid = pcntl_wait($status, WNOHANG | WUNTRACED);
-         #$pid = pcntl_wait($status, WUNTRACED);
 
          // If child is running?
          if ($pid === 0) {
@@ -289,7 +291,7 @@ class Server implements Servers
 
             $this->log('@\;');
 
-            // Wait for command output before looping
+            // @ Wait for command output before looping
             if ($interact === false) {
                usleep(100000 * $this->workers); // @ wait 0.1 s * qt workers
             }
@@ -297,7 +299,7 @@ class Server implements Servers
             continue;
          } else if ($pid > 0) { // If a child has already exited?
             $this->log('@\;Child exited!@\;', self::LOG_ERROR_LEVEL);
-            $this->stop();
+            $this->Process->sendSignal(SIGINT);
             break;
          } else if ($pid === -1) { // If error
             break;
@@ -326,13 +328,13 @@ class Server implements Servers
 
       // @ Loop
       while ($this->mode === self::MODE_MONITOR) {
-         // Calls signal handlers for pending signals
+         // @ Calls signal handlers for pending signals
          pcntl_signal_dispatch();
 
-         // Suspends execution of the current process until a child has exited, or until a signal is delivered
+         // @ Suspends execution of the current process until a child has exited, or until a signal is delivered
          $pid = pcntl_wait($status, WUNTRACED);
 
-         // Calls signal handlers for pending signals again
+         // @ Calls signal handlers for pending signals again
          pcntl_signal_dispatch();
 
          // If child is running?
@@ -340,7 +342,7 @@ class Server implements Servers
             continue;
          } else if ($pid > 0) { // If a child has already exited?
             $this->log('@\;Child exited!@\;', self::LOG_ERROR_LEVEL);
-            $this->stop();
+            $this->Process->sendSignal(SIGINT);
             break;
          } else if ($pid === -1) { // If error ignore
             continue;
