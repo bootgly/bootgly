@@ -83,8 +83,10 @@ class Console extends CLI\Console
       return $this->command($command);
    }
 
-   public function command ($command) : bool
+   public function command (string $command) : bool
    {
+      // TODO split command in subcommands by space
+
       return match ($command) {
          // ! Server
          'stop', 'exit', 'quit' =>
@@ -101,6 +103,7 @@ class Console extends CLI\Console
          'reload' =>
             $this->Server->Process->sendSignal(SIGUSR2, master: false)
             && true,
+         // TODO restart command
 
          'monitor' =>
             $this->Server->mode = Server::MODE_MONITOR,
