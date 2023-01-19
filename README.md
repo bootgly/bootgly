@@ -52,7 +52,7 @@ or with Docker *(-10% performance)*:
 
 - Build local image:
 
-`docker build --pull --rm -f "bootgly-cli-server.dockerfile" -t bootglyphpframework:latest "."`
+`docker build --pull --rm -f "bootgly-cli-server.http.dockerfile" -t bootglyphpframework:latest "."`
 
 - Run the Docker image:
 
