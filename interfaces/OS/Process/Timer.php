@@ -112,12 +112,20 @@ class Timer
 
       // @ Delete one task by id
       foreach (self::$tasks as $runtime => $tasks) {
-         if (array_key_exists($id, $tasks))
+         if ( array_key_exists($id, $tasks) ) {
             unset(self::$tasks[$runtime][$id]);
+         }
       }
 
-      if (array_key_exists($id, self::$status))
+      // @ Delete status
+      if ( array_key_exists($id, self::$status) ) {
          unset(self::$status[$id]);
+      }
+
+      // @ Reset timer alarm if no status
+      if (empty(self::$status)) {
+         pcntl_alarm(0);
+      }
 
       return true;
    }

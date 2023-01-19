@@ -13,6 +13,8 @@ namespace Bootgly\Web\TCP;
 
 // use
 use Bootgly\Debugger\Backtrace;
+use Bootgly\SAPI;
+use Bootgly\OS\Process\Timer;
 // extend
 use Bootgly\CLI\_\ {
    Logger\Logging
@@ -313,6 +315,16 @@ class Server implements Servers
       $this->log('@\\\;Entering in Monitor mode...@\;', self::LOG_SUCCESS_LEVEL);
       $this->log('>_ Type `CTRL + Z` to enter in Interactive mode or `CTRL + C` to stop the Server.@\;');
 
+      // @ Set time to hot reloading of sapi.constructor.php file
+      Timer::add(2, function () {
+         $modified = SAPI::check();
+
+         if ($modified) {
+            $this->Process->sendSignal(SIGUSR2, master: false); // @ Send signal to all children to reload
+         }
+      });
+
+      // @ Loop
       while ($this->mode === self::MODE_MONITOR) {
          // Calls signal handlers for pending signals
          pcntl_signal_dispatch();
@@ -335,7 +347,10 @@ class Server implements Servers
          }
       }
 
+      // @ Enter in CLI mode
       if ($this->mode === self::MODE_INTERACTIVE) {
+         Timer::del(0); // @ Delete all timers
+
          $this->interact();
       }
    }
