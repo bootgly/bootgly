@@ -13,38 +13,47 @@ namespace Bootgly;
 
 use Closure;
 use Bootgly\{
-  SAPI\Environment
+   SAPI\Environment
 };
 
 
 class SAPI
 {
-  // * Config
-  public static string $sapi = HOME_DIR . 'projects/sapi.constructor.php';
-  // * Data
-  // * Meta
-  public static Closure $Handler;
+   // * Config
+   public static string $sapi = HOME_DIR . 'projects/sapi.constructor.php';
+   // * Data
+   // * Meta
+   public static Closure $Handler;
 
-  public object $Environment;
+   public object $Environment;
 
 
-  public function __construct ()
-  {
-    // TODO
-    #$this->Environment = new Environment($this);
+   public function __construct ()
+   {
+      // TODO
+      #$this->Environment = new Environment($this);
 
-    #$Environment  = &$this->Environment;
-  }
+      #$Environment  = &$this->Environment;
+   }
 
-  public static function boot ($reset = false)
-  {
-    if ($reset) {
-      if ( function_exists('opcache_invalidate') )
-        opcache_invalidate(self::$sapi, true);
+   public static function boot ($reset = false)
+   {
+      if ($reset) {
+         if ( function_exists('opcache_invalidate') ) {
+            opcache_invalidate(self::$sapi, true);
+         }
 
-      self::$Handler = require(self::$sapi);
-    }
+         if (file_exists(self::$sapi) === false) {
+            $copied = copy(self::$sapi . '.example', self::$sapi);
 
-    return self::$Handler;
-  }
+            if ($copied === false) {
+               return false;
+            }
+         }
+
+         self::$Handler = require(self::$sapi);
+      }
+
+      return self::$Handler;
+   }
 }
