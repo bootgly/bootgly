@@ -39,7 +39,7 @@ class SAPI
    public static function boot ($reset = false)
    {
       if ($reset) {
-         // @ Clear cache
+         // @ Invalidate opcache
          if ( function_exists('opcache_invalidate') ) {
             opcache_invalidate(self::$sapi, true);
          }

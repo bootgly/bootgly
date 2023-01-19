@@ -16,7 +16,7 @@ use Bootgly\Logger;
 
 trait Logging
 {
-   use \Bootgly\Logging;
+   use \Bootgly\Logging; // TODO remove; use interface instead.
 
 
    // * Config
