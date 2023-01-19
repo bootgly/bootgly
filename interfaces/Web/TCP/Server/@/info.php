@@ -8,8 +8,8 @@ switch ($name) {
       $php = PHP_VERSION;
       // Runtime
       $runtime = [];
-      $uptime = time() - static::$started;
-      $runtime['started'] = date('Y-m-d H:i:s', static::$started);
+      $uptime = time() - $this->started;
+      $runtime['started'] = date('Y-m-d H:i:s', $this->started);
       // @ uptime (d = days, h = hours, m = minutes)
       if ($uptime > 60) $uptime += 30;
       $runtime['d'] = (int) ($uptime / (24 * 60 * 60)) . 'd ';

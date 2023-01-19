@@ -85,7 +85,19 @@ class Connections implements Web\Connections
    }
    public function __get ($name)
    {
-      require __DIR__ . '/Connections/@/info.php';
+      $info = __DIR__ . '/Connections/@/info.php';
+
+      // @ Clear cache of file info
+      if ( function_exists('opcache_invalidate') ) {
+         opcache_invalidate($info, true);
+      }
+
+      clearstatcache(false, $info);
+
+      // @ Load file info
+      try {
+         require $info;
+      } catch (\Throwable) {}
    }
 
    // Accept connection from client / Open connection with client / Connect with client
@@ -130,12 +142,24 @@ class Connections implements Web\Connections
 
    public function close ($Connection) : bool
    {
-      $closed = self::$Connections[(int) $Connection]->close();
+      // @ Close all Connections
+      #if ($Connection === null) {
+      #   foreach(self::$Connections as $Connection) {
+      #      $Connection->close();
+      #   }
+
+      #   return true;
+      #}
+
+      $connection = (int) $Connection;
+
+      // @ Close specific Connection
+      $closed = self::$Connections[$connection]->close();
 
       // @ On success
       if ($closed) {
          // Remove closed connection from @peers
-         #unset(self::$Connections[(int) $Connection]);
+         #unset(self::$Connections[$connection]);
 
          return true;
       }

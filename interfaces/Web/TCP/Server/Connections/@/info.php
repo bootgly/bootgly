@@ -1,9 +1,13 @@
 <?php
+
+use Bootgly\Logger;
 use Bootgly\Web\TCP\Server\Connections\Connection;
 
 switch ($name) {
    // TODO move to Info class?
    case '@stats':
+      Logger::$display = Logger::DISPLAY_MESSAGE;
+
       if ($this->Server === null) {
          return false;
       }
@@ -59,6 +63,8 @@ switch ($name) {
       break;
 
    case '@peers':
+      Logger::$display = Logger::DISPLAY_MESSAGE;
+
       if ($this->Server === null) {
          return false;
       }

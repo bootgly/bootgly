@@ -104,7 +104,12 @@ class Server implements Servers
       // ! @\CLI\Console
       $this->Console = new Console($this);
       // ! @\OS\Process
-      $this->Process = new Process($this);
+      $Process = $this->Process = new Process($this);
+
+      // @ Register shutdown function to avoid orphaned children
+      register_shutdown_function(function () use ($Process) {
+         $Process->sendSignal(SIGINT);
+      });
    }
    public function __get (string $name)
    {
@@ -121,7 +126,20 @@ class Server implements Servers
             return $this->mode;
       }
 
-      require __DIR__ . '/Server/@/info.php';
+      // ! @info
+      $info = __DIR__ . '/Server/@/info.php';
+
+      // @ Clear cache of file info
+      if ( function_exists('opcache_invalidate') ) {
+         opcache_invalidate($info, true);
+      }
+
+      clearstatcache(false, $info);
+
+      // @ Load file info
+      try {
+         require $info;
+      } catch (\Throwable) {}
    }
    public function __set (string $name, $value)
    {
@@ -276,6 +294,8 @@ class Server implements Servers
    private function interact ()
    {
       $this->status = self::STATUS_RUNNING;
+
+      Logger::$display = Logger::DISPLAY_MESSAGE;
 
       $this->log('@\\\;Entering in CLI mode...@\;', self::LOG_SUCCESS_LEVEL);
       $this->log('>_ Type `quit` to stop the Server or `help` to list commands.@\;');

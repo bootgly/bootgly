@@ -83,6 +83,7 @@ class Console extends CLI\Console
       return $this->command($command);
    }
 
+   // ! Command
    public function command (string $command) : bool
    {
       // TODO split command in subcommands by space
@@ -127,7 +128,7 @@ class Console extends CLI\Console
          // $this->Server->Process->Signal->send(SIGIO, ...)
             $this->Server->Process->sendSignal(SIGIO, master: false) && false,
          'stats reset' =>
-            $this->save('@' . $command, 'Connection')
+            $this->saveCommand('@' . $command, 'Connection')
             && $this->Server->Process->sendSignal(SIGUSR1, master: false) && true,
 
          'peers', 'connections' =>
@@ -140,6 +141,18 @@ class Console extends CLI\Console
 
          default => passthru($command) !== false && true
       };
+   }
+   public function saveCommand (string $command, string $object = ''): bool
+   {
+      $filename = HOME_DIR . '/workspace/server.command';
+      $data = $command;
+      #$data = $object . '|' . $command;
+
+      if (file_put_contents($filename, $data) === false) {
+         return false;
+      }
+
+      return true;
    }
 
    public function help ()
@@ -161,19 +174,6 @@ class Console extends CLI\Console
       ============================================================
 
       OUTPUT);
-
-      return true;
-   }
-
-   public function save (string $command, string $object = ''): bool
-   {
-      $filename = HOME_DIR . '/workspace/server.command';
-      $data = $command;
-      #$data = $object . '|' . $command;
-
-      if (file_put_contents($filename, $data) === false) {
-         return false;
-      }
 
       return true;
    }
