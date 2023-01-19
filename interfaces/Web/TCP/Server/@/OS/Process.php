@@ -145,7 +145,9 @@ class Process
 
          // * Custom command
          case SIGUSR1:  // 10
-            $command = file_get_contents(static::$commandFile);
+            // TODO review security concious
+            $data = file(static::$commandFile);
+            $command = $data[count($data) - 1];
             $this->Server->Connections->{$command};
             break;
 
