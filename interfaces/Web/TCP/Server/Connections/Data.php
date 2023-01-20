@@ -16,8 +16,10 @@ use Bootgly\SAPI;
 use Bootgly\CLI\_\ {
    Logger\Logging // @trait
 };
+
 use Bootgly\Web\Packages; // @interface
 
+use Bootgly\Web\TCP\Server;
 use Bootgly\Web\TCP\Server\Connections;
 
 
@@ -71,7 +73,7 @@ class Data implements Packages
       // @ Check connection close intention by peer?
       // Close connection if input data is empty to avoid unnecessary loop
       if ($input === '') {
-         // $this->log('Failed to read buffer: input data is empty!' . PHP_EOL);
+         #$this->log('Failed to read buffer: input data is empty!' . PHP_EOL, self::LOG_WARNING_LEVEL);
          // Server::$Event->del($Socket, Server::$Event::EVENT_WRITE);
          $this->Connections->close($Socket);
          return false;
@@ -86,13 +88,13 @@ class Data implements Packages
          }
 
          if ($eof) {
-            // $this->log('Failed to read buffer: End-of-file!' . PHP_EOL);
+            #$this->log('Failed to read buffer: End-of-file!' . PHP_EOL, self::LOG_WARNING_LEVEL);
             $this->Connections->close($Socket);
             return false;
          }
 
          if (is_resource($Socket) && get_resource_type($Socket) === 'stream') {
-            $this->log('Failed to read buffer: closing connection...' . PHP_EOL);
+            $this->log('Failed to read buffer: closing connection...' . PHP_EOL, self::LOG_ERROR_LEVEL);
             $this->Connections->close($Socket);
          }
 
@@ -169,18 +171,18 @@ class Data implements Packages
 
          // @ Check connection reset by peer?
          if ($eof) {
-            $this->log('Failed to write data: End-of-file!' . PHP_EOL);
+            #$this->log('Failed to write data: End-of-file!' . PHP_EOL);
             $this->Connections->close($Socket);
             return false;
          }
 
          // @ Check connection close intention by server?
          if ($written === 0) {
-            $this->log('Failed to write data: 0 bytes written!' . PHP_EOL);
+            $this->log('Failed to write data: 0 byte written!' . PHP_EOL);
          }
 
          if (is_resource($Socket) && get_resource_type($Socket) === 'stream') {
-            // $this->log('Failed to write data: closing connection...' . PHP_EOL);
+            $this->log('Failed to write data: closing connection...' . PHP_EOL);
             $this->Connections->close($Socket);
             return false;
          }
