@@ -17,11 +17,12 @@ use Bootgly\Web\HTTP\Server\_\Meta\Authentication;
 class Meta
 {
    // * Data
-   private string $method;
-   private string $uri;
-   private string $protocol;
+   public string $raw;
+   public string $method;
+   public string $uri; // @ Resource
+   public string $protocol;
    // * Meta
-   private string $raw;
+   public ? int $length;
    // ? Resource
    // @ URI
    // @ URL
@@ -29,14 +30,20 @@ class Meta
    // @ Path
    // @ Query
 
-   public Authentication $Authentication;
+   #public Authentication $Authentication;
 
 
-   public function __construct (Authentication $Authentication)
+   public function __construct ()
    {
       // * Data
+      $this->raw = '';
+      $this->method = '';
+      $this->uri = '';
+      $this->protocol = '';
+      // * Meta
+      $this->length = null;
 
 
-      $this->Authentication = $Authentication;
+      #$this->Authentication = $Authentication;
    }
 }

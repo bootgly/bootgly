@@ -12,22 +12,16 @@ namespace Bootgly\Web\HTTP\Server\_\Connections;
 
 
 use Bootgly\SAPI;
+use Bootgly\Web\TCP\Server;
 use Bootgly\Web\TCP\Server\Connections;
 use Bootgly\Web\TCP\Server\Connections\Data as TCPData;
 
 
-class Data extends TCPData
+// abstract Packages
+class Data extends TCPData // TODO rename to Packages extends TCP\Packages
 {
-   // * Meta
-   // @ Parser
-   public static bool $parsed = false;
-   public static bool $parsing = false;
-   public static int $pointer = 0; // @ Current Line of parser read
-
-
    public function __construct (Connections &$Connections)
    {
-      // * Meta
       parent::__construct($Connections);
    }
 
@@ -42,29 +36,17 @@ class Data extends TCPData
       $Response = $this->callbacks[1];
       $Router = $this->callbacks[2];
 
-      // @ Set HTTP Request data
-      // $Request->input();
-      $Request->parse();
+      // ! Request
+      // @ Input HTTP Request
+      if ($Request->input(self::$input) === 0) { //  && Data::$output !== ''?
+         parent::write($Socket, false);
 
-      #$Request->raw;
-
-      // @ Set HTTP Response data
-      try {
-         $Response->Content->raw = (SAPI::$Handler)($Request, $Response, $Router);
-      } catch (\Throwable) {
-         // $this->Content->raw = '';
-         $Response->Meta->status = 500; // @ 500 HTTP Server Error
+         $this->Connections->close($Socket);
       }
 
-      $Response->parse();
-
-      // @ Set HTTP raw output
-      self::$output = <<<HTTP_RAW
-      {$Response->Meta->raw}
-      {$Response->Header->raw}
-
-      {$Response->Content->raw}
-      HTTP_RAW;
+      // ! Response
+      // @ Output HTTP Response
+      self::$output = $Response->output($Request, $Response, $Router);
 
       #$this->log(self::$output . PHP_EOL . PHP_EOL . PHP_EOL);
 
@@ -76,22 +58,16 @@ class Data extends TCPData
 
       // @ On success
       if ($this->changed) {
-         // Delete event from loop
+         // @ Delete event from loop
          #Server::$Event->del($Socket, Server::$Event::EVENT_WRITE);
 
-         // Reset HTTP Request/Response Data
+         // @ Reset HTTP Request/Response Data
          $Request->reset();
          $Response->reset();
 
-         // Reset Buffer I/O
+         // @ Reset Buffer I/O
          #self::$input = '';
          #self::$output = '';
-
-         // TODO move to Request
-         // Reset Parser
-         self::$parsed = false;
-         self::$parsing = false;
-         self::$pointer = 0;
       }
 
       return true;

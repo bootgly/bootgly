@@ -23,7 +23,8 @@ use Bootgly\Web\TCP\Server;
 use Bootgly\Web\TCP\Server\Connections;
 
 
-class Data implements Packages
+// abstract Packages
+class Data implements Packages // TODO rename to Packages
 {
    use Logging;
 

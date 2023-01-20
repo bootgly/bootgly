@@ -14,10 +14,10 @@ namespace Bootgly\Web\HTTP\Server;
 use Bootgly\Web\HTTP;
 
 use Bootgly\Path;
-use Bootgly\Requestable;
 use Bootgly\Web\HTTP\Server\_\Connections\Data;
 
 use Bootgly\Web\HTTP\Server\_\ {
+   Meta,
    Content,
    Header
 };
@@ -89,9 +89,11 @@ class Request
    // * Config
    private string $base;
    // * Data
+   // public string $raw;
    // ...
    // * Meta
    // ...
+   // public string $length;
    private bool $meta;
    private bool $header;
    private bool $content;
@@ -110,25 +112,12 @@ class Request
       // * Data
       /* ... dynamically ... */
       // * Meta
-      $this->meta = false;
-      $this->header = false;
-      $this->content = false;
 
       $this->Session = new Session;
    }
 
    public function __get ($name)
    {
-      $parsed = false;
-
-      if (\PHP_SAPI === 'cli') {
-         $parsed = $this->parse($name);
-      }
-
-      if ($parsed) {
-         return $parsed;
-      }
-
       // TODO move to @/resources
       switch ($name) {
          // * Config
@@ -178,6 +167,8 @@ class Request
 
             return $raw;
          // ? Meta
+         case 'Meta':
+            return $this->Meta = new Meta;
          case 'method':
             return $_SERVER['REQUEST_METHOD'];
          // case 'uri': break;
@@ -431,96 +422,104 @@ class Request
       }
    }
 
-   public function parse (string $name = '') // TODO (WIP)
+   public function input ($buffer) : int // @ return Request Content length
    {
-      if (Data::$parsed || Data::$parsing)
-         return false;
+      static $input = []; // @ Instance cache variable
 
-      Data::$parsing = true;
-
-      /**
-       * Example:
-       * 
-       * GET /path/to?query1=value1 HTTP/1.1
-       * User-Agent: PostmanRuntime/7.30.0
-       * Accept: text/html
-       * Postman-Token: 32993fbd-236c-48f1-a078-1442e354d7eb
-       * Host: localhost
-       * Accept-Encoding: gzip, deflate, br
-       * Connection: keep-alive
-       * 
-       */
-
-      /*
-      // Parse meta only
-      switch ($name) {
-         case 'method':
-         case 'uri':
-         case 'protocol':
-            $meta = strstr(Data::$input, "\r\n", true);
-
-            [$method, $uri, $procotol] = explode(' ', $meta, 3);
-
-            $this->method = $method;
-            $this->uri = $uri ?? '/';
-            $this->protocol = $procotol;
+      // @ Check cache $input and return
+      if ( ! isSet($buffer[512]) && isSet($input[$buffer]) ) {
+         #$this->cached = true;
+         return $input[$buffer];
       }
 
-      return $this->$name;
-      */
+      // @ Set the position of Content starts
+      $this->Content->position = strpos($buffer, "\r\n\r\n");
 
-      foreach (preg_split("/\r\n|\n|\r/", Data::$input) as $line => $text) {
-         // if ($line < Data::$pointer) continue;
-
-         // Data::$pointer = $line;
-
-         // @ HTTP Meta
-         if ($this->meta === false) {
-            if ($line === 0) {
-               @[$method, $uri, $procotol] = explode(' ', $text, 3);
-   
-               if ($method) $this->method = $method;
-               if ($uri) $this->uri = $uri ?? '/';
-               if ($procotol) $this->protocol = $procotol;
-   
-               $this->meta = true;
-   
-               continue;
-            }
+      // @ Check if Request has Content (body)
+      if ($this->Content->position === false) {
+         // @ Judge whether the package length exceeds the limit.
+         if (strlen($buffer) >= 16384) {
+            Data::$output = "HTTP/1.1 413 Request Entity Too Large\r\n\r\n";
          }
 
-         // @ HTTP Header
-         if ($this->header === false) {
-            if ($line > 0 && $text !== '') { // @ Request Header
-               if ($line === 1) {
-                  $this->__get('Header'); // @ Create Request Header object
-               }
-   
-               @[$fieldName, $fieldValue] = explode(': ', $text);
+         return 0;
+      }
 
-               if ($fieldName) {
-                  $this->Header->$fieldName = $fieldValue ?? '';
-               }
-            } else if ($line > 1) {
-               $this->__get('Content'); // @ Create Request Content object
-               $this->header = true;
-            }
+      // @ Boot Request Content length
+      $length = $this->Content->position + 4;
 
-            continue;
-         }
+      // ? Meta
+      // @ Boot Meta
+      // Sample: GET /path HTTP/1.1
+      #$meta = strstr($buffer, "\r\n", true);
+      $meta = strtok($buffer, "\r\n");
+      @[$method, $uri, $procotol] = explode(' ', $meta, 3);
 
-         // @ HTTP Content
-         if ($this->content === false) {
-            $this->Content->raw .= $text . "\n";
+      // @ Check Meta
+      // method
+      switch ($method) {
+         case 'GET':
+         case 'POST':
+         case 'OPTIONS':
+         case 'HEAD':
+         case 'DELETE':
+         case 'PUT':
+         case 'PATCH':
+            break;
+         default:
+            Data::$output = "HTTP/1.1 405 Method Not Allowed\r\n\r\n";
+            return 0;
+      }
+      // @ Set Meta
+      // raw
+      $this->Meta->raw = $meta;
+      // method
+      $this->method = $method;
+      // uri
+      $this->uri = $uri ?? '/';
+      // protocol
+      $this->protocol = $procotol;
+      // length
+      $this->Meta->length = strlen($meta) + 2;
+
+      // ? Header
+      // @ Set Header
+      $this->Header->raw = substr(
+         $buffer,
+         $this->Meta->length,
+         ($this->Content->position - $this->Meta->length)
+      );
+      $this->Header->length = strlen($this->Header->raw);
+
+      // @ Try to set Content Length
+      if ( $_ = strpos($this->Header->raw, "\r\nContent-Length: ") ) {
+         $this->Content->length = (int) substr($this->Header->raw, $_ + 18, 10);
+      } else if (preg_match("/\r\ncontent-length: ?(\d+)/i", $this->Header->raw, $match) === 1) {
+         $this->Content->length = $match[1];
+      } else if (stripos($this->Header->raw, "\r\nTransfer-Encoding:") !== false) {
+         Data::$output = "HTTP/1.1 400 Bad Request\r\n\r\n";
+         return 0;
+      }
+
+      if ($this->Content->length !== null) {
+         $length += $this->Content->length;
+
+         if ($length > 10485760) {
+            Data::$output = "HTTP/1.1 413 Request Entity Too Large\r\n\r\n";
+            return 0;
          }
       }
 
-      $this->content = true;
+      // @ Write to cache $input
+      if ( ! isSet($buffer[512]) ) {
+         $input[$buffer] = $length;
 
-      Data::$parsing = false;
-      Data::$parsed = true;
+         if (count($input) > 512) {
+            unSet($input[key($input)]);
+         }
+      }
 
-      return true;
+      return $length;
    }
    public function reset ()
    {
@@ -528,13 +527,13 @@ class Request
       unset($this->method);
       unset($this->uri);
       unset($this->protocol);
-      $this->meta = false;
+
+      // ? Meta
+      $this->Meta->__construct();
       // ? Header
       $this->Header->__construct();
-      $this->header = false;
       // ? Content
       $this->Content->__construct();
-      $this->content = false;
    }
 
    // TODO implement https://www.php.net/manual/pt_BR/ref.filter.php

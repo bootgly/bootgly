@@ -390,10 +390,10 @@ class Server implements Servers
          exit(1);
       }
 
-      $closed = false;
       try {
          $closed = @fclose($this->Socket);
       } catch (\Throwable) {
+         $closed = false;
       }
 
       if ($closed === false) {

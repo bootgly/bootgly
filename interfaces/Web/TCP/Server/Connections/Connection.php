@@ -16,7 +16,7 @@ use Bootgly\Web\TCP\Server;
 use Bootgly\Web\TCP\Server\Connections;
 
 
-class Connection
+class Connection # extends Packages
 {
    public $Socket;
 

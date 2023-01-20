@@ -16,16 +16,25 @@ use Bootgly\Web\HTTP\Server\_\Content\Downloader;
 
 class Content
 {
-   public string $input;
+   // * Data
    public string $raw;
+   public string $input;
+   // * Meta
+   public ? int $length;
+   public null|int|false $position;
 
    public Downloader $Downloader;
 
 
    public function __construct ()
    {
+      // * Data
       $this->input = '';
       $this->raw = '';
+      // * Meta
+      $this->length = null;
+      $this->position = null;
+
 
       if (\PHP_SAPI !== 'cli') {
          $this->input = file_get_contents('php://input');

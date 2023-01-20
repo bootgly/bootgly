@@ -14,11 +14,15 @@ namespace Bootgly\Web\HTTP\Server;
 use const Bootgly\HOME_DIR;
 use Bootgly\File;
 use Bootgly\Bootgly;
+use Bootgly\SAPI;
 use Bootgly\Web;
 use Bootgly\Web\HTTP;
+use Bootgly\Web\HTTP\Server\_\Connections\Data;
+use Bootgly\Web\HTTP\Server\Request;
 use Bootgly\Web\HTTP\Server\Response\Content;
 use Bootgly\Web\HTTP\Server\Response\Meta;
 use Bootgly\Web\HTTP\Server\Response\Header;
+use Bootgly\Web\HTTP\Server\Router;
 
 
 class Response
@@ -157,14 +161,28 @@ class Response
       return $this->process($x);
    }
 
-   public function parse ()
+   public function output (Request $Request, Response $Response, Router $Router)
    {
+      try {
+         $this->Content->raw = (SAPI::$Handler)($Request, $Response, $Router);
+      } catch (\Throwable) {
+         // $this->Content->raw = '';
+         $this->Meta->status = 500; // @ 500 HTTP Server Error
+      }
+
       // ? Response Content
       $this->Content->length = strlen($this->Content->raw);
       // ? Response Header
       $this->Header->set('Content-Length', $this->Content->length);
       // ? Response Meta
       // ...
+
+      return <<<HTTP_RAW
+      {$this->Meta->raw}
+      {$this->Header->raw}
+
+      {$this->Content->raw}
+      HTTP_RAW;;
    }
    public function reset ()
    {

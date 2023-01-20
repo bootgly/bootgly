@@ -13,7 +13,11 @@ namespace Bootgly\Web\HTTP\Server\_;
 
 class Header
 {
+   // * Data
+   protected string $raw;
    public array $fields;
+   // * Meta
+   public null|int|false $length;
 
 
    public function __construct ()
@@ -30,12 +34,19 @@ class Header
          $fields = [];
       }
 
+      // * Data
       $this->fields = $fields;
+      // * Meta
+      $this->length = null;
    }
    public function __get (string $name)
    {
       switch ($name) {
          case 'raw':
+            if ( isSet($this->raw) ) {
+               return $this->raw;
+            }
+
             $raw = '';
             foreach ($this->fields as $name => $value) {
                $raw .= "$name: $value\r\n";
@@ -46,14 +57,14 @@ class Header
             return @$this->fields[$name];
       }
    }
-   public function __set (string $fieldName, ?string $fieldValue = null)
+   public function __set (string $name, string $value)
    {
-      $fieldName = strtolower($fieldName);
-
-      if ($fieldValue === null) {
-         $this->fields[$fieldName] = true;
-      } else {
-         $this->fields[$fieldName] = $fieldValue;
+      switch ($name) {
+         case 'raw':
+            $this->raw = $value;
+            break;
+         default:
+            $this->fields[$name] = $value;
       }
    }
 
