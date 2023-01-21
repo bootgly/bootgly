@@ -67,9 +67,10 @@ class Connection # extends Packages
       #$this->reads = 0;
       $this->writes = 0;
 
-      #$context = stream_context_get_options($Socket);
-      #if ( isSet($context['ssl']) && $this->handshake() === false)
-      #   return false;
+      $context = stream_context_get_options($Socket);
+      if ( isSet($context['ssl']) && $this->handshake() === false) {
+         return false;
+      }
 
       // @ Set Connection timeout expiration
       $this->timers[] = Timer::add(
@@ -89,18 +90,23 @@ class Connection # extends Packages
 
    public function handshake ()
    {
+      static $tries = 1;
+
       try {
-         $negotiation = @stream_socket_enable_crypto(
+         stream_set_blocking ($this->Socket, true);
+
+         $negotiation = stream_socket_enable_crypto(
             $this->Socket,
             true,
-            STREAM_CRYPTO_METHOD_SSLv2_SERVER |
-            STREAM_CRYPTO_METHOD_SSLv23_SERVER |
+            STREAM_CRYPTO_METHOD_TLSv1_0_SERVER |
             STREAM_CRYPTO_METHOD_TLSv1_1_SERVER |
             STREAM_CRYPTO_METHOD_TLSv1_2_SERVER |
             STREAM_CRYPTO_METHOD_TLSv1_3_SERVER
          );
+
+         stream_set_blocking ($this->Socket, false);
       } catch (\Throwable) {
-         $negotiation = -1;
+         $negotiation = false;
       }
 
       // @ Check negotiation
@@ -108,8 +114,17 @@ class Connection # extends Packages
          $this->close();
          return false;
       } elseif ($negotiation === 0) {
-         // TODO Need try again
+         if ($tries > 2) {
+            return false;
+         }
+
+         $tries++;
+
+         $this->handshake();
+
          return 0;
+      } else {
+         // Handshake success!
       }
 
       return true;
