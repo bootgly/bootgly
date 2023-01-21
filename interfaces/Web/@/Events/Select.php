@@ -162,7 +162,7 @@ class Select implements Event\Loops
                // @ Select action
                match (@$this->reading[$id]) {
                   'accept' => $this->Connections->accept($Socket),
-                  'read' => $this->Connections->Data->read($Socket),
+                  'read' => $this->Connections->Packages->read($Socket),
                   default => null
                };
             }
@@ -170,7 +170,7 @@ class Select implements Event\Loops
 
          if ($write) {
             foreach ($write as $Socket) {
-               $this->Connections->Data->write($Socket);
+               $this->Connections->Packages->write($Socket);
             }
          }
 

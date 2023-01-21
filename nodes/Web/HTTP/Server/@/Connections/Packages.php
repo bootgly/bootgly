@@ -13,14 +13,13 @@ namespace Bootgly\Web\HTTP\Server\_\Connections;
 
 use Bootgly\SAPI;
 use Bootgly\Web\TCP\Server;
-use Bootgly\Web\TCP\Server\Connections;
-use Bootgly\Web\TCP\Server\Connections\Data as TCPData;
+use Bootgly\Web\TCP\Server\Connections as TCP;
 
 
 // abstract Packages
-class Data extends TCPData // TODO rename to Packages extends TCP\Packages
+class Packages extends TCP\Packages
 {
-   public function __construct (Connections &$Connections)
+   public function __construct (TCP &$Connections)
    {
       parent::__construct($Connections);
    }
@@ -74,4 +73,4 @@ class Data extends TCPData // TODO rename to Packages extends TCP\Packages
    }
 }
 
-return new Data($this->Connections);
+return new Packages($this->Connections);

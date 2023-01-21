@@ -17,14 +17,14 @@ use Bootgly\CLI\_\ {
    Logger\Logging // @trait
 };
 
-use Bootgly\Web\Packages; // @interface
+use Bootgly\Web; // @interface
 
 use Bootgly\Web\TCP\Server;
 use Bootgly\Web\TCP\Server\Connections;
 
 
 // abstract Packages
-class Data implements Packages // TODO rename to Packages
+class Packages implements Web\Packages // TODO rename to Packages
 {
    use Logging;
 
@@ -214,4 +214,4 @@ class Data implements Packages // TODO rename to Packages
    }
 }
 
-return new Data($this->Connections);
+return new Packages($this->Connections);

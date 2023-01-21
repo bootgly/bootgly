@@ -54,7 +54,7 @@ class Server extends TCP\Server
          $this->Request->Header;
          $this->Request->Content;
 
-         $this->Connections->Data->callbacks = [
+         $this->Connections->Packages->callbacks = [
             &$this->Request,
             &$this->Response,
             &$this->Router

@@ -44,13 +44,13 @@ class Connections implements Web\Connections
    public int $connections;
    // Errors
    public static array $errors;
-   // Data
+   // Packages
    public static int $reads;
    public static int $writes;
    public static int $read;
    public static int $written;
 
-   public Packages $Data;
+   public Packages $Packages;
 
 
    public function __construct (? Server &$Server = null, $Socket = null)
@@ -77,7 +77,7 @@ class Connections implements Web\Connections
          'write' => 0        // Socket Writing errors
          // 'except' => 0
       ];
-      // Data
+      // Packages
       self::$reads = 0;        // Socket Read count
       self::$writes = 0;       // Socket Write count
       self::$read = 0;         // Socket Reads in bytes
