@@ -22,16 +22,13 @@ use function Bootgly\__String;
 use Bootgly\Debugger;
 use Bootgly\Path;
 use Bootgly\File;
-
+use Bootgly\Web\HTTP\Server;
 use Bootgly\Web\HTTP\Server\Router\Route;
 
 
 class Router
 {
    public Web $Web;
-
-   public Request $Request;
-   public Response $Response;
 
    // * Config
    const MODE_FILE = 1;
@@ -48,12 +45,9 @@ class Router
    public ? Route $Route;
 
 
-   public function __construct (Web $Web, HTTP\Server $Server)
+   public function __construct (Web $Web)
    {
       $this->Web = &$Web;
-
-      $this->Request = &$Server->Request;
-      $this->Response = &$Server->Response;
 
       // * Config
       $this->mode = self::MODE_FILE;
@@ -100,7 +94,7 @@ class Router
    {
       $Web = &$this->Web;
 
-      $Request = &$this->Request;
+      $Request = &Server::$Request;
 
       $Router = &$this;
       $Route = &$this->Route;
@@ -184,12 +178,12 @@ class Router
          foreach ($conditions as $condition) {
             switch ($condition) {
                case is_string($condition):
-                  if ($this->Request->method === $condition) {
+                  if (Server::$Request->method === $condition) {
                      $this->Route->matched = 2;
                   }
                   break;
                case is_array($condition):
-                  if (__Array($condition)->search($this->Request->method)->found) {
+                  if (__Array($condition)->search(Server::$Request->method)->found) {
                      $this->Route->matched = 2;
                      break;
                   } else {
@@ -205,7 +199,7 @@ class Router
                      break 2;
                   }
                case $condition instanceof \Closure:
-                  if ($condition($this->Response) === true) {
+                  if ($condition(Server::$Response) === true) {
                      $this->Route->matched = 2;
                      break;
                   } else {
@@ -227,10 +221,10 @@ class Router
          if ($this->Route->parameterized) {
             foreach ($this->Route->Params as $param => $value) {
                if (is_int($value)) {
-                  $this->Route->Params->$param = @$this->Request->paths[$value - 1];
+                  $this->Route->Params->$param = @Server::$Request->paths[$value - 1];
                } elseif (is_array($value)) {
                   foreach ($value as $param_index => $location_index) {
-                     $this->Route->Params->$param[$param_index] = @$this->Request->paths[$location_index - 1];
+                     $this->Route->Params->$param[$param_index] = @Server::$Request->paths[$location_index - 1];
                   }
                }
             }
@@ -248,7 +242,7 @@ class Router
          switch (gettype($handler)) {
             case 'object':
                if ($handler instanceof \Closure) {
-                  $handler($this->Response, $this->Request, $this->Route); // @ Call handler
+                  $handler(Server::$Response, Server::$Request, $this->Route); // @ Call handler
                } else {
                   exit();
                }
@@ -283,7 +277,7 @@ class Router
                   $subject = $this->Route->catched;
                   $this->Route->catched = '';
                } else {
-                  $subject = $this->Request->path;
+                  $subject = Server::$Request->path;
                }
 
                preg_match($pattern, $subject, $matches);
@@ -300,10 +294,10 @@ class Router
             }
          } else {
             if ($this->Route->nested) {
-               $relative_url = __String($this->Request->path)->cut($this->Route->routed[$this->Route->level - 1][0], '^');
+               $relative_url = __String(Server::$Request->path)->cut($this->Route->routed[$this->Route->level - 1][0], '^');
                return ($this->Route->path === $relative_url ? 1 : 0);
             } else {
-               return ($this->Route->path === $this->Request->path ? 1 : 0);
+               return ($this->Route->path === Server::$Request->path ? 1 : 0);
             }
          }
       }
@@ -321,7 +315,7 @@ class Router
       if ($this->Route->catched) { // Get catched path instead of Request path
          $locations = explode('/', str_replace("/", "\/", $this->Route->catched));
       } else {
-         $locations = explode('/', str_replace("/", "\/", $this->Request->path));
+         $locations = explode('/', str_replace("/", "\/", Server::$Request->path));
       }
       // ? Route Path Node replaced by Regex
       $regex_replaced = [];

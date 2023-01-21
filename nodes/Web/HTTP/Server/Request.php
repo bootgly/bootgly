@@ -14,6 +14,7 @@ namespace Bootgly\Web\HTTP\Server;
 use Bootgly\Web\HTTP;
 
 use Bootgly\Path;
+use Bootgly\Web\HTTP\Server;
 use Bootgly\Web\HTTP\Server\_\Connections\Packages;
 
 use Bootgly\Web\HTTP\Server\_\ {
@@ -84,8 +85,6 @@ use Bootgly\Web\HTTP\Server\Request\Session;
 #[\AllowDynamicProperties]
 class Request
 {
-   public HTTP\Server $Server;
-
    // * Config
    private string $base;
    // * Data
@@ -101,10 +100,8 @@ class Request
    public Session $Session;
 
 
-   public function __construct (HTTP\Server $Server)
+   public function __construct ()
    {
-      $this->Server = $Server;
-
       // * Config
       $this->base = '';
       // TODO pre-defined filters
@@ -331,7 +328,7 @@ class Request
             }
 
             // TODO 2xx or 304 as per rfc2616 14.26 ?
-            // $status = $this->Server->Response->code;
+            // $status = Server::$Response->code;
             // if ( ($status >= 200 && $status < 300) || $status === 304) {
             //    return false;
             // }
@@ -350,7 +347,7 @@ class Request
 
             // @ if-none-match
             if ($noneMatch && $noneMatch !== '*') {
-               $eTag = $this->Server->Response->Header->get('etag');
+               $eTag = Server::$Response->Header->get('etag');
 
                if (!$eTag) {
                   return false;
@@ -397,7 +394,7 @@ class Request
 
             // @ if-modified-since
             if ($modifiedSince) {
-               $lastModified = $this->Server->Response->Header->get('last-modified');
+               $lastModified = Server::$Response->Header->get('last-modified');
                $modifiedStale = !$lastModified && (strtotime($lastModified) < strtotime($modifiedSince));
 
                if ($modifiedStale) {

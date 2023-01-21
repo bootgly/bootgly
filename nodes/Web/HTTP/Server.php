@@ -26,9 +26,9 @@ class Server extends TCP\Server
    // * Meta
    public readonly array $versions;
 
-   public Request $Request;
-   public Response $Response;
-   public Router $Router;
+   public static Request $Request;
+   public static Response $Response;
+   public static Router $Router;
 
 
    public function __construct (Web $Web)
@@ -44,21 +44,15 @@ class Server extends TCP\Server
       parent::__construct();
 
       // TODO make static ?
-      $this->Request = new Request($this);
-      $this->Response = new Response($Web, $this);
-      $this->Router = new Router($Web, $this);
+      self::$Request = new Request;
+      self::$Response = new Response($Web);
+      self::$Router = new Router($Web);
 
       // @ Init Data callback
       if ($this->status === self::STATUS_BOOTING) {
-         $this->Request->Meta;
-         $this->Request->Header;
-         $this->Request->Content;
-
-         $this->Connections->Packages->callbacks = [
-            &$this->Request,
-            &$this->Response,
-            &$this->Router
-         ];
+         self::$Request->Meta;
+         self::$Request->Header;
+         self::$Request->Content;
       }
    }
 }

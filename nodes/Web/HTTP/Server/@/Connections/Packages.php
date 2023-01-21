@@ -12,7 +12,7 @@ namespace Bootgly\Web\HTTP\Server\_\Connections;
 
 
 use Bootgly\SAPI;
-use Bootgly\Web\TCP\Server;
+use Bootgly\Web\HTTP\Server;
 use Bootgly\Web\TCP\Server\Connections as TCP;
 
 
@@ -31,13 +31,13 @@ class Packages extends TCP\Packages
       }
 
       // @ Instance callbacks
-      $Request = $this->callbacks[0];
-      $Response = $this->callbacks[1];
-      $Router = $this->callbacks[2];
+      $Request = Server::$Request;
+      $Response = Server::$Response;
+      $Router = Server::$Router;
 
       // ! Request
       // @ Input HTTP Request
-      if ($Request->input(self::$input) === 0) { //  && Data::$output !== ''?
+      if ($Request->input(self::$input) === 0) {
          parent::write($Socket, false);
 
          $this->Connections->close($Socket);

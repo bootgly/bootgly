@@ -17,6 +17,7 @@ use Bootgly\Bootgly;
 use Bootgly\SAPI;
 use Bootgly\Web;
 use Bootgly\Web\HTTP;
+use Bootgly\Web\HTTP\Server;
 use Bootgly\Web\HTTP\Server\_\Connections\Data;
 use Bootgly\Web\HTTP\Server\Request;
 use Bootgly\Web\HTTP\Server\Response\Content;
@@ -28,7 +29,6 @@ use Bootgly\Web\HTTP\Server\Router;
 class Response
 {
    public Web $Web;
-   public HTTP\Server $Server;
 
    // ! HTTP
    public object $Meta;
@@ -53,10 +53,9 @@ class Response
    public bool $sent;
 
 
-   public function __construct (Web $Web, HTTP\Server $Server, ? array $resources = null)
+   public function __construct (Web $Web, ? array $resources = null)
    {
       $this->Web = &$Web;
-      $this->Server = &$Server;
 
       // ! HTTP
       $this->Meta = new Meta;
@@ -336,9 +335,9 @@ class Response
        * @var \Bootgly\Web $Web
        */
       $Web = &$this->Web;
-      $Request = &$this->Server->Request;
-      $Response = &$this->Server->Response;
-      $Route = &$this->Server->Router->Route;
+      $Request = &Server::$Request;
+      $Response = &Server::$Response;
+      $Route = &Server::$Router->Route;
       // TODO add variables dinamically according to loaded modules and loaded web classes
 
       $API = &$Web->API ?? null;
@@ -391,7 +390,7 @@ class Response
                   break;
                case 'jsonp':
                   header('Content-Type: application/json', true, $this->code); // TODO move to prepare or process
-                  print $this->Server->Request->queries['callback'].'('.json_encode($body).')';
+                  print Server::$Request->queries['callback'].'('.json_encode($body).')';
                   break;
 
                default:
@@ -423,9 +422,9 @@ class Response
                default: // Dynamic (PHP)
                   $Web = &$this->Web;
 
-                  $Request = &$this->Server->Request;
-                  $Response = &$this->Server->Response;
-                  $Route = &$this->Server->Router->Route;
+                  $Request = &Server::$Request;
+                  $Response = &Server::$Response;
+                  $Route = &Server::$Router->Route;
 
                   // TODO add variables dinamically according to loaded modules and loaded web classes
                   $API = &$this->Web->API ?? null;
@@ -492,7 +491,7 @@ class Response
 
    public function authenticate (string $realm = 'Protected area')
    {
-      if ($this->Server->Request->headers['x-requested-with'] !== 'XMLHttpRequest') {
+      if (Server::$Request->headers['x-requested-with'] !== 'XMLHttpRequest') {
          header('WWW-Authenticate: Basic realm="'.$realm.'"');
       }
 
