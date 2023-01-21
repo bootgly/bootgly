@@ -95,7 +95,7 @@ class Connection # extends Packages
       try {
          stream_set_blocking ($this->Socket, true);
 
-         $negotiation = stream_socket_enable_crypto(
+         $negotiation = @stream_socket_enable_crypto(
             $this->Socket,
             true,
             STREAM_CRYPTO_METHOD_TLSv1_0_SERVER |
