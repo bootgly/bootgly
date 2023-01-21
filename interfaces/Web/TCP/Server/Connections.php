@@ -154,7 +154,11 @@ class Connections implements Web\Connections
       $connection = (int) $Connection;
 
       // @ Close specific Connection
-      $closed = self::$Connections[$connection]->close();
+      if ( isSet(self::$Connections[$connection]) ) {
+         $closed = self::$Connections[$connection]->close();
+      } else {
+         $closed = false;
+      }
 
       // @ On success
       if ($closed) {
