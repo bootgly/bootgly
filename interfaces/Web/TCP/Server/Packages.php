@@ -194,4 +194,15 @@ abstract class Packages implements Web\Packages
 
       return true;
    }
+
+   public function reject ($Socket, string $raw)
+   {
+      self::$output = $raw;
+
+      try {
+         @fwrite($Socket, self::$output);
+      } catch (\Throwable) {}
+
+      $this->Connection->close($Socket);
+   }
 }

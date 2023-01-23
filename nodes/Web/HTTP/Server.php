@@ -67,11 +67,9 @@ class Server extends TCP\Server
 
       // ! Request
       // @ Input HTTP Request
-      if ($Request->input($Package::$input, $Package::$output) === 0) {
-         $Package->write($Socket, false);
-
-         $Package->Connections->close($Socket);
-      }
+      $Request->input($Package, function ($raw) use ($Package, $Socket) {
+         $Package->reject($Socket, $raw);
+      });
 
       #$this->log(self::$output . PHP_EOL . PHP_EOL . PHP_EOL);
    }
