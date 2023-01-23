@@ -70,9 +70,9 @@ abstract class Packages implements Web\Packages
 
       // @ Check connection reset?
       if ($eof) {
-         #$this->log('Failed to write package: End-of-file!' . PHP_EOL);
+         #$this->log('Failed to ' . $operation . ' package: End-of-file!' . PHP_EOL);
          $this->Connection->close();
-         return false;
+         return true;
       }
 
       // @ Check connection close intention?
@@ -85,15 +85,13 @@ abstract class Packages implements Web\Packages
          $this->Connection->close();
       }
 
-      Connections::$errors['write']++;
+      Connections::$errors[$operation]++;
 
-      return true;
+      return false;
    }
 
-   public function handle (&$Socket) : bool
+   public function read (&$Socket) : bool
    {
-      // @?! --- Read ---
-
       try {
          $input = @fread($Socket, 65535);
       } catch (\Throwable) {
@@ -137,22 +135,17 @@ abstract class Packages implements Web\Packages
          #Connections::$Connections[(int) $Socket]['reads']++;
       }
 
-      $length = null;
       // @ Write/Decode Data
       if (Server::$Application) {
-         $decoded = Server::$Application::decode($this);
-
-         if (!$decoded) {
-            return false;
-         }
+         Server::$Application::decode($this);
       }
 
-      // @?! --- Write ---
+      $this->write($Socket);
 
-      #if ($this->Connection->status === $this->Connection::STATUS_CLOSING) {
-      #   return false;
-      #}
-
+      return true;
+   }
+   public function write (&$Socket, ? int $length = null) : bool
+   {
       // @ Set Output
       if (Server::$Application) {
          self::$output = Server::$Application::encode($this);
@@ -190,9 +183,6 @@ abstract class Packages implements Web\Packages
       if ($written === 0 || $written === false) {
          return $this->fail($Socket, 'write', $written);
       }
-
-      // @ On success
-      #Server::$Event->del($Socket, Server::$Event::EVENT_WRITE);
 
       // @ Set Stats (disable to max performance in benchmarks)
       if (Connections::$stats) {

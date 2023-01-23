@@ -52,6 +52,11 @@ class Server extends TCP\Server
          self::$Request->Meta;
          self::$Request->Header;
          self::$Request->Content;
+
+         // TODO initial Response Data API
+         #self::$Response->Meta;
+         #self::$Response->Header;
+         #self::$Response->Content;
       }
    }
 
@@ -66,7 +71,7 @@ class Server extends TCP\Server
 
       // ! Request
       // @ Input HTTP Request
-      return $Request->input($Package); // @ return package length
+      return $Request->input($Package); // @ Return Request Content length
    }
    public static function encode ($Package)
    {
@@ -75,11 +80,8 @@ class Server extends TCP\Server
       $Response = Server::$Response;
       $Router = Server::$Router;
 
-      // @ Reset cache
+      // @ Reset cache if necessary otherwise return cached
       if ($Package->changed) {
-         // @ Delete event from loop
-         #Server::$Event->del($Socket, Server::$Event::EVENT_WRITE);
-
          // @ Reset HTTP Request/Response Data
          $Request->reset();
          $Response->reset();
@@ -87,10 +89,12 @@ class Server extends TCP\Server
          // @ Reset Buffer I/O
          #$Package::$input = '';
          #$Package::$output = '';
+      } else {
+         return $Response->raw;
       }
 
       // ! Response
       // @ Output HTTP Response
-      return $Response->output($Request, $Response, $Router);
+      return $Response->output($Request, $Response, $Router); // @ Return Response raw
    }
 }

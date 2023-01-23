@@ -190,12 +190,11 @@ class Select implements Event\Loops
                   $this->Connections->accept($Socket);
                } else if ( isSet($this->reading[$id]) ) {
                   $Package = &$this->reading[$id];
-                  $Package->handle($Socket);
+                  $Package->read($Socket);
                }
             }
          }
 
-         /*
          if ($write) {
             foreach ($write as $Socket) {
                $id = (int) $Socket;
@@ -206,7 +205,6 @@ class Select implements Event\Loops
                }
             }
          }
-         */
 
          // TODO add timer ticks?
          // if ($except) {}

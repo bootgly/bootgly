@@ -13,6 +13,6 @@ namespace Bootgly\Web;
 
 interface Packages
 {
-   public function handle (&$Socket);
-   #public function write (&$Socket);
+   public function read (&$Socket);
+   public function write (&$Socket);
 }

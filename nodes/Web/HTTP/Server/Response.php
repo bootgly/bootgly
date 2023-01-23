@@ -36,6 +36,8 @@ class Response
    // * Config
    public bool $debugger;
    // * Data
+   public string $raw = '';
+
    public $body;
 
    public ? string $source; //! move to Content->source? join with type?
@@ -147,23 +149,29 @@ class Response
             return $this->$name(...$arguments);
       }
    }
-   public function __invoke ($x = null, string $raw = '', int $status = 200)
+   public function __invoke
+   ($x = null, int $status = 200, array $headers = [], string $content = '', string $raw = '')
    {
-      if ($x === null && $raw) {
-         $this->resource = 'raw';
-         return $this->process($raw);
+      if ($x === null && $raw && PHP_SAPI === 'cli') {
+         $this->raw = $raw;
+
+         return $this;
+      } else if ($x === null && $content) {
+         $this->Content->raw = $content;
+
+         return $this;
       }
 
       $this->prepare();
+
       return $this->process($x);
    }
 
    public function output (Request $Request, Response $Response, Router $Router)
    {
       try {
-         $this->Content->raw = (SAPI::$Handler)($Request, $Response, $Router);
+         (SAPI::$Handler)($Request, $Response, $Router);
       } catch (\Throwable) {
-         // $this->Content->raw = '';
          $this->Meta->status = 500; // @ 500 HTTP Server Error
       }
 
@@ -174,15 +182,21 @@ class Response
       // ? Response Meta
       // ...
 
-      return <<<HTTP_RAW
-      {$this->Meta->raw}
-      {$this->Header->raw}
+      if ($this->raw === '') {
+         $this->raw = <<<HTTP_RAW
+         {$this->Meta->raw}
+         {$this->Header->raw}
+         
+         {$this->Content->raw}
+         HTTP_RAW;
+      }
 
-      {$this->Content->raw}
-      HTTP_RAW;;
+      return $this->raw;
    }
    public function reset ()
    {
+      $this->raw = '';
+
       $this->Meta->__construct();
       $this->Header->__construct();
    }

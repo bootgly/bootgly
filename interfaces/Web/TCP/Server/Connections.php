@@ -124,7 +124,7 @@ class Connections implements Web\Connections
          return false;
       }
 
-      // @ On success
+      // @ Instance new connection
       $Connection = new Connection($Socket);
 
       // @ Check connection
@@ -133,7 +133,6 @@ class Connections implements Web\Connections
       }
 
       // @ Set stats
-      // Global
       $this->connections++;
 
       // @ Set Connection

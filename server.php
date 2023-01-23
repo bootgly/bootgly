@@ -21,7 +21,7 @@ $TCPServer = new TCP\Server;
 $TCPServer->configure(
    host: '0.0.0.0',
    port: 8080,
-   workers: 13
+   workers: 12
 );
 // on Data -> projects/sapi.constructor.php
 $TCPServer->start();
