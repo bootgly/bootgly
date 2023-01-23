@@ -426,7 +426,7 @@ class Server implements Servers
 
       match ($this->Process->level) {
          'master' => $this->log("Resuming {$this->Process->children} worker(s)... @\\;", 3),
-         'child' => self::$Event->add($this->Socket, self::$Event::EVENT_READ, 'accept')
+         'child' => self::$Event->add($this->Socket, self::$Event::EVENT_ACCEPT, 'accept')
       };
 
       return true;
@@ -446,7 +446,7 @@ class Server implements Servers
 
       match ($this->Process->level) {
          'master' => $this->log("Pausing {$this->Process->children} worker(s)... @\\;", 3),
-         'child' => self::$Event->del($this->Socket, self::$Event::EVENT_READ)
+         'child' => self::$Event->del($this->Socket, self::$Event::EVENT_ACCEPT)
       };
 
       return true;
