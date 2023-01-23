@@ -39,7 +39,7 @@ class Select implements Event\Loops
    private array $writes = [];
    private array $excepts = [];
    // * Meta
-   // @ Actions
+   // @ Events
    private array $accepting = [];
    private array $reading = [];
    private array $writing = [];
@@ -51,7 +51,7 @@ class Select implements Event\Loops
       $this->Connections = $Connections;
    }
 
-   public function add ($Socket, int $flag, $action, ? array $arguments = null)
+   public function add ($Socket, int $flag, $payload, ? array $arguments = null)
    {
       switch ($flag) {
          case self::EVENT_ACCEPT:
@@ -59,7 +59,7 @@ class Select implements Event\Loops
 
             $this->reads[$id] = $Socket;
 
-            $this->accepting[$id] = $action;
+            $this->accepting[$id] = $payload;
 
             return true;
 
@@ -73,7 +73,7 @@ class Select implements Event\Loops
 
             $this->reads[$id] = $Socket;
 
-            $this->reading[$id] = $action;
+            $this->reading[$id] = $payload;
 
             return true;
          case self::EVENT_WRITE:
@@ -86,7 +86,7 @@ class Select implements Event\Loops
 
             $this->writes[$id] = $Socket;
 
-            $this->writing[$id] = $action;
+            $this->writing[$id] = $payload;
 
             return true;
          case self::EVENT_EXCEPT:
@@ -99,7 +99,7 @@ class Select implements Event\Loops
 
             $this->excepts[$id] = $Socket;
 
-            $this->excepting[$id] = $action;
+            $this->excepting[$id] = $payload;
 
             return true;
       }
@@ -109,6 +109,15 @@ class Select implements Event\Loops
    public function del ($Socket, int $flag)
    {
       switch ($flag) {
+         case self::EVENT_ACCEPT:
+            $id = (int) $Socket;
+
+            unset($this->accepting[$id]);
+
+            unset($this->reads[$id]);
+
+            return true;
+
          case self::EVENT_READ:
             $id = (int) $Socket;
 
@@ -175,15 +184,20 @@ class Select implements Event\Loops
                if ( isSet($this->accepting[$id]) ) {
                   $this->Connections->accept($Socket);
                } else if ( isSet($this->reading[$id]) ) {
-                  $this->Connections->Packages->read($Socket);
-                  // call_user_func_array($this->reading[$id], [&$Socket])
+                  $Package = &$this->reading[$id];
+                  $Package->read($Socket);
                }
             }
          }
 
          if ($write) {
             foreach ($write as $Socket) {
-               $this->Connections->Packages->write($Socket);
+               $id = (int) $Socket;
+
+               if ( isSet($this->writing[$id]) ) {
+                  $Package = &$this->writing[$id];
+                  $Package->write($Socket);
+               }
             }
          }
 
