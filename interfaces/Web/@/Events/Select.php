@@ -28,11 +28,11 @@ class Select implements Event\Loops
    public Connections $Connections;
 
    // * Config
-   const EVENT_ACCEPT = 0;
+   const EVENT_ACCEPT = 1;
 
-   const EVENT_READ = 1;
-   const EVENT_WRITE = 2;
-   const EVENT_EXCEPT = 3;
+   const EVENT_READ = 2;
+   const EVENT_WRITE = 3;
+   const EVENT_EXCEPT = 4;
    // * Data
    // @ Sockets
    private array $reads = [];
@@ -40,6 +40,7 @@ class Select implements Event\Loops
    private array $excepts = [];
    // * Meta
    // @ Actions
+   private array $accepting = [];
    private array $reading = [];
    private array $writing = [];
    private array $excepting = [];
@@ -53,6 +54,15 @@ class Select implements Event\Loops
    public function add ($Socket, int $flag, $action, ? array $arguments = null)
    {
       switch ($flag) {
+         case self::EVENT_ACCEPT:
+            $id = (int) $Socket;
+
+            $this->reads[$id] = $Socket;
+
+            $this->accepting[$id] = $action;
+
+            return true;
+
          case self::EVENT_READ:
             // System call select exceeded the maximum number of connections 1024, please install event/libevent extension for more connections.
             if (count($this->reads) >= 1000) {
@@ -158,13 +168,16 @@ class Select implements Event\Loops
 
          // @ Call
          if ($read) {
-            foreach ($read as $id => $Socket) {
+            foreach ($read as $Socket) {
+               $id = (int) $Socket;
+
                // @ Select action
-               match (@$this->reading[$id]) {
-                  'accept' => $this->Connections->accept($Socket),
-                  'read' => $this->Connections->Packages->read($Socket),
-                  default => null
-               };
+               if ( isSet($this->accepting[$id]) ) {
+                  $this->Connections->accept($Socket);
+               } else if ( isSet($this->reading[$id]) ) {
+                  $this->Connections->Packages->read($Socket);
+                  // call_user_func_array($this->reading[$id], [&$Socket])
+               }
             }
          }
 
