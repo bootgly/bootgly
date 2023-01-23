@@ -97,7 +97,7 @@ class Server implements Servers
       // ! Connection(s)
       // @ New design pattern?
       $this->Connections = new Connections($this);
-      $this->Connections->Packages = require __DIR__ . '/Server/Connections/Packages.php';
+      #$this->Connections->Packages = require __DIR__ . '/Server/Connections/Packages.php';
       if (__CLASS__ !== static::class) {
          self::$Application = static::class;
          #$this->Connections->Packages = require (new Backtrace)->dir . '/Server/@/Connections/Packages.php';
@@ -285,6 +285,8 @@ class Server implements Servers
       }
 
       $this->status = self::STATUS_RUNNING;
+
+      return $this->Socket;
    }
 
    private function daemonize ()

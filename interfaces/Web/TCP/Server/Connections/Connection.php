@@ -14,9 +14,10 @@ namespace Bootgly\Web\TCP\Server\Connections;
 use Bootgly\OS\Process\Timer;
 use Bootgly\Web\TCP\Server;
 use Bootgly\Web\TCP\Server\Connections;
+use Bootgly\Web\TCP\Server\Packages;
 
 
-class Connection # extends Packages
+class Connection extends Packages
 {
    public $Socket;
 
@@ -66,6 +67,8 @@ class Connection # extends Packages
       // @ Stats
       #$this->reads = 0;
       $this->writes = 0;
+
+      parent::__construct($this);
 
       if ( isSet(Server::$context['ssl']) && $this->handshake() === false) {
          return false;

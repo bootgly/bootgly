@@ -104,6 +104,8 @@ class Connections implements Web\Connections
    public function accept ($_Socket) : bool
    {
       try {
+         // stream_set_blocking($_Socket, false);
+
          $Socket = @stream_socket_accept($_Socket, null);
 
          stream_set_blocking($Socket, false); // +15% performance
@@ -124,8 +126,9 @@ class Connections implements Web\Connections
       $Connection = new Connection($Socket);
 
       // @ Check connection
-      if ( $Connection->check() === false )
+      if ( $Connection->check() === false ) {
          return false;
+      }
 
       // @ Set stats
       // Global

@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\Web\TCP\Server\Connections;
+namespace Bootgly\Web\TCP\Server;
 
 
 use Bootgly\SAPI;
@@ -21,15 +21,14 @@ use Bootgly\Web; // @interface
 
 use Bootgly\Web\TCP\Server;
 use Bootgly\Web\TCP\Server\Connections;
+use Bootgly\Web\TCP\Server\Connections\Connection;
 
-
-// abstract Packages
-class Packages implements Web\Packages
+abstract class Packages implements Web\Packages
 {
    use Logging;
 
 
-   public Connections $Connections;
+   public Connection $Connection;
 
    // * Config
    public bool $cache;
@@ -43,9 +42,9 @@ class Packages implements Web\Packages
    public array $callbacks; // TODO move
 
 
-   public function __construct (Connections &$Connections)
+   public function __construct (Connection &$Connection)
    {
-      $this->Connections = $Connections;
+      $this->Connection = $Connection;
 
       // * Config
       $this->cache = true;
@@ -72,7 +71,7 @@ class Packages implements Web\Packages
       // @ Check connection reset?
       if ($eof) {
          #$this->log('Failed to write package: End-of-file!' . PHP_EOL);
-         $this->Connections->close($Socket);
+         $this->Connection->close($Socket);
          return false;
       }
 
@@ -83,7 +82,7 @@ class Packages implements Web\Packages
 
       if (is_resource($Socket) && get_resource_type($Socket) === 'stream') {
          $this->log('Failed to ' . $operation . ' package: closing connection...' . PHP_EOL);
-         $this->Connections->close($Socket);
+         $this->Connection->close($Socket);
       }
 
       Connections::$errors['write']++;
@@ -105,7 +104,7 @@ class Packages implements Web\Packages
       if ($input === '') {
          #$this->log('Failed to read buffer: input data is empty!' . PHP_EOL, self::LOG_WARNING_LEVEL);
          // Server::$Event->del($Socket, Server::$Event::EVENT_WRITE);
-         $this->Connections->close($Socket);
+         $this->Connection->close($Socket);
          return false;
       }
 
@@ -196,5 +195,3 @@ class Packages implements Web\Packages
       return true;
    }
 }
-
-return new Packages($this->Connections);
