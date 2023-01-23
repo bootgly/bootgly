@@ -67,7 +67,7 @@ class Server extends TCP\Server
 
       // ! Request
       // @ Input HTTP Request
-      if ($Request->input($Package::$input) === 0) {
+      if ($Request->input($Package::$input, $Package::$output) === 0) {
          $Package->write($Socket, false);
 
          $Package->Connections->close($Socket);
