@@ -418,7 +418,7 @@ class Request
       }
    }
 
-   public function input ($Package, Closure $reject) : int // @ return Request Content length
+   public function input ($Package) : int // @ return Request Content length
    {
       static $input = []; // @ Instance cache variable
 
@@ -437,7 +437,7 @@ class Request
       if ($this->Content->position === false) {
          // @ Judge whether the package length exceeds the limit.
          if (strlen($buffer) >= 16384) {
-            $reject("HTTP/1.1 413 Request Entity Too Large\r\n\r\n");
+            $Package->reject("HTTP/1.1 413 Request Entity Too Large\r\n\r\n");
          }
 
          return 0;
@@ -465,7 +465,7 @@ class Request
          case 'PATCH':
             break;
          default:
-            $reject("HTTP/1.1 405 Method Not Allowed\r\n\r\n");
+            $Package->reject("HTTP/1.1 405 Method Not Allowed\r\n\r\n");
             return 0;
       }
       // @ Set Meta
@@ -495,7 +495,7 @@ class Request
       } else if (preg_match("/\r\ncontent-length: ?(\d+)/i", $this->Header->raw, $match) === 1) {
          $this->Content->length = $match[1];
       } else if (stripos($this->Header->raw, "\r\nTransfer-Encoding:") !== false) {
-         $reject("HTTP/1.1 400 Bad Request\r\n\r\n");
+         $Package->reject("HTTP/1.1 400 Bad Request\r\n\r\n");
          return 0;
       }
 
@@ -503,7 +503,7 @@ class Request
          $length += $this->Content->length;
 
          if ($length > 10485760) {
-            $reject("HTTP/1.1 413 Request Entity Too Large\r\n\r\n");
+            $Package->reject("HTTP/1.1 413 Request Entity Too Large\r\n\r\n");
             return 0;
          }
       }

@@ -71,7 +71,7 @@ abstract class Packages implements Web\Packages
       // @ Check connection reset?
       if ($eof) {
          #$this->log('Failed to write package: End-of-file!' . PHP_EOL);
-         $this->Connection->close($Socket);
+         $this->Connection->close();
          return false;
       }
 
@@ -82,7 +82,7 @@ abstract class Packages implements Web\Packages
 
       if (is_resource($Socket) && get_resource_type($Socket) === 'stream') {
          $this->log('Failed to ' . $operation . ' package: closing connection...' . PHP_EOL);
-         $this->Connection->close($Socket);
+         $this->Connection->close();
       }
 
       Connections::$errors['write']++;
@@ -104,7 +104,7 @@ abstract class Packages implements Web\Packages
       if ($input === '') {
          #$this->log('Failed to read buffer: input data is empty!' . PHP_EOL, self::LOG_WARNING_LEVEL);
          // Server::$Event->del($Socket, Server::$Event::EVENT_WRITE);
-         $this->Connection->close($Socket);
+         $this->Connection->close();
          return false;
       }
 
@@ -137,7 +137,11 @@ abstract class Packages implements Web\Packages
 
       // @ Write/Decode Data
       if (Server::$Application) {
-         Server::$Application::decode($Socket, $this);
+         $decoded = Server::$Application::decode($this);
+
+         if (!$decoded) {
+            return false;
+         }
       }
 
       // TODO implement this data write by default?
@@ -150,7 +154,7 @@ abstract class Packages implements Web\Packages
    {
       // @ Set Output
       if (Server::$Application) {
-         self::$output = Server::$Application::encode($Socket, $this);
+         self::$output = Server::$Application::encode($this);
       } else {
          self::$output = (SAPI::$Handler)(...$this->callbacks);
       }
@@ -195,14 +199,12 @@ abstract class Packages implements Web\Packages
       return true;
    }
 
-   public function reject ($Socket, string $raw)
+   public function reject (string $raw)
    {
-      self::$output = $raw;
-
       try {
-         @fwrite($Socket, self::$output);
+         @fwrite($this->Connection->Socket, $raw);
       } catch (\Throwable) {}
 
-      $this->Connection->close($Socket);
+      $this->Connection->close();
    }
 }

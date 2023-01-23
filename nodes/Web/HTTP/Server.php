@@ -56,7 +56,7 @@ class Server extends TCP\Server
       }
    }
 
-   public static function decode ($Socket, $Package)
+   public static function decode ($Package)
    {
       if ($Package::$input === '') {
          return false;
@@ -67,13 +67,9 @@ class Server extends TCP\Server
 
       // ! Request
       // @ Input HTTP Request
-      $Request->input($Package, function ($raw) use ($Package, $Socket) {
-         $Package->reject($Socket, $raw);
-      });
-
-      #$this->log(self::$output . PHP_EOL . PHP_EOL . PHP_EOL);
+      return $Request->input($Package);
    }
-   public static function encode ($Socket, $Package)
+   public static function encode ($Package)
    {
       // @ Instance callbacks
       $Request = Server::$Request;
