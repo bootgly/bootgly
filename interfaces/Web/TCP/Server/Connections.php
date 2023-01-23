@@ -104,11 +104,13 @@ class Connections implements Web\Connections
    public function accept ($_Socket) : bool
    {
       try {
-         // stream_set_blocking($_Socket, false);
-
          $Socket = @stream_socket_accept($_Socket, null);
 
+         stream_set_timeout($Socket, 0);
+
          stream_set_blocking($Socket, false); // +15% performance
+
+         #stream_set_chunk_size($Socket, 65535);
 
          #stream_set_read_buffer($Socket, 65535);
          #stream_set_write_buffer($Socket, 65535);
@@ -139,6 +141,7 @@ class Connections implements Web\Connections
 
       // @ Add Connection Data read to Event loop
       Server::$Event->add($Socket, Server::$Event::EVENT_READ, $Connection);
+      #Server::$Event->add($Socket, Server::$Event::EVENT_WRITE, $Connection);
 
       return true;
    }

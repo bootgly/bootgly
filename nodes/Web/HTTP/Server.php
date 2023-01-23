@@ -43,7 +43,6 @@ class Server extends TCP\Server
 
       parent::__construct();
 
-      // TODO make static ?
       self::$Request = new Request;
       self::$Response = new Response;
       self::$Router = new Router;
@@ -67,7 +66,7 @@ class Server extends TCP\Server
 
       // ! Request
       // @ Input HTTP Request
-      return $Request->input($Package);
+      return $Request->input($Package); // @ return package length
    }
    public static function encode ($Package)
    {
@@ -90,6 +89,8 @@ class Server extends TCP\Server
          #$Package::$output = '';
       }
 
+      // ! Response
+      // @ Output HTTP Response
       return $Response->output($Request, $Response, $Router);
    }
 }

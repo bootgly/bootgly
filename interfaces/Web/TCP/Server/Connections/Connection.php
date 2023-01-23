@@ -74,20 +74,23 @@ class Connection extends Packages
          return false;
       }
 
-      // @ Set Connection timeout expiration
-      $this->timers[] = Timer::add(
-         interval: $this->expiration,
-         handler: [$this, 'expire'],
-         args: [$this->expiration]
-      );
-      /*
-      // @ Set Connection limit
-      $this->timers[] = Timer::add(
-         interval: 5,
-         handler: [$this, 'limit'],
-         args: [1000]
-      );
-      */
+      if (Connections::$stats) {
+         // @ Set Connection timeout expiration
+         $this->timers[] = Timer::add(
+            interval: $this->expiration,
+            handler: [$this, 'expire'],
+            args: [$this->expiration]
+         );
+
+         /*
+         // @ Set Connection limit
+         $this->timers[] = Timer::add(
+            interval: 5,
+            handler: [$this, 'limit'],
+            args: [1000]
+         );
+         */
+      }
    }
 
    public function handshake ()
@@ -184,7 +187,7 @@ class Connection extends Packages
    public function close ()
    {
       Server::$Event->del($this->Socket, Server::$Event::EVENT_READ);
-      Server::$Event->del($this->Socket, Server::$Event::EVENT_WRITE);
+      #Server::$Event->del($this->Socket, Server::$Event::EVENT_WRITE);
 
       if ($this->Socket === null || $this->Socket === false) {
          #$this->log('$Socket is false or null on close!');
@@ -203,11 +206,11 @@ class Connection extends Packages
 
       // @ On success
       $this->status = self::STATUS_CLOSED;
-      // Delete timers
+      // @ Delete timers
       foreach ($this->timers as $id) {
          Timer::del($id);
       }
-      // Destroy itself
+      // @ Destroy itself
       unset(Connections::$Connections[$this->id]);
 
       return true;
@@ -215,7 +218,7 @@ class Connection extends Packages
 
    public function __destruct ()
    {
-      // Delete timers
+      // @ Delete timers
       foreach ($this->timers as $id) {
          Timer::del($id);
       }

@@ -449,8 +449,8 @@ class Request
       // ? Meta
       // @ Boot Meta
       // Sample: GET /path HTTP/1.1
-      #$meta = strstr($buffer, "\r\n", true);
-      $meta = strtok($buffer, "\r\n");
+      $meta = strstr($buffer, "\r\n", true);
+      #$meta = strtok($buffer, "\r\n");
       @[$method, $uri, $procotol] = explode(' ', $meta, 3);
 
       // @ Check Meta
