@@ -28,8 +28,6 @@ use Bootgly\Web\HTTP\Server\Router\Route;
 
 class Router
 {
-   public Web $Web;
-
    // * Config
    const MODE_FILE = 1;
    const MODE_DIRECTORIES = 2;
@@ -45,10 +43,8 @@ class Router
    public ? Route $Route;
 
 
-   public function __construct (Web $Web)
+   public function __construct ()
    {
-      $this->Web = &$Web;
-
       // * Config
       $this->mode = self::MODE_FILE;
       //$this->base = '/';
@@ -92,22 +88,20 @@ class Router
 
    public function boot (string|array $instances = ['routes'])
    {
-      $Web = &$this->Web;
-
       $Request = &Server::$Request;
 
       $Router = &$this;
       $Route = &$this->Route;
 
       (static function (string $__default__)
-      use ($Web, $Request, $Router, $Route) {
+      use ($Request, $Router, $Route) {
          include_once $__default__;
       })( (string) new File(Bootgly::$Project->path . 'router/' . 'index.php') );
 
       $instances = (array) $instances;
       foreach ($instances as $instance) {
          (static function (string $__routes__)
-         use ($Web, $Request, $Router, $Route) {
+         use ($Request, $Router, $Route) {
             @include_once $__routes__;
          })( (string) new File(Bootgly::$Project->path . 'router/' . $instance . '.php') );
       }

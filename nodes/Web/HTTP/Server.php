@@ -45,8 +45,8 @@ class Server extends TCP\Server
 
       // TODO make static ?
       self::$Request = new Request;
-      self::$Response = new Response($Web);
-      self::$Router = new Router($Web);
+      self::$Response = new Response;
+      self::$Router = new Router;
 
       // @ Init Data callback
       if ($this->status === self::STATUS_BOOTING) {
@@ -54,5 +54,48 @@ class Server extends TCP\Server
          self::$Request->Header;
          self::$Request->Content;
       }
+   }
+
+   public static function decode ($Socket, $Package)
+   {
+      if ($Package::$input === '') {
+         return false;
+      }
+
+      // @ Instance callbacks
+      $Request = Server::$Request;
+
+      // ! Request
+      // @ Input HTTP Request
+      if ($Request->input($Package::$input) === 0) {
+         $Package->write($Socket, false);
+
+         $Package->Connections->close($Socket);
+      }
+
+      #$this->log(self::$output . PHP_EOL . PHP_EOL . PHP_EOL);
+   }
+   public static function encode ($Socket, $Package)
+   {
+      // @ Instance callbacks
+      $Request = Server::$Request;
+      $Response = Server::$Response;
+      $Router = Server::$Router;
+
+      // @ Reset cache
+      if ($Package->changed) {
+         // @ Delete event from loop
+         #Server::$Event->del($Socket, Server::$Event::EVENT_WRITE);
+
+         // @ Reset HTTP Request/Response Data
+         $Request->reset();
+         $Response->reset();
+
+         // @ Reset Buffer I/O
+         #$Package::$input = '';
+         #$Package::$output = '';
+      }
+
+      return $Response->output($Request, $Response, $Router);
    }
 }

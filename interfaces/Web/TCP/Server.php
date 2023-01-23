@@ -52,10 +52,12 @@ class Server implements Servers
    public const MODE_DAEMON = 1;
    public const MODE_INTERACTIVE = 2;
    public const MODE_MONITOR = 3;
+   // * Data
+   public static $Application = null; // OSI Application
    // * Meta
    public const VERSION = '0.0.1';
    protected int $started = 0;
-   protected $Context; // TODO make static?
+   public static array $context;
    // @ Status
    protected int $status = 0;
    protected const STATUS_BOOTING = 1;
@@ -86,6 +88,7 @@ class Server implements Servers
       // @ Mode
       $this->mode = self::MODE_MONITOR;
       // * Data
+      // self::$application = self::$application ?? '';
       // * Meta
       $this->started = time();
       // @ Status
@@ -96,7 +99,8 @@ class Server implements Servers
       $this->Connections = new Connections($this);
       $this->Connections->Packages = require __DIR__ . '/Server/Connections/Packages.php';
       if (__CLASS__ !== static::class) {
-         $this->Connections->Packages = require (new Backtrace)->dir . '/Server/@/Connections/Packages.php';
+         self::$Application = static::class;
+         #$this->Connections->Packages = require (new Backtrace)->dir . '/Server/@/Connections/Packages.php';
       }
 
       // ! Web\@\Events
@@ -230,9 +234,9 @@ class Server implements Servers
       $error_message = '';
 
       // @ Set context options
-      $options = [];
+      self::$context = [];
       // Socket
-      $options['socket'] = [
+      self::$context['socket'] = [
          // Used to limit the number of outstanding connections in the socket's listen queue.
          'backlog' => 102400,
 
@@ -244,11 +248,11 @@ class Server implements Servers
       ];
       // SSL
       if ( ! empty($this->ssl) ) {
-         $options['ssl'] = $this->ssl;
+         self::$context['ssl'] = $this->ssl;
       }
 
       // @ Create context
-      $this->Context = stream_context_create($options);
+      $Context = stream_context_create(self::$context);
 
       // @ Create server socket
       try {
@@ -257,7 +261,7 @@ class Server implements Servers
             $error_code,
             $error_message,
             STREAM_SERVER_BIND | STREAM_SERVER_LISTEN,
-            $this->Context
+            $Context
          );
       } catch (\Throwable) {
          $this->Socket = false;

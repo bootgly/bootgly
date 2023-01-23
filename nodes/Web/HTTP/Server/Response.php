@@ -28,8 +28,6 @@ use Bootgly\Web\HTTP\Server\Router;
 
 class Response
 {
-   public Web $Web;
-
    // ! HTTP
    public object $Meta;
    public object $Header;
@@ -53,9 +51,9 @@ class Response
    public bool $sent;
 
 
-   public function __construct (Web $Web, ? array $resources = null)
+   public function __construct (? array $resources = null)
    {
-      $this->Web = &$Web;
+      // $this->Web = &$Web;
 
       // ! HTTP
       $this->Meta = new Meta;
@@ -334,14 +332,14 @@ class Response
       /**
        * @var \Bootgly\Web $Web
        */
-      $Web = &$this->Web;
+      #$Web = &$this->Web;
       $Request = &Server::$Request;
       $Response = &Server::$Response;
       $Route = &Server::$Router->Route;
       // TODO add variables dinamically according to loaded modules and loaded web classes
 
-      $API = &$Web->API ?? null;
-      $App = &$Web->App ?? null;
+      #$API = &$Web->API ?? null;
+      #$App = &$Web->App ?? null;
 
       // Output/Buffer start()
       ob_start();
@@ -349,7 +347,7 @@ class Response
       try {
          // Isolate context with anonymous static function
          (static function (string $__file__, ?array $__data__)
-            use ($Web, $Request, $Response, $Route, $API, $App) {
+            use ($Web, $Request, $Response, $Route) {
             if ($__data__ !== null) {
                extract($__data__);
             }
@@ -420,19 +418,19 @@ class Response
                   break;
 
                default: // Dynamic (PHP)
-                  $Web = &$this->Web;
+                  #$Web = &$this->Web;
 
                   $Request = &Server::$Request;
                   $Response = &Server::$Response;
                   $Route = &Server::$Router->Route;
 
                   // TODO add variables dinamically according to loaded modules and loaded web classes
-                  $API = &$this->Web->API ?? null;
-                  $App = &$this->Web->App ?? null;
+                  #$API = &$this->Web->API ?? null;
+                  #$App = &$this->Web->App ?? null;
 
                   // Isolate context with anonymous static function
                   (static function (string $__file__)
-                     use ($Web, $Request, $Response, $Route, $API, $App) {
+                     use ($Request, $Response, $Route) {
                      require $__file__;
                   })($File);
             }

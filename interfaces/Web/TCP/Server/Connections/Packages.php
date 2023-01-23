@@ -24,7 +24,7 @@ use Bootgly\Web\TCP\Server\Connections;
 
 
 // abstract Packages
-class Packages implements Web\Packages // TODO rename to Packages
+class Packages implements Web\Packages
 {
    use Logging;
 
@@ -61,7 +61,36 @@ class Packages implements Web\Packages // TODO rename to Packages
       SAPI::boot(true);
    }
 
-   public function read (&$Socket, bool $write = true) : bool
+   public function fail ($Socket, string $operation, $result)
+   {
+      try {
+         $eof = @feof($Socket);
+      } catch (\Throwable) {
+         $eof = false;
+      }
+
+      // @ Check connection reset?
+      if ($eof) {
+         #$this->log('Failed to write package: End-of-file!' . PHP_EOL);
+         $this->Connections->close($Socket);
+         return false;
+      }
+
+      // @ Check connection close intention?
+      if ($result === 0) {
+         $this->log('Failed to ' . $operation . ' package: 0 byte handled!' . PHP_EOL);
+      }
+
+      if (is_resource($Socket) && get_resource_type($Socket) === 'stream') {
+         $this->log('Failed to ' . $operation . ' package: closing connection...' . PHP_EOL);
+         $this->Connections->close($Socket);
+      }
+
+      Connections::$errors['write']++;
+
+      return true;
+   }
+   public function read (&$Socket) : bool
    {
       try {
          $input = @fread($Socket, 65535);
@@ -82,26 +111,7 @@ class Packages implements Web\Packages // TODO rename to Packages
 
       // @ Check issues
       if ($input === false) {
-         try {
-            $eof = @feof($Socket);
-         } catch (\Throwable) {
-            $eof = false;
-         }
-
-         if ($eof) {
-            #$this->log('Failed to read buffer: End-of-file!' . PHP_EOL, self::LOG_WARNING_LEVEL);
-            $this->Connections->close($Socket);
-            return false;
-         }
-
-         if (is_resource($Socket) && get_resource_type($Socket) === 'stream') {
-            $this->log('Failed to read buffer: closing connection...' . PHP_EOL, self::LOG_ERROR_LEVEL);
-            $this->Connections->close($Socket);
-         }
-
-         Connections::$errors['read']++;
-
-         return false;
+         return $this->fail($Socket, 'read', $input);
       }
 
       // @ On success
@@ -126,21 +136,25 @@ class Packages implements Web\Packages // TODO rename to Packages
          #Connections::$Connections[(int) $Socket]['reads']++;
       }
 
-      // @ Write Data
-      if ($write) {
-         // TODO implement this data write by default?
-         #Server::$Event->add($Socket, Server::$Event::EVENT_WRITE, 'write');
-
-         $this->write($Socket);
+      // @ Write/Decode Data
+      if (Server::$Application) {
+         Server::$Application::decode($Socket, $this);
       }
+
+      // TODO implement this data write by default?
+      #Server::$Event->add($Socket, Server::$Event::EVENT_WRITE, 'write');
+      self::write($Socket);
 
       return true;
    }
-   public function write (&$Socket, bool $handle = true, ? int $length = null) : bool
+   public function write (&$Socket, ? int $length = null) : bool
    {
       // @ Set Output
-      if ($handle)
+      if (Server::$Application) {
+         self::$output = Server::$Application::encode($Socket, $this);
+      } else {
          self::$output = (SAPI::$Handler)(...$this->callbacks);
+      }
 
       try {
          $buffer = self::$output;
@@ -164,42 +178,11 @@ class Packages implements Web\Packages // TODO rename to Packages
 
       // @ Check issues
       if ($written === 0 || $written === false) {
-         try {
-            $eof = @feof($Socket);
-         } catch (\Throwable) {
-            $eof = false;
-         }
-
-         // @ Check connection reset by peer?
-         if ($eof) {
-            #$this->log('Failed to write data: End-of-file!' . PHP_EOL);
-            $this->Connections->close($Socket);
-            return false;
-         }
-
-         // @ Check connection close intention by server?
-         if ($written === 0) {
-            $this->log('Failed to write data: 0 byte written!' . PHP_EOL);
-         }
-
-         if (is_resource($Socket) && get_resource_type($Socket) === 'stream') {
-            $this->log('Failed to write data: closing connection...' . PHP_EOL);
-            $this->Connections->close($Socket);
-            return false;
-         }
-
-         Connections::$errors['write']++;
-
-         return false;
+         return $this->fail($Socket, 'write', $written);
       }
 
       // @ On success
-      if ($handle) {
-         #Server::$Event->del($Socket, Server::$Event::EVENT_WRITE);
-
-         // Reset Input Buffer
-         self::$input = '';
-      }
+      #Server::$Event->del($Socket, Server::$Event::EVENT_WRITE);
 
       // @ Set Stats (disable to max performance in benchmarks)
       if (Connections::$stats) {

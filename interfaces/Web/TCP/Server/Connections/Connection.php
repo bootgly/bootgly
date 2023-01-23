@@ -67,8 +67,7 @@ class Connection # extends Packages
       #$this->reads = 0;
       $this->writes = 0;
 
-      $context = stream_context_get_options($Socket);
-      if ( isSet($context['ssl']) && $this->handshake() === false) {
+      if ( isSet(Server::$context['ssl']) && $this->handshake() === false) {
          return false;
       }
 
