@@ -55,6 +55,11 @@ class Select implements Event\Loops
    {
       switch ($flag) {
          case self::EVENT_ACCEPT:
+            // System call select exceeded the maximum number of connections 1024, please install event/libevent extension for more connections.
+            if (count($this->reads) >= 1000) {
+               return false;
+            }
+
             $id = (int) $Socket;
 
             $this->reads[$id] = $Socket;
@@ -161,9 +166,9 @@ class Select implements Event\Loops
          if ($read || $write || $except) {
             try {
                // Waiting $this->timeout for read / write / excepts events.
-               $connections = @stream_select($read, $write, $except, null);
+               $streams = @stream_select($read, $write, $except, null);
             } catch (\Throwable) {
-               $connections = false;
+               $streams = false;
             }
          } else {
             // @ Sleep for 1 second and continue (Used to pause the Server)
@@ -171,7 +176,7 @@ class Select implements Event\Loops
             continue;
          }
 
-         if ($connections === false || $connections === 0) {
+         if ($streams === false || $streams === 0) {
             continue;
          }
 
@@ -185,11 +190,12 @@ class Select implements Event\Loops
                   $this->Connections->accept($Socket);
                } else if ( isSet($this->reading[$id]) ) {
                   $Package = &$this->reading[$id];
-                  $Package->read($Socket);
+                  $Package->handle($Socket);
                }
             }
          }
 
+         /*
          if ($write) {
             foreach ($write as $Socket) {
                $id = (int) $Socket;
@@ -200,6 +206,7 @@ class Select implements Event\Loops
                }
             }
          }
+         */
 
          // TODO add timer ticks?
          // if ($except) {}

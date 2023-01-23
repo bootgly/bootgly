@@ -89,8 +89,11 @@ abstract class Packages implements Web\Packages
 
       return true;
    }
-   public function read (&$Socket) : bool
+
+   public function handle (&$Socket) : bool
    {
+      // @?! --- Read ---
+
       try {
          $input = @fread($Socket, 65535);
       } catch (\Throwable) {
@@ -103,7 +106,6 @@ abstract class Packages implements Web\Packages
       // Close connection if input data is empty to avoid unnecessary loop
       if ($input === '') {
          #$this->log('Failed to read buffer: input data is empty!' . PHP_EOL, self::LOG_WARNING_LEVEL);
-         // Server::$Event->del($Socket, Server::$Event::EVENT_WRITE);
          $this->Connection->close();
          return false;
       }
@@ -135,6 +137,7 @@ abstract class Packages implements Web\Packages
          #Connections::$Connections[(int) $Socket]['reads']++;
       }
 
+      $length = null;
       // @ Write/Decode Data
       if (Server::$Application) {
          $decoded = Server::$Application::decode($this);
@@ -144,14 +147,12 @@ abstract class Packages implements Web\Packages
          }
       }
 
-      // TODO implement this data write by default?
-      #Server::$Event->add($Socket, Server::$Event::EVENT_WRITE, 'write');
-      self::write($Socket);
+      // @?! --- Write ---
 
-      return true;
-   }
-   public function write (&$Socket, ? int $length = null) : bool
-   {
+      #if ($this->Connection->status === $this->Connection::STATUS_CLOSING) {
+      #   return false;
+      #}
+
       // @ Set Output
       if (Server::$Application) {
          self::$output = Server::$Application::encode($this);
@@ -162,16 +163,22 @@ abstract class Packages implements Web\Packages
       try {
          $buffer = self::$output;
 
+         $written = 0;
+
          while (true) {
-            $written = @fwrite($Socket, $buffer, $length);
+            $sent = @fwrite($Socket, $buffer, $length);
 
-            if ($written === false)
+            if ($sent === false) {
                break;
+            }
 
-            if ($written < $length) {
-               $buffer = substr($buffer, $written);
-               $length -= $written;
+            if ($sent < $length) { // @ Stream
+               $buffer = substr($buffer, $sent);
+               $length -= $sent;
+               $written += $sent;
             } else {
+               $written += $sent;
+
                break;
             }
          }
