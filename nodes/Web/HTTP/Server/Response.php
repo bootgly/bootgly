@@ -14,29 +14,23 @@ namespace Bootgly\Web\HTTP\Server;
 use const Bootgly\HOME_DIR;
 use Bootgly\File;
 use Bootgly\Bootgly;
-use Bootgly\SAPI;
-use Bootgly\Web;
-use Bootgly\Web\HTTP;
 use Bootgly\Web\HTTP\Server;
-use Bootgly\Web\HTTP\Server\_\Connections\Data;
-use Bootgly\Web\HTTP\Server\Request;
 use Bootgly\Web\HTTP\Server\Response\Content;
 use Bootgly\Web\HTTP\Server\Response\Meta;
 use Bootgly\Web\HTTP\Server\Response\Header;
-use Bootgly\Web\HTTP\Server\Router;
 
 
 class Response
 {
    // ! HTTP
-   public object $Meta;
-   public object $Header;
-   public object $Content;
+   public Meta $Meta;
+   public Header $Header;
+   public Content $Content;
 
    // * Config
    public bool $debugger;
    // * Data
-   public string $raw = '';
+   public string $raw;
 
    public $body;
 
@@ -55,8 +49,6 @@ class Response
 
    public function __construct (? array $resources = null)
    {
-      // $this->Web = &$Web;
-
       // ! HTTP
       $this->Meta = new Meta;
       $this->Content = new Content;
@@ -65,6 +57,8 @@ class Response
       // * Config
       $this->debugger = true;
       // * Data
+      $this->raw = '';
+
       $this->body = null;
 
       $this->source = null; // TODO rename to resource?
@@ -74,22 +68,21 @@ class Response
       $this->resources = $resources !== null ? $resources : ['JSON', 'JSONP', 'View', 'HTML/pre'];
       // * Meta
       $this->resource = null;
-
+      // @ Buffer Status
       $this->initied = false;
       $this->prepared = true;
       $this->processed = true;
-
       $this->sent = false;
    }
    public function __get ($name)
    {
       switch ($name) {
          case 'code':
-            return http_response_code();
+            return \PHP_SAPI !== 'cli' ? http_response_code() : $this->Meta->code;
          case 'headers':
             return $this->Header->fields;
-         default:
-            $this->resource = $name; // TODO $this->Resource->set($name); ???
+         default: // @ Construct resource
+            $this->resource = $name;
 
             $this->prepared = false;
             $this->processed = false;
@@ -103,17 +96,8 @@ class Response
    {
       switch ($name) {
          case 'code':
-            return http_response_code($value);
-         case 'resource':
-            $this->resource = $value;
-
-            $this->prepared = false;
-            $this->processed = false;
-
-            $this->prepare($this->resource);
-
-            return true;
-         default:
+            return \PHP_SAPI !== 'cli' ? http_response_code($value) : $this->Meta->status = $value;
+         default: // @ Set custom resource
             // $this->resources[$name] = $value; // TODO
       }
    }
@@ -140,8 +124,8 @@ class Response
             }
 
             if ($view !== null) {
-               $this->prepare('views');
-               $this->process($view, 'views');
+               $this->prepare('view');
+               $this->process($view, 'view');
             }
 
             return $this->render($data, $callback);
@@ -156,7 +140,7 @@ class Response
          $this->raw = $raw;
 
          return $this;
-      } else if ($x === null && $content) {
+      } else if ($x === null && $content && PHP_SAPI === 'cli') {
          $this->Content->raw = $content;
 
          return $this;
@@ -167,14 +151,60 @@ class Response
       return $this->process($x);
    }
 
-   public function output (Request $Request, Response $Response, Router $Router)
+   public function append ($body)
    {
-      try {
-         (SAPI::$Handler)($Request, $Response, $Router);
-      } catch (\Throwable) {
-         $this->Meta->status = 500; // @ 500 HTTP Server Error
+      $this->initied = true;
+      $this->body .= $body . "\n";
+   }
+
+   private function render (? array $data = null, ? \Closure $callback = null)
+   {
+      $File = $this->body;
+
+      if ($File === null) {
+         return;
       }
 
+      // @ Set variables
+      /**
+       * @var \Bootgly\Web $Web
+       */
+      $Request = &Server::$Request;
+      $Response = &Server::$Response;
+      $Route = &Server::$Router->Route;
+      // TODO add variables dinamically according to loaded modules and loaded web classes
+
+      $API = Server::$Web->API ?? null;
+      $App = Server::$Web->App ?? null;
+
+      // @ Output/Buffer start()
+      ob_start();
+
+      try {
+         // @ Isolate context with anonymous static function
+         (static function (string $__file__, ?array $__data__)
+            use ($Request, $Response, $Route, $API, $App) {
+            if ($__data__ !== null) {
+               extract($__data__);
+            }
+            require $__file__;
+         })($File, $data);
+      } catch (\Exception $Exception) {}
+
+      // @ Set $Response properties
+      $this->source = 'content';
+      $this->type = '';
+      $this->body = ob_get_clean(); // Output/Buffer clean()->get()
+
+      // @ Call callback
+      if ($callback !== null && $callback instanceof \Closure) {
+         $callback($this->body, $Exception);
+      }
+
+      return $this;
+   }
+   public function output ()
+   {
       // ? Response Content
       $this->Content->length = strlen($this->Content->raw);
       // ? Response Header
@@ -193,6 +223,7 @@ class Response
 
       return $this->raw;
    }
+
    public function reset ()
    {
       $this->raw = '';
@@ -252,7 +283,6 @@ class Response
 
       return $this;
    }
-
    public function process ($data, ?string $resource = null)
    {
       if ($resource === null) {
@@ -263,7 +293,7 @@ class Response
 
       switch ($resource) {
          // @ File
-         case 'views':
+         case 'view':
             $File = new File(Bootgly::$Project->path . 'views/' . $data);
             $this->body   = $File;
             $this->source = 'file';
@@ -273,27 +303,32 @@ class Response
          // @ Content
          case 'json':
          case 'jsonp':
-            if (is_array($data)) {
+            if ( is_array($data) ) {
                $this->body = $data;
                break;
             }
+
             $this->body = json_decode($data, true);
+
             break;
          case 'pre':
             if ($data === null) {
                $data = $this->body;
             }
+
             $this->body = '<pre>'.$data.'</pre>';
+
             break;
          case 'raw':
             $this->body = $data;
+
             break;
 
          default:
             if ($resource) {
-               // TODO inject Resource with custom process() created by user
+               // TODO Inject resource with custom process() created by user
             } else {
-               switch (getType($data)) { // $_Data->type
+               switch ( getType($data) ) { // _()->type
                   case 'string':
                      // TODO check if string is a valid path
                      if ($data[0] === '/') {
@@ -312,6 +347,7 @@ class Response
                   case 'object':
                      if ($data instanceof File) {
                         $File = $data;
+
                         $this->body   = $File;
                         $this->source = 'file';
                         $this->type   = $File->extension;
@@ -328,60 +364,8 @@ class Response
 
       return $this;
    }
-   public function append ($body)
-   {
-      $this->initied = true;
-      $this->body .= $body . "\n";
-   }
 
-   private function render (? array $data = null, ? \Closure $callback = null)
-   {
-      $File = $this->body;
-
-      if ($File === null) {
-         return;
-      }
-
-      // Set variables
-      /**
-       * @var \Bootgly\Web $Web
-       */
-      #$Web = &$this->Web;
-      $Request = &Server::$Request;
-      $Response = &Server::$Response;
-      $Route = &Server::$Router->Route;
-      // TODO add variables dinamically according to loaded modules and loaded web classes
-
-      #$API = &$Web->API ?? null;
-      #$App = &$Web->App ?? null;
-
-      // Output/Buffer start()
-      ob_start();
-
-      try {
-         // Isolate context with anonymous static function
-         (static function (string $__file__, ?array $__data__)
-            use ($Web, $Request, $Response, $Route) {
-            if ($__data__ !== null) {
-               extract($__data__);
-            }
-            require $__file__;
-         })($File, $data);
-      } catch (\Exception $Exception) {}
-
-      // Set $Response properties
-      $this->source = 'content';
-      $this->type = '';
-      $this->body = ob_get_clean(); // Output/Buffer clean()->get()
-
-      // Call callback
-      if ($callback !== null && $callback instanceof \Closure) {
-         $callback($this->body, $Exception);
-      }
-
-      return $this;
-   }
-   public function send ($body = null, ...$options): void
+   public function send ($body = null, ...$options): self
    {
       if ($this->processed === false) {
          $this->process($body, $this->resource);
@@ -392,26 +376,32 @@ class Response
          $body = $this->body;
       }
 
+      // TODO refactor. Use file resources.
       switch ($this->source) {
          case 'content':
+            // @ Set body/content
             switch ($this->type) {
                case 'application/json':
                case 'json':
-                  header('Content-Type: application/json', true, $this->code); // TODO move to prepare or process
-                  print json_encode($body, $options[0] ?? 0);
+                  // TODO move to prepare or process
+                  $this->Header->set('Content-Type', 'application/json');
+
+                  $body = json_encode($body, $options[0] ?? 0);
+
                   break;
                case 'jsonp':
-                  header('Content-Type: application/json', true, $this->code); // TODO move to prepare or process
-                  print Server::$Request->queries['callback'].'('.json_encode($body).')';
-                  break;
+                  // TODO move to prepare or process
+                  $this->Header->set('Content-Type', 'application/json');
 
-               default:
-                  print $body;
+                  $body = Server::$Request->queries['callback'].'('.json_encode($body).')';
+
+                  break;
             }
+
             break;
          case 'file':
             if ($body === false || $body === null) {
-               return;
+               return $this;
             }
 
             if ($body instanceof File) {
@@ -419,51 +409,72 @@ class Response
             }
 
             if ($File->readable === false) {
-               return;
+               return $this;
             }
 
+            // @ Set body/content
             switch ($this->type) {
                case 'image/x-icon':
                case 'ico':
-                  header('Content-Type: image/x-icon'); // TODO move to prepare or process
-                  header('Content-Length: ' . $File->size); // TODO move to prepare or process
-                  print $File->contents;
-                  $this->end();
+                  $this->Header->set('Content-Type', 'image/x-icon');
+
+                  if (\PHP_SAPI !== 'cli') {
+                     $this->Header->set('Content-Length', $File->size);
+                  }
+
+                  $body = $File->contents;
+
                   break;
 
                default: // Dynamic (PHP)
-                  #$Web = &$this->Web;
+                  // @ Output/Buffer start()
+                  ob_start();
 
                   $Request = &Server::$Request;
                   $Response = &Server::$Response;
                   $Route = &Server::$Router->Route;
 
                   // TODO add variables dinamically according to loaded modules and loaded web classes
-                  #$API = &$this->Web->API ?? null;
-                  #$App = &$this->Web->App ?? null;
+                  $API = Server::$Web->API ?? null;
+                  $App = Server::$Web->App ?? null;
 
-                  // Isolate context with anonymous static function
+                  // @ Isolate context with anonymous static function
                   (static function (string $__file__)
-                     use ($Request, $Response, $Route) {
+                     use ($Request, $Response, $Route, $API, $App) {
                      require $__file__;
                   })($File);
+
+                  $body = ob_get_clean(); // @ Output/Buffer clean()->get()
             }
+
             break;
          default: // * HTTP Status Code || (string) $body
             if ($body === null) {
                $this->end();
+               return $this;
             }
 
             if (is_int($body) && $body > 99 && $body < 600) {
                $code = $body;
-               $this->body = null;
+
+               $body = '';
+               $this->body = '';
+
                $this->code = $code;
-            } else {
-               print $body;
             }
       }
 
+      // @ Output
+      if (\PHP_SAPI !== 'cli') {
+         print $body ?? $this->body;
+      } else {
+         $this->Content->raw = $body ?? $this->body;
+         $this->output();
+      }
+
       $this->end();
+
+      return $this;
    }
    public function upload ($content = null)
    {
@@ -514,6 +525,9 @@ class Response
    public function end ($status = null)
    {
       $this->sent = true;
-      exit($status);
+
+      if (\PHP_SAPI !== 'cli') {
+         exit($status);
+      }
    }
 }
