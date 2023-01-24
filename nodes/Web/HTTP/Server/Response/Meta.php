@@ -80,6 +80,7 @@ class Meta
    private int|string $status;
    // * Meta
    private string $raw;
+   private int $code; // @ status code
 
 
    public function __construct ()
@@ -89,18 +90,31 @@ class Meta
       $this->protocol = 'HTTP/1.1';
       $this->status = '200 OK';
       // * Meta
-      // @ raw
       $this->reset();
    }
    public function __get (string $name)
    {
-      return $this->$name;
+      switch ($name) {
+         case 'code':
+            if ( isSet($this->code) && $this->code !== 0 ) {
+               return $this->code;
+            }
+
+            $code = array_search($this->status, self::PHRASES);
+            $this->code = $code;
+
+            break;
+
+         default:
+            return $this->$name;
+      }
    }
    public function __set (string $name, $value)
    {
       switch ($name) {
          case 'raw':
             break;
+
          case 'status':
             $this->status = match ($value) {
                (int) $value => $value . ' ' . self::PHRASES[$value],
@@ -110,6 +124,7 @@ class Meta
             $this->reset();
 
             break;
+
          default:
             $this->$name = $value;
       }
@@ -117,6 +132,9 @@ class Meta
 
    public function reset () // @ raw
    {
+      // Raw
       $this->raw = $this->protocol . ' ' . $this->status;
+      // Code
+      unSet($this->code);
    }
 }
