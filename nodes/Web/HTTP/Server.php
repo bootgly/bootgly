@@ -10,7 +10,7 @@
 
 namespace Bootgly\Web\HTTP;
 
-
+use Bootgly\SAPI;
 use Bootgly\Web;
 use Bootgly\Web\TCP;
 
@@ -21,7 +21,7 @@ use Bootgly\Web\HTTP\Server\Router;
 
 class Server extends TCP\Server
 {
-   public Web $Web;
+   public static Web $Web;
 
    // * Meta
    public readonly array $versions;
@@ -33,7 +33,7 @@ class Server extends TCP\Server
 
    public function __construct (Web $Web)
    {
-      $this->Web = $Web; // TODO make static ?
+      self::$Web = $Web;
 
       // * Meta
       $this->versions = [ // @ HTTP 1.1
@@ -85,16 +85,21 @@ class Server extends TCP\Server
          // @ Reset HTTP Request/Response Data
          $Request->reset();
          $Response->reset();
-
-         // @ Reset Buffer I/O
-         #$Package::$input = '';
-         #$Package::$output = '';
       } else {
+         // TODO check if Response raw is static or dynamic
          return $Response->raw;
       }
 
       // ! Response
+      // @ Invoke SAPI Closure
+      try {
+         (SAPI::$Handler)($Request, $Response, $Router);
+      } catch (\Throwable $Throwable) {
+         echo $Throwable->getMessage() . PHP_EOL;
+         $Response->Meta->status = 500; // @ Set 500 HTTP Server Error Response
+      }
+
       // @ Output HTTP Response
-      return $Response->output($Request, $Response, $Router); // @ Return Response raw
+      return $Response->output(); // @ Return Response raw
    }
 }
