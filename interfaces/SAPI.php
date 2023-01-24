@@ -15,6 +15,7 @@ use Closure;
 use Bootgly\{
    SAPI\Environment
 };
+use Bootgly\Web\HTTP\Server;
 
 
 class SAPI
@@ -53,6 +54,8 @@ class SAPI
             }
          }
 
+         // @ Clear Response cache
+         Server::$Response->reset();
          // @ Load file
          self::$Handler = require(self::$sapi);
       }
