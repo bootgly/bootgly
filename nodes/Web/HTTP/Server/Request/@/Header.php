@@ -17,6 +17,7 @@ class Header
    protected string $raw;
    public array $fields;
    // * Meta
+   public bool $built;
    public null|int|false $length;
 
 
@@ -30,8 +31,12 @@ class Header
 
       if ($fields !== false) {
          $fields = array_change_key_case($fields, CASE_LOWER);
+
+         $this->built = true;
       } else {
          $fields = [];
+
+         $this->built = false;
       }
 
       // * Data
@@ -43,7 +48,7 @@ class Header
    {
       switch ($name) {
          case 'raw':
-            if ( isSet($this->raw) ) {
+            if ( isSet($this->raw) && $this->raw !== '' ) {
                return $this->raw;
             }
 
@@ -51,10 +56,12 @@ class Header
             foreach ($this->fields as $name => $value) {
                $raw .= "$name: $value\r\n";
             }
+
             return $raw;
+         case 'fields':
+            return $this->fields;
          default:
-            $name = strtolower($name);
-            return @$this->fields[$name];
+            return $this->get($name);
       }
    }
    public function __set (string $name, string $value)
@@ -63,6 +70,8 @@ class Header
          case 'raw':
             $this->raw = $value;
             break;
+         case 'fields':
+            break;
          default:
             $this->fields[$name] = $value;
       }
@@ -70,6 +79,39 @@ class Header
 
    public function get (string $name)
    {
-      return @$this->$name;
+      $this->build();
+
+      return (string) @$this->fields[$name] ?? (string) @$this->fields[strtolower($name)];
+   }
+
+   public function build ()
+   {
+      if ($this->built) {
+         return false;
+      }
+
+      $fields = explode("\r\n", $this->raw);
+
+      foreach ($fields as $field) {
+         if (strpos($field, ':') !== false) {
+
+            @[$key, $value] = explode(':', $field, 2);
+
+            $value = ltrim($value);
+         } else {
+            $key = $field;
+            $value = '';
+         }
+
+         if ( isSet($this->fields[$key]) ) {
+            $this->fields[$key] = "{$this->fields[$key]},$value";
+         } else {
+            $this->fields[$key] = $value;
+         }
+      }
+
+      $this->built = true;
+
+      return true;
    }
 }
