@@ -15,6 +15,7 @@ use Closure;
 
 use Bootgly\Path;
 
+use Bootgly\Web\TCP\Server\Packages;
 use Bootgly\Web\HTTP\Server;
 use Bootgly\Web\HTTP\Server\_\ {
    Meta,
@@ -46,11 +47,11 @@ use Bootgly\Web\HTTP\Server\Request\Session;
  * @property string $identifier    (URI) /test/foo?query=abc&query2=xyz
  * @property string $locator       (URL) /test/foo
  * @property string $name          (URN) foo
- * ? Path
+ * ? Meta / Resource / Path
  * @property object $Path
  * @property string $path          /test/foo
  * @property array $paths          ['test', 'foo']
- * ? Query
+ * ? Meta / Resource / Query
  * @property object $Query
  * @property string $query          query=abc&query2=xyz
  * @property array $queries        ['query' => 'abc', 'query2' => 'xyz']
@@ -92,9 +93,6 @@ class Request
    // * Meta
    // ...
    // public string $length;
-   private bool $meta;
-   private bool $header;
-   private bool $content;
 
    public Session $Session;
 
@@ -418,7 +416,7 @@ class Request
       }
    }
 
-   public function input ($Package) : int // @ return Request Content length
+   public function input (Packages $Package) : int // @ return Request Content length
    {
       static $input = []; // @ Instance cache variable
 
@@ -468,6 +466,7 @@ class Request
             $Package->reject("HTTP/1.1 405 Method Not Allowed\r\n\r\n");
             return 0;
       }
+
       // @ Set Meta
       // raw
       $this->Meta->raw = $meta;
