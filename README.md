@@ -4,7 +4,7 @@
 
 🚧 Do not use it in production environments. The alpha version hasn't even been released yet. 🚧
 
-*Temporary repository created for Github Accelerator.*
+*Repository created for Github Accelerator.*
 
 First beta release is planned for mid-year 2023.
 
@@ -59,6 +59,10 @@ or with Docker *(-10% performance)*:
 `docker run -it --network host bootglyphpframework`
 
 ---
+
+## 💖 Sponsorship
+
+I'm devote my time and energy to this project, but isn't sustainable if I don't have a minimum source of financial income. If you like this project or depend on it for your stack to work, consider sponsoring it.
 
 ## 📃 License
 
