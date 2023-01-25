@@ -64,6 +64,8 @@ or with Docker *(-10% performance)*:
 
 I'm devote my time and energy to this project, but isn't sustainable if I don't have a minimum source of financial income. If you like this project or depend on it for your stack to work, consider sponsoring it.
 
+Your sponsorship will always keep the project **up to date** with **new features** and **improvements** / **bug fixes**.
+
 ## 📃 License
 
 The Bootgly PHP Framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
