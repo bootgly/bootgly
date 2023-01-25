@@ -32,10 +32,6 @@ use Bootgly\Web\HTTP\Server\Request\Session;
  * @property string $port          52252
  * 
  * @property string $scheme        http, https
- * @property string $host          v1.lab.slayer.tech
- * @property string $domain        slayer.tech
- * @property string $subdomain     v1.lab
- * @property array $subdomains     ['lab', 'v1']
  * 
  * ! HTTP
  * @property string $raw
@@ -47,17 +43,17 @@ use Bootgly\Web\HTTP\Server\Request\Session;
  * @property string $identifier    (URI) /test/foo?query=abc&query2=xyz
  * @property string $locator       (URL) /test/foo
  * @property string $name          (URN) foo
- * ? Meta / Resource / Path
+ * @ Path
  * @property object $Path
  * @property string $path          /test/foo
  * @property array $paths          ['test', 'foo']
- * ? Meta / Resource / Query
+ * @ Query
  * @property object $Query
  * @property string $query          query=abc&query2=xyz
  * @property array $queries        ['query' => 'abc', 'query2' => 'xyz']
  * ? Meta / Authentication
- * @property string $user          slayer
- * @property string $password      tech
+ * @property string $user          boot
+ * @property string $password      gly
  * ? Header
  * @property object Header         ->{'X-Header'}
  * @property string $language      pt-BR
@@ -74,9 +70,15 @@ use Bootgly\Web\HTTP\Server\Request\Session;
  * 
  * 
  * * Meta
+ * @property string $host          v1.lab.bootgly.com
+ * @property string $domain        bootgly.com
+ * @property string $subdomain     v1.lab
+ * @property array $subdomains     ['lab', 'v1']
+ * 
  * @property string $on            2020-03-10 (Y-m-d)
  * @property string $at            17:16:18 (H:i:s)
  * @property int $timestamp        1586496524
+ * 
  * @property bool $secure          true
  * @property bool $fresh           true
  * @property bool $stale           false
@@ -120,41 +122,37 @@ class Request
 
          // * Data
          case 'ip': // TODO IP->...
-         case 'address':
-            if (@$this->headers['cf-connecting-ip']) {
+         case 'address': // @ CLI OK | Non-CLI OK
+            // @ Parse CloudFlare remote ip headers
+            if ( isSet($this->headers['cf-connecting-ip']) ) {
                return $this->headers['cf-connecting-ip'];
             }
+
             return $_SERVER['REMOTE_ADDR'];
-         case 'port':
+         case 'port': // @ CLI OK | Non-CLI OK
             return $_SERVER['REMOTE_PORT'];
 
-         case 'scheme':
-            return $this->scheme = $_SERVER['HTTP_X_FORWARDED_PROTO'] ?? (!empty($_SERVER['HTTPS']) ? "https" : "http");
-         case 'host': // TODO create secure method to get host
-            return $this->host = $_SERVER['HTTP_HOST'];
-         case 'hostname':
-            return $this->host;
+         case 'scheme': // @ CLI ? | Non-CLI OK?
+            if (PHP_SAPI !== 'cli') {
+               if ( isSet($_SERVER['HTTP_X_FORWARDED_PROTO']) ) {
+                  $scheme = $_SERVER['HTTP_X_FORWARDED_PROTO'];
+               } else if ( ! empty($_SERVER['HTTPS']) ) {
+                  $scheme = 'https';
+               } else {
+                  $scheme = 'http';
+               }
+            } else {
+               // TODO CLI
+               $scheme = '';
+            }
 
-         case 'domain': // TODO validate all cases
-            $pattern = "/(?P<domain>[a-z0-9][a-z0-9\-]{1,63}\.[a-z\.]{2,6})$/i";
-            if ( preg_match($pattern, $this->host, $matches) ){
-               return $this->domain = @$matches['domain'];
-            } break;
-
-         case 'subdomain': // TODO validate all cases
-            return $this->subdomain = rtrim(strstr($this->host, $this->domain, true), '.');
-         case 'subdomains':
-            return $this->subdomains = explode('.', $this->subdomain);
-         // TODO Domain with __String/Domain
-         // TODO Domain->sub, Domain->second (second-level), Domain->top (top-level), Domain->root, tld, ...
+            return $this->scheme = $scheme;
 
          // ! HTTP
          case 'raw': // TODO refactor
             $raw = "$this->method $this->uri $this->protocol\r\n";
-
             $raw .= $this->Header->raw;
             $raw .= "\r\n";
-
             $raw .= $this->input;
 
             $this->raw = $raw;
@@ -309,6 +307,35 @@ class Request
             // TODO implement
             return $this->Content->Downloader;
          // * Meta
+         case 'host': // @ CLI OK | Non-CLI OK?
+            if (\PHP_SAPI !== 'cli') {
+               // TODO create secure method to get host
+               $host = $_SERVER['HTTP_HOST'];
+            } else {
+               // ! FIX bad performance
+               $host = $this->Header->get('Host');
+            }
+
+            return $this->host = $host;
+         case 'hostname': // alias
+            return $this->host;
+         case 'domain':
+            // TODO validate all cases
+            $pattern = "/(?P<domain>[a-z0-9][a-z0-9\-]{1,63}\.[a-z\.]{2,6})(:[\d]+)?$/i";
+
+            if ( preg_match($pattern, $this->host, $matches) ){
+               return $this->domain = @$matches['domain'];
+            }
+
+            break;
+
+         case 'subdomain':
+            // TODO validate all cases
+            return $this->subdomain = rtrim(strstr($this->host, $this->domain, true), '.');
+         case 'subdomains':
+            return $this->subdomains = explode('.', $this->subdomain);
+         // TODO Domain with __String/Domain
+         // TODO Domain->sub, Domain->second (second-level), Domain->top (top-level), Domain->root, tld, ...
          case 'on':
             return $this->on = date("Y-m-d");
          case 'at':
@@ -410,6 +437,7 @@ class Request
          case 'base': // TODO refactor
             unSet($this->url);
             unSet($this->locator);
+
             return $this->base = $value;
          default:
             return $this->$name = $value;
@@ -440,6 +468,10 @@ class Request
 
          return 0;
       }
+
+      // @ Set Request data
+      $_SERVER['REMOTE_ADDR'] = $Package->Connection->ip;
+      $_SERVER['REMOTE_PORT'] = $Package->Connection->port;
 
       // @ Boot Request Content length
       $length = $this->Content->position + 4;
@@ -521,9 +553,9 @@ class Request
    public function reset ()
    {
       // ? Meta
-      unset($this->method);
-      unset($this->uri);
-      unset($this->protocol);
+      unSet($this->method);
+      unSet($this->uri);
+      unSet($this->protocol);
 
       // ? Meta
       $this->Meta->__construct();
@@ -545,17 +577,17 @@ class Request
 
    public function range (int $size, string $header, array $options = ['combine' => true])
    {
-      // Validate
+      // @ Validate
       $equalIndex = strpos($header, '=');
       if ($equalIndex === false) {
          return -2; // Malformed header string
       }
 
-      // Split ranges
+      // @ Split ranges
       $headerRanges = explode(',', substr($header, $equalIndex + 1));
       $ranges = [];
 
-      // Iterate ranges
+      // @ Iterate ranges
       for ($i = 0; $i < count($headerRanges); $i++) {
          $range = explode('-', $headerRanges[$i]);
          $start = (int) $range[0];
@@ -568,7 +600,7 @@ class Request
             $end = $size - 1;
          }
 
-         // Limit last-byte-pos to current length
+         // @ Limit last-byte-pos to current length
          if ($end > $size - 1) {
             $end = $size - 1;
          }
