@@ -265,6 +265,7 @@ class Response
 
       return $this;
    }
+
    public function process ($data, ?string $resource = null)
    {
       if ($resource === null) {
@@ -345,6 +346,30 @@ class Response
       $this->resource = null;
 
       return $this;
+   }
+   public function compress (string $raw, string $method = 'gzip', int $level = 9)
+   {
+      $encoded = false;
+      $deflated = false;
+
+      switch ($method) {
+         case 'gzip':
+            $encoded = gzencode($raw, $level);
+            break;
+         case 'deflate':
+            $deflated = gzdeflate($raw, $level);
+            break;
+      }
+
+      if ($encoded) {
+         $this->Header->set('Content-Encoding', 'gzip');
+         return $encoded;
+      } else if ($deflated) {
+         $this->Header->set('Content-Encoding', 'deflate');
+         return $deflated;
+      }
+
+      return false;
    }
 
    public function send ($body = null, ...$options): self
@@ -487,7 +512,7 @@ class Response
          } else {
             $this->Content->raw = $File->read($File::CONTENTS_READ_METHOD);
 
-            if ($File->size > 2 * 1024 * 1024) {
+            if ($File->size > 2 * 1024 * 1024) { // @ Stream if the file is larger than 2 MB
                $this->stream = true;
             }
          }
@@ -509,7 +534,7 @@ class Response
       $this->raw = <<<HTTP_RAW
       {$this->Meta->raw}
       {$this->Header->raw}
-      
+
       {$this->Content->raw}
       HTTP_RAW;
 
