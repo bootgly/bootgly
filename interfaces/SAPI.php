@@ -54,8 +54,11 @@ class SAPI
             }
          }
 
-         // @ Clear Response cache
-         Server::$Response->reset();
+         if ( isSet(Server::$Response) ) {
+            // @ Clear Response cache
+            Server::$Response->reset();
+         }
+
          // @ Load file
          self::$Handler = require(self::$sapi);
       }
