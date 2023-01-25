@@ -23,6 +23,7 @@ use Bootgly\Web\TCP\Server;
 use Bootgly\Web\TCP\Server\Connections;
 use Bootgly\Web\TCP\Server\Connections\Connection;
 
+
 abstract class Packages implements Web\Packages
 {
    use Logging;
@@ -39,6 +40,7 @@ abstract class Packages implements Web\Packages
    public static string $output;
    // * Meta
    // @ Handler
+   public array $handlers;
    public array $callbacks; // TODO move
 
 
@@ -55,6 +57,7 @@ abstract class Packages implements Web\Packages
       self::$output = '';
       // * Meta
       // @ Handler
+      $this->handlers = [];
       $this->callbacks = [&self::$input];
 
       SAPI::boot(true);
@@ -167,8 +170,13 @@ abstract class Packages implements Web\Packages
             $sent = @fwrite($Socket, $initial, $length);
          }
 
+         // @ Stream with file handlers if exists
+         if ( ! empty($this->handlers) ) {
+            throw new \Exception; // TODO use another catch Object
+         }
+
          // @ Set remaining of data if exists
-         if ($sent !== false) {
+         if ($sent) {
             $buffer = substr($buffer, $sent);
             $length = strlen($buffer);
          }
@@ -189,11 +197,13 @@ abstract class Packages implements Web\Packages
                continue; // TODO check EOF?
             } else {
                $written += $sent;
-
                break;
             }
          }
-      } catch (\Throwable) {
+      } catch (\Exception) { // TODO use another catch Object
+         $written = $this->stream($Socket, 0);
+         var_dump($written);
+      } catch (\Error) {
          $written = false;
       }
 
@@ -212,6 +222,65 @@ abstract class Packages implements Web\Packages
       }
 
       return true;
+   }
+   public function stream ($Socket, int $offset = 0, ? int $length = null)
+   {
+      // TODO support to offset
+      // TODO support to send multiple files
+      $length = $this->handlers[0]['size'];
+      $handler = $this->handlers[0]['handler'];
+
+      $sent = 0;
+
+      while ($sent < $length) {
+         $rate = 1 * 1024 * 1024; // @ Set upload speed rate by loop cycle
+
+         // @ Read file from disk
+         try {
+            $buffer = @fread($handler, $rate);
+         } catch (\Throwable) {
+            $buffer = false;
+         }
+
+         if ($buffer === '' || $buffer === false) {
+            @fclose($handler);
+            break;
+         }
+
+         // @ Send part of read file to client
+         $read = strlen($buffer);
+
+         while (true) {
+            try {
+               $written = @fwrite($Socket, $buffer);
+            } catch (\Throwable) {
+               $written = false;
+            }
+
+            if ($written === false || $written === 0) {
+               continue;
+            } else if ($written < $read) {
+               $buffer = substr($buffer, $written);
+               $read = strlen($buffer);
+            } else {
+               $sent += $written;
+               break;
+            }
+         }
+
+         // @ Check End-of-file
+         try {
+            $end = @feof($handler);
+         } catch (\Throwable) {
+            $end = false;
+         }
+
+         if ($end) {
+            break;
+         }
+      }
+
+      return $sent;
    }
 
    public function reject (string $raw)

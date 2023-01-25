@@ -30,6 +30,7 @@ class Response
    // * Config
    public bool $debugger;
    public bool $stream;
+   public array $files;
    // * Data
    public string $raw;
 
@@ -41,7 +42,7 @@ class Response
    public ? array $resources;
    // * Meta
    private ? string $resource;
-   // @ Buffer Status
+   // @ Status
    public bool $initied = false;
    public bool $prepared;
    public bool $processed;
@@ -58,6 +59,7 @@ class Response
       // * Config
       $this->debugger = true;
       $this->stream = false;
+      $this->files = [];
       // * Data
       $this->raw = '';
 
@@ -153,67 +155,20 @@ class Response
       return $this->process($x);
    }
 
-   public function append ($body)
-   {
-      $this->initied = true;
-      $this->body .= $body . "\n";
-   }
-
-   private function render (? array $data = null, ? \Closure $callback = null)
-   {
-      $File = $this->body;
-
-      if ($File === null) {
-         return;
-      }
-
-      // @ Set variables
-      /**
-       * @var \Bootgly\Web $Web
-       */
-      $Request = &Server::$Request;
-      $Response = &Server::$Response;
-      $Route = &Server::$Router->Route;
-      // TODO add variables dinamically according to loaded modules and loaded web classes
-
-      $API = Server::$Web->API ?? null;
-      $App = Server::$Web->App ?? null;
-
-      // @ Output/Buffer start()
-      ob_start();
-
-      try {
-         // @ Isolate context with anonymous static function
-         (static function (string $__file__, ?array $__data__)
-            use ($Request, $Response, $Route, $API, $App) {
-            if ($__data__ !== null) {
-               extract($__data__);
-            }
-            require $__file__;
-         })($File, $data);
-      } catch (\Exception $Exception) {}
-
-      // @ Set $Response properties
-      $this->source = 'content';
-      $this->type = '';
-      $this->body = ob_get_clean(); // Output/Buffer clean()->get()
-
-      // @ Call callback
-      if ($callback !== null && $callback instanceof \Closure) {
-         $callback($this->body, $Exception);
-      }
-
-      return $this;
-   }
-
    public function reset ()
    {
       $this->raw = '';
 
       $this->Meta->__construct();
       $this->Header->__construct();
+      #$this->Content->__construct();
    }
 
+   public function append ($body)
+   {
+      $this->initied = true;
+      $this->body .= $body . "\n";
+   }
    public function prepare (? string $resource = null)
    {
       if ($this->initied === false) {
@@ -344,6 +299,52 @@ class Response
       $this->processed = true;
 
       $this->resource = null;
+
+      return $this;
+   }
+   private function render (? array $data = null, ? \Closure $callback = null)
+   {
+      $File = $this->body;
+
+      if ($File === null) {
+         return;
+      }
+
+      // @ Set variables
+      /**
+       * @var \Bootgly\Web $Web
+       */
+      $Request = &Server::$Request;
+      $Response = &Server::$Response;
+      $Route = &Server::$Router->Route;
+      // TODO add variables dinamically according to loaded modules and loaded web classes
+
+      $API = Server::$Web->API ?? null;
+      $App = Server::$Web->App ?? null;
+
+      // @ Output/Buffer start()
+      ob_start();
+
+      try {
+         // @ Isolate context with anonymous static function
+         (static function (string $__file__, ?array $__data__)
+            use ($Request, $Response, $Route, $API, $App) {
+            if ($__data__ !== null) {
+               extract($__data__);
+            }
+            require $__file__;
+         })($File, $data);
+      } catch (\Exception $Exception) {}
+
+      // @ Set $Response properties
+      $this->source = 'content';
+      $this->type = '';
+      $this->body = ob_get_clean(); // Output/Buffer clean()->get()
+
+      // @ Call callback
+      if ($callback !== null && $callback instanceof \Closure) {
+         $callback($this->body, $Exception);
+      }
 
       return $this;
    }
@@ -497,23 +498,31 @@ class Response
 
       if ($File->readable) {
          // @ Set HTTP headers
-         $this->Header->set('Content-Description', $description);
+         $this->Header->set('Content-Length', $File->size);
          $this->Header->set('Content-Type', 'application/octet-stream');
          $this->Header->set('Content-Disposition', 'attachment; filename="'.$File->basename.'"');
+         $this->Header->set('Content-Description', $description);
          $this->Header->set('Cache-Control', 'no-cache, must-revalidate');
          $this->Header->set('Expires', '0');
          $this->Header->set('Pragma', 'public');
 
          // @ Send File Content
          if (\PHP_SAPI !== 'cli') {
-            $this->Header->set('Content-Length', $File->size);
+            // TODO refactor
             flush();
             $File->read();
          } else {
-            $this->Content->raw = $File->read($File::CONTENTS_READ_METHOD);
-
             if ($File->size > 2 * 1024 * 1024) { // @ Stream if the file is larger than 2 MB
                $this->stream = true;
+
+               $this->Content->length = $File->size;
+
+               $this->files[] = [
+                  'handler' => $File->open('r'),
+                  'size' => $File->size
+               ];
+            } else {
+               $this->Content->raw = $File->read($File::CONTENTS_READ_METHOD);
             }
          }
 
@@ -522,14 +531,16 @@ class Response
 
       return $this;
    }
-   public function output (&$length)
+   public function output ($Package, &$length)
    {
-      // ? Response Content
-      $this->Content->length = strlen($this->Content->raw);
-      // ? Response Header
-      $this->Header->set('Content-Length', $this->Content->length);
-      // ? Response Meta
-      // ...
+      if ($this->Content->raw) {
+         // ? Response Content
+         $this->Content->length = strlen($this->Content->raw);
+         // ? Response Header
+         $this->Header->set('Content-Length', $this->Content->length);
+         // ? Response Meta
+         // ...
+      }
 
       $this->raw = <<<HTTP_RAW
       {$this->Meta->raw}
@@ -541,6 +552,8 @@ class Response
       if ($this->stream) {
          // TODO simplify
          $length = strlen($this->Meta->raw) + strlen($this->Header->raw) + strlen("\r\n\r\n");
+         // TODO check file permission then send unauthorized
+         $Package->handlers = $this->files;
       }
 
       return $this->raw;

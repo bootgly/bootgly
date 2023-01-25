@@ -99,6 +99,6 @@ class Server extends TCP\Server
       }
 
       // @ Output/Stream HTTP Response
-      return $Response->output($length); // @ Return Response raw
+      return $Response->output($Package, $length); // @ Return Response raw
    }
 }
