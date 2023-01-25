@@ -202,7 +202,6 @@ abstract class Packages implements Web\Packages
          }
       } catch (\Exception) { // TODO use another catch Object
          $written = $this->stream($Socket, 0);
-         var_dump($written);
       } catch (\Error) {
          $written = false;
       }
