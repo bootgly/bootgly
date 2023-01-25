@@ -18,6 +18,7 @@ class Meta
 {
    // * Data
    public string $raw;
+
    public string $method;
    public string $uri; // @ Resource
    public string $protocol;
@@ -37,6 +38,7 @@ class Meta
    {
       // * Data
       $this->raw = '';
+
       $this->method = '';
       $this->uri = '';
       $this->protocol = '';

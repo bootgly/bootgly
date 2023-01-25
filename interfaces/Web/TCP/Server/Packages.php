@@ -135,29 +135,45 @@ abstract class Packages implements Web\Packages
          #Connections::$Connections[(int) $Socket]['reads']++;
       }
 
-      // @ Write/Decode Data
-      if (Server::$Application) {
-         Server::$Application::decode($this);
+      // @ Write data
+      if (Server::$Application) { // @ Decode Application Data if exists
+         $input = Server::$Application::decode($this);
       }
 
-      $this->write($Socket);
+      if ($input) {
+         $this->write($Socket);
+      }
 
       return true;
    }
    public function write (&$Socket, ? int $length = null) : bool
    {
-      // @ Set Output
+      // @ Set output buffer
       if (Server::$Application) {
-         self::$output = Server::$Application::encode($this);
+         self::$output = Server::$Application::encode($this, $length);
       } else {
          self::$output = (SAPI::$Handler)(...$this->callbacks);
       }
 
       try {
+         // @ Prepare to send data
          $buffer = self::$output;
-
+         $sent = false;
          $written = 0;
 
+         // @ Send initial part of data
+         if ($length) {
+            $initial = substr($buffer, 0, $length);
+            $sent = @fwrite($Socket, $initial, $length);
+         }
+
+         // @ Set remaining of data if exists
+         if ($sent !== false) {
+            $buffer = substr($buffer, $sent);
+            $length = strlen($buffer);
+         }
+
+         // @ Send entire or remaining of data if exists
          while (true) {
             $sent = @fwrite($Socket, $buffer, $length);
 
@@ -165,10 +181,12 @@ abstract class Packages implements Web\Packages
                break;
             }
 
-            if ($sent < $length) { // @ Stream
+            if ($sent > 0 && $sent < $length) { // @ Stream data
                $buffer = substr($buffer, $sent);
                $length -= $sent;
                $written += $sent;
+            } else if ($sent === 0) {
+               continue; // TODO check EOF?
             } else {
                $written += $sent;
 
@@ -180,7 +198,7 @@ abstract class Packages implements Web\Packages
       }
 
       // @ Check issues
-      if ($written === 0 || $written === false) {
+      if ($written === 0 || $written === false || $sent === false) {
          return $this->fail($Socket, 'write', $written);
       }
 

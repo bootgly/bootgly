@@ -17,7 +17,7 @@ class Content
    // * Data
    private string $raw;
    // * Meta
-   private string $length;
+   private int $length;
 
 
    public function __construct ()
@@ -44,7 +44,7 @@ class Content
             $this->raw = $value;
             break;
          case 'length':
-            $this->length = (string) $value;
+            $this->length = $value;
             break;
       }
    }

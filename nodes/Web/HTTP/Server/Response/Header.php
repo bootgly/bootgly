@@ -67,6 +67,8 @@ class Header
 
    public function reset () // @ raw
    {
+      // ! FIX bad performance
+
       foreach ($this->fields as $name => $value) {
          $this->raw .= "$name: $value\r\n";
       }
@@ -74,9 +76,9 @@ class Header
       $this->raw = rtrim($this->raw);
    }
 
-   public function get (string $name)
+   public function get (string $name) : string
    {
-      return @$this->fields[$name];
+      return (string) @$this->fields[$name] ?? (string) @$this->fields[strtolower($name)];
    }
    public function set (string $field, string $value = '') // TODO refactor
    {

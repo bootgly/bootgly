@@ -73,7 +73,7 @@ class Server extends TCP\Server
       // @ Input HTTP Request
       return $Request->input($Package); // @ Return Request Content length
    }
-   public static function encode ($Package)
+   public static function encode ($Package, &$length)
    {
       // @ Instance callbacks
       $Request = Server::$Request;
@@ -94,12 +94,11 @@ class Server extends TCP\Server
       // @ Invoke SAPI Closure
       try {
          (SAPI::$Handler)($Request, $Response, $Router);
-      } catch (\Throwable $Throwable) {
-         echo $Throwable->getMessage() . PHP_EOL;
+      } catch (\Throwable) {
          $Response->Meta->status = 500; // @ Set 500 HTTP Server Error Response
       }
 
-      // @ Output HTTP Response
-      return $Response->output(); // @ Return Response raw
+      // @ Output/Stream HTTP Response
+      return $Response->output($length); // @ Return Response raw
    }
 }

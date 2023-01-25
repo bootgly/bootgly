@@ -25,6 +25,7 @@ class Connection extends Packages
    public array $timers;
    public int $expiration;
    // * Data
+   // @ Remote
    public string $ip;
    public int $port;
    // * Meta
@@ -48,8 +49,13 @@ class Connection extends Packages
    {
       $this->Socket = $Socket;
 
+      // @ Remote
+      // IP:port
       $peer = stream_socket_get_name($Socket, true);
       @[$ip, $port] = explode(':', $peer, 2); // TODO IPv6
+      // @ Local?
+      // metadata
+      #$metadata = stream_get_meta_data($Socket);
 
       // * Config
       $this->timers = [];

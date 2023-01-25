@@ -387,7 +387,7 @@ class File
       return $this->handle;
    }
 
-   public function read ($method = null)
+   public function read ($method = null, int $offset = 0, ? int $length = null)
    {
       if ($method) {
          $this->method = $method;
@@ -416,7 +416,7 @@ class File
 
          switch ($this->method) {
             case self::CONTENTS_READ_METHOD:
-               return $this->contents = file_get_contents($this->File);
+               return $this->contents = file_get_contents($this->File, false, null, $offset, $length);
                break;
             default:
                return readfile($this->File);

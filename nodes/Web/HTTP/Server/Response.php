@@ -29,6 +29,7 @@ class Response
 
    // * Config
    public bool $debugger;
+   public bool $stream;
    // * Data
    public string $raw;
 
@@ -56,6 +57,7 @@ class Response
 
       // * Config
       $this->debugger = true;
+      $this->stream = false;
       // * Data
       $this->raw = '';
 
@@ -134,7 +136,7 @@ class Response
       }
    }
    public function __invoke
-   ($x = null, int $status = 200, array $headers = [], string $content = '', string $raw = '')
+   ($x = null, ? int $status = 200, ? array $headers = [], ? string $content = '', ? string $raw = '')
    {
       if ($x === null && $raw && PHP_SAPI === 'cli') {
          $this->raw = $raw;
@@ -202,26 +204,6 @@ class Response
       }
 
       return $this;
-   }
-   public function output ()
-   {
-      // ? Response Content
-      $this->Content->length = strlen($this->Content->raw);
-      // ? Response Header
-      $this->Header->set('Content-Length', $this->Content->length);
-      // ? Response Meta
-      // ...
-
-      if ($this->raw === '') {
-         $this->raw = <<<HTTP_RAW
-         {$this->Meta->raw}
-         {$this->Header->raw}
-         
-         {$this->Content->raw}
-         HTTP_RAW;
-      }
-
-      return $this->raw;
    }
 
    public function reset ()
@@ -469,14 +451,14 @@ class Response
          print $body ?? $this->body;
       } else {
          $this->Content->raw = $body ?? $this->body;
-         $this->output();
+         $this->output(null, null);
       }
 
       $this->end();
 
       return $this;
    }
-   public function upload ($content = null)
+   public function upload ($content = null, string $description = 'File Transfer') : self
    {
       if ($content === null) {
          $content = $this->body;
@@ -489,20 +471,54 @@ class Response
       }
 
       if ($File->readable) {
-         header('Content-Description: File Transfer');
-         header('Content-Type: application/octet-stream');
-         header('Content-Disposition: attachment; filename="'.$File->basename.'"');
-         header('Content-Length: ' . $File->size);
-         header("Cache-Control: no-cache, must-revalidate");
-         header("Expires: 0");
-         header('Pragma: public');
+         // @ Set HTTP headers
+         $this->Header->set('Content-Description', $description);
+         $this->Header->set('Content-Type', 'application/octet-stream');
+         $this->Header->set('Content-Disposition', 'attachment; filename="'.$File->basename.'"');
+         $this->Header->set('Cache-Control', 'no-cache, must-revalidate');
+         $this->Header->set('Expires', '0');
+         $this->Header->set('Pragma', 'public');
 
-         flush();
+         // @ Send File Content
+         if (\PHP_SAPI !== 'cli') {
+            $this->Header->set('Content-Length', $File->size);
+            flush();
+            $File->read();
+         } else {
+            $this->Content->raw = $File->read($File::CONTENTS_READ_METHOD);
 
-         $File->read();
+            if ($File->size > 2 * 1024 * 1024) {
+               $this->stream = true;
+            }
+         }
 
          $this->end();
       }
+
+      return $this;
+   }
+   public function output (&$length)
+   {
+      // ? Response Content
+      $this->Content->length = strlen($this->Content->raw);
+      // ? Response Header
+      $this->Header->set('Content-Length', $this->Content->length);
+      // ? Response Meta
+      // ...
+
+      $this->raw = <<<HTTP_RAW
+      {$this->Meta->raw}
+      {$this->Header->raw}
+      
+      {$this->Content->raw}
+      HTTP_RAW;
+
+      if ($this->stream) {
+         // TODO simplify
+         $length = strlen($this->Meta->raw) + strlen($this->Header->raw) + strlen("\r\n\r\n");
+      }
+
+      return $this->raw;
    }
 
    public function redirect (string $uri, $code = 302) // Code 302 = temporary; 301 = permanent;
