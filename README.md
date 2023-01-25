@@ -62,7 +62,7 @@ or with Docker *(-10% performance)*:
 
 ## 💖 Sponsorship
 
-I'm devote my time and energy to this project, but isn't sustainable if I don't have a minimum source of financial income. If you like this project or depend on it for your stack to work, consider sponsoring it.
+A lot of time and energy is devoted to this project. To accelerate your growth, if you like this project or depend on it for your stack to work, consider sponsoring it.
 
 Your sponsorship will keep this project always **up to date** with **new features** and **improvements** / **bug fixes**.
 
