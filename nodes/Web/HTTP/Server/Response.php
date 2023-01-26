@@ -551,7 +551,12 @@ class Response
 
                      $range = $range[0];
                      $offset = $range['start'];
-                     $length = $range['end'];
+
+                     if ($range['start'] === $range['end']) {
+                        $length = 1;                        
+                     } else {
+                        $length = ($range['end'] - $range['start']) + 1;
+                     }
                }
             }
 
@@ -581,7 +586,7 @@ class Response
             $this->files[] = [
                'file' => $File->File, // @ Set file path to open handler
                'offset' => $range['start'],
-               'length' => $range['end']
+               'length' => $this->Content->length
             ];
          }
 
@@ -613,6 +618,9 @@ class Response
          $length = strlen($this->Meta->raw) + strlen($this->Header->raw) + strlen("\r\n\r\n");
 
          $Package->handlers = $this->files;
+
+         $this->files = [];
+         $this->stream = false;
       }
 
       return $this->raw;
