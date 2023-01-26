@@ -6,18 +6,19 @@ use Bootgly\Web\HTTP\Server\Response;
 use Bootgly\Web\HTTP\Server\Router;
 
 
+Bootgly::$Project->vendor = '@bootgly/';
+Bootgly::$Project->container = 'web/';
+Bootgly::$Project->package = 'examples/';
+Bootgly::$Project->version = 'app/';
+Bootgly::$Project->setPath();
+
+
 return static function
 (Request $Request, Response $Response, Router $Router) : Response
 {
    #$Request->method;    // GET
    #$Request->uri;       // /path/to?query1=value2...
    #$Request->protocol;  // HTTP/1.1
-
-   Bootgly::$Project->vendor = '@bootgly/';
-   Bootgly::$Project->container = 'web/';
-   Bootgly::$Project->package = 'examples/';
-   Bootgly::$Project->version = 'app/';
-   Bootgly::$Project->setPath();
 
    #return $Response('statics/screenshot.gif')->upload();
    return $Response(content: 'Hello World!');
