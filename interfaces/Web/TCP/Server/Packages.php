@@ -101,7 +101,7 @@ abstract class Packages implements Web\Packages
          $input = false;
       }
 
-      $this->log($input);
+      // $this->log($input);
 
       // @ Check connection close intention by peer?
       // Close connection if input data is empty to avoid unnecessary loop
