@@ -533,13 +533,16 @@ class Response
                switch ($range) {
                   case -2: // Malformed Range header string
                      $this->Meta->status = 400; // Bad Request
+                     $this->Header->clean();
                      return $this;
                   case -1:
                      $this->Meta->status = 416; // Range Not Satisfiable
+                     $this->Header->clean();
                      return $this;
                   default:
                      if ($range['type'] !== 'bytes') {
                         $this->Meta->status = 416; // Range Not Satisfiable
+                        $this->Header->clean();
                         return $this;
                      }
 
