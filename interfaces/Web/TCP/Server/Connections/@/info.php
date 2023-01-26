@@ -77,7 +77,9 @@ switch ($name) {
          $this->log('Connection ID #' . $Connection . ':' . PHP_EOL, self::LOG_INFO_LEVEL);
 
          foreach ($info as $key => $value) {
+            // @ Exclude
             switch ($key) {
+               case 'Connection':
                case 'Socket':
                   continue 2;
             }
@@ -101,16 +103,16 @@ switch ($name) {
                   $this->log($value . ' second(s)' . PHP_EOL);
                   break;
 
-               case 'timers':
-                  $this->log(count($value) . PHP_EOL);
-                  break;
-
                case 'used':
                case 'started':
                   $this->log(date('Y-m-d H:i:s', $value) . PHP_EOL);
                   break;
 
                default:
+                  if ( is_array($value) ) {
+                     $value = count($value);
+                  }
+
                   $this->log($value . PHP_EOL);
             }
          }
