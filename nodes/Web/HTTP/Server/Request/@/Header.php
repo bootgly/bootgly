@@ -77,7 +77,7 @@ class Header
       }
    }
 
-   public function get (string $name)
+   public function get (string $name) : string
    {
       $this->build();
 

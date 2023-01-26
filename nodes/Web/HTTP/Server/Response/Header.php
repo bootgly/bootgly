@@ -45,7 +45,7 @@ class Header
                return $this->raw;
             }
 
-            $this->reset();
+            $this->build();
 
             return $this->raw;
 
@@ -60,20 +60,34 @@ class Header
             return $this->get($name);
       }
    }
+   public function __isSet ($name)
+   {
+      return isSet($this->fields[$name]);
+   }
    public function __set ($name, $value)
    {
       $this->$name = $value;
    }
 
-   public function reset () // @ raw
+   public function clean ()
+   {
+      $this->fields = [];
+   }
+   public function build () // @ raw
    {
       // ! FIX bad performance
-
-      foreach ($this->fields as $name => $value) {
-         $this->raw .= "$name: $value\r\n";
+      if ( count($this->fields) === 0 ) {
+         return false;
       }
 
-      $this->raw = rtrim($this->raw);
+      $raw = '';
+      foreach ($this->fields as $name => $value) {
+         $raw .= "$name: $value\r\n";
+      }
+
+      $this->raw = rtrim($raw);
+
+      return true;
    }
 
    public function get (string $name) : string

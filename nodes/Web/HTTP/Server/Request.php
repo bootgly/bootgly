@@ -580,7 +580,7 @@ class Request
       // @ Validate
       $equalIndex = strpos($header, '=');
       if ($equalIndex === false) {
-         return -2; // Malformed header string
+         return -2; // @ Return malformed header string
       }
 
       // @ Split ranges
@@ -590,6 +590,7 @@ class Request
       // @ Iterate ranges
       for ($i = 0; $i < count($headerRanges); $i++) {
          $range = explode('-', $headerRanges[$i]);
+
          $start = (int) $range[0];
          $end = (int) $range[1];
 

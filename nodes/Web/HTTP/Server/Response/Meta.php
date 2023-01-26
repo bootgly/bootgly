@@ -50,7 +50,7 @@ class Meta
       413 => 'Request Entity Too Large',
       414 => 'Request-URI Too Large',
       415 => 'Unsupported Media Type',
-      416 => 'Requested range not satisfiable',
+      416 => 'Range Not Satisfiable',
       417 => 'Expectation Failed',
       418 => 'I\'m a teapot',
       422 => 'Unprocessable Entity',

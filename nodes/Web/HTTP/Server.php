@@ -85,7 +85,7 @@ class Server extends TCP\Server
          // @ Reset HTTP Request/Response Data
          $Request->reset();
          $Response->reset();
-      } else {
+      } else if ($Response->Content->raw) {
          // TODO check if Response raw is static or dynamic
          return $Response->raw;
       }

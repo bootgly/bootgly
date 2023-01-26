@@ -172,8 +172,8 @@ abstract class Packages implements Web\Packages
             $written =+ ($sent === false) ? 0 : $sent;
          }
 
-         // @ Stream with file handlers if exists
-         if ( ! empty($this->handlers) ) {
+         // @ Stream remaining of data with file handlers if exists
+         if ( ! empty($this->handlers) ) { // TODO Stream extends Exception
             throw new \LogicException;
          }
 
@@ -184,7 +184,7 @@ abstract class Packages implements Web\Packages
          }
 
          // @ Send entire or remaining of data if exists
-         while (true) {
+         while ($buffer) {
             $sent = @fwrite($Socket, $buffer, $length);
 
             if ($sent === false) {
@@ -202,20 +202,14 @@ abstract class Packages implements Web\Packages
                break;
             }
          }
-      } catch (\LogicException) {
-         echo('Pre-send: ' . $sent .'|'. $written . PHP_EOL . PHP_EOL);
-
+      } catch (\LogicException) { // TODO Stream extends Exception
          $sent = $this->stream($Socket);
-
-         #$written += $sent ? $sent : 0;
-
-         echo(PHP_EOL . 'Stream: ' . $sent .'|'. $written . PHP_EOL . PHP_EOL);
       } catch (\Error) {
          $written = false;
       }
 
       // @ Check issues
-      if ($written === 0 || $written === false || $sent === false) {
+      if ($written === 0 || $written === false || $sent === false || $buffer === '') {
          return $this->fail($Socket, 'write', $written);
       }
 
@@ -317,6 +311,9 @@ abstract class Packages implements Web\Packages
             }
          }
       }
+
+      // @ Unset handler from handlers
+      unSet($this->handlers[0]);
 
       // @ Try closing the handler if it's still open
       try {

@@ -379,7 +379,7 @@ class File
                $this->handle = true;
          }
 
-         if (!$this->File and $this->handle) {
+         if ($this->File === '' && $this->handle !== false) {
             $this->__construct($this->Path->_);
          }
       }
@@ -387,41 +387,45 @@ class File
       return $this->handle;
    }
 
-   public function read ($method = null, int $offset = 0, ? int $length = null)
+   public function read ($method = self::READFILE_READ_METHOD, int $offset = 0, ? int $length = null)
    {
+      if ($this->File === '') {
+         return false;
+      }
+
       if ($method) {
          $this->method = $method;
       }
 
-      if ($this->File) {
-         if ($this->handle) {
-            switch ($this->method) {
-               case self::REQUIRE_READ_METHOD: // TODO refactor
-                  ob_start();
-                  require $this->File;
-                  $contents = ob_get_contents();
-                  ob_end_clean();
-
-                  return $this->contents = $contents;
-               default:
-                  if ($this->mode == 'rw+') {
-                     $this->handle = fopen($this->Path, 'r');
-                  }
-
-                  if ($this->size > 0) {
-                     return $this->contents = fread($this->handle, $this->size);
-                  }
-            }
-         }
-
+      if ($this->handle) {
          switch ($this->method) {
-            case self::CONTENTS_READ_METHOD:
-               return $this->contents = file_get_contents($this->File, false, null, $offset, $length);
-               break;
+            case self::REQUIRE_READ_METHOD: // TODO refactor
+               ob_start();
+
+               require $this->File;
+
+               $contents = ob_get_contents();
+
+               ob_end_clean();
+
+               return $this->contents = $contents;
             default:
-               return readfile($this->File);
+               if ($this->mode == 'rw+') {
+                  $this->handle = fopen($this->Path, 'r');
+               }
+
+               return $this->contents = fread($this->handle, $this->size);
          }
       }
+
+      switch ($this->method) {
+         case self::CONTENTS_READ_METHOD:
+            return $this->contents = file_get_contents($this->File, false, null, $offset, $length);
+         case self::READFILE_READ_METHOD:
+            return readfile($this->File);
+      }
+
+      return false;
    }
    public function write ($data)
    {
