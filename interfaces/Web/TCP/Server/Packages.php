@@ -233,7 +233,7 @@ abstract class Packages implements Web\Packages
       $sent = 0;
 
       while ($sent < $length) {
-         $rate = 1 * 1024; // @ Set upload speed rate by loop cycle
+         $rate = 1 * 1024 * 1024; // @ Set upload speed rate by loop cycle
 
          // @ Read file from disk
          try {
