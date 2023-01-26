@@ -149,6 +149,7 @@ abstract class Packages implements Web\Packages
 
       return true;
    }
+
    public function write (&$Socket, ? int $length = null) : bool
    {
       // @ Set output buffer
@@ -168,11 +169,12 @@ abstract class Packages implements Web\Packages
          if ($length) {
             $initial = substr($buffer, 0, $length);
             $sent = @fwrite($Socket, $initial, $length);
+            $written =+ ($sent === false) ? 0 : $sent;
          }
 
          // @ Stream with file handlers if exists
          if ( ! empty($this->handlers) ) {
-            throw new \Exception; // TODO use another catch Object
+            throw new \LogicException;
          }
 
          // @ Set remaining of data if exists
@@ -200,8 +202,14 @@ abstract class Packages implements Web\Packages
                break;
             }
          }
-      } catch (\Exception) { // TODO use another catch Object
-         $written = $this->stream($Socket, 0);
+      } catch (\LogicException) {
+         echo('Pre-send: ' . $sent .'|'. $written . PHP_EOL . PHP_EOL);
+
+         $sent = $this->stream($Socket);
+
+         #$written += $sent ? $sent : 0;
+
+         echo(PHP_EOL . 'Stream: ' . $sent .'|'. $written . PHP_EOL . PHP_EOL);
       } catch (\Error) {
          $written = false;
       }
@@ -222,51 +230,63 @@ abstract class Packages implements Web\Packages
 
       return true;
    }
-   public function stream ($Socket, int $offset = 0, ? int $length = null)
+   public function stream ($Socket)
    {
-      // TODO support to offset
       // TODO support to send multiple files
 
-      $length = $this->handlers[0]['size'];
-      $handler = $this->handlers[0]['handler'];
+      $handler = @fopen($this->handlers[0]['file'], 'r');
+      $offset = $this->handlers[0]['offset'];
+      $length = $this->handlers[0]['length'];
 
       $sent = 0;
 
-      while ($sent < $length) {
-         $rate = 1 * 1024 * 1024; // @ Set upload speed rate by loop cycle
+      // @ Move pointer of file to offset
+      try {
+         @fseek($handler, $offset, SEEK_SET);
+         #@flock($handler, \LOCK_SH);
+      } catch (\Throwable) {
+         return $sent;
+      }
 
+      // @ Limit length of data file (size) to read
+      $over = 0;
+      $rate = 1 * 1024 * 1024; // 1 MB (1048576) = Max rate to read/send data file by loop
+      $size = $rate;
+
+      if ($length < $rate) {
+         $size = $length;
+      } else if ($length > $rate) {
+         $over = $length - $rate;
+      }
+
+      while ($sent < $length) {
          // @ Read file from disk
          try {
-            $buffer = @fread($handler, $rate);
+            $buffer = @fread($handler, $size);
          } catch (\Throwable) {
-            $buffer = false;
-         }
-
-         if ($buffer === '' || $buffer === false) {
-            try {
-               @fclose($handler);
-            } catch (\Throwable) {}
-
             break;
          }
 
-         // @ Send part of read file to client
+         if ($buffer === false) {
+            break;
+         }
+
          $read = strlen($buffer);
 
-         while (true) {
+         // @ Send part of read (if exists) file to client
+         while ($read) {
             try {
-               $written = @fwrite($Socket, $buffer);
+               $written = @fwrite($Socket, $buffer, $read);
             } catch (\Throwable) {
-               $written = false;
+               break;
             }
 
             if ($written === false) {
                break;
-            }
-
-            if ($written === 0) {
+            } else if ($written === 0) {
                continue;
             } else if ($written < $read) {
+               $sent += $written;
                $buffer = substr($buffer, $written);
                $read = strlen($buffer);
             } else {
@@ -279,13 +299,29 @@ abstract class Packages implements Web\Packages
          try {
             $end = @feof($handler);
          } catch (\Throwable) {
-            $end = true;
+            break;
          }
 
          if ($end) {
             break;
          }
+
+         // @ Set new over / size if necessary
+         if ($over % $rate > 0) {
+            if ($over >= $sent) {
+               $over -= $sent;
+            }
+
+            if ($over < $size) {
+               $size = $over;
+            }
+         }
       }
+
+      // @ Try closing the handler if it's still open
+      try {
+         @fclose($handler);
+      } catch (\Throwable) {}
 
       return $sent;
    }
