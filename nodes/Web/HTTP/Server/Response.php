@@ -164,11 +164,6 @@ class Response
       #$this->Content->__construct();
    }
 
-   public function append ($body)
-   {
-      $this->initied = true;
-      $this->body .= $body . "\n";
-   }
    public function prepare (? string $resource = null)
    {
       if ($this->initied === false) {
@@ -219,6 +214,11 @@ class Response
       $this->prepared = true;
 
       return $this;
+   }
+   public function append ($body)
+   {
+      $this->initied = true;
+      $this->body .= $body . "\n";
    }
 
    public function process ($data, ?string $resource = null)
@@ -512,6 +512,8 @@ class Response
             flush();
             $File->read();
          } else {
+            $this->Header->set('Accept-Ranges', 'bytes');
+
             if ($File->size > 2 * 1024 * 1024) { // @ Stream if the file is larger than 2 MB
                $this->stream = true;
 
@@ -552,7 +554,12 @@ class Response
       if ($this->stream) {
          // TODO simplify
          $length = strlen($this->Meta->raw) + strlen($this->Header->raw) + strlen("\r\n\r\n");
-         // TODO check file permission then send unauthorized
+
+         if (isSet($this->files[0]) && @$this->files[0]['handler'] === false) {
+            $Package->reject("HTTP/1.1 403 Forbidden\r\n\r\n");
+            return '';
+         }
+
          $Package->handlers = $this->files;
       }
 

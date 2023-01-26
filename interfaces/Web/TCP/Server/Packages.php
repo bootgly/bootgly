@@ -101,7 +101,7 @@ abstract class Packages implements Web\Packages
          $input = false;
       }
 
-      // $this->log($input);
+      $this->log($input);
 
       // @ Check connection close intention by peer?
       // Close connection if input data is empty to avoid unnecessary loop
@@ -226,13 +226,14 @@ abstract class Packages implements Web\Packages
    {
       // TODO support to offset
       // TODO support to send multiple files
+
       $length = $this->handlers[0]['size'];
       $handler = $this->handlers[0]['handler'];
 
       $sent = 0;
 
       while ($sent < $length) {
-         $rate = 1 * 1024 * 1024; // @ Set upload speed rate by loop cycle
+         $rate = 1 * 1024; // @ Set upload speed rate by loop cycle
 
          // @ Read file from disk
          try {
@@ -242,7 +243,10 @@ abstract class Packages implements Web\Packages
          }
 
          if ($buffer === '' || $buffer === false) {
-            @fclose($handler);
+            try {
+               @fclose($handler);
+            } catch (\Throwable) {}
+
             break;
          }
 
@@ -256,7 +260,11 @@ abstract class Packages implements Web\Packages
                $written = false;
             }
 
-            if ($written === false || $written === 0) {
+            if ($written === false) {
+               break;
+            }
+
+            if ($written === 0) {
                continue;
             } else if ($written < $read) {
                $buffer = substr($buffer, $written);
@@ -271,7 +279,7 @@ abstract class Packages implements Web\Packages
          try {
             $end = @feof($handler);
          } catch (\Throwable) {
-            $end = false;
+            $end = true;
          }
 
          if ($end) {
