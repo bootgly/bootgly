@@ -80,11 +80,11 @@ abstract class Packages implements Web\Packages
 
       // @ Check connection close intention?
       if ($result === 0) {
-         $this->log('Failed to ' . $operation . ' package: 0 byte handled!' . PHP_EOL);
+         #$this->log('Failed to ' . $operation . ' package: 0 byte handled!' . PHP_EOL);
       }
 
       if (is_resource($Socket) && get_resource_type($Socket) === 'stream') {
-         $this->log('Failed to ' . $operation . ' package: closing connection...' . PHP_EOL);
+         #$this->log('Failed to ' . $operation . ' package: closing connection...' . PHP_EOL);
          $this->Connection->close();
       }
 
@@ -191,7 +191,7 @@ abstract class Packages implements Web\Packages
                break;
             }
 
-            if ($sent > 0 && $sent < $length) { // @ Stream data
+            if ($sent > 0 && $sent < $length) { // @ Stream remaining of not sent data
                $buffer = substr($buffer, $sent);
                $length -= $sent;
                $written += $sent;
@@ -219,7 +219,9 @@ abstract class Packages implements Web\Packages
          Connections::$writes++;
          Connections::$written += $written;
          // Per client
-         Connections::$Connections[(int) $Socket]->writes++;
+         if ( isSet(Connections::$Connections[(int) $Socket]) ) {
+            Connections::$Connections[(int) $Socket]->writes++;
+         }
       }
 
       return true;
@@ -315,9 +317,11 @@ abstract class Packages implements Web\Packages
       // @ Unset handler from handlers
       unSet($this->handlers[0]);
 
-      // @ Try closing the handler if it's still open
+      // @ Try closing the handler / socket if it's still open
       try {
          @fclose($handler);
+
+         $this->Connection->close();
       } catch (\Throwable) {}
 
       return $sent;
