@@ -500,98 +500,107 @@ class Response
          $File = new File(Bootgly::$Project->path . $content);
       }
 
-      if ($File->readable) {
-         // @ Set HTTP headers
-         $this->Header->set('Content-Type', 'application/octet-stream');
-         $this->Header->set('Content-Disposition', 'attachment; filename="'.$File->basename.'"');
-         $this->Header->set('Content-Description', $description ? $description : 'File Transfer');
-         $this->Header->set('Cache-Control', 'no-cache, must-revalidate');
-         $this->Header->set('Expires', '0');
-         $this->Header->set('Pragma', 'public');
+      if ($File->readable === false) {
+         $this->status = 403; // Forbidden
+         return $this;
+      }
 
-         // @ Send File Content
-         if (\PHP_SAPI !== 'cli') {
-            // TODO refactor
-            $this->Header->set('Content-Length', $File->size);
-            flush();
-            $File->read(); // ! FIX MEMORY RAM USAGE OR LIMIT FILE SIZE TO UPLOAD
-         } else {
-            if ($File->size <= 2 * 1024 * 1024) {
-               $this->Content->raw = $File->read($File::CONTENTS_READ_METHOD);
-               return $this;
-            }
+      // @ Set HTTP headers
+      $this->Header->prepare([
+         'Content-Type' => 'application/octet-stream',
+         'Content-Disposition' => 'attachment; filename="'.$File->basename.'"',
+         'Content-Description' => $description ? $description : 'File Transfer',
+         'Cache-Control' => 'no-cache, must-revalidate',
+         'Expires' => '0',
+         'Pragma' => 'public'
+      ]);
 
-            // @ Stream if the file is larger than 2 MB
-            $this->stream = true;
+      // @ Send File Content
+      if (\PHP_SAPI !== 'cli') { // TODO refactor
+         $this->Header->build();
+         $this->Header->set('Content-Length', $File->size);
 
-            // @ Set Request range
-            // TODO move to Request
-            $range = [];
-            if ( $Range = Server::$Request->Header->get('Range') ) {
-               $range = Server::$Request->range($File->size, $Range);
+         flush();
 
-               switch ($range) {
-                  case -2: // Malformed Range header string
-                     $this->Meta->status = 400; // Bad Request
-                     $this->Header->clean();
-                     return $this;
-                  case -1:
+         $File->read(); // FIX MEMORY RAM USAGE OR LIMIT FILE SIZE TO UPLOAD
+      } else {
+         $this->Header->build();
+
+         if ($File->size <= 2 * 1024 * 1024) {
+            $this->Content->raw = $File->read($File::CONTENTS_READ_METHOD);
+            return $this;
+         }
+
+         // @ Stream if the file is larger than 2 MB
+         $this->stream = true;
+
+         // @ Set Request range
+         // TODO move to Request
+         $range = [];
+         if ( $Range = Server::$Request->Header->get('Range') ) {
+            $range = Server::$Request->range($File->size, $Range);
+
+            switch ($range) {
+               case -2: // Malformed Range header string
+                  $this->Meta->status = 400; // Bad Request
+                  $this->Header->clean();
+                  return $this;
+               case -1:
+                  $this->Meta->status = 416; // Range Not Satisfiable
+                  $this->Header->clean();
+                  return $this;
+               default:
+                  if ($range['type'] !== 'bytes') {
                      $this->Meta->status = 416; // Range Not Satisfiable
                      $this->Header->clean();
                      return $this;
-                  default:
-                     if ($range['type'] !== 'bytes') {
-                        $this->Meta->status = 416; // Range Not Satisfiable
-                        $this->Header->clean();
-                        return $this;
-                     }
+                  }
 
-                     // TODO support multiple ranges
-                     // TODO support negative ranges
+                  // TODO support multiple ranges
+                  // TODO support negative ranges
 
-                     $range = $range[0];
-                     $offset = $range['start'];
+                  $range = $range[0];
+                  $offset = $range['start'];
 
-                     if ($range['start'] === $range['end']) {
-                        $length = 1;                        
-                     } else {
-                        $length = ($range['end'] - $range['start']) + 1;
-                     }
-               }
+                  if ($range['start'] === $range['end']) {
+                     $length = 1;                        
+                  } else {
+                     $length = ($range['end'] - $range['start']) + 1;
+                  }
             }
-
-            #var_dump($length, $offset);
-            // @ Set Content Length
-            $this->Content->length = ($length > 0) ? ($length) : ($File->size - $offset);
-            $this->Header->set('Content-Length', $this->Content->length);
-
-            // @ Set User range
-            if ( empty($range) ) {
-               $range['start'] = $offset;
-               $range['end'] = $this->Content->length;
-            }
-
-            // @ Set (HTTP/1.1): Range Requests Headers
-            if ($offset || $length) {
-               $this->Header->set('Accept-Ranges', 'bytes');
-               $this->Header->set('Content-Range', "bytes {$range['start']}-{$range['end']}/{$File->size}");
-
-               if ($this->Content->length !== $File->size)
-                  $this->Meta->status = 206; // 206 Partial Content
-            }
-
-            #var_dump($this->Content->length, $range);
-
-            // @ Prepare Response files
-            $this->files[] = [
-               'file' => $File->File, // @ Set file path to open handler
-               'offset' => $range['start'],
-               'length' => $this->Content->length
-            ];
          }
 
-         $this->end();
+         #var_dump($length, $offset);
+         // @ Set Content Length
+         $this->Content->length = ($length > 0) ? ($length) : ($File->size - $offset);
+         $this->Header->set('Content-Length', $this->Content->length);
+
+         // @ Set User range
+         if ( empty($range) ) {
+            $range['start'] = $offset;
+            $range['end'] = $this->Content->length;
+         }
+
+         // @ Set (HTTP/1.1): Range Requests Headers
+         if ($offset || $length) {
+            $this->Header->set('Accept-Ranges', 'bytes');
+            $this->Header->set('Content-Range', "bytes {$range['start']}-{$range['end']}/{$File->size}");
+
+            if ($this->Content->length !== $File->size)
+               $this->Meta->status = 206; // 206 Partial Content
+         }
+
+         #var_dump($this->Content->length, $range);
+
+         // @ Prepare Response files
+         $this->files[] = [
+            'file' => $File->File, // @ Set file path to open handler
+            'offset' => $range['start'],
+            'length' => $this->Content->length
+         ];
       }
+
+      $this->end();
 
       return $this;
    }
@@ -606,6 +615,7 @@ class Response
          // ...
       }
 
+      // ! FIX remove aditional \r\n if Header and Content is empty
       $this->raw = <<<HTTP_RAW
       {$this->Meta->raw}
       {$this->Header->raw}

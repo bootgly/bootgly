@@ -13,6 +13,8 @@ namespace Bootgly\Web\HTTP\Server\Response;
 
 class Header
 {
+   // * Config
+   private array $prepared;
    // * Data
    private array $fields;
    // * Meta
@@ -32,6 +34,10 @@ class Header
    public function __get (string $name)
    {
       switch ($name) {
+         // * Config
+         case 'prepared':
+            return $this->prepared;
+         // * Data
          case 'fields':
          case 'headers':
             if (\PHP_SAPI !== 'cli') {
@@ -39,7 +45,7 @@ class Header
             }
 
             return $this->fields;
-
+         // * Meta
          case 'raw':
             if ($this->raw !== '') {
                return $this->raw;
@@ -60,24 +66,39 @@ class Header
             return $this->get($name);
       }
    }
+   public function __set ($name, $value)
+   {
+      switch ($name) {
+         case 'prepared':
+            break;
+         default:
+            $this->$name = $value;     
+      }
+   }
    public function __isSet ($name)
    {
       return isSet($this->fields[$name]);
-   }
-   public function __set ($name, $value)
-   {
-      $this->$name = $value;
    }
 
    public function clean ()
    {
       $this->fields = [];
    }
+
+   public function prepare (array $fields) // @ Prepare to build
+   {
+      $this->prepared = $fields;
+   }
+
+   // TODO increase performance
    public function build () // @ raw
    {
-      // ! FIX bad performance
-      if ( count($this->fields) === 0 ) {
+      if ( empty($this->fields) && empty($this->prepared) ) {
          return false;
+      }
+
+      if ( empty($this->fields) && ! empty($this->prepared) ) {
+         $this->fields = $this->prepared;
       }
 
       $raw = '';
