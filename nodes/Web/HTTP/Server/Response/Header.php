@@ -14,29 +14,36 @@ namespace Bootgly\Web\HTTP\Server\Response;
 class Header
 {
    // * Config
+   private array $pre;
    private array $prepared;
    // * Data
    private array $fields;
    // * Meta
    private string $raw;
+   private bool $sent;
 
 
    public function __construct ()
    {
-      // * Data
-      $this->fields = [
+      // * Config
+      $this->pre = [
          'Server' => 'Bootgly',
          'Content-Type' => 'text/html; charset=UTF-8'
       ];
+      $this->prepared = [];
+      // * Data
+      $this->fields = [];
       // * Meta
       $this->raw = '';
+      $this->sent = false;
    }
    public function __get (string $name)
    {
       switch ($name) {
          // * Config
+         case 'pre':
          case 'prepared':
-            return $this->prepared;
+            return $this->$name;
          // * Data
          case 'fields':
          case 'headers':
@@ -47,7 +54,7 @@ class Header
             return $this->fields;
          // * Meta
          case 'raw':
-            if ($this->raw !== '') {
+            if ($this->raw) {
                return $this->raw;
             }
 
@@ -55,12 +62,12 @@ class Header
 
             return $this->raw;
 
-         case 'sent': // TODO refactor
+         case 'sent':
             if (\PHP_SAPI !== 'cli') {
                return headers_sent();
             }
 
-            return null;
+            return $this->sent;
 
          default:
             return $this->get($name);
@@ -69,10 +76,14 @@ class Header
    public function __set ($name, $value)
    {
       switch ($name) {
+         // * Config
+         case 'pre':
+            $this->pre = (array) $value;
          case 'prepared':
             break;
+         // *
          default:
-            $this->$name = $value;     
+            $this->$name = $value;
       }
    }
    public function __isSet ($name)
@@ -98,10 +109,15 @@ class Header
       }
 
       if ( empty($this->fields) && ! empty($this->prepared) ) {
-         $this->fields = $this->prepared;
+         $this->fields = array_merge($this->fields, $this->prepared);
       }
 
       $raw = '';
+      // @ Build Pre-set Fields
+      foreach ($this->pre as $name => $value) {
+         $raw .= "$name: $value\r\n";
+      }
+      // @ Build Fields
       foreach ($this->fields as $name => $value) {
          $raw .= "$name: $value\r\n";
       }
