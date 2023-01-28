@@ -112,24 +112,24 @@ class Header
          $this->fields = $this->prepared;
       }
 
-      $raw = '';
-      // @ Build Pre-set Fields
+      $raw = [];
+      // @ Build Preset Fields
       foreach ($this->preset as $name => $value) {
-         $raw .= "$name: $value\r\n";
+         $raw[] = "$name: $value";
       }
       // @ Build Fields
       foreach ($this->fields as $name => $value) {
-         $raw .= "$name: $value\r\n";
+         $raw[] = "$name: $value";
       }
 
-      $this->raw = rtrim($raw);
+      $this->raw = implode("\r\n", $raw);
 
       return true;
    }
 
    public function get (string $name) : string
    {
-      return (string) @$this->fields[$name] ?? (string) @$this->fields[strtolower($name)];
+      return (string) $this->fields[$name] ?? (string) $this->fields[strtolower($name)] ?? '';
    }
    public function set (string $field, string $value = '') // TODO refactor
    {
