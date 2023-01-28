@@ -14,7 +14,7 @@ namespace Bootgly\Web\HTTP\Server\Response;
 class Header
 {
    // * Config
-   private array $pre;
+   private array $preset;
    private array $prepared;
    // * Data
    private array $fields;
@@ -26,7 +26,7 @@ class Header
    public function __construct ()
    {
       // * Config
-      $this->pre = [
+      $this->preset = [
          'Server' => 'Bootgly',
          'Content-Type' => 'text/html; charset=UTF-8'
       ];
@@ -41,7 +41,7 @@ class Header
    {
       switch ($name) {
          // * Config
-         case 'pre':
+         case 'preset':
          case 'prepared':
             return $this->$name;
          // * Data
@@ -78,7 +78,7 @@ class Header
       switch ($name) {
          // * Config
          case 'pre':
-            $this->pre = (array) $value;
+            $this->preset = (array) $value;
          case 'prepared':
             break;
          // *
@@ -109,12 +109,12 @@ class Header
       }
 
       if ( empty($this->fields) && ! empty($this->prepared) ) {
-         $this->fields = array_merge($this->fields, $this->prepared);
+         $this->fields = $this->prepared;
       }
 
       $raw = '';
       // @ Build Pre-set Fields
-      foreach ($this->pre as $name => $value) {
+      foreach ($this->preset as $name => $value) {
          $raw .= "$name: $value\r\n";
       }
       // @ Build Fields
