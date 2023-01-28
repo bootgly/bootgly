@@ -91,11 +91,15 @@ class Server extends TCP\Server
       }
 
       // ! Response
-      // @ Invoke SAPI Closure
+      // @ Try to Invoke SAPI Closure
       try {
          (SAPI::$Handler)($Request, $Response, $Router);
       } catch (\Throwable) {
          $Response->Meta->status = 500; // @ Set 500 HTTP Server Error Response
+
+         if ($Response->Content->raw === '') {
+            $Response->Content->raw = ' ';
+         }
       }
 
       // @ Output/Stream HTTP Response
