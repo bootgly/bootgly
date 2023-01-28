@@ -590,8 +590,6 @@ class Response
                $this->Meta->status = 206; // 206 Partial Content
          }
 
-         #var_dump($this->Content->length, $range);
-
          // @ Prepare Response files
          $this->files[] = [
             'file' => $File->File, // @ Set file path to open handler
@@ -615,7 +613,6 @@ class Response
          // ...
       }
 
-      // ! FIX remove aditional \r\n if Header and Content is empty
       $this->raw = <<<HTTP_RAW
       {$this->Meta->raw}
       {$this->Header->raw}

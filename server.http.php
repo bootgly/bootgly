@@ -32,8 +32,10 @@ $HTTPServer->configure(
       // SSL Keyfile
       'local_pk'    => __DIR__ . '/@/certificates/localhost.key.pem',
       'disable_compression' => true, // TLS compression attack vulnerability
-      'verify_peer' => false,        // Set this to true if acting as an SSL client
-      'ssltransport' => 'tlsv1.3',   // Transport Methods such as 'tlsv1.2', 'tlsv1.3', ...
+      #'verify_peer' => true,
+      #'verify_peer_name' => true,
+      #'capture_peer_cert' => true,
+      'ssltransport' => 'tlsv1.3'
    ]
    */
 );

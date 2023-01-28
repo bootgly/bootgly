@@ -31,11 +31,11 @@ class Connection extends Packages
    // * Meta
    public int $id;
    // @ Status
-   const STATUS_INITIAL = 0;
-   const STATUS_CONNECTING = 1;
-   const STATUS_ESTABLISHED = 2;
-   const STATUS_CLOSING = 4;
-   const STATUS_CLOSED = 8;
+   public const STATUS_INITIAL = 0;
+   public const STATUS_CONNECTING = 1;
+   public const STATUS_ESTABLISHED = 2;
+   public const STATUS_CLOSING = 4;
+   public const STATUS_CLOSED = 8;
    public int $status;
    // @ Handler
    public int $started;
@@ -104,7 +104,7 @@ class Connection extends Packages
       static $tries = 1;
 
       try {
-         stream_set_blocking ($this->Socket, true);
+         stream_set_blocking($this->Socket, true);
 
          $negotiation = @stream_socket_enable_crypto(
             $this->Socket,
@@ -115,7 +115,7 @@ class Connection extends Packages
             STREAM_CRYPTO_METHOD_TLSv1_3_SERVER
          );
 
-         stream_set_blocking ($this->Socket, false);
+         stream_set_blocking($this->Socket, false);
       } catch (\Throwable) {
          $negotiation = false;
       }

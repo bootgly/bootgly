@@ -17,6 +17,7 @@ class Meta
       100 => 'Continue',
       101 => 'Switching Protocols',
       102 => 'Processing',
+
       200 => 'OK',
       201 => 'Created',
       202 => 'Accepted',
@@ -26,6 +27,7 @@ class Meta
       206 => 'Partial Content',
       207 => 'Multi-status',
       208 => 'Already Reported',
+
       300 => 'Multiple Choices',
       301 => 'Moved Permanently',
       302 => 'Found',
@@ -34,6 +36,7 @@ class Meta
       305 => 'Use Proxy',
       306 => 'Switch Proxy',
       307 => 'Temporary Redirect',
+
       400 => 'Bad Request',
       401 => 'Unauthorized',
       402 => 'Payment Required',
@@ -62,6 +65,7 @@ class Meta
       429 => 'Too Many Requests',
       431 => 'Request Header Fields Too Large',
       451 => 'Unavailable For Legal Reasons',
+
       500 => 'Internal Server Error',
       501 => 'Not Implemented',
       502 => 'Bad Gateway',
@@ -132,6 +136,7 @@ class Meta
 
    public function reset () // @ raw
    {
+      // * Meta
       // Raw
       $this->raw = $this->protocol . ' ' . $this->status;
       // Code
