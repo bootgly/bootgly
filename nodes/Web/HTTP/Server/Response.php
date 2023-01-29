@@ -74,7 +74,7 @@ class Response
       $this->resources = $resources !== null ? $resources : ['JSON', 'JSONP', 'View', 'HTML/pre'];
       // * Meta
       $this->resource = null;
-      // @ Buffer Status
+      // @ Status
       $this->initied = false;
       $this->prepared = true;
       $this->processed = true;
@@ -594,7 +594,8 @@ class Response
          $this->files[] = [
             'file' => $File->File, // @ Set file path to open handler
             'offset' => $range['start'],
-            'length' => $this->Content->length
+            'length' => $this->Content->length,
+            'close' => true
          ];
       }
 
