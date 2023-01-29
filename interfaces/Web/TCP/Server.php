@@ -12,7 +12,7 @@ namespace Bootgly\Web\TCP;
 
 
 // use
-use Bootgly\Debugger\Backtrace;
+use Bootgly\Debugger;
 use Bootgly\SAPI;
 use Bootgly\OS\Process\Timer;
 // extend
@@ -93,6 +93,10 @@ class Server implements Servers
       $this->started = time();
       // @ Status
       $this->status = self::STATUS_BOOTING;
+
+      Debugger::$debug = true;
+      Debugger::$print = true;
+      Debugger::$exit = false;
 
       // ! Connection(s)
       // @ New design pattern?

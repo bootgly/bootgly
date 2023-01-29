@@ -11,10 +11,9 @@
 namespace Bootgly;
 
 
-class Debugger
+class Debugger // TODO refactor (too old!)
 {
-   // _
-   // _Config
+   // * Config
    public static $debug = false;
    public static $print = true;
    public static $exit = true;
@@ -43,11 +42,13 @@ class Debugger
    // .Output
    public static $Output;
 
-   public function __construct(...$vars)
+
+   public function __construct (...$vars)
    {
       if (self::$debug === false)
          return;
-      if (!empty(self::$ips)) {
+
+      if ( ! empty(self::$ips) ) {
          foreach (self::$ips as $ip) {
             $founded = false;
             if ($_SERVER['REMOTE_ADDR'] == $ip or $ip === '*') {
@@ -128,11 +129,11 @@ class Debugger
       }
    }
 
-   public static function input(...$vars)
+   public static function input (...$vars)
    {
       self::$vars = $vars;
    }
-   public static function reset()
+   public static function reset ()
    {
       self::$call = 1;
       self::$from = null;
@@ -142,7 +143,7 @@ class Debugger
       self::$labels = null;
    }
 
-   public static function dump($value)
+   public static function dump ($value)
    {
       switch (gettype($value)) {
          case 'boolean':
@@ -183,7 +184,7 @@ class Debugger
             $info = ' (size=' . count($value) . ") ";
             $color = '';
             $array = $value;
-            $identity = "\t\t\t";
+            $identity = self::$cli ? "   " : "\t\t\t";
 
             $var = '';
             foreach ($array as $key => $value) {
@@ -249,7 +250,7 @@ class Debugger
 
       return $dump;
    }
-   private function generate($vars)
+   private function generate ($vars)
    {
       self::$Output = "";
 

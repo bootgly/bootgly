@@ -11,7 +11,7 @@
 use Bootgly\Debugger;
 
 
-function Debug(...$vars)
+function debug (...$vars)
 {
    if (Debugger::$trace === null) {
       Debugger::$trace = debug_backtrace();
