@@ -486,7 +486,7 @@ class Response
 
       return $this;
    }
-   public function upload ($content = null, int $offset = 0, ? int $length = null, string $description = '') : self
+   public function upload ($content = null, int $offset = 0, ? int $length = null) : self
    {
       // TODO support to upload multiple files
 
@@ -509,10 +509,11 @@ class Response
       $this->Header->prepare([
          'Content-Type' => 'application/octet-stream',
          'Content-Disposition' => 'attachment; filename="'.$File->basename.'"',
-         'Content-Description' => $description ? $description : 'File Transfer',
+
+         'Last-Modified' => gmdate('D, d M Y H:i:s', $File->modified) . ' GMT',
+         // Cache
          'Cache-Control' => 'no-cache, must-revalidate',
          'Expires' => '0',
-         'Pragma' => 'public'
       ]);
 
       // @ Send File Content
