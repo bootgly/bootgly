@@ -27,8 +27,7 @@ class Header
    {
       // * Config
       $this->preset = [
-         'Server' => 'Bootgly',
-         'Content-Type' => 'text/html; charset=UTF-8'
+         'Server' => 'Bootgly'
       ];
       $this->prepared = [];
       // * Data
@@ -104,12 +103,17 @@ class Header
    // TODO increase performance
    public function build () // @ raw
    {
+      // @ Return if empty
       if ( empty($this->fields) && empty($this->prepared) ) {
          return false;
       }
-
+      // @ Set headers with prepared fields
       if ( empty($this->fields) && ! empty($this->prepared) ) {
          $this->fields = $this->prepared;
+      }
+      // @ Set default headers
+      if ( ! isSet($this->fields['Content-Type']) ) {
+         $this->fields['Content-Type'] = 'text/html; charset=UTF-8';
       }
 
       $raw = [];
