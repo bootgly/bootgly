@@ -231,8 +231,10 @@ abstract class Packages implements Web\Packages
       // TODO support to send multiple files
 
       $handler = @fopen($this->handlers[0]['file'], 'r');
+
       $offset = $this->handlers[0]['offset'];
       $length = $this->handlers[0]['length'];
+      $close = $this->handlers[0]['close'];
 
       $sent = 0;
 
@@ -314,15 +316,17 @@ abstract class Packages implements Web\Packages
          }
       }
 
+      // @ Try closing the handler / socket if it's still open
+      if ($close) {
+         try {
+            @fclose($handler);
+   
+            $this->Connection->close();
+         } catch (\Throwable) {}
+      }
+
       // @ Unset handler from handlers
       unSet($this->handlers[0]);
-
-      // @ Try closing the handler / socket if it's still open
-      try {
-         @fclose($handler);
-
-         $this->Connection->close();
-      } catch (\Throwable) {}
 
       return $sent;
    }
