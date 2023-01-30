@@ -29,8 +29,6 @@ class Response
 
    // * Config
    public bool $debugger;
-   public bool $stream;
-   public bool $close;
    // * Data
    public string $raw;
 
@@ -48,6 +46,10 @@ class Response
    public bool $prepared;
    public bool $processed;
    public bool $sent;
+   // @ Type
+   public bool $chunked;
+   public bool $encoded;
+   public bool $stream;
 
 
    public function __construct (? array $resources = null)
@@ -59,8 +61,6 @@ class Response
 
       // * Config
       $this->debugger = true;
-      $this->stream = false;
-      $this->close = false;
       // * Data
       $this->raw = '';
 
@@ -79,14 +79,29 @@ class Response
       $this->prepared = true;
       $this->processed = true;
       $this->sent = false;
+      // @ Type
+      $this->stream = false;
+      $this->chunked = false;
+      $this->encoded = false;
    }
    public function __get ($name)
    {
       switch ($name) {
+         // HTTP Meta
          case 'code':
             return \PHP_SAPI !== 'cli' ? http_response_code() : $this->Meta->code;
+         // HTTP Headers
          case 'headers':
             return $this->Header->fields;
+         // HTTP Content
+         case 'chunked':
+            if (! $this->chunked) {
+               $this->chunked = true;
+               $this->Header->append('Transfer-Encoding', 'chunked');
+            }
+
+            return $this->Content->chunked;
+
          default: // @ Construct resource
             $this->resource = $name;
 
@@ -142,11 +157,11 @@ class Response
    public function __invoke
    ($x = null, ? int $status = 200, ? array $headers = [], ? string $content = '', ? string $raw = '')
    {
-      if ($x === null && $raw && PHP_SAPI === 'cli') {
+      if ($x === null && $raw) {
          $this->raw = $raw;
 
          return $this;
-      } else if ($x === null && $content && PHP_SAPI === 'cli') {
+      } else if ($x === null && $content) {
          $this->Content->raw = $content;
 
          return $this;
@@ -159,7 +174,12 @@ class Response
 
    public function reset ()
    {
+      // * Data
       $this->raw = '';
+      // * Meta
+      $this->chunked = false;
+      $this->encoded = false;
+      $this->stream = false;
 
       $this->Meta->__construct();
       $this->Header->__construct();
@@ -350,26 +370,38 @@ class Response
 
       return $this;
    }
-   public function compress (string $raw, string $method = 'gzip', int $level = 9)
+   public function compress (string $raw, string $method = 'gzip', int $level = 9, ? int $encoding = null)
    {
       $encoded = false;
       $deflated = false;
+      $compressed = false;
 
-      switch ($method) {
-         case 'gzip':
-            $encoded = gzencode($raw, $level);
-            break;
-         case 'deflate':
-            $deflated = gzdeflate($raw, $level);
-            break;
-      }
+      try {
+         switch ($method) {
+            case 'gzip':
+               $encoded = @gzencode($raw, $level, $encoding);
+               break;
+            case 'deflate':
+               $deflated = @gzdeflate($raw, $level, $encoding);
+               break;
+            case 'compress':
+               $compressed = @gzcompress($raw, $level, $encoding);
+               break;
+         }
+      } catch (\Throwable) {}
 
       if ($encoded) {
+         $this->encoded = true;
          $this->Header->set('Content-Encoding', 'gzip');
          return $encoded;
       } else if ($deflated) {
+         $this->encoded = true;
          $this->Header->set('Content-Encoding', 'deflate');
          return $deflated;
+      } else if ($compressed) {
+         $this->encoded = true;
+         $this->Header->set('Content-Encoding', 'compress');
+         return $compressed;
       }
 
       return false;
@@ -606,7 +638,7 @@ class Response
    }
    public function output ($Package, &$length)
    {
-      if ($this->Content->raw) {
+      if (! $this->stream && ! $this->chunked && ! $this->encoded) {
          // ? Response Content
          $this->Content->length = strlen($this->Content->raw);
          // ? Response Header

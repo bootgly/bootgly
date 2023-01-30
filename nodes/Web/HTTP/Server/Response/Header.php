@@ -144,7 +144,15 @@ class Header
    }
    public function append (string $field, string $value = '') // TODO refactor
    {
-      $this->fields[$field] = $value;
+      if ( isSet($this->fields[$field]) ) {
+         // @ Append only value (not entire Header field)
+
+         // TODO map (with const?) Header that can have only value to append, only entire header, etc.
+
+         $this->fields[$field] = $this->fields[$field] . ', ' .$value;   
+      } else {
+         $this->fields[$field] = $value;
+      }
 
       if (\PHP_SAPI !== 'cli')
          header($field . ': ' . $value, false);

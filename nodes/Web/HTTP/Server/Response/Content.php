@@ -44,4 +44,14 @@ class Content
          }
       }
    }
+
+   public function __get (string $name) : string
+   {
+      switch ($name) {
+         case 'chunked':
+            return dechex($this->length) . "\r\n$this->raw\r\n";
+         default:
+            return '';
+      }
+   }
 }
