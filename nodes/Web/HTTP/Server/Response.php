@@ -400,7 +400,7 @@ class Response
          return $deflated;
       } else if ($compressed) {
          $this->encoded = true;
-         $this->Header->set('Content-Encoding', 'compress');
+         $this->Header->set('Content-Encoding', 'gzip');
          return $compressed;
       }
 
