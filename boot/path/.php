@@ -131,8 +131,13 @@ class Path
 				return self::concatenate($this->paths, ...$arguments); break;
 		}
 	}
-	public static function __callStatic (string $name, $arguments) {
-		return self::$name(...$arguments);
+	public static function __callStatic (string $name, $arguments)
+	{
+		if ( method_exists(__CLASS__, $name) ) {
+			return self::$name(...$arguments);
+		}
+
+		return null;
 	}
 	public function __invoke (string $path) {
 		$this->Path = '';
@@ -249,6 +254,25 @@ class Path
 
 		return $paths;
 		// return [0 => 'var', 1 => 'www', 2 => 'sys'];
+	}
+	public static function relativize (string $from, string $to) : string
+	{
+		// $from = '/foo/bar/, $to = '/foo/bar/tests/test2.php';
+		$from = explode(DIRECTORY_SEPARATOR, realpath($from));
+		$to = explode(DIRECTORY_SEPARATOR, realpath($to));
+
+		$length = min(count($from), count($to));
+		for ($i = 0; $i < $length; $i++) {
+			if ($from[$i] !== $to[$i]) {
+				break;
+			}
+		}
+
+		$up = str_pad('', ($length - $i) * 3, '..' . DIRECTORY_SEPARATOR);
+		$rest = implode(DIRECTORY_SEPARATOR, array_slice($to, $i));
+
+		return $up . $rest;
+		// return 'tests/test2.php';
 	}
 	private static function join (array $paths, string $format = '%'): string
 	{
