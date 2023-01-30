@@ -16,12 +16,12 @@ Bootgly::$Project->setPath();
 return static function
 (Request $Request, Response $Response, Router $Router) : Response
 {
+   // ! Request examples
    #$Request->method;    // GET
    #$Request->uri;       // /path/to?query1=value2...
    #$Request->protocol;  // HTTP/1.1
 
-   #return $Response('statics/screenshot.gif')->upload();
-
+   // ! Response examples
    /*
    return $Response(raw: <<<HTTP_RAW
    HTTP/1.1 200 OK
@@ -32,6 +32,8 @@ return static function
    Hello World!
    HTTP_RAW);
    */
+
+   #return $Response('statics/screenshot.gif')->upload();
 
    return $Response(content: 'Hello World!');
 };
