@@ -140,7 +140,7 @@ abstract class Packages implements Web\Packages
 
       // @ Write data
       if (Server::$Application) { // @ Decode Application Data if exists
-         $input = Server::$Application::decode($this);
+         $input = Server::$Application::decode($this, $input);
       }
 
       if ($input) {
