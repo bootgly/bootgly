@@ -511,7 +511,6 @@ class Response
          print $body ?? $this->body;
       } else {
          $this->Content->raw = $body ?? $this->body;
-         $this->output(null, null);
       }
 
       $this->end();
