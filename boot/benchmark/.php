@@ -79,11 +79,11 @@ class Benchmark
 		$result .= 'Benchmark results for: ' . $tag . PHP_EOL . PHP_EOL;
 
 		if (self::$time) {
-			$result .= 'Time: ' . (string) self::$results[$tag]['time'] . 's' . PHP_EOL;
+			$result .= 'CPU time spent: ' . (string) self::$results[$tag]['time'] . 's' . PHP_EOL;
 		}
 
 		if (self::$memory) {
-			$result .= 'Memory: ' . (string) self::$results[$tag]['memory'] . PHP_EOL;
+			$result .= 'RAM memory usage: ' . (string) self::$results[$tag]['memory'] . PHP_EOL;
 		}
 
 		$result .= PHP_EOL . '=-=-=-=-=-=-';
@@ -105,7 +105,7 @@ class Benchmark
 		$file = HOME_DIR . 'workspace/bench.marks';
 
 		// @ Build data
-		$header = "[$relativePath:$Backtrace->line]:";
+		$header = "[$tag@$relativePath:$Backtrace->line]:";
 		$body = self::$results[$tag]['time'];
 
 		// @ Read file if exists
