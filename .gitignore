@@ -33,6 +33,7 @@ server-*.php
 !/boot/__class
 !/boot/__iterable
 !/boot/__string
+!/boot/benchmark
 !/boot/debugger
 !/boot/dir
 !/boot/exception

@@ -65,8 +65,7 @@ require '__class/nulled/.php';
 
 // * .Helpers
 // ! Benchmark
-#require 'Benchmark.constants.php';
-#require 'Benchmark.php';
+require 'benchmark/.php';
 // ! Debugger
 require 'debugger/.php';
 
@@ -81,4 +80,4 @@ require 'logger/logging.php'; // @trait
 
 require 'logger/~functions.php';
 // ! Tester
-    #require 'Tester.php';
+#require 'Tester.php';
