@@ -11,6 +11,9 @@
 namespace Bootgly\Web\HTTP\Server\_;
 
 
+use Bootgly\Web\HTTP\Server\_\Header\Cookie;
+
+
 class Header
 {
    // * Data
@@ -19,6 +22,8 @@ class Header
    // * Meta
    public bool $built;
    public null|int|false $length;
+
+   public Cookie $Cookie;
 
 
    public function __construct ()
@@ -43,6 +48,8 @@ class Header
       $this->fields = $fields;
       // * Meta
       $this->length = null;
+
+      $this->Cookie = new Cookie($this);
    }
    public function __get (string $name)
    {
@@ -81,7 +88,7 @@ class Header
    {
       $this->build();
 
-      return (string) @$this->fields[$name] ?? (string) @$this->fields[strtolower($name)];
+      return (string) $this->fields[$name] ?? (string) $this->fields[strtolower($name)] ?? '';
    }
 
    public function build ()
@@ -90,25 +97,18 @@ class Header
          return false;
       }
 
-      $fields = explode("\r\n", $this->raw);
+      $fields = [];
 
-      foreach ($fields as $field) {
-         if (strpos($field, ':') !== false) {
+      foreach (explode("\r\n", $this->raw) as $field) {
+         if (strpos($field, ': ') !== false) {
 
-            @[$key, $value] = explode(':', $field, 2);
+            @[$key, $value] = explode(': ', $field, 2);
 
-            $value = ltrim($value);
-         } else {
-            $key = $field;
-            $value = '';
-         }
-
-         if ( isSet($this->fields[$key]) ) {
-            $this->fields[$key] = "{$this->fields[$key]},$value";
-         } else {
-            $this->fields[$key] = $value;
+            $fields[$key] = $value;
          }
       }
+
+      $this->fields = $fields;
 
       $this->built = true;
 
