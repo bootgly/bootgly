@@ -444,23 +444,13 @@ class Request
       }
    }
 
-   public function input (Packages $Package) : int // @ return Request Content length
+   public function input (Packages $Package, string &$buffer) : int // @ return Request Content length
    {
-      static $input = []; // @ Instance cache variable
-
-      $buffer = $Package::$input;
-
-      // @ Check cache $input and return
-      if ( ! isSet($buffer[512]) && isSet($input[$buffer]) ) {
-         #$this->cached = true;
-         return $input[$buffer];
-      }
-
-      // @ Set the position of Content starts
-      $this->Content->position = strpos($buffer, "\r\n\r\n");
+      // @ Prepare the position of Content starts
+      $contentPosition = strpos($buffer, "\r\n\r\n");
 
       // @ Check if Request has Content (body)
-      if ($this->Content->position === false) {
+      if ($contentPosition === false) {
          // @ Judge whether the package length exceeds the limit.
          if (strlen($buffer) >= 16384) {
             $Package->reject("HTTP/1.1 413 Request Entity Too Large\r\n\r\n");
@@ -469,23 +459,20 @@ class Request
          return 0;
       }
 
-      // @ Set Request data
-      $_SERVER['REMOTE_ADDR'] = $Package->Connection->ip;
-      $_SERVER['REMOTE_PORT'] = $Package->Connection->port;
-
       // @ Boot Request Content length
-      $length = $this->Content->position + 4;
+      $length = $contentPosition + 4;
 
       // ? Meta
       // @ Boot Meta
       // Sample: GET /path HTTP/1.1
-      $meta = strstr($buffer, "\r\n", true);
-      #$meta = strtok($buffer, "\r\n");
-      @[$method, $uri, $procotol] = explode(' ', $meta, 3);
+      $metaRaw = strstr($buffer, "\r\n", true);
+      #$metaRaw = strtok($buffer, "\r\n");
+
+      @[$this->method, $this->uri, $this->protocol] = explode(' ', $metaRaw, 3);
 
       // @ Check Meta
       // method
-      switch ($method) {
+      switch ($this->method) {
          case 'GET':
          case 'POST':
          case 'OPTIONS':
@@ -499,54 +486,60 @@ class Request
             return 0;
       }
 
-      // @ Set Meta
-      // raw
-      $this->Meta->raw = $meta;
-      // method
-      $this->method = $method;
-      // uri
-      $this->uri = $uri ?? '/';
-      // protocol
-      $this->protocol = $procotol;
-      // length
-      $this->Meta->length = strlen($meta) + 2;
+      // @ Prepare Meta
+      $metaLength = strlen($metaRaw);
 
       // ? Header
-      // @ Set Header
-      $this->Header->raw = substr(
+      // @ Prepare Header
+      $headerRaw = substr(
          $buffer,
-         $this->Meta->length,
-         ($this->Content->position - $this->Meta->length)
+         $metaLength + 2,
+         $contentPosition - $metaLength
       );
-      $this->Header->length = strlen($this->Header->raw);
+      $headerLength = strlen($headerRaw);
 
       // @ Try to set Content Length
-      if ( $_ = strpos($this->Header->raw, "\r\nContent-Length: ") ) {
-         $this->Content->length = (int) substr($this->Header->raw, $_ + 18, 10);
-      } else if (preg_match("/\r\ncontent-length: ?(\d+)/i", $this->Header->raw, $match) === 1) {
-         $this->Content->length = $match[1];
-      } else if (stripos($this->Header->raw, "\r\nTransfer-Encoding:") !== false) {
+      if ( $_ = strpos($headerRaw, "\r\nContent-Length: ") ) {
+         $contentLength = (int) substr($headerRaw, $_ + 18, 10);
+      } else if (preg_match("/\r\ncontent-length: ?(\d+)/i", $headerRaw, $match) === 1) {
+         $contentLength = $match[1];
+      } else if (stripos($headerRaw, "\r\nTransfer-Encoding:") !== false) {
          $Package->reject("HTTP/1.1 400 Bad Request\r\n\r\n");
          return 0;
       }
 
-      if ($this->Content->length !== null) {
-         $length += $this->Content->length;
+      if ( isSet($contentLength) ) {
+         $length += $contentLength;
 
-         if ($length > 10485760) {
+         if ($length > 10485760) { // @ 10 megabytes
             $Package->reject("HTTP/1.1 413 Request Entity Too Large\r\n\r\n");
             return 0;
          }
       }
 
-      // @ Write to cache $input
-      if ( ! isSet($buffer[512]) ) {
-         $input[$buffer] = $length;
+      // @ Set Request
+      $_SERVER['REMOTE_ADDR'] = $Package->Connection->ip;
+      $_SERVER['REMOTE_PORT'] = $Package->Connection->port;
+      // ? Meta
+      // raw
+      $this->Meta->raw = $metaRaw;
 
-         if (count($input) > 512) {
-            unSet($input[key($input)]);
-         }
-      }
+      // method
+      #$this->method = $method;
+      // uri
+      #$this->uri = $uri ?? '/';
+      // protocol
+      #$this->protocol = $protocol;
+
+      // length
+      $this->Meta->length = $metaLength;
+      // ? Header
+      $this->Header->raw = $headerRaw;
+
+      $this->Header->length = $headerLength;
+      // ? Content
+      $this->Content->length = $contentLength ?? null;
+      $this->Content->position = $contentPosition;
 
       return $length;
    }

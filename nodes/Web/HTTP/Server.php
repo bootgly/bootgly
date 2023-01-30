@@ -14,6 +14,8 @@ use Bootgly\SAPI;
 use Bootgly\Web;
 use Bootgly\Web\TCP;
 
+use Bootgly\Web\TCP\Server\Packages;
+
 use Bootgly\Web\HTTP\Server\Request;
 use Bootgly\Web\HTTP\Server\Response;
 use Bootgly\Web\HTTP\Server\Router;
@@ -60,10 +62,18 @@ class Server extends TCP\Server
       }
    }
 
-   public static function decode ($Package)
+   public static function decode (Packages $Package, string &$buffer)
    {
-      if ($Package::$input === '') {
+      if ($buffer === '') {
          return false;
+      }
+
+      static $input = []; // @ Instance cache variable
+
+      // @ Check cache $input and return
+      if ( isSet($input[$buffer]) ) {
+         #$this->cached = true;
+         return $input[$buffer];
       }
 
       // @ Instance callbacks
@@ -71,9 +81,20 @@ class Server extends TCP\Server
 
       // ! Request
       // @ Input HTTP Request
-      return $Request->input($Package); // @ Return Request Content length
+      $length = $Request->input($Package, $buffer); // @ Return Request Content length
+
+      // @ Write to cache $input
+      if ( ! isSet($buffer[512]) ) {
+         $input[$buffer] = $length;
+
+         if (count($input) > 512) {
+            unSet($input[key($input)]);
+         }
+      }
+
+      return $length;
    }
-   public static function encode ($Package, &$length)
+   public static function encode (Packages $Package, &$length)
    {
       // @ Instance callbacks
       $Request = Server::$Request;
