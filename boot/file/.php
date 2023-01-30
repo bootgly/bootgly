@@ -51,7 +51,7 @@ class File
    // ? Write
    const WRITE_MODE = 'w';
    const WRITE_NEW_MODE = 'w+';
-   const APPEND_MODE = 'a';
+   const WRITE_APPEND_MODE = 'a';
    // ? Read / Write
    const READ_WRITE_MODE = 'rw';
    const READ_WRITE_NEW_MODE = 'rw+';
@@ -306,6 +306,7 @@ class File
          // }
 
          switch ($mode) {
+            // Read
             case 'r':
                // Open to Read (r)
                // Place the file pointer at the beginning of the file. (?)
@@ -322,7 +323,7 @@ class File
                if ($this->File === '') {
                   // Create directory base if not exists
                   if (is_dir($this->parent) === false) {
-                     mkdir($this->parent);
+                     mkdir($this->parent, 0775);
                   }
                   // Create empty file if file not exists
                   file_put_contents($this->Path, '');
@@ -331,6 +332,7 @@ class File
                $this->handle = fopen($this->Path, 'r+');
 
                break;
+            // Write
             case 'w':
                // Open to Write
                // Place the file pointer at the end of the file. (?)
@@ -351,7 +353,7 @@ class File
                if ($this->File === '') {
                   // Create dir if not exists
                   if (is_dir($this->parent) === false) {
-                     mkdir($this->parent);
+                     mkdir($this->parent, 0775);
                   }
                }
 
@@ -366,7 +368,7 @@ class File
                if ($this->File === '') {
                   // Create directory base if not exists
                   if (is_dir($this->parent) === false) {
-                     mkdir($this->parent);
+                     mkdir($this->parent, 0775);
                   }
                   // Create empty file if file not exists
                   file_put_contents($this->Path, '');
