@@ -246,7 +246,7 @@ class Debugger // TODO refactor (too old!)
       if (!self::$cli)
          $dump = $prefix . $info . '<span style="color: ' . $color . '">' . $var . '</span>';
       else
-         $dump = $type . $info . $var;
+         $dump = $type . $info . ' ' . $var;
 
       return $dump;
    }
