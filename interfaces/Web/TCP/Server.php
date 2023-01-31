@@ -472,8 +472,8 @@ class Server implements Servers
    public function __destruct ()
    {
       // @ Reset Opcache?
-      if (function_exists('opcache_reset') && $this->Process->level === 'master') {
-         opcache_reset();
-      }
+      #if (function_exists('opcache_reset') && $this->Process->level === 'master') {
+      #   opcache_reset();
+      #}
    }
 }
