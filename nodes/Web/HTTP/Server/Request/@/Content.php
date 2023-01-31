@@ -11,9 +11,6 @@
 namespace Bootgly\Web\HTTP\Server\_;
 
 
-use Bootgly\Web\HTTP\Server\_\Content\Downloader;
-
-
 class Content
 {
    // * Data
@@ -22,8 +19,6 @@ class Content
    // * Meta
    public ? int $length;
    public null|int|false $position;
-
-   public Downloader $Downloader;
 
 
    public function __construct ()
@@ -39,7 +34,5 @@ class Content
       if (\PHP_SAPI !== 'cli') {
          $this->input = file_get_contents('php://input');
       }
-
-      $this->Downloader = new Downloader($this);
    }
 }

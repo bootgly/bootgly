@@ -24,6 +24,7 @@ use Bootgly\Web\HTTP\Server\_\ {
    Header
 };
 
+use Bootgly\Web\HTTP\Server\Request\Downloader;
 use Bootgly\Web\HTTP\Server\Request\Session;
 
 
@@ -92,13 +93,12 @@ class Request
    private string $base;
    // * Data
    // public string $raw;
-   private array $posts;
-   private array $files;
    // ...
    // * Meta
    // ...
    // public string $length;
 
+   private Downloader $Downloader;
    public Session $Session;
 
 
@@ -109,11 +109,10 @@ class Request
       // TODO pre-defined filters
       // $this->Filter->sanitize(...) | $this->Filter->validate(...)
       // * Data
-      $this->posts = [];
-      $this->files = [];
       /* ... dynamically ... */
       // * Meta
 
+      $this->Downloader = new Downloader($this);
       $this->Session = new Session;
    }
 
@@ -304,13 +303,9 @@ class Request
 
             return $_POST;
          case 'posts':
-            return json_encode($this->post);
+            return \PHP_SAPI !== 'cli' ? json_encode($this->post) : $this->Downloader->posts;
          case 'files':
-            return $_FILES;
-         // ? Content / Downloader
-         case 'Downloader':
-            // TODO implement
-            return $this->Content->Downloader;
+            return \PHP_SAPI !== 'cli' ? $_FILES : $this->Downloader->files;
          // * Meta
          case 'host': // @ CLI OK | Non-CLI OK?
             if (\PHP_SAPI !== 'cli') {
@@ -580,149 +575,15 @@ class Request
    }
    public function download (? string $key = null) : array|null
    {
-      if ( empty($this->files) ) {
-         $this->parsePost();
+      if ( empty($this->Downloader->files) ) {
+         $this->Downloader->parse();
       }
 
       if ($key === null) {
-         return $this->files;
+         return $this->Downloader->files;
       }
 
-      return isSet($this->files[$key]) ? $this->files[$key] : null;
-   }
-
-   public function parsePost ()
-   {
-      $contentType = $this->Header->get('Content-Type');
-
-      if (preg_match('/boundary="?(\S+)"?/', $contentType, $match)) {
-         $boundary = '--' . $match[1];
-
-         $this->parseFiles($boundary);
-
-         return;
-     }
-   }
-   public function parseFiles (string $data)
-   {
-      $boundary = trim($data, '"');
-
-      $postEncoded = '';
-
-      $filesEncoded = '';
-      $files = [];
-
-      $sectionStart = strlen($boundary) + 4 + 2;
-      $maxClientFiles = 1024;
-
-      while ($maxClientFiles-- > 0 && $sectionStart) {
-         $sectionStart = $this->parseFile($boundary, $sectionStart, $postEncoded, $filesEncoded, $files);
-      }
-
-      if ($postEncoded) {
-         parse_str($postEncoded, $this->posts);
-      }
-
-      if ($filesEncoded) {
-         parse_str($filesEncoded, $this->files);
-         array_walk_recursive($this->files, function (&$value) use ($files) {
-            $value = $files[$value];
-         });
-      }
-   }
-   public function parseFile ($boundary, $sectionStart, &$postEncoded, &$filesEncoded, &$files)
-   {
-      $file = [];
-      $boundary = "\r\n$boundary";
-      $buffer = $this->Content->raw;
-
-      if (strlen($buffer) < $sectionStart) {
-         return 0;
-      }
-
-      $sectionEnd = strpos($buffer, $boundary, $sectionStart);
-      if (! $sectionEnd) {
-         return 0;
-      }
-
-      $contentLinesEnd = strpos($buffer, "\r\n\r\n", $sectionStart);
-      if (! $contentLinesEnd || $contentLinesEnd + 4 > $sectionEnd) {
-         return 0;
-      }
-
-      $contentLinesRaw = substr($buffer, $sectionStart, $contentLinesEnd - $sectionStart);
-      $contentLines = explode("\r\n", trim($contentLinesRaw . "\r\n"));
-
-      $boundaryValue = substr($buffer, $contentLinesEnd + 4, $sectionEnd - $contentLinesEnd - 4);
-
-      $uploadKey = false;
-
-      foreach ($contentLines as $contentLine) {
-         if (! strpos($contentLine, ': ') ) {
-            return 0;
-         }
-
-         @[$key, $value] = explode(': ', $contentLine);
-
-         switch ( strtolower($key) ) {
-            case 'content-disposition':
-               // Form-data
-               if ( preg_match('/name="(.*?)"; filename="(.*?)"/i', $value, $match) ) {
-                  $error = 0;
-                  $tmp_file = '';
-                  $size = \strlen($boundaryValue);
-                  $tmp_upload_dir = HOME_BASE . '/workspace/temp/';
-
-                  if (! $tmp_upload_dir) {
-                     $error = UPLOAD_ERR_NO_TMP_DIR;
-                  } else if ($boundaryValue === '') {
-                     $error = UPLOAD_ERR_NO_FILE;
-                  } else {
-                     $tmp_file = tempnam($tmp_upload_dir, 'server.http.downloaded');
-
-                     if ($tmp_file === false || file_put_contents($tmp_file, $boundaryValue) === false) {
-                        $error = UPLOAD_ERR_CANT_WRITE;
-                     }
-                  }
-
-                  $uploadKey = $match[1];
-
-                  // Parse upload files.
-                  $file = [
-                     'name' => $match[2],
-                     'tmp_name' => $tmp_file,
-                     'size' => $size,
-                     'error' => $error,
-                     'type' => '',
-                  ];
-
-                  break;
-               } else { // Is post field
-                  // Parse $_POST
-                  if ( preg_match('/name="(.*?)"$/', $value, $match) ) {
-                     $k = $match[1];
-                     $postEncoded .= urlencode($k) . "=" . urlencode($boundaryValue) . '&';
-                  }
-
-                  return $sectionEnd + strlen($boundary) + 2;
-               }
-
-               break;
-            case "content-type":
-               $file['type'] = trim($value);
-
-               break;
-         }
-      }
-
-      if ($uploadKey === false) {
-         return 0;
-      }
-
-      $filesEncoded .= urlencode($uploadKey) . '=' . count($files) . '&';
-      $files[] = $file;
-
-      return $sectionEnd + strlen($boundary) + 2;
+      return isSet($this->Downloader->files[$key]) ? $this->Downloader->files[$key] : null;
    }
 
    // TODO implement https://www.php.net/manual/pt_BR/ref.filter.php
@@ -788,16 +649,16 @@ class Request
    public function __destruct ()
    {
       // @ Delete files downloaded by server in temp folder
-      if ( ! empty($this->files) ) {
+      if ( ! empty($this->Downloader->files) ) {
          clearstatcache();
 
-         array_walk_recursive($this->files, function ($value, $key) {
+         array_walk_recursive($this->Downloader->files, function ($value, $key) {
             if ($key === 'tmp_name') {
                if ( is_file($value) ) {
                   unlink($value);
                }
             }
          });
-     }
+      }
    }
 }

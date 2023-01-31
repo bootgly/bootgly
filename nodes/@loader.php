@@ -8,8 +8,8 @@ require 'Web/HTTP/Server/Request/@/Meta.php';
 require 'Web/HTTP/Server/Request/@/Header.php';
 require 'Web/HTTP/Server/Request/@/Header/Cookie.php';
 require 'Web/HTTP/Server/Request/@/Content.php';
-require 'Web/HTTP/Server/Request/@/Content/Downloader.php';
 
+require 'Web/HTTP/Server/Request/Downloader.php';
 require 'Web/HTTP/Server/Request/Session.php';
 // ? Response
 require 'Web/HTTP/Server/Response.php';
