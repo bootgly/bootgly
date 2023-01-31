@@ -678,7 +678,7 @@ class Request
                   } else if ($boundaryValue === '') {
                      $error = UPLOAD_ERR_NO_FILE;
                   } else {
-                     $tmp_file = tempnam($tmp_upload_dir, 'bootgly.downloaded.file.');
+                     $tmp_file = tempnam($tmp_upload_dir, 'server.http.downloaded');
 
                      if ($tmp_file === false || file_put_contents($tmp_file, $boundaryValue) === false) {
                         $error = UPLOAD_ERR_CANT_WRITE;
@@ -783,5 +783,21 @@ class Request
       $ranges['type'] = substr($header, 0, $equalIndex);
 
       return $ranges;
+   }
+
+   public function __destruct ()
+   {
+      // @ Delete files downloaded by server in temp folder
+      if ( ! empty($this->files) ) {
+         clearstatcache();
+
+         array_walk_recursive($this->files, function ($value, $key) {
+            if ($key === 'tmp_name') {
+               if ( is_file($value) ) {
+                  unlink($value);
+               }
+            }
+         });
+     }
    }
 }
