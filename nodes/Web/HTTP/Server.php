@@ -68,9 +68,9 @@ class Server extends TCP\Server
          return false;
       }
 
-      static $input = []; // @ Instance cache variable
+      static $input = []; // @ Instance local cache
 
-      // @ Check cache $input and return
+      // @ Check local cache and return
       if ( isSet($input[$buffer]) ) {
          #$this->cached = true;
          return $input[$buffer];
@@ -79,11 +79,16 @@ class Server extends TCP\Server
       // @ Instance callbacks
       $Request = Server::$Request;
 
+      // @ Handle Package cache
+      if ($Package->changed) {
+         $Request->reset();
+      }
+
       // ! Request
       // @ Input HTTP Request
       $length = $Request->input($Package, $buffer); // @ Return Request Content length
 
-      // @ Write to cache $input
+      // @ Write to local cache
       if ( ! isSet($buffer[512]) ) {
          $input[$buffer] = $length;
 
@@ -101,10 +106,8 @@ class Server extends TCP\Server
       $Response = Server::$Response;
       $Router = Server::$Router;
 
-      // @ Reset cache if necessary otherwise return cached
+      // @ Handle Package cache
       if ($Package->changed) {
-         // @ Reset HTTP Request/Response Data
-         $Request->reset();
          $Response->reset();
       } else if ($Response->Content->raw) {
          // TODO check if Response raw is static or dynamic
