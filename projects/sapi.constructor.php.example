@@ -21,6 +21,9 @@ return static function
    #$Request->uri;       // /path/to?query1=value2...
    #$Request->protocol;  // HTTP/1.1
 
+   #$file = $Request->download('file1');
+   #var_dump($file);
+
    // ! Response examples
    /*
    return $Response(raw: <<<HTTP_RAW
