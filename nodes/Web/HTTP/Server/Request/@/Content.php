@@ -29,8 +29,8 @@ class Content
    public function __construct ()
    {
       // * Data
-      $this->input = '';
       $this->raw = '';
+      $this->input = '';
       // * Meta
       $this->length = null;
       $this->position = null;

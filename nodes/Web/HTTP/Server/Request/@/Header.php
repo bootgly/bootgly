@@ -88,7 +88,7 @@ class Header
    {
       $this->build();
 
-      return (string) $this->fields[$name] ?? (string) $this->fields[strtolower($name)] ?? '';
+      return (string) @$this->fields[$name] ?? (string) @$this->fields[strtolower($name)] ?? '';
    }
 
    public function build ()

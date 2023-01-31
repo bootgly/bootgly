@@ -12,7 +12,8 @@ namespace Bootgly\Web\HTTP\Server;
 
 
 use Closure;
-
+use const Bootgly\HOME_DIR;
+use Bootgly\Debugger;
 use Bootgly\Path;
 
 use Bootgly\Web\TCP\Server\Packages;
@@ -91,6 +92,8 @@ class Request
    private string $base;
    // * Data
    // public string $raw;
+   private array $posts;
+   private array $files;
    // ...
    // * Meta
    // ...
@@ -106,6 +109,8 @@ class Request
       // TODO pre-defined filters
       // $this->Filter->sanitize(...) | $this->Filter->validate(...)
       // * Data
+      $this->posts = [];
+      $this->files = [];
       /* ... dynamically ... */
       // * Meta
 
@@ -444,14 +449,27 @@ class Request
       }
    }
 
+   public function reset ()
+   {
+      // ? Request
+      unSet($this->method);
+      unSet($this->uri);
+      unSet($this->protocol);
+
+      // ? Request Meta
+      $this->Meta->__construct();
+      // ? RequestHeader
+      $this->Header->__construct();
+      // ? RequestContent
+      $this->Content->__construct();
+   }
+
    public function input (Packages $Package, string &$buffer) : int // @ return Request Content length
    {
-      // @ Prepare the position of Content starts
+      // @ Prepare the position of Request Content starts
       $contentPosition = strpos($buffer, "\r\n\r\n");
-
-      // @ Check if Request has Content (body)
-      if ($contentPosition === false) {
-         // @ Judge whether the package length exceeds the limit.
+      if ($contentPosition === false) { // @ Check if Request has Content (body)
+         // @ Check Request raw length
          if (strlen($buffer) >= 16384) {
             $Package->reject("HTTP/1.1 413 Request Entity Too Large\r\n\r\n");
          }
@@ -459,20 +477,23 @@ class Request
          return 0;
       }
 
-      // @ Boot Request Content length
-      $length = $contentPosition + 4;
+      $length = $contentPosition + 4; // @ Boot Request Content length
 
-      // ? Meta
-      // @ Boot Meta
+      // ? Request Meta
+      // @ Boot Request Meta raw
       // Sample: GET /path HTTP/1.1
       $metaRaw = strstr($buffer, "\r\n", true);
       #$metaRaw = strtok($buffer, "\r\n");
 
-      @[$this->method, $this->uri, $this->protocol] = explode(' ', $metaRaw, 3);
+      @[$method, $uri, $protocol] = explode(' ', $metaRaw, 3);
 
-      // @ Check Meta
+      // @ Check Request Meta
+      if (! $method || ! $uri || ! $protocol) {
+         $Package->reject("HTTP/1.1 400 Bad Request\r\n\r\n");
+         return 0;
+      }
       // method
-      switch ($this->method) {
+      switch ($method) {
          case 'GET':
          case 'POST':
          case 'OPTIONS':
@@ -485,20 +506,25 @@ class Request
             $Package->reject("HTTP/1.1 405 Method Not Allowed\r\n\r\n");
             return 0;
       }
+      // uri
+      // protocol
 
-      // @ Prepare Meta
+      // @ Prepare Request Meta length
       $metaLength = strlen($metaRaw);
 
-      // ? Header
-      // @ Prepare Header
+      // ? Request Header
+      // @ Boot Request Header raw
       $headerRaw = substr(
          $buffer,
          $metaLength + 2,
          $contentPosition - $metaLength
       );
+
+      // @ Prepare Request Header length
       $headerLength = strlen($headerRaw);
 
-      // @ Try to set Content Length
+      // ? Request Content
+      // @ Prepare Request Content length if possible
       if ( $_ = strpos($headerRaw, "\r\nContent-Length: ") ) {
          $contentLength = (int) substr($headerRaw, $_ + 18, 10);
       } else if (preg_match("/\r\ncontent-length: ?(\d+)/i", $headerRaw, $match) === 1) {
@@ -508,8 +534,13 @@ class Request
          return 0;
       }
 
+      // @ Prepare Request Content raw if possible
       if ( isSet($contentLength) ) {
-         $length += $contentLength;
+         if ($method !== 'GET' && $method !== 'HEAD') {
+            $contentRaw = substr($buffer, $contentPosition, $contentLength);
+         }
+
+         $length += $contentLength; // @ Add Request Content length
 
          if ($length > 10485760) { // @ 10 megabytes
             $Package->reject("HTTP/1.1 413 Request Entity Too Large\r\n\r\n");
@@ -518,44 +549,180 @@ class Request
       }
 
       // @ Set Request
+      // ? Request
       $_SERVER['REMOTE_ADDR'] = $Package->Connection->ip;
       $_SERVER['REMOTE_PORT'] = $Package->Connection->port;
-      // ? Meta
+      // ? Request Meta
       // raw
       $this->Meta->raw = $metaRaw;
 
       // method
-      #$this->method = $method;
+      $this->method = $method;
       // uri
-      #$this->uri = $uri ?? '/';
+      $this->uri = $uri;
       // protocol
-      #$this->protocol = $protocol;
+      $this->protocol = $protocol;
 
       // length
       $this->Meta->length = $metaLength;
-      // ? Header
+      // ? Request Header
       $this->Header->raw = $headerRaw;
 
       $this->Header->length = $headerLength;
-      // ? Content
-      $this->Content->length = $contentLength ?? null;
+      // ? Request Content
+      if ( isSet($contentRaw) ) $this->Content->raw = $contentRaw;
+
+      if ( isSet($contentLength) ) $this->Content->length = $contentLength;
       $this->Content->position = $contentPosition;
 
+      // @ return Request Content length
       return $length;
    }
-   public function reset ()
+   public function download (string $key) : array|null
    {
-      // ? Meta
-      unSet($this->method);
-      unSet($this->uri);
-      unSet($this->protocol);
+      if ( ! empty($this->files) ) {
+         $this->parsePost();
+      }
 
-      // ? Meta
-      $this->Meta->__construct();
-      // ? Header
-      $this->Header->__construct();
-      // ? Content
-      $this->Content->__construct();
+      if ($key === null) {
+         return $this->files;
+      }
+
+      return isSet($this->files[$key]) ? $this->files[$key] : null;
+   }
+
+   public function parsePost ()
+   {
+      $contentType = $this->Header->get('Content-Type');
+
+      if (preg_match('/boundary="?(\S+)"?/', $contentType, $match)) {
+         $boundary = '--' . $match[1];
+
+         $this->parseFiles($boundary);
+
+         return;
+     }
+   }
+   public function parseFiles (string $data)
+   {
+      $boundary = trim($data, '"');
+
+      $postEncoded = '';
+
+      $filesEncoded = '';
+      $files = [];
+
+      $sectionStart = strlen($boundary) + 4 + 2;
+      $maxClientFiles = 1024;
+
+      while ($maxClientFiles-- > 0 && $sectionStart) {
+         $sectionStart = $this->parseFile($boundary, $sectionStart, $postEncoded, $filesEncoded, $files);
+      }
+
+      if ($postEncoded) {
+         parse_str($postEncoded, $this->posts);
+      }
+
+      if ($filesEncoded) {
+         parse_str($filesEncoded, $this->files);
+         array_walk_recursive($this->files, function (&$value) use ($files) {
+            $value = $files[$value];
+         });
+      }
+   }
+   public function parseFile ($boundary, $sectionStart, &$postEncoded, &$filesEncoded, &$files)
+   {
+      $file = [];
+      $boundary = "\r\n$boundary";
+      $buffer = $this->Content->raw;
+
+      if (strlen($buffer) < $sectionStart) {
+         return 0;
+      }
+
+      $sectionEnd = strpos($buffer, $boundary, $sectionStart);
+      if (! $sectionEnd) {
+         return 0;
+      }
+
+      $contentLinesEnd = strpos($buffer, "\r\n\r\n", $sectionStart);
+      if (! $contentLinesEnd || $contentLinesEnd + 4 > $sectionEnd) {
+         return 0;
+      }
+
+      $contentLinesRaw = substr($buffer, $sectionStart, $contentLinesEnd - $sectionStart);
+      $contentLines = explode("\r\n", trim($contentLinesRaw . "\r\n"));
+
+      $boundaryValue = substr($buffer, $contentLinesEnd + 4, $sectionEnd - $contentLinesEnd - 4);
+
+      $uploadKey = false;
+
+      foreach ($contentLines as $contentLine) {
+         if (! strpos($contentLine, ': ') ) {
+            return 0;
+         }
+
+         @[$key, $value] = explode(': ', $contentLine);
+
+         switch ( strtolower($key) ) {
+            case 'content-disposition':
+               // Form-data
+               if ( preg_match('/name="(.*?)"; filename="(.*?)"/i', $value, $match) ) {
+                  $error = 0;
+                  $tmp_file = '';
+                  $size = \strlen($boundaryValue);
+                  $tmp_upload_dir = HOME_BASE . '/workspace/temp/';
+
+                  if (! $tmp_upload_dir) {
+                     $error = UPLOAD_ERR_NO_TMP_DIR;
+                  } else if ($boundaryValue === '') {
+                     $error = UPLOAD_ERR_NO_FILE;
+                  } else {
+                     $tmp_file = tempnam($tmp_upload_dir, 'bootgly.downloaded.file.');
+
+                     if ($tmp_file === false || file_put_contents($tmp_file, $boundaryValue) === false) {
+                        $error = UPLOAD_ERR_CANT_WRITE;
+                     }
+                  }
+
+                  $uploadKey = $match[1];
+
+                  // Parse upload files.
+                  $file = [
+                     'name' => $match[2],
+                     'tmp_name' => $tmp_file,
+                     'size' => $size,
+                     'error' => $error,
+                     'type' => '',
+                  ];
+
+                  break;
+               } else { // Is post field
+                  // Parse $_POST
+                  if ( preg_match('/name="(.*?)"$/', $value, $match) ) {
+                     $k = $match[1];
+                     $postEncoded .= urlencode($k) . "=" . urlencode($boundaryValue) . '&';
+                  }
+
+                  return $sectionEnd + strlen($boundary) + 2;
+               }
+
+               break;
+            case "content-type":
+               $file['type'] = trim($value);
+
+               break;
+         }
+      }
+
+      if ($uploadKey === false) {
+         return 0;
+      }
+
+      $filesEncoded .= urlencode($uploadKey) . '=' . count($files) . '&';
+      $files[] = $file;
+
+      return $sectionEnd + strlen($boundary) + 2;
    }
 
    // TODO implement https://www.php.net/manual/pt_BR/ref.filter.php
