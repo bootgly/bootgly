@@ -578,9 +578,9 @@ class Request
       // @ return Request Content length
       return $length;
    }
-   public function download (string $key) : array|null
+   public function download (? string $key = null) : array|null
    {
-      if ( ! empty($this->files) ) {
+      if ( empty($this->files) ) {
          $this->parsePost();
       }
 
