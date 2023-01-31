@@ -193,12 +193,19 @@ class Debugger // TODO refactor (too old!)
 
                if (is_array($value)) {
                   $arrayValueCount = count($value);
-                  $value = "<b>array</b>" . ' (size=' . $arrayValueCount . ") ";
+
+                  if (! self::$cli) {
+                     $value = '<b>array</b>';
+                  } else {
+                     $value = 'array';
+                  }
+
+                  $value .= ' (size=' . $arrayValueCount . ") ";
 
                   if ($arrayValueCount > 0) {
-                     $value .= "[...]";
+                     $value .= '[...]';
                   } else {
-                     $value .= "[]";
+                     $value .= '[]';
                   }
                } else
                   $value = self::dump($value);
@@ -299,21 +306,30 @@ class Debugger // TODO refactor (too old!)
 
       self::$Output .= "\n";
 
-      // Dump
+      // @ Dump
       foreach ($vars as $key => $value) {
          if (@self::$labels[$key]) {
-            if (!self::$cli)
+            if (! self::$cli) {
                self::$Output .= '<b style="color:#7d7d7d">';
+            } else {
+               self::$Output .= "\n\033[95m";
+            }
+
             self::$Output .= self::$labels[$key] . "\n";
-            if (!self::$cli)
-               self::$Output .= "</b>";
+
+            if (! self::$cli) {
+               self::$Output .= '</b>';
+            } else {
+               self::$Output .= "\033[0m";
+            }
          }
 
          self::$Output .= self::dump($value) . "\n";
       }
 
       self::$Output .= "\n";
-      if (!self::$cli) {
+
+      if (! self::$cli) {
          self::$Output .= "</pre>";
          self::$Output .= "<style>pre{-moz-tab-size: 1; tab-size: 1;}</style>";
       }
