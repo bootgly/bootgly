@@ -662,8 +662,6 @@ class Response
       {$this->Content->raw}
       HTTP_RAW;
 
-      debug(Server::$Request->raw, $this->raw);
-
       if ($this->stream) {
          $length = strlen($this->Meta->raw) + strlen($this->Header->raw) + 4;
 
