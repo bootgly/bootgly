@@ -107,21 +107,26 @@ class Header
       if ( empty($this->fields) && empty($this->prepared) ) {
          return false;
       }
-      // @ Set headers with prepared fields
+
+      // @ Set / merge headers with prepared fields
       if ( empty($this->fields) && ! empty($this->prepared) ) {
          $this->fields = $this->prepared;
+      } else {
+         $this->fields = array_merge($this->fields, $this->prepared);
       }
+
       // @ Set default headers
       if ( ! isSet($this->fields['Content-Type']) ) {
          $this->fields['Content-Type'] = 'text/html; charset=UTF-8';
       }
 
+      // @ Build
       $raw = [];
-      // @ Build Preset Fields
+      // Preset Fields
       foreach ($this->preset as $name => $value) {
          $raw[] = "$name: $value";
       }
-      // @ Build Fields
+      // Fields
       foreach ($this->fields as $name => $value) {
          $raw[] = "$name: $value";
       }
