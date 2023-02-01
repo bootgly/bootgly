@@ -8,6 +8,7 @@ composer.json
 composer.lock
 cli-config.php
 server-*.php
+*.iso
 
 ### @Bootgly ###
 ## Short folders
