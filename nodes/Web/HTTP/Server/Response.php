@@ -651,11 +651,8 @@ class Response
       {$this->Content->raw}
       HTTP_RAW;
 
-      debug($this->Meta->raw, $this->Header->raw);
-
       if ($this->stream) {
-         // TODO simplify
-         $length = strlen($this->Meta->raw) + strlen($this->Header->raw) + strlen("\r\n\r\n");
+         $length = strlen($this->Meta->raw) + strlen($this->Header->raw) + 4;
 
          $Package->handlers = $this->files;
 
