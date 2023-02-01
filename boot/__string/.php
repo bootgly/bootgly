@@ -11,7 +11,8 @@
 namespace Bootgly;
 
 
-final class __String
+#[\AllowDynamicProperties]
+final class __String // TODO refactor old class
 {
 	public string $string;
 

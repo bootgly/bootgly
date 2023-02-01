@@ -1,4 +1,5 @@
 <?php
+require '@functions/formatters.php';
 require '@interfaces/Requestable.php';
 require '@traits/Configuring.php';
 

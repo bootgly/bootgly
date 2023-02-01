@@ -3,6 +3,8 @@
 use Bootgly\Logger;
 use Bootgly\Web\TCP\Server\Connections\Connection;
 
+use function Bootgly\formatBytes;
+
 switch ($name) {
    // TODO move to Info class?
    case '@stats':
@@ -19,8 +21,9 @@ switch ($name) {
       $reads = number_format(self::$reads, 0, '', ',');
       $writes = number_format(self::$writes, 0, '', ',');
 
-      $read = round(self::$read / 1024 / 1024, 2);
-      $written = round(self::$written / 1024 / 1024, 2);
+      // @ Format bytes
+      $read = formatBytes(self::$read);
+      $written = formatBytes(self::$written);
 
       $errors = [];
       $errors[0] = self::$errors['connection'];

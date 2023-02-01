@@ -28,6 +28,7 @@ server-*.php
 ## /boot
 /boot/*
 !/boot/..php
+!/boot/@functions
 !/boot/@interfaces
 !/boot/@traits
 !/boot/__array
