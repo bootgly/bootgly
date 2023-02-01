@@ -250,10 +250,12 @@ class Debugger // TODO refactor (too old!)
             }
       }
 
-      if (!self::$cli)
+      if (! self::$cli) {
          $dump = $prefix . $info . '<span style="color: ' . $color . '">' . $var . '</span>';
-      else
+      }
+      else {
          $dump = $type . $info . ' ' . $var;
+      }
 
       return $dump;
    }
@@ -261,6 +263,7 @@ class Debugger // TODO refactor (too old!)
    {
       self::$Output = "";
 
+      // @ Call
       if (!self::$cli)
          self::$Output = "<pre>";
 
@@ -272,17 +275,27 @@ class Debugger // TODO refactor (too old!)
             self::$Output .= '</b>';
       }
 
-      if (!self::$cli)
+      if (! self::$cli) {
          self::$Output .= '<small>';
+      } else {
+         self::$Output .= "\n\033[96m";
+      }
+
       self::$Output .= ' in call number: ' . self::$call;
-      if (!self::$cli)
+
+      if (! self::$cli) {
          self::$Output .= '</small>';
+      } else {
+         self::$Output .= "\033[0m";
+      }
+
       self::$Output .= "\n";
 
-      // Trace
+      // @ Trace
       if (self::$trace && self::$trace[0]['file'] and self::$trace[0]['line']) {
-         if (!self::$cli)
+         if (! self::$cli) {
             self::$Output .= '<small>';
+         }
 
          $n = 1;
          foreach (self::$trace as $trace) {
@@ -299,20 +312,23 @@ class Debugger // TODO refactor (too old!)
             $n++;
          }
 
-         if (!self::$cli)
+         if (! self::$cli) {
             self::$Output .= "</small>";
+         }
+
          self::$Output .= "\n";
       }
 
       self::$Output .= "\n";
 
-      // @ Dump
+      // @ Value
       foreach ($vars as $key => $value) {
+         // @ Labels
          if (@self::$labels[$key]) {
             if (! self::$cli) {
                self::$Output .= '<b style="color:#7d7d7d">';
             } else {
-               self::$Output .= "\n\033[95m";
+               self::$Output .= "\033[95m";
             }
 
             self::$Output .= self::$labels[$key] . "\n";
