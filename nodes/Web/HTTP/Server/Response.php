@@ -549,19 +549,27 @@ class Response
 
       // @ Send File Content
       if (\PHP_SAPI !== 'cli') { // TODO refactor
-         $this->Header->build();
          $this->Header->set('Content-Length', $File->size);
+         $this->Header->build();
 
          flush();
 
          $File->read(); // FIX MEMORY RAM USAGE OR LIMIT FILE SIZE TO UPLOAD
       } else {
+         // @ Return null Response if client Purpose === prefetch
+         if (Server::$Request->Header->get('Purpose') === 'prefetch') {
+            $this->Meta->status = 204;
+            $this->Header->set('Cache-Control', 'no-store');
+            $this->Header->set('Expires', 0);
+            return $this;
+         }
+
+         // @ If file size < 2 MB set file content in the Response Content raw
          if ($File->size <= 2 * 1024 * 1024) { // @ 2097152 bytes
             $this->Content->raw = $File->read($File::CONTENTS_READ_METHOD);
             return $this;
          }
 
-         $this->Header->build();
          // @ Stream if the file is larger than 2 MB
          $this->stream = true;
 
@@ -620,6 +628,9 @@ class Response
                $this->Meta->status = 206; // 206 Partial Content
          }
 
+         // @ Build Response Header
+         $this->Header->build();
+
          // @ Prepare Response files
          $this->files[] = [
             'file' => $File->File, // @ Set file path to open handler
@@ -650,6 +661,8 @@ class Response
 
       {$this->Content->raw}
       HTTP_RAW;
+
+      debug(Server::$Request->raw, $this->raw);
 
       if ($this->stream) {
          $length = strlen($this->Meta->raw) + strlen($this->Header->raw) + 4;
