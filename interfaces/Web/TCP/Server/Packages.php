@@ -161,6 +161,7 @@ abstract class Packages implements Web\Packages
          self::$output = (SAPI::$Handler)(...$this->callbacks);
       }
 
+      // @ Check connection close intention by server?
       if ( empty(self::$output) ) {
          return false;
       }
@@ -172,21 +173,24 @@ abstract class Packages implements Web\Packages
          $written = 0;
 
          // @ Send initial part of data
-         if ($length) {
+         if ($length !== null) {
             $initial = substr($buffer, 0, $length);
             $sent = @fwrite($Socket, $initial, $length);
-            $written =+ ($sent === false) ? 0 : $sent;
-         }
-
-         // @ Stream remaining of data with file handlers if exists
-         if ( ! empty($this->handlers) ) { // TODO Stream extends Exception
-            throw new \LogicException;
          }
 
          // @ Set remaining of data if exists
-         if ($sent) {
-            $buffer = substr($buffer, $sent);
-            $length = strlen($buffer);
+         if ($sent !== false) {
+            $written += $sent;
+
+            if ( ! empty($this->handlers) ) {
+               // @ Prepare stream with file handler
+               $written = $this->stream($Socket);
+               $buffer = '';
+            } else {
+               // @ Prepare stream with content raw
+               $buffer = substr($buffer, $sent);
+               $length = strlen($buffer);
+            }
          }
 
          // @ Send entire or remaining of data if exists
@@ -208,14 +212,12 @@ abstract class Packages implements Web\Packages
                break;
             }
          }
-      } catch (\LogicException) { // TODO Stream extends Exception
-         $sent = $this->stream($Socket);
-      } catch (\Error) {
+      } catch (\Throwable) {
          $written = false;
       }
 
       // @ Check issues
-      if ($written === 0 || $written === false || $sent === false || $buffer === '') {
+      if (! $written || ! $sent) {
          return $this->fail($Socket, 'write', $written);
       }
 
