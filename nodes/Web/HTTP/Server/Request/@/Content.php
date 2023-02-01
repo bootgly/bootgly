@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\Web\HTTP\Server\_;
+namespace Bootgly\Web\HTTP\Server\Request\_;
 
 
 class Content
@@ -19,6 +19,8 @@ class Content
    // * Meta
    public ? int $length;
    public null|int|false $position;
+   public ? int $downloaded;
+   public bool $waiting;
 
 
    public function __construct ()
@@ -29,6 +31,8 @@ class Content
       // * Meta
       $this->length = null;
       $this->position = null;
+      $this->downloaded = null;
+      $this->waiting = false;
 
 
       if (\PHP_SAPI !== 'cli') {

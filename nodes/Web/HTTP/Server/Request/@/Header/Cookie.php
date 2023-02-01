@@ -8,10 +8,10 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\Web\HTTP\Server\_\Header;
+namespace Bootgly\Web\HTTP\Server\Request\_\Header;
 
 
-use Bootgly\Web\HTTP\Server\_\Header;
+use Bootgly\Web\HTTP\Server\Request\_\Header;
 
 
 final class Cookie

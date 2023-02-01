@@ -8,10 +8,10 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\Web\HTTP\Server\_\Meta;
+namespace Bootgly\Web\HTTP\Server\Request\_\Meta;
 
 
-use Bootgly\Web\HTTP\Server\_\Meta;
+use Bootgly\Web\HTTP\Server\Request\_\Meta;
 
 
 final class Authentication
