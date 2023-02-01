@@ -556,13 +556,12 @@ class Response
 
          $File->read(); // FIX MEMORY RAM USAGE OR LIMIT FILE SIZE TO UPLOAD
       } else {
-         $this->Header->build();
-
-         if ($File->size <= 2 * 1024 * 1024) {
+         if ($File->size <= 2 * 1024 * 1024) { // @ 2097152 bytes
             $this->Content->raw = $File->read($File::CONTENTS_READ_METHOD);
             return $this;
          }
 
+         $this->Header->build();
          // @ Stream if the file is larger than 2 MB
          $this->stream = true;
 
@@ -651,6 +650,8 @@ class Response
 
       {$this->Content->raw}
       HTTP_RAW;
+
+      debug($this->Meta->raw, $this->Header->raw);
 
       if ($this->stream) {
          // TODO simplify
