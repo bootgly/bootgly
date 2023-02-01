@@ -571,16 +571,16 @@ class Request
    }
    public function download (? string $key = null) : array|null
    {
-      if ( empty($this->Downloader->files) ) {
+      if ( empty($this->files) ) {
          $this->Downloader->parse();
       }
 
       if ($key === null) {
-         return $this->Downloader->files;
+         return $this->files;
       }
 
-      if ( isSet($this->Downloader->files[$key]) ) {
-         return $this->Downloader->files[$key];
+      if ( isSet($this->files[$key]) ) {
+         return $this->files[$key];
       }
 
       return null;
