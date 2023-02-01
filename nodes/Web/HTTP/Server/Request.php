@@ -18,7 +18,7 @@ use Bootgly\Path;
 
 use Bootgly\Web\TCP\Server\Packages;
 use Bootgly\Web\HTTP\Server;
-use Bootgly\Web\HTTP\Server\_\ {
+use Bootgly\Web\HTTP\Server\Request\_\ {
    Meta,
    Content,
    Header
@@ -303,9 +303,9 @@ class Request
 
             return $_POST;
          case 'posts':
-            return \PHP_SAPI !== 'cli' ? json_encode($this->post) : $this->Downloader->posts;
+            return json_encode($this->post);
          case 'files':
-            return \PHP_SAPI !== 'cli' ? $_FILES : $this->Downloader->files;
+            return $_FILES;
          // * Meta
          case 'host': // @ CLI OK | Non-CLI OK?
             if (\PHP_SAPI !== 'cli') {
@@ -459,13 +459,13 @@ class Request
       $this->Content->__construct();
    }
 
-   public function input (Packages $Package, string &$buffer) : int // @ return Request Content length
+   public function input (Packages $Package, string &$buffer, int $length) : int // @ return Request Content length
    {
       // @ Prepare the position of Request Content starts
       $contentPosition = strpos($buffer, "\r\n\r\n");
       if ($contentPosition === false) { // @ Check if Request has Content (body)
          // @ Check Request raw length
-         if (strlen($buffer) >= 16384) {
+         if ($length >= 16384) {
             $Package->reject("HTTP/1.1 413 Request Entity Too Large\r\n\r\n");
          }
 
@@ -490,12 +490,12 @@ class Request
       // method
       switch ($method) {
          case 'GET':
-         case 'POST':
-         case 'OPTIONS':
          case 'HEAD':
-         case 'DELETE':
+         case 'POST':
          case 'PUT':
          case 'PATCH':
+         case 'DELETE':
+         case 'OPTIONS':
             break;
          default:
             $Package->reject("HTTP/1.1 405 Method Not Allowed\r\n\r\n");
@@ -509,11 +509,7 @@ class Request
 
       // ? Request Header
       // @ Boot Request Header raw
-      $headerRaw = substr(
-         $buffer,
-         $metaLength + 2,
-         $contentPosition - $metaLength
-      );
+      $headerRaw = substr($buffer, $metaLength + 2, $contentPosition - $metaLength);
 
       // @ Prepare Request Header length
       $headerLength = strlen($headerRaw);
@@ -529,18 +525,21 @@ class Request
          return 0;
       }
 
-      // @ Prepare Request Content raw if possible
+      // @ Set Request Content raw / length if possible
       if ( isSet($contentLength) ) {
-         if ($method !== 'GET' && $method !== 'HEAD') {
-            $contentRaw = substr($buffer, $contentPosition, $contentLength);
-         }
-
          $length += $contentLength; // @ Add Request Content length
 
          if ($length > 10485760) { // @ 10 megabytes
             $Package->reject("HTTP/1.1 413 Request Entity Too Large\r\n\r\n");
             return 0;
          }
+
+         if ($method === 'POST') {
+            $this->Content->raw = substr($buffer, $contentPosition, $contentLength);
+            $this->Content->downloaded = strlen($this->Content->raw);
+         }
+
+         $this->Content->length = $contentLength;
       }
 
       // @ Set Request
@@ -565,9 +564,6 @@ class Request
 
       $this->Header->length = $headerLength;
       // ? Request Content
-      if ( isSet($contentRaw) ) $this->Content->raw = $contentRaw;
-
-      if ( isSet($contentLength) ) $this->Content->length = $contentLength;
       $this->Content->position = $contentPosition;
 
       // @ return Request Content length
@@ -583,7 +579,11 @@ class Request
          return $this->Downloader->files;
       }
 
-      return isSet($this->Downloader->files[$key]) ? $this->Downloader->files[$key] : null;
+      if ( isSet($this->Downloader->files[$key]) ) {
+         return $this->Downloader->files[$key];
+      }
+
+      return null;
    }
 
    // TODO implement https://www.php.net/manual/pt_BR/ref.filter.php

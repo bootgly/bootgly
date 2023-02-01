@@ -602,7 +602,6 @@ class Response
             }
          }
 
-         #var_dump($length, $offset);
          // @ Set Content Length
          $this->Content->length = ($length > 0) ? ($length) : ($File->size - $offset);
          $this->Header->set('Content-Length', $this->Content->length);

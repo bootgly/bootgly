@@ -62,49 +62,60 @@ class Server extends TCP\Server
       }
    }
 
-   public static function decode (Packages $Package, string &$buffer)
+   public static function decode (Packages $Package, string &$buffer, int $length)
    {
-      if ($buffer === '') {
-         return false;
-      }
-
-      static $input = []; // @ Instance local cache
+      static $inputs = []; // @ Instance local cache
 
       // @ Check local cache and return
-      if ( isSet($input[$buffer]) ) {
-         #$this->cached = true;
-         return $input[$buffer];
+      if ( $length <= 512 && isSet($inputs[$buffer]) ) {
+         return $length;
       }
 
       // @ Instance callbacks
       $Request = Server::$Request;
 
+      // ! Request
+      // @ Check if Request Content is waiting data
+      if ($Request->Content->waiting) {
+         // @ Finish filling the Request Content raw with TCP read buffer
+         $Content = &$Request->Content;
+
+         $Content->raw .= $buffer;
+         $Content->downloaded += $length;
+
+         if ($Content->length > $Content->downloaded) {
+            return 0;
+         }
+
+         $Content->waiting = false;
+
+         return $Content->length;
+      }
+
       // @ Handle Package cache
       if ($Package->changed) {
-         $Request->reset();
+         // $Request->reset();
+         $Request = Server::$Request = new Request;
+      }
+
+      // @ Write to local cache
+      if ($length <= 512) {
+         $inputs[$buffer] = $length;
+
+         if (count($inputs) > 512) {
+            unSet($inputs[key($inputs)]);
+         }
       }
 
       // ! Request
       // @ Input HTTP Request
-      $length = $Request->input($Package, $buffer); // @ Return Request Content length
-
-      // @ Write to local cache
-      if ( ! isSet($buffer[512]) ) {
-         $input[$buffer] = $length;
-
-         if (count($input) > 512) {
-            unSet($input[key($input)]);
-         }
-      }
-
-      return $length;
+      return $Request->input($Package, $buffer, $length); // @ Return Request Content length
    }
    public static function encode (Packages $Package, &$length)
    {
       // @ Instance callbacks
       $Request = Server::$Request;
       $Response = Server::$Response;
-      $Router = Server::$Router;
 
       // @ Handle Package cache
       if ($Package->changed) {
@@ -117,7 +128,7 @@ class Server extends TCP\Server
       // ! Response
       // @ Try to Invoke SAPI Closure
       try {
-         (SAPI::$Handler)($Request, $Response, $Router);
+         (SAPI::$Handler)($Request, $Response, Server::$Router);
       } catch (\Throwable) {
          $Response->Meta->status = 500; // @ Set 500 HTTP Server Error Response
 
@@ -125,7 +136,10 @@ class Server extends TCP\Server
             $Response->Content->raw = ' ';
          }
       }
-
+      // @ Check if Request Content is waiting data
+      if ($Request->Content->waiting) {
+         return '';
+      }
       // @ Output/Stream HTTP Response
       return $Response->output($Package, $length); // @ Return Response raw
    }

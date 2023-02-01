@@ -12,31 +12,32 @@ namespace Bootgly\Web\HTTP\Server\Request;
 
 
 use Bootgly\Web\HTTP\Server\Request;
+use Bootgly\Web\HTTP\Server\Request\_\Header;
+use Bootgly\Web\HTTP\Server\Request\_\Content;
 
 
 class Downloader
 {
-   public Request $Request;
+   public Header $Header;
+   public Content $Content;
 
-   // * Data
-   public array $posts;
-   public array $files;
+   // ***
 
 
    public function __construct (Request $Request)
    {
-      $this->Request = $Request;
+      $this->Header = &$Request->Header;
+      $this->Content = &$Request->Content;
 
-      // * Data
-      $this->posts = [];
-      $this->files = [];
+      // ***
    }
 
-   public function parse ()
+   public function parse () : bool
    {
+      // @ Parse boundary / Form-data
       $matched = preg_match(
          '/boundary="?(\S+)"?/',
-         $this->Request->Header->get('Content-Type'),
+         $this->Header->get('Content-Type'),
          $match
       );
 
@@ -45,60 +46,80 @@ class Downloader
 
          $this->downloading($boundary);
 
-         return;
+         return true;
       }
+      // @ Parse JSON
+      // TODO
+
+      return false;
    }
    public function downloading (string $boundary)
    {
       $postEncoded = '';
-
       $filesEncoded = '';
+
       $files = [];
 
       $sectionStart = strlen($boundary) + 4 + 2;
       $maxClientFiles = 1024;
 
-      while ($maxClientFiles-- > 0 && $sectionStart) {
+      while ($maxClientFiles-- > 0 && $sectionStart > 0) {
          $sectionStart = $this->download($boundary, $sectionStart, $postEncoded, $filesEncoded, $files);
       }
 
       if ($postEncoded) {
-         parse_str($postEncoded, $this->posts);
+         parse_str($postEncoded, $_POST);
       }
 
       if ($filesEncoded) {
-         parse_str($filesEncoded, $this->files);
-         array_walk_recursive($this->files, function (&$value) use ($files) {
+         parse_str($filesEncoded, $_FILES);
+         array_walk_recursive($_FILES, function (&$value) use ($files) {
             $value = $files[$value];
          });
       }
    }
    public function download ($boundary, $sectionStart, &$postEncoded, &$filesEncoded, &$files)
    {
-      $file = [];
-      $boundary = "\r\n$boundary";
-      $content = $this->Request->Content->raw;
+      $Content = $this->Content; // @ Instance Request Content
 
-      if (strlen($content) < $sectionStart) {
+      // @ Check if Content downloaded length is minor than Section start position
+      if ($Content->downloaded < $sectionStart) {
+         $Content->waiting = true;
          return 0;
       }
 
-      $sectionEnd = strpos($content, $boundary, $sectionStart);
+      // @ Check if Content downloaded length is minor than Content length
+      if ($Content->downloaded < $Content->length) {
+         $Content->waiting = true;
+         return 0;
+      }
+
+      // @ Set Section end position
+      // @ Check if boundary exists in the end of Section
+      $sectionEnd = strpos($Content->raw, "\r\n$boundary", $sectionStart);
       if (! $sectionEnd) {
+         $Content->waiting = false;
          return 0;
       }
 
-      $contentLinesEnd = strpos($content, "\r\n\r\n", $sectionStart);
+      // @ Set content lines end position
+      // @ Check if content lines end position exists
+      $contentLinesEnd = strpos($Content->raw, "\r\n\r\n", $sectionStart);
       if (! $contentLinesEnd || $contentLinesEnd + 4 > $sectionEnd) {
+         $Content->waiting = false;
          return 0;
       }
 
-      $contentLinesRaw = substr($content, $sectionStart, $contentLinesEnd - $sectionStart);
+      $Content->waiting = false;
+
+      $contentLinesRaw = substr($Content->raw, $sectionStart, $contentLinesEnd - $sectionStart);
       $contentLines = explode("\r\n", trim($contentLinesRaw . "\r\n"));
 
-      $boundaryValue = substr($content, $contentLinesEnd + 4, $sectionEnd - $contentLinesEnd - 4);
+      $boundaryValue = substr($Content->raw, $contentLinesEnd + 4, $sectionEnd - $contentLinesEnd - 4);
 
       $uploadKey = false;
+
+      $file = [];
 
       foreach ($contentLines as $contentLine) {
          if (! strpos($contentLine, ': ') ) {
@@ -107,10 +128,12 @@ class Downloader
 
          @[$key, $value] = explode(': ', $contentLine);
 
+         // Form-data
          switch ( strtolower($key) ) {
             case 'content-disposition':
-               // Form-data
+               // @ File
                if ( preg_match('/name="(.*?)"; filename="(.*?)"/i', $value, $match) ) {
+                  // Parse $_FILES
                   $error = 0;
                   $tempFile = '';
                   $size = \strlen($boundaryValue);
@@ -130,7 +153,6 @@ class Downloader
 
                   $uploadKey = $match[1];
 
-                  // Parse upload files.
                   $file = [
                      'name' => $match[2],
                      'tmp_name' => $tempFile,
@@ -140,7 +162,9 @@ class Downloader
                   ];
 
                   break;
-               } else { // Is post field
+               }
+               // @ Text
+               else {
                   // Parse $_POST
                   if ( preg_match('/name="(.*?)"$/', $value, $match) ) {
                      $k = $match[1];
