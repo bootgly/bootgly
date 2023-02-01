@@ -184,7 +184,7 @@ abstract class Packages implements Web\Packages
 
             if ( ! empty($this->handlers) ) {
                // @ Prepare stream with file handler
-               $written = $this->stream($Socket);
+               $written += $this->stream($Socket);
                $buffer = '';
             } else {
                // @ Prepare stream with content raw
@@ -234,7 +234,7 @@ abstract class Packages implements Web\Packages
 
       return true;
    }
-   public function stream ($Socket)
+   public function stream ($Socket) : int
    {
       // TODO support to send multiple files
 
