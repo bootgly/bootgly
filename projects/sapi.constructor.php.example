@@ -17,14 +17,19 @@ return static function
 (Request $Request, Response $Response, Router $Router) : Response
 {
    // ! Request examples
+   // ? Meta
    #$Request->method;    // GET
    #$Request->uri;       // /path/to?query1=value2...
    #$Request->protocol;  // HTTP/1.1
-
-   #$file = $Request->download('file1');
-   #var_dump($file);
+   // ? Content
+   // @ Download Files / Text fields
+   // Form-data
+   #$files = $Request->download('file1'); // $_FILES and $Request->files available too
 
    // ! Response examples
+   // ? Content
+   // @ Output Content
+   // raw ?
    /*
    return $Response(raw: <<<HTTP_RAW
    HTTP/1.1 200 OK
@@ -35,8 +40,11 @@ return static function
    Hello World!
    HTTP_RAW);
    */
-
-   #return $Response('statics/screenshot.gif')->upload();
-
+   // content
    return $Response(content: 'Hello World!');
+   // @ Upload Files
+   // Small files
+   #return $Response('statics/image1.jpg')->upload();
+   // Large files
+   #return $Response('statics/screenshot.gif')->upload();
 };
