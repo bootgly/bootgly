@@ -649,10 +649,10 @@ class Request
    public function __destruct ()
    {
       // @ Delete files downloaded by server in temp folder
-      if ( ! empty($this->Downloader->files) ) {
+      if ( ! empty($this->files) ) {
          clearstatcache();
 
-         array_walk_recursive($this->Downloader->files, function ($value, $key) {
+         array_walk_recursive($this->files, function ($value, $key) {
             if ($key === 'tmp_name') {
                if ( is_file($value) ) {
                   unlink($value);
