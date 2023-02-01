@@ -130,20 +130,22 @@ abstract class Packages implements Web\Packages
       }
 
       // @ Set Stats (disable to max performance in benchmarks)
+      $length = strlen($input);
+
       if (Connections::$stats) {
          // Global
          Connections::$reads++;
-         Connections::$read += strlen($input);
+         Connections::$read += $length;
          // Per client
          #Connections::$Connections[(int) $Socket]['reads']++;
       }
 
       // @ Write data
       if (Server::$Application) { // @ Decode Application Data if exists
-         $input = Server::$Application::decode($this, $input);
+         $length = Server::$Application::decode($this, $input, $length);
       }
 
-      if ($input) {
+      if ($length) {
          $this->write($Socket);
       }
 
@@ -157,6 +159,10 @@ abstract class Packages implements Web\Packages
          self::$output = Server::$Application::encode($this, $length);
       } else {
          self::$output = (SAPI::$Handler)(...$this->callbacks);
+      }
+
+      if ( empty(self::$output) ) {
+         return false;
       }
 
       try {
