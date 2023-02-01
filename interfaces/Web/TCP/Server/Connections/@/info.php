@@ -37,11 +37,11 @@ switch ($name) {
          Connection Errors    | @:error: {$errors[0]} error(s) @;
             --------------------------------------------------
          Data Reads Count     | @:info: {$reads} time(s) @;
-         Data Reads in MB     | @:info: {$read} MB @;
+         Data Reads Bytes     | @:info: {$read} @;
          Data Reads Errors    | @:error: {$errors[1]} error(s) @;
             --------------------------------------------------
          Data Writes Count    | @:info: {$writes} time(s) @;
-         Data Writes in MB    | @:info: {$written} MB @;
+         Data Writes Bytes    | @:info: {$written} @;
          Data Writes Errors   | @:error: {$errors[2]} error(s) @;@\;
          OUTPUT);
       } else {
