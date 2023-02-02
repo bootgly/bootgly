@@ -62,11 +62,11 @@ or with Docker *(-10% performance)*:
 
 ## 🖼 Screenshots
 
-| ![HTTP Server CLI - My Benchmark results using Ryzen 9 3900X on WSL2](https://github.com/bootgly/bootgly-php-framework/blob/master/.github/screenshots/Server-CLI-HTTP-Benchmark-Ryzen-9-3900X-WSL2.png?raw=true "HTTP Server CLI - My Benchmark results using Ryzen 9 3900X on WSL2") |
+| ![HTTP Server CLI - My Benchmark results using Ryzen 9 3900X (24 CPUs) on WSL2](https://github.com/bootgly/.github/raw/main/screenshots/bootgly-php-framework/Server-CLI-HTTP-Benchmark-Ryzen-9-3900X-WSL2.png "HTTP Server CLI - My Benchmark results using Ryzen 9 3900X (24 CPUs) on WSL2") |
 |:--:| 
-| *HTTP Server CLI - My Benchmark results using Ryzen 9 3900X on WSL2* |
+| *HTTP Server CLI - My Benchmark results using Ryzen 9 3900X (24 CPUs) on WSL2* |
 
-| ![HTTP Server CLI started - Initial output](https://github.com/bootgly/bootgly-php-framework/blob/master/.github/screenshots/Server-CLI-HTTP-started.png?raw=true "HTTP Server CLI started - Initial output") |
+| ![HTTP Server CLI started - Initial output](https://github.com/bootgly/.github/raw/main/screenshots/bootgly-php-framework/Server-CLI-HTTP-started.png "HTTP Server CLI started - Initial output") |
 |:--:| 
 | *HTTP Server CLI started - Initial output* |
 
