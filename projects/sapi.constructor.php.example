@@ -17,10 +17,12 @@ return static function
 (Request $Request, Response $Response, Router $Router) : Response
 {
    // ! Request examples
-   // ? Meta
+   // ? Meta (first line of HTTP Header)
    #$Request->method;    // GET
    #$Request->uri;       // /path/to?query1=value2...
    #$Request->protocol;  // HTTP/1.1
+   // ? Header
+   #$host = $Request->Header->get('Host');
    // ? Content
    // @ Download Files / Text fields
    // Form-data
@@ -41,10 +43,11 @@ return static function
    HTTP_RAW);
    */
    // content
-   return $Response(content: 'Hello World!');
+   return $Response(content: 'Hello World!'); // text
+   #return $Response->Json->send(['Hello' => 'World!']); // JSON
    // @ Upload Files
    // Small files
    #return $Response('statics/image1.jpg')->upload();
    // Large files
-   #return $Response('statics/screenshot.gif')->upload();
+   #return $Response('statics/screenshot.gif')->upload(offset: 0, length: 2);
 };
