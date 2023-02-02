@@ -18,9 +18,9 @@ class Header
 {
    // * Data
    protected string $raw;
-   public array $fields;
+   private array $fields;
    // * Meta
-   public bool $built;
+   private bool $built;
    public null|int|false $length;
 
    public Cookie $Cookie;
@@ -54,6 +54,7 @@ class Header
    public function __get (string $name)
    {
       switch ($name) {
+         // * Data
          case 'raw':
             if ( isSet($this->raw) && $this->raw !== '' ) {
                return $this->raw;
@@ -67,6 +68,7 @@ class Header
             return $raw;
          case 'fields':
             return $this->fields;
+
          default:
             return $this->get($name);
       }
@@ -74,11 +76,13 @@ class Header
    public function __set (string $name, string $value)
    {
       switch ($name) {
+         // * Data
          case 'raw':
             $this->raw = $value;
             break;
          case 'fields':
             break;
+
          default:
             $this->fields[$name] = $value;
       }
@@ -86,23 +90,24 @@ class Header
 
    public function get (string $name) : string
    {
-      $this->build();
+      if ($this->built === false) {
+         $this->build();
+      }
 
       return (string) @$this->fields[$name] ?? (string) @$this->fields[strtolower($name)] ?? '';
    }
 
-   public function build ()
+   public function build () : bool
    {
-      if ($this->built) {
-         return false;
-      }
-
       $fields = [];
 
       foreach (explode("\r\n", $this->raw) as $field) {
-         if (strpos($field, ': ') !== false) {
-
+         if ( strpos($field, ': ') ) {
             @[$key, $value] = explode(': ', $field, 2);
+
+            #if ( strpos($key, ' ') ) {
+            #   return false; // @ 400 Bad Request
+            #}
 
             $fields[$key] = $value;
          }
