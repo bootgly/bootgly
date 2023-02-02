@@ -11,6 +11,7 @@ require_once HOME_BASE . '/boot/..php';
 require_once HOME_BASE . '/core/@loader.php';
 require_once HOME_BASE . '/interfaces/@loader.php';
 
+require_once HOME_BASE . '/modules/@loader.php';
 require_once HOME_BASE . '/nodes/@loader.php';
 require_once HOME_BASE . '/platforms/@loader.php';
 

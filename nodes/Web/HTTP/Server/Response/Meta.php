@@ -11,80 +11,20 @@
 namespace Bootgly\Web\HTTP\Server\Response;
 
 
+use Bootgly\Web\HTTP\Server;
+
+
 class Meta
 {
-   private const PHRASES = [
-      100 => 'Continue',
-      101 => 'Switching Protocols',
-      102 => 'Processing',
-
-      200 => 'OK',
-      201 => 'Created',
-      202 => 'Accepted',
-      203 => 'Non-Authoritative Information',
-      204 => 'No Content',
-      205 => 'Reset Content',
-      206 => 'Partial Content',
-      207 => 'Multi-status',
-      208 => 'Already Reported',
-
-      300 => 'Multiple Choices',
-      301 => 'Moved Permanently',
-      302 => 'Found',
-      303 => 'See Other',
-      304 => 'Not Modified',
-      305 => 'Use Proxy',
-      306 => 'Switch Proxy',
-      307 => 'Temporary Redirect',
-
-      400 => 'Bad Request',
-      401 => 'Unauthorized',
-      402 => 'Payment Required',
-      403 => 'Forbidden',
-      404 => 'Not Found',
-      405 => 'Method Not Allowed',
-      406 => 'Not Acceptable',
-      407 => 'Proxy Authentication Required',
-      408 => 'Request Time-out',
-      409 => 'Conflict',
-      410 => 'Gone',
-      411 => 'Length Required',
-      412 => 'Precondition Failed',
-      413 => 'Request Entity Too Large',
-      414 => 'Request-URI Too Large',
-      415 => 'Unsupported Media Type',
-      416 => 'Range Not Satisfiable',
-      417 => 'Expectation Failed',
-      418 => 'I\'m a teapot',
-      422 => 'Unprocessable Entity',
-      423 => 'Locked',
-      424 => 'Failed Dependency',
-      425 => 'Unordered Collection',
-      426 => 'Upgrade Required',
-      428 => 'Precondition Required',
-      429 => 'Too Many Requests',
-      431 => 'Request Header Fields Too Large',
-      451 => 'Unavailable For Legal Reasons',
-
-      500 => 'Internal Server Error',
-      501 => 'Not Implemented',
-      502 => 'Bad Gateway',
-      503 => 'Service Unavailable',
-      504 => 'Gateway Time-out',
-      505 => 'HTTP Version not supported',
-      506 => 'Variant Also Negotiates',
-      507 => 'Insufficient Storage',
-      508 => 'Loop Detected',
-      511 => 'Network Authentication Required',
-   ];
-
    // * Config
    // * Data
-   private string $protocol;
-   private int|string $status;
+   protected string $protocol;
+   protected int|string $status;
    // * Meta
    private string $raw;
-   private int $code; // @ status code
+   // @ status
+   private int $code;
+   private string $message;
 
 
    public function __construct ()
@@ -99,12 +39,15 @@ class Meta
    public function __get (string $name)
    {
       switch ($name) {
+         // * Meta
+         // @ status
          case 'code':
             if ( isSet($this->code) && $this->code !== 0 ) {
                return $this->code;
             }
 
-            $code = array_search($this->status, self::PHRASES);
+            $code = array_search($this->status, Server::RESPONSE_STATUS);
+
             $this->code = $code;
 
             break;
@@ -116,17 +59,28 @@ class Meta
    public function __set (string $name, $value)
    {
       switch ($name) {
-         case 'raw':
+         // * Data
+         case 'protocol':
             break;
-
          case 'status':
-            $this->status = match ($value) {
-               (int) $value => $value . ' ' . self::PHRASES[$value],
-               (string) $value => array_search($value, self::PHRASES) . ' ' . $value
+            $status = match ($value) {
+               (int) $value => $value . ' ' . Server::RESPONSE_STATUS[$value],
+               (string) $value => array_search($value, Server::RESPONSE_STATUS) . ' ' . $value
             };
 
-            $this->reset();
+            @[$code, $message] = explode(' ', $status);
 
+            if ($code && $message) {
+               $this->status = $status;
+               $this->reset();
+            }
+
+            break;
+         // * Meta
+         case 'raw':
+         // @ status
+         case 'code':
+         case 'message':
             break;
 
          default:
@@ -134,12 +88,13 @@ class Meta
       }
    }
 
-   public function reset () // @ raw
+   public function reset ()
    {
       // * Meta
-      // Raw
+      // raw
       $this->raw = $this->protocol . ' ' . $this->status;
-      // Code
+      // @ status
+      // code
       unSet($this->code);
    }
 }

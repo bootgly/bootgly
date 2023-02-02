@@ -10,18 +10,20 @@
 
 namespace Bootgly\Web\HTTP;
 
+
 use Bootgly\SAPI;
 use Bootgly\Web;
 use Bootgly\Web\TCP;
-
 use Bootgly\Web\TCP\Server\Packages;
+
+use Bootgly\Web\protocols\HTTP;
 
 use Bootgly\Web\HTTP\Server\Request;
 use Bootgly\Web\HTTP\Server\Response;
 use Bootgly\Web\HTTP\Server\Router;
 
 
-class Server extends TCP\Server
+class Server extends TCP\Server implements HTTP
 {
    public static Web $Web;
 
