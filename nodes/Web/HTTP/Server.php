@@ -68,6 +68,7 @@ class Server extends TCP\Server
 
       // @ Check local cache and return
       if ( $length <= 512 && isSet($inputs[$buffer]) ) {
+         #Server::$Request = $inputs[$buffer];
          return $length;
       }
 
@@ -100,9 +101,10 @@ class Server extends TCP\Server
 
       // @ Write to local cache
       if ($length <= 512) {
+         #$inputs[$buffer] = clone $Request;
          $inputs[$buffer] = $length;
 
-         if (count($inputs) > 512) {
+         if (count($inputs) > 1) { // @ Cache only the last Request?
             unSet($inputs[key($inputs)]);
          }
       }
