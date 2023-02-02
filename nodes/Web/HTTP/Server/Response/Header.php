@@ -116,9 +116,7 @@ class Header
       }
 
       // @ Set default headers
-      if ( ! isSet($this->fields['Content-Type']) ) {
-         $this->fields['Content-Type'] = 'text/html; charset=UTF-8';
-      }
+      $this->fields['Content-Type'] ??= 'text/html; charset=UTF-8';
 
       // @ Build
       $raw = [];
