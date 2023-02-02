@@ -210,6 +210,10 @@ class Server implements Servers
       }
 
       // @ Continue to master process:
+      $this->log('@\\\;');
+
+      $this->{'@status'};
+
       switch ($this->mode) {
          case self::MODE_DAEMON:
             $this->daemonize();
