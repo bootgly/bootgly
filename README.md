@@ -62,7 +62,9 @@ or with Docker *(-10% performance)*:
 
 ## 🖼 Screenshots
 
-![Server CLI Benchmark results - Ryzen 9 3900X in WSL2](https://github.com/bootgly/bootgly-php-framework/blob/master/.github/screenshots/Server-CLI-Benchmark-Ryzen-9-3900X-WSL2.png?raw=true "Server CLI Benchmark results - Ryzen 9 3900X in WSL2")
+| ![Server CLI Benchmark results - Ryzen 9 3900X in WSL2](https://github.com/bootgly/bootgly-php-framework/blob/0d6997c09b8e33d0839d32aac385f6c3e045388b/.github/screenshots/Server-CLI-Benchmark-Ryzen-9-3900X-WSL2.png?raw=true "Server CLI Benchmark results - Ryzen 9 3900X in WSL2") |
+|:--:| 
+| *Server CLI Benchmark results - Ryzen 9 3900X in WSL2* |
 
 ## 💖 Sponsorship
 
