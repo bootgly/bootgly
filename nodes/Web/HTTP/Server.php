@@ -97,8 +97,13 @@ class Server extends TCP\Server implements HTTP
 
       // @ Handle Package cache
       if ($Package->changed) {
-         // $Request->reset();
+         // @ Reset Globals
+         $_POST = [];
+         $_FILES = [];
+         // @ Instance new Request
          $Request = Server::$Request = new Request;
+         // Reset Request
+         // $Request->reset();
       }
 
       // @ Write to local cache
