@@ -18,7 +18,6 @@ use Bootgly\Web\HTTP\Server\Request\_\Content;
 
 class Downloader
 {
-   public Header $Header;
    public Content $Content;
 
    // ***
@@ -26,33 +25,11 @@ class Downloader
 
    public function __construct (Request $Request)
    {
-      $this->Header = &$Request->Header;
       $this->Content = &$Request->Content;
 
       // ***
    }
 
-   public function parse () : bool
-   {
-      // @ Parse boundary / Form-data
-      $matched = preg_match(
-         '/boundary="?(\S+)"?/',
-         $this->Header->get('Content-Type'),
-         $match
-      );
-
-      if ($matched === 1) {
-         $boundary = trim('--' . $match[1], '"');
-
-         $this->downloading($boundary);
-
-         return true;
-      }
-      // @ Parse JSON
-      // TODO
-
-      return false;
-   }
    public function downloading (string $boundary)
    {
       $postEncoded = '';
@@ -60,7 +37,7 @@ class Downloader
 
       $files = [];
 
-      $sectionStart = strlen($boundary) + 4 + 2;
+      $sectionStart = strlen($boundary) + 2;
       $maxClientFiles = 1024;
 
       while ($maxClientFiles-- > 0 && $sectionStart > 0) {
@@ -118,7 +95,6 @@ class Downloader
       $boundaryValue = substr($Content->raw, $contentLinesEnd + 4, $sectionEnd - $contentLinesEnd - 4);
 
       $uploadKey = false;
-
       $file = [];
 
       foreach ($contentLines as $contentLine) {

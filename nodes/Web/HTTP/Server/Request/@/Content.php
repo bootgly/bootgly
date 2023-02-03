@@ -13,6 +13,8 @@ namespace Bootgly\Web\HTTP\Server\Request\_;
 
 class Content
 {
+   // * Config
+   // -
    // * Data
    public string $raw;
    public string $input;
@@ -25,6 +27,8 @@ class Content
 
    public function __construct ()
    {
+      // * Config
+      // -
       // * Data
       $this->raw = '';
       $this->input = '';
@@ -38,5 +42,38 @@ class Content
       if (\PHP_SAPI !== 'cli') {
          $this->input = file_get_contents('php://input');
       }
+   }
+
+   public function parse (string $content = 'raw', string $type) : bool|string
+   {
+      switch ($content) {
+         case 'Form-data':
+            // @ Parse Form-data (boundary)
+            $matched = preg_match('/boundary="?(\S+)"?/', $type, $match);
+
+            if ($matched === 1) {
+               $boundary = trim('--' . $match[1], '"');
+
+               return $boundary;
+            }
+
+            return false;
+         case 'raw':
+            // @ Parse Raw - JSON
+            $matched = preg_match('/\bjson\b/i', $type);
+
+            if ($matched === 1) {
+               $_POST = (array) json_decode($this->raw, true);
+
+               return true;
+            }
+
+            // @ Parse Raw - URL Encoded, Text, etc.
+            parse_str($this->raw, $_POST);
+
+            return true;
+      }
+
+      return false;
    }
 }
