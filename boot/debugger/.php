@@ -152,10 +152,16 @@ class Debugger // TODO refactor (too old!)
             $info = '';
             $color = '#75507b';
 
-            if ($value)
+            if ($value) {
                $var = 'true';
-            else
+            } else {
                $var = 'false';
+            }
+
+            if (self::$cli) {
+               $var = "\033[31m" . $var . "\033[0m";
+            }
+
             break;
          case 'integer':
             $type = 'int';
@@ -174,9 +180,15 @@ class Debugger // TODO refactor (too old!)
          case 'string':
             $type = 'string';
             $prefix = "<small>$type</small> ";
-            $info = '(length=' . strlen($value) . ') ';
+            $info = ' (length=' . strlen($value) . ')';
             $color = '#cc0000';
-            $var = "'" . $value . "'";
+
+            if (! self::$cli) {
+               $var = "'" . $value . "'";
+            } else {
+               $var = "\033[92m'" . $value . "'\033[0m";
+            }
+
             break;
          case 'array':
             $type = 'array';
@@ -188,16 +200,23 @@ class Debugger // TODO refactor (too old!)
 
             $var = '';
             foreach ($array as $key => $value) {
-               if (is_string($key))
-                  $key = "'" . $key . "'";
+               // @@ Key
+               if ( is_string($key) ) {
+                  if (! self::$cli) {
+                     $key = "'" . $key . "'";
+                  } else {
+                     $key = "\033[92m'" . $key . "'\033[0m";
+                  }
+               }
 
-               if (is_array($value)) {
+               // @@ Value
+               if ( is_array($value) ) {
                   $arrayValueCount = count($value);
 
                   if (! self::$cli) {
                      $value = '<b>array</b>';
                   } else {
-                     $value = 'array';
+                     $value = "\033[95marray\033[0m";
                   }
 
                   $value .= ' (size=' . $arrayValueCount . ") ";
@@ -207,8 +226,9 @@ class Debugger // TODO refactor (too old!)
                   } else {
                      $value .= '[]';
                   }
-               } else
+               } else {
                   $value = self::dump($value);
+               }
 
                $var .= "\n" . $identity . $key . ' => ' . $value;
             }
@@ -216,14 +236,14 @@ class Debugger // TODO refactor (too old!)
          case 'object':
             $type = 'object';
             $prefix = "<b>$type</b>";
-            $info = '(' . get_class($value) . ') ';
+            $info = ' (' . get_class($value) . ')';
             $color = '';
             $var = '';
             break;
          case 'resource':
             $type = 'resource';
             $prefix = "<b>$type</b>";
-            $info = '(' . get_resource_type($value) . ")";
+            $info = ' (' . get_resource_type($value) . ')';
             $color = '';
             $var = '';
             break;
@@ -233,6 +253,11 @@ class Debugger // TODO refactor (too old!)
             $info = '';
             $color = '#3465a4';
             $var = 'null';
+
+            if (self::$cli) {
+               $var = "\033[31m" . $var . "\033[0m";
+            }
+
             break;
          default:
             if (is_callable($value)) {
@@ -254,7 +279,7 @@ class Debugger // TODO refactor (too old!)
          $dump = $prefix . $info . '<span style="color: ' . $color . '">' . $var . '</span>';
       }
       else {
-         $dump = $type . $info . ' ' . $var;
+         $dump = "\033[95m".$type."\033[0m" . $info . ' ' . $var;
       }
 
       return $dump;
