@@ -31,17 +31,12 @@ class Content
       // -
       // * Data
       $this->raw = '';
-      $this->input = '';
+      $this->input = PHP_SAPI === 'cli' ? '' : file_get_contents('php://input');
       // * Meta
       $this->length = null;
       $this->position = null;
       $this->downloaded = null;
       $this->waiting = false;
-
-
-      if (\PHP_SAPI !== 'cli') {
-         $this->input = file_get_contents('php://input');
-      }
    }
 
    public function parse (string $content = 'raw', string $type) : bool|string
@@ -63,11 +58,17 @@ class Content
                // @ Parse Raw - JSON
                case 'application/json':
                   $_POST = (array) json_decode($this->raw, true);
+
                   return true;
-               // @ Parse Raw - URL Encoded (x-www-form-urlencoded), Text, etc.
-               default:
+               // @ Parse Raw - URL Encoded (x-www-form-urlencoded)
+               case 'application/x-www-form-urlencoded':
+                  $this->input = $this->raw;
+
                   parse_str($this->raw, $_POST);
+
                   return true;
+               default: // @ Set Input Raw: text, binary, etc.
+                  $this->input = $this->raw;
             }
       }
 
