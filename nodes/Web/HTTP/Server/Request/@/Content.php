@@ -54,6 +54,14 @@ class Content
 
             return false;
          case 'raw':
+            // @ Check if Content downloaded length is minor than Content length
+            if ($this->downloaded < $this->length) {
+               $this->waiting = true;
+               return 0;
+            }
+
+            $this->waiting = false;
+
             switch ($type) {
                // @ Parse Raw - JSON
                case 'application/json':
