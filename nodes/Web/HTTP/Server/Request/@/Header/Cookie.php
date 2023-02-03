@@ -50,15 +50,15 @@ final class Cookie
 
    public function build ()
    {
-      if ( empty($this->cookies) ) {
-         $replaced = preg_replace('/; ?/', '&', $this->Header->get('Cookie'));
-
-         parse_str($replaced, $this->cookies);
-
-         return true;
+      if ( ! empty($this->cookies) ) {
+         return false;
       }
 
-      return false;
+      $replaced = preg_replace('/; ?/', '&', $this->Header->get('Cookie'));
+
+      parse_str($replaced, $this->cookies);
+
+      return true;
    }
 
    public function get (string $name) : string

@@ -70,11 +70,15 @@ or with Docker *(-10% performance)*:
 |:--:| 
 | *HTTP Server CLI started - Initial output* |
 
+---
+
 ## 💖 Sponsorship
 
 A lot of time and energy is devoted to this project. To accelerate your growth, if you like this project or depend on it for your stack to work, consider sponsoring it.
 
 Your sponsorship will keep this project always **up to date** with **new features** and **improvements** / **bug fixes**.
+
+---
 
 ## 📃 License
 

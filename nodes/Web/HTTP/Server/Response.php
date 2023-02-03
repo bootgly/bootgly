@@ -47,6 +47,10 @@ class Response
    public bool $processed;
    public bool $sent;
    // @ Type
+   #public bool $cacheable;
+   #public bool $static;
+   #public bool $dynamic;
+
    public bool $chunked;
    public bool $encoded;
    public bool $stream;
@@ -80,6 +84,10 @@ class Response
       $this->processed = true;
       $this->sent = false;
       // @ Type
+      #$this->cacheable = true;
+      #$this->static = true;
+      #$this->dynamic = false;
+
       $this->stream = false;
       $this->chunked = false;
       $this->encoded = false;
@@ -87,13 +95,14 @@ class Response
    public function __get ($name)
    {
       switch ($name) {
-         // HTTP Meta
+         // ? Response Meta
+         case 'status':
          case 'code':
             return \PHP_SAPI !== 'cli' ? http_response_code() : $this->Meta->code;
-         // HTTP Headers
+         // ? Response Headers
          case 'headers':
             return $this->Header->fields;
-         // HTTP Content
+         // ? Response Content
          case 'chunked':
             if (! $this->chunked) {
                $this->chunked = true;
@@ -116,8 +125,17 @@ class Response
    public function __set ($name, $value)
    {
       switch ($name) {
+         case 'status':
          case 'code':
-            return \PHP_SAPI !== 'cli' ? http_response_code($value) : $this->Meta->status = $value;
+            if (\PHP_SAPI !== 'cli') {
+               http_response_code($value);
+
+               return $this;
+            }
+
+            $this->Meta->status = $value;
+
+            return $this;
          default: // @ Set custom resource
             // $this->resources[$name] = $value; // TODO
       }
