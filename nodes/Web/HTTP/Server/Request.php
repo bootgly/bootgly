@@ -459,11 +459,11 @@ class Request
       $this->Content->__construct();
    }
 
-   public function input (Packages $Package, string &$buffer, int $length) : int // @ return Request Content length
+   public function input (Packages $Package, string &$buffer, int $length) : int // @ return Request length
    {
-      // @ Prepare the position of Request Content starts
-      $contentPosition = strpos($buffer, "\r\n\r\n");
-      if ($contentPosition === false) { // @ Check if Request has Content (body)
+      // @ Check Request raw separator
+      $separatorPosition = strpos($buffer, "\r\n\r\n");
+      if ($separatorPosition === false) { // @ Check if the Request raw has a separator
          // @ Check Request raw length
          if ($length >= 16384) {
             $Package->reject("HTTP/1.1 413 Request Entity Too Large\r\n\r\n");
@@ -472,7 +472,7 @@ class Request
          return 0;
       }
 
-      $length = $contentPosition + 4; // @ Boot Request Content length
+      $length = $separatorPosition + 4; // @ Boot Request Content length
 
       // ? Request Meta
       // @ Boot Request Meta raw
@@ -509,7 +509,7 @@ class Request
 
       // ? Request Header
       // @ Boot Request Header raw
-      $headerRaw = substr($buffer, $metaLength + 2, $contentPosition - $metaLength);
+      $headerRaw = substr($buffer, $metaLength + 2, $separatorPosition - $metaLength);
 
       // @ Prepare Request Header length
       $headerLength = strlen($headerRaw);
@@ -535,8 +535,13 @@ class Request
          }
 
          if ($method === 'POST') {
-            $this->Content->raw = substr($buffer, $contentPosition, $contentLength);
+            $this->Content->raw = substr($buffer, $separatorPosition + 4, $contentLength);
             $this->Content->downloaded = strlen($this->Content->raw);
+
+            #if ($contentLength > $this->Content->downloaded) {
+            #   $this->Content->waiting = true;
+            #   return 0;
+            #}
          }
 
          $this->Content->length = $contentLength;
@@ -564,15 +569,19 @@ class Request
 
       $this->Header->length = $headerLength;
       // ? Request Content
-      $this->Content->position = $contentPosition;
+      $this->Content->position = $separatorPosition + 4;
 
-      // @ return Request Content length
+      // @ return Request length
       return $length;
    }
    public function download (? string $key = null) : array|null
    {
       if ( empty($this->files) ) {
-         $this->Downloader->parse();
+         $boundary = $this->Content->parse('Form-data', $this->Header->get('Content-Type'));
+
+         if ($boundary) {
+            $this->Downloader->downloading($boundary);
+         }
       }
 
       if ($key === null) {
