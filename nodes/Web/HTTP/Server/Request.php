@@ -297,7 +297,7 @@ class Request
             return json_decode($this->input, true);
 
          case 'post':
-            if ( $this->method === 'POST' && empty($_POST) ) {
+            if ( PHP_SAPI !== 'cli' && $this->method === 'POST' && empty($_POST) ) {
                return $this->inputs;
             }
 
@@ -590,6 +590,26 @@ class Request
 
       if ( isSet($this->files[$key]) ) {
          return $this->files[$key];
+      }
+
+      return null;
+   }
+   public function receive (? string $key = null) : array|null
+   {
+      if ( empty($this->post) ) {
+         $parsed = $this->Content->parse('raw', $this->Header->get('Content-Type'));
+
+         if ($parsed) {
+            $this->Downloader->downloading($parsed);
+         }
+      }
+
+      if ($key === null) {
+         return $this->post;
+      }
+
+      if ( isSet($this->post[$key]) ) {
+         return $this->post[$key];
       }
 
       return null;
