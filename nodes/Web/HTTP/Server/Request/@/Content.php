@@ -59,19 +59,16 @@ class Content
 
             return false;
          case 'raw':
-            // @ Parse Raw - JSON
-            $matched = preg_match('/\bjson\b/i', $type);
-
-            if ($matched === 1) {
-               $_POST = (array) json_decode($this->raw, true);
-
-               return true;
+            switch ($type) {
+               // @ Parse Raw - JSON
+               case 'application/json':
+                  $_POST = (array) json_decode($this->raw, true);
+                  return true;
+               // @ Parse Raw - URL Encoded (x-www-form-urlencoded), Text, etc.
+               default:
+                  parse_str($this->raw, $_POST);
+                  return true;
             }
-
-            // @ Parse Raw - URL Encoded, Text, etc.
-            parse_str($this->raw, $_POST);
-
-            return true;
       }
 
       return false;
