@@ -163,20 +163,34 @@ class Debugger // TODO refactor (too old!)
             }
 
             break;
+
          case 'integer':
             $type = 'int';
             $prefix = "<small>$type</small> ";
             $info = '';
             $color = '#4e9a06';
+
             $var = $value;
+
+            if (self::$cli) {
+               $var = "\033[33m" . $var . "\033[0m";
+            }
+
             break;
          case 'double': // float
             $type = 'float';
             $prefix = "<small>$type</small> ";
             $info = '';
             $color = "#f57900";
+
             $var = $value;
+
+            if (self::$cli) {
+               $var = "\033[33m" . $var . "\033[0m";
+            }
+
             break;
+
          case 'string':
             $type = 'string';
             $prefix = "<small>$type</small> ";
@@ -190,6 +204,7 @@ class Debugger // TODO refactor (too old!)
             }
 
             break;
+
          case 'array':
             $type = 'array';
             $prefix = "<b>$type</b>";
@@ -232,21 +247,27 @@ class Debugger // TODO refactor (too old!)
 
                $var .= "\n" . $identity . $key . ' => ' . $value;
             }
+
             break;
+
          case 'object':
             $type = 'object';
             $prefix = "<b>$type</b>";
             $info = ' (' . get_class($value) . ')';
             $color = '';
             $var = '';
+
             break;
+
          case 'resource':
             $type = 'resource';
             $prefix = "<b>$type</b>";
             $info = ' (' . get_resource_type($value) . ')';
             $color = '';
             $var = '';
+
             break;
+
          case 'NULL':
             $type = '';
             $prefix = '';
@@ -259,6 +280,7 @@ class Debugger // TODO refactor (too old!)
             }
 
             break;
+
          default:
             if (is_callable($value)) {
                $type = 'callable';
