@@ -459,7 +459,7 @@ class Request
       $this->Content->__construct();
    }
 
-   public function input (Packages $Package, string &$buffer, int $length) : int // @ return Request length
+   public function boot (Packages $Package, string &$buffer, int $length) : int // @ return Request length
    {
       // @ Check Request raw separator
       $separatorPosition = strpos($buffer, "\r\n\r\n");
@@ -472,7 +472,7 @@ class Request
          return 0;
       }
 
-      $length = $separatorPosition + 4; // @ Boot Request Content length
+      $length = $separatorPosition + 4; // @ Boot Request length
 
       // ? Request Meta
       // @ Boot Request Meta raw

@@ -117,8 +117,8 @@ class Server extends TCP\Server implements HTTP
       }
 
       // ! Request
-      // @ Input HTTP Request
-      return $Request->input($Package, $buffer, $length); // @ Return Request Content length
+      // @ Boot HTTP Request
+      return $Request->boot($Package, $buffer, $length); // @ Return Request Content length
    }
    public static function encode (Packages $Package, &$length)
    {
