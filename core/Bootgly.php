@@ -25,4 +25,15 @@ abstract class Bootgly
       self::$Project = new Project;
       self::$Template = new Template;
    }
+
+   public static function debug (bool $status)
+   {
+      // @ PHP
+      match ($status) {
+         true => error_reporting(E_ALL) && ini_set('display_errors', 'On'),
+         false => error_reporting(0) && ini_set('display_errors', 'Off')
+      };
+
+      return true;
+   }
 }

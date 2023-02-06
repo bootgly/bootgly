@@ -63,19 +63,21 @@ class Content
             $this->waiting = false;
 
             switch ($type) {
-               // @ Parse Raw - JSON
+               // @ Parse raw - JSON
                case 'application/json':
+                  // TODO implement json_validate (PHP 8.3)
+
                   $_POST = (array) json_decode($this->raw, true);
 
                   return true;
-               // @ Parse Raw - URL Encoded (x-www-form-urlencoded)
+               // @ Parse raw - URL Encoded
                case 'application/x-www-form-urlencoded':
                   $this->input = $this->raw;
 
                   parse_str($this->raw, $_POST);
 
                   return true;
-               default: // @ Set Input Raw: text, binary, etc.
+               default: // @ Set input raw: text, binary, etc.
                   $this->input = $this->raw;
             }
       }

@@ -12,6 +12,8 @@ namespace Bootgly\Web\TCP\_\CLI;
 
 
 use const Bootgly\HOME_DIR;
+
+use Bootgly\Bootgly;
 use Bootgly\CLI;
 use Bootgly\Web\TCP\ {
    Server
@@ -113,14 +115,14 @@ class Console extends CLI\Console
             $this->Server->{'@status'} && true,
 
          'debug on' =>
-            error_reporting(E_ALL) && ini_set('display_errors', 'On') && true,
+            Bootgly::debug(true) && true,
          'debug off' =>
-            error_reporting(0) && ini_set('display_errors', 'Off') && true,
+            Bootgly::debug(false) && true,
          // TODO 'benchmark' => ...,
          // TODO 'test' response of 1 request
 
          'check jit' => $this->log(
-            (function_exists('opcache_get_status') && opcache_get_status()['jit']['enabled'])
+            (function_exists('opcache_get_status') && @opcache_get_status()['jit']['enabled'])
             ? 'JIT enabled' : 'JIT disabled') && true,
 
          // ! \Connection
@@ -158,20 +160,20 @@ class Console extends CLI\Console
    public function help ()
    {
       $this->log(<<<'OUTPUT'
-      @\;============================================================
-      @:i: `stop` @;    = Stop the Server and all workers;
-      @:i: `pause` @;   = Pause the Server and all workers;
-      @:i: `resume` @;  = Resume the Server and all workers;
-      @:i: `reload` @;  = Reload the Server and all workers;
+      @\;======================================================================
+      @:i: `stop` @;        = Stop the Server and all workers;
+      @:i: `pause` @;       = Pause the Server and all workers;
+      @:i: `resume` @;      = Resume the Server and all workers;
+      @:i: `reload` @;      = Reload the Server and all workers;
 
-      @:i: `monitor` @; = Enter in monitor mode;
+      @:i: `monitor` @;     = Enter in monitor mode;
 
-      @:i: `status` @;  = Show info about status of server;
-      @:i: `stats` @;   = Show stats about connections / data per worker;
-      @:i: `peers` @;   = Show info about active connections remote peers;
+      @:i: `status` @;      = Show info about status of server;
+      @:i: `stats` @;       = Show stats about connections / data per worker;
+      @:i: `connections` @; = Show info about active connections remote peers;
 
-      @:i: `clear` @;   = Clear this console screen;
-      ============================================================
+      @:i: `clear` @;       = Clear this console screen;
+      ========================================================================
 
       OUTPUT);
 
