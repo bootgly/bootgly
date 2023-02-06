@@ -16,6 +16,7 @@ require 'Web/HTTP/Server/Response.php';
 // @
 require 'Web/HTTP/Server/Response/Content.php';
 require 'Web/HTTP/Server/Response/Header.php';
+require 'Web/HTTP/Server/Response/Header/Cookie.php';
 require 'Web/HTTP/Server/Response/Meta.php';
 // ? Router
 require 'Web/HTTP/Server/Router.php';

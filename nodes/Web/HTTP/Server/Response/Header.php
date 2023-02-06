@@ -11,6 +11,9 @@
 namespace Bootgly\Web\HTTP\Server\Response;
 
 
+use Bootgly\Web\HTTP\Server\Response\Header\Cookie;
+
+
 class Header
 {
    // * Config
@@ -19,8 +22,11 @@ class Header
    // * Data
    private array $fields;
    // * Meta
+   private array $queued;
    private string $raw;
    private bool $sent;
+
+   public Cookie $Cookie;
 
 
    public function __construct ()
@@ -33,8 +39,11 @@ class Header
       // * Data
       $this->fields = [];
       // * Meta
+      $this->queued = [];
       $this->raw = '';
       $this->sent = false;
+
+      $this->Cookie = new Cookie($this);
    }
    public function __get (string $name)
    {
@@ -52,6 +61,8 @@ class Header
 
             return $this->fields;
          // * Meta
+         case 'queued':
+            return $this->queued;
          case 'raw':
             if ($this->raw) {
                return $this->raw;
@@ -76,9 +87,13 @@ class Header
    {
       switch ($name) {
          // * Config
-         case 'pre':
+         case 'preset':
             $this->preset = (array) $value;
          case 'prepared':
+         // * Data
+         // case 'fields':
+         // * Meta
+         case 'queued':
             break;
          // *
          default:
@@ -119,17 +134,17 @@ class Header
       $this->fields['Content-Type'] ??= 'text/html; charset=UTF-8';
 
       // @ Build
-      $raw = [];
+      $queued = $this->queued;
       // Preset Fields
       foreach ($this->preset as $name => $value) {
-         $raw[] = "$name: $value";
+         $queued[] = "$name: $value";
       }
       // Fields
       foreach ($this->fields as $name => $value) {
-         $raw[] = "$name: $value";
+         $queued[] = "$name: $value";
       }
 
-      $this->raw = implode("\r\n", $raw);
+      $this->raw = implode("\r\n", $queued);
 
       return true;
    }
@@ -138,36 +153,31 @@ class Header
    {
       return (string) $this->fields[$name] ?? (string) $this->fields[strtolower($name)] ?? '';
    }
+
    public function set (string $field, string $value = '') // TODO refactor
    {
       $this->fields[$field] = $value;
 
-      if (\PHP_SAPI !== 'cli')
+      if (\PHP_SAPI !== 'cli') {
          header($field . ': ' . $value, true);
+      }
    }
-   public function append (string $field, string $value = '') // TODO refactor
+   public function append (string $field, string $value = '', ? string $separator = ', ') // TODO refactor
    {
+      // TODO map separator (with const?) Header that can have only value to append, only entire header, etc.
+
       if ( isSet($this->fields[$field]) ) {
-         // @ Append only value (not entire Header field)
-
-         // TODO map (with const?) Header that can have only value to append, only entire header, etc.
-
-         $this->fields[$field] = $this->fields[$field] . ', ' .$value;   
+         $this->fields[$field] .= $separator . $value;
       } else {
          $this->fields[$field] = $value;
       }
 
-      if (\PHP_SAPI !== 'cli')
+      if (\PHP_SAPI !== 'cli') {
          header($field . ': ' . $value, false);
-   }
-   public function list (array $headers)
-   {
-      foreach ($headers as $field => $value) {
-         if ( is_int($field) ) {
-            $this->set($value);
-         } else {
-            $this->set($field, $value);
-         }
       }
+   }
+   public function queue (string $field, string $value = '')
+   {
+      $this->queued[] = "$field: $value";
    }
 }
