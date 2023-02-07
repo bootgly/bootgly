@@ -683,7 +683,7 @@ class Response
       if ($this->stream) {
          $length = strlen($this->Meta->raw) + strlen($this->Header->raw) + 4;
 
-         $Package->handlers = $this->files;
+         $Package->writing = $this->files;
 
          $this->files = [];
          $this->stream = false;

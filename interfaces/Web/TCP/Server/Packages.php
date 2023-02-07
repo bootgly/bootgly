@@ -40,7 +40,8 @@ abstract class Packages implements Web\Packages
    public static string $output;
    // * Meta
    // @ Handler
-   public array $handlers;
+   public array $reading;
+   public array $writing;
    public array $callbacks; // TODO move
 
 
@@ -57,7 +58,8 @@ abstract class Packages implements Web\Packages
       self::$output = '';
       // * Meta
       // @ Handler
-      $this->handlers = [];
+      $this->reading = [];
+      $this->writing = [];
       $this->callbacks = [&self::$input];
 
       SAPI::boot(true);
@@ -93,6 +95,98 @@ abstract class Packages implements Web\Packages
       return false;
    }
 
+   public function reading ($Socket) : int
+   {
+      // ! WARNING check server disk space
+      // ! WARNING check user input length
+      // TODO test!!!
+      $handler = @fopen($this->reading[0]['file'], 'w+');
+      $offset = 0;
+      $length = $this->reading[0]['length'] ?? -1;
+      $close = true;
+
+      $received = 0;
+
+      // @ Limit length of data file (size) to write
+      $over = 0;
+      $rate = 1 * 1024 * 1024; // 1 MB (1048576) = Max rate to write/receive data file by loop
+      $size = $rate;
+
+      if ($length > 0 && $length < $rate) {
+         $size = $length;
+      } else if ($length > $rate) {
+         $over = $length - $rate;
+      }
+
+      while ($length < 0 || $received < $length) {
+         // @ Read part of file from client
+         try {
+            $buffer = @fread($Socket, $size);
+         } catch (\Throwable) {
+            break;
+         }
+   
+         if ($buffer === false) {
+            break;
+         }
+   
+         $read = strlen($buffer);
+   
+         // @ Write part of received (if exists) file to disk
+         while ($read) {
+            try {
+               $written = @fwrite($handler, $buffer, $read);
+            } catch (\Throwable) {
+               break;
+            }
+   
+            if ($written === false) {
+               break;
+            } else if ($written === 0) {
+               continue;
+            } else if ($written < $read) {
+               $received += $written;
+               $buffer = substr($buffer, $written);
+               $read = strlen($buffer);
+            } else {
+               $received += $written;
+               break;
+            }
+         }
+   
+         // @ Check End-of-file
+         try {
+            $end = @feof($Socket);
+         } catch (\Throwable) {
+            break;
+         }
+   
+         if ($end) {
+            break;
+         }
+   
+         // @ Set new over / size if necessary
+         if ($over % $rate > 0) {
+            if ($over >= $received) {
+               $over -= $received;
+            }
+   
+            if ($over < $size) {
+               $size = $over;
+            }
+         }
+      }
+   
+      // @ Try closing the handler / socket if it's still open
+      if ($close) {
+         try {
+            @fclose($handler);
+            @fclose($Socket);
+         } catch (\Throwable) {}
+      }
+   
+      return $received;
+   }
    public function read (&$Socket) : bool
    {
       try {
@@ -182,9 +276,9 @@ abstract class Packages implements Web\Packages
          if ($sent !== false) {
             $written += $sent;
 
-            if ( ! empty($this->handlers) ) {
+            if ( ! empty($this->writing) ) {
                // @ Prepare stream with file handler
-               $written += $this->stream($Socket);
+               $written += $this->writing($Socket);
                $buffer = '';
             } else {
                // @ Prepare stream with content raw
@@ -234,15 +328,15 @@ abstract class Packages implements Web\Packages
 
       return true;
    }
-   public function stream ($Socket) : int
+   public function writing ($Socket) : int
    {
       // TODO support to send multiple files
 
-      $handler = @fopen($this->handlers[0]['file'], 'r');
+      $handler = @fopen($this->writing[0]['file'], 'r');
 
-      $offset = $this->handlers[0]['offset'];
-      $length = $this->handlers[0]['length'];
-      $close = $this->handlers[0]['close'];
+      $offset = $this->writing[0]['offset'];
+      $length = $this->writing[0]['length'];
+      $close = $this->writing[0]['close'];
 
       $sent = 0;
 
@@ -333,8 +427,8 @@ abstract class Packages implements Web\Packages
          } catch (\Throwable) {}
       }
 
-      // @ Unset handler from handlers
-      unSet($this->handlers[0]);
+      // @ Unset handler from writing
+      unSet($this->writing[0]);
 
       return $sent;
    }
