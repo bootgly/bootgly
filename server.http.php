@@ -39,7 +39,7 @@ $HTTPServer->configure(
    ]
    */
 );
-// on Data -> projects/sapi.constructor.php
+// on Data -> projects/sapi.http.constructor.php
 $HTTPServer->start();
 
 // Benchmark test suggestion with 512 connections:

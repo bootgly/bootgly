@@ -64,6 +64,12 @@ class Server extends TCP\Server implements HTTP
       }
    }
 
+   public static function boot ()
+   {
+      SAPI::$file = \Bootgly\HOME_DIR . 'projects/sapi.http.constructor.php';
+      SAPI::boot(true);
+   }
+
    public static function decode (Packages $Package, string &$buffer, int $length)
    {
       static $inputs = []; // @ Instance local cache

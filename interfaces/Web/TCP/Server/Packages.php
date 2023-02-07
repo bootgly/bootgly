@@ -61,8 +61,6 @@ abstract class Packages implements Web\Packages
       $this->reading = [];
       $this->writing = [];
       $this->callbacks = [&self::$input];
-
-      SAPI::boot(true);
    }
 
    public function fail ($Socket, string $operation, $result)
@@ -95,6 +93,148 @@ abstract class Packages implements Web\Packages
       return false;
    }
 
+   public function read (&$Socket) : bool
+   {
+      try {
+         $input = @fread($Socket, 65535);
+      } catch (\Throwable) {
+         $input = false;
+      }
+
+      // $this->log($input);
+
+      // @ Check connection close intention by peer?
+      // Close connection if input data is empty to avoid unnecessary loop
+      if ($input === '') {
+         #$this->log('Failed to read buffer: input data is empty!' . PHP_EOL, self::LOG_WARNING_LEVEL);
+         $this->Connection->close();
+         return false;
+      }
+
+      // @ Check issues
+      if ($input === false) {
+         return $this->fail($Socket, 'read', $input);
+      }
+
+      // @ On success
+      if (self::$input !== $input) {
+         $this->changed = true;
+      } else {
+         $this->changed = false;
+      }
+
+      // @ Set Input
+      if ($this->cache === false || $this->changed === true) {
+         #self::$input .= $input;
+         self::$input = $input;
+      }
+
+      // @ Set Stats (disable to max performance in benchmarks)
+      $length = strlen($input);
+
+      if (Connections::$stats) {
+         // Global
+         Connections::$reads++;
+         Connections::$read += $length;
+         // Per client
+         #Connections::$Connections[(int) $Socket]['reads']++;
+      }
+
+      // @ Write data
+      if (Server::$Application) { // @ Decode Application Data if exists
+         $length = Server::$Application::decode($this, $input, $length);
+      }
+
+      if ($length) {
+         $this->write($Socket);
+      }
+
+      return true;
+   }
+   public function write (&$Socket, ? int $length = null) : bool
+   {
+      // @ Set output buffer
+      if (Server::$Application) {
+         self::$output = Server::$Application::encode($this, $length);
+      } else {
+         self::$output = (SAPI::$Handler)(...$this->callbacks);
+      }
+
+      // @ Check connection close intention by server?
+      if ( empty(self::$output) ) {
+         return false;
+      }
+
+      try {
+         // @ Prepare to send data
+         $buffer = self::$output;
+         $sent = false;
+         $written = 0;
+
+         // @ Send initial part of data
+         if ($length !== null) {
+            $initial = substr($buffer, 0, $length);
+            $sent = @fwrite($Socket, $initial, $length);
+         }
+
+         // @ Set remaining of data if exists
+         if ($sent !== false) {
+            $written += $sent;
+
+            if ( ! empty($this->writing) ) {
+               // @ Prepare stream with file handler
+               $written += $this->writing($Socket);
+               $buffer = '';
+            } else {
+               // @ Prepare stream with content raw
+               $buffer = substr($buffer, $sent);
+               $length = strlen($buffer);
+            }
+         }
+
+         // @ Send entire or remaining of data if exists
+         while ($buffer) {
+            $sent = @fwrite($Socket, $buffer, $length);
+
+            if ($sent === false) {
+               break;
+            }
+
+            if ($sent > 0 && $sent < $length) { // @ Stream remaining of not sent data
+               $buffer = substr($buffer, $sent);
+               $length -= $sent;
+               $written += $sent;
+            } else if ($sent === 0) {
+               continue; // TODO check EOF?
+            } else {
+               $written += $sent;
+               break;
+            }
+         }
+      } catch (\Throwable) {
+         $written = false;
+      }
+
+      // @ Check issues
+      if (! $written || ! $sent) {
+         return $this->fail($Socket, 'write', $written);
+      }
+
+      // @ Set Stats (disable to max performance in benchmarks)
+      if (Connections::$stats) {
+         // Global
+         Connections::$writes++;
+         Connections::$written += $written;
+         // Per client
+         if ( isSet(Connections::$Connections[(int) $Socket]) ) {
+            Connections::$Connections[(int) $Socket]->writes++;
+         }
+      }
+
+      return true;
+   }
+
+   // ! Stream
    public function reading ($Socket) : int
    {
       // ! WARNING check server disk space
@@ -186,147 +326,6 @@ abstract class Packages implements Web\Packages
       }
    
       return $received;
-   }
-   public function read (&$Socket) : bool
-   {
-      try {
-         $input = @fread($Socket, 65535);
-      } catch (\Throwable) {
-         $input = false;
-      }
-
-      // $this->log($input);
-
-      // @ Check connection close intention by peer?
-      // Close connection if input data is empty to avoid unnecessary loop
-      if ($input === '') {
-         #$this->log('Failed to read buffer: input data is empty!' . PHP_EOL, self::LOG_WARNING_LEVEL);
-         $this->Connection->close();
-         return false;
-      }
-
-      // @ Check issues
-      if ($input === false) {
-         return $this->fail($Socket, 'read', $input);
-      }
-
-      // @ On success
-      if (self::$input !== $input) {
-         $this->changed = true;
-      } else {
-         $this->changed = false;
-      }
-
-      // @ Set Input
-      if ($this->cache === false || $this->changed === true) {
-         #self::$input .= $input;
-         self::$input = $input;
-      }
-
-      // @ Set Stats (disable to max performance in benchmarks)
-      $length = strlen($input);
-
-      if (Connections::$stats) {
-         // Global
-         Connections::$reads++;
-         Connections::$read += $length;
-         // Per client
-         #Connections::$Connections[(int) $Socket]['reads']++;
-      }
-
-      // @ Write data
-      if (Server::$Application) { // @ Decode Application Data if exists
-         $length = Server::$Application::decode($this, $input, $length);
-      }
-
-      if ($length) {
-         $this->write($Socket);
-      }
-
-      return true;
-   }
-
-   public function write (&$Socket, ? int $length = null) : bool
-   {
-      // @ Set output buffer
-      if (Server::$Application) {
-         self::$output = Server::$Application::encode($this, $length);
-      } else {
-         self::$output = (SAPI::$Handler)(...$this->callbacks);
-      }
-
-      // @ Check connection close intention by server?
-      if ( empty(self::$output) ) {
-         return false;
-      }
-
-      try {
-         // @ Prepare to send data
-         $buffer = self::$output;
-         $sent = false;
-         $written = 0;
-
-         // @ Send initial part of data
-         if ($length !== null) {
-            $initial = substr($buffer, 0, $length);
-            $sent = @fwrite($Socket, $initial, $length);
-         }
-
-         // @ Set remaining of data if exists
-         if ($sent !== false) {
-            $written += $sent;
-
-            if ( ! empty($this->writing) ) {
-               // @ Prepare stream with file handler
-               $written += $this->writing($Socket);
-               $buffer = '';
-            } else {
-               // @ Prepare stream with content raw
-               $buffer = substr($buffer, $sent);
-               $length = strlen($buffer);
-            }
-         }
-
-         // @ Send entire or remaining of data if exists
-         while ($buffer) {
-            $sent = @fwrite($Socket, $buffer, $length);
-
-            if ($sent === false) {
-               break;
-            }
-
-            if ($sent > 0 && $sent < $length) { // @ Stream remaining of not sent data
-               $buffer = substr($buffer, $sent);
-               $length -= $sent;
-               $written += $sent;
-            } else if ($sent === 0) {
-               continue; // TODO check EOF?
-            } else {
-               $written += $sent;
-               break;
-            }
-         }
-      } catch (\Throwable) {
-         $written = false;
-      }
-
-      // @ Check issues
-      if (! $written || ! $sent) {
-         return $this->fail($Socket, 'write', $written);
-      }
-
-      // @ Set Stats (disable to max performance in benchmarks)
-      if (Connections::$stats) {
-         // Global
-         Connections::$writes++;
-         Connections::$written += $written;
-         // Per client
-         if ( isSet(Connections::$Connections[(int) $Socket]) ) {
-            Connections::$Connections[(int) $Socket]->writes++;
-         }
-      }
-
-      return true;
    }
    public function writing ($Socket) : int
    {

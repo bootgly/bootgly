@@ -1,67 +1,15 @@
 <?php
 use Bootgly\Bootgly;
 
-use Bootgly\Web\HTTP\Server\Request;
-use Bootgly\Web\HTTP\Server\Response;
-use Bootgly\Web\HTTP\Server\Router;
 
-
-Bootgly::$Project->vendor = '@bootgly/';
-Bootgly::$Project->container = 'web/';
-Bootgly::$Project->package = 'examples/';
-Bootgly::$Project->version = 'app/';
-Bootgly::$Project->setPath();
-
-
-return static function
-(Request $Request, Response $Response, Router $Router) : Response
+return static function ($input)
 {
-   // ! Request examples
-   // ? Meta (first line of HTTP Request Header)
-   #$Request->method;    // GET
-   #$Request->uri;       // /path/to?query1=value2...
-   #$Request->protocol;  // HTTP/1.1
-   // ? Header
-   #$host = $Request->Header->get('Host');
-   // ? Content
-   // @ Download
-   // Form-data ($_POST, $_FILES)
-   #$files = $Request->download('file1'); // $_FILES and $Request->files available too
-   // @ Receive
-   // Raw - JSON, URL Encoded, Text, etc.
-   #$Request->receive();
-
-   #debug($_POST, $_FILES, $Request->input); // $Request->input ↔ file_get_contents('php://input')
-
-   // ! Response examples
-   // ? Meta (first line of HTTP Response Header)
-   #return $Response->send(302); // 302 Not Found
-   // ? Header
-   #$Response->Header->set('Content-Type', 'text/plain');
-   // Cookies
-   #$Response->Header->Cookie->append('Test', 'value1');
-   #$Response->Header->Cookie->append('Test2', 'value2');
-   // ? Content
-   // @ Output
-   // raw ?
-   /*
-   return $Response(raw: <<<HTTP_RAW
+   return <<<HTTP_RAW
    HTTP/1.1 200 OK
    Server: Bootgly
    Content-Type: text/plain; charset=UTF-8
    Content-Length: 12
 
    Hello World!
-   HTTP_RAW);
-   */
-   // content
-   return $Response(content: 'Hello World!'); // text
-   // @ Send
-   #return $Response->Json->send(['Hello' => 'World!']); // JSON
-   // @ Upload
-   // Small files
-   #return $Response('statics/image1.jpg')->upload();
-   // Large files
-   #return $Response('statics/screenshot.gif')->upload();
-   #return $Response('statics/screenshot.gif')->upload(offset: 0, length: 2);
+   HTTP_RAW;
 };

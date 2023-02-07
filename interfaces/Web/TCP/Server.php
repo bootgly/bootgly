@@ -99,7 +99,6 @@ class Server implements Servers
       Debugger::$exit = false;
 
       // ! Connection(s)
-      // @ New design pattern?
       $this->Connections = new Connections($this);
       #$this->Connections->Packages = require __DIR__ . '/Server/Connections/Packages.php';
       if (__CLASS__ !== static::class) {
@@ -118,6 +117,14 @@ class Server implements Servers
       register_shutdown_function(function () use ($Process) {
          $Process->sendSignal(SIGINT);
       });
+
+      // @ Boot SAPI
+      if (self::$Application) {
+         self::$Application::boot();
+      } else {
+         SAPI::$file = \Bootgly\HOME_DIR . 'projects/sapi.constructor.php';
+         SAPI::boot(true);
+      }
    }
    public function __get (string $name)
    {
@@ -231,7 +238,7 @@ class Server implements Servers
    public function on (string $name, \Closure $handler)
    {
       switch ($name) {
-         case 'data': // DEPRECATED -> moved to projects/sapi.constructor.php
+         case 'data': // DEPRECATED -> moved to projects/sapi.*.constructor.php
             break;
       }
    }
@@ -354,7 +361,7 @@ class Server implements Servers
       $this->log('@\\\;Entering in Monitor mode...@\;', self::LOG_SUCCESS_LEVEL);
       $this->log('>_ Type `CTRL + Z` to enter in Interactive mode or `CTRL + C` to stop the Server.@\;');
 
-      // @ Set time to hot reloading of sapi.constructor.php file
+      // @ Set time to hot reloading of sapi.*.constructor.php file
       Timer::add(2, function () {
          $modified = SAPI::check();
 

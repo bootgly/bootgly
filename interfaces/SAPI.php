@@ -21,7 +21,7 @@ use Bootgly\Web\HTTP\Server;
 class SAPI
 {
    // * Config
-   public static string $sapi = HOME_DIR . 'projects/sapi.constructor.php';
+   public static string $file = HOME_DIR . 'projects/sapi.constructor.php';
    // * Data
    // * Meta
    public static Closure $Handler;
@@ -42,12 +42,12 @@ class SAPI
       if ($reset) {
          // @ Invalidate opcache
          if ( function_exists('opcache_invalidate') ) {
-            opcache_invalidate(self::$sapi, true);
+            opcache_invalidate(self::$file, true);
          }
 
          // @ Copy example file if loaded not exists
-         if (file_exists(self::$sapi) === false) {
-            $copied = copy(self::$sapi . '.example', self::$sapi);
+         if (file_exists(self::$file) === false) {
+            $copied = copy(self::$file . '.example', self::$file);
 
             if ($copied === false) {
                return false;
@@ -60,7 +60,7 @@ class SAPI
          }
 
          // @ Load file
-         self::$Handler = require(self::$sapi);
+         self::$Handler = require(self::$file);
       }
 
       return self::$Handler;
@@ -70,12 +70,12 @@ class SAPI
    {
       static $modified = 0;
 
-      if (file_exists(self::$sapi) === true) {
+      if (file_exists(self::$file) === true) {
          // @ Clear file cache
-         clearstatcache(false, self::$sapi);
+         clearstatcache(false, self::$file);
 
          // @ Get last modified timestamp of file
-         $lastModified = filemtime(self::$sapi);
+         $lastModified = filemtime(self::$file);
 
          // @ Set initial value to $modified
          if ($modified === 0) {

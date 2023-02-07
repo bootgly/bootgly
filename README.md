@@ -1,6 +1,6 @@
 # Bootgly PHP Framework (v0.0.1-pre-alpha)
 
-**Full Stack PHP Framework for Multi Projects (WIP)**
+> Full Stack PHP Framework for Multi Projects (WIP)
 
 🚧 Do not use it in production environments. The alpha version hasn't even been released yet. 🚧
 
@@ -41,7 +41,7 @@ _ | _ | [Response (WIP)](/nodes/Web/HTTP/Server/Response.php) | _
 in Linux OS:
 
 - Check `server.http.php` file;
-- Rename `projects\sapi.constructor.php.example` to `projects\sapi.constructor.php`;
+- Rename `projects\sapi.http.constructor.php.example` to `projects\sapi.http.constructor.php`;
 - Run the server:
 
 `php server.http.php`
@@ -62,9 +62,9 @@ or with Docker *(-10% performance)*:
 
 ## 🖼 Screenshots
 
-| ![HTTP Server CLI - My Benchmark results using Ryzen 9 3900X (24 CPUs) on WSL2](https://github.com/bootgly/.github/raw/main/screenshots/bootgly-php-framework/Server-CLI-HTTP-Benchmark-Ryzen-9-3900X-WSL2.png "HTTP Server CLI - My Benchmark results using Ryzen 9 3900X (24 CPUs) on WSL2") |
+| ![HTTP Server CLI - My Benchmark results using Ryzen 9 3900X (24 CPUs) on WSL2 - Simple 'Hello World!'](https://github.com/bootgly/.github/raw/main/screenshots/bootgly-php-framework/Server-CLI-HTTP-Benchmark-Ryzen-9-3900X-WSL2.png "HTTP Server CLI - My Benchmark results using Ryzen 9 3900X (24 CPUs) on WSL2 - Simple 'Hello World!'") |
 |:--:| 
-| *HTTP Server CLI - My Benchmark results using Ryzen 9 3900X (24 CPUs) on WSL2* |
+| *HTTP Server CLI - My Benchmark results using Ryzen 9 3900X (24 CPUs) on WSL2 - Simple 'Hello World!'* |
 
 | ![HTTP Server CLI started - Initial output](https://github.com/bootgly/.github/raw/main/screenshots/bootgly-php-framework/Server-CLI-HTTP-started.png "HTTP Server CLI started - Initial output") |
 |:--:| 
