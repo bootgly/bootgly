@@ -17,7 +17,7 @@ use Bootgly\CLI\_\ {
    Logger\Logging
 };
 
-use Bootgly\Web\TCP\Server\Connections;
+use Bootgly\Web\Connections;
 
 
 class Select implements Event\Loops
@@ -28,11 +28,15 @@ class Select implements Event\Loops
    public Connections $Connections;
 
    // * Config
+   // @ Events
+   // Server
    const EVENT_ACCEPT = 1;
-
+   // Package
    const EVENT_READ = 2;
    const EVENT_WRITE = 3;
    const EVENT_EXCEPT = 4;
+   // @ Loop
+   private bool $loop = true;
    // * Data
    // @ Sockets
    private array $reads = [];
@@ -40,10 +44,15 @@ class Select implements Event\Loops
    private array $excepts = [];
    // * Meta
    // @ Events
+   // Server
    private array $accepting = [];
+   // Package
    private array $reading = [];
    private array $writing = [];
    private array $excepting = [];
+   // @ Loop
+   private float $started;
+   private float $finished;
 
 
    public function __construct (Connections &$Connections)
@@ -51,11 +60,12 @@ class Select implements Event\Loops
       $this->Connections = $Connections;
    }
 
-   public function add ($Socket, int $flag, $payload, ? array $arguments = null)
+   public function add ($Socket, int $flag, $payload)
    {
       switch ($flag) {
+         // Server
          case self::EVENT_ACCEPT:
-            // System call select exceeded the maximum number of connections 1024, please install event/libevent extension for more connections.
+            // System call select exceeded the maximum number of connections 1024.
             if (count($this->reads) >= 1000) {
                return false;
             }
@@ -67,9 +77,9 @@ class Select implements Event\Loops
             $this->accepting[$id] = $payload;
 
             return true;
-
+         // Package
          case self::EVENT_READ:
-            // System call select exceeded the maximum number of connections 1024, please install event/libevent extension for more connections.
+            // System call select exceeded the maximum number of connections 1024.
             if (count($this->reads) >= 1000) {
                return false;
             }
@@ -82,7 +92,7 @@ class Select implements Event\Loops
 
             return true;
          case self::EVENT_WRITE:
-            // System call select exceeded the maximum number of connections 1024, please install event/libevent extension for more connections.
+            // System call select exceeded the maximum number of connections 1024.
             if (count($this->writes) >= 1000) {
                return false;
             }
@@ -95,7 +105,7 @@ class Select implements Event\Loops
 
             return true;
          case self::EVENT_EXCEPT:
-            // System call select exceeded the maximum number of connections 1024, please install event/libevent extension for more connections.
+            // System call select exceeded the maximum number of connections 1024.
             if (count($this->excepts) >= 1000) {
                return false;
             }
@@ -114,6 +124,7 @@ class Select implements Event\Loops
    public function del ($Socket, int $flag)
    {
       switch ($flag) {
+         // Server
          case self::EVENT_ACCEPT:
             $id = (int) $Socket;
 
@@ -122,7 +133,7 @@ class Select implements Event\Loops
             unset($this->reads[$id]);
 
             return true;
-
+         // Package
          case self::EVENT_READ:
             $id = (int) $Socket;
 
@@ -154,6 +165,8 @@ class Select implements Event\Loops
 
    public function loop ()
    {
+      $this->started = microtime(true);
+
       #$this->log('Event loop started!' . PHP_EOL);
 
       while (true) {
@@ -173,6 +186,11 @@ class Select implements Event\Loops
          } else {
             // @ Sleep for 1 second and continue (Used to pause the Server)
             sleep(1);
+
+            if ($this->loop === false) {
+               break;
+            }
+
             continue;
          }
 
@@ -188,7 +206,8 @@ class Select implements Event\Loops
                // @ Select action
                if ( isSet($this->accepting[$id]) ) {
                   $this->Connections->accept($Socket);
-               } else if ( isSet($this->reading[$id]) ) {
+               }
+               else if ( isSet($this->reading[$id]) ) {
                   $Package = &$this->reading[$id];
                   $Package->read($Socket);
                }
@@ -209,7 +228,11 @@ class Select implements Event\Loops
          // TODO add timer ticks?
          // if ($except) {}
       }
+
+      $this->finished = microtime(true);
    }
    public function destroy ()
-   {}
+   {
+      $this->loop = false;
+   }
 }
