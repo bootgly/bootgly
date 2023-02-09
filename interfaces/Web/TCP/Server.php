@@ -24,7 +24,7 @@ use Bootgly\Web\_\ {
    Events\Select
 };
 use Bootgly\Web\Servers;
-use Bootgly\Web\TCP\_\ {
+use Bootgly\Web\TCP\Server\_\ {
    CLI\Console,
    OS\Process
 };
@@ -52,8 +52,10 @@ class Server implements Servers
    public const MODE_DAEMON = 1;
    public const MODE_INTERACTIVE = 2;
    public const MODE_MONITOR = 3;
+
    // * Data
    public static $Application = null; // OSI Application
+
    // * Meta
    public const VERSION = '0.0.1';
    protected int $started = 0;
@@ -87,8 +89,10 @@ class Server implements Servers
       // * Config
       // @ Mode
       $this->mode = self::MODE_MONITOR;
+
       // * Data
       // self::$application = self::$application ?? '';
+
       // * Meta
       $this->started = time();
       // @ Status
@@ -204,6 +208,7 @@ class Server implements Servers
       $this->log('Starting Server... ', self::LOG_INFO_LEVEL);
 
       // ! Process
+      // @ Install process signals
       // $this->Process->Signal->install();
       $this->Process->installSignal();
       #$this->Process::lock();

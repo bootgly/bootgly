@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\Web\TCP\_\OS;
+namespace Bootgly\Web\TCP\Server\_\OS;
 
 
 // use

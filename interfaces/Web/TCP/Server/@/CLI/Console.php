@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\Web\TCP\_\CLI;
+namespace Bootgly\Web\TCP\Server\_\CLI;
 
 
 use const Bootgly\HOME_DIR;
@@ -118,8 +118,9 @@ class Console extends CLI\Console
             Bootgly::debug(true) && true,
          'debug off' =>
             Bootgly::debug(false) && true,
-         // TODO 'benchmark' => ...,
-         // TODO 'test' response of 1 request
+         // TODO 'benchmark'
+         // TODO 'test'
+         // TODO 'log'
 
          'check jit' => $this->log(
             (function_exists('opcache_get_status') && @opcache_get_status()['jit']['enabled'])
