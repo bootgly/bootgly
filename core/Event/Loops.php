@@ -13,7 +13,7 @@ namespace Bootgly\Event;
 
 interface Loops
 {
-   public function add ($data, int $flag, $action, ? array $arguments = null);
+   public function add ($data, int $flag, $payload);
    public function del ($data, int $flag);
 
    public function loop ();
