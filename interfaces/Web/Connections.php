@@ -13,5 +13,5 @@ namespace Bootgly\Web;
 
 interface Connections
 {
-   public function accept ($Socket);
+   public function connect ();
 }

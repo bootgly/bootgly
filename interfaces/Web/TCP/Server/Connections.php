@@ -32,7 +32,6 @@ class Connections implements Web\Connections
    // * Config
    public ? float $timeout;
    // * Data
-   public $Socket;
    // * Meta
    // @ Remote
    public static array $Connections;
@@ -53,14 +52,13 @@ class Connections implements Web\Connections
    public Packages $Packages;
 
 
-   public function __construct (? Server &$Server = null, $Socket = null)
+   public function __construct (? Server &$Server = null)
    {
       $this->Server = $Server;
 
       // * Config
       $this->timeout = 5;
       // * Data
-      $this->Socket = $Socket;
       // * Meta
       // @ Remote
       self::$Connections = []; // Connections peers
@@ -101,10 +99,10 @@ class Connections implements Web\Connections
    }
 
    // Accept connection from client / Open connection with client / Connect with client
-   public function accept ($_Socket) : bool
+   public function connect () : bool
    {
       try {
-         $Socket = @stream_socket_accept($_Socket, null);
+         $Socket = @stream_socket_accept($this->Server->Socket, null);
 
          stream_set_timeout($Socket, 0);
 

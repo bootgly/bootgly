@@ -29,8 +29,8 @@ class Select implements Event\Loops
 
    // * Config
    // @ Events
-   // Server
-   const EVENT_ACCEPT = 1;
+   // Client/Server
+   const EVENT_CONNECT = 1;
    // Package
    const EVENT_READ = 2;
    const EVENT_WRITE = 3;
@@ -44,8 +44,8 @@ class Select implements Event\Loops
    private array $excepts = [];
    // * Meta
    // @ Events
-   // Server
-   private array $accepting = [];
+   // Client/Server
+   private array $connecting = [];
    // Package
    private array $reading = [];
    private array $writing = [];
@@ -63,8 +63,8 @@ class Select implements Event\Loops
    public function add ($Socket, int $flag, $payload)
    {
       switch ($flag) {
-         // Server
-         case self::EVENT_ACCEPT:
+         // Client/Server
+         case self::EVENT_CONNECT:
             // System call select exceeded the maximum number of connections 1024.
             if (count($this->reads) >= 1000) {
                return false;
@@ -74,7 +74,7 @@ class Select implements Event\Loops
 
             $this->reads[$id] = $Socket;
 
-            $this->accepting[$id] = $payload;
+            $this->connecting[$id] = $payload;
 
             return true;
          // Package
@@ -124,11 +124,11 @@ class Select implements Event\Loops
    public function del ($Socket, int $flag)
    {
       switch ($flag) {
-         // Server
-         case self::EVENT_ACCEPT:
+         // Client/Server
+         case self::EVENT_CONNECT:
             $id = (int) $Socket;
 
-            unset($this->accepting[$id]);
+            unset($this->connecting[$id]);
 
             unset($this->reads[$id]);
 
@@ -204,8 +204,8 @@ class Select implements Event\Loops
                $id = (int) $Socket;
 
                // @ Select action
-               if ( isSet($this->accepting[$id]) ) {
-                  $this->Connections->accept($Socket);
+               if ( isSet($this->connecting[$id]) ) {
+                  $this->Connections->connect();
                }
                else if ( isSet($this->reading[$id]) ) {
                   $Package = &$this->reading[$id];

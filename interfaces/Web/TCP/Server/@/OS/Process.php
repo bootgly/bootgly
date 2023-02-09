@@ -231,7 +231,7 @@ class Process
             $this->Server->instance();
 
             // Event Loop
-            $this->Server::$Event->add($this->Server->Socket, Select::EVENT_ACCEPT, true);
+            $this->Server::$Event->add($this->Server->Socket, Select::EVENT_CONNECT, true);
             $this->Server::$Event->loop();
 
             $this->Server->stop();

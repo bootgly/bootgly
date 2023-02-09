@@ -41,6 +41,14 @@ class Server implements Servers
 
    protected $Socket;
 
+   // ! Event
+   public static string|object $Event = '\Bootgly\Web\_\Events\Select';
+
+   // ! Process
+   protected Process $Process;
+   // ! Console
+   protected Console $Console;
+
    // * Config
    #protected ? string $domain;
    protected ? string $host;
@@ -72,19 +80,13 @@ class Server implements Servers
    // ! Connection(s)
    protected Connections $Connections;
 
-   // ! Event
-   public static $Event = null; // TODO refactor
-   // ! Process
-   protected Process $Process;
-   // ! Console
-   protected Console $Console;
-
 
    public function __construct ()
    {
       if (\PHP_SAPI !== 'cli') {
          return false;
       }
+
 
       // * Config
       // @ Mode
@@ -98,20 +100,21 @@ class Server implements Servers
       // @ Status
       $this->status = self::STATUS_BOOTING;
 
+
+      // @ Configure Debugger
       Debugger::$debug = true;
       Debugger::$print = true;
       Debugger::$exit = false;
 
+      // @ Instance Bootables
       // ! Connection(s)
       $this->Connections = new Connections($this);
-      #$this->Connections->Packages = require __DIR__ . '/Server/Connections/Packages.php';
       if (__CLASS__ !== static::class) {
          self::$Application = static::class;
-         #$this->Connections->Packages = require (new Backtrace)->dir . '/Server/@/Connections/Packages.php';
       }
-
       // ! Web\@\Events
       static::$Event = new Select($this->Connections);
+
       // ! @\CLI\Console
       $this->Console = new Console($this);
       // ! @\OS\Process
@@ -446,7 +449,7 @@ class Server implements Servers
 
       match ($this->Process->level) {
          'master' => $this->log("Resuming {$this->Process->children} worker(s)... @\\;", 3),
-         'child' => self::$Event->add($this->Socket, self::$Event::EVENT_ACCEPT, 'accept')
+         'child' => self::$Event->add($this->Socket, self::$Event::EVENT_CONNECT, true)
       };
 
       return true;
@@ -466,7 +469,7 @@ class Server implements Servers
 
       match ($this->Process->level) {
          'master' => $this->log("Pausing {$this->Process->children} worker(s)... @\\;", 3),
-         'child' => self::$Event->del($this->Socket, self::$Event::EVENT_ACCEPT)
+         'child' => self::$Event->del($this->Socket, self::$Event::EVENT_CONNECT)
       };
 
       return true;
