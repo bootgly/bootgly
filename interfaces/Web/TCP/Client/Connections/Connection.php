@@ -77,16 +77,10 @@ class Connection extends Packages
 
       parent::__construct($this);
 
-      // TODO on Connect trigger
-      // @ Set Connection expiration
-      $this->timers[] = Timer::add(
-         interval: $this->expiration,
-         handler: function ($Connection) {
-            $Connection->close();
-         },
-         args: [$this],
-         persistent: false
-      );
+      // @ Call On Connection connect
+      if (Client::$Connect) {
+         (Client::$Connect)($this);
+      }
    }
 
    public function close ()

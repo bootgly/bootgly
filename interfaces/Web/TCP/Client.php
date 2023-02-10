@@ -12,6 +12,7 @@ namespace Bootgly\Web\TCP;
 
 
 // use
+use Closure;
 use Bootgly\Debugger;
 use Bootgly\CLI\_\ {
    Logger\Logging
@@ -54,9 +55,15 @@ class Client
    protected int $mode;
    public const MODE_DEFAULT = 1;
    public const MODE_MONITOR = 2;
-
    // * Data
-
+   // ! On
+   // @ Worker
+   public static ? Closure $Instance = null;
+   // @ Connection(s)
+   public static ? Closure $Connect = null;
+   // @ Packages
+   public static ? Closure $Read = null;
+   public static ? Closure $Write = null;
    // * Meta
    public const VERSION = '0.0.1';
    // @ Error
@@ -152,6 +159,17 @@ class Client
       $this->workers = $workers;
 
       return $this;
+   }
+   public function on
+   (? Closure $instance = null, ? Closure $connect = null, ? Closure $read = null, ? Closure $write = null)
+   {
+      // @ Worker
+      self::$Instance = $instance;
+      // @ Connection(s)
+      self::$Connect = $connect;
+      // @ Packages
+      self::$Read = $read;
+      self::$Write = $write;
    }
    public function start ()
    {

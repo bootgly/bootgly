@@ -15,6 +15,7 @@ require_once '@/autoload.php';
 
 
 use Bootgly\Web\TCP;
+use Bootgly\OS\Process\Timer;
 
 
 $TCPClient = new TCP\Client;
@@ -23,10 +24,38 @@ $TCPClient->configure(
    port: 8080,
    workers: 1
 );
-// TODO onWorkerStart
+$TCPClient->on(
+   // @ Worker
+   instance: function ($Client) {
+      // @ Connect to Server
+      $Socket = $Client->connect();
 
-// TODO onConnection
+      if ($Socket) {
+         // @ Call Event loop
+         #if ($Socket) {
+         #   $this->Client::$Event->add($Socket, Select::EVENT_CONNECT, true);
+         #}
 
-// TODO onPackageRead
-// TODO onPackageWrite
+         $Client::$Event->loop();
+      }
+   },
+   // @ Connection(s)
+   connect: function ($Connection) {
+      // @ Set Connection expiration
+      Timer::add(
+         interval: 10,
+         handler: function ($Connection) {
+            $Connection->close();
+         },
+         args: [$Connection],
+         persistent: false
+      );
+
+      // @ Add Connection Data read to Event loop
+      TCP\Client::$Event->add($Connection->Socket, TCP\Client::$Event::EVENT_WRITE, $Connection);
+   },
+   // @ Packages
+   write: null,
+   read: null,
+);
 $TCPClient->start();

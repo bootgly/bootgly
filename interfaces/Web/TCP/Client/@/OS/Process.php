@@ -201,15 +201,10 @@ class Process
             // @ Set Logging display
             Logger::$display = Logger::DISPLAY_MESSAGE_DATETIME_LEVEL;
 
-            // @ Connect to Server
-            $Socket = $this->Client->connect(self::$index);
-
-            // @ Call Event loop
-            #if ($Socket) {
-            #   $this->Client::$Event->add($Socket, Select::EVENT_CONNECT, true);
-            #}
-
-            $this->Client::$Event->loop();
+            // @ Call On Worker instance
+            if (Client::$Instance) {
+               (Client::$Instance)($this->Client);
+            }
 
             $this->Client->stop();
             #exit(1);

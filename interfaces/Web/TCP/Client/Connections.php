@@ -127,9 +127,6 @@ class Connections implements Web\Connections
       // @ Set Connection
       self::$Connections[(int) $Socket] = $Connection;
 
-      // @ Add Connection Data read to Event loop
-      Client::$Event->add($Socket, Client::$Event::EVENT_WRITE, $Connection);
-
       return true;
    }
 
