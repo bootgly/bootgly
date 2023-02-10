@@ -12,9 +12,9 @@ Documentation and Website will be released alongside the beta.
 
 Servers | Database | Back-end | Front-end
 --- | --- | --- | ---
-[TCP Server (WIP)](/interfaces/Web/TCP/Server.php) | ORM (TODO) | [Router (WIP)](/nodes/Web/HTTP/Server/Router.php) | [Templating Engine (WIP)](/core/Template.php)
-[HTTP Server (WIP)](/nodes/Web/HTTP/Server.php) | _ | [Router/Route (WIP)](/nodes/Web/HTTP/Server/Router/Route.php) | _
-_ | _ | [Request (WIP)](/nodes/Web/HTTP/Server/Request.php) | _
+[TCP Server (WIP)](/interfaces/Web/TCP/Server.php) | DBAL (TODO) | [Router (WIP)](/nodes/Web/HTTP/Server/Router.php) | [Templating Engine (WIP)](/core/Template.php)
+[HTTP Server (WIP)](/nodes/Web/HTTP/Server.php) | ORM (TODO) | [Router/Route (WIP)](/nodes/Web/HTTP/Server/Router/Route.php) | _
+WS Server (TODO) | _ | [Request (WIP)](/nodes/Web/HTTP/Server/Request.php) | _
 _ | _ | [Response (WIP)](/nodes/Web/HTTP/Server/Response.php) | _
 
 ---
