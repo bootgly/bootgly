@@ -51,11 +51,12 @@ $TCPClient->on(
          persistent: false
       );
 
-      // @ Add Connection Data read to Event loop
+      // @ Add Connection Data write to Event loop
       TCP\Client::$Event->add($Connection->Socket, TCP\Client::$Event::EVENT_WRITE, $Connection);
    },
    // @ on Package write / read
    write: function ($Socket, $Package, $Connection) {
+      // @ Add Connection Data read to Event loop
       TCP\Client::$Event->add($Socket, TCP\Client::$Event::EVENT_READ, $Connection);
    },
    read: null,
