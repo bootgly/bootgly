@@ -245,7 +245,7 @@ class Client
                // that PHP will use to access the network. The syntax is ip:port for IPv4 addresses,
                // and [ip]:port for IPv6 addresses. Setting the IP or the port to 0 will 
                // let the system choose the IP and/or port.
-               'bindto' => $this->host . ':' . (55000 + $index)
+               #'bindto' => $this->host . ':' . (55000 + $index)
             ]
          ]);
 
