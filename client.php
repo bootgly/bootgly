@@ -1,6 +1,32 @@
 <?php
+/*
+ * --------------------------------------------------------------------------
+ * Bootgly PHP Framework
+ * Developed by Rodrigo Vieira (@rodrigoslayertech)
+ * Copyright 2020-present
+ * Licensed under MIT
+ * --------------------------------------------------------------------------
+ */
+
 namespace Bootgly;
 
-const HOME_DIR = __DIR__.DIRECTORY_SEPARATOR;
 
-require HOME_DIR . 'projects/@bootgly/web/tools/http-flooder-multithread.php';
+require_once '@/autoload.php';
+
+
+use Bootgly\Web\TCP;
+
+
+$TCPClient = new TCP\Client;
+$TCPClient->configure(
+   host: '127.0.0.1',
+   port: 8080,
+   workers: 1
+);
+// TODO onWorkerStart
+
+// TODO onConnection
+
+// TODO onPackageRead
+// TODO onPackageWrite
+$TCPClient->start();

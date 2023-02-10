@@ -35,11 +35,11 @@ switch ($name) {
          $this->log(<<<OUTPUT
          Connections Accepted | @:info: {$connections} connection(s) @;
          Connection Errors    | @:error: {$errors[0]} error(s) @;
-            --------------------------------------------------
+          ---------------------------------------------------
          Data Reads Count     | @:info: {$reads} time(s) @;
          Data Reads Bytes     | @:info: {$read} @;
          Data Reads Errors    | @:error: {$errors[1]} error(s) @;
-            --------------------------------------------------
+          ---------------------------------------------------
          Data Writes Count    | @:info: {$writes} time(s) @;
          Data Writes Bytes    | @:info: {$written} @;
          Data Writes Errors   | @:error: {$errors[2]} error(s) @;@\;

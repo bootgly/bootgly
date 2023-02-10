@@ -66,7 +66,9 @@ class Server implements Servers
 
    // * Meta
    public const VERSION = '0.0.1';
+   // @ State
    protected int $started = 0;
+   // @ Socket
    public static array $context;
    // @ Status
    protected int $status = 0;
@@ -93,9 +95,9 @@ class Server implements Servers
       $this->mode = self::MODE_MONITOR;
 
       // * Data
-      // self::$application = self::$application ?? '';
 
       // * Meta
+      // @ State
       $this->started = time();
       // @ Status
       $this->status = self::STATUS_BOOTING;
@@ -141,6 +143,7 @@ class Server implements Servers
 
          case 'Connections':
             return $this->Connections;
+
          case 'Process':
             return $this->Process;
 
@@ -211,6 +214,7 @@ class Server implements Servers
       $this->log('Starting Server... ', self::LOG_INFO_LEVEL);
 
       // ! Process
+      // ? Signals
       // @ Install process signals
       // $this->Process->Signal->install();
       $this->Process->installSignal();
@@ -219,14 +223,8 @@ class Server implements Servers
       // @ Fork process workers...
       $this->Process->fork($this->workers);
 
-      if ($this->Process->level === 'child') {
-         #$this->log('Ops, child exited!@\;');
-         #exit;
-      }
-
-      // @ Continue to master process:
+      // ... Continue to master process:
       $this->log('@\\\;');
-
       $this->{'@status'};
 
       switch ($this->mode) {
@@ -350,7 +348,7 @@ class Server implements Servers
 
             continue;
          } else if ($pid > 0) { // If a child has already exited?
-            $this->log('@\;Child exited!@\;', self::LOG_ERROR_LEVEL);
+            $this->log('@\;Process child exited!@\;', self::LOG_ERROR_LEVEL);
             $this->Process->sendSignal(SIGINT);
             break;
          } else if ($pid === -1) { // If error
@@ -396,7 +394,7 @@ class Server implements Servers
          if ($pid === 0) {
             continue;
          } else if ($pid > 0) { // If a child has already exited?
-            $this->log('@\;Child exited!@\;', self::LOG_ERROR_LEVEL);
+            $this->log('@\;Process child exited!@\;', self::LOG_ERROR_LEVEL);
             $this->Process->sendSignal(SIGINT);
             break;
          } else if ($pid === -1) { // If error ignore
