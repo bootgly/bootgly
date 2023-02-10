@@ -57,13 +57,13 @@ class Client
    public const MODE_MONITOR = 2;
    // * Data
    // ! On
-   // @ Worker
-   public static ? Closure $Instance = null;
-   // @ Connection(s)
-   public static ? Closure $Connect = null;
-   // @ Packages
-   public static ? Closure $Read = null;
-   public static ? Closure $Write = null;
+   // @ on Worker
+   public static ? Closure $onInstance = null;
+   // @ on Connection
+   public static ? Closure $onConnect = null;
+   // @ on Packages
+   public static ? Closure $onRead = null;
+   public static ? Closure $onWrite = null;
    // * Meta
    public const VERSION = '0.0.1';
    // @ Error
@@ -164,12 +164,12 @@ class Client
    (? Closure $instance = null, ? Closure $connect = null, ? Closure $read = null, ? Closure $write = null)
    {
       // @ Worker
-      self::$Instance = $instance;
+      self::$onInstance = $instance;
       // @ Connection(s)
-      self::$Connect = $connect;
+      self::$onConnect = $connect;
       // @ Packages
-      self::$Read = $read;
-      self::$Write = $write;
+      self::$onRead = $read;
+      self::$onWrite = $write;
    }
    public function start ()
    {

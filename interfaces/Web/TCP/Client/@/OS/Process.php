@@ -202,8 +202,8 @@ class Process
             Logger::$display = Logger::DISPLAY_MESSAGE_DATETIME_LEVEL;
 
             // @ Call On Worker instance
-            if (Client::$Instance) {
-               (Client::$Instance)($this->Client);
+            if (Client::$onInstance) {
+               (Client::$onInstance)($this->Client);
             }
 
             $this->Client->stop();

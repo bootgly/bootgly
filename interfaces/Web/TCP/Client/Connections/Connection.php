@@ -78,8 +78,8 @@ class Connection extends Packages
       parent::__construct($this);
 
       // @ Call On Connection connect
-      if (Client::$Connect) {
-         (Client::$Connect)($this);
+      if (Client::$onConnect) {
+         (Client::$onConnect)($this);
       }
    }
 

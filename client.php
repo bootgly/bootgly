@@ -25,7 +25,7 @@ $TCPClient->configure(
    workers: 1
 );
 $TCPClient->on(
-   // @ Worker
+   // @ on Worker instance
    instance: function ($Client) {
       // @ Connect to Server
       $Socket = $Client->connect();
@@ -39,7 +39,7 @@ $TCPClient->on(
          $Client::$Event->loop();
       }
    },
-   // @ Connection(s)
+   // @ on Connection connect
    connect: function ($Connection) {
       // @ Set Connection expiration
       Timer::add(
@@ -54,7 +54,7 @@ $TCPClient->on(
       // @ Add Connection Data read to Event loop
       TCP\Client::$Event->add($Connection->Socket, TCP\Client::$Event::EVENT_WRITE, $Connection);
    },
-   // @ Packages
+   // @ on Package write / read
    write: null,
    read: null,
 );
