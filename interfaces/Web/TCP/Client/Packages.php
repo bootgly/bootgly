@@ -48,7 +48,7 @@ class Packages implements Web\Packages
 
       // * Data
       // @ Buffer
-      self::$output = "GET / HTTP/1.0\r\n\r\n";
+      self::$output ='';
       self::$input = '';
       // * Meta
       $this->written = 0;         // Output Data length (bytes written).

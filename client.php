@@ -24,6 +24,8 @@ $TCPClient->configure(
    port: 8080,
    workers: 1
 );
+// This runs a Benchmark for 10 seconds with 1 Worker \
+// type stats command in Server to get stats of writes
 $TCPClient->on(
    // @ on Worker instance
    instance: function ($Client) {
@@ -51,12 +53,15 @@ $TCPClient->on(
          persistent: false
       );
 
-      // @ Add Connection Data write to Event loop
+      // @ Set Data raw to write
+      $Connection::$output = "GET / HTTP/1.0\r\n\r\n";
+
+      // @ Add Package write trigger to Event loop
       TCP\Client::$Event->add($Connection->Socket, TCP\Client::$Event::EVENT_WRITE, $Connection);
    },
    // @ on Package write / read
    write: function ($Socket, $Package, $Connection) {
-      // @ Add Connection Data read to Event loop
+      // @ Add Package read trigger to Event loop
       TCP\Client::$Event->add($Socket, TCP\Client::$Event::EVENT_READ, $Connection);
    },
    read: null,
