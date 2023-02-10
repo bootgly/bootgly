@@ -55,7 +55,9 @@ $TCPClient->on(
       TCP\Client::$Event->add($Connection->Socket, TCP\Client::$Event::EVENT_WRITE, $Connection);
    },
    // @ on Package write / read
-   write: null,
+   write: function ($Socket, $Package, $Connection) {
+      TCP\Client::$Event->add($Socket, TCP\Client::$Event::EVENT_READ, $Connection);
+   },
    read: null,
 );
 $TCPClient->start();

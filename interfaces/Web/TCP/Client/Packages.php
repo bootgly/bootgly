@@ -171,10 +171,8 @@ class Packages implements Web\Packages
          }
       }
 
-      if ($written) {
-         #$this->read($Socket);
-
-         Client::$Event->add($Socket, Client::$Event::EVENT_READ, $this->Connection);
+      if (Client::$onWrite) {
+         (Client::$onWrite)($Socket, $this, $this->Connection);
       }
 
       return true;
@@ -183,13 +181,13 @@ class Packages implements Web\Packages
    public function read (&$Socket)
    {
       try {
-         $input = fread($Socket, 1024);
+         $input = fread($Socket, 65535);
       } catch (\Throwable) {}
 
       // @ Check connection close intention by server?
-      // Close connection if input data is empty to avoid unnecessary loop
+      // Close connection if input data is empty to avoid unnecessary loop?
       if ($input === '') {
-         $this->log('Failed to read buffer: input data is empty!' . PHP_EOL, self::LOG_WARNING_LEVEL);
+         #$this->log('Failed to read buffer: input data is empty!' . PHP_EOL, self::LOG_WARNING_LEVEL);
          #$this->fail($Socket, 'read', $input);
          return false;
       }
@@ -197,6 +195,21 @@ class Packages implements Web\Packages
       // @ Check issues
       if ($input === false) {
          $this->fail($Socket, 'read', $input);
+      }
+
+      // @ Set Stats (disable to max performance in benchmarks)
+      $length = strlen($input);
+
+      if (Connections::$stats) {
+         // Global
+         Connections::$reads++;
+         Connections::$read += $length;
+         // Per client
+         #Connections::$Connections[(int) $Socket]['reads']++;
+      }
+
+      if (Client::$onRead) {
+         (Client::$onRead)($Socket, $this, $this->Connection);
       }
 
       return true;

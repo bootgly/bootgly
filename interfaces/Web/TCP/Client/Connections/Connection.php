@@ -50,20 +50,11 @@ class Connection extends Packages
    {
       $this->Socket = $Socket;
 
-      // @ Remote
-      // IP:port
-      $peer = stream_socket_get_name($Socket, true);
-      @[$ip, $port] = explode(':', $peer, 2); // TODO IPv6
-      // @ Local?
-      // metadata
-      #$metadata = stream_get_meta_data($Socket);
-
       // * Config
       $this->timers = [];
       $this->expiration = 10;
       // * Data
-      $this->ip = $ip;
-      $this->port = $port;
+      // ... dynamicaly
       // * Meta
       $this->id = (int) $Socket;
       // @ Status
@@ -75,6 +66,14 @@ class Connection extends Packages
       $this->writes = 0;
       $this->reads = 0;
 
+      // @ Set Remote Data if possible
+      // IP:port
+      $peer = stream_socket_get_name($Socket, true);
+      if ($peer === false)
+         return $this->close();
+      @[$this->ip, $this->port] = explode(':', $peer, 2); // TODO IPv6
+
+      // @ Call parent constructor
       parent::__construct($this);
 
       // @ Call On Connection connect

@@ -71,7 +71,7 @@ class Connections implements Web\Connections
       // @ Remote
       self::$Connections = []; // Connections peers
       // @ Stats
-      self::$stats = true;
+      self::$stats = false;
       // Connections
       $this->connections = 0;  // Connections count
       // Errors
