@@ -15,7 +15,7 @@ use Closure;
 use Bootgly\{
    SAPI\Environment
 };
-use Bootgly\Web\HTTP\Server;
+use Bootgly\Web\HTTP;
 
 
 class SAPI
@@ -40,7 +40,7 @@ class SAPI
    public static function boot ($reset = false)
    {
       if ($reset) {
-         // @ Invalidate opcache
+         // @ Clear cache
          if ( function_exists('opcache_invalidate') ) {
             opcache_invalidate(self::$file, true);
          }
@@ -54,9 +54,10 @@ class SAPI
             }
          }
 
-         if ( isSet(Server::$Response) ) {
-            // @ Clear Response cache
-            Server::$Response->reset();
+         // @ Clear Server Application cache
+         // HTTP
+         if ( isSet(HTTP\Server::$Response) ) {
+            HTTP\Server::$Response->reset();
          }
 
          // @ Load file

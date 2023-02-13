@@ -18,7 +18,7 @@ use Bootgly\Web\TCP;
 use Bootgly\OS\Process\Timer;
 
 
-$TCPClient = new TCP\Client;
+$TCPClient = new TCP\Client(TCP\Client::MODE_MONITOR);
 $TCPClient->configure(
    host: '127.0.0.1',
    port: 8080,
@@ -42,7 +42,7 @@ $TCPClient->on(
       }
    },
    // on Connection connect
-   connect: function ($Connection) {
+   connect: function ($Socket, $Connection) {
       // @ Set Connection expiration
       Timer::add(
          interval: 10,
@@ -57,10 +57,10 @@ $TCPClient->on(
       $Connection::$output = "GET / HTTP/1.0\r\n\r\n";
 
       // @ Add Package write to Event loop
-      TCP\Client::$Event->add($Connection->Socket, TCP\Client::$Event::EVENT_WRITE, $Connection);
+      TCP\Client::$Event->add($Socket, TCP\Client::$Event::EVENT_WRITE, $Connection);
    },
    // on Package write / read
-   write: function ($Socket, $Package, $Connection) {
+   write: function ($Socket, $Connection, $Package) {
       // @ Add Package read to Event loop
       TCP\Client::$Event->add($Socket, TCP\Client::$Event::EVENT_READ, $Connection);
    },

@@ -83,7 +83,7 @@ class Client
    protected Connections $Connections;
 
 
-   public function __construct ()
+   public function __construct (int $mode = self::MODE_DEFAULT)
    {
       if (\PHP_SAPI !== 'cli') {
          return false;
@@ -91,7 +91,7 @@ class Client
 
       // * Config
       // @ Mode
-      $this->mode = self::MODE_MONITOR;
+      $this->mode = $mode;
 
       // * Data
 
@@ -175,19 +175,23 @@ class Client
    {
       self::$status = self::STATUS_STARTING;
 
-      $this->log('Starting Client... ', self::LOG_INFO_LEVEL);
+      if ($this->workers) {
+         $this->log('Starting Client... ', self::LOG_INFO_LEVEL);
 
-      // ! Process
-      // ? Signals
-      // @ Install process signals
-      $this->Process->installSignal();
-      // @ Fork process workers...
-      $this->Process->fork($this->workers);
+         // ! Process
+         // ? Signals
+         // @ Install process signals
+         $this->Process->installSignal();
+         // @ Fork process workers...
+         $this->Process->fork($this->workers);
+      }
 
       // ... Continue to master process:
       switch ($this->mode) {
          case self::MODE_DEFAULT:
-            // TODO
+            if (Client::$onInstance) {
+               (Client::$onInstance)($this);
+            }
             break;
          case self::MODE_MONITOR:
             $this->monitor();
@@ -201,7 +205,9 @@ class Client
    {
       self::$status = self::STATUS_RUNNING;
 
-      Logger::$display = Logger::DISPLAY_MESSAGE;
+      if (Logger::$display !== Logger::DISPLAY_NONE) {
+         Logger::$display = Logger::DISPLAY_MESSAGE;
+      }
 
       $this->log('@\\\;Entering in Monitor mode...@\;', self::LOG_SUCCESS_LEVEL);
       $this->log('>_ Type `CTRL + Z` to enter in Interactive mode or `CTRL + C` to stop the Server.@\;');
