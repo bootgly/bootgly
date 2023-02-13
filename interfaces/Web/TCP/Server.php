@@ -149,6 +149,11 @@ class Server implements Servers
 
          case 'mode':
             return $this->mode;
+
+         case '@test':
+            if (self::$Application && method_exists(self::$Application, 'test')) {
+               self::$Application::test($this);
+            }
       }
 
       // ! @info

@@ -119,6 +119,9 @@ class Console extends CLI\Console
          'debug off' =>
             Bootgly::debug(false) && true,
          // TODO 'benchmark'
+         'test' =>
+            $this->saveCommand('test')
+            && $this->Server->Process->sendSignal(SIGUSR1, master: true, children: false) && true,
          // TODO 'test'
          // TODO 'log'
 

@@ -10,11 +10,13 @@
 
 namespace Bootgly\Web\HTTP;
 
-
+use Bootgly\Logger;
 use Bootgly\SAPI;
 use Bootgly\Web;
+
 use Bootgly\Web\TCP;
 use Bootgly\Web\TCP\Server\Packages;
+use Bootgly\Web\TCP\Client;
 
 use Bootgly\Web\protocols\HTTP;
 
@@ -157,5 +159,118 @@ class Server extends TCP\Server implements HTTP
       }
       // @ Output/Stream HTTP Response
       return $Response->output($Package, $length); // @ Return Response raw
+   }
+
+   protected static function test ($Server)
+   {
+      Logger::$display = Logger::DISPLAY_NONE;
+
+      // TODO with HTTP Client
+      $TCPClient = new Client;
+
+      if ($Server->host === '0.0.0.0') {
+         $host = '127.0.0.1';
+      }
+
+      $TCPClient->configure(host: $host ?? $Server->host, port: $Server->port, workers: 0);
+
+      $TCPClient->on(
+         // on Worker instance
+         instance: function ($Client) {
+            // @ Connect to Server
+            $Socket = $Client->connect();
+      
+            if ($Socket) {
+               $Client::$Event->loop();
+            }
+         },
+         // on Connection connect
+         connect: static function ($Socket, $Connection) use ($Server, $TCPClient) {
+            Logger::$display = Logger::DISPLAY_MESSAGE;
+
+            // @ Set test -suite-
+            // TODO set in Console Wizard
+            $tests = [
+               '1.1-respond_hello_world',
+            ];
+
+            // @ Init test variables
+            $passed = 0;
+            $failed = 0;
+            $total = count($tests);
+            $started = microtime(true);
+
+            // @ Run test cases
+            foreach ($tests as $testing) {
+               // @ Construct Test case file path
+               $file = __DIR__ . '/Server/tests/' . $testing . '.test.php';
+               // @ Reset Cache of Test case file
+               if ( function_exists('opcache_invalidate') )
+                  opcache_invalidate($file, true);
+               clearstatcache(false, $file);
+               // @ Load Test case from file
+               $test = require $file;
+
+               $sapi = $test['sapi'];     // @ Set Server API
+               $capi = $test['capi'];     // @ Set Client API
+               $assert = $test['assert']; // @ Get assert
+               $except = $test['except']; // @ Get except
+
+               SAPI::$Handler = $sapi;
+               $Connection::$output = $capi(); // CAPI::$Handler = $capi;
+
+               if ( $Connection->write($Socket) ) {
+                  $timeout = 2;
+                  $latency = time();
+   
+                  $Connection::$input = '';
+   
+                  while ($Connection::$input === '') {
+                     if (time() - $latency >= $timeout) { // Response Timeout
+                        break;
+                     }
+   
+                     if ( $Connection->read($Socket) ) {
+                        $result = $assert($Connection::$input) || $except();
+
+                        if ($result === true) {
+                           $passed++;
+
+                           $Server->log('[PASS] - ' . $testing . PHP_EOL, self::LOG_SUCCESS_LEVEL);
+                        } else {
+                           $failed++;
+
+                           $Server->log('[FAIL] - ' . $result . PHP_EOL, self::LOG_ERROR_LEVEL);
+                        }
+
+                        break;
+                     }
+                  }
+               }
+            }
+
+            $finished = microtime(true);
+            $spent = number_format(round($finished - $started, 5), 6);
+
+            $Server->log(<<<TESTS
+
+            Tests: @:e: {$failed} failed @;, @:s:{$passed} passed @;, {$total} total
+            Time: {$spent}s
+            \033[90mRan all tests.\033[0m@\;
+
+            TESTS);
+
+            Logger::$display = Logger::DISPLAY_MESSAGE;
+
+            // @ Reset SAPI (in master?)
+            SAPI::boot(true);
+
+            // @ Stop Client (destroy instance)
+            $TCPClient::$Event->destroy();
+         }
+      );
+      $TCPClient->start();
+
+      return true;
    }
 }
