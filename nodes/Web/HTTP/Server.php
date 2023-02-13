@@ -231,7 +231,7 @@ class Server extends TCP\Server implements HTTP
                      }
    
                      if ( $Connection->read($Socket) ) {
-                        $result = $assert($Connection::$input) || $except();
+                        $result = $assert($Connection::$input);
 
                         if ($result === true) {
                            $passed++;
@@ -240,7 +240,7 @@ class Server extends TCP\Server implements HTTP
                         } else {
                            $failed++;
 
-                           $Server->log('[FAIL] - ' . $result . PHP_EOL, self::LOG_ERROR_LEVEL);
+                           $Server->log('[FAIL] - ' . $except() . PHP_EOL, self::LOG_ERROR_LEVEL);
                         }
 
                         break;
