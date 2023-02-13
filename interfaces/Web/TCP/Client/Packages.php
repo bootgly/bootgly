@@ -99,11 +99,11 @@ class Packages implements Web\Packages
       return false;
    }
 
-   public function write (&$Socket, ? int $length = null)
+   public function write (&$Socket, ? string $data = null, ? int $length = null)
    {
       try {
          // @ Prepare to send data
-         $buffer = self::$output;
+         $buffer = $data ?? self::$output;
          $sent = false;
          $written = 0;
 
@@ -172,7 +172,7 @@ class Packages implements Web\Packages
       }
 
       if (Client::$onWrite) {
-         (Client::$onWrite)($Socket, $this, $this->Connection);
+         (Client::$onWrite)($Socket, $this->Connection, $this);
       }
 
       return true;
@@ -195,7 +195,11 @@ class Packages implements Web\Packages
       // @ Check issues
       if ($input === false) {
          $this->fail($Socket, 'read', $input);
+         return false;
       }
+
+      // @ Set Input
+      self::$input = $input;
 
       // @ Set Stats (disable to max performance in benchmarks)
       $length = strlen($input);
