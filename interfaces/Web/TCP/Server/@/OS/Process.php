@@ -145,10 +145,21 @@ class Process
 
          // * Custom command
          case SIGUSR1:  // 10
-            // TODO review security concious
-            $data = file(static::$commandFile);
-            $command = $data[count($data) - 1];
-            $this->Server->Connections->{$command};
+            // TODO review security concious (+1)
+            $lines = file(static::$commandFile);
+            $line = $lines[count($lines) - 1];
+
+            [$command, $context] = explode(':', $line);
+
+            // @ Prepend command
+            $command = '@' . $command;
+
+            // @ Match context
+            match ($context) {
+               'Connections' => $this->Server->Connections->{$command},
+               default => $this->Server->{$command}
+            };
+
             break;
 
          // ! Server

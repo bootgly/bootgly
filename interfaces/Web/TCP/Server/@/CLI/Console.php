@@ -131,7 +131,7 @@ class Console extends CLI\Console
          // $this->Server->Process->Signal->send(SIGIO, ...)
             $this->Server->Process->sendSignal(SIGIO, master: false) && false,
          'stats reset' =>
-            $this->saveCommand('@' . $command, 'Connection')
+            $this->saveCommand($command, 'Connections')
             && $this->Server->Process->sendSignal(SIGUSR1, master: false) && true,
 
          'peers', 'connections' =>
@@ -145,13 +145,13 @@ class Console extends CLI\Console
          default => passthru($command) !== false && true
       };
    }
-   public function saveCommand (string $command, string $object = ''): bool
+   public function saveCommand (string $command, string $context = ''): bool
    {
-      $filename = HOME_DIR . '/workspace/server.command';
-      $data = $command;
-      #$data = $object . '|' . $command;
+      $file = HOME_DIR . '/workspace/server.command';
 
-      if (file_put_contents($filename, $data) === false) {
+      $line = $command . ':' . $context;
+
+      if (file_put_contents($file, $line) === false) {
          return false;
       }
 
