@@ -78,7 +78,7 @@ class Connection extends Packages
 
       // @ Call On Connection connect
       if (Client::$onConnect) {
-         (Client::$onConnect)($this);
+         (Client::$onConnect)($Socket, $this);
       }
    }
 
