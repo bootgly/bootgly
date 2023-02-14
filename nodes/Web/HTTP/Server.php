@@ -147,12 +147,11 @@ class Server extends TCP\Server implements HTTP
 
       // @ Handle Package cache
       if ($Package->changed) {
-         // @ Reset Globals
          $_POST = [];
          $_FILES = [];
-         // @ Instance new Request
+
          $Request = Server::$Request = new Request;
-         // Reset Request
+
          // $Request->reset();
       }
 
@@ -178,9 +177,9 @@ class Server extends TCP\Server implements HTTP
 
       // @ Handle Package cache
       if ($Package->changed) {
-         #$Response->reset();
-
          $Response = Server::$Response = new Response;
+
+         #$Response->reset();
 
          if (SAPI::$mode === SAPI::MODE_TEST) {
             SAPI::boot(true, self::class);
@@ -238,9 +237,12 @@ class Server extends TCP\Server implements HTTP
             $tests = SAPI::$tests[self::class];
 
             // @ Init test variables
+            // stats
             $passed = 0;
             $failed = 0;
+            $skipped = 0;
             $total = count($tests);
+            // status
             $started = microtime(true);
 
             $TCPServer->log('@\;');
@@ -250,7 +252,7 @@ class Server extends TCP\Server implements HTTP
                $spec = SAPI::$Tests[self::class][$index];
 
                if (! $spec || !is_array($spec) || count($spec) < 4) {
-                  $failed++;
+                  $skipped++;
                   continue;
                };
 
@@ -258,7 +260,7 @@ class Server extends TCP\Server implements HTTP
                $responseLength = (int) @$spec['response.length'] ?? 0;
                // ! Client
                $capi = $spec['capi'];     // @ Set Client API
-               $requestData = $capi($TCPServer->host . ':' . $TCPServer->port);
+               $requestData = $capi($TCPClient->host . ':' . $TCPClient->port);
                #$requestLength = strlen($requestData);
 
                if ( $Connection->write($Socket, $requestData) ) {
@@ -321,7 +323,7 @@ class Server extends TCP\Server implements HTTP
 
             $TCPServer->log(<<<TESTS
 
-            Tests: @:e: {$failed} failed @;, @:s:{$passed} passed @;, {$total} total
+            Tests: @:e: {$failed} failed @;, @:n:{$skipped} skipped @;, @:s:{$passed} passed @;, {$total} total
             Time: {$spent}s
             \033[90mRan all tests.\033[0m
 

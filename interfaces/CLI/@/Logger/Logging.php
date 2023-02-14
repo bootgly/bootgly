@@ -117,7 +117,8 @@ trait Logging
             ':i', ':info' => self::LOG_CYAN_BOLD_COLOR,
             ':n', ':notice' => self::LOG_YELLOW_BOLD_COLOR,
             ':e', ':error' => self::LOG_RED_BOLD_COLOR,
-            ':s', ':success' => self::LOG_GREEN_BOLD_COLOR
+            ':s', ':success' => self::LOG_GREEN_BOLD_COLOR,
+            default => self::LOG_DEFAULT_TRANSPARENT_COLOR
          };
       }, $message);
 
