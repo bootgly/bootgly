@@ -22,21 +22,16 @@ return [
 
       Bootgly::$Project->setPath();
 
-      return $Response('statics/screenshot.gif')->upload(offset: 0, length: 2);
+      return $Response('statics/screenshot.gif')->upload(offset: 0, length: 2, close: false);
    },
    // ! Client
    // API
    'capi' => function () {
       // return $Request->get('//header/changed/1');
-      return "GET /test/download/file_with_offset/1 HTTP/1.0\r\n\r\n";
+      return "GET /test/download/file_with_offset_length/1 HTTP/1.0\r\n\r\n";
    },
 
    'assert' => function ($response) : bool {
-      /*
-      return $Response->code === '500'
-      && $Response->body === ' ';
-      */
-
       $expected = <<<HTML_RAW
       HTTP/1.1 206 Partial Content\r
       Server: Bootgly\r
@@ -55,7 +50,7 @@ return [
       // @ Assert
       if ($response !== $expected) {
          Debugger::$labels = ['HTTP Response:', 'Expected:'];
-         debug($response, json_encode($response), json_encode($expected));
+         debug(json_encode($response), json_encode($expected));
          return false;
       }
 
