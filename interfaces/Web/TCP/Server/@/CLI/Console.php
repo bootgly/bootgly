@@ -126,7 +126,7 @@ class Console extends CLI\Console
             && $this->saveCommand('test')
             && $this->Server->Process->sendSignal(SIGUSR1, master: true, children: false)
 
-            && $this->saveCommand('test stop')
+            && $this->saveCommand('test end')
             && $this->Server->Process->sendSignal(SIGUSR1, master: false, children: true) && true,
          // TODO 'log'
 

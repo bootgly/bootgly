@@ -27,7 +27,7 @@ class SAPI
    // @ Mode
    public const MODE_PRODUCTION = 1;
    public const MODE_TEST = 2;
-   public static int $mode = self::MODE_TEST;
+   public static int $mode = self::MODE_PRODUCTION;
    // * Data
    public static array $tests;
    // * Meta
