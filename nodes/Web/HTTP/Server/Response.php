@@ -192,6 +192,7 @@ class Response
 
    public function reset ()
    {
+      /*
       // * Data
       $this->Content->raw = '';
       $this->raw = '';
@@ -203,6 +204,8 @@ class Response
       $this->Meta->__construct();
       $this->Header->__construct();
       #$this->Content->__construct();
+      */
+      $this->__construct();
    }
 
    public function prepare (? string $resource = null)
@@ -536,7 +539,7 @@ class Response
 
       return $this;
    }
-   public function upload ($content = null, int $offset = 0, ? int $length = null) : self
+   public function upload ($content = null, int $offset = 0, ? int $length = null, bool $close = true) : self
    {
       // TODO support to upload multiple files
 
@@ -655,7 +658,7 @@ class Response
             'file' => $File->File, // @ Set file path to open handler
             'offset' => $range['start'],
             'length' => $this->Content->length,
-            'close' => true
+            'close' => $close
          ];
       }
 
