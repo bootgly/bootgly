@@ -83,7 +83,8 @@ class Server extends TCP\Server implements HTTP
          // ? Header \ Cookie
          '1.4-respond_with_header_cookies',
          // ! Content
-         '1.5-respond_in_json'
+         '1.5-send_in_json',
+         '1.6-upload_file_with_offset'
       ];
       // * Meta
       SAPI::$Tests[self::class] = [];
@@ -248,46 +249,64 @@ class Server extends TCP\Server implements HTTP
                   continue;
                };
 
+               // ! Server
+               $length = (int) @$spec['response.length'] ?? 0;
+               // ! Client
                $capi = $spec['capi'];     // @ Set Client API
+
                $assert = $spec['assert']; // @ Get assert
                $except = $spec['except']; // @ Get except
 
                $Connection::$output = $capi(); // CAPI::$Handler = $capi;
 
                if ( $Connection->write($Socket) ) {
+                  $expired = false;
                   $timeout = 2;
                   $latency = time();
    
                   $Connection::$input = '';
+
+                  $buffer = '';
    
-                  while ($Connection::$input === '') {
-                     if (time() - $latency >= $timeout) { // Response Timeout
-                        $failed++;
+                  while (true) {
+                     if ($length > 0) {
+                        if (strlen($buffer) >= $length) {
+                           break;
+                        }
+                     } else if ($Connection::$input !== '') {
+                        break;
+                     }
+
+                     if (time() - $latency >= $timeout) { // @ Check Response Timeout
+                        echo 'Expired?';
+                        $expired = true;
                         break;
                      }
    
                      if ( $Connection->read($Socket) ) {
-                        ob_start();
-                        $result = $assert($Connection::$input);
-                        $debugged = ob_get_clean();
+                        $buffer .= $Connection::$input;
+                     }
+                  }
 
-                        if ($result === true) {
-                           $passed++;
-                           $TCPServer->log(
-                              "\033[1;37;42m PASS \033[0m - " 
-                              . '✅ ' . "\033[90m" . $testing . "\033[0m" . PHP_EOL
-                           );
-                        } else {
-                           $failed++;
-                           $TCPServer->log(
-                              "\033[1;37;41m FAIL \033[0m - " 
-                              . '❌ ' . $testing . " -> \"\033[91m"
-                              . $except() . "\033[0m\"" . ':'
-                              . $debugged . PHP_EOL
-                           );
-                        }
+                  if ($buffer) {
+                     ob_start();
+                     $result = $assert($buffer);
+                     $debugged = ob_get_clean();
 
-                        break;
+                     if ($result === true && $expired === false) {
+                        $passed++;
+                        $TCPServer->log(
+                           "\033[1;37;42m PASS \033[0m - " 
+                           . '✅ ' . "\033[90m" . $testing . "\033[0m" . PHP_EOL
+                        );
+                     } else {
+                        $failed++;
+                        $TCPServer->log(
+                           "\033[1;37;41m FAIL \033[0m - " 
+                           . '❌ ' . $testing . " -> \"\033[91m"
+                           . $except() . "\033[0m\"" . ':'
+                           . $debugged . PHP_EOL
+                        );
                      }
                   }
                }
