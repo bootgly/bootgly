@@ -73,11 +73,13 @@ class Server extends TCP\Server implements HTTP
       // * Data
       SAPI::$tests[self::class] = [
          '1.1-respond_hello_world',
-         // Meta Status
+         // Meta status
          '1.2-respond_with_status_302',
          '1.2.1-respond_with_status_500_no_body',
-         // Header Changed
-         '1.3-respond_with_header_content_text_plain'
+         // Header changed
+         '1.3-respond_with_header_content_text_plain',
+         // Header \ Cookie
+         '1.4-respond_with_header_cookies'
       ];
       // * Meta
       SAPI::$Tests[self::class] = [];
