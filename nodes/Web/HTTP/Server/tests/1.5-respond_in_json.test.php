@@ -13,15 +13,12 @@ use Bootgly\Web\HTTP\Server\Router;
 return [
    // Server API
    'sapi' => function (Request $Request, Response $Response, Router $Router) : Response {
-      $Response->Header->Cookie->append('Test1', 'value1');
-      $Response->Header->Cookie->append('Test2', 'value2');
-
-      return $Response(content: 'Hello World!');
+      return $Response->Json->send(['Hello' => 'World!']); // JSON
    },
    // Client API
    'capi' => function () {
       // return $Request->get('//header/changed/1');
-      return "GET /header/cookies/1 HTTP/1.0\r\n\r\n";
+      return "GET /test/content/json/1 HTTP/1.0\r\n\r\n";
    },
 
    'assert' => function ($response) : bool {
@@ -32,13 +29,11 @@ return [
 
       $expected = <<<HTML_RAW
       HTTP/1.1 200 OK\r
-      Set-Cookie: Test1=value1\r
-      Set-Cookie: Test2=value2\r
       Server: Bootgly\r
-      Content-Length: 12\r
-      Content-Type: text/html; charset=UTF-8\r
+      Content-Type: application/json\r
+      Content-Length: 18\r
       \r
-      Hello World!
+      {"Hello":"World!"}
       HTML_RAW;
 
       // @ Assert
@@ -52,6 +47,6 @@ return [
    },
 
    'except' => function () : string {
-      return 'Header Set-Cookie not found?';
+      return 'Response is a valid JSON?';
    }
 ];
