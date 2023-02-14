@@ -13,12 +13,13 @@ use Bootgly\Web\HTTP\Server\Router;
 return [
    // Server API
    'sapi' => function (Request $Request, Response $Response, Router $Router) : Response {
-      return $Response->send(500);
+      $Response->Header->set('Content-Type', 'text/plain');
+      return $Response(content: 'Hello World!');
    },
    // Client API
    'capi' => function () {
-      // return $Request->get('/status');
-      return "GET /status/500 HTTP/1.0\r\n\r\n";
+      // return $Request->get('//header/changed/1');
+      return "GET /header/changed/1 HTTP/1.0\r\n\r\n";
    },
 
    'assert' => function ($response) : bool {
@@ -28,11 +29,12 @@ return [
       */
 
       $expected = <<<HTML_RAW
-      HTTP/1.1 500 Internal Server Error\r
+      HTTP/1.1 200 OK\r
       Server: Bootgly\r
-      Content-Length: 0\r
-      Content-Type: text/html; charset=UTF-8\r
-      \r\n
+      Content-Type: text/plain\r
+      Content-Length: 12\r
+      \r
+      Hello World!
       HTML_RAW;
 
       // @ Assert
@@ -46,6 +48,6 @@ return [
    },
 
    'except' => function () : string {
-      return '500 Status not matched';
+      return 'Header Content-Type not matched';
    }
 ];
