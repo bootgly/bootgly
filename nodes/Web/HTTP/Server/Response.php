@@ -193,6 +193,7 @@ class Response
    public function reset ()
    {
       // * Data
+      $this->Content->raw = '';
       $this->raw = '';
       // * Meta
       $this->chunked = false;
@@ -681,7 +682,7 @@ class Response
       HTTP_RAW;
 
       if ($this->stream) {
-         $length = strlen($this->Meta->raw) + strlen($this->Header->raw) + 4;
+         $length = strlen($this->Meta->raw) + 1 + strlen($this->Header->raw) + 5;
 
          $Package->writing = $this->files;
 
