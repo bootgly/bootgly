@@ -83,8 +83,11 @@ class Server extends TCP\Server implements HTTP
          // ? Header \ Cookie
          '1.4-respond_with_header_cookies',
          // ! Content
+         // @ send
          '1.5-send_in_json',
-         '1.6-upload_file_with_offset'
+         // @ upload
+         '1.6.1.1-upload_file_with_offset_length_1',
+         '1.6.2.1-upload_file_with_range_1'
       ];
       // * Meta
       SAPI::$Tests[self::class] = [];
@@ -175,7 +178,9 @@ class Server extends TCP\Server implements HTTP
 
       // @ Handle Package cache
       if ($Package->changed) {
-         $Response->reset();
+         #$Response->reset();
+
+         $Response = Server::$Response = new Response;
 
          if (SAPI::$mode === SAPI::MODE_TEST) {
             SAPI::boot(true, self::class);
@@ -250,63 +255,63 @@ class Server extends TCP\Server implements HTTP
                };
 
                // ! Server
-               $length = (int) @$spec['response.length'] ?? 0;
+               $responseLength = (int) @$spec['response.length'] ?? 0;
                // ! Client
                $capi = $spec['capi'];     // @ Set Client API
+               $requestData = $capi($TCPServer->host . ':' . $TCPServer->port);
+               #$requestLength = strlen($requestData);
 
-               $assert = $spec['assert']; // @ Get assert
-               $except = $spec['except']; // @ Get except
-
-               $Connection::$output = $capi(); // CAPI::$Handler = $capi;
-
-               if ( $Connection->write($Socket) ) {
+               if ( $Connection->write($Socket, $requestData) ) {
                   $expired = false;
                   $timeout = 2;
-                  $latency = time();
+                  $latency = microtime(true);
    
                   $Connection::$input = '';
 
                   $buffer = '';
    
                   while (true) {
-                     if ($length > 0) {
-                        if (strlen($buffer) >= $length) {
+                     if ($responseLength > 0) {
+                        if (strlen($buffer) >= $responseLength) {
                            break;
                         }
                      } else if ($Connection::$input !== '') {
                         break;
                      }
 
-                     if (time() - $latency >= $timeout) { // @ Check Response Timeout
+                     if (microtime(true) - $latency >= $timeout) { // @ Check Response Timeout
                         $expired = true;
                         break;
                      }
-   
+
                      if ( $Connection->read($Socket) ) {
                         $buffer .= $Connection::$input;
                      }
                   }
 
-                  if ($buffer) {
-                     ob_start();
-                     $result = $assert($buffer);
-                     $debugged = ob_get_clean();
+                  // @ Execute assert
+                  $assert = $spec['assert']; // @ Get assert
+                  $except = $spec['except']; // @ Get except
 
-                     if ($result === true && $expired === false) {
-                        $passed++;
-                        $TCPServer->log(
-                           "\033[1;37;42m PASS \033[0m - " 
-                           . '✅ ' . "\033[90m" . $testing . "\033[0m" . PHP_EOL
-                        );
-                     } else {
-                        $failed++;
-                        $TCPServer->log(
-                           "\033[1;37;41m FAIL \033[0m - " 
-                           . '❌ ' . $testing . " -> \"\033[91m"
-                           . $except() . "\033[0m\"" . ':'
-                           . $debugged . PHP_EOL
-                        );
-                     }
+                  ob_start();
+                  $result = $assert($buffer);
+                  $debugged = ob_get_clean();
+
+                  // @ Show result
+                  if ($result === true && $expired === false) {
+                     $passed++;
+                     $TCPServer->log(
+                        "\033[1;37;42m PASS \033[0m - " 
+                        . '✅ ' . "\033[90m" . $testing . "\033[0m" . PHP_EOL
+                     );
+                  } else {
+                     $failed++;
+                     $TCPServer->log(
+                        "\033[1;37;41m FAIL \033[0m - " 
+                        . '❌ ' . $testing . " -> \"\033[91m"
+                        . $except() . "\033[0m\"" . ':'
+                        . $debugged . PHP_EOL
+                     );
                   }
                }
             }
