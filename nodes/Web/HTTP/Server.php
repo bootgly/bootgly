@@ -71,27 +71,29 @@ class Server extends TCP\Server implements HTTP
       // * Config
       SAPI::$production = \Bootgly\HOME_DIR . 'projects/sapi.http.constructor.php';
       // * Data
-      SAPI::$tests = [
-         self::class => [
-            '1.1-respond_hello_world',
-            '1.2-respond_with_status_302'
-         ]
+      SAPI::$tests[self::class] = [
+         '1.1-respond_hello_world',
+         '1.2-respond_with_status_302',
+         '1.2.1-respond_with_status_500_no_body'
       ];
       // * Meta
       SAPI::$Tests[self::class] = [];
 
       foreach (SAPI::$tests[self::class] as $test) {
          $file = __DIR__ . '/Server/tests/' . $test . '.test.php';
+
          // @ Reset Cache of Test case file
          if ( function_exists('opcache_invalidate') )
             opcache_invalidate($file, true);
          clearstatcache(false, $file);
+
          // @ Load Test case from file
          try {
             $spec = @require $file;
          } catch (\Throwable) {
             $spec = false;
          }
+
          // @ Set Closure to SAPI Tests
          SAPI::$Tests[self::class][] = $spec;
       }
@@ -256,14 +258,24 @@ class Server extends TCP\Server implements HTTP
                      }
    
                      if ( $Connection->read($Socket) ) {
+                        ob_start();
                         $result = $assert($Connection::$input);
+                        $debugged = ob_get_clean();
 
                         if ($result === true) {
                            $passed++;
-                           $TCPServer->log('[PASS] - ' . $testing . PHP_EOL, self::LOG_SUCCESS_LEVEL);
+                           $TCPServer->log(
+                              "\033[1;37;42m PASS \033[0m - " 
+                              . '✅ ' . "\033[90m" . $testing . "\033[0m" . PHP_EOL
+                           );
                         } else {
                            $failed++;
-                           $TCPServer->log('[FAIL] - ' . $except() . PHP_EOL, self::LOG_ERROR_LEVEL);
+                           $TCPServer->log(
+                              "\033[1;37;41m FAIL \033[0m - " 
+                              . '❌ ' . $testing . " -> \"\033[91m"
+                              . $except() . "\033[0m\"" . ':'
+                              . $debugged . PHP_EOL
+                           );
                         }
 
                         break;

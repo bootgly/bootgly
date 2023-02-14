@@ -28,14 +28,20 @@ return [
       */
 
       $expected = <<<HTML_RAW
-      HTTP/1.1 302 Found
+      HTTP/1.1 302 Found\r
       Server: Bootgly\r
       Content-Length: 0\r
-      Content-Type: text/html; charset=UTF-8
-      \n
+      Content-Type: text/html; charset=UTF-8\r
+      \r\n
       HTML_RAW;
 
-      return $response === $expected;
+      // @ Assert
+      if ($response !== $expected) {
+         debug(json_encode($response), json_encode($expected));
+         return false;
+      }
+
+      return true;
    },
 
    'except' => function () : string {
