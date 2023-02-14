@@ -131,7 +131,7 @@ class Server implements Servers
       if (self::$Application) {
          self::$Application::boot();
       } else {
-         SAPI::$file = \Bootgly\HOME_DIR . 'projects/sapi.constructor.php';
+         SAPI::$production = \Bootgly\HOME_DIR . 'projects/sapi.constructor.php';
          SAPI::boot(true);
       }
    }
@@ -150,10 +150,20 @@ class Server implements Servers
          case 'mode':
             return $this->mode;
 
+         case '@test init':
+            SAPI::$mode = SAPI::MODE_TEST;
+            break;
          case '@test':
-            if (self::$Application && method_exists(self::$Application, 'test')) {
-               self::$Application::test($this);
+            if ($this->Process->level === 'master') {
+               if (self::$Application && method_exists(self::$Application, 'test')) {
+                  self::$Application::test($this);
+               }
             }
+            break;
+         case '@test stop':
+            SAPI::$mode = SAPI::MODE_PRODUCTION;
+            SAPI::boot(true);
+            break;
       }
 
       // ! @info
