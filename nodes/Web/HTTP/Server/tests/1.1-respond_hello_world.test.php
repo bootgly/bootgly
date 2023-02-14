@@ -32,7 +32,7 @@ return [
       Server: Bootgly\r
       Content-Length: 12\r
       Content-Type: text/html; charset=UTF-8\r
-      \r.
+      \r
       Hello World!
       HTML_RAW;
 
