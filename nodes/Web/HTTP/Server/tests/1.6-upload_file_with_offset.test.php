@@ -48,7 +48,7 @@ return [
       Last-Modified: Sun, 29 Jan 2023 14:14:08 GMT\r
       Cache-Control: no-cache, must-revalidate\r
       Expires: 0\r
-      
+      \r
       GI
       HTML_RAW;
 

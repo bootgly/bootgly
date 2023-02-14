@@ -278,7 +278,6 @@ class Server extends TCP\Server implements HTTP
                      }
 
                      if (time() - $latency >= $timeout) { // @ Check Response Timeout
-                        echo 'Expired?';
                         $expired = true;
                         break;
                      }
