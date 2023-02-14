@@ -120,8 +120,14 @@ class Console extends CLI\Console
             Bootgly::debug(false) && true,
          // TODO 'benchmark'
          'test' => // TODO use CLI wizard to choose the tests
-            $this->saveCommand('test')
-            && $this->Server->Process->sendSignal(SIGUSR1, master: true, children: false) && true,
+            $this->saveCommand('test init')
+            && $this->Server->Process->sendSignal(SIGUSR1, master: false, children: true)
+
+            && $this->saveCommand('test')
+            && $this->Server->Process->sendSignal(SIGUSR1)
+
+            && $this->saveCommand('test stop')
+            && $this->Server->Process->sendSignal(SIGUSR1, master: false, children: true) && true,
          // TODO 'log'
 
          'check jit' => $this->log(
@@ -151,9 +157,9 @@ class Console extends CLI\Console
    {
       $file = HOME_DIR . '/workspace/server.command';
 
-      $line = $command . ':' . $context;
+      $line = $command . ':' . $context . PHP_EOL;
 
-      if (file_put_contents($file, $line) === false) {
+      if (file_put_contents($file, $line, FILE_APPEND) === false) {
          return false;
       }
 
