@@ -1,6 +1,6 @@
 <?php
 use Bootgly\Bootgly;
-
+use Bootgly\Debugger;
 // SAPI
 use Bootgly\Web\HTTP\Server\Request;
 use Bootgly\Web\HTTP\Server\Response;
@@ -37,6 +37,7 @@ return [
 
       // @ Assert
       if ($response !== $expected) {
+         Debugger::$labels = ['HTTP Response:', 'Expected:'];
          debug(json_encode($response), json_encode($expected));
          return false;
       }

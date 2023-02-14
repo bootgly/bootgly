@@ -375,7 +375,7 @@ class Debugger // TODO refactor (too old!)
             if (! self::$cli) {
                self::$Output .= '<b style="color:#7d7d7d">';
             } else {
-               self::$Output .= "\033[95m";
+               self::$Output .= "\033[93m";
             }
 
             self::$Output .= self::$labels[$key] . "\n";
