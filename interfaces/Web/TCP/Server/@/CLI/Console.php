@@ -177,6 +177,8 @@ class Console extends CLI\Console
 
       @:i: `monitor` @;     = Enter in monitor mode;
 
+      @:i: `test` @;        = Run Server test suites;
+
       @:i: `status` @;      = Show info about status of server;
       @:i: `stats` @;       = Show stats about connections / data per worker;
       @:i: `connections` @; = Show info about active connections remote peers;
