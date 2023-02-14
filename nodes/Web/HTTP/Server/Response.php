@@ -674,9 +674,9 @@ class Response
       }
 
       $this->raw = <<<HTTP_RAW
-      {$this->Meta->raw}
-      {$this->Header->raw}
-
+      {$this->Meta->raw}\r
+      {$this->Header->raw}\r
+      \r
       {$this->Content->raw}
       HTTP_RAW;
 
