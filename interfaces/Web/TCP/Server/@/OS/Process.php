@@ -149,7 +149,7 @@ class Process
             $lines = file(static::$commandFile);
             $line = $lines[count($lines) - 1];
 
-            [$command, $context] = explode(':', $line);
+            [$command, $context] = explode(':', rtrim($line));
 
             // @ Prepend command
             $command = '@' . $command;
@@ -205,6 +205,8 @@ class Process
       if ($master) {
          // Send signal to master process
          posix_kill(static::$master, $signal);
+
+         pcntl_signal_dispatch();
       }
 
       if ($children) {
