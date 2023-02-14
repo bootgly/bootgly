@@ -68,7 +68,34 @@ class Server extends TCP\Server implements HTTP
 
    public static function boot ()
    {
-      SAPI::$file = \Bootgly\HOME_DIR . 'projects/sapi.http.constructor.php';
+      // * Config
+      SAPI::$production = \Bootgly\HOME_DIR . 'projects/sapi.http.constructor.php';
+      // * Data
+      SAPI::$tests = [
+         self::class => [
+            '1.1-respond_hello_world',
+            '1.2-respond_302_status'
+         ]
+      ];
+      // * Meta
+      SAPI::$Tests[self::class] = [];
+
+      foreach (SAPI::$tests[self::class] as $test) {
+         $file = __DIR__ . '/Server/tests/' . $test . '.test.php';
+         // @ Reset Cache of Test case file
+         if ( function_exists('opcache_invalidate') )
+            opcache_invalidate($file, true);
+         clearstatcache(false, $file);
+         // @ Load Test case from file
+         try {
+            $spec = @require $file;
+         } catch (\Throwable) {
+            $spec = false;
+         }
+         // @ Set Closure to SAPI Tests
+         SAPI::$Tests[self::class][] = $spec;
+      }
+
       SAPI::boot(true);
    }
 
@@ -137,6 +164,10 @@ class Server extends TCP\Server implements HTTP
       // @ Handle Package cache
       if ($Package->changed) {
          $Response->reset();
+
+         if (SAPI::$mode === SAPI::MODE_TEST) {
+            SAPI::boot(true, self::class);
+         }
       } else if ($Response->Content->raw) {
          // TODO check if Response raw is static or dynamic
          return $Response->raw;
@@ -165,15 +196,13 @@ class Server extends TCP\Server implements HTTP
    {
       Logger::$display = Logger::DISPLAY_NONE;
 
-      // TODO with HTTP Client
+      // @ Instance Client
       $TCPClient = new Client;
-
-      if ($Server->host === '0.0.0.0') {
-         $host = '127.0.0.1';
-      }
-
-      $TCPClient->configure(host: $host ?? $Server->host, port: $Server->port, workers: 0);
-
+      $TCPClient->configure(
+         host: $Server->host === '0.0.0.0' ? '127.0.0.1' : $Server->host,
+         port: $Server->port,
+         workers: 0
+      );
       $TCPClient->on(
          // on Worker instance
          instance: function ($Client) {
@@ -188,11 +217,8 @@ class Server extends TCP\Server implements HTTP
          connect: static function ($Socket, $Connection) use ($Server, $TCPClient) {
             Logger::$display = Logger::DISPLAY_MESSAGE;
 
-            // @ Set test -suite-
-            // TODO set in Console Wizard
-            $tests = [
-               '1.1-respond_hello_world',
-            ];
+            // @ Get test -suite-
+            $tests = SAPI::$tests[self::class];
 
             // @ Init test variables
             $passed = 0;
@@ -201,22 +227,20 @@ class Server extends TCP\Server implements HTTP
             $started = microtime(true);
 
             // @ Run test cases
-            foreach ($tests as $testing) {
-               // @ Construct Test case file path
-               $file = __DIR__ . '/Server/tests/' . $testing . '.test.php';
-               // @ Reset Cache of Test case file
-               if ( function_exists('opcache_invalidate') )
-                  opcache_invalidate($file, true);
-               clearstatcache(false, $file);
-               // @ Load Test case from file
-               $test = require $file;
+            foreach ($tests as $index => $testing) {
+               $spec = SAPI::$Tests[self::class][$index];
 
-               $sapi = $test['sapi'];     // @ Set Server API
-               $capi = $test['capi'];     // @ Set Client API
-               $assert = $test['assert']; // @ Get assert
-               $except = $test['except']; // @ Get except
+               if (! $spec || !is_array($spec) || count($spec) < 4) {
+                  $failed++;
+                  continue;
+               };
 
-               SAPI::$Handler = $sapi;
+               $sapi = $spec['sapi'];     // @ Set Server API
+               $capi = $spec['capi'];     // @ Set Client API
+               $assert = $spec['assert']; // @ Get assert
+               $except = $spec['except']; // @ Get except
+
+               #SAPI::$Handler = $sapi;
                $Connection::$output = $capi(); // CAPI::$Handler = $capi;
 
                if ( $Connection->write($Socket) ) {
@@ -227,6 +251,7 @@ class Server extends TCP\Server implements HTTP
    
                   while ($Connection::$input === '') {
                      if (time() - $latency >= $timeout) { // Response Timeout
+                        $failed++;
                         break;
                      }
    
@@ -261,9 +286,6 @@ class Server extends TCP\Server implements HTTP
             TESTS);
 
             Logger::$display = Logger::DISPLAY_MESSAGE;
-
-            // @ Reset SAPI (in master?)
-            SAPI::boot(true);
 
             // @ Stop Client (destroy instance)
             $TCPClient::$Event->destroy();
