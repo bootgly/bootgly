@@ -206,7 +206,9 @@ class Process
          // Send signal to master process
          posix_kill(static::$master, $signal);
 
-         pcntl_signal_dispatch();
+         if ($children === false) {
+            pcntl_signal_dispatch();
+         }
       }
 
       if ($children) {
