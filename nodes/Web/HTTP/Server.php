@@ -192,29 +192,29 @@ class Server extends TCP\Server implements HTTP
       return $Response->output($Package, $length); // @ Return Response raw
    }
 
-   protected static function test ($Server)
+   protected static function test ($TCPServer)
    {
       Logger::$display = Logger::DISPLAY_NONE;
 
       // @ Instance Client
       $TCPClient = new Client;
       $TCPClient->configure(
-         host: $Server->host === '0.0.0.0' ? '127.0.0.1' : $Server->host,
-         port: $Server->port,
+         host: $TCPServer->host === '0.0.0.0' ? '127.0.0.1' : $TCPServer->host,
+         port: $TCPServer->port,
          workers: 0
       );
       $TCPClient->on(
-         // on Worker instance
+         // on Worker instance 
          instance: function ($Client) {
             // @ Connect to Server
             $Socket = $Client->connect();
-      
+
             if ($Socket) {
                $Client::$Event->loop();
             }
          },
          // on Connection connect
-         connect: static function ($Socket, $Connection) use ($Server, $TCPClient) {
+         connect: static function ($Socket, $Connection) use ($TCPServer, $TCPClient) {
             Logger::$display = Logger::DISPLAY_MESSAGE;
 
             // @ Get test -suite-
@@ -226,6 +226,8 @@ class Server extends TCP\Server implements HTTP
             $total = count($tests);
             $started = microtime(true);
 
+            $TCPServer->log('@\;');
+
             // @ Run test cases
             foreach ($tests as $index => $testing) {
                $spec = SAPI::$Tests[self::class][$index];
@@ -235,12 +237,10 @@ class Server extends TCP\Server implements HTTP
                   continue;
                };
 
-               $sapi = $spec['sapi'];     // @ Set Server API
                $capi = $spec['capi'];     // @ Set Client API
                $assert = $spec['assert']; // @ Get assert
                $except = $spec['except']; // @ Get except
 
-               #SAPI::$Handler = $sapi;
                $Connection::$output = $capi(); // CAPI::$Handler = $capi;
 
                if ( $Connection->write($Socket) ) {
@@ -260,12 +260,10 @@ class Server extends TCP\Server implements HTTP
 
                         if ($result === true) {
                            $passed++;
-
-                           $Server->log('[PASS] - ' . $testing . PHP_EOL, self::LOG_SUCCESS_LEVEL);
+                           $TCPServer->log('[PASS] - ' . $testing . PHP_EOL, self::LOG_SUCCESS_LEVEL);
                         } else {
                            $failed++;
-
-                           $Server->log('[FAIL] - ' . $except() . PHP_EOL, self::LOG_ERROR_LEVEL);
+                           $TCPServer->log('[FAIL] - ' . $except() . PHP_EOL, self::LOG_ERROR_LEVEL);
                         }
 
                         break;
@@ -277,17 +275,17 @@ class Server extends TCP\Server implements HTTP
             $finished = microtime(true);
             $spent = number_format(round($finished - $started, 5), 6);
 
-            $Server->log(<<<TESTS
+            $TCPServer->log(<<<TESTS
 
             Tests: @:e: {$failed} failed @;, @:s:{$passed} passed @;, {$total} total
             Time: {$spent}s
-            \033[90mRan all tests.\033[0m@\;
+            \033[90mRan all tests.\033[0m
 
             TESTS);
 
             Logger::$display = Logger::DISPLAY_MESSAGE;
 
-            // @ Stop Client (destroy instance)
+            // @ Stop Client (stop Event Loop and destroy instance)
             $TCPClient::$Event->destroy();
          }
       );

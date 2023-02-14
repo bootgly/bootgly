@@ -152,6 +152,9 @@ class Server implements Servers
 
          case '@test init':
             SAPI::$mode = SAPI::MODE_TEST;
+            if (self::$Application) {
+               self::$Application::boot();
+            }
             break;
          case '@test':
             if ($this->Process->level === 'master') {
@@ -160,7 +163,7 @@ class Server implements Servers
                }
             }
             break;
-         case '@test stop':
+         case '@test end':
             SAPI::$mode = SAPI::MODE_PRODUCTION;
             SAPI::boot(true);
             break;
