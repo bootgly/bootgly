@@ -27,27 +27,42 @@ class Console extends CLI\Console
    // ! Command
    // * Data
    public static array $commands = [
+      // ! Server
+      // @
+      'status',
+      // @ control
       'stop', 'exit', 'quit',
       'pause',
       'resume',
       'reload',
-
-      'status',
+      // @ mode
       'monitor',
+      // @ operations
+      // TODO 'benchmark'
       'check',
-
+      'debug',
+      // TODO 'log'
+      'test',
+      // ! \ Connection
       'stats',
       'peers', 'connections',
-
+      // *
       'clear',
       'help'
    ];
    public static array $subcommands = [
-      'stats' => [
-         'reset'
-      ],
+      // ! Server
+      // @ operations
       'check' => [
          'jit'
+      ],
+      'debug' => [
+         'on',
+         'off',
+      ],
+      // ! \ Connection
+      'stats' => [
+         'reset'
       ]
    ];
 
@@ -92,6 +107,10 @@ class Console extends CLI\Console
 
       return match ($command) {
          // ! Server
+         // @
+         'status' =>
+            $this->Server->{'@status'} && true,
+         // @ control
          'stop', 'exit', 'quit' =>
             $this->log(
                '@\;Stopping ' . $this->Server->Process->children . ' worker(s)... ',
@@ -107,18 +126,20 @@ class Console extends CLI\Console
             $this->Server->Process->sendSignal(SIGUSR2, master: false)
             && true,
          // TODO restart command
-
+         // @ mode
          'monitor' =>
             $this->Server->mode = Server::MODE_MONITOR,
-
-         'status' =>
-            $this->Server->{'@status'} && true,
-
+         // @ operations
+         // TODO 'benchmark'
+         'check jit' => 
+            $this->log(
+            (function_exists('opcache_get_status') && @opcache_get_status()['jit']['enabled'])
+            ? 'JIT enabled' : 'JIT disabled') && true,
          'debug on' =>
             Bootgly::debug(true) && true,
          'debug off' =>
             Bootgly::debug(false) && true,
-         // TODO 'benchmark'
+         // TODO 'log'
          'test' => // TODO use CLI wizard to choose the tests
             $this->saveCommand('test init')
             && $this->Server->Process->sendSignal(SIGUSR1, master: false, children: true)
@@ -128,15 +149,9 @@ class Console extends CLI\Console
 
             && $this->saveCommand('test end')
             && $this->Server->Process->sendSignal(SIGUSR1, master: false, children: true) && true,
-         // TODO 'log'
 
-         'check jit' => $this->log(
-            (function_exists('opcache_get_status') && @opcache_get_status()['jit']['enabled'])
-            ? 'JIT enabled' : 'JIT disabled') && true,
-
-         // ! \Connection
+         // ! \ Connection
          'stats' =>
-         // $this->Server->Process->Signal->send(SIGIO, ...)
             $this->Server->Process->sendSignal(SIGIO, master: false) && false,
          'stats reset' =>
             $this->saveCommand($command, 'Connections')
@@ -144,7 +159,7 @@ class Console extends CLI\Console
 
          'peers', 'connections' =>
             $this->Server->Process->sendSignal(SIGIOT, master: false) && false,
-
+         // *
          'clear' =>
             $this->clear() && true,
          'help' =>
@@ -170,6 +185,8 @@ class Console extends CLI\Console
    {
       $this->log(<<<'OUTPUT'
       @\;======================================================================
+      @:i: `status` @;      = Show info about status of server;
+
       @:i: `stop` @;        = Stop the Server and all workers;
       @:i: `pause` @;       = Pause the Server and all workers;
       @:i: `resume` @;      = Resume the Server and all workers;
@@ -177,13 +194,17 @@ class Console extends CLI\Console
 
       @:i: `monitor` @;     = Enter in monitor mode;
 
+      @:i: `check jit` @;   = Check if JIT is enabled;
+      @:i: `debug on` @;    = Enable debug log output;
+      @:i: `debug off` @;   = Disable debug log output;
       @:i: `test` @;        = Run Server test suites;
 
-      @:i: `status` @;      = Show info about status of server;
       @:i: `stats` @;       = Show stats about connections / data per worker;
+      @:i: `stats reset` @; = Reset stats about connections / data per worker;
       @:i: `connections` @; = Show info about active connections remote peers;
 
       @:i: `clear` @;       = Clear this console screen;
+      @:i: `help` @;        = Show this help message;
       ========================================================================
 
       OUTPUT);
