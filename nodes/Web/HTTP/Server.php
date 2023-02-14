@@ -74,7 +74,7 @@ class Server extends TCP\Server implements HTTP
       SAPI::$tests = [
          self::class => [
             '1.1-respond_hello_world',
-            '1.2-respond_302_status'
+            '1.2-respond_with_status_302'
          ]
       ];
       // * Meta

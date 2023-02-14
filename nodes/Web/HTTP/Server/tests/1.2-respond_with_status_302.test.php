@@ -17,14 +17,14 @@ return [
    },
    // Client API
    'capi' => function () {
-      // return $Request->get('/');
+      // return $Request->get('/status');
       return "GET /status HTTP/1.0\r\n\r\n";
    },
 
    'assert' => function ($response) : bool {
       /*
-      return $Response->status === '200 OK'
-      && $Response->body === 'Hello World!';
+      return $Response->status === '302 Found'
+      && $Response->body === '';
       */
 
       $expected = <<<HTML_RAW
