@@ -207,18 +207,26 @@ abstract class Packages implements Web\Packages
    }
 
    // ! Stream
-   public function reading ($Socket) : int
+   public function reading ($Socket) : int|false
    {
-      // ! WARNING check server disk space
-      // ! WARNING check user input length
       // TODO test!!!
-      $handler = @fopen($this->reading[0]['file'], 'w+');
+      $file = $this->reading[0]['file'];
+      $handler = @fopen($file, 'w+');
 
       $length = $this->reading[0]['length'];
       $close = $this->reading[0]['close'];
 
       $read = 0;   // Socket read
       $stored = 0; // File size stored
+
+      // @ Check free space of dir of file
+      try {
+         if (disk_free_space(dirname($file)) < $length) {
+            return false;
+         }
+      } catch (\Throwable) {
+         return false;
+      }
 
       // @ Limit length of Socket read
       $over = 0;
@@ -230,7 +238,7 @@ abstract class Packages implements Web\Packages
       } else if ($length > $rate) {
          $over = $length - $rate;
       } else {
-         return 0;
+         return false;
       }
 
       while ($read < $length) {
