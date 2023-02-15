@@ -213,13 +213,14 @@ abstract class Packages implements Web\Packages
       // ! WARNING check user input length
       // TODO test!!!
       $handler = @fopen($this->reading[0]['file'], 'w+');
-      $offset = 0;
-      $length = $this->reading[0]['length'] ?? -1;
-      $close = true;
 
-      $received = 0;
+      $length = $this->reading[0]['length'];
+      $close = $this->reading[0]['close'];
 
-      // @ Limit length of data file (size) to write
+      $read = 0;   // Socket read
+      $stored = 0; // File size stored
+
+      // @ Limit length of Socket read
       $over = 0;
       $rate = 1 * 1024 * 1024; // 1 MB (1048576) = Max rate to write/receive data file by loop
       $size = $rate;
@@ -228,9 +229,12 @@ abstract class Packages implements Web\Packages
          $size = $length;
       } else if ($length > $rate) {
          $over = $length - $rate;
+      } else {
+         return 0;
       }
 
-      while ($length < 0 || $received < $length) {
+      while ($read < $length) {
+         // ! Socket
          // @ Read part of file from client
          try {
             $buffer = @fread($Socket, $size);
@@ -242,31 +246,43 @@ abstract class Packages implements Web\Packages
             break;
          }
    
-         $read = strlen($buffer);
+         $read += strlen($buffer);
    
-         // @ Write part of received (if exists) file to disk
+         // @ Write part of received (if exists) file to local storage
          while ($read) {
+            // ! File
             try {
                $written = @fwrite($handler, $buffer, $read);
             } catch (\Throwable) {
                break;
             }
    
-            if ($written === false) {
-               break;
-            } else if ($written === 0) {
-               continue;
-            } else if ($written < $read) {
-               $received += $written;
+            if ($written === false) break;
+            if ($written === 0) continue;
+
+            $stored += $written;
+
+            if ($written < $read) {
                $buffer = substr($buffer, $written);
-               $read = strlen($buffer);
-            } else {
-               $received += $written;
-               break;
+               $read -= $written;
+               continue;
             }
+
+            // @ Set new over / size if necessary
+            if ($over % $rate > 0) {
+               if ($over >= $stored) {
+                  $over -= $stored;
+               }
+      
+               if ($over < $size) {
+                  $size = $over;
+               }
+            }
+
+            break;
          }
    
-         // @ Check End-of-file
+         // @ Check Socket End-of-file (EOF)
          try {
             $end = @feof($Socket);
          } catch (\Throwable) {
@@ -276,28 +292,20 @@ abstract class Packages implements Web\Packages
          if ($end) {
             break;
          }
-   
-         // @ Set new over / size if necessary
-         if ($over % $rate > 0) {
-            if ($over >= $received) {
-               $over -= $received;
-            }
-   
-            if ($over < $size) {
-               $size = $over;
-            }
-         }
       }
    
-      // @ Try closing the handler / socket if it's still open
+      // @ Try to close the file handler
+      try {
+         @fclose($handler);
+      } catch (\Throwable) {}
+      // @ Try to close the Socket if requested
       if ($close) {
          try {
-            @fclose($handler);
             @fclose($Socket);
          } catch (\Throwable) {}
       }
    
-      return $received;
+      return $read;
    }
    public function writing ($Socket) : int
    {
@@ -331,7 +339,8 @@ abstract class Packages implements Web\Packages
       }
 
       while ($written < $length) {
-         // @ Read file from disk
+         // ! File
+         // @ Read file from local storage
          try {
             $buffer = @fread($handler, $size);
          } catch (\Throwable) {
@@ -346,6 +355,7 @@ abstract class Packages implements Web\Packages
 
          // @ Send part of read (if exists) file to client
          while ($read) {
+            // ! Socket
             try {
                $sent = @fwrite($Socket, $buffer, $read);
             } catch (\Throwable) {
@@ -363,6 +373,17 @@ abstract class Packages implements Web\Packages
                continue;
             }
 
+            // @ Set new over / size if necessary
+            if ($over % $rate > 0) {
+               if ($over >= $written) {
+                  $over -= $written;
+               }
+
+               if ($over < $size) {
+                  $size = $over;
+               }
+            }
+
             break;
          }
 
@@ -375,17 +396,6 @@ abstract class Packages implements Web\Packages
 
          if ($end) {
             break;
-         }
-
-         // @ Set new over / size if necessary
-         if ($over % $rate > 0) {
-            if ($over >= $written) {
-               $over -= $written;
-            }
-
-            if ($over < $size) {
-               $size = $over;
-            }
          }
       }
 
