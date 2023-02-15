@@ -64,11 +64,11 @@ trait Logging
             $level = 'NOTICE';
             $color = self::LOG_YELLOW_BOLD_COLOR;
             break;
-
          case self::LOG_INFO_LEVEL:
             $level = 'INFO';
             $color = self::LOG_CYAN_BOLD_COLOR;
             break;
+
          case self::LOG_WARNING_LEVEL:
             $level = 'WARNING';
             $color = self::LOG_MAGENTA_BOLD_COLOR;
@@ -114,10 +114,11 @@ trait Logging
       // @ Levels => Decorators (@:[a-b]+:)
       $message = preg_replace_callback('/@(:[a-z]+):/m', function ($matches) {
          return match ($matches[1]) {
-            ':i', ':info' => self::LOG_CYAN_BOLD_COLOR,
-            ':n', ':notice' => self::LOG_YELLOW_BOLD_COLOR,
-            ':e', ':error' => self::LOG_RED_BOLD_COLOR,
             ':s', ':success' => self::LOG_GREEN_BOLD_COLOR,
+            ':n', ':notice' => self::LOG_YELLOW_BOLD_COLOR,
+            ':i', ':info' => self::LOG_CYAN_BOLD_COLOR,
+            ':w', ':warning' => self::LOG_MAGENTA_BOLD_COLOR,
+            ':e', ':error' => self::LOG_RED_BOLD_COLOR,
             default => self::LOG_DEFAULT_TRANSPARENT_COLOR
          };
       }, $message);
