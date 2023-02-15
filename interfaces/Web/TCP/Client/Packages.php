@@ -102,35 +102,24 @@ class Packages implements Web\Packages
    public function write (&$Socket, ? string $data = null, ? int $length = null)
    {
       try {
-         // @ Prepare to send data
          $buffer = $data ?? self::$output;
-         $sent = false;
          $written = 0;
 
-         // @ Send initial part of data
-         if ($length !== null) {
-            $initial = substr($buffer, 0, $length);
-            $sent = @fwrite($Socket, $initial, $length);
-         }
-
-         // @ Send entire or remaining of data if exists
          while ($buffer) {
             $sent = @fwrite($Socket, $buffer, $length);
 
-            if ($sent === false) {
-               break;
-            }
+            if ($sent === false) break;
+            if ($sent === 0) continue; // TODO check EOF?
 
-            if ($sent > 0 && $sent < $length) {
+            $written += $sent;
+
+            if ($sent < $length) {
                $buffer = substr($buffer, $sent);
                $length -= $sent;
-               $written += $sent;
-            } else if ($sent === 0) {
                continue;
-            } else {
-               $written += $sent;
-               break;
             }
+
+            break;
          }
       } catch (\Throwable) {
          $written = false;

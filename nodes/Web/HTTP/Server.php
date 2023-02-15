@@ -261,9 +261,9 @@ class Server extends TCP\Server implements HTTP
                // ! Client
                $capi = $spec['capi'];     // @ Set Client API
                $requestData = $capi($TCPClient->host . ':' . $TCPClient->port);
-               #$requestLength = strlen($requestData);
+               $requestLength = strlen($requestData);
 
-               if ( $Connection->write($Socket, $requestData) ) {
+               if ( $Connection->write($Socket, $requestData, $requestLength) ) {
                   $expired = false;
                   $timeout = 2;
                   $latency = microtime(true);

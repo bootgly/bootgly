@@ -153,63 +153,35 @@ abstract class Packages implements Web\Packages
    }
    public function write (&$Socket, ? int $length = null) : bool
    {
-      // @ Set output buffer
       if (Server::$Application) {
          self::$output = Server::$Application::encode($this, $length);
       } else {
          self::$output = (SAPI::$Handler)(...$this->callbacks);
       }
 
-      // @ Check connection close intention by server?
-      if ( empty(self::$output) ) {
-         return false;
-      }
-
       try {
-         // @ Prepare to send data
          $buffer = self::$output;
-         $sent = false;
          $written = 0;
 
-         // @ Send initial part of data
-         if ($length !== null) {
-            $initial = substr($buffer, 0, $length);
-            $sent = @fwrite($Socket, $initial, $length);
-         }
-
-         // @ Set remaining of data if exists
-         if ($sent !== false) {
-            $written += $sent;
-
-            if ( ! empty($this->writing) ) {
-               // @ Prepare stream with file handler
-               $written += $this->writing($Socket);
-               $buffer = '';
-            } else {
-               // @ Prepare stream with content raw
-               $buffer = substr($buffer, $sent);
-               $length = strlen($buffer);
-            }
-         }
-
-         // @ Send entire or remaining of data if exists
          while ($buffer) {
             $sent = @fwrite($Socket, $buffer, $length);
 
-            if ($sent === false) {
-               break;
-            }
+            if ($sent === false) break;
+            if ($sent === 0) continue; // TODO check EOF?
 
-            if ($sent > 0 && $sent < $length) { // @ Stream remaining of not sent data
+            $written += $sent;
+
+            if ($sent < $length) {
                $buffer = substr($buffer, $sent);
                $length -= $sent;
-               $written += $sent;
-            } else if ($sent === 0) {
-               continue; // TODO check EOF?
-            } else {
-               $written += $sent;
-               break;
+               continue;
             }
+
+            if ( count($this->writing) ) {
+               $written += $this->writing($Socket);
+            }
+
+            break;
          }
       } catch (\Throwable) {
          $written = false;
@@ -220,7 +192,7 @@ abstract class Packages implements Web\Packages
          return $this->fail($Socket, 'write', $written);
       }
 
-      // @ Set Stats (disable to max performance in benchmarks)
+      // @ Set Stats
       if (Connections::$stats) {
          // Global
          Connections::$writes++;
@@ -337,14 +309,14 @@ abstract class Packages implements Web\Packages
       $length = $this->writing[0]['length'];
       $close = $this->writing[0]['close'];
 
-      $sent = 0;
+      $written = 0;
 
       // @ Move pointer of file to offset
       try {
          @fseek($handler, $offset, SEEK_SET);
          #@flock($handler, \LOCK_SH);
       } catch (\Throwable) {
-         return $sent;
+         return $written;
       }
 
       // @ Limit length of data file (size) to read
@@ -358,7 +330,7 @@ abstract class Packages implements Web\Packages
          $over = $length - $rate;
       }
 
-      while ($sent < $length) {
+      while ($written < $length) {
          // @ Read file from disk
          try {
             $buffer = @fread($handler, $size);
@@ -375,23 +347,23 @@ abstract class Packages implements Web\Packages
          // @ Send part of read (if exists) file to client
          while ($read) {
             try {
-               $written = @fwrite($Socket, $buffer, $read);
+               $sent = @fwrite($Socket, $buffer, $read);
             } catch (\Throwable) {
                break;
             }
 
-            if ($written === false) {
-               break;
-            } else if ($written === 0) {
+            if ($sent === false) break;
+            if ($sent === 0) continue; // TODO check EOF?
+
+            $written += $sent;
+
+            if ($sent < $read) {
+               $buffer = substr($buffer, $sent);
+               $read -= $sent;
                continue;
-            } else if ($written < $read) {
-               $sent += $written;
-               $buffer = substr($buffer, $written);
-               $read = strlen($buffer);
-            } else {
-               $sent += $written;
-               break;
             }
+
+            break;
          }
 
          // @ Check End-of-file
@@ -407,8 +379,8 @@ abstract class Packages implements Web\Packages
 
          // @ Set new over / size if necessary
          if ($over % $rate > 0) {
-            if ($over >= $sent) {
-               $over -= $sent;
+            if ($over >= $written) {
+               $over -= $written;
             }
 
             if ($over < $size) {
@@ -429,7 +401,7 @@ abstract class Packages implements Web\Packages
       // @ Unset handler from writing
       unSet($this->writing[0]);
 
-      return $sent;
+      return $written;
    }
 
    public function reject (string $raw)
