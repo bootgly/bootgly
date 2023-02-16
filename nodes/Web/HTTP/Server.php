@@ -88,7 +88,8 @@ class Server extends TCP\Server implements HTTP
          // @ upload
          '1.6-upload_small_file',
          '1.6.1.1-upload_file_with_offset_length_1',
-         '1.6.2.1-upload_file_with_range_1'
+         '1.6.2.1-upload_file_with_range_1',
+         '1.6.3-upload_large_file'
       ];
       // * Meta
       SAPI::$Tests[self::class] = [];
