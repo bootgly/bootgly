@@ -86,6 +86,7 @@ class Server extends TCP\Server implements HTTP
          // @ send
          '1.5-send_in_json',
          // @ upload
+         '1.6-upload_small_file',
          '1.6.1.1-upload_file_with_offset_length_1',
          '1.6.2.1-upload_file_with_range_1'
       ];
@@ -212,7 +213,6 @@ class Server extends TCP\Server implements HTTP
    {
       Logger::$display = Logger::DISPLAY_NONE;
 
-      // @ Instance Client
       $TCPClient = new Client;
       $TCPClient->configure(
          host: $TCPServer->host === '0.0.0.0' ? '127.0.0.1' : $TCPServer->host,
@@ -222,7 +222,6 @@ class Server extends TCP\Server implements HTTP
       $TCPClient->on(
          // on Worker instance 
          instance: function ($Client) {
-            // @ Connect to Server
             $Socket = $Client->connect();
 
             if ($Socket) {
@@ -310,10 +309,12 @@ class Server extends TCP\Server implements HTTP
                      $failed++;
                      $TCPServer->log(
                         "\033[1;37;41m FAIL \033[0m - " 
-                        . '❌ ' . $testing . " -> \"\033[91m"
-                        . $except() . "\033[0m\"" . ':'
+                        . '❌ ' . $testing 
+                        . " -> \"\033[91m" . $except() . "\033[0m\"" . ':'
                         . $debugged . PHP_EOL
                      );
+
+                     break;
                   }
                }
             }
