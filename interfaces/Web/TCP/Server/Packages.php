@@ -306,10 +306,11 @@ abstract class Packages implements Web\Packages
       try {
          @fclose($handler);
       } catch (\Throwable) {}
+
       // @ Try to close the Socket if requested
       if ($close) {
          try {
-            @fclose($Socket);
+            $this->Connection->close();
          } catch (\Throwable) {}
       }
    
@@ -407,11 +408,14 @@ abstract class Packages implements Web\Packages
          }
       }
 
-      // @ Try closing the handler / socket if it's still open
+      // @ Try to close the file handler
+      try {
+         @fclose($handler);
+      } catch (\Throwable) {}
+
+      // @ Try to close the Socket if requested
       if ($close) {
          try {
-            @fclose($handler);
-   
             $this->Connection->close();
          } catch (\Throwable) {}
       }
