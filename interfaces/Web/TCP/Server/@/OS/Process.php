@@ -147,18 +147,21 @@ class Process
          case SIGUSR1:  // 10
             // TODO review security concious (+1)
             $lines = file(static::$commandFile);
-            $line = $lines[count($lines) - 1];
 
-            [$command, $context] = explode(':', rtrim($line));
+            if ($lines) {
+               $line = $lines[count($lines) - 1];
 
-            // @ Prepend command
-            $command = '@' . $command;
-
-            // @ Match context
-            match ($context) {
-               'Connections' => $this->Server->Connections->{$command},
-               default => $this->Server->{$command}
-            };
+               [$command, $context] = explode(':', rtrim($line));
+   
+               // @ Prepend command
+               $command = '@' . $command;
+   
+               // @ Match context
+               match ($context) {
+                  'Connections' => $this->Server->Connections->{$command},
+                  default => $this->Server->{$command}
+               };
+            }
 
             break;
 
