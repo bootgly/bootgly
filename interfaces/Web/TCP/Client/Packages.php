@@ -127,25 +127,7 @@ class Packages implements Web\Packages
 
       // @ Check issues
       if ($written === 0 || $written === false) {
-         try {
-            $eof = @feof($Socket);
-         } catch (\Throwable) {
-            $eof = false;
-         }
-
-         // @ Check connection close/reset by server?
-         if ($eof) {
-            $this->fail($Socket, 'write', $written);
-            return false;
-         }
-
-         // @ Check connection close intention by peer?
-         if ($written === 0) {
-            #$this->log('Failed to write data: 0 bytes written!' . PHP_EOL);
-         }
-
-         $this->errors['write']++;
-
+         $this->fail($Socket, 'write', $written);
          return false;
       }
 
@@ -171,13 +153,13 @@ class Packages implements Web\Packages
    {
       try {
          $input = fread($Socket, 65535);
-      } catch (\Throwable) {}
+      } catch (\Throwable) {
+         $input = false;
+      }
 
       // @ Check connection close intention by server?
       // Close connection if input data is empty to avoid unnecessary loop?
       if ($input === '') {
-         #$this->log('Failed to read buffer: input data is empty!' . PHP_EOL, self::LOG_WARNING_LEVEL);
-         #$this->fail($Socket, 'read', $input);
          return false;
       }
 
@@ -202,7 +184,7 @@ class Packages implements Web\Packages
       }
 
       if (Client::$onRead) {
-         (Client::$onRead)($Socket, $this, $this->Connection);
+         (Client::$onRead)($Socket, $this->Connection, $this);
       }
 
       return true;
