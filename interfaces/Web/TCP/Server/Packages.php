@@ -96,28 +96,28 @@ abstract class Packages implements Web\Packages
    public function read (&$Socket) : bool
    {
       try {
-         $input = @fread($Socket, 65535);
+         $buffer = @fread($Socket, 65535);
       } catch (\Throwable) {
-         $input = false;
+         $buffer = false;
       }
 
-      // $this->log($input);
+      // $this->log($buffer);
 
       // @ Check connection close intention by peer?
       // Close connection if input data is empty to avoid unnecessary loop
-      if ($input === '') {
+      if ($buffer === '') {
          #$this->log('Failed to read buffer: input data is empty!' . PHP_EOL, self::LOG_WARNING_LEVEL);
          $this->Connection->close();
          return false;
       }
 
       // @ Check issues
-      if ($input === false) {
-         return $this->fail($Socket, 'read', $input);
+      if ($buffer === false) {
+         return $this->fail($Socket, 'read', $buffer);
       }
 
       // @ On success
-      if (self::$input !== $input) {
+      if (self::$input !== $buffer) {
          $this->changed = true;
       } else {
          $this->changed = false;
@@ -125,12 +125,11 @@ abstract class Packages implements Web\Packages
 
       // @ Set Input
       if ($this->cache === false || $this->changed === true) {
-         #self::$input .= $input;
-         self::$input = $input;
+         self::$input = $buffer;
       }
 
       // @ Set Stats (disable to max performance in benchmarks)
-      $length = strlen($input);
+      $length = strlen($buffer);
 
       if (Connections::$stats) {
          // Global
@@ -142,7 +141,7 @@ abstract class Packages implements Web\Packages
 
       // @ Write data
       if (Server::$Application) { // @ Decode Application Data if exists
-         $length = Server::$Application::decode($this, $input, $length);
+         $length = Server::$Application::decode($this, $buffer, $length);
       }
 
       if ($length) {
