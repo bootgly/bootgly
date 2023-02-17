@@ -184,7 +184,7 @@ abstract class Packages implements Web\Packages
             break;
          }
       } catch (\Throwable) {
-         $written = false;
+         $sent = false;
       }
 
       // @ Check issues
