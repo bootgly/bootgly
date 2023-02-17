@@ -74,11 +74,11 @@ class Server extends TCP\Server implements HTTP
       SAPI::$tests[self::class] = [
          '1.1-respond_hello_world',
          // ! Meta
-         // Meta status
+         // status
          '1.2-respond_with_status_302',
          '1.2.1-respond_with_status_500_no_body',
          // ! Header
-         // Header changed
+         // Content-Type
          '1.3-respond_with_header_content_text_plain',
          // ? Header \ Cookie
          '1.4-respond_with_header_cookies',
@@ -257,38 +257,27 @@ class Server extends TCP\Server implements HTTP
                };
 
                // ! Server
-               $responseLength = (int) @$spec['response.length'] ?? 0;
+               $responseLength = @$spec['response.length'] ?? null;
                // ! Client
-               $capi = $spec['capi'];     // @ Set Client API
-               $requestData = $capi($TCPClient->host . ':' . $TCPClient->port);
+               // @ boot
+               $capi = $spec['capi']; // @ Set Client API
+               // @ prepare
+               $host = $TCPClient->host . ':' . $TCPClient->port;
+               // @ request
+               $requestData = $capi($host);
                $requestLength = strlen($requestData);
 
-               if ( $Connection->write($Socket, $requestData, $requestLength) ) {
-                  $expired = false;
+               // @ Send Request to Server
+               $Connection::$output = $requestData;
+               if ( $Connection->write($Socket, $requestLength) ) {
+                  // ? Response
                   $timeout = 2;
-                  $latency = microtime(true);
-   
-                  $Connection::$input = '';
 
-                  $buffer = '';
-   
-                  while (true) {
-                     if ($responseLength > 0) {
-                        if (strlen($buffer) >= $responseLength) {
-                           break;
-                        }
-                     } else if ($Connection::$input !== '') {
-                        break;
-                     }
+                  $input = '';
 
-                     if (microtime(true) - $latency >= $timeout) { // @ Check Response Timeout
-                        $expired = true;
-                        break;
-                     }
-
-                     if ( $Connection->read($Socket) ) {
-                        $buffer .= $Connection::$input;
-                     }
+                  // @ Get Response of Server
+                  if ( $Connection->read($Socket, $responseLength, $timeout) ) {
+                     $input = $Connection::$input;
                   }
 
                   // @ Execute assert
@@ -296,18 +285,20 @@ class Server extends TCP\Server implements HTTP
                   $except = $spec['except']; // @ Get except
 
                   ob_start();
-                  $result = $assert($buffer);
+                  $result = $assert($input);
                   $debugged = ob_get_clean();
 
                   // @ Show result
-                  if ($result === true && $expired === false) {
+                  if ($result === true && $Connection->expired === false) {
                      $passed++;
+
                      $TCPServer->log(
                         "\033[1;37;42m PASS \033[0m - " 
                         . '✅ ' . "\033[90m" . $testing . "\033[0m" . PHP_EOL
                      );
                   } else {
                      $failed++;
+
                      $TCPServer->log(
                         "\033[1;37;41m FAIL \033[0m - " 
                         . '❌ ' . $testing 
@@ -323,6 +314,7 @@ class Server extends TCP\Server implements HTTP
             $finished = microtime(true);
             $spent = number_format(round($finished - $started, 5), 6);
 
+            // @ Show Test summary
             $TCPServer->log(<<<TESTS
 
             Tests: @:e: {$failed} failed @;, @:n:{$skipped} skipped @;, @:s:{$passed} passed @;, {$total} total
@@ -331,6 +323,7 @@ class Server extends TCP\Server implements HTTP
 
             TESTS);
 
+            // @ Reset CLI Logger
             Logger::$display = Logger::DISPLAY_MESSAGE;
 
             // @ Stop Client (stop Event Loop and destroy instance)

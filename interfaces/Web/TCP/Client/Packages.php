@@ -40,6 +40,8 @@ class Packages implements Web\Packages
    public int $writes;
    public int $reads;
    public array $errors;
+   // @ Expiration
+   public bool $expired;
 
 
    public function __construct (Connection &$Connection)
@@ -58,6 +60,8 @@ class Packages implements Web\Packages
       $this->reads = 0;           // Socket Read count
       $this->errors['write'] = 0; // Socket Writing errors
       $this->errors['read'] = 0;  // Socket Reading errors
+      // @ Expiration
+      $this->expired = false;
    }
 
    public function fail ($Socket, string $operation, $result)
@@ -99,10 +103,10 @@ class Packages implements Web\Packages
       return false;
    }
 
-   public function write (&$Socket, ? string $data = null, ? int $length = null)
+   public function write (&$Socket, ? int $length = null)
    {
       try {
-         $buffer = $data ?? self::$output;
+         $buffer = self::$output;
          $written = 0;
 
          while ($buffer) {
@@ -122,13 +126,12 @@ class Packages implements Web\Packages
             break;
          }
       } catch (\Throwable) {
-         $written = false;
+         $sent = false;
       }
 
       // @ Check issues
-      if ($written === 0 || $written === false) {
-         $this->fail($Socket, 'write', $written);
-         return false;
+      if (! $written || ! $sent) {
+         return $this->fail($Socket, 'write', $written);
       }
 
       // @ Set Stats
@@ -149,36 +152,66 @@ class Packages implements Web\Packages
       return true;
    }
 
-   public function read (&$Socket)
+   public function read (&$Socket, ? int $length = null, ? int $timeout = null)
    {
       try {
-         $input = fread($Socket, 65535);
+         $input = '';
+         $received = 0;
+         $total = $length ?? 0;
+
+         if ($length > 0 || $timeout > 0) {
+            $started = microtime(true);
+         }
+
+         do {
+            $buffer = fread($Socket, $length ?? 65535);
+
+            if ($buffer === false) break;
+            if ($buffer === '') {
+               if (! $timeout > 0 || microtime(true) - $started >= $timeout) {
+                  $this->expired = true;
+                  break;
+               }
+
+               continue; // TODO check EOF?
+            }
+
+            $input .= $buffer;
+
+            $bytes = strlen($buffer);
+            $received += $bytes;
+
+            if ($length) {
+               $length -= $bytes;
+               continue;
+            }
+
+            break;
+         } while ($received < $total || $total === 0);
       } catch (\Throwable) {
-         $input = false;
+         $buffer = false;
       }
 
       // @ Check connection close intention by server?
       // Close connection if input data is empty to avoid unnecessary loop?
-      if ($input === '') {
+      // TODO remove?
+      if ($buffer === '') {
          return false;
       }
 
       // @ Check issues
-      if ($input === false) {
-         $this->fail($Socket, 'read', $input);
-         return false;
+      if ($buffer === false) {
+         return $this->fail($Socket, 'read', $buffer);
       }
 
       // @ Set Input
       self::$input = $input;
 
       // @ Set Stats (disable to max performance in benchmarks)
-      $length = strlen($input);
-
       if (Connections::$stats) {
          // Global
          Connections::$reads++;
-         Connections::$read += $length;
+         Connections::$read += $received;
          // Per client
          #Connections::$Connections[(int) $Socket]['reads']++;
       }
