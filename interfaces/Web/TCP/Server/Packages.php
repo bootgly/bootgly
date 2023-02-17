@@ -96,12 +96,10 @@ abstract class Packages implements Web\Packages
    public function read (&$Socket) : bool
    {
       try {
-         $buffer = @fread($Socket, 65535);
+         $buffer = @stream_socket_recvfrom($Socket, 65535);
       } catch (\Throwable) {
          $buffer = false;
       }
-
-      // $this->log($buffer);
 
       // @ Check connection close intention by peer?
       // Close connection if input data is empty to avoid unnecessary loop
@@ -164,6 +162,7 @@ abstract class Packages implements Web\Packages
 
          while ($buffer) {
             $sent = @fwrite($Socket, $buffer, $length);
+            #$sent = @stream_socket_sendto($Socket, $buffer, $length???);
 
             if ($sent === false) break;
             if ($sent === 0) continue; // TODO check EOF?
