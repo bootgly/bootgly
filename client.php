@@ -64,7 +64,7 @@ $TCPClient->on(
    disconnect: function ($Connection) use($TCPClient) {
       $TCPClient->log(
          'Connection #' . $Connection->id . ' (' . $Connection->ip . ':' . $Connection->port . ')'
-         . ' from Worker #' . $TCPClient->Process->id . ' was closed! @\;'
+         . ' from Worker with PID @_' . $TCPClient->Process->id . '_@ was closed! @\;'
       );
    },
    // on Package write / read

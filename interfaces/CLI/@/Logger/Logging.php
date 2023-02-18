@@ -44,8 +44,14 @@ trait Logging
    // with background
    public const LOG_BLACK_WHITE_COLOR = "\033[47;30m";
    public const LOG_GREEN_BLACK_COLOR = "\033[32;40m";
-   // @ line
-   public const LOG_END_OF_DECORATOR = "\033[0m";
+   // @ Style
+   public const LOG_BOLD = "\033[1m";
+   public const LOG_ITALIC = "\033[3m";
+   public const LOG_UNDERLINE = "\033[4m";
+   public const LOG_STRIKE = "\033[9m";
+   // @
+   public const LOG_START_OF = "\033[";
+   public const LOG_END_OF = "\033[0m";
 
 
    protected function log ($message, int $level = self::LOG_DEFAULT_LEVEL) : true
@@ -123,10 +129,22 @@ trait Logging
          };
       }, $message);
 
-      // @ End of decorator
-      $message = str_replace([' @;'], self::LOG_END_OF_DECORATOR, $message);
+      // @ Style
+      $message = preg_replace_callback('/@([*_-])/m', function ($matches) {
+         return match ($matches[1]) {
+            '*' => self::LOG_BOLD,
+            '_' => self::LOG_UNDERLINE,
+            '-' => self::LOG_STRIKE,
+            default => ''
+         };
+      }, $message);
 
-      // @ End of line
+      // @ End of
+      $message = preg_replace_callback('/\s@([;])|([*_-])@/m', function ($matches) {
+         return self::LOG_END_OF;
+      }, $message);
+
+      // @ Break lines / End of line (EOL)
       $message = preg_replace_callback('/@(\\\\+);/m', function ($matches) {
          if ($matches[0]) {
             return str_repeat(PHP_EOL, strlen($matches[1]));
