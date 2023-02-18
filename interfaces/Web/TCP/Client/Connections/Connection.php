@@ -68,7 +68,7 @@ class Connection extends Packages
 
       // @ Set Remote Data if possible
       // IP:port
-      $peer = stream_socket_get_name($Socket, true);
+      $peer = stream_socket_get_name($Socket, false);
       if ($peer === false) {
          return $this->close();
       }
@@ -100,6 +100,10 @@ class Connection extends Packages
       } catch (\Throwable) {}
 
       $this->status = self::STATUS_CLOSED;
+
+      if (Client::$onDisconnect) {
+         (Client::$onDisconnect)($this);
+      }
 
       // @ Destroy itself
       unset(Connections::$Connections[$this->id]);

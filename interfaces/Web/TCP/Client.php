@@ -61,6 +61,7 @@ class Client
    public static ? Closure $onInstance = null;
    // @ on Connection
    public static ? Closure $onConnect = null;
+   public static ? Closure $onDisconnect = null;
    // @ on Packages
    public static ? Closure $onRead = null;
    public static ? Closure $onWrite = null;
@@ -143,8 +144,9 @@ class Client
    public function __call (string $name, array $arguments)
    {
       switch ($name) {
+         case 'log':
          case 'stop':
-            return $this->stop(...$arguments);
+            return $this->$name(...$arguments);
       }
    }
 
@@ -161,12 +163,17 @@ class Client
       return $this;
    }
    public function on
-   (? Closure $instance = null, ? Closure $connect = null, ? Closure $read = null, ? Closure $write = null)
+   (
+      ? Closure $instance = null,
+      ? Closure $connect = null, ? Closure $disconnect = null,
+      ? Closure $read = null, ? Closure $write = null
+   )
    {
       // @ Worker
       self::$onInstance = $instance;
       // @ Connection(s)
       self::$onConnect = $connect;
+      self::$onDisconnect = $disconnect;
       // @ Packages
       self::$onRead = $read;
       self::$onWrite = $write;
@@ -210,7 +217,7 @@ class Client
       }
 
       $this->log('@\\\;Entering in Monitor mode...@\;', self::LOG_SUCCESS_LEVEL);
-      $this->log('>_ Type `CTRL + Z` to enter in Interactive mode or `CTRL + C` to stop the Server.@\;');
+      $this->log('>_ Type `CTRL + C` to stop the Client.@\;');
 
       // @ Loop
       while ($this->mode === self::MODE_MONITOR) {

@@ -61,6 +61,12 @@ $TCPClient->on(
       // @ Add Package write to Event loop
       TCP\Client::$Event->add($Socket, TCP\Client::$Event::EVENT_WRITE, $Connection);
    },
+   disconnect: function ($Connection) use($TCPClient) {
+      $TCPClient->log(
+         'Connection #' . $Connection->id . ' (' . $Connection->ip . ':' . $Connection->port . ')'
+         . ' from Worker #' . $TCPClient->Process->id . ' was closed! @\;'
+      );
+   },
    // on Package write / read
    write: function ($Socket, $Connection, $Package) {
       // @ Add Package read to Event loop
