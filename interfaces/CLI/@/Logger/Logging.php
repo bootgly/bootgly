@@ -23,6 +23,7 @@ trait Logging
    // imported from \Bootgly\logging...
    // * Meta
    // @ color (foreground;background?)
+   // transparent
    public const LOG_BLACK_TRANSPARENT_COLOR = "\033[30m";
    public const LOG_RED_TRANSPARENT_COLOR = "\033[31m";
    public const LOG_GREEN_TRANSPARENT_COLOR = "\033[32m";
@@ -33,6 +34,7 @@ trait Logging
    public const LOG_WHITE_TRANSPARENT_COLOR = "\033[37m";
    public const LOG_EXTENDED_TRANSPARENT_COLOR = "\033[38m";
    public const LOG_DEFAULT_TRANSPARENT_COLOR = "\033[39m";
+   // bold
    public const LOG_BLACK_BOLD_COLOR = "\033[90m";
    public const LOG_RED_BOLD_COLOR = "\033[91m";
    public const LOG_GREEN_BOLD_COLOR = "\033[92m";
@@ -45,10 +47,10 @@ trait Logging
    public const LOG_BLACK_WHITE_COLOR = "\033[47;30m";
    public const LOG_GREEN_BLACK_COLOR = "\033[32;40m";
    // @ Style
-   public const LOG_BOLD = "\033[1m";
-   public const LOG_ITALIC = "\033[3m";
-   public const LOG_UNDERLINE = "\033[4m";
-   public const LOG_STRIKE = "\033[9m";
+   public const LOG_BOLD_STYLE = "\033[1m";
+   public const LOG_ITALIC_STYLE = "\033[3m";
+   public const LOG_UNDERLINE_STYLE = "\033[4m";
+   public const LOG_STRIKE_STYLE = "\033[9m";
    // @
    public const LOG_START_OF = "\033[";
    public const LOG_END_OF = "\033[0m";
@@ -130,17 +132,18 @@ trait Logging
       }, $message);
 
       // @ Style
-      $message = preg_replace_callback('/@([*_-])/m', function ($matches) {
+      $message = preg_replace_callback('/@([*~_-])/m', function ($matches) {
          return match ($matches[1]) {
-            '*' => self::LOG_BOLD,
-            '_' => self::LOG_UNDERLINE,
-            '-' => self::LOG_STRIKE,
+            '*' => self::LOG_BOLD_STYLE,
+            '~' => self::LOG_ITALIC_STYLE,
+            '_' => self::LOG_UNDERLINE_STYLE,
+            '-' => self::LOG_STRIKE_STYLE,
             default => ''
          };
       }, $message);
 
       // @ End of
-      $message = preg_replace_callback('/\s@([;])|([*_-])@/m', function ($matches) {
+      $message = preg_replace_callback('/\s@([;])|([*~_-])@/m', function ($matches) {
          return self::LOG_END_OF;
       }, $message);
 
