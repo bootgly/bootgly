@@ -69,11 +69,13 @@ class Connection extends Packages
       // @ Set Remote Data if possible
       // IP:port
       $peer = stream_socket_get_name($Socket, true);
-      if ($peer === false)
+      if ($peer === false) {
          return $this->close();
+      }
+      // * Data
+      // @ Remote
       @[$this->ip, $this->port] = explode(':', $peer, 2); // TODO IPv6
 
-      // @ Call parent constructor
       parent::__construct($this);
 
       // @ Call On Connection connect
@@ -82,32 +84,23 @@ class Connection extends Packages
       }
    }
 
-   public function close ()
+   public function close () : true
    {
+      if ($this->status > self::STATUS_ESTABLISHED) {
+         return true;
+      }
+
+      $this->status = self::STATUS_CLOSING;
+
       Client::$Event->del($this->Socket, Client::$Event::EVENT_WRITE);
       Client::$Event->del($this->Socket, Client::$Event::EVENT_READ);
 
-      if ($this->Socket === null || $this->Socket === false) {
-         #$this->log('$Socket is false or null on close!');
-         return false;
-      }
-
-      $closed = false;
       try {
-         $closed = @fclose($this->Socket);
+         @fclose($this->Socket);
       } catch (\Throwable) {}
 
-      if ($closed === false) {
-         #$this->log('Connection failed to close!' . PHP_EOL);
-         return false;
-      }
-
-      // @ On success
       $this->status = self::STATUS_CLOSED;
-      // @ Delete timers
-      foreach ($this->timers as $id) {
-         Timer::del($id);
-      }
+
       // @ Destroy itself
       unset(Connections::$Connections[$this->id]);
 
@@ -116,7 +109,6 @@ class Connection extends Packages
 
    public function __destruct ()
    {
-      // @ Delete timers
       foreach ($this->timers as $id) {
          Timer::del($id);
       }

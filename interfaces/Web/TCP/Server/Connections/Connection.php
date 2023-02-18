@@ -49,20 +49,11 @@ class Connection extends Packages
    {
       $this->Socket = $Socket;
 
-      // @ Remote
-      // IP:port
-      $peer = stream_socket_get_name($Socket, true);
-      @[$ip, $port] = explode(':', $peer, 2); // TODO IPv6
-      // @ Local?
-      // metadata
-      #$metadata = stream_get_meta_data($Socket);
-
       // * Config
       $this->timers = [];
       $this->expiration = 15;
       // * Data
-      $this->ip = $ip;
-      $this->port = $port;
+      // ... dynamicaly
       // * Meta
       $this->id = (int) $Socket;
       // @ Status
@@ -74,8 +65,19 @@ class Connection extends Packages
       #$this->reads = 0;
       $this->writes = 0;
 
+      // @ Set Remote Data if possible
+      // IP:port
+      $peer = stream_socket_get_name($Socket, true);
+      if ($peer === false) {
+         return $this->close();
+      }
+      // * Data
+      // @ Remote
+      @[$this->ip, $this->port] = explode(':', $peer, 2); // TODO IPv6
+
       parent::__construct($this);
 
+      // @ Call handshake if SSL is enabled
       if ( isSet(Server::$context['ssl']) && $this->handshake() === false) {
          return false;
       }
@@ -152,11 +154,11 @@ class Connection extends Packages
 
       return true;
    }
-   public function expire (int $timeout = 5) 
+   public function expire (int $timeout) 
    {
       static $writes = 0;
 
-      if ($this->status === self::STATUS_CLOSED) {
+      if ($this->status > self::STATUS_ESTABLISHED) {
          return true;
       }
 
@@ -176,7 +178,7 @@ class Connection extends Packages
    {
       static $writes = 0;
 
-      if ($this->status === self::STATUS_CLOSED) {
+      if ($this->status > self::STATUS_ESTABLISHED) {
          return true;
       }
 
@@ -190,32 +192,36 @@ class Connection extends Packages
       return false;
    }
 
-   public function close ()
+   public function close () : true
    {
-      Server::$Event->del($this->Socket, Server::$Event::EVENT_READ);
-      #Server::$Event->del($this->Socket, Server::$Event::EVENT_WRITE);
-
-      if ($this->Socket === null || $this->Socket === false) {
-         #$this->log('$Socket is false or null on close!');
-         return false;
+      if ($this->status > self::STATUS_ESTABLISHED) {
+         return true;
       }
 
-      $closed = false;
+      $this->status = self::STATUS_CLOSING;
+
+      $Socket = &$this->Socket;
+
+      /*
+      if ( isSet(Server::$context['ssl'] ) {
+         try {
+            stream_set_blocking($this->Socket, true);
+            stream_socket_enable_crypto($Socket, false);
+            stream_set_blocking($this->Socket, false);
+         } catch (\Throwable) {}
+      }
+      */
+
+      Server::$Event->del($Socket, Server::$Event::EVENT_READ);
+      #Server::$Event->del($Socket, Server::$Event::EVENT_WRITE);
+
       try {
-         $closed = @fclose($this->Socket);
+         @fclose($Socket);
+         #@stream_socket_shutdown($Socket);
       } catch (\Throwable) {}
 
-      if ($closed === false) {
-         #$this->log('Connection failed to close!' . PHP_EOL);
-         return false;
-      }
-
-      // @ On success
       $this->status = self::STATUS_CLOSED;
-      // @ Delete timers
-      foreach ($this->timers as $id) {
-         Timer::del($id);
-      }
+
       // @ Destroy itself
       unset(Connections::$Connections[$this->id]);
 
@@ -224,7 +230,6 @@ class Connection extends Packages
 
    public function __destruct ()
    {
-      // @ Delete timers
       foreach ($this->timers as $id) {
          Timer::del($id);
       }
