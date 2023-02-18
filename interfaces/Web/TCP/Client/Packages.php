@@ -30,7 +30,7 @@ class Packages implements Web\Packages
    public Connection $Connection;
 
    // * Data
-   // @ Buffer
+   // @ IO
    public static string $output;
    public static string $input;
    // * Meta
@@ -49,7 +49,7 @@ class Packages implements Web\Packages
       $this->Connection = $Connection;
 
       // * Data
-      // @ Buffer
+      // @ IO
       self::$output ='';
       self::$input = '';
       // * Meta
@@ -158,8 +158,8 @@ class Packages implements Web\Packages
    {
       try {
          $input = '';
-         $received = 0;
-         $total = $length ?? 0;
+         $received = 0; // @ Bytes received from server
+         $total = $length ?? 0; // @ Total length of packet = the expected length of packet or 0
 
          if ($length > 0 || $timeout > 0) {
             $started = microtime(true);

@@ -251,7 +251,7 @@ class Server extends TCP\Server implements HTTP
             foreach ($tests as $index => $testing) {
                $spec = SAPI::$Tests[self::class][$index];
 
-               if (! $spec || !is_array($spec) || count($spec) < 4) {
+               if (! $spec || ! is_array($spec) || count($spec) < 4) {
                   $skipped++;
                   continue;
                };
@@ -272,10 +272,9 @@ class Server extends TCP\Server implements HTTP
                if ( $Connection->write($Socket, $requestLength) ) {
                   // ? Response
                   $timeout = 2;
-
                   $input = '';
 
-                  // @ Get Response of Server
+                  // @ Get Response from Server
                   if ( $Connection->read($Socket, $responseLength, $timeout) ) {
                      $input = $Connection::$input;
                   }

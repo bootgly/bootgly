@@ -35,14 +35,14 @@ abstract class Packages implements Web\Packages
    public bool $cache;
    // * Data
    public bool $changed;
-   // @ Buffer
+   // @ IO
    public static string $input;
    public static string $output;
    // * Meta
    // @ Handler
    public array $reading;
    public array $writing;
-   public array $callbacks; // TODO move
+   public array $callbacks;
 
 
    public function __construct (Connection &$Connection)
@@ -53,7 +53,7 @@ abstract class Packages implements Web\Packages
       $this->cache = true;
       // * Data
       $this->changed = true;
-      // @ Buffer
+      // @ IO
       self::$input = '';
       self::$output = '';
       // * Meta
@@ -128,7 +128,7 @@ abstract class Packages implements Web\Packages
          $this->changed = false;
       }
 
-      // @ Set Input
+      // @ Handle cache and set Input
       if ($this->cache === false || $this->changed === true) {
          self::$input = $buffer;
       }
