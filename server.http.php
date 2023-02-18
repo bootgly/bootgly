@@ -31,11 +31,16 @@ $HTTPServer->configure(
       'local_cert'  => __DIR__ . '/@/certificates/localhost.cert.pem', 
       // SSL Keyfile
       'local_pk'    => __DIR__ . '/@/certificates/localhost.key.pem',
+
       'disable_compression' => true, // TLS compression attack vulnerability
-      #'verify_peer' => true,
+
+      'ssltransport' => 'tlsv1.3',
+
+      'ciphers' => 'AES256-SHA256',
+
+      'verify_peer' => false,
       #'verify_peer_name' => true,
       #'capture_peer_cert' => true,
-      'ssltransport' => 'tlsv1.3'
    ]
    */
 );

@@ -93,10 +93,17 @@ abstract class Packages implements Web\Packages
       return false;
    }
 
+   // @ SSL / TLS context
+   public function decrypt (string $encrypted)
+   {
+      // TODO (only fread return the data decrypted when using SSL context)
+   }
+
    public function read (&$Socket) : bool
    {
       try {
-         $buffer = @stream_socket_recvfrom($Socket, 65535);
+         #$buffer = @fread($Socket, 65535); // Works with SSL context
+         $buffer = @stream_socket_recvfrom($Socket, 65535); // Does not works with SSL context
       } catch (\Throwable) {
          $buffer = false;
       }

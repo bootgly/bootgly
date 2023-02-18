@@ -108,9 +108,11 @@ class Packages implements Web\Packages
       try {
          $buffer = self::$output;
          $written = 0;
+         #$length ??= strlen($buffer);
 
          while ($buffer) {
             $sent = @fwrite($Socket, $buffer, $length);
+            #$sent = @stream_socket_sendto($Socket, $buffer, $length???);
 
             if ($sent === false) break;
             if ($sent === 0) continue; // TODO check EOF?
@@ -164,7 +166,8 @@ class Packages implements Web\Packages
          }
 
          do {
-            $buffer = fread($Socket, $length ?? 65535);
+            $buffer = @fread($Socket, $length ?? 65535);
+            #$buffer = @stream_socket_recvfrom($Socket, $length ?? 65535);
 
             if ($buffer === false) break;
             if ($buffer === '') {
