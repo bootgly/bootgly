@@ -93,21 +93,28 @@ class Connections implements Web\Connections
    // Open connection with server / Connect with server
    public function connect () : bool
    {
-      Client::$Event->del($this->Client->Socket, Client::$Event::EVENT_CONNECT);
+      $Socket = &$this->Client->Socket;
+
+      Client::$Event->del($Socket, Client::$Event::EVENT_CONNECT);
 
       try {
          // @ Set blocking
-         stream_set_blocking($this->Client->Socket, $this->blocking);
+         stream_set_blocking($Socket, $this->blocking);
+
+         // @ Set Buffer sizes
+         #stream_set_read_buffer($Socket, 65535);
+         #stream_set_write_buffer($Socket, 65535);
+
+         // @ Set Chunk size
+         #stream_set_chunk_size($Socket, 65535);
 
          // @ Import stream
-         if (function_exists('socket_import_stream') === true) {
-            $Socket = socket_import_stream($this->Client->Socket);
+         #if (function_exists('socket_import_stream') === true) {
+         #   $Socket = socket_import_stream($Socket);
 
-            socket_set_option($Socket, SOL_SOCKET, SO_KEEPALIVE, 1);
-            socket_set_option($Socket, SOL_TCP, TCP_NODELAY, 1);
-         } else {
-            $Socket = $this->Client->Socket;
-         }
+         #   socket_set_option($Socket, SOL_SOCKET, SO_KEEPALIVE, 1);
+         #   socket_set_option($Socket, SOL_TCP, TCP_NODELAY, 1);
+         #}
       } catch (\Throwable) {
          $Socket = false;
       }
