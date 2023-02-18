@@ -11,11 +11,6 @@
 namespace Bootgly\Web\HTTP\Server\Request;
 
 
-use Bootgly\Exception\{
-  Error
-};
-
-
 class Session
 {
   public $name = '';

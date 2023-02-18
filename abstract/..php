@@ -3,6 +3,7 @@ require '@functions/formatters.php';
 require '@interfaces/Requestable.php';
 require '@traits/Configuring.php';
 
+
 // * .Constructors
 // ! .Types
 // ? __Array
@@ -14,28 +15,6 @@ require '__iterable/.php';
 #require '__String.functions.php';
 require '__string/.php';
 require '__string/~functions.php';
-// ! Exception
-require 'exception/.php';
-// ? Error
-require 'exception/error/.php';
-// ? Notice
-require 'exception/notice/.php';
-// ? Warning
-require 'exception/warning/.php';
-// ! .Streams
-// ? Path
-#require 'Path.constants.php';
-#require 'Path.functions.php';
-#require 'Path.globals.php';
-
-require 'path/.php';
-// ? Dir
-require 'dir/.php';
-// ? File
-require 'file/.php';
-
-#require 'Path~constants.php';
-#require 'Path~functions.php';
 // ! __Class
 require '__class/adopted/.php';
 require '__class/nulled/.php';
@@ -50,11 +29,28 @@ require '__class/nulled/.php';
 #require '__Class@Index@Permissions.php';
 // ? Index/Status
 #require '__Class@Index@Status.php';
+
+
+// *
 // ! Autoloader
 #require 'Autoloader.php';
 
 // ? __Class
 #require 'Autoloader@__Class.php';
+
+// ! .Streams
+// ? Dir
+require 'dir/.php';
+// ? File
+require 'file/.php';
+// ? Path
+#require 'Path.constants.php';
+#require 'Path.functions.php';
+#require 'Path.globals.php';
+#require 'Path~constants.php';
+#require 'Path~functions.php';
+
+require 'path/.php';
 
 
 // * .Controllers
@@ -62,23 +58,3 @@ require '__class/nulled/.php';
 #require 'Output.php';
 // ? Output/Buffer
 #require 'Output@Buffer.php';
-
-
-// * .Helpers
-// ! Benchmark
-require 'benchmark/.php';
-// ! Debugger
-require 'debugger/.php';
-
-// ? BackTrace
-require 'debugger/backtrace/.php';
-
-require 'debugger/~function.php';
-// ! Logger
-require 'logger/logs.php';    // @interface
-require 'logger/.php';
-require 'logger/logging.php'; // @trait
-
-require 'logger/~functions.php';
-// ! Tester
-#require 'Tester.php';

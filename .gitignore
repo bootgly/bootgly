@@ -25,23 +25,22 @@ server-*.php
 # Ignore imported packages (equivalent to vendor)
 @/imports/*
 
-## /boot
-/boot/*
-!/boot/..php
-!/boot/@functions
-!/boot/@interfaces
-!/boot/@traits
-!/boot/__array
-!/boot/__class
-!/boot/__iterable
-!/boot/__string
-!/boot/benchmark
-!/boot/debugger
-!/boot/dir
-!/boot/exception
-!/boot/file
-!/boot/logger
-!/boot/path
+## /abstract
+/abstract/*
+!/abstract/..php
+!/abstract/@functions
+!/abstract/@interfaces
+!/abstract/@traits
+!/abstract/__array
+!/abstract/__class
+!/abstract/__iterable
+!/abstract/__string
+!/abstract/dir
+!/abstract/file
+!/abstract/path
+
+## /base
+
 
 ## /core
 /core/*
