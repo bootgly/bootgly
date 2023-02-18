@@ -15,7 +15,6 @@ use Closure;
 use Bootgly\{
    SAPI\Environment
 };
-use Bootgly\Web\HTTP;
 
 
 class SAPI
@@ -78,12 +77,6 @@ class SAPI
             if ($copied === false) {
                return false;
             }
-         }
-
-         // @ Clear Server Application cache
-         // HTTP
-         if ( isSet(HTTP\Server::$Response) ) {
-            HTTP\Server::$Response->reset();
          }
 
          // @ Load production
