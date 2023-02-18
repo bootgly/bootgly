@@ -93,7 +93,7 @@ trait Logging
       // @ Set datetime
       $datetime = '';
       if (Logger::$display >= Logger::DISPLAY_MESSAGE_DATETIME) {
-         $datetime = date(DATE_ATOM) . ': ';
+         $datetime = "\033[90m" . date(DATE_ATOM) . ': ' . "\033[0m";
       }
 
       // @ Format and set message
