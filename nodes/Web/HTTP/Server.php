@@ -258,37 +258,40 @@ class Server extends TCP\Server implements HTTP
                   continue;
                }
 
-               $Test->separate();
+               $Test->separate(); // @ Output Test separators
 
                // ! Server
                $responseLength = @$spec['response.length'] ?? null;
                // ! Client
-               // @ request
+               // ? Request
                $requestData = $spec['capi']($TCPClient->host . ':' . $TCPClient->port);
                $requestLength = strlen($requestData);
 
                // @ Send Request to Server
                $Connection::$output = $requestData;
-               if ( $Connection->write($Socket, $requestLength) ) {
-                  // ? Response
-                  $timeout = 2;
-                  $input = '';
+               if ( ! $Connection->write($Socket, $requestLength) ) {
+                  $Test->fail();
+                  break;
+               }
 
-                  // @ Get Response from Server
-                  if ( $Connection->read($Socket, $responseLength, $timeout) ) {
-                     $input = $Connection::$input;
-                  }
+               // ? Response
+               $timeout = 2;
+               $input = '';
 
-                  // @ Execute Test assert
-                  $Test->assert($input);
+               // @ Get Response from Server
+               if ( $Connection->read($Socket, $responseLength, $timeout) ) {
+                  $input = $Connection::$input;
+               }
 
-                  // @ Output Test result
-                  if ($Test->success === true && $Connection->expired === false) {
-                     $Test->pass();
-                  } else {
-                     $Test->fail();
-                     break;
-                  }
+               // @ Execute Test assert
+               $Test->assert($input);
+
+               // @ Output Test result
+               if (! $Connection->expired && $Test->success) {
+                  $Test->pass();
+               } else {
+                  $Test->fail();
+                  break;
                }
             }
 

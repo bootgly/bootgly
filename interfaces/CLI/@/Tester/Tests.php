@@ -13,7 +13,6 @@ namespace Bootgly\CLI\_\Tester;
 
 use Bootgly\CLI\_\Logger\Logging;
 use Bootgly\CLI\_\Tester\Tests\Test;
-use Bootgly\Logs;
 
 
 class Tests implements \Bootgly\Tests

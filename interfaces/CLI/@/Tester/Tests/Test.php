@@ -29,6 +29,9 @@ class Test
    public $test;
    public bool $success;
    public false|string $debugged;
+   // @ Time
+   public float $started;
+   public float $finished;
 
 
    public function __construct (Tests $Tests, array $specifications)
@@ -41,6 +44,8 @@ class Test
       $this->test = current($this->Tests->tests); // @ file
       $this->success = false;
       $this->debugged = false;
+      // @ Time
+      $this->started = microtime(true);
    }
 
    public function assert ($input)
@@ -48,6 +53,7 @@ class Test
       ob_start();
       $this->success = $this->specifications['assert']($input);
       $this->debugged = ob_get_clean();
+      $this->finished = microtime(true);
    }
 
    public function separate ()
@@ -81,9 +87,12 @@ class Test
    {
       $this->Tests->passed++;
 
+      $time = number_format(round($this->finished - $this->started, 5), 6);
+
       $this->log(
          "\033[1;37;42m PASS \033[0m - " 
-         . '✅ ' . "\033[90m" . $this->test . "\033[0m" . PHP_EOL
+         . '✅ ' . "\033[90m" . $this->test . "\033[0m" 
+         . "\033[35m +" . $time . "s\033[0m" . PHP_EOL
       );
    }
    public function fail ()
