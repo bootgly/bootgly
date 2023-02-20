@@ -52,9 +52,24 @@ class Test
 
    public function separate ()
    {
+      static $length;
+
       $separator = @$this->specifications['separator'] ?? null;
+      $header = @$this->specifications['header'] ?? null;
+
       if ($separator) {
+         if ($separator !== true) {
+            $length = strlen($separator);
+            $separator = '@:i: ' . $separator . '  @;';
+         }
+
          $this->log('-----------------' . $separator . '----------------- @\;');
+      }
+
+      if ($header) {
+         $header = str_pad($header, $length ?? 0, ' ', STR_PAD_BOTH);
+
+         $this->log('                 \\' . $header . '/                @\;');
       }
    }
 

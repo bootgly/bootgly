@@ -21,7 +21,7 @@ return [
       return "GET /status HTTP/1.0\r\n\r\n";
    },
 
-   'separator' => '@:i: Response Meta  @;',
+   'separator' => 'Response Meta',
    'assert' => function ($response) : bool {
       /*
       return $Response->status === '302 Found'

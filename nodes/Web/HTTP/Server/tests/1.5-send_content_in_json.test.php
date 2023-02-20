@@ -21,7 +21,8 @@ return [
       return "GET /test/content/json/1 HTTP/1.0\r\n\r\n";
    },
 
-   'separator' => '@:i: Response Content  @;',
+   'separator' => 'Response Content',
+   'header' => '@send',
    'assert' => function ($response) : bool {
       /*
       return $Response->code === '500'

@@ -22,7 +22,7 @@ return [
       return "GET /header/changed/1 HTTP/1.0\r\n\r\n";
    },
 
-   'separator' => '@:i: Response Header  @;',
+   'separator' => 'Response Header',
    'assert' => function ($response) : bool {
       /*
       return $Response->code === '500'

@@ -31,6 +31,7 @@ return [
       return "GET /test/download/small_file/1 HTTP/1.0\r\n\r\n";
    },
 
+   'header' => '@upload',
    'assert' => function ($response) : bool {
       // ! Asserts
       // @ Assert length of response
