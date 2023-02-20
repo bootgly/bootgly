@@ -70,7 +70,7 @@ or with Docker *(-10% performance)*:
 |:--:| 
 | *HTTP Server CLI started - Initial output* |
 
-| ![HTTP Server CLI - Test suites](https://github.com/bootgly/.github/raw/main/screenshots/bootgly-php-framework/Bootgly-HTTP-Server-Test-Suite.png "HTTP Server CLI - Test suites") |
+| ![HTTP Server CLI - Test suites](https://github.com/bootgly/.github/raw/main/screenshots/bootgly-php-framework/Bootgly-HTTP-Server-Test-Suite2.png "HTTP Server CLI - Test suites") |
 |:--:| 
 | *HTTP Server CLI - Test suites* |
 
