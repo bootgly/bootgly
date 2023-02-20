@@ -16,7 +16,6 @@ use Bootgly\Logger;
 use Bootgly\CLI\_\ {
    Tester\Tests
 };
-
 use Bootgly\SAPI;
 use Bootgly\Web;
 
@@ -242,24 +241,24 @@ class Server extends TCP\Server implements HTTP
             // @ Get test -suite-
             $tests = SAPI::$tests[self::class];
 
-            // @ Init tests
+            // @ Init Tests
             $Tests = new Tests($tests);
 
             $TCPServer->log('@\;');
 
             // @ Run test cases
-            foreach ($tests as $index => $testing) {
+            foreach ($tests as $index => $value) {
                $spec = SAPI::$Tests[self::class][$index];
 
+               // @ Init Test
+               $Test = $Tests->test($spec);
+
                if (! $spec || ! is_array($spec) || count($spec) < 4) {
-                  $Tests->skipped++;
+                  $Test->skip();
                   continue;
                }
 
-               $separator = @$spec['separator'] ?? null;
-               if ($separator) {
-                  $TCPServer->log('-----------------' . $separator . '----------------- @\;');
-               }
+               $Test->separate();
 
                // ! Server
                $responseLength = @$spec['response.length'] ?? null;
@@ -280,40 +279,25 @@ class Server extends TCP\Server implements HTTP
                      $input = $Connection::$input;
                   }
 
-                  // @ Execute assert
-                  ob_start();
-                  $result = $spec['assert']($input);
-                  $debugged = ob_get_clean();
+                  // @ Execute Test assert
+                  $Test->assert($input);
 
-                  // @ Show result
-                  if ($result === true && $Connection->expired === false) {
-                     $Tests->passed++;
-
-                     $TCPServer->log(
-                        "\033[1;37;42m PASS \033[0m - " 
-                        . '✅ ' . "\033[90m" . $testing . "\033[0m" . PHP_EOL
-                     );
+                  // @ Output Test result
+                  if ($Test->success === true && $Connection->expired === false) {
+                     $Test->pass();
                   } else {
-                     $Tests->failed++;
-
-                     $TCPServer->log(
-                        "\033[1;37;41m FAIL \033[0m - " 
-                        . '❌ ' . $testing 
-                        . " -> \"\033[91m" . $spec['except']() . "\033[0m\"" . ':'
-                        . $debugged . PHP_EOL
-                     );
-
+                     $Test->fail();
                      break;
                   }
                }
             }
 
-            $Tests->summarize($TCPServer);
+            $Tests->summarize();
 
             // @ Reset CLI Logger
             Logger::$display = Logger::DISPLAY_MESSAGE;
 
-            // @ Stop Client (stop Event Loop and destroy instance)
+            // @ Destroy Client Event Loop
             $TCPClient::$Event->destroy();
          }
       );

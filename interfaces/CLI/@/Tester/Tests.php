@@ -11,11 +11,18 @@
 namespace Bootgly\CLI\_\Tester;
 
 
+use Bootgly\CLI\_\Logger\Logging;
+use Bootgly\CLI\_\Tester\Tests\Test;
 use Bootgly\Logs;
 
 
 class Tests implements \Bootgly\Tests
 {
+   use Logging;
+
+
+   // * Data
+   public array $tests;
    // * Meta
    public int $failed;
    public int $passed;
@@ -27,8 +34,10 @@ class Tests implements \Bootgly\Tests
    public float $finished;
 
 
-   public function __construct (array $tests)
+   public function __construct (array &$tests)
    {
+      // * Data
+      $this->tests = $tests;
       // * Meta
       $this->failed = 0;
       $this->passed = 0;
@@ -39,7 +48,18 @@ class Tests implements \Bootgly\Tests
       $this->started = microtime(true);
    }
 
-   public function summarize (Logs $Instance)
+   public function test (array &$specifications) : Test
+   {
+      $Test = new Test($this, $specifications);
+
+      if (key($this->tests) < $this->total) {
+         next($this->tests);
+      }
+
+      return $Test;
+   }
+
+   public function summarize ()
    {
       $failed = $this->failed;
       $passed = $this->passed;
@@ -54,7 +74,7 @@ class Tests implements \Bootgly\Tests
       $finished = microtime(true);
       $duration = number_format(round($finished - $started, 5), 6);
 
-      $Instance->log(<<<TESTS
+      $this->log(<<<TESTS
 
       Tests: @:e: {$failed} failed @;, @:n:{$skipped} skipped @;, @:s:{$passed} passed @;, {$total} total
       Time: {$duration}s

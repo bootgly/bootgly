@@ -11,12 +11,9 @@
 namespace Bootgly;
 
 
-use Bootgly\Logs;
-
-
 interface Tests
 {
-   public function __construct (array $tests);
+   public function __construct (array &$tests);
 
-   public function summarize (Logs $Instance);
+   public function summarize ();
 }
