@@ -199,10 +199,8 @@ class Client
             if (Client::$onInstance) {
                (Client::$onInstance)($this);
             } else {
-               $Socket = $this->connect();
-
-               if ($Socket) {
-                  $this::$Event->loop();
+               if ( $this->connect() ) {
+                  self::$Event->loop();
                }
             }
             break;
