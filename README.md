@@ -32,17 +32,18 @@ _ | _ | [Response (WIP)](/nodes/Web/HTTP/Server/Response.php) | _
 
 ### **Non-CLI SAPI (Apache, LiteSpeed, Nginx, etc)**
 
-1) Clone this repository
-2) Rename `projects/web.constructor.php.example` to `projects/web.constructor.php`
-3) Enable Rewrite
+1) Enable Rewrite;
+2) Rename `projects/web.constructor.php.example` to `projects/web.constructor.php`;
+3) Configure Web constructor in `projects/web.constructor.php` file;
+4) Run the Non-CLI HTTP Server.
 
 ### **CLI SAPI**
 
 in Linux OS:
 
-- Check `server.http.php` file;
-- Rename `projects\sapi.http.constructor.php.example` to `projects\sapi.http.constructor.php`;
-- Run the server:
+1) Configure Bootgly HTTP Server in `server.http.php` file;
+2) Configure SAPI constructor in `projects/sapi.http.constructor.php` file;
+3) Run the Bootgly HTTP Server in the terminal:
 
 `php server.http.php`
 
