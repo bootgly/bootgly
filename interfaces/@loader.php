@@ -1,7 +1,8 @@
 <?php
 // ! CLI
 require 'CLI.php';
-require 'CLI/@/Logger/Logging.php'; // @traits
+require 'CLI/@/Logger/Logging.php'; // @trait
+require 'CLI/@/Tester/Tests.php'; // @inteface
 // ? Command
 require 'CLI/Command.php';
 // ? Console

@@ -56,7 +56,7 @@ trait Logging
    public const LOG_END_OF = "\033[0m";
 
 
-   protected function log ($message, int $level = self::LOG_DEFAULT_LEVEL) : true
+   public function log ($message, int $level = self::LOG_DEFAULT_LEVEL) : true
    {
       if (Logger::$display === Logger::DISPLAY_NONE) {
          return true;

@@ -1,6 +1,7 @@
 <?php
 // @interfaces
 require 'Logs.php';
+require 'Tests.php';
 
 // ! Benchmark
 require 'Benchmark.php';

@@ -11,6 +11,12 @@
 namespace Bootgly\Web\HTTP;
 
 use Bootgly\Logger;
+
+// extend
+use Bootgly\CLI\_\ {
+   Tester\Tests
+};
+
 use Bootgly\SAPI;
 use Bootgly\Web;
 
@@ -236,14 +242,8 @@ class Server extends TCP\Server implements HTTP
             // @ Get test -suite-
             $tests = SAPI::$tests[self::class];
 
-            // @ Init test variables
-            // stats
-            $passed = 0;
-            $failed = 0;
-            $skipped = 0;
-            $total = count($tests);
-            // status
-            $started = microtime(true);
+            // @ Init tests
+            $Tests = new Tests($tests);
 
             $TCPServer->log('@\;');
 
@@ -252,26 +252,20 @@ class Server extends TCP\Server implements HTTP
                $spec = SAPI::$Tests[self::class][$index];
 
                if (! $spec || ! is_array($spec) || count($spec) < 4) {
-                  $skipped++;
+                  $Tests->skipped++;
                   continue;
-               };
+               }
 
                $separator = @$spec['separator'] ?? null;
                if ($separator) {
-                  $TCPServer->log(
-                     '-----------------' . $separator . '----------------- @\;'
-                  );
+                  $TCPServer->log('-----------------' . $separator . '----------------- @\;');
                }
 
                // ! Server
                $responseLength = @$spec['response.length'] ?? null;
                // ! Client
-               // @ boot
-               $capi = $spec['capi']; // @ Set Client API
-               // @ prepare
-               $host = $TCPClient->host . ':' . $TCPClient->port;
                // @ request
-               $requestData = $capi($host);
+               $requestData = $spec['capi']($TCPClient->host . ':' . $TCPClient->port);
                $requestLength = strlen($requestData);
 
                // @ Send Request to Server
@@ -287,28 +281,25 @@ class Server extends TCP\Server implements HTTP
                   }
 
                   // @ Execute assert
-                  $assert = $spec['assert']; // @ Get assert
-                  $except = $spec['except']; // @ Get except
-
                   ob_start();
-                  $result = $assert($input);
+                  $result = $spec['assert']($input);
                   $debugged = ob_get_clean();
 
                   // @ Show result
                   if ($result === true && $Connection->expired === false) {
-                     $passed++;
+                     $Tests->passed++;
 
                      $TCPServer->log(
                         "\033[1;37;42m PASS \033[0m - " 
                         . '✅ ' . "\033[90m" . $testing . "\033[0m" . PHP_EOL
                      );
                   } else {
-                     $failed++;
+                     $Tests->failed++;
 
                      $TCPServer->log(
                         "\033[1;37;41m FAIL \033[0m - " 
                         . '❌ ' . $testing 
-                        . " -> \"\033[91m" . $except() . "\033[0m\"" . ':'
+                        . " -> \"\033[91m" . $spec['except']() . "\033[0m\"" . ':'
                         . $debugged . PHP_EOL
                      );
 
@@ -317,17 +308,7 @@ class Server extends TCP\Server implements HTTP
                }
             }
 
-            $finished = microtime(true);
-            $spent = number_format(round($finished - $started, 5), 6);
-
-            // @ Show Test summary
-            $TCPServer->log(<<<TESTS
-
-            Tests: @:e: {$failed} failed @;, @:n:{$skipped} skipped @;, @:s:{$passed} passed @;, {$total} total
-            Time: {$spent}s
-            \033[90mRan all tests.\033[0m
-
-            TESTS);
+            $Tests->summarize($TCPServer);
 
             // @ Reset CLI Logger
             Logger::$display = Logger::DISPLAY_MESSAGE;

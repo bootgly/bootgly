@@ -13,13 +13,14 @@ namespace Bootgly\Web\TCP;
 
 // use
 use Bootgly\Debugger;
+use Bootgly\Logger;
+use Bootgly\Logs;
 use Bootgly\SAPI;
 use Bootgly\OS\Process\Timer;
 // extend
 use Bootgly\CLI\_\ {
    Logger\Logging
 };
-use Bootgly\Logger;
 use Bootgly\Web\_\ {
    Events\Select
 };
@@ -34,7 +35,7 @@ use Bootgly\Web\TCP\ {
 };
 
 
-class Server implements Servers
+class Server implements Servers, Logs
 {
    use Logging;
 
