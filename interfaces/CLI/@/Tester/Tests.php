@@ -45,6 +45,8 @@ class Tests implements \Bootgly\Tests
       $this->total = count($tests);
       // @ Time
       $this->started = microtime(true);
+
+      $this->log('@\;');
    }
 
    public function test (array &$specifications) : Test

@@ -235,16 +235,13 @@ class Server extends TCP\Server implements HTTP
             }
          },
          // on Connection connect
-         connect: static function ($Socket, $Connection) use ($TCPServer, $TCPClient) {
+         connect: static function ($Socket, $Connection) use ($TCPClient) {
             Logger::$display = Logger::DISPLAY_MESSAGE;
 
-            // @ Get test -suite-
+            // @ Get test files
             $tests = SAPI::$tests[self::class];
 
-            // @ Init Tests
             $Tests = new Tests($tests);
-
-            $TCPServer->log('@\;');
 
             // @ Run test cases
             foreach ($tests as $index => $value) {
