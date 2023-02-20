@@ -222,18 +222,9 @@ class Server extends TCP\Server implements HTTP
       $TCPClient = new Client;
       $TCPClient->configure(
          host: $TCPServer->host === '0.0.0.0' ? '127.0.0.1' : $TCPServer->host,
-         port: $TCPServer->port,
-         workers: 0
+         port: $TCPServer->port
       );
       $TCPClient->on(
-         // on Worker instance 
-         instance: function ($Client) {
-            $Socket = $Client->connect();
-
-            if ($Socket) {
-               $Client::$Event->loop();
-            }
-         },
          // on Connection connect
          connect: static function ($Socket, $Connection) use ($TCPClient) {
             Logger::$display = Logger::DISPLAY_MESSAGE;
@@ -263,7 +254,6 @@ class Server extends TCP\Server implements HTTP
                // ? Request
                $requestData = $spec['capi']($TCPClient->host . ':' . $TCPClient->port);
                $requestLength = strlen($requestData);
-
                // @ Send Request to Server
                $Connection::$output = $requestData;
                if ( ! $Connection->write($Socket, $requestLength) ) {
@@ -274,7 +264,6 @@ class Server extends TCP\Server implements HTTP
                // ? Response
                $timeout = 2;
                $input = '';
-
                // @ Get Response from Server
                if ( $Connection->read($Socket, $responseLength, $timeout) ) {
                   $input = $Connection::$input;
@@ -282,7 +271,6 @@ class Server extends TCP\Server implements HTTP
 
                // @ Execute Test assert
                $Test->assert($input);
-
                // @ Output Test result
                if (! $Connection->expired && $Test->success) {
                   $Test->pass();

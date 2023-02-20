@@ -150,7 +150,7 @@ class Client
       }
    }
 
-   public function configure (string $host, int $port, int $workers)
+   public function configure (string $host, int $port, int $workers = 0)
    {
       self::$status = self::STATUS_CONFIGURING;
 
@@ -198,6 +198,12 @@ class Client
          case self::MODE_DEFAULT:
             if (Client::$onInstance) {
                (Client::$onInstance)($this);
+            } else {
+               $Socket = $this->connect();
+
+               if ($Socket) {
+                  $this::$Event->loop();
+               }
             }
             break;
          case self::MODE_MONITOR:
