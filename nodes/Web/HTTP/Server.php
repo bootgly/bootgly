@@ -79,12 +79,12 @@ class Server extends TCP\Server implements HTTP
          '1.2.1-respond_with_status_500_no_body',
          // ! Header
          // Content-Type
-         '1.3-respond_with_header_content_text_plain',
+         '1.3-respond_with_content_type_text_plain',
          // ? Header \ Cookie
-         '1.4-respond_with_header_cookies',
+         '1.4-respond_with_set_cookies',
          // ! Content
          // @ send
-         '1.5-send_in_json',
+         '1.5-send_content_in_json',
          // @ upload
          '1.6-upload_small_file',
          '1.6.1.1-upload_file_with_offset_length_1',
@@ -255,6 +255,13 @@ class Server extends TCP\Server implements HTTP
                   $skipped++;
                   continue;
                };
+
+               $separator = @$spec['separator'] ?? null;
+               if ($separator) {
+                  $TCPServer->log(
+                     '-----------------' . $separator . '----------------- @\;'
+                  );
+               }
 
                // ! Server
                $responseLength = @$spec['response.length'] ?? null;
