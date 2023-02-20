@@ -71,51 +71,54 @@ class Server extends TCP\Server implements HTTP
       }
    }
 
-   public static function boot ()
+   public static function boot (bool $production = true, bool $test = false)
    {
       // * Config
-      SAPI::$production = \Bootgly\HOME_DIR . 'projects/sapi.http.constructor.php';
+      if ($production)
+         SAPI::$production = \Bootgly\HOME_DIR . 'projects/sapi.http.constructor.php';
       // * Data
-      SAPI::$tests[self::class] = [
-         '1.1-respond_hello_world',
-         // ! Meta
-         // status
-         '1.2-respond_with_status_302',
-         '1.2.1-respond_with_status_500_no_body',
-         // ! Header
-         // Content-Type
-         '1.3-respond_with_content_type_text_plain',
-         // ? Header \ Cookie
-         '1.4-respond_with_set_cookies',
-         // ! Content
-         // @ send
-         '1.5-send_content_in_json',
-         // @ upload
-         '1.6-upload_small_file',
-         '1.6.1.1-upload_file_with_offset_length_1',
-         '1.6.2.1-upload_file_with_range-requests_1',
-         '1.6.3-upload_large_file'
-      ];
-      // * Meta
-      SAPI::$Tests[self::class] = [];
-
-      foreach (SAPI::$tests[self::class] as $test) {
-         $file = __DIR__ . '/Server/tests/' . $test . '.test.php';
-
-         // @ Reset Cache of Test case file
-         if ( function_exists('opcache_invalidate') )
-            opcache_invalidate($file, true);
-         clearstatcache(false, $file);
-
-         // @ Load Test case from file
-         try {
-            $spec = @require $file;
-         } catch (\Throwable) {
-            $spec = false;
+      if ($test) {
+         SAPI::$tests[self::class] = [
+            '1.1-respond_hello_world',
+            // ! Meta
+            // status
+            '1.2-respond_with_status_302',
+            '1.2.1-respond_with_status_500_no_body',
+            // ! Header
+            // Content-Type
+            '1.3-respond_with_content_type_text_plain',
+            // ? Header \ Cookie
+            '1.4-respond_with_set_cookies',
+            // ! Content
+            // @ send
+            '1.5-send_content_in_json',
+            // @ upload
+            '1.6-upload_small_file',
+            '1.6.1.1-upload_file_with_offset_length_1',
+            '1.6.2.1-upload_file_with_range-requests_1',
+            '1.6.3-upload_large_file'
+         ];
+         // * Meta
+         SAPI::$Tests[self::class] = [];
+   
+         foreach (SAPI::$tests[self::class] as $case) {
+            $file = __DIR__ . '/Server/tests/' . $case . '.test.php';
+   
+            // @ Reset Cache of Test case file
+            if ( function_exists('opcache_invalidate') )
+               opcache_invalidate($file, true);
+            clearstatcache(false, $file);
+   
+            // @ Load Test case from file
+            try {
+               $spec = @require $file;
+            } catch (\Throwable) {
+               $spec = false;
+            }
+      
+            // @ Set Closure to SAPI Tests
+            SAPI::$Tests[self::class][] = $spec;
          }
-
-         // @ Set Closure to SAPI Tests
-         SAPI::$Tests[self::class][] = $spec;
       }
 
       SAPI::boot(true);
@@ -218,6 +221,8 @@ class Server extends TCP\Server implements HTTP
    protected static function test ($TCPServer)
    {
       Logger::$display = Logger::DISPLAY_NONE;
+
+      self::boot(production: false, test: true);
 
       $TCPClient = new Client;
       $TCPClient->configure(

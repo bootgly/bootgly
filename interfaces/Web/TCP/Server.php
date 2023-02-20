@@ -154,7 +154,7 @@ class Server implements Servers, Logs
          case '@test init':
             SAPI::$mode = SAPI::MODE_TEST;
             if (self::$Application) {
-               self::$Application::boot();
+               self::$Application::boot(production: false, test: true);
             }
             break;
          case '@test':
