@@ -101,7 +101,8 @@ trait Logging
       // @ Set datetime
       $datetime = '';
       if (Logger::$display >= Logger::DISPLAY_MESSAGE_DATETIME) {
-         $datetime = "\033[90m" . date(DATE_ATOM) . ': ' . "\033[0m";
+         $DateTime = new \DateTime();
+         $datetime = "\033[90m" . $DateTime->format('Y-m-d\TH:i:s.uP') . ': ' . "\033[0m";
       }
 
       // @ Format and set message
