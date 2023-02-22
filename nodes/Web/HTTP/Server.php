@@ -107,13 +107,13 @@ class Server extends TCP\Server implements HTTP
       SAPI::boot(true);
    }
 
-   public static function decode (Packages $Package, string &$buffer, int $length)
+   public static function decode (Packages $Package, string $input, int $length)
    {
       static $inputs = []; // @ Instance local cache
 
       // @ Check local cache and return
-      if ( $length <= 512 && isSet($inputs[$buffer]) ) {
-         #Server::$Request = $inputs[$buffer];
+      if ( $length <= 512 && isSet($inputs[$input]) ) {
+         #Server::$Request = $inputs[$input];
          return $length;
       }
 
@@ -126,7 +126,7 @@ class Server extends TCP\Server implements HTTP
          // @ Finish filling the Request Content raw with TCP read buffer
          $Content = &$Request->Content;
 
-         $Content->raw .= $buffer;
+         $Content->raw .= $input;
          $Content->downloaded += $length;
 
          if ($Content->length > $Content->downloaded) {
@@ -150,8 +150,8 @@ class Server extends TCP\Server implements HTTP
 
       // @ Write to local cache
       if ($length <= 512) {
-         #$inputs[$buffer] = clone $Request;
-         $inputs[$buffer] = $length;
+         #$inputs[$input] = clone $Request;
+         $inputs[$input] = $length;
 
          if (count($inputs) > 1) { // @ Cache only the last Request?
             unSet($inputs[key($inputs)]);
@@ -160,7 +160,7 @@ class Server extends TCP\Server implements HTTP
 
       // ! Request
       // @ Boot HTTP Request
-      return $Request->boot($Package, $buffer, $length); // @ Return Request Content length
+      return $Request->boot($Package, $input, $length); // @ Return Request length
    }
    public static function encode (Packages $Package, &$length)
    {

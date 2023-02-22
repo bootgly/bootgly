@@ -180,7 +180,7 @@ abstract class Packages implements Web\Packages
 
       // @ Write data
       if (Server::$Application) { // @ Decode Application Data if exists
-         $received = Server::$Application::decode($this, $buffer, $received);
+         $received = Server::$Application::decode($this, $input, $received);
       }
 
       if ($received) {
@@ -258,7 +258,7 @@ abstract class Packages implements Web\Packages
       $read = 0;   // Socket read
       $stored = 0; // File size stored
 
-      // @ Check free space of dir of file
+      // @ Check free space in dir of file
       try {
          if (disk_free_space(dirname($file)) < $length) {
             return false;
