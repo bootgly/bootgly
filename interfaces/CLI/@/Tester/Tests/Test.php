@@ -92,7 +92,7 @@ class Test
       $this->log(
          "\033[1;37;42m PASS \033[0m - " 
          . '✅ ' . "\033[90m" . $this->test . "\033[0m" 
-         . "\033[35m +" . $time . "s\033[0m" . PHP_EOL
+         . "\033[1;35m +" . $time . "s\033[0m" . PHP_EOL
       );
    }
    public function fail ()
