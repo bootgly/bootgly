@@ -43,6 +43,8 @@ abstract class Packages implements Web\Packages
    public array $reading;
    public array $writing;
    public array $callbacks;
+   // @ Expiration
+   public bool $expired;
 
 
    public function __construct (Connection &$Connection)
@@ -61,6 +63,8 @@ abstract class Packages implements Web\Packages
       $this->reading = [];
       $this->writing = [];
       $this->callbacks = [&self::$input];
+      // @ Expiration
+      $this->expired = false;
    }
 
    public function fail ($Socket, string $operation, $result)
@@ -99,11 +103,43 @@ abstract class Packages implements Web\Packages
       // TODO (only fread return the data decrypted when using SSL context)
    }
 
-   public function read (&$Socket) : bool
+   public function read (&$Socket, ? int $length = null, ? int $timeout = null) : bool
    {
       try {
-         #$buffer = @fread($Socket, 65535); // Works with SSL context
-         $buffer = @stream_socket_recvfrom($Socket, 65535); // Does not works with SSL context
+         $input = '';
+         $received = 0; // @ Bytes received from client
+         $total = $length ?? 0; // @ Total length of packet = the expected length of packet or 0
+
+         if ($length > 0 || $timeout > 0) {
+            $started = microtime(true);
+         }
+
+         do {
+            $buffer = @fread($Socket, $length ?? 65535);
+            #$buffer = @stream_socket_recvfrom($Socket, $length ?? 65535);
+
+            if ($buffer === false) break;
+            if ($buffer === '') {
+               if (! $timeout > 0 || microtime(true) - $started >= $timeout) {
+                  $this->expired = true;
+                  break;
+               }
+
+               continue; // TODO check EOF?
+            }
+
+            $input .= $buffer;
+
+            $bytes = strlen($buffer);
+            $received += $bytes;
+
+            if ($length) {
+               $length -= $bytes;
+               continue;
+            }
+
+            break;
+         } while ($received < $total || $total === 0);
       } catch (\Throwable) {
          $buffer = false;
       }
@@ -122,7 +158,7 @@ abstract class Packages implements Web\Packages
       }
 
       // @ On success
-      if (self::$input !== $buffer) {
+      if (self::$input !== $input) {
          $this->changed = true;
       } else {
          $this->changed = false;
@@ -130,26 +166,24 @@ abstract class Packages implements Web\Packages
 
       // @ Handle cache and set Input
       if ($this->cache === false || $this->changed === true) {
-         self::$input = $buffer;
+         self::$input = $input;
       }
 
       // @ Set Stats (disable to max performance in benchmarks)
-      $length = strlen($buffer);
-
       if (Connections::$stats) {
          // Global
          Connections::$reads++;
-         Connections::$read += $length;
+         Connections::$read += $received;
          // Per client
          #Connections::$Connections[(int) $Socket]['reads']++;
       }
 
       // @ Write data
       if (Server::$Application) { // @ Decode Application Data if exists
-         $length = Server::$Application::decode($this, $buffer, $length);
+         $received = Server::$Application::decode($this, $buffer, $received);
       }
 
-      if ($length) {
+      if ($received) {
          $this->write($Socket);
       }
 
