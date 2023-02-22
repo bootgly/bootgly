@@ -1,4 +1,4 @@
-# Bootgly PHP Framework (v0.0.1-pre-alpha)
+# Bootgly PHP Framework
 
 > Full Stack PHP Framework for Multi Projects (WIP)
 
