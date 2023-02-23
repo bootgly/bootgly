@@ -227,7 +227,7 @@ class Process
 
    public function fork (int $workers)
    {
-      $this->log("forking $workers workers... ", self::LOG_INFO_LEVEL);
+      $this->log("forking $workers workers... ", self::LOG_NOTICE_LEVEL);
 
       $script = HOME_DIR . $_SERVER['PHP_SELF'];
 
@@ -243,7 +243,7 @@ class Process
             cli_set_process_title('BootglyWebServer: child process (Worker #' . self::$index . ')');
 
             // @ Set Logging display
-            Logger::$display = Logger::DISPLAY_MESSAGE_DATETIME_LEVEL;
+            Logger::$display = Logger::DISPLAY_MESSAGE_WHEN_ID;
 
             // @ Create stream socket server
             $this->Server->instance();

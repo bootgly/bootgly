@@ -30,18 +30,18 @@ switch ($name) {
       $errors[1] = self::$errors['read'];
       $errors[2] = self::$errors['write'];
 
-      $this->log("@\;==================== @:success: Worker #{$worker} @; ====================@\;");
+      $this->log("@\;==================== @:info: Worker #{$worker} @; ====================@\;");
       if ($connections > 0) {
          $this->log(<<<OUTPUT
-         Connections Accepted | @:info: {$connections} connection(s) @;
+         Connections Accepted | @:notice: {$connections} connection(s) @;
          Connection Errors    | @:error: {$errors[0]} error(s) @;
           ---------------------------------------------------
-         Data Reads Count     | @:info: {$reads} time(s) @;
-         Data Reads Bytes     | @:info: {$read} @;
+         Data Reads Count     | @:notice: {$reads} time(s) @;
+         Data Reads Bytes     | @:notice: {$read} @;
          Data Reads Errors    | @:error: {$errors[1]} error(s) @;
           ---------------------------------------------------
-         Data Writes Count    | @:info: {$writes} time(s) @;
-         Data Writes Bytes    | @:info: {$written} @;
+         Data Writes Count    | @:notice: {$writes} time(s) @;
+         Data Writes Bytes    | @:notice: {$written} @;
          Data Writes Errors   | @:error: {$errors[2]} error(s) @;@\;
          OUTPUT);
       } else {

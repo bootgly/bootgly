@@ -34,6 +34,7 @@ switch ($name) {
       $event = (new \ReflectionClass(self::$Event))->getName();
 
       $this->log(<<<OUTPUT
+
       =========================== Server Status ===========================
       @:i: Bootgly Server: @; {$server}
       @:i: Bootgly Server version: @; {$version}\t\t@:i: PHP version: @; {$php}
@@ -43,7 +44,8 @@ switch ($name) {
       @:i: Socket address: @; {$address}
 
       @:i: Event-loop: @; {$event}
-      =====================================================================@\\;
+      =====================================================================
+
       OUTPUT);
 
       break;

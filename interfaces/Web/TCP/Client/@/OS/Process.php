@@ -199,7 +199,7 @@ class Process
             cli_set_process_title('BootglyWebClient: child process (Worker #' . self::$index . ')');
 
             // @ Set Logging display
-            Logger::$display = Logger::DISPLAY_MESSAGE_DATETIME_LEVEL;
+            Logger::$display = Logger::DISPLAY_MESSAGE_WHEN_ID;
 
             // @ Call On Worker instance
             if (Client::$onInstance) {

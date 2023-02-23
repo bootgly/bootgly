@@ -104,6 +104,8 @@ class Server implements Servers, Logs
       $this->status = self::STATUS_BOOTING;
 
 
+      // @ Configure Logger
+      $this->Logger = new Logger(channel: 'Server');
       // @ Configure Debugger
       Debugger::$debug = true;
       Debugger::$print = true;
@@ -230,7 +232,7 @@ class Server implements Servers, Logs
 
       Logger::$display = Logger::DISPLAY_MESSAGE;
 
-      $this->log('Starting Server... ', self::LOG_INFO_LEVEL);
+      $this->log('@\;Starting Server...', self::LOG_NOTICE_LEVEL);
 
       // ! Process
       // ? Signals
@@ -243,7 +245,7 @@ class Server implements Servers, Logs
       $this->Process->fork($this->workers);
 
       // ... Continue to master process:
-      $this->log('@\\\;');
+      $this->log('@\;');
       $this->{'@status'};
 
       switch ($this->mode) {
@@ -343,7 +345,7 @@ class Server implements Servers, Logs
 
       Logger::$display = Logger::DISPLAY_MESSAGE;
 
-      $this->log('@\\\;Entering in CLI mode...@\;', self::LOG_SUCCESS_LEVEL);
+      $this->log('@\;Entering in CLI mode...@\;', self::LOG_INFO_LEVEL);
       $this->log('>_ Type `quit` to stop the Server or `help` to list commands.@\;');
       $this->log('>_ Autocompletation and history enabled.@\\\;', self::LOG_NOTICE_LEVEL);
 
@@ -383,7 +385,7 @@ class Server implements Servers, Logs
    {
       $this->status = self::STATUS_RUNNING;
 
-      $this->log('@\\\;Entering in Monitor mode...@\;', self::LOG_SUCCESS_LEVEL);
+      $this->log('@\;Entering in Monitor mode...@\;', self::LOG_INFO_LEVEL);
       $this->log('>_ Type `CTRL + Z` to enter in Interactive mode or `CTRL + C` to stop the Server.@\;');
 
       // @ Set time to hot reloading of sapi.*.constructor.php file
@@ -396,7 +398,7 @@ class Server implements Servers, Logs
       });
 
       // @ Set Logger to display messages, datetime and level
-      Logger::$display = Logger::DISPLAY_MESSAGE_DATETIME_LEVEL;
+      Logger::$display = Logger::DISPLAY_MESSAGE_WHEN_ID;
 
       // @ Loop
       while ($this->mode === self::MODE_MONITOR) {

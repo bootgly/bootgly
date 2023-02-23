@@ -77,7 +77,7 @@ class Tests implements \Bootgly\Tests
 
       $this->log(<<<TESTS
 
-      Tests: @:e: {$failed} failed @;, @:n:{$skipped} skipped @;, @:s:{$passed} passed @;, {$total} total
+      Tests: @:e: {$failed} failed @;, @:n:{$skipped} skipped @;, @:i:{$passed} passed @;, {$total} total
       Time: {$duration}s
       \033[90mRan all tests.\033[0m
 

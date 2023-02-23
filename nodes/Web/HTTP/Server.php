@@ -10,6 +10,7 @@
 
 namespace Bootgly\Web\HTTP;
 
+
 use Bootgly\Logger;
 
 // extend
@@ -53,6 +54,9 @@ class Server extends TCP\Server implements HTTP
       ];
 
       parent::__construct();
+
+      // @ Configure Logger
+      $this->Logger = new Logger(channel: 'Server.HTTP');
 
       self::$Request = new Request;
       self::$Response = new Response;

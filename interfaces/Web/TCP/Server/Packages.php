@@ -11,12 +11,12 @@
 namespace Bootgly\Web\TCP\Server;
 
 
+use Bootgly\Logger;
 use Bootgly\SAPI;
 
 use Bootgly\CLI\_\ {
    Logger\Logging // @trait
 };
-
 use Bootgly\Web; // @interface
 
 use Bootgly\Web\TCP\Server;
@@ -65,6 +65,9 @@ abstract class Packages implements Web\Packages
       $this->callbacks = [&self::$input];
       // @ Expiration
       $this->expired = false;
+
+      // @ Configure Logger
+      $this->Logger = new Logger(channel: __CLASS__);
    }
 
    public function fail ($Socket, string $operation, $result)

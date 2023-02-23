@@ -220,7 +220,7 @@ class Client
          Logger::$display = Logger::DISPLAY_MESSAGE;
       }
 
-      $this->log('@\\\;Entering in Monitor mode...@\;', self::LOG_SUCCESS_LEVEL);
+      $this->log('@\;Entering in Monitor mode...@\;', self::LOG_INFO_LEVEL);
       $this->log('>_ Type `CTRL + C` to stop the Client.@\;');
 
       // @ Loop
