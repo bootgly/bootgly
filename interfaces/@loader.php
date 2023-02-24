@@ -1,6 +1,7 @@
 <?php
 // ! CLI
 require 'CLI.php';
+require 'CLI/text/Formatting.php'; // @ trait
 require 'CLI/@/Logger/Logging.php'; // @trait
 require 'CLI/@/Tester/Tests.php';
 require 'CLI/@/Tester/Tests/Test.php';
@@ -8,7 +9,6 @@ require 'CLI/@/Tester/Tests/Test.php';
 require 'CLI/Command.php';
 // ? Console
 require 'CLI/Console.php';
-require 'CLI/Console/text/Formatting.php';
 // ? Output
 #require 'CLI/Output.php';
 // ? Router

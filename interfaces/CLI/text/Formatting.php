@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\CLI\Console\text;
+namespace Bootgly\CLI\text;
 
 
 trait Formatting

@@ -17,7 +17,7 @@ use Bootgly\Logger;
 trait Logging
 {
    use \Bootgly\Logging; // TODO remove; use interface instead.
-   use \Bootgly\CLI\Console\text\Formatting;
+   use \Bootgly\CLI\text\Formatting;
 
 
    // * Config
