@@ -667,14 +667,14 @@ class Response
    public function redirect (string $uri, $code = 302) // Code 302 = temporary; 301 = permanent;
    {
       $this->code = $code;
-      $this->Header->set('Location: ' . $uri);
+      $this->Header->set('Location: ', $uri);
       $this->sent = true;
    }
 
    public function authenticate (string $realm = 'Protected area') : self
    {
       if (Server::$Request->Header->get('X-Requested-With') !== 'XMLHttpRequest') {
-         $this->Header->set('WWW-Authenticate: Basic realm="'.$realm.'"');
+         $this->Header->set('WWW-Authenticate', 'Basic realm="'.$realm.'"');
       }
 
       $this->code = 401;

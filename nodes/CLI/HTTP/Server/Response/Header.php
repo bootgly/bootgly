@@ -146,7 +146,7 @@ class Header
       return (string) $this->fields[$name] ?? (string) $this->fields[strtolower($name)] ?? '';
    }
 
-   public function set (string $field, string $value = '') // TODO refactor
+   public function set (string $field, string $value)
    {
       $this->fields[$field] = $value;
    }
