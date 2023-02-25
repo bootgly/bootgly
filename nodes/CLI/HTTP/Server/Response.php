@@ -664,6 +664,13 @@ class Response
       return $this->raw;
    }
 
+   /**
+    * Sets the authentication headers for basic authentication with 401 (Unauthorized) HTTP status code.
+    *
+    * @param string $realm The realm string to set in the WWW-Authenticate header. Default is "Protected area".
+    *
+    * @return self Returns Response.
+    */
    public function authenticate (string $realm = 'Protected area') : self
    {
       $this->code = 401;
@@ -676,9 +683,9 @@ class Response
     * Redirects to a new URI.
     *
     * @param string $uri The new URI to redirect to.
-    * @param int $code The HTTP status code to use for the redirection. Default is 307 (Temporary Redirect).
+    * @param int $code The HTTP status code to use for the redirection. Default is 307 for GET (Temporary Redirect) and 303 (See Other) for POST.
     *
-    * @return self Returns Response
+    * @return self Returns Response.
     */
    public function redirect (string $uri, ? int $code = null): self
    {
