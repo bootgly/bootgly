@@ -49,8 +49,12 @@ class Tests implements \Bootgly\Tests
       $this->log('@\;');
    }
 
-   public function test (array &$specifications) : Test
+   public function test (? array &$specifications) : Test|false
    {
+      if ($specifications === null) {
+         return false;
+      }
+
       $Test = new Test($this, $specifications);
 
       if (key($this->tests) < $this->total) {
