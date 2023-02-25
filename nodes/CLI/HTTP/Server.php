@@ -74,9 +74,14 @@ class Server extends TCP\Server implements HTTP
             // * Meta
             SAPI::$Tests[self::class] = [];
       
-            foreach (SAPI::$tests[self::class] as $case) {
+            foreach (SAPI::$tests[self::class] as $index => $case) {
                $file = __DIR__ . '/Server/tests/' . $case . '.test.php';
-      
+
+               if (! file_exists($file) ) {
+                  unset(SAPI::$tests[self::class][$index]);
+                  continue;
+               }
+
                // @ Reset Cache of Test case file
                if ( function_exists('opcache_invalidate') )
                   opcache_invalidate($file, true);
@@ -86,7 +91,7 @@ class Server extends TCP\Server implements HTTP
                try {
                   $spec = @require $file;
                } catch (\Throwable) {
-                  $spec = false;
+                  $spec = null;
                }
          
                // @ Set Closure to SAPI Tests
@@ -177,8 +182,7 @@ class Server extends TCP\Server implements HTTP
       // @ Try to Invoke SAPI Closure
       try {
          (SAPI::$Handler)($Request, $Response);
-      } catch (\Throwable $Throwable) {
-         debug($Throwable->getMessage(), $Throwable->getFile(), $Throwable->getLine());
+      } catch (\Throwable) {
          $Response->Meta->status = 500; // @ Set 500 HTTP Server Error Response
 
          if ($Response->Content->raw === '') {
