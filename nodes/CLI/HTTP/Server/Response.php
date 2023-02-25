@@ -664,13 +664,6 @@ class Response
       return $this->raw;
    }
 
-   public function redirect (string $uri, $code = 302) // Code 302 = temporary; 301 = permanent;
-   {
-      $this->code = $code;
-      $this->Header->set('Location: ', $uri);
-      $this->sent = true;
-   }
-
    public function authenticate (string $realm = 'Protected area') : self
    {
       if (Server::$Request->Header->get('X-Requested-With') !== 'XMLHttpRequest') {
@@ -679,6 +672,14 @@ class Response
 
       $this->code = 401;
 
+      $this->sent = true;
+
+      return $this;
+   }
+   public function redirect (string $uri, $code = 302): self // Code 302 = temporary; 301 = permanent;
+   {
+      $this->code = $code;
+      $this->Header->set('Location', $uri);
       $this->sent = true;
 
       return $this;

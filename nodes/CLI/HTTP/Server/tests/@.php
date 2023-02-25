@@ -20,6 +20,8 @@ return [
       '1.6.2.1-upload_file_with_range-requests_1',
       '1.6.3-upload_large_file',
       // @ authenticate
-      '1.7.1-basic-authentication'
+      '1.7.1-basic-authentication',
+      // @ redirect
+      '1.8.1-redirect-with-302'
    ]
 ];
