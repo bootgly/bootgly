@@ -494,7 +494,7 @@ class Response
             break;
          default: // * HTTP Status Code || (string) $body
             if ($body === null) {
-               $this->end();
+               $this->sent = true;
                return $this;
             }
 
@@ -511,7 +511,7 @@ class Response
       // @ Output
       $this->Content->raw = $body ?? $this->body;
 
-      $this->end();
+      $this->sent = true;
 
       return $this;
    }
@@ -630,7 +630,7 @@ class Response
          'close' => $close
       ];
 
-      $this->end();
+      $this->sent = true;
 
       return $this;
    }
@@ -666,19 +666,20 @@ class Response
 
    public function redirect (string $uri, $code = 302) // Code 302 = temporary; 301 = permanent;
    {
-      // $this->code = $code;
-      header('Location: '.$uri, true, $code);
-      $this->end();
+      $this->code = $code;
+      $this->Header->set('Location: ' . $uri);
+      $this->sent = true;
    }
 
    public function authenticate (string $realm = 'Protected area')
    {
-      if (Server::$Request->headers['x-requested-with'] !== 'XMLHttpRequest') {
-         header('WWW-Authenticate: Basic realm="'.$realm.'"');
+      if (Server::$Request->Header->get('X-Requested-With') !== 'XMLHttpRequest') {
+         $this->Header->set('WWW-Authenticate: Basic realm="'.$realm.'"');
       }
 
       $this->code = 401;
-      // header('HTTP/1.0 401 Unauthorized');
+
+      $this->sent = true;
    }
 
    public function end (int|string|null $status = null)
