@@ -672,9 +672,39 @@ class Response
 
       return $this;
    }
-   public function redirect (string $uri, $code = 302): self // Code 302 = temporary; 301 = permanent;
+   /**
+    * Redirects to a new URI.
+    *
+    * @param string $uri The new URI to redirect to.
+    * @param int $code The HTTP status code to use for the redirection. Default is 307 (Temporary Redirect).
+    *
+    * @return self Returns Response
+    */
+   public function redirect (string $uri, ? int $code = null): self
    {
-      $this->code = $code;
+      // @ Set default code
+      if ($code === null) {
+         $code = match (Server::$Request->method) {
+            'POST' => 303, // See Other
+            'GET'  => 307, // Temporary Redirect
+            default => null
+         };
+      }
+
+      switch ($code) {
+         case 300: // Multiple Choices
+         case 301: // Moved Permanently
+         case 302: // Found (or Moved Temporarily)
+         case 303: // See Other
+         case 307: // Temporary Redirect
+         case 308: // Permanent Redirect
+            $this->code = $code;
+            break;
+         default:
+            // TODO throw invalid code;
+            return $this;
+      }
+
       $this->Header->set('Location', $uri);
       $this->sent = true;
 

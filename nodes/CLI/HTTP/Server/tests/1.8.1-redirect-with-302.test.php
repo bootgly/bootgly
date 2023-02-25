@@ -22,7 +22,7 @@ return [
 
       Bootgly::$Project->setPath();
 
-      return $Response->redirect('https://docs.bootgly.com/');
+      return $Response->redirect('https://docs.bootgly.com/', 302);
    },
    // Client API
    'capi' => function () {
