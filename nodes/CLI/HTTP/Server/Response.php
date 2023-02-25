@@ -8,16 +8,16 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\Web\HTTP\Server;
+namespace Bootgly\CLI\HTTP\Server;
 
 
 use const Bootgly\HOME_DIR;
 use Bootgly\File;
 use Bootgly\Bootgly;
-use Bootgly\Web\HTTP\Server;
-use Bootgly\Web\HTTP\Server\Response\Content;
-use Bootgly\Web\HTTP\Server\Response\Meta;
-use Bootgly\Web\HTTP\Server\Response\Header;
+use Bootgly\CLI\HTTP\Server;
+use Bootgly\CLI\HTTP\Server\Response\Content;
+use Bootgly\CLI\HTTP\Server\Response\Meta;
+use Bootgly\CLI\HTTP\Server\Response\Header;
 
 
 class Response
@@ -98,7 +98,7 @@ class Response
          // ? Response Meta
          case 'status':
          case 'code':
-            return http_response_code();
+            return $this->Meta->code;
          // ? Response Headers
          case 'headers':
             return $this->Header->fields;
@@ -127,7 +127,7 @@ class Response
       switch ($name) {
          case 'status':
          case 'code':
-            http_response_code($value);
+            $this->Meta->status = $value;
 
             return $this;
          default: // @ Set custom resource
@@ -182,6 +182,24 @@ class Response
       $this->prepare();
 
       return $this->process($x);
+   }
+
+   public function reset ()
+   {
+      /*
+      // * Data
+      $this->Content->raw = '';
+      $this->raw = '';
+      // * Meta
+      $this->chunked = false;
+      $this->encoded = false;
+      $this->stream = false;
+
+      $this->Meta->__construct();
+      $this->Header->__construct();
+      #$this->Content->__construct();
+      */
+      $this->__construct();
    }
 
    public function prepare (? string $resource = null)
@@ -336,11 +354,6 @@ class Response
        */
       $Request = &Server::$Request;
       $Response = &Server::$Response;
-      $Route = &Server::$Router->Route;
-      // TODO add variables dinamically according to loaded modules and loaded web classes
-
-      $API = Server::$Web->API ?? null;
-      $App = Server::$Web->App ?? null;
 
       // @ Output/Buffer start()
       ob_start();
@@ -348,7 +361,7 @@ class Response
       try {
          // @ Isolate context with anonymous static function
          (static function (string $__file__, ?array $__data__)
-            use ($Request, $Response, $Route, $API, $App) {
+            use ($Request, $Response) {
             if ($__data__ !== null) {
                extract($__data__);
             }
@@ -367,6 +380,42 @@ class Response
       }
 
       return $this;
+   }
+   public function compress (string $raw, string $method = 'gzip', int $level = 9, ? int $encoding = null)
+   {
+      $encoded = false;
+      $deflated = false;
+      $compressed = false;
+
+      try {
+         switch ($method) {
+            case 'gzip':
+               $encoded = @gzencode($raw, $level, $encoding);
+               break;
+            case 'deflate':
+               $deflated = @gzdeflate($raw, $level, $encoding);
+               break;
+            case 'compress':
+               $compressed = @gzcompress($raw, $level, $encoding);
+               break;
+         }
+      } catch (\Throwable) {}
+
+      if ($encoded) {
+         $this->encoded = true;
+         $this->Header->set('Content-Encoding', 'gzip');
+         return $encoded;
+      } else if ($deflated) {
+         $this->encoded = true;
+         $this->Header->set('Content-Encoding', 'deflate');
+         return $deflated;
+      } else if ($compressed) {
+         $this->encoded = true;
+         $this->Header->set('Content-Encoding', 'gzip');
+         return $compressed;
+      }
+
+      return false;
    }
 
    public function send ($body = null, ...$options): self
@@ -421,7 +470,6 @@ class Response
                case 'image/x-icon':
                case 'ico':
                   $this->Header->set('Content-Type', 'image/x-icon');
-                  $this->Header->set('Content-Length', $File->size);
 
                   $body = $File->contents;
 
@@ -433,15 +481,10 @@ class Response
 
                   $Request = &Server::$Request;
                   $Response = &Server::$Response;
-                  $Route = &Server::$Router->Route;
-
-                  // TODO add variables dinamically according to loaded modules and loaded web classes
-                  $API = Server::$Web->API ?? null;
-                  $App = Server::$Web->App ?? null;
 
                   // @ Isolate context with anonymous static function
                   (static function (string $__file__)
-                     use ($Request, $Response, $Route, $API, $App) {
+                     use ($Request, $Response) {
                      require $__file__;
                   })($File);
 
@@ -466,7 +509,7 @@ class Response
       }
 
       // @ Output
-      print $body ?? $this->body;
+      $this->Content->raw = $body ?? $this->body;
 
       $this->end();
 
@@ -503,16 +546,122 @@ class Response
       ]);
 
       // @ Send File Content
-      $this->Header->set('Content-Length', $File->size);
+
+      // @ Return null Response if client Purpose === prefetch
+      if (Server::$Request->Header->get('Purpose') === 'prefetch') {
+         $this->Meta->status = 204;
+         $this->Header->set('Cache-Control', 'no-store');
+         $this->Header->set('Expires', 0);
+         return $this;
+      }
+
+      // @ If file size < 2 MB set file content in the Response Content raw
+      if ($File->size <= 2 * 1024 * 1024) { // @ 2097152 bytes
+         $this->Content->raw = $File->read($File::CONTENTS_READ_METHOD);
+         return $this;
+      }
+
+      // @ Stream if the file is larger than 2 MB
+      $this->stream = true;
+
+      // @ Set Request range
+      // TODO move to Request
+      $range = [];
+      if ( $Range = Server::$Request->Header->get('Range') ) {
+         $range = Server::$Request->range($File->size, $Range);
+
+         switch ($range) {
+            case -2: // Malformed Range header string
+               $this->Meta->status = 400; // Bad Request
+               $this->Header->clean();
+               return $this;
+            case -1:
+               $this->Meta->status = 416; // Range Not Satisfiable
+               $this->Header->clean();
+               return $this;
+            default:
+               if ($range['type'] !== 'bytes') {
+                  $this->Meta->status = 416; // Range Not Satisfiable
+                  $this->Header->clean();
+                  return $this;
+               }
+
+               // TODO support multiple ranges
+               // TODO support negative ranges
+
+               $range = $range[0];
+               $offset = $range['start'];
+
+               if ($range['start'] === $range['end']) {
+                  $length = 1;                        
+               } else {
+                  $length = ($range['end'] - $range['start']) + 1;
+               }
+         }
+      }
+
+      // @ Set Content Length
+      $this->Content->length = ($length > 0) ? ($length) : ($File->size - $offset);
+      $this->Header->set('Content-Length', $this->Content->length);
+
+      // @ Set User range
+      if ( empty($range) ) {
+         $range['start'] = $offset;
+         $range['end'] = $this->Content->length;
+      }
+
+      // @ Set (HTTP/1.1): Range Requests Headers
+      if ($offset || $length) {
+         $this->Header->set('Accept-Ranges', 'bytes');
+         $this->Header->set('Content-Range', "bytes {$range['start']}-{$range['end']}/{$File->size}");
+
+         if ($this->Content->length !== $File->size)
+            $this->Meta->status = 206; // 206 Partial Content
+      }
+
+      // @ Build Response Header
       $this->Header->build();
 
-      flush();
-
-      $File->read(); // FIX MEMORY RAM USAGE OR LIMIT FILE SIZE TO UPLOAD
+      // @ Prepare Response files
+      $this->files[] = [
+         'file' => $File->File, // @ Set file path to open handler
+         'offset' => $range['start'],
+         'length' => $this->Content->length,
+         'close' => $close
+      ];
 
       $this->end();
 
       return $this;
+   }
+   public function output ($Package, &$length)
+   {
+      if (! $this->stream && ! $this->chunked && ! $this->encoded) {
+         // ? Response Content
+         $this->Content->length = strlen($this->Content->raw);
+         // ? Response Header
+         $this->Header->set('Content-Length', $this->Content->length);
+         // ? Response Meta
+         // ...
+      }
+
+      $this->raw = <<<HTTP_RAW
+      {$this->Meta->raw}\r
+      {$this->Header->raw}\r
+      \r
+      {$this->Content->raw}
+      HTTP_RAW;
+
+      if ($this->stream) {
+         $length = strlen($this->Meta->raw) + 1 + strlen($this->Header->raw) + 5;
+
+         $Package->writing = $this->files;
+
+         $this->files = [];
+         $this->stream = false;
+      }
+
+      return $this->raw;
    }
 
    public function redirect (string $uri, $code = 302) // Code 302 = temporary; 301 = permanent;
@@ -534,8 +683,7 @@ class Response
 
    public function end ($status = null)
    {
+      $this->status = $status;
       $this->sent = true;
-
-      exit($status);
    }
 }

@@ -2,19 +2,18 @@
 use Bootgly\Bootgly;
 use Bootgly\Debugger;
 // SAPI
-use Bootgly\Web\HTTP\Server\Request;
-use Bootgly\Web\HTTP\Server\Response;
-use Bootgly\Web\HTTP\Server\Router;
+use Bootgly\CLI\HTTP\Server\Request;
+use Bootgly\CLI\HTTP\Server\Response;
 // CAPI?
-#use Bootgly\Web\HTTP\Client\Request;
-#use Bootgly\Web\HTTP\Client\Response;
+#use Bootgly\CLI\HTTP\Client\Request;
+#use Bootgly\CLI\HTTP\Client\Response;
 // TODO ?
 
 return [
    // ! Server
-   'response.length' => 3101873,
+   'response.length' => 82906,
    // API
-   'sapi' => function (Request $Request, Response $Response, Router $Router) : Response {
+   'sapi' => function (Request $Request, Response $Response) : Response {
       Bootgly::$Project->vendor = '@bootgly/';
       Bootgly::$Project->container = 'web/';
       Bootgly::$Project->package = 'examples/';
@@ -22,19 +21,20 @@ return [
 
       Bootgly::$Project->setPath();
 
-      return $Response('statics/screenshot.gif')->upload(close: false);
+      return $Response('statics/image1.jpg')->upload(close: false);
    },
    // ! Client
    // API
    'capi' => function () {
       // return $Request->get('//header/changed/1');
-      return "GET /test/download/large_file/1 HTTP/1.0\r\n\r\n";
+      return "GET /test/download/small_file/1 HTTP/1.0\r\n\r\n";
    },
 
+   'header' => '@upload',
    'assert' => function ($response) : bool {
       // ! Asserts
       // @ Assert length of response
-      $expected = 3101873;
+      $expected = 82906;
 
       if (strlen($response) !== $expected) {
          Debugger::$labels = ['HTTP Response length:', 'Expected:'];

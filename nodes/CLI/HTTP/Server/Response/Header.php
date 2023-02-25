@@ -8,10 +8,10 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\Web\HTTP\Server\Response;
+namespace Bootgly\CLI\HTTP\Server\Response;
 
 
-use Bootgly\Web\HTTP\Server\Response\Header\Cookie;
+use Bootgly\CLI\HTTP\Server\Response\Header\Cookie;
 
 
 class Header
@@ -55,8 +55,6 @@ class Header
          // * Data
          case 'fields':
          case 'headers':
-            $this->fields = apache_response_headers();
-
             return $this->fields;
          // * Meta
          case 'queued':
@@ -71,8 +69,6 @@ class Header
             return $this->raw;
 
          case 'sent':
-            return headers_sent();
-
             return $this->sent;
 
          default:
@@ -153,8 +149,6 @@ class Header
    public function set (string $field, string $value = '') // TODO refactor
    {
       $this->fields[$field] = $value;
-
-      header($field . ': ' . $value, true);
    }
    public function append (string $field, string $value = '', ? string $separator = ', ') // TODO refactor
    {
@@ -165,8 +159,6 @@ class Header
       } else {
          $this->fields[$field] = $value;
       }
-
-      header($field . ': ' . $value, false);
    }
    public function queue (string $field, string $value = '')
    {

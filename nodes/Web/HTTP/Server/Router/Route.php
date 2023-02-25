@@ -12,6 +12,7 @@ namespace Bootgly\Web\HTTP\Server\Router;
 
 
 use Bootgly\Debugger;
+use Bootgly\Web\HTTP\Server;
 use Bootgly\Web\HTTP\Server\Router;
 
 use function Bootgly\__String;
@@ -110,7 +111,7 @@ final class Route
 
          case 'base':
          case 'prefix': // TODO refactor
-            $this->Router->Request->base = $value; break;
+            Server::$Request->base = $value; break;
 
          default:
             $this->$name = $value;

@@ -14,13 +14,10 @@ namespace Bootgly;
 require_once '@/autoload.php';
 
 
-$Web = new Web;
+use Bootgly\CLI\HTTP;
 
 
-use Bootgly\Web\HTTP;
-
-
-$HTTPServer = new HTTP\Server($Web);
+$HTTPServer = new HTTP\Server;
 $HTTPServer->configure(
    host: '0.0.0.0',
    port: 8080,

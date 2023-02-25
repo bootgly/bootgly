@@ -2,38 +2,35 @@
 use Bootgly\Bootgly;
 use Bootgly\Debugger;
 // SAPI
-use Bootgly\Web\HTTP\Server\Request;
-use Bootgly\Web\HTTP\Server\Response;
-use Bootgly\Web\HTTP\Server\Router;
+use Bootgly\CLI\HTTP\Server\Request;
+use Bootgly\CLI\HTTP\Server\Response;
 // CAPI?
-#use Bootgly\Web\HTTP\Client\Request;
-#use Bootgly\Web\HTTP\Client\Response;
+#use Bootgly\CLI\HTTP\Client\Request;
+#use Bootgly\CLI\HTTP\Client\Response;
 // TODO ?
 
 return [
    // Server API
-   'sapi' => function (Request $Request, Response $Response, Router $Router) : Response {
-      $Response->Header->set('Content-Type', 'text/plain');
+   'sapi' => function (Request $Request, Response $Response) : Response {
       return $Response(content: 'Hello World!');
    },
    // Client API
    'capi' => function () {
-      // return $Request->get('//header/changed/1');
-      return "GET /header/changed/1 HTTP/1.0\r\n\r\n";
+      // return $Request->get('/');
+      return "GET / HTTP/1.0\r\n\r\n";
    },
 
-   'separator' => 'Response Header',
    'assert' => function ($response) : bool {
       /*
-      return $Response->code === '500'
-      && $Response->body === ' ';
+      return $Response->status === '200 OK'
+      && $Response->body === 'Hello World!';
       */
 
       $expected = <<<HTML_RAW
       HTTP/1.1 200 OK\r
       Server: Bootgly\r
-      Content-Type: text/plain\r
       Content-Length: 12\r
+      Content-Type: text/html; charset=UTF-8\r
       \r
       Hello World!
       HTML_RAW;
@@ -49,6 +46,6 @@ return [
    },
 
    'except' => function () : string {
-      return 'Header Content-Type not matched';
+      return 'Response not matched';
    }
 ];

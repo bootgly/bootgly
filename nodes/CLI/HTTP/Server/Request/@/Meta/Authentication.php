@@ -8,16 +8,19 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\Web\HTTP\Client;
+namespace Bootgly\CLI\HTTP\Server\Request\_\Meta;
 
 
-use Bootgly\Web\Client;
-
-use Bootgly\Path;
-use Bootgly\Requestable;
+use Bootgly\CLI\HTTP\Server\Request\_\Meta;
 
 
-class Request
+final class Authentication
 {
+   public Meta $Meta;
 
+
+   public function __construct (Meta $Meta)
+   {
+      $this->Meta = $Meta;
+   }
 }

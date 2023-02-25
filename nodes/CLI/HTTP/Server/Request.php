@@ -8,21 +8,25 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\Web\HTTP\Server;
+namespace Bootgly\CLI\HTTP\Server;
 
 
+use Closure;
+use const Bootgly\HOME_DIR;
+use Bootgly\Debugger;
 use Bootgly\Path;
 
-use Bootgly\Web\protocols\HTTP\Request\Ranging;
-
-use Bootgly\Web\HTTP\Server;
-use Bootgly\Web\HTTP\Server\Request\_\ {
+use Bootgly\Web\TCP\Server\Packages;
+use Bootgly\CLI\HTTP\Server;
+use Bootgly\CLI\HTTP\Server\Request\_\ {
    Meta,
    Content,
    Header
 };
 
-use Bootgly\Web\HTTP\Server\Request\Session;
+use Bootgly\CLI\HTTP\Server\Request\Downloader;
+use Bootgly\CLI\HTTP\Server\Request\Session;
+use Bootgly\Web\protocols\HTTP\Request\Ranging;
 
 /**
  * * Data
@@ -87,6 +91,7 @@ class Request
 {
    use Ranging;
 
+
    // * Config
    private string $base;
    // * Data
@@ -96,7 +101,7 @@ class Request
    // ...
    // public string $length;
 
-   public Session $Session;
+   private Downloader $Downloader;
 
 
    public function __construct ()
@@ -109,7 +114,7 @@ class Request
       /* ... dynamically ... */
       // * Meta
 
-      $this->Session = new Session;
+      $this->Downloader = new Downloader($this);
    }
 
    public function __get ($name)
@@ -122,29 +127,24 @@ class Request
 
          // * Data
          case 'ip': // TODO IP->...
-         case 'address':
+         case 'address': // @ CLI OK | Non-CLI OK
             // @ Parse CloudFlare remote ip headers
             if ( isSet($this->headers['cf-connecting-ip']) ) {
                return $this->headers['cf-connecting-ip'];
             }
 
             return $_SERVER['REMOTE_ADDR'];
-         case 'port':
+         case 'port': // @ CLI OK | Non-CLI OK
             return $_SERVER['REMOTE_PORT'];
 
-         case 'scheme':
-            if ( isSet($_SERVER['HTTP_X_FORWARDED_PROTO']) ) {
-               $scheme = $_SERVER['HTTP_X_FORWARDED_PROTO'];
-            } else if ( ! empty($_SERVER['HTTPS']) ) {
-               $scheme = 'https';
-            } else {
-               $scheme = 'http';
-            }
+         case 'scheme': // @ CLI ? | Non-CLI OK?
+            // TODO CLI
+            $scheme = '';
 
             return $this->scheme = $scheme;
 
          // ! HTTP
-         case 'raw':
+         case 'raw': // TODO refactor
             $raw = "$this->method $this->uri $this->protocol\r\n";
             $raw .= $this->Header->raw;
             $raw .= "\r\n";
@@ -167,10 +167,7 @@ class Request
          case 'uri':
          case 'URI': // TODO with __String/URI?
          case 'identifier': // @ base
-            if (\PHP_SAPI !== 'cli')
-               $identifier = @$_SERVER['REQUEST_URI'];
-            else
-               $identifier = $this->uri ?? '';
+            $identifier = $this->uri ?? '';
 
             $this->uri = $identifier;
             // $this->URI = $identifier;
@@ -244,7 +241,7 @@ class Request
             return $this->Header = new Header;
          case 'headers':
             return $this->Header->fields;
-         case 'language':
+         case 'language': // TODO refactor
             $httpAcceptLanguage = @$_SERVER['HTTP_ACCEPT_LANGUAGE'];
 
             if ($httpAcceptLanguage === null) {
@@ -288,10 +285,6 @@ class Request
             return json_decode($this->input, true);
 
          case 'post':
-            if ( $this->method === 'POST' && empty($_POST) ) {
-               return $this->inputs;
-            }
-
             return $_POST;
          case 'posts':
             return json_encode($this->post);
@@ -299,7 +292,8 @@ class Request
             return $_FILES;
          // * Meta
          case 'host': // @ CLI OK | Non-CLI OK?
-            $host = $_SERVER['HTTP_HOST'];
+            // ! FIX bad performance
+            $host = $this->Header->get('Host');
 
             return $this->host = $host;
          case 'hostname': // alias
@@ -331,7 +325,7 @@ class Request
          case 'secure':
             return $this->scheme === 'https';
 
-         case 'fresh': // TODO move to trait?
+         case 'fresh':
             if ($this->method !== 'GET' && $this->method !== 'HEAD') {
                return false;
             }
@@ -429,6 +423,177 @@ class Request
       }
    }
 
+   public function reset ()
+   {
+      // ? Request
+      unSet($this->method);
+      unSet($this->uri);
+      unSet($this->protocol);
+
+      // ? Request Meta
+      $this->Meta->__construct();
+      // ? RequestHeader
+      $this->Header->__construct();
+      // ? RequestContent
+      $this->Content->__construct();
+   }
+
+   public function boot (Packages $Package, string &$buffer, int $length) : int // @ return Request length
+   {
+      // @ Check Request raw separator
+      $separatorPosition = strpos($buffer, "\r\n\r\n");
+      if ($separatorPosition === false) { // @ Check if the Request raw has a separator
+         // @ Check Request raw length
+         if ($length >= 16384) {
+            $Package->reject("HTTP/1.1 413 Request Entity Too Large\r\n\r\n");
+         }
+
+         return 0;
+      }
+
+      $length = $separatorPosition + 4; // @ Boot Request length
+
+      // ? Request Meta
+      // @ Boot Request Meta raw
+      // Sample: GET /path HTTP/1.1
+      $metaRaw = strstr($buffer, "\r\n", true);
+      #$metaRaw = strtok($buffer, "\r\n");
+
+      @[$method, $uri, $protocol] = explode(' ', $metaRaw, 3);
+
+      // @ Check Request Meta
+      if (! $method || ! $uri || ! $protocol) {
+         $Package->reject("HTTP/1.1 400 Bad Request\r\n\r\n");
+         return 0;
+      }
+      // method
+      switch ($method) {
+         case 'GET':
+         case 'HEAD':
+         case 'POST':
+         case 'PUT':
+         case 'PATCH':
+         case 'DELETE':
+         case 'OPTIONS':
+            break;
+         default:
+            $Package->reject("HTTP/1.1 405 Method Not Allowed\r\n\r\n");
+            return 0;
+      }
+      // uri
+      // protocol
+
+      // @ Prepare Request Meta length
+      $metaLength = strlen($metaRaw);
+
+      // ? Request Header
+      // @ Boot Request Header raw
+      $headerRaw = substr($buffer, $metaLength + 2, $separatorPosition - $metaLength);
+
+      // @ Prepare Request Header length
+      $headerLength = strlen($headerRaw);
+
+      // ? Request Content
+      // @ Prepare Request Content length if possible
+      if ( $_ = strpos($headerRaw, "\r\nContent-Length: ") ) {
+         $contentLength = (int) substr($headerRaw, $_ + 18, 10);
+      } else if (preg_match("/\r\ncontent-length: ?(\d+)/i", $headerRaw, $match) === 1) {
+         $contentLength = $match[1];
+      } else if (stripos($headerRaw, "\r\nTransfer-Encoding:") !== false) {
+         $Package->reject("HTTP/1.1 400 Bad Request\r\n\r\n");
+         return 0;
+      }
+
+      // @ Set Request Content raw / length if possible
+      if ( isSet($contentLength) ) {
+         $length += $contentLength; // @ Add Request Content length
+
+         if ($length > 10485760) { // @ 10 megabytes
+            $Package->reject("HTTP/1.1 413 Request Entity Too Large\r\n\r\n");
+            return 0;
+         }
+
+         if ($method === 'POST') {
+            $this->Content->raw = substr($buffer, $separatorPosition + 4, $contentLength);
+            $this->Content->downloaded = strlen($this->Content->raw);
+
+            #if ($contentLength > $this->Content->downloaded) {
+            #   $this->Content->waiting = true;
+            #   return 0;
+            #}
+         }
+
+         $this->Content->length = $contentLength;
+      }
+
+      // @ Set Request
+      // ? Request
+      $_SERVER['REMOTE_ADDR'] = $Package->Connection->ip;
+      $_SERVER['REMOTE_PORT'] = $Package->Connection->port;
+      // ? Request Meta
+      // raw
+      $this->Meta->raw = $metaRaw;
+
+      // method
+      $this->method = $method;
+      // uri
+      $this->uri = $uri;
+      // protocol
+      $this->protocol = $protocol;
+
+      // length
+      $this->Meta->length = $metaLength;
+      // ? Request Header
+      $this->Header->raw = $headerRaw;
+
+      $this->Header->length = $headerLength;
+      // ? Request Content
+      $this->Content->position = $separatorPosition + 4;
+
+      // @ return Request length
+      return $length;
+   }
+   public function download (? string $key = null) : array|null
+   {
+      if ( empty($this->files) ) {
+         $boundary = $this->Content->parse('Form-data', $this->Header->get('Content-Type'));
+
+         if ($boundary) {
+            $this->Downloader->downloading($boundary);
+         }
+      }
+
+      if ($key === null) {
+         return $this->files;
+      }
+
+      if ( isSet($this->files[$key]) ) {
+         return $this->files[$key];
+      }
+
+      return null;
+   }
+   public function receive (? string $key = null) : array|null
+   {
+      if ( empty($this->post) ) {
+         $parsed = $this->Content->parse('raw', $this->Header->get('Content-Type'));
+
+         if ($parsed) {
+            $this->Downloader->downloading($parsed);
+         }
+      }
+
+      if ($key === null) {
+         return $this->post;
+      }
+
+      if ( isSet($this->post[$key]) ) {
+         return $this->post[$key];
+      }
+
+      return null;
+   }
+
    // TODO implement https://www.php.net/manual/pt_BR/ref.filter.php
    public function filter (int $type, string $var_name, int $filter, array|int $options)
    {
@@ -438,4 +603,20 @@ class Request
    {}
    public function validate ()
    {}
+
+   public function __destruct ()
+   {
+      // @ Delete files downloaded by server in temp folder
+      if ( ! empty($_FILES) ) {
+         clearstatcache();
+
+         array_walk_recursive($_FILES, function ($value, $key) {
+            if ($key === 'tmp_name') {
+               if ( is_file($value) ) {
+                  unlink($value);
+               }
+            }
+         });
+      }
+   }
 }

@@ -8,10 +8,10 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\Web\HTTP\Server\Request\_;
+namespace Bootgly\CLI\HTTP\Server\Request\_;
 
 
-use Bootgly\Web\HTTP\Server\Request\_\Header\Cookie;
+use Bootgly\CLI\HTTP\Server\Request\_\Header\Cookie;
 
 
 class Header
@@ -28,21 +28,10 @@ class Header
 
    public function __construct ()
    {
-      $fields = apache_request_headers();
-
-      if ($fields !== false) {
-         $fields = array_change_key_case($fields, CASE_LOWER);
-
-         $this->built = true;
-      } else {
-         $fields = [];
-
-         $this->built = false;
-      }
-
       // * Data
-      $this->fields = $fields;
+      $this->fields = [];
       // * Meta
+      $this->built = false;
       $this->length = null;
 
       $this->Cookie = new Cookie($this);

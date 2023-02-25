@@ -2,17 +2,16 @@
 use Bootgly\Bootgly;
 use Bootgly\Debugger;
 // SAPI
-use Bootgly\Web\HTTP\Server\Request;
-use Bootgly\Web\HTTP\Server\Response;
-use Bootgly\Web\HTTP\Server\Router;
+use Bootgly\CLI\HTTP\Server\Request;
+use Bootgly\CLI\HTTP\Server\Response;
 // CAPI?
-#use Bootgly\Web\HTTP\Client\Request;
-#use Bootgly\Web\HTTP\Client\Response;
+#use Bootgly\CLI\HTTP\Client\Request;
+#use Bootgly\CLI\HTTP\Client\Response;
 // TODO ?
 
 return [
    // Server API
-   'sapi' => function (Request $Request, Response $Response, Router $Router) : Response {
+   'sapi' => function (Request $Request, Response $Response) : Response {
       return $Response->send(302); // 302 Not Found
    },
    // Client API

@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\Web\HTTP\Server\Request\_;
+namespace Bootgly\CLI\HTTP\Server\Request\_;
 
 
 class Content
@@ -31,7 +31,7 @@ class Content
       // -
       // * Data
       $this->raw = '';
-      $this->input = file_get_contents('php://input');
+      $this->input = '';
       // * Meta
       $this->length = null;
       $this->position = null;

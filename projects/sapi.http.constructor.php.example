@@ -1,9 +1,8 @@
 <?php
 use Bootgly\Bootgly;
 
-use Bootgly\Web\HTTP\Server\Request;
-use Bootgly\Web\HTTP\Server\Response;
-use Bootgly\Web\HTTP\Server\Router;
+use Bootgly\CLI\HTTP\Server\Request;
+use Bootgly\CLI\HTTP\Server\Response;
 
 
 Bootgly::$Project->vendor = '@bootgly/';
@@ -14,7 +13,7 @@ Bootgly::$Project->setPath();
 
 
 return static function
-(Request $Request, Response $Response, Router $Router) : Response
+(Request $Request, Response $Response) : Response
 {
    // ! Request examples
    // ? Meta (first line of HTTP Request Header)

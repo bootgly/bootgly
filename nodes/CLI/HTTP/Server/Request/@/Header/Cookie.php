@@ -8,10 +8,10 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\Web\HTTP\Server\Request\_\Header;
+namespace Bootgly\CLI\HTTP\Server\Request\_\Header;
 
 
-use Bootgly\Web\HTTP\Server\Request\_\Header;
+use Bootgly\CLI\HTTP\Server\Request\_\Header;
 
 
 final class Cookie
@@ -27,17 +27,34 @@ final class Cookie
       $this->Header = $Header;
 
       // * Data
-      $this->cookies = $_COOKIE;
+      $this->cookies = [];
    }
 
    public function __get (string $name)
    {
       switch ($name) {
          case 'cookies':
+            $this->build();
+
             return $this->cookies;
          default:
+            $this->build();
+
             return $this->cookies[$name] ?? '';
       }
+   }
+
+   public function build ()
+   {
+      if ( ! empty($this->cookies) ) {
+         return false;
+      }
+
+      $replaced = preg_replace('/; ?/', '&', $this->Header->get('Cookie'));
+
+      parse_str($replaced, $this->cookies);
+
+      return true;
    }
 
    public function get (string $name) : string
