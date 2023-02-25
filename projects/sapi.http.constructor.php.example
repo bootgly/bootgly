@@ -23,10 +23,10 @@ return static function
    // ? Header
    #$host = $Request->Header->get('Host');
    // ? Content
-   // @ Download
+   // @ download
    // Form-data ($_POST, $_FILES)
    #$files = $Request->download('file1'); // $_FILES and $Request->files available too
-   // @ Receive
+   // @ receive
    // Raw - JSON, URL Encoded, Text, etc.
    #$Request->receive();
 
@@ -41,7 +41,7 @@ return static function
    #$Response->Header->Cookie->append('Test', 'value1');
    #$Response->Header->Cookie->append('Test2', 'value2');
    // ? Content
-   // @ Output
+   // @ output
    // raw ?
    /*
    return $Response(raw: <<<HTTP_RAW
@@ -55,12 +55,16 @@ return static function
    */
    // content
    return $Response(content: 'Hello World!'); // text
-   // @ Send
+   // @ send
    #return $Response->Json->send(['Hello' => 'World!']); // JSON
-   // @ Upload
+   // @ upload
    // Small files
    #return $Response('statics/image1.jpg')->upload();
    // Large files
    #return $Response('statics/screenshot.gif')->upload();
    #return $Response('statics/screenshot.gif')->upload(offset: 0, length: 2);
+   // @ authenticate
+   #return $Response->authenticate(realm: 'Protected area');
+   // @ redirect
+   #return $Response->redirect(uri: 'https://docs.bootgly.com/', code: 302);
 };
