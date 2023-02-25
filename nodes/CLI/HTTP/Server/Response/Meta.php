@@ -66,7 +66,7 @@ class Meta
             $status = match ($value) {
                (int) $value => $value . ' ' . Server::RESPONSE_STATUS[$value],
                (string) $value => array_search($value, Server::RESPONSE_STATUS) . ' ' . $value,
-               default => Server::RESPONSE_STATUS[200]
+               default => ''
             };
 
             @[$code, $message] = explode(' ', $status);

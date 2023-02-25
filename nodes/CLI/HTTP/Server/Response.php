@@ -681,9 +681,12 @@ class Response
       // header('HTTP/1.0 401 Unauthorized');
    }
 
-   public function end ($status = null)
+   public function end (int|string|null $status = null)
    {
-      $this->status = $status;
+      if ($status) {
+         $this->status = $status;
+      }
+
       $this->sent = true;
    }
 }
