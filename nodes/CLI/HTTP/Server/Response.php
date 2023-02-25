@@ -671,7 +671,7 @@ class Response
       $this->sent = true;
    }
 
-   public function authenticate (string $realm = 'Protected area')
+   public function authenticate (string $realm = 'Protected area') : self
    {
       if (Server::$Request->Header->get('X-Requested-With') !== 'XMLHttpRequest') {
          $this->Header->set('WWW-Authenticate: Basic realm="'.$realm.'"');
@@ -680,6 +680,8 @@ class Response
       $this->code = 401;
 
       $this->sent = true;
+
+      return $this;
    }
 
    public function end (int|string|null $status = null)
