@@ -82,4 +82,10 @@ trait Formatting
    public const LOG_GREEN_BLACK = '32;40';
    // @ default background + default foreground
    public const LOG_BLACK_WHITE = '47;30';
+
+
+   protected function wrap (string ...$codes)
+   {
+      return self::LOG_START . implode(';', $codes) . self::LOG_END;
+   }
 }

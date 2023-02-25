@@ -16,8 +16,10 @@ use Bootgly\Logger;
 
 trait Logging
 {
-   use \Bootgly\Logging; // TODO remove; use interface instead.
-   use \Bootgly\CLI\text\Formatting;
+   use \Bootgly\Logging;
+   use \Bootgly\CLI\text\Formatting {
+      wrap as private;
+   }
 
 
    // * Config
@@ -96,10 +98,9 @@ trait Logging
    {
       #$line = "\033[1A\n\033[K";
 
-      // @ Levels => Decorators (@:[a-b]+:)
+      // @ Levels => Colors (@:[a-b]+:)
       $message = preg_replace_callback('/@(:[a-z]+):/m', function ($matches) {
-         $color = self::LOG_START;
-         $color .= match ($matches[1]) {
+         $color = match ($matches[1]) {
             ':d', ':s', ':debug', ':success' => self::LOG_GREEN_BRIGHT_FOREGROUND,
 
             ':i', ':info' => self::LOG_CYAN_BRIGHT_FOREGROUND,
@@ -109,24 +110,21 @@ trait Logging
 
             default => self::LOG_DEFAULT_FOREGROUND
          };
-         $color .= self::LOG_END;
 
-         return $color;
+         return $this->wrap($color);
       }, $message);
 
       // @ Style
       $message = preg_replace_callback('/@([*~_-])/m', function ($matches) {
-         $style = self::LOG_START;
-         $style .= match ($matches[1]) {
+         $style = match ($matches[1]) {
             '*' => self::LOG_BOLD_STYLE,
             '~' => self::LOG_ITALIC_STYLE,
             '_' => self::LOG_UNDERLINE_STYLE,
             '-' => self::LOG_STRIKE_STYLE,
             default => ''
          };
-         $style .= self::LOG_END;
 
-         return $style;
+         return $this->wrap($style);
       }, $message);
 
       // @ Reset (End of)
@@ -151,7 +149,7 @@ trait Logging
       if (Logger::$display >= Logger::DISPLAY_MESSAGE_WHEN) {
          $DateTime = new \DateTime();
 
-         $when .= self::LOG_START . self::LOG_BLACK_BRIGHT_FOREGROUND . self::LOG_END;
+         $when .= $this->wrap(self::LOG_BLACK_BRIGHT_FOREGROUND);
          $when .= '[';
          $when .= $DateTime->format('Y-m-d\TH:i:s.uP');
          $when .= '] ';
@@ -164,11 +162,11 @@ trait Logging
             $id .= $this->Logger->channel . '.';
          }
 
-         $id .= self::LOG_START . $color . self::LOG_END;
+         $id .= $this->wrap($color);
          $id .= $severity . self::LOG_RESET . ': ';
       }
       // @ Display message (always)
-      $message = self::LOG_START . $color . self::LOG_END . $message . self::LOG_RESET;
+      $message = $this->wrap($color) . $message . self::LOG_RESET;
       if (Logger::$display > Logger::DISPLAY_MESSAGE) {
          $message .= PHP_EOL;
       }

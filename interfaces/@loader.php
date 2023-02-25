@@ -1,7 +1,9 @@
 <?php
 // ! CLI
 require 'CLI.php';
+// resources
 require 'CLI/text/Formatting.php'; // @ trait
+// extends
 require 'CLI/@/Logger/Logging.php'; // @trait
 require 'CLI/@/Tester/Tests.php';
 require 'CLI/@/Tester/Tests/Test.php';
