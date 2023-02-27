@@ -595,16 +595,15 @@ class Response
                }
 
                // TODO support negative ranges
-
-               $offset = $ranges[0]['start'];
+               #$offset = $ranges[0]['start'];
                $length = 0;
 
                foreach ($ranges as $range) {
-                  if ($range['start'] === $range['end']) {
-                     $length += 1;                        
-                  } else {
-                     $length += ($range['end'] - $range['start']) + 1;
+                  if ($range['end'] > $range['start']) {
+                     $length += ($range['end'] - $range['start']);
                   }
+
+                  $length += 1;
                }
          }
       }
@@ -628,15 +627,20 @@ class Response
 
       // @ Set (HTTP/1.1): Range Requests Headers
       if ($offset || $length) {
-         $this->Header->set('Accept-Ranges', 'bytes');
+         // @ Set Response status
+         $this->Meta->status = 206; // 206 Partial Content
 
-         if ($this->Content->length !== $File->size) {
-            $start = $ranges[0]['start'];
-            $end = $ranges[0]['end'];
-            $this->Header->set('Content-Range', "bytes {$start}-{$end}/{$File->size}");
+         // @ Set Content-Range header
+         $start = $ranges[0]['start'];
 
-            $this->Meta->status = 206; // 206 Partial Content
+         $end = $ranges[0]['end'];
+         if ($ranges[0]['end'] > $File->size - 1) {
+            $end += 1;
          }
+
+         $this->Header->set('Content-Range', "bytes {$start}-{$end}/{$File->size}");
+      } else {
+         $this->Header->set('Accept-Ranges', 'bytes');
       }
 
       // @ Build Response Header
