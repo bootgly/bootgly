@@ -78,7 +78,6 @@ class Server extends TCP\Server implements HTTP
                $file = __DIR__ . '/Server/tests/' . $case . '.test.php';
 
                if (! file_exists($file) ) {
-                  unset(SAPI::$tests[self::class][$index]);
                   continue;
                }
 
@@ -220,13 +219,16 @@ class Server extends TCP\Server implements HTTP
 
             // @ Run test cases
             foreach ($tests as $index => $value) {
-               $spec = SAPI::$Tests[self::class][$index];
+               $spec = SAPI::$Tests[self::class][$index] ?? null;
 
                // @ Init Test
                $Test = $Tests->test($spec);
 
-               if (! $spec || ! is_array($spec) || count($spec) < 4) {
-                  $Test->skip();
+               if ($spec === null || count($spec) < 4) {
+                  if ($Test) {
+                     $Test->skip();
+                  }
+
                   continue;
                }
 
