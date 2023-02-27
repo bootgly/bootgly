@@ -565,12 +565,11 @@ class Response
       $this->stream = true;
 
       // @ Set Request range
-      // TODO move to Request
-      $range = [];
+      $ranges = [];
       if ( $Range = Server::$Request->Header->get('Range') ) {
-         $range = Server::$Request->range($File->size, $Range);
+         $ranges = Server::$Request->range($File->size, $Range, combine: true);
 
-         switch ($range) {
+         switch ($ranges) {
             case -2: // Malformed Range header string
                $this->Meta->status = 400; // Bad Request
                $this->Header->clean();
@@ -580,43 +579,64 @@ class Response
                $this->Header->clean();
                return $this;
             default:
-               if ($range['type'] !== 'bytes') {
+               $type = array_pop($ranges);
+               // @ Check Range type
+               if ($type !== 'bytes') {
+                  $this->Meta->status = 416; // Range Not Satisfiable
+                  $this->Header->clean();
+                  return $this;
+               }
+               // @ Check multiple ranges
+               // TODO support multiple ranges (multipart/byteranges)
+               if (count($ranges) > 1) {
                   $this->Meta->status = 416; // Range Not Satisfiable
                   $this->Header->clean();
                   return $this;
                }
 
-               // TODO support multiple ranges
                // TODO support negative ranges
 
-               $range = $range[0];
-               $offset = $range['start'];
+               $offset = $ranges[0]['start'];
+               $length = 0;
 
-               if ($range['start'] === $range['end']) {
-                  $length = 1;                        
-               } else {
-                  $length = ($range['end'] - $range['start']) + 1;
+               foreach ($ranges as $range) {
+                  if ($range['start'] === $range['end']) {
+                     $length += 1;                        
+                  } else {
+                     $length += ($range['end'] - $range['start']) + 1;
+                  }
                }
          }
       }
 
       // @ Set Content Length
-      $this->Content->length = ($length > 0) ? ($length) : ($File->size - $offset);
+      if ($length > 0) {
+         $this->Content->length = $length;
+      } else {
+         $this->Content->length = $File->size - $offset;
+      }
+
       $this->Header->set('Content-Length', $this->Content->length);
 
       // @ Set User range
-      if ( empty($range) ) {
-         $range['start'] = $offset;
-         $range['end'] = $this->Content->length;
+      if ( empty($ranges) ) {
+         $ranges[] = [
+            'start' => $offset,
+            'end' => $this->Content->length
+         ];
       }
 
       // @ Set (HTTP/1.1): Range Requests Headers
       if ($offset || $length) {
          $this->Header->set('Accept-Ranges', 'bytes');
-         $this->Header->set('Content-Range', "bytes {$range['start']}-{$range['end']}/{$File->size}");
 
-         if ($this->Content->length !== $File->size)
+         if ($this->Content->length !== $File->size) {
+            $start = $ranges[0]['start'];
+            $end = $ranges[0]['end'];
+            $this->Header->set('Content-Range', "bytes {$start}-{$end}/{$File->size}");
+
             $this->Meta->status = 206; // 206 Partial Content
+         }
       }
 
       // @ Build Response Header
@@ -625,8 +645,11 @@ class Response
       // @ Prepare Response files
       $this->files[] = [
          'file' => $File->File, // @ Set file path to open handler
-         'offset' => $range['start'],
+
+         // 'ranges' => [...],
+         'offset' => $ranges[0]['start'],
          'length' => $this->Content->length,
+
          'close' => $close
       ];
 
