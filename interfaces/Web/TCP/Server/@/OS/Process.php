@@ -146,7 +146,7 @@ class Process
          // * Custom command
          case SIGUSR1:  // 10
             // TODO review security concious (+1)
-            $lines = file(static::$commandFile);
+            $lines = @file(static::$commandFile);
 
             if ($lines) {
                $line = $lines[count($lines) - 1];
