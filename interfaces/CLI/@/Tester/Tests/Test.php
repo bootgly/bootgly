@@ -48,10 +48,10 @@ class Test
       $this->started = microtime(true);
    }
 
-   public function assert ($input)
+   public function assert (...$arguments)
    {
       ob_start();
-      $this->success = $this->specifications['assert']($input);
+      $this->success = $this->specifications['assert'](...$arguments);
       $this->debugged = ob_get_clean();
       $this->finished = microtime(true);
    }
