@@ -52,6 +52,7 @@ class Tests implements \Bootgly\Tests
    public function test (? array &$specifications) : Test|false
    {
       if ($specifications === null) {
+         $this->skipped++;
          return false;
       }
 
