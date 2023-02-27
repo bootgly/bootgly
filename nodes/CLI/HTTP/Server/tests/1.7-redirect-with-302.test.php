@@ -10,9 +10,11 @@ use Bootgly\CLI\HTTP\Server\Response;
 // TODO ?
 
 return [
-   // ! Server
-   'response.length' => 3101873,
-   // API
+   // @ arrange
+   'header' => '@redirect',
+
+   // @ act
+   // Server API
    'sapi' => function (Request $Request, Response $Response) : Response {
       Bootgly::$Project->vendor = '@bootgly/';
       Bootgly::$Project->container = 'web/';
@@ -21,30 +23,37 @@ return [
 
       Bootgly::$Project->setPath();
 
-      return $Response('statics/screenshot.gif')->upload(close: false);
+      return $Response->redirect('https://docs.bootgly.com/', 302);
    },
-   // ! Client
-   // API
+   // Client API
    'capi' => function () {
-      // return $Request->get('//header/changed/1');
-      return "GET /test/download/large_file/1 HTTP/1.0\r\n\r\n";
+      // return $Request->get('/test/auth/1');
+      return "GET /test/redirect/1 HTTP/1.0\r\n\r\n";
    },
 
+   // @ assert
    'assert' => function ($response) : bool {
       // ! Asserts
-      // @ Assert length of response
-      $expected = 3101873;
+      // @ Assert response raw
+      $expected = <<<HTML_RAW
+      HTTP/1.1 302 Found\r
+      Server: Bootgly\r
+      Location: https://docs.bootgly.com/\r
+      Content-Length: 0\r
+      Content-Type: text/html; charset=UTF-8\r
+      \r
+      
+      HTML_RAW;
 
-      if (strlen($response) !== $expected) {
-         Debugger::$labels = ['HTTP Response length:', 'Expected:'];
-         debug(strlen($response), $expected);
+      if ($response !== $expected) {
+         Debugger::$labels = ['HTTP Response:', 'Expected:'];
+         debug(json_encode($response), json_encode($expected));
          return false;
       }
 
       return true;
    },
-
    'except' => function () : string {
-      return 'Response length of uploaded file by server is correct?';
+      return 'Response raw not matched';
    }
 ];

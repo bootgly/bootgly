@@ -14,14 +14,20 @@ return [
       // ! Content
       // @ send
       '1.5-send_content_in_json',
-      // @ upload
-      '1.6-upload_small_file',
-      '1.6.1.1-upload_file_with_offset_length_1',
-      '1.6.2.1-upload_file_with_range-requests_1',
-      '1.6.3-upload_large_file',
       // @ authenticate
-      '1.7.1-basic-authentication',
+      '1.6-basic-authentication',
       // @ redirect
-      '1.8.1-redirect-with-302'
+      '1.7-redirect-with-302',
+      // @ upload
+      // .1 - Small Files
+      '1.z.1-upload_small_file',
+      // .2.1 - Requests Range - User
+      '1.z.2.1-upload_file_with_offset_length_1',
+      // .2.2 - Requests Range - Client
+      '1.z.2.2.1-upload_file_with_range-requests_1',
+      '1.z.2.2.2-upload_file_with_range-requests_2',
+      '1.z.2.2.3-upload_file_with_range-requests_3',
+      // .3 - Large Files
+      '1.z.3-upload_large_file',
    ]
 ];
