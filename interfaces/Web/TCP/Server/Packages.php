@@ -381,19 +381,18 @@ abstract class Packages implements Web\Packages
       // @ Limit length of data file (size) to read
       $over = 0;
       $rate = 1 * 1024 * 1024; // 1 MB (1048576) = Max rate to read/send data file by loop
-      $size = $rate;
 
       if ($length < $rate) {
-         $size = $length;
+         $rate = $length;
       } else if ($length > $rate) {
-         $over = $length - $rate;
+         $over = $length % $rate;
       }
 
       while ($written < $length) {
          // ! File
          // @ Read file from local storage
          try {
-            $buffer = @fread($handler, $size);
+            $buffer = @fread($handler, $rate);
          } catch (\Throwable) {
             break;
          }
@@ -424,15 +423,10 @@ abstract class Packages implements Web\Packages
                continue;
             }
 
-            // @ Set new over / size if necessary
-            if ($over % $rate > 0) {
-               if ($over >= $written) {
-                  $over -= $written;
-               }
-
-               if ($over < $size) {
-                  $size = $over;
-               }
+            // @ Set overate
+            if ($over && $length - $written <= $over) {
+               $rate = $over;
+               $over = 0;
             }
 
             break;
