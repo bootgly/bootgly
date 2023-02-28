@@ -1,6 +1,6 @@
 # Bootgly PHP Framework
 
-> Full Stack PHP Framework for Multi Projects (WIP)
+> Full Stack PHP Framework for Multi Projects
 
 🚧 Do not use it in production environments. The alpha version hasn't even been released yet. 🚧
 
@@ -10,12 +10,12 @@ First beta release is planned for mid-year 2023.
 
 Documentation and Website will be released alongside the beta.
 
-Servers | Database | Back-end | Front-end
---- | --- | --- | ---
-[TCP Server (WIP)](/interfaces/Web/TCP/Server.php) | DBAL (TODO) | [Router (WIP)](/nodes/Web/HTTP/Server/Router.php) | [Templating Engine (WIP)](/core/Template.php)
-[HTTP Server (WIP)](/nodes/Web/HTTP/Server.php) | ORM (TODO) | [Router/Route (WIP)](/nodes/Web/HTTP/Server/Router/Route.php) | _
-WS Server (TODO) | _ | [Request (WIP)](/nodes/Web/HTTP/Server/Request.php) | _
-_ | _ | [Response (WIP)](/nodes/Web/HTTP/Server/Response.php) | _
+Clients | Servers | Database | Back-end | Front-end
+--- | --- | --- | --- | ---
+[TCP Client [Beta]](/interfaces/Web/TCP/Client.php) | [TCP Server [Beta]](/interfaces/Web/TCP/Server.php) | DBAL [TODO] | [Router [WIP]](/nodes/Web/HTTP/Server/Router.php) | [Templating Engine [WIP]](/core/Template.php)
+HTTP Client (CLI) [TODO] | [HTTP Server (CLI) [WIP]](/nodes/CLI/HTTP/Server.php) | ORM [TODO] | [Router/Route [WIP]](/nodes/Web/HTTP/Server/Router/Route.php) | _
+_ | WS Server [TODO] | _ | [Request [WIP]](/nodes/CLI/HTTP/Server/Request.php) | _
+_ | _ | _ | [Response [WIP]](/nodes/CLI/HTTP/Server/Response.php) | _
 
 ---
 
