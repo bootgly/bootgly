@@ -100,6 +100,7 @@ class Header
    public function clean ()
    {
       $this->fields = [];
+      $this->prepared = [];
    }
 
    public function prepare (array $fields) // @ Prepare to build
