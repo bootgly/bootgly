@@ -82,8 +82,8 @@ class Tests implements \Bootgly\Tests
 
       $this->log(<<<TESTS
 
-      Tests: @:e: {$failed} failed @;, @:n:{$skipped} skipped @;, @:s:{$passed} passed @;, {$total} total
-      Time: {$duration}s
+      Tests: @:e:{$failed} failed @;, @:n:{$skipped} skipped @;, @:s:{$passed} passed @;, {$total} total
+      Time: \033[1;35m{$duration}s \033[0m
       \033[90mRan all tests.\033[0m
 
       TESTS);
