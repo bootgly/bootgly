@@ -575,8 +575,7 @@ class Response
                   return $this->end(416, $File->size);
                }
 
-               // TODO support negative ranges
-               #$offset = $ranges[0]['start'];
+               $offset = $ranges[0]['start'];
                $length = 0;
 
                foreach ($ranges as $range) {
