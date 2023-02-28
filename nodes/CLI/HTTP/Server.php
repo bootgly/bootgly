@@ -81,7 +81,7 @@ class Server extends TCP\Server implements HTTP
             SAPI::$tests[self::class] = (@require $tests)['files'];
             // * Meta
             SAPI::$Tests[self::class] = [];
-      
+
             foreach (SAPI::$tests[self::class] as $index => $case) {
                $file = __DIR__ . '/Server/tests/' . $case . '.test.php';
 
@@ -93,14 +93,14 @@ class Server extends TCP\Server implements HTTP
                if ( function_exists('opcache_invalidate') )
                   opcache_invalidate($file, true);
                clearstatcache(false, $file);
-      
+
                // @ Load Test case from file
                try {
                   $spec = @require $file;
                } catch (\Throwable) {
                   $spec = null;
                }
-         
+
                // @ Set Closure to SAPI Tests
                SAPI::$Tests[self::class][] = $spec;
             }
