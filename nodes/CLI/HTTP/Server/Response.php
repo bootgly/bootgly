@@ -553,13 +553,7 @@ class Response
          return $this;
       }
 
-      // @ If file size < 2 MB set file content in the Response Content raw
-      if ($File->size <= 2 * 1024 * 1024) { // @ 2097152 bytes
-         $this->Content->raw = $File->read($File::CONTENTS_READ_METHOD);
-         return $this;
-      }
-
-      // @ Set Request range
+      // @ Set Request range if exists
       $ranges = [];
       if ( $Range = Server::$Request->Header->get('Range') ) {
          $ranges = Server::$Request->range($File->size, $Range, combine: true);
@@ -594,9 +588,6 @@ class Response
                }
          }
       }
-
-      // @ Set stream if the file is larger than 2 MB
-      $this->stream = true;
 
       // @ Set Content Length
       if ($length > 0) {
@@ -636,16 +627,24 @@ class Response
       // @ Build Response Header
       $this->Header->build();
 
-      // @ Prepare Response files
-      $this->files[] = [
-         'file' => $File->File, // @ Set file path to open handler
+      // @ If file size < 2 MB set file content in the Response Content raw
+      if ($File->size <= 2 * 1024 * 1024) { // @ 2097152 bytes
+         $this->Content->raw = $File->read($File::CONTENTS_READ_METHOD, $offset, $length);
+      } else {
+         // @ Set stream if the file is larger than 2 MB
+         $this->stream = true;
 
-         // 'ranges' => [...],
-         'offset' => $ranges[0]['start'],
-         'length' => $this->Content->length,
+         // @ Prepare Response files
+         $this->files[] = [
+            'file' => $File->File, // @ Set file path to open handler
 
-         'close' => $close
-      ];
+            // 'ranges' => [...],
+            'offset' => $ranges[0]['start'],
+            'length' => $this->Content->length,
+
+            'close' => $close
+         ];
+      }
 
       $this->sent = true;
 
