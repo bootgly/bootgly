@@ -10,6 +10,9 @@ use Bootgly\CLI\HTTP\Server\Response;
 // TODO ?
 
 return [
+   // @ arrange
+
+   // @ act
    // Server API
    'sapi' => function (Request $Request, Response $Response) : Response {
       return $Response(content: 'Hello World!');
@@ -20,6 +23,7 @@ return [
       return "GET / HTTP/1.0\r\n\r\n";
    },
 
+   // @ assert
    'assert' => function ($response) : bool {
       /*
       return $Response->status === '200 OK'
@@ -44,7 +48,6 @@ return [
 
       return true;
    },
-
    'except' => function () : string {
       return 'Response not matched';
    }

@@ -10,6 +10,11 @@ use Bootgly\CLI\HTTP\Server\Response;
 // TODO ?
 
 return [
+   // @ arrange
+   'separator' => 'Response Content',
+   'header' => '@send',
+
+   // @ act
    // Server API
    'sapi' => function (Request $Request, Response $Response) : Response {
       return $Response->Json->send(['Hello' => 'World!']); // JSON
@@ -20,8 +25,7 @@ return [
       return "GET /test/content/json/1 HTTP/1.0\r\n\r\n";
    },
 
-   'separator' => 'Response Content',
-   'header' => '@send',
+   // @ assert
    'assert' => function ($response) : bool {
       /*
       return $Response->code === '500'
@@ -37,7 +41,6 @@ return [
       {"Hello":"World!"}
       HTML_RAW;
 
-      // @ Assert
       if ($response !== $expected) {
          Debugger::$labels = ['HTTP Response:', 'Expected:'];
          debug(json_encode($response), json_encode($expected));
@@ -46,7 +49,6 @@ return [
 
       return true;
    },
-
    'except' => function () : string {
       return 'Response is a valid JSON?';
    }

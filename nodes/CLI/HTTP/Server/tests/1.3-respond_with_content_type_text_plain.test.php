@@ -10,6 +10,10 @@ use Bootgly\CLI\HTTP\Server\Response;
 // TODO ?
 
 return [
+   // @ arrange
+   'separator' => 'Response Header',
+
+   // @ act
    // Server API
    'sapi' => function (Request $Request, Response $Response) : Response {
       $Response->Header->set('Content-Type', 'text/plain');
@@ -21,7 +25,7 @@ return [
       return "GET /header/changed/1 HTTP/1.0\r\n\r\n";
    },
 
-   'separator' => 'Response Header',
+   // @ assert
    'assert' => function ($response) : bool {
       /*
       return $Response->code === '500'
@@ -46,7 +50,6 @@ return [
 
       return true;
    },
-
    'except' => function () : string {
       return 'Header Content-Type not matched';
    }

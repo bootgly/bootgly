@@ -12,6 +12,7 @@ use Bootgly\CLI\HTTP\Server\Response;
 return [
    // @ arrange
    'response.length' => 305,
+   'describe' => 'Should return 3 bytes of file when bytes is `0-2`',
 
    // @ act
    // Server API

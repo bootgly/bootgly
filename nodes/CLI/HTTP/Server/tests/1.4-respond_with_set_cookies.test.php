@@ -10,6 +10,9 @@ use Bootgly\CLI\HTTP\Server\Response;
 // TODO ?
 
 return [
+   // @ arrange
+
+   // @ act
    // Server API
    'sapi' => function (Request $Request, Response $Response) : Response {
       $Response->Header->Cookie->append('Test1', 'value1');
@@ -23,6 +26,7 @@ return [
       return "GET /header/cookies/1 HTTP/1.0\r\n\r\n";
    },
 
+   // @ assert
    'assert' => function ($response) : bool {
       /*
       return $Response->code === '500'
@@ -49,7 +53,6 @@ return [
 
       return true;
    },
-
    'except' => function () : string {
       return 'Header Set-Cookie not found?';
    }

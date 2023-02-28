@@ -10,6 +10,10 @@ use Bootgly\CLI\HTTP\Server\Response;
 // TODO ?
 
 return [
+   // @ arrange
+   'separator' => 'Response Meta',
+
+   // @ act
    // Server API
    'sapi' => function (Request $Request, Response $Response) : Response {
       return $Response->send(302); // 302 Not Found
@@ -20,7 +24,7 @@ return [
       return "GET /status HTTP/1.0\r\n\r\n";
    },
 
-   'separator' => 'Response Meta',
+   // @ assert
    'assert' => function ($response) : bool {
       /*
       return $Response->status === '302 Found'
@@ -44,7 +48,6 @@ return [
 
       return true;
    },
-
    'except' => function () : string {
       return 'Status not matched';
    }

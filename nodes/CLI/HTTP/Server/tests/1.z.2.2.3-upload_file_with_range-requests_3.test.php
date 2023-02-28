@@ -11,7 +11,6 @@ use Bootgly\CLI\HTTP\Server\Response;
 
 return [
    // @ arrange
-   #'response.length' => 3101612,
 
    // @ act
    // Server API

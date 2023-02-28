@@ -10,9 +10,10 @@ use Bootgly\CLI\HTTP\Server\Response;
 // TODO ?
 
 return [
-   // @ Arrange
+   // @ arrange
    'header' => '@authenticate',
-   // @ Act
+
+   // @ act
    // Server API
    'sapi' => function (Request $Request, Response $Response) : Response {
       Bootgly::$Project->vendor = '@bootgly/';
@@ -30,7 +31,8 @@ return [
       // return $Request->get('/test/auth/1');
       return "GET /test/auth/1 HTTP/1.0\r\n\r\n";
    },
-   // @ Assert
+
+   // @ assert
    'assert' => function ($response) : bool {
       // ! Asserts
       // @ Assert response raw
@@ -53,7 +55,6 @@ return [
 
       return true;
    },
-
    'except' => function () : string {
       return 'Response raw not matched';
    }

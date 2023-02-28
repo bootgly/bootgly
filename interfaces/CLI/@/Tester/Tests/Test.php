@@ -48,12 +48,15 @@ class Test
       $this->started = microtime(true);
    }
 
-   public function assert (...$arguments)
+
+   public function describe (? string $description)
    {
-      ob_start();
-      $this->success = $this->specifications['assert'](...$arguments);
-      $this->debugged = ob_get_clean();
-      $this->finished = microtime(true);
+      if (! $description) {
+         return;
+      }
+
+      # ⮡ ↳
+      $this->log("       ⮡ " . $description . '@\;');
    }
 
    public function separate ()
@@ -77,6 +80,15 @@ class Test
 
          $this->log('                 \\' . $header . '/                @\;');
       }
+   }
+
+
+   public function assert (...$arguments)
+   {
+      ob_start();
+      $this->success = $this->specifications['assert'](...$arguments);
+      $this->debugged = ob_get_clean();
+      $this->finished = microtime(true);
    }
 
    public function skip ()

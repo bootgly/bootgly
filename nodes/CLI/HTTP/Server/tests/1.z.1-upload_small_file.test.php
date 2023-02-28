@@ -10,9 +10,13 @@ use Bootgly\CLI\HTTP\Server\Response;
 // TODO ?
 
 return [
-   // ! Server
+   // @ arrange
+   'header' => '@upload',
+
    'response.length' => 82906,
-   // API
+
+   // @ act
+   // Server API
    'sapi' => function (Request $Request, Response $Response) : Response {
       Bootgly::$Project->vendor = '@bootgly/';
       Bootgly::$Project->container = 'web/';
@@ -23,14 +27,13 @@ return [
 
       return $Response('statics/image1.jpg')->upload(close: false);
    },
-   // ! Client
-   // API
+   // Client API
    'capi' => function () {
       // return $Request->get('//header/changed/1');
       return "GET /test/download/small_file/1 HTTP/1.0\r\n\r\n";
    },
 
-   'header' => '@upload',
+   // @ assert
    'assert' => function ($response) : bool {
       // ! Asserts
       // @ Assert length of response
@@ -44,7 +47,6 @@ return [
 
       return true;
    },
-
    'except' => function () : string {
       return 'Response length of uploaded file by server is correct?';
    }
