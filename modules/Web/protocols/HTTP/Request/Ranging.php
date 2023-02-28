@@ -34,7 +34,11 @@ trait Ranging
 
          if ( ($range[0] !== '' && $range[1] !== '')
             && (! ctype_digit($range[0]) || ! ctype_digit($range[1])) ) {
-            return -1;
+            return -1; // Unsatisifiable range
+         }
+
+         if ( count($range) > 2 ) {
+            return -1; // Unsatisifiable range
          }
 
          $start = (int) $range[0];
