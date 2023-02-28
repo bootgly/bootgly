@@ -11,7 +11,7 @@ use Bootgly\CLI\HTTP\Server\Response;
 
 return [
    // @ arrange
-   'describe' => 'It should return the entire file when `bytes=0-$fileSize`',
+   'describe' => 'It should return the entire file when `end` overlap',
 
    // @ act
    // Server API
@@ -28,10 +28,10 @@ return [
    // Client API
    'capi' => function ($host) {
       $raw = <<<HTTP_RAW
-      GET /test/download/file_with_range/one_range/3 HTTP/1.1\r
+      GET /test/download/file_with_range/one_range/4 HTTP/1.1\r
       Host: {$host}\r
       User-Agent: Bootgly\r
-      Range: bytes=0-62\r
+      Range: bytes=0-63\r
       \r\n
       HTTP_RAW;
 

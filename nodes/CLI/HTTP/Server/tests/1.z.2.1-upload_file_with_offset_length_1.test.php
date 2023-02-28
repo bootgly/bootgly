@@ -11,7 +11,7 @@ use Bootgly\CLI\HTTP\Server\Response;
 
 return [
    // @ arrange
-   'response.length' => 304,
+   'response.length' => 301,
 
    // @ act
    // Server API
@@ -23,7 +23,7 @@ return [
 
       Bootgly::$Project->setPath();
 
-      return $Response('statics/screenshot.gif')->upload(offset: 0, length: 2, close: false);
+      return $Response('statics/alphanumeric.txt')->upload(offset: 0, length: 2, close: false);
    },
    // Client API
    'capi' => function () {
@@ -37,14 +37,14 @@ return [
       HTTP/1.1 206 Partial Content\r
       Server: Bootgly\r
       Content-Length: 2\r
-      Content-Range: bytes 0-2/3101612\r
+      Content-Range: bytes 0-2/62\r
       Content-Type: application/octet-stream\r
-      Content-Disposition: attachment; filename="screenshot.gif"\r
-      Last-Modified: Sun, 29 Jan 2023 14:14:08 GMT\r
+      Content-Disposition: attachment; filename="alphanumeric.txt"\r
+      Last-Modified: Tue, 28 Feb 2023 15:30:43 GMT\r
       Cache-Control: no-cache, must-revalidate\r
       Expires: 0\r
       \r
-      GI
+      ab
       HTML_RAW;
 
       if ($response !== $expected) {

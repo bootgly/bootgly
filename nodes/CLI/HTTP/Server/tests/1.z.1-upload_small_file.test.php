@@ -13,7 +13,7 @@ return [
    // @ arrange
    'header' => '@upload',
 
-   'response.length' => 82906,
+   'response.length' => 82928,
 
    // @ act
    // Server API
@@ -37,7 +37,7 @@ return [
    'assert' => function ($response) : bool {
       // ! Asserts
       // @ Assert length of response
-      $expected = 82906;
+      $expected = 82928;
 
       if (strlen($response) !== $expected) {
          Debugger::$labels = ['HTTP Response length:', 'Expected:'];

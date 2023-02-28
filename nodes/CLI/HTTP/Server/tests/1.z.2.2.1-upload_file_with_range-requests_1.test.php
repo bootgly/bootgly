@@ -11,8 +11,8 @@ use Bootgly\CLI\HTTP\Server\Response;
 
 return [
    // @ arrange
-   'response.length' => 305,
-   'describe' => 'Should return 3 bytes of file when bytes is `0-2`',
+   'response.length' => 302,
+   'describe' => 'It should return first 3 bytes of file when `bytes=0-2`',
 
    // @ act
    // Server API
@@ -24,7 +24,7 @@ return [
 
       Bootgly::$Project->setPath();
 
-      return $Response('statics/screenshot.gif')->upload(close: false);
+      return $Response('statics/alphanumeric.txt')->upload(close: false);
    },
    // Client API
    'capi' => function ($host) {
@@ -45,14 +45,14 @@ return [
       HTTP/1.1 206 Partial Content\r
       Server: Bootgly\r
       Content-Length: 3\r
-      Content-Range: bytes 0-2/3101612\r
+      Content-Range: bytes 0-2/62\r
       Content-Type: application/octet-stream\r
-      Content-Disposition: attachment; filename="screenshot.gif"\r
-      Last-Modified: Sun, 29 Jan 2023 14:14:08 GMT\r
+      Content-Disposition: attachment; filename="alphanumeric.txt"\r
+      Last-Modified: Tue, 28 Feb 2023 15:30:43 GMT\r
       Cache-Control: no-cache, must-revalidate\r
       Expires: 0\r
       \r
-      GIF
+      abc
       HTML_RAW;
 
       if ($response !== $expected) {

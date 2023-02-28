@@ -27,6 +27,7 @@ return [
       '1.z.2.2.1-upload_file_with_range-requests_1',
       '1.z.2.2.2-upload_file_with_range-requests_2',
       '1.z.2.2.3-upload_file_with_range-requests_3',
+      '1.z.2.2.4-upload_file_with_range-requests_4',
       // .3 - Large Files
       '1.z.3-upload_large_file',
    ]
