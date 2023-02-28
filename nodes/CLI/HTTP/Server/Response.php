@@ -545,8 +545,6 @@ class Response
          'Expires' => '0',
       ]);
 
-      // @ Send File Content
-
       // @ Return null Response if client Purpose === prefetch
       if (Server::$Request->Header->get('Purpose') === 'prefetch') {
          $this->Meta->status = 204;
@@ -561,9 +559,6 @@ class Response
          return $this;
       }
 
-      // @ Stream if the file is larger than 2 MB
-      $this->stream = true;
-
       // @ Set Request range
       $ranges = [];
       if ( $Range = Server::$Request->Header->get('Range') ) {
@@ -571,27 +566,19 @@ class Response
 
          switch ($ranges) {
             case -2: // Malformed Range header string
-               $this->Meta->status = 400; // Bad Request
-               $this->Header->clean();
-               return $this;
+               return $this->end(400);
             case -1:
-               $this->Meta->status = 416; // Range Not Satisfiable
-               $this->Header->clean();
-               return $this;
+               return $this->end(416, $File->size);
             default:
                $type = array_pop($ranges);
                // @ Check Range type
                if ($type !== 'bytes') {
-                  $this->Meta->status = 416; // Range Not Satisfiable
-                  $this->Header->clean();
-                  return $this;
+                  return $this->end(416, $File->size);
                }
                // @ Check multiple ranges
                // TODO support multiple ranges (multipart/byteranges)
                if (count($ranges) > 1) {
-                  $this->Meta->status = 416; // Range Not Satisfiable
-                  $this->Header->clean();
-                  return $this;
+                  return $this->end(416, $File->size);
                }
 
                // TODO support negative ranges
@@ -607,6 +594,9 @@ class Response
                }
          }
       }
+
+      // @ Set stream if the file is larger than 2 MB
+      $this->stream = true;
 
       // @ Set Content Length
       if ($length > 0) {
@@ -745,12 +735,34 @@ class Response
       return $this;
    }
 
-   public function end (int|string|null $status = null)
+   public function end (int|string|null $status = null, ? string $context = null) : self
    {
       if ($status) {
-         $this->status = $status;
+         // @ Preset
+         switch ($status) {
+            case 400: // Bad Request
+            case 416: // Range Not Satisfiable
+               $this->Meta->status = 416;
+               // Clean prepared headers / header fields already set
+               $this->Header->clean();
+               $this->Content->raw = ' '; // Needs body non-empty
+               break;
+            default:
+               $this->status = $status;
+         }
+
+         // @ Contextualize
+         switch ($status) {
+            case 416: // Range Not Satisfiable
+               if ($context) {
+                  $this->Header->set('Content-Range', 'bytes */' . $context);
+               }
+               break;
+         }
       }
 
       $this->sent = true;
+
+      return $this;
    }
 }
