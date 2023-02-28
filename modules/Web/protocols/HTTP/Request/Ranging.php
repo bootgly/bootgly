@@ -32,6 +32,10 @@ trait Ranging
       for ($i = 0; $i < count($headerRanges); $i++) {
          $range = explode('-', $headerRanges[$i]);
 
+         if (! ctype_digit($range[0]) || ! ctype_digit($range[1]) ) {
+            return -1;
+         }
+
          $start = (int) $range[0];
          $end = (int) $range[1];
 
