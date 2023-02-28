@@ -32,22 +32,24 @@ trait Ranging
       for ($i = 0; $i < count($headerRanges); $i++) {
          $range = explode('-', $headerRanges[$i]);
 
-         if ( ($range[0] !== '' && $range[1] !== '')
-            && (! ctype_digit($range[0]) || ! ctype_digit($range[1])) ) {
+         if ( count($range) > 2 ) {
             return -1; // Unsatisifiable range
          }
 
-         if ( count($range) > 2 ) {
+         if ( $range[0] !== '' && ! ctype_digit($range[0]) ) {
+            return -1; // Unsatisifiable range
+         }
+         if ( $range[1] !== '' && ! ctype_digit($range[1]) ) {
             return -1; // Unsatisifiable range
          }
 
          $start = (int) $range[0];
          $end = (int) $range[1];
 
-         if (is_nan($start) || $range[0] === '') {
+         if ($range[0] === '') {
             $start = $size - $end;
             $end = $size - 1;
-         } else if (is_nan($end) || $range[1] === '') {
+         } else if ($range[1] === '') {
             $end = $size - 1;
          }
 
@@ -56,7 +58,7 @@ trait Ranging
             $end = $size - 1;
          }
 
-         if (is_nan($start) || is_nan($end) || $start > $end || $start < 0) {
+         if ($start > $end || $start < 0) {
             continue;
          }
 
