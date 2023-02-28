@@ -70,7 +70,15 @@ class Server extends TCP\Server implements HTTP
       // * Data
       if ($test) {
          try {
-            SAPI::$tests[self::class] = (@require __DIR__ . '/Server/tests/@.php')['files'];
+            // * Config
+            $tests = __DIR__ . '/Server/tests/@.php';
+
+            // @ Reset Cache of Test boot file
+            if ( function_exists('opcache_invalidate') )
+               opcache_invalidate($tests, true);
+            clearstatcache(false, $tests);
+
+            SAPI::$tests[self::class] = (@require $tests)['files'];
             // * Meta
             SAPI::$Tests[self::class] = [];
       

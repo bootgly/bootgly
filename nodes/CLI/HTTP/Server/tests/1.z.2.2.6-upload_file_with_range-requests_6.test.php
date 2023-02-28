@@ -11,7 +11,7 @@ use Bootgly\CLI\HTTP\Server\Response;
 
 return [
    // @ arrange
-   'describe' => 'It should return the last 5 bytes of file when `bytes=-5`',
+   'describe' => 'It should return the content after 5 bytes of file when `bytes=5-`',
 
    // @ act
    // Server API
@@ -31,7 +31,7 @@ return [
       GET /test/download/file_with_range/one_range/5 HTTP/1.1\r
       Host: {$host}\r
       User-Agent: Bootgly\r
-      Range: bytes=-5\r
+      Range: bytes=5-\r
       \r\n
       HTTP_RAW;
 
@@ -43,26 +43,26 @@ return [
       $expected = <<<HTML_RAW
       HTTP/1.1 206 Partial Content\r
       Server: Bootgly\r
-      Content-Length: 5\r
-      Content-Range: bytes 57-61/62\r
+      Content-Length: 57\r
+      Content-Range: bytes 5-61/62\r
       Content-Type: application/octet-stream\r
       Content-Disposition: attachment; filename="alphanumeric.txt"\r
       Last-Modified: Tue, 28 Feb 2023 15:30:43 GMT\r
       Cache-Control: no-cache, must-revalidate\r
       Expires: 0\r
       \r
-      56789
+      fghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789
       HTML_RAW;
 
-      if (substr($response, 0, 363) !== $expected) {
+      if (substr($response, 0, 358) !== $expected) {
          Debugger::$labels = ['HTTP Response:', 'Expected:'];
-         debug(json_encode(substr($response, 0, 363)), json_encode($expected));
+         debug(json_encode(substr($response, 0, 358)), json_encode($expected));
          return false;
       }
 
       return true;
    },
    'except' => function () : string {
-      return 'Response did not return the last 5 bytes of file?';
+      return 'Response did not return the content after 5 bytes of the file?';
    }
 ];
