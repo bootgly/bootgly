@@ -363,14 +363,15 @@ abstract class Packages implements Web\Packages
       // TODO support to send multiple files
 
       $Handler = @fopen($this->writing[0]['file'], 'r');
+      $parts = $this->writing[0]['parts'];
+      $pads = $this->writing[0]['pads'];
       $close = $this->writing[0]['close'];
-      $ranges = $this->writing[0]['ranges'];
 
       $written = 0;
 
-      foreach ($ranges as $range) {
-         $offset = $range['offset'];
-         $length = $range['length'];
+      foreach ($parts as $index => $part) {
+         $offset = $part['offset'];
+         $length = $part['length'];
 
          // @ Move pointer of file to offset
          try {
@@ -378,6 +379,19 @@ abstract class Packages implements Web\Packages
             #@flock($Handler, \LOCK_SH);
          } catch (\Throwable) {
             return $written;
+         }
+
+         // @ Prepend
+         if ( ! empty($pads[$index]) && ! empty($pads[$index]['prepend']) ) {
+            try {
+               $sent = @fwrite($Socket, $pads[$index]['prepend']);
+            } catch (\Throwable) {
+               break;
+            }
+
+            if ($sent === false) break;
+
+            $written += $sent;
          }
 
          // @ Set over / rate
@@ -390,11 +404,25 @@ abstract class Packages implements Web\Packages
             $over = $length % $rate;
          }
 
+         // @ Upstream
          if ($over > 0) {
             $written += $this->upstream($Socket, $Handler, $over, $over);
          }
 
          $written += $this->upstream($Socket, $Handler, $rate, $length);
+
+         // @ Append
+         if ( ! empty($pads[$index]) && ! empty($pads[$index]['append']) ) {
+            try {
+               $sent = @fwrite($Socket, $pads[$index]['append']);
+            } catch (\Throwable) {
+               break;
+            }
+
+            if ($sent === false) break;
+
+            $written += $sent;
+         }
       }
 
       // @ Try to close the file Handler
