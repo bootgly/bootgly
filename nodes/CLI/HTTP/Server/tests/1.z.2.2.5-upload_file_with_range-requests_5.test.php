@@ -11,6 +11,7 @@ use Bootgly\CLI\HTTP\Server\Response;
 
 return [
    // @ arrange
+   'response.length' => 306,
    'describe' => 'It should return the last 5 bytes of file when `bytes=-5`',
 
    // @ act
@@ -54,9 +55,9 @@ return [
       56789
       HTML_RAW;
 
-      if (substr($response, 0, 363) !== $expected) {
-         Debugger::$labels = ['HTTP Response:', 'Expected:'];
-         debug(json_encode(substr($response, 0, 363)), json_encode($expected));
+      if ($response !== $expected) {
+         Debugger::$labels = ['HTTP Response:', 'Expected string:', 'Expected length:'];
+         debug(json_encode($response), json_encode($expected), strlen($expected));
          return false;
       }
 

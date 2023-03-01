@@ -23,13 +23,13 @@ return [
       '1.z.1-upload_small_file',
       // .2.1 - Requests Range - User
       '1.z.2.1-upload_file_with_offset_length_1',
-      // .2.2 - Requests Range - Client (Valid)
+      // .2.2 - Requests Range - Client - Single Part (Valid)
       '1.z.2.2.1-upload_file_with_range-requests_1',
       '1.z.2.2.2-upload_file_with_range-requests_2',
       '1.z.2.2.3-upload_file_with_range-requests_3',
       '1.z.2.2.4-upload_file_with_range-requests_4',
       '1.z.2.2.5-upload_file_with_range-requests_5',
-      // 2.3 - Requests Range - Client (Invalid)
+      // 2.3 - Requests Range - Client - Single Part (Invalid)
       '1.z.2.3.1-upload_file_with_invalid_range-requests_1',
       '1.z.2.3.2-upload_file_with_invalid_range-requests_2',
       '1.z.2.3.3-upload_file_with_invalid_range-requests_3',
