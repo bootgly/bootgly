@@ -362,44 +362,75 @@ abstract class Packages implements Web\Packages
    {
       // TODO support to send multiple files
 
-      $handler = @fopen($this->writing[0]['file'], 'r');
-
-      $offset = $this->writing[0]['offset'];
-      $length = $this->writing[0]['length'];
+      $Handler = @fopen($this->writing[0]['file'], 'r');
       $close = $this->writing[0]['close'];
+      $ranges = $this->writing[0]['ranges'];
 
       $written = 0;
 
-      // @ Move pointer of file to offset
+      foreach ($ranges as $range) {
+         $offset = $range['offset'];
+         $length = $range['length'];
+
+         // @ Move pointer of file to offset
+         try {
+            @fseek($Handler, $offset, SEEK_SET);
+            #@flock($Handler, \LOCK_SH);
+         } catch (\Throwable) {
+            return $written;
+         }
+
+         // @ Set over / rate
+         $over = 0;
+         $rate = 1 * 1024 * 1024; // 1 MB (1048576) = Max rate to read/send data file by loop
+   
+         if ($length < $rate) {
+            $rate = $length;
+         } else if ($length > $rate) {
+            $over = $length % $rate;
+         }
+
+         if ($over > 0) {
+            $written += $this->upstream($Socket, $Handler, $over, $over);
+         }
+
+         $written += $this->upstream($Socket, $Handler, $rate, $length);
+      }
+
+      // @ Try to close the file Handler
       try {
-         @fseek($handler, $offset, SEEK_SET);
-         #@flock($handler, \LOCK_SH);
-      } catch (\Throwable) {
-         return $written;
+         @fclose($Handler);
+      } catch (\Throwable) {}
+
+      // @ Unset current writing
+      unSet($this->writing[0]);
+
+      // @ Try to close the Socket if requested
+      if ($close) {
+         try {
+            $this->Connection->close();
+         } catch (\Throwable) {}
       }
 
-      // @ Limit length of data file (size) to read
-      $over = 0;
-      $rate = 1 * 1024 * 1024; // 1 MB (1048576) = Max rate to read/send data file by loop
+      return $written;
+   }
 
-      if ($length < $rate) {
-         $rate = $length;
-      } else if ($length > $rate) {
-         $over = $length % $rate;
-      }
+   public function upstream (&$Socket, &$Handler, $rate, $length)
+   {
+      $written = 0;
+
+      // TODO Exceptions in breaks
 
       while ($written < $length) {
          // ! File
          // @ Read file from local storage
          try {
-            $buffer = @fread($handler, $rate);
+            $buffer = @fread($Handler, $rate);
          } catch (\Throwable) {
             break;
          }
 
-         if ($buffer === false) {
-            break;
-         }
+         if ($buffer === false) break;
 
          $read = strlen($buffer);
 
@@ -423,41 +454,18 @@ abstract class Packages implements Web\Packages
                continue;
             }
 
-            // @ Set overate
-            if ($over && $length - $written <= $over) {
-               $rate = $over;
-               $over = 0;
-            }
-
             break;
          }
 
          // @ Check End-of-file
          try {
-            $end = @feof($handler);
+            $end = @feof($Handler);
          } catch (\Throwable) {
             break;
          }
 
-         if ($end) {
-            break;
-         }
+         if ($end) break;
       }
-
-      // @ Try to close the file handler
-      try {
-         @fclose($handler);
-      } catch (\Throwable) {}
-
-      // @ Try to close the Socket if requested
-      if ($close) {
-         try {
-            $this->Connection->close();
-         } catch (\Throwable) {}
-      }
-
-      // @ Unset handler from writing
-      unSet($this->writing[0]);
 
       return $written;
    }
