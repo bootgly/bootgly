@@ -107,6 +107,24 @@ class Header
    {
       $this->prepared = $fields;
    }
+   public function translate (string $field, ...$values) : string
+   {
+      switch ($field) {
+         case 'Content-Range':
+            // @ bytes Context
+            $start = $values[0];
+            $end = $values[1];
+            $size = $values[2];
+
+            if ($end > $size - 1) {
+               $end += 1;
+            }
+
+            return "bytes {$start}-{$end}/{$size}";
+         default:
+            return '';
+      }
+   }
 
    // TODO increase performance
    public function build () // @ raw
