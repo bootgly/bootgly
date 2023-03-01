@@ -549,13 +549,13 @@ class Response
       if (Server::$Request->Header->get('Purpose') === 'prefetch') {
          $this->Meta->status = 204;
          $this->Header->set('Cache-Control', 'no-store');
-         $this->Header->set('Expires', 0);
+         $this->Header->set('Expires', '0');
          return $this;
       }
 
-      // @ Set Request range if exists
       $ranges = [];
       if ( $Range = Server::$Request->Header->get('Range') ) {
+         // @ Parse Client range requests
          $ranges = Server::$Request->range($File->size, $Range, combine: true);
 
          switch ($ranges) {
@@ -575,46 +575,43 @@ class Response
                   return $this->end(416, $File->size);
                }
 
-               $offset = $ranges[0]['start'];
-               $length = 0;
+               foreach ($ranges as &$range) {
+                  $range['offset'] = $range['start'];
+                  $range['length'] = 0;
 
-               foreach ($ranges as $range) {
                   if ($range['end'] > $range['start']) {
-                     $length += ($range['end'] - $range['start']);
+                     $range['length'] += ($range['end'] - $range['start']);
                   }
 
-                  $length += 1;
+                  $range['length'] += 1;
                }
+
+               #debug(...$ranges);
          }
-      }
-
-      // @ Set Content Length
-      if ($length > 0) {
-         $this->Content->length = $length;
       } else {
-         $this->Content->length = $File->size - $offset;
-      }
-
-      $this->Header->set('Content-Length', $this->Content->length);
-
-      // @ Set User range
-      if ( empty($ranges) ) {
+         // @ Set User offset / length
          $ranges[] = [
             'start' => $offset,
-            'end' => $this->Content->length
+            'end' => $length,
+
+            'offset' => $offset,
+            'length' => $length ?? $File->size - $offset
          ];
       }
 
+      // @ Set Content Length
+      $this->Header->set('Content-Length', $ranges[0]['length']);
+
       // @ Set (HTTP/1.1): Range Requests Headers
-      if ($offset || $length) {
+      if ($ranges[0]['end'] !== null || $ranges[0]['start']) {
          // @ Set Response status
          $this->Meta->status = 206; // 206 Partial Content
 
          // @ Set Content-Range header
          $start = $ranges[0]['start'];
-
          $end = $ranges[0]['end'];
-         if ($ranges[0]['end'] > $File->size - 1) {
+
+         if ($end > $File->size - 1) {
             $end += 1;
          }
 
@@ -626,24 +623,17 @@ class Response
       // @ Build Response Header
       $this->Header->build();
 
-      // @ If file size < 2 MB set file content in the Response Content raw
-      if ($File->size <= 2 * 1024 * 1024) { // @ 2097152 bytes
-         $this->Content->raw = $File->read($File::CONTENTS_READ_METHOD, $offset, $length);
-      } else {
-         // @ Set stream if the file is larger than 2 MB
-         $this->stream = true;
+      // @ Prepare upstream
+      $this->stream = true;
 
-         // @ Prepare Response files
-         $this->files[] = [
-            'file' => $File->File, // @ Set file path to open handler
+      // @ Prepare Response files
+      $this->files[] = [
+         'file' => $File->File, // @ Set file path to open handler
 
-            // 'ranges' => [...],
-            'offset' => $ranges[0]['start'],
-            'length' => $this->Content->length,
+         'ranges' => $ranges,
 
-            'close' => $close
-         ];
-      }
+         'close' => $close
+      ];
 
       $this->sent = true;
 
