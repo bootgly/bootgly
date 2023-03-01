@@ -616,7 +616,7 @@ class Response
 
             $boundary = str_pad($multiparts, 20, '0', STR_PAD_LEFT);
 
-            $this->Header->set('Content-Type', 'multiparts/byteranges; boundary=' . $boundary);
+            $this->Header->set('Content-Type', 'multipart/byteranges; boundary=' . $boundary);
 
             foreach ($ranges as $index => $range) {
                $start = $range['start'];
