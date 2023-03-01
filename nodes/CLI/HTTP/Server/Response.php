@@ -517,8 +517,6 @@ class Response
    }
    public function upload ($content = null, int $offset = 0, ? int $length = null, bool $close = true) : self
    {
-      // TODO support to upload multiple files
-
       if ($content === null) {
          $content = $this->body;
       }
@@ -534,11 +532,10 @@ class Response
          return $this;
       }
 
-      // @ Set HTTP headers
-      $this->Header->prepare([
-         'Content-Type' => 'application/octet-stream',
-         'Content-Disposition' => 'attachment; filename="'.$File->basename.'"',
+      $size = $File->size;
 
+      // @ Prepare HTTP headers
+      $this->Header->prepare([
          'Last-Modified' => gmdate('D, d M Y H:i:s', $File->modified) . ' GMT',
          // Cache
          'Cache-Control' => 'no-cache, must-revalidate',
@@ -554,83 +551,124 @@ class Response
       }
 
       $ranges = [];
+      $parts = [];
       if ( $Range = Server::$Request->Header->get('Range') ) {
          // @ Parse Client range requests
-         $ranges = Server::$Request->range($File->size, $Range, combine: true);
+         $ranges = Server::$Request->range($size, $Range);
 
          switch ($ranges) {
             case -2: // Malformed Range header string
                return $this->end(400);
             case -1:
-               return $this->end(416, $File->size);
+               return $this->end(416, $size);
             default:
                $type = array_pop($ranges);
                // @ Check Range type
                if ($type !== 'bytes') {
-                  return $this->end(416, $File->size);
-               }
-               // @ Check multiple ranges
-               // TODO support multiple ranges (multipart/byteranges)
-               if (count($ranges) > 1) {
-                  return $this->end(416, $File->size);
+                  return $this->end(416, $size);
                }
 
-               foreach ($ranges as &$range) {
-                  $range['offset'] = $range['start'];
-                  $range['length'] = 0;
+               foreach ($ranges as $range) {
+                  $start = $range['start'];
+                  $end = $range['end'];
 
-                  if ($range['end'] > $range['start']) {
-                     $range['length'] += ($range['end'] - $range['start']);
+                  $offset = $start;
+                  $length = 0;
+                  if ($end > $start) {
+                     $length += ($end - $start);
                   }
+                  $length += 1;
 
-                  $range['length'] += 1;
+                  $parts[] = [
+                     'offset' => $offset,
+                     'length' => $length
+                  ];
                }
-
-               #debug(...$ranges);
          }
       } else {
          // @ Set User offset / length
          $ranges[] = [
             'start' => $offset,
-            'end' => $length,
-
+            'end' => $length
+         ];
+         $parts[] = [
             'offset' => $offset,
-            'length' => $length ?? $File->size - $offset
+            'length' => $length ?? $size - $offset
          ];
       }
 
-      // @ Set Content Length
-      $this->Header->set('Content-Length', $ranges[0]['length']);
-
-      // @ Set (HTTP/1.1): Range Requests Headers
+      // ! Header
+      $rangesCount = count($ranges);
+      // @ Set Content Length Header
+      if ($rangesCount === 1) {
+         $this->Header->set('Content-Length', $parts[0]['length']);
+      }
+      // @ Set HTTP range requests Headers
+      $pads = [];
       if ($ranges[0]['end'] !== null || $ranges[0]['start']) {
          // @ Set Response status
          $this->Meta->status = 206; // 206 Partial Content
 
-         // @ Set Content-Range header
-         $start = $ranges[0]['start'];
-         $end = $ranges[0]['end'];
+         // @ Check multiple ranges
+         if ($rangesCount > 1) {
+            static $multiparts = 0;
+            $multiparts++;
 
-         if ($end > $File->size - 1) {
-            $end += 1;
+            $boundary = str_pad($multiparts, 20, '0', STR_PAD_LEFT);
+
+            $this->Header->set('Content-Type', 'multiparts/byteranges; boundary=' . $boundary);
+
+            foreach ($ranges as $index => $range) {
+               $start = $range['start'];
+               $end = $range['end'];
+
+               if ($end > $size - 1) $end += 1;
+
+               $prepend = <<<HTTP_RAW
+               \r\n--$boundary
+               Content-Type: application/octet-stream
+               Content-Range: bytes {$start}-{$end}/{$size}\r\n\r\n
+               HTTP_RAW;
+
+               $append = null;
+               if ($index === $rangesCount - 1) {
+                  $append = <<<HTTP_RAW
+                  \r\n--$boundary--\r\n
+                  HTTP_RAW;
+               }
+
+               $pads[] = [
+                  'prepend' => $prepend,
+                  'append' => $append
+               ];
+            }
+         } else {
+            $start = $ranges[0]['start'];
+            $end = $ranges[0]['end'];
+
+            if ($end > $size - 1) $end += 1;
+
+            $this->Header->set('Content-Range', "bytes {$start}-{$end}/{$size}");
          }
-
-         $this->Header->set('Content-Range', "bytes {$start}-{$end}/{$File->size}");
       } else {
          $this->Header->set('Accept-Ranges', 'bytes');
       }
-
+      // @ Set Content-Disposition Header
+      if ($rangesCount === 1) {
+         $this->Header->set('Content-Type', 'application/octet-stream');
+         $this->Header->set('Content-Disposition', 'attachment; filename="'.$File->basename.'"');
+      }
       // @ Build Response Header
       $this->Header->build();
 
       // @ Prepare upstream
       $this->stream = true;
-
-      // @ Prepare Response files
+      // @ Prepare writing
       $this->files[] = [
          'file' => $File->File, // @ Set file path to open handler
 
-         'ranges' => $ranges,
+         'parts' => $parts,
+         'pads' => $pads,
 
          'close' => $close
       ];
