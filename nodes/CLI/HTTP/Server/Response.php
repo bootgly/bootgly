@@ -618,6 +618,7 @@ class Response
 
             $this->Header->set('Content-Type', 'multipart/byteranges; boundary=' . $boundary);
 
+            $length = 0;
             foreach ($ranges as $index => $range) {
                $start = $range['start'];
                $end = $range['end'];
@@ -637,11 +638,17 @@ class Response
                   HTTP_RAW;
                }
 
+               $length += $parts[$index]['length'];
+               $length += strlen($prepend);
+               $length += strlen($append ?? '');
+
                $pads[] = [
                   'prepend' => $prepend,
                   'append' => $append
                ];
             }
+
+            $this->Header->set('Content-Length', $length);
          } else {
             $start = $ranges[0]['start'];
             $end = $ranges[0]['end'];
