@@ -106,6 +106,8 @@ class Test
          . "\033[90m" . $this->test . "\033[0m" 
          . "\033[1;35m +" . $time . "s\033[0m" . PHP_EOL
       );
+
+      $this->describe($this->specifications['describe'] ?? null);
    }
    public function fail ()
    {
@@ -115,7 +117,11 @@ class Test
          "\033[1;37;41m FAIL \033[0m " 
          . $this->test
          . " -> \"\033[91m" . $this->specifications['except']() . "\033[0m\"" . ':'
-         . $this->debugged . PHP_EOL
+         . PHP_EOL
       );
+
+      $this->describe($this->specifications['describe'] ?? null);
+
+      $this->log($this->debugged);
    }
 }

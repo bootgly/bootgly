@@ -268,8 +268,6 @@ class Server extends TCP\Server implements HTTP
                // @ Output Test result
                if (! $Connection->expired && $Test->success) {
                   $Test->pass();
-
-                  $Test->describe($spec['describe'] ?? null);
                } else {
                   $Test->fail();
                   break;
