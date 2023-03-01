@@ -16,6 +16,10 @@ namespace Bootgly\Web\protocols\HTTP\Request;
 
 trait Ranging
 {
+   // * Meta
+   public static int $multiparts = 0;
+
+
    public function range (int $size, string $header, bool $combine = false)
    {
       // @ Validate

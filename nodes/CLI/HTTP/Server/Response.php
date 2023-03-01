@@ -18,6 +18,7 @@ use Bootgly\CLI\HTTP\Server;
 use Bootgly\CLI\HTTP\Server\Response\Content;
 use Bootgly\CLI\HTTP\Server\Response\Meta;
 use Bootgly\CLI\HTTP\Server\Response\Header;
+use Bootgly\Web\protocols\HTTP;
 
 
 class Response
@@ -609,12 +610,8 @@ class Response
          // @ Set Response status
          $this->Meta->status = 206; // 206 Partial Content
 
-         // @ Check multiple ranges
-         if ($rangesCount > 1) {
-            static $multiparts = 0;
-            $multiparts++;
-
-            $boundary = str_pad($multiparts, 20, '0', STR_PAD_LEFT);
+         if ($rangesCount > 1) { // @ HTTP Multipart ranges
+            $boundary = str_pad(++HTTP\Request\Ranging::$multiparts, 20, '0', STR_PAD_LEFT);
 
             $this->Header->set('Content-Type', 'multipart/byteranges; boundary=' . $boundary);
 
@@ -649,7 +646,7 @@ class Response
             }
 
             $this->Header->set('Content-Length', $length);
-         } else {
+         } else { // @ HTTP Single part ranges
             $start = $ranges[0]['start'];
             $end = $ranges[0]['end'];
 
