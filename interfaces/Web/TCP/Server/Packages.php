@@ -319,7 +319,7 @@ abstract class Packages implements Web\Packages
          $offset = $part['offset'];
          $length = $part['length'];
 
-         #$pad = $pads[$index];
+         $pad = $pads[$index] ?? null;
 
          // @ Move pointer of file to offset
          try {
@@ -330,9 +330,9 @@ abstract class Packages implements Web\Packages
          }
 
          // @ Prepend
-         if ( ! empty($pads[$index]) && ! empty($pads[$index]['prepend']) ) {
+         if ( ! empty($pad['prepend']) ) {
             try {
-               $sent = @fwrite($Socket, $pads[$index]['prepend']);
+               $sent = @fwrite($Socket, $pad['prepend']);
             } catch (\Throwable) {
                break;
             }
@@ -363,9 +363,9 @@ abstract class Packages implements Web\Packages
          $written += $this->upload($Socket, $Handler, $rate, $length);
 
          // @ Append
-         if ( ! empty($pads[$index]) && ! empty($pads[$index]['append']) ) {
+         if ( ! empty($pad['append']) ) {
             try {
-               $sent = @fwrite($Socket, $pads[$index]['append']);
+               $sent = @fwrite($Socket, $pad['append']);
             } catch (\Throwable) {
                break;
             }
