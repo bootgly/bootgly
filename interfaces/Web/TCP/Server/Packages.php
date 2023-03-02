@@ -253,13 +253,12 @@ abstract class Packages implements Web\Packages
    {
       // TODO test!!!
       $file = $this->reading[0]['file'];
-      $handler = @fopen($file, 'w+');
+      $Handler = @fopen($file, 'w+');
 
       $length = $this->reading[0]['length'];
       $close = $this->reading[0]['close'];
 
-      $read = 0;   // Socket read
-      $stored = 0; // File size stored
+      $read = 0; // int Socket read in bytes
 
       // @ Check free space in dir of file
       try {
@@ -270,84 +269,31 @@ abstract class Packages implements Web\Packages
          return false;
       }
 
-      // @ Limit length of Socket read
+      // @ Set over / rate
       $over = 0;
-      $rate = 1 * 1024 * 1024; // 1 MB (1048576) = Max rate to write/receive data file by loop
-      $size = $rate;
+      $rate = 1 * 1024 * 1024; // 1 MB (1048576) = Max rate to read/send data file by loop
 
       if ($length > 0 && $length < $rate) {
-         $size = $length;
+         $rate = $length;
       } else if ($length > $rate) {
-         $over = $length - $rate;
-      } else {
-         return false;
+         $over = $length % $rate;
       }
 
-      while ($read < $length) {
-         // ! Socket
-         // @ Read part of file from client
-         try {
-            $buffer = @fread($Socket, $size);
-         } catch (\Throwable) {
-            break;
-         }
-   
-         if ($buffer === false) {
-            break;
-         }
-   
-         $read += strlen($buffer);
-   
-         // @ Write part of received (if exists) file to local storage
-         while ($read) {
-            // ! File
-            try {
-               $written = @fwrite($handler, $buffer, $read);
-            } catch (\Throwable) {
-               break;
-            }
-   
-            if ($written === false) break;
-            if ($written === 0) continue;
-
-            $stored += $written;
-
-            if ($written < $read) {
-               $buffer = substr($buffer, $written);
-               $read -= $written;
-               continue;
-            }
-
-            // @ Set new over / size if necessary
-            if ($over % $rate > 0) {
-               if ($over >= $stored) {
-                  $over -= $stored;
-               }
-      
-               if ($over < $size) {
-                  $size = $over;
-               }
-            }
-
-            break;
-         }
-   
-         // @ Check Socket End-of-file (EOF)
-         try {
-            $end = @feof($Socket);
-         } catch (\Throwable) {
-            break;
-         }
-   
-         if ($end) {
-            break;
-         }
+      // @ Download File
+      if ($over > 0) {
+         $read += $this->download($Socket, $Handler, $over, $over);
+         $length -= $read;
       }
+
+      $read += $this->download($Socket, $Handler, $rate, $length);
    
-      // @ Try to close the file handler
+      // @ Try to close the file Handler
       try {
-         @fclose($handler);
+         @fclose($Handler);
       } catch (\Throwable) {}
+
+      // @ Unset current reading
+      unSet($this->reading[0]);
 
       // @ Try to close the Socket if requested
       if ($close) {
@@ -443,7 +389,61 @@ abstract class Packages implements Web\Packages
       return $written;
    }
 
-   public function upload (&$Socket, &$Handler, int $rate, int $length)
+   public function download (&$Socket, &$Handler, int $rate, int $length) : int
+   {
+      // TODO test!!!
+      $read = 0;
+      $stored = 0;
+
+      while ($stored < $length) {
+         // ! Socket
+         // @ Read part of file from client
+         try {
+            $buffer = @fread($Socket, $rate);
+         } catch (\Throwable) {
+            break;
+         }
+   
+         if ($buffer === false) break;
+   
+         $read += strlen($buffer);
+   
+         // @ Write part of received (if exists) file to local storage
+         while ($read) {
+            // ! File
+            try {
+               $written = @fwrite($Handler, $buffer, $read);
+            } catch (\Throwable) {
+               break;
+            }
+   
+            if ($written === false) break;
+            if ($written === 0) continue;
+
+            $stored += $written;
+
+            if ($written < $read) {
+               $buffer = substr($buffer, $written);
+               $read -= $written;
+               continue;
+            }
+
+            break;
+         }
+   
+         // @ Check Socket End-of-file (EOF)
+         try {
+            $end = @feof($Socket);
+         } catch (\Throwable) {
+            break;
+         }
+   
+         if ($end) break;
+      }
+
+      return $stored;
+   }
+   public function upload (&$Socket, &$Handler, int $rate, int $length) : int
    {
       $written = 0;
 
