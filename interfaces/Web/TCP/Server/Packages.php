@@ -319,6 +319,8 @@ abstract class Packages implements Web\Packages
          $offset = $part['offset'];
          $length = $part['length'];
 
+         #$pad = $pads[$index];
+
          // @ Move pointer of file to offset
          try {
             @fseek($Handler, $offset, SEEK_SET);
@@ -338,6 +340,7 @@ abstract class Packages implements Web\Packages
             if ($sent === false) break;
 
             $written += $sent;
+            // TODO check if the data has been completely sent
          }
 
          // @ Set over / rate
@@ -353,6 +356,8 @@ abstract class Packages implements Web\Packages
          // @ Upload File
          if ($over > 0) {
             $written += $this->upload($Socket, $Handler, $over, $over);
+            // TODO check if the data has been completely sent
+            $length -= $written;
          }
 
          $written += $this->upload($Socket, $Handler, $rate, $length);
@@ -368,6 +373,7 @@ abstract class Packages implements Web\Packages
             if ($sent === false) break;
 
             $written += $sent;
+            // TODO check if the data has been completely sent
          }
       }
 
