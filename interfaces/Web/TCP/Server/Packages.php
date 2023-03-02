@@ -40,9 +40,10 @@ abstract class Packages implements Web\Packages
    public static string $output;
    // * Meta
    // @ Handler
-   public array $reading;
-   public array $writing;
    public array $callbacks;
+   // @ Stream
+   public array $downloading;
+   public array $uploading;
    // @ Expiration
    public bool $expired;
 
@@ -60,9 +61,10 @@ abstract class Packages implements Web\Packages
       self::$output = '';
       // * Meta
       // @ Handler
-      $this->reading = [];
-      $this->writing = [];
       $this->callbacks = [&self::$input];
+      // @ Stream
+      $this->downloading = [];
+      $this->uploading = [];
       // @ Expiration
       $this->expired = false;
 
@@ -219,8 +221,8 @@ abstract class Packages implements Web\Packages
                continue;
             }
 
-            if ( count($this->writing) ) {
-               $written += $this->writing($Socket);
+            if ( count($this->uploading) ) {
+               $written += $this->uploading($Socket);
             }
 
             break;
@@ -249,14 +251,14 @@ abstract class Packages implements Web\Packages
    }
 
    // ! Stream
-   public function reading ($Socket) : int|false
+   public function downloading ($Socket) : int|false
    {
       // TODO test!!!
-      $file = $this->reading[0]['file'];
+      $file = $this->downloading[0]['file'];
       $Handler = @fopen($file, 'w+');
 
-      $length = $this->reading[0]['length'];
-      $close = $this->reading[0]['close'];
+      $length = $this->downloading[0]['length'];
+      $close = $this->downloading[0]['close'];
 
       $read = 0; // int Socket read in bytes
 
@@ -292,8 +294,8 @@ abstract class Packages implements Web\Packages
          @fclose($Handler);
       } catch (\Throwable) {}
 
-      // @ Unset current reading
-      unSet($this->reading[0]);
+      // @ Unset current downloading
+      unSet($this->downloading[0]);
 
       // @ Try to close the Socket if requested
       if ($close) {
@@ -304,12 +306,12 @@ abstract class Packages implements Web\Packages
    
       return $read;
    }
-   public function writing ($Socket) : int
-   { // TODO support to send multiple files
-      $Handler = @fopen($this->writing[0]['file'], 'r');
-      $parts = $this->writing[0]['parts'];
-      $pads = $this->writing[0]['pads'];
-      $close = $this->writing[0]['close'];
+   public function uploading ($Socket) : int
+   { // TODO support to upload multiple files
+      $Handler = @fopen($this->uploading[0]['file'], 'r');
+      $parts = $this->uploading[0]['parts'];
+      $pads = $this->uploading[0]['pads'];
+      $close = $this->uploading[0]['close'];
 
       $written = 0;
 
@@ -379,8 +381,8 @@ abstract class Packages implements Web\Packages
          @fclose($Handler);
       } catch (\Throwable) {}
 
-      // @ Unset current writing
-      unSet($this->writing[0]);
+      // @ Unset current uploading
+      unSet($this->uploading[0]);
 
       // @ Try to close the Socket if requested
       if ($close) {
