@@ -404,12 +404,12 @@ abstract class Packages implements Web\Packages
             $over = $length % $rate;
          }
 
-         // @ Upstream
+         // @ Upload File
          if ($over > 0) {
-            $written += $this->upstream($Socket, $Handler, $over, $over);
+            $written += $this->upload($Socket, $Handler, $over, $over);
          }
 
-         $written += $this->upstream($Socket, $Handler, $rate, $length);
+         $written += $this->upload($Socket, $Handler, $rate, $length);
 
          // @ Append
          if ( ! empty($pads[$index]) && ! empty($pads[$index]['append']) ) {
@@ -443,7 +443,7 @@ abstract class Packages implements Web\Packages
       return $written;
    }
 
-   public function upstream (&$Socket, &$Handler, $rate, $length)
+   public function upload (&$Socket, &$Handler, int $rate, int $length)
    {
       $written = 0;
 
