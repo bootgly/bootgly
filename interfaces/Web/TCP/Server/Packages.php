@@ -282,7 +282,7 @@ abstract class Packages implements Web\Packages
       // @ Download File
       if ($over > 0) {
          $read += $this->download($Socket, $Handler, $over, $over);
-         $length -= $read;
+         $length -= $over;
       }
 
       $read += $this->download($Socket, $Handler, $rate, $length);
@@ -305,9 +305,7 @@ abstract class Packages implements Web\Packages
       return $read;
    }
    public function writing ($Socket) : int
-   {
-      // TODO support to send multiple files
-
+   { // TODO support to send multiple files
       $Handler = @fopen($this->writing[0]['file'], 'r');
       $parts = $this->writing[0]['parts'];
       $pads = $this->writing[0]['pads'];
@@ -324,7 +322,6 @@ abstract class Packages implements Web\Packages
          // @ Move pointer of file to offset
          try {
             @fseek($Handler, $offset, SEEK_SET);
-            #@flock($Handler, \LOCK_SH);
          } catch (\Throwable) {
             return $written;
          }
@@ -346,7 +343,7 @@ abstract class Packages implements Web\Packages
          // @ Set over / rate
          $over = 0;
          $rate = 1 * 1024 * 1024; // 1 MB (1048576) = Max rate to read/send data file by loop
-   
+
          if ($length < $rate) {
             $rate = $length;
          } else if ($length > $rate) {
@@ -357,7 +354,7 @@ abstract class Packages implements Web\Packages
          if ($over > 0) {
             $written += $this->upload($Socket, $Handler, $over, $over);
             // TODO check if the data has been completely sent
-            $length -= $written;
+            $length -= $over;
          }
 
          $written += $this->upload($Socket, $Handler, $rate, $length);
