@@ -1,10 +1,15 @@
-# Bootgly PHP Framework
+<h1 align="center">Bootgly PHP Framework</h1>
 
-> Full Stack PHP Framework for Multi Projects
+<p align="center">
+  <img src="https://github.com/bootgly/.github/raw/main/favicon-temp1-128.png" alt="bootgly-logo" width="120px" height="120px"/>
+  <br>
+  <i>Full Stack PHP Framework for Multi Projects.</i>
+  <br>
+</p>
 
 🚧 Do not use it in production environments. The alpha version hasn't even been released yet. 🚧
 
-*Repository created for Github Accelerator.*
+*Repository initially created for the Github Accelerator.*
 
 First beta release is planned for mid-year 2023.
 
@@ -101,6 +106,12 @@ Help us keep Bootgly open and inclusive. Please read and follow our [Code of Con
 
 ---
 
+## 📑 Versioning
+
+Bootgly PHP Framework will follow [Semantic Versioning 2.0][semver].
+
+---
+
 ## 📃 License
 
 The Bootgly PHP Framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
@@ -108,3 +119,4 @@ The Bootgly PHP Framework is open-sourced software licensed under the [MIT licen
 
 [telegram]: https://t.me/bootgly
 [codeofconduct]: CODE_OF_CONDUCT.md
+[semver]: https://semver.org/
