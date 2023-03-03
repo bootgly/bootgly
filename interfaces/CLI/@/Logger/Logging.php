@@ -114,6 +114,33 @@ trait Logging
          return $this->wrap($color);
       }, $message);
 
+      // @ Colors => Colors (@#[a-bzA-Z]+:)
+      $message = preg_replace_callback('/@(#[a-zA-Z]+):/m', function ($matches) {
+         $color = match ($matches[1]) {
+            '#black' => self::LOG_BLACK_FOREGROUND,
+            '#red' => self::LOG_RED_FOREGROUND,
+            '#green' => self::LOG_GREEN_FOREGROUND,
+            '#yellow' => self::LOG_YELLOW_FOREGROUND,
+            '#blue' => self::LOG_BLUE_FOREGROUND,
+            '#magenta' => self::LOG_MAGENTA_FOREGROUND,
+            '#cyan' => self::LOG_CYAN_FOREGROUND,
+            '#white' => self::LOG_WHITE_FOREGROUND,
+
+            '#Black', '#BLACK' => self::LOG_BLACK_BRIGHT_FOREGROUND,
+            '#Red', '#RED' => self::LOG_RED_BRIGHT_FOREGROUND,
+            '#Green', '#GREEN' => self::LOG_GREEN_BRIGHT_FOREGROUND,
+            '#Yellow', '#YELLOW' => self::LOG_YELLOW_BRIGHT_FOREGROUND,
+            '#Blue', '#BLUE' => self::LOG_BLUE_BRIGHT_FOREGROUND,
+            '#Magenta', '#MAGENTA' => self::LOG_MAGENTA_BRIGHT_FOREGROUND,
+            '#Cyan', '#CYAN' => self::LOG_CYAN_BRIGHT_FOREGROUND,
+            '#White', '#WHITE' => self::LOG_WHITE_BRIGHT_FOREGROUND,
+
+            default => self::LOG_DEFAULT_FOREGROUND
+         };
+
+         return $this->wrap($color);
+      }, $message);
+
       // @ Style
       $message = preg_replace_callback('/@([*~_-])/m', function ($matches) {
          $style = match ($matches[1]) {
