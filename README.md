@@ -85,6 +85,26 @@ Your sponsorship will keep this project always **up to date** with **new feature
 
 ---
 
+## 🌱 Community
+
+Join the conversation and help the community.
+
+- [Telegram][telegram]
+
+**Love Bootgly? Give our repo a star ⭐!**
+
+---
+
+## 🛂 Code of Conduct
+
+Help us keep Bootgly open and inclusive. Please read and follow our [Code of Conduct][codeofconduct].
+
+---
+
 ## 📃 License
 
 The Bootgly PHP Framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+
+
+[telegram]: https://t.me/bootgly
+[codeofconduct]: CODE_OF_CONDUCT.md
