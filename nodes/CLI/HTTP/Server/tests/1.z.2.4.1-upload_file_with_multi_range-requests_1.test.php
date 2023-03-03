@@ -11,10 +11,10 @@ use Bootgly\CLI\HTTP\Server\Response;
 
 return [
    // @ arrange
-   'response.length' => 301,
+   'response.length' => 557,
+   'describe' => 'It should return parts of file `bytes=1-2,3-4,-1`',
    'separators' => [
-      'separator' => true,
-      'left' => '.2.1 - Requests Range - Dev'
+      'left' => '.2.2 - Requests Range - Client - Multi Part (Valid)'
    ],
 
    // @ act
@@ -27,12 +27,19 @@ return [
 
       Bootgly::$Project->setPath();
 
-      return $Response('statics/alphanumeric.txt')->upload(offset: 0, length: 2, close: false);
+      return $Response('statics/alphanumeric.txt')->upload(close: false);
    },
    // Client API
-   'capi' => function () {
-      // return $Request->get('//header/changed/1');
-      return "GET /test/download/file_with_offset_length/1 HTTP/1.0\r\n\r\n";
+   'capi' => function ($host) {
+      $raw = <<<HTTP_RAW
+      GET /test/download/file_with_range/multi_range/1 HTTP/1.1\r
+      Host: {$host}\r
+      User-Agent: Bootgly\r
+      Range: bytes=1-2,3-4,-1\r
+      \r\n
+      HTTP_RAW;
+
+      return $raw;
    },
 
    // @ assert
@@ -40,15 +47,30 @@ return [
       $expected = <<<HTML_RAW
       HTTP/1.1 206 Partial Content\r
       Server: Bootgly\r
-      Content-Length: 2\r
-      Content-Range: bytes 0-2/62\r
-      Content-Type: application/octet-stream\r
-      Content-Disposition: attachment; filename="alphanumeric.txt"\r
+      Content-Type: multipart/byteranges; boundary=00000000000000000001\r
+      Content-Length: 320\r
       Last-Modified: Tue, 28 Feb 2023 15:30:43 GMT\r
       Cache-Control: no-cache, must-revalidate\r
       Expires: 0\r
       \r
-      ab
+      \r
+      --00000000000000000001
+      Content-Type: application/octet-stream
+      Content-Range: bytes 1-2/62\r
+      \r
+      bc\r
+      --00000000000000000001
+      Content-Type: application/octet-stream
+      Content-Range: bytes 3-4/62\r
+      \r
+      de\r
+      --00000000000000000001
+      Content-Type: application/octet-stream
+      Content-Range: bytes 61-61/62\r
+      \r
+      9\r
+      --00000000000000000001--\r
+      
       HTML_RAW;
 
       if ($response !== $expected) {
@@ -60,6 +82,6 @@ return [
       return true;
    },
    'except' => function () : string {
-      return 'Response contains part of file uploaded by server?';
+      return 'Response did not return multiple parts of file?';
    }
 ];

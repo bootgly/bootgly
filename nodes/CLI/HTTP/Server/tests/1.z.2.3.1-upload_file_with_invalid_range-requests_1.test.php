@@ -12,6 +12,9 @@ use Bootgly\CLI\HTTP\Server\Response;
 return [
    // @ arrange
    'describe' => 'It should return 416 status: negative range start `-5-10`',
+   'separators' => [
+      'left' => '.2.3 - Requests Range - Client - Single Part (Invalid)'
+   ],
 
    // @ act
    // Server API

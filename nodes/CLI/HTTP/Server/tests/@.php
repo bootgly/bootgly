@@ -21,7 +21,7 @@ return [
       // @ upload
       // .1 - Small Files
       '1.z.1-upload_a_small_file',
-      // .2.1 - Requests Range - User
+      // .2.1 - Requests Range - Dev
       '1.z.2.1-upload_file_with_offset_length_1',
       // .2.2 - Requests Range - Client - Single Part (Valid)
       '1.z.2.2.1-upload_file_with_range-requests_1',
@@ -36,6 +36,8 @@ return [
       '1.z.2.3.4-upload_file_with_invalid_range-requests_4',
       '1.z.2.3.5-upload_file_with_invalid_range-requests_5',
       '1.z.2.3.6-upload_file_with_invalid_range-requests_6',
+      // 2.4 - Requests Range - Client - Multi (Valid)
+      '1.z.2.4.1-upload_file_with_multi_range-requests_1',
       // .3 - Large Files
       '1.z.3-upload_large_file',
    ]

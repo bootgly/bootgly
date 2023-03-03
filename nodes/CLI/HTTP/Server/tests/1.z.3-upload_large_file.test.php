@@ -12,6 +12,9 @@ use Bootgly\CLI\HTTP\Server\Response;
 return [
    // @ arrange
    'response.length' => 3101873,
+   'separators' => [
+      'separator' => true
+   ],
 
    // @ act
    // Server API
