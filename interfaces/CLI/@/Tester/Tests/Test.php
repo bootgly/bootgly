@@ -67,6 +67,7 @@ class Test
 
       $suite = @$separators['suite'] ?? null;
       $separator = @$separators['separator'] ?? null;
+      $left = @$separators['left'] ?? null;
       $header = @$separators['header'] ?? null;
 
       $width = $this->Tests->width + 25;
@@ -93,6 +94,10 @@ class Test
          }
 
          $this->log($separator . ' @\;');
+      }
+
+      if ($left) {
+         $this->log("@\;       \033[3;90m" . $left . ":\033[0m @\;");
       }
 
       if ($header) {
