@@ -11,7 +11,7 @@ use Bootgly\CLI\HTTP\Server\Response;
 
 return [
    // @ arrange
-   'describe' => 'It should return 416 status with float `bytes=1.1-3`',
+   'describe' => 'It should return 416 status: float `bytes=1.1-3`',
 
    // @ act
    // Server API

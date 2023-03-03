@@ -61,24 +61,41 @@ class Test
 
    public function separate ()
    {
-      static $length;
+      static $separatorLength;
 
-      $separator = @$this->specifications['separator'] ?? null;
-      $header = @$this->specifications['header'] ?? null;
+      $separators = @$this->specifications['separators'] ?? [];
+
+      $suite = @$separators['suite'] ?? null;
+      $separator = @$separators['separator'] ?? null;
+      $header = @$separators['header'] ?? null;
+
+      $width = $this->Tests->width + 25;
+
+      if ($suite) {
+         // @ Text + `=`
+         $suite = '@#Blue: ' . $suite . '  @;';
+         $suite = str_pad($suite, $width + 3, '=', STR_PAD_BOTH);
+
+         $this->log($suite . ' @\;');
+      }
 
       if ($separator) {
+         // @ `-`
          if ($separator !== true) {
-            $length = strlen($separator);
+            $separatorLength = strlen($separator);
             $separator = '@:i: ' . $separator . '  @;';
          }
+         // @ Text + `-`
+         $separator = str_pad($separator, $width, '-', STR_PAD_BOTH);
 
-         $this->log('-----------------' . $separator . '----------------- @\;');
+         $this->log($separator . ' @\;');
       }
 
       if ($header) {
-         $header = str_pad($header, $length ?? 0, ' ', STR_PAD_BOTH);
+         $header = '\\' .str_pad($header, $separatorLength ?? 0, ' ', STR_PAD_BOTH) . '/';
+         $header = str_pad($header, $width - 7, ' ', STR_PAD_BOTH);
 
-         $this->log('                 \\' . $header . '/                @\;');
+         $this->log($header . ' @\;');
       }
    }
 
@@ -101,9 +118,11 @@ class Test
 
       $time = number_format(round($this->finished - $this->started, 5), 6);
 
+      $test = str_pad($this->test, $this->Tests->width, '.', STR_PAD_RIGHT);
+
       $this->log(
          "\033[1;37;42m PASS \033[0m " 
-         . "\033[90m" . $this->test . "\033[0m" 
+         . "\033[90m" . $test . "\033[0m" 
          . "\033[1;35m +" . $time . "s\033[0m" . PHP_EOL
       );
 

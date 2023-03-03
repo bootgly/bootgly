@@ -11,7 +11,9 @@ use Bootgly\CLI\HTTP\Server\Response;
 
 return [
    // @ arrange
-   'header' => '@upload',
+   'separators' => [
+      'header' => '@upload'
+   ],
 
    'response.length' => 82928,
 

@@ -1,7 +1,7 @@
 <?php
 return [
    'files' => [
-      '1.1-respond_hello_world',
+      '1.1-respond_with_a_simple_hello_world',
       // ! Meta
       // status
       '1.2-respond_with_status_302',

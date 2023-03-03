@@ -31,6 +31,8 @@ class Tests implements \Bootgly\Tests
    // @ Time
    public float $started;
    public float $finished;
+   // @ Screen
+   public int $width;
 
 
    public function __construct (array &$tests)
@@ -45,6 +47,16 @@ class Tests implements \Bootgly\Tests
       $this->total = count($tests);
       // @ Time
       $this->started = microtime(true);
+      // @ Screen
+      // width
+      $width = 0;
+      foreach ($tests as $value) {
+         $length = strlen($value);
+         if ($length > $width) {
+            $width = $length;
+         }
+      }
+      $this->width = $width;
 
       $this->log('@\;');
    }
@@ -83,7 +95,7 @@ class Tests implements \Bootgly\Tests
       $this->log(<<<TESTS
 
       Tests: @:e:{$failed} failed @;, @:n:{$skipped} skipped @;, @:s:{$passed} passed @;, {$total} total
-      Time: \033[1;35m{$duration}s \033[0m
+      Duration: \033[1;35m{$duration}s \033[0m
       \033[90mRan all tests.\033[0m
 
       TESTS);

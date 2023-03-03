@@ -11,8 +11,10 @@ use Bootgly\CLI\HTTP\Server\Response;
 
 return [
    // @ arrange
-   'separator' => 'Response Content',
-   'header' => '@send',
+   'separators' => [
+      'separator' => 'Response Content',
+      'header' => '@send'
+   ],
 
    // @ act
    // Server API

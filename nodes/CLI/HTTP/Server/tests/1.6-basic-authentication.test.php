@@ -11,7 +11,9 @@ use Bootgly\CLI\HTTP\Server\Response;
 
 return [
    // @ arrange
-   'header' => '@authenticate',
+   'separators' => [
+      'header' => '@authenticate'
+   ],
 
    // @ act
    // Server API

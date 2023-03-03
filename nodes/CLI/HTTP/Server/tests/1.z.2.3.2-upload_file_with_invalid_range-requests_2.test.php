@@ -11,7 +11,7 @@ use Bootgly\CLI\HTTP\Server\Response;
 
 return [
    // @ arrange
-   'describe' => 'It should return 416 status with NaN `bytes=0-x`',
+   'describe' => 'It should return 416 status: NaN `bytes=0-x`',
 
    // @ act
    // Server API

@@ -11,7 +11,9 @@ use Bootgly\CLI\HTTP\Server\Response;
 
 return [
    // @ arrange
-   'separator' => 'Response Meta',
+   'separators' => [
+      'separator' => 'Response Meta'
+   ],
 
    // @ act
    // Server API
