@@ -84,9 +84,13 @@ class Test
          if ($separator !== true) {
             $separatorLength = strlen($separator);
             $separator = '@:i: ' . $separator . '  @;';
+
+            // @ Text + `-`
+            $separator = str_pad($separator, $width, '-', STR_PAD_BOTH);
+         } else {
+            // @ `-`
+            $separator = str_repeat('-', $width - 7);
          }
-         // @ Text + `-`
-         $separator = str_pad($separator, $width, '-', STR_PAD_BOTH);
 
          $this->log($separator . ' @\;');
       }
