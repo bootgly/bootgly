@@ -53,40 +53,40 @@ trait Logging
       switch ($level) {
          case self::LOG_DEBUG_LEVEL:
             $severity = 'DEBUG';
-            $color = self::LOG_WHITE_FOREGROUND;
+            $color = self::_WHITE_FOREGROUND;
             break;
          case self::LOG_INFO_LEVEL:
             $severity = 'INFO';
-            $color = self::LOG_GREEN_BOLD;
+            $color = self::_GREEN_BOLD;
             break;
          case self::LOG_NOTICE_LEVEL:
             $severity = 'NOTICE';
-            $color = self::LOG_CYAN_FOREGROUND;
+            $color = self::_CYAN_FOREGROUND;
             break;
          case self::LOG_WARNING_LEVEL:
             $severity = 'WARNING';
-            $color = self::LOG_YELLOW_BOLD;
+            $color = self::_YELLOW_BOLD;
             break;
          case self::LOG_ERROR_LEVEL:
             $severity = 'ERROR';
-            $color = self::LOG_RED_BRIGHT_FOREGROUND;
+            $color = self::_RED_BRIGHT_FOREGROUND;
             break;
          case self::LOG_CRITICAL_LEVEL:
             $severity = 'CRITICAL';
-            $color = self::LOG_MAGENTA_FOREGROUND;
+            $color = self::_MAGENTA_FOREGROUND;
             break;
          case self::LOG_ALERT_LEVEL:
             $severity = 'ALERT';
-            $color = self::LOG_MAGENTA_BOLD;
+            $color = self::_MAGENTA_BOLD;
             break;
          case self::LOG_EMERGENCY_LEVEL:
             $severity = 'EMERGENCY';
-            $color = self::LOG_RED_BOLD;
+            $color = self::_RED_BOLD;
             break;
 
          default:
             $severity = 'LOG';
-            $color = self::LOG_DEFAULT_FOREGROUND;
+            $color = self::_DEFAULT_FOREGROUND;
       }
 
       return [
@@ -101,14 +101,14 @@ trait Logging
       // @ Levels => Colors (@:[a-b]+:)
       $message = preg_replace_callback('/@(:[a-z]+):/m', function ($matches) {
          $color = match ($matches[1]) {
-            ':d', ':s', ':debug', ':success' => self::LOG_GREEN_BRIGHT_FOREGROUND,
+            ':d', ':s', ':debug', ':success' => self::_GREEN_BRIGHT_FOREGROUND,
 
-            ':i', ':info' => self::LOG_CYAN_BRIGHT_FOREGROUND,
-            ':n', ':notice' => self::LOG_YELLOW_BRIGHT_FOREGROUND,
-            ':w', ':warning' => self::LOG_MAGENTA_BRIGHT_FOREGROUND,
-            ':e', ':error' => self::LOG_RED_BRIGHT_FOREGROUND,
+            ':i', ':info' => self::_CYAN_BRIGHT_FOREGROUND,
+            ':n', ':notice' => self::_YELLOW_BRIGHT_FOREGROUND,
+            ':w', ':warning' => self::_MAGENTA_BRIGHT_FOREGROUND,
+            ':e', ':error' => self::_RED_BRIGHT_FOREGROUND,
 
-            default => self::LOG_DEFAULT_FOREGROUND
+            default => self::_DEFAULT_FOREGROUND
          };
 
          return $this->wrap($color);
@@ -117,25 +117,25 @@ trait Logging
       // @ Colors => Colors (@#[a-bzA-Z]+:)
       $message = preg_replace_callback('/@(#[a-zA-Z]+):/m', function ($matches) {
          $color = match ($matches[1]) {
-            '#black' => self::LOG_BLACK_FOREGROUND,
-            '#red' => self::LOG_RED_FOREGROUND,
-            '#green' => self::LOG_GREEN_FOREGROUND,
-            '#yellow' => self::LOG_YELLOW_FOREGROUND,
-            '#blue' => self::LOG_BLUE_FOREGROUND,
-            '#magenta' => self::LOG_MAGENTA_FOREGROUND,
-            '#cyan' => self::LOG_CYAN_FOREGROUND,
-            '#white' => self::LOG_WHITE_FOREGROUND,
+            '#black' => self::_BLACK_FOREGROUND,
+            '#red' => self::_RED_FOREGROUND,
+            '#green' => self::_GREEN_FOREGROUND,
+            '#yellow' => self::_YELLOW_FOREGROUND,
+            '#blue' => self::_BLUE_FOREGROUND,
+            '#magenta' => self::_MAGENTA_FOREGROUND,
+            '#cyan' => self::_CYAN_FOREGROUND,
+            '#white' => self::_WHITE_FOREGROUND,
 
-            '#Black', '#BLACK' => self::LOG_BLACK_BRIGHT_FOREGROUND,
-            '#Red', '#RED' => self::LOG_RED_BRIGHT_FOREGROUND,
-            '#Green', '#GREEN' => self::LOG_GREEN_BRIGHT_FOREGROUND,
-            '#Yellow', '#YELLOW' => self::LOG_YELLOW_BRIGHT_FOREGROUND,
-            '#Blue', '#BLUE' => self::LOG_BLUE_BRIGHT_FOREGROUND,
-            '#Magenta', '#MAGENTA' => self::LOG_MAGENTA_BRIGHT_FOREGROUND,
-            '#Cyan', '#CYAN' => self::LOG_CYAN_BRIGHT_FOREGROUND,
-            '#White', '#WHITE' => self::LOG_WHITE_BRIGHT_FOREGROUND,
+            '#Black', '#BLACK' => self::_BLACK_BRIGHT_FOREGROUND,
+            '#Red', '#RED' => self::_RED_BRIGHT_FOREGROUND,
+            '#Green', '#GREEN' => self::_GREEN_BRIGHT_FOREGROUND,
+            '#Yellow', '#YELLOW' => self::_YELLOW_BRIGHT_FOREGROUND,
+            '#Blue', '#BLUE' => self::_BLUE_BRIGHT_FOREGROUND,
+            '#Magenta', '#MAGENTA' => self::_MAGENTA_BRIGHT_FOREGROUND,
+            '#Cyan', '#CYAN' => self::_CYAN_BRIGHT_FOREGROUND,
+            '#White', '#WHITE' => self::_WHITE_BRIGHT_FOREGROUND,
 
-            default => self::LOG_DEFAULT_FOREGROUND
+            default => self::_DEFAULT_FOREGROUND
          };
 
          return $this->wrap($color);
@@ -144,10 +144,10 @@ trait Logging
       // @ Style
       $message = preg_replace_callback('/@([*~_-])/m', function ($matches) {
          $style = match ($matches[1]) {
-            '*' => self::LOG_BOLD_STYLE,
-            '~' => self::LOG_ITALIC_STYLE,
-            '_' => self::LOG_UNDERLINE_STYLE,
-            '-' => self::LOG_STRIKE_STYLE,
+            '*' => self::_BOLD_STYLE,
+            '~' => self::_ITALIC_STYLE,
+            '_' => self::_UNDERLINE_STYLE,
+            '-' => self::_STRIKE_STYLE,
             default => ''
          };
 
@@ -156,7 +156,7 @@ trait Logging
 
       // @ Reset (End of)
       $message = preg_replace_callback('/\s@([;])|([*~_-])@/m', function ($matches) {
-         return self::LOG_RESET;
+         return self::_RESET;
       }, $message);
 
       // @ Break lines / End of line (EOL)
@@ -176,11 +176,11 @@ trait Logging
       if (Logger::$display >= Logger::DISPLAY_MESSAGE_WHEN) {
          $DateTime = new \DateTime();
 
-         $when .= $this->wrap(self::LOG_BLACK_BRIGHT_FOREGROUND);
+         $when .= $this->wrap(self::_BLACK_BRIGHT_FOREGROUND);
          $when .= '[';
          $when .= $DateTime->format('Y-m-d\TH:i:s.uP');
          $when .= '] ';
-         $when .= self::LOG_RESET;
+         $when .= self::_RESET;
       }
       // @ Display id
       $id = '';
@@ -190,10 +190,10 @@ trait Logging
          }
 
          $id .= $this->wrap($color);
-         $id .= $severity . self::LOG_RESET . ': ';
+         $id .= $severity . self::_RESET . ': ';
       }
       // @ Display message (always)
-      $message = $this->wrap($color) . $message . self::LOG_RESET;
+      $message = $this->wrap($color) . $message . self::_RESET;
       if (Logger::$display > Logger::DISPLAY_MESSAGE) {
          $message .= PHP_EOL;
       }
