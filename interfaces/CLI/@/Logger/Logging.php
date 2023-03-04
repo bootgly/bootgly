@@ -156,7 +156,7 @@ trait Logging
 
       // @ Reset (End of)
       $message = preg_replace_callback('/\s@([;])|([*~_-])@/m', function ($matches) {
-         return self::_RESET;
+         return self::_RESET_FORMAT;
       }, $message);
 
       // @ Break lines / End of line (EOL)
@@ -180,7 +180,7 @@ trait Logging
          $when .= '[';
          $when .= $DateTime->format('Y-m-d\TH:i:s.uP');
          $when .= '] ';
-         $when .= self::_RESET;
+         $when .= self::_RESET_FORMAT;
       }
       // @ Display id
       $id = '';
@@ -190,10 +190,10 @@ trait Logging
          }
 
          $id .= $this->wrap($color);
-         $id .= $severity . self::_RESET . ': ';
+         $id .= $severity . self::_RESET_FORMAT . ': ';
       }
       // @ Display message (always)
-      $message = $this->wrap($color) . $message . self::_RESET;
+      $message = $this->wrap($color) . $message . self::_RESET_FORMAT;
       if (Logger::$display > Logger::DISPLAY_MESSAGE) {
          $message .= PHP_EOL;
       }

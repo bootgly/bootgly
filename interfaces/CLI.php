@@ -20,6 +20,7 @@ class CLI
 {
    // * Data
    // * Meta
+   public const _START_ESCAPE = "\033[";
 
    public Command $Command;
 

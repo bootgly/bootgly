@@ -11,14 +11,15 @@
 namespace Bootgly\CLI\text;
 
 
+use Bootgly\CLI;
+
+
 trait Formatting
 {
    // * Meta
    // ! ANSI Escape
-   // TODO Move to parent
-   public const _START = "\033[";
-   public const _END = 'm';
-   public const _RESET = self::_START . '0' . self::_END;
+   public const _END_FORMAT = 'm';
+   public const _RESET_FORMAT = CLI::_START_ESCAPE . '0' . self::_END_FORMAT;
    // ? Single
    // @ styles
    public const _BOLD_STYLE      = '1';
@@ -87,6 +88,6 @@ trait Formatting
 
    protected function wrap (string ...$codes)
    {
-      return self::_START . implode(';', $codes) . self::_END;
+      return CLI::_START_ESCAPE . implode(';', $codes) . self::_END_FORMAT;
    }
 }
