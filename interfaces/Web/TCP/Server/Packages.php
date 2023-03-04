@@ -393,7 +393,7 @@ abstract class Packages implements Web\Packages
 
       return $written;
    }
-
+   // @
    public function download (&$Socket, &$Handler, int $rate, int $length) : int
    {
       // TODO test!!!
@@ -402,18 +402,18 @@ abstract class Packages implements Web\Packages
 
       while ($stored < $length) {
          // ! Socket
-         // @ Read part of file from client
+         // @ Read buffer from Client
          try {
             $buffer = @fread($Socket, $rate);
          } catch (\Throwable) {
             break;
          }
-   
+
          if ($buffer === false) break;
-   
+
          $read += strlen($buffer);
-   
-         // @ Write part of received (if exists) file to local storage
+
+         // @ Write part of data (if exists) using Handler
          while ($read) {
             // ! File
             try {
@@ -421,7 +421,7 @@ abstract class Packages implements Web\Packages
             } catch (\Throwable) {
                break;
             }
-   
+
             if ($written === false) break;
             if ($written === 0) continue;
 
@@ -435,14 +435,14 @@ abstract class Packages implements Web\Packages
 
             break;
          }
-   
-         // @ Check Socket End-of-file (EOF)
+
+         // @ Check Socket EOF (End-Of-File)
          try {
             $end = @feof($Socket);
          } catch (\Throwable) {
             break;
          }
-   
+
          if ($end) break;
       }
 
@@ -455,8 +455,8 @@ abstract class Packages implements Web\Packages
       // TODO Exceptions in breaks
 
       while ($written < $length) {
-         // ! File
-         // @ Read file from local storage
+         // ! Stream
+         // @ Read buffer using Handler
          try {
             $buffer = @fread($Handler, $rate);
          } catch (\Throwable) {
@@ -467,7 +467,7 @@ abstract class Packages implements Web\Packages
 
          $read = strlen($buffer);
 
-         // @ Send part of read (if exists) file to client
+         // @ Write part of data (if exists) to Client
          while ($read) {
             // ! Socket
             try {
@@ -490,7 +490,7 @@ abstract class Packages implements Web\Packages
             break;
          }
 
-         // @ Check End-of-file
+         // @ Check Handler EOF (End-Of-File)
          try {
             $end = @feof($Handler);
          } catch (\Throwable) {

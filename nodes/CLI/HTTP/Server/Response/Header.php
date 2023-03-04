@@ -107,6 +107,21 @@ class Header
    {
       $this->prepared = $fields;
    }
+   public function append (string $field, string $value = '', ? string $separator = ', ') // TODO refactor
+   {
+      // TODO map separator (with const?) Header that can have only value to append, only entire header, etc.
+
+      if ( isSet($this->fields[$field]) ) {
+         $this->fields[$field] .= $separator . $value;
+      } else {
+         $this->fields[$field] = $value;
+      }
+   }
+   public function queue (string $field, string $value = '')
+   {
+      $this->queued[] = "$field: $value";
+   }
+
    public function translate (string $field, ...$values) : string
    {
       switch ($field) {
@@ -168,19 +183,5 @@ class Header
    public function set (string $field, string $value)
    {
       $this->fields[$field] = $value;
-   }
-   public function append (string $field, string $value = '', ? string $separator = ', ') // TODO refactor
-   {
-      // TODO map separator (with const?) Header that can have only value to append, only entire header, etc.
-
-      if ( isSet($this->fields[$field]) ) {
-         $this->fields[$field] .= $separator . $value;
-      } else {
-         $this->fields[$field] = $value;
-      }
-   }
-   public function queue (string $field, string $value = '')
-   {
-      $this->queued[] = "$field: $value";
    }
 }

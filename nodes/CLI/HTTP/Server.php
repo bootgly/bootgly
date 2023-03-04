@@ -38,6 +38,7 @@ class Server extends TCP\Server implements HTTP
    public static Request $Request;
    public static Response $Response;
 
+
    public function __construct ()
    {
       // * Meta
