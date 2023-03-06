@@ -11,8 +11,28 @@
 namespace Bootgly\CLI;
 
 
+// @resources
+// cursor
+require 'Terminal/cursor/Positioning.php'; // @ trait
+require 'Terminal/cursor/Visualizing.php'; // @ trait
+// text
+require 'Terminal/text/Formatting.php'; // @ trait
+require 'Terminal/text/Modifying.php'; // @ trait
+
+
+use Bootgly\CLI;
+use Bootgly\CLI\Terminal\cursor;
+use Bootgly\CLI\Terminal\text;
+
+
 class Terminal
 {
+   use cursor\Visualizing;
+   use cursor\Positioning;
+   use text\Formatting;
+   use text\Modifying;
+
+
    // * Config
    // * Data
    public $stream = STDOUT;
@@ -70,7 +90,10 @@ class Terminal
    }
    public function clear ()
    {
-      $this->output(chr(27).chr(91).'H'.chr(27).chr(91).'J');
+      $this->output(
+         CLI::_START_ESCAPE . self::_CURSOR_POSITION .
+         CLI::_START_ESCAPE . self::_TEXT_ERASE_IN_DISPLAY
+      );
       return true;
    }
 }

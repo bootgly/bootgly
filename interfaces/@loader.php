@@ -5,9 +5,7 @@ require 'CLI.php';
 require 'CLI/Command.php';
 // ? Terminal
 require 'CLI/Terminal.php';
-// resources
-require 'CLI/Terminal/text/Formatting.php'; // @ trait
-// sources
+// @
 require 'CLI/Terminal/@/Logger/Logging.php'; // @trait
 require 'CLI/Terminal/@/Tester/Tests.php';
 require 'CLI/Terminal/@/Tester/Tests/Test.php';
