@@ -1,8 +1,8 @@
 <?php
 // ! CLI
 require 'CLI.php';
-// ? Command
-require 'CLI/Command.php';
+// ? Commands
+require 'CLI/Commands.php';
 // ? Terminal
 require 'CLI/Terminal.php';
 // @

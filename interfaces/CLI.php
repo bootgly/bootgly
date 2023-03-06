@@ -11,21 +11,22 @@
 namespace Bootgly;
 
 
-use Bootgly\CLI\{
-   Command,
+use Bootgly\CLI\ {
+   Commands,
    Terminal
 };
 
 
 class CLI
 {
+   // * Config
    // * Data
    // * Meta
    // ! Escaping
    public const _START_ESCAPE = "\033[";
 
-   public Command $Command;
-   public Terminal $Terminal;
+   public static Commands $Commands;
+   public static Terminal $Terminal;
 
 
    public function __construct ()
@@ -34,8 +35,8 @@ class CLI
          return;
       }
 
-      $Command = $this->Command = new Command($this);
-      $Terminal = $this->Terminal = new Terminal($this);
+      $Commands = self::$Commands = new Commands;
+      $Terminal = self::$Terminal = new Terminal;
 
       // @ Load CLI constructor
       @include Bootgly::$Project::PROJECT_DIR . 'cli.constructor.php';
