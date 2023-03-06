@@ -15,7 +15,7 @@ class Terminal
 {
    // * Config
    // * Data
-   public $stream;
+   public $stream = STDOUT;
    // ! Command
    public static array $commands = [];
    public static array $subcommands = [];
