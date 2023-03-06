@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\CLI\_\Logger;
+namespace Bootgly\CLI\Terminal\_\Logger;
 
 
 use Bootgly\Logger;
@@ -17,7 +17,7 @@ use Bootgly\Logger;
 trait Logging
 {
    use \Bootgly\Logging;
-   use \Bootgly\CLI\text\Formatting {
+   use \Bootgly\CLI\Terminal\text\Formatting {
       wrap as private;
    }
 
@@ -25,7 +25,7 @@ trait Logging
    // * Config
    // imported from \Bootgly\logging...
    // * Meta
-   // imported from \Bootgly\CLI\Console\text\Formatting...
+   // imported from \Bootgly\CLI\Terminal\text\Formatting...
 
    public function log ($message, int $level = self::LOG_DEBUG_LEVEL) : true
    {

@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\CLI\text;
+namespace Bootgly\CLI\Terminal\text;
 
 
 use Bootgly\CLI;

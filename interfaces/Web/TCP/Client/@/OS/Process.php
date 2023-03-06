@@ -22,7 +22,7 @@ use Bootgly\Web\TCP\ {
    Client
 };
 // extend
-use Bootgly\CLI\_\ {
+use Bootgly\CLI\Terminal\_\ {
    Logger\Logging
 };
 

@@ -15,13 +15,19 @@ use const Bootgly\HOME_DIR;
 
 use Bootgly\Bootgly;
 use Bootgly\CLI;
+use Bootgly\CLI\Terminal\_\ {
+   Logger\Logging
+};
 use Bootgly\Web\TCP\ {
    Server
 };
 
 
-class Console extends CLI\Console
+class Terminal extends CLI\Terminal
 {
+   use Logging;
+
+
    public Server $Server;
 
    // ! Command

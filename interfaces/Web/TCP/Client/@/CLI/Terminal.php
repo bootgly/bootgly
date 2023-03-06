@@ -15,17 +15,23 @@ use const Bootgly\HOME_DIR;
 
 use Bootgly\Bootgly;
 use Bootgly\CLI;
+use Bootgly\CLI\Terminal\_\ {
+   Logger\Logging
+};
 use Bootgly\Web\TCP\ {
    Client
 };
 
 
-class Console extends CLI\Console
+class Terminal extends CLI\Terminal
 {
+   use Logging;
+
+
    public Client $Client;
 
-   // ! Command
    // * Data
+   // ! Command
    public static array $commands = [
       'stop', 'exit', 'quit',
 

@@ -1,20 +1,16 @@
 <?php
 // ! CLI
 require 'CLI.php';
-// resources
-require 'CLI/text/Formatting.php'; // @ trait
-// extends
-require 'CLI/@/Logger/Logging.php'; // @trait
-require 'CLI/@/Tester/Tests.php';
-require 'CLI/@/Tester/Tests/Test.php';
 // ? Command
 require 'CLI/Command.php';
-// ? Console
-require 'CLI/Console.php';
-// ? Output
-#require 'CLI/Output.php';
-// ? Router
-#require 'CLI/Router.php';
+// ? Terminal
+require 'CLI/Terminal.php';
+// resources
+require 'CLI/Terminal/text/Formatting.php'; // @ trait
+// sources
+require 'CLI/Terminal/@/Logger/Logging.php'; // @trait
+require 'CLI/Terminal/@/Tester/Tests.php';
+require 'CLI/Terminal/@/Tester/Tests/Test.php';
 
 // ! OS
 require 'OS/Process/Timer.php';
@@ -38,7 +34,7 @@ require 'Web/TCP/Client/Connections.php';
 require 'Web/TCP/Client/Packages.php';
 // @
 require 'Web/TCP/Client/@/OS/Process.php';
-require 'Web/TCP/Client/@/CLI/Console.php';
+require 'Web/TCP/Client/@/CLI/Terminal.php';
 // ? TCP\Client\Connection(s)
 require 'Web/TCP/Client/Connections/Connection.php';
 
@@ -48,6 +44,6 @@ require 'Web/TCP/Server/Connections.php';
 require 'Web/TCP/Server/Packages.php';
 // @
 require 'Web/TCP/Server/@/OS/Process.php';
-require 'Web/TCP/Server/@/CLI/Console.php';
+require 'Web/TCP/Server/@/CLI/Terminal.php';
 // ? TCP\Server\Connection(s)
 require 'Web/TCP/Server/Connections/Connection.php';

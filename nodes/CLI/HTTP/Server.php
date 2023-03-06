@@ -14,7 +14,7 @@ namespace Bootgly\CLI\HTTP;
 use Bootgly\Logger;
 
 // extend
-use Bootgly\CLI\_\ {
+use Bootgly\CLI\Terminal\_\ {
    Tester\Tests
 };
 use Bootgly\SAPI;

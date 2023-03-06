@@ -11,7 +11,7 @@
 namespace Bootgly\Web\TCP\Client;
 
 
-use Bootgly\CLI\_\ {
+use Bootgly\CLI\Terminal\_\ {
    Logger\Logging
 };
 

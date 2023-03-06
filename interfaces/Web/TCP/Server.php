@@ -18,7 +18,7 @@ use Bootgly\Logs;
 use Bootgly\SAPI;
 use Bootgly\OS\Process\Timer;
 // extend
-use Bootgly\CLI\_\ {
+use Bootgly\CLI\Terminal\_\ {
    Logger\Logging
 };
 use Bootgly\Web\_\ {
@@ -26,7 +26,7 @@ use Bootgly\Web\_\ {
 };
 use Bootgly\Web\Servers;
 use Bootgly\Web\TCP\Server\_\ {
-   CLI\Console,
+   CLI\Terminal,
    OS\Process
 };
 // inherit
@@ -47,8 +47,8 @@ class Server implements Servers, Logs
 
    // ! Process
    protected Process $Process;
-   // ! Console
-   protected Console $Console;
+   // ! Terminal
+   protected Terminal $Terminal;
 
    // * Config
    #protected ? string $domain;
@@ -120,8 +120,8 @@ class Server implements Servers, Logs
       // ! Web\@\Events
       static::$Event = new Select($this->Connections);
 
-      // ! @\CLI\Console
-      $this->Console = new Console($this);
+      // ! @\CLI\Terminal
+      $this->Terminal = new Terminal($this);
       // ! @\OS\Process
       $Process = $this->Process = new Process($this);
 
@@ -358,7 +358,7 @@ class Server implements Servers, Logs
 
          // If child is running?
          if ($pid === 0) {
-            $interact = $this->Console->interact();
+            $interact = $this->Terminal->interact();
 
             $this->log('@\;');
 

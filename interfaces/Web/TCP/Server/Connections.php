@@ -14,7 +14,7 @@ namespace Bootgly\Web\TCP\Server;
 use Bootgly\Web;
 use Bootgly\Web\Packages; // @interface
 
-use Bootgly\CLI\_\ {
+use Bootgly\CLI\Terminal\_\ {
    Logger\Logging // @trait
 };
 

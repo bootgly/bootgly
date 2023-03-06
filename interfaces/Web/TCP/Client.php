@@ -14,7 +14,7 @@ namespace Bootgly\Web\TCP;
 // use
 use Closure;
 use Bootgly\Debugger;
-use Bootgly\CLI\_\ {
+use Bootgly\CLI\Terminal\_\ {
    Logger\Logging
 };
 use Bootgly\Logger;
@@ -22,7 +22,7 @@ use Bootgly\Web\_\ {
    Events\Select
 };
 use Bootgly\Web\TCP\Client\_\ {
-   CLI\Console,
+   CLI\Terminal,
    OS\Process
 };
 // inherit
@@ -44,7 +44,7 @@ class Client
    // ! Process
    protected Process $Process;
    // ! Console
-   protected Console $Console;
+   protected Terminal $Terminal;
 
    // * Config
    #protected string $resource;
@@ -115,8 +115,8 @@ class Client
       // ! Web\@\Events
       static::$Event = new Select($this->Connections);
 
-      // ! @\CLI\Console
-      $this->Console = new Console($this);
+      // ! @\CLI\Terminal
+      $this->Terminal = new Terminal($this);
       // ! @\OS\Process
       $Process = $this->Process = new Process($this);
 
@@ -193,6 +193,8 @@ class Client
          $this->Process->fork($this->workers);
       }
 
+      $this->log('@\;@\;');
+
       // ... Continue to master process:
       switch ($this->mode) {
          case self::MODE_DEFAULT:
@@ -220,7 +222,7 @@ class Client
          Logger::$display = Logger::DISPLAY_MESSAGE;
       }
 
-      $this->log('@\;Entering in Monitor mode...@\;', self::LOG_INFO_LEVEL);
+      $this->log('Entering in Monitor mode...@\;', self::LOG_INFO_LEVEL);
       $this->log('>_ Type `CTRL + C` to stop the Client.@\;');
 
       // @ Loop

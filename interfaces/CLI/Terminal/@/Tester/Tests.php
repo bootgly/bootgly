@@ -8,11 +8,11 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\CLI\_\Tester;
+namespace Bootgly\CLI\Terminal\_\Tester;
 
 
-use Bootgly\CLI\_\Logger\Logging;
-use Bootgly\CLI\_\Tester\Tests\Test;
+use Bootgly\CLI\Terminal\_\Logger\Logging;
+use Bootgly\CLI\Terminal\_\Tester\Tests\Test;
 
 
 class Tests implements \Bootgly\Tests

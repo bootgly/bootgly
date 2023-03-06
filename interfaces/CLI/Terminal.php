@@ -11,25 +11,33 @@
 namespace Bootgly\CLI;
 
 
-use Bootgly\CLI\_\ {
-   Logger\Logging
-};
-
-
-// TODO implements or extend CLI/Command?
-class Console
+class Terminal
 {
-   use Logging;
-
-   // ! Command
+   // * Config
    // * Data
+   public $stream;
+   // ! Command
    public static array $commands = [];
    public static array $subcommands = [];
    // * Meta
+   public int $width;
+   // ! Command
    public static array $command = []; // @ Last command used (returned by autocomplete)
 
-   // ***
 
+   public function __construct ($stream = STDOUT)
+   {
+      // * Data
+      $this->stream = $stream;
+      // * Meta
+      // width
+      // @ Get the terminal width
+      $this->width = exec("tput cols 2>/dev/null");
+      if ( ! is_numeric($this->width) ) {
+         $this->width = 80;
+      }
+
+   }
 
    // TODO support to multiple subcommands (command1 subcommand1 subcommand2...)
    public function autocomplete (string $search) : array // return commands found
@@ -56,9 +64,13 @@ class Console
       return $found;
    }
 
+   public function output (string $data) : int|false
+   {
+      return fwrite($this->stream, $data);
+   }
    public function clear ()
    {
-      $this->log(chr(27).chr(91).'H'.chr(27).chr(91).'J');
+      $this->output(chr(27).chr(91).'H'.chr(27).chr(91).'J');
       return true;
    }
 }
