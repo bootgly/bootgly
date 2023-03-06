@@ -17,5 +17,20 @@ use Bootgly\CLI;
 trait Modifying
 {
    // * Meta
-   public const _TEXT_ERASE_LINE = 'K';
+   // [<n>@] (Insert Character) "Insert <n> spaces at the current cursor position, shifting all existing text to the right. Text exiting the screen to the right is removed."
+   public const _TEXT_INSERT_CHARACTER = '@';
+   // [<n>P] (Delete Character) "Delete <n> characters at the current cursor position, shifting in space characters from the right edge of the screen."
+   public const _TEXT_DELETE_CHARACTER = 'P';
+   // [<n>X]  (Erase Character) "Erase <n> characters from the current cursor position by overwriting them with a space character."
+   public const _TEXT_ERASE_CHARACTER = 'X';
+
+   // [<n>L]  (Insert Line) "Inserts <n> lines into the buffer at the cursor position. The line the cursor is on, and lines below it, will be shifted downwards."
+   public const _TEXT_INSERT_LINE = 'L';
+   // [<n>M]  (Delete Line) "Deletes <n> lines from the buffer, starting with the row the cursor is on."
+   public const _TEXT_DELETE_LINE = 'M';
+
+   // [<n>J] (Erase in Display) "Replace all text in the current viewport/screen specified by <n> with space characters"
+   public const _TEXT_ERASE_IN_DISPLAY = 'J';
+   // [<n>K] (Erase in Line) "Replace all text on the line with the cursor specified by <n> with space characters"
+   public const _TEXT_ERASE_IN_LINE = 'K';
 }
