@@ -9,6 +9,7 @@ composer.lock
 cli-config.php
 server-*.php
 *.iso
+_*.examples.php
 
 ### @Bootgly ###
 ## Short folders
