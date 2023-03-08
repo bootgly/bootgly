@@ -80,33 +80,8 @@ class Terminal extends CLI\Terminal
       $this->Server = $Server;
    }
 
-   // If return true -> interact imediatily in the next loop otherwise wait for output...
-   public function interact () : bool
-   {
-      // @ Register CLI autocomplete function
-      // Use TAB key as trigger
-      readline_completion_function([$this, 'autocomplete']);
-
-      // @ Get user input (read line)
-      $input = readline('>_: ');
-
-      // @ Sanitize user input
-      $command = trim($input);
-
-      if ($command === '') return true;
-
-      // @ Clear last used command (returned by autocomplete function)
-      self::$command = [];
-
-      // @ Enable command history and add the last command to history
-      // Use UP/DOWN key to access the history
-      readline_add_history($command);
-
-      // @ Execute command
-      return $this->command($command);
-   }
-
-   // ! Command
+   // ! Command<T>
+   // @ Interact
    public function command (string $command) : bool
    {
       // TODO split command in subcommands by space
@@ -186,7 +161,6 @@ class Terminal extends CLI\Terminal
 
       return true;
    }
-
    public function help ()
    {
       $this->log(<<<'OUTPUT'
