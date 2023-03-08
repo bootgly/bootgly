@@ -19,5 +19,3 @@ require_once HOME_BASE . '/nodes/@loader.php';
 require_once HOME_BASE . '/platforms/@loader.php';
 
 Bootgly::boot();
-
-require HOME_BASE . '/projects/bootgly.constructor.php';

@@ -22,8 +22,11 @@ abstract class Bootgly
 
    public static function boot ()
    {
-      self::$Project = new Project;
-      self::$Template = new Template;
+      $Project = self::$Project = new Project;
+      $Template = self::$Template = new Template;
+
+      // @ Load Bootgly constructor
+      require HOME_BASE . '/projects/bootgly.constructor.php';
    }
 
    public static function debug (bool $status)
