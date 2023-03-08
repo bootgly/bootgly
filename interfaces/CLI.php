@@ -36,7 +36,7 @@ class CLI
       }
 
       $Commands = self::$Commands = new Commands;
-      $Terminal = self::$Terminal = new Terminal;
+      #$Terminal = self::$Terminal = new Terminal;
 
       // @ Load CLI constructor
       @include Bootgly::$Project::PROJECT_DIR . 'cli.constructor.php';
