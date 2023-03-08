@@ -25,7 +25,7 @@ use Bootgly\CLI\Terminal\cursor;
 use Bootgly\CLI\Terminal\text;
 
 
-abstract class Terminal
+class Terminal
 {
    use cursor\Visualizing;
    use cursor\Positioning;
@@ -85,7 +85,11 @@ abstract class Terminal
       // @ Execute command
       return $this->command($command);
    }
-   abstract public function command (string $command): bool;
+   public function command (string $command): bool
+   {
+      // TODO default
+      return true;
+   }
 
    // TODO support to multiple subcommands (command1 subcommand1 subcommand2...)
    public function autocomplete (string $search) : array // return commands found
