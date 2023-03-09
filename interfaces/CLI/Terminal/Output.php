@@ -38,8 +38,8 @@ class Output
    {
       // * Config
       // @ Delay
-      $this->wait = -1;
-      $this->waiting = 50000;
+      $this->wait = -1;       // @ to write method
+      $this->waiting = 50000; // @ to writing method
       // * Data
       $this->stream = $stream;
       // * Meta
@@ -52,14 +52,16 @@ class Output
 
    public function write (string $text, int $times = 1) : self
    {
-      $stream = &$this->stream;
+      // * Config
       $wait = $this->wait;
+      // * Data
+      $stream = &$this->stream;
 
       do {
          $this->written = fwrite($stream, $text);
 
          if ($wait > 0) {
-            sleep($wait);
+            usleep($wait);
          }
 
          $times--;
@@ -69,11 +71,14 @@ class Output
    }
    public function writing (string $text) : self
    {
-      $stream = $this->stream;
+      // * Config
       $waiting = $this->waiting;
-      $parts = str_split($text);
+      // * Data
+      $stream = $this->stream;
+      // * Meta
       $written = 0;
 
+      $parts = str_split($text);
       foreach ($parts as $part) {
          $written += fwrite($stream, $part);
 

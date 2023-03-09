@@ -8,7 +8,7 @@ require 'CLI/Escaping.php';
 // cursor
 require 'CLI/Escaping/cursor/Positioning.php';   // @ trait
 require 'CLI/Escaping/cursor/Visualizing.php';   // @ trait
-require 'CLI/Escaping/cursor/Shaping.php';   // @ trait
+require 'CLI/Escaping/cursor/Shaping.php';       // @ trait
 // text
 require 'CLI/Escaping/text/Formatting.php';      // @ trait
 require 'CLI/Escaping/text/Modifying.php';       // @ trait
@@ -24,6 +24,7 @@ require 'CLI/Terminal/Output/Cursor.php';
 require 'CLI/Terminal/Output/Text.php';
 // @
 require 'CLI/Terminal/@/Logger/Logging.php';      // @trait
+
 require 'CLI/Terminal/@/Tester/Tests.php';
 require 'CLI/Terminal/@/Tester/Tests/Test.php';
 
