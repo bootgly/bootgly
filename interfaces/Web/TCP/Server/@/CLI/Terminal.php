@@ -77,6 +77,7 @@ class Terminal extends CLI\Terminal
 
    public function __construct (Server &$Server)
    {
+      parent::__construct();
       $this->Server = $Server;
    }
 

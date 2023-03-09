@@ -43,6 +43,7 @@ class Terminal extends CLI\Terminal
 
    public function __construct (Client &$Client)
    {
+      parent::__construct();
       $this->Client = $Client;
    }
 
