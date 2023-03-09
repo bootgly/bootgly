@@ -63,7 +63,7 @@ class Cursor
       return $this->Output;
    }
 
-   public function move (? int $line = null, ? int $column = null) : Output
+   public function moveTo (? int $line = null, ? int $column = null) : Output
    {
       if ($line === null && $column >= 0) {
          return $this->Output->write(CLI::_START_ESCAPE . $column . self::_CURSOR_LEFT_ABSOLUTE);
@@ -84,11 +84,11 @@ class Cursor
       return $this->Output->write(CLI::_START_ESCAPE . $line . $column . self::_CURSOR_POSITION);
    }
 
-   public function next (int $lines = 1)
+   public function advance (int $lines = 1)
    {
       return $this->Output->write(CLI::_START_ESCAPE . $lines . self::_CURSOR_NEXT_LINE);
    }
-   public function previous (int $lines = 1)
+   public function back (int $lines = 1)
    {
       return $this->Output->write(CLI::_START_ESCAPE . $lines . self::_CURSOR_PREVIOUS_LINE);
    }
