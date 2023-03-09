@@ -38,23 +38,23 @@ class Cursor
 
    // @ Positioning
    // Moving
-   public function up (int $lines) : Output
+   public function up (int $lines, ? int $column = null) : Output
    {
-      $this->Output->write(CLI::_START_ESCAPE . $lines . self::_CURSOR_UP);
-
-      return $this->Output;
+      return match ($column) {
+         1 => $this->Output->write(CLI::_START_ESCAPE . $lines . self::_CURSOR_PREVIOUS_LINE),
+         default => $this->Output->write(CLI::_START_ESCAPE . $lines . self::_CURSOR_UP)
+      };
    }
    public function right (int $columns) : Output
    {
-      $this->Output->write(CLI::_START_ESCAPE . $columns . self::_CURSOR_RIGHT);
-
-      return $this->Output;
+      return $this->Output->write(CLI::_START_ESCAPE . $columns . self::_CURSOR_RIGHT);
    }
-   public function down (int $lines) : Output
+   public function down (int $lines, ? int $column = null) : Output
    {
-      $this->Output->write(CLI::_START_ESCAPE . $lines . self::_CURSOR_DOWN);
-
-      return $this->Output;
+      return match ($column) {
+         1 => $this->Output->write(CLI::_START_ESCAPE . $lines . self::_CURSOR_NEXT_LINE),
+         default => $this->Output->write(CLI::_START_ESCAPE . $lines . self::_CURSOR_DOWN)
+      };
    }
    public function left (int $columns) : Output
    {
@@ -84,14 +84,6 @@ class Cursor
       return $this->Output->write(CLI::_START_ESCAPE . $line . $column . self::_CURSOR_POSITION);
    }
 
-   public function advance (int $lines = 1)
-   {
-      return $this->Output->write(CLI::_START_ESCAPE . $lines . self::_CURSOR_NEXT_LINE);
-   }
-   public function back (int $lines = 1)
-   {
-      return $this->Output->write(CLI::_START_ESCAPE . $lines . self::_CURSOR_PREVIOUS_LINE);
-   }
    // Memorizing
    public function save ()
    {
