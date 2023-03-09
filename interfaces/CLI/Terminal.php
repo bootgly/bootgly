@@ -11,52 +11,70 @@
 namespace Bootgly\CLI;
 
 
-// @resources
-// cursor
-require 'Terminal/cursor/Positioning.php'; // @ trait
-require 'Terminal/cursor/Visualizing.php'; // @ trait
-// text
-require 'Terminal/text/Formatting.php'; // @ trait
-require 'Terminal/text/Modifying.php'; // @ trait
-
-
 use Bootgly\CLI;
-use Bootgly\CLI\Terminal\cursor;
-use Bootgly\CLI\Terminal\text;
+
+use Bootgly\CLI\Escaping\cursor\Positioning;
+use Bootgly\CLI\Escaping\text\Modifying;
+
+use Bootgly\CLI\Terminal\Input;
+use Bootgly\CLI\Terminal\Output;
 
 
 class Terminal
 {
-   use cursor\Visualizing;
-   use cursor\Positioning;
-   use text\Formatting;
-   use text\Modifying;
+   use Positioning;
+   use Modifying;
 
 
    // * Config
    // * Data
-   public $stream = STDOUT;
    // ! Command
    public static array $commands = [];
    public static array $subcommands = [];
    // * Meta
-   public int $width;
+   public static int $width;
+   public static int $heigth;
+
+   public static int $columns;
+   public static int $lines;
    // ! Command
    public static array $command = []; // @ Last command used (returned by autocomplete)
 
+   // ! IO
+   // ? Input
+   public Input $Input;
+   // ? Output
+   public Output $Output;
+   public Output\Cursor $Cursor;
 
-   public function __construct ($stream = STDOUT)
+
+   public function __construct ()
    {
       // * Data
-      $this->stream = $stream;
       // * Meta
-      // width
-      // @ Get the terminal width
-      $this->width = exec("tput cols 2>/dev/null");
-      if ( ! is_numeric($this->width) ) {
-         $this->width = 80;
+      // columns
+      // @ Get the terminal columns (width)
+      self::$columns = exec("tput cols 2>/dev/null");
+      if ( ! is_numeric(self::$columns) ) {
+         self::$columns = 80;
       }
+      // lines
+      // @ Get the terminal lines (heigth)
+      self::$lines = exec("tput lines 2>/dev/null");
+      if ( ! is_numeric(self::$lines) ) {
+         self::$lines = 30;
+      }
+      // width
+      self::$width = self::$columns;
+      // heigth
+      self::$heigth = self::$lines;
 
+      // ! IO
+      // ? Input
+      $this->Input = new Input;
+      // ? Output
+      $this->Output = new Output;
+      $this->Cursor = &$this->Output->Cursor;
    }
 
    // ! Command
@@ -85,14 +103,14 @@ class Terminal
       // @ Execute command
       return $this->command($command);
    }
-   public function command (string $command): bool
+   protected function command (string $command): bool
    {
       // TODO default
       return true;
    }
 
    // TODO support to multiple subcommands (command1 subcommand1 subcommand2...)
-   public function autocomplete (string $search) : array // return commands found
+   protected function autocomplete (string $search) : array // return commands found
    {
       $found = [];
 
@@ -116,13 +134,9 @@ class Terminal
       return $found;
    }
 
-   public function output (string $data) : int|false
+   public function clear () : true
    {
-      return fwrite($this->stream, $data);
-   }
-   public function clear ()
-   {
-      $this->output(
+      $this->Output->write(
          CLI::_START_ESCAPE . self::_CURSOR_POSITION .
          CLI::_START_ESCAPE . self::_TEXT_ERASE_IN_DISPLAY
       );
