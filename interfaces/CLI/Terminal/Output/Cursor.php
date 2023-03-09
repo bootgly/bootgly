@@ -11,8 +11,6 @@
 namespace Bootgly\CLI\Terminal\Output;
 
 
-use Bootgly\CLI;
-
 use Bootgly\CLI\Escaping\cursor\Positioning;
 use Bootgly\CLI\Escaping\cursor\Visualizing;
 use Bootgly\CLI\Escaping\cursor\Shaping;
@@ -40,6 +38,10 @@ class Cursor
    // Moving
    public function up (int $lines, ? int $column = null) : Output
    {
+      if ($column > 1 || $column < 0) {
+         $this->moveTo(null, $column);
+      }
+
       return match ($column) {
          1 => $this->Output->escape($lines . self::_CURSOR_PREVIOUS_LINE),
          default => $this->Output->escape($lines . self::_CURSOR_UP)
@@ -51,6 +53,10 @@ class Cursor
    }
    public function down (int $lines, ? int $column = null) : Output
    {
+      if ($column > 1 || $column < 0) {
+         $this->moveTo(null, $column);
+      }
+
       return match ($column) {
          1 => $this->Output->escape($lines . self::_CURSOR_NEXT_LINE),
          default => $this->Output->escape($lines . self::_CURSOR_DOWN)
@@ -58,9 +64,7 @@ class Cursor
    }
    public function left (int $columns) : Output
    {
-      $this->Output->escape($columns . self::_CURSOR_LEFT);
-
-      return $this->Output;
+      return $this->Output->escape($columns . self::_CURSOR_LEFT);
    }
 
    public function moveTo (? int $line = null, ? int $column = null) : Output
