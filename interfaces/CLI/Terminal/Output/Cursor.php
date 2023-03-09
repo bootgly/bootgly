@@ -15,6 +15,7 @@ use Bootgly\CLI;
 
 use Bootgly\CLI\Escaping\cursor\Positioning;
 use Bootgly\CLI\Escaping\cursor\Visualizing;
+use Bootgly\CLI\Escaping\cursor\Shaping;
 
 use Bootgly\CLI\Terminal;
 use Bootgly\CLI\Terminal\Output;
@@ -24,6 +25,7 @@ class Cursor
 {
    use Positioning;
    use Visualizing;
+   use Shaping;
 
 
    private Output $Output;
@@ -116,5 +118,19 @@ class Cursor
    public function hide () : Output
    {
       return $this->Output->write(CLI::_START_ESCAPE . self::_CURSOR_HIDDEN);
+   }
+
+   // @ Shaping
+   public function shape (? string $style = '@user')
+   {
+      return match ($style) {
+         'block' => $this->Output->write(CLI::_START_ESCAPE . self::_CURSOR_BLINKING_BLOCK_SHAPE),
+
+         'underline' => $this->Output->write(CLI::_START_ESCAPE . self::_CURSOR_BLINKING_UNDERLINE_SHAPE),
+
+         'bar' => $this->Output->write(CLI::_START_ESCAPE . self::_CURSOR_BLINKING_BAR_SHAPE),
+
+         default => $this->Output->write(CLI::_START_ESCAPE . self::_CURSOR_USER_SHAPE)
+      };
    }
 }
