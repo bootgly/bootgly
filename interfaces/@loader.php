@@ -6,11 +6,13 @@ require 'CLI/Commands.php';
 // ? Escaping
 require 'CLI/Escaping.php';
 // cursor
-require 'CLI/Escaping/cursor/Positioning.php'; // @ trait
-require 'CLI/Escaping/cursor/Visualizing.php'; // @ trait
+require 'CLI/Escaping/cursor/Positioning.php';   // @ trait
+require 'CLI/Escaping/cursor/Visualizing.php';   // @ trait
 // text
-require 'CLI/Escaping/text/Formatting.php';    // @ trait
-require 'CLI/Escaping/text/Modifying.php';     // @ trait
+require 'CLI/Escaping/text/Formatting.php';      // @ trait
+require 'CLI/Escaping/text/Modifying.php';       // @ trait
+// viewport
+require 'CLI/Escaping/viewport/Positioning.php'; // @ trait
 // ? Terminal
 require 'CLI/Terminal.php';
 require 'CLI/Terminal/Input.php';
