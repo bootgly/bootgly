@@ -8,18 +8,10 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\CLI\Terminal\cursor;
+namespace Bootgly\CLI\Terminal\Output\Cursor;
 
 
-use Bootgly\CLI;
-
-
-trait Visualizing
+trait Escaping
 {
-   // * Meta
-   public const _CURSOR_HIDDEN = '?25l';
-   public const _CURSOR_VISIBLE = '?25h';
-
-   public const _CURSOR_BLINKING_DISABLED = '?12l';
-   public const _CURSOR_BLINKING_ENABLED = '?12h';
+   public const _START_ESCAPE = "\033[";
 }

@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\CLI\Terminal\text;
+namespace Bootgly\CLI\Escaping\text;
 
 
 use Bootgly\CLI;

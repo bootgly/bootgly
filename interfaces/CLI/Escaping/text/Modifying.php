@@ -8,10 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\CLI\Terminal\text;
-
-
-use Bootgly\CLI;
+namespace Bootgly\CLI\Escaping\text;
 
 
 trait Modifying

@@ -17,7 +17,7 @@ use Bootgly\Logger;
 trait Logging
 {
    use \Bootgly\Logging;
-   use \Bootgly\CLI\Terminal\text\Formatting;
+   use \Bootgly\CLI\Escaping\text\Formatting;
 
 
    // * Config
