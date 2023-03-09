@@ -86,6 +86,12 @@ class Output
 
       return $this;
    }
+   public function escape (string $code) : self
+   {
+      fwrite($this->stream, CLI::_START_ESCAPE . $code);
+
+      return $this;
+   }
    public function append (string $text) : self
    {
       $this->written = fwrite($this->stream, $text . PHP_EOL);
