@@ -41,24 +41,24 @@ class Cursor
    public function up (int $lines, ? int $column = null) : Output
    {
       return match ($column) {
-         1 => $this->Output->write(CLI::_START_ESCAPE . $lines . self::_CURSOR_PREVIOUS_LINE),
-         default => $this->Output->write(CLI::_START_ESCAPE . $lines . self::_CURSOR_UP)
+         1 => $this->Output->escape($lines . self::_CURSOR_PREVIOUS_LINE),
+         default => $this->Output->escape($lines . self::_CURSOR_UP)
       };
    }
    public function right (int $columns) : Output
    {
-      return $this->Output->write(CLI::_START_ESCAPE . $columns . self::_CURSOR_RIGHT);
+      return $this->Output->escape($columns . self::_CURSOR_RIGHT);
    }
    public function down (int $lines, ? int $column = null) : Output
    {
       return match ($column) {
-         1 => $this->Output->write(CLI::_START_ESCAPE . $lines . self::_CURSOR_NEXT_LINE),
-         default => $this->Output->write(CLI::_START_ESCAPE . $lines . self::_CURSOR_DOWN)
+         1 => $this->Output->escape($lines . self::_CURSOR_NEXT_LINE),
+         default => $this->Output->escape($lines . self::_CURSOR_DOWN)
       };
    }
    public function left (int $columns) : Output
    {
-      $this->Output->write(CLI::_START_ESCAPE . $columns . self::_CURSOR_LEFT);
+      $this->Output->escape($columns . self::_CURSOR_LEFT);
 
       return $this->Output;
    }
@@ -66,63 +66,63 @@ class Cursor
    public function moveTo (? int $line = null, ? int $column = null) : Output
    {
       if ($line === null && $column >= 0) {
-         return $this->Output->write(CLI::_START_ESCAPE . $column . self::_CURSOR_LEFT_ABSOLUTE);
+         return $this->Output->escape($column . self::_CURSOR_LEFT_ABSOLUTE);
       }
       if ($line === null && $column < 0) {
          $c = $column + Terminal::$columns;
-         return $this->Output->write(CLI::_START_ESCAPE . $c . self::_CURSOR_LEFT_ABSOLUTE);
+         return $this->Output->escape($c . self::_CURSOR_LEFT_ABSOLUTE);
       }
 
       if ($column === null && $line >= 0) {
-         return $this->Output->write(CLI::_START_ESCAPE . $line . self::_CURSOR_UP_ABSOLUTE);
+         return $this->Output->escape($line . self::_CURSOR_UP_ABSOLUTE);
       }
       if ($column === null && $line < 0) {
          $l = $line + Terminal::$lines;
-         return $this->Output->write(CLI::_START_ESCAPE . $l . self::_CURSOR_UP_ABSOLUTE);
+         return $this->Output->escape($l . self::_CURSOR_UP_ABSOLUTE);
       }
 
-      return $this->Output->write(CLI::_START_ESCAPE . $line . $column . self::_CURSOR_POSITION);
+      return $this->Output->escape($line . $column . self::_CURSOR_POSITION);
    }
 
    // Memorizing
    public function save ()
    {
-      return $this->Output->write(CLI::_START_ESCAPE . self::_CURSOR_SAVED);
+      return $this->Output->escape(self::_CURSOR_SAVED);
    }
    public function restore ()
    {
-      return $this->Output->write(CLI::_START_ESCAPE . self::_CURSOR_RESTORED);
+      return $this->Output->escape(self::_CURSOR_RESTORED);
    }
 
    // @ Visualizing
    public function blink (bool $status) : Output
    {
       return match ($status) {
-         false => $this->Output->write(CLI::_START_ESCAPE . self::_CURSOR_BLINKING_DISABLED),
-         true => $this->Output->write(CLI::_START_ESCAPE . self::_CURSOR_BLINKING_ENABLED),
+         false => $this->Output->escape(self::_CURSOR_BLINKING_DISABLED),
+         true => $this->Output->escape(self::_CURSOR_BLINKING_ENABLED),
       };
    }
 
    public function show () : Output
    {
-      return $this->Output->write(CLI::_START_ESCAPE . self::_CURSOR_VISIBLE);
+      return $this->Output->escape(self::_CURSOR_VISIBLE);
    }
    public function hide () : Output
    {
-      return $this->Output->write(CLI::_START_ESCAPE . self::_CURSOR_HIDDEN);
+      return $this->Output->escape(self::_CURSOR_HIDDEN);
    }
 
    // @ Shaping
    public function shape (? string $style = '@user')
    {
       return match ($style) {
-         'block' => $this->Output->write(CLI::_START_ESCAPE . self::_CURSOR_BLINKING_BLOCK_SHAPE),
+         'block' => $this->Output->escape(self::_CURSOR_BLINKING_BLOCK_SHAPE),
 
-         'underline' => $this->Output->write(CLI::_START_ESCAPE . self::_CURSOR_BLINKING_UNDERLINE_SHAPE),
+         'underline' => $this->Output->escape(self::_CURSOR_BLINKING_UNDERLINE_SHAPE),
 
-         'bar' => $this->Output->write(CLI::_START_ESCAPE . self::_CURSOR_BLINKING_BAR_SHAPE),
+         'bar' => $this->Output->escape(self::_CURSOR_BLINKING_BAR_SHAPE),
 
-         default => $this->Output->write(CLI::_START_ESCAPE . self::_CURSOR_USER_SHAPE)
+         default => $this->Output->escape(self::_CURSOR_USER_SHAPE)
       };
    }
 }
