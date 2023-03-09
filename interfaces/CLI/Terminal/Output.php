@@ -14,6 +14,7 @@ namespace Bootgly\CLI\Terminal;
 use Bootgly\CLI;
 
 use Bootgly\CLI\Terminal\Output\Cursor;
+use Bootgly\CLI\Terminal\Output\Text;
 
 
 class Output
@@ -30,6 +31,7 @@ class Output
 
 
    public Cursor $Cursor;
+   public Text $Text;
 
 
    public function __construct ($stream = STDOUT)
@@ -45,15 +47,23 @@ class Output
       $this->written = 0;
 
       $this->Cursor = new Cursor($this);
+      $this->Text = new Text($this);
    }
 
-   public function write (string $data) : self
+   public function write (string $text, int $times = 1) : self
    {
-      $this->written = fwrite($this->stream, $data);
+      $stream = &$this->stream;
+      $wait = $this->wait;
 
-      if ($this->wait > 0) {
-         sleep($this->wait);
-      }
+      do {
+         $this->written = fwrite($stream, $text);
+
+         if ($wait > 0) {
+            sleep($wait);
+         }
+
+         $times--;
+      } while ($times > 0);
 
       return $this;
    }

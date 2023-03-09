@@ -24,4 +24,16 @@ class Text
 {
    use Formatting;
    use Modifying;
+
+
+   private Output $Output;
+
+
+   public function __construct (Output &$Output)
+   {
+      $this->Output = $Output;
+   }
+
+   // @ Formatting
+   
 }
