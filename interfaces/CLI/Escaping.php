@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\CLI\Terminal\Output\Cursor;
+namespace Bootgly\CLI;
 
 
 trait Escaping
