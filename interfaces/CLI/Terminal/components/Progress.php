@@ -157,10 +157,6 @@ class Progress
 
       return $bar;
    }
-   
-   private function getSymbols($symbol, $count) {
-      return array_fill(0, $count, $symbol);
-   }
 
    public function start ()
    {
