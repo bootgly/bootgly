@@ -12,7 +12,7 @@ use Bootgly\CLI\HTTP\Server\Response;
 return [
    // @ arrange
    'separators' => [
-      'suite' => 'Response'
+      'suite' => 'HTTP Response'
    ],
 
    // @ act

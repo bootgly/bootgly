@@ -12,9 +12,9 @@ use Bootgly\CLI\HTTP\Server\Response;
 return [
    // @ arrange
    'response.length' => 557,
-   'describe' => 'It should return parts of file `bytes=1-2,3-4,-1`',
+   'describe' => 'It should return parts of file `bytes=1-2,4-5,-1`',
    'separators' => [
-      'left' => '.2.2 - Requests Range - Client - Multi Part (Valid)'
+      'left' => '.2.4 - Requests Range - Client - Multi Part (Valid)'
    ],
 
    // @ act
@@ -35,7 +35,7 @@ return [
       GET /test/download/file_with_range/multi_range/1 HTTP/1.1\r
       Host: {$host}\r
       User-Agent: Bootgly\r
-      Range: bytes=1-2,3-4,-1\r
+      Range: bytes=1-2,4-5,-1\r
       \r\n
       HTTP_RAW;
 
@@ -61,9 +61,9 @@ return [
       bc\r
       --00000000000000000001
       Content-Type: application/octet-stream
-      Content-Range: bytes 3-4/62\r
+      Content-Range: bytes 4-5/62\r
       \r
-      de\r
+      ef\r
       --00000000000000000001
       Content-Type: application/octet-stream
       Content-Range: bytes 61-61/62\r
