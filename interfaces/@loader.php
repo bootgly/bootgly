@@ -17,6 +17,7 @@ require 'CLI/Escaping/viewport/Positioning.php'; // @ trait
 // ? Terminal
 require 'CLI/Terminal.php';
 require 'CLI/Terminal/Input.php';
+
 require 'CLI/Terminal/Output.php';
 // Cursor
 require 'CLI/Terminal/Output/Cursor.php';
@@ -27,7 +28,8 @@ require 'CLI/Terminal/@/Logger/Logging.php';      // @trait
 
 require 'CLI/Terminal/@/Tester/Tests.php';
 require 'CLI/Terminal/@/Tester/Tests/Test.php';
-
+// @ components
+require 'CLI/Terminal/components/Progress.php';
 // ! OS
 require 'OS/Process/Timer.php';
 
