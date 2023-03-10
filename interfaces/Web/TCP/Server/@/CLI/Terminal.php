@@ -37,7 +37,7 @@ class Terminal extends CLI\Terminal
       // @
       'status',
       // @ control
-      'stop', 'exit', 'quit',
+      'quit',
       'pause',
       'resume',
       'reload',
@@ -51,7 +51,7 @@ class Terminal extends CLI\Terminal
       'test',
       // ! \ Connection
       'stats',
-      'peers', 'connections',
+      'connections',
       // *
       'clear',
       'help'
@@ -93,7 +93,7 @@ class Terminal extends CLI\Terminal
          'status' =>
             $this->Server->{'@status'} && true,
          // @ control
-         'stop', 'exit', 'quit' =>
+         'quit' =>
             $this->log(
                '@\;Stopping ' . $this->Server->Process->children . ' worker(s)... ',
                self::LOG_WARNING_LEVEL
@@ -139,7 +139,7 @@ class Terminal extends CLI\Terminal
             $this->saveCommand($command, 'Connections')
             && $this->Server->Process->sendSignal(SIGUSR1, master: false) && true,
 
-         'peers', 'connections' =>
+         'connections' =>
             $this->Server->Process->sendSignal(SIGIOT, master: false) && false,
          // *
          'clear' =>

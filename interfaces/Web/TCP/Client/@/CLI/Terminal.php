@@ -33,7 +33,7 @@ class Terminal extends CLI\Terminal
    // * Data
    // ! Command
    public static array $commands = [
-      'stop', 'exit', 'quit',
+      'quit',
 
       'clear',
       'help'
@@ -55,7 +55,7 @@ class Terminal extends CLI\Terminal
 
       return match ($command) {
          // ! Client
-         'stop', 'exit', 'quit' =>
+         'quit' =>
             $this->log(
                '@\;Stopping ' . $this->Client->Process->children . ' worker(s)... ',
                self::LOG_WARNING_LEVEL
