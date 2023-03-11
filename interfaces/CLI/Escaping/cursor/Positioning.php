@@ -43,14 +43,21 @@ trait Positioning
 
    // [<c>G] (Cursor Left Absolute)
    public const _CURSOR_LEFT_ABSOLUTE = 'G';
-   // ? Coordinate (<l>;<c>) "<c> = column, <l> = line"
-   // [<l>;<c>H] (Cursor Position) "Cursor moves to <l>;<c> coordinate within the viewport"
+   // ? Coordinate (<r>;<c>) "<c> = column, <r> = row"
+   // [<r>;<c>H] (Cursor Position) "Cursor moves to <r>;<c> coordinate within the viewport"
    public const _CURSOR_POSITION = 'H';
-   // [<l>;<c>H] (Cursor Position) "Cursor moves to <l>;<c> coordinate within the viewport"
+   // [<r>;<c>H] (Cursor Position) "Cursor moves to <r>;<c> coordinate within the viewport"
    public const _CURSOR_HORIZONTAL_VERTICAL_POSITION = 'f';
+
+
    // ! Memorizing
    // [\<n\>s] (Save Cursor) "Save the current position of cursor to memory array"
    public const _CURSOR_SAVED = 's';
    // [\<n\>u] (Restore Cursor) "Retrieve the last saved cursor position and set it as the current position"
    public const _CURSOR_RESTORED = 'u';
+
+
+   // ! Reporting
+   // [6n] (Report Cursor Position) "Emit the cursor position as: ESC [ <r> ; <c> R Where <r> = cursor row and <c> = cursor column"
+   public const _CURSOR_REPORT_POSITION = '6n';
 }
