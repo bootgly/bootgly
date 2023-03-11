@@ -33,33 +33,38 @@ class Progress
 
    // * Config
    // @ Tick
-   public float $ticks = 1.0;
-   public float $throttle = 0.1;
+   public float $ticks;
+   public float $throttle;
    // @ Templating
-   public string $format;
+   public string $template;
    // @ Precision
-   public int $secondPrecision  = 2;
-   public int $percentPrecision = 1;
-   // @ Bar
+   public int $secondPrecision;
+   public int $percentPrecision;
+   // ! Bar
+   // units
    public int $barUnits;
    // symbols
-   public string $symbolComplete   = '=';
-   public string $symbolCurrent    = '>';
-   public string $symbolIncomplete = ' ';
-   public string $symbolUnknown    = '?';
+   // TODO convert to array?
+   public string $symbolComplete;
+   public string $symbolCurrent;
+   public string $symbolIncomplete;
+   public string $symbolUnknown;
    // * Data
+   // @ Tick
    public float $ticked;
    // * Meta
-   public float|string $elapsed;
-   public float|string $percent;
-   public float|string $eta;
-   public float|string $rate;
    // @ Timing
    private float $started;
-   private bool $finished;
    private float $rendered;
+   private bool $finished;
+   // @ Display
+   private float|string $elapsed;
+   private float|string $percent;
+   private float|string $eta;
+   private float|string $rate;
    // @ Templating
-   private array $tokens = ['@ticked;', '@ticks;', '@bar;', '@elapsed;', '@percent;', '@eta;', '@rate;'];
+   private array $tokens;
+   private array $lines;
 
 
    public function __construct (Output $Output)
@@ -67,23 +72,41 @@ class Progress
       $this->Output = $Output;
 
       // * Config
+      // @ Tick
       $this->ticks = 100;
-      // @ Bar
-      $this->barUnits = Terminal::$width / 2;
+      $this->throttle = 0.1;
       // @ Templating
-      $this->format = <<<'TEMPLATE'
+      $this->template = <<<'TEMPLATE'
       @ticked;/@ticks;  [@bar;]  @percent;% - Elapsed: @elapsed;s - ETA: @eta;s - Rate: @rate;/s
       TEMPLATE;
+      // @ Precision
+      $this->secondPrecision = 2;
+      $this->percentPrecision = 1;
+      // ! Bar
+      // units
+      $this->barUnits = Terminal::$width / 2;
+      // symbols
+      // TODO convert to array?
+      $this->symbolComplete   = '=';
+      $this->symbolCurrent    = '>';
+      $this->symbolIncomplete = ' ';
+      $this->symbolUnknown    = '?';
       // * Data
+      // @ Tick
       $this->ticked = 0.0;
       // * Meta
+      // @ Timing
+      $this->started = 0.0;
+      $this->rendered = 0.0;
+      $this->finished = false;
+      // @ Display
       $this->elapsed = 0.0;
       $this->percent = 0.0;
       $this->eta = 0.0;
       $this->rate = 0.0;
-      // @ Timing
-      $this->started = 0.0;
-      $this->finished = false;
+      // @ Templating
+      $this->tokens = ['@ticked;', '@ticks;', '@bar;', '@elapsed;', '@percent;', '@eta;', '@rate;'];
+      $this->lines = [];
    }
 
    private function render ()
@@ -91,34 +114,46 @@ class Progress
       // @ Timing
       $this->rendered = microtime(true);
 
-      // @ Escaping
-      $this->Output->Cursor->moveTo(column: 1);
-
       // @ Templating
-      if (strpos($this->format, '@bar;') !== false) {
+      if (strpos($this->template, '@bar;') !== false) {
          $bar = $this->renderBar();
       }
 
-      $output = str_replace(
-         search: $this->tokens,
-         replace: [
-            $this->ticked,
-            $this->ticks,
-            // @ Bar
-            $bar ?? '',
-            // @ Format numbers
-            number_format($this->elapsed, $this->secondPrecision, '.', ''),
-            number_format($this->percent, $this->percentPrecision, '.', ''),
-            number_format($this->eta, $this->secondPrecision, '.', ''),
-            number_format($this->rate, 0, '.', ''),
-         ],
-         subject: $this->format
-      );
+      // @ Prepare values
+      $tokens = $this->tokens;
 
-      // @ Write to output
-      $this->Output->write(
-         $output . self::_START_ESCAPE . self::_TEXT_DELETE_CHARACTER
-      );
+      $ticked = $this->ticked;
+      $ticks = $this->ticks;
+
+      $elapsed = number_format($this->elapsed, $this->secondPrecision, '.', '');
+      $percent = number_format($this->percent, $this->percentPrecision, '.', '');
+      $eta = number_format($this->eta, $this->secondPrecision, '.', '');
+      $rate = number_format($this->rate, 0, '.', '');
+
+      // @ Write each line to output
+      foreach ($this->lines as $index => $line) {
+         $output = str_replace(
+            search: $tokens,
+            replace: [
+               $ticked,
+               $ticks,
+
+               $bar ?? '',
+
+               $elapsed,
+               $percent,
+               $eta,
+               $rate
+            ],
+            subject: $line
+         );
+
+         // @ Move cursor to line
+         $this->Output->Cursor->moveTo(line: $index + 2, column: 1);
+
+         // @ Write to output
+         $this->Output->write($output);
+      }
    }
    // TODO move to Progress/Bar
    public function renderBar() : string
@@ -169,6 +204,14 @@ class Progress
 
       // @ Set the start time
       $this->rendered = microtime(true);
+
+      // @ Set lines
+      $lines = explode("\n", $this->template);
+      foreach ($lines as $index => $line) {
+         // @ Write to each end of line
+         $lines[$index] .= '   ';
+      }
+      $this->lines = $lines;
 
       $this->render();
    }
@@ -225,7 +268,7 @@ class Progress
       // TODO Check whether the last rendered showed the completed progress (when using throttle).
 
       $this->Output
-         ->escape(self::_CURSOR_VISIBLE)
+         ->Cursor->show()
          ->write("\n");
    }
 
