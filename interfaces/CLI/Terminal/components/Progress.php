@@ -123,7 +123,7 @@ class Progress
       $tokens = $this->tokens;
 
       $ticked = $this->ticked;
-      $ticks = $this->ticks;
+      $ticks = (int) $this->ticks;
 
       $elapsed = number_format($this->elapsed, $this->secondPrecision, '.', '');
       $percent = number_format($this->percent, $this->percentPrecision, '.', '');
@@ -212,7 +212,7 @@ class Progress
       $this->template = str_replace("\n", "   \n", $this->template);
       $this->template .= "   \n\n";
 
-      // @ Get/Increase the current Cursor position row
+      // @ Get/Set the current Cursor position row
       $this->row = ($this->Output->Cursor->position['row'] ?? 0);
 
       $this->render();
