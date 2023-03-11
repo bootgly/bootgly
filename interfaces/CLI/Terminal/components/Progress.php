@@ -131,29 +131,27 @@ class Progress
       $rate = number_format($this->rate, 0, '.', '');
 
       // @ Write each line to output
-      foreach ($this->lines as $index => $line) {
-         $output = str_replace(
-            search: $tokens,
-            replace: [
-               $ticked,
-               $ticks,
+      $output = str_replace(
+         search: $tokens,
+         replace: [
+            $ticked,
+            $ticks,
 
-               $bar ?? '',
+            $bar ?? '',
 
-               $elapsed,
-               $percent,
-               $eta,
-               $rate
-            ],
-            subject: $line
-         );
+            $elapsed,
+            $percent,
+            $eta,
+            $rate
+         ],
+         subject: $this->template
+      );
 
-         // @ Move cursor to line
-         $this->Output->Cursor->moveTo(line: $index + $this->row, column: 1);
+      // @ Move cursor to line
+      $this->Output->Cursor->moveTo(line: $this->row, column: 1);
 
-         // @ Write to output
-         $this->Output->write($output);
-      }
+      // @ Write to output
+      $this->Output->write($output);
    }
    // TODO move to Progress/Bar
    public function renderBar() : string
@@ -210,15 +208,12 @@ class Progress
       // @ Set the start time
       $this->rendered = microtime(true);
 
-      // @ Set lines
-      $lines = explode("\n", $this->template);
-      foreach ($lines as $index => $line) {
-         // @ Write to each end of line
-         $lines[$index] .= '   ';
-      }
-      $this->lines = $lines;
+      // @ Format Template EOL
+      $this->template = str_replace("\n", "   \n", $this->template);
+      $this->template .= "   \n\n";
+
       // @ Get/Increase the current Cursor position row
-      $this->row = ($this->Output->Cursor->position['row'] ?? 0) + 1;
+      $this->row = ($this->Output->Cursor->position['row'] ?? 0);
 
       $this->render();
    }
@@ -274,9 +269,7 @@ class Progress
       // TODO Check unknown symbol in ETA
       // TODO Check whether the last rendered showed the completed progress (when using throttle).
 
-      $this->Output
-         ->Cursor->show()
-         ->write("\n");
+      $this->Output->Cursor->show();
    }
 
    public function __destruct()
