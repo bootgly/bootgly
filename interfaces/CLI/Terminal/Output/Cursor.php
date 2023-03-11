@@ -85,7 +85,7 @@ class Cursor
          return $this->Output->escape($l . self::_CURSOR_UP_ABSOLUTE);
       }
 
-      return $this->Output->escape($line . $column . self::_CURSOR_POSITION);
+      return $this->Output->escape($line . ';' . $column . self::_CURSOR_POSITION);
    }
 
    // Memorizing
