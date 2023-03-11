@@ -14,9 +14,9 @@ namespace Bootgly\CLI\Terminal\components;
 use Bootgly\CLI;
 
 use Bootgly\CLI\Escaping;
-use Bootgly\CLI\Escaping\cursor\Positioning;
-use Bootgly\CLI\Escaping\cursor\Visualizing;
-use Bootgly\CLI\Escaping\text\Modifying;
+use Bootgly\CLI\Escaping\cursor;
+use Bootgly\CLI\Escaping\text;
+
 use Bootgly\CLI\Terminal;
 use Bootgly\CLI\Terminal\Output;
 
@@ -24,9 +24,9 @@ use Bootgly\CLI\Terminal\Output;
 class Progress
 {
    use Escaping;
-   use Positioning;
-   use Visualizing;
-   use Modifying;
+   use cursor\Positioning;
+   use cursor\Visualizing;
+   use text\Modifying;
 
 
    private Output $Output;
@@ -45,14 +45,13 @@ class Progress
    public int $barUnits;
    // symbols
    // TODO convert to array?
-   public string $symbolComplete;
-   public string $symbolCurrent;
-   public string $symbolIncomplete;
-   public string $symbolUnknown;
+   public array $barSymbols;
    // * Data
    // @ Tick
    public float $ticked;
    // * Meta
+   // @ Cursor
+   private int $row;
    // @ Timing
    private float $started;
    private float $rendered;
@@ -67,7 +66,7 @@ class Progress
    private array $lines;
 
 
-   public function __construct (Output $Output)
+   public function __construct (Output &$Output)
    {
       $this->Output = $Output;
 
@@ -77,7 +76,7 @@ class Progress
       $this->throttle = 0.1;
       // @ Templating
       $this->template = <<<'TEMPLATE'
-      @ticked;/@ticks;  [@bar;]  @percent;% - Elapsed: @elapsed;s - ETA: @eta;s - Rate: @rate;/s
+      @ticked;/@ticks; [@bar;] @percent;% - Elapsed: @elapsed;s - ETA: @eta;s - Rate: @rate;/s
       TEMPLATE;
       // @ Precision
       $this->secondPrecision = 2;
@@ -86,15 +85,16 @@ class Progress
       // units
       $this->barUnits = Terminal::$width / 2;
       // symbols
-      // TODO convert to array?
-      $this->symbolComplete   = '=';
-      $this->symbolCurrent    = '>';
-      $this->symbolIncomplete = ' ';
-      $this->symbolUnknown    = '?';
+      $this->barSymbols = [
+         'determined'   => ['=', '>', ' '], // determined
+         'indetermined' => ['?']            // indetermined
+      ];
       // * Data
       // @ Tick
       $this->ticked = 0.0;
       // * Meta
+      // @ Cursor
+      $this->row = 0;
       // @ Timing
       $this->started = 0.0;
       $this->rendered = 0.0;
@@ -149,7 +149,7 @@ class Progress
          );
 
          // @ Move cursor to line
-         $this->Output->Cursor->moveTo(line: $index + 2, column: 1);
+         $this->Output->Cursor->moveTo(line: $index + $this->row, column: 1);
 
          // @ Write to output
          $this->Output->write($output);
@@ -169,26 +169,31 @@ class Progress
       $left = $units - $done;
 
       // @ Construct symbols
+      $symbols = $this->barSymbols['determined'];
       // incomplete
+      $incomplete = $symbols[0];
+
       $symbolsIncomplete = [];
+
       for ($i = 0; $i < $left; $i++) {
-         $symbolsIncomplete[] = $this->symbolIncomplete;
+         $symbolsIncomplete[] = $incomplete;
       }
+      // current
+      // ...
       // complete
       $symbolsComplete = [];
+
       if ($this->ticks <= 0) {
          for ($i = 0; $i < $done; $i++) {
-            $symbolsComplete[] = $this->symbolIncomplete;
+            $symbolsComplete[] = $incomplete;
          }
       } else {
          for ($i = 0; $i < $done; $i++) {
-            $symbolsComplete[] = $this->symbolComplete;
+            $symbolsComplete[] = $symbols[2];
          }
       }
-      // current
-      $symbolCurrent = $this->symbolCurrent;
 
-      $bar = implode('', $symbolsComplete) . $symbolCurrent . implode('', $symbolsIncomplete);
+      $bar = implode('', $symbolsComplete) . $symbols[1] . implode('', $symbolsIncomplete);
 
       return $bar;
    }
@@ -212,6 +217,8 @@ class Progress
          $lines[$index] .= '   ';
       }
       $this->lines = $lines;
+      // @ Get/Increase the current Cursor position row
+      $this->row = ($this->Output->Cursor->position['row'] ?? 0) + 1;
 
       $this->render();
    }
