@@ -3,14 +3,64 @@ namespace Bootgly\CLI;
 
 
 use Bootgly\CLI;
+use Bootgly\CLI\Terminal\components\Progress;
 
 
 $Output = CLI::$Terminal->Output;
 
+/* 
+ * Terminal - Progress component
+ */
+/*
+$Progress = new Progress($Output);
+// * Config
+// @ Ticks
+$Progress->ticks = 250000;
+$Progress->throttle = 0;
+// @ Templating
+$Progress->template = <<<'TEMPLATE'
+@description;
+@ticked;/@ticks; [@bar;] @percent;%
+⏱️ @elapsed;s - 🏁 @eta;s - 📈 @rate; loops/s
+TEMPLATE;
+// ! Bar
+// Symbols
+$Progress->Bar->symbols = [
+   'determined'   => [
+      // incompleted / current / completed
+      '🖤', '', '❤️'
+   ],
+   'indetermined' => ['-']
+];
+// Units
+$Progress->Bar->units = 10;
+
+
+$Progress->start();
+
+
+for ($i = 0; $i < $Progress->ticks; $i++) {
+   if ($i === 0) {
+      $Progress->describe('Performing progress!');
+   }
+   if ($i === 125000) {
+      $Progress->describe('There\'s only half left...');
+   }
+   if ($i === 249999) {
+      $Progress->describe('Finished!!!');
+   }
+
+	$Progress->tick();
+}
+
+
+$Progress->finish();
+*/
 
 /* 
- * Cursor Positioning
+ * Escaping - Cursor Positioning
  */
+/*
 // Example 1
 $Output->writing("Cursor Positioning on _:\n");
 $Output->writing("Moving up 1 line from current line and going back 53 columns to the left...");
@@ -57,9 +107,10 @@ $Output
    ->write("o");
 
 $Output->write("\n");
+*/
 
 /* 
- * Cursor Shaping
+ * Escaping - Cursor Shaping
  */
 /*
 $Output->write("Bootgly CLI - Cursor Shaping:\n");
@@ -75,7 +126,7 @@ $Output->Cursor->shape('bar');
 */
 
 /* 
- * Cursor Visualizing
+ * Escaping - Cursor Visualizing
  */
 /*
 $Output->write("Bootgly CLI - Cursor Visualizing:\n");
