@@ -30,6 +30,7 @@ require 'CLI/Terminal/@/Tester/Tests.php';
 require 'CLI/Terminal/@/Tester/Tests/Test.php';
 // @ components
 require 'CLI/Terminal/components/Progress.php';
+require 'CLI/Terminal/components/Progress/Bar.php';
 // ! OS
 require 'OS/Process/Timer.php';
 

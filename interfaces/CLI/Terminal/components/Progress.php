@@ -19,6 +19,7 @@ use Bootgly\CLI\Escaping\text;
 
 use Bootgly\CLI\Terminal;
 use Bootgly\CLI\Terminal\Output;
+use Bootgly\CLI\Terminal\components\Progress\Bar;
 
 
 class Progress
@@ -40,15 +41,11 @@ class Progress
    // @ Precision
    public int $secondPrecision;
    public int $percentPrecision;
-   // ! Bar
-   // units
-   public int $barUnits;
-   // symbols
-   // TODO convert to array?
-   public array $barSymbols;
+
    // * Data
    // @ Tick
    public float $ticked;
+
    // * Meta
    // @ Cursor
    private int $row;
@@ -63,7 +60,8 @@ class Progress
    private float|string $rate;
    // @ Templating
    private array $tokens;
-   private array $lines;
+
+   public Bar $Bar;
 
 
    public function __construct (Output &$Output)
@@ -81,17 +79,11 @@ class Progress
       // @ Precision
       $this->secondPrecision = 2;
       $this->percentPrecision = 1;
-      // ! Bar
-      // units
-      $this->barUnits = Terminal::$width / 2;
-      // symbols
-      $this->barSymbols = [
-         'determined'   => ['=', '>', ' '], // determined
-         'indetermined' => ['?']            // indetermined
-      ];
+
       // * Data
       // @ Tick
       $this->ticked = 0.0;
+
       // * Meta
       // @ Cursor
       $this->row = 0;
@@ -106,7 +98,12 @@ class Progress
       $this->rate = 0.0;
       // @ Templating
       $this->tokens = ['@ticked;', '@ticks;', '@bar;', '@elapsed;', '@percent;', '@eta;', '@rate;'];
-      $this->lines = [];
+
+      $this->Bar = new Bar($this);
+   }
+   public function __get ($name)
+   {
+      return $this->$name;
    }
 
    private function render ()
@@ -116,7 +113,7 @@ class Progress
 
       // @ Templating
       if (strpos($this->template, '@bar;') !== false) {
-         $bar = $this->renderBar();
+         $bar = $this->Bar->render();
       }
 
       // @ Prepare values
@@ -152,48 +149,6 @@ class Progress
 
       // @ Write to output
       $this->Output->write($output);
-   }
-   // TODO move to Progress/Bar
-   public function renderBar() : string
-   {
-      $units = $this->barUnits;
-
-      // @ done
-      $done = $units * ($this->percent / 100);
-      if ($done > $units) {
-         $done = $units;
-      }
-      // @ left
-      $left = $units - $done;
-
-      // @ Construct symbols
-      $symbols = $this->barSymbols['determined'];
-      // incomplete
-      $incomplete = $symbols[0];
-
-      $symbolsIncomplete = [];
-
-      for ($i = 0; $i < $left; $i++) {
-         $symbolsIncomplete[] = $incomplete;
-      }
-      // current
-      // ...
-      // complete
-      $symbolsComplete = [];
-
-      if ($this->ticks <= 0) {
-         for ($i = 0; $i < $done; $i++) {
-            $symbolsComplete[] = $incomplete;
-         }
-      } else {
-         for ($i = 0; $i < $done; $i++) {
-            $symbolsComplete[] = $symbols[2];
-         }
-      }
-
-      $bar = implode('', $symbolsComplete) . $symbols[1] . implode('', $symbolsIncomplete);
-
-      return $bar;
    }
 
    public function start ()
@@ -266,7 +221,6 @@ class Progress
 
       $this->finished = true;
 
-      // TODO Check unknown symbol in ETA
       // TODO Check whether the last rendered showed the completed progress (when using throttle).
 
       $this->Output->Cursor->show();
