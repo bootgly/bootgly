@@ -40,8 +40,9 @@ $Progress->Bar->units = 10;
 $Progress->start();
 
 
-for ($i = 0; $i < $Progress->ticks; $i++) {
-   if ($i === 0) {
+$i = 0;
+while ($i++ < 250000) {
+   if ($i === 1) {
       $Progress->describe('Performing progress!');
    }
    if ($i === 125000) {
