@@ -54,8 +54,9 @@ class Progress
    private float $rendered;
    private bool $finished;
    // @ Display
-   private float|string $elapsed;
+   private string $description; // TODO use CLI templating
    private float|string $percent;
+   private float|string $elapsed;
    private float|string $eta;
    private float|string $rate;
    // @ Templating
@@ -74,7 +75,9 @@ class Progress
       $this->throttle = 0.1;
       // @ Templating
       $this->template = <<<'TEMPLATE'
-      @ticked;/@ticks; [@bar;] @percent;% - Elapsed: @elapsed;s - ETA: @eta;s - Rate: @rate;/s
+      @described;
+      @ticked;/@ticks; [@bar;] @percent;%
+      ⏱️ @elapsed;s - 🏁 @eta;s - 📈 @rate; loops/s
       TEMPLATE;
       // @ Precision
       $this->secondPrecision = 2;
@@ -92,12 +95,13 @@ class Progress
       $this->rendered = 0.0;
       $this->finished = false;
       // @ Display
-      $this->elapsed = 0.0;
+      $this->description = ''; // TODO use CLI templating
       $this->percent = 0.0;
+      $this->elapsed = 0.0;
       $this->eta = 0.0;
       $this->rate = 0.0;
       // @ Templating
-      $this->tokens = ['@ticked;', '@ticks;', '@bar;', '@elapsed;', '@percent;', '@eta;', '@rate;'];
+      $this->tokens = ['@description;', '@ticked;', '@ticks;', '@bar;', '@percent;', '@elapsed;', '@eta;', '@rate;'];
 
       $this->Bar = new Bar($this);
    }
@@ -111,38 +115,38 @@ class Progress
       // @ Timing
       $this->rendered = microtime(true);
 
-      // @ Templating
+      // ! Templating
+      // @ Prepare values
+      // description
+      // TODO use CLI templating
+      if (strpos($this->template, '@description;') !== false) {
+         $description = $this->description;
+      }
+      // ticked
+      $ticked = $this->ticked;
+      // ticks
+      $ticks = (int) $this->ticks;
+      // bar
       if (strpos($this->template, '@bar;') !== false) {
          $bar = $this->Bar->render();
       }
 
-      // @ Prepare values
-      $tokens = $this->tokens;
-
-      $ticked = $this->ticked;
-      $ticks = (int) $this->ticks;
-
-      $elapsed = number_format($this->elapsed, $this->secondPrecision, '.', '');
       $percent = number_format($this->percent, $this->percentPrecision, '.', '');
+      $elapsed = number_format($this->elapsed, $this->secondPrecision, '.', '');
       $eta = number_format($this->eta, $this->secondPrecision, '.', '');
       $rate = number_format($this->rate, 0, '.', '');
 
-      // @ Write each line to output
-      $output = str_replace(
-         search: $tokens,
-         replace: [
-            $ticked,
-            $ticks,
-
-            $bar ?? '',
-
-            $elapsed,
-            $percent,
-            $eta,
-            $rate
-         ],
-         subject: $this->template
-      );
+      // @ Replace tokens by strings
+      $output = strtr($this->template, [
+         '@description;' => $description ?? '',
+         '@ticked;' => $ticked,
+         '@ticks;' => $ticks,
+         '@bar;' => $bar ?? '',
+         '@percent;' => $percent,
+         '@elapsed;' => $elapsed,
+         '@eta;' => $eta,
+         '@rate;' => $rate
+      ]);
 
       // @ Move cursor to line
       $this->Output->Cursor->moveTo(line: $this->row, column: 1);
@@ -211,6 +215,21 @@ class Progress
       $this->rate = $rate;
 
       $this->render();
+   }
+
+   public function describe (string $description)
+   {
+      if ($this->description === $description) {
+         return;
+      }
+
+      $describedLength = strlen($this->description);
+
+      if (strlen($description) < $describedLength) {
+         $description = str_pad($description, $describedLength, ' ', STR_PAD_RIGHT);
+      }
+
+      $this->description = $description;
    }
 
    public function finish ()
