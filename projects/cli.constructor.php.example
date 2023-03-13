@@ -27,7 +27,8 @@ TEMPLATE;
 // Symbols
 $Progress->Bar->symbols = [
    'determined'   => [
-      // incompleted / current / completed
+      // Symbols array map:
+      // 0 => incomplete / 1 => current / 2 => complete
       '🖤', '', '❤️'
    ],
    'indetermined' => ['-']
