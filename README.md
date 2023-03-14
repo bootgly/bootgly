@@ -35,34 +35,37 @@ _ | _ | _ | [Response [WIP]](/nodes/CLI/HTTP/Server/Response.php) | _
 
 ## 🔧 Usage
 
-### **Non-CLI SAPI (Apache, LiteSpeed, Nginx, etc)**
+### Running a HTTP Server in Bootgly PHP Framework:
 
-1) Enable Rewrite;
-2) Rename `projects/web.constructor.php.example` to `projects/web.constructor.php`;
-3) Configure Web constructor in `projects/web.constructor.php` file;
-4) Run the Non-CLI HTTP Server.
+#### **Option 1: Non-CLI SAPI (Apache, LiteSpeed, Nginx, etc)**
 
-### **CLI SAPI**
+1) Enable support to Rewrite;
+2) Rename the file `projects/web.constructor.php.example` to `projects/web.constructor.php`;
+3) Configure the Web constructor in `projects/web.constructor.php` file;
+4) Run the Non-CLI HTTP Server pointing to `index.php`.
 
-in Linux OS:
+#### **Option 2: CLI SAPI**
 
-1) Configure Bootgly HTTP Server in `server.http.php` file;
-2) Configure SAPI constructor in `projects/sapi.http.constructor.php` file;
-3) Run the Bootgly HTTP Server in the terminal:
+Directly in Linux OS *(max performance)*:
+
+1) Configure the Bootgly HTTP Server in `server.http.php` file;
+2) Rename `projects/sapi.http.constructor.php.example` to `projects/sapi.http.constructor.php`;
+3) Configure SAPI constructor in `projects/sapi.http.constructor.php` file;
+4) Run the Bootgly HTTP Server in the terminal:
 
 `php server.http.php`
 
 --
 
-or with Docker *(-10% performance)*:
+or using Docker *(-10% performance)*:
 
-- Build local image:
+1) Pull the Bootgly image from Docker Hub:
 
-`docker build --pull --rm -f "bootgly-cli-server.http.dockerfile" -t bootgly-php-framework:latest "."`
+`docker pull bootgly/bootgly-php-framework`
 
-- Run the Docker image:
+2) Run the Bootgly container in interactive mode:
 
-`docker run -it --network host bootgly-php-framework`
+`docker run -it --network host bootgly/bootgly-php-framework`
 
 ---
 
