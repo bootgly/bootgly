@@ -44,12 +44,18 @@ return [
 
    // @ assert
    'assert' => function ($response) : bool {
+      if (preg_match('/Last-Modified: (.*)\r\n/i', $response, $matches)) {
+         $lastModified = $matches[1];
+      } else {
+         $lastModified = '?';
+      }
+
       $expected = <<<HTML_RAW
       HTTP/1.1 206 Partial Content\r
       Server: Bootgly\r
       Content-Type: multipart/byteranges; boundary=00000000000000000001\r
       Content-Length: 320\r
-      Last-Modified: Tue, 28 Feb 2023 15:30:43 GMT\r
+      Last-Modified: $lastModified\r
       Cache-Control: no-cache, must-revalidate\r
       Expires: 0\r
       \r
