@@ -4,7 +4,6 @@
 .vscode/
 # Ignore locks, bin, envs...
 composer
-composer.json
 composer.lock
 cli-config.php
 server-*.php
