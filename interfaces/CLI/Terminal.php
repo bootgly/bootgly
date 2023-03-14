@@ -62,7 +62,7 @@ class Terminal
       // lines
       // @ Get the terminal lines (heigth)
       $lines = exec("tput lines 2>/dev/null");
-      if ( ! is_numeric(self::$lines) ) {
+      if ( ! is_numeric($lines) ) {
          $lines = 30;
       }
       self::$lines = $lines;
