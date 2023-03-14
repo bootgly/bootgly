@@ -611,7 +611,7 @@ class Response
          $this->Meta->status = 206; // 206 Partial Content
 
          if ($rangesCount > 1) { // @ HTTP Multipart ranges
-            $boundary = str_pad(++HTTP\Request\Ranging::$multiparts, 20, '0', STR_PAD_LEFT);
+            $boundary = str_pad(++Server::$Request::$multiparts, 20, '0', STR_PAD_LEFT);
 
             $this->Header->set('Content-Type', 'multipart/byteranges; boundary=' . $boundary);
 
