@@ -39,7 +39,7 @@ class Content
       $this->waiting = false;
    }
 
-   public function parse (string $content = 'raw', string $type) : bool|string
+   public function parse (string $content, string $type) : bool|string
    {
       switch ($content) {
          case 'Form-data':
