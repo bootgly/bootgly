@@ -54,16 +54,18 @@ class Terminal
       // * Meta
       // columns
       // @ Get the terminal columns (width)
-      self::$columns = exec("tput cols 2>/dev/null");
-      if ( ! is_numeric(self::$columns) ) {
-         self::$columns = 80;
+      $columns = exec("tput cols 2>/dev/null");
+      if ( ! is_numeric($columns) ) {
+         $columns = 80;
       }
+      self::$columns = $columns;
       // lines
       // @ Get the terminal lines (heigth)
-      self::$lines = exec("tput lines 2>/dev/null");
+      $lines = exec("tput lines 2>/dev/null");
       if ( ! is_numeric(self::$lines) ) {
-         self::$lines = 30;
+         $lines = 30;
       }
+      self::$lines = $lines;
       // width
       self::$width = self::$columns;
       // heigth
