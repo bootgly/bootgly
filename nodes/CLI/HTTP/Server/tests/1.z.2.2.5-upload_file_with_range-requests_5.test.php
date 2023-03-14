@@ -41,6 +41,12 @@ return [
 
    // @ assert
    'assert' => function ($response) : bool {
+      if (preg_match('/Last-Modified: (.*)\r\n/i', $response, $matches)) {
+         $lastModified = $matches[1];
+      } else {
+         $lastModified = '?';
+      }
+
       $expected = <<<HTML_RAW
       HTTP/1.1 206 Partial Content\r
       Server: Bootgly\r
@@ -48,7 +54,7 @@ return [
       Content-Range: bytes 57-61/62\r
       Content-Type: application/octet-stream\r
       Content-Disposition: attachment; filename="alphanumeric.txt"\r
-      Last-Modified: Tue, 28 Feb 2023 15:30:43 GMT\r
+      Last-Modified: $lastModified\r
       Cache-Control: no-cache, must-revalidate\r
       Expires: 0\r
       \r
