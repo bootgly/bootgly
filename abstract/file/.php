@@ -16,6 +16,7 @@ use Bootgly\Path;
 use Bootgly\Dir;
 
 
+#[\AllowDynamicProperties]
 class File
 {
    // TODO load MIMES externaly (with use, require?)
