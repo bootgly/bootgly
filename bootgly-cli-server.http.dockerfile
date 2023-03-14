@@ -2,24 +2,28 @@ FROM ubuntu:22.04
 
 ARG DEBIAN_FRONTEND=noninteractive
 
-RUN apt-get update -yqq && apt-get install -yqq software-properties-common > /dev/null
-RUN LC_ALL=C.UTF-8 add-apt-repository ppa:ondrej/php > /dev/null
-RUN apt-get update -yqq > /dev/null && apt-get upgrade -yqq > /dev/null
+# Prepare system
+RUN apt-get update -y && \
+    apt-get install -y software-properties-common apt-utils
 
-RUN apt-get install -yqq php8.2-cli php8.2-pgsql php8.2-xml php8.2-readline > /dev/null
+# Install PHP repository
+RUN LC_ALL=C.UTF-8 add-apt-repository ppa:ondrej/php
+RUN apt-get update -y && \
+    apt-get upgrade -y
 
+# Install PHP
+RUN apt-get install -y git php-pear php8.2-dev php8.2-cli php8.2-pgsql php8.2-xml php8.2-readline
+# Install Composer
 COPY --from=composer:latest /usr/bin/composer /usr/local/bin/composer
-
-RUN apt-get install -y php-pear php8.2-dev git > /dev/null
-
+# Configure PHP with JIT
 COPY /@/php-jit.ini /etc/php/8.2/cli/php.ini
 
-ADD ./ /bootgly
+# Install Bootgly
+COPY ./ /bootgly/
 WORKDIR /bootgly
+RUN composer install --optimize-autoloader --classmap-authoritative --no-dev -vvv
 
-RUN composer install --optimize-autoloader --classmap-authoritative --no-dev --quiet
-
+# Run Bootgly HTTP Server from CLI
 EXPOSE 8080
-
-ADD projects/sapi.http.constructor.php.example projects/sapi.http.constructor.php
-CMD php /bootgly/server.http.php
+COPY projects/sapi.http.constructor.php.example projects/sapi.http.constructor.php
+CMD ["php", "/bootgly/server.http.php"]
