@@ -37,7 +37,6 @@ class Bar
       // @ units
       $this->units = Terminal::$width / 2;
       // @ symbols
-      // TODO convert to array?
       $this->symbols = [
          'determined'   => [' ', '>', '='], // determined
          'indetermined' => ['?']            // indetermined

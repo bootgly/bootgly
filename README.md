@@ -57,7 +57,7 @@ Directly in Linux OS *(max performance)*:
 
 --
 
-or using Docker *(-10% performance)*:
+or using Docker:
 
 1) Pull the Bootgly image from Docker Hub:
 
