@@ -22,6 +22,7 @@ class Table
    // * Config
    // * Data
    private $headers;
+   private $footers;
    private $rows;
    // @ Style
    private array $borders;
@@ -35,6 +36,7 @@ class Table
       // * Config
       // * Data
       $this->headers = [];
+      $this->footers = [];
       $this->rows = [];
       // @ Style
       $this->borders = [
@@ -57,13 +59,17 @@ class Table
          'left'         => '║',
          'right'        => '║',
       ];
-      // * Meta
    }
 
    // ! Header(s)
    public function setHeaders (array $headers)
    {
       $this->headers = $headers;
+   }
+   // ! Footer(s)
+   public function setFooters (array $footers)
+   {
+      $this->footers = $footers;
    }
 
    // ! Row(s)
@@ -173,6 +179,12 @@ class Table
    
             $this->printRow($row, $columnWidths);
          }
+      }
+
+      // ! Footer
+      if (count($this->footers) > 0) {
+         $this->printHorizontalLine($columnWidths, 'mid');
+         $this->printRow($this->footers, $columnWidths);
       }
 
       $this->printHorizontalLine($columnWidths, 'bottom');
