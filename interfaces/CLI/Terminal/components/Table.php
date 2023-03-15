@@ -24,6 +24,7 @@ class Table
    // * Data
    private $headers;
    private $footers;
+
    private $rows;
    // @ Style
    private array $borders;
@@ -42,6 +43,7 @@ class Table
       // * Data
       $this->headers = [];
       $this->footers = [];
+
       $this->rows = [];
       // @ Style
       $this->borders = [
@@ -78,9 +80,9 @@ class Table
       switch ($name) {
          case 'alignment':
             $this->alignment = match ($value) {
-               'left' => 1,
-               'right' => 0,
-               'center' => 2,
+               1, 'left' => 1,
+               0, 'right' => 0,
+               2, 'center' => 2,
 
                default => 1
             };
@@ -89,17 +91,40 @@ class Table
       }
    }
 
-   // ! Header(s)
+   // ! Header
    public function setHeaders (array $headers)
    {
       $this->headers = $headers;
    }
-   // ! Footer(s)
+   // ! Body
+
+   // ! Footer
    public function setFooters (array $footers)
    {
       $this->footers = $footers;
    }
 
+   // ! Column(s)
+   private function calculateColumnWidths ()
+   {
+      $columnWidths = [];
+
+      foreach ($this->headers as $index => $header) {
+         $columnWidths[$index] = mb_strlen($header);
+      }
+
+      foreach ($this->footers as $index => $footer) {
+         $columnWidths[$index] = max($columnWidths[$index] ?? 0, mb_strlen($footer));
+      }
+
+      foreach ($this->rows as $row) {
+         foreach ($row as $index => $value) {
+            $columnWidths[$index] = max($columnWidths[$index] ?? 0, mb_strlen($value));
+         }
+      }
+
+      return $columnWidths;
+   }
    // ! Row(s)
    public function addRow (array $row)
    {
@@ -112,16 +137,23 @@ class Table
 
    private function printRow (array $row, array $columnWidths)
    {
-      $output = $this->borders['left'] . ' ';
+      if ( empty($row) ) {
+         $this->printHorizontalLine($columnWidths, 'mid');
+         return;
+      }
 
-      foreach ($row as $key => $value) {
-         if ($key > 0) {
+      $output = '';
+      foreach ($row as $columnIndex => $value) {
+         if ($columnIndex === 0) {
+            $output .= $this->borders['left'] . ' ';
+         }
+         if ($columnIndex > 0) {
             $output .= ' ' . $this->borders['middle'];
          }
 
-         $output .= __String::pad($value, $columnWidths[$key], ' ', $this->alignment);
+         $output .= __String::pad($value, $columnWidths[$columnIndex], ' ', $this->alignment);
 
-         if ($key > 0) {
+         if ($columnIndex > 0) {
             $output .= ' ';
          }
       }
@@ -130,24 +162,6 @@ class Table
       $output .= "\n";
 
       $this->Output->write($output);
-   }
-
-   // ! Column(s)
-   private function calculateColumnWidths ()
-   {
-      $columnWidths = [];
-
-      foreach ($this->headers as $header) {
-         $columnWidths[] = mb_strlen($header);
-      }
-
-      foreach ($this->rows as $row) {
-         foreach ($row as $key => $value) {
-            $columnWidths[$key] = max($columnWidths[$key], mb_strlen($value));
-         }
-      }
-
-      return $columnWidths;
    }
 
    // @ Border
@@ -192,10 +206,9 @@ class Table
       // Widths
       $columnWidths = $this->calculateColumnWidths();
 
-      $this->printHorizontalLine($columnWidths, 'top');
-
       // ! Header
       if (count($this->headers) > 0) {
+         $this->printHorizontalLine($columnWidths, 'top');
          $this->printRow($this->headers, $columnWidths);
       }
 
@@ -203,7 +216,7 @@ class Table
       if (count($this->rows) > 0) {
          foreach ($this->rows as $index => $row) {
             if ($index === 0)
-               $this->printHorizontalLine($columnWidths, 'mid');
+               $this->printHorizontalLine($columnWidths, 'top');
    
             $this->printRow($row, $columnWidths);
          }
@@ -211,7 +224,7 @@ class Table
 
       // ! Footer
       if (count($this->footers) > 0) {
-         $this->printHorizontalLine($columnWidths, 'mid');
+         $this->printHorizontalLine($columnWidths, 'bottom');
          $this->printRow($this->footers, $columnWidths);
       }
 
