@@ -23,6 +23,8 @@ class Table
    // * Data
    private $headers;
    private $rows;
+   // @ Style
+   private array $borders;
    // * Meta
 
 
@@ -34,6 +36,27 @@ class Table
       // * Data
       $this->headers = [];
       $this->rows = [];
+      // @ Style
+      $this->borders = [
+         'top'          => '═',
+         'top-left'     => '╔',
+         'top-mid'      => '╤',
+         'top-right'    => '╗',
+
+         'bottom'       => '═',
+         'bottom-left'  => '╚',
+         'bottom-mid'   => '╧',
+         'bottom-right' => '╝',
+
+         'mid'          => '─',
+         'mid-left'     => '╟',
+         'mid-mid'      => '┼',
+         'mid-right'    => '╢',
+         'middle'       => '│ ',
+
+         'left'         => '║',
+         'right'        => '║',
+      ];
       // * Meta
    }
 
@@ -55,17 +78,24 @@ class Table
 
    private function printRow (array $row, array $columnWidths)
    {
-      $rowOutput = '';
+      $output = $this->borders['left'] . ' ';
 
       foreach ($row as $key => $value) {
-         $rowOutput .= '| ';
-         $rowOutput .= __String::pad($value, $columnWidths[$key], ' ', STR_PAD_RIGHT);
-         $rowOutput .= ' ';
-      }
-  
-      $rowOutput .= "|\n";
+         if ($key > 0) {
+            $output .= ' ' . $this->borders['middle'];
+         }
 
-      $this->Output->write($rowOutput);
+         $output .= __String::pad($value, $columnWidths[$key], ' ', STR_PAD_RIGHT);
+
+         if ($key > 0) {
+            $output .= ' ';
+         }
+      }
+
+      $output .= $this->borders['right'];
+      $output .= "\n";
+
+      $this->Output->write($output);
    }
 
    // ! Column(s)
@@ -86,36 +116,65 @@ class Table
       return $columnWidths;
    }
 
-   // @ Line
-   private function printHorizontalLine (array $columnWidths)
+   // @ Border
+   private function printHorizontalLine (array $columnWidths, string $position)
    {
-      $lineOutput = '';
+      $line = match ($position) {
+         'top' => $this->borders['top-left'],
+         'mid' => $this->borders['mid-left'],
+         'bottom' => $this->borders['bottom-left']
+      };
 
-      foreach ($columnWidths as $width) {
-         $lineOutput .= '+' . str_repeat('-', $width + 2);
+      foreach ($columnWidths as $index => $width) {
+         if ($index > 0) {
+            $line .= match($position) {
+               'top' => $this->borders['top-mid'],
+               'mid' => $this->borders['mid-mid'],
+               'bottom' => $this->borders['bottom-mid']
+            };
+         }
+
+         $border = match($position) {
+            'top' => $this->borders['top'],
+            'mid' => $this->borders['mid'],
+            'bottom' => $this->borders['bottom']
+         };
+         $line .= str_repeat($border, $width + 2);
       }
 
-      $lineOutput .= "+\n";
+      $line .= match ($position) {
+         'top' => $this->borders['top-right'],
+         'mid' => $this->borders['mid-right'],
+         'bottom' => $this->borders['bottom-right']
+      };
+      $line .= "\n";
 
-      $this->Output->write($lineOutput);
+      $this->Output->write($line);
    }
 
    public function render ()
    {
-      // @ Calculate Column Widths
+      // @ Calculate Column
+      // Widths
       $columnWidths = $this->calculateColumnWidths();
 
-      // @ Print Headers
-      $this->printHorizontalLine($columnWidths);
-      $this->printRow($this->headers, $columnWidths);
+      $this->printHorizontalLine($columnWidths, 'top');
 
-      // @ Print Rows
-      $this->printHorizontalLine($columnWidths);
-
-      foreach ($this->rows as $row) {
-         $this->printRow($row, $columnWidths);
+      // ! Header
+      if (count($this->headers) > 0) {
+         $this->printRow($this->headers, $columnWidths);
       }
 
-      $this->printHorizontalLine($columnWidths);
+      // ! Rows (Body)
+      if (count($this->rows) > 0) {
+         foreach ($this->rows as $index => $row) {
+            if ($index === 0)
+               $this->printHorizontalLine($columnWidths, 'mid');
+   
+            $this->printRow($row, $columnWidths);
+         }
+      }
+
+      $this->printHorizontalLine($columnWidths, 'bottom');
    }
 }
