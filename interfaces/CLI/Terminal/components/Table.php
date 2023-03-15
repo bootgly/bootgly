@@ -20,13 +20,17 @@ class Table
    private Output $Output;
 
    // * Config
+
    // * Data
    private $headers;
    private $footers;
    private $rows;
    // @ Style
    private array $borders;
+
    // * Meta
+   // ! Cells
+   private int $alignment;
 
 
    public function __construct (Output $Output)
@@ -34,6 +38,7 @@ class Table
       $this->Output = $Output;
 
       // * Config
+
       // * Data
       $this->headers = [];
       $this->footers = [];
@@ -59,6 +64,29 @@ class Table
          'left'         => '║',
          'right'        => '║',
       ];
+
+      // * Meta
+      // ! Cells
+      $this->alignment = 1;
+   }
+   public function __get ($name)
+   {
+      return $this->$name;
+   }
+   public function __set ($name, $value)
+   {
+      switch ($name) {
+         case 'alignment':
+            $this->alignment = match ($value) {
+               'left' => 1,
+               'right' => 0,
+               'center' => 2,
+
+               default => 1
+            };
+
+            break;
+      }
    }
 
    // ! Header(s)
@@ -91,7 +119,7 @@ class Table
             $output .= ' ' . $this->borders['middle'];
          }
 
-         $output .= __String::pad($value, $columnWidths[$key], ' ', STR_PAD_RIGHT);
+         $output .= __String::pad($value, $columnWidths[$key], ' ', $this->alignment);
 
          if ($key > 0) {
             $output .= ' ';
