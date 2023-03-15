@@ -30,6 +30,7 @@ class Table
    private array $borders;
 
    // * Meta
+   private int $columns;
    // ! Cells
    private int $alignment;
 
@@ -68,6 +69,7 @@ class Table
       ];
 
       // * Meta
+      $this->columns = 0;
       // ! Cells
       $this->alignment = 1;
    }
@@ -137,25 +139,26 @@ class Table
 
    private function printRow (array $row, array $columnWidths)
    {
-      if ( empty($row) ) {
+      if ( count($row) === 1 && @$row[0] === '@---;' ) {
          $this->printHorizontalLine($columnWidths, 'mid');
          return;
       }
 
-      $output = '';
-      foreach ($row as $columnIndex => $value) {
-         if ($columnIndex === 0) {
-            $output .= $this->borders['left'] . ' ';
-         }
-         if ($columnIndex > 0) {
+      $output = $this->borders['left'] . ' ';
+
+      $column = 0;
+      while ($column < $this->columns) {
+         if ($column > 0) {
             $output .= ' ' . $this->borders['middle'];
          }
 
-         $output .= __String::pad($value, $columnWidths[$columnIndex], ' ', $this->alignment);
+         $output .= __String::pad(@$row[$column], $columnWidths[$column], ' ', $this->alignment);
 
-         if ($columnIndex > 0) {
+         if ($column > 0) {
             $output .= ' ';
          }
+
+         $column++;
       }
 
       $output .= $this->borders['right'];
@@ -205,6 +208,8 @@ class Table
       // @ Calculate Column
       // Widths
       $columnWidths = $this->calculateColumnWidths();
+      // Columns
+      $this->columns = count($columnWidths);
 
       // ! Header
       if (count($this->headers) > 0) {
@@ -218,7 +223,7 @@ class Table
             if ($index === 0)
                $this->printHorizontalLine($columnWidths, 'top');
    
-            $this->printRow($row, $columnWidths);
+            $this->printRow((array) $row, $columnWidths);
          }
       }
 
