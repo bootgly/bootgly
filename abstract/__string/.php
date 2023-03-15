@@ -200,4 +200,44 @@ final class __String // TODO refactor old class
 	private static function explode (string $delimiter, string $string, ?int $limit) {
 		return explode($delimiter, $string, $limit);
 	}
+
+	public static function pad ($input, $length, $padding = ' ', $type = STR_PAD_RIGHT, $encoding = 'UTF-8')
+	{
+		$inputLength = mb_strlen($input, $encoding);
+		$padStringLength = mb_strlen($padding, $encoding);
+	
+		if ($length <= 0 || ($length - $inputLength) <= 0) {
+			return $input;
+		}
+	
+		$numPadChars = $length - $inputLength;
+	
+		switch ($type) {
+			case STR_PAD_RIGHT:
+				$leftPad = 0;
+				$rigthPad = $numPadChars;
+				break;
+	
+			case STR_PAD_LEFT:
+				$leftPad = $numPadChars;
+				$rigthPad = 0;
+				break;
+	
+			case STR_PAD_BOTH:
+				$leftPad = floor($numPadChars / 2);
+				$rigthPad = $numPadChars - $leftPad;
+				break;
+		}
+	
+		$result = '';
+		for ($i = 0; $i < $leftPad; ++$i) {
+			$result .= mb_substr($padding, $i % $padStringLength, 1, $encoding);
+		}
+		$result .= $input;
+		for ($i = 0; $i < $rigthPad; ++$i) {
+			$result .= mb_substr($padding, $i % $padStringLength, 1, $encoding);
+		}
+	
+		return $result;
+	}
 }
