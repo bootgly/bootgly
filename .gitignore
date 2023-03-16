@@ -28,13 +28,18 @@ _*.examples.php
 ## /abstract
 /abstract/*
 !/abstract/..php
+
 !/abstract/@functions
 !/abstract/@interfaces
 !/abstract/@traits
+
 !/abstract/__array
 !/abstract/__class
 !/abstract/__iterable
 !/abstract/__string
+
+!/abstract/data
+
 !/abstract/dir
 !/abstract/file
 !/abstract/path

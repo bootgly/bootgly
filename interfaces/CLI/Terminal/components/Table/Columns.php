@@ -52,7 +52,7 @@ class Columns
    {
       $widths = [];
 
-      foreach ($this->Table->Rows->rows as $section => $rows) {
+      foreach ($this->Table->Data->rows as $section => $rows) {
          // @ Pre
          // ...
 

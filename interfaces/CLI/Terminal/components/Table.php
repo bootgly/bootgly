@@ -11,6 +11,8 @@
 namespace Bootgly\CLI\Terminal\components;
 
 
+use Bootgly\Data\Table as DataTable;
+
 use Bootgly\CLI\Terminal\components\Table\Cells;
 use Bootgly\CLI\Terminal\components\Table\Columns;
 use Bootgly\CLI\Terminal\components\Table\Row;
@@ -20,6 +22,8 @@ use Bootgly\CLI\Terminal\Output;
 
 class Table
 {
+   public DataTable $Data;
+
    private Output $Output;
 
    // * Config
@@ -40,6 +44,8 @@ class Table
 
    public function __construct (Output $Output)
    {
+      $this->Data = new DataTable;
+
       $this->Output = $Output;
 
       // * Config
@@ -88,21 +94,6 @@ class Table
    public function __call ($name, $arguments)
    {
       return $this->$name(...$arguments);
-   }
-
-   public function set (? array $header = null, ? array $body = null, ? array $footer = null)
-   {
-      if ($header) {
-         $this->Rows->set($header, 'header');
-      }
-
-      if ($body) {
-         $this->Rows->set($body, 'body');
-      }
-
-      if ($footer) {
-         $this->Rows->set($footer, 'footer');
-      }
    }
 
    // @ Border

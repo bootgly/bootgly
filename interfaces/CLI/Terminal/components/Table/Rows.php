@@ -11,7 +11,6 @@
 namespace Bootgly\CLI\Terminal\components\Table;
 
 
-use Bootgly\__String;
 use Bootgly\CLI\Terminal\components\Table;
 
 
@@ -35,7 +34,7 @@ class Rows
 
       // * Config
       // * Data
-      $this->rows = null;
+      $this->rows = &$Table->Data->rows;
       // * Meta
    }
    public function __get ($name)
@@ -47,22 +46,9 @@ class Rows
       return $this->Table->$name(...$arguments);
    }
 
-   public function set (array $rows, string $section = '')
+   public function render ()
    {
-      if ($rows && (count($rows) !== count($rows, COUNT_RECURSIVE)) === false) {
-         $rows = [$rows];
-      }
-
-      $this->rows[$section] = $rows;
-   }
-   public function append (array $row, string $section = '')
-   {
-      $this->rows[$section] = $row;
-   }
-
-   public function render (? array $data = null)
-   {
-      $data ??= $this->rows;
+      $data = $this->rows;
 
       if (count($data) === 0) {
          return false;

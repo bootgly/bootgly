@@ -38,6 +38,10 @@ require '__class/nulled/.php';
 // ? __Class
 #require 'Autoloader@__Class.php';
 
+// ! .Data
+// ? Table
+require 'data/table/.php';
+
 // ! .Streams
 // ? Dir
 require 'dir/.php';
