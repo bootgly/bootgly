@@ -48,29 +48,27 @@ class Columns
       return $this->Table->$name(...$arguments);
    }
 
-   public function calculate () : array
+   public function calculate () : bool
    {
       $widths = [];
 
-      // ! Headers
-      foreach ($this->headers as $index => $header) {
-         $widths[$index] = mb_strlen($header);
-      }
+      foreach ($this->Table->Rows->rows as $section => $rows) {
+         // @ Pre
+         // ...
 
-      // ! Footers
-      foreach ($this->footers as $index => $footer) {
-         $widths[$index] = max($widths[$index] ?? 0, mb_strlen($footer));
-      }
-
-      // ! Rows
-      foreach ($this->Rows->rows as $row) {
-         foreach ($row as $index => $value) {
-            $widths[$index] = max($widths[$index] ?? 0, mb_strlen($value));
+         foreach ($rows as $row) {
+            foreach ($row as $column => $data) {
+               $widths[$column] = max($widths[$column] ?? 0, mb_strlen($data));
+            }
          }
+
+         // @ Post
+         // ...
       }
 
       $this->count = count($widths);
+      $this->widths = $widths;
 
-      return $this->widths = $widths;
+      return true;
    }
 }

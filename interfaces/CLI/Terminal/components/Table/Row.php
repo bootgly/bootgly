@@ -48,19 +48,27 @@ class Row
          return;
       }
 
-      $output = $this->borders['left'] . ' ';
+      // ! Table
+      $borders = &$this->Table->borders;
+      // ! Cells
+      $aligment = $this->Cells->alignment;
+      // ! Columns
+      $widths = &$this->Columns->widths;
+      $columns = $this->Columns->count;
+
+      $output = $borders['left'] . ' ';
 
       $column = 0;
-      while ($column < $this->Columns->count) {
+      while ($column < $columns) {
          if ($column > 0) {
-            $output .= ' ' . $this->borders['middle'];
+            $output .= ' ' . $borders['middle'];
          }
 
          $output .= __String::pad(
             input: @$row[$column],
-            length: $this->Columns->widths[$column],
+            length: $widths[$column],
             padding: ' ',
-            type: $this->Cells->alignment
+            type: $aligment
          );
 
          if ($column > 0) {
@@ -70,7 +78,7 @@ class Row
          $column++;
       }
 
-      $output .= $this->borders['right'];
+      $output .= $borders['right'];
       $output .= "\n";
 
       $this->Output->write($output);

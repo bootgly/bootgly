@@ -26,8 +26,6 @@ class Table
    // ...
 
    // * Data
-   private $headers;
-   private $footers;
    // @ Style
    protected array $borders;
 
@@ -45,10 +43,12 @@ class Table
       $this->Output = $Output;
 
       // * Config
+      // ...
 
       // * Data
-      $this->headers = [];
-      $this->footers = [];
+      $this->header = null;
+      $this->body = null;
+      $this->footer = null;
       // @ Style
       $this->borders = [
          'top'          => '═',
@@ -72,8 +72,7 @@ class Table
       ];
 
       // * Meta
-      $this->columns = 0;
-
+      // ...
 
       // @compose
       $this->Cells = new Cells($this);
@@ -94,17 +93,19 @@ class Table
       return $this->$name(...$arguments);
    }
 
-   // ! Header
-   public function setHeaders (array $headers)
+   public function set (? array $header = null, ? array $body = null, ? array $footer = null)
    {
-      $this->headers = $headers;
-   }
-   // ! Body
+      if ($header) {
+         $this->Rows->set($header, 'header');
+      }
 
-   // ! Footer
-   public function setFooters (array $footers)
-   {
-      $this->footers = $footers;
+      if ($body) {
+         $this->Rows->set($body, 'body');
+      }
+
+      if ($footer) {
+         $this->Rows->set($footer, 'footer');
+      }
    }
 
    // @ Border
@@ -149,22 +150,7 @@ class Table
       // Calculate columns width and count
       $this->Columns->calculate(); // TODO rename???
 
-      // ! Header
-      if (count($this->headers) > 0) {
-         $this->printHorizontalLine('top');
-         $this->Rows->render([$this->headers]);
-      }
-
-      // ! Body
-      $this->printHorizontalLine('top');
+      // ! Rows
       $this->Rows->render();
-
-      // ! Footer
-      if (count($this->footers) > 0) {
-         $this->printHorizontalLine('bottom');
-         $this->Rows->render([$this->footers]);
-      }
-
-      $this->printHorizontalLine('bottom');
    }
 }

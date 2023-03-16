@@ -23,7 +23,7 @@ class Rows
 
    // * Config
    // * Data
-   public array $rows;
+   public ? array $rows;
    // * Meta
 
 
@@ -35,7 +35,7 @@ class Rows
 
       // * Config
       // * Data
-      $this->rows = [];
+      $this->rows = null;
       // * Meta
    }
    public function __get ($name)
@@ -47,26 +47,48 @@ class Rows
       return $this->Table->$name(...$arguments);
    }
 
-   public function set (array $rows)
+   public function set (array $rows, string $section = '')
    {
-      $this->rows = $rows;
+      if ($rows && (count($rows) !== count($rows, COUNT_RECURSIVE)) === false) {
+         $rows = [$rows];
+      }
+
+      $this->rows[$section] = $rows;
    }
-   public function append (array $row)
+   public function append (array $row, string $section = '')
    {
-      $this->rows[] = $row;
+      $this->rows[$section] = $row;
    }
 
-   public function render (? array $rows = null)
+   public function render (? array $data = null)
    {
-      $rows ??= $this->rows;
+      $data ??= $this->rows;
 
-      if (count($rows) === 0) {
+      if (count($data) === 0) {
          return false;
       }
 
-      foreach ($rows as $index => $row) {
-         // TODO use $index to set configurations per row
-         $this->Row->render($row);
+      foreach ($data as $section => $rows) {
+         // @ Pre
+         match ($section) {
+            'header' => $this->Table->printHorizontalLine('top'),
+            'body' => $this->Table->printHorizontalLine('top'),
+            'footer' => $this->Table->printHorizontalLine('bottom'),
+            default => null
+         };
+
+         foreach ($rows as $metadata => $rows) {
+            // TODO use $metadata to set configurations per row
+            $this->Row->render($rows);
+         }
+
+         // @ Post
+         match ($section) {
+            #'header' => $this->Table->printHorizontalLine('top'),
+            #'body' => $this->Table->printHorizontalLine('bottom'),
+            'footer' => $this->printHorizontalLine('bottom'),
+            default => null
+         };
       }
    }
 }
