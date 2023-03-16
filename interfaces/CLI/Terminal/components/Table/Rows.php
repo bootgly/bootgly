@@ -71,9 +71,9 @@ class Rows
       foreach ($data as $section => $rows) {
          // @ Pre
          match ($section) {
-            'header' => $this->Table->printHorizontalLine('top'),
-            'body' => $this->Table->printHorizontalLine('top'),
-            'footer' => $this->Table->printHorizontalLine('bottom'),
+            'header' => $this->Table->border('top'),
+            'body' => $this->Table->border('top'),
+            'footer' => $this->Table->border('bottom'),
             default => null
          };
 
@@ -84,9 +84,9 @@ class Rows
 
          // @ Post
          match ($section) {
-            #'header' => $this->Table->printHorizontalLine('top'),
-            #'body' => $this->Table->printHorizontalLine('bottom'),
-            'footer' => $this->printHorizontalLine('bottom'),
+            #'header' => $this->Table->border('top'),
+            #'body' => $this->Table->border('bottom'),
+            'footer' => $this->Table->border('bottom'),
             default => null
          };
       }

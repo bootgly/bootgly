@@ -46,9 +46,6 @@ class Table
       // ...
 
       // * Data
-      $this->header = null;
-      $this->body = null;
-      $this->footer = null;
       // @ Style
       $this->borders = [
          'top'          => '═',
@@ -109,7 +106,7 @@ class Table
    }
 
    // @ Border
-   private function printHorizontalLine (string $position)
+   public function border (string $position)
    {
       $line = match ($position) {
          'top' => $this->borders['top-left'],

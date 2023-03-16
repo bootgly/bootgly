@@ -44,7 +44,7 @@ class Row
    public function render (array $row)
    {
       if ( count($row) === 1 && @$row[0] === '@---;' ) {
-         $this->printHorizontalLine('mid');
+         $this->Table->border('mid');
          return;
       }
 
@@ -81,6 +81,7 @@ class Row
       $output .= $borders['right'];
       $output .= "\n";
 
+      // TODO use Output as trait?
       $this->Output->write($output);
    }
 }
