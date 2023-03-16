@@ -56,7 +56,12 @@ class Row
             $output .= ' ' . $this->borders['middle'];
          }
 
-         $output .= __String::pad(@$row[$column], $this->Columns->widths[$column], ' ', $this->alignment);
+         $output .= __String::pad(
+            input: @$row[$column],
+            length: $this->Columns->widths[$column],
+            padding: ' ',
+            type: $this->Cells->alignment
+         );
 
          if ($column > 0) {
             $output .= ' ';

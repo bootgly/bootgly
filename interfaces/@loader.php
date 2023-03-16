@@ -34,6 +34,7 @@ require 'CLI/Terminal/components/Progress.php';
 require 'CLI/Terminal/components/Progress/Bar.php';
 // Table
 require 'CLI/Terminal/components/Table.php';
+require 'CLI/Terminal/components/Table/Cells.php';
 require 'CLI/Terminal/components/Table/Columns.php';
 require 'CLI/Terminal/components/Table/Row.php';
 require 'CLI/Terminal/components/Table/Rows.php';

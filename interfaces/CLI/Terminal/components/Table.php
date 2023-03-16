@@ -11,7 +11,7 @@
 namespace Bootgly\CLI\Terminal\components;
 
 
-use Bootgly\__String;
+use Bootgly\CLI\Terminal\components\Table\Cells;
 use Bootgly\CLI\Terminal\components\Table\Columns;
 use Bootgly\CLI\Terminal\components\Table\Row;
 use Bootgly\CLI\Terminal\components\Table\Rows;
@@ -23,6 +23,7 @@ class Table
    private Output $Output;
 
    // * Config
+   // ...
 
    // * Data
    private $headers;
@@ -31,11 +32,10 @@ class Table
    protected array $borders;
 
    // * Meta
-   // ! Cells
-   private int $alignment;
+   // ...
 
+   public Cells $Cells;
    public Columns $Columns;
-
    public Row $Row;
    public Rows $Rows;
 
@@ -73,12 +73,11 @@ class Table
 
       // * Meta
       $this->columns = 0;
-      // ! Cells
-      $this->alignment = 1;
 
 
+      // @compose
+      $this->Cells = new Cells($this);
       $this->Columns = new Columns($this);
-
       $this->Row = new Row($this);
       $this->Rows = new Rows($this);
    }
@@ -88,18 +87,7 @@ class Table
    }
    public function __set ($name, $value)
    {
-      switch ($name) {
-         case 'alignment':
-            $this->alignment = match ($value) {
-               1, 'left' => 1,
-               0, 'right' => 0,
-               2, 'center' => 2,
-
-               default => 1
-            };
-
-            break;
-      }
+      // ...
    }
    public function __call ($name, $arguments)
    {
