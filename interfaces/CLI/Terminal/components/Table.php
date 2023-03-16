@@ -12,6 +12,9 @@ namespace Bootgly\CLI\Terminal\components;
 
 
 use Bootgly\__String;
+use Bootgly\CLI\Terminal\components\Table\Columns;
+use Bootgly\CLI\Terminal\components\Table\Row;
+use Bootgly\CLI\Terminal\components\Table\Rows;
 use Bootgly\CLI\Terminal\Output;
 
 
@@ -24,15 +27,17 @@ class Table
    // * Data
    private $headers;
    private $footers;
-
-   private $rows;
    // @ Style
-   private array $borders;
+   protected array $borders;
 
    // * Meta
-   private int $columns;
    // ! Cells
    private int $alignment;
+
+   public Columns $Columns;
+
+   public Row $Row;
+   public Rows $Rows;
 
 
    public function __construct (Output $Output)
@@ -44,8 +49,6 @@ class Table
       // * Data
       $this->headers = [];
       $this->footers = [];
-
-      $this->rows = [];
       // @ Style
       $this->borders = [
          'top'          => '═',
@@ -72,6 +75,12 @@ class Table
       $this->columns = 0;
       // ! Cells
       $this->alignment = 1;
+
+
+      $this->Columns = new Columns($this);
+
+      $this->Row = new Row($this);
+      $this->Rows = new Rows($this);
    }
    public function __get ($name)
    {
@@ -92,6 +101,10 @@ class Table
             break;
       }
    }
+   public function __call ($name, $arguments)
+   {
+      return $this->$name(...$arguments);
+   }
 
    // ! Header
    public function setHeaders (array $headers)
@@ -106,69 +119,8 @@ class Table
       $this->footers = $footers;
    }
 
-   // ! Column(s)
-   private function calculateColumnWidths ()
-   {
-      $columnWidths = [];
-
-      foreach ($this->headers as $index => $header) {
-         $columnWidths[$index] = mb_strlen($header);
-      }
-
-      foreach ($this->footers as $index => $footer) {
-         $columnWidths[$index] = max($columnWidths[$index] ?? 0, mb_strlen($footer));
-      }
-
-      foreach ($this->rows as $row) {
-         foreach ($row as $index => $value) {
-            $columnWidths[$index] = max($columnWidths[$index] ?? 0, mb_strlen($value));
-         }
-      }
-
-      return $columnWidths;
-   }
-   // ! Row(s)
-   public function addRow (array $row)
-   {
-      $this->rows[] = $row;
-   }
-   public function setRows (array $rows)
-   {
-      $this->rows = $rows;
-   }
-
-   private function printRow (array $row, array $columnWidths)
-   {
-      if ( count($row) === 1 && @$row[0] === '@---;' ) {
-         $this->printHorizontalLine($columnWidths, 'mid');
-         return;
-      }
-
-      $output = $this->borders['left'] . ' ';
-
-      $column = 0;
-      while ($column < $this->columns) {
-         if ($column > 0) {
-            $output .= ' ' . $this->borders['middle'];
-         }
-
-         $output .= __String::pad(@$row[$column], $columnWidths[$column], ' ', $this->alignment);
-
-         if ($column > 0) {
-            $output .= ' ';
-         }
-
-         $column++;
-      }
-
-      $output .= $this->borders['right'];
-      $output .= "\n";
-
-      $this->Output->write($output);
-   }
-
    // @ Border
-   private function printHorizontalLine (array $columnWidths, string $position)
+   private function printHorizontalLine (string $position)
    {
       $line = match ($position) {
          'top' => $this->borders['top-left'],
@@ -176,7 +128,7 @@ class Table
          'bottom' => $this->borders['bottom-left']
       };
 
-      foreach ($columnWidths as $index => $width) {
+      foreach ($this->Columns->widths as $index => $width) {
          if ($index > 0) {
             $line .= match($position) {
                'top' => $this->borders['top-mid'],
@@ -205,34 +157,26 @@ class Table
 
    public function render ()
    {
-      // @ Calculate Column
-      // Widths
-      $columnWidths = $this->calculateColumnWidths();
-      // Columns
-      $this->columns = count($columnWidths);
+      // ! Columns
+      // Calculate columns width and count
+      $this->Columns->calculate(); // TODO rename???
 
       // ! Header
       if (count($this->headers) > 0) {
-         $this->printHorizontalLine($columnWidths, 'top');
-         $this->printRow($this->headers, $columnWidths);
+         $this->printHorizontalLine('top');
+         $this->Rows->render([$this->headers]);
       }
 
-      // ! Rows (Body)
-      if (count($this->rows) > 0) {
-         foreach ($this->rows as $index => $row) {
-            if ($index === 0)
-               $this->printHorizontalLine($columnWidths, 'top');
-   
-            $this->printRow((array) $row, $columnWidths);
-         }
-      }
+      // ! Body
+      $this->printHorizontalLine('top');
+      $this->Rows->render();
 
       // ! Footer
       if (count($this->footers) > 0) {
-         $this->printHorizontalLine($columnWidths, 'bottom');
-         $this->printRow($this->footers, $columnWidths);
+         $this->printHorizontalLine('bottom');
+         $this->Rows->render([$this->footers]);
       }
 
-      $this->printHorizontalLine($columnWidths, 'bottom');
+      $this->printHorizontalLine('bottom');
    }
 }
