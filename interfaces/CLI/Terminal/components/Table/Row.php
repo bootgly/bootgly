@@ -44,7 +44,7 @@ class Row
    public function render (array $row)
    {
       if ( count($row) === 1 && @$row[0] === '@---;' ) {
-         $this->Table->border('mid');
+         $this->Table->border(position: 'mid');
          return;
       }
 
