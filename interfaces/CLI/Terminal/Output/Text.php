@@ -84,7 +84,7 @@ class Text
 
       $color = $this->wrap(...$codes);
 
-      $this->Output->escape($color);
+      $this->Output->write($color);
    }
 
    // @ Modifying
