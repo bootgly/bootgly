@@ -12,12 +12,17 @@ $Output = CLI::$Terminal->Output;
 $examples = [
    // Terminal->Output . Writing
    'terminal/output.writing-01.example.php',
+
    // Terminal->Output _ Cursor Positioning
    'terminal/output_cursor-positioning-01.example.php',
    // Terminal->Output _ Cursor Shaping
    'terminal/output_cursor-shaping-01.example.php',
    // Terminal->Output _ Cursor Visualizing
    'terminal/output_cursor-visualizing-01.example.php',
+
+   // Terminal->Output _ Text Formatting - Coloring
+   'terminal/output_text-formatting-coloring-01.example.php',
+
    // Terminal/components - Progress component
    'terminal/components/progress-component-01.example.php',
    // Terminal/components - Table component

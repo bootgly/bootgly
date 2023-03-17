@@ -10,21 +10,21 @@ $Output->waiting = 10000;
 /* 
  * Terminal Output - Text Formatting - Example #1
  */
-// @ Testing Preset colors Foreground + Default Background
+// @ Testing Preset colors: foreground + default background
 $Output->write(<<<OUTPUT
 *
-* Testing Preset colors Foreground + Default Background
+* Testing Preset colors: foreground + default background
 *\n
 OUTPUT);
 $Output->Text->colorize(foreground: 'cyan');
 $Output->writing("Writing with the color of the text in cyan on a `default` background...\n\n");
 
 
-// @ Testing Preset colors (Foreground + Background)
+// @ Testing Preset colors: foreground + background
 $Output->Text->colorize(); // @ Reset colors
 $Output->write(<<<OUTPUT
 *
-* Testing Preset colors (Foreground + Background)
+* Testing Preset colors: foreground + background
 *\n
 OUTPUT);
 $Output->Text->colorize(foreground: 'black', background: 'white');
@@ -51,7 +51,7 @@ $Output->writing("Writing with the color of the text in `black` on a `cyan` back
 $Output->Text->colorize(foreground: 'white', background: 'black');
 $Output->writing("Writing with the color of the text in `white` on a `black` background...\n\n");
 
-// @ Testing extended colors
+// @ Testing extended colors (0-255)
 $Output->Text->colorize(); // @ Reset colors
 $Output->write(<<<OUTPUT
 *
