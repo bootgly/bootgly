@@ -5,7 +5,11 @@ use Bootgly\CLI;
 use Bootgly\CLI\Terminal\components\Table;
 
 $Output = CLI::$Terminal->Output;
+$Output->reset();
 
+/* 
+ * Terminal components - Table component - Example #1
+ */
 $Table = new Table($Output);
 
 $Table->Data->set(header: ['Alura Courses', 'Quantity']);
@@ -27,8 +31,6 @@ $Output->write("\n");
 
 $loops = 3;
 for ($i = 1; $i <= $loops; $i++) {
-   $Output->Cursor->moveTo(3, 1);
-
    switch ($i) {
       case 1:
          $alignment = 'left';
@@ -46,6 +48,8 @@ for ($i = 1; $i <= $loops; $i++) {
    $Output->append('Cells - text aligment: ' . $alignment . '   ');
 
    $Table->render();
+
+   $Output->write("\n\n");
 
    sleep(1);
 }

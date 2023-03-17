@@ -4,7 +4,11 @@ namespace Bootgly\CLI;
 use Bootgly\CLI;
 
 $Output = CLI::$Terminal->Output;
+$Output->reset();
 
+/* 
+ * Terminal Output - Cursor Visualizing - Example #1
+ */
 $Output->write("Bootgly CLI - Cursor Visualizing:\n");
 sleep(1);
 

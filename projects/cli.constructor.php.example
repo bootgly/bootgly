@@ -9,34 +9,25 @@ use Bootgly\CLI\Terminal\components\Table;
 
 $Output = CLI::$Terminal->Output;
 
-/* 
- * Terminal components - Table component
- */
-// Example 1 - Cell alignment demo
-#require '@bootgly/cli/examples/terminal/components/table-example-1.php';
+$examples = [
+   // Terminal->Output . Writing
+   'terminal/output.writing-01.example.php',
+   // Terminal->Output _ Cursor Positioning
+   'terminal/output_cursor-positioning-01.example.php',
+   // Terminal->Output _ Cursor Shaping
+   'terminal/output_cursor-shaping-01.example.php',
+   // Terminal->Output _ Cursor Visualizing
+   'terminal/output_cursor-visualizing-01.example.php',
+   // Terminal/components - Progress component
+   'terminal/components/progress-component-01.example.php',
+   // Terminal/components - Table component
+   'terminal/components/table-component-01.example.php'
+];
 
-/* 
- * Terminal components - Progress component
- */
-// Example 1 - High performance: 250k loops in while
-#require '@bootgly/cli/examples/terminal/components/progress-example-1.php';
+foreach ($examples as $index => $example) {
+   require '@bootgly/cli/examples/' . $example;
 
-
-
-/* 
- * Terminal Output - Cursor Positioning
- */
-// Example 1
-#require '@bootgly/cli/examples/terminal/output-cursor-positioning-example-1.php';
-
-/* 
- * Terminal Output - Cursor Shaping
- */
-// Example 1
-#require '@bootgly/cli/examples/terminal/output-cursor-shaping-example-1.php';
-
-/* 
- * Terminal Output - Cursor Visualizing
- */
-// Example 1
-#require '@bootgly/cli/examples/terminal/output-cursor-visualizing-example-1.php';
+   if (count($examples) > $index + 1) {
+      $Output->write("\n---\n\n");
+   }
+}

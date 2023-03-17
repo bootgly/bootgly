@@ -4,7 +4,11 @@ namespace Bootgly\CLI;
 use Bootgly\CLI;
 
 $Output = CLI::$Terminal->Output;
+$Output->reset();
 
+/* 
+ * Terminal Output - Cursor Shaping - Example #1
+ */
 $Output->write("\nBootgly CLI - Cursor Shaping\n\n");
 
 $Output->write("Changing cursor shape to `block`:\n");

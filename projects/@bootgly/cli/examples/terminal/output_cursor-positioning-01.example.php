@@ -4,7 +4,11 @@ namespace Bootgly\CLI;
 use Bootgly\CLI;
 
 $Output = CLI::$Terminal->Output;
+$Output->reset();
 
+/* 
+ * Terminal Output - Cursor Positioning - Example #1
+ */
 $Output->writing("Cursor Positioning on _:\n");
 $Output->writing("Moving up 1 line from current line and going back 53 columns to the left...");
 
