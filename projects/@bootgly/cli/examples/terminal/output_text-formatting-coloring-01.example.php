@@ -8,7 +8,7 @@ $Output->reset();
 $Output->waiting = 10000;
 
 /* 
- * Terminal Output - Text Formatting - Example #1
+ * Terminal Output - Text Formatting - Coloring - Example #1
  */
 // @ Testing Preset colors: foreground + default background
 $Output->write(<<<OUTPUT
@@ -49,6 +49,37 @@ $Output->Text->colorize(foreground: 'black', background: 'cyan');
 $Output->writing("Writing with the color of the text in `black` on a `cyan` background...\n");
 
 $Output->Text->colorize(foreground: 'white', background: 'black');
+$Output->writing("Writing with the color of the text in `white` on a `black` background...\n\n");
+
+// @ Testing Preset colors: foreground + background
+$Output->Text->colorize(); // @ Reset colors
+$Output->write(<<<OUTPUT
+*
+* Testing Preset colors ("bright" colors): foreground + background
+*\n
+OUTPUT);
+$Output->Text->colorize(foreground: 'black', background: 'white', type: $Output->Text::BRIGHT_COLORS);
+$Output->writing("Writing with the color of the text in `black` on a `white` background...\n");
+
+$Output->Text->colorize(foreground: 'white', background: 'red', type: $Output->Text::BRIGHT_COLORS);
+$Output->writing("Writing with the color of the text in `white` on a `red` background...\n");
+
+$Output->Text->colorize(foreground: 'white', background: 'green', type: $Output->Text::BRIGHT_COLORS);
+$Output->writing("Writing with the color of the text in `white` on a `green` background...\n");
+
+$Output->Text->colorize(foreground: 'white', background: 'blue', type: $Output->Text::BRIGHT_COLORS);
+$Output->writing("Writing with the color of the text in `white` on a `blue` background...\n");
+
+$Output->Text->colorize(foreground: 'black', background: 'yellow', type: $Output->Text::BRIGHT_COLORS);
+$Output->writing("Writing with the color of the text in `black` on a `yellow` background...\n");
+
+$Output->Text->colorize(foreground: 'white', background: 'magenta', type: $Output->Text::BRIGHT_COLORS);
+$Output->writing("Writing with the color of the text in `white` on a `magenta` background...\n");
+
+$Output->Text->colorize(foreground: 'black', background: 'cyan', type: $Output->Text::BRIGHT_COLORS);
+$Output->writing("Writing with the color of the text in `black` on a `cyan` background...\n");
+
+$Output->Text->colorize(foreground: 'white', background: 'black', type: $Output->Text::BRIGHT_COLORS);
 $Output->writing("Writing with the color of the text in `white` on a `black` background...\n\n");
 
 // @ Testing extended colors (0-255)

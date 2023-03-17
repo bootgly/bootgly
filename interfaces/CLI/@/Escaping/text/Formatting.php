@@ -17,16 +17,16 @@ use Bootgly\CLI;
 trait Formatting
 {
    // * Meta
-   // ! ANSI Escape
    public const _END_FORMAT = 'm';
    public const _RESET_FORMAT = CLI::_START_ESCAPE . '0' . self::_END_FORMAT;
-   // ? Single
-   // @ styles
+
+   // ! Styling
    public const _BOLD_STYLE      = '1';
    public const _ITALIC_STYLE    = '3';
    public const _UNDERLINE_STYLE = '4';
    public const _STRIKE_STYLE    = '9';
 
+   // ! Coloring
    // @ default foregrounds
    public const _BLACK_FOREGROUND    = '30';
    public const _RED_FOREGROUND      = '31';

@@ -28,6 +28,11 @@ class Text
 
    private Output $Output;
 
+   // ! Coloring
+   // @ type
+   public const DEFAULT_COLORS = 1;
+   public const BRIGHT_COLORS = 2;
+   // default type
    public const COLORS_FOREGROUND = [
       'black'   => self::_BLACK_FOREGROUND,
       'red'     => self::_RED_FOREGROUND,
@@ -52,6 +57,27 @@ class Text
 
       'default' => self::_DEFAULT_BACKGROUND,
    ];
+   // bright type
+   public const COLORS_FOREGROUND_BRIGHT = [
+      'black'   => self::_BLACK_BRIGHT_FOREGROUND,
+      'red'     => self::_RED_BRIGHT_FOREGROUND,
+      'green'   => self::_GREEN_BRIGHT_FOREGROUND,
+      'yellow'  => self::_YELLOW_BRIGHT_FOREGROUND,
+      'blue'    => self::_BLUE_BRIGHT_FOREGROUND,
+      'magenta' => self::_MAGENTA_BRIGHT_FOREGROUND,
+      'cyan'    => self::_CYAN_BRIGHT_FOREGROUND,
+      'white'   => self::_WHITE_BRIGHT_FOREGROUND
+   ];
+   public const COLORS_BACKGROUND_BRIGHT = [
+      'black'   => self::_BLACK_BRIGHT_BACKGROUND,
+      'red'     => self::_RED_BRIGHT_BACKGROUND,
+      'green'   => self::_GREEN_BRIGHT_BACKGROUND,
+      'yellow'  => self::_YELLOW_BRIGHT_BACKGROUND,
+      'blue'    => self::_BLUE_BRIGHT_BACKGROUND,
+      'magenta' => self::_MAGENTA_BRIGHT_BACKGROUND,
+      'cyan'    => self::_CYAN_BRIGHT_BACKGROUND,
+      'white'   => self::_WHITE_BRIGHT_BACKGROUND
+   ];
 
 
    public function __construct (Output &$Output)
@@ -60,15 +86,21 @@ class Text
    }
 
    // @ Formatting
-   public function colorize (null|int|string $foreground = 'default', null|int|string $background = 'default')
+   public function colorize (int|string $foreground = 'default', int|string $background = 'default', int $type = self::DEFAULT_COLORS)
    {
       $codes = [];
 
+      // @ Set Colors type
+      $foregrounds = ($type !== self::BRIGHT_COLORS)
+                     ? (self::COLORS_FOREGROUND) : (self::COLORS_FOREGROUND_BRIGHT);
+      $backgrounds = ($type !== self::BRIGHT_COLORS)
+                     ? self::COLORS_BACKGROUND : (self::COLORS_BACKGROUND_BRIGHT);
+
       // @ Use Preset colors
-      if ( is_string($foreground) || $foreground === null )
-         $codes[] = self::COLORS_FOREGROUND[$foreground] ?? self::_DEFAULT_FOREGROUND;
-      if ( is_string($background) || $background === null )
-         $codes[] = self::COLORS_BACKGROUND[$background] ?? self::_DEFAULT_BACKGROUND;
+      if ( is_string($foreground) )
+         $codes[] = $foregrounds[$foreground] ?? self::_DEFAULT_FOREGROUND;
+      if ( is_string($background) )
+         $codes[] = $backgrounds[$background] ?? self::_DEFAULT_BACKGROUND;
 
       // @ Use Extended colors
       if ( is_int($foreground) && $foreground >= 0 && $foreground <= 255 ) {
