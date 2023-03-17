@@ -28,6 +28,31 @@ class Text
 
    private Output $Output;
 
+   public const COLORS_FOREGROUND = [
+      'black'   => self::_BLACK_FOREGROUND,
+      'red'     => self::_RED_FOREGROUND,
+      'green'   => self::_GREEN_FOREGROUND,
+      'yellow'  => self::_YELLOW_FOREGROUND,
+      'blue'    => self::_BLUE_FOREGROUND,
+      'magenta' => self::_MAGENTA_FOREGROUND,
+      'cyan'    => self::_CYAN_FOREGROUND,
+      'white'   => self::_WHITE_FOREGROUND,
+
+      'default' => self::_DEFAULT_FOREGROUND,
+   ];
+   public const COLORS_BACKGROUND = [
+      'black'   => self::_BLACK_BACKGROUND,
+      'red'     => self::_RED_BACKGROUND,
+      'green'   => self::_GREEN_BACKGROUND,
+      'yellow'  => self::_YELLOW_BACKGROUND,
+      'blue'    => self::_BLUE_BACKGROUND,
+      'magenta' => self::_MAGENTA_BACKGROUND,
+      'cyan'    => self::_CYAN_BACKGROUND,
+      'white'   => self::_WHITE_BACKGROUND,
+
+      'default' => self::_DEFAULT_BACKGROUND,
+   ];
+
 
    public function __construct (Output &$Output)
    {
@@ -35,9 +60,31 @@ class Text
    }
 
    // @ Formatting
-   public function color (string $foreground, string $background)
+   public function colorize (null|int|string $foreground = 'default', null|int|string $background = 'default')
    {
-      // TODO
+      $codes = [];
+
+      // @ Use Preset colors
+      if ( is_string($foreground) || $foreground === null )
+         $codes[] = self::COLORS_FOREGROUND[$foreground] ?? self::_DEFAULT_FOREGROUND;
+      if ( is_string($background) || $background === null )
+         $codes[] = self::COLORS_BACKGROUND[$background] ?? self::_DEFAULT_BACKGROUND;
+
+      // @ Use Extended colors
+      if ( is_int($foreground) && $foreground >= 0 && $foreground <= 255 ) {
+         $codes[] = self::_EXTENDED_FOREGROUND;
+         $codes[] = '5';
+         $codes[] = (string) $foreground;
+      }
+      if ( is_int($background) && $background >= 0 && $background <= 255 ) {
+         $codes[] = self::_EXTENDED_BACKGROUND;
+         $codes[] = '5';
+         $codes[] = (string) $background;
+      }
+
+      $color = $this->wrap(...$codes);
+
+      $this->Output->escape($color);
    }
 
    // @ Modifying
