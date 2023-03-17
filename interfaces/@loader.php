@@ -1,23 +1,25 @@
 <?php
 // ! CLI
 require 'CLI.php';
+// @
+// ? Escaping
+require 'CLI/@/Escaping.php';                      // @trait
+// cursor
+require 'CLI/@/Escaping/cursor/Positioning.php';   // @trait
+require 'CLI/@/Escaping/cursor/Visualizing.php';   // @trait
+require 'CLI/@/Escaping/cursor/Shaping.php';       // @trait
+// text
+require 'CLI/@/Escaping/text/Formatting.php';      // @trait
+require 'CLI/@/Escaping/text/Modifying.php';       // @trait
+// viewport
+require 'CLI/@/Escaping/viewport/Positioning.php'; // @trait
+
 // ? Commands
 require 'CLI/Commands.php';
-// ? Escaping
-require 'CLI/Escaping.php';
-// cursor
-require 'CLI/Escaping/cursor/Positioning.php';   // @ trait
-require 'CLI/Escaping/cursor/Visualizing.php';   // @ trait
-require 'CLI/Escaping/cursor/Shaping.php';       // @ trait
-// text
-require 'CLI/Escaping/text/Formatting.php';      // @ trait
-require 'CLI/Escaping/text/Modifying.php';       // @ trait
-// viewport
-require 'CLI/Escaping/viewport/Positioning.php'; // @ trait
 // ? Terminal
 require 'CLI/Terminal.php';
 require 'CLI/Terminal/Input.php';
-
+// ? Terminal/Output
 require 'CLI/Terminal/Output.php';
 // Cursor
 require 'CLI/Terminal/Output/Cursor.php';
