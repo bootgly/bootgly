@@ -4,145 +4,39 @@ namespace Bootgly\CLI;
 
 use Bootgly\CLI;
 use Bootgly\CLI\Terminal\components\Progress;
+use Bootgly\CLI\Terminal\components\Table;
 
 
 $Output = CLI::$Terminal->Output;
 
 /* 
- * Terminal - Progress component
+ * Terminal components - Table component
  */
-/*
-$Progress = new Progress($Output);
-// * Config
-// @ Ticks
-$Progress->ticks = 250000;
-$Progress->throttle = 0;
-// @ Templating
-$Progress->template = <<<'TEMPLATE'
-@description;
-@ticked;/@ticks; [@bar;] @percent;%
-⏱️ @elapsed;s - 🏁 @eta;s - 📈 @rate; loops/s
-TEMPLATE;
-// ! Bar
-// Symbols
-$Progress->Bar->symbols = [
-   'determined'   => [
-      // Symbols array map:
-      // 0 => incomplete / 1 => current / 2 => complete
-      '🖤', '', '❤️'
-   ],
-   'indetermined' => ['-']
-];
-// Units
-$Progress->Bar->units = 10;
-
-
-$Progress->start();
-
-
-$i = 0;
-while ($i++ < 250000) {
-   if ($i === 1) {
-      $Progress->describe('Performing progress!');
-   }
-   if ($i === 125000) {
-      $Progress->describe('There\'s only half left...');
-   }
-   if ($i === 249999) {
-      $Progress->describe('Finished!!!');
-   }
-
-	$Progress->tick();
-}
-
-
-$Progress->finish();
-*/
+// Example 1 - Cell alignment demo
+#require '@bootgly/cli/examples/terminal/components/table-example-1.php';
 
 /* 
- * Escaping - Cursor Positioning
+ * Terminal components - Progress component
  */
-/*
+// Example 1 - High performance: 250k loops in while
+#require '@bootgly/cli/examples/terminal/components/progress-example-1.php';
+
+
+
+/* 
+ * Terminal Output - Cursor Positioning
+ */
 // Example 1
-$Output->writing("Cursor Positioning on _:\n");
-$Output->writing("Moving up 1 line from current line and going back 53 columns to the left...");
-
-$Output->Cursor->up(lines: 1);
-$Output->Cursor->left(columns: 53);
-
-$Output->writing("Bootgly: moving down 2 lines and going to column 1...");
-
-$Output->Cursor->down(lines: 2);
-$Output->Cursor->moveTo(column: 1);
-
-$Output->writing("Continuing writing and moving down 2 lines to column 3...");
-$Output->Cursor->down(lines: 2, column: 3);
-
-$Output->writing("- Continuing writing and moving up 2 lines to column 1...");
-$Output->Cursor->up(lines: 2, column: 1);
-
-$Output->writing("Moving down 3 lines to column 1 and moving 6 columns to the right...");
-$Output->Cursor->down(3, column: 1);
-$Output->Cursor->right(columns: 6);
-
-$Output->writing("+ Continue writing and moving down 2 lines to column 1...");
-$Output->Cursor->down(2, column: 1);
-// Example 2 - Cursor right / left methods
-$Output->write("_______");
-$Output->Cursor->moveTo(column: 1);
-
-$Output->wait = 100000; // @ Set wait time between writes (in microseconds)
-
-$Output
-   ->write("B")
-   ->Cursor->right(columns: 5)
-   ->write("y")
-   ->Cursor->left(columns: 4)
-   ->write("t")
-   ->Cursor->right(columns: 1)
-   ->write("l")
-   ->Cursor->left(columns: 5)
-   ->write("o")
-   ->Cursor->right(columns: 2)
-   ->write("g")
-   ->Cursor->left(columns: 3)
-   ->write("o");
-
-$Output->write("\n");
-*/
+#require '@bootgly/cli/examples/terminal/output-cursor-positioning-example-1.php';
 
 /* 
- * Escaping - Cursor Shaping
+ * Terminal Output - Cursor Shaping
  */
-/*
-$Output->write("Bootgly CLI - Cursor Shaping:\n");
-
-$Output->write("Changing cursor shape to `block`...\n");
-$Output->Cursor->shape('block');
-
-$Output->write("Changing cursor shape to `underline`...\n");
-$Output->Cursor->shape('underline');
-
-$Output->write("Changing cursor shape to `bar`...\n");
-$Output->Cursor->shape('bar');
-*/
+// Example 1
+#require '@bootgly/cli/examples/terminal/output-cursor-shaping-example-1.php';
 
 /* 
- * Escaping - Cursor Visualizing
+ * Terminal Output - Cursor Visualizing
  */
-/*
-$Output->write("Bootgly CLI - Cursor Visualizing:\n");
-sleep(1);
-$Output->write("Hiding cursor for 3 seconds...\n");
-$Output->Cursor->hide();
-sleep(3);
-$Output->write("Showing cursor again...\n");
-$Output->Cursor->show();
-sleep(2);
-$Output->write("Stopping cursor from blinking for 3 seconds...\n");
-$Output->Cursor->blink(false);
-sleep(3);
-$Output->write("Making cursor blink again...\n");
-$Output->Cursor->blink(true);
-sleep(2);
-*/
+// Example 1
+#require '@bootgly/cli/examples/terminal/output-cursor-visualizing-example-1.php';
