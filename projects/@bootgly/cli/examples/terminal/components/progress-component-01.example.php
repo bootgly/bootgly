@@ -1,7 +1,10 @@
 <?php
+namespace Bootgly\CLI;
 
+use Bootgly\CLI;
 use Bootgly\CLI\Terminal\components\Progress;
 
+$Output = CLI::$Terminal->Output;
 
 $Progress = new Progress($Output);
 // * Config

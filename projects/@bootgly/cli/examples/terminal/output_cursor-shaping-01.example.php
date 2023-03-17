@@ -1,4 +1,10 @@
 <?php
+namespace Bootgly\CLI;
+
+use Bootgly\CLI;
+
+$Output = CLI::$Terminal->Output;
+
 $Output->write("\nBootgly CLI - Cursor Shaping\n\n");
 
 $Output->write("Changing cursor shape to `block`:\n");

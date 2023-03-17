@@ -1,4 +1,10 @@
 <?php
+namespace Bootgly\CLI;
+
+use Bootgly\CLI;
+
+$Output = CLI::$Terminal->Output;
+
 $Output->write("Bootgly CLI - Cursor Visualizing:\n");
 sleep(1);
 

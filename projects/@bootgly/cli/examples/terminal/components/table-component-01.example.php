@@ -1,7 +1,10 @@
 <?php
+namespace Bootgly\CLI;
 
+use Bootgly\CLI;
 use Bootgly\CLI\Terminal\components\Table;
 
+$Output = CLI::$Terminal->Output;
 
 $Table = new Table($Output);
 
