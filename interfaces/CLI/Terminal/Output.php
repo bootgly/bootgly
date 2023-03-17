@@ -50,6 +50,11 @@ class Output
       $this->Text = new Text($this);
    }
 
+   public function reset ()
+   {
+      $this->__construct();
+   }
+
    public function write (string $text, int $times = 1) : self
    {
       // * Config
