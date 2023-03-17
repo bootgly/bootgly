@@ -8,12 +8,10 @@ composer.lock
 cli-config.php
 server-*.php
 *.iso
-_*.examples.php
+_*.example.php
 
 ### @Bootgly ###
 ## Short folders
-# Ignore #doc folders
-**/#
 # Ignore &xcluded folders
 **/&
 
