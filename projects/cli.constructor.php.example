@@ -22,6 +22,8 @@ $examples = [
 
    // Terminal->Output _ Text Formatting - Coloring
    'terminal/output_text-formatting-coloring-01.example.php',
+   // Terminal->Output _ Text Formatting - Styling
+   'terminal/output_text-formatting-styling-01.example.php',
 
    // Terminal/components - Progress component
    'terminal/components/progress-component-01.example.php',
