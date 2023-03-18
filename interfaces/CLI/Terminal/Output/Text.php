@@ -129,8 +129,13 @@ class Text
          $codes[] = (string) $background;
       }
 
+      // @ Wrap color codes
       $color = $this->wrap(...$codes);
 
+      // @ Save the last defined color
+      $this->color = $color;
+
+      // @ Output color
       // TODO enqueue to Output and return self
       $this->Output->write($color);
    }
@@ -152,9 +157,16 @@ class Text
          };
       }
 
+      // @ Wrap style codes
       $wrapped = $this->wrap(...$codes);
 
+      // @ Output style
       $this->Output->write($wrapped);
+
+      // @ Try to keep the last defined colors?
+      if (! $codes[0] && $this->color) {
+         $this->Output->write($this->color);
+      }
    }
 
    // @ Modifying
