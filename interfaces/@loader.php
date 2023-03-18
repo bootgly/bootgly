@@ -18,6 +18,14 @@ require 'CLI/@/Escaping/viewport/Positioning.php'; // @trait
 require 'CLI/Commands.php';
 // ? Terminal
 require 'CLI/Terminal.php';
+// @
+// Logging
+require 'CLI/Terminal/@/Logger/Logging.php';      // @trait
+// Tester
+require 'CLI/Terminal/@/Tester/Tests.php';
+require 'CLI/Terminal/@/Tester/Tests/Test.php';
+
+// ? Terminal/Input
 require 'CLI/Terminal/Input.php';
 // ? Terminal/Output
 require 'CLI/Terminal/Output.php';
@@ -25,11 +33,6 @@ require 'CLI/Terminal/Output.php';
 require 'CLI/Terminal/Output/Cursor.php';
 // Text
 require 'CLI/Terminal/Output/Text.php';
-// @
-require 'CLI/Terminal/@/Logger/Logging.php';      // @trait
-
-require 'CLI/Terminal/@/Tester/Tests.php';
-require 'CLI/Terminal/@/Tester/Tests/Test.php';
 // @ components
 // Progress
 require 'CLI/Terminal/components/Progress.php';
@@ -40,6 +43,7 @@ require 'CLI/Terminal/components/Table/Cells.php';
 require 'CLI/Terminal/components/Table/Columns.php';
 require 'CLI/Terminal/components/Table/Row.php';
 require 'CLI/Terminal/components/Table/Rows.php';
+
 // ! OS
 require 'OS/Process/Timer.php';
 

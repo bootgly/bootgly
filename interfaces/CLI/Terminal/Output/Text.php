@@ -78,11 +78,26 @@ class Text
       'cyan'    => self::_CYAN_BRIGHT_BACKGROUND,
       'white'   => self::_WHITE_BRIGHT_BACKGROUND
    ];
+   // ! Styling
+   public const STYLES = [
+      'bold'      => self::_BOLD_STYLE,
+      'italic'    => self::_ITALIC_STYLE,
+      'underline' => self::_UNDERLINE_STYLE,
+      'strike'    => self::_STRIKE_STYLE,
+   ];
+
+   // * Config
+   // * Data
+   // * Meta
+   private ? string $color;
 
 
    public function __construct (Output &$Output)
    {
       $this->Output = $Output;
+
+      // * Meta
+      $this->color = null;
    }
 
    // @ Formatting
@@ -116,7 +131,30 @@ class Text
 
       $color = $this->wrap(...$codes);
 
+      // TODO enqueue to Output and return self
       $this->Output->write($color);
+   }
+   public function stylize (string ...$styles)
+   {
+      $codes = [];
+
+      if ( empty($styles) ) {
+         $styles = [null];
+      }
+
+      foreach ($styles as $style) {
+         $codes[] = match ($style) {
+            'bold'      => self::_BOLD_STYLE,
+            'italic'    => self::_ITALIC_STYLE,
+            'underline' => self::_UNDERLINE_STYLE,
+            'strike'    => self::_STRIKE_STYLE,
+            default     => self::_DEFAULT_STYLE
+         };
+      }
+
+      $wrapped = $this->wrap(...$codes);
+
+      $this->Output->write($wrapped);
    }
 
    // @ Modifying

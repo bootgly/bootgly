@@ -20,12 +20,6 @@ trait Formatting
    public const _END_FORMAT = 'm';
    public const _RESET_FORMAT = CLI::_START_ESCAPE . '0' . self::_END_FORMAT;
 
-   // ! Styling
-   public const _BOLD_STYLE      = '1';
-   public const _ITALIC_STYLE    = '3';
-   public const _UNDERLINE_STYLE = '4';
-   public const _STRIKE_STYLE    = '9';
-
    // ! Coloring
    // @ default foregrounds
    public const _BLACK_FOREGROUND    = '30';
@@ -68,7 +62,16 @@ trait Formatting
    public const _MAGENTA_BRIGHT_BACKGROUND = '105';
    public const _CYAN_BRIGHT_BACKGROUND    = '106';
    public const _WHITE_BRIGHT_BACKGROUND   = '107';
-   // ? Combined
+
+
+   // ! Styling
+   public const _DEFAULT_STYLE   = '';
+   public const _BOLD_STYLE      = '1';
+   public const _ITALIC_STYLE    = '3';
+   public const _UNDERLINE_STYLE = '4';
+   public const _STRIKE_STYLE    = '9';
+
+   // * Combined
    // @ bold style + default foregrounds
    public const _BLACK_BOLD    = '1;30';
    public const _RED_BOLD      = '1;31';
