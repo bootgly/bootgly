@@ -160,7 +160,12 @@ class Progress
       // * Meta
       $this->started = microtime(true);
 
-      // @ Init the display
+      // @ Make vertical space for writing
+      $lines = substr_count($this->template, "\n") + 1;
+      $this->Output->write(str_repeat("\n", $lines + 1));
+      $this->Output->Cursor->up($lines + 1);
+
+      // @ Point cursor to the initial position to write
       $this->Output->Cursor->hide();
       $this->Output->Cursor->moveTo(column: 1);
 
