@@ -102,6 +102,12 @@ class Output
 
       return $this;
    }
+   public function metaescape (string $command) : self
+   {
+      fwrite($this->stream, escapeshellcmd($command));
+
+      return $this;
+   }
    public function append (string $text) : self
    {
       $this->written = fwrite($this->stream, $text . PHP_EOL);
