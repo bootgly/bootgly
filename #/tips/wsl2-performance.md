@@ -2,7 +2,7 @@
 
 If you want to benchmark the Bootgly CLI Server, you need to uninstall and install "Windows Subsystem For Linux" to reset the performance of WSL 2 Kernel.
 
-Go to Windows -> Config. -> Applications -> Installed Applications and search for "Windows Subsystem For Linux". Uninstall it to reinstall! No data will be removed and your distro will be intact.
+Go to Windows -> Config. -> Applications -> Installed Applications and search for "Windows Subsystem For Linux". Uninstall it and reboot your system to reinstall! No data will be removed and your distro will be intact.
 
 I don't know what really happens behind the scenes, but WSL2 loses performance over time with JIT enabled and the marks in the Benchmark decrease to about 10% of permanent loss.
 
