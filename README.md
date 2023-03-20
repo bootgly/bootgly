@@ -126,7 +126,7 @@ Bootgly PHP Framework will follow [Semantic Versioning 2.0](SEMANTIC_VERSIONING)
 
 ## 📃 License
 
-The Bootgly PHP Framework is open-sourced software licensed under the [MIT license](MIT_LICENSE).
+The Bootgly PHP Framework is open-sourced software licensed under the [MIT license][MIT_LICENSE].
 
 
 <!-- Links -->
