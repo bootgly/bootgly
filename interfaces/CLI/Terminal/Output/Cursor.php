@@ -133,6 +133,29 @@ class Cursor
       return $this->Output->escape(self::_CURSOR_RESTORED);
    }
 
+   // Reporting
+   /**
+    * Emit the cursor position as: ESC [ <r> ; <c> R Where <r> = cursor row and <c> = cursor column
+    */
+   public function report ()
+   {
+      return $this->Output->escape(self::_CURSOR_REPORT_POSITION);
+   }
+
+   // @ Shaping
+   public function shape (? string $style = '@user')
+   {
+      return match ($style) {
+         'block' => $this->Output->escape(self::_CURSOR_BLINKING_BLOCK_SHAPE),
+
+         'underline' => $this->Output->escape(self::_CURSOR_BLINKING_UNDERLINE_SHAPE),
+
+         'bar' => $this->Output->escape(self::_CURSOR_BLINKING_BAR_SHAPE),
+
+         default => $this->Output->escape(self::_CURSOR_USER_SHAPE)
+      };
+   }
+
    // @ Visualizing
    public function blink (bool $status) : Output
    {
@@ -149,19 +172,5 @@ class Cursor
    public function hide () : Output
    {
       return $this->Output->escape(self::_CURSOR_HIDDEN);
-   }
-
-   // @ Shaping
-   public function shape (? string $style = '@user')
-   {
-      return match ($style) {
-         'block' => $this->Output->escape(self::_CURSOR_BLINKING_BLOCK_SHAPE),
-
-         'underline' => $this->Output->escape(self::_CURSOR_BLINKING_UNDERLINE_SHAPE),
-
-         'bar' => $this->Output->escape(self::_CURSOR_BLINKING_BAR_SHAPE),
-
-         default => $this->Output->escape(self::_CURSOR_USER_SHAPE)
-      };
    }
 }
