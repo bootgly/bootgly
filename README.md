@@ -21,10 +21,10 @@ Documentation and Website will be released alongside the beta.
 
 Clients | Servers | Database | Back-end | Front-end
 --- | --- | --- | --- | ---
-[TCP Client [Beta]](TCP_CLIENT_INTERFACE) | [TCP Server [Beta]](TCP_SERVER_INTERFACE) | DBAL [TODO] | [Router [WIP]](WEB_HTTP_SERVER_ROUTER) | [Templating Engine [WIP]](TEMPLATE_ENGINE)
-HTTP Client (CLI) [TODO] | [HTTP Server (CLI) [WIP]](HTTP_SERVER_CLI) | ORM [TODO] | [Router/Route [WIP]](WEB_HTTP_SERVER_ROUTER_ROUTE) | _
-_ | WS Server [TODO] | _ | [Request [WIP]](HTTP_SERVER_CLI_REQUEST) | _
-_ | _ | _ | [Response [WIP]](HTTP_SERVER_CLI_RESPONSE) | _
+[TCP Client [Beta]][TCP_CLIENT_INTERFACE] | [TCP Server [Beta]][TCP_SERVER_INTERFACE] | DBAL [TODO] | [Router [WIP]][WEB_HTTP_SERVER_ROUTER] | [Templating Engine [WIP]][TEMPLATE_ENGINE]
+HTTP Client (CLI) [TODO] | [HTTP Server (CLI) [WIP]][HTTP_SERVER_CLI] | ORM [TODO] | [Router/Route [WIP]][WEB_HTTP_SERVER_ROUTER_ROUTE] | _
+_ | WS Server [TODO] | _ | [Request [WIP]][HTTP_SERVER_CLI_REQUEST] | _
+_ | _ | _ | [Response [WIP]][HTTP_SERVER_CLI_RESPONSE] | _
 
 ---
 
@@ -114,13 +114,13 @@ Wait for the "contributing guidelines" to start your contribution.
 
 ### 🛂 Code of Conduct
 
-Help us keep Bootgly open and inclusive. Please read and follow our [Code of Conduct](CODE_OF_CONDUCT).
+Help us keep Bootgly open and inclusive. Please read and follow our [Code of Conduct][CODE_OF_CONDUCT].
 
 ---
 
 ## 📑 Versioning
 
-Bootgly PHP Framework will follow [Semantic Versioning 2.0](SEMANTIC_VERSIONING).
+Bootgly PHP Framework will follow [Semantic Versioning 2.0][SEMANTIC_VERSIONING].
 
 ---
 
