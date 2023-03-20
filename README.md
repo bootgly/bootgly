@@ -1,10 +1,14 @@
-<h1 align="center">Bootgly PHP Framework</h1>
-
 <p align="center">
   <img src="https://github.com/bootgly/.github/raw/main/favicon-temp1-128.png" alt="bootgly-logo" width="120px" height="120px"/>
-  <br>
+</p>
+<h1 align="center">Bootgly PHP Framework</h1>
+<p align="center">
   <i>Full Stack PHP Framework for Multi Projects.</i>
-  <br>
+</p>
+<p align="center">
+  <a href="https://packagist.org/packages/bootgly/bootgly-php-framework">
+    <img alt="GitHub" src="https://img.shields.io/github/license/bootgly/bootgly-php-framework">
+  </a>
 </p>
 
 🚧 Do not use it in production environments. The alpha version hasn't even been released yet. 🚧
@@ -17,10 +21,10 @@ Documentation and Website will be released alongside the beta.
 
 Clients | Servers | Database | Back-end | Front-end
 --- | --- | --- | --- | ---
-[TCP Client [Beta]](/interfaces/Web/TCP/Client.php) | [TCP Server [Beta]](/interfaces/Web/TCP/Server.php) | DBAL [TODO] | [Router [WIP]](/nodes/Web/HTTP/Server/Router.php) | [Templating Engine [WIP]](/core/Template.php)
-HTTP Client (CLI) [TODO] | [HTTP Server (CLI) [WIP]](/nodes/CLI/HTTP/Server.php) | ORM [TODO] | [Router/Route [WIP]](/nodes/Web/HTTP/Server/Router/Route.php) | _
-_ | WS Server [TODO] | _ | [Request [WIP]](/nodes/CLI/HTTP/Server/Request.php) | _
-_ | _ | _ | [Response [WIP]](/nodes/CLI/HTTP/Server/Response.php) | _
+[TCP Client [Beta]](TCP_CLIENT_INTERFACE) | [TCP Server [Beta]](TCP_SERVER_INTERFACE) | DBAL [TODO] | [Router [WIP]](WEB_HTTP_SERVER_ROUTER) | [Templating Engine [WIP]](TEMPLATE_ENGINE)
+HTTP Client (CLI) [TODO] | [HTTP Server (CLI) [WIP]](HTTP_SERVER_CLI) | ORM [TODO] | [Router/Route [WIP]](WEB_HTTP_SERVER_ROUTER_ROUTE) | _
+_ | WS Server [TODO] | _ | [Request [WIP]](HTTP_SERVER_CLI_REQUEST) | _
+_ | _ | _ | [Response [WIP]](HTTP_SERVER_CLI_RESPONSE) | _
 
 ---
 
@@ -95,31 +99,52 @@ Your sponsorship will keep this project always **up to date** with **new feature
 
 ## 🌱 Community
 
-Join the conversation and help the community.
+Join us and help the community.
 
-- [Telegram][telegram]
+- [Telegram][TELEGRAM]
+- [Reddit][REDDIT]
 
 **Love Bootgly? Give our repo a star ⭐!**
 
 ---
 
-## 🛂 Code of Conduct
+## 💻 Contributing
 
-Help us keep Bootgly open and inclusive. Please read and follow our [Code of Conduct][codeofconduct].
+Wait for the "contributing guidelines" to start your contribution.
+
+### 🛂 Code of Conduct
+
+Help us keep Bootgly open and inclusive. Please read and follow our [Code of Conduct](CODE_OF_CONDUCT).
 
 ---
 
 ## 📑 Versioning
 
-Bootgly PHP Framework will follow [Semantic Versioning 2.0][semver].
+Bootgly PHP Framework will follow [Semantic Versioning 2.0](SEMANTIC_VERSIONING).
 
 ---
 
 ## 📃 License
 
-The Bootgly PHP Framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+The Bootgly PHP Framework is open-sourced software licensed under the [MIT license](MIT_LICENSE).
 
 
-[telegram]: https://t.me/bootgly
-[codeofconduct]: CODE_OF_CONDUCT.md
-[semver]: https://semver.org/
+<!-- Links -->
+[TEMPLATE_ENGINE]: https://github.com/bootgly/bootgly-php-framework/blob/main/core/Template.php
+
+[WEB_TCP_CLIENT_INTERFACE]: https://github.com/bootgly/bootgly-php-framework/blob/main/interfaces/Web/TCP/Client.php
+[WEB_TCP_SERVER_INTERFACE]: https://github.com/bootgly/bootgly-php-framework/blob/main/interfaces/Web/TCP/Server.php
+
+[CLI_HTTP_SERVER]: https://github.com/bootgly/bootgly-php-framework/blob/main/nodes/CLI/HTTP/Server.php
+[CLI_HTTP_SERVER_REQUEST]: https://github.com/bootgly/bootgly-php-framework/blob/main/nodes/CLI/HTTP/Server/Request.php
+[CLI_HTTP_SERVER_RESPONSE]: https://github.com/bootgly/bootgly-php-framework/blob/main/nodes/CLI/HTTP/Server/Response.php
+[WEB_HTTP_SERVER_ROUTER]: https://github.com/bootgly/bootgly-php-framework/blob/main/nodes/Web/HTTP/Server/Router.php
+[WEB_HTTP_SERVER_ROUTER_ROUTE]: https://github.com/bootgly/bootgly-php-framework/blob/main/nodes/Web/HTTP/Server/Router/Route.php
+
+[TELEGRAM]: https://t.me/bootgly/
+[REDDIT]: https://www.reddit.com/r/bootgly/
+
+[CODE_OF_CONDUCT]: CODE_OF_CONDUCT.md
+
+[SEMANTIC_VERSIONING]: https://semver.org/
+[MIT_LICENSE]: https://opensource.org/licenses/MIT
