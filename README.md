@@ -21,10 +21,10 @@ Documentation and Website will be released alongside the beta.
 
 Clients | Servers | Database | Back-end | Front-end
 --- | --- | --- | --- | ---
-[TCP Client [Beta]][TCP_CLIENT_INTERFACE] | [TCP Server [Beta]][TCP_SERVER_INTERFACE] | DBAL [TODO] | [Router [WIP]][WEB_HTTP_SERVER_ROUTER] | [Templating Engine [WIP]][TEMPLATE_ENGINE]
-HTTP Client (CLI) [TODO] | [HTTP Server (CLI) [WIP]][HTTP_SERVER_CLI] | ORM [TODO] | [Router/Route [WIP]][WEB_HTTP_SERVER_ROUTER_ROUTE] | _
-_ | WS Server [TODO] | _ | [Request [WIP]][HTTP_SERVER_CLI_REQUEST] | _
-_ | _ | _ | [Response [WIP]][HTTP_SERVER_CLI_RESPONSE] | _
+[TCP Client [Beta]][WEB_TCP_CLIENT_INTERFACE] | [TCP Server [Beta]][WEB_TCP_SERVER_INTERFACE] | DBAL [TODO] | [Router [WIP]][WEB_HTTP_SERVER_ROUTER] | [Templating Engine [WIP]][TEMPLATE_ENGINE]
+HTTP Client (CLI) [TODO] | [HTTP Server (CLI) [WIP]][CLI_HTTP_SERVER] | ORM [TODO] | [Router/Route [WIP]][WEB_HTTP_SERVER_ROUTER_ROUTE] | _
+_ | WS Server [TODO] | _ | [Request [WIP]][CLI_HTTP_SERVER_REQUEST] | _
+_ | _ | _ | [Response [WIP]][CLI_HTTP_SERVER_RESPONSE] | _
 
 ---
 
@@ -89,22 +89,21 @@ or using Docker:
 
 ---
 
-## 💖 Sponsorship
+## 🌱 Community
+
+Join us and help the community.
+
+**Love Bootgly? Give our repo a star ⭐!**
+
+### 💖 Sponsorship
 
 A lot of time and energy is devoted to this project. To accelerate your growth, if you like this project or depend on it for your stack to work, consider sponsoring it.
 
 Your sponsorship will keep this project always **up to date** with **new features** and **improvements** / **bug fixes**.
 
----
-
-## 🌱 Community
-
-Join us and help the community.
-
+### 🔗 Social networks
 - [Telegram][TELEGRAM]
 - [Reddit][REDDIT]
-
-**Love Bootgly? Give our repo a star ⭐!**
 
 ---
 
