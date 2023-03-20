@@ -104,6 +104,7 @@ Your sponsorship will keep this project always **up to date** with **new feature
 ### 🔗 Social networks
 - [Telegram][TELEGRAM]
 - [Reddit][REDDIT]
+- [Discord][DISCORD]
 
 ---
 
@@ -115,9 +116,7 @@ Wait for the "contributing guidelines" to start your contribution.
 
 Help us keep Bootgly open and inclusive. Please read and follow our [Code of Conduct][CODE_OF_CONDUCT].
 
----
-
-## 📑 Versioning
+### 📑 Versioning
 
 Bootgly PHP Framework will follow [Semantic Versioning 2.0][SEMANTIC_VERSIONING].
 
@@ -142,6 +141,7 @@ The Bootgly PHP Framework is open-sourced software licensed under the [MIT licen
 
 [TELEGRAM]: https://t.me/bootgly/
 [REDDIT]: https://www.reddit.com/r/bootgly/
+[DISCORD]: https://discord.gg/SKRHsYmtyJ/
 
 [CODE_OF_CONDUCT]: CODE_OF_CONDUCT.md
 
