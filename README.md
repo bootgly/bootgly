@@ -97,7 +97,7 @@ Join us and help the community.
 
 ### 💖 Sponsorship
 
-A lot of time and energy is devoted to this project. To accelerate your growth, if you like this project or depend on it for your stack to work, consider sponsoring it.
+A lot of time and energy is devoted to this project. To accelerate your growth, if you like this project or depend on it for your stack to work, consider [sponsoring it][GITHUB_SPONSOR].
 
 Your sponsorship will keep this project always **up to date** with **new features** and **improvements** / **bug fixes**.
 
@@ -139,11 +139,16 @@ The Bootgly PHP Framework is open-sourced software licensed under the [MIT licen
 [WEB_HTTP_SERVER_ROUTER]: https://github.com/bootgly/bootgly-php-framework/blob/main/nodes/Web/HTTP/Server/Router.php
 [WEB_HTTP_SERVER_ROUTER_ROUTE]: https://github.com/bootgly/bootgly-php-framework/blob/main/nodes/Web/HTTP/Server/Router/Route.php
 
+
+[GITHUB_SPONSOR]: https://github.com/sponsors/bootgly
+
 [TELEGRAM]: https://t.me/bootgly/
 [REDDIT]: https://www.reddit.com/r/bootgly/
 [DISCORD]: https://discord.gg/SKRHsYmtyJ/
 
-[CODE_OF_CONDUCT]: CODE_OF_CONDUCT.md
 
+[CODE_OF_CONDUCT]: CODE_OF_CONDUCT.md
 [SEMANTIC_VERSIONING]: https://semver.org/
+
+
 [MIT_LICENSE]: https://opensource.org/licenses/MIT
