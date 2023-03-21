@@ -46,6 +46,7 @@ class Client
    // ! Console
    protected Terminal $Terminal;
 
+
    // * Config
    #protected string $resource;
    protected ? string $host;
@@ -55,6 +56,7 @@ class Client
    protected int $mode;
    public const MODE_DEFAULT = 1;
    public const MODE_MONITOR = 2;
+
    // * Data
    // ! On
    // @ on Worker
@@ -65,6 +67,7 @@ class Client
    // @ on Packages
    public static ? Closure $onRead = null;
    public static ? Closure $onWrite = null;
+
    // * Meta
    public const VERSION = '0.0.1';
    // @ Error
@@ -79,6 +82,7 @@ class Client
    protected const STATUS_RUNNING = 8;
    protected const STATUS_PAUSED = 16;
    protected const STATUS_STOPING = 32;
+
 
    // ! Connection(s)
    protected Connections $Connections;
@@ -95,6 +99,7 @@ class Client
       $this->mode = $mode;
 
       // * Data
+      // ...
 
       // * Meta
       // @ Error
@@ -103,6 +108,7 @@ class Client
       static::$started = time();
       // @ Status
       self::$status = self::STATUS_BOOTING;
+
 
       // @ Configure Debugger
       Debugger::$debug = true;
@@ -238,38 +244,39 @@ class Client
 
          // If child is running?
          if ($pid === 0) {
-            continue;
+            // ...
          } else if ($pid > 0) { // If a child has already exited?
             $this->log('@\;Process child exited!@\;', self::LOG_ERROR_LEVEL);
             $this->Process->sendSignal(SIGINT);
             break;
          } else if ($pid === -1) { // If error ignore
-            continue;
+            // ...
          }
       }
    }
 
-   public function connect (int $index = 0)
+   public function connect ()
    {
       $error = false;
 
       try {
          $context = stream_context_create([
-            'socket' => [ 
-               // Setting this option to true will set SOL_TCP, NO_DELAY=1 appropriately, 
+            'socket' => [
+               // Setting this option to true will set SOL_TCP, NO_DELAY=1 appropriately,
                // thus disabling the TCP Nagle algorithm.
                'tcp_nodelay' => true,
    
                // Used to specify the IP address (either IPv4 or IPv6) and/or the port number
                // that PHP will use to access the network. The syntax is ip:port for IPv4 addresses,
-               // and [ip]:port for IPv6 addresses. Setting the IP or the port to 0 will 
+               // and [ip]:port for IPv6 addresses. Setting the IP or the port to 0 will
                // let the system choose the IP and/or port.
                #'bindto' => $this->host . ':' . (55000 + $index)
             ]
          ]);
 
          // @ Set custom handler error
-         set_error_handler(function ($code, $message, $file, $line) use (&$error) {
+         // function ($code, $message, $file, $line)
+         set_error_handler(function ($code, $message) use (&$error) {
             if ($code === E_WARNING && strpos($message, 'stream_socket_client(): Failed to bind') !== false) {
                $error = true;
 

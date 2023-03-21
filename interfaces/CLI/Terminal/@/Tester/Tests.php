@@ -20,8 +20,12 @@ class Tests implements \Bootgly\Tests
    use Logging;
 
 
+   // * Config
+   // ...
+
    // * Data
    public array $tests;
+
    // * Meta
    public int $failed;
    public int $passed;
@@ -37,8 +41,12 @@ class Tests implements \Bootgly\Tests
 
    public function __construct (array &$tests)
    {
+      // * Config
+      // ...
+
       // * Data
       $this->tests = $tests;
+
       // * Meta
       $this->failed = 0;
       $this->passed = 0;
@@ -57,6 +65,7 @@ class Tests implements \Bootgly\Tests
          }
       }
       $this->width = $width;
+
 
       $this->log('@\;');
    }
@@ -89,7 +98,6 @@ class Tests implements \Bootgly\Tests
       $finished = $this->finished = microtime(true);
 
       // @ Benchmark Tests time
-      $finished = microtime(true);
       $duration = number_format(round($finished - $started, 5), 6);
 
       $this->log(<<<TESTS

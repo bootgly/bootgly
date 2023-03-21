@@ -1,11 +1,11 @@
 <?php
 namespace Bootgly\Template;
 
-use Bootgly\Configuring;
 
 enum Config
 {
-   use Configuring;
+   use \Bootgly\Configuring;
+
 
    case EXECUTE_MODE_REQUIRE;
    case EXECUTE_MODE_EVAL;

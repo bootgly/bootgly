@@ -25,7 +25,7 @@ $HTTPServer->configure(
    /*
    ssl: [
       // SSL Certificate
-      'local_cert'  => __DIR__ . '/@/certificates/localhost.cert.pem', 
+      'local_cert'  => __DIR__ . '/@/certificates/localhost.cert.pem',
       // SSL Keyfile
       'local_pk'    => __DIR__ . '/@/certificates/localhost.key.pem',
 
@@ -43,13 +43,3 @@ $HTTPServer->configure(
 );
 // on Data -> projects/sapi.http.constructor.php
 $HTTPServer->start();
-
-// Benchmark test suggestion with 512 connections:
-
-// eg. if your CPU have 24 CPU cores:
-
-// # Without JIT enabled: ~40% of CPU
-// wrk -t10 -c514 -d10s http://localhost:8080
-
-// # With JIT enabled: ~50% of CPU
-// wrk -t12 -c514 -d10s http://localhost:8080

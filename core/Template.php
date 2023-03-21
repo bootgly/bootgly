@@ -22,8 +22,10 @@ class Template
    // * Config
    private array $compilables;
    private array $parameters;
+
    // * Data
    public string $raw;
+
    // * Meta
    public array $compiled;
    public array $patterns;
@@ -33,10 +35,12 @@ class Template
 
    public function __construct ()
    {
-      // if ($_SERVER['HTTP_HOST'] === 'bootgly.slayer.tech') {
-         // Debugger::$debug = true;
-         // Debug(Config::get());
-      // }
+      /*
+      if ($_SERVER['HTTP_HOST'] === 'bootgly.slayer.tech') {
+         Debugger::$debug = true;
+         Debug(Config::get());
+      }
+      */
 
       // * Config
       Config::EXECUTE_MODE_REQUIRE;
@@ -52,8 +56,10 @@ class Template
          'while'
       ];
       $this->parameters = [];
+
       // * Data
       $this->raw = '';
+
       // * Meta
       $this->compiled = [];
       $this->patterns = [];
@@ -62,17 +68,11 @@ class Template
    }
    public function __get ($name)
    {
-      switch ($name) {
-         default:
-            return $this->$name;
-      }
+      return $this->$name;
    }
    public function __set ($name, $value)
    {
-      switch ($name) {
-         default:
-            $this->$name = $value;
-      }
+      $this->$name = $value;
    }
 
    public function load (string $view, array $parameters) : bool
@@ -101,6 +101,8 @@ class Template
 
    #public function parse () {}
 
+   // TODO REFACTOR: This function "compile" has 175 lines, which is greater than the 150 lines authorized.
+   // TODO move to resources pattern
    public function compile (? string $name = null)
    {
       if ($name !== null) {
@@ -129,9 +131,7 @@ class Template
                      return '';
                   }
 
-                  $replaced = '$_->';
-   
-                  return $replaced;
+                  return '$_->';
                };
                $this->patterns[$pattern] = $callback;
 
@@ -149,11 +149,9 @@ class Template
                   // @ ?<level:number>;
                   $level = $matches[1] ?? '';
 
-                  $replaced = <<<PHP
+                  return <<<PHP
                   <?php break $level; ?>
                   PHP;
-   
-                  return $replaced;
                };
                $this->patterns[$pattern] = $callback;
 
@@ -165,11 +163,9 @@ class Template
                   // @ <conditional>;
                   $conditional = $matches[2];
    
-                  $replaced = <<<PHP
+                  return <<<PHP
                   <?php if ($conditional) break $level; ?>
                   PHP;
-   
-                  return $replaced;
                };
                $this->patterns[$pattern] = $callback;
 
@@ -186,11 +182,9 @@ class Template
                   // @ ?<level:number>;
                   $level = $matches[1] ?? '';
 
-                  $replaced = <<<PHP
+                  return <<<PHP
                   <?php continue $level; ?>
                   PHP;
-   
-                  return $replaced;
                };
                $this->patterns[$pattern] = $callback;
 
@@ -202,11 +196,9 @@ class Template
                   // @ <conditional>;
                   $conditional = $matches[2];
    
-                  $replaced = <<<PHP
+                  return <<<PHP
                   <?php if ($conditional) continue $level; ?>
                   PHP;
-   
-                  return $replaced;
                };
                $this->patterns[$pattern] = $callback;
 
@@ -222,11 +214,9 @@ class Template
 
                   $whitespace = $matches[2] ?? '';
 
-                  $replaced = <<<PHP
+                  return <<<PHP
                   <?php echo {$wrapped}; ?>{$whitespace}
                   PHP;
-
-                  return $replaced;
                };
                $this->patterns[$pattern] = $callback;
                break;
@@ -237,11 +227,9 @@ class Template
                   // @ Conditional
                   $conditional = $matches[2];
    
-                  $replaced = <<<PHP
+                  return <<<PHP
                   <?php if ({$conditional}): ?>
                   PHP;
-   
-                  return $replaced;
                };
                $this->patterns[$pattern] = $callback;
    
@@ -250,31 +238,25 @@ class Template
                   // @ Conditional
                   $conditional = $matches[2];
    
-                  $replaced = <<<PHP
+                  return <<<PHP
                   <?php elseif ({$conditional}): ?>
                   PHP;
-   
-                  return $replaced;
                };
                $this->patterns[$pattern] = $callback;
    
                $pattern = "/(@else)[ ]?:/sx";
                $callback = function () {
-                  $replaced = <<<PHP
+                  return <<<PHP
                   <?php else: ?>
                   PHP;
-   
-                  return $replaced;
                };
                $this->patterns[$pattern] = $callback;
    
                $pattern = "/@if[ ]?;/sx";
                $callback = function () {
-                  $replaced = <<<PHP
+                  return <<<PHP
                   <?php endif; ?>
                   PHP;
-   
-                  return $replaced;
                };
                $this->patterns[$pattern] = $callback;
    
@@ -296,21 +278,17 @@ class Template
                   \$_ = new \Bootgly\__Iterable(\$$iteratee);
                   PHP;
 
-                  $replaced = <<<PHP
+                  return <<<PHP
                   <?php {$init} foreach (\$_ as {$iteration}): ?>
                   PHP;
-   
-                  return $replaced;
                };
                $this->patterns[$pattern] = $callback;
    
                $pattern = "/@foreach[ ]?;/sx";
                $callback = function () {
-                  $replaced = <<<PHP
+                  return <<<PHP
                   <?php endforeach; ?>
                   PHP;
-   
-                  return $replaced;
                };
                $this->patterns[$pattern] = $callback;
    
@@ -321,21 +299,17 @@ class Template
                   // @ ...<expressions>
                   $expressions = trim($matches[2], '()');
    
-                  $replaced = <<<PHP
+                  return <<<PHP
                   <?php for ({$expressions}): ?>
                   PHP;
-   
-                  return $replaced;
                };
                $this->patterns[$pattern] = $callback;
    
                $pattern = "/@for[ ]?;/sx";
                $callback = function () {
-                  $replaced = <<<PHP
+                  return <<<PHP
                   <?php endfor; ?>
                   PHP;
-   
-                  return $replaced;
                };
                $this->patterns[$pattern] = $callback;
    
@@ -346,21 +320,17 @@ class Template
                   // @ <expression>
                   $expression = $matches[2];
    
-                  $replaced = <<<PHP
+                  return <<<PHP
                   <?php while ({$expression}): ?>
                   PHP;
-   
-                  return $replaced;
                };
                $this->patterns[$pattern] = $callback;
    
                $pattern = "/@while[ ]?;/sx";
                $callback = function () {
-                  $replaced = <<<PHP
+                  return <<<PHP
                   <?php endwhile; ?>
                   PHP;
-   
-                  return $replaced;
                };
                $this->patterns[$pattern] = $callback;
    
@@ -372,7 +342,8 @@ class Template
 
       return true;
    }
-   public function render (string $view, array $parameters) {
+   public function render (string $view, array $parameters)
+   {
       // ! Load Raw, Parameters
       $this->load($view, $parameters);
 
@@ -391,7 +362,8 @@ class Template
       $this->execute();
    }
 
-   public function register (string $tag, string $type, \Closure $callback) {
+   public function register (string $tag, string $type, \Closure $callback)
+   {
       // TODO register custom tag
    }
 
@@ -402,8 +374,11 @@ class Template
       }
 
       $this->Output = new File(HOME_DIR . 'workspace/cache/' . 'views/' . sha1($this->raw) . '.php');
-      if ($this->Output->exists)
+
+      if ($this->Output->exists) {
          return false;
+      }
+
       $this->Output->open('w+');
       $this->Output->write($this->output);
       $this->Output->close();
@@ -434,7 +409,8 @@ class Template
       }
    }
 
-   public function debug () {
+   public function debug ()
+   {
       Debug('<code>'.htmlspecialchars($this->output).'</code>');
    }
 }

@@ -50,6 +50,7 @@ class Server implements Servers, Logs
    // ! Terminal
    protected Terminal $Terminal;
 
+
    // * Config
    #protected ? string $domain;
    protected ? string $host;
@@ -80,6 +81,7 @@ class Server implements Servers, Logs
    protected const STATUS_PAUSED = 16;
    protected const STATUS_STOPING = 32;
 
+
    // ! Connection(s)
    protected Connections $Connections;
 
@@ -96,6 +98,7 @@ class Server implements Servers, Logs
       $this->mode = self::MODE_MONITOR;
 
       // * Data
+      // ...
 
       // * Meta
       // @ State
@@ -155,20 +158,22 @@ class Server implements Servers, Logs
 
          case '@test init':
             SAPI::$mode = SAPI::MODE_TEST;
+
             if (self::$Application) {
                self::$Application::boot(production: false, test: true);
             }
+
             break;
          case '@test':
-            if ($this->Process->level === 'master') {
-               if (self::$Application && method_exists(self::$Application, 'test')) {
-                  self::$Application::test($this);
-               }
+            if ($this->Process->level === 'master' && self::$Application && method_exists(self::$Application, 'test')) {
+               self::$Application::test($this);
             }
+
             break;
          case '@test end':
             SAPI::$mode = SAPI::MODE_PRODUCTION;
             SAPI::boot(true);
+
             break;
       }
 
@@ -185,7 +190,9 @@ class Server implements Servers, Logs
       // @ Load file info
       try {
          require $info;
-      } catch (\Throwable) {}
+      } catch (\Throwable) {
+         // ...
+      }
    }
    public function __set (string $name, $value)
    {
@@ -202,7 +209,8 @@ class Server implements Servers, Logs
             return $this->instance(...$arguments);
 
          case 'stop':
-            return $this->stop(...$arguments);
+            $this->stop(...$arguments);
+            break;
          case 'pause':
             return $this->pause(...$arguments);
          case 'resume':
@@ -307,7 +315,7 @@ class Server implements Servers, Logs
          );
       } catch (\Throwable) {
          $this->Socket = false;
-      };
+      }
 
       if ($this->Socket === false) {
          $this->log('@\;Could not create socket: ' . $error_message, self::LOG_ERROR_LEVEL);
@@ -366,8 +374,6 @@ class Server implements Servers, Logs
             if ($interact === false) {
                usleep(100000 * $this->workers); // @ wait 0.1 s * qt workers
             }
-
-            continue;
          } else if ($pid > 0) { // If a child has already exited?
             $this->log('@\;Process child exited!@\;', self::LOG_ERROR_LEVEL);
             $this->Process->sendSignal(SIGINT);
@@ -413,13 +419,13 @@ class Server implements Servers, Logs
 
          // If child is running?
          if ($pid === 0) {
-            continue;
+            // ...
          } else if ($pid > 0) { // If a child has already exited?
             $this->log('@\;Process child exited!@\;', self::LOG_ERROR_LEVEL);
             $this->Process->sendSignal(SIGINT);
             break;
          } else if ($pid === -1) { // If error ignore
-            continue;
+            // ...
          }
       }
 
@@ -445,9 +451,10 @@ class Server implements Servers, Logs
       }
 
       if ($closed === false) {
-         #$this->log('@\;Failed to close $this->Socket!');
+         $this->log('@\;Failed to close $this->Socket!');
       } else {
-         #$this->log('@\;Sockets closed successful.', 5);
+         // TODO $this->alert?
+         $this->log('@\;Sockets closed successful.', self::LOG_INFO_LEVEL);
       }
 
       $this->Socket = null;
@@ -510,8 +517,10 @@ class Server implements Servers, Logs
    public function __destruct ()
    {
       // @ Reset Opcache?
-      #if (function_exists('opcache_reset') && $this->Process->level === 'master') {
-      #   opcache_reset();
-      #}
+      /*
+      if (function_exists('opcache_reset') && $this->Process->level === 'master') {
+         opcache_reset();
+      }
+      */
    }
 }

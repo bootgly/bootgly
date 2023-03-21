@@ -17,9 +17,12 @@ use Bootgly\Web\HTTP\Server;
 class Meta
 {
    // * Config
+   // ...
+
    // * Data
    protected string $protocol;
    protected int|string $status;
+
    // * Meta
    private string $raw;
    // @ status
@@ -30,9 +33,12 @@ class Meta
    public function __construct ()
    {
       // * Config
+      // ...
+
       // * Data
       $this->protocol = 'HTTP/1.1';
       $this->status = '200 OK';
+
       // * Meta
       $this->reset();
    }

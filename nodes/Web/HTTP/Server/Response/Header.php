@@ -19,8 +19,10 @@ class Header
    // * Config
    private array $preset;
    private array $prepared;
+
    // * Data
    private array $fields;
+
    // * Meta
    private array $queued;
    private string $raw;
@@ -36,8 +38,10 @@ class Header
          'Server' => 'Bootgly'
       ];
       $this->prepared = [];
+
       // * Data
       $this->fields = [];
+
       // * Meta
       $this->queued = [];
       $this->raw = '';
@@ -73,8 +77,6 @@ class Header
          case 'sent':
             return headers_sent();
 
-            return $this->sent;
-
          default:
             return $this->get($name);
       }
@@ -85,6 +87,8 @@ class Header
          // * Config
          case 'preset':
             $this->preset = (array) $value;
+
+            break;
          case 'prepared':
          // * Data
          // case 'fields':

@@ -27,10 +27,13 @@ class Terminal
 
 
    // * Config
+   // ...
+
    // * Data
    // ! Command
    public static array $commands = [];
    public static array $subcommands = [];
+
    // * Meta
    public static int $width;
    public static int $heigth;
@@ -39,6 +42,7 @@ class Terminal
    public static int $lines;
    // ! Command
    public static array $command = []; // @ Last command used (returned by autocomplete)
+
 
    // ! IO
    // ? Input
@@ -50,7 +54,12 @@ class Terminal
 
    public function __construct ()
    {
+      // * Config
+      // ...
+
       // * Data
+      // ...
+
       // * Meta
       // columns
       // @ Get the terminal columns (width)
@@ -70,6 +79,7 @@ class Terminal
       self::$width = self::$columns;
       // heigth
       self::$heigth = self::$lines;
+
 
       // ! IO
       // ? Input
@@ -93,7 +103,9 @@ class Terminal
       // @ Sanitize user input
       $command = trim($input);
 
-      if ($command === '') return true;
+      if ($command === '') {
+         return true;
+      }
 
       // @ Clear last used command (returned by autocomplete function)
       self::$command = [];
@@ -105,7 +117,7 @@ class Terminal
       // @ Execute command
       return $this->command($command);
    }
-   protected function command (string $command): bool
+   protected function command (string $command) : bool
    {
       // TODO default
       return true;
@@ -142,6 +154,7 @@ class Terminal
          CLI::_START_ESCAPE . self::_CURSOR_POSITION .
          CLI::_START_ESCAPE . self::_TEXT_ERASE_IN_DISPLAY
       );
+
       return true;
    }
 }

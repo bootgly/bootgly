@@ -10,7 +10,9 @@
 
 namespace Bootgly;
 
+
 use Iterator;
+
 
 class __Iterable implements Iterator
 {
@@ -18,26 +20,36 @@ class __Iterable implements Iterator
    public int $index;
 
 
-   public function __construct (array|object $iteratee) {
+   public function __construct (array|object $iteratee)
+   {
       $this->iteratee = $iteratee;
       $this->index = 0;
    }
 
-   public function rewind(): void {
+   public function rewind () : void
+   {
       $this->index = 0;
    }
+
    #[\ReturnTypeWillChange]
-   public function current() {
+   public function current ()
+   {
       return $this->iteratee[$this->index];
    }
+
    #[\ReturnTypeWillChange]
-   public function key() {
+   public function key ()
+   {
       return $this->index;
    }
-   public function next(): void {
+
+   public function next () : void
+   {
       ++$this->index;
    }
-   public function valid(): bool {
+
+   public function valid () : bool
+   {
       return isSet($this->iteratee[$this->index]);
    }
 }

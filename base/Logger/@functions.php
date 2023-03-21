@@ -7,12 +7,14 @@
  * Licensed under MIT
  * --------------------------------------------------------------------------
  */
+
 namespace Bootgly;
+
 
 use Bootgly\Logger;
 
 
-function Log($data)
+function Log ($data)
 {
-   new Logger($data);
+   return new Logger($data);
 }

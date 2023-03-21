@@ -11,8 +11,6 @@
 namespace Bootgly\CLI\Terminal\components\Progress;
 
 
-use Bootgly\CLI;
-use Bootgly\CLI\Escaping;
 use Bootgly\CLI\Terminal;
 use Bootgly\CLI\Terminal\components\Progress;
 
@@ -26,7 +24,12 @@ class Bar
    public int $units;
    // @ symbols
    public array $symbols;
+
    // * Data
+   // ...
+
+   // * Meta
+   // ...
 
 
    public function __construct (Progress $Progress)
@@ -41,6 +44,12 @@ class Bar
          'determined'   => [' ', '>', '='], // determined
          'indetermined' => ['?']            // indetermined
       ];
+
+      // * Data
+      // ...
+
+      // * Meta
+      // ...
    }
    public function __get ($name)
    {
@@ -84,8 +93,10 @@ class Bar
          }
       }
 
-      $bar = implode('', $symbolsComplete) . $symbols[1] . implode('', $symbolsIncomplete);
+      $complete = implode('', $symbolsComplete);
+      $current = $symbols[1];
+      $incomplete = implode('', $symbolsIncomplete);
 
-      return $bar;
+      return $complete . $current . $incomplete;
    }
 }

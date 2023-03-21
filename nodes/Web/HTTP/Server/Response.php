@@ -29,6 +29,7 @@ class Response
 
    // * Config
    public bool $debugger;
+
    // * Data
    public string $raw;
 
@@ -39,6 +40,7 @@ class Response
    public ? string $type;   //! move to Content->type or Header->Content->type?
 
    public ? array $resources;
+
    // * Meta
    private ? string $resource;
    // @ Status
@@ -63,8 +65,10 @@ class Response
       $this->Content = new Content;
       $this->Header = new Header;
 
+
       // * Config
       $this->debugger = true;
+
       // * Data
       $this->raw = '';
 
@@ -76,6 +80,7 @@ class Response
 
       // TODO rename to sources?
       $this->resources = $resources !== null ? $resources : ['JSON', 'JSONP', 'View', 'HTML/pre'];
+
       // * Meta
       $this->resource = null;
       // @ Status
@@ -87,6 +92,7 @@ class Response
       #$this->cacheable = true;
       #$this->static = true;
       #$this->dynamic = false;
+
 
       $this->stream = false;
       $this->chunked = false;
@@ -241,7 +247,7 @@ class Response
       $this->body .= $body . "\n";
    }
 
-   public function process ($data, ?string $resource = null)
+   public function process ($data, ? string $resource = null)
    {
       if ($resource === null) {
          $resource = $this->resource;
@@ -369,7 +375,7 @@ class Response
       return $this;
    }
 
-   public function send ($body = null, ...$options): self
+   public function send ($body = null, ...$options) : self
    {
       if ($this->processed === false) {
          $this->process($body, $this->resource);

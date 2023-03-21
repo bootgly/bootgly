@@ -3,7 +3,7 @@
  * --------------------------------------------------------------------------
  * Bootgly PHP Framework
  * Developed by Rodrigo Vieira (@rodrigoslayertech)
- * Copyright 2020-present
+ * Copyright 2015-present
  * Licensed under MIT
  * --------------------------------------------------------------------------
  */
@@ -15,12 +15,10 @@ use Bootgly\{
    __String,
    Web
 };
-use Bootgly\Exception\{
-   Error
-};
 use Exception;
 
 
+// TODO Refactor class (too old)
 class Database
 {
    public Bootgly $Bootgly;
@@ -63,9 +61,9 @@ class Database
          case 'connected':
             if ($this->PDO) {
                return true;
-            } else {
-               return false;
             }
+
+            return false;
          default:
             return null;
       }
@@ -88,11 +86,13 @@ class Database
          if (@$this->PDO) {
             return $this->$name(...$arguments);
          } else {
+            /*
             $Error = new Error;
             $Error->title = 'Database -> prepare()';
             $Error->fatal = true;
             $Error->message = 'Database not connected!';
             $Error->throw();
+            */
          }
       } catch (\PDOException $e) {
          $this->PDOException = $e->getMessage();
@@ -100,7 +100,7 @@ class Database
    }
 
 
-   public function config (string $instance) 
+   public function config (string $instance)
    {
       // TODO validate / parse $instance
       try {
@@ -111,6 +111,7 @@ class Database
             throw new Exception('Database configuration file not found.', 1);
          }
       } catch (Exception $Exception) {
+         /*
          $Error = new Error;
          $Error->title = 'Database -> config()';
 
@@ -119,6 +120,7 @@ class Database
          $Error->message = $Exception->getMessage();
 
          $Error->throw();
+         */
       }
    }
 
@@ -137,8 +139,9 @@ class Database
 
          return true;
       } catch (\PDOException $e) {
-         $code = $e->getCode();
+         // $code = $e->getCode();
 
+         /*
          $Error = new Error;
          $Error->title = 'Database -> connect()';
 
@@ -155,6 +158,7 @@ class Database
          }
 
          $Error->throw();
+         */
       }
    }
 
@@ -172,19 +176,17 @@ class Database
             return TRUE;
          }
       } catch (\PDOException $e) {
-         $code = $e->getCode();
+         // $code = $e->getCode();
 
+         /*
          $Error = new Error;
          $Error->title = 'Database -> use()';
-
-         switch ($code) {
-            default:
-               $Error->fatal = true;
-               $Error->code = $code;
-               $Error->message = $e->getMessage();
-         }
+         $Error->fatal = true;
+         $Error->code = $code;
+         $Error->message = $e->getMessage();
 
          $Error->throw();
+         */
       }
    }
    private function prepare ($query)
@@ -198,20 +200,19 @@ class Database
 
          return $this->query;
       } catch (\PDOException $e) {
-         $code = $e->getCode();
          $this->PDOException = $e->getMessage();
+
+         /*
+         $code = $e->getCode();
 
          $Error = new Error;
          $Error->title = 'Database -> prepare()';
-
-         switch ($code) {
-            default:
-               $Error->fatal = true;
-               $Error->code = $code;
-               $Error->message = $e->getMessage();
-         }
+         $Error->fatal = true;
+         $Error->code = $code;
+         $Error->message = $e->getMessage();
 
          $Error->throw();
+         */
       }
 
       return $this;

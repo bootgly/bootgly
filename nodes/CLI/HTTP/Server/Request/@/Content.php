@@ -14,10 +14,12 @@ namespace Bootgly\CLI\HTTP\Server\Request\_;
 class Content
 {
    // * Config
-   // -
+   // ...
+
    // * Data
    public string $raw;
    public string $input;
+
    // * Meta
    public ? int $length;
    public null|int|false $position;
@@ -28,10 +30,12 @@ class Content
    public function __construct ()
    {
       // * Config
-      // -
+      // ...
+
       // * Data
       $this->raw = '';
       $this->input = '';
+
       // * Meta
       $this->length = null;
       $this->position = null;

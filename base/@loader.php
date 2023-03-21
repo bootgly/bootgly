@@ -9,11 +9,6 @@ require 'Benchmark.php';
 require 'Debugger/@functions.php';
 require 'Debugger/Backtrace.php';
 require 'Debugger.php';
-// ! Exception
-require 'Exception.php';
-require 'Exception/Error.php';
-require 'Exception/Notice.php';
-require 'Exception/Warning.php';
 // ! Logger
 require 'Logger.php';
 require 'Logger/@functions.php';

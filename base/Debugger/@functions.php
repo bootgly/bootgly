@@ -10,6 +10,7 @@
 
 #namespace Debugger;
 
+
 use Bootgly\Debugger;
 
 
@@ -19,9 +20,11 @@ function debug (...$vars)
       Debugger::$trace = debug_backtrace();
    }
 
-   new Debugger(...$vars);
+   $Debugger = new Debugger(...$vars);
 
    if (Debugger::$trace !== false) {
       Debugger::$trace = null;
    }
+
+   return $Debugger;
 }

@@ -11,9 +11,6 @@
 namespace Bootgly\CLI\HTTP\Server;
 
 
-use Closure;
-use const Bootgly\HOME_DIR;
-use Bootgly\Debugger;
 use Bootgly\Path;
 
 use Bootgly\Web\TCP\Server\Packages;
@@ -25,16 +22,15 @@ use Bootgly\CLI\HTTP\Server\Request\_\ {
 };
 
 use Bootgly\CLI\HTTP\Server\Request\Downloader;
-use Bootgly\CLI\HTTP\Server\Request\Session;
 use Bootgly\Web\protocols\HTTP\Request\Ranging;
 
 /**
  * * Data
  * @property string $address       127.0.0.1
  * @property string $port          52252
- * 
+ *
  * @property string $scheme        http, https
- * 
+ *
  * ! HTTP
  * @property string $raw
  * ? Meta
@@ -69,18 +65,18 @@ use Bootgly\Web\protocols\HTTP\Request\Ranging;
  * @property array $files
  * ? Content / Downloader
  * @property object Downloader
- * 
- * 
+ *
+ *
  * * Meta
  * @property string $host          v1.lab.bootgly.com
  * @property string $domain        bootgly.com
  * @property string $subdomain     v1.lab
  * @property array $subdomains     ['lab', 'v1']
- * 
+ *
  * @property string $on            2020-03-10 (Y-m-d)
  * @property string $at            17:16:18 (H:i:s)
  * @property int $timestamp        1586496524
- * 
+ *
  * @property bool $secure          true
  * @property bool $fresh           true
  * @property bool $stale           false
@@ -94,9 +90,11 @@ class Request
 
    // * Config
    private string $base;
+
    // * Data
    // public string $raw;
    // ...
+
    // * Meta
    // ...
    // public string $length;
@@ -110,9 +108,12 @@ class Request
       $this->base = '';
       // TODO pre-defined filters
       // $this->Filter->sanitize(...) | $this->Filter->validate(...)
+
       // * Data
-      /* ... dynamically ... */
+      // ... dynamically
+
       // * Meta
+      // ...
 
       $this->Downloader = new Downloader($this);
    }
@@ -181,13 +182,14 @@ class Request
          case 'locator':
             #$locator = @$_SERVER['REDIRECT_URL'];
 
-            #if ($locator === '/index.php') 
+            #if ($locator === '/index.php')
             $locator = strtok($this->uri, '?');
 
             $locator = rtrim($locator ?? '/', '/');
 
-            if ($this->base && substr($locator, 0, strlen($this->base)) == $this->base)
+            if ($this->base && substr($locator, 0, strlen($this->base)) == $this->base) {
                $locator = substr($locator, strlen($this->base)); // Return relative location
+            }
 
             $this->url = $locator;
             // $this->URL = $locator;
@@ -600,9 +602,13 @@ class Request
       return filter_input($type, $var_name, $filter, $options);
    }
    public function sanitize ()
-   {}
+   {
+      // TODO
+   }
    public function validate ()
-   {}
+   {
+      // TODO
+   }
 
    public function __destruct ()
    {
@@ -611,10 +617,8 @@ class Request
          clearstatcache();
 
          array_walk_recursive($_FILES, function ($value, $key) {
-            if ($key === 'tmp_name') {
-               if ( is_file($value) ) {
-                  unlink($value);
-               }
+            if (is_file($value) && $key === 'tmp_name') {
+               unlink($value);
             }
          });
       }

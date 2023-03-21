@@ -19,8 +19,10 @@ class Header
    // * Config
    private array $preset;
    private array $prepared;
+
    // * Data
    private array $fields;
+
    // * Meta
    private array $queued;
    private string $raw;
@@ -36,12 +38,15 @@ class Header
          'Server' => 'Bootgly'
       ];
       $this->prepared = [];
+
       // * Data
       $this->fields = [];
+
       // * Meta
       $this->queued = [];
       $this->raw = '';
       $this->sent = false;
+
 
       $this->Cookie = new Cookie($this);
    }
@@ -81,6 +86,7 @@ class Header
          // * Config
          case 'preset':
             $this->preset = (array) $value;
+            break;
          case 'prepared':
          // * Data
          // case 'fields':

@@ -18,16 +18,30 @@ final class Cookie
 {
    public Header $Header;
 
+
+   // * Config
+   // ...
+
    // * Data
    private array $cookies;
+
+   // * Meta
+   // ...
 
 
    public function __construct (Header $Header)
    {
       $this->Header = $Header;
 
+
+      // * Config
+      // ...
+
       // * Data
       $this->cookies = [];
+
+      // * Meta
+      // ...
    }
 
    public function __get (string $name)

@@ -33,11 +33,13 @@ abstract class Packages implements Web\Packages
 
    // * Config
    public bool $cache;
+
    // * Data
    public bool $changed;
    // @ IO
    public static string $input;
    public static string $output;
+
    // * Meta
    // @ Handler
    public array $callbacks;
@@ -50,15 +52,19 @@ abstract class Packages implements Web\Packages
 
    public function __construct (Connection &$Connection)
    {
+      $this->Logger = new Logger(channel: __CLASS__);
       $this->Connection = $Connection;
+
 
       // * Config
       $this->cache = true;
+
       // * Data
       $this->changed = true;
       // @ IO
       self::$input = '';
       self::$output = '';
+
       // * Meta
       // @ Handler
       $this->callbacks = [&self::$input];
@@ -67,9 +73,6 @@ abstract class Packages implements Web\Packages
       $this->uploading = [];
       // @ Expiration
       $this->expired = false;
-
-      // @ Configure Logger
-      $this->Logger = new Logger(channel: __CLASS__);
    }
 
    public function fail ($Socket, string $operation, $result)
@@ -507,7 +510,9 @@ abstract class Packages implements Web\Packages
    {
       try {
          @fwrite($this->Connection->Socket, $raw);
-      } catch (\Throwable) {}
+      } catch (\Throwable) {
+         // ...
+      }
 
       $this->Connection->close();
    }

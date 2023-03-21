@@ -20,8 +20,11 @@ class Logger implements Logs
    public const DISPLAY_MESSAGE_WHEN = 2;
    public const DISPLAY_MESSAGE_WHEN_ID = 4;
    public static $display = self::DISPLAY_MESSAGE;
+
    // * Data
    public string $channel;
+   // * Meta
+   // ...
 
 
    public function __construct (string $channel = '')

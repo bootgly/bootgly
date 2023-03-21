@@ -11,9 +11,6 @@
 namespace Bootgly\Web\TCP\Client\_\CLI;
 
 
-use const Bootgly\HOME_DIR;
-
-use Bootgly\Bootgly;
 use Bootgly\CLI;
 use Bootgly\CLI\Terminal\_\ {
    Logger\Logging

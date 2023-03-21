@@ -21,9 +21,13 @@ class Rows
    private Row $Row;
 
    // * Config
+   // ...
+
    // * Data
    public ? array $rows;
+
    // * Meta
+   // ...
 
 
    public function __construct ($Table)
@@ -33,9 +37,13 @@ class Rows
       $this->Row = $Table->Row;
 
       // * Config
+      // ...
+
       // * Data
       $this->rows = &$Table->Data->rows;
+
       // * Meta
+      // ...
    }
    public function __get ($name)
    {

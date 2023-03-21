@@ -33,8 +33,10 @@ class Connections implements Web\Connections
    public ? float $timeout;
    public bool $async;
    public bool $blocking;
+
    // * Data
    public $Socket;
+
    // * Meta
    // @ Error
    public array $error = [];
@@ -63,8 +65,10 @@ class Connections implements Web\Connections
       $this->timeout = 5;
       $this->async = true;
       $this->blocking = false;
+
       // * Data
       // ... dynamicaly
+
       // * Meta
       // @ Error
       $this->error = [];
@@ -88,7 +92,9 @@ class Connections implements Web\Connections
       self::$read = 0;         // Socket Reads in bytes
    }
    public function __get ($name)
-   {}
+   {
+      // TODO ?
+   }
 
    // Open connection with server / Connect with server
    public function connect () : bool

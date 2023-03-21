@@ -32,6 +32,9 @@ trait Logging
    public const LOG_CRITICAL_ERROR_LEVEL = 5;
    public const LOG_FATAL_ERROR_LEVEL = 6;
    public const LOG_CATASTROPHIC_ERROR_LEVEL = 7;
+
    // * Data
+   // ...
    // * Meta
+   // ...
 }

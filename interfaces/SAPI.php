@@ -27,8 +27,10 @@ class SAPI
    public const MODE_PRODUCTION = 1;
    public const MODE_TEST = 2;
    public static int $mode = self::MODE_PRODUCTION;
+
    // * Data
    public static array $tests;
+
    // * Meta
    public static Closure $Handler;
    public static array $Tests;
@@ -62,7 +64,7 @@ class SAPI
             }
 
             return true;
-      };
+      }
 
       if ($reset) {
          // @ Clear cache

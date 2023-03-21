@@ -14,10 +14,8 @@ namespace Bootgly\Web\TCP\Client\_\OS;
 // use
 use const Bootgly\HOME_DIR;
 use Bootgly\Logger;
-use Bootgly\SAPI;
 use Bootgly\OS\Process\Timer;
-use Bootgly\Web\_\Events\Select;
-// 
+// ?
 use Bootgly\Web\TCP\ {
    Client
 };
@@ -34,6 +32,13 @@ class Process
 
    public Client $Client;
 
+
+   // * Config
+   // ...
+
+   // * Data
+   // ...
+
    // * Meta
    // @ Id
    public static int $index;
@@ -49,8 +54,16 @@ class Process
    {
       $this->Client = $Client;
 
+
+      // * Config
+      // ...
+
+      // * Data
+      // ...
+
       // * Meta
       self::$master = posix_getpid();
+
 
       static::lock();
       static::saveMasterPid();
@@ -211,7 +224,7 @@ class Process
          } else if ($pid > 0) { // Master process
             cli_set_process_title("BootglyWebClient: master process ($script)");
          } else if ($pid === -1) {
-            die("Could not fork process!"); 
+            die('Could not fork process!');
          }
       }
    }

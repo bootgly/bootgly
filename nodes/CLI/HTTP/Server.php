@@ -18,7 +18,6 @@ use Bootgly\CLI\Terminal\_\ {
    Tester\Tests
 };
 use Bootgly\SAPI;
-use Bootgly\CLI;
 
 use Bootgly\Web\TCP;
 use Bootgly\Web\TCP\Server\Packages;
@@ -32,6 +31,12 @@ use Bootgly\CLI\HTTP\Server\Response;
 
 class Server extends TCP\Server implements HTTP
 {
+   // * Config
+   // ...
+
+   // * Data
+   // ...
+
    // * Meta
    public readonly array $versions;
 
@@ -66,8 +71,10 @@ class Server extends TCP\Server implements HTTP
    public static function boot (bool $production = true, bool $test = false)
    {
       // * Config
-      if ($production)
+      if ($production) {
          SAPI::$production = \Bootgly\HOME_DIR . 'projects/sapi.http.constructor.php';
+      }
+
       // * Data
       if ($test) {
          try {
@@ -75,8 +82,10 @@ class Server extends TCP\Server implements HTTP
             $tests = __DIR__ . '/Server/tests/@.php';
 
             // @ Reset Cache of Test boot file
-            if ( function_exists('opcache_invalidate') )
+            if ( function_exists('opcache_invalidate') ) {
                opcache_invalidate($tests, true);
+            }
+
             clearstatcache(false, $tests);
 
             SAPI::$tests[self::class] = (@require $tests)['files'];
@@ -91,8 +100,10 @@ class Server extends TCP\Server implements HTTP
                }
 
                // @ Reset Cache of Test case file
-               if ( function_exists('opcache_invalidate') )
+               if ( function_exists('opcache_invalidate') ) {
                   opcache_invalidate($file, true);
+               }
+
                clearstatcache(false, $file);
 
                // @ Load Test case from file
@@ -105,7 +116,9 @@ class Server extends TCP\Server implements HTTP
                // @ Set Closure to SAPI Tests
                SAPI::$Tests[self::class][] = $spec;
             }
-         } catch (\Throwable) {}
+         } catch (\Throwable) {
+            // ...
+         }
       }
 
       SAPI::boot(true);

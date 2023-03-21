@@ -29,10 +29,14 @@ class Packages implements Web\Packages
 
    public Connection $Connection;
 
+   // * Config
+   // ...
+
    // * Data
    // @ IO
    public static string $output;
    public static string $input;
+
    // * Meta
    public int $written;
    public int $read;
@@ -48,10 +52,14 @@ class Packages implements Web\Packages
    {
       $this->Connection = $Connection;
 
+      // * Config
+      // ...
+
       // * Data
       // @ IO
       self::$output ='';
       self::$input = '';
+
       // * Meta
       $this->written = 0;         // Output Data length (bytes written).
       $this->read = 0;            // Input Data length (bytes read).

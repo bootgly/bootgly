@@ -113,10 +113,11 @@ class Terminal extends CLI\Terminal
             $this->Server->mode = Server::MODE_MONITOR,
          // @ operations
          // TODO 'benchmark'
-         'check jit' => 
+         'check jit' =>
             $this->log(
-            (function_exists('opcache_get_status') && @opcache_get_status()['jit']['enabled'])
-            ? 'JIT enabled' : 'JIT disabled') && true,
+               (function_exists('opcache_get_status') && @opcache_get_status()['jit']['enabled'])
+               ? 'JIT enabled' : 'JIT disabled'
+            ) && true,
          'debug on' =>
             Bootgly::debug(true) && true,
          'debug off' =>

@@ -12,15 +12,9 @@ namespace Bootgly\Web\HTTP\Server;
 
 
 use Bootgly\Bootgly;
-use Bootgly\Web;
-use Bootgly\Web\HTTP;
-
-use Bootgly\__Array;
-use Bootgly\__Class\Nulled;
 use function Bootgly\__Array;
 use function Bootgly\__String;
 use Bootgly\Debugger;
-use Bootgly\Path;
 use Bootgly\File;
 use Bootgly\Web\HTTP\Server;
 use Bootgly\Web\HTTP\Server\Router\Route;
@@ -37,8 +31,12 @@ class Router
    //public array $methods;    // 'route' => [string ...$methods]
    //public array $handlers;   // 'route' => [function ...$handlers]
    //public array $conditions; // 'route' => [mixed ...$handlers]
+
    // * Data
+   // ...
+
    // * Meta
+   // ...
 
    public ? Route $Route;
 
@@ -51,9 +49,13 @@ class Router
       //$this->methods = [];
       //$this->handlers = [];
       //$this->conditions = [];
+
       // * Data
+      // ...
+
       // * Meta
       //$this->history = [];
+
 
       $this->Route = new Route($this);
 
@@ -65,7 +67,7 @@ class Router
    {
       return $this->route(...$x);
    }
-   function __call (string $name, array $arguments)
+   public function __call (string $name, array $arguments)
    {
       switch ($name) {
          case 'get':
@@ -76,9 +78,12 @@ class Router
          case 'connect':
          case 'trace':
          case 'options':
-            if ($arguments[0] === null || $arguments[1] === null)
+            if ($arguments[0] === null || $arguments[1] === null) {
                break;
+            }
+
             $arguments[] = strtoupper($name);
+
             return $this->route(...$arguments);
 
          default:
@@ -120,8 +125,11 @@ class Router
       // TODO received array from boot() with routes and build it
    }
 
-   public function control (string $controller, string $basepath = '') // control(productController::class, '/products/')
-   {}
+   // control(productController::class, '/products/')
+   public function control (string $controller, string $basepath = '')
+   {
+      // TODO
+   }
    // @ default
    public function route (string|array $route, mixed $handler, ...$conditions)
    {
@@ -144,7 +152,7 @@ class Router
 
       // ? Reset
       // If Route nested then process next route
-      if ($this->Route->matched === 2 and !$this->Route->nested and $route['path'][0] !== '/') {
+      if ($this->Route->matched === 2 && !$this->Route->nested && $route['path'][0] !== '/') {
          $this->Route->matched = 0;
          $this->Route->nested = true;
       }
@@ -152,7 +160,7 @@ class Router
       // ? Check
       if ($this->Route->status === false) return;
       if ($this->Route->matched === 2) return;
-      if ($this->Route->nested and $route['path'][0] === '/') return;
+      if ($this->Route->nested && $route['path'][0] === '/') return;
 
       // ? Set
       $this->Route->path = $route['path'];
@@ -175,29 +183,36 @@ class Router
                   if (Server::$Request->method === $condition) {
                      $this->Route->matched = 2;
                   }
+
                   break;
                case is_array($condition):
                   if (__Array($condition)->search(Server::$Request->method)->found) {
                      $this->Route->matched = 2;
+
                      break;
                   } else {
                      $this->Route->matched = 1;
+
                      break 2;
                   }
                case is_bool($condition):
                   if ($condition) {
                      $this->Route->matched = 2;
+
                      break;
                   } else {
                      $this->Route->matched = 1;
+
                      break 2;
                   }
                case $condition instanceof \Closure:
                   if ($condition(Server::$Response) === true) {
                      $this->Route->matched = 2;
+
                      break;
                   } else {
                      $this->Route->matched = 1;
+
                      break 2;
                   }
             }
@@ -240,6 +255,7 @@ class Router
                } else {
                   exit();
                }
+
                break;
             case 'array':
                // TODO
@@ -253,8 +269,9 @@ class Router
 
    public function validate () // TODO validate Route
    {
+      // TODO
    }
-   private function match (array $route = []) //? Route path match
+   private function match (array $route = []) // @ Route path match
    {
       if ($this->Route->status === false) return;
 
@@ -262,12 +279,12 @@ class Router
          Debug($route);
       } else {
          if ($this->Route->parameterized) {
-            $this->parse(); //? Set $Route->parsed and $Route->catched
+            $this->parse(); // @ Set $Route->parsed and $Route->catched
 
             if ($this->Route->parsed) {
                $pattern = '/^' . $this->Route->parsed . '$/m';
 
-               if ($this->Route->catched and $this->Route->catched !== '(.*)') {
+               if ($this->Route->catched && $this->Route->catched !== '(.*)') {
                   $subject = $this->Route->catched;
                   $this->Route->catched = '';
                } else {
@@ -288,7 +305,9 @@ class Router
             }
          } else {
             if ($this->Route->nested) {
-               $relative_url = __String(Server::$Request->path)->cut($this->Route->routed[$this->Route->level - 1][0], '^');
+               $relative_url = __String(
+                  Server::$Request->path)->cut($this->Route->routed[$this->Route->level - 1][0], '^'
+               );
                return ($this->Route->path === $relative_url ? 1 : 0);
             } else {
                return ($this->Route->path === Server::$Request->path ? 1 : 0);
@@ -298,7 +317,7 @@ class Router
 
       return 0;
    }
-   public function parse () //? Parse Route Path (Parameterized)
+   public function parse () // @ Parse Route Path (Parameterized)
    {
       if ($this->Route->status === false) return;
 
@@ -322,8 +341,8 @@ class Router
       }
 
       foreach ($paths as $index => $node) {
-         if ($index > 0 or $node !== '\\') {
-            if (@$node[-1] === '*' or @$node[-2] === '*') { //? Catch-All Param
+         if ($index > 0 || $node !== '\\') {
+            if (@$node[-1] === '*' || @$node[-2] === '*') { //? Catch-All Param
                $node = str_replace(':*', '(.*)', $node); //? Replace with (...) capture everything enclosed
                $this->Route->catched = '(.*)';
                // TODO error if detected next node after Catch-All param?
@@ -333,9 +352,9 @@ class Router
                // TODO validate all $param name 😓 - only accept a-z, A-Z, 0-9 and "-"?
 
                //? In-URL Regex
-               //! BAD IDEA?! 🤔
+               // ! BAD IDEA?! 🤔
                if (@$node[-1] === ')') {
-                  // TODO validate In-URL Regex 🥵 - only accept this characters -> "azdDw-[]^|" ??? 
+                  // TODO validate In-URL Regex 🥵 - only accept this characters -> "azdDw-[]^|" ???
                   $params = explode('(', rtrim($param, ')'));
                   $param = $params[0];
 
@@ -352,8 +371,11 @@ class Router
 
                if (is_string($this->Route->Params->$param)) {
                   $node = str_replace(':' . $param, $this->Route->Params->$param, $node);
-                  $regex_replaced[$param] = $this->Route->Params->$param; //? Store values to use in equals params
-                  $this->Route->Params->$param = $index + $this->Route->nodes; //? Replace param by $index + nodes parsed
+                  // @ Store values to use in equals params
+                  $regex_replaced[$param] = $this->Route->Params->$param;
+
+                  // @ Replace param by $index + nodes parsed
+                  $this->Route->Params->$param = $index + $this->Route->nodes;
                } else {
                   $node = str_replace(':' . $param, $regex_replaced[$param], $node);
                   $this->Route->Params->$param = (array)$this->Route->Params->$param;
@@ -364,14 +386,16 @@ class Router
                break;
             }
 
-            if ($index > 0)
+            if ($index > 0) {
                $this->Route->parsed .= '/';
+            }
+
             $this->Route->parsed .= $node;
 
             if ($this->Route->catched === '(.*)') break;
 
             // TODO FIX BUG
-            if ($this->Route->path[-1] === '*' or $this->Route->path[-2] === '*' or $this->Route->catched) {
+            if ($this->Route->path[-1] === '*' || $this->Route->path[-2] === '*' || $this->Route->catched) {
                $this->Route->nodes++;
             }
          }
@@ -382,11 +406,14 @@ class Router
 
    public function go (int $n)
    {
+      // TODO
    }
    public function push (array $location)
    {
+      // TODO
    }
    public function redirect (string $from, string $to, int $status)
    {
+      // TODO
    }
 }

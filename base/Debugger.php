@@ -43,21 +43,25 @@ class Debugger // TODO refactor (too old!)
    public static $Output;
 
 
+   // TODO Refactor this function to reduce its Cognitive Complexity from 41 to the 15 allowed.
    public function __construct (...$vars)
    {
-      if (self::$debug === false)
+      if (self::$debug === false) {
          return;
+      }
 
       if ( ! empty(self::$ips) ) {
          foreach (self::$ips as $ip) {
             $founded = false;
-            if ($_SERVER['REMOTE_ADDR'] == $ip or $ip === '*') {
+            if ($_SERVER['REMOTE_ADDR'] == $ip || $ip === '*') {
                $founded = true;
                break;
             }
          }
 
-         if ($founded === false) return;
+         if ($founded === false) {
+            return;
+         }
       }
 
       // CLI
@@ -68,7 +72,7 @@ class Debugger // TODO refactor (too old!)
       // Title
       $title = self::$title;
       // Vars
-      if (empty($vars) and self::$vars) {
+      if (empty($vars) && self::$vars) {
          $vars = self::$vars;
       }
 
@@ -82,7 +86,7 @@ class Debugger // TODO refactor (too old!)
          $to = self::$to;
       }
       // From
-      if (self::$from and (self::$from <=> self::$to) !== -1) {
+      if (self::$from && (self::$from <=> self::$to) !== -1) {
          self::$from = null;
       }
       $from = self::$from;
@@ -94,8 +98,8 @@ class Debugger // TODO refactor (too old!)
       }
 
       // Catch
-      if ((($from and $call >= $from) or $call >= $to) and $search == $title) {
-         if (self::$trace !== false and self::$trace === null) {
+      if ((($from && $call >= $from) || $call >= $to) && $search == $title) {
+         if (self::$trace !== false && self::$trace === null) {
             $trace = debug_backtrace();
             self::$trace = $trace;
          }
@@ -120,7 +124,7 @@ class Debugger // TODO refactor (too old!)
          }
       }
 
-      if (self::$to and self::$search) {
+      if (self::$to && self::$search) {
          if ($search == self::$title) {
             self::$call++;
          }
@@ -143,6 +147,7 @@ class Debugger // TODO refactor (too old!)
       self::$labels = null;
    }
 
+   // TODO Refactor this function to reduce its Cognitive Complexity from 46 to the 15 allowed.
    public static function dump ($value)
    {
       switch (gettype($value)) {
@@ -306,20 +311,26 @@ class Debugger // TODO refactor (too old!)
 
       return $dump;
    }
+   // TODO Refactor this function to reduce its Cognitive Complexity from 36 to the 15 allowed.
    private function generate ($vars)
    {
       self::$Output = "";
 
       // @ Call
-      if (!self::$cli)
+      if (! self::$cli) {
          self::$Output = "<pre>";
+      }
 
       if (self::$title) {
-         if (!self::$cli)
+         if (! self::$cli) {
             self::$Output .= '<b>';
+         }
+
          self::$Output .= self::$title;
-         if (!self::$cli)
+
+         if (! self::$cli) {
             self::$Output .= '</b>';
+         }
       }
 
       if (! self::$cli) {
@@ -339,14 +350,14 @@ class Debugger // TODO refactor (too old!)
       self::$Output .= "\n";
 
       // @ Trace
-      if (self::$trace && self::$trace[0]['file'] and self::$trace[0]['line']) {
+      if (self::$trace && self::$trace[0]['file'] && self::$trace[0]['line']) {
          if (! self::$cli) {
             self::$Output .= '<small>';
          }
 
          $n = 1;
          foreach (self::$trace as $trace) {
-            if (isset($trace['file']) and isset($trace['line'])) {
+            if (isSet($trace['file']) && isSet($trace['line'])) {
                self::$Output .= $trace['file'] . ':' . $trace['line'];
             }
 

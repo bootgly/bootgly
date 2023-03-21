@@ -13,7 +13,6 @@ namespace Bootgly\Web;
 
 use Bootgly\{
    Bootgly,
-   Debugger,
    Web
 };
 
@@ -24,6 +23,7 @@ class API // TODO extends, implements, uses
 
    // * Config
    public bool $debugger;
+
    // * Data
    public array $data;
    // ? data['result']
@@ -34,6 +34,7 @@ class API // TODO extends, implements, uses
    // protected $warning;
    // protected $info;
    // ? data['metadata']
+
    // * Meta
    public string $key;
 
@@ -42,13 +43,16 @@ class API // TODO extends, implements, uses
    {
       $this->Web = $Web;
 
+
       // * Config
       $this->debugger = true;
+
       // * Data
       $this->data = [];
       $this->data['result'] = NULL;
       $this->data['exception'] = NULL; // TODO rename to events? logging? log?
       $this->data['metadata'] = NULL;
+
       // * Meta
       $this->key = '';
    }

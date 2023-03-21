@@ -14,8 +14,11 @@ namespace Bootgly\CLI\HTTP\Server\Response;
 class Content
 {
    // * Config
+   // ...
+
    // * Data
    public string $raw;
+
    // * Meta
    public int $length;
    public static array $mimes; // @ 'html' => 'text/html'
@@ -24,8 +27,11 @@ class Content
    public function __construct ()
    {
       // * Config
+      // ...
+
       // * Data
       $this->raw = '';
+
       // * Meta
       $this->length = 0;
       // mimes

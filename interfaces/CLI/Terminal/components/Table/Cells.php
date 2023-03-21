@@ -19,11 +19,13 @@ class Cells
    private Table $Table;
 
    // * Config
+   // ...
 
    // * Data
    public int $alignment;
 
    // * Meta
+   // ...
 
 
    public function __construct ($Table)
@@ -31,11 +33,13 @@ class Cells
       $this->Table = $Table;
 
       // * Config
+      // ...
 
       // * Data
       $this->alignment = 1;
 
       // * Meta
+      // ...
    }
    public function __get ($name)
    {

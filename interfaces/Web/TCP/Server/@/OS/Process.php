@@ -17,7 +17,7 @@ use Bootgly\Logger;
 use Bootgly\SAPI;
 use Bootgly\OS\Process\Timer;
 use Bootgly\Web\_\Events\Select;
-// 
+// ?
 use Bootgly\Web\TCP\ {
    Server
 };
@@ -34,6 +34,12 @@ class Process
 
    public Server $Server;
 
+   // * Config
+   // ...
+
+   // * Data
+   // ...
+
    // * Meta
    // @ Id
    public static int $index;
@@ -49,8 +55,16 @@ class Process
    {
       $this->Server = $Server;
 
+
+      // * Config
+      // ...
+
+      // * Data
+      // ...
+
       // * Meta
       self::$master = posix_getpid();
+
 
       static::lock();
       static::saveMasterPid();
@@ -257,7 +271,7 @@ class Process
          } else if ($pid > 0) { // Master process
             cli_set_process_title("BootglyWebServer: master process ($script)");
          } else if ($pid === -1) {
-            die("Could not fork process!"); 
+            die('Could not fork process!');
          }
       }
    }

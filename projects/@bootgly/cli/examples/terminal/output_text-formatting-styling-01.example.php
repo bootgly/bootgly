@@ -7,7 +7,7 @@ $Output = CLI::$Terminal->Output;
 $Output->reset();
 $Output->waiting = 15000;
 
-/* 
+/*
  * Terminal Output - Text Formatting - Styling - Example #1
  */
 $Output->write(<<<OUTPUT

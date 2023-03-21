@@ -31,7 +31,10 @@ class Connections implements Web\Connections
 
    // * Config
    public ? float $timeout;
+
    // * Data
+   // ...
+
    // * Meta
    // @ Remote
    public static array $Connections;
@@ -58,7 +61,10 @@ class Connections implements Web\Connections
 
       // * Config
       $this->timeout = 5;
+
       // * Data
+      // ..
+
       // * Meta
       // @ Remote
       self::$Connections = []; // Connections peers
@@ -95,7 +101,9 @@ class Connections implements Web\Connections
       // @ Load file info
       try {
          require $info;
-      } catch (\Throwable) {}
+      } catch (\Throwable) {
+         // ...
+      }
    }
 
    // Accept connection from client / Open connection with client / Connect with client

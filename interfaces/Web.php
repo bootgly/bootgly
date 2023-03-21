@@ -39,6 +39,7 @@ class Web
          if (\PHP_SAPI !== 'cli') {
             echo 'Missing Rewrite!';
          }
+
          return;
       }
 

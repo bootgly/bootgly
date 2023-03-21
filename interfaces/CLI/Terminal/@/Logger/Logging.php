@@ -153,7 +153,7 @@ trait Logging
       }, $message);
 
       // @ Reset (End of)
-      $message = preg_replace_callback('/\s@([;])|([*~_-])@/m', function ($matches) {
+      $message = preg_replace_callback('/\s@(;)|([*~_-])@/m', function ($matches) {
          return self::_RESET_FORMAT;
       }, $message);
 

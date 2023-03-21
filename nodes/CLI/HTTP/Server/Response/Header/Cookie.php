@@ -18,20 +18,34 @@ final class Cookie
 {
    public Header $Header;
 
+   // * Config
+   // ...
+
    // * Data
    private array $cookies;
+
+   // * Meta
+   // ...
 
 
    public function __construct (Header $Header)
    {
       $this->Header = $Header;
 
+      // * Config
+      // ...
+
       // * Data
       $this->cookies = [];
+
+      // * Meta
+      // ...
    }
 
-   public function append
-   ($name, $value = '', $expiration = null, $path = '', $domain = '', $secure = false, $httpOnly = false, $sameSite  = false)
+   // TODO REFACTOR: This function has 8 parameters, which is greater than the 7 authorized.
+   public function append(
+      $name, $value = '', $expiration = null, $path = '', $domain = '', $secure = false, $httpOnly = false, $sameSite  = false
+   )
    {
       $cookie = $name . '=' . \rawurlencode($value)
       . (empty($domain) ? '' : '; Domain=' . $domain)

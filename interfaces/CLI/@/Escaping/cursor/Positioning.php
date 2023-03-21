@@ -22,12 +22,12 @@ trait Positioning
    public const _CURSOR_UP = 'A';
    /**
    * [\<n\>B] (Cursor Down) "Cursor down by \<n\>"
-   */ 
+   */
    public const _CURSOR_DOWN = 'B';
 
    /**
    * [\<l\>d] (Cursor Up Absolute)
-   */ 
+   */
    public const _CURSOR_UP_ABSOLUTE = 'd';
 
    // ? Horizontal (<c>) "<c> = column"
@@ -58,6 +58,7 @@ trait Positioning
 
 
    // ! Reporting
-   // [6n] (Report Cursor Position) "Emit the cursor position as: ESC [ <r> ; <c> R Where <r> = cursor row and <c> = cursor column"
+   // [6n] (Report Cursor Position)
+   // "Emit the cursor position as: ESC [ <r> ; <c> R Where <r> = cursor row and <c> = cursor column"
    public const _CURSOR_REPORT_POSITION = '6n';
 }

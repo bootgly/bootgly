@@ -24,10 +24,12 @@ class Connection extends Packages
    // * Config
    public array $timers;
    public int $expiration;
+
    // * Data
    // @ Remote
    public string $ip;
    public int $port;
+
    // * Meta
    public int $id;
    // @ Status
@@ -52,8 +54,10 @@ class Connection extends Packages
       // * Config
       $this->timers = [];
       $this->expiration = 15;
+
       // * Data
       // ... dynamicaly
+
       // * Meta
       $this->id = (int) $Socket;
       // @ Status
@@ -64,6 +68,7 @@ class Connection extends Packages
       // @ Stats
       #$this->reads = 0;
       $this->writes = 0;
+
 
       // @ Set Remote Data if possible
       // IP:port
@@ -111,10 +116,7 @@ class Connection extends Packages
          $negotiation = @stream_socket_enable_crypto(
             $this->Socket,
             true,
-            STREAM_CRYPTO_METHOD_TLSv1_0_SERVER |
-            STREAM_CRYPTO_METHOD_TLSv1_1_SERVER |
-            STREAM_CRYPTO_METHOD_TLSv1_2_SERVER |
-            STREAM_CRYPTO_METHOD_TLSv1_3_SERVER
+            STREAM_CRYPTO_METHOD_TLSv1_2_SERVER | STREAM_CRYPTO_METHOD_TLSv1_3_SERVER
          );
 
          stream_set_blocking($this->Socket, false);
@@ -154,7 +156,7 @@ class Connection extends Packages
 
       return true;
    }
-   public function expire (int $timeout) 
+   public function expire (int $timeout)
    {
       static $writes = 0;
 
@@ -218,7 +220,9 @@ class Connection extends Packages
       try {
          @fclose($Socket);
          #@stream_socket_shutdown($Socket);
-      } catch (\Throwable) {}
+      } catch (\Throwable) {
+         // ...
+      }
 
       $this->status = self::STATUS_CLOSED;
 

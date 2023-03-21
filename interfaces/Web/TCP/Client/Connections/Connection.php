@@ -12,7 +12,6 @@ namespace Bootgly\Web\TCP\Client\Connections;
 
 
 use Bootgly\OS\Process\Timer;
-use Bootgly\Web\_\Events\Select;
 use Bootgly\Web\TCP\Client;
 use Bootgly\Web\TCP\Client\Connections;
 use Bootgly\Web\TCP\Client\Packages;
@@ -22,13 +21,16 @@ class Connection extends Packages
 {
    public $Socket;
 
+
    // * Config
    public array $timers;
    public int $expiration;
+
    // * Data
    // @ Remote
    public string $ip;
    public int $port;
+
    // * Meta
    public int $id;
    // @ Status
@@ -50,11 +52,14 @@ class Connection extends Packages
    {
       $this->Socket = $Socket;
 
+
       // * Config
       $this->timers = [];
       $this->expiration = 10;
+
       // * Data
       // ... dynamicaly
+
       // * Meta
       $this->id = (int) $Socket;
       // @ Status
@@ -65,6 +70,7 @@ class Connection extends Packages
       // @ Stats
       $this->writes = 0;
       $this->reads = 0;
+
 
       // @ Set Remote Data if possible
       // IP:port
@@ -97,7 +103,9 @@ class Connection extends Packages
 
       try {
          @fclose($this->Socket);
-      } catch (\Throwable) {}
+      } catch (\Throwable) {
+         // ...
+      }
 
       $this->status = self::STATUS_CLOSED;
 

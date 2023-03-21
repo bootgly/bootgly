@@ -19,8 +19,10 @@ class Columns
    private Table $Table;
 
    // * Config
+   // ...
 
    // * Data
+   // ...
 
    // * Meta
    public array $widths;
@@ -32,8 +34,10 @@ class Columns
       $this->Table = $Table;
 
       // * Config
+      // ...
 
       // * Data
+      // ...
 
       // * Meta
       $this->widths = [];

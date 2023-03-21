@@ -28,9 +28,9 @@ use Bootgly\Web\HTTP\Server\Request\Session;
  * * Data
  * @property string $address       127.0.0.1
  * @property string $port          52252
- * 
+ *
  * @property string $scheme        http, https
- * 
+ *
  * ! HTTP
  * @property string $raw
  * ? Meta
@@ -65,18 +65,18 @@ use Bootgly\Web\HTTP\Server\Request\Session;
  * @property array $files
  * ? Content / Downloader
  * @property object Downloader
- * 
- * 
+ *
+ *
  * * Meta
  * @property string $host          v1.lab.bootgly.com
  * @property string $domain        bootgly.com
  * @property string $subdomain     v1.lab
  * @property array $subdomains     ['lab', 'v1']
- * 
+ *
  * @property string $on            2020-03-10 (Y-m-d)
  * @property string $at            17:16:18 (H:i:s)
  * @property int $timestamp        1586496524
- * 
+ *
  * @property bool $secure          true
  * @property bool $fresh           true
  * @property bool $stale           false
@@ -89,11 +89,11 @@ class Request
 
    // * Config
    private string $base;
+
    // * Data
    // public string $raw;
-   // ...
+
    // * Meta
-   // ...
    // public string $length;
 
    public Session $Session;
@@ -105,9 +105,13 @@ class Request
       $this->base = '';
       // TODO pre-defined filters
       // $this->Filter->sanitize(...) | $this->Filter->validate(...)
+
       // * Data
-      /* ... dynamically ... */
+      // ... dynamically
+
       // * Meta
+      // ...
+
 
       $this->Session = new Session;
    }
@@ -435,7 +439,11 @@ class Request
       return filter_input($type, $var_name, $filter, $options);
    }
    public function sanitize ()
-   {}
+   {
+      // TODO
+   }
    public function validate ()
-   {}
+   {
+      // TODO
+   }
 }

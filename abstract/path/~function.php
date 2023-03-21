@@ -11,8 +11,7 @@
 use Bootgly\Path;
 
 
-function Path(...$vars)
+function Path (...$vars)
 {
-   $Path = new Path(...$vars);
-   return $Path;
+   return new Path(...$vars);
 }

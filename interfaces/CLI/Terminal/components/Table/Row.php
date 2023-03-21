@@ -20,8 +20,13 @@ class Row
    private Table $Table;
 
    // * Config
+   // ...
+
    // * Data
+   // ...
+
    // * Meta
+   // ...
 
 
    public function __construct ($Table)
@@ -29,8 +34,13 @@ class Row
       $this->Table = $Table;
 
       // * Config
+      // ...
+
       // * Data
+      // ...
+
       // * Meta
+      // ...
    }
    public function __get ($name)
    {

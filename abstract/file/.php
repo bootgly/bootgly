@@ -73,11 +73,13 @@ class File
    protected $pointer;           // Line pointer positions array
    protected $mode;              // Open mode: r, r+, w, w+, a...
    protected $method;            // Read method: fread, require, file_get_contents
+
    // * Data (set public or injetable)
    public string $path = '';
    public string $file = '';
    public string $dir = '';
    protected $contents;
+
    // * Meta (set private|protected and not injetable)
    public string $File = '';
    public ?Dir $Dir  = null;
@@ -258,45 +260,46 @@ class File
 
       return $this->$name = $value;
    }
-   public function __toString (): string
+   public function __toString () : string
    {
       return $this->File;
    }
 
-   public function construct (string $path): string
+   public function construct (string $path) : string
    {
+      if (! $path) {
+         return '';
+      }
+
       $this->File = '';
 
-      if ($path) {
-         if ($this->check) { // Only check if the path exists as file
-            if (is_file($path)) {
-               return $this->File = $path;
-            }
+      if ($this->check && is_file($path)) { // Only check if the path exists as file
+         return $this->File = $path;
+      }
+
+      if ($this->construct) { // Construct the path with $Path->Path($path) and check if file exists
+         $path = $this->Path->Path($path);
+         if (is_file($path)) {
+            return $this->File = $path;
+         }
+      }
+
+      if ($this->convert) { // Convert the path to base or index and check if file exists
+         $base = $path . '.php';
+         if (is_file($base)) {
+            return $this->File = $base;
          }
 
-         if ($this->construct) { // Construct the path with $Path->Path($path) and check if file exists
-            $path = $this->Path->Path($path);
-            if (is_file($path)) {
-               return $this->File = $path;
-            }
-         }
-
-         if ($this->convert) { // Convert the path to base or index and check if file exists
-            $base = $path . '.php';
-            if (is_file($base)) {
-               return $this->File = $base;
-            }
-
-            $index = __String::trim($path, Path::DIR_, 1) . $this->Path::DIR_ . 'index.php';
-            if (is_file($index)) {
-               return $this->File = $index;
-            }
+         $index = __String::trim($path, Path::DIR_, 1) . $this->Path::DIR_ . 'index.php';
+         if (is_file($index)) {
+            return $this->File = $index;
          }
       }
 
       return $this->File;
    }
 
+   // TODO Refactor this function to reduce its Cognitive Complexity from 29 to the 15 allowed.
    public function open (string $mode)
    {
       if ($this->handle === null && $this->Path !== null) {
@@ -351,11 +354,9 @@ class File
                // Place the file pointer at the end of the file. (?)
                // If the file does not exist, attempt to create it. (+)
 
-               if ($this->File === '') {
+               if ($this->File === '' && is_dir($this->parent) === false) {
                   // Create dir if not exists
-                  if (is_dir($this->parent) === false) {
-                     mkdir($this->parent, 0775);
-                  }
+                  mkdir($this->parent, 0775);
                }
 
                $this->handle = fopen($this->Path, 'w+');

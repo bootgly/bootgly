@@ -18,9 +18,12 @@ use \Throwable;
 class Timer
 {
    // * Config
+   // ...
+
    // * Data
    protected static array $tasks = [];
    protected static array $status = [];
+
    // * Meta
    protected static int $id = 0;
 
@@ -60,6 +63,7 @@ class Timer
       return self::$id;
    }
 
+   // TODO Refactor this function to reduce its Cognitive Complexity from 21 to the 15 allowed.
    public static function tick ()
    {
       if ( empty(self::$tasks) ) {
@@ -79,13 +83,16 @@ class Timer
 
                try {
                   call_user_func_array($handler, $args);
-               } catch (Throwable) {}
+               } catch (Throwable) {
+                  // ...
+               }
 
                if ($persistent && ! empty(self::$status[$index])) {
                   $_runtime_ = time() + $interval;
 
-                  if( ! isSet(self::$tasks[$_runtime_]) )
+                  if ( ! isSet(self::$tasks[$_runtime_]) ) {
                      self::$tasks[$_runtime_] = [];
+                  }
 
                   self::$tasks[$_runtime_][$index] = [
                      $interval, $handler, $args, $persistent

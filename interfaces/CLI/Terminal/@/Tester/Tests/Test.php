@@ -23,8 +23,12 @@ class Test
 
    public Tests $Tests;
 
+   // * Config
+   // ...
+
    // * Data
    public array $specifications;
+
    // * Meta
    public $test;
    public bool $success;
@@ -38,8 +42,12 @@ class Test
    {
       $this->Tests = $Tests;
 
+      // * Config
+      // ...
+
       // * Data
       $this->specifications = $specifications;
+
       // * Meta
       $this->test = current($this->Tests->tests); // @ file
       $this->success = false;
@@ -130,8 +138,8 @@ class Test
       $test = str_pad($this->test, $this->Tests->width, '.', STR_PAD_RIGHT);
 
       $this->log(
-         "\033[1;37;42m PASS \033[0m " 
-         . "\033[90m" . $test . "\033[0m" 
+         "\033[1;37;42m PASS \033[0m "
+         . "\033[90m" . $test . "\033[0m"
          . "\033[1;35m +" . $time . "s\033[0m" . PHP_EOL
       );
 
@@ -142,7 +150,7 @@ class Test
       $this->Tests->failed++;
 
       $this->log(
-         "\033[1;37;41m FAIL \033[0m " 
+         "\033[1;37;41m FAIL \033[0m "
          . $this->test
          . " -> \"\033[91m" . $this->specifications['except']() . "\033[0m\"" . ':'
          . PHP_EOL

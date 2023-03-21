@@ -13,7 +13,8 @@ namespace Bootgly;
 
 class __Class
 {
-	public static function name(object $object): string {
-		return get_class($object);
-	}
+   public static function name (object $object) : string
+   {
+      return get_class($object);
+   }
 }

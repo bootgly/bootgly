@@ -12,10 +12,7 @@ namespace Bootgly\Web;
 
 
 use Bootgly\Bootgly;
-use const Bootgly\HOME_DIR;
 use Bootgly\{
-   Debugger,
-   Path,
    Web
 };
 
@@ -33,7 +30,11 @@ class App
    public string $pathbase = ''; // Request->paths[0] | $pathbase
 
    public string $template = '';
+   // * Data
+   // ...
+
    // * Meta
+   // ...
 
 
    public function __construct (Web $Web)
@@ -41,7 +42,7 @@ class App
       $this->Web = $Web;
    }
    // public function preload () {}
-   public function load () 
+   public function load ()
    {
       // $this->preload();
 

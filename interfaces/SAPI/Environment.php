@@ -10,5 +10,8 @@
 
 namespace Bootgly\SAPI;
 
+
 class Environment
-{}
+{
+   // TODO
+}

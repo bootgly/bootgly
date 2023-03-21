@@ -11,7 +11,6 @@
 namespace Bootgly\Web\HTTP\Server\Router;
 
 
-use Bootgly\Debugger;
 use Bootgly\Web\HTTP\Server;
 use Bootgly\Web\HTTP\Server\Router;
 
@@ -25,22 +24,24 @@ final class Route
    // * Config
    private ?string $name;
    public bool $status;
+
    // * Data
    private object $Params;
    // private object $Path;
+
    // * Meta
    private string $path;
    public int $matched; // 0 -> none; 1 = route path; 2 = route path and route conditions
    private bool $parameterized;
 
-   //* Parse
+   // ! Parse
    public string $parsed;
    public string $catched; // Group of (.*) Catch-All Param
    // private string $node;
    public int $nodes; // Nodes parsed
-   //* Group
+   // ! Group
    private bool $nested;
-   //* Log
+   // ! Log
    public int $index; // Route index invoked | before callback
    public array $routed; // Route path and parsed | after callback
    public int $level; // Route group level | after callback
@@ -50,9 +51,11 @@ final class Route
    {
       $this->Router = $Router;
 
+
       // * Config
       $this->name = null;
       $this->status = true;
+
       // * Data
       // TODO deny user to set Catch-All this object
       // TODO validate Param value (Regex)
@@ -68,10 +71,12 @@ final class Route
             $this->$param = $regex;
          }
       };
+
       // * Meta
       $this->path = '';
       $this->matched = 0;
       $this->parameterized = false;
+
 
       // ! Parse
       $this->parsed = '';
@@ -89,10 +94,11 @@ final class Route
    {
       switch ($name) {
          case 'parameterized':
-            if (strpos($this->path, ':') !== false)
+            if (strpos($this->path, ':') !== false) {
                return $this->parameterized = true;
-            else
+            } else {
                return $this->parameterized = false;
+            }
          case 'node':
             return __String($this->path)->separateBefore(':');
          default:
@@ -107,11 +113,15 @@ final class Route
                $this->path = '';
             } else {
                $this->path = rtrim($value, '/');
-            } break;
+            }
+
+            break;
 
          case 'base':
          case 'prefix': // TODO refactor
-            Server::$Request->base = $value; break;
+            Server::$Request->base = $value;
+
+            break;
 
          default:
             $this->$name = $value;

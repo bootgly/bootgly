@@ -23,8 +23,10 @@ class Output
    // @ Delay
    public int $wait;
    public int $waiting;
+
    // * Data
    public $stream;
+
    // * Meta
    // @ Stats
    public int|false $written;
@@ -40,11 +42,14 @@ class Output
       // @ Delay
       $this->wait = -1;       // @ to write method
       $this->waiting = 50000; // @ to writing method
+
       // * Data
       $this->stream = $stream;
+
       // * Meta
       // @ Stats
       $this->written = 0;
+
 
       $this->Cursor = new Cursor($this);
       $this->Text = new Text($this);

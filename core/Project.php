@@ -16,80 +16,84 @@ use const Bootgly\HOME_DIR;
 
 class Project
 {
-  public const PROJECT_DIR = HOME_DIR . 'projects/';
+   public const PROJECT_DIR = HOME_DIR . 'projects/';
 
-  // * Config
-  public bool $cache;
-  // * Data
-  public string $vendor;       // @bootgly/
-  public string $container;    // examples/
-  public string $package;      // app/
+   // * Config
+   public bool $cache;
 
-  public string $type;         // spa, pwa, etc.
+   // * Data
+   public string $vendor;       // @bootgly/
+   public string $container;    // examples/
+   public string $package;      // app/
 
-  public string $public;       // dist/
+   public string $type;         // spa, pwa, etc.
 
-  public string $version;      // v1/
-  // * Meta
-  public static string $path0;
-  private array $paths;
+   public string $public;       // dist/
+
+   public string $version;      // v1/
+
+   // * Meta
+   public static string $path0;
+   private array $paths;
 
 
-  public function __construct ()
-  {
-    // * Config
-    $this->cache = true;
-    // * Data
-    $this->vendor = '';
-    $this->container = '';
-    $this->package = '';
+   public function __construct ()
+   {
+      // * Config
+      $this->cache = true;
 
-    $this->type = '';
+      // * Data
+      $this->vendor = '';
+      $this->container = '';
+      $this->package = '';
 
-    $this->public = '';
+      $this->type = '';
 
-    $this->version = '';
-    // * Meta
-    $this->paths = [];
-  }
+      $this->public = '';
 
-  public function __get ($name)
-  {
-    switch ($name) {
-      case 'path':
-        if ( $this->cache && isSet($this->paths[1]) && !is_dir($this->paths[0]) ) {
-          return $this->paths[1];
-        }
+      $this->version = '';
 
-        return $this->paths[0];
-      default:
-        return $this->$name;
-    }
-  }
-  public function __toString (): string
-  {
-    return $this->path;
-  }
+      // * Meta
+      $this->paths = [];
+   }
 
-  public function setPath ()
-  {
-    // Join paths
-    $path = self::PROJECT_DIR;
+   public function __get ($name)
+   {
+      switch ($name) {
+         case 'path':
+            if ($this->cache && isset($this->paths[1]) && !is_dir($this->paths[0])) {
+               return $this->paths[1];
+            }
 
-    $path .= $this->vendor;
-    $path .= $this->container;
-    $path .= $this->package;
+            return $this->paths[0];
+         default:
+            return $this->$name;
+      }
+   }
+   public function __toString () : string
+   {
+      return $this->path;
+   }
 
-    $path .= $this->type;
+   public function setPath ()
+   {
+      // Join paths
+      $path = self::PROJECT_DIR;
 
-    $path .= $this->public;
+      $path .= $this->vendor;
+      $path .= $this->container;
+      $path .= $this->package;
 
-    $path .= $this->version;
+      $path .= $this->type;
 
-    // Set static paths[0] (Main path)
-    self::$path0 = $path;
+      $path .= $this->public;
 
-    // Push to paths array
-    $this->paths[] = $path;
-  }
+      $path .= $this->version;
+
+      // Set static paths[0] (Main path)
+      self::$path0 = $path;
+
+      // Push to paths array
+      $this->paths[] = $path;
+   }
 }

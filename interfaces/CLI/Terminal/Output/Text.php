@@ -101,7 +101,9 @@ class Text
    }
 
    // @ Formatting
-   public function colorize (int|string $foreground = 'default', int|string $background = 'default', int $type = self::DEFAULT_COLORS)
+   public function colorize (
+      int|string $foreground = 'default', int|string $background = 'default', int $type = self::DEFAULT_COLORS
+   )
    {
       $codes = [];
 
@@ -112,10 +114,12 @@ class Text
                      ? self::COLORS_BACKGROUND : (self::COLORS_BACKGROUND_BRIGHT);
 
       // @ Use Preset colors
-      if ( is_string($foreground) )
+      if ( is_string($foreground) ) {
          $codes[] = $foregrounds[$foreground] ?? self::_DEFAULT_FOREGROUND;
-      if ( is_string($background) )
+      }
+      if ( is_string($background) ) {
          $codes[] = $backgrounds[$background] ?? self::_DEFAULT_BACKGROUND;
+      }
 
       // @ Use Extended colors
       if ( is_int($foreground) && $foreground >= 0 && $foreground <= 255 ) {
@@ -176,7 +180,7 @@ class Text
     * @param bool $right Whether to remove characters to the right of the cursor position.
     * @param bool $left Whether to remove characters to the left of the cursor position.
     */
-   function trim (bool $left = false, bool $right = true): Output
+   public function trim (bool $left = false, bool $right = true) : Output
    {
       if ($right && $left) {
          return $this->Output->escape(self::_TEXT_ERASE_IN_LINE_2);

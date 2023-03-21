@@ -37,11 +37,13 @@ class Select implements Event\Loops
    const EVENT_EXCEPT = 4;
    // @ Loop
    private bool $loop = true;
+
    // * Data
    // @ Sockets
    private array $reads = [];
    private array $writes = [];
    private array $excepts = [];
+
    // * Meta
    // @ Events
    // Client/Server

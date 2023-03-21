@@ -12,7 +12,6 @@ namespace Bootgly\CLI\HTTP\Server\Request;
 
 
 use Bootgly\CLI\HTTP\Server\Request;
-use Bootgly\CLI\HTTP\Server\Request\_\Header;
 use Bootgly\CLI\HTTP\Server\Request\_\Content;
 
 

@@ -16,9 +16,13 @@ use Bootgly\CLI\HTTP\Server\Request\_\Header\Cookie;
 
 class Header
 {
+   // * Config
+   // ...
+
    // * Data
    protected string $raw;
    private array $fields;
+
    // * Meta
    private bool $built;
    public null|int|false $length;
@@ -28,11 +32,16 @@ class Header
 
    public function __construct ()
    {
+      // * Config
+      // ...
+
       // * Data
       $this->fields = [];
+
       // * Meta
       $this->built = false;
       $this->length = null;
+
 
       $this->Cookie = new Cookie($this);
    }

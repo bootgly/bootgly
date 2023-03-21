@@ -18,7 +18,6 @@ use Bootgly\CLI\HTTP\Server;
 use Bootgly\CLI\HTTP\Server\Response\Content;
 use Bootgly\CLI\HTTP\Server\Response\Meta;
 use Bootgly\CLI\HTTP\Server\Response\Header;
-use Bootgly\Web\protocols\HTTP;
 
 
 class Response
@@ -30,6 +29,7 @@ class Response
 
    // * Config
    public bool $debugger;
+
    // * Data
    public string $raw;
 
@@ -40,6 +40,7 @@ class Response
    public ? string $type;   //! move to Content->type or Header->Content->type?
 
    public ? array $resources;
+
    // * Meta
    private ? string $resource;
    // @ Status
@@ -167,8 +168,9 @@ class Response
             return $this->$name(...$arguments);
       }
    }
-   public function __invoke
-   ($x = null, ? int $status = 200, ? array $headers = [], ? string $content = '', ? string $raw = '')
+   public function __invoke (
+      $x = null, ? int $status = 200, ? array $headers = [], ? string $content = '', ? string $raw = ''
+   )
    {
       if ($x === null && $raw) {
          $this->raw = $raw;
@@ -260,7 +262,7 @@ class Response
       $this->body .= $body . "\n";
    }
 
-   public function process ($data, ?string $resource = null)
+   public function process ($data, ? string $resource = null)
    {
       if ($resource === null) {
          $resource = $this->resource;
@@ -400,7 +402,9 @@ class Response
                $compressed = @gzcompress($raw, $level, $encoding);
                break;
          }
-      } catch (\Throwable) {}
+      } catch (\Throwable) {
+         // ...
+      }
 
       if ($encoded) {
          $this->encoded = true;
@@ -419,7 +423,7 @@ class Response
       return false;
    }
 
-   public function send ($body = null, ...$options): self
+   public function send ($body = null, ...$options) : self
    {
       if ($this->processed === false) {
          $this->process($body, $this->resource);
@@ -727,10 +731,11 @@ class Response
       return $this;
    }
    /**
-    * Redirects to a new URI.
+    * Redirects to a new URI. Default return is 307 for GET (Temporary Redirect) and 303 (See Other) for POST.
     *
     * @param string $uri The new URI to redirect to.
-    * @param int $code The HTTP status code to use for the redirection. Default is 307 for GET (Temporary Redirect) and 303 (See Other) for POST.
+    * @param int $code The HTTP status code to use for the redirection.
+    *
     *
     * @return self Returns Response.
     */
