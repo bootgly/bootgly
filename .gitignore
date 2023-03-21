@@ -1,7 +1,6 @@
 ### * Globals
 # Ignore IDEs folders...
 .idea/
-.vscode/
 # Ignore locks, bin, envs...
 composer
 composer.lock

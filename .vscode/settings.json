@@ -1,0 +1,210 @@
+{
+   "editor.renderControlCharacters": false,
+   "editor.tabSize": 3,
+
+   "explorer.sortOrderLexicographicOptions": "unicode",
+   "explorer.sortOrder": "filesFirst",
+
+   "files.exclude": {
+      "**/__pycache__": true,
+      "**/.idea": true,
+      "**/.vscode": true
+   },
+   "files.watcherExclude": {
+      "**/&/**": true
+   },
+
+   "search.exclude": {
+      "**/!": true,
+      "**/&": true
+   },
+
+   "workbench.colorTheme": "Andromeda Colorizer",
+   "workbench.iconTheme": "material-icon-theme",
+
+
+   "material-icon-theme.folders.associations": {
+      "#": "docs",
+      "@": "config",
+      "&": "other",
+      "✓": "test",
+
+      "boot": "src",
+      "nodes": "contract",
+      "platforms": "client",
+      "workspace": "tools",
+      "component": "components",
+      "debugger": "debug",
+      "logger": "log",
+      "tester": "test",
+
+      "@wordpress": "wordpress",
+      "@quasar": "quasar",
+      "endpoints": "public",
+      "statics": "public"
+   },
+   "material-icon-theme.files.associations": {
+      "bootgly": "php",
+      "composer": "php",
+      "*.template.php": "template"
+   },
+
+   "better-comments.tags": [
+      {
+         "tag": "//",
+         "color": "#474747",
+         "strikethrough": true,
+         "underline": false,
+         "backgroundColor": "transparent",
+         "bold": false,
+         "italic": false
+      },
+      {
+         "tag": "*",
+         "color": "#98C379",
+         "strikethrough": false,
+         "underline": false,
+         "backgroundColor": "transparent",
+         "bold": false,
+         "italic": false
+      },
+      {
+         "tag": "!",
+         "color": "#FF2D00",
+         "strikethrough": false,
+         "underline": false,
+         "backgroundColor": "transparent",
+         "bold": false,
+         "italic": false
+      },
+      {
+         "tag": "?",
+         "color": "#3498DB",
+         "strikethrough": false,
+         "underline": false,
+         "backgroundColor": "transparent",
+         "bold": false,
+         "italic": false
+      },
+      {
+         "tag": "@",
+         "color": "#BEBEBE",
+         "strikethrough": false,
+         "underline": false,
+         "backgroundColor": "transparent",
+         "bold": false,
+         "italic": false
+      },
+      {
+         "tag": "todo",
+         "color": "#FF8C00",
+         "strikethrough": false,
+         "underline": false,
+         "backgroundColor": "transparent",
+         "bold": false,
+         "italic": false
+      },
+      {
+         "tag": "fix",
+         "color": "#FF2D00",
+         "strikethrough": false,
+         "underline": false,
+         "backgroundColor": "transparent",
+         "bold": false,
+         "italic": false
+      },
+      {
+         "tag": "deprecated",
+         "color": "#FF2D00",
+         "strikethrough": false,
+         "underline": false,
+         "backgroundColor": "transparent",
+         "bold": false,
+         "italic": false
+      }
+   ],
+
+   "intelephense.environment.includePaths": [
+      "@/imports"
+   ],
+   "intelephense.files.exclude": [
+      "**/.git/**",
+      "**/.svn/**",
+      "**/.hg/**",
+      "**/CVS/**",
+      "**/.DS_Store/**",
+      "**/node_modules/**",
+      "**/bower_components/**",
+      "**/vendor/**/{Tests,tests}/**",
+      "**/.history/**",
+      "**/&/**",
+      "**/workspace/**"
+   ],
+   "intelephense.references.exclude": [
+      "**/imports/**",
+      "**/vendor/**",
+      "**/&/**"
+   ],
+   "intelephense.rename.exclude": [
+      "**/imports/**",
+      "**/vendor/**",
+      "**/&/**"
+   ],
+
+   "sonarlint.rules": {
+      "php:S1488": {
+         "level": "off"
+      },
+      "php:S1125": {
+         "level": "off"
+      },
+      "php:S1481": {
+         "level": "off"
+      },
+      "php:S1781": {
+         "level": "off"
+      },
+      "php:S100": {
+         "level": "off"
+      },
+      "php:S101": {
+         "level": "off"
+      },
+      "php:S1172": {
+         "level": "off"
+      },
+      "php:S1301": {
+         "level": "off"
+      },
+      "php:S125": {
+         "level": "off"
+      },
+      "php:S131": {
+         "level": "off"
+      },
+      "php:S1142": {
+         "level": "off"
+      },
+      "php:S2003": {
+         "level": "off"
+      },
+      "php:S4833": {
+         "level": "off"
+      },
+      "php:S115": {
+         "level": "off"
+      },
+      "php:S116": {
+         "level": "off"
+      },
+      "php:S117": {
+         "level": "off"
+      },
+      "php:S1808": {
+         "level": "off"
+      },
+      "php:S1793": {
+         "level": "off"
+      }
+   }
+}
