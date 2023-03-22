@@ -29,6 +29,8 @@ $examples = [
 
    // Terminal->Output _ Text Modifying
    'terminal/output_text-modifying-01.example.php',
+   // Terminal->Output _ Text Modifying - Line
+   'terminal/output_text-modifying-line-01.example.php',
 
 
    // Terminal/components - Progress component
