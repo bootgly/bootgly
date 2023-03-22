@@ -121,17 +121,14 @@ class Text
       $codes = [];
 
       // @ Set Colors type
-      if ($this->Colors->get() !== Text\Colors::Bright) {
-         $foregrounds = self::COLORS_FOREGROUND;
-      } else {
-         $foregrounds = self::COLORS_FOREGROUND_BRIGHT;
-      }
-
-      if ($this->Colors->get() !== Text\Colors::Bright) {
-         $backgrounds = self::COLORS_BACKGROUND;
-      } else {
-         $backgrounds = self::COLORS_BACKGROUND_BRIGHT;
-      }
+      $foregrounds = match ( $this->Colors->get() ) {
+         Text\Colors::Bright => self::COLORS_FOREGROUND_BRIGHT,
+         Text\Colors::Default => self::COLORS_FOREGROUND
+      };
+      $backgrounds = match ( $this->Colors->get() ) {
+         Text\Colors::Bright => self::COLORS_BACKGROUND_BRIGHT,
+         Text\Colors::Default => self::COLORS_BACKGROUND
+      };
 
       // @ Use Preset colors
       if ( is_string($foreground) ) {
