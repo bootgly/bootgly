@@ -31,11 +31,12 @@ trait Modifying
    public const _TEXT_INSERT_LINE = 'L';
    // [<n>M]  (Delete Line) "Deletes <n> lines from the buffer, starting with the row the cursor is on."
    public const _TEXT_DELETE_LINE = 'M';
+   // [<n>K] (Erase in Line) "Replace all text on the line with the cursor specified by <n> with space characters"
+   public const _TEXT_ERASE_IN_LINE = 'K';
 
    // [<n>J] (Erase in Display) "Replace all text in the current viewport/screen specified by <n> with space characters"
    public const _TEXT_ERASE_IN_DISPLAY = 'J';
-   // [<n>K] (Erase in Line) "Replace all text on the line with the cursor specified by <n> with space characters"
-   public const _TEXT_ERASE_IN_LINE = 'K';
+
 
    public const _TEXT_ERASE_IN_LINE_0 = '0K'; // To Right from cursor
    public const _TEXT_ERASE_IN_LINE_1 = '1K'; // To Left from cursor

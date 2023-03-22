@@ -11,12 +11,9 @@
 namespace Bootgly\CLI\Terminal\Output;
 
 
-use Bootgly\CLI;
-
 use Bootgly\CLI\Escaping\text\Formatting;
 use Bootgly\CLI\Escaping\text\Modifying;
 
-use Bootgly\CLI\Terminal;
 use Bootgly\CLI\Terminal\Output;
 
 
@@ -95,6 +92,7 @@ class Text
    public function __construct (Output &$Output)
    {
       $this->Output = $Output;
+
 
       // * Meta
       $this->color = null;
@@ -182,33 +180,70 @@ class Text
     *
     * @return Output
     */
-   public function space (int $n = 1)
+   public function space (int $n = 1) : Output
    {
       return $this->Output->escape($n . self::_TEXT_INSERT_CHARACTER);
    }
    /**
-    * Delete <n> characters at the current cursor position,
-    * shifting in space characters from the right edge of the screen.
+    * Delete <n> characters and/or <n> lines at the current cursor position.
     *
-    * @param int $n The number of characters to delete.
+    * Characteres: will be shifting in space characters, from the right edge of the screen.
+    * Lines: deletes <n> lines from the buffer, starting with the row the cursor is on.
+    *
+    * @param int $characters The number of characters to delete.
+    * @param int $lines The number of lines to delete.
     *
     * @return Output
     */
-   public function delete (int $n = 1)
+   public function delete (? int $characters = null, ? int $lines = null) : Output
    {
-      return $this->Output->escape($n . self::_TEXT_DELETE_CHARACTER);
+      $Output = &$this->Output;
+
+      if ($characters > 0) {
+         $Output->escape($characters . self::_TEXT_DELETE_CHARACTER);
+      }
+
+      if ($lines > 0) {
+         $Output->escape($lines . self::_TEXT_DELETE_LINE);
+      }
+
+      return $Output;
    }
    /**
-    * Erase <n> characters from the current cursor position,
-    * by overwriting them with a space character.
+    * Erase <n> characters from the current cursor position, by overwriting them with a space character.
     *
-    * @param int $n The number of characters to erase.
+    * @param int $characters The number of characters to erase.
     *
     * @return Output
     */
-   public function erase (int $n = 1)
+   public function erase (int $characters = 1) : Output
    {
-      return $this->Output->escape($n . self::_TEXT_ERASE_CHARACTER);
+      return $this->Output->escape($characters . self::_TEXT_ERASE_CHARACTER);
+   }
+   /**
+    * Inserts <n> lines and/or <n> spaces at the cursor position.
+    *
+    * Lines: the line the cursor is on, and lines below it, will be shifted downwards.
+    * Spaces: Insert <n> spaces at the current cursor position, shifting all existing text to the right.
+    *
+    * @param int $lines The number of lines to insert.
+    * @param int $spaces The number of spaces to insert.
+    *
+    * @return Output
+    */
+   public function insert (? int $lines = null, ? int $spaces = null) : Output
+   {
+      $Output = &$this->Output;
+
+      if ($lines > 0) {
+         $Output->escape($lines . self::_TEXT_INSERT_LINE);
+      }
+
+      if ($spaces > 0) {
+         $Output->escape($spaces . self::_TEXT_INSERT_CHARACTER);
+      }
+
+      return $Output;
    }
    /**
     * Trims the current line of the screen, removing characters to the right and/or left of the cursor position.
