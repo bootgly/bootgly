@@ -43,3 +43,4 @@ sleep(2);
 
 $Output->Text->trim(left: true, right: true);
 $Output->write("\n");
+

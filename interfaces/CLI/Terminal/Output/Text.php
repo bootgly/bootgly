@@ -268,3 +268,4 @@ class Text
       return $Output;
    }
 }
+
