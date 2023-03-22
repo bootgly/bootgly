@@ -4,14 +4,14 @@ namespace Bootgly;
 
 trait Configuring
 {
-   public static function get ()
+   public function __call (string $name, array $arguments)
    {
-      $Reflection = new \ReflectionEnum(self::class);
+      static $value;
 
-      return $Reflection->name;
-   }
-   public function set ()
-   {
-      // TODO
+      return match ($name) {
+         'get' => $value ?? $this,
+         'set' => $value = $this,
+         default => $this
+      };
    }
 }
