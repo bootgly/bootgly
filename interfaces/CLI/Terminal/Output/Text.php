@@ -224,7 +224,7 @@ class Text
     * Inserts <n> lines and/or <n> spaces at the cursor position.
     *
     * Lines: the line the cursor is on, and lines below it, will be shifted downwards.
-    * Spaces: Insert <n> spaces at the current cursor position, shifting all existing text to the right.
+    * Spaces: insert <n> spaces at the current cursor position, shifting all existing text to the right.
     *
     * @param int $lines The number of lines to insert.
     * @param int $spaces The number of spaces to insert.
@@ -246,21 +246,25 @@ class Text
       return $Output;
    }
    /**
-    * Trims the current line of the screen, removing characters to the right and/or left of the cursor position.
+    * Trims the current line of the screen, removing **all characters** to the right and/or left of the cursor position.
     *
-    * @param bool $right Whether to remove characters to the right of the cursor position.
-    * @param bool $left Whether to remove characters to the left of the cursor position.
+    * @param bool $right Whether to remove all characters to the right of the cursor position.
+    * @param bool $left Whether to remove all characters to the left of the cursor position.
     *
     * @return Output
     */
-   public function trim (bool $left = false, bool $right = true) : Output
+   public function trim (bool $left = false, bool $right = false) : Output
    {
+      $Output = &$this->Output;
+
       if ($right && $left) {
-         return $this->Output->escape(self::_TEXT_ERASE_IN_LINE_2);
+         $Output->escape(self::_TEXT_ERASE_IN_LINE_2);
       } else if ($right) {
-         return $this->Output->escape(self::_TEXT_ERASE_IN_LINE_0);
+         $Output->escape(self::_TEXT_ERASE_IN_LINE_0);
       } else if ($left) {
-         return $this->Output->escape(self::_TEXT_ERASE_IN_LINE_1);
+         $Output->escape(self::_TEXT_ERASE_IN_LINE_1);
       }
+
+      return $Output;
    }
 }

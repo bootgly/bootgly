@@ -25,10 +25,10 @@ $Output->writing("* Inserting 3 lines below: *\n");
 $Output->Text->insert(lines: 3);
 #$Output->Text->Line->insert(n: 3);
 
-$Output->Cursor->down(5);
+$Output->Cursor->down(4);
 
 $Output->writing("* Deleting lines added above... *\n");
-$Output->Cursor->up(6);
+$Output->Cursor->up(5);
 
 $Output->Text->delete(lines: 3);
 #$Output->Text->Line->delete(n: 3);
