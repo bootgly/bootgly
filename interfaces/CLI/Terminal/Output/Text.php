@@ -175,10 +175,48 @@ class Text
 
    // @ Modifying
    /**
+    * Insert <n> spaces at the current cursor position, shifting all existing text to the right.
+    * Text exiting the screen to the right is removed.
+    *
+    * @param int $n The number of spaces to insert.
+    *
+    * @return Output
+    */
+   public function space (int $n = 1)
+   {
+      return $this->Output->escape($n . self::_TEXT_INSERT_CHARACTER);
+   }
+   /**
+    * Delete <n> characters at the current cursor position,
+    * shifting in space characters from the right edge of the screen.
+    *
+    * @param int $n The number of characters to delete.
+    *
+    * @return Output
+    */
+   public function delete (int $n = 1)
+   {
+      return $this->Output->escape($n . self::_TEXT_DELETE_CHARACTER);
+   }
+   /**
+    * Erase <n> characters from the current cursor position,
+    * by overwriting them with a space character.
+    *
+    * @param int $n The number of characters to erase.
+    *
+    * @return Output
+    */
+   public function erase (int $n = 1)
+   {
+      return $this->Output->escape($n . self::_TEXT_ERASE_CHARACTER);
+   }
+   /**
     * Trims the current line of the screen, removing characters to the right and/or left of the cursor position.
     *
     * @param bool $right Whether to remove characters to the right of the cursor position.
     * @param bool $left Whether to remove characters to the left of the cursor position.
+    *
+    * @return Output
     */
    public function trim (bool $left = false, bool $right = true) : Output
    {
