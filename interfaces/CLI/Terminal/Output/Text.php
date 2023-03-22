@@ -99,9 +99,18 @@ class Text
    }
 
    // @ Formatting
+   /**
+    * Applies color to the output text.
+    *
+    * @param int|string $foreground The foreground color code or name. Defaults to 'default'.
+    * @param int|string $background The background color code or name. Defaults to 'default'.
+    * @param int $type The type of colors to use. One of the constants defined in the class. Defaults to DEFAULT_COLORS.
+    *
+    * @return Output
+    */
    public function colorize (
       int|string $foreground = 'default', int|string $background = 'default', int $type = self::DEFAULT_COLORS
-   )
+   ) : Output
    {
       $codes = [];
 
@@ -138,11 +147,20 @@ class Text
       $this->color = $color;
 
       // @ Output color
-      // TODO enqueue to Output and return self
-      $this->Output->write($color);
+      return $this->Output->write($color);
    }
-   public function stylize (string ...$styles)
+   /**
+    * Applies one or more text styles to the output.
+    * Valid styles are 'bold', 'italic', 'underline', 'strike', and null (to reset the styles).
+    *
+    * @param string ...$styles One or more styles to apply to the text.
+    *
+    * @return Output
+    */
+   public function stylize (string ...$styles) : Output
    {
+      $Output = &$this->Output;
+
       $codes = [];
 
       if ( empty($styles) ) {
@@ -163,12 +181,14 @@ class Text
       $wrapped = $this->wrap(...$codes);
 
       // @ Output style
-      $this->Output->write($wrapped);
+      $Output->write($wrapped);
 
       // @ Try to keep the last defined colors?
       if (! $codes[0] && $this->color) {
-         $this->Output->write($this->color);
+         $Output->write($this->color);
       }
+
+      return $Output;
    }
 
    // @ Modifying
@@ -268,4 +288,3 @@ class Text
       return $Output;
    }
 }
-
