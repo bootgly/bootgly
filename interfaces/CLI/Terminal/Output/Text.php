@@ -84,7 +84,9 @@ class Text
    ];
 
    // * Config
+   public Text\Colors $Colors;
    // * Data
+   // ...
    // * Meta
    private ? string $color;
 
@@ -93,6 +95,12 @@ class Text
    {
       $this->Output = $Output;
 
+
+      // * Config
+      $this->Colors = Text\Colors::Default;
+
+      // * Data
+      // ...
 
       // * Meta
       $this->color = null;
@@ -108,17 +116,22 @@ class Text
     *
     * @return Output
     */
-   public function colorize (
-      int|string $foreground = 'default', int|string $background = 'default', int $type = self::DEFAULT_COLORS
-   ) : Output
+   public function colorize (int|string $foreground = 'default', int|string $background = 'default') : Output
    {
       $codes = [];
 
       // @ Set Colors type
-      $foregrounds = ($type !== self::BRIGHT_COLORS)
-                     ? (self::COLORS_FOREGROUND) : (self::COLORS_FOREGROUND_BRIGHT);
-      $backgrounds = ($type !== self::BRIGHT_COLORS)
-                     ? self::COLORS_BACKGROUND : (self::COLORS_BACKGROUND_BRIGHT);
+      if ($this->Colors->get() !== Text\Colors::Bright) {
+         $foregrounds = self::COLORS_FOREGROUND;
+      } else {
+         $foregrounds = self::COLORS_FOREGROUND_BRIGHT;
+      }
+
+      if ($this->Colors->get() !== Text\Colors::Bright) {
+         $backgrounds = self::COLORS_BACKGROUND;
+      } else {
+         $backgrounds = self::COLORS_BACKGROUND_BRIGHT;
+      }
 
       // @ Use Preset colors
       if ( is_string($foreground) ) {
@@ -287,4 +300,18 @@ class Text
 
       return $Output;
    }
+}
+
+
+// * Config
+namespace Bootgly\CLI\Terminal\Output\Text;
+
+
+enum Colors : int
+{
+   use \Bootgly\Configuring;
+
+
+   case Default = 1;
+   case Bright = 2;
 }
