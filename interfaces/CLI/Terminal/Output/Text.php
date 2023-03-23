@@ -276,6 +276,26 @@ class Text
       return $Output;
    }
    /**
+    * Clear the entire display or a part of it.
+    *
+    * @param bool $up If true, clear the lines above the current cursor position.
+    * @param bool $down If true, clear the lines below the current cursor position.
+    *
+    * @return Output
+    */
+   public function clear (bool $up = false, bool $down = false) : Output
+   {
+      $Output = &$this->Output;
+
+      match (true) {
+         ($up && !$down) => $Output->escape(self::_TEXT_ERASE_IN_DISPLAY_1),
+         (!$up && $down) => $Output->escape(self::_TEXT_ERASE_IN_DISPLAY_0),
+         default => $Output->escape(self::_TEXT_ERASE_IN_DISPLAY_2)
+      };
+
+      return $Output;
+   }
+   /**
     * Trims the current line of the screen, removing **all characters** to the right and/or left of the cursor position.
     *
     * @param bool $right Whether to remove all characters to the right of the cursor position.
@@ -300,10 +320,11 @@ class Text
 }
 
 
-// * Config
+
 namespace Bootgly\CLI\Terminal\Output\Text;
 
 
+// * Configs
 enum Colors : int
 {
    use \Bootgly\Configuring;

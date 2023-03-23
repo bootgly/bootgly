@@ -39,6 +39,10 @@ trait Modifying
    public const _TEXT_ERASE_IN_DISPLAY = 'J';
 
 
+   public const _TEXT_ERASE_IN_DISPLAY_0 = '0J'; // Clear the lines below the current cursor position
+   public const _TEXT_ERASE_IN_DISPLAY_1 = '1J'; // Clear the lines above the current cursor position
+   public const _TEXT_ERASE_IN_DISPLAY_2 = '2J'; // Clear the entire screen / display
+
    public const _TEXT_ERASE_IN_LINE_0 = '0K'; // To Right from cursor
    public const _TEXT_ERASE_IN_LINE_1 = '1K'; // To Left from cursor
    public const _TEXT_ERASE_IN_LINE_2 = '2K'; // To Left and Right from cursor
