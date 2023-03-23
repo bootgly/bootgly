@@ -7,13 +7,13 @@ use Bootgly\CLI\Terminal\components\Progress;
 $Output = CLI::$Terminal->Output;
 $Output->reset();
 
-$Output->Text->colorize('green');
-$Output->write(<<<OUTPUT
-/*
- * Bootgly CLI Terminal - Progress component - Example #1
+$Output->render(<<<OUTPUT
+/* @*
+ * @#green: Bootgly CLI Terminal - Progress component @;
+ * @#yellow: Example #1: {$example} @;
+ * Love Bootgly? Give our repo a star ⭐!
  */\n\n
 OUTPUT);
-$Output->Text->colorize();
 
 $Progress = new Progress($Output);
 // * Config
@@ -45,13 +45,13 @@ $Progress->start();
 $i = 0;
 while ($i++ < 250000) {
    if ($i === 1) {
-      $Progress->describe('Performing progress!');
+      $Progress->describe('@#red:Performing progress! @;');
    }
    if ($i === 125000) {
-      $Progress->describe('There\'s only half left...');
+      $Progress->describe('@#yellow:There\'s only half left... @;');
    }
    if ($i === 249999) {
-      $Progress->describe('Finished!!!');
+      $Progress->describe('@#green:Finished!!! @;');
    }
 
 	$Progress->tick();

@@ -6,13 +6,13 @@ use Bootgly\CLI;
 $Output = CLI::$Terminal->Output;
 $Output->reset();
 
-$Output->Text->colorize('green');
-$Output->write(<<<OUTPUT
-/*
- * Bootgly CLI Terminal (>) - Cursor Positioning - Example #1
+$Output->render(<<<OUTPUT
+/* @*
+ * @#green: Bootgly CLI Terminal (>) - Cursor Positioning @;
+ * @#yellow: Example #1: {$example} @;
+ * Love Bootgly? Give our repo a star ⭐!
  */\n\n
 OUTPUT);
-$Output->Text->colorize();
 
 $Output->writing("Cursor Positioning on _:\n");
 $Output->writing("Moving up 1 line from current line and going back 53 columns to the left...");

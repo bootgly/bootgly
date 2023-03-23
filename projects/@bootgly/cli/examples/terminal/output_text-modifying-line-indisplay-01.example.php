@@ -7,13 +7,13 @@ $Output = CLI::$Terminal->Output;
 $Output->reset();
 $Output->waiting = 50000; // @ Wait time in miliseconds to "writing" (per character written)
 
-$Output->Text->colorize('green');
-$Output->write(<<<OUTPUT
-/*
- * Bootgly CLI Terminal (>) - Text Modifying - Line - In Display - Example #1
+$Output->render(<<<OUTPUT
+/* @*
+ * @#green: Bootgly CLI Terminal (>) - Text Modifying - Line - In Display @;
+ * @#yellow: Example #1: {$example} @;
+ * Love Bootgly? Give our repo a star ⭐!
  */\n\n
 OUTPUT);
-$Output->Text->colorize();
 
 $Output->writing("Writing something here...\n");
 $Output->writing("---------------------\n");

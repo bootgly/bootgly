@@ -7,13 +7,13 @@ $Output = CLI::$Terminal->Output;
 $Output->reset();
 $Output->waiting = 100000; // @ Wait time in miliseconds to "writing" (per character written)
 
-$Output->Text->colorize('green');
-$Output->write(<<<OUTPUT
-/*
- * Bootgly CLI Terminal (>) - Text Modifying - Line - Inline - Example #1
+$Output->render(<<<OUTPUT
+/* @*
+ * @#green: Bootgly CLI Terminal (>) - Text Modifying - Line - Inline @;
+ * @#yellow: Example #1: {$example} @;
+ * Love Bootgly? Give our repo a star ⭐!
  */\n\n
 OUTPUT);
-$Output->Text->colorize();
 
 $Output->writing("Trim all text to the right of cursor... ->!@#$%^&");
 $Output->Cursor->left(7);

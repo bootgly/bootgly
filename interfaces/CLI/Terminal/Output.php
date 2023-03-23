@@ -45,7 +45,7 @@ class Output
       $this->stream = $stream;
       // @ Delay
       $this->wait = -1;       // @ to write method
-      $this->waiting = 50000; // @ to writing method
+      $this->waiting = 30000; // @ to writing method
 
       // * Data
       $this->text = '';

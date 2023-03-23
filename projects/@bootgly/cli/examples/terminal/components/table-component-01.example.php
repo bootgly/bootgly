@@ -7,13 +7,13 @@ use Bootgly\CLI\Terminal\components\Table;
 $Output = CLI::$Terminal->Output;
 $Output->reset();
 
-$Output->Text->colorize('green');
-$Output->write(<<<OUTPUT
-/*
- * Bootgly CLI Terminal - Table component - Example #1
+$Output->render(<<<OUTPUT
+/* @*
+ * @#green: Bootgly CLI Terminal - Table component @;
+ * @#yellow: Example #1: {$example} @;
+ * Love Bootgly? Give our repo a star ⭐!
  */\n\n
 OUTPUT);
-$Output->Text->colorize();
 
 $Table = new Table($Output);
 
