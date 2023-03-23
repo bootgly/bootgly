@@ -6,11 +6,13 @@ use Bootgly\CLI;
 $Output = CLI::$Terminal->Output;
 $Output->reset();
 
-/* 
- * Terminal Output - Cursor Visualizing - Example #1
- */
-$Output->write("Bootgly CLI - Cursor Visualizing:\n");
-sleep(1);
+$Output->Text->colorize('green');
+$Output->write(<<<OUTPUT
+/*
+ * Bootgly CLI Terminal > - Cursor Visualizing - Example #1
+ */\n\n
+OUTPUT);
+$Output->Text->colorize();
 
 $Output->write("Hiding cursor for 3 seconds...\n");
 $Output->Cursor->hide();

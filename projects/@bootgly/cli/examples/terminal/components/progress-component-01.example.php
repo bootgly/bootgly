@@ -7,9 +7,14 @@ use Bootgly\CLI\Terminal\components\Progress;
 $Output = CLI::$Terminal->Output;
 $Output->reset();
 
-/* 
- * Terminal components - Progress component - Example #1
- */
+$Output->Text->colorize('green');
+$Output->write(<<<OUTPUT
+/*
+ * Bootgly CLI Terminal - Progress component - Example #1
+ */\n\n
+OUTPUT);
+$Output->Text->colorize();
+
 $Progress = new Progress($Output);
 // * Config
 // @ Ticks

@@ -7,9 +7,14 @@ $Output = CLI::$Terminal->Output;
 $Output->reset();
 $Output->waiting = 15000;
 
+$Output->Text->colorize('green');
+$Output->write(<<<OUTPUT
 /*
- * Terminal Output - Text Formatting - Styling - Example #1
- */
+ * Bootgly CLI Terminal > - Text Formatting - Styling - Example #1
+ */\n\n
+OUTPUT);
+$Output->Text->colorize();
+
 $Output->write(<<<OUTPUT
 *
 * Unique style

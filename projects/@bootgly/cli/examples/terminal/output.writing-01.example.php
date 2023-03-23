@@ -6,9 +6,14 @@ use Bootgly\CLI;
 $Output = CLI::$Terminal->Output;
 $Output->reset();
 
-/* 
- * Terminal Output - Writing method - Example #1
- */
+$Output->Text->colorize('green');
+$Output->write(<<<OUTPUT
+/*
+ * Bootgly CLI Terminal > - writing(string \$text) method - Example #1
+ */\n\n
+OUTPUT);
+$Output->Text->colorize();
+
 $Output->writing("Cursor Output: writing method on Bootgly!\n");
 $Output->writing("This feature allows writing to be slow and gradual...\n");
 $Output->waiting = 10000;

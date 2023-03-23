@@ -7,14 +7,20 @@ $Output = CLI::$Terminal->Output;
 $Output->reset();
 $Output->waiting = 10000;
 
+$Output->Text->colorize('green');
+$Output->write(<<<OUTPUT
 /*
- * Terminal Output - Text Formatting - Coloring - Example #1
- */
+ * Bootgly CLI Terminal > - Text Formatting - Coloring - Example #1
+ */\n\n
+OUTPUT);
+$Output->Text->colorize();
+
+
 // @ Testing Preset colors: foreground + default background
 $Output->write(<<<OUTPUT
 *
 * Testing Preset colors: foreground + default background
-*\n
+*\n\n
 OUTPUT);
 $Output->Text->colorize(foreground: 'cyan');
 $Output->writing("Writing with the color of the text in cyan on a `default` background...\n\n");
@@ -27,6 +33,7 @@ $Output->write(<<<OUTPUT
 * Testing Preset colors (default colors): foreground + background
 *\n
 OUTPUT);
+
 $Output->Text->colorize(foreground: 'black', background: 'white');
 $Output->writing("Writing with the color of the text in `black` on a `white` background...\n");
 
@@ -59,7 +66,7 @@ $Output->write(<<<OUTPUT
 *\n
 OUTPUT);
 
-$Output->Text->Colors::Bright->set(); // @ Set bright colors
+$Output->Text->Colors::Bright->set(); // @ Config the set of colors using enums 🤯
 
 $Output->Text->colorize(foreground: 'black', background: 'white');
 $Output->writing("Writing with the color of the text in `black` on a `white` background...\n");

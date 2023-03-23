@@ -7,9 +7,14 @@ use Bootgly\CLI\Terminal\components\Table;
 $Output = CLI::$Terminal->Output;
 $Output->reset();
 
-/* 
- * Terminal components - Table component - Example #1
- */
+$Output->Text->colorize('green');
+$Output->write(<<<OUTPUT
+/*
+ * Bootgly CLI Terminal > - Table component - Example #1
+ */\n\n
+OUTPUT);
+$Output->Text->colorize();
+
 $Table = new Table($Output);
 
 $Table->Data->set(header: ['Alura Courses', 'Quantity']);
@@ -41,7 +46,7 @@ for ($i = 1; $i <= $loops; $i++) {
       case 3:
          $alignment = 'right';
          break;
-   };
+   }
 
    // ! Cells
    $Table->Cells->align($alignment);

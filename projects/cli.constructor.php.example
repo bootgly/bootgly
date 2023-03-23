@@ -3,11 +3,12 @@ namespace Bootgly\CLI;
 
 
 use Bootgly\CLI;
-use Bootgly\CLI\Terminal\components\Progress;
-use Bootgly\CLI\Terminal\components\Table;
 
 
 $Output = CLI::$Terminal->Output;
+
+$Output->expand(lines: CLI::$Terminal::$lines);
+// TODO Check the height (n of lines) of the terminal?
 
 $examples = [
    // Terminal->Output . Writing
@@ -44,7 +45,7 @@ $examples = [
 foreach ($examples as $index => $example) {
    require '@bootgly/cli/examples/' . $example;
 
-   if (count($examples) > $index + 1) {
-      $Output->write("\n---\n\n");
-   }
+   sleep(3);
+
+   CLI::$Terminal->clear();
 }
