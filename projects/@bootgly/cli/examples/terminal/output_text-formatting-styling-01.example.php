@@ -39,6 +39,9 @@ $Output->Text->stylize('strike');
 $Output->writing("Writing text in strike style...\n\n");
 $Output->Text->stylize();
 
+$Output->Text->stylize('blink');
+$Output->writing("Writing text in blink style...\n\n");
+#$Output->Text->stylize();
 
 $Output->Text->stylize();
 $Output->writing("Writing text in default style again...\n\n\n");

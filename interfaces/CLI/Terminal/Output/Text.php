@@ -182,6 +182,7 @@ class Text
             'bold'      => self::_BOLD_STYLE,
             'italic'    => self::_ITALIC_STYLE,
             'underline' => self::_UNDERLINE_STYLE,
+            'blink'     => self::_BLINK_STYLE,
             'strike'    => self::_STRIKE_STYLE,
             default     => self::_DEFAULT_STYLE
          };

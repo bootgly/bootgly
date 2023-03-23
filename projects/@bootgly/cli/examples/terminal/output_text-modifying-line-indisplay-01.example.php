@@ -20,12 +20,13 @@ $Output->writing("---------------------\n");
 $Output->writing("Writing again here...\n");
 $Output->Cursor->up(2);
 $Output->Cursor->moveTo(column: 1);
-sleep(3);
+sleep(2);
 $Output->Text->clear(down: true);
+sleep(3);
 
 $Output->writing("---------------------\n");
 $Output->writing("Bootgly Bootgly Bootgly...\n");
 $Output->Cursor->up(2);
 $Output->Cursor->right(21);
-sleep(3);
+sleep(2);
 $Output->Text->clear(up: true);

@@ -69,6 +69,7 @@ trait Formatting
    public const _BOLD_STYLE      = '1';
    public const _ITALIC_STYLE    = '3';
    public const _UNDERLINE_STYLE = '4';
+   public const _BLINK_STYLE     = '5';
    public const _STRIKE_STYLE    = '9';
 
    // * Combined
