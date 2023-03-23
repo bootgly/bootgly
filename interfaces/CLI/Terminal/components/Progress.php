@@ -234,7 +234,7 @@ class Progress
          $description = str_pad($description, $describedLength, ' ', STR_PAD_RIGHT);
       }
 
-      $this->description = $description;
+      $this->description = CLI\Template::render($description);
    }
 
    public function finish ()

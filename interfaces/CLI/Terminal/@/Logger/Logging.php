@@ -11,6 +11,7 @@
 namespace Bootgly\CLI\Terminal\_\Logger;
 
 
+use Bootgly\CLI;
 use Bootgly\Logger;
 
 
@@ -25,6 +26,7 @@ trait Logging
    // * Meta
    // imported from \Bootgly\CLI\Terminal\text\Formatting...
 
+
    public function log ($message, int $level = self::LOG_DEBUG_LEVEL) : true
    {
       if (Logger::$display === Logger::DISPLAY_NONE) {
@@ -35,7 +37,7 @@ trait Logging
       [$severity, $color] = $this->translate($level);
 
       // @ Render templating
-      $message = $this->render($message);
+      $message = CLI\Template::render($message);
 
       // @ Output log
       echo $this->format($message, $severity, $color);
@@ -91,81 +93,7 @@ trait Logging
          $severity, $color
       ];
    }
-   // @ Templating
-   private function render ($message) : string
-   {
-      #$line = "\033[1A\n\033[K";
 
-      // @ Levels => Colors (@:[a-b]+:)
-      $message = preg_replace_callback('/@(:[a-z]+):/m', function ($matches) {
-         $color = match ($matches[1]) {
-            ':d', ':s', ':debug', ':success' => self::_GREEN_BRIGHT_FOREGROUND,
-
-            ':i', ':info' => self::_CYAN_BRIGHT_FOREGROUND,
-            ':n', ':notice' => self::_YELLOW_BRIGHT_FOREGROUND,
-            ':w', ':warning' => self::_MAGENTA_BRIGHT_FOREGROUND,
-            ':e', ':error' => self::_RED_BRIGHT_FOREGROUND,
-
-            default => self::_DEFAULT_FOREGROUND
-         };
-
-         return self::wrap($color);
-      }, $message);
-
-      // @ Colors => Colors (@#[a-bzA-Z]+:)
-      $message = preg_replace_callback('/@(#[a-zA-Z]+):/m', function ($matches) {
-         $color = match ($matches[1]) {
-            '#black' => self::_BLACK_FOREGROUND,
-            '#red' => self::_RED_FOREGROUND,
-            '#green' => self::_GREEN_FOREGROUND,
-            '#yellow' => self::_YELLOW_FOREGROUND,
-            '#blue' => self::_BLUE_FOREGROUND,
-            '#magenta' => self::_MAGENTA_FOREGROUND,
-            '#cyan' => self::_CYAN_FOREGROUND,
-            '#white' => self::_WHITE_FOREGROUND,
-
-            '#Black', '#BLACK' => self::_BLACK_BRIGHT_FOREGROUND,
-            '#Red', '#RED' => self::_RED_BRIGHT_FOREGROUND,
-            '#Green', '#GREEN' => self::_GREEN_BRIGHT_FOREGROUND,
-            '#Yellow', '#YELLOW' => self::_YELLOW_BRIGHT_FOREGROUND,
-            '#Blue', '#BLUE' => self::_BLUE_BRIGHT_FOREGROUND,
-            '#Magenta', '#MAGENTA' => self::_MAGENTA_BRIGHT_FOREGROUND,
-            '#Cyan', '#CYAN' => self::_CYAN_BRIGHT_FOREGROUND,
-            '#White', '#WHITE' => self::_WHITE_BRIGHT_FOREGROUND,
-
-            default => self::_DEFAULT_FOREGROUND
-         };
-
-         return self::wrap($color);
-      }, $message);
-
-      // @ Style
-      $message = preg_replace_callback('/@([*~_-])/m', function ($matches) {
-         $style = match ($matches[1]) {
-            '*' => self::_BOLD_STYLE,
-            '~' => self::_ITALIC_STYLE,
-            '_' => self::_UNDERLINE_STYLE,
-            '-' => self::_STRIKE_STYLE,
-            default => ''
-         };
-
-         return self::wrap($style);
-      }, $message);
-
-      // @ Reset (End of)
-      $message = preg_replace_callback('/\s@(;)|([*~_-])@/m', function ($matches) {
-         return self::_RESET_FORMAT;
-      }, $message);
-
-      // @ Break lines / End of line (EOL)
-      $message = preg_replace_callback('/@(\\\\+);/m', function ($matches) {
-         if ($matches[0]) {
-            return str_repeat(PHP_EOL, strlen($matches[1]));
-         }
-      }, $message);
-
-      return $message;
-   }
    // @ Formatting
    private function format ($message, $severity, $color) : string
    {

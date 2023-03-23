@@ -12,7 +12,7 @@ namespace Bootgly\CLI\Terminal;
 
 
 use Bootgly\CLI;
-
+use Bootgly\CLI\Template;
 use Bootgly\CLI\Terminal\Output\Cursor;
 use Bootgly\CLI\Terminal\Output\Text;
 use Bootgly\CLI\Terminal\Output\Viewport;
@@ -21,12 +21,13 @@ use Bootgly\CLI\Terminal\Output\Viewport;
 class Output
 {
    // * Config
+   public $stream;
    // @ Delay
    public int $wait;
    public int $waiting;
 
    // * Data
-   public $stream;
+   public string $text;
 
    // * Meta
    // @ Stats
@@ -41,12 +42,13 @@ class Output
    public function __construct ($stream = STDOUT)
    {
       // * Config
+      $this->stream = $stream;
       // @ Delay
       $this->wait = -1;       // @ to write method
       $this->waiting = 50000; // @ to writing method
 
       // * Data
-      $this->stream = $stream;
+      $this->text = '';
 
       // * Meta
       // @ Stats
@@ -75,9 +77,13 @@ class Output
    public function write (string $text, int $times = 1) : self
    {
       // * Config
-      $wait = $this->wait;
-      // * Data
       $stream = &$this->stream;
+      // @ Delay
+      $wait = $this->wait;
+
+      // * Data
+      // ...
+
 
       do {
          $this->written = fwrite($stream, $text);
@@ -94,11 +100,16 @@ class Output
    public function writing (string $text) : self
    {
       // * Config
-      $waiting = $this->waiting;
-      // * Data
       $stream = $this->stream;
+      // @ Delay
+      $waiting = $this->waiting;
+
+      // * Data
+      // ...
+
       // * Meta
       $written = 0;
+
 
       $parts = str_split($text);
       foreach ($parts as $part) {
@@ -113,6 +124,14 @@ class Output
 
       return $this;
    }
+
+   public function append (string $text) : self
+   {
+      $this->written = fwrite($this->stream, $text . PHP_EOL);
+
+      return $this;
+   }
+
    public function escape (string $code) : self
    {
       fwrite($this->stream, CLI::_START_ESCAPE . $code);
@@ -125,9 +144,12 @@ class Output
 
       return $this;
    }
-   public function append (string $text) : self
+
+   public function render (string $text) : self
    {
-      $this->written = fwrite($this->stream, $text . PHP_EOL);
+      $text = Template::render($text);
+
+      fwrite($this->stream, $text);
 
       return $this;
    }
