@@ -33,6 +33,8 @@ require 'CLI/Terminal/Output.php';
 require 'CLI/Terminal/Output/Cursor.php';
 // Text
 require 'CLI/Terminal/Output/Text.php';
+// Viewport
+require 'CLI/Terminal/Output/Viewport.php';
 // @ components
 // Progress
 require 'CLI/Terminal/components/Progress.php';

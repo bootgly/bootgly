@@ -15,6 +15,7 @@ use Bootgly\CLI;
 
 use Bootgly\CLI\Terminal\Output\Cursor;
 use Bootgly\CLI\Terminal\Output\Text;
+use Bootgly\CLI\Terminal\Output\Viewport;
 
 
 class Output
@@ -34,6 +35,7 @@ class Output
 
    public Cursor $Cursor;
    public Text $Text;
+   public Viewport $Viewport;
 
 
    public function __construct ($stream = STDOUT)
@@ -53,6 +55,7 @@ class Output
 
       $this->Cursor = new Cursor($this);
       $this->Text = new Text($this);
+      $this->Viewport = new Viewport($this);
    }
 
    public function reset ()
