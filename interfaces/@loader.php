@@ -13,6 +13,8 @@ require 'CLI/@/Escaping/text/Formatting.php';      // @trait
 require 'CLI/@/Escaping/text/Modifying.php';       // @trait
 // viewport
 require 'CLI/@/Escaping/viewport/Positioning.php'; // @trait
+// ? Template
+require 'CLI/@/Template.php';
 
 // ? Commands
 require 'CLI/Commands.php';
