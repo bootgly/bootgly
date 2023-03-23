@@ -10,7 +10,7 @@ $Output->waiting = 100000; // @ Wait time in miliseconds to "writing" (per chara
 $Output->Text->colorize('green');
 $Output->write(<<<OUTPUT
 /*
- * Bootgly CLI Terminal > - Text Modifying - Line - Example #1
+ * Bootgly CLI Terminal (>) - Text Modifying - Line - Example #1
  */\n\n
 OUTPUT);
 $Output->Text->colorize();

@@ -10,7 +10,7 @@ $Output->waiting = 30000;
 $Output->Text->colorize('green');
 $Output->write(<<<OUTPUT
 /*
- * Bootgly CLI Terminal > - Text Modifying - Example #1
+ * Bootgly CLI Terminal (>) - Text Modifying - Example #1
  */\n\n
 OUTPUT);
 $Output->Text->colorize();

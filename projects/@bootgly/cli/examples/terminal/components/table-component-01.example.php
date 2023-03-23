@@ -10,7 +10,7 @@ $Output->reset();
 $Output->Text->colorize('green');
 $Output->write(<<<OUTPUT
 /*
- * Bootgly CLI Terminal > - Table component - Example #1
+ * Bootgly CLI Terminal - Table component - Example #1
  */\n\n
 OUTPUT);
 $Output->Text->colorize();

@@ -32,6 +32,8 @@ $examples = [
    'terminal/output_text-modifying-01.example.php',
    // Terminal->Output _ Text Modifying - Line
    'terminal/output_text-modifying-line-01.example.php',
+   // Terminal->Output _ Text Modifying - Line - In Display
+   'terminal/output_text-modifying-line-indisplay-01.example.php',
    // Terminal->Output _ Text Modifying - Line - Inline
    'terminal/output_text-modifying-line-inline-01.example.php',
 

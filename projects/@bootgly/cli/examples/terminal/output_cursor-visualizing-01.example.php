@@ -9,7 +9,7 @@ $Output->reset();
 $Output->Text->colorize('green');
 $Output->write(<<<OUTPUT
 /*
- * Bootgly CLI Terminal > - Cursor Visualizing - Example #1
+ * Bootgly CLI Terminal (>) - Cursor Visualizing - Example #1
  */\n\n
 OUTPUT);
 $Output->Text->colorize();
