@@ -62,6 +62,15 @@ class Output
    {
       $this->__construct();
    }
+   public function expand (int $lines) : self
+   {
+      if ($lines > 0) {
+         $this->Viewport->panDown($lines); // @ use EOL instead of pan down?
+         $this->Cursor->up($lines);
+      }
+
+      return $this;
+   }
 
    public function write (string $text, int $times = 1) : self
    {
