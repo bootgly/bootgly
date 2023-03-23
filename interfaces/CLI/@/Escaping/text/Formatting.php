@@ -12,11 +12,14 @@ namespace Bootgly\CLI\Escaping\text;
 
 
 use Bootgly\CLI;
+use Bootgly\CLI\Escaping;
 
 
 trait Formatting
 {
-   // * Meta
+   use Escaping;
+
+
    public const _END_FORMAT = 'm';
    public const _RESET_FORMAT = CLI::_START_ESCAPE . '0' . self::_END_FORMAT;
 
@@ -90,8 +93,8 @@ trait Formatting
    public const _BLACK_WHITE = '47;30';
 
 
-   protected function wrap (string ...$codes)
+   protected static function wrap (string ...$codes)
    {
-      return CLI::_START_ESCAPE . implode(';', $codes) . self::_END_FORMAT;
+      return self::_START_ESCAPE . implode(';', $codes) . self::_END_FORMAT;
    }
 }

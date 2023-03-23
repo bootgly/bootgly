@@ -151,7 +151,7 @@ class Text
       }
 
       // @ Wrap color codes
-      $color = $this->wrap(...$codes);
+      $color = self::wrap(...$codes);
 
       // @ Save the last defined color
       $this->color = $color;
@@ -189,7 +189,7 @@ class Text
       }
 
       // @ Wrap style codes
-      $wrapped = $this->wrap(...$codes);
+      $wrapped = self::wrap(...$codes);
 
       // @ Output style
       $Output->write($wrapped);

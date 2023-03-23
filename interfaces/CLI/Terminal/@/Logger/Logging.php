@@ -109,7 +109,7 @@ trait Logging
             default => self::_DEFAULT_FOREGROUND
          };
 
-         return $this->wrap($color);
+         return self::wrap($color);
       }, $message);
 
       // @ Colors => Colors (@#[a-bzA-Z]+:)
@@ -136,7 +136,7 @@ trait Logging
             default => self::_DEFAULT_FOREGROUND
          };
 
-         return $this->wrap($color);
+         return self::wrap($color);
       }, $message);
 
       // @ Style
@@ -149,7 +149,7 @@ trait Logging
             default => ''
          };
 
-         return $this->wrap($style);
+         return self::wrap($style);
       }, $message);
 
       // @ Reset (End of)
@@ -174,7 +174,7 @@ trait Logging
       if (Logger::$display >= Logger::DISPLAY_MESSAGE_WHEN) {
          $DateTime = new \DateTime();
 
-         $when .= $this->wrap(self::_BLACK_BRIGHT_FOREGROUND);
+         $when .= self::wrap(self::_BLACK_BRIGHT_FOREGROUND);
          $when .= '[';
          $when .= $DateTime->format('Y-m-d\TH:i:s.uP');
          $when .= '] ';
@@ -187,11 +187,11 @@ trait Logging
             $id .= $this->Logger->channel . '.';
          }
 
-         $id .= $this->wrap($color);
+         $id .= self::wrap($color);
          $id .= $severity . self::_RESET_FORMAT . ': ';
       }
       // @ Display message (always)
-      $message = $this->wrap($color) . $message . self::_RESET_FORMAT;
+      $message = self::wrap($color) . $message . self::_RESET_FORMAT;
       if (Logger::$display > Logger::DISPLAY_MESSAGE) {
          $message .= PHP_EOL;
       }
