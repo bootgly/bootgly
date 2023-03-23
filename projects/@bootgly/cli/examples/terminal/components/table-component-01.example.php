@@ -54,7 +54,9 @@ for ($i = 1; $i <= $loops; $i++) {
 
    $Table->render();
 
-   $Output->write("\n\n");
-
    sleep(1);
+
+   $Output->write("\n");
+   $Output->Cursor->up(16);
+   $Output->Text->clear(down: true);
 }
