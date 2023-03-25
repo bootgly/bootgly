@@ -8,10 +8,10 @@ $Output->reset();
 $Output->waiting = 10000;
 
 $Output->render(<<<OUTPUT
-/* @*
+/* @*:
  * @#green: Bootgly CLI Terminal (>) - Text Formatting - Coloring @;
- * @#yellow: Example #1: {$example} @;
- * Love Bootgly? Give our repo a star ⭐!
+ * @#yellow: @@ Demo - Example #1 @;
+ * {$location}
  */\n\n
 OUTPUT);
 
@@ -108,7 +108,7 @@ $Output->writing("Writing a text with color index '209' on a background with col
 
 // !!! Se você tem epilepsia fotossensível, por favor, evite olhar para a tela quando executar esse código abaixo.
 // !!! As luzes piscantes coloridas podem desencadear uma crise epiléptica. Cuide da sua saúde e segurança.
-/* @*
+/* @*:
 $Output->waiting = 1000;
 
 for ($f = 0; $f < 255; $f++) {

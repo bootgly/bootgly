@@ -7,10 +7,10 @@ $Output = CLI::$Terminal->Output;
 $Output->reset();
 
 $Output->render(<<<OUTPUT
-/* @*
+/* @*:
  * @#green: Bootgly CLI Terminal (>) - writing method @;
- * @#yellow: Example #1: {$example} @;
- * Love Bootgly? Give our repo a star ⭐!
+ * @#yellow: @@ Demo - Example #1 @;
+ * {$location}
  */\n\n
 OUTPUT);
 

@@ -8,10 +8,10 @@ $Output->reset();
 $Output->waiting = 30000;
 
 $Output->render(<<<OUTPUT
-/* @*
+/* @*:
  * @#green: Bootgly CLI Terminal (>) - Text Modifying @;
- * @#yellow: Example #1: {$example} @;
- * Love Bootgly? Give our repo a star ⭐!
+ * @#yellow: @@ Demo - Example #1 @;
+ * {$location}
  */\n\n
 OUTPUT);
 
