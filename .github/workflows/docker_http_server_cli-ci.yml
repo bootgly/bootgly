@@ -30,5 +30,6 @@ jobs:
         name: Build and push Docker image
         uses: docker/build-push-action@v3
         with:
+          file: bootgly-cli-server.http.dockerfile
           push: true
           tags: bootgly/bootgly-php-framework:latest
