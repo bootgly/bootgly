@@ -36,7 +36,7 @@ class Terminal
 
    // * Meta
    public static int $width;
-   public static int $heigth;
+   public static int $height;
 
    public static int $columns;
    public static int $lines;
@@ -69,7 +69,7 @@ class Terminal
       }
       self::$columns = $columns;
       // lines
-      // @ Get the terminal lines (heigth)
+      // @ Get the terminal lines (height)
       $lines = exec("tput lines 2>/dev/null");
       if ( ! is_numeric($lines) ) {
          $lines = 30;
@@ -77,8 +77,8 @@ class Terminal
       self::$lines = $lines;
       // width
       self::$width = self::$columns;
-      // heigth
-      self::$heigth = self::$lines;
+      // height
+      self::$height = self::$lines;
 
 
       // ! IO
