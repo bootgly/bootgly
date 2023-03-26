@@ -13,6 +13,7 @@ namespace Bootgly\CLI\Terminal;
 
 use Bootgly\CLI;
 use Bootgly\CLI\Template;
+use Bootgly\CLI\Terminal;
 use Bootgly\CLI\Terminal\Output\Cursor;
 use Bootgly\CLI\Terminal\Output\Text;
 use Bootgly\CLI\Terminal\Output\Viewport;
@@ -66,10 +67,21 @@ class Output
    }
    public function expand (int $lines) : self
    {
-      if ($lines > 0) {
-         $this->Viewport->panDown($lines); // @ use EOL instead of pan down?
-         $this->Cursor->up($lines);
+      if ($lines <= 0) {
+         return $this;
       }
+
+      // @ Cursor
+      // position
+      $final = $this->Cursor->position['row'] + $lines;
+
+      if ($final < Terminal::$height) {
+         return $this;
+      }
+
+      $this->Viewport->panDown($lines);
+
+      $this->Cursor->up($lines);
 
       return $this;
    }
