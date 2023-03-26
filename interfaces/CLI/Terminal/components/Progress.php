@@ -17,7 +17,6 @@ use Bootgly\CLI\Escaping;
 use Bootgly\CLI\Escaping\cursor;
 use Bootgly\CLI\Escaping\text;
 
-use Bootgly\CLI\Terminal;
 use Bootgly\CLI\Terminal\Output;
 use Bootgly\CLI\Terminal\components\Progress\Bar;
 
@@ -33,34 +32,34 @@ class Progress
    private Output $Output;
 
    // * Config
-   // @ Tick
-   public float $ticks;
+   // @
    public float $throttle;
-   // @ Templating
-   public string $template;
-   // @ Precision
-   public int $secondPrecision;
-   public int $percentPrecision;
+   // ---
+   public object $Precision;
 
    // * Data
-   // @ Tick
-   public float $ticked;
+   // @
+   public float $current;
+   public float $total;
+   // ! Templating
+   public string $template;
 
    // * Meta
    // @ Cursor
-   private int $row;
-   // @ Timing
-   private float $started;
-   private float $rendered;
-   private bool $finished;
+   private array $cursor;
    // @ Display
-   private string $description; // TODO use CLI templating
+   private string $description;
    private float|string $percent;
    private float|string $elapsed;
    private float|string $eta;
    private float|string $rate;
-   // @ Templating
+   // ! Templating
    private array $tokens;
+   // @ render
+   // time
+   private float $started;
+   private float $rendered;
+   private bool $finished;
 
    public Bar $Bar;
 
@@ -69,39 +68,45 @@ class Progress
    {
       $this->Output = $Output;
 
+
       // * Config
-      // @ Tick
-      $this->ticks = 100;
+      // @
       $this->throttle = 0.1;
-      // @ Templating
-      $this->template = <<<'TEMPLATE'
-      @described;
-      @ticked;/@ticks; [@bar;] @percent;%
-      ⏱️ @elapsed;s - 🏁 @eta;s - 📈 @rate; loops/s
-      TEMPLATE;
-      // @ Precision
-      $this->secondPrecision = 2;
-      $this->percentPrecision = 1;
+      // ---
+      $this->Precision = new class {
+         public int $seconds = 2;
+         public int $percent = 1;
+         public int $rate = 0;
+      };
 
       // * Data
-      // @ Tick
-      $this->ticked = 0.0;
+      // @
+      $this->current = 0.0;
+      $this->total = 100;
+      // ! Templating
+      $this->template = <<<'TEMPLATE'
+      @described;
+      @current;/@total; [@bar;] @percent;%
+      ⏱️ @elapsed;s - 🏁 @eta;s - 📈 @rate; loops/s
+      TEMPLATE;
 
       // * Meta
       // @ Cursor
-      $this->row = 0;
-      // @ Timing
-      $this->started = 0.0;
-      $this->rendered = 0.0;
-      $this->finished = false;
+      $this->cursor = [0, 1];
       // @ Display
-      $this->description = ''; // TODO use CLI templating
+      $this->description = '';
       $this->percent = 0.0;
       $this->elapsed = 0.0;
       $this->eta = 0.0;
       $this->rate = 0.0;
-      // @ Templating
-      $this->tokens = ['@description;', '@ticked;', '@ticks;', '@bar;', '@percent;', '@elapsed;', '@eta;', '@rate;'];
+      // ! Templating
+      $this->tokens = ['@description;', '@current;', '@total;', '@bar;', '@percent;', '@elapsed;', '@eta;', '@rate;'];
+      // @ render
+      // time
+      $this->started = 0.0;
+      $this->rendered = 0.0;
+      $this->finished = false;
+
 
       $this->Bar = new Bar($this);
    }
@@ -112,35 +117,38 @@ class Progress
 
    private function render ()
    {
-      // @ Timing
       $this->rendered = microtime(true);
 
       // ! Templating
       // @ Prepare values
       // description
-      // TODO use CLI templating
       if (strpos($this->template, '@description;') !== false) {
          $description = $this->description;
       }
-      // ticked
-      $ticked = $this->ticked;
-      // ticks
-      $ticks = (int) $this->ticks;
+      // current
+      $current = $this->current;
+      // total
+      $total = (int) $this->total;
       // bar
       if (strpos($this->template, '@bar;') !== false) {
          $bar = $this->Bar->render();
       }
-
-      $percent = number_format($this->percent, $this->percentPrecision, '.', '');
-      $elapsed = number_format($this->elapsed, $this->secondPrecision, '.', '');
-      $eta = number_format($this->eta, $this->secondPrecision, '.', '');
-      $rate = number_format($this->rate, 0, '.', '');
+      // ---
+      $Precision = $this->Precision;
+      // percent
+      $percent = number_format($this->percent, $Precision->percent, '.', '');
+      // elapsed
+      $elapsed = number_format($this->elapsed, $Precision->seconds, '.', '');
+      // eta
+      $eta = number_format($this->eta, $Precision->seconds, '.', '');
+      // rate
+      $rate = number_format($this->rate, $Precision->rate, '.', '');
 
       // @ Replace tokens by strings
       $output = strtr($this->template, [
          '@description;' => $description ?? '',
-         '@ticked;' => $ticked,
-         '@ticks;' => $ticks,
+         '@current;' => $current,
+         '@total;' => $total,
          '@bar;' => $bar ?? '',
          '@percent;' => $percent,
          '@elapsed;' => $elapsed,
@@ -148,8 +156,8 @@ class Progress
          '@rate;' => $rate
       ]);
 
-      // @ Move cursor to line
-      $this->Output->Cursor->moveTo(line: $this->row, column: 1);
+      // @ Reset cursor position to initial line
+      $this->Output->Cursor->moveTo(...$this->cursor);
 
       // @ Write to output
       $this->Output->write($output);
@@ -157,63 +165,71 @@ class Progress
 
    public function start ()
    {
-      // * Meta
+      if ($this->started) {
+         return;
+      }
+
       $this->started = microtime(true);
 
+      // ---
       // @ Make vertical space for writing
-      $lines = substr_count($this->template, "\n") + 1;
-      $this->Output->write(str_repeat("\n", $lines + 1));
-      $this->Output->Cursor->up($lines + 1);
+      $lines = substr_count($this->template, "\n") + 2;
+      $this->Output->expand($lines);
 
-      // @ Point cursor to the initial position to write
+      // @ Hide cursor
       $this->Output->Cursor->hide();
-      $this->Output->Cursor->moveTo(column: 1);
 
-      // @ Set the start time
-      $this->rendered = microtime(true);
-
-      // @ Format Template EOL
+      // @ Format Template
+      // TODO add support to render in multi columns
+      // EOL
       $this->template = str_replace("\n", "   \n", $this->template);
       $this->template .= "   \n\n";
 
-      // @ Get/Set the current Cursor position row
-      $this->row = ($this->Output->Cursor->position['row'] ?? 0);
+      // @ Set the current Cursor position
+      #$position = $this->Output->Cursor->position;
+      $this->cursor = $this->Output->Cursor->position;
+      // ---
 
       $this->render();
    }
 
-   public function tick (int $amount = 1)
+   public function advance (int $amount = 1)
    {
-      $ticked = $this->ticked += $amount;
-      $ticks = $this->ticks;
+      $current = $this->current += $amount;
 
-      if (microtime(true) - $this->rendered < $this->throttle) {
+      // ! Templating
+      // @ render
+      // time
+      $last = microtime(true) - $this->rendered;
+      if ($last < $this->throttle) {
          return;
       }
 
-      // @ Calculate
+      $total = $this->total;
+
+      // @ calculate
       // elapsed
       $elapsed = microtime(true) - $this->started;
       // percent
-      if ($ticks > 0) {
-         $percent = ($ticked / $ticks) * 100;
+      if ($total > 0) {
+         $percent = ($current / $total) * 100;
       } else {
-         $percent = $ticked;
+         $percent = $current;
       }
       // eta
-      if ($ticked > 0) {
-         $eta = (($elapsed / $ticked) * $ticks) - $elapsed;
+      if ($current > 0) {
+         $eta = (($elapsed / $current) * $total) - $elapsed;
       } else {
          $eta = 0.0;
       }
       // rate
-      if ($ticked > 0) {
-         $rate = $ticked / $elapsed;
+      if ($current > 0) {
+         $rate = $current / $elapsed;
       } else {
          $rate = 0.0;
       }
 
-      // @ Set
+      // @ set
       $this->elapsed = $elapsed;
       $this->percent = $percent;
       $this->eta = $eta;
@@ -245,12 +261,19 @@ class Progress
 
       $this->finished = true;
 
-      // TODO Check whether the last rendered showed the completed progress (when using throttle).
+      // @ Complete progress (when using throttle)
+      if ($this->throttle > 0.0 && $this->percent < 100) {
+         $this->elapsed = microtime(true) - $this->started;
+         $this->percent = 100;
+         $this->eta = 0.0;
+
+         $this->render();
+      }
 
       $this->Output->Cursor->show();
    }
 
-   public function __destruct()
+   public function __destruct ()
    {
       $this->finish();
    }
