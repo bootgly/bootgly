@@ -17,17 +17,21 @@ OUTPUT);
 
 $Progress = new Progress($Output);
 // * Config
-// @ Ticks
-$Progress->ticks = 250000;
-$Progress->throttle = 0;
-// @ Templating
+// @
+$Progress->throttle = 0.0;
+
+// * Data
+// @
+$Progress->total = 250000;
+// ! Templating
 $Progress->template = <<<'TEMPLATE'
 @description;
-@ticked;/@ticks; [@bar;] @percent;%
+@current;/@total; [@bar;] @percent;%
 ⏱️ @elapsed;s - 🏁 @eta;s - 📈 @rate; loops/s
 TEMPLATE;
+
 // ! Bar
-// Symbols
+// * Config
 $Progress->Bar->symbols = [
    'determined'   => [
       // Symbols array map:
@@ -36,25 +40,25 @@ $Progress->Bar->symbols = [
    ],
    'indetermined' => ['-']
 ];
-// Units
 $Progress->Bar->units = 10;
-
 
 $Progress->start();
 
 $i = 0;
 while ($i++ < 250000) {
    if ($i === 1) {
-      $Progress->describe('@#red:Performing progress! @;');
+      $Progress->describe('@#red: Performing progress! @;');
    }
    if ($i === 125000) {
-      $Progress->describe('@#yellow:There\'s only half left... @;');
+      $Progress->describe('@#yellow: There\'s only half left... @;');
    }
    if ($i === 249999) {
-      $Progress->describe('@#green:Finished!!! @;');
+      $Progress->describe('@#green: Finished!!! @;');
    }
 
-	$Progress->tick();
+   $Progress->advance();
+
+   #usleep(100);
 }
 
 
