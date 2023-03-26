@@ -62,10 +62,7 @@ class Cursor
             $row = intval(@$matches[1]);
             $column = intval(@$matches[2]);
 
-            return [
-               'row' => $row,
-               'column' => $column
-            ];
+            return [$row, $column];
       }
    }
 
