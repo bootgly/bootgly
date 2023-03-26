@@ -7,7 +7,8 @@
 </p>
 <p align="center">
   <a href="https://packagist.org/packages/bootgly/bootgly-php-framework">
-    <img alt="GitHub" src="https://img.shields.io/github/license/bootgly/bootgly-php-framework">
+    <img alt="Bootgly License" src="https://img.shields.io/github/license/bootgly/bootgly-php-framework"/>
+    <img alt="Github Actions" src="https://img.shields.io/github/actions/workflow/status/bootgly/bootgly-php-framework/docker_http_server_cli-ci.yml?label=CI%2FCD"/>
   </a>
 </p>
 
