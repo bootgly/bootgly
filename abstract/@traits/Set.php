@@ -2,7 +2,7 @@
 namespace Bootgly;
 
 
-trait Configuring // @ Use with enums
+trait Set // @ Use with enums
 {
    public function __call (string $name, array $arguments)
    {

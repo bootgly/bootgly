@@ -4,7 +4,7 @@ namespace Bootgly\Template;
 
 enum Config
 {
-   use \Bootgly\Configuring;
+   use \Bootgly\Set;
 
 
    case EXECUTE_MODE_REQUIRE;
