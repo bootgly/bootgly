@@ -45,6 +45,8 @@ class Progress
    public string $template;
 
    // * Meta
+   private bool $indetermined;
+   private bool $determined;
    // @ Cursor
    private array $cursor;
    // @ Display
@@ -91,6 +93,8 @@ class Progress
       TEMPLATE;
 
       // * Meta
+      $this->indetermined = false;
+      $this->determined = true;
       // @ Cursor
       $this->cursor = [0, 1];
       // @ Display
@@ -114,6 +118,14 @@ class Progress
    {
       return $this->$name;
    }
+   public function __set ($name, $value)
+   {
+      switch ($name) {
+         case 'percent':
+            $this->percent = $value;
+            break;
+      }
+   }
 
    private function render ()
    {
@@ -128,7 +140,9 @@ class Progress
       // current
       $current = $this->current;
       // total
-      $total = (int) $this->total;
+      if ($this->determined) {
+         $total = (int) $this->total;
+      }
       // bar
       if (strpos($this->template, '@bar;') !== false) {
          $bar = $this->Bar->render();
@@ -136,7 +150,9 @@ class Progress
       // ---
       $Precision = $this->Precision;
       // percent
-      $percent = number_format($this->percent, $Precision->percent, '.', '');
+      if ($this->determined) {
+         $percent = number_format($this->percent, $Precision->percent, '.', '');
+      }
       // elapsed
       $elapsed = number_format($this->elapsed, $Precision->seconds, '.', '');
       // eta
@@ -148,9 +164,9 @@ class Progress
       $output = strtr($this->template, [
          '@description;' => $description ?? '',
          '@current;' => $current,
-         '@total;' => $total,
+         '@total;' => $total ?? '?',
          '@bar;' => $bar ?? '',
-         '@percent;' => $percent,
+         '@percent;' => $percent ?? '?',
          '@elapsed;' => $elapsed,
          '@eta;' => $eta,
          '@rate;' => $rate
@@ -186,8 +202,13 @@ class Progress
       $this->template .= "   \n\n";
 
       // @ Set the current Cursor position
-      #$position = $this->Output->Cursor->position;
       $this->cursor = $this->Output->Cursor->position;
+
+      // @ Parse indetermined
+      if ($this->total <= 0) {
+         $this->indetermined = true;
+         $this->determined = false;
+      }
       // ---
 
       $this->render();
@@ -212,9 +233,9 @@ class Progress
       $elapsed = microtime(true) - $this->started;
       // percent
       if ($total > 0) {
-         $percent = ($current / $total) * 100;
+         $this->percent = ($current / $total) * 100;
       } else {
-         $percent = $current;
+         $this->percent++;
       }
       // eta
       if ($current > 0) {
@@ -231,7 +252,6 @@ class Progress
 
       // @ set
       $this->elapsed = $elapsed;
-      $this->percent = $percent;
       $this->eta = $eta;
       $this->rate = $rate;
 
@@ -261,8 +281,8 @@ class Progress
 
       $this->finished = true;
 
-      // @ Complete progress (when using throttle)
-      if ($this->throttle > 0.0 && $this->percent < 100) {
+      // @ Complete progress (when using throttle and the progress can be determined)
+      if ($this->throttle > 0.0 && $this->percent < 100 && $this->determined) {
          $this->elapsed = microtime(true) - $this->started;
          $this->percent = 100;
          $this->eta = 0.0;

@@ -26,7 +26,8 @@ class Bar
    public Bar\Symbols $Symbols;
 
    // * Meta
-   // ...
+   public bool $completing;
+   public bool $emptying;
 
 
    public function __construct (Progress $Progress)
@@ -41,7 +42,9 @@ class Bar
       $this->Symbols = new Bar\Symbols;
 
       // * Meta
-      // ...
+      // @ Status
+      $this->completing = true;
+      $this->emptying = false;
    }
    public function __get ($name)
    {
@@ -53,34 +56,75 @@ class Bar
       $units = $this->units;
 
       // done
-      $done = $units * ($this->Progress->percent / 100);
+      $done = (int)($units * ($this->Progress->percent / 100));
       if ($done > $units) {
          $done = $units;
       }
       // left
-      $left = $units - $done;
+      $left = (int)($units - $done);
 
       // @ Construct symbols
       $Symbols = $this->Symbols;
-      // incomplete(s)
-      $incomplete = $Symbols->incomplete;
-      $incompletes = [];
-      for ($i = 0; $i < $left; $i++) {
-         $incompletes[] = $incomplete;
+      $symbols = [];
+      // complete
+      $complete = $Symbols->complete;
+      for ($i = 0; $i < $done; $i++) {
+         $symbols[] = $complete;
       }
       // current
       $current = $Symbols->current;
-      // complete(s)
-      $complete = $Symbols->complete;
-      $completes = [];
-      for ($i = 0; $i < $done; $i++) {
-         $completes[] = $complete;
+      if ($current) {
+         $symbols[] = $current;
+      }
+      // incomplete
+      $incomplete = $Symbols->incomplete;
+      for ($i = 0; $i < $left; $i++) {
+         $symbols[] = $incomplete;
       }
 
-      $complete = implode('', $completes);
-      $incomplete = implode('', $incompletes);
+      if ($this->Progress->indetermined) {
+         if ($this->completing) {
+            for ($i = 0; $i <= $units - 1; $i++) {
+               if ($done > $i + 5) {
+                  $symbols[$i] = $incomplete;
+               }
+            }
+         }
 
-      return $complete . $current . $incomplete;
+         if ($this->emptying) {
+            $loops = $units / 2;
+
+            for ($i = 0; $i < $units; $i++) {
+               if ($i <= $loops + $done) {
+                  $symbols[$i] = $incomplete;
+                  continue;
+               }
+
+               $symbols[$i] = $complete;
+            }
+
+            if ($done === $loops - 1) {
+               $this->redirect(10.0);
+            }
+         }
+
+         // @ Reset
+         if ($this->Progress->percent >= 100) {
+            $this->redirect();
+         }
+      }
+
+      $bar = implode('', $symbols);
+
+      return $bar;
+   }
+
+   private function redirect (float $value = 0.0)
+   {
+      $this->Progress->percent = $value;
+
+      $this->emptying = ! $this->emptying;
+      $this->completing = ! $this->completing;
    }
 }
 
