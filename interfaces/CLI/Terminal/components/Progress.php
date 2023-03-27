@@ -45,10 +45,9 @@ class Progress
    public string $template;
 
    // * Meta
+   // @ State
    private bool $indetermined;
    private bool $determined;
-   // @ Cursor
-   private array $cursor;
    // @ Display
    private string $description;
    private float|string $percent;
@@ -58,6 +57,7 @@ class Progress
    // ! Templating
    private array $tokens;
    // @ render
+   private array $cursor;
    // time
    private float $started;
    private float $rendered;
@@ -93,10 +93,9 @@ class Progress
       TEMPLATE;
 
       // * Meta
+      // @ State
       $this->indetermined = false;
       $this->determined = true;
-      // @ Cursor
-      $this->cursor = [0, 1];
       // @ Display
       $this->description = '';
       $this->percent = 0.0;
@@ -106,6 +105,7 @@ class Progress
       // ! Templating
       $this->tokens = ['@description;', '@current;', '@total;', '@bar;', '@percent;', '@elapsed;', '@eta;', '@rate;'];
       // @ render
+      $this->cursor = [0, 1];
       // time
       $this->started = 0.0;
       $this->rendered = 0.0;
