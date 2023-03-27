@@ -21,10 +21,9 @@ class Bar
 
    // * Config
    public int $units;
-   public array $symbols;
 
    // * Data
-   // ...
+   public Bar\Symbols $Symbols;
 
    // * Meta
    // ...
@@ -34,15 +33,12 @@ class Bar
    {
       $this->Progress = $Progress;
 
+
       // * Config
       $this->units = Terminal::$width / 2;
-      $this->symbols = [
-         'determined'   => [' ', '>', '='], // determined
-         'indetermined' => ['?']            // indetermined
-      ];
 
       // * Data
-      // ...
+      $this->Symbols = new Bar\Symbols;
 
       // * Meta
       // ...
@@ -57,7 +53,7 @@ class Bar
       $units = $this->units;
 
       // done
-      $done = $units * ($this->percent / 100);
+      $done = $units * ($this->Progress->percent / 100);
       if ($done > $units) {
          $done = $units;
       }
@@ -65,34 +61,38 @@ class Bar
       $left = $units - $done;
 
       // @ Construct symbols
-      $symbols = $this->symbols['determined'];
-      // incomplete
-      $incomplete = $symbols[0];
-
-      $symbolsIncomplete = [];
-
+      $Symbols = $this->Symbols;
+      // incomplete(s)
+      $incomplete = $Symbols->incomplete;
+      $incompletes = [];
       for ($i = 0; $i < $left; $i++) {
-         $symbolsIncomplete[] = $incomplete;
+         $incompletes[] = $incomplete;
       }
       // current
-      // ...
-      // complete
-      $symbolsComplete = [];
-
-      if ($this->total <= 0) {
-         for ($i = 0; $i < $done; $i++) {
-            $symbolsComplete[] = $incomplete;
-         }
-      } else {
-         for ($i = 0; $i < $done; $i++) {
-            $symbolsComplete[] = $symbols[2];
-         }
+      $current = $Symbols->current;
+      // complete(s)
+      $complete = $Symbols->complete;
+      $completes = [];
+      for ($i = 0; $i < $done; $i++) {
+         $completes[] = $complete;
       }
 
-      $complete = implode('', $symbolsComplete);
-      $current = $symbols[1];
-      $incomplete = implode('', $symbolsIncomplete);
+      $complete = implode('', $completes);
+      $incomplete = implode('', $incompletes);
 
       return $complete . $current . $incomplete;
    }
+}
+
+
+
+namespace Bootgly\CLI\Terminal\components\Progress\Bar;
+
+class Symbols
+{
+   public string $incomplete   = ' ';
+   public string $current      = '>';
+   public string $complete     = '=';
+
+   public string $indetermined = '-';
 }

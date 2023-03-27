@@ -3,6 +3,7 @@ namespace Bootgly\CLI;
 
 use Bootgly\CLI;
 use Bootgly\CLI\Terminal\components\Progress;
+use Bootgly\CLI\Terminal\components\Progress\Bar;
 
 $Output = CLI::$Terminal->Output;
 $Output->reset();
@@ -32,15 +33,11 @@ TEMPLATE;
 
 // ! Bar
 // * Config
-$Progress->Bar->symbols = [
-   'determined'   => [
-      // Symbols array map:
-      // 0 => incomplete / 1 => current / 2 => complete
-      '🖤', '', '❤️'
-   ],
-   'indetermined' => ['-']
-];
 $Progress->Bar->units = 10;
+// * Data
+$Progress->Bar->Symbols->incomplete = '🖤';
+$Progress->Bar->Symbols->current = '';
+$Progress->Bar->Symbols->complete = '❤️';
 
 $Progress->start();
 
