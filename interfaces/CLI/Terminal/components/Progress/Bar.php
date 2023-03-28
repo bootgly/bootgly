@@ -26,6 +26,8 @@ class Bar
    public Bar\Symbols $Symbols;
 
    // * Meta
+   // @ State
+   // indetermined
    public bool $completing;
    public bool $emptying;
 
@@ -42,7 +44,8 @@ class Bar
       $this->Symbols = new Bar\Symbols;
 
       // * Meta
-      // @ Status
+      // @ State
+      // indetermined
       $this->completing = true;
       $this->emptying = false;
    }
@@ -63,6 +66,7 @@ class Bar
       // left
       $left = (int)($units - $done);
 
+      // ? Determined state
       // @ Construct symbols
       $Symbols = $this->Symbols;
       $symbols = [];
@@ -82,6 +86,8 @@ class Bar
          $symbols[] = $incomplete;
       }
 
+      // ? Indetermined state
+      // @ Construct symbols
       if ($this->Progress->indetermined) {
          if ($this->completing) {
             for ($i = 0; $i <= $units - 1; $i++) {
@@ -108,7 +114,6 @@ class Bar
             }
          }
 
-         // @ Reset
          if ($this->Progress->percent >= 100) {
             $this->redirect();
          }
@@ -137,6 +142,4 @@ class Symbols
    public string $incomplete   = ' ';
    public string $current      = '>';
    public string $complete     = '=';
-
-   public string $indetermined = '-';
 }
