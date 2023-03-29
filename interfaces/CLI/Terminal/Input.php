@@ -73,7 +73,7 @@ class Input
       $pid = pcntl_fork();
 
       if ($pid === 0) { // @ Child (Client)
-         cli_set_process_title("BootglyCLI: child process");
+         cli_set_process_title("BootglyCLI: Client");
 
          // Watch for a signal from the parent process to terminate
          pcntl_signal(SIGTERM, function () {
@@ -95,7 +95,7 @@ class Input
          // Close Client API
          exit(0);
       } else if ($pid > 0) { // @ Parent (Server)
-         cli_set_process_title("BootglyCLI: master process");
+         cli_set_process_title("BootglyCLI: Server");
 
          try {
             // @ Call Terminal Server API passing the Pipe reading method

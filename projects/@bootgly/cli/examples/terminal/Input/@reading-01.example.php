@@ -24,13 +24,22 @@ $Input->reading(
    use ($Output)
    {
       // * Config
-      $timeout = 10;
+      $expire = true;
+      $timeout = 20; // total timeout in seconds since client was started
+      // @ Mode
+      $secret = false;
+      $hidden = false;
       // * Data
       $line = '';
+      $encoded = '';
       // * Meta
       $started = microtime(true);
+      // @ Encoding
+      $encoding = false;
 
-      echo "Client: `Type any character. Type `enter` to send to Server...`\n\n";
+      $Output->render("@:info: Type any character (even special characters)...\n");
+      $Output->render("@:info: Type `enter` to send to Terminal Server... @;\n");
+      $Output->render("@:info: Type `*` or `#` to toggle the input mode to secret/hidden... @;\n\n");
 
       while (true) {
          // @ Autoread each character from Terminal Input (in non-blocking mode)
@@ -38,33 +47,70 @@ $Input->reading(
          $char = $read(length: 1); // Only length === 1 is acceptable (for now)
 
          // @ Check timeout
-         if (microtime(true) - $started > $timeout) {
-            echo "Client: `Terminal Input Timeout! Closing Client...`\n\n";
+         if ($expire && (microtime(true) - $started) > $timeout) {
+            echo "Client: `Terminal Input timeout! Closing Client...`\n\n";
             exit(0);
+         }
+
+         // @ Toggle modes
+         if ($char === '*') {
+            $secret = ! $secret;
+            continue;
+         } else if ($char === '#') {
+            $hidden = ! $hidden;
+            continue;
          }
 
          // @ Parse char
          // No data
          if ($char === '') {
+            $write(data: $char); // No effect
             usleep(100000);
+            continue;
+         }
+         // Encoding
+         if ( $char === "\e" || ($encoding && $char === '[') ) {
+            $encoding = true;
+            $char = '';
             continue;
          }
          // EOL
          if ($char === "\n") {
             // @ Write user data to Terminal Input (Client => Server)
             $write(data: $line);
-
             $line = '';
-
             continue;
             #break;
          }
          // ...
+
+         if ($line === '') {
+            $Output->write("\nClient: ");
+         }
+
+         // @ Parse Output
          $line .= $char;
 
-         $Output->write('Client: ');
+         if ($hidden) continue;
+         else if ($secret) $char = '*';
+
+         if ($encoding) {
+            $encoded = match ($char) {
+               'A' => '⬆️',
+               'B' => '⬇️',
+               'C' => '➡️',
+               'D' => '⬅️',
+               default => ''
+            };
+
+            $encoding = false;
+
+            $encoded ? $Output->write($encoded) : $Output->metaencode($char);
+
+            continue;
+         }
+
          $Output->metaencode($char);
-         $Output->write("\n");
       }
    },
    // Terminal Server API
@@ -72,29 +118,22 @@ $Input->reading(
    use ($Output)
    {
       // * Config
-      $timeout = 7;
+      $timeout = 12000000; // in microseconds (1 second = 1000000 microsecond)
 
-      while (true) {
-         $error = false;
-
-         // @ Reading input data from the Client Terminal
-         foreach ($reading(timeout: $timeout) as $data) {
-            // @ Write user data to Terminal Output (Server => Client)
-            if ($data) {
-               $Output->render(data: "\nServer: `You entered: @#cyan:" . json_encode($data) . " @;`\n\n");
-               break;
-            } else if ($data === null) {
-               $Output->write(data: "Server: `No data received from Client.`\n");
-            } else {
-               $error = true;
-               $Output->write(data: "Server: `Unexpected data from Client. Client is dead?`\n\n");
-            }
+      // @ Reading input data from the Client Terminal
+      foreach ($reading(timeout: $timeout) as $data) {
+         // @ Write user data to Terminal Output (Server => Client)
+         if ($data === null) {
+            $Output->write(data: "Server: `No data received from Client. Timeout reached?`\n");
+         } else if ($data === false) {
+            $Output->write(data: "Server: `Unexpected data! Client is dead? Closing Server...`\n\n");
+            break;
+         } else {
+            $Output->render(data: "\nServer: `You entered: @#cyan:" . json_encode($data) . " @;`\n\n");
          }
-
-         if ($error) break;
       }
    }
 );
 
-echo "Finish example...\n";
+echo "Bye...\n";
 sleep(3);
