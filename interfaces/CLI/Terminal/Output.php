@@ -99,7 +99,7 @@ class Output
 
 
       do {
-         $this->written = fwrite($stream, $data);
+         $this->written = @fwrite($stream, $data);
 
          if ($wait > 0) {
             usleep($wait);
@@ -126,7 +126,7 @@ class Output
 
       $parts = str_split($data);
       foreach ($parts as $part) {
-         $written += fwrite($stream, $part);
+         $written += @fwrite($stream, $part);
 
          if ($waiting > 0) {
             usleep($waiting);
@@ -140,7 +140,7 @@ class Output
 
    public function append (string $data) : self
    {
-      $this->written = fwrite($this->stream, $data . PHP_EOL);
+      $this->written = @fwrite($this->stream, $data . PHP_EOL);
 
       return $this;
    }
@@ -148,13 +148,19 @@ class Output
    // @ ANSI Code
    public function escape (string $data) : self
    {
-      fwrite($this->stream, CLI::_START_ESCAPE . $data);
+      @fwrite($this->stream, CLI::_START_ESCAPE . $data);
 
       return $this;
    }
    public function metaescape (string $data) : self
    {
-      fwrite($this->stream, escapeshellcmd($data));
+      @fwrite($this->stream, escapeshellcmd($data));
+
+      return $this;
+   }
+   public function metaencode (string $data) : self
+   {
+      @fwrite($this->stream, json_encode($data));
 
       return $this;
    }
@@ -163,7 +169,7 @@ class Output
    {
       $text = Template::render($data);
 
-      fwrite($this->stream, $text);
+      @fwrite($this->stream, $text);
 
       return $this;
    }

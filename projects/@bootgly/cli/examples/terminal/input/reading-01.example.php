@@ -21,6 +21,7 @@ OUTPUT);
 $Input->reading(
    // Terminal Client API
    CAPI: function ($read, $write) // Client Input { $read, $write }
+   use ($Output)
    {
       // * Config
       $timeout = 10;
@@ -28,6 +29,8 @@ $Input->reading(
       $line = '';
       // * Meta
       $started = microtime(true);
+
+      echo "Client: `Type any character or special character. Type `enter` to send to Server...`\n\n";
 
       while (true) {
          // @ Autoread each character from Terminal Input (in non-blocking mode)
@@ -57,7 +60,9 @@ $Input->reading(
             #break;
          }
          // ...
-         echo "$char\n";
+         $Output->write('Client: ');
+         $Output->metaencode($char);
+         $Output->write("\n");
          $line .= $char;
       }
    },
@@ -66,7 +71,7 @@ $Input->reading(
    use ($Output)
    {
       // * Config
-      $timeout = 10;
+      $timeout = 7;
 
       while (true) {
          $error = false;
@@ -75,7 +80,7 @@ $Input->reading(
          foreach ($reading(timeout: $timeout) as $data) {
             // @ Write user data to Terminal Output (Server => Client)
             if ($data) {
-               $Output->render(data: "\nServer: `You entered: @#red:" . json_encode($data) . "` @;\n\n");
+               $Output->render(data: "\nServer: `You entered: @#cyan:" . json_encode($data) . "` @;\n\n");
                break;
             } else if ($data === null) {
                $Output->write(data: "Server: `No data received from Client.`\n");
@@ -91,3 +96,4 @@ $Input->reading(
 );
 
 echo "Finish example...\n";
+sleep(3);
