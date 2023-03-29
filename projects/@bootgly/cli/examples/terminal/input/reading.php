@@ -30,7 +30,7 @@ $Input->reading(
 
          // @ Check timeout
          if (microtime(true) - $started > $timeout) {
-            echo 'Timeout! Closing client...';
+            echo "Client: `Terminal Input Timeout! Closing Client...`\n";
             exit(0);
          }
 
@@ -70,10 +70,10 @@ $Input->reading(
             // @ Write user data to Terminal Output (Server => Client)
             if ($data === false) {
                $error = true;
-               $Output->write(data: "An error occurred.\n");
+               $Output->write(data: "Unexpected data. Timeout?\n");
                break;
             } else if ($data === null) {
-               $Output->write(data: "No data received from child process.\n");
+               $Output->write(data: "Server: `No data received from child process.`\n");
             } else {
                $Output->render(data: "\nYou entered: @#red:" . json_encode($data) . " @;\n\n");
             }
@@ -84,4 +84,4 @@ $Input->reading(
    }
 );
 
-echo "Finish...\n";
+echo "Finish example...\n";
