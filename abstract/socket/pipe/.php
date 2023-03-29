@@ -18,7 +18,7 @@ class Pipe
 {
    // * Config
    // ! Stream
-   public int $timeout;
+   public ? int $timeout;
 
    // * Data
    private array $pair;
@@ -47,16 +47,18 @@ class Pipe
       stream_set_blocking($this->pair[1], $blocking);
    }
 
-   public function reading (int $length = 1024) : Generator
+   public function reading (int $length = 1024, ? int $timeout = null) : Generator
    {
       $read = [$this->pair[0]];
       $write = null;
       $except = null;
 
+      $seconds = $timeout ?? $this->timeout ?? null;
+
       // @ Read output from pair
       while (true) {
          try {
-            $streams = @stream_select($read, $write, $except, $this->timeout);
+            $streams = @stream_select($read, $write, $except, $seconds);
          } catch (\Throwable) {
             $streams = false;
          }
@@ -78,16 +80,16 @@ class Pipe
    public function read (int $length = 1024) : string|false
    {
       try {
-         $chunk = @fread($this->pair[0], $length);
+         $read = @fread($this->pair[0], $length);
       } catch (\Throwable) {
-         $chunk = false;
+         $read = false;
       }
 
-      if ($chunk === false) {
+      if ($read === false) {
          // TODO check errors
       }
 
-      return $chunk;
+      return $read;
    }
 
    public function write (string $data, ? int $length = null) : int|false
