@@ -30,7 +30,7 @@ $Input->reading(
 
          // @ Check timeout
          if (microtime(true) - $started > $timeout) {
-            echo "Client: `Terminal Input Timeout! Closing Client...`\n";
+            echo "Client: `Terminal Input Timeout! Closing Client...`\n\n";
             exit(0);
          }
 
@@ -75,7 +75,7 @@ $Input->reading(
                $Output->write(data: "Server: `No data received from Client.`\n");
             } else {
                $error = true;
-               $Output->write(data: "Unexpected data from Client. Client is dead?\n");
+               $Output->write(data: "Unexpected data from Client. Client is dead?\n\n");
             }
          }
 

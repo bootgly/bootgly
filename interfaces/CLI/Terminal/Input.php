@@ -85,16 +85,24 @@ class Input
          // Set non-blocking for data stream
          stream_set_blocking($this->stream, false);
 
-         // @ Call Terminal Client API passing the Pipe write method
-         $CAPI([$this, 'read'], [$Pipe, 'write']);
+         try {
+            // @ Call Terminal Client API passing the Pipe write method
+            $CAPI([$this, 'read'], [$Pipe, 'write']);
+         } catch (\Throwable) {
+            // ...
+         }
 
          // Close Client API
          exit(0);
       } else if ($pid > 0) { // @ Parent (Server)
          cli_set_process_title("BootglyCLI: master process");
 
-         // @ Call Terminal Server API passing the Pipe reading method
-         $SAPI([$Pipe, 'reading']);
+         try {
+            // @ Call Terminal Server API passing the Pipe reading method
+            $SAPI([$Pipe, 'reading']);
+         } catch (\Throwable) {
+            // ...
+         }
 
          // Send signal to terminate child process
          posix_kill($pid, SIGTERM);
