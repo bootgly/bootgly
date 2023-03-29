@@ -2,14 +2,20 @@
 namespace Bootgly\CLI;
 
 
-require '/home/rodrigo/bootgly/bootgly-php-framework/@/autoload.php';
-
-
 use Bootgly\CLI;
 
 
 $Input = CLI::$Terminal->Input;
 $Output = CLI::$Terminal->Output;
+
+
+$Output->render(<<<OUTPUT
+/* @*:
+ * @#green: Bootgly CLI Terminal (<<) - reading method @;
+ * @#yellow: @@ Demo - Example #1 @;
+ * {$location}
+ */\n\n
+OUTPUT);
 
 
 $Input->reading(
@@ -69,13 +75,13 @@ $Input->reading(
          foreach ($reading(timeout: $timeout) as $data) {
             // @ Write user data to Terminal Output (Server => Client)
             if ($data) {
-               $Output->render(data: "\nYou entered: @#red:" . json_encode($data) . " @;\n\n");
+               $Output->render(data: "\nServer: `You entered: @#red:" . json_encode($data) . "` @;\n\n");
                break;
             } else if ($data === null) {
                $Output->write(data: "Server: `No data received from Client.`\n");
             } else {
                $error = true;
-               $Output->write(data: "Unexpected data from Client. Client is dead?\n\n");
+               $Output->write(data: "Server: `Unexpected data from Client. Client is dead?`\n\n");
             }
          }
 

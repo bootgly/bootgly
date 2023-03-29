@@ -11,6 +11,11 @@ $Output->expand(lines: CLI::$Terminal::$lines);
 
 
 $examples = [
+   // ! Terminal
+   // ? Input
+   'terminal/input/reading-01.example.php',
+
+   // ? Output
    // Terminal->Output . Writing
    'terminal/output.writing-01.example.php',
 
