@@ -68,14 +68,14 @@ $Input->reading(
          // @ Reading input data from the Client Terminal
          foreach ($reading(timeout: $timeout) as $data) {
             // @ Write user data to Terminal Output (Server => Client)
-            if ($data === false) {
-               $error = true;
-               $Output->write(data: "Unexpected data. Timeout?\n");
+            if ($data) {
+               $Output->render(data: "\nYou entered: @#red:" . json_encode($data) . " @;\n\n");
                break;
             } else if ($data === null) {
-               $Output->write(data: "Server: `No data received from child process.`\n");
+               $Output->write(data: "Server: `No data received from Client.`\n");
             } else {
-               $Output->render(data: "\nYou entered: @#red:" . json_encode($data) . " @;\n\n");
+               $error = true;
+               $Output->write(data: "Unexpected data from Client. Client is dead?\n");
             }
          }
 
