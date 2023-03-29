@@ -57,6 +57,8 @@ class Pipe
 
       // @ Read output from pair
       while (true) {
+         pcntl_signal_dispatch();
+
          try {
             $streams = @stream_select($read, $write, $except, $seconds);
          } catch (\Throwable) {
@@ -65,6 +67,8 @@ class Pipe
 
          // @ Check result
          if ($streams === false) {
+            yield false;
+
             break;
          } elseif ($streams === 0) {
             yield null;
@@ -74,8 +78,6 @@ class Pipe
 
          yield $this->read(length: $length);
       }
-
-      yield false;
    }
    public function read (int $length = 1024) : string|false
    {
