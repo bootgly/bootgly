@@ -86,7 +86,8 @@ class Output
       return $this;
    }
 
-   public function write (string $text, int $times = 1) : self
+   // @ Raw
+   public function write (string $data, int $times = 1) : self
    {
       // * Config
       $stream = &$this->stream;
@@ -98,7 +99,7 @@ class Output
 
 
       do {
-         $this->written = fwrite($stream, $text);
+         $this->written = fwrite($stream, $data);
 
          if ($wait > 0) {
             usleep($wait);
@@ -109,7 +110,7 @@ class Output
 
       return $this;
    }
-   public function writing (string $text) : self
+   public function writing (string $data) : self
    {
       // * Config
       $stream = $this->stream;
@@ -123,7 +124,7 @@ class Output
       $written = 0;
 
 
-      $parts = str_split($text);
+      $parts = str_split($data);
       foreach ($parts as $part) {
          $written += fwrite($stream, $part);
 
@@ -137,29 +138,30 @@ class Output
       return $this;
    }
 
-   public function append (string $text) : self
+   public function append (string $data) : self
    {
-      $this->written = fwrite($this->stream, $text . PHP_EOL);
+      $this->written = fwrite($this->stream, $data . PHP_EOL);
 
       return $this;
    }
 
-   public function escape (string $code) : self
+   // @ ANSI Code
+   public function escape (string $data) : self
    {
-      fwrite($this->stream, CLI::_START_ESCAPE . $code);
+      fwrite($this->stream, CLI::_START_ESCAPE . $data);
 
       return $this;
    }
-   public function metaescape (string $command) : self
+   public function metaescape (string $data) : self
    {
-      fwrite($this->stream, escapeshellcmd($command));
+      fwrite($this->stream, escapeshellcmd($data));
 
       return $this;
    }
 
-   public function render (string $text) : self
+   public function render (string $data) : self
    {
-      $text = Template::render($text);
+      $text = Template::render($data);
 
       fwrite($this->stream, $text);
 
