@@ -81,7 +81,7 @@ $Input->reading(
          foreach ($reading(timeout: $timeout) as $data) {
             // @ Write user data to Terminal Output (Server => Client)
             if ($data) {
-               $Output->render(data: "\nServer: `You entered: @#cyan:" . json_encode($data) . "` @;\n\n");
+               $Output->render(data: "\nServer: `You entered: @#cyan:" . json_encode($data) . " @;`\n\n");
                break;
             } else if ($data === null) {
                $Output->write(data: "Server: `No data received from Client.`\n");

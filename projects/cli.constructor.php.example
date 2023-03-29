@@ -13,42 +13,42 @@ $Output->expand(lines: CLI::$Terminal::$lines);
 $examples = [
    // ! Terminal
    // ? Input
-   'terminal/input/reading-01.example.php',
+   'terminal/Input/@reading-01.example.php',
 
    // ? Output
-   // Terminal->Output . Writing
-   'terminal/output.writing-01.example.php',
+   // Terminal -> Output @ writing
+   'terminal/Output/@writing-01.example.php',
 
 
-   // Terminal->Output _ Cursor Positioning
-   'terminal/output_cursor-positioning-01.example.php',
-   // Terminal->Output _ Cursor Shaping
-   'terminal/output_cursor-shaping-01.example.php',
-   // Terminal->Output _ Cursor Visualizing
-   'terminal/output_cursor-visualizing-01.example.php',
+   // Terminal -> Output -> Cursor Positioning
+   'terminal/Output/Cursor-positioning-01.example.php',
+   // Terminal -> Output -> Cursor Shaping
+   'terminal/Output/Cursor-shaping-01.example.php',
+   // Terminal -> Output -> Cursor Visualizing
+   'terminal/Output/Cursor-visualizing-01.example.php',
 
 
-   // Terminal->Output _ Text Formatting - Coloring
-   'terminal/output_text-formatting-coloring-01.example.php',
-   // Terminal->Output _ Text Formatting - Styling
-   'terminal/output_text-formatting-styling-01.example.php',
+   // Terminal -> Output -> Text Formatting - Coloring
+   'terminal/Output/Text-formatting-coloring-01.example.php',
+   // Terminal -> Output -> Text Formatting - Styling
+   'terminal/Output/Text-formatting-styling-01.example.php',
 
-   // Terminal->Output _ Text Modifying
-   'terminal/output_text-modifying-01.example.php',
-   // Terminal->Output _ Text Modifying - In Display
-   'terminal/output_text-modifying-indisplay-01.example.php',
-   // Terminal->Output _ Text Modifying - Inline
-   'terminal/output_text-modifying-inline-01.example.php',
-   // Terminal->Output _ Text Modifying - Line
-   'terminal/output_text-modifying-line-01.example.php',
+   // Terminal -> Output -> Text Modifying
+   'terminal/Output/Text-modifying-01.example.php',
+   // Terminal -> Output -> Text Modifying - In Display
+   'terminal/Output/Text-modifying-indisplay-01.example.php',
+   // Terminal -> Output -> Text Modifying - Inline
+   'terminal/Output/Text-modifying-inline-01.example.php',
+   // Terminal -> Output -> Text Modifying - Line
+   'terminal/Output/Text-modifying-line-01.example.php',
 
 
-   // Terminal/components - Progress component
-   'terminal/components/progress-01.example.php',
-   // Terminal/components - Progress component: indeterminate state
-   'terminal/components/progress-02.example.php',
-   // Terminal/components - Table component
-   'terminal/components/table-01.example.php'
+   // Terminal -> Output components - Progress component
+   'terminal/Output/components/Progress-01.example.php',
+   // Terminal -> Output components - Progress component: indeterminate state
+   'terminal/Output/components/Progress-02.example.php',
+   // Terminal -> Output components - Table component
+   'terminal/Output/components/Table-01.example.php'
 ];
 
 foreach ($examples as $index => $example) {
