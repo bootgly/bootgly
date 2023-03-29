@@ -30,7 +30,7 @@ $Input->reading(
       // * Meta
       $started = microtime(true);
 
-      echo "Client: `Type any character or special character. Type `enter` to send to Server...`\n\n";
+      echo "Client: `Type any character. Type `enter` to send to Server...`\n\n";
 
       while (true) {
          // @ Autoread each character from Terminal Input (in non-blocking mode)
@@ -60,10 +60,11 @@ $Input->reading(
             #break;
          }
          // ...
+         $line .= $char;
+
          $Output->write('Client: ');
          $Output->metaencode($char);
          $Output->write("\n");
-         $line .= $char;
       }
    },
    // Terminal Server API

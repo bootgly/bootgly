@@ -99,7 +99,11 @@ class Output
 
 
       do {
-         $this->written = @fwrite($stream, $data);
+         try {
+            $this->written = @fwrite($stream, $data);
+         } catch (\Throwable) {
+            $this->written = false;
+         }
 
          if ($wait > 0) {
             usleep($wait);
@@ -126,7 +130,11 @@ class Output
 
       $parts = str_split($data);
       foreach ($parts as $part) {
-         $written += @fwrite($stream, $part);
+         try {
+            $written += @fwrite($stream, $part);
+         } catch (\Throwable) {
+            $written += false;
+         }
 
          if ($waiting > 0) {
             usleep($waiting);
@@ -140,7 +148,11 @@ class Output
 
    public function append (string $data) : self
    {
-      $this->written = @fwrite($this->stream, $data . PHP_EOL);
+      try {
+         $this->written = @fwrite($this->stream, $data . PHP_EOL);
+      } catch (\Throwable) {
+         $this->written = false;
+      }
 
       return $this;
    }
@@ -148,28 +160,42 @@ class Output
    // @ ANSI Code
    public function escape (string $data) : self
    {
-      @fwrite($this->stream, CLI::_START_ESCAPE . $data);
+      try {
+         $this->written = @fwrite($this->stream, CLI::_START_ESCAPE . $data);
+      } catch (\Throwable) {
+         $this->written = false;
+      }
 
       return $this;
    }
    public function metaescape (string $data) : self
    {
-      @fwrite($this->stream, escapeshellcmd($data));
+      try {
+         $this->written = @fwrite($this->stream, escapeshellcmd($data));
+      } catch (\Throwable) {
+         $this->written = false;
+      }
 
       return $this;
    }
    public function metaencode (string $data) : self
    {
-      @fwrite($this->stream, json_encode($data));
+      try {
+         $this->written = @fwrite($this->stream, json_encode($data));
+      } catch (\Throwable) {
+         $this->written = false;
+      }
 
       return $this;
    }
 
    public function render (string $data) : self
    {
-      $text = Template::render($data);
-
-      @fwrite($this->stream, $text);
+      try {
+         $this->written = @fwrite($this->stream, Template::render($data));
+      } catch (\Throwable) {
+         $this->written = false;
+      }
 
       return $this;
    }
