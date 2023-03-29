@@ -1,7 +1,9 @@
 <?php
 require '@functions/formatters.php';
 require '@interfaces/Requestable.php';
+
 require '@traits/Set.php';
+#require '@traits/Sets/.php';
 
 
 // * .Constructors
@@ -55,6 +57,9 @@ require 'file/.php';
 #require 'Path~functions.php';
 
 require 'path/.php';
+// ? Socket
+// Pipe
+require 'socket/pipe/.php';
 
 
 // * .Controllers
