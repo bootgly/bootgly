@@ -2,8 +2,8 @@
 require '@functions/formatters.php';
 require '@interfaces/Requestable.php';
 
-require '@traits/Set.php';
-#require '@traits/Sets/.php';
+require '@traits/Set/.php';
+require '@traits/Sets/.php';
 
 
 // * .Constructors
@@ -50,12 +50,6 @@ require 'dir/.php';
 // ? File
 require 'file/.php';
 // ? Path
-#require 'Path.constants.php';
-#require 'Path.functions.php';
-#require 'Path.globals.php';
-#require 'Path~constants.php';
-#require 'Path~functions.php';
-
 require 'path/.php';
 // ? Socket
 // Pipe

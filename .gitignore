@@ -41,6 +41,8 @@ _*.example.php
 !/abstract/file
 !/abstract/path
 
+!/abstract/socket
+
 ## /base
 
 
