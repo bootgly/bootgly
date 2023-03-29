@@ -24,7 +24,7 @@ class Pipe
    private array $pair;
 
    // * Meta
-   #public string $data;
+   public bool $paired;
 
 
    public function __construct (? int $timeout = null, ? bool $blocking = false, ? array $pair = null)
@@ -37,30 +37,34 @@ class Pipe
       $this->pair = $pair ?? stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
 
       // * Meta
-      #$this->data = '';
+      $this->paired = true;
 
 
-      // @ Set non-blocking to pipes
-      // Read pipe
-      stream_set_blocking($this->pair[0], $blocking);
-      // Write pipe
-      stream_set_blocking($this->pair[1], $blocking);
+      try {
+         // @ Set non-blocking to pipes
+         // Read pipe
+         stream_set_blocking($this->pair[0], $blocking);
+         // Write pipe
+         stream_set_blocking($this->pair[1], $blocking);
+      } catch (\Throwable) {
+         $this->paired = false;
+      }
    }
 
    public function reading (int $length = 1024, ? int $timeout = null) : Generator
    {
-      $read = [$this->pair[0]];
+      $read = [@$this->pair[0]];
       $write = null;
       $except = null;
 
-      $seconds = $timeout ?? $this->timeout ?? null;
+      $microseconds = $timeout ?? $this->timeout ?? null;
 
       // @ Read output from pair
       while (true) {
          pcntl_signal_dispatch();
 
          try {
-            $streams = @stream_select($read, $write, $except, $seconds);
+            $streams = @stream_select($read, $write, $except, 0, $microseconds);
          } catch (\Throwable) {
             $streams = false;
          }
@@ -112,7 +116,11 @@ class Pipe
    public function __destruct ()
    {
       // @ Close the ends of the communication channel
-      fclose($this->pair[0]);
-      fclose($this->pair[1]);
+      try {
+         @fclose($this->pair[0]);
+         @fclose($this->pair[1]);
+      } catch (\Throwable) {
+         // ...
+      }
    }
 }
