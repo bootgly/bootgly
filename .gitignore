@@ -1,77 +1,58 @@
-### * Globals
 # Ignore IDEs folders...
 .idea/
+# Ignore files by extension...
+*.iso
 # Ignore locks, bin, envs...
 composer
 composer.lock
 cli-config.php
 server-*.php
-*.iso
-_*.example.php
+
 
 ### @Bootgly ###
-## Short folders
-# Ignore &xcluded folders
+
+## Global folders
+# Excluded
 **/&
 
-#--- Bootstrap ---#
-
-#- /@
+## Root folders
+# Boot
 @/*
 !@/autoload.php
 !@/php-jit.ini
 
+## Private files
+# Examples
+_*.example.php
+# Tests
+_*.test.php
+
+#-- Bootstrap --#
+
 #- /abstract
-/abstract/*
-!/abstract/..php
-
-!/abstract/@functions
-!/abstract/@interfaces
-!/abstract/@traits
-
-!/abstract/__array
-!/abstract/__class
-!/abstract/__iterable
-!/abstract/__string
-
-!/abstract/data
-
-!/abstract/dir
-!/abstract/file
-!/abstract/path
-
-!/abstract/socket
+# ...
 
 #- /base
 # ...
 
 #- /core
-/core/*
-!/core/@loader.php
-!/core/Bootgly.php
-!/core/Database.php
-!/core/Event.php
-!/core/Event
-!/core/Project.php
-!/core/Template.php
-!/core/Template
+# ...
 
-#--- Resources ---#
+#-- Resources --#
 
 #- /interfaces
+# ...
 
 #- /modules
+# ...
 
 #- /nodes
+# ...
 
 #- /platforms
-/platforms/CLI/*
-/platforms/Web/*
-!/platforms/Web/API.php
-!/platforms/Web/App.php
+# ...
 
-
-#--- Sources ---#
+#-- Sources --#
 
 #- /projects
 /projects/cli.constructor.php
@@ -85,9 +66,7 @@ _*.example.php
 #- /workspace
 # Ignore all files here
 /workspace/*.*
-# Ignore all folder here
-/workspace/*/*
-# Ignore all folder started with @
+# Ignore all folder starting with @ here
 /workspace/@*/
 # Preserve existence of folders with .gitkeep here
 !/workspace/*/.gitkeep
