@@ -18,6 +18,7 @@ _*.example.php
 
 #- /@
 @/*
+!@/autoload.php
 !@/php-jit.ini
 
 #- /abstract
@@ -86,5 +87,7 @@ _*.example.php
 /workspace/*.*
 # Ignore all folder here
 /workspace/*/*
+# Ignore all folder started with @
+/workspace/@*/
 # Preserve existence of folders with .gitkeep here
 !/workspace/*/.gitkeep
