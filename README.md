@@ -74,19 +74,9 @@ or using Docker:
 
 ---
 
-## 🖼 Screenshots
+## 🖼 Preview
 
-| ![HTTP Server CLI - My Benchmark results using Ryzen 9 3900X (24 CPUs) on WSL2 - Simple 'Hello World!'](https://github.com/bootgly/.github/raw/main/screenshots/bootgly-php-framework/Server-CLI-HTTP-Benchmark-Ryzen-9-3900X-WSL2.png "HTTP Server CLI - My Benchmark results using Ryzen 9 3900X (24 CPUs) on WSL2 - Simple 'Hello World!'") |
-|:--:| 
-| *HTTP Server CLI - My Benchmark results using Ryzen 9 3900X (24 CPUs) on WSL2 - Simple 'Hello World!'* |
-
-| ![HTTP Server CLI started - Initial output](https://github.com/bootgly/.github/raw/main/screenshots/bootgly-php-framework/Server-CLI-HTTP-started.png "HTTP Server CLI started - Initial output") |
-|:--:| 
-| *HTTP Server CLI started - Initial output* |
-
-| ![HTTP Server CLI - Test suites](https://github.com/bootgly/.github/raw/main/screenshots/bootgly-php-framework/Bootgly-HTTP-Server-Test-Suite5.png "HTTP Server CLI - Test suites") |
-|:--:| 
-| *HTTP Server CLI - Test suites* |
+**Screenshots** and **videos** can be found in the home page of [Bootgly Docs][PROJECT_DOCS].
 
 ---
 
@@ -94,18 +84,18 @@ or using Docker:
 
 Join us and help the community.
 
-**Love Bootgly? Give our repo a star ⭐!**
+**Love Bootgly? Give [our repo][GITHUB_REPOSITORY] a star ⭐!**
 
 ### 💖 Sponsorship
 
-A lot of time and energy is devoted to this project. To accelerate your growth, if you like this project or depend on it for your stack to work, consider [sponsoring it][GITHUB_SPONSOR].
+A lot of time and energy is devoted to Bootgly projects. To accelerate your growth, if you like this project or depend on it for your stack to work, consider [sponsoring it][GITHUB_SPONSOR].
 
 Your sponsorship will keep this project always **up to date** with **new features** and **improvements** / **bug fixes**.
 
 ### 🔗 Social networks
-- [Telegram][TELEGRAM]
-- [Reddit][REDDIT]
-- [Discord][DISCORD]
+- [Bootgly on Telegram][TELEGRAM]
+- [Bootgly on Reddit][REDDIT]
+- [Bootgly on Discord][DISCORD]
 
 ---
 
@@ -141,7 +131,9 @@ The Bootgly PHP Framework is open-sourced software licensed under the [MIT licen
 [WEB_HTTP_SERVER_ROUTER_ROUTE]: https://github.com/bootgly/bootgly-php-framework/blob/main/nodes/Web/HTTP/Server/Router/Route.php
 
 
-[GITHUB_SPONSOR]: https://github.com/sponsors/bootgly
+[PROJECT_DOCS]: https://docs.bootgly.com/
+[GITHUB_REPOSITORY]: https://github.com/bootgly/bootgly-php-framework/
+[GITHUB_SPONSOR]: https://github.com/sponsors/bootgly/
 
 [TELEGRAM]: https://t.me/bootgly/
 [REDDIT]: https://www.reddit.com/r/bootgly/
@@ -152,4 +144,4 @@ The Bootgly PHP Framework is open-sourced software licensed under the [MIT licen
 [SEMANTIC_VERSIONING]: https://semver.org/
 
 
-[MIT_LICENSE]: https://opensource.org/licenses/MIT
+[MIT_LICENSE]: https://opensource.org/license/mit/
