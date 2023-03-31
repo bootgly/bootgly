@@ -14,15 +14,13 @@ _*.example.php
 # Ignore &xcluded folders
 **/&
 
-### Bootstrap ###
+#--- Bootstrap ---#
 
-## /@
-@/php.ini
-@/certificates/*
-# Ignore imported packages (equivalent to vendor)
-@/imports/*
+#- /@
+@/*
+!@/php-jit.ini
 
-## /abstract
+#- /abstract
 /abstract/*
 !/abstract/..php
 
@@ -43,10 +41,10 @@ _*.example.php
 
 !/abstract/socket
 
-## /base
+#- /base
+# ...
 
-
-## /core
+#- /core
 /core/*
 !/core/@loader.php
 !/core/Bootgly.php
@@ -57,40 +55,33 @@ _*.example.php
 !/core/Template.php
 !/core/Template
 
-### Resources ###
+#--- Resources ---#
 
-## /interfaces
+#- /interfaces
 
-## /modules
+#- /modules
 
-## /nodes
+#- /nodes
 
-## /platforms
+#- /platforms
 /platforms/CLI/*
 /platforms/Web/*
 !/platforms/Web/API.php
 !/platforms/Web/App.php
 
 
-### Sources ###
+#--- Sources ---#
 
-## /projects
-# Ignore projects except bootgly subdirectory
-/projects/*
-!/projects
-!/projects/bootgly.constructor.php
-!/projects/cli.constructor.php.example
-!/projects/sapi.constructor.php.example
-!/projects/sapi.http.constructor.php.example
-!/projects/web.constructor.php.example
-!/projects/@bootgly
+#- /projects
+/projects/cli.constructor.php
+/projects/sapi.constructor.php
+/projects/sapi.http.constructor.php
+/projects/web.constructor.php
 
-## /public
-/public/*
-!/public
-!/public/example.com
+#- /public
+/public/test
 
-## /workspace
+#- /workspace
 # Ignore all files here
 /workspace/*.*
 # Ignore all folder here
