@@ -31,11 +31,11 @@ $Input->reading(
       $hidden = false;
       // * Data
       $line = '';
-      $encoded = '';
+      $decoded = '';
       // * Meta
       $started = microtime(true);
-      // @ Encoding
-      $encoding = false;
+      // @ ANSI Code
+      $decoding = false;
 
       $Output->render("@:info: Type any character (even special characters)...\n");
       $Output->render("@:info: Type `enter` to send to Terminal Server... @;\n");
@@ -52,15 +52,6 @@ $Input->reading(
             exit(0);
          }
 
-         // @ Toggle modes
-         if ($char === '*') {
-            $secret = ! $secret;
-            continue;
-         } else if ($char === '#') {
-            $hidden = ! $hidden;
-            continue;
-         }
-
          // @ Parse char
          // No data
          if ($char === '') {
@@ -68,9 +59,9 @@ $Input->reading(
             usleep(100000);
             continue;
          }
-         // Encoding
-         if ( $char === "\e" || ($encoding && $char === '[') ) {
-            $encoding = true;
+         // ANSI Code
+         if ( $char === "\e" || ($decoding && $char === '[') ) {
+            $decoding = true;
             $char = '';
             continue;
          }
@@ -84,18 +75,27 @@ $Input->reading(
          }
          // ...
 
+         // @ Toggle modes
+         if ($char === '*') {
+            $secret = ! $secret;
+            continue;
+         } else if ($char === '#') {
+            $hidden = ! $hidden;
+            continue;
+         }
+
+         // @ Parse Output
          if ($line === '') {
             $Output->write("\nClient: ");
          }
 
-         // @ Parse Output
          $line .= $char;
 
          if ($hidden) continue;
          else if ($secret) $char = '*';
 
-         if ($encoding) {
-            $encoded = match ($char) {
+         if ($decoding) {
+            $decoded = match ($char) {
                'A' => '⬆️',
                'B' => '⬇️',
                'C' => '➡️',
@@ -103,9 +103,9 @@ $Input->reading(
                default => ''
             };
 
-            $encoding = false;
+            $decoding = false;
 
-            $encoded ? $Output->write($encoded) : $Output->metaencode($char);
+            $decoded ? $Output->write($decoded) : $Output->metaencode($char);
 
             continue;
          }
@@ -120,18 +120,21 @@ $Input->reading(
       // * Config
       $timeout = 12000000; // in microseconds (1 second = 1000000 microsecond)
 
+      // You can use while before $reading!
+
       // @ Reading input data from the Client Terminal
       foreach ($reading(timeout: $timeout) as $data) {
          // @ Write user data to Terminal Output (Server => Client)
          if ($data === null) {
             $Output->write(data: "Server: `No data received from Client. Timeout reached?`\n");
          } else if ($data === false) {
-            $Output->write(data: "Server: `Unexpected data! Client is dead? Closing Server...`\n\n");
-            break;
+            $Output->write(data: "Server: `Unexpected data! Client is dead?`\n");
          } else {
             $Output->render(data: "\nServer: `You entered: @#cyan:" . json_encode($data) . " @;`\n\n");
          }
       }
+
+      $Output->write(data: "Closing Server...`\n\n");
    }
 );
 
