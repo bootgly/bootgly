@@ -11,12 +11,10 @@
 namespace Bootgly;
 
 
-use const Bootgly\HOME_DIR;
-
-
 class Project
 {
-   public const PROJECT_DIR = HOME_DIR . 'projects/';
+   public const PROJECT_DIR = WORKABLES_BASE . '/project/';
+   public const PROJECTS_DIR = WORKABLES_BASE . '/projects/';
 
    // * Config
    public bool $cache;
@@ -78,7 +76,7 @@ class Project
    public function setPath ()
    {
       // Join paths
-      $path = self::PROJECT_DIR;
+      $path = self::PROJECTS_DIR;
 
       $path .= $this->vendor;
       $path .= $this->container;

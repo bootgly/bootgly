@@ -22,19 +22,21 @@ abstract class Bootgly
 
    public static function boot ()
    {
+      // @ Dependencies
+      // core
       $Project = self::$Project = new Project;
       $Template = self::$Template = new Template;
 
-
+      // @ Workables
       // @ Load Bootgly constructor
-      $projects = HOME_BASE . '/projects/bootgly.constructor.php';
+      $projects = WORKABLES_BASE . '/projects/bootgly.constructor.php';
       // Multi projects
       if ( is_file($projects) ) {
          return require $projects;
       }
 
       // Single project
-      $project = HOME_BASE . '/project/bootgly.constructor.php';
+      $project = WORKABLES_BASE . '/project/bootgly.constructor.php';
       if ( is_file($project) ) {
          return require $project;
       }

@@ -49,7 +49,16 @@ class Web
       $Response = $this->Response = &$this->Server->Response;
       $Router = $this->Router = &$this->Server->Router;
 
-      // @ Load Web constructor
-      @include Bootgly::$Project::PROJECT_DIR . 'web.constructor.php';
+      // @ Load CLI constructor
+      $projects = Bootgly::$Project::PROJECTS_DIR . 'web.constructor.php';
+      if ( is_file($projects) ) {
+         @include $projects;
+         return;
+      }
+
+      $project = Bootgly::$Project::PROJECT_DIR . 'web.constructor.php';
+      if ( is_file($project) ) {
+         @include $project;
+      }
    }
 }

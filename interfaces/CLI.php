@@ -41,7 +41,10 @@ class CLI
       $this->includes = [
          'scripts' => [
             HOME_DIR . 'bootgly',
-            HOME_DIR . './bootgly' // TODO normalize path
+            HOME_DIR . './bootgly', // TODO normalize path
+
+            WORKABLES_BASE . '/bootgly',
+            WORKABLES_BASE . '/./bootgly', // TODO normalize path
          ]
       ];
 
@@ -53,10 +56,19 @@ class CLI
       $included = array_search($script, $this->includes['scripts']);
 
       if ($included === false) {
-         return ;
+         return;
       }
 
       // @ Load CLI constructor
-      @include Bootgly::$Project::PROJECT_DIR . 'cli.constructor.php';
+      $projects = Bootgly::$Project::PROJECTS_DIR . 'cli.constructor.php';
+      if ( is_file($projects) ) {
+         @include $projects;
+         return;
+      }
+
+      $project = Bootgly::$Project::PROJECT_DIR . 'cli.constructor.php';
+      if ( is_file($project) ) {
+         @include $project;
+      }
    }
 }
