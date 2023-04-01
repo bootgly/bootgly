@@ -1,21 +1,31 @@
 {
-    "name": "bootgly/bootgly-php-framework",
-    "type": "project",
-    "description": "The Bootgly PHP Framework.",
-    "keywords": ["bootgly", "php", "framework"],
-    "license": "MIT",
-    "authors":[
-        {
-            "name":"Rodrigo Vieira",
-            "email":"rodrigo@bootgly.com",
-            "homepage":"https://www.bootgly.com/"
-        }
-    ],
-    "config": {
-        "vendor-dir": "./@/imports/"
-    },
+   "name": "bootgly/bootgly-php-framework",
+   "type": "library",
+   "description": "The Bootgly PHP Framework.",
+   "license": "MIT",
+   "keywords": [
+      "bootgly",
+      "php",
+      "framework"
+   ],
+   "authors": [
+      {
+         "name": "Rodrigo Vieira",
+         "email": "rodrigo@bootgly.com",
+         "homepage": "https://www.bootgly.com/"
+      }
+   ],
 
-    "require": {
-        "php": "^8.2"
-    }
+   "config": {
+      "vendor-dir": "./@/imports/"
+   },
+
+   "autoload": {
+      "files": [
+         "./@/autoload.php"
+      ]
+   },
+   "require": {
+      "php": "^8.2"
+   }
 }
