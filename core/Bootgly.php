@@ -25,8 +25,23 @@ abstract class Bootgly
       $Project = self::$Project = new Project;
       $Template = self::$Template = new Template;
 
+
       // @ Load Bootgly constructor
-      require HOME_BASE . '/projects/bootgly.constructor.php';
+      $projects = HOME_BASE . '/projects/bootgly.constructor.php';
+      // Multi projects
+      if ( is_file($projects) ) {
+         return require $projects;
+      }
+
+      // Single project
+      $project = HOME_BASE . '/project/bootgly.constructor.php';
+      if ( is_file($project) ) {
+         return require $project;
+      }
+
+      // TODO warning or error?
+
+      return false;
    }
 
    public static function debug (bool $status)
