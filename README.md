@@ -6,9 +6,9 @@
   <i>Full Stack PHP Framework for Multi Projects.</i>
 </p>
 <p align="center">
-  <a href="https://packagist.org/packages/bootgly/bootgly-php-framework">
-    <img alt="Bootgly License" src="https://img.shields.io/github/license/bootgly/bootgly-php-framework"/>
-    <img alt="Github Actions" src="https://img.shields.io/github/actions/workflow/status/bootgly/bootgly-php-framework/docker_http_server_cli-ci.yml?label=CI%2FCD"/>
+  <a href="https://packagist.org/packages/bootgly/bootgly">
+    <img alt="Bootgly License" src="https://img.shields.io/github/license/bootgly/bootgly"/>
+    <img alt="Github Actions" src="https://img.shields.io/github/actions/workflow/status/bootgly/bootgly/docker_http_server_cli-ci.yml?label=CI%2FCD"/>
   </a>
 </p>
 
@@ -66,11 +66,11 @@ or using Docker:
 
 1) Pull the Bootgly image from Docker Hub:
 
-`docker pull bootgly/bootgly-php-framework`
+`docker pull bootgly/bootgly`
 
 2) Run the Bootgly container in interactive mode:
 
-`docker run -it --network host bootgly/bootgly-php-framework`
+`docker run -it --network host bootgly/bootgly`
 
 ---
 
@@ -119,20 +119,20 @@ The Bootgly PHP Framework is open-sourced software licensed under the [MIT licen
 
 
 <!-- Links -->
-[TEMPLATE_ENGINE]: https://github.com/bootgly/bootgly-php-framework/blob/main/core/Template.php
+[TEMPLATE_ENGINE]: https://github.com/bootgly/bootgly/blob/main/core/Template.php
 
-[WEB_TCP_CLIENT_INTERFACE]: https://github.com/bootgly/bootgly-php-framework/blob/main/interfaces/Web/TCP/Client.php
-[WEB_TCP_SERVER_INTERFACE]: https://github.com/bootgly/bootgly-php-framework/blob/main/interfaces/Web/TCP/Server.php
+[WEB_TCP_CLIENT_INTERFACE]: https://github.com/bootgly/bootgly/blob/main/interfaces/Web/TCP/Client.php
+[WEB_TCP_SERVER_INTERFACE]: https://github.com/bootgly/bootgly/blob/main/interfaces/Web/TCP/Server.php
 
-[CLI_HTTP_SERVER]: https://github.com/bootgly/bootgly-php-framework/blob/main/nodes/CLI/HTTP/Server.php
-[CLI_HTTP_SERVER_REQUEST]: https://github.com/bootgly/bootgly-php-framework/blob/main/nodes/CLI/HTTP/Server/Request.php
-[CLI_HTTP_SERVER_RESPONSE]: https://github.com/bootgly/bootgly-php-framework/blob/main/nodes/CLI/HTTP/Server/Response.php
-[WEB_HTTP_SERVER_ROUTER]: https://github.com/bootgly/bootgly-php-framework/blob/main/nodes/Web/HTTP/Server/Router.php
-[WEB_HTTP_SERVER_ROUTER_ROUTE]: https://github.com/bootgly/bootgly-php-framework/blob/main/nodes/Web/HTTP/Server/Router/Route.php
+[CLI_HTTP_SERVER]: https://github.com/bootgly/bootgly/blob/main/nodes/CLI/HTTP/Server.php
+[CLI_HTTP_SERVER_REQUEST]: https://github.com/bootgly/bootgly/blob/main/nodes/CLI/HTTP/Server/Request.php
+[CLI_HTTP_SERVER_RESPONSE]: https://github.com/bootgly/bootgly/blob/main/nodes/CLI/HTTP/Server/Response.php
+[WEB_HTTP_SERVER_ROUTER]: https://github.com/bootgly/bootgly/blob/main/nodes/Web/HTTP/Server/Router.php
+[WEB_HTTP_SERVER_ROUTER_ROUTE]: https://github.com/bootgly/bootgly/blob/main/nodes/Web/HTTP/Server/Router/Route.php
 
 
 [PROJECT_DOCS]: https://docs.bootgly.com/
-[GITHUB_REPOSITORY]: https://github.com/bootgly/bootgly-php-framework/
+[GITHUB_REPOSITORY]: https://github.com/bootgly/bootgly/
 [GITHUB_SPONSOR]: https://github.com/sponsors/bootgly/
 
 [TELEGRAM]: https://t.me/bootgly/
