@@ -12,6 +12,8 @@ namespace Bootgly\CLI\Terminal;
 
 
 use Bootgly\CLI;
+use Bootgly\CLI\Escaping\cursor\Positioning;
+use Bootgly\CLI\Escaping\text\Modifying;
 use Bootgly\CLI\Template;
 use Bootgly\CLI\Terminal;
 use Bootgly\CLI\Terminal\Output\Cursor;
@@ -21,6 +23,10 @@ use Bootgly\CLI\Terminal\Output\Viewport;
 
 class Output
 {
+   use Positioning;
+   use Modifying;
+
+
    // * Config
    public $stream;
    // @ Delay
@@ -64,6 +70,15 @@ class Output
    public function reset ()
    {
       $this->__construct();
+   }
+   public function clear () : true
+   {
+      $this->write(
+         CLI::_START_ESCAPE . self::_CURSOR_POSITION .
+         CLI::_START_ESCAPE . self::_TEXT_ERASE_IN_DISPLAY
+      );
+
+      return true;
    }
    public function expand (int $lines) : self
    {
