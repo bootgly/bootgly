@@ -49,7 +49,6 @@ class Terminal
    public Input $Input;
    // ? Output
    public Output $Output;
-   public Output\Cursor $Cursor;
 
 
    public function __construct ()
@@ -86,7 +85,6 @@ class Terminal
       $this->Input = new Input;
       // ? Output
       $this->Output = new Output;
-      $this->Cursor = &$this->Output->Cursor;
    }
 
    // ! Command
