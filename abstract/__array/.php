@@ -24,39 +24,39 @@ class __Array
    public function __get (string $property)
    {
       switch ($property) {
-            // * Config
+         // * Config
 
-            // * Data
-            // ! Array Key
+         // * Data
+         // ! Array Key
          case 'keys':
             return array_keys($this->array);
-            // ! Array Value
+         // ! Array Value
          case 'values':
             return array_values($this->array);
 
-            // * Meta
-            // ! Array Pointer
-            // ? Current
+         // * Meta
+         // ! Array Pointer
+         // ? Current
          case 'Current': // TODO return Current->key, Current->value;
             break;
          case 'current':
             return current($this->array);
-            // ? Next
+         // ? Next
          case 'Next': // TODO return Next->key, Next->value;
             break;
          case 'next': // By default return the next Array->Last->value;
             return next($this->array);
-            // ? Previous
+         // ? Previous
          case 'Previous': // TODO return Previous->key, Previous->value;
             break;
          case 'previous':
             return prev($this->array);
-            // ? First || Start || Reset() ??
+         // ? First || Start || Reset() ??
          case 'First': // TODO
             break;
          case 'first': // TODO
             break;
-            // ? Last || End
+         // ? Last || End
          case 'Last':
             return new class($this->array)
             {
@@ -87,7 +87,7 @@ class __Array
             };
          case 'last': // TODO by default return last key or last value???
             break;
-            // ! Array Type
+         // ! Array Type
          case 'type': // TODO return 'indexed or numeric', 'associative', 'multidimensional', 'mixed??'
             break;
       }
