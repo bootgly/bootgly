@@ -25,3 +25,6 @@ $Alert->emit('Attention message.');
 
 $Alert->Type::FAILURE->set();
 $Alert->emit('Failure message.');
+
+$Alert->Type::DEFAULT->set();
+$Alert->emit('Default message.');

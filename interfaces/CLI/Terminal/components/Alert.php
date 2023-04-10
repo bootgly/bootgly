@@ -43,7 +43,7 @@ class Alert
          Alert\Type::SUCCESS => $this->Output->Text->colorize('white', 'green'),
          Alert\Type::ATTENTION => $this->Output->Text->colorize(0, 'yellow'),
          Alert\Type::FAILURE => $this->Output->Text->colorize('white', 'red'),
-         default => $this->Output->Text->colorize('default', 'default')
+         default => $this->Output->Text->colorize(0, 7)
       };
 
       // @ Padding
