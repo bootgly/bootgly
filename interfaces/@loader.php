@@ -38,6 +38,8 @@ require 'CLI/Terminal/Output/Text.php';
 // Viewport
 require 'CLI/Terminal/Output/Viewport.php';
 // @ components
+// Alert
+require 'CLI/Terminal/components/Alert.php';
 // Progress
 require 'CLI/Terminal/components/Progress.php';
 require 'CLI/Terminal/components/Progress/Bar.php';
