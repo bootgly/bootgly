@@ -9,7 +9,7 @@ $Output->waiting = 30000;
 
 $Output->render(<<<OUTPUT
 /* @*:
- * @#green: Bootgly CLI Terminal (>) - Text Modifying @;
+ * @#green: Bootgly CLI Terminal (>>) - Text Modifying @;
  * @#yellow: @@ Demo - Example #1 @;
  * {$location}
  */\n\n

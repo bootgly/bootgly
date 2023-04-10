@@ -8,7 +8,7 @@ $Output->reset();
 
 $Output->render(<<<OUTPUT
 /* @*:
- * @#green: Bootgly CLI Terminal (>) - Cursor Visualizing @;
+ * @#green: Bootgly CLI Terminal (>>) - Cursor Visualizing @;
  * @#yellow: @@ Demo - Example #1 @;
  * {$location}
  */\n\n
