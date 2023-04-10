@@ -15,10 +15,10 @@ jobs:
         name: Checkout code
         uses: actions/checkout@v3
       -
-        name: Set up QEMU
+        name: Setup QEMU
         uses: docker/setup-qemu-action@v2
       -
-        name: Set up Docker Buildx
+        name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v2
       -
         name: Login to DockerHub
@@ -32,4 +32,4 @@ jobs:
         with:
           file: bootgly-cli-server.http.dockerfile
           push: true
-          tags: bootgly/bootgly-php-framework:latest
+          tags: bootgly/bootgly:latest
