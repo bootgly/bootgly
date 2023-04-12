@@ -24,7 +24,7 @@ class Menu
    public Output $Output;
 
    // * Config
-   #public int $width;
+   public int $width;
    public string $prompt;
    // * Data
    public Items $Items;
@@ -38,7 +38,7 @@ class Menu
       $this->Output = $Output;
 
       // * Config
-      #$this->width = 80;
+      $this->width = 80;
       $this->prompt = '';
       // * Data
       $this->Items = new Items($this);

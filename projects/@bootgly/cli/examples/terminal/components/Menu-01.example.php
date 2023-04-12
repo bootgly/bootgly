@@ -19,7 +19,9 @@ $Output->render(<<<OUTPUT
 OUTPUT);
 
 $Menu = new Menu($Input, $Output);
+// * Config
 $Menu->prompt = "Choose one or more options:";
+
 // > Items
 $Items = $Menu->Items;
 // * Config
@@ -29,6 +31,7 @@ $Items->selectable = true;
 $Items->deselectable = true;
 // @ Display
 $Items->Orientation::Vertical->set();
+$Items->Aligment::Left->set();
 
 
 /*
@@ -42,9 +45,9 @@ $Items->set([
 ]);
 */
 $Items
-   ->add('Option 1')
-   ->add('Option 2')
-   ->add('Option 3');
+   ->add(label: 'Option 1')
+   ->add(label: 'Option 2')
+   ->add(label: 'Option 3');
 
 $selected = $Menu->open();
 

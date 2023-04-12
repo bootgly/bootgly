@@ -39,6 +39,10 @@ class Items
     * Items Orientation is Vertical or Horizontal?
     */
    public Orientation $Orientation;
+   /**
+    * Items Aligment is Left, Center or Right?
+    */
+   public Aligment $Aligment;
 
    // * Data
    #public array $deselectables;
@@ -62,7 +66,8 @@ class Items
       $this->deselectable = true;
       $this->Selection = Selection::Multiple->set();
       // @ Display
-      $this->Orientation = Orientation::Horizontal->set();
+      $this->Orientation = Orientation::Vertical->set();
+      $this->Aligment = Aligment::Left->set();
 
 
       // * Data
@@ -128,7 +133,7 @@ class Items
    }
    private function iterate ()
    {
-      // @ Select / Unselect current item
+      // @ Select / Unselect item(s)
       $index = 0;
       foreach ($this->items as $key => $value) {
          if ($this->aimed === $index) {
@@ -143,8 +148,6 @@ class Items
 
    public function control (string $char) : bool
    {
-      $continue = true;
-
       switch ($char) {
          // \x1b \e \033
          // @ Aiming
@@ -163,25 +166,30 @@ class Items
             break;
 
          case PHP_EOL: // Enter Key
-            $continue = false;
+            return false;
             break;
 
          default:
             break;
       }
 
-      return $continue;
+      return true;
    }
 
    public function render ()
    {
+      // * Config
+      // @ Display
+      $Orientation = $this->Orientation->get();
+      $Aligment = $this->Aligment->get();
+
       $index = 0;
+      $items = '';
 
       // @ Write each Menu item
       foreach ($this->items as $key => $value) {
          // * Config
          // @ Display
-         $Orientation = $this->Orientation->get();
          if ($Orientation === $Orientation::Vertical) {
             $divisor = "\n";
          } else {
@@ -223,14 +231,31 @@ class Items
             $selected[1] = '';
          }
 
+         $item = <<<OUTPUT
+         {$aimed[0]} {$selected[0]} {$prepend}$item{$append}{$selected[1]} {$aimed[1]}
+         OUTPUT;
+
+         // @ Display
+         // Aligment
+         if ($Orientation === $Orientation::Vertical) {
+            $item = str_pad($item, 80, ' ', $Aligment->value);
+         }
+
+         // @ Add item divisor
+         $item .= $divisor;
+
          // @
-         $this->Menu->Output->render(<<<OUTPUT
-         {$aimed[0]} {$selected[0]} {$prepend}$item{$append}{$selected[1]} {$aimed[1]} {$divisor}
-         OUTPUT);
+         $items .= $item;
 
          // ...
          $index++;
       }
+
+      if ($Orientation === $Orientation::Horizontal) {
+         $items = str_pad($items, 80, ' ', $Aligment->value);
+      }
+
+      $this->Menu->Output->render($items);
    }
 }
 
@@ -253,4 +278,13 @@ enum Orientation
 
    case Vertical;
    case Horizontal;
+}
+enum Aligment : int
+{
+   use \Bootgly\Set;
+
+
+   case Left = 1;
+   case Center = 2;
+   case Right = 0;
 }
