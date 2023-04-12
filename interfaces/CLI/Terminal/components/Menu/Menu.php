@@ -56,6 +56,8 @@ class Menu
       $aimed = &$Items->aimed;
       $selected = &$Items->selected;
 
+      $this->Output->Cursor->save();
+
       // Set the Terminal Input Non-Canonical Processing and Disable echo
       system('stty -icanon -echo');
       // Set Input Stream Non-Blocking
@@ -64,7 +66,7 @@ class Menu
       $this->Output->Cursor->hide();
 
       while (true) {
-         $this->Output->clear();
+         $this->Output->Cursor->restore();
 
          // @ Write Menu title
          $this->Output->write($this->title);

@@ -46,7 +46,9 @@ class Items
    public array $items;
 
    // * Meta
+   // @ Pointer
    public int $aimed;
+   // @ Selection
    public array $selected;
 
 
@@ -132,14 +134,16 @@ class Items
       // @ Write each Menu item
       foreach ($this->items as $key => $value) {
          // * Config
+         // @ Display
          $Orientation = $this->Orientation->get();
          if ($Orientation === $Orientation::Vertical) {
             $divisor = "\n";
          } else {
             $divisor = ' ';
          }
+
          // * Data
-         // Item
+         // item
          $prepend = '';
          $append = '';
          $item = '';
@@ -150,7 +154,9 @@ class Items
          } else {
             $item = $value;
          }
+
          // * Meta
+         // @ Pointer
          // Aimed prepend / append
          $aimed = [];
          if ($this->aimed === $index) {
@@ -160,6 +166,7 @@ class Items
             $aimed[0] = '  ';
             $aimed[1] = '';
          }
+         // @ Selection
          // Selected prepend / append
          $selected = [];
          if ( in_array($index, $this->selected) ) {
@@ -170,10 +177,12 @@ class Items
             $selected[1] = '';
          }
 
+         // @
          $this->Menu->Output->render(<<<OUTPUT
          {$aimed[0]} {$selected[0]} {$prepend}$item{$append}{$selected[1]} {$aimed[1]} {$divisor}
          OUTPUT);
 
+         // ...
          $index++;
       }
    }
@@ -181,6 +190,7 @@ class Items
 
 
 // * Configs
+// @ Selection
 enum Selection
 {
    use \Bootgly\Set;
@@ -189,7 +199,7 @@ enum Selection
    case Unique;
    case Multiple;
 }
-
+// @ Display
 enum Orientation
 {
    use \Bootgly\Set;
