@@ -106,25 +106,71 @@ class Items
    }
 
    // @ Selecting
-   public function select ($index)
+   private function select ($index)
    {
       if ($this->selectable) {
          $this->selected[] = $index;
       }
    }
-   public function deselect ($index)
+   private function deselect ($index)
    {
       if ($this->deselectable) {
          $this->selected = array_diff($this->selected, [$index]);
       }
    }
-   public function toggle ($index)
+   private function toggle ($index)
    {
       if ( in_array($index, $this->selected) ) {
          $this->deselect($index);
       } else {
          $this->select($index);
       }
+   }
+   private function iterate ()
+   {
+      // @ Select / Unselect current item
+      $index = 0;
+      foreach ($this->items as $key => $value) {
+         if ($this->aimed === $index) {
+            $this->toggle($index);
+         } else if ($this->Selection->get() === $this->Selection::Unique) {
+            $this->deselect($index);
+         }
+
+         $index++;
+      }
+   }
+
+   public function control (string $char) : bool
+   {
+      $continue = true;
+
+      switch ($char) {
+         // \x1b \e \033
+         // @ Aiming
+         case "\e[D": // Left Key
+         case "\e[A": // Up Key
+            $this->regress();
+            break;
+         case "\e[C": // Right Key
+         case "\e[B": // Down Key
+            $this->advance();
+            break;
+
+         // @ Selecting
+         case ' ': // Space Key
+            $this->iterate();
+            break;
+
+         case PHP_EOL: // Enter Key
+            $continue = false;
+            break;
+
+         default:
+            break;
+      }
+
+      return $continue;
    }
 
    public function render ()

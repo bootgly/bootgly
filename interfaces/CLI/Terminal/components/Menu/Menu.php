@@ -50,12 +50,6 @@ class Menu
    {
       // > Menu
       $Items = $this->Items;
-      // * Config
-      // @ Selection
-      $Selection = $Items->Selection;
-      // * Meta
-      $aimed = &$Items->aimed;
-      $selected = &$Items->selected;
 
       // Save Cursor position
       $this->Output->Cursor->save();
@@ -80,41 +74,18 @@ class Menu
          // @ Read 3 characters from Input
          $char = $this->Input->read(3);
 
-         switch ($char) {
-            // \x1b \e \033
-            case "\e[D": // Left Key
-            case "\e[A": // Up Key
-               $Items->regress();
+         // @ Control Menu Items
+         $continue = $Items->control($char);
 
-               break;
-            case "\e[C": // Right Key
-            case "\e[B": // Down Key
-               $Items->advance();
+         if ($continue) {
+            usleep(100000);
+            #usleep(250000);
+            #usleep(500000);
 
-               break;
-            case ' ': // Space Key
-               // @ Select / Unselect current item
-               $index = 0;
-               foreach ($this->items as $key => $value) {
-                  if ($aimed === $index) {
-                     $Items->toggle($index);
-                  } else if ($Selection->get() === $Selection::Unique) {
-                     $Items->deselect($index);
-                  }
-
-                  $index++;
-               }
-
-               break;
-            case PHP_EOL: // Enter Key
-               break 2;
-            default:
-               break;
+            continue;
          }
 
-         usleep(125000);
-         #usleep(250000);
-         #usleep(500000);
+         break;
       }
 
       // Restore Input settings
@@ -126,6 +97,6 @@ class Menu
       // Show Cursor
       $this->Output->Cursor->show();
 
-      return $selected;
+      return $Items->selected;
    }
 }
