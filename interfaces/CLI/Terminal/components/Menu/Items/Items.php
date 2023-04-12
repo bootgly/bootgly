@@ -44,6 +44,9 @@ class Items
     */
    public Aligment $Aligment;
    // @ Styling
+   /**
+    * Separator between Items
+    */
    public string $separator;
 
    // * Data
@@ -63,14 +66,15 @@ class Items
       $this->Menu = $Menu;
 
       // * Config
-      // @ Selection
+      // @ Selecting
       $this->selectable = true;
       $this->deselectable = true;
       $this->Selection = Selection::Multiple->set();
-      // @ Display
+      // @ Displaying
       $this->Orientation = Orientation::Vertical->set();
       $this->Aligment = Aligment::Left->set();
-
+      // @ Styling
+      $this->separator = '';
 
       // * Data
       $this->items = [];
@@ -186,6 +190,8 @@ class Items
       // @ Display
       $Orientation = $this->Orientation->get();
       $Aligment = $this->Aligment->get();
+      // @ Styling
+      $separator = $this->separator;
 
       $index = 0;
       $count = count($this->items);
@@ -195,16 +201,30 @@ class Items
       foreach ($this->items as $key => $value) {
          // * Config
          // @ Display
-         if ($Orientation === $Orientation::Vertical) {
-            $divisor = "\n";
+         switch ($Orientation) {
+            case $Orientation::Vertical:
+               $divisor = "\n";
 
-            if ($key < $count - 1) {
-               $separator = $this->separator;
-               $separator = str_repeat($separator, $Menu->width / strlen($separator));
-               $divisor .= "{$separator}\n";
-            }
-         } else {
-            $divisor = ' ';
+               // @ Styling
+               // Separator
+               if ($key < $count - 1) {
+                  $characters = strlen($separator);
+   
+                  if ($characters > 0) {
+                     $separator = str_repeat($separator, $Menu->width / strlen($separator));
+                     $divisor .= "{$separator}\n";
+                  }
+               }
+
+               break;
+            case $Orientation::Horizontal:
+               $divisor = ' ';
+
+               // @ Styling
+               // Separator
+               if ($key < $count - 1) {
+                  $divisor .= "{$separator}";
+               }
          }
 
          // * Data
