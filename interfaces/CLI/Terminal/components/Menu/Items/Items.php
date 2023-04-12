@@ -21,7 +21,7 @@ class Items
    private Menu $Menu;
 
    // * Config
-   // @ Selection
+   // @ Selecting
    /**
     * Items Selection is Unique or Multiple?
     */
@@ -34,7 +34,7 @@ class Items
     * Items are deselectable?
     */
    public bool $deselectable;
-   // @ Display
+   // @ Displaying
    /**
     * Items Orientation is Vertical or Horizontal?
     */
@@ -43,6 +43,8 @@ class Items
     * Items Aligment is Left, Center or Right?
     */
    public Aligment $Aligment;
+   // @ Styling
+   public string $separator;
 
    // * Data
    #public array $deselectables;
@@ -178,12 +180,15 @@ class Items
 
    public function render ()
    {
+      $Menu = $this->Menu;
+
       // * Config
       // @ Display
       $Orientation = $this->Orientation->get();
       $Aligment = $this->Aligment->get();
 
       $index = 0;
+      $count = count($this->items);
       $items = '';
 
       // @ Write each Menu item
@@ -192,6 +197,12 @@ class Items
          // @ Display
          if ($Orientation === $Orientation::Vertical) {
             $divisor = "\n";
+
+            if ($key < $count - 1) {
+               $separator = $this->separator;
+               $separator = str_repeat($separator, $Menu->width / strlen($separator));
+               $divisor .= "{$separator}\n";
+            }
          } else {
             $divisor = ' ';
          }
@@ -238,7 +249,7 @@ class Items
          // @ Display
          // Aligment
          if ($Orientation === $Orientation::Vertical) {
-            $item = str_pad($item, 80, ' ', $Aligment->value);
+            $item = str_pad($item, $Menu->width, ' ', $Aligment->value);
          }
 
          // @ Add item divisor
@@ -252,7 +263,7 @@ class Items
       }
 
       if ($Orientation === $Orientation::Horizontal) {
-         $items = str_pad($items, 80, ' ', $Aligment->value);
+         $items = str_pad($items, $Menu->width, ' ', $Aligment->value);
       }
 
       $this->Menu->Output->render($items);
@@ -261,7 +272,7 @@ class Items
 
 
 // * Configs
-// @ Selection
+// @ Selecting
 enum Selection
 {
    use \Bootgly\Set;
@@ -270,7 +281,7 @@ enum Selection
    case Unique;
    case Multiple;
 }
-// @ Display
+// @ Displaying
 enum Orientation
 {
    use \Bootgly\Set;
