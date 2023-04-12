@@ -38,6 +38,17 @@ class Input
       // ...
    }
 
+   public function configure (bool $blocking = true, bool $canonical = true, bool $echo = true)
+   {
+      stream_set_blocking($this->stream, $blocking);
+
+      $canonical ? system('stty icanon') : system('stty -icanon');
+
+      $echo ? system('stty echo') : system('stty -echo');
+
+      return $this;
+   }
+
    public function read (int $length) : string|false
    {
       pcntl_signal_dispatch();
@@ -80,7 +91,7 @@ class Input
             exit(0);
          });
 
-         // Configure terminal
+         // Disable canonical input processing mode and echo return
          system('stty -icanon -echo');
          // Set non-blocking for data stream
          stream_set_blocking($this->stream, false);

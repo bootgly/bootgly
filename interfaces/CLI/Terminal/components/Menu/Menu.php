@@ -57,12 +57,10 @@ class Menu
       $aimed = &$Items->aimed;
       $selected = &$Items->selected;
 
+      // Save Cursor position
       $this->Output->Cursor->save();
-
-      // Set the Terminal Input Non-Canonical Processing and Disable echo
-      system('stty -icanon -echo');
-      // Set Input Stream Non-Blocking
-      stream_set_blocking($this->Input->stream, false);
+      // Set Input settings
+      $this->Input->configure(blocking: false, canonical: false, echo: false);
       // Hide Cursor
       $this->Output->Cursor->hide();
 
@@ -115,8 +113,9 @@ class Menu
          #usleep(500000);
       }
 
-      system('stty icanon echo');
-      stream_set_blocking($this->Input->stream, true);
+      // Restore Input settings
+      $this->Input->configure(blocking: true, canonical: true, echo: true);
+      // Show Cursor
       $this->Output->Cursor->show();
 
       return $selected;
