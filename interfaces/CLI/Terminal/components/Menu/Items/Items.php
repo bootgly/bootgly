@@ -14,7 +14,9 @@ namespace Bootgly\CLI\Terminal\components\Menu\Items;
 use Bootgly\CLI\Terminal\components\Menu\ {
    Menu
 };
-
+use Bootgly\CLI\Terminal\components\Menu\Items\ {
+   Options\Options
+};
 
 class Items
 {
@@ -45,20 +47,20 @@ class Items
    public Aligment $Aligment;
    // @ Styling
    /**
-    * Separator between Items
+    * Separator between each Item
     */
    public string $separator;
 
    // * Data
-   #public array $deselectables;
-   #public array $selectables;
-   public array $items;
+   public array $options;
 
    // * Meta
-   // @ Pointer
+   // @ Aiming
    public int $aimed;
-   // @ Selection
+   // @ Selecting
    public array $selected;
+
+   public Options $Options;
 
 
    public function __construct (Menu &$Menu)
@@ -77,29 +79,13 @@ class Items
       $this->separator = '';
 
       // * Data
-      $this->items = [];
+      $this->Options = new Options;
 
       // * Meta
+      // @ Aiming
       $this->aimed = 0;
-      $this->selected = [];
-   }
-   public function __get ($name)
-   {
-      return match ($name) {
-         'count' => count($this->items),
-         default => null
-      };
-   }
-
-   public function set (array $items)
-   {
-      $this->items = $items;
-   }
-   public function add (string $label)
-   {
-      $this->items[] = $label;
-
-      return $this;
+      // @ Selecting
+      $this->selected[0] = [];
    }
 
    // @ Aiming
@@ -111,7 +97,7 @@ class Items
    }
    public function advance ()
    {
-      if ($this->aimed < count($this->items) - 1) {
+      if ($this->aimed < $this->Options->count() - 1) {
          $this->aimed++;
       }
    }
@@ -120,18 +106,21 @@ class Items
    private function select ($index)
    {
       if ($this->selectable) {
-         $this->selected[] = $index;
+         $this->selected[$this->Menu->level][] = $index;
       }
    }
    private function deselect ($index)
    {
       if ($this->deselectable) {
-         $this->selected = array_diff($this->selected, [$index]);
+         $this->selected[0] = array_diff(
+            $this->selected[$this->Menu->level],
+            [$index]
+         );
       }
    }
    private function toggle ($index)
    {
-      if ( in_array($index, $this->selected) ) {
+      if ( in_array($index, $this->selected[$this->Menu->level]) ) {
          $this->deselect($index);
       } else {
          $this->select($index);
@@ -139,9 +128,9 @@ class Items
    }
    private function iterate ()
    {
-      // @ Select / Unselect item(s)
+      // @ Select / Unselect option(s)
       $index = 0;
-      foreach ($this->items as $key => $value) {
+      foreach ($this->Options[$this->Menu->level] as $key => $value) {
          if ($this->aimed === $index) {
             $this->toggle($index);
          } else if ($this->Selection->get() === $this->Selection::Unique) {
@@ -187,20 +176,20 @@ class Items
       $Menu = $this->Menu;
 
       // * Config
-      // @ Display
+      // @ Displaying
       $Orientation = $this->Orientation->get();
       $Aligment = $this->Aligment->get();
       // @ Styling
       $separator = $this->separator;
 
       $index = 0;
-      $count = count($this->items);
-      $items = '';
+      $count = $this->Options->count();
+      $options = '';
 
-      // @ Write each Menu item
-      foreach ($this->items as $key => $value) {
+      // @ Write each Menu option
+      foreach ($this->Options[$Menu->level] as $key => $value) {
          // * Config
-         // @ Display
+         // @ Displaying
          switch ($Orientation) {
             case $Orientation::Vertical:
                $divisor = "\n";
@@ -211,7 +200,7 @@ class Items
                   $characters = strlen($separator);
    
                   if ($characters > 0) {
-                     $separator = str_repeat($separator, $Menu->width / strlen($separator));
+                     $separator = str_repeat($separator, $Menu->width / $characters);
                      $divisor .= "{$separator}\n";
                   }
                }
@@ -228,20 +217,16 @@ class Items
          }
 
          // * Data
-         // item
+         // option
          $prepend = '';
          $append = '';
-         $item = '';
-         if ( is_array($value) ) {
-            $item = $key;
-            $prepend = $value['prepend'] ?? '';
-            $append = $value['append'] ?? '';
-         } else {
-            $item = $value;
-         }
+
+         $option = $value['label'];
+         $prepend = $value['prepend'] ?? '';
+         $append = $value['append'] ?? '';
 
          // * Meta
-         // @ Pointer
+         // @ Aiming
          // Aimed prepend / append
          $aimed = [];
          if ($this->aimed === $index) {
@@ -251,10 +236,10 @@ class Items
             $aimed[0] = '  ';
             $aimed[1] = '';
          }
-         // @ Selection
+         // @ Selecting
          // Selected prepend / append
          $selected = [];
-         if ( in_array($index, $this->selected) ) {
+         if ( in_array($index, $this->selected[$this->Menu->level]) ) {
             $selected[0] = '[X]';
             $selected[1] = '';
          } else {
@@ -262,31 +247,31 @@ class Items
             $selected[1] = '';
          }
 
-         $item = <<<OUTPUT
-         {$aimed[0]} {$selected[0]} {$prepend}$item{$append}{$selected[1]} {$aimed[1]}
+         $option = <<<OUTPUT
+         {$aimed[0]} {$selected[0]} {$prepend}$option{$append}{$selected[1]} {$aimed[1]}
          OUTPUT;
 
-         // @ Display
+         // @ Displaying
          // Aligment
          if ($Orientation === $Orientation::Vertical) {
-            $item = str_pad($item, $Menu->width, ' ', $Aligment->value);
+            $option = str_pad($option, $Menu->width, ' ', $Aligment->value);
          }
 
-         // @ Add item divisor
-         $item .= $divisor;
+         // @ Add option divisor
+         $option .= $divisor;
 
          // @
-         $items .= $item;
+         $options .= $option;
 
          // ...
          $index++;
       }
 
       if ($Orientation === $Orientation::Horizontal) {
-         $items = str_pad($items, $Menu->width, ' ', $Aligment->value);
+         $options = str_pad($options, $Menu->width, ' ', $Aligment->value);
       }
 
-      $this->Menu->Output->render($items);
+      $this->Menu->Output->render($options);
    }
 }
 

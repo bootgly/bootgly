@@ -43,6 +43,7 @@ require 'CLI/Terminal/components/Alert.php';
 // Menu
 require 'CLI/Terminal/components/Menu/Menu.php';
 require 'CLI/Terminal/components/Menu/Items/Items.php';
+require 'CLI/Terminal/components/Menu/Items/Options/Options.php';
 // Progress
 require 'CLI/Terminal/components/Progress.php';
 require 'CLI/Terminal/components/Progress/Bar.php';

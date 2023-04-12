@@ -26,10 +26,12 @@ class Menu
    // * Config
    public int $width;
    public string $prompt;
+
    // * Data
    public Items $Items;
+
    // * Meta
-   public array $items;
+   public int $level;
 
 
    public function __construct (Input &$Input, Output &$Output)
@@ -40,10 +42,12 @@ class Menu
       // * Config
       $this->width = 80;
       $this->prompt = '';
+
       // * Data
       $this->Items = new Items($this);
+
       // * Meta
-      $this->items = &$this->Items->items;
+      $this->level = 0;
    }
 
    public function open ()
@@ -97,6 +101,6 @@ class Menu
       // Show Cursor
       $this->Output->Cursor->show();
 
-      return $Items->selected;
+      return $Items->selected[$this->level];
    }
 }

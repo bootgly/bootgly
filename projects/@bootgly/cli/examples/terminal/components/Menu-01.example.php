@@ -25,29 +25,31 @@ $Menu->prompt = "Choose one or more options:";
 // > Items
 $Items = $Menu->Items;
 // * Config
-// @ Selection
+// @ Selecting
 $Items->Selection::Multiple->set();
 $Items->selectable = true;
 $Items->deselectable = true;
-// @ Display
+// @ Displaying
 $Items->Orientation::Vertical->set();
 $Items->Aligment::Left->set();
+// @ Styling
+$Items->separator = '-';
 
-
-/*
-$Items->set([
-   'Option 1' => [
-      'prepend' => '@#red: ',
-      'append' => ' @;'
-   ],
-   '@#blue: Option 2 @;',
-   'Option 3'
-]);
+// @ Setting
+/* Menu Builder
+$Builder = $Menu->Builder;
+$MenuBuilder
+->Option->add(id: 'O-0-1', label: 'Option 1')
+->Option->add(id: 'O-0-2', label: 'Option 2')
+->Option->add(id: 'O-0-3', label: 'Option 3')
+->Separator->add('-')
+->build();
 */
-$Items
-   ->add(label: 'Option 1')
-   ->add(label: 'Option 2')
-   ->add(label: 'Option 3');
+
+/* */
+$Items->Options->add(id: 'O-0-1', label: 'Option 1');
+$Items->Options->add(id: 'O-0-2', label: 'Option 2');
+$Items->Options->add(id: 'O-0-3', label: 'Option 3');
 
 $selected = $Menu->open();
 
