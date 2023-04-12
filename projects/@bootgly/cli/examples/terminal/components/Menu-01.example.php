@@ -19,9 +19,7 @@ $Output->render(<<<OUTPUT
 OUTPUT);
 
 $Menu = new Menu($Input, $Output);
-
 $Menu->prompt = "Choose one or more options:";
-
 // > Items
 $Items = $Menu->Items;
 // * Config

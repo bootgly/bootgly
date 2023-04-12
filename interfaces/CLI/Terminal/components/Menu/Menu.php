@@ -60,7 +60,11 @@ class Menu
       // Save Cursor position
       $this->Output->Cursor->save();
       // Set Input settings
-      $this->Input->configure(blocking: false, canonical: false, echo: false);
+      $this->Input->configure(
+         blocking: false,
+         canonical: false,
+         echo: false
+      );
       // Hide Cursor
       $this->Output->Cursor->hide();
 
@@ -114,7 +118,11 @@ class Menu
       }
 
       // Restore Input settings
-      $this->Input->configure(blocking: true, canonical: true, echo: true);
+      $this->Input->configure(
+         blocking: true,
+         canonical: true,
+         echo: true
+      );
       // Show Cursor
       $this->Output->Cursor->show();
 
