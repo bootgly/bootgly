@@ -25,7 +25,7 @@ class Menu
 
    // * Config
    #public int $width;
-   public string $title;
+   public string $prompt;
    // * Data
    public Items $Items;
    // * Meta
@@ -39,6 +39,7 @@ class Menu
 
       // * Config
       #$this->width = 80;
+      $this->prompt = '';
       // * Data
       $this->Items = new Items($this);
       // * Meta
@@ -68,8 +69,8 @@ class Menu
       while (true) {
          $this->Output->Cursor->restore();
 
-         // @ Write Menu title
-         $this->Output->write($this->title);
+         // @ Render Menu prompt
+         $this->Output->render($this->prompt . "\n");
 
          // @ Render Menu Items
          $Items->render();

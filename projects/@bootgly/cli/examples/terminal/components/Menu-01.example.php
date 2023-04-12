@@ -20,7 +20,8 @@ OUTPUT);
 
 $Menu = new Menu($Input, $Output);
 
-$Menu->title = "Choose one or more options:\n";
+$Menu->prompt = "Choose one or more options:";
+
 // > Items
 $Items = $Menu->Items;
 // * Config
@@ -52,7 +53,7 @@ $selected = $Menu->open();
 
 echo "\n";
 if ( ! empty($selected) ) {
-   $Output->write("Selected options indexes: " . implode(", ", $selected) . PHP_EOL);
+   $Output->write("Selected options (index): " . implode(", ", $selected) . PHP_EOL);
 } else {
    echo "No options selected." . PHP_EOL;
 }
