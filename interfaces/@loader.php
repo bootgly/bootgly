@@ -40,6 +40,9 @@ require 'CLI/Terminal/Output/Viewport.php';
 // @ components
 // Alert
 require 'CLI/Terminal/components/Alert.php';
+// Menu
+require 'CLI/Terminal/components/Menu/Menu.php';
+require 'CLI/Terminal/components/Menu/Items/Items.php';
 // Progress
 require 'CLI/Terminal/components/Progress.php';
 require 'CLI/Terminal/components/Progress/Bar.php';
