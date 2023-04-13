@@ -11,13 +11,13 @@
 namespace Bootgly\CLI\Terminal\components\Menu\Items\collections;
 
 
-final class Separator
+final class Header
 {
    // * Config
    // ...
 
    // * Data
-   public string $separator;
+   public string $header;
 
    // * Meta
    public readonly string $type;

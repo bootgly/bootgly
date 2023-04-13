@@ -40,7 +40,7 @@ final class Options extends Items
 
    public function __construct ($Menu)
    {
-      // @ Parent
+      // --- Parent --- \\
       parent::__construct($Menu);
 
       // * Config
@@ -48,12 +48,11 @@ final class Options extends Items
       $this->selectable = true;
       $this->deselectable = true;
 
-      // ---
-
-      // @ Child
+      // --- Child --- \\
       // * Config
       // @ Selecting
       $this->Selection = Selection::Multiple->set();
+      // @ Styling
       $this->separator = '';
 
       // * Data
@@ -67,7 +66,7 @@ final class Options extends Items
 
    public function add (string $label, ? string $id = null) : Option
    {
-      $Option = new Option($this->Menu);
+      $Option = new Option;
 
       // * Data
       $Option->id = $id;
@@ -91,9 +90,7 @@ final class Options extends Items
    }
    public function advance () : self
    {
-      $options = Items::$data[Menu::$level];
-
-      if ($this->aimed < count($options) - 1) {
+      if ($this->aimed < $this->indexes - 1) {
          $this->aimed++;
       }
 
@@ -175,62 +172,32 @@ final class Options extends Items
    {
       $Menu = $this->Menu;
 
-      // ! Global
+      // @ Options
       // * Config
       // @ Displaying
       $Orientation = $this->Orientation->get();
       $Aligment = $this->Aligment->get();
       // @ Styling
       $separator = $this->separator;
-
+      // * Data
+      // ...
       // * Meta
       // @ Aiming
       $aimed = $this->aimed;
       // @ Selecting
       $selected = $this->selected[Menu::$level];
 
-      $index = $Option->index;
-      #$count = count(Items::$data[Menu::$level]);
-      $options = '';
-
-
-      // * Config
-      // @ Displaying
-      switch ($Orientation) {
-         case $Orientation::Vertical:
-            $divisor = "\n";
-
-            // @ Styling
-            // Separator
-            #if ($key < $count - 1) {
-            $characters = strlen($separator);
-
-            if ($characters > 0) {
-               $separator = str_repeat($separator, $Menu->width / $characters);
-               $divisor .= "{$separator}\n";
-            }
-            #}
-
-            break;
-         case $Orientation::Horizontal:
-            $divisor = ' ';
-
-            // @ Styling
-            // Separator
-            #if ($key < $count - 1) {
-            $divisor .= "{$separator}";
-            #}
-      }
-
+      // @ Option
       // * Data
-      // Option
       $label = $Option->label;
       $prepend = $Option->prepend ?? '';
       $append = $Option->append ?? '';
-
       // * Meta
-      // @ Aiming
-      // Aimed prepend / append
+      $index = $Option->index;
+
+      // @
+      $compiled = '';
+
       $aim = [];
       if ($aimed === $index) {
          $aim[0] = $Option->aimed[0] ?? '=>';
@@ -239,8 +206,7 @@ final class Options extends Items
          $aim[0] = $Option->unaimed[0] ?? '  ';
          $aim[1] = $Option->unaimed[1] ?? '';
       }
-      // @ Selecting
-      // Selected prepend / append
+
       $marker = [];
       if ( in_array($index, $selected) ) {
          $marker[0] = $Option->marked[0] ?? '[X]';
@@ -250,20 +216,42 @@ final class Options extends Items
          $marker[1] = $Option->unmarked[1] ?? '';
       }
 
-      $option = <<<OUTPUT
+      $compiled = <<<OUTPUT
       {$aim[0]} {$marker[0]} {$prepend}$label{$append} {$marker[1]} {$aim[1]}
       OUTPUT;
 
       // @ Displaying
       // Aligment
       if ($Orientation === $Orientation::Vertical) {
-         $option = str_pad($option, $Menu->width, ' ', $Aligment->value);
+         $compiled = str_pad($compiled, $Menu->width, ' ', $Aligment->value);
       }
 
-      // @ Add option divisor
-      $option .= $divisor;
+      // @ Styling
+      // Divisor
+      switch ($Orientation) {
+         case $Orientation::Vertical:
+            $divisor = "\n";
 
-      return $option;
+            if ($index < $this->indexes - 1) {
+               $characters = strlen($separator);
+
+               if ($characters > 0) {
+                  $separator = str_repeat($separator, $Menu->width / $characters);
+                  $divisor .= "{$separator}\n";
+               }
+            }
+
+            break;
+         case $Orientation::Horizontal:
+            $divisor = ' ';
+
+            if ($index < $this->indexes - 1) {
+               $divisor .= "{$separator}";
+            }
+      }
+      $compiled .= $divisor;
+
+      return $compiled;
    }
 }
 

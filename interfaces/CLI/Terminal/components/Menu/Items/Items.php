@@ -16,12 +16,19 @@ use Bootgly\CLI\Terminal\components\Menu\ {
    Menu
 };
 use Bootgly\CLI\Terminal\components\Menu\Items\collections\ {
+   Divisor,
+   Divisors,
+   Header,
+   Headers,
    Option,
-   Separator,
+   Options,
 };
 
 
 #[\AllowDynamicProperties]
+/**
+ * @Headers $Headers
+ */
 class Items
 {
    protected Menu $Menu;
@@ -47,6 +54,9 @@ class Items
    public Aligment $Aligment;
 
    // * Data
+   public Divisors $Divisors;
+   public Headers $Headers;
+   public Options $Options;
    public static array $data;
 
    // * Meta
@@ -71,7 +81,7 @@ class Items
       $this->aimed = 0;
    }
 
-   public static function push (Option|Separator $Item)
+   public static function push (Divisor|Header|Option $Item)
    {
       self::$data[Menu::$level][] = $Item;
    }
@@ -87,15 +97,40 @@ class Items
       $Orientation = $this->Orientation->get();
       $Aligment = $this->Aligment->get();
 
+      // @
       $items = '';
+      // ---
+      $Divisors = $this->Divisors;
+      $Headers = $this->Headers;
+      $Options = $this->Options;
+
       foreach (self::$data[Menu::$level] as $key => $Item) {
-         $items .= match ($Item->type) {
-            Option::class    => $this->Options->compile($Item),
-            Separator::class => $this->Separators->compile($Item)
-         };
+         // @ Compile
+         switch ($Item->type) {
+            case Divisor::class:
+               // @ Compile Divisor
+               $items .= $Divisors->compile($Item);
+
+               break;
+            case Header::class:
+               // @ Compile Header
+               $items .= $Headers->compile($Item);
+
+               break;
+            case Option::class:
+               // @ Compile Option
+               $items .= $Options->compile($Item);
+
+               break;
+         }
+
+         // @ Post compile
+         if ($Item->type === Header::class) {
+            $items .= $Options->Orientation->get() === $Orientation::Horizontal ? '' : "\n";
+         }
       }
 
-      // Align items horizontally
+      // @ Align items horizontally
       if ($Orientation === $Orientation::Horizontal) {
          $items = str_pad($items, $Menu->width, ' ', $Aligment->value);
       }
@@ -106,6 +141,7 @@ class Items
    public function __destruct ()
    {
       // * Data
+      self::$data = [];
       self::$data[0] = [];
    }
 }

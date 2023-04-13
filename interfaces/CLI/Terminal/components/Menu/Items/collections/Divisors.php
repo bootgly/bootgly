@@ -15,7 +15,7 @@ use Bootgly\CLI\Terminal\components\Menu\Items\Items;
 use Bootgly\CLI\Terminal\components\Menu\Menu;
 
 
-final class Separators extends Items
+final class Divisors extends Items
 {
    // * Config
    // ...
@@ -27,48 +27,56 @@ final class Separators extends Items
    // ...
 
 
-   public function add (string $separator) : Separator
+   /**
+    * Characters to repeat (in Vertical Orientation) or to add (in Horizontal Orientation)
+    */
+   public function add (string $characters) : Divisor
    {
-      $Separator = new Separator($this->Menu);
-      $Separator->separator = $separator;
+      $Divisor = new Divisor;
+      $Divisor->characters = $characters;
 
-      Items::push($Separator);
+      Items::push($Divisor);
 
-      return $Separator;
+      return $Divisor;
    }
 
-   public function compile (Separator $Separator)
+   public function compile (Divisor $Divisor)
    {
       $Menu = $this->Menu;
 
+      // @ Divisors
       // * Config
       // @ Displaying
       $Orientation = $this->Orientation->get();
-
       // * Data
       // ...
-
       // * Meta
       // ...
 
+      // @ Divisor
+      // * Config
+      // ...
+      // * Data
+      $characters = $Divisor->characters;
+      // * Meta
+      $length = strlen($characters);
+
+      // @
       $compiled = '';
 
-      $separator = $Separator->separator;
+      if ($length === 0) {
+         return $compiled;
+      }
 
-      // * Config
-      // @ Displaying
       switch ($Orientation) {
          case $Orientation::Vertical:
-            $characters = strlen($separator);
+            $divisor = str_repeat($characters, $Menu->width / $length);
 
-            if ($characters > 0) {
-               $separators = str_repeat($separator, $Menu->width / $characters);
-               $compiled .= "{$separators}\n";
-            }
+            $compiled .= "{$divisor}\n";
 
             break;
          case $Orientation::Horizontal:
-            $compiled = "{$separator}";
+            $compiled = "{$characters}";
       }
 
       return $compiled;

@@ -43,10 +43,12 @@ require 'CLI/Terminal/components/Alert.php';
 // Menu
 require 'CLI/Terminal/components/Menu/Menu.php';
 require 'CLI/Terminal/components/Menu/Items/Items.php';
+require 'CLI/Terminal/components/Menu/Items/collections/Header.php';
+require 'CLI/Terminal/components/Menu/Items/collections/Headers.php';
+require 'CLI/Terminal/components/Menu/Items/collections/Divisor.php';
+require 'CLI/Terminal/components/Menu/Items/collections/Divisors.php';
 require 'CLI/Terminal/components/Menu/Items/collections/Option.php';
 require 'CLI/Terminal/components/Menu/Items/collections/Options.php';
-require 'CLI/Terminal/components/Menu/Items/collections/Separator.php';
-require 'CLI/Terminal/components/Menu/Items/collections/Separators.php';
 // Progress
 require 'CLI/Terminal/components/Progress.php';
 require 'CLI/Terminal/components/Progress/Bar.php';

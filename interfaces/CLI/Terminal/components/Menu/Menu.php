@@ -17,8 +17,9 @@ use Bootgly\CLI\Terminal\components\Menu\Items\ {
    Items,
 };
 use Bootgly\CLI\Terminal\components\Menu\Items\collections\ {
+   Divisors,
+   Headers,
    Options,
-   Separators
 };
 
 
@@ -49,8 +50,9 @@ class Menu
 
       // * Data
       $this->Items = new Items($this);
+      $this->Items->Divisors = new Divisors($this);
+      $this->Items->Headers = new Headers($this);
       $this->Items->Options = new Options($this);
-      $this->Items->Separators = new Separators($this);
 
       // * Meta
       self::$level = 0;
