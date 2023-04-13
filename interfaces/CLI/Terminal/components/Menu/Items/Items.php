@@ -10,13 +10,16 @@
 
 namespace Bootgly\CLI\Terminal\components\Menu\Items;
 
+
 use AllowDynamicProperties;
 use Bootgly\CLI\Terminal\components\Menu\ {
    Menu
 };
-use Bootgly\CLI\Terminal\components\Menu\Items\ {
-   Options
+use Bootgly\CLI\Terminal\components\Menu\Items\collections\ {
+   Option,
+   Separator,
 };
+
 
 #[\AllowDynamicProperties]
 class Items

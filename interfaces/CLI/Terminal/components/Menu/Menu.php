@@ -15,6 +15,8 @@ use Bootgly\CLI\Terminal\Input;
 use Bootgly\CLI\Terminal\Output;
 use Bootgly\CLI\Terminal\components\Menu\Items\ {
    Items,
+};
+use Bootgly\CLI\Terminal\components\Menu\Items\collections\ {
    Options,
    Separators
 };

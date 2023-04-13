@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\CLI\Terminal\components\Menu\Items;
+namespace Bootgly\CLI\Terminal\components\Menu\Items\collections;
 
 
 use Bootgly\CLI\Terminal\components\Menu\Items\Items;

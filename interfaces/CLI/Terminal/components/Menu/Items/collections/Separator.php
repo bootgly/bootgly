@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\CLI\Terminal\components\Menu\Items;
+namespace Bootgly\CLI\Terminal\components\Menu\Items\collections;
 
 
 final class Separator
