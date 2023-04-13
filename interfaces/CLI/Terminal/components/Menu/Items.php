@@ -20,8 +20,8 @@ use Bootgly\CLI\Terminal\components\Menu\Items\ {
    Options,
 };
 use Bootgly\CLI\Terminal\components\Menu\Items\extensions\ {
-   Divisor,
-   Header,
+   Divisors\Divisor,
+   Headers\Header,
 };
 
 

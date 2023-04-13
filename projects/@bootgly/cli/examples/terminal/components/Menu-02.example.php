@@ -7,7 +7,7 @@ use Bootgly\CLI\Terminal\components\Menu\ {
    Menu,
 };
 use Bootgly\CLI\Terminal\components\Menu\Items\extensions\ {
-   Divisors
+   Divisors\Divisors
 };
 
 

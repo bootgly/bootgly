@@ -46,10 +46,10 @@ require 'CLI/Terminal/components/Menu/Items.php';
 require 'CLI/Terminal/components/Menu/Menu.php';
 require 'CLI/Terminal/components/Menu/Items/Option.php';
 require 'CLI/Terminal/components/Menu/Items/Options.php';
-require 'CLI/Terminal/components/Menu/Items/extensions/Header.php';
-require 'CLI/Terminal/components/Menu/Items/extensions/Headers.php';
-require 'CLI/Terminal/components/Menu/Items/extensions/Divisor.php';
-require 'CLI/Terminal/components/Menu/Items/extensions/Divisors.php';
+require 'CLI/Terminal/components/Menu/Items/extensions/Headers/Header.php';
+require 'CLI/Terminal/components/Menu/Items/extensions/Headers/Headers.php';
+require 'CLI/Terminal/components/Menu/Items/extensions/Divisors/Divisor.php';
+require 'CLI/Terminal/components/Menu/Items/extensions/Divisors/Divisors.php';
 // Progress
 require 'CLI/Terminal/components/Progress.php';
 require 'CLI/Terminal/components/Progress/Bar.php';

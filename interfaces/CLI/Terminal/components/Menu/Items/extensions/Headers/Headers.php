@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\CLI\Terminal\components\Menu\Items\extensions;
+namespace Bootgly\CLI\Terminal\components\Menu\Items\extensions\Headers;
 
 
 use Bootgly\CLI\Terminal\components\Menu\Items;

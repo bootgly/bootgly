@@ -8,19 +8,19 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\CLI\Terminal\components\Menu\Items\extensions;
+namespace Bootgly\CLI\Terminal\components\Menu\Items\extensions\Headers;
 
 
 use Bootgly\CLI\Terminal\components\Menu\Item;
 
 
-final class Divisor extends Item
+final class Header extends Item
 {
    // * Config
    // ...
 
    // * Data
-   public string $characters;
+   public string $header;
 
    // * Meta
    // ...
