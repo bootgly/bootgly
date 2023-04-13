@@ -39,7 +39,7 @@ $Options->Selection::Unique->set();
 $Options->selectable = true;
 $Options->deselectable = true;
 // @ Styling
-$Options->separator = '-';
+#$Options->divisors = '-';
 // @ Displaying
 $Options->Orientation::Vertical->set();
 $Options->Aligment::Left->set();

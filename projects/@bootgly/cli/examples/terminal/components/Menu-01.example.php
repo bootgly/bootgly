@@ -14,7 +14,7 @@ $Output->reset();
 $Output->render(<<<OUTPUT
 /* @*:
  * @#green: Bootgly CLI Terminal - Menu component @;
- * @#yellow: @@ Demo - Example #1 - Options: global separator @;
+ * @#yellow: @@ Demo - Example #1 - Options: global divisors @;
  * {$location}
  */\n\n
 OUTPUT);
@@ -39,7 +39,7 @@ $Options->Selection::Multiple->set();
 $Options->selectable = true;
 $Options->deselectable = true;
 // @ Styling
-$Options->separator = '-';
+$Options->divisors = '-';
 // @ Displaying
 $Options->Orientation::Vertical->set();
 $Options->Aligment::Left->set();

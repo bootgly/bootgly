@@ -27,7 +27,7 @@ final class Options extends Items
    /**
     * Separator between each Option
     */
-   public string $separator;
+   public string $divisors;
 
    // * Data
    // ...
@@ -53,7 +53,7 @@ final class Options extends Items
       // @ Selecting
       $this->Selection = Selection::Multiple->set();
       // @ Styling
-      $this->separator = '';
+      $this->divisors = '';
 
       // * Data
       // ...
@@ -178,7 +178,7 @@ final class Options extends Items
       $Orientation = $this->Orientation->get();
       $Aligment = $this->Aligment->get();
       // @ Styling
-      $separator = $this->separator;
+      $divisors = $this->divisors;
       // * Data
       // ...
       // * Meta
@@ -233,11 +233,11 @@ final class Options extends Items
             $divisor = "\n";
 
             if ($index < $this->indexes - 1) {
-               $characters = strlen($separator);
+               $characters = strlen($divisors);
 
                if ($characters > 0) {
-                  $separator = str_repeat($separator, $Menu->width / $characters);
-                  $divisor .= "{$separator}\n";
+                  $divisors = str_repeat($divisors, $Menu->width / $characters);
+                  $divisor .= "{$divisors}\n";
                }
             }
 
@@ -246,7 +246,7 @@ final class Options extends Items
             $divisor = ' ';
 
             if ($index < $this->indexes - 1) {
-               $divisor .= "{$separator}";
+               $divisor .= "{$divisors}";
             }
       }
       $compiled .= $divisor;
