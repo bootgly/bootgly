@@ -22,7 +22,7 @@ OUTPUT);
 
 $Menu = new Menu($Input, $Output);
 // * Config
-$Menu->prompt = "Choose one or more options:";
+$Menu->prompt = "Choose one or more options:\n";
 
 // > Items
 $Items = $Menu->Items;
@@ -46,9 +46,9 @@ $Options->Orientation::Vertical->set();
 
 // * Items set - Option #1 */
 $Items->Options->add(label: 'Option 1');
-$Items->Divisors->add('~');
+$Items->Divisors->add('#');
 $Items->Options->add(label: 'Option 2');
-$Items->Divisors->add('_');
+$Items->Divisors->add('.');
 $Items->Options->add(label: 'Option 3');
 $Items->Divisors->add('=');
 

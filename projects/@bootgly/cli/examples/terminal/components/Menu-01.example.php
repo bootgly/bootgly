@@ -22,7 +22,7 @@ OUTPUT);
 
 $Menu = new Menu($Input, $Output);
 // * Config
-$Menu->prompt = "Choose one or more options:";
+$Menu->prompt = "Choose one or more options:\n";
 
 // > Items
 $Items = $Menu->Items;
