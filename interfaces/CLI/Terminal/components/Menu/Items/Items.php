@@ -135,6 +135,7 @@ class Items
       // @ Align items horizontally
       if ($Orientation === $Orientation::Horizontal) {
          $rendered = str_pad($rendered, $Menu->width, ' ', $Aligment->value);
+         $rendered .= "\n";
       }
 
       $this->Menu->Output->render($rendered);
