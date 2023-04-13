@@ -8,10 +8,10 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\CLI\Terminal\components\Menu\Items\collections;
+namespace Bootgly\CLI\Terminal\components\Menu\Items\extensions;
 
 
-use Bootgly\CLI\Terminal\components\Menu\Items\Items;
+use Bootgly\CLI\Terminal\components\Menu\Items;
 
 
 final class Headers extends Items

@@ -8,10 +8,13 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\CLI\Terminal\components\Menu\Items\collections;
+namespace Bootgly\CLI\Terminal\components\Menu\Items;
 
 
-final class Option
+use Bootgly\CLI\Terminal\components\Menu\Item;
+
+
+final class Option extends Item
 {
    // * Config
    public array $aimed;
@@ -27,12 +30,13 @@ final class Option
    public string $append;
 
    // * Meta
-   public readonly string $type;
    public int $index;
 
 
    public function __construct ()
    {
+      parent::__construct();
+
       // * Config
       $this->aimed = [];
       $this->unaimed = [];
@@ -44,6 +48,6 @@ final class Option
       // ...
 
       // * Meta
-      $this->type = static::class;
+      // ...
    }
 }

@@ -13,12 +13,8 @@ namespace Bootgly\CLI\Terminal\components\Menu;
 
 use Bootgly\CLI\Terminal\Input;
 use Bootgly\CLI\Terminal\Output;
+
 use Bootgly\CLI\Terminal\components\Menu\Items\ {
-   Items,
-};
-use Bootgly\CLI\Terminal\components\Menu\Items\collections\ {
-   Divisors,
-   Headers,
    Options,
 };
 
@@ -50,9 +46,8 @@ class Menu
 
       // * Data
       $this->Items = new Items($this);
-      $this->Items->Divisors = new Divisors($this);
-      $this->Items->Headers = new Headers($this);
       $this->Items->Options = new Options($this);
+      // ...Items extensions loaded dynamically
 
       // * Meta
       self::$level = 0;

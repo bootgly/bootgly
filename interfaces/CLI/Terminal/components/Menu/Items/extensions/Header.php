@@ -8,10 +8,13 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\CLI\Terminal\components\Menu\Items\collections;
+namespace Bootgly\CLI\Terminal\components\Menu\Items\extensions;
 
 
-final class Header
+use Bootgly\CLI\Terminal\components\Menu\Item;
+
+
+final class Header extends Item
 {
    // * Config
    // ...
@@ -20,18 +23,5 @@ final class Header
    public string $header;
 
    // * Meta
-   public readonly string $type;
-
-
-   public function __construct ()
-   {
-      // * Config
-      // ...
-
-      // * Data
-      // ...
-
-      // * Meta
-      $this->type = static::class;
-   }
+   // ...
 }

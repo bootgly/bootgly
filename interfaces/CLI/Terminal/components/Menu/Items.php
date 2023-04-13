@@ -8,20 +8,20 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\CLI\Terminal\components\Menu\Items;
+namespace Bootgly\CLI\Terminal\components\Menu;
 
 
 use AllowDynamicProperties;
 use Bootgly\CLI\Terminal\components\Menu\ {
    Menu
 };
-use Bootgly\CLI\Terminal\components\Menu\Items\collections\ {
-   Divisor,
-   Divisors,
-   Header,
-   Headers,
+use Bootgly\CLI\Terminal\components\Menu\Items\ {
    Option,
    Options,
+};
+use Bootgly\CLI\Terminal\components\Menu\Items\extensions\ {
+   Divisor,
+   Header,
 };
 
 
@@ -51,8 +51,6 @@ class Items
    public Aligment $Aligment;
 
    // * Data
-   public Divisors $Divisors;
-   public Headers $Headers;
    public Options $Options;
    public static array $data;
 

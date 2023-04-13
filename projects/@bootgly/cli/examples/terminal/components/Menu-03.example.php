@@ -48,7 +48,6 @@ $Options->Aligment::Left->set();
 $Items->Options->add(label: 'Option 1');
 $Items->Options->add(label: 'Option 2');
 $Items->Options->add(label: 'Option 3');
-$Items->Options->advance();
 
 $selected = $Menu->open();
 

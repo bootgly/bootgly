@@ -6,6 +6,10 @@ use Bootgly\CLI;
 use Bootgly\CLI\Terminal\components\Menu\ {
    Menu,
 };
+use Bootgly\CLI\Terminal\components\Menu\Items\extensions\ {
+   Divisors
+};
+
 
 $Input = CLI::$Terminal->Input;
 $Output = CLI::$Terminal->Output;
@@ -26,10 +30,8 @@ $Menu->prompt = "Choose one or more options:\n";
 
 // > Items
 $Items = $Menu->Items;
-// * Config
-// @ Selecting
-// @ Styling
-// @ Displaying
+// @ extend
+$Items->Divisors = new Divisors($Menu);
 
 // > Items > Options
 $Options = $Items->Options;
