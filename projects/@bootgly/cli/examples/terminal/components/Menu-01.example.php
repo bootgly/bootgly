@@ -1,10 +1,12 @@
 <?php
 namespace Bootgly\CLI;
 
+
 use Bootgly\CLI;
 use Bootgly\CLI\Terminal\components\Menu\ {
-   Menu
+   Menu,
 };
+
 
 $Input = CLI::$Terminal->Input;
 $Output = CLI::$Terminal->Output;
@@ -18,6 +20,7 @@ $Output->render(<<<OUTPUT
  */\n\n
 OUTPUT);
 
+
 $Menu = new Menu($Input, $Output);
 // * Config
 $Menu->prompt = "Choose one or more options:";
@@ -26,30 +29,39 @@ $Menu->prompt = "Choose one or more options:";
 $Items = $Menu->Items;
 // * Config
 // @ Selecting
-$Items->Selection::Multiple->set();
-$Items->selectable = true;
-$Items->deselectable = true;
-// @ Displaying
-$Items->Orientation::Vertical->set();
-$Items->Aligment::Left->set();
 // @ Styling
-$Items->separator = '-';
+// @ Displaying
 
-// @ Setting
-/* Menu Builder
-$Builder = $Menu->Builder;
-$MenuBuilder
-->Option->add(id: 'O-0-1', label: 'Option 1')
-->Option->add(id: 'O-0-2', label: 'Option 2')
-->Option->add(id: 'O-0-3', label: 'Option 3')
-->Separator->add('-')
-->build();
+// > Items > Options
+$Options = $Items->Options;
+// * Config
+// @ Selecting
+$Options->Selection::Unique->set();
+$Options->selectable = true;
+$Options->deselectable = true;
+// @ Styling
+#$Options->separator = '-';
+// @ Displaying
+$Options->Orientation::Vertical->set();
+$Options->Aligment::Left->set();
+
+/* Set 1 */
+/*
+$Menu->Builder
+->Option->add(...);
+->Separator->add(...);
 */
 
-/* */
-$Items->Options->add(id: 'O-0-1', label: 'Option 1');
-$Items->Options->add(id: 'O-0-2', label: 'Option 2');
-$Items->Options->add(id: 'O-0-3', label: 'Option 3');
+/* Set 2 */
+#$Items->Options->push();
+$Items->Options->add(label: 'Option 1');
+$Items->Separators->add('-');
+$Items->Options->add(label: 'Option 2');
+$Items->Separators->add('_');
+$Items->Options->add(label: 'Option 3');
+$Items->Separators->add('=');
+$Items->Options->advance();
+#$Items->Groups->add('Test');
 
 $selected = $Menu->open();
 
