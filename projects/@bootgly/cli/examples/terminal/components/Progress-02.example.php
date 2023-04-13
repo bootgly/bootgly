@@ -23,7 +23,7 @@ $Progress->throttle = 0.0;
 // * Data
 // @
 $Progress->total = 0;
-// ! Templating
+// @ Templating
 $Progress->template = <<<'TEMPLATE'
 @description;
 @current;/@total; [@bar;] @percent;%
@@ -31,12 +31,13 @@ $Progress->template = <<<'TEMPLATE'
 TEMPLATE;
 
 // ! Bar
+$Bar = $Progress->Bar;
 // * Config
-$Progress->Bar->units = 10;
+$Bar->units = 10;
 // * Data
-$Progress->Bar->Symbols->incomplete = '🖤';
-$Progress->Bar->Symbols->current = '';
-$Progress->Bar->Symbols->complete = '❤️';
+$Bar->Symbols->incomplete = '🖤';
+$Bar->Symbols->current = '';
+$Bar->Symbols->complete = '❤️';
 
 $Progress->start();
 
