@@ -14,7 +14,7 @@ $Output->reset();
 $Output->render(<<<OUTPUT
 /* @*:
  * @#green: Bootgly CLI Terminal - Menu component @;
- * @#yellow: @@ Demo - Example #4 - Options: horizontal orientation @;
+ * @#yellow: @@ Demo - Example #5 - Options: center aligment @;
  * {$location}
  */\n\n
 OUTPUT);
@@ -41,8 +41,8 @@ $Options->deselectable = true;
 // @ Styling
 #$Options->divisors = '-';
 // @ Displaying
-$Options->Orientation::Horizontal->set();
-$Options->Aligment::Left->set();
+$Options->Orientation::Vertical->set();
+$Options->Aligment::Center->set();
 
 // * Items set - Option #1 */
 $Items->Options->add(label: 'Option 1');
@@ -58,3 +58,5 @@ if ( ! empty($selected) ) {
 } else {
    echo "No options selected." . PHP_EOL;
 }
+
+$wait = 1;
