@@ -14,7 +14,9 @@ namespace Bootgly\CLI\Terminal\components\Menu;
 use Bootgly\CLI\Terminal\Input;
 use Bootgly\CLI\Terminal\Output;
 use Bootgly\CLI\Terminal\components\Menu\Items\ {
-   Items
+   Items,
+   Options,
+   Separators
 };
 
 
@@ -31,7 +33,7 @@ class Menu
    public Items $Items;
 
    // * Meta
-   public int $level;
+   public static int $level;
 
 
    public function __construct (Input &$Input, Output &$Output)
@@ -45,16 +47,15 @@ class Menu
 
       // * Data
       $this->Items = new Items($this);
+      $this->Items->Options = new Options($this);
+      $this->Items->Separators = new Separators($this);
 
       // * Meta
-      $this->level = 0;
+      self::$level = 0;
    }
 
    public function open ()
    {
-      // > Menu
-      $Items = $this->Items;
-
       // Save Cursor position
       $this->Output->Cursor->save();
       // Set Input settings
@@ -65,6 +66,9 @@ class Menu
       );
       // Hide Cursor
       $this->Output->Cursor->hide();
+
+      // > Items
+      $Items = $this->Items;
 
       while (true) {
          $this->Output->Cursor->restore();
@@ -79,7 +83,7 @@ class Menu
          $char = $this->Input->read(3);
 
          // @ Control Menu Items
-         $continue = $Items->control($char);
+         $continue = $Items->Options->control($char);
 
          if ($continue) {
             usleep(100000);
@@ -101,6 +105,6 @@ class Menu
       // Show Cursor
       $this->Output->Cursor->show();
 
-      return $Items->selected[$this->level];
+      return $Items->Options->selected[self::$level];
    }
 }
