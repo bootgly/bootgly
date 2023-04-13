@@ -14,7 +14,7 @@ $Output->reset();
 $Output->render(<<<OUTPUT
 /* @*:
  * @#green: Bootgly CLI Terminal - Menu component @;
- * @#yellow: @@ Demo - Example #1 - Options: global separator @;
+ * @#yellow: @@ Demo - Example #2 - Options: per Option separator @;
  * {$location}
  */\n\n
 OUTPUT);
@@ -39,25 +39,18 @@ $Options->Selection::Multiple->set();
 $Options->selectable = true;
 $Options->deselectable = true;
 // @ Styling
-$Options->separator = '-';
+#$Options->separator = '-';
 // @ Displaying
 $Options->Orientation::Vertical->set();
-$Options->Aligment::Left->set();
+#$Options->Aligment::Left->set();
 
 // * Items set - Option #1 */
 $Items->Options->add(label: 'Option 1');
+$Items->Divisors->add('~');
 $Items->Options->add(label: 'Option 2');
+$Items->Divisors->add('_');
 $Items->Options->add(label: 'Option 3');
-$Items->Options->advance();
-// * Items set - Option #2 */
-/*
-$Option1 = new Option(...);
-$Option1->...;
-$Items->push($Option1);
-$Divisor1 = new Divisor(...);
-$Divisor1->...;
-$Items->push($Divisor1);
-*/
+$Items->Divisors->add('=');
 
 $selected = $Menu->open();
 

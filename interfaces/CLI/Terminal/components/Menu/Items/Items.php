@@ -25,10 +25,7 @@ use Bootgly\CLI\Terminal\components\Menu\Items\collections\ {
 };
 
 
-#[\AllowDynamicProperties]
-/**
- * @Headers $Headers
- */
+#[AllowDynamicProperties]
 class Items
 {
    protected Menu $Menu;
@@ -98,44 +95,49 @@ class Items
       $Aligment = $this->Aligment->get();
 
       // @
-      $items = '';
+      $rendered = '';
       // ---
       $Divisors = $this->Divisors;
       $Headers = $this->Headers;
       $Options = $this->Options;
 
       foreach (self::$data[Menu::$level] as $key => $Item) {
+         $compiled = '';
+
          // @ Compile
          switch ($Item->type) {
             case Divisor::class:
                // @ Compile Divisor
-               $items .= $Divisors->compile($Item);
+               $compiled = $Divisors->compile($Item);
 
                break;
             case Header::class:
                // @ Compile Header
-               $items .= $Headers->compile($Item);
+               $compiled = $Headers->compile($Item);
 
                break;
             case Option::class:
                // @ Compile Option
-               $items .= $Options->compile($Item);
+               $compiled = $Options->compile($Item);
 
                break;
          }
 
-         // @ Post compile
+         // @ Post compile Item
          if ($Item->type === Header::class) {
-            $items .= $Options->Orientation->get() === $Orientation::Horizontal ? '' : "\n";
+            $compiled .= $Options->Orientation->get() === $Orientation::Horizontal ? ' ' : "\n";
          }
+
+         $rendered .= $compiled;
       }
 
+      // @ Post compile Items
       // @ Align items horizontally
       if ($Orientation === $Orientation::Horizontal) {
-         $items = str_pad($items, $Menu->width, ' ', $Aligment->value);
+         $rendered = str_pad($rendered, $Menu->width, ' ', $Aligment->value);
       }
 
-      $this->Menu->Output->render($items);
+      $this->Menu->Output->render($rendered);
    }
 
    public function __destruct ()
