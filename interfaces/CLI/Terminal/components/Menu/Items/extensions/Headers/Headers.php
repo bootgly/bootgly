@@ -29,6 +29,7 @@ final class Headers extends Items
    public function add (string $header) : Header
    {
       $Header = new Header;
+      // * Data
       $Header->header = $header;
 
       Items::push($Header);

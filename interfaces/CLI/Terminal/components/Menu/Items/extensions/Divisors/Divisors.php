@@ -32,6 +32,7 @@ final class Divisors extends Items
    public function add (string $characters) : Divisor
    {
       $Divisor = new Divisor;
+      // * Data
       $Divisor->characters = $characters;
 
       Items::push($Divisor);

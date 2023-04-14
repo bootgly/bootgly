@@ -76,7 +76,7 @@ class Items
       $this->aimed = 0;
    }
 
-   public static function push (Divisor|Header|Option $Item)
+   public static function push (Item $Item)
    {
       self::$data[Menu::$level][] = $Item;
    }
@@ -95,8 +95,8 @@ class Items
       // @
       $rendered = '';
       // ---
-      $Divisors = $this->Divisors;
-      $Headers = $this->Headers;
+      $Divisors = $this->Divisors ?? null;
+      $Headers = $this->Headers ?? null;
       $Options = $this->Options;
 
       foreach (self::$data[Menu::$level] as $key => $Item) {
