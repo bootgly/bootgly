@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\CLI\Terminal\components;
+namespace Bootgly\CLI\Terminal\components\Alert;
 
 
 use Bootgly\CLI\Terminal\Output;
@@ -19,7 +19,7 @@ class Alert
    private Output $Output;
 
    // * Config
-   public Alert\Type $Type;
+   public Type $Type;
    public int $width;
 
 
@@ -28,7 +28,7 @@ class Alert
       $this->Output = $Output;
 
       // * Config
-      $this->Type = Alert\Type::DEFAULT;
+      $this->Type = Type::DEFAULT;
       $this->width = 80;
    }
 
@@ -40,9 +40,9 @@ class Alert
       $this->Output->Text->stylize('bold');
 
       match ($type) {
-         Alert\Type::SUCCESS => $this->Output->Text->colorize('white', 'green'),
-         Alert\Type::ATTENTION => $this->Output->Text->colorize(0, 'yellow'),
-         Alert\Type::FAILURE => $this->Output->Text->colorize('white', 'red'),
+         Type::SUCCESS => $this->Output->Text->colorize('white', 'green'),
+         Type::ATTENTION => $this->Output->Text->colorize(0, 'yellow'),
+         Type::FAILURE => $this->Output->Text->colorize('white', 'red'),
          default => $this->Output->Text->colorize(0, 7)
       };
 
@@ -63,10 +63,6 @@ class Alert
       #$this->Output->Text->colorize();
    }
 }
-
-
-
-namespace Bootgly\CLI\Terminal\components\Alert;
 
 
 // * Configs

@@ -39,7 +39,7 @@ require 'CLI/Terminal/Output/Text.php';
 require 'CLI/Terminal/Output/Viewport.php';
 // @ components
 // Alert
-require 'CLI/Terminal/components/Alert.php';
+require 'CLI/Terminal/components/Alert/Alert.php';
 // Menu
 require 'CLI/Terminal/components/Menu/Item.php';
 require 'CLI/Terminal/components/Menu/Items.php';
@@ -51,10 +51,10 @@ require 'CLI/Terminal/components/Menu/Items/extensions/Headers/Headers.php';
 require 'CLI/Terminal/components/Menu/Items/extensions/Divisors/Divisor.php';
 require 'CLI/Terminal/components/Menu/Items/extensions/Divisors/Divisors.php';
 // Progress
-require 'CLI/Terminal/components/Progress.php';
-require 'CLI/Terminal/components/Progress/Bar.php';
+require 'CLI/Terminal/components/Progress/Progress.php';
+require 'CLI/Terminal/components/Progress/Bar/Bar.php';
 // Table
-require 'CLI/Terminal/components/Table.php';
+require 'CLI/Terminal/components/Table/Table.php';
 require 'CLI/Terminal/components/Table/Cells.php';
 require 'CLI/Terminal/components/Table/Columns.php';
 require 'CLI/Terminal/components/Table/Row.php';

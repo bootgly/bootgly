@@ -8,15 +8,17 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\CLI\Terminal\components;
+namespace Bootgly\CLI\Terminal\components\Table;
 
 
 use Bootgly\Data\Table as DataTable;
 
-use Bootgly\CLI\Terminal\components\Table\Cells;
-use Bootgly\CLI\Terminal\components\Table\Columns;
-use Bootgly\CLI\Terminal\components\Table\Row;
-use Bootgly\CLI\Terminal\components\Table\Rows;
+use Bootgly\CLI\Terminal\components\Table\ {
+   Cells,
+   Columns,
+   Row,
+   Rows,
+};
 use Bootgly\CLI\Terminal\Output;
 
 

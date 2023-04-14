@@ -8,11 +8,13 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\CLI\Terminal\components\Progress;
+namespace Bootgly\CLI\Terminal\components\Progress\Bar;
 
 
 use Bootgly\CLI\Terminal;
-use Bootgly\CLI\Terminal\components\Progress;
+use Bootgly\CLI\Terminal\components\Progress\ {
+   Progress
+};
 
 
 class Bar
@@ -23,7 +25,7 @@ class Bar
    public int $units;
 
    // * Data
-   public Bar\Symbols $Symbols;
+   public Symbols $Symbols;
 
    // * Meta
    // @ State
@@ -41,7 +43,7 @@ class Bar
       $this->units = Terminal::$width / 2;
 
       // * Data
-      $this->Symbols = new Bar\Symbols;
+      $this->Symbols = new Symbols;
 
       // * Meta
       // @ State
@@ -134,9 +136,7 @@ class Bar
 }
 
 
-
-namespace Bootgly\CLI\Terminal\components\Progress\Bar;
-
+// * Configs
 class Symbols
 {
    public string $incomplete   = ' ';

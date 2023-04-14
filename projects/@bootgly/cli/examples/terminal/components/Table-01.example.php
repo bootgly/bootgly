@@ -2,7 +2,9 @@
 namespace Bootgly\CLI;
 
 use Bootgly\CLI;
-use Bootgly\CLI\Terminal\components\Table;
+use Bootgly\CLI\Terminal\components\Table\ {
+   Table
+};
 
 $Output = CLI::$Terminal->Output;
 $Output->reset();
@@ -15,6 +17,7 @@ $Output->render(<<<OUTPUT
  */\n\n
 OUTPUT);
 
+#$Table = CLI::$components::Table->use();
 $Table = new Table($Output);
 
 $Table->Data->set(header: ['Alura Courses', 'Quantity']);

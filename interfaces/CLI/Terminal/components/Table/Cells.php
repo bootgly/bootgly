@@ -11,7 +11,9 @@
 namespace Bootgly\CLI\Terminal\components\Table;
 
 
-use Bootgly\CLI\Terminal\components\Table;
+use Bootgly\CLI\Terminal\components\Table\ {
+   Table
+};
 
 
 class Cells

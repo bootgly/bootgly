@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\CLI\Terminal\components;
+namespace Bootgly\CLI\Terminal\components\Progress;
 
 
 use Bootgly\CLI;
@@ -18,7 +18,9 @@ use Bootgly\CLI\Escaping\cursor;
 use Bootgly\CLI\Escaping\text;
 
 use Bootgly\CLI\Terminal\Output;
-use Bootgly\CLI\Terminal\components\Progress\Bar;
+use Bootgly\CLI\Terminal\components\Progress\Bar\ {
+   Bar
+};
 
 
 class Progress

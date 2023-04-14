@@ -47,6 +47,7 @@ $Options->Orientation::Vertical->set();
 #$Options->Aligment::Left->set();
 
 // * Items set - Option #1 */
+$Items->Divisors->add('');
 $Items->Options->add(label: 'Option 1');
 $Items->Divisors->add('#');
 $Items->Options->add(label: 'Option 2');
