@@ -12,6 +12,7 @@ namespace Bootgly\CLI\Terminal\components\Menu\Items\extensions\Divisors;
 
 
 use Bootgly\CLI\Terminal\components\Menu\Items;
+use Bootgly\CLI\Terminal\components\Menu\Menu;
 
 
 final class Divisors extends Items
@@ -42,8 +43,6 @@ final class Divisors extends Items
 
    public function compile (Divisor $Divisor)
    {
-      $Menu = $this->Menu;
-
       // @ Divisors
       // * Config
       // @ Displaying
@@ -70,7 +69,7 @@ final class Divisors extends Items
 
       switch ($Orientation) {
          case $Orientation::Vertical:
-            $divisor = str_repeat($characters, $Menu->width / $length);
+            $divisor = str_repeat($characters, Menu::$width / $length);
 
             $compiled .= "{$divisor}\n";
 

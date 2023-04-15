@@ -172,8 +172,6 @@ final class Options extends Items
 
    public function compile (Option $Option)
    {
-      $Menu = $this->Menu;
-
       // @ Options
       // * Config
       // @ Displaying
@@ -225,7 +223,7 @@ final class Options extends Items
       // @ Displaying
       // Aligment
       if ($Orientation === $Orientation::Vertical) {
-         $compiled = str_pad($compiled, $Menu->width, ' ', $Aligment->value);
+         $compiled = str_pad($compiled, Menu::$width, ' ', $Aligment->value);
       }
 
       // @ Styling
@@ -238,7 +236,7 @@ final class Options extends Items
                $characters = strlen($divisors);
 
                if ($characters > 0) {
-                  $divisors = str_repeat($divisors, $Menu->width / $characters);
+                  $divisors = str_repeat($divisors, Menu::$width / $characters);
                   $divisor .= "{$divisors}\n";
                }
             }

@@ -30,7 +30,7 @@ class Menu
    public Output $Output;
 
    // * Config
-   public int $width;
+   public static int $width;
    public string $prompt;
 
    // * Data
@@ -46,7 +46,7 @@ class Menu
       $this->Output = $Output;
 
       // * Config
-      $this->width = 80;
+      self::$width = 80;
       $this->prompt = '';
 
       // * Data
