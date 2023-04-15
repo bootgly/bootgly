@@ -49,6 +49,9 @@ class Items
     * Items Aligment is Left, Center or Right?
     */
    public Aligment $Aligment;
+   // @ Boxing
+   public Margin $Margin;
+
 
    // * Data
    public Options $Options;
@@ -67,6 +70,8 @@ class Items
       // @ Displaying
       $this->Orientation = Orientation::Vertical->set();
       $this->Aligment = Aligment::Left->set();
+      // @ Boxing
+      $this->Margin = Margin::All;
 
       // * Data
       self::$data[0] = [];
@@ -125,17 +130,17 @@ class Items
          switch ($Item->type) {
             case Divisor::class:
                // @ Compile Divisor
-               $compiled = $Divisors->compile($Item);
+               $compiled .= $Divisors->compile($Item);
 
                break;
             case Header::class:
                // @ Compile Header
-               $compiled = $Headers->compile($Item);
+               $compiled .= $Headers->compile($Item);
 
                break;
             case Option::class:
                // @ Compile Option
-               $compiled = $Options->compile($Item);
+               $compiled .= $Options->compile($Item);
 
                break;
          }
@@ -190,4 +195,21 @@ enum Aligment : int
 }
 // @ Styling
 // TODO Color = Foreground, Background
-// TODO Box   = Border, Margin, Padding
+// @ Boxing
+/*
+enum Border
+{}
+enum Padding
+{}
+*/
+enum Margin
+{
+   use \Bootgly\Sets;
+
+
+   case All;
+   case Top;
+   case Right;
+   case Bottom;
+   case Left;
+}
