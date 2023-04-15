@@ -9,8 +9,9 @@ trait Sets // @ Use with enums
       static $values = [];
 
       return match ($name) {
-         'get' => $values[$this->name] ?? null,
-         'set' => $values[$this->name] = $arguments[0],
+         'list'  => $values,
+         'get'   => $values[$this->name] ?? null,
+         'set'   => $values[$this->name] = $arguments[0],
          default => $this
       };
    }
