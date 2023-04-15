@@ -15,7 +15,12 @@ use Bootgly\CLI\Terminal\Input;
 use Bootgly\CLI\Terminal\Output;
 
 use Bootgly\CLI\Terminal\components\Menu\Items\ {
+   Option,
    Options,
+};
+use Bootgly\CLI\Terminal\components\Menu\Items\extensions\ {
+   Divisors\Divisor,
+   Headers\Header,
 };
 
 
@@ -53,6 +58,64 @@ class Menu
       self::$level = 0;
    }
 
+   // @ Templating
+   private function render ()
+   {
+      $Items = &$this->Items;
+      // * Config
+      // @ Displaying
+      $Orientation = $Items->Orientation->get();
+      $Aligment = $Items->Aligment->get();
+
+      // @
+      $rendered = '';
+      // ---
+      $Divisors = $Items->Divisors ?? null;
+      $Headers = $Items->Headers ?? null;
+      $Options = $Items->Options;
+
+      foreach (Items::$data[self::$level] as $key => $Item) {
+         $compiled = '';
+
+         // @ Compile
+         switch ($Item->type) {
+            case Divisor::class:
+               // @ Compile Divisor
+               $compiled = $Divisors->compile($Item);
+
+               break;
+            case Header::class:
+               // @ Compile Header
+               $compiled = $Headers->compile($Item);
+
+               break;
+            case Option::class:
+               // @ Compile Option
+               $compiled = $Options->compile($Item);
+
+               break;
+         }
+
+         // @ Post compile Item
+         if ($Item->type === Header::class) {
+            $compiled .= $Options->Orientation->get() === $Orientation::Horizontal ? ' ' : "\n";
+         }
+
+         $rendered .= $compiled;
+      }
+
+      // TODO calculate the numbers of items rendered in the screen and render only items visible in viewport
+
+      // @ Post compile Items
+      // @ Align items horizontally
+      if ($Orientation === $Orientation::Horizontal) {
+         $rendered = str_pad($rendered, $this->width, ' ', $Aligment->value);
+         $rendered .= "\n";
+      }
+
+      $this->Output->render($rendered);
+   }
+
    public function open ()
    {
       // Save Cursor position
@@ -75,8 +138,8 @@ class Menu
          // @ Render Menu prompt
          $this->Output->render($this->prompt . "\n");
 
-         // @ Render Menu Items
-         $Items->render();
+         // @ Render Menu
+         $this->render();
 
          // @ Read 3 characters from Input
          $char = $this->Input->read(3);
