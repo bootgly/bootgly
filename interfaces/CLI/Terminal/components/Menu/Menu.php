@@ -104,6 +104,6 @@ class Menu
       // Show Cursor
       $this->Output->Cursor->show();
 
-      return $Items->Options->selected[self::$level];
+      return $Items->Options::$selected[self::$level];
    }
 }

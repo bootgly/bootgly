@@ -33,9 +33,9 @@ final class Options extends Items
    // ...
 
    // * Meta
-   public int $indexes;
+   public static int $indexes;
    // @ Selecting
-   public array $selected;
+   public static array $selected;
 
 
    public function __construct ($Menu)
@@ -59,9 +59,9 @@ final class Options extends Items
       // ...
 
       // * Meta
-      $this->indexes = 0;
+      self::$indexes = 0;
       // @ Selecting
-      $this->selected[0] = [];
+      self::$selected[0] = [];
    }
 
    public function add (string $label, ? string $id = null) : Option
@@ -71,8 +71,6 @@ final class Options extends Items
       // * Data
       $Option->id = $id;
       $Option->label = $label;
-      // * Meta
-      $Option->index = $this->indexes++;
 
       Items::push($Option);
 
@@ -85,14 +83,14 @@ final class Options extends Items
       if ($this->aimed > 0) {
          $this->aimed--;
       } else {
-         $this->aimed = $this->indexes - 1;
+         $this->aimed = self::$indexes - 1;
       }
 
       return $this;
    }
    public function advance () : self
    {
-      if ($this->aimed < $this->indexes - 1) {
+      if ($this->aimed < self::$indexes - 1) {
          $this->aimed++;
       } else {
          $this->aimed = 0;
@@ -105,21 +103,21 @@ final class Options extends Items
    private function select ($index)
    {
       if ($this->selectable) {
-         $this->selected[Menu::$level][] = $index;
+         self::$selected[Menu::$level][] = $index;
       }
    }
    private function deselect ($index)
    {
       if ($this->deselectable) {
-         $this->selected[Menu::$level] = array_diff(
-            $this->selected[Menu::$level],
+         self::$selected[Menu::$level] = array_diff(
+            self::$selected[Menu::$level],
             [$index]
          );
       }
    }
    private function toggle ($index)
    {
-      if ( in_array($index, $this->selected[Menu::$level]) ) {
+      if ( in_array($index, self::$selected[Menu::$level]) ) {
          $this->deselect($index);
       } else {
          $this->select($index);
@@ -189,7 +187,7 @@ final class Options extends Items
       // @ Aiming
       $aimed = $this->aimed;
       // @ Selecting
-      $selected = $this->selected[Menu::$level];
+      $selected = self::$selected[Menu::$level];
 
       // @ Option
       // * Data
@@ -236,7 +234,7 @@ final class Options extends Items
          case $Orientation::Vertical:
             $divisor = "\n";
 
-            if ($index < $this->indexes - 1) {
+            if ($index < self::$indexes - 1) {
                $characters = strlen($divisors);
 
                if ($characters > 0) {
@@ -249,7 +247,7 @@ final class Options extends Items
          case $Orientation::Horizontal:
             $divisor = ' ';
 
-            if ($index < $this->indexes - 1) {
+            if ($index < self::$indexes - 1) {
                $divisor .= "{$divisors}";
             }
       }

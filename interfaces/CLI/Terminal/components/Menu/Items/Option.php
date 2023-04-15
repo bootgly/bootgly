@@ -33,7 +33,7 @@ final class Option extends Item
    public int $index;
 
 
-   public function __construct ()
+   public function __construct (string $label = '')
    {
       parent::__construct();
 
@@ -45,9 +45,12 @@ final class Option extends Item
       $this->unmarked = [];
 
       // * Data
-      // ...
+      $this->id = '';
+      $this->label = $label;
+      $this->prepend = '';
+      $this->append = '';
 
       // * Meta
-      // ...
+      $this->index = Options::$indexes++;
    }
 }
