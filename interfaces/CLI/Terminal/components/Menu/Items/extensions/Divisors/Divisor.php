@@ -24,4 +24,13 @@ final class Divisor extends Item
 
    // * Meta
    // ...
+
+
+   public function __construct (string $characters = '')
+   {
+      parent::__construct();
+
+      // * Data
+      $this->characters = $characters;
+   }
 }

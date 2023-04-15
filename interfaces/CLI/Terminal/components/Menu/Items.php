@@ -76,11 +76,30 @@ class Items
       $this->aimed = 0;
    }
 
-   public static function push (Item $Item)
+   // @ Extending
+   // TODO rename args to (Extension ...$Extensions)
+   public function extend (Items ...$Extensions)
    {
-      self::$data[Menu::$level][] = $Item;
+      foreach ($Extensions as $Extension) {
+         $extension = basename(
+            str_replace(
+               '\\', '/', get_class($Extension)
+            )
+         );
+   
+         $this->$extension = $Extension;
+      }
    }
 
+   // @ Setting
+   public static function push (Item ...$Items)
+   {
+      foreach ($Items as $Item) {
+         self::$data[Menu::$level][] = $Item;
+      }
+   }
+
+   // @ Templating
    public function render ()
    {
       $Menu = $this->Menu;
@@ -129,6 +148,8 @@ class Items
          $rendered .= $compiled;
       }
 
+      // TODO calculate the numbers of items rendered in the screen and render only items visible in viewport
+
       // @ Post compile Items
       // @ Align items horizontally
       if ($Orientation === $Orientation::Horizontal) {
@@ -167,3 +188,6 @@ enum Aligment : int
    case Center = 2;
    case Right = 0;
 }
+// @ Styling
+// TODO Color = Foreground, Background
+// TODO Box   = Border, Margin, Padding

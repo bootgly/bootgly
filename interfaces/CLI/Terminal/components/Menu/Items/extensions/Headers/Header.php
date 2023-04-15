@@ -24,4 +24,13 @@ final class Header extends Item
 
    // * Meta
    // ...
+
+
+   public function __construct (string $characters = '')
+   {
+      parent::__construct();
+
+      // * Data
+      $this->header = $characters;
+   }
 }

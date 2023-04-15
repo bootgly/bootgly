@@ -2,12 +2,18 @@
 namespace Bootgly\CLI;
 
 
-use Bootgly\CLI;
+use Bootgly\ {
+   CLI
+};
 use Bootgly\CLI\Terminal\components\Menu\ {
    Menu,
 };
-use Bootgly\CLI\Terminal\components\Menu\Items\extensions\ {
-   Divisors\Divisors
+use Bootgly\CLI\Terminal\components\Menu\Items\ {
+   Option,
+};
+use Bootgly\CLI\Terminal\components\Menu\Items\extensions\Divisors\ {
+   Divisors,
+   Divisor,
 };
 
 
@@ -18,7 +24,7 @@ $Output->reset();
 $Output->render(<<<OUTPUT
 /* @*:
  * @#green: Bootgly CLI Terminal - Menu component @;
- * @#yellow: @@ Demo - Example #2 - Options: divisors in builder @;
+ * @#yellow: @@ Demo - Example #2 - Options: divisors in Builder @;
  * {$location}
  */\n\n
 OUTPUT);
@@ -30,8 +36,6 @@ $Menu->prompt = "Choose one or more options:\n";
 
 // > Items
 $Items = $Menu->Items;
-// @ extend
-$Items->Divisors = new Divisors($Menu);
 
 // > Items > Options
 $Options = $Items->Options;
@@ -47,13 +51,18 @@ $Options->Orientation::Vertical->set();
 #$Options->Aligment::Left->set();
 
 // * Items set - Option #1 */
-$Items->Divisors->add('');
-$Items->Options->add(label: 'Option 1');
-$Items->Divisors->add('#');
-$Items->Options->add(label: 'Option 2');
-$Items->Divisors->add('.');
-$Items->Options->add(label: 'Option 3');
-$Items->Divisors->add('=');
+$Items->extend(
+   new Divisors($Menu)
+);
+$Items->push(
+   (new Divisor(characters: '')),
+   new Option(label: 'Option 1'),
+   new Divisor(characters: '#'),
+   new Option(label: 'Option 2'),
+   new Divisor(characters: '.'),
+   new Option(label: 'Option 3'),
+   new Divisor(characters: '='),
+);
 
 $selected = $Menu->open();
 
