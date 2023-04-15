@@ -18,6 +18,7 @@ use Bootgly\CLI\Terminal\components\Menu\Items\ {
    Option,
    Options,
 };
+// TODO remove:
 use Bootgly\CLI\Terminal\components\Menu\Items\extensions\ {
    Divisors\Divisor,
    Headers\Header,
@@ -67,17 +68,20 @@ class Menu
       $Orientation = $Items->Orientation->get();
       $Aligment = $Items->Aligment->get();
 
+      // TODO remove:
+      $Divisors = $Items->Divisors ?? null;
+      $Headers = $Items->Headers ?? null;
+
       // @
       $rendered = '';
       // ---
-      $Divisors = $Items->Divisors ?? null;
-      $Headers = $Items->Headers ?? null;
       $Options = $Items->Options;
 
       foreach (Items::$data[self::$level] as $key => $Item) {
          $compiled = '';
 
          // @ Compile
+         // TODO refactor:
          switch ($Item->type) {
             case Divisor::class:
                // @ Compile Divisor
@@ -97,6 +101,7 @@ class Menu
          }
 
          // @ Post compile Item
+         // TODO refactor:
          if ($Item->type === Header::class) {
             $compiled .= $Options->Orientation->get() === $Orientation::Horizontal ? ' ' : "\n";
          }

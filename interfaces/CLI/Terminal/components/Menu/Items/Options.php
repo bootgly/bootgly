@@ -19,14 +19,8 @@ final class Options extends Items
 {
    // * Config
    // @ Selecting
-   /**
-    * Items Selection is Unique or Multiple?
-    */
    public Selection $Selection;
    // @ Styling
-   /**
-    * Separator between each Option
-    */
    public string $divisors;
 
    // * Data
@@ -64,13 +58,30 @@ final class Options extends Items
       self::$selected[0] = [];
    }
 
-   public function add (string $label, ? string $id = null) : Option
+   public function add (
+      array $aimed = [],
+      array $unaimed = [],
+      array $marked = [],
+      array $unmarked = [],
+      string $label = '',
+      string $prepend = '',
+      string $append = '',
+   ) : Option
    {
       $Option = new Option;
+      // * Config
+      // @ Aiming
+      // Aim
+      $Option->aimed = $aimed;
+      $Option->unaimed = $unaimed;
+      // Marker
+      $Option->marked = $marked;
+      $Option->unmarked = $unmarked;
 
       // * Data
-      $Option->id = $id;
       $Option->label = $label;
+      $Option->prepend = $prepend;
+      $Option->append = $append;
 
       Items::push($Option);
 
@@ -172,7 +183,7 @@ final class Options extends Items
 
    public function compile (Option $Option)
    {
-      // @ Options
+      // ? Options
       // * Config
       // @ Displaying
       $Orientation = $this->Orientation->get();
@@ -187,7 +198,7 @@ final class Options extends Items
       // @ Selecting
       $selected = self::$selected[Menu::$level];
 
-      // @ Option
+      // ? Option
       // * Data
       $label = $Option->label;
       $prepend = $Option->prepend ?? '';

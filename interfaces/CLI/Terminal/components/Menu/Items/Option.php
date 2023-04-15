@@ -17,14 +17,15 @@ use Bootgly\CLI\Terminal\components\Menu\Item;
 final class Option extends Item
 {
    // * Config
+   // @ Aiming
+   // Aim
    public array $aimed;
    public array $unaimed;
-
+   // Marker
    public array $marked;
    public array $unmarked;
 
    // * Data
-   public ? string $id;
    public string $label;
    public string $prepend;
    public string $append;
@@ -33,22 +34,31 @@ final class Option extends Item
    public int $index;
 
 
-   public function __construct (string $label = '')
+   public function __construct (
+      array $aimed = [],
+      array $unaimed = [],
+      array $marked = [],
+      array $unmarked = [],
+      string $label = '',
+      string $prepend = '',
+      string $append = '',
+   )
    {
       parent::__construct();
 
       // * Config
-      $this->aimed = [];
-      $this->unaimed = [];
-
-      $this->marked = [];
-      $this->unmarked = [];
+      // @ Aiming
+      // Aim
+      $this->aimed = $aimed;
+      $this->unaimed = $unaimed;
+      // Marker
+      $this->marked = $marked;
+      $this->unmarked = $unmarked;
 
       // * Data
-      $this->id = '';
       $this->label = $label;
-      $this->prepend = '';
-      $this->append = '';
+      $this->prepend = $prepend;
+      $this->append = $append;
 
       // * Meta
       $this->index = Options::$indexes++;
