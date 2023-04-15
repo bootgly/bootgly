@@ -84,6 +84,8 @@ final class Options extends Items
    {
       if ($this->aimed > 0) {
          $this->aimed--;
+      } else {
+         $this->aimed = $this->indexes - 1;
       }
 
       return $this;
@@ -92,6 +94,8 @@ final class Options extends Items
    {
       if ($this->aimed < $this->indexes - 1) {
          $this->aimed++;
+      } else {
+         $this->aimed = 0;
       }
 
       return $this;
