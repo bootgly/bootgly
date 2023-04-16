@@ -14,33 +14,26 @@
 
 🚧 Do not use it in production environments. The alpha version hasn't even been released yet. 🚧
 
-*Repository initially created for the Github Accelerator.*
-
 First beta release is planned for mid-year 2023.
 
-Documentation and Website will be released alongside the beta.
-
-Clients | Servers | Database | Back-end | Front-end
---- | --- | --- | --- | ---
-[TCP Client [Beta]][WEB_TCP_CLIENT_INTERFACE] | [TCP Server [Beta]][WEB_TCP_SERVER_INTERFACE] | DBAL [TODO] | [Router [WIP]][WEB_HTTP_SERVER_ROUTER] | [Templating Engine [WIP]][TEMPLATE_ENGINE]
-HTTP Client (CLI) [TODO] | [HTTP Server (CLI) [WIP]][CLI_HTTP_SERVER] | ORM [TODO] | [Router/Route [WIP]][WEB_HTTP_SERVER_ROUTER_ROUTE] | _
-_ | WS Server [TODO] | _ | [Request [WIP]][CLI_HTTP_SERVER_REQUEST] | _
-_ | _ | _ | [Response [WIP]][CLI_HTTP_SERVER_RESPONSE] | _
+Documentation will be released alongside the beta.
 
 ---
 
 ## ⚙️ Dependencies
 
 - PHP 8.2+ `[Required]`
-- Apache Rewrite enabled `[Required for Non-CLI SAPI only]`
 - Opcache with JIT enabled (+50% performance) `[Optional]`
 - Linux OS (Debian based OS is recommended: Debian, Ubuntu...) `[Required]`
+
+### Bootgly Web dependencies
+- Rewrite enabled `[Required if you are using a Non-CLI SAPI only]`
 
 ---
 
 ## 🔧 Usage
 
-### Running a HTTP Server in Bootgly PHP Framework:
+### Running a HTTP Server in Bootgly Web:
 
 #### **Option 1: Non-CLI SAPI (Apache, LiteSpeed, Nginx, etc)**
 
