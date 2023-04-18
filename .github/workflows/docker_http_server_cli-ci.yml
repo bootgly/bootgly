@@ -35,4 +35,4 @@ jobs:
           tags: bootgly/bootgly-cli-server.http:latest
       -
         name: Push Docker image to GitHub Packages
-        run: docker push docker.pkg.github.com/bootgly/bootgly-bootgly/bootgly-cli-server.http:latest
+        run: docker push docker.pkg.github.com/bootgly/bootgly/bootgly-cli-server.http:latest
