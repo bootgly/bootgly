@@ -32,4 +32,7 @@ jobs:
         with:
           file: bootgly-cli-server.http.dockerfile
           push: true
-          tags: bootgly/bootgly:latest
+          tags: bootgly/bootgly-cli-server.http:latest
+      -
+        name: Push Docker image to GitHub Packages
+        run: docker push docker.pkg.github.com/bootgly/bootgly-bootgly/bootgly-cli-server.http:latest
