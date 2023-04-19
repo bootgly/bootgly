@@ -1,6 +1,9 @@
 <?php
 namespace Bootgly;
 
+if (defined('HOME_BASE')) {
+   return;
+}
 
 @include_once __DIR__ . '/imports/autoload.php';
 

@@ -26,7 +26,10 @@
       ]
    },
    "scripts": {
-      "serve": "php @/scripts/http-server-cli.php"
+      "serve": [
+         "Composer\\Config::disableProcessTimeout",
+         "php @/scripts/http-server-cli.php"
+      ]
    },
 
    "require": {
