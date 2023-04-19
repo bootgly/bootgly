@@ -22,6 +22,8 @@ COPY /@/__php__/php-jit.ini /etc/php/8.2/cli/php.ini
 # Install Bootgly
 COPY ./ /bootgly/
 WORKDIR /bootgly
+
+# Run composer install
 RUN composer install --optimize-autoloader --classmap-authoritative --no-dev -vvv
 
 # Run Bootgly HTTP Server from CLI

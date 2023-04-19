@@ -11,7 +11,7 @@
 namespace Bootgly;
 
 
-require_once __DIR__ . '/../autoload.php';
+include_once __DIR__ . '/../autoload.php';
 
 
 use Bootgly\Web\TCP;
