@@ -47,11 +47,11 @@ Documentation will be released alongside the beta.
 Directly in Linux OS *(max performance)*:
 
 1) Configure the Bootgly HTTP Server in `server.http.php` file;
-2) Rename `projects/sapi.http.constructor.php.example` to `projects/sapi.http.constructor.php`;
-3) Configure SAPI constructor in `projects/sapi.http.constructor.php` file;
-4) Run the Bootgly HTTP Server in the terminal:
+2) Rename `projects/cli.http-server.api.php.example` to `projects/cli.http-server.api.php`;
+3) Configure Server API in `projects/cli.http-server.api.php` file;
+4) Run the Bootgly HTTP Server CLI in the terminal:
 
-`php server.http.php`
+`php \@/scripts/http-server-cli.php`
 
 --
 
@@ -59,11 +59,11 @@ or using Docker:
 
 1) Pull the Bootgly image from Docker Hub:
 
-`docker pull bootgly/bootgly`
+`docker pull bootgly/http-server-cli`
 
 2) Run the Bootgly container in interactive mode:
 
-`docker run -it --network host bootgly/bootgly`
+`docker run -it --network host bootgly/http-server-cli`
 
 ---
 
