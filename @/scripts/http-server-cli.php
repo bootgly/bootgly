@@ -11,7 +11,7 @@
 namespace Bootgly;
 
 
-require_once '../autoload.php';
+require_once __DIR__ . '/../autoload.php';
 
 
 use Bootgly\CLI\HTTP;
