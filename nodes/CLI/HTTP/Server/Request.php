@@ -434,9 +434,9 @@ class Request
 
       // ? Request Meta
       $this->Meta->__construct();
-      // ? RequestHeader
+      // ? Request Header
       $this->Header->__construct();
-      // ? RequestContent
+      // ? Request Content
       $this->Content->__construct();
    }
 

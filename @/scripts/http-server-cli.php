@@ -11,7 +11,7 @@
 namespace Bootgly;
 
 
-require_once '@/autoload.php';
+require_once '../autoload.php';
 
 
 use Bootgly\CLI\HTTP;
@@ -20,7 +20,7 @@ use Bootgly\CLI\HTTP;
 $HTTPServer = new HTTP\Server;
 $HTTPServer->configure(
    host: '0.0.0.0',
-   port: 8080,
+   port: 8181,
    workers: round( ((int) shell_exec('nproc')) * 0.50 ), // Without JIT: * 0.6
    /*
    ssl: [

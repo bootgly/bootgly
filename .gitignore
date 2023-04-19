@@ -2,11 +2,10 @@
 .idea/
 # Ignore files by extension...
 *.iso
+*.log
 # Ignore locks, bin, envs...
 composer
 composer.lock
-cli-config.php
-server-*.php
 
 
 ### @Bootgly ###
@@ -19,7 +18,11 @@ server-*.php
 # Boot
 @/*
 !@/autoload.php
-!@/php-jit.ini
+
+!@/__php__/
+!@/__docker__/
+
+!@/scripts/
 
 ## Private files
 # Examples
@@ -56,9 +59,9 @@ _*.test.php
 
 #- /projects
 /projects/cli.constructor.php
-/projects/sapi.constructor.php
-/projects/sapi.http.constructor.php
+/projects/cli.*.api.php
 /projects/web.constructor.php
+/projects/web.*.api.php
 
 #- /public
 /public/test

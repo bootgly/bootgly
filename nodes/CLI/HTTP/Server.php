@@ -72,7 +72,7 @@ class Server extends TCP\Server implements HTTP
    {
       // * Config
       if ($production) {
-         SAPI::$production = \Bootgly\HOME_DIR . 'projects/sapi.http.constructor.php';
+         SAPI::$production = \Bootgly\HOME_DIR . 'projects/cli.http-server.api.php';
       }
 
       // * Data

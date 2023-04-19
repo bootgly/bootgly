@@ -12,17 +12,13 @@ namespace Bootgly;
 
 
 use Closure;
-use Bootgly\{
-   SAPI\Environment
-};
 
 
 class SAPI
 {
    // * Config
    // @ Files
-   public static string $production = HOME_DIR . 'projects/sapi.constructor.php';
-   public static string $test = HOME_DIR . 'workspace/tests/sapi.php';
+   public static string $production = HOME_DIR . 'projects/cli.tcp-server.api.php';
    // @ Mode
    public const MODE_PRODUCTION = 1;
    public const MODE_TEST = 2;
@@ -35,16 +31,6 @@ class SAPI
    public static Closure $Handler;
    public static array $Tests;
 
-   public object $Environment;
-
-
-   public function __construct ()
-   {
-      // TODO
-      #$this->Environment = new Environment($this);
-
-      #$Environment  = &$this->Environment;
-   }
 
    public static function boot ($reset = false, string $base = '')
    {
@@ -76,6 +62,7 @@ class SAPI
          if (file_exists($file) === false) {
             $copied = copy($file . '.example', $file);
 
+            var_dump($file . '.example', $file);
             if ($copied === false) {
                return false;
             }

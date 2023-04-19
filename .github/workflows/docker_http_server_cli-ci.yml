@@ -37,8 +37,9 @@ jobs:
         name: Build and push Docker image
         uses: docker/build-push-action@v3
         with:
-          file: bootgly-cli-server.http.dockerfile
+          context: .
+          file: ./@/__docker__/http-server-cli.dockerfile
           push: true
           tags: |
-            bootgly/bootgly-cli-server.http:latest
-            ghcr.io/bootgly/bootgly-cli-server.http:latest
+            bootgly/http-server-cli:latest
+            ghcr.io/bootgly/http-server-cli:latest

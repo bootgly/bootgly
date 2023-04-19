@@ -16,7 +16,7 @@ RUN apt-get install -y git php-pear php8.2-dev php8.2-cli php8.2-pgsql php8.2-xm
 # Install Composer
 COPY --from=composer:latest /usr/bin/composer /usr/local/bin/composer
 # Configure PHP with JIT
-COPY /@/php-jit.ini /etc/php/8.2/cli/php.ini
+COPY /@/__php__/php-jit.ini /etc/php/8.2/cli/php.ini
 
 # Install Bootgly
 COPY ./ /bootgly/
@@ -25,5 +25,5 @@ RUN composer install --optimize-autoloader --classmap-authoritative --no-dev -vv
 
 # Run Bootgly HTTP Server from CLI
 EXPOSE 8080
-COPY projects/sapi.http.constructor.php.example projects/sapi.http.constructor.php
-CMD ["php", "/bootgly/server.http.php"]
+COPY projects/cli.http-server.api.php.example projects/cli.http-server.api.php
+CMD ["php", "/bootgly/@/scripts/http-server-cli.php"]
