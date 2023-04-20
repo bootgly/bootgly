@@ -12,7 +12,7 @@
   </a>
 </p>
 
-# 🤔 About
+## 🤔 About
 
 Bootgly is a full-stack framework for developing APIs and Apps for both command-line interfaces (CLI) and Web.
 Focused on performance, versatility, and easy-to-understand code APIs.
@@ -26,7 +26,10 @@ First beta release is planned for mid-year 2023 (near June).
 🚧
 
 ---
-## 🤝 Compatibility
+
+## 🟢 Boot
+
+### 🤝 Compatibility
 
 Operation System
 --- |
@@ -41,22 +44,22 @@ Operation System
 ❔ = Untested
 
 
-## ⚙️ Dependencies
+### ⚙️ Dependencies
 
 - PHP 8.2+ ⚠️
 - Opcache with JIT enabled (+50% performance) 👍
 
-### \- Bootgly CLI 📟
+#### \- Bootgly CLI 📟
 - `php-cli` ⚠️
 - `php-readline` ⚠️
 
-### \- Bootgly Web 🌐
+#### \- Bootgly Web 🌐
 
-##### CLI *API ¹:
+##### Web + CLI *API ¹ (eg. Bootgly HTTP Server CLI):
 - \* See Bootgly CLI dependencies \*
 
-##### Non-CLI (apache2handler, litespeed and nginx)  *API ¹:
-- `rewrite` module enabled
+##### Web in Non-CLI (apache2handler, litespeed and nginx)  *API ¹:
+- `rewrite` module enabled ⚠️
 
 --
 
@@ -69,7 +72,7 @@ Operation System
 
 ## 🔧 Usage
 
-### Bootgly CLI 📟:
+### \- Bootgly CLI 📟:
 
 See the examples in `projects/@bootgly/cli/examples/terminal/`.
 
@@ -79,7 +82,7 @@ See the examples in `projects/@bootgly/cli/examples/terminal/`.
 
 `php bootgly`
 
-### Bootgly Web 🌐:
+### \- Bootgly Web 🌐:
 
 #### Running a HTTP Server:
 
