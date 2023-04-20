@@ -13,8 +13,8 @@ RUN apt-get update -y && \
     apt-get upgrade -y
 # Install PHP in system
 RUN apt-get install -y git php-pear php8.2-dev php8.2-cli php8.2-xml php8.2-readline
-# Configure PHP with JIT
-COPY /@/__php__/php-jit.ini /etc/php/8.2/cli/php.ini
+# Configure PHP Opcache with JIT
+COPY /@/__php__/php-opcache.ini /etc/php/8.2/cli/conf.d/10-opcache.ini
 
 # Install Bootgly
 COPY ./ /bootgly/
