@@ -23,7 +23,7 @@ $TCPClient = new TCP\Client(
 );
 $TCPClient->configure(
    host: '127.0.0.1',
-   port: 8080,
+   port: getenv('PORT') ? getenv('PORT') : 8080,
    workers: 1
 );
 // TODO move to /projects
