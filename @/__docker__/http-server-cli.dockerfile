@@ -14,7 +14,7 @@ RUN apt-get update -y && \
 # Install PHP in system
 RUN apt-get install -y git php-pear php8.2-dev php8.2-cli php8.2-xml php8.2-readline
 # Configure PHP with JIT
-COPY /@/__php__/php-jit.ini /etc/php/8.2/cli/php.ini
+COPY ../__php__/php-jit.ini /etc/php/8.2/cli/php.ini
 
 # Install Bootgly
 COPY ./ /bootgly/
