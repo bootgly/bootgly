@@ -15,6 +15,7 @@ namespace Bootgly\OS\Process;
 use \Throwable;
 
 
+// TODO move
 class Timer
 {
    // * Config
