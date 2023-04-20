@@ -26,6 +26,7 @@ $TCPClient->configure(
    port: 8080,
    workers: 1
 );
+// TODO move to /projects
 // This runs a Benchmark for 10 seconds with 1 Worker \
 // type stats command in Server to get stats of writes
 $TCPClient->on(
