@@ -12,56 +12,104 @@
   </a>
 </p>
 
-🚧 Do not use it in production environments. The alpha version hasn't even been released yet. 🚧
+# 🤔 About
 
-First beta release is planned for mid-year 2023.
+Bootgly is a full-stack framework for developing APIs and Apps for both command-line interfaces (CLI) and Web.
+Focused on performance, versatility, and easy-to-understand code APIs.
 
-Documentation will be released alongside the beta.
+🚧
+
+Do not use it in production environments. The alpha version hasn't even been released yet. 
+First beta release is planned for mid-year 2023 (near June).
+[Documentation is under construction][PROJECT_DOCS] and will be released alongside the beta.
+
+🚧
 
 ---
+## 🤝 Compatibility
+
+Operation System
+--- |
+✅ Linux (Debian based) |
+❌ Windows |
+❔ Unix |
+
+--
+
+✅ = Compatible
+❌ = Incompatible
+❔ = Untested
+
 
 ## ⚙️ Dependencies
 
-- PHP 8.2+ `[Required]`
-- Opcache with JIT enabled (+50% performance) `[Optional]`
-- Linux OS (Debian based OS is recommended: Debian, Ubuntu...) `[Required]`
+- PHP 8.2+ ⚠️
+- Opcache with JIT enabled (+50% performance) 👍
 
-### Bootgly Web dependencies
-- Rewrite enabled `[Required if you are using a Non-CLI SAPI only]`
+### \- Bootgly CLI 📟
+- `php-cli` ⚠️
+- `php-readline` ⚠️
+
+### \- Bootgly Web 🌐
+
+##### CLI *API ¹:
+- \* See Bootgly CLI dependencies \*
+
+##### Non-CLI (apache2handler, litespeed and nginx)  *API ¹:
+- `rewrite` module enabled
+
+--
+
+⚠️ = Required
+👍 = Recommended
+
+¹ *API = Server API (SAPI), Client API (CAPI), etc.
 
 ---
 
 ## 🔧 Usage
 
-### Running a HTTP Server in Bootgly Web:
+### Bootgly CLI 📟:
 
-#### **Option 1: Non-CLI SAPI (Apache, LiteSpeed, Nginx, etc)**
+See the examples in `projects/@bootgly/cli/examples/terminal/`.
 
-1) Enable support to Rewrite;
+1) Rename the file `projects/cli.constructor.php.example` to `projects/cli.constructor.php`;
+2) Instantiate your CLI components.
+3) Run the Bootgly CLI in terminal:
+
+`php bootgly`
+
+### Bootgly Web 🌐:
+
+#### Running a HTTP Server:
+
+##### **Option 1: Non-CLI SAPI (Apache, LiteSpeed, Nginx, etc)**
+
+1) Enable support to `rewrite`;
 2) Rename the file `projects/web.constructor.php.example` to `projects/web.constructor.php`;
 3) Configure the Web constructor in `projects/web.constructor.php` file;
 4) Run the Non-CLI HTTP Server pointing to `index.php`.
 
-#### **Option 2: CLI SAPI**
+##### **Option 2: CLI SAPI**
 
 Directly in Linux OS *(max performance)*:
 
-1) Configure the Bootgly HTTP Server in `server.http.php` file;
+1) Configure the Bootgly HTTP Server in `@/scripts/http-server-cli.php` file;
 2) Rename `projects/cli.http-server.api.php.example` to `projects/cli.http-server.api.php`;
-3) Configure Server API in `projects/cli.http-server.api.php` file;
+3) Configure the HTTP Server API in `projects/cli.http-server.api.php` file;
 4) Run the Bootgly HTTP Server CLI in the terminal:
 
-`php \@/scripts/http-server-cli.php`
+`php @/scripts/http-server-cli.php`
 
 --
 
 or using Docker:
 
-1) Pull the Bootgly image from Docker Hub:
+1) Pull the image:
 
 `docker pull bootgly/http-server-cli`
 
-2) Run the Bootgly container in interactive mode:
+2) Run the container in interactive mode and in the host network for max performance:
 
 `docker run -it --network host bootgly/http-server-cli`
 
