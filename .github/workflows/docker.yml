@@ -1,4 +1,4 @@
-name: Docker HTTP Server CLI - CI
+name: Docker
 
 on:
   workflow_dispatch:
@@ -34,7 +34,7 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GHCR_TOKEN }}
       -
-        name: Build and push Docker image
+        name: Build and push HTTP Server CLI image
         uses: docker/build-push-action@v3
         with:
           context: .
@@ -43,3 +43,13 @@ jobs:
           tags: |
             bootgly/http-server-cli:latest
             ghcr.io/bootgly/http-server-cli:latest
+      -
+        name: Build and push TCP Server CLI image
+        uses: docker/build-push-action@v3
+        with:
+          context: .
+          file: ./@/__docker__/tcp-server-cli.dockerfile
+          push: true
+          tags: |
+            bootgly/tcp-server-cli:latest
+            ghcr.io/bootgly/tcp-server-cli:latest

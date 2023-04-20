@@ -1,14 +1,14 @@
 <p align="center">
   <img src="https://github.com/bootgly/.github/raw/main/favicon-temp1-128.png" alt="bootgly-logo" width="120px" height="120px"/>
 </p>
-<h1 align="center">Bootgly PHP Framework</h1>
+<h1 align="center">Bootgly</h1>
 <p align="center">
   <i>Full Stack PHP Framework for Multi Projects.</i>
 </p>
 <p align="center">
   <a href="https://packagist.org/packages/bootgly/bootgly">
     <img alt="Bootgly License" src="https://img.shields.io/github/license/bootgly/bootgly"/>
-    <img alt="Github Actions" src="https://img.shields.io/github/actions/workflow/status/bootgly/bootgly/docker_http_server_cli-ci.yml?label=CI%2FCD"/>
+    <img alt="Github Actions" src="https://img.shields.io/github/actions/workflow/status/bootgly/bootgly/docker.yml?label=CI%2FCD"/>
   </a>
 </p>
 
