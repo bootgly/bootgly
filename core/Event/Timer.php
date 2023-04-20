@@ -9,7 +9,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\OS\Process;
+namespace Bootgly\Event;
 
 
 use \Throwable;

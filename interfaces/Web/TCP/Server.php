@@ -12,26 +12,34 @@ namespace Bootgly\Web\TCP;
 
 
 // use
-use Bootgly\Debugger;
-use Bootgly\Logger;
-use Bootgly\Logs;
-use Bootgly\SAPI;
-use Bootgly\OS\Process\Timer;
+use Bootgly\ {
+   Debugger,
+   Logger,
+   Logs,
+   SAPI,
+};
+use Bootgly\Event\ {
+   Timer
+};
 // extend
-use Bootgly\CLI\Terminal\_\ {
-   Logger\Logging
+use Bootgly\CLI\Terminal\_\Logger\ {
+   Logging
 };
-use Bootgly\Web\_\ {
-   Events\Select
+use Bootgly\Web\_\Events\ {
+   Select,
 };
-use Bootgly\Web\Servers;
+use Bootgly\Web\ {
+   Servers,
+};
 use Bootgly\Web\TCP\Server\_\ {
-   CLI\Terminal,
-   OS\Process
+   Process,
+};
+use Bootgly\Web\TCP\Server\_\CLI\ {
+   Terminal,
 };
 // inherit
-use Bootgly\Web\TCP\ {
-   Server\Connections
+use Bootgly\Web\TCP\Server\ {
+   Connections,
 };
 
 
@@ -123,10 +131,10 @@ class Server implements Servers, Logs
       // ! Web\@\Events
       static::$Event = new Select($this->Connections);
 
+      // ! @\Process
+      $Process = $this->Process = new Process($this);
       // ! @\CLI\Terminal
       $this->Terminal = new Terminal($this);
-      // ! @\OS\Process
-      $Process = $this->Process = new Process($this);
 
       // @ Register shutdown function to avoid orphaned children
       register_shutdown_function(function () use ($Process) {

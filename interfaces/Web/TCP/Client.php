@@ -13,21 +13,27 @@ namespace Bootgly\Web\TCP;
 
 // use
 use Closure;
-use Bootgly\Debugger;
-use Bootgly\CLI\Terminal\_\ {
-   Logger\Logging
+use Bootgly\ {
+   Debugger,
 };
-use Bootgly\Logger;
-use Bootgly\Web\_\ {
-   Events\Select
+use Bootgly\CLI\Terminal\_\Logger\ {
+   Logging,
+};
+use Bootgly\ {
+   Logger
+};
+use Bootgly\Web\_\Events\ {
+   Select
 };
 use Bootgly\Web\TCP\Client\_\ {
-   CLI\Terminal,
-   OS\Process
+   Process,
+};
+use Bootgly\Web\TCP\Client\_\CLI\ {
+   Terminal,
 };
 // inherit
-use Bootgly\Web\TCP\ {
-   Client\Connections
+use Bootgly\Web\TCP\Client\ {
+   Connections,
 };
 
 
@@ -121,10 +127,10 @@ class Client
       // ! Web\@\Events
       static::$Event = new Select($this->Connections);
 
+      // ! @\Process
+      $Process = $this->Process = new Process($this);
       // ! @\CLI\Terminal
       $this->Terminal = new Terminal($this);
-      // ! @\OS\Process
-      $Process = $this->Process = new Process($this);
 
       // @ Register shutdown function to avoid orphaned children
       register_shutdown_function(function () use ($Process) {

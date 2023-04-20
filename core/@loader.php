@@ -7,8 +7,8 @@ require 'Database.php';
 // ? Event
 require 'Event.php';
 require 'Event/Loops.php'; // @interface
-// On
 require 'Event/On.php';
+require 'Event/Timer.php';
 // ? Project
 require 'Project.php';
 // ? Template

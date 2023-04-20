@@ -60,9 +60,6 @@ require 'CLI/Terminal/components/Table/Columns.php';
 require 'CLI/Terminal/components/Table/Row.php';
 require 'CLI/Terminal/components/Table/Rows.php';
 
-// ! OS
-require 'OS/Process/Timer.php';
-
 // ! SAPI
 require 'SAPI.php';
 // ? Environment
@@ -81,7 +78,7 @@ require 'Web/TCP/Client.php';
 require 'Web/TCP/Client/Connections.php';
 require 'Web/TCP/Client/Packages.php';
 // @
-require 'Web/TCP/Client/@/OS/Process.php';
+require 'Web/TCP/Client/@/Process.php';
 require 'Web/TCP/Client/@/CLI/Terminal.php';
 // ? TCP\Client\Connection(s)
 require 'Web/TCP/Client/Connections/Connection.php';
@@ -91,7 +88,7 @@ require 'Web/TCP/Server.php';
 require 'Web/TCP/Server/Connections.php';
 require 'Web/TCP/Server/Packages.php';
 // @
-require 'Web/TCP/Server/@/OS/Process.php';
+require 'Web/TCP/Server/@/Process.php';
 require 'Web/TCP/Server/@/CLI/Terminal.php';
 // ? TCP\Server\Connection(s)
 require 'Web/TCP/Server/Connections/Connection.php';

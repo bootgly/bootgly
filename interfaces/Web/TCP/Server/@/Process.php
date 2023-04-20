@@ -8,22 +8,32 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\Web\TCP\Server\_\OS;
+namespace Bootgly\Web\TCP\Server\_;
 
 
 // use
-use const Bootgly\HOME_DIR;
-use Bootgly\Logger;
-use Bootgly\SAPI;
-use Bootgly\OS\Process\Timer;
-use Bootgly\Web\_\Events\Select;
+use const Bootgly\ {
+   HOME_DIR
+};
+use Bootgly\ {
+   Logger
+};
+use Bootgly\ {
+   SAPI
+};
+use Bootgly\Event\ {
+   Timer
+};
+use Bootgly\Web\_\Events\ {
+   Select
+};
 // ?
 use Bootgly\Web\TCP\ {
    Server
 };
 // extend
-use Bootgly\CLI\Terminal\_\ {
-   Logger\Logging
+use Bootgly\CLI\Terminal\_\Logger\ {
+   Logging
 };
 
 

@@ -8,20 +8,26 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\Web\TCP\Client\_\OS;
+namespace Bootgly\Web\TCP\Client\_;
 
 
 // use
-use const Bootgly\HOME_DIR;
-use Bootgly\Logger;
-use Bootgly\OS\Process\Timer;
+use const Bootgly\ {
+   HOME_DIR
+};
+use Bootgly\ {
+   Logger,
+};
+use Bootgly\Event\ {
+   Timer,
+};
 // ?
 use Bootgly\Web\TCP\ {
-   Client
+   Client,
 };
 // extend
-use Bootgly\CLI\Terminal\_\ {
-   Logger\Logging
+use Bootgly\CLI\Terminal\_\Logger\ {
+   Logging,
 };
 
 

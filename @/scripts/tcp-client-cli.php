@@ -15,7 +15,7 @@ include_once __DIR__ . '/../autoload.php';
 
 
 use Bootgly\Web\TCP;
-use Bootgly\OS\Process\Timer;
+use Bootgly\Event\Timer;
 
 
 $TCPClient = new TCP\Client(
