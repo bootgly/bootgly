@@ -53,3 +53,13 @@ jobs:
           tags: |
             bootgly/tcp-server-cli:latest
             ghcr.io/bootgly/tcp-server-cli:latest
+      -
+        name: Build and push TCP Client CLI image
+        uses: docker/build-push-action@v3
+        with:
+          context: .
+          file: ./@/__docker__/tcp-client-cli.dockerfile
+          push: true
+          tags: |
+            bootgly/tcp-client-cli:latest
+            ghcr.io/bootgly/tcp-client-cli:latest
