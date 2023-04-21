@@ -16,11 +16,11 @@ use Closure;
 use Bootgly\ {
    Debugger,
 };
+use Bootgly\Logger\ {
+   Logger
+};
 use Bootgly\CLI\Terminal\_\Logger\ {
    Logging,
-};
-use Bootgly\ {
-   Logger
 };
 use Bootgly\Web\_\Events\ {
    Select

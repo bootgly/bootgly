@@ -15,7 +15,7 @@ namespace Bootgly\Web\TCP\Client\_;
 use const Bootgly\ {
    HOME_DIR
 };
-use Bootgly\ {
+use Bootgly\Logger\ {
    Logger,
 };
 use Bootgly\Event\ {

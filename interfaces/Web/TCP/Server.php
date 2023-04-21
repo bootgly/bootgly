@@ -14,9 +14,11 @@ namespace Bootgly\Web\TCP;
 // use
 use Bootgly\ {
    Debugger,
-   Logger,
    Logs,
    SAPI,
+};
+use Bootgly\Logger\ {
+   Logger,
 };
 use Bootgly\Event\ {
    Timer

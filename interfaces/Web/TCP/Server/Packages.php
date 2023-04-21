@@ -11,17 +11,29 @@
 namespace Bootgly\Web\TCP\Server;
 
 
-use Bootgly\Logger;
-use Bootgly\SAPI;
-
-use Bootgly\CLI\Terminal\_\ {
-   Logger\Logging // @trait
+use Bootgly\Logger\ {
+   Logger
 };
-use Bootgly\Web; // @interface
 
-use Bootgly\Web\TCP\Server;
-use Bootgly\Web\TCP\Server\Connections;
-use Bootgly\Web\TCP\Server\Connections\Connection;
+use Bootgly\ {
+   SAPI // TODO move
+};
+use Bootgly\CLI\Terminal\_\Logger\ {
+   Logging // @trait
+};
+use Bootgly\ {
+   Web
+}; // @interface
+
+use Bootgly\Web\TCP\ {
+   Server
+};
+use Bootgly\Web\TCP\Server\ {
+   Connections
+};
+use Bootgly\Web\TCP\Server\Connections\ {
+   Connection
+};
 
 
 abstract class Packages implements Web\Packages

@@ -16,10 +16,10 @@ use const Bootgly\ {
    HOME_DIR
 };
 use Bootgly\ {
-   Logger
-};
-use Bootgly\ {
    SAPI
+};
+use Bootgly\Logger\ {
+   Logger
 };
 use Bootgly\Event\ {
    Timer

@@ -12,12 +12,14 @@ namespace Bootgly\CLI\Terminal\_\Logger;
 
 
 use Bootgly\CLI;
-use Bootgly\Logger;
+use Bootgly\Logger\ {
+   Logger
+};
 
 
 trait Logging
 {
-   use \Bootgly\Logging;
+   use \Bootgly\Logger\Logging;
    use \Bootgly\CLI\Escaping\text\Formatting;
 
 

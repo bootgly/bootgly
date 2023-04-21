@@ -11,9 +11,15 @@
 namespace Bootgly\CLI\Terminal\_\Tester\Tests;
 
 
-use Bootgly\CLI\Terminal\_\Logger\Logging;
-use Bootgly\CLI\Terminal\_\Tester\Tests;
-use Bootgly\Logs;
+use Bootgly\CLI\Terminal\_\Logger\ {
+   Logging
+};
+use Bootgly\CLI\Terminal\_\Tester\ {
+   Tests
+};
+use Bootgly\ {
+   Logs
+};
 
 
 class Test
