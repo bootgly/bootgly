@@ -11,10 +11,6 @@
 namespace Bootgly\Benchmark;
 
 
-use const Bootgly\ {
-   HOME_DIR
-};
-
 use Bootgly\ {
    Path
 };
@@ -113,7 +109,7 @@ class Benchmark
 
       $Backtrace = new Backtrace;
       $relativePath = Path::relativize(from: HOME_BASE, to: $Backtrace->file);
-      $file = HOME_DIR . 'workspace/bench.marks';
+      $file = \Bootgly\HOME_DIR . 'workspace/bench.marks';
 
       // @ Build data
       $header = "[$tag@$relativePath:$Backtrace->line]:";

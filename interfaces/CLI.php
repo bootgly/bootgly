@@ -40,8 +40,8 @@ class CLI
       // TODO move to bootgly config path
       $this->includes = [
          'scripts' => [
-            HOME_DIR . 'bootgly',
-            HOME_DIR . './bootgly', // TODO normalize path
+            \Bootgly\HOME_DIR . 'bootgly',
+            \Bootgly\HOME_DIR . './bootgly', // TODO normalize path
 
             WORKABLES_BASE . '/bootgly',
             WORKABLES_BASE . '/./bootgly', // TODO normalize path

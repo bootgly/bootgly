@@ -12,9 +12,6 @@ namespace Bootgly\Web\TCP\Server\_;
 
 
 // use
-use const Bootgly\ {
-   HOME_DIR
-};
 use Bootgly\ {
    API
 };
@@ -56,9 +53,9 @@ class Process
    public static int $master;
    public static array $children = [];
    // File
-   public static $commandFile = HOME_DIR . '/workspace/server.command';
-   public static $pidFile = HOME_DIR . '/workspace/server.pid';
-   public static $pidLockFile = HOME_DIR . '/workspace/server.pid.lock';
+   public static $commandFile = \Bootgly\HOME_DIR . '/workspace/server.command';
+   public static $pidFile = \Bootgly\HOME_DIR . '/workspace/server.pid';
+   public static $pidLockFile = \Bootgly\HOME_DIR . '/workspace/server.pid.lock';
 
 
    public function __construct (Server &$Server)
@@ -253,7 +250,7 @@ class Process
    {
       $this->log("forking $workers workers... ", self::LOG_NOTICE_LEVEL);
 
-      $script = HOME_DIR . $_SERVER['PHP_SELF'];
+      $script = \Bootgly\HOME_DIR . $_SERVER['PHP_SELF'];
 
       for ($i = 0; $i < $workers; $i++) {
          $pid = pcntl_fork();

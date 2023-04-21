@@ -28,7 +28,7 @@ class Path
    // ? Test (✓)
    const TEST_CURRENT = '✓';
    const TEST_DIR_RELATIVE = self::TEST_CURRENT . self::DIR_;
-   const TEST_DIR = HOME_DIR . self::TEST_DIR_RELATIVE;
+   const TEST_DIR = \Bootgly\HOME_DIR . self::TEST_DIR_RELATIVE;
 
 
    public $Path = '';
