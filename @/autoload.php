@@ -8,7 +8,7 @@ const HOME_DIR = HOME_BASE . DIRECTORY_SEPARATOR;
 
 // TODO load with autoloader
 // @ Bootables
-@include_once HOME_BASE . '/abstract/..php';
+@include_once HOME_BASE . '/abstract/@loader.php';
 @include_once HOME_BASE . '/base/@loader.php';
 @include_once HOME_BASE . '/core/@loader.php';
 // @ Features

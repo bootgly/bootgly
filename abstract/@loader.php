@@ -7,28 +7,27 @@ require '@interfaces/Requestable.php';
 require '@traits/Set/Set.php';
 require '@traits/Sets/Sets.php';
 
-// ? __Array
+// __Array
 require '__Array/__Array.php';
 require '__Array/~functions.php';
-// ? __Class
+// __Class
 require '__Class/__Class.php';
 require '__Class/Adopted/Adopted.php';
 require '__Class/Nulled/Nulled.php';
-// ? __Iterable
+// __Iterable
 require '__Iterable/__Iterable.php';
-// ? __String
+// __String
 #require '__String/.functions.php';
 require '__String/__String.php';
 require '__String/~functions.php';
 
-// _ data
-// ? Table
+// - data
+// Table
 require 'data/Table/Table.php';
-// _ streams
-// _ socket
+// - streams/socket
 // Pipe
 require 'streams/socket/Pipe/Pipe.php';
-// _ storage
+// - storage
 // Dir
 require 'streams/storage/Dir/Dir.php';
 // File
