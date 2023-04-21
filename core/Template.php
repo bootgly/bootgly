@@ -11,10 +11,9 @@
 namespace Bootgly;
 
 
-use Bootgly\Debugger;
-use Bootgly\File;
-// @
-use Bootgly\Template\Config;
+use Bootgly\ {
+   File
+};
 
 
 class Template
@@ -413,4 +412,21 @@ class Template
    {
       Debug('<code>'.htmlspecialchars($this->output).'</code>');
    }
+}
+
+
+enum Config
+{
+   use \Bootgly\Set;
+
+
+   case EXECUTE_MODE_REQUIRE;
+   case EXECUTE_MODE_EVAL;
+   const EXECUTE_MODE_DEFAULT = self::EXECUTE_MODE_EVAL;
+
+   case COMPILE_ECHO;
+   case COMPILE_IF;
+   case COMPILE_FOREACH;
+   case COMPILE_FOR;
+   case COMPILE_WHILE;
 }

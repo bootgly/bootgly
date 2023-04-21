@@ -11,18 +11,16 @@
 namespace Bootgly;
 
 
-use Bootgly\{
-   __String,
-   Web
-};
 use Exception;
+use Bootgly\ {
+   __String,
+   Bootgly,
+};
 
 
 // TODO Refactor class (too old)
 class Database
 {
-   public Bootgly $Bootgly;
-
    // * Config
    public $debug = true;
    // * Data
@@ -46,10 +44,8 @@ class Database
    //
    private $rows;
 
-   public function __construct (Bootgly $Bootgly)
+   public function __construct ()
    {
-      $this->Bootgly = &$Bootgly;
-
       $this->rows = [];
    }
 

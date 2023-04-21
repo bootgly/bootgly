@@ -63,11 +63,12 @@ class Project
                return $this->paths[1];
             }
 
-            return $this->paths[0];
+            return $this->paths[0] ?? '';
          default:
             return $this->$name;
       }
    }
+
    public function __toString () : string
    {
       return $this->path;

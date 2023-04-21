@@ -13,24 +13,21 @@ namespace Bootgly;
 
 abstract class Bootgly
 {
-   // * Meta
-   public readonly bool $booted;
-
    public static Project $Project;
    public static Template $Template;
 
 
    public static function boot ()
    {
-      // @ Dependencies
+      // - Features
       // core
-      $Project = self::$Project = new Project;
-      $Template = self::$Template = new Template;
+      $Project = static::$Project = new Project;
+      $Template = static::$Template = new Template;
 
-      // @ Workables
+      // - Workables
       // @ Load Bootgly constructor
-      $projects = WORKABLES_BASE . '/projects/bootgly.constructor.php';
       // Multi projects
+      $projects = WORKABLES_BASE . '/projects/bootgly.constructor.php';
       if ( is_file($projects) ) {
          return require $projects;
       }

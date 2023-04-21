@@ -8,9 +8,10 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\Template;
+namespace Bootgly\Event;
 
-use Bootgly\Template;
 
-class Component
-{}
+class Event
+{
+   // TODO
+}
