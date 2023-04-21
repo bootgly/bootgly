@@ -8,13 +8,15 @@
 <p align="center">
   <a href="https://packagist.org/packages/bootgly/bootgly">
     <img alt="Bootgly License" src="https://img.shields.io/github/license/bootgly/bootgly"/>
-    <img alt="Github Actions" src="https://img.shields.io/github/actions/workflow/status/bootgly/bootgly/docker.yml?label=CI%2FCD"/>
+    <img alt="Github Actions - Build" src="https://img.shields.io/github/actions/workflow/status/bootgly/bootgly/docker.yml"/>
   </a>
 </p>
 
+---
+
 ## 🤔 About
 
-Bootgly is a base framework for developing APIs and Apps for both command-line interfaces (CLI) and Web.
+Bootgly is a base framework for developing APIs and Apps for both command-line interfaces (CLI) 📟 and Web 🌐.
 Focused on performance, versatility, and easy-to-understand codebase APIs.
 
 ### Bootgly CLI 📟
@@ -40,11 +42,9 @@ interfaces | nodes
 [TCP Server][WEB_TCP_SERVER_INTERFACE] | 
 
 🚧
-
 Do not use it in production environments. The alpha version hasn't even been released yet. 
 First beta release is planned for mid-year 2023 (near June).
 [Documentation is under construction][PROJECT_DOCS] and will be released alongside the beta.
-
 🚧
 
 ---
@@ -94,7 +94,46 @@ Above is the native compatibility, of course it is possible to run on Windows an
 
 ---
 
-## 🖼 Hightlights
+## 🌱 Community
+
+Join us and help the community.
+
+**Love Bootgly? Give [our repo][GITHUB_REPOSITORY] a star ⭐!**
+
+### 💻 Contributing
+
+Wait for the "contributing guidelines" to start your contribution.
+
+#### 🛂 Code of Conduct
+
+Help us keep Bootgly open and inclusive. Please read and follow our [Code of Conduct][CODE_OF_CONDUCT].
+
+### 🔗 Social networks
+- [Bootgly on Telegram][TELEGRAM]
+- [Bootgly on Reddit][REDDIT]
+- [Bootgly on Discord][DISCORD]
+
+### 💖 Sponsorship
+
+A lot of time and energy is devoted to Bootgly projects. To accelerate your growth, if you like this project or depend on it for your stack to work, consider [sponsoring it][GITHUB_SPONSOR].
+
+Your sponsorship will keep this project always **up to date** with **new features** and **improvements** / **bug fixes**.
+
+---
+
+## 📝 Compliances
+
+### 📃 License
+
+The Bootgly is open-sourced software licensed under the [MIT license][MIT_LICENSE].
+
+### 📑 Versioning
+
+Bootgly will follow [Semantic Versioning 2.0][SEMANTIC_VERSIONING].
+
+---
+
+## 🖼 Highlights
 
 ### \- Bootgly CLI 📟
 
@@ -158,44 +197,6 @@ or using Docker:
 
 `docker run -it --network host bootgly/http-server-cli`
 
----
-
-## 🌱 Community
-
-Join us and help the community.
-
-**Love Bootgly? Give [our repo][GITHUB_REPOSITORY] a star ⭐!**
-
-### 💖 Sponsorship
-
-A lot of time and energy is devoted to Bootgly projects. To accelerate your growth, if you like this project or depend on it for your stack to work, consider [sponsoring it][GITHUB_SPONSOR].
-
-Your sponsorship will keep this project always **up to date** with **new features** and **improvements** / **bug fixes**.
-
-### 🔗 Social networks
-- [Bootgly on Telegram][TELEGRAM]
-- [Bootgly on Reddit][REDDIT]
-- [Bootgly on Discord][DISCORD]
-
----
-
-## 💻 Contributing
-
-Wait for the "contributing guidelines" to start your contribution.
-
-### 🛂 Code of Conduct
-
-Help us keep Bootgly open and inclusive. Please read and follow our [Code of Conduct][CODE_OF_CONDUCT].
-
-### 📑 Versioning
-
-Bootgly PHP Framework will follow [Semantic Versioning 2.0][SEMANTIC_VERSIONING].
-
----
-
-## 📃 License
-
-The Bootgly PHP Framework is open-sourced software licensed under the [MIT license][MIT_LICENSE].
 
 
 <!-- Links -->
