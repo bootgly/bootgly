@@ -8,7 +8,12 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly;
+namespace Bootgly\Logger;
+
+
+use Bootgly\ {
+   Logs
+};
 
 
 class Logger implements Logs
@@ -23,6 +28,7 @@ class Logger implements Logs
 
    // * Data
    public string $channel;
+
    // * Meta
    // ...
 

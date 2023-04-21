@@ -8,10 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly;
-
-
-use Bootgly\Logger;
+namespace Bootgly\Logger;
 
 
 function Log ($data)

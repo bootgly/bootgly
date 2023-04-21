@@ -11,22 +11,34 @@
 namespace Bootgly\CLI\HTTP;
 
 
-use Bootgly\Logger;
-
-// extend
-use Bootgly\CLI\Terminal\_\ {
-   Tester\Tests
+use Bootgly\Logger\ {
+   Logger
 };
-use Bootgly\SAPI;
-
-use Bootgly\Web\TCP;
-use Bootgly\Web\TCP\Server\Packages;
-use Bootgly\Web\TCP\Client;
-
-use Bootgly\Web\protocols\HTTP;
-
-use Bootgly\CLI\HTTP\Server\Request;
-use Bootgly\CLI\HTTP\Server\Response;
+// extend
+use Bootgly\CLI\Terminal\_\Tester\ {
+   Tests
+};
+use Bootgly\ {
+   SAPI // TODO move
+};
+use Bootgly\Web\ {
+   TCP
+};
+use Bootgly\Web\TCP\Server\ {
+   Packages
+};
+use Bootgly\Web\TCP\ {
+   Client
+};
+use Bootgly\Web\protocols\ {
+   HTTP
+};
+use Bootgly\CLI\HTTP\Server\ {
+   Request
+};
+use Bootgly\CLI\HTTP\Server\ {
+   Response
+};
 
 
 class Server extends TCP\Server implements HTTP

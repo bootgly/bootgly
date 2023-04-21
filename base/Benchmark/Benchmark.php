@@ -8,10 +8,19 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly;
+namespace Bootgly\Benchmark;
 
 
-use Bootgly\Debugger\Backtrace;
+use const Bootgly\ {
+   HOME_DIR
+};
+
+use Bootgly\ {
+   Path
+};
+use Bootgly\Debugger\ {
+   Backtrace
+};
 
 
 class Benchmark
