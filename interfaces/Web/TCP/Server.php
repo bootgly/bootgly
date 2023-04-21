@@ -15,7 +15,7 @@ namespace Bootgly\Web\TCP;
 use Bootgly\ {
    Debugger,
    Logs,
-   SAPI,
+   API,
 };
 use Bootgly\Logger\ {
    Logger,
@@ -143,12 +143,12 @@ class Server implements Servers, Logs
          $Process->sendSignal(SIGINT);
       });
 
-      // @ Boot SAPI
+      // @ Boot API
       if (self::$Application) {
          self::$Application::boot();
       } else {
-         SAPI::$production = \Bootgly\HOME_DIR . 'projects/cli.tcp-server.api.php';
-         SAPI::boot(true);
+         API\Server::$production = \Bootgly\HOME_DIR . 'projects/cli.tcp-server.api.php';
+         API\Server::boot(true);
       }
    }
    public function __get (string $name)
@@ -167,7 +167,7 @@ class Server implements Servers, Logs
             return $this->mode;
 
          case '@test init':
-            SAPI::$mode = SAPI::MODE_TEST;
+            API\Server::$mode = API\Server::MODE_TEST;
 
             if (self::$Application) {
                self::$Application::boot(production: false, test: true);
@@ -181,8 +181,8 @@ class Server implements Servers, Logs
 
             break;
          case '@test end':
-            SAPI::$mode = SAPI::MODE_PRODUCTION;
-            SAPI::boot(true);
+            API\Server::$mode = API\Server::MODE_PRODUCTION;
+            API\Server::boot(true);
 
             break;
       }
@@ -406,7 +406,7 @@ class Server implements Servers, Logs
 
       // @ Set time to hot reloading of sapi.*.constructor.php file
       Timer::add(2, function () {
-         $modified = SAPI::check();
+         $modified = API\Server::check();
 
          if ($modified) {
             $this->Process->sendSignal(SIGUSR2, master: false); // @ Send signal to all children to reload

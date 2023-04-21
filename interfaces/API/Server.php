@@ -8,18 +8,17 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly;
+namespace Bootgly\API;
 
 
 use Closure;
 
 
-// TODO move
-class SAPI
+class Server
 {
    // * Config
    // @ Files
-   public static string $production = HOME_DIR . 'projects/cli.tcp-server.api.php';
+   public static string $production = \Bootgly\HOME_DIR . 'projects/cli.tcp-server.api.php';
    // @ Mode
    public const MODE_PRODUCTION = 1;
    public const MODE_TEST = 2;

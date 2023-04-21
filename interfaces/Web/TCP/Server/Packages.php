@@ -16,7 +16,7 @@ use Bootgly\Logger\ {
 };
 
 use Bootgly\ {
-   SAPI // TODO move
+   API
 };
 use Bootgly\CLI\Terminal\_\Logger\ {
    Logging // @trait
@@ -214,7 +214,7 @@ abstract class Packages implements Web\Packages
       if (Server::$Application) {
          self::$output = Server::$Application::encode($this, $length);
       } else {
-         self::$output = (SAPI::$Handler)(...$this->callbacks);
+         self::$output = (API\Server::$Handler)(...$this->callbacks);
       }
 
       try {

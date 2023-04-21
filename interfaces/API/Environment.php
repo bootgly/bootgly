@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\SAPI;
+namespace Bootgly\API;
 
 
 class Environment

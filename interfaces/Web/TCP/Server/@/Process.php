@@ -16,7 +16,7 @@ use const Bootgly\ {
    HOME_DIR
 };
 use Bootgly\ {
-   SAPI
+   API
 };
 use Bootgly\Logger\ {
    Logger
@@ -210,7 +210,7 @@ class Process
             break;
          // @ reload()
          case SIGUSR2: // 12
-            SAPI::boot(true);
+            API\Server::boot(true);
             break;
 
          // ! \Connection

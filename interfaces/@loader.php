@@ -1,4 +1,9 @@
 <?php
+// ! API
+require 'API/Environment.php';
+require 'API/Server.php';
+
+
 // ! CLI
 require 'CLI.php';
 // @
@@ -60,10 +65,6 @@ require 'CLI/Terminal/components/Table/Columns.php';
 require 'CLI/Terminal/components/Table/Row.php';
 require 'CLI/Terminal/components/Table/Rows.php';
 
-// ! SAPI
-require 'SAPI.php';
-// ? Environment
-require 'SAPI/Environment.php';
 
 // ! Web
 require 'Web.php';
