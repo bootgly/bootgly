@@ -3,7 +3,7 @@
 </p>
 <h1 align="center">Bootgly</h1>
 <p align="center">
-  <i>Full Stack PHP Framework for Multi Projects.</i>
+  <i>Base PHP Framework for Multi Projects.</i>
 </p>
 <p align="center">
   <a href="https://packagist.org/packages/bootgly/bootgly">
@@ -14,8 +14,30 @@
 
 ## 🤔 About
 
-Bootgly is a full-stack framework for developing APIs and Apps for both command-line interfaces (CLI) and Web.
+Bootgly is a base framework for developing APIs and Apps for both command-line interfaces (CLI) and Web.
 Focused on performance, versatility, and easy-to-understand codebase APIs.
+
+### Bootgly CLI 📟
+
+interfaces | nodes
+--- | ---
+[Terminal Input][CLI_TERMINAL_INTERFACE_INPUT] | Console (TODO)
+[Terminal Output][CLI_TERMINAL_INTERFACE_OUTPUT] | 
+
+Terminal components |
+--- |
+[Alert component][CLI_TERMINAL_ALERT] | 
+[Menu component][CLI_TERMINAL_MENU] | 
+[Progress component][CLI_TERMINAL_PROGRESS] | 
+[Table component][CLI_TERMINAL_TABLE] | 
+
+
+### Bootgly Web 🌐
+
+interfaces | nodes
+--- | ---
+[TCP Client][WEB_TCP_CLIENT_INTERFACE] | [HTTP Server][WEB_HTTP_SERVER_NODE]
+[TCP Server][WEB_TCP_SERVER_INTERFACE] | 
 
 🚧
 
@@ -31,7 +53,7 @@ First beta release is planned for mid-year 2023 (near June).
 
 ### 🤝 Compatibility
 
-Operation System
+Operation System |
 --- |
 ✅ Linux (Debian based) |
 ❌ Windows |
@@ -43,6 +65,7 @@ Operation System
 ❌ = Incompatible
 ❔ = Untested
 
+Above is the native compatibility, of course it is possible to run on Windows and Unix using containers.
 
 ### ⚙️ Dependencies
 
@@ -55,7 +78,7 @@ Operation System
 
 #### \- Bootgly Web 🌐
 
-##### Web + CLI *API ¹ (eg. Bootgly HTTP Server CLI):
+##### CLI + Web *API ¹ (eg. Bootgly HTTP Server CLI):
 - \* See Bootgly CLI dependencies \*
 
 ##### Web in Non-CLI (apache2handler, litespeed and nginx) SAPI ²:
@@ -68,6 +91,24 @@ Operation System
 
 ¹ *API = Can be Server API (SAPI), Client API (CAPI), etc.
 ² SAPI = Server API
+
+---
+
+## 🖼 Hightlights
+
+### \- Bootgly CLI 📟
+
+| ![HTTP Server CLI started - Initial output](https://github.com/bootgly/.github/raw/main/screenshots/bootgly-php-framework/Bootgly-Progress-Bar-component.png "Render 6x faster than Symfony / Laravel") |
+|:--:| 
+| *Progress component (with Bar) - Render 6x faster than Symfony / Laravel* |
+
+### \- Bootgly Web 🌐
+
+| ![HTTP Server CLI - Faster than Workerman +7%](https://github.com/bootgly/.github/raw/main/screenshots/bootgly-php-framework/Server-CLI-HTTP-Benchmark-Ryzen-9-3900X-WSL2.png "HTTP Server CLI - +7% faster than Workerman (Plain Text test)'") |
+|:--:| 
+| *HTTP Server CLI - +7% faster than Workerman (Plain Text test)* |
+
+More **Screenshots**, videos and details can be found in the home page of [Bootgly Docs][PROJECT_DOCS].
 
 ---
 
@@ -119,12 +160,6 @@ or using Docker:
 
 ---
 
-## 🖼 Preview
-
-**Screenshots** and **videos** can be found in the home page of [Bootgly Docs][PROJECT_DOCS].
-
----
-
 ## 🌱 Community
 
 Join us and help the community.
@@ -164,16 +199,18 @@ The Bootgly PHP Framework is open-sourced software licensed under the [MIT licen
 
 
 <!-- Links -->
-[TEMPLATE_ENGINE]: https://github.com/bootgly/bootgly/blob/main/core/Template.php
+[CLI_TERMINAL_INTERFACE_INPUT]: https://github.com/bootgly/bootgly/blob/main/interfaces/CLI/Terminal/Input.php
+[CLI_TERMINAL_INTERFACE_OUTPUT]: https://github.com/bootgly/bootgly/blob/main/interfaces/CLI/Terminal/Output.php
+[CLI_TERMINAL_COMPONENTS]: https://github.com/bootgly/bootgly/tree/main/interfaces/CLI/Terminal/components
+
+[CLI_TERMINAL_ALERT]: https://github.com/bootgly/bootgly/tree/main/interfaces/CLI/Terminal/components/Alert
+[CLI_TERMINAL_MENU]: https://github.com/bootgly/bootgly/tree/main/interfaces/CLI/Terminal/components/Menu
+[CLI_TERMINAL_PROGRESS]: https://github.com/bootgly/bootgly/tree/main/interfaces/CLI/Terminal/components/Progress
+[CLI_TERMINAL_TABLE]: https://github.com/bootgly/bootgly/tree/main/interfaces/CLI/Terminal/components/Table
 
 [WEB_TCP_CLIENT_INTERFACE]: https://github.com/bootgly/bootgly/blob/main/interfaces/Web/TCP/Client.php
 [WEB_TCP_SERVER_INTERFACE]: https://github.com/bootgly/bootgly/blob/main/interfaces/Web/TCP/Server.php
-
-[CLI_HTTP_SERVER]: https://github.com/bootgly/bootgly/blob/main/nodes/CLI/HTTP/Server.php
-[CLI_HTTP_SERVER_REQUEST]: https://github.com/bootgly/bootgly/blob/main/nodes/CLI/HTTP/Server/Request.php
-[CLI_HTTP_SERVER_RESPONSE]: https://github.com/bootgly/bootgly/blob/main/nodes/CLI/HTTP/Server/Response.php
-[WEB_HTTP_SERVER_ROUTER]: https://github.com/bootgly/bootgly/blob/main/nodes/Web/HTTP/Server/Router.php
-[WEB_HTTP_SERVER_ROUTER_ROUTE]: https://github.com/bootgly/bootgly/blob/main/nodes/Web/HTTP/Server/Router/Route.php
+[WEB_HTTP_SERVER_NODE]: https://github.com/bootgly/bootgly/blob/main/nodes/CLI/HTTP/Server.php
 
 
 [PROJECT_DOCS]: https://docs.bootgly.com/
