@@ -15,7 +15,7 @@
 ## 🤔 About
 
 Bootgly is a full-stack framework for developing APIs and Apps for both command-line interfaces (CLI) and Web.
-Focused on performance, versatility, and easy-to-understand code APIs.
+Focused on performance, versatility, and easy-to-understand codebase APIs.
 
 🚧
 
@@ -58,7 +58,7 @@ Operation System
 ##### Web + CLI *API ¹ (eg. Bootgly HTTP Server CLI):
 - \* See Bootgly CLI dependencies \*
 
-##### Web in Non-CLI (apache2handler, litespeed and nginx)  *API ¹:
+##### Web in Non-CLI (apache2handler, litespeed and nginx) SAPI ²:
 - `rewrite` module enabled ⚠️
 
 --
@@ -66,7 +66,8 @@ Operation System
 ⚠️ = Required
 👍 = Recommended
 
-¹ *API = Server API (SAPI), Client API (CAPI), etc.
+¹ *API = Can be Server API (SAPI), Client API (CAPI), etc.
+² SAPI = Server API
 
 ---
 
