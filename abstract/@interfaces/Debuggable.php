@@ -11,7 +11,7 @@
 namespace Bootgly;
 
 
-interface Debugable
+interface Debuggable
 {
    public function debug ();
 }

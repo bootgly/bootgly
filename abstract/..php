@@ -1,43 +1,37 @@
 <?php
 require '@functions/formatters.php';
 
+require '@interfaces/Debuggable.php';
 require '@interfaces/Requestable.php';
 
-require '@traits/Set/.php';
-require '@traits/Sets/.php';
+require '@traits/Set/Set.php';
+require '@traits/Sets/Sets.php';
 
-// ! .Types
 // ? __Array
-require '__array/.php';
-require '__array/~functions.php';
+require '__Array/__Array.php';
+require '__Array/~functions.php';
 // ? __Class
-require '__class/adopted/.php';
-require '__class/nulled/.php';
+require '__Class/__Class.php';
+require '__Class/Adopted/Adopted.php';
+require '__Class/Nulled/Nulled.php';
 // ? __Iterable
-require '__iterable/.php';
+require '__Iterable/__Iterable.php';
 // ? __String
-#require '__String.functions.php';
-require '__string/.php';
-require '__string/~functions.php';
+#require '__String/.functions.php';
+require '__String/__String.php';
+require '__String/~functions.php';
 
-// *
-// ! Autoloader
-#require 'Autoloader.php';
-// ? __Class
-#require 'Autoloader@__Class.php';
-
-// ! Data
+// _ data
 // ? Table
-require 'data/table/.php';
-
-// ! Streams
+require 'data/Table/Table.php';
+// _ streams
 // _ socket
 // Pipe
-require 'streams/socket/pipe/.php';
+require 'streams/socket/Pipe/Pipe.php';
 // _ storage
 // Dir
-require 'streams/storage/dir/.php';
+require 'streams/storage/Dir/Dir.php';
 // File
-require 'streams/storage/file/.php';
+require 'streams/storage/File/File.php';
 // Path
-require 'streams/storage/path/.php';
+require 'streams/storage/Path/Path.php';
