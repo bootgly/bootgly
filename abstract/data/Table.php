@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\Data;
+namespace Bootgly\data;
 
 
 class Table

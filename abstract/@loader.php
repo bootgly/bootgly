@@ -38,7 +38,7 @@ require '__String/~functions.php';
 
 // - data
 // Table
-require 'data/Table/Table.php';
+require 'data/Table.php';
 
 // - streams/socket
 // Pipe
