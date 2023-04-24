@@ -11,9 +11,9 @@
 namespace Bootgly\CLI\Terminal\Output;
 
 
-use Bootgly\__String\Escaping\cursor\Positioning;
-use Bootgly\__String\Escaping\cursor\Visualizing;
-use Bootgly\__String\Escaping\cursor\Shaping;
+use Bootgly\__String\Escapeable\cursor\Positionable;
+use Bootgly\__String\Escapeable\cursor\Visualizable;
+use Bootgly\__String\Escapeable\cursor\Shapeable;
 
 use Bootgly\CLI\Terminal;
 use Bootgly\CLI\Terminal\Output;
@@ -21,9 +21,9 @@ use Bootgly\CLI\Terminal\Output;
 
 class Cursor
 {
-   use Positioning;
-   use Visualizing;
-   use Shaping;
+   use Positionable;
+   use Visualizable;
+   use Shapeable;
 
 
    private Output $Output;
@@ -66,7 +66,7 @@ class Cursor
       }
    }
 
-   // @ Positioning
+   // @ Positionable
    // Moving
    public function up (int $lines, ? int $column = null) : Output
    {
@@ -130,7 +130,7 @@ class Cursor
       return $this->Output->escape(self::_CURSOR_RESTORED);
    }
 
-   // Reporting
+   // Reportable
    /**
     * Emit the cursor position as: ESC [ <r> ; <c> R Where <r> = cursor row and <c> = cursor column
     */
@@ -139,7 +139,7 @@ class Cursor
       return $this->Output->escape(self::_CURSOR_REPORT_POSITION);
    }
 
-   // @ Shaping
+   // @ Shapeable
    public function shape (? string $style = '@user')
    {
       return match ($style) {
@@ -153,7 +153,7 @@ class Cursor
       };
    }
 
-   // @ Visualizing
+   // @ Visualizable
    public function blink (bool $status) : Output
    {
       return match ($status) {

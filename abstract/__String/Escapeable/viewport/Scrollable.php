@@ -8,10 +8,10 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\__String\Escaping\viewport;
+namespace Bootgly\__String\Escapeable\viewport;
 
 
-trait Positioning
+trait Scrollable
 {
    // * Meta
    // ! Scrolling

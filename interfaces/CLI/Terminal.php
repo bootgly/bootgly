@@ -13,8 +13,8 @@ namespace Bootgly\CLI;
 
 use Bootgly\CLI;
 
-use Bootgly\__String\Escaping\cursor\Positioning;
-use Bootgly\__String\Escaping\text\Modifying;
+use Bootgly\__String\Escapeable\cursor\Positionable;
+use Bootgly\__String\Escapeable\text\Modifiable;
 
 use Bootgly\CLI\Terminal\Input;
 use Bootgly\CLI\Terminal\Output;
@@ -22,8 +22,8 @@ use Bootgly\CLI\Terminal\Output;
 
 class Terminal
 {
-   use Positioning;
-   use Modifying;
+   use Positionable;
+   use Modifiable;
 
 
    // * Config

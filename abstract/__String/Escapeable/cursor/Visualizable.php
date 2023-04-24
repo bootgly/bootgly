@@ -8,10 +8,10 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\__String\Escaping\cursor;
+namespace Bootgly\__String\Escapeable\cursor;
 
 
-trait Visualizing
+trait Visualizable
 {
    /**
     * [?25l] (Text Cursor Enable Mode Hide) "Hide the cursor"

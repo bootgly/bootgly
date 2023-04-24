@@ -8,10 +8,10 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\__String\Escaping\cursor;
+namespace Bootgly\__String\Escapeable\cursor;
 
 
-trait Shaping
+trait Shapeable
 {
    /**
     * [0q] (User Shape) "Default cursor shape configured by the user"

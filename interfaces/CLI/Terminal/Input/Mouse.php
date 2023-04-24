@@ -11,19 +11,19 @@
 namespace Bootgly\CLI\Terminal\Input;
 
 
-use Bootgly\__String\Escaping\ {
-   Escaping
+use Bootgly\__String\Escapeable\ {
+   Escapeable
 };
-use Bootgly\__String\Escaping\mouse\ {
-   Reporting
+use Bootgly\__String\Escapeable\mouse\ {
+   Reportable
 };
 
 
 class Mouse
 {
-   use Escaping;
+   use Escapeable;
 
-   use Reporting;
+   use Reportable;
 
 
    public function report (bool $click)

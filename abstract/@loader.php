@@ -20,18 +20,18 @@ require '__Iterable/__Iterable.php';
 #require '__String/.functions.php';
 require '__String/__String.php';
 
-require '__String/Escaping/Escaping.php';
+require '__String/Escapeable/Escapeable.php';
 // cursor
-require '__String/Escaping/cursor/Positioning.php';
-require '__String/Escaping/cursor/Shaping.php';
-require '__String/Escaping/cursor/Visualizing.php';
+require '__String/Escapeable/cursor/Positionable.php';
+require '__String/Escapeable/cursor/Shapeable.php';
+require '__String/Escapeable/cursor/Visualizable.php';
 // mouse
-require '__String/Escaping/mouse/Reporting.php';
+require '__String/Escapeable/mouse/Reportable.php';
 // text
-require '__String/Escaping/text/Formatting.php';
-require '__String/Escaping/text/Modifying.php';
+require '__String/Escapeable/text/Formattable.php';
+require '__String/Escapeable/text/Modifiable.php';
 // viewport
-require '__String/Escaping/viewport/Positioning.php';
+require '__String/Escapeable/viewport/Scrollable.php';
 
 require '__String/~functions.php';
 

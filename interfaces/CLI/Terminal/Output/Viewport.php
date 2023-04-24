@@ -11,14 +11,14 @@
 namespace Bootgly\CLI\Terminal\Output;
 
 
-use Bootgly\__String\Escaping\viewport\Positioning;
+use Bootgly\__String\Escapeable\viewport\Scrollable;
 
 use Bootgly\CLI\Terminal\Output;
 
 
 class Viewport
 {
-   use Positioning;
+   use Scrollable;
 
 
    private Output $Output;

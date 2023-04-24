@@ -11,16 +11,16 @@
 namespace Bootgly\CLI\Terminal\Output;
 
 
-use Bootgly\__String\Escaping\text\Formatting;
-use Bootgly\__String\Escaping\text\Modifying;
+use Bootgly\__String\Escapeable\text\Formattable;
+use Bootgly\__String\Escapeable\text\Modifiable;
 
 use Bootgly\CLI\Terminal\Output;
 
 
 class Text
 {
-   use Formatting;
-   use Modifying;
+   use Formattable;
+   use Modifiable;
 
 
    private Output $Output;
@@ -106,7 +106,7 @@ class Text
       $this->color = null;
    }
 
-   // @ Formatting
+   // @ Formattable
    /**
     * Applies color to the output text.
     *
@@ -202,7 +202,7 @@ class Text
       return $Output;
    }
 
-   // @ Modifying
+   // @ Modifiable
    /**
     * Insert <n> spaces at the current cursor position, shifting all existing text to the right.
     * Text exiting the screen to the right is removed.

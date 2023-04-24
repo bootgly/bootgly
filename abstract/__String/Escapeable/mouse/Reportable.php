@@ -8,10 +8,10 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\__String\Escaping\mouse;
+namespace Bootgly\__String\Escapeable\mouse;
 
 
-trait Reporting
+trait Reportable
 {
    /**
     * [?1000h] (Mouse Click Reporting)

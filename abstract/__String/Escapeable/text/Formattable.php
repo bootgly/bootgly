@@ -8,17 +8,17 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\__String\Escaping\text;
+namespace Bootgly\__String\Escapeable\text;
 
 
-use Bootgly\__String\Escaping\ {
-   Escaping
+use Bootgly\__String\Escapeable\ {
+   Escapeable
 };
 
 
-trait Formatting
+trait Formattable
 {
-   use Escaping;
+   use Escapeable;
 
 
    public const _END_FORMAT = 'm';

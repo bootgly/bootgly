@@ -8,10 +8,10 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\__String\Escaping\text;
+namespace Bootgly\__String\Escapeable\text;
 
 
-trait Modifying
+trait Modifiable
 {
    // * Meta
    // [<n>@] (Insert Character)

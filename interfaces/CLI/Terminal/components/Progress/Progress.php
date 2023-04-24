@@ -15,8 +15,8 @@ use Bootgly\ {
    CLI
 };
 
-use Bootgly\__String\Escaping\ {
-   Escaping,
+use Bootgly\__String\Escapeable\ {
+   Escapeable,
    cursor,
    text,
 };
@@ -32,10 +32,10 @@ use Bootgly\CLI\Terminal\components\Progress\Bar\ {
 
 class Progress
 {
-   use Escaping;
-   use cursor\Positioning;
-   use cursor\Visualizing;
-   use text\Modifying;
+   use Escapeable;
+   use cursor\Positionable;
+   use cursor\Visualizable;
+   use text\Modifiable;
 
 
    private Output $Output;

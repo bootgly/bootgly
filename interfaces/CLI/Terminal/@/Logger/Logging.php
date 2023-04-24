@@ -15,18 +15,21 @@ use Bootgly\CLI;
 use Bootgly\Logger\ {
    Logger
 };
+use \Bootgly\__String\Escapeable\text\ {
+   Formattable
+};
 
 
-trait Logging
+trait Logging // TODO change name
 {
    use \Bootgly\Logger\Logging;
-   use \Bootgly\__String\Escaping\text\Formatting;
+   use Formattable;
 
 
    // * Config
-   // imported from \Bootgly\logging...
+   // ...
    // * Meta
-   // imported from \Bootgly\CLI\Terminal\text\Formatting...
+   // ...
 
 
    public function log ($message, int $level = self::LOG_DEBUG_LEVEL) : true

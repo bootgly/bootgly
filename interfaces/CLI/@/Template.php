@@ -11,26 +11,23 @@
 namespace Bootgly\CLI;
 
 
-use Bootgly\__String\Escaping\ {
-   Escaping
+use Bootgly\__String\Escapeable\ {
+   Escapeable
 };
-use Bootgly\__String\Escaping\cursor;
-use Bootgly\__String\Escaping\text;
-use Bootgly\__String\Escaping\viewport;
+use Bootgly\__String\Escapeable\cursor;
+use Bootgly\__String\Escapeable\text;
+use Bootgly\__String\Escapeable\viewport;
 
 
 class Template
 {
-   use Escaping;
-
-   use cursor\Positioning;
-   use cursor\Shaping;
-   use cursor\Visualizing;
-
-   use text\Formatting;
-   use text\Modifying;
-
-   use viewport\Positioning;
+   use Escapeable;
+   use cursor\Positionable;
+   use cursor\Shapeable;
+   use cursor\Visualizable;
+   use text\Formattable;
+   use text\Modifiable;
+   use viewport\Scrollable;
 
 
    public static array $tokens = [];

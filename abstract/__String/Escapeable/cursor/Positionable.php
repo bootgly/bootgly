@@ -8,10 +8,10 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\__String\Escaping\cursor;
+namespace Bootgly\__String\Escapeable\cursor;
 
 
-trait Positioning
+trait Positionable
 {
    // ! Moving
    // ? Vertical (<l>) "<l> = line"
@@ -74,7 +74,7 @@ trait Positioning
    public const _CURSOR_RESTORED = 'u';
 
 
-   // ! Reporting
+   // ! Reportable
    /**
     * [6n] (Report Cursor Position)
     * "Emit the cursor position as: ESC [\<r\>;\<c\>R Where \<r\> = cursor row and \<c\> = cursor column"

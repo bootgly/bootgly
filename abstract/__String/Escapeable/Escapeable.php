@@ -8,10 +8,10 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\__String\Escaping;
+namespace Bootgly\__String\Escapeable;
 
 
-trait Escaping
+trait Escapeable
 {
    public const _START_ESCAPE = "\033[";
 }

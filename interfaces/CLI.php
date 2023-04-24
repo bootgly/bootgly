@@ -23,7 +23,7 @@ class CLI
    public array $includes;
    // * Data
    // * Meta
-   // ! Escaping
+   // ! Escapeable
    public const _START_ESCAPE = "\033[";
 
    public static Commands $Commands;
