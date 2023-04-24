@@ -8,15 +8,14 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly;
+namespace Bootgly\templates;
 
 
-use Bootgly\ {
-   File
-};
+use Bootgly\File;
+use Bootgly\Bootgly; // TODO refactor remove Bootgly::$Project dependency
 
 
-class Template
+class Template // TODO refactor
 {
    // * Config
    private array $compilables;
@@ -34,13 +33,6 @@ class Template
 
    public function __construct ()
    {
-      /*
-      if ($_SERVER['HTTP_HOST'] === 'bootgly.slayer.tech') {
-         Debugger::$debug = true;
-         Debug(Config::get());
-      }
-      */
-
       // * Config
       Config::EXECUTE_MODE_REQUIRE;
 
@@ -74,6 +66,7 @@ class Template
       $this->$name = $value;
    }
 
+   // TODO refactor remove Bootgly::$Project dependency
    public function load (string $view, array $parameters) : bool
    {
       if ($this->raw !== '') {

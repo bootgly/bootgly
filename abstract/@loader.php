@@ -20,6 +20,7 @@ require '__Iterable/__Iterable.php';
 #require '__String/.functions.php';
 require '__String/__String.php';
 
+// > Escapeable
 require '__String/Escapeable/Escapeable.php';
 // cursor
 require '__String/Escapeable/cursor/Positionable.php';
@@ -38,6 +39,7 @@ require '__String/~functions.php';
 // - data
 // Table
 require 'data/Table/Table.php';
+
 // - streams/socket
 // Pipe
 require 'streams/socket/Pipe/Pipe.php';
@@ -48,3 +50,7 @@ require 'streams/storage/Dir/Dir.php';
 require 'streams/storage/File/File.php';
 // Path
 require 'streams/storage/Path/Path.php';
+
+// - templates
+require 'templates/Template.php';
+require 'templates/ANSI/Escaped.php';

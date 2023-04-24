@@ -13,10 +13,9 @@ namespace Bootgly\CLI\Terminal\_\Logger;
 
 // -abstract
 use Bootgly\__String\Escapeable\text\Formattable;
+use Bootgly\templates\ANSI\Escaped;
 // -base
 use Bootgly\Logger\Logger;
-// -core
-use Bootgly\Templates;
 
 
 trait Logging // TODO change name
@@ -41,7 +40,7 @@ trait Logging // TODO change name
       [$severity, $color] = $this->translate($level);
 
       // @ Render templating
-      $message = Templates\Escaped::render($message);
+      $message = Escaped::render($message);
 
       // @ Output log
       echo $this->format($message, $severity, $color);

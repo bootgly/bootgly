@@ -11,7 +11,10 @@
 namespace Bootgly;
 
 
-abstract class Bootgly
+use Bootgly\templates\Template;
+
+
+abstract class Bootgly // TODO move
 {
    public static Project $Project;
    public static Template $Template;
