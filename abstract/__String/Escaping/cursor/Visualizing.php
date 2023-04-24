@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\CLI\Escaping\cursor;
+namespace Bootgly\__String\Escaping\cursor;
 
 
 trait Visualizing

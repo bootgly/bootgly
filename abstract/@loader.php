@@ -19,6 +19,20 @@ require '__Iterable/__Iterable.php';
 // __String
 #require '__String/.functions.php';
 require '__String/__String.php';
+
+require '__String/Escaping/Escaping.php';
+// cursor
+require '__String/Escaping/cursor/Positioning.php';
+require '__String/Escaping/cursor/Shaping.php';
+require '__String/Escaping/cursor/Visualizing.php';
+// mouse
+require '__String/Escaping/mouse/Reporting.php';
+// text
+require '__String/Escaping/text/Formatting.php';
+require '__String/Escaping/text/Modifying.php';
+// viewport
+require '__String/Escaping/viewport/Positioning.php';
+
 require '__String/~functions.php';
 
 // - data

@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\CLI;
+namespace Bootgly\__String\Escaping;
 
 
 trait Escaping

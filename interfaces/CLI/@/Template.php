@@ -11,11 +11,12 @@
 namespace Bootgly\CLI;
 
 
-use Bootgly\CLI\Escaping;
-use Bootgly\CLI\Escaping\cursor;
-use Bootgly\CLI\Escaping\text;
-use Bootgly\CLI\Escaping\viewport;
-use Bootgly\Debugger;
+use Bootgly\__String\Escaping\ {
+   Escaping
+};
+use Bootgly\__String\Escaping\cursor;
+use Bootgly\__String\Escaping\text;
+use Bootgly\__String\Escaping\viewport;
 
 
 class Template

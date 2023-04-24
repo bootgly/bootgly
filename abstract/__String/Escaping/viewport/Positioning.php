@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\CLI\Escaping\viewport;
+namespace Bootgly\__String\Escaping\viewport;
 
 
 trait Positioning

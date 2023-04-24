@@ -8,11 +8,12 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\CLI\Escaping\text;
+namespace Bootgly\__String\Escaping\text;
 
 
-use Bootgly\CLI;
-use Bootgly\CLI\Escaping;
+use Bootgly\__String\Escaping\ {
+   Escaping
+};
 
 
 trait Formatting
@@ -21,7 +22,7 @@ trait Formatting
 
 
    public const _END_FORMAT = 'm';
-   public const _RESET_FORMAT = CLI::_START_ESCAPE . '0' . self::_END_FORMAT;
+   public const _RESET_FORMAT = self::_START_ESCAPE . '0' . self::_END_FORMAT;
 
    // ! Coloring
    // @ default foregrounds

@@ -11,13 +11,18 @@
 namespace Bootgly\CLI\Terminal\Input;
 
 
-use Bootgly\CLI\Escaping;
-use Bootgly\CLI\Escaping\mouse\Reporting;
+use Bootgly\__String\Escaping\ {
+   Escaping
+};
+use Bootgly\__String\Escaping\mouse\ {
+   Reporting
+};
 
 
 class Mouse
 {
    use Escaping;
+
    use Reporting;
 
 

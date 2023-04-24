@@ -11,13 +11,20 @@
 namespace Bootgly\CLI\Terminal\components\Progress;
 
 
-use Bootgly\CLI;
+use Bootgly\ {
+   CLI
+};
 
-use Bootgly\CLI\Escaping;
-use Bootgly\CLI\Escaping\cursor;
-use Bootgly\CLI\Escaping\text;
+use Bootgly\__String\Escaping\ {
+   Escaping,
+   cursor,
+   text,
+};
 
-use Bootgly\CLI\Terminal\Output;
+use Bootgly\CLI\Terminal\ {
+   Output
+};
+
 use Bootgly\CLI\Terminal\components\Progress\Bar\ {
    Bar
 };

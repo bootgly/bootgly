@@ -20,7 +20,7 @@ use Bootgly\Logger\ {
 trait Logging
 {
    use \Bootgly\Logger\Logging;
-   use \Bootgly\CLI\Escaping\text\Formatting;
+   use \Bootgly\__String\Escaping\text\Formatting;
 
 
    // * Config

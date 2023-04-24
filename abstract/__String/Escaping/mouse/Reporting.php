@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\CLI\Escaping\mouse;
+namespace Bootgly\__String\Escaping\mouse;
 
 
 trait Reporting

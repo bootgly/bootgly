@@ -11,7 +11,7 @@
 namespace Bootgly\CLI\Terminal\Output;
 
 
-use Bootgly\CLI\Escaping\viewport\Positioning;
+use Bootgly\__String\Escaping\viewport\Positioning;
 
 use Bootgly\CLI\Terminal\Output;
 
