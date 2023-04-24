@@ -11,10 +11,13 @@
 namespace Bootgly\CLI\Terminal;
 
 
-use Bootgly\CLI;
+// -abstract
 use Bootgly\__String\Escapeable\cursor\Positionable;
 use Bootgly\__String\Escapeable\text\Modifiable;
-use Bootgly\CLI\Template;
+// -core
+use Bootgly\Templates;
+// -interfaces
+use Bootgly\CLI;
 use Bootgly\CLI\Terminal;
 use Bootgly\CLI\Terminal\Output\Cursor;
 use Bootgly\CLI\Terminal\Output\Text;
@@ -207,7 +210,7 @@ class Output
    public function render (string $data) : self
    {
       try {
-         $this->written = @fwrite($this->stream, Template::render($data));
+         $this->written = @fwrite($this->stream, Templates\Escaped::render($data));
       } catch (\Throwable) {
          $this->written = false;
       }

@@ -11,13 +11,12 @@
 namespace Bootgly\CLI\Terminal\_\Logger;
 
 
-use Bootgly\CLI;
-use Bootgly\Logger\ {
-   Logger
-};
-use \Bootgly\__String\Escapeable\text\ {
-   Formattable
-};
+// -abstract
+use Bootgly\__String\Escapeable\text\Formattable;
+// -base
+use Bootgly\Logger\Logger;
+// -core
+use Bootgly\Templates;
 
 
 trait Logging // TODO change name
@@ -42,7 +41,7 @@ trait Logging // TODO change name
       [$severity, $color] = $this->translate($level);
 
       // @ Render templating
-      $message = CLI\Template::render($message);
+      $message = Templates\Escaped::render($message);
 
       // @ Output log
       echo $this->format($message, $severity, $color);

@@ -8,18 +8,17 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\CLI;
+namespace Bootgly\Templates;
 
 
-use Bootgly\__String\Escapeable\ {
-   Escapeable
-};
+// -abstract
+use Bootgly\__String\Escapeable\Escapeable;
 use Bootgly\__String\Escapeable\cursor;
 use Bootgly\__String\Escapeable\text;
 use Bootgly\__String\Escapeable\viewport;
 
 
-class Template
+class Escaped
 {
    use Escapeable;
    use cursor\Positionable;
@@ -35,7 +34,7 @@ class Template
 
    public static function boot ()
    {
-      $resource = 'Template/tokens/';
+      $resource = 'tokens/';
       $tokens = require $resource . '@.php';
 
       $files = $tokens['files'];
@@ -58,4 +57,4 @@ class Template
    }
 }
 
-Template::boot();
+Escaped::boot();

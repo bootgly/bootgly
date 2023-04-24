@@ -13,3 +13,4 @@ require 'Event/Timer.php';
 require 'Project.php';
 // ? Template
 require 'Template.php';
+require 'Templates/Escaped/Escaped.php';

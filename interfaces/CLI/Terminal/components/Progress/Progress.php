@@ -11,23 +11,15 @@
 namespace Bootgly\CLI\Terminal\components\Progress;
 
 
-use Bootgly\ {
-   CLI
-};
-
-use Bootgly\__String\Escapeable\ {
-   Escapeable,
-   cursor,
-   text,
-};
-
-use Bootgly\CLI\Terminal\ {
-   Output
-};
-
-use Bootgly\CLI\Terminal\components\Progress\Bar\ {
-   Bar
-};
+// -abstract
+use Bootgly\__String\Escapeable\Escapeable;
+use Bootgly\__String\Escapeable\cursor;
+use Bootgly\__String\Escapeable\text;
+// -core
+use Bootgly\Templates;
+// -interfaces
+use Bootgly\CLI\Terminal\Output;
+use Bootgly\CLI\Terminal\components\Progress\Bar\Bar;
 
 
 class Progress
@@ -279,7 +271,7 @@ class Progress
          $description = str_pad($description, $describedLength, ' ', STR_PAD_RIGHT);
       }
 
-      $this->description = CLI\Template::render($description);
+      $this->description = Templates\Escaped::render($description);
    }
 
    public function finish ()

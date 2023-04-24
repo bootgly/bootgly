@@ -6,9 +6,6 @@ require 'API/Server.php';
 
 // ! CLI
 require 'CLI.php';
-// @
-// ? Template
-require 'CLI/@/Template.php';
 
 // ? Commands
 require 'CLI/Commands.php';
@@ -31,7 +28,7 @@ require 'CLI/Terminal/Output/Cursor.php';
 require 'CLI/Terminal/Output/Text.php';
 // Viewport
 require 'CLI/Terminal/Output/Viewport.php';
-// @ components
+// _ components
 // Alert
 require 'CLI/Terminal/components/Alert/Alert.php';
 // Menu
