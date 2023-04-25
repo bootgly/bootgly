@@ -155,7 +155,7 @@ More **Screenshots**, videos and details can be found in the home page of [Bootg
 
 ### \- Bootgly CLI 📟:
 
-See the examples in `projects/@bootgly/cli/examples/terminal/`.
+See the examples in `projects/@bootgly/cli/examples/`.
 
 1) Rename the file `projects/cli.constructor.php.example` to `projects/cli.constructor.php`;
 2) Instantiate your CLI components.
@@ -178,12 +178,12 @@ See the examples in `projects/@bootgly/cli/examples/terminal/`.
 
 Directly in Linux OS *(max performance)*:
 
-1) Configure the Bootgly HTTP Server in `@/scripts/http-server-cli.php` file;
+1) Configure the Bootgly HTTP Server in `scripts/http-server-cli.php` file;
 2) Rename `projects/cli.http-server.api.php.example` to `projects/cli.http-server.api.php`;
 3) Configure the HTTP Server API in `projects/cli.http-server.api.php` file;
 4) Run the Bootgly HTTP Server CLI in the terminal:
 
-`php @/scripts/http-server-cli.php`
+`php scripts/http-server-cli.php`
 
 --
 

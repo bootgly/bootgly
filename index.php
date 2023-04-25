@@ -14,4 +14,4 @@ namespace Bootgly;
 
 #phpinfo(); exit;
 
-require_once '@/autoload.php';
+require_once 'autoload.php';

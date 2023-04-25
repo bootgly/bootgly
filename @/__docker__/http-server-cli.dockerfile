@@ -23,7 +23,7 @@ WORKDIR /bootgly
 # Install Composer
 COPY --from=composer:latest /usr/bin/composer /usr/local/bin/composer
 # Run composer install
-RUN composer install --optimize-autoloader --classmap-authoritative --no-dev -vvv
+RUN composer install --optimize-autoloader --classmap-authoritative --no-dev
 
 # Prepare Bootgly HTTP Server CLI
 ENV PORT=8080
@@ -31,4 +31,4 @@ EXPOSE $PORT
 
 COPY projects/cli.http-server.api.php.example projects/cli.http-server.api.php
 
-CMD ["sh", "-c", "php /bootgly/@/scripts/http-server-cli.php -- --port=$PORT"]
+CMD ["sh", "-c", "php /bootgly/scripts/http-server-cli.php -- --port=$PORT"]

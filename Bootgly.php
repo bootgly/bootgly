@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly;
+namespace Bootgly; // TODO remove namespace
 
 
 use Bootgly\templates\Template;

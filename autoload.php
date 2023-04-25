@@ -1,9 +1,9 @@
 <?php
-namespace Bootgly;
+namespace Bootgly; // TODO remove
 
-#@include_once __DIR__ . '/imports/autoload.php';
+#@include_once __DIR__ . '/@/imports/autoload.php';
 
-define('HOME_BASE', rtrim(__DIR__, '/@'));
+define('HOME_BASE', __DIR__);
 const HOME_DIR = HOME_BASE . DIRECTORY_SEPARATOR;
 
 // TODO load with autoloader

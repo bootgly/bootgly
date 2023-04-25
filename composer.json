@@ -22,13 +22,13 @@
 
    "autoload": {
       "files": [
-         "./@/autoload.php"
+         "./autoload.php"
       ]
    },
    "scripts": {
       "serve": [
          "Composer\\Config::disableProcessTimeout",
-         "php @/scripts/http-server-cli.php"
+         "php /scripts/http-server-cli.php"
       ]
    },
 
