@@ -178,12 +178,12 @@ See the examples in `projects/@bootgly/cli/examples/`.
 
 Directly in Linux OS *(max performance)*:
 
-1) Configure the Bootgly HTTP Server in `scripts/http-server-cli.php` file;
+1) Configure the Bootgly HTTP Server in `scripts/http-server-cli` file;
 2) Rename `projects/cli.http-server.api.php.example` to `projects/cli.http-server.api.php`;
 3) Configure the HTTP Server API in `projects/cli.http-server.api.php` file;
 4) Run the Bootgly HTTP Server CLI in the terminal:
 
-`php scripts/http-server-cli.php`
+`php scripts/http-server-cli`
 
 --
 
