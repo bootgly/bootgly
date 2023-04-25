@@ -31,4 +31,4 @@ EXPOSE $PORT
 
 COPY projects/cli.http-server.api.php.example projects/cli.http-server.api.php
 
-CMD ["sh", "-c", "php /bootgly/scripts/http-server-cli.php -- --port=$PORT"]
+CMD ["sh", "-c", "php /bootgly/scripts/http-server-cli -- --port=$PORT"]
