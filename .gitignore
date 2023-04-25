@@ -22,15 +22,14 @@ composer.lock
 !@/__php__/
 !@/__docker__/
 
-!@/scripts/
-
 ## Private files
 # Examples
 _*.example.php
 # Tests
 _*.test.php
 
-#-- Bootstrap --#
+
+#-- /Bootgly --#
 
 #- /abstract
 # ...
@@ -40,8 +39,6 @@ _*.test.php
 
 #- /core
 # ...
-
-#-- Resources --#
 
 #- /interfaces
 # ...
@@ -55,7 +52,7 @@ _*.test.php
 #- /platforms
 # ...
 
-#-- Sources --#
+#-- Workables --#
 
 #- /projects
 /projects/cli.constructor.php
@@ -63,10 +60,13 @@ _*.test.php
 /projects/web.constructor.php
 /projects/web.*.api.php
 
-#- /public
+# /public
 /public/test
+# /scripts
+# Ignore private scripts
+/scripts/_*.php
 
-#- /workspace
+# /workspace
 # Ignore all files here
 /workspace/*.*
 # Ignore all folder starting with @ here
