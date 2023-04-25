@@ -8,14 +8,14 @@ const HOME_DIR = HOME_BASE . DIRECTORY_SEPARATOR;
 
 // TODO load with autoloader
 // @ Bootables
-@include_once HOME_BASE . '/abstract/@loader.php';
-@include_once HOME_BASE . '/base/@loader.php';
-@include_once HOME_BASE . '/core/@loader.php';
+@include_once HOME_BASE . '/Bootgly/abstract/@loader.php';
+@include_once HOME_BASE . '/Bootgly/base/@loader.php';
+@include_once HOME_BASE . '/Bootgly/core/@loader.php';
 // @ Features
-@include_once HOME_BASE . '/interfaces/@loader.php';
-@include_once HOME_BASE . '/modules/@loader.php';
-@include_once HOME_BASE . '/nodes/@loader.php';
-@include_once HOME_BASE . '/platforms/@loader.php';
+@include_once HOME_BASE . '/Bootgly/interfaces/@loader.php';
+@include_once HOME_BASE . '/Bootgly/modules/@loader.php';
+@include_once HOME_BASE . '/Bootgly/nodes/@loader.php';
+@include_once HOME_BASE . '/Bootgly/platforms/@loader.php';
 // @ Workables
 // composer?
 $installed = HOME_BASE . '/../../composer/installed.php';

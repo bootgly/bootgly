@@ -11,7 +11,7 @@
 namespace Bootgly;
 
 
-use Bootgly\Path;
+use Bootgly\Path\Path;
 
 
 class Dir
@@ -19,7 +19,7 @@ class Dir
    const DIR_ = DIRECTORY_SEPARATOR;
 
 
-   public ?Path $Path = null;
+   public ? Path $Path = null;
 
    public string $path = '';
    public string $dir = '';

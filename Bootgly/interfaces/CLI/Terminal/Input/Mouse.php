@@ -11,18 +11,13 @@
 namespace Bootgly\CLI\Terminal\Input;
 
 
-use Bootgly\__String\Escapeable\ {
-   Escapeable
-};
-use Bootgly\__String\Escapeable\mouse\ {
-   Reportable
-};
+use Bootgly\__String\Escapeable\Escapeable;
+use Bootgly\__String\Escapeable\mouse\Reportable;
 
 
 class Mouse
 {
    use Escapeable;
-
    use Reportable;
 
 

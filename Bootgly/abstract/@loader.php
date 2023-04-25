@@ -34,23 +34,23 @@ require '__String/Escapeable/text/Modifiable.php';
 // viewport
 require '__String/Escapeable/viewport/Scrollable.php';
 
+// > Path
+require '__String/Path/Path.php';
+
 require '__String/~functions.php';
 
 // - data
+// Dir
+require 'data/Dir.php';
 // Table
 require 'data/Table.php';
 
 // - streams/socket
+// File
+require 'streams/File.php';
 // Pipe
 require 'streams/socket/Pipe/Pipe.php';
-// - storage
-// Dir
-require 'streams/storage/Dir/Dir.php';
-// File
-require 'streams/storage/File/File.php';
-// Path
-require 'streams/storage/Path/Path.php';
 
 // - templates
-require 'templates/Template.php';
 require 'templates/ANSI/Escaped.php';
+require 'templates/Template.php';

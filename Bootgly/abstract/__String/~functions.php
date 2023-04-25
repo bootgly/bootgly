@@ -8,10 +8,10 @@
  * --------------------------------------------------------------------------
  */
 
-use Bootgly\Path;
+namespace Bootgly;
 
 
-function Path (...$vars)
+function __String (string $string)
 {
-   return new Path(...$vars);
+   return new __String($string);
 }

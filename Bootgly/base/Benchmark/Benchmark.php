@@ -11,12 +11,8 @@
 namespace Bootgly\Benchmark;
 
 
-use Bootgly\ {
-   Path
-};
-use Bootgly\Debugger\ {
-   Backtrace
-};
+use Bootgly\Path\Path;
+use Bootgly\Debugger\Backtrace;
 
 
 class Benchmark

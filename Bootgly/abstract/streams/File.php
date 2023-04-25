@@ -12,7 +12,7 @@ namespace Bootgly;
 
 
 use Bootgly\__String;
-use Bootgly\Path;
+use Bootgly\Path\Path;
 use Bootgly\Dir;
 
 
@@ -64,7 +64,7 @@ class File
    const READFILE_READ_METHOD = 'readfile';
 
 
-   public ?Path $Path = null;
+   public ? Path $Path = null;
 
    // * Config
    public bool $check = true;
@@ -82,7 +82,7 @@ class File
 
    // * Meta (set private|protected and not injetable)
    public string $File = '';
-   public ?Dir $Dir  = null;
+   public ? Dir $Dir  = null;
    private $handle;
    protected $exists;             // @ bool
    protected $size;               // @ int 51162
