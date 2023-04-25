@@ -1,7 +1,4 @@
 <?php
-// ! Bootgly
-require 'Bootgly.php';
-
 // ? Database
 require 'Database.php';
 // ? Event

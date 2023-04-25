@@ -32,4 +32,7 @@ if ( is_file($installed) ) {
    define('WORKABLES_BASE', HOME_BASE);
 }
 
+// ! Bootgly
+require HOME_DIR . 'Bootgly.php';
+
 Bootgly::boot();
