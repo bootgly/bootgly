@@ -71,5 +71,8 @@ _*.test.php
 /workspace/*.*
 # Ignore all folder starting with @ here
 /workspace/@*/
-# Preserve existence of folders with .gitkeep here
-!/workspace/*/.gitkeep
+# Ignore known folders
+/workspace/cache/*
+/workspace/logs/*
+/workspace/temp/*
+/workspace/tests/*
