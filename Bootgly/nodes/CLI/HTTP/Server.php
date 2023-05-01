@@ -11,34 +11,16 @@
 namespace Bootgly\CLI\HTTP;
 
 
-use Bootgly\Logger\ {
-   Logger
-};
+use Bootgly\Logger\Logger;
 // extend
-use Bootgly\CLI\Terminal\_\Tester\ {
-   Tests
-};
-use Bootgly\ {
-   API
-};
-use Bootgly\Web\ {
-   TCP
-};
-use Bootgly\Web\TCP\Server\ {
-   Packages
-};
-use Bootgly\Web\TCP\ {
-   Client
-};
-use Bootgly\Web\protocols\ {
-   HTTP
-};
-use Bootgly\CLI\HTTP\Server\ {
-   Request
-};
-use Bootgly\CLI\HTTP\Server\ {
-   Response
-};
+use Bootgly\CLI\Terminal\_\Tester\Tests;
+use Bootgly\API;
+use Bootgly\Web\TCP;
+use Bootgly\Web\TCP\Server\Packages;
+use Bootgly\Web\TCP\Client;
+use Bootgly\Web\protocols\HTTP;
+use Bootgly\CLI\HTTP\Server\Request;
+use Bootgly\CLI\HTTP\Server\Response;
 
 
 class Server extends TCP\Server implements HTTP
@@ -84,7 +66,7 @@ class Server extends TCP\Server implements HTTP
    {
       // * Config
       if ($production) {
-         API\Server::$production = \Bootgly\HOME_DIR . 'projects/cli.http-server.api.php';
+         API\Server::$production = BOOTGLY_HOME_DIR . 'projects/cli.http-server.api.php';
       }
 
       // * Data

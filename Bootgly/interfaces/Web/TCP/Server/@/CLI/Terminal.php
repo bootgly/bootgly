@@ -13,12 +13,8 @@ namespace Bootgly\Web\TCP\Server\_\CLI;
 
 use Bootgly\Bootgly;
 use Bootgly\CLI;
-use Bootgly\CLI\Terminal\_\ {
-   Logger\Logging
-};
-use Bootgly\Web\TCP\ {
-   Server
-};
+use Bootgly\CLI\Terminal\_\Logger\Logging;
+use Bootgly\Web\TCP\Server;
 
 
 class Terminal extends CLI\Terminal
@@ -151,7 +147,7 @@ class Terminal extends CLI\Terminal
    }
    public function saveCommand (string $command, string $context = ''): bool
    {
-      $file = \Bootgly\HOME_DIR . '/workspace/server.command';
+      $file = BOOTGLY_HOME_DIR . '/workspace/server.command';
 
       $line = $command . ':' . $context . PHP_EOL;
 

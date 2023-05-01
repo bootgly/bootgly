@@ -18,7 +18,7 @@ class Server
 {
    // * Config
    // @ Files
-   public static string $production = \Bootgly\HOME_DIR . 'projects/cli.tcp-server.api.php';
+   public static string $production = BOOTGLY_HOME_DIR . 'projects/cli.tcp-server.api.php';
    // @ Mode
    public const MODE_PRODUCTION = 1;
    public const MODE_TEST = 2;

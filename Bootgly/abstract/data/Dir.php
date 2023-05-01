@@ -174,7 +174,7 @@ class Dir
          $Path = new Path($path);
          $Dir = $Path->Path($Path->dir);
 
-         if (!$Dir or $Dir === $Path->Path(\Bootgly\HOME_DIR)) {
+         if (!$Dir or $Dir === $Path->Path(BOOTGLY_HOME_DIR)) {
             return [];
          }
 

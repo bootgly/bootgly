@@ -365,7 +365,7 @@ class Template // TODO refactor
          $this->output = $replaced;
       }
 
-      $this->Output = new File(\Bootgly\HOME_DIR . 'workspace/cache/' . 'views/' . sha1($this->raw) . '.php');
+      $this->Output = new File(BOOTGLY_HOME_DIR . 'workspace/cache/' . 'views/' . sha1($this->raw) . '.php');
 
       if ($this->Output->exists) {
          return false;

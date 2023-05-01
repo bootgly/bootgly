@@ -13,8 +13,8 @@ namespace Bootgly;
 
 class Project
 {
-   public const PROJECT_DIR = WORKABLES_BASE . '/project/';
-   public const PROJECTS_DIR = WORKABLES_BASE . '/projects/';
+   public const PROJECT_DIR = BOOTGLY_WORKABLES_BASE . '/project/';
+   public const PROJECTS_DIR = BOOTGLY_WORKABLES_BASE . '/projects/';
 
    // * Config
    public bool $cache;

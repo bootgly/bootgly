@@ -11,10 +11,8 @@
 namespace Bootgly;
 
 
-use Bootgly\CLI\ {
-   Commands,
-   Terminal
-};
+use Bootgly\CLI\Commands;
+use Bootgly\CLI\Terminal;
 
 
 class CLI
@@ -40,11 +38,11 @@ class CLI
       // TODO move to bootgly config path
       $this->includes = [
          'scripts' => [
-            \Bootgly\HOME_DIR . 'bootgly',
-            \Bootgly\HOME_DIR . './bootgly', // TODO normalize path
+            BOOTGLY_HOME_DIR . 'bootgly',
+            BOOTGLY_HOME_DIR . './bootgly', // TODO normalize path
 
-            WORKABLES_BASE . '/bootgly',
-            WORKABLES_BASE . '/./bootgly', // TODO normalize path
+            BOOTGLY_WORKABLES_BASE . '/bootgly',
+            BOOTGLY_WORKABLES_BASE . '/./bootgly', // TODO normalize path
          ]
       ];
 

@@ -12,10 +12,9 @@ namespace Bootgly;
 
 
 use Exception;
-use Bootgly\ {
-   __String,
-   Bootgly,
-};
+
+use Bootgly\__String;
+use Bootgly\Bootgly;
 
 
 // TODO Refactor class (too old)

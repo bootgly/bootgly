@@ -3,22 +3,22 @@ namespace Bootgly; // TODO remove
 
 #@include_once __DIR__ . '/@/imports/autoload.php';
 
-define('HOME_BASE', __DIR__);
-const HOME_DIR = HOME_BASE . DIRECTORY_SEPARATOR;
+define('BOOTGLY_HOME_BASE', __DIR__);
+define('BOOTGLY_HOME_DIR', __DIR__ . DIRECTORY_SEPARATOR);
 
 // TODO load with autoloader
 // @ Bootables
-@include_once HOME_BASE . '/Bootgly/abstract/@loader.php';
-@include_once HOME_BASE . '/Bootgly/base/@loader.php';
-@include_once HOME_BASE . '/Bootgly/core/@loader.php';
+@include_once BOOTGLY_HOME_BASE . '/Bootgly/abstract/@loader.php';
+@include_once BOOTGLY_HOME_BASE . '/Bootgly/base/@loader.php';
+@include_once BOOTGLY_HOME_BASE . '/Bootgly/core/@loader.php';
 // @ Features
-@include_once HOME_BASE . '/Bootgly/interfaces/@loader.php';
-@include_once HOME_BASE . '/Bootgly/modules/@loader.php';
-@include_once HOME_BASE . '/Bootgly/nodes/@loader.php';
-@include_once HOME_BASE . '/Bootgly/platforms/@loader.php';
+@include_once BOOTGLY_HOME_BASE . '/Bootgly/interfaces/@loader.php';
+@include_once BOOTGLY_HOME_BASE . '/Bootgly/modules/@loader.php';
+@include_once BOOTGLY_HOME_BASE . '/Bootgly/nodes/@loader.php';
+@include_once BOOTGLY_HOME_BASE . '/Bootgly/platforms/@loader.php';
 // @ Workables
 // composer?
-$installed = HOME_BASE . '/../../composer/installed.php';
+$installed = BOOTGLY_HOME_BASE . '/../../composer/installed.php';
 if ( is_file($installed) ) {
    $installed = @include @$installed;
 
@@ -27,12 +27,13 @@ if ( is_file($installed) ) {
       $root = realpath($root);
    }
 
-   define('WORKABLES_BASE', $root ?? HOME_BASE);
+   define('BOOTGLY_WORKABLES_BASE', $root ?? BOOTGLY_HOME_BASE); // TODO rename
 } else {
-   define('WORKABLES_BASE', HOME_BASE);
+   define('BOOTGLY_WORKABLES_BASE', BOOTGLY_HOME_BASE); // TODO rename
 }
+define('BOOTGLY_WORKABLES_DIR', BOOTGLY_HOME_BASE . DIRECTORY_SEPARATOR);
 
 // ! Bootgly
-require HOME_DIR . 'Bootgly.php';
+require BOOTGLY_HOME_DIR . 'Bootgly.php';
 
 Bootgly::boot();

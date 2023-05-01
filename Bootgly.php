@@ -30,13 +30,13 @@ abstract class Bootgly // TODO move
       // - Workables
       // @ Load Bootgly constructor
       // Multi projects
-      $projects = WORKABLES_BASE . '/projects/bootgly.constructor.php';
+      $projects = BOOTGLY_WORKABLES_BASE . '/projects/bootgly.constructor.php';
       if ( is_file($projects) ) {
          return require $projects;
       }
 
       // Single project
-      $project = WORKABLES_BASE . '/project/bootgly.constructor.php';
+      $project = BOOTGLY_WORKABLES_BASE . '/project/bootgly.constructor.php';
       if ( is_file($project) ) {
          return require $project;
       }

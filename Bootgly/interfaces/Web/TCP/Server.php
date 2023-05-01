@@ -147,7 +147,7 @@ class Server implements Servers, Logs
       if (self::$Application) {
          self::$Application::boot();
       } else {
-         API\Server::$production = \Bootgly\HOME_DIR . 'projects/cli.tcp-server.api.php';
+         API\Server::$production = BOOTGLY_HOME_DIR . 'projects/cli.tcp-server.api.php';
          API\Server::boot(true);
       }
    }
