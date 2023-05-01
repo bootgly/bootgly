@@ -12,7 +12,6 @@ namespace Bootgly\templates;
 
 
 use Bootgly\File;
-use Bootgly\Bootgly; // TODO refactor remove Bootgly::$Project dependency
 
 
 class Template // TODO refactor
@@ -64,31 +63,6 @@ class Template // TODO refactor
    public function __set ($name, $value)
    {
       $this->$name = $value;
-   }
-
-   // TODO refactor remove Bootgly::$Project dependency
-   public function load (string $view, array $parameters) : bool
-   {
-      if ($this->raw !== '') {
-         return true;
-      }
-
-      // ! Load Raw file/string
-      $File = new File;
-      $File->construct = false;
-      $File->convert = false;
-      $File(Bootgly::$Project . $view . '.template.php');
-
-      if ($File->File) {
-         $this->raw = $File->contents;
-      } else {
-         $this->raw = $view;
-      }
-
-      // ! Set Parameters
-      $this->parameters = $parameters;
-
-      return true;
    }
 
    #public function parse () {}
@@ -334,11 +308,8 @@ class Template // TODO refactor
 
       return true;
    }
-   public function render (string $view, array $parameters)
+   public function render ()
    {
-      // ! Load Raw, Parameters
-      $this->load($view, $parameters);
-
       // ! Compile Raw
       $this->compile();
 

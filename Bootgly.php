@@ -45,7 +45,6 @@ abstract class Bootgly // TODO move
 
       return false;
    }
-
    public static function debug (bool $status)
    {
       // @ PHP
@@ -53,6 +52,33 @@ abstract class Bootgly // TODO move
          true => error_reporting(E_ALL) && ini_set('display_errors', 'On'),
          false => error_reporting(0) && ini_set('display_errors', 'Off')
       };
+
+      return true;
+   }
+
+   public static function template (string $view, array $parameters) : bool
+   {
+      $Template = static::$Template;
+
+      // TODO check Template cache
+
+      $file = static::$Project . $view . '.template.php';
+      // ! Load Raw file/string
+      $File = new File;
+      $File->construct = false;
+      $File->convert = false;
+      $File($file);
+
+      if ($File->File) {
+         $Template->raw = $File->contents;
+      } else {
+         $Template->raw = $view;
+      }
+
+      // ! Set Parameters
+      $Template->parameters = $parameters;
+
+      $Template->render();
 
       return true;
    }
