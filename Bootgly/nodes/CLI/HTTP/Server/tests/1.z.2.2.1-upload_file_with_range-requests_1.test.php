@@ -1,5 +1,5 @@
 <?php
-use Bootgly\Bootgly;
+use Bootgly\Project;
 use Bootgly\Debugger;
 // SAPI
 use Bootgly\CLI\HTTP\Server\Request;
@@ -20,12 +20,13 @@ return [
    // @ act
    // Server API
    'sapi' => function (Request $Request, Response $Response) : Response {
-      Bootgly::$Project->vendor = '@bootgly/';
-      Bootgly::$Project->container = 'web/';
-      Bootgly::$Project->package = 'examples/';
-      Bootgly::$Project->version = 'app/';
+      $Project = new Project;
+      $Project->vendor = '@bootgly/';
+      $Project->container = 'web/';
+      $Project->package = 'examples/';
+      $Project->version = 'app/';
 
-      Bootgly::$Project->setPath();
+      $Project->setPath();
 
       return $Response('statics/alphanumeric.txt')->upload(close: false);
    },

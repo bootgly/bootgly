@@ -11,10 +11,7 @@
 namespace Bootgly;
 
 
-use Exception;
-
 use Bootgly\__String;
-use Bootgly\Bootgly;
 
 
 // TODO Refactor class (too old)
@@ -91,31 +88,6 @@ class Database
          }
       } catch (\PDOException $e) {
          $this->PDOException = $e->getMessage();
-      }
-   }
-
-
-   public function config (string $instance)
-   {
-      // TODO validate / parse $instance
-      try {
-         $configFile = Bootgly::$Project . '/database/' . $instance . '.config.php';
-         if ( is_file($configFile) ) {
-            require $configFile;
-         } else {
-            throw new Exception('Database configuration file not found.', 1);
-         }
-      } catch (Exception $Exception) {
-         /*
-         $Error = new Error;
-         $Error->title = 'Database -> config()';
-
-         $Error->fatal = true;
-         $Error->code = $Exception->getCode();
-         $Error->message = $Exception->getMessage();
-
-         $Error->throw();
-         */
       }
    }
 

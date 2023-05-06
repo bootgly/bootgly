@@ -45,15 +45,9 @@ abstract class Bootgly // TODO move
 
       return false;
    }
-   public static function debug (bool $status)
+   public static function debug ()
    {
-      // @ PHP
-      match ($status) {
-         true => error_reporting(E_ALL) && ini_set('display_errors', 'On'),
-         false => error_reporting(0) && ini_set('display_errors', 'Off')
-      };
-
-      return true;
+      // TODO
    }
 
    public static function template (string $view, array $parameters) : Template

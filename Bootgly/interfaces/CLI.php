@@ -58,13 +58,13 @@ class CLI
       }
 
       // @ Load CLI constructor
-      $projects = Bootgly::$Project::PROJECTS_DIR . 'cli.constructor.php';
+      $projects = Project::PROJECTS_DIR . 'cli.constructor.php';
       if ( is_file($projects) ) {
          @include $projects;
          return;
       }
 
-      $project = Bootgly::$Project::PROJECT_DIR . 'cli.constructor.php';
+      $project = Project::PROJECT_DIR . 'cli.constructor.php';
       if ( is_file($project) ) {
          @include $project;
       }

@@ -11,7 +11,6 @@
 namespace Bootgly\Web\TCP\Server\_\CLI;
 
 
-use Bootgly\Bootgly;
 use Bootgly\CLI;
 use Bootgly\CLI\Terminal\_\Logger\Logging;
 use Bootgly\Web\TCP\Server;
@@ -40,7 +39,7 @@ class Terminal extends CLI\Terminal
       // @ operations
       // TODO 'benchmark'
       'check',
-      'debug',
+      'error',
       // TODO 'log'
       'test',
       // ! \ Connection
@@ -56,7 +55,7 @@ class Terminal extends CLI\Terminal
       'check' => [
          'jit'
       ],
-      'debug' => [
+      'error' => [
          'on',
          'off',
       ],
@@ -112,10 +111,10 @@ class Terminal extends CLI\Terminal
                (function_exists('opcache_get_status') && @opcache_get_status()['jit']['enabled'])
                ? 'JIT enabled' : 'JIT disabled'
             ) && true,
-         'debug on' =>
-            Bootgly::debug(true) && true,
-         'debug off' =>
-            Bootgly::debug(false) && true,
+         'error on' =>
+            error_reporting(E_ALL) && ini_set('display_errors', 'On') && true,
+         'error off' =>
+            error_reporting(0) && ini_set('display_errors', 'Off') && true,
          // TODO 'log'
          'test' => // TODO use CLI wizard to choose the tests
             $this->saveCommand('test init')
@@ -171,8 +170,8 @@ class Terminal extends CLI\Terminal
       @:i: `monitor` @;     = Enter in monitor mode;
 
       @:i: `check jit` @;   = Check if JIT is enabled;
-      @:i: `debug on` @;    = Enable debug log output;
-      @:i: `debug off` @;   = Disable debug log output;
+      @:i: `error on` @;    = Enable PHP error reporting;
+      @:i: `error off` @;   = Disable PHP error reporting;
       @:i: `test` @;        = Run Server test suites;
 
       @:i: `stats` @;       = Show stats about connections / data per worker;

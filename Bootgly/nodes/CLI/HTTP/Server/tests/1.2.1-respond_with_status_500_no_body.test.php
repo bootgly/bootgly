@@ -1,5 +1,4 @@
 <?php
-use Bootgly\Bootgly;
 use Bootgly\Debugger;
 // SAPI
 use Bootgly\CLI\HTTP\Server\Request;
