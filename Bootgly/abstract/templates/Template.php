@@ -17,17 +17,17 @@ use Bootgly\File;
 class Template // TODO refactor
 {
    // * Config
-   private array $compilables;
-   private array $parameters;
+   public array $parameters;
 
    // * Data
+   protected array $directives;
    public string $raw;
 
    // * Meta
-   public array $compiled;
-   public array $patterns;
-   public string $output;
+   public string $compiled;
+
    public ? File $Output;
+   public string $output;
 
 
    public function __construct ()
@@ -35,26 +35,20 @@ class Template // TODO refactor
       // * Config
       Config::EXECUTE_MODE_REQUIRE;
 
-      $this->compilables = [
-         'echo',
-         // ! Directives
-         // ? Conditionals
-         'if',
-         // ? Loops
-         'foreach',
-         'for',
-         'while'
-      ];
       $this->parameters = [];
 
       // * Data
+      $this->directives = [];
       $this->raw = '';
 
       // * Meta
-      $this->compiled = [];
-      $this->patterns = [];
-      $this->output = '';
+      $this->compiled = '';
+
       $this->Output = null;
+      $this->output = '';
+
+
+      $this->boot();
    }
    public function __get ($name)
    {
@@ -65,291 +59,71 @@ class Template // TODO refactor
       $this->$name = $value;
    }
 
+   protected function boot ()
+   {
+      $resource = 'directives/';
+
+      $bootables = require $resource . '@.php';
+
+      $files = $bootables['files'];
+      foreach ($files as $file) {
+         $directives = require $resource . $file . '.php';
+
+         foreach ($directives as $directive => $Closure) {
+            $this->directives[$directive] = $Closure;
+         }
+      }
+   }
+   public function extend (string $pattern, \Closure $Callback)
+   {
+      $this->directives[$pattern] ??= $Callback;
+   }
    #public function parse () {}
 
-   // TODO REFACTOR: This function "compile" has 175 lines, which is greater than the 150 lines authorized.
-   // TODO move to resources pattern
-   public function compile (? string $name = null)
+   private function compile ()
    {
-      if ($name !== null) {
-         $this->compilables = [];
-         $this->compilables[] = $name;
-      }
+      $compiled = preg_replace_callback_array($this->directives, $this->raw);
 
-      if ( ! empty($this->compiled) && $name !== null ) {
-         return true;
-      }
-
-      foreach ($this->compilables as $compilable) {
-         // ! Compile - Level 0
-         switch ($compilable) {
-            // ? Loops
-            case 'foreach':
-               // @ Meta variable ($@)
-               if (@$this->compiled['meta_']) {
-                  break;
-               }
-
-               // @ $@->...;
-               $pattern = '/(\$@){1}(->){1}/sx';
-               $callback = function ($matches) {
-                  if ($matches[1] === null) {
-                     return '';
-                  }
-
-                  return '$_->';
-               };
-               $this->patterns[$pattern] = $callback;
-
-               $this->compiled['meta_'] = true;
-            case 'for':
-            case 'while':
-               // @ Break
-               if (@$this->compiled['break']) {
-                  break;
-               }
-
-               // @ break ?<level:number>;
-               $pattern = "/@break[ ]?(\d+)?[ ]?;/sx";
-               $callback = function ($matches) {
-                  // @ ?<level:number>;
-                  $level = $matches[1] ?? '';
-
-                  return <<<PHP
-                  <?php break $level; ?>
-                  PHP;
-               };
-               $this->patterns[$pattern] = $callback;
-
-               // @ break ?<level:number> in <condition>;
-               $pattern = "/@break[ ]+?(\d+)?[ ]?in[ ]+?(.+?)[ ]?;/sx";
-               $callback = function ($matches) {
-                  // @ ?<level:number>;
-                  $level = $matches[1] ?? '';
-                  // @ <conditional>;
-                  $conditional = $matches[2];
-   
-                  return <<<PHP
-                  <?php if ($conditional) break $level; ?>
-                  PHP;
-               };
-               $this->patterns[$pattern] = $callback;
-
-               $this->compiled['break'] = true;
-
-               // ? Continue
-               if (@$this->compiled['continue']) {
-                  break;
-               }
-
-               // @ continue ?<level:number>;
-               $pattern = "/@continue[ ]?(\d+)?[ ]?;/sx";
-               $callback = function ($matches) {
-                  // @ ?<level:number>;
-                  $level = $matches[1] ?? '';
-
-                  return <<<PHP
-                  <?php continue $level; ?>
-                  PHP;
-               };
-               $this->patterns[$pattern] = $callback;
-
-               // @ continue ?<level:number> in <condition>;
-               $pattern = "/@continue[ ]+?(\d+)?[ ]?in[ ]+?(.+?)[ ]?;/sx";
-               $callback = function ($matches) {
-                  // @ ?<level:number>;
-                  $level = $matches[1] ?? '';
-                  // @ <conditional>;
-                  $conditional = $matches[2];
-   
-                  return <<<PHP
-                  <?php if ($conditional) continue $level; ?>
-                  PHP;
-               };
-               $this->patterns[$pattern] = $callback;
-
-               $this->compiled['continue'] = true;
-         }
-
-         // ! Compile - Level 1
-         switch ($compilable) {
-            case 'echo':
-               $pattern = '/@>>\s*(.+?)\s*;(\r?\n)?/s';
-               $callback = function ($matches) {
-                  $wrapped = $matches[1];
-
-                  $whitespace = $matches[2] ?? '';
-
-                  return <<<PHP
-                  <?php echo {$wrapped}; ?>{$whitespace}
-                  PHP;
-               };
-               $this->patterns[$pattern] = $callback;
-               break;
-            // ? Conditionals
-            case 'if':
-               $pattern = "/(@if)[ ]+?(.+?)[ ]?:/sx";
-               $callback = function ($matches) {
-                  // @ Conditional
-                  $conditional = $matches[2];
-   
-                  return <<<PHP
-                  <?php if ({$conditional}): ?>
-                  PHP;
-               };
-               $this->patterns[$pattern] = $callback;
-   
-               $pattern = "/(@elseif)[ ]+?(.+?)[ ]?:/sx";
-               $callback = function ($matches) {
-                  // @ Conditional
-                  $conditional = $matches[2];
-   
-                  return <<<PHP
-                  <?php elseif ({$conditional}): ?>
-                  PHP;
-               };
-               $this->patterns[$pattern] = $callback;
-   
-               $pattern = "/(@else)[ ]?:/sx";
-               $callback = function () {
-                  return <<<PHP
-                  <?php else: ?>
-                  PHP;
-               };
-               $this->patterns[$pattern] = $callback;
-   
-               $pattern = "/@if[ ]?;/sx";
-               $callback = function () {
-                  return <<<PHP
-                  <?php endif; ?>
-                  PHP;
-               };
-               $this->patterns[$pattern] = $callback;
-   
-               break;
-            // ? Loops
-            case 'foreach':
-               $pattern = "/(@foreach)[ ]+?(.+?)[ ]?:/sx";
-               $callback = function ($matches) {
-                  // @ <expression> as $key
-                  $iterable = trim($matches[2], '()');
-   
-                  // TODO Add Loop Variables only if meta variable ($@) exists inside foreach
-                  preg_match('/\$(.*) +as *(.*)$/is', $iterable, $_matches);
-                  $iteratee = $_matches[1];
-                  $iteration = $_matches[2];
-
-                  //Debug($iteratee, $this->parameters[$iteratee]); exit;
-                  $init = <<<PHP
-                  \$_ = new \Bootgly\__Iterable(\$$iteratee);
-                  PHP;
-
-                  return <<<PHP
-                  <?php {$init} foreach (\$_ as {$iteration}): ?>
-                  PHP;
-               };
-               $this->patterns[$pattern] = $callback;
-   
-               $pattern = "/@foreach[ ]?;/sx";
-               $callback = function () {
-                  return <<<PHP
-                  <?php endforeach; ?>
-                  PHP;
-               };
-               $this->patterns[$pattern] = $callback;
-   
-               break;
-            case 'for':
-               $pattern = "/(@for)[ ]+?(.+?)[ ]?:/sx";
-               $callback = function ($matches) {
-                  // @ ...<expressions>
-                  $expressions = trim($matches[2], '()');
-   
-                  return <<<PHP
-                  <?php for ({$expressions}): ?>
-                  PHP;
-               };
-               $this->patterns[$pattern] = $callback;
-   
-               $pattern = "/@for[ ]?;/sx";
-               $callback = function () {
-                  return <<<PHP
-                  <?php endfor; ?>
-                  PHP;
-               };
-               $this->patterns[$pattern] = $callback;
-   
-               break;
-            case 'while':
-               $pattern = "/(@while)[ ]+?(.+?)[ ]?:/sx";
-               $callback = function ($matches) {
-                  // @ <expression>
-                  $expression = $matches[2];
-   
-                  return <<<PHP
-                  <?php while ({$expression}): ?>
-                  PHP;
-               };
-               $this->patterns[$pattern] = $callback;
-   
-               $pattern = "/@while[ ]?;/sx";
-               $callback = function () {
-                  return <<<PHP
-                  <?php endwhile; ?>
-                  PHP;
-               };
-               $this->patterns[$pattern] = $callback;
-   
-               break;
-         }
-
-         $this->compiled[$compilable] = true;
-      }
-
-      return true;
+      $this->compiled = $compiled;
    }
-   public function render ()
+   public function render () : self
    {
-      // ! Compile Raw
       $this->compile();
 
-      // ! Render Template
-      $replaced = preg_replace_callback_array($this->patterns, $this->raw);
-
-      // ! Save Output
-      $this->save($replaced);
+      $this->cache();
 
       // $this->debug();
-
-      // ! Execute Output with Parameters
       $this->execute();
+
+      return $this;
    }
 
-   public function register (string $tag, string $type, \Closure $callback)
+   private function cache () : bool
    {
-      // TODO register custom tag
-   }
-
-   public function save (? string $replaced = null) : bool
-   {
-      if ($replaced !== null) {
-         $this->output = $replaced;
-      }
-
-      $this->Output = new File(BOOTGLY_HOME_DIR . 'workspace/cache/' . 'views/' . sha1($this->raw) . '.php');
+      $this->Output = new File(
+         BOOTGLY_WORKABLES_DIR .
+         'workspace/cache/' .
+         'views/' .
+         sha1($this->raw) .
+         '.php'
+      );
 
       if ($this->Output->exists) {
          return false;
       }
 
       $this->Output->open('w+');
-      $this->Output->write($this->output);
+      $this->Output->write($this->compiled);
       $this->Output->close();
 
       return true;
    }
 
-   public function execute (? Config $Mode = null) : bool
+   public function debug ()
+   {
+      Debug('<code>'.htmlspecialchars($this->compiled).'</code>');
+   }
+   private function execute (? Config $Mode = null) : bool
    {
       if ($Mode === null) {
          $Mode = Config::EXECUTE_MODE_REQUIRE;
@@ -358,23 +132,20 @@ class Template // TODO refactor
       try {
          extract($this->parameters);
 
+         ob_start();
          switch ($Mode) {
             case Config::EXECUTE_MODE_REQUIRE:
                require (string) $this->Output; break;
             case Config::EXECUTE_MODE_EVAL:
-               eval('?>'.$this->output); break;
+               eval('?>'.$this->compiled); break;
          }
+         $this->output = ob_get_clean();
 
          return true;
       } catch (\Throwable $Throwable) {
          Debug('Error!', $Throwable->getMessage(), $Throwable->getLine());
          $this->output = '';
       }
-   }
-
-   public function debug ()
-   {
-      Debug('<code>'.htmlspecialchars($this->output).'</code>');
    }
 }
 

@@ -56,7 +56,7 @@ abstract class Bootgly // TODO move
       return true;
    }
 
-   public static function template (string $view, array $parameters) : bool
+   public static function template (string $view, array $parameters) : Template
    {
       $Template = static::$Template;
 
@@ -78,8 +78,6 @@ abstract class Bootgly // TODO move
       // ! Set Parameters
       $Template->parameters = $parameters;
 
-      $Template->render();
-
-      return true;
+      return $Template;
    }
 }

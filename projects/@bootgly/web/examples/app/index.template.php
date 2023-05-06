@@ -16,13 +16,13 @@
       <link rel="icon" type="image/ico" href="favicon.ico">
    </head>
    <body>
-      <div id="ifs-1">
-         @if ($testA):
-         <span>if</span>
-         @elseif ($test1):
-         <span>else if #1</span>
+      <div id="conditionals-ifs-1">
+         @if ($a):
+         <span>a enabled!</span>
+         @elseif ($b):
+         <span>b enabled!</span>
          @else:
-         <span>else</span>
+         <span>Neither a nor b.</span>
          @if;
       </div>
 
@@ -31,13 +31,13 @@
             @if ($@->index === 1):
                @>> 'First!';
             @if;
+
             @>> $@->index;
          @foreach;
       </div>
       <div id="loops-for-1">
          @for ($i = 0; $i <= 10; $i++):
             @break in $i === 3;
-
             @>> $i;
          @for;
       </div>
