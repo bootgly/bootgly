@@ -63,7 +63,7 @@ abstract class Bootgly // TODO move
       // TODO check Template cache
 
       $file = static::$Project . $view . '.template.php';
-      // ! Load Raw file/string
+      // @ Load Raw file/string
       $File = new File;
       $File->construct = false;
       $File->convert = false;
@@ -75,7 +75,7 @@ abstract class Bootgly // TODO move
          $Template->raw = $view;
       }
 
-      // ! Set Parameters
+      // @ Set Parameters
       $Template->parameters = $parameters;
 
       return $Template;

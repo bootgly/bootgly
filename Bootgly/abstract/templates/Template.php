@@ -14,49 +14,42 @@ namespace Bootgly\templates;
 use Bootgly\File;
 
 
-class Template // TODO refactor
+class Template
 {
    // * Config
    public array $parameters;
+   public Mode $Execution;
 
    // * Data
    protected array $directives;
    public string $raw;
+   public string $output;
 
    // * Meta
-   public string $compiled;
-
-   public ? File $Output;
-   public string $output;
+   private string $compiled;
+   // Cache
+   private ? File $Output;
 
 
    public function __construct ()
    {
       // * Config
-      Config::EXECUTE_MODE_REQUIRE;
-
       $this->parameters = [];
+      // execute
+      $this->Execution = Mode::REQUIRE->set();
 
       // * Data
       $this->directives = [];
       $this->raw = '';
+      $this->output = '';
 
       // * Meta
       $this->compiled = '';
-
+      // cache
       $this->Output = null;
-      $this->output = '';
 
 
       $this->boot();
-   }
-   public function __get ($name)
-   {
-      return $this->$name;
-   }
-   public function __set ($name, $value)
-   {
-      $this->$name = $value;
    }
 
    protected function boot ()
@@ -80,9 +73,12 @@ class Template // TODO refactor
    }
    #public function parse () {}
 
-   private function compile ()
+   private function compile (? string $raw = null)
    {
-      $compiled = preg_replace_callback_array($this->directives, $this->raw);
+      $compiled = preg_replace_callback_array(
+         $this->directives,
+         $raw ?? $this->raw
+      );
 
       $this->compiled = $compiled;
    }
@@ -123,45 +119,41 @@ class Template // TODO refactor
    {
       Debug('<code>'.htmlspecialchars($this->compiled).'</code>');
    }
-   private function execute (? Config $Mode = null) : bool
+   private function execute () : bool
    {
-      if ($Mode === null) {
-         $Mode = Config::EXECUTE_MODE_REQUIRE;
-      }
-
       try {
          extract($this->parameters);
 
          ob_start();
-         switch ($Mode) {
-            case Config::EXECUTE_MODE_REQUIRE:
-               require (string) $this->Output; break;
-            case Config::EXECUTE_MODE_EVAL:
-               eval('?>'.$this->compiled); break;
-         }
+
+         $Mode = $this->Execution->get();
+         match ($Mode) {
+            Mode::REQUIRE => require (string) $this->Output,
+            Mode::EVAL => eval('?>'.$this->compiled),
+            default => null
+         };
+
          $this->output = ob_get_clean();
 
          return true;
       } catch (\Throwable $Throwable) {
-         Debug('Error!', $Throwable->getMessage(), $Throwable->getLine());
+         Debug(
+            'Error!',
+            $Throwable->getMessage(),
+            $Throwable->getLine()
+         );
+
          $this->output = '';
       }
    }
 }
 
 
-enum Config
+// * Config
+enum Mode
 {
    use \Bootgly\Set;
 
-
-   case EXECUTE_MODE_REQUIRE;
-   case EXECUTE_MODE_EVAL;
-   const EXECUTE_MODE_DEFAULT = self::EXECUTE_MODE_EVAL;
-
-   case COMPILE_ECHO;
-   case COMPILE_IF;
-   case COMPILE_FOREACH;
-   case COMPILE_FOR;
-   case COMPILE_WHILE;
+   case REQUIRE;
+   case EVAL;
 }
