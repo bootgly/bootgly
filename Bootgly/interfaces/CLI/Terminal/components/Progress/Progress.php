@@ -12,7 +12,7 @@ namespace Bootgly\CLI\Terminal\components\Progress;
 
 
 // -abstract
-use Bootgly\__String\Escapeable\Escapeable;
+use Bootgly\__String\Escapeable;
 use Bootgly\__String\Escapeable\cursor;
 use Bootgly\__String\Escapeable\text;
 use Bootgly\templates\ANSI\Escaped;

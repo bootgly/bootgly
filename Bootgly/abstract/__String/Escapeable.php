@@ -8,12 +8,10 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly;
+namespace Bootgly\__String;
 
 
-use Bootgly\__Array;
-
-
-function __Array (array $array) {
-   return new __Array($array);
+trait Escapeable
+{
+   public const _START_ESCAPE = "\033[";
 }

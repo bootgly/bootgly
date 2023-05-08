@@ -155,3 +155,7 @@ class __Array
       }
    }
 }
+
+function __Array (array $array) {
+   return new __Array($array);
+}

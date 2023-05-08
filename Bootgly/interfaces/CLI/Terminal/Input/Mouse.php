@@ -11,7 +11,7 @@
 namespace Bootgly\CLI\Terminal\Input;
 
 
-use Bootgly\__String\Escapeable\Escapeable;
+use Bootgly\__String\Escapeable;
 use Bootgly\__String\Escapeable\mouse\Reportable;
 
 

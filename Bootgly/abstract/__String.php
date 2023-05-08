@@ -261,3 +261,8 @@ final class __String // TODO refactor old class
       return $result;
    }
 }
+
+function __String (string $string)
+{
+   return new __String($string);
+}

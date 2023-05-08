@@ -11,9 +11,7 @@
 namespace Bootgly\__String\Escapeable\text;
 
 
-use Bootgly\__String\Escapeable\ {
-   Escapeable
-};
+use Bootgly\__String\Escapeable;
 
 
 trait Formattable

@@ -2,9 +2,7 @@
 namespace Bootgly\CLI;
 
 use Bootgly\CLI;
-use Bootgly\CLI\Terminal\components\Alert\ {
-   Alert
-};
+use Bootgly\CLI\Terminal\components\Alert\Alert;
 
 $Output = CLI::$Terminal->Output;
 $Output->reset();

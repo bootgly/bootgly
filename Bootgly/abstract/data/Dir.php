@@ -11,7 +11,7 @@
 namespace Bootgly;
 
 
-use Bootgly\Path\Path;
+use Bootgly\__String\Path;
 
 
 class Dir

@@ -12,7 +12,7 @@ namespace Bootgly;
 
 
 use Bootgly\__String;
-use Bootgly\Path\Path;
+use Bootgly\__String\Path;
 use Bootgly\Dir;
 
 

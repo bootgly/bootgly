@@ -24,8 +24,6 @@ trait Set // @ Use with enums
       };
    }
 }
-
-
 /* Example:
 // * Config
 namespace Bootgly\CLI\Terminal\Output\Text;
@@ -52,3 +50,18 @@ $Output->Text->Colors::Bright->set(); // @ Set bright color
 // $Output->Text->Colors->value;
 $Output->Text->Colors->get(); // @ Get configured color
 */
+
+trait Sets // @ Use with enums
+{
+   public function __call (string $name, array $arguments)
+   {
+      static $values = [];
+
+      return match ($name) {
+         'list'  => $values,
+         'get'   => $values[$this->name] ?? null,
+         'set'   => $values[$this->name] = $arguments[0],
+         default => $this
+      };
+   }
+}

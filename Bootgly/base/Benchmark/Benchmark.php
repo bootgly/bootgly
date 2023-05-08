@@ -11,7 +11,7 @@
 namespace Bootgly\Benchmark;
 
 
-use Bootgly\Path\Path;
+use Bootgly\__String\Path;
 use Bootgly\Debugger\Backtrace;
 
 

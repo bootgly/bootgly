@@ -2,9 +2,7 @@
 namespace Bootgly\CLI;
 
 use Bootgly\CLI;
-use Bootgly\CLI\Terminal\components\Progress\ {
-   Progress
-};
+use Bootgly\CLI\Terminal\components\Progress\Progress;
 
 $Output = CLI::$Terminal->Output;
 $Output->reset();

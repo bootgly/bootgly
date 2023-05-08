@@ -13,12 +13,7 @@ namespace Bootgly\CLI\Terminal\components\Table;
 
 use Bootgly\data\Table as DataTable;
 
-use Bootgly\CLI\Terminal\components\Table\ {
-   Cells,
-   Columns,
-   Row,
-   Rows,
-};
+use Bootgly\CLI\Terminal\components\Table\ { Cells, Columns, Row, Rows };
 use Bootgly\CLI\Terminal\Output;
 
 
@@ -33,7 +28,7 @@ class Table
 
    // * Data
    // @ Style
-   protected array $borders;
+   public array $borders;
 
    // * Meta
    // ...
@@ -116,7 +111,7 @@ class Table
             };
          }
 
-         $border = match($position) {
+         $border = match ($position) {
             'top' => $this->borders['top'],
             'mid' => $this->borders['mid'],
             'bottom' => $this->borders['bottom']
