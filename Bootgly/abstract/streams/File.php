@@ -8,12 +8,12 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly;
+namespace Bootgly\streams;
 
 
 use Bootgly\__String;
 use Bootgly\__String\Path;
-use Bootgly\Dir;
+use Bootgly\data\Dir;
 
 
 #[\AllowDynamicProperties]

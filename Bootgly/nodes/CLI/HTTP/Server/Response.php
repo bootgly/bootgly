@@ -11,7 +11,7 @@
 namespace Bootgly\CLI\HTTP\Server;
 
 
-use Bootgly\File;
+use Bootgly\streams\File;
 use Bootgly\Bootgly;
 use Bootgly\CLI\HTTP\Server;
 use Bootgly\CLI\HTTP\Server\Response\Content;

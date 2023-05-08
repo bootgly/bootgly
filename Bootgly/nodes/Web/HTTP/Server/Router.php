@@ -15,7 +15,7 @@ use Bootgly\Bootgly;
 use function Bootgly\__Array;
 use function Bootgly\__String;
 use Bootgly\Debugger;
-use Bootgly\File;
+use Bootgly\streams\File;
 use Bootgly\Web\HTTP\Server;
 use Bootgly\Web\HTTP\Server\Router\Route;
 

@@ -8,7 +8,7 @@ define('BOOTGLY_HOME_DIR', __DIR__ . DIRECTORY_SEPARATOR);
 
 // TODO load with autoloader
 // @ Bootables
-@include_once BOOTGLY_HOME_BASE . '/Bootgly/abstract/@loader.php';
+@include_once BOOTGLY_HOME_BASE . '/Bootgly/abstract/loader.php';
 @include_once BOOTGLY_HOME_BASE . '/Bootgly/base/@loader.php';
 @include_once BOOTGLY_HOME_BASE . '/Bootgly/core/@loader.php';
 // @ Features

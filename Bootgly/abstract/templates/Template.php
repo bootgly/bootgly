@@ -11,7 +11,7 @@
 namespace Bootgly\templates;
 
 
-use Bootgly\File;
+use Bootgly\streams\File;
 
 
 class Template

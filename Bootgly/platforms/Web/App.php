@@ -12,9 +12,8 @@ namespace Bootgly\Web;
 
 
 use Bootgly\Bootgly;
-use Bootgly\{
-   Web
-};
+use Bootgly\streams\File;
+use Bootgly\Web;
 
 
 class App
@@ -56,7 +55,7 @@ class App
                   $this->Web->Router->Route->prefix = $this->pathbase;
                }
 
-               $Static = new \Bootgly\File(Bootgly::$Project->path . $this->Web->Request->path);
+               $Static = new File(Bootgly::$Project->path . $this->Web->Request->path);
                // TODO save and get list of all files in project->path and compare here to optimize performance
                if ($Static->File) {
                   header('Content-Type: '. $Static->type);

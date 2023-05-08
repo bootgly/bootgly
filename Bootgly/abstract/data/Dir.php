@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly;
+namespace Bootgly\data;
 
 
 use Bootgly\__String\Path;

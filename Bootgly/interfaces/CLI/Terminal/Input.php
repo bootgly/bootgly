@@ -11,7 +11,7 @@
 namespace Bootgly\CLI\Terminal;
 
 
-use Bootgly\socket\Pipe;
+use Bootgly\sockets\Pipe;
 
 
 class Input
