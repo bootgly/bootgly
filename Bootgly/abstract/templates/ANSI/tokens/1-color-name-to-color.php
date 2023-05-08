@@ -1,6 +1,6 @@
 <?php
 return [
-   '/@(#[a-zA-Z]+):[\s]?/m' => function ($matches) {
+   '/@(#[a-zA-Z]+):/m' => function ($matches) {
       $color = match ($matches[1]) {
          '#black' => self::_BLACK_FOREGROUND,
          '#red' => self::_RED_FOREGROUND,
