@@ -9,9 +9,8 @@ return [
       $iteratee = $_matches[1];
       $iteration = $_matches[2];
 
-      //Debug($iteratee, $this->parameters[$iteratee]); exit;
       $init = <<<PHP
-      \$_ = new \Bootgly\__Iterable(\$$iteratee);
+      \$_ = new \Bootgly\iterators\Iterator(\$$iteratee);
       PHP;
 
       return <<<PHP

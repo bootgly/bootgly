@@ -6,10 +6,9 @@ require '@traits.php';
 require '__Array.php';
 // __Class
 require '__Class.php';
-// __Iterable
-require '__Iterable.php';
 // __String
 require '__String.php';
+
 // > Escapeable
 require '__String/Escapeable.php';
 // > Escapeable/cursor
@@ -27,17 +26,24 @@ require '__String/Escapeable/viewport/Scrollable.php';
 // > Path
 require '__String/Path.php';
 
+
 // - data
 // Dir
 require 'data/Dir.php';
 // Table
 require 'data/Table.php';
+// - iterators
+require 'iterators/Iterator.php';
+
 
 // - streams
 // File
 require 'streams/File.php';
+
+
 // - socket
 require 'sockets/Pipe.php';
+
 
 // - templates
 require 'templates/ANSI/Escaped.php';

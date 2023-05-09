@@ -8,13 +8,13 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly;
+namespace Bootgly\iterators;
 
 
-use Iterator;
+use Iterator as Iterating;
 
 
-class __Iterable implements Iterator
+class Iterator implements Iterating
 {
    private array|object $iteratee;
    public int $index;
