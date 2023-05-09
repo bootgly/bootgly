@@ -11,9 +11,7 @@
 namespace Bootgly\Logger;
 
 
-use Bootgly\ {
-   Logs
-};
+use Bootgly\Logs;
 
 
 class Logger implements Logs

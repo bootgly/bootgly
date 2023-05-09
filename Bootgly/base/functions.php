@@ -11,9 +11,7 @@
 #namespace Debugger;
 
 
-use Bootgly\ {
-   Debugger
-};
+use Bootgly\Debugger;
 
 
 function debug (...$vars)

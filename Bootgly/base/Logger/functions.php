@@ -11,7 +11,7 @@
 namespace Bootgly\Logger;
 
 
-function Log ($data)
+function Log ($data) : Logger
 {
    return new Logger($data);
 }
