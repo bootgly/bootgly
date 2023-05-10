@@ -14,6 +14,11 @@ define('BOOTGLY_HOME_DIR', __DIR__ . DIRECTORY_SEPARATOR);
 @include_once BOOTGLY_HOME_BASE . '/Bootgly/-modules/loader.php';
 @include_once BOOTGLY_HOME_BASE . '/Bootgly/-nodes/loader.php';
 @include_once BOOTGLY_HOME_BASE . '/Bootgly/-platforms/loader.php';
+
+// @ Interfaces
+@include_once BOOTGLY_HOME_BASE . '/Bootgly/CLI.php';
+@include_once BOOTGLY_HOME_BASE . '/Bootgly/Web.php';
+
 // @ Workables
 // composer?
 $installed = BOOTGLY_HOME_BASE . '/../../composer/installed.php';

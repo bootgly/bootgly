@@ -5,7 +5,7 @@ require 'API/Server.php';
 
 
 // ! CLI
-require 'CLI.php';
+#require 'CLI.php';
 
 // ? Commands
 require 'CLI/Commands.php';
@@ -53,7 +53,7 @@ require 'CLI/Terminal/components/Table/Rows.php';
 
 
 // ! Web
-require 'Web.php';
+#require 'Web.php';
 require 'Web/Connections.php'; // @interface
 require 'Web/Packages.php';    // @interface
 require 'Web/Servers.php';     // @interface
