@@ -53,9 +53,9 @@ class Process
    public static int $master;
    public static array $children = [];
    // File
-   public static $commandFile = BOOTGLY_HOME_DIR . '/workspace/server.command';
-   public static $pidFile = BOOTGLY_HOME_DIR . '/workspace/server.pid';
-   public static $pidLockFile = BOOTGLY_HOME_DIR . '/workspace/server.pid.lock';
+   public static $commandFile = BOOTGLY_WORKABLES_DIR . '/workspace/server.command';
+   public static $pidFile = BOOTGLY_WORKABLES_DIR . '/workspace/server.pid';
+   public static $pidLockFile = BOOTGLY_WORKABLES_DIR . '/workspace/server.pid.lock';
 
 
    public function __construct (Server &$Server)
@@ -250,7 +250,7 @@ class Process
    {
       $this->log("forking $workers workers... ", self::LOG_NOTICE_LEVEL);
 
-      $script = BOOTGLY_HOME_DIR . $_SERVER['PHP_SELF'];
+      $script = BOOTGLY_WORKABLES_DIR . $_SERVER['PHP_SELF'];
 
       for ($i = 0; $i < $workers; $i++) {
          $pid = pcntl_fork();

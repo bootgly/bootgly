@@ -12,9 +12,10 @@ namespace Bootgly; // TODO remove namespace
 
 
 use Bootgly\templates\Template;
+use Bootgly\streams\File;
 
 
-abstract class Bootgly // TODO move
+abstract class Bootgly
 {
    public static Project $Project;
    public static Template $Template;

@@ -39,6 +39,6 @@ class Logger implements Logs
 
    public function log ($message)
    {
-      error_log($message, 3, BOOTGLY_HOME_BASE . '/workspace/logs/bootgly.log');
+      error_log($message, 3, BOOTGLY_WORKABLES_BASE . '/workspace/logs/bootgly.log');
    }
 }

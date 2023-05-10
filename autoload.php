@@ -1,6 +1,4 @@
 <?php
-namespace Bootgly; // TODO remove
-
 #@include_once __DIR__ . '/@/imports/autoload.php';
 
 define('BOOTGLY_HOME_BASE', __DIR__);
@@ -27,13 +25,13 @@ if ( is_file($installed) ) {
       $root = realpath($root);
    }
 
-   define('BOOTGLY_WORKABLES_BASE', $root ?? BOOTGLY_HOME_BASE); // TODO rename
+   define('BOOTGLY_WORKABLES_BASE', $root ?? BOOTGLY_HOME_BASE);
 } else {
-   define('BOOTGLY_WORKABLES_BASE', BOOTGLY_HOME_BASE); // TODO rename
+   define('BOOTGLY_WORKABLES_BASE', BOOTGLY_HOME_BASE);
 }
 define('BOOTGLY_WORKABLES_DIR', BOOTGLY_HOME_BASE . DIRECTORY_SEPARATOR);
 
 // ! Bootgly
 require BOOTGLY_HOME_DIR . 'Bootgly.php';
 
-Bootgly::boot();
+\Bootgly\Bootgly::boot();

@@ -15,24 +15,10 @@ use Bootgly\__Array;
 use Bootgly\__String;
 
 
-class Path
+class Path // TODO refactor
 {
    const DIR_ = DIRECTORY_SEPARATOR;
    const PATH_ = PATH_SEPARATOR;
-   // ?
-   const DOCUMENTATION_CURRENT = '!';
-   const EXCLUDED_CURRENT = '&';
-   // ? I/O
-   // Input («)
-   const INPUT_CURRENT = '«';
-   const INPUT_DIR_RELATIVE = self::INPUT_CURRENT . self::DIR_;
-   // Output (»)
-   const OUTPUT_CURRENT = '»';
-   const OUTPUT_DIR_RELATIVE = self::OUTPUT_CURRENT . self::DIR_;
-   // ? Test (✓)
-   const TEST_CURRENT = '✓';
-   const TEST_DIR_RELATIVE = self::TEST_CURRENT . self::DIR_;
-   const TEST_DIR = BOOTGLY_HOME_DIR . self::TEST_DIR_RELATIVE;
 
 
    public $Path = '';

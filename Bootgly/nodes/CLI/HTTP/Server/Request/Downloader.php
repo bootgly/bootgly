@@ -112,7 +112,7 @@ class Downloader
                   $error = 0;
                   $tempFile = '';
                   $size = \strlen($boundaryValue);
-                  $tempUploadedDir = BOOTGLY_HOME_BASE . '/workspace/temp/';
+                  $tempUploadedDir = BOOTGLY_WORKABLES_BASE . '/workspace/temp/';
 
                   if (! $tempUploadedDir) {
                      $error = UPLOAD_ERR_NO_TMP_DIR;

@@ -66,7 +66,7 @@ class Server extends TCP\Server implements HTTP
    {
       // * Config
       if ($production) {
-         API\Server::$production = BOOTGLY_HOME_DIR . 'projects/cli.http-server.api.php';
+         API\Server::$production = BOOTGLY_WORKABLES_DIR . 'projects/cli.http-server.api.php';
       }
 
       // * Data
