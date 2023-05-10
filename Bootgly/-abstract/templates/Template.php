@@ -88,7 +88,7 @@ class Template
 
       $this->cache();
 
-      // $this->debug();
+      #$this->debug();
       $this->execute();
 
       return $this;
@@ -117,7 +117,7 @@ class Template
 
    public function debug ()
    {
-      Debug('<code>'.htmlspecialchars($this->compiled).'</code>');
+      debug('<code>'.htmlspecialchars($this->compiled).'</code>');
    }
    private function execute () : bool
    {
@@ -134,16 +134,18 @@ class Template
          };
 
          $this->output = ob_get_clean();
-
-         return true;
       } catch (\Throwable $Throwable) {
-         Debug(
+         ob_end_clean();
+
+         debug(
             'Error!',
             $Throwable->getMessage(),
             $Throwable->getLine()
          );
 
          $this->output = '';
+      } finally {
+         return true;
       }
    }
 }

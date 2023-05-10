@@ -71,7 +71,8 @@ class Meta
          case 'status':
             $status = match ($value) {
                (int) $value => $value . ' ' . Server::RESPONSE_STATUS[$value],
-               (string) $value => array_search($value, Server::RESPONSE_STATUS) . ' ' . $value
+               (string) $value => array_search($value, Server::RESPONSE_STATUS) . ' ' . $value,
+               default => ''
             };
 
             @[$code, $message] = explode(' ', $status);

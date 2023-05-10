@@ -15,7 +15,7 @@ namespace Bootgly;
 require __DIR__ . '/../autoload.php';
 
 
-use Bootgly\CLI\HTTP;
+use Bootgly\Web\HTTP;
 
 
 $HTTPServer = new HTTP\Server;

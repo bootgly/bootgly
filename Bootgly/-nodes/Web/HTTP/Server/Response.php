@@ -11,8 +11,10 @@
 namespace Bootgly\Web\HTTP\Server;
 
 
+use Bootgly\Bootgly; // TODO remove
+
 use Bootgly\streams\File;
-use Bootgly\Bootgly;
+
 use Bootgly\Web\HTTP\Server;
 use Bootgly\Web\HTTP\Server\Response\Content;
 use Bootgly\Web\HTTP\Server\Response\Meta;
@@ -64,10 +66,8 @@ class Response
       $this->Content = new Content;
       $this->Header = new Header;
 
-
       // * Config
       $this->debugger = true;
-
       // * Data
       $this->raw = '';
 
@@ -79,7 +79,6 @@ class Response
 
       // TODO rename to sources?
       $this->resources = $resources !== null ? $resources : ['JSON', 'JSONP', 'View', 'HTML/pre'];
-
       // * Meta
       $this->resource = null;
       // @ Status
@@ -92,7 +91,6 @@ class Response
       #$this->static = true;
       #$this->dynamic = false;
 
-
       $this->stream = false;
       $this->chunked = false;
       $this->encoded = false;
@@ -103,7 +101,7 @@ class Response
          // ? Response Meta
          case 'status':
          case 'code':
-            return http_response_code();
+            return $this->Meta->code;
          // ? Response Headers
          case 'headers':
             return $this->Header->fields;
@@ -132,7 +130,7 @@ class Response
       switch ($name) {
          case 'status':
          case 'code':
-            http_response_code($value);
+            $this->Meta->status = $value;
 
             return $this;
          default: // @ Set custom resource
@@ -171,8 +169,9 @@ class Response
             return $this->$name(...$arguments);
       }
    }
-   public function __invoke
-   ($x = null, ? int $status = 200, ? array $headers = [], ? string $content = '', ? string $raw = '')
+   public function __invoke (
+      $x = null, ? int $status = 200, ? array $headers = [], ? string $content = '', ? string $raw = ''
+   )
    {
       if ($x === null && $raw) {
          $this->raw = $raw;
@@ -187,6 +186,24 @@ class Response
       $this->prepare();
 
       return $this->process($x);
+   }
+
+   public function reset ()
+   {
+      /*
+      // * Data
+      $this->Content->raw = '';
+      $this->raw = '';
+      // * Meta
+      $this->chunked = false;
+      $this->encoded = false;
+      $this->stream = false;
+
+      $this->Meta->__construct();
+      $this->Header->__construct();
+      #$this->Content->__construct();
+      */
+      $this->__construct();
    }
 
    public function prepare (? string $resource = null)
@@ -341,11 +358,6 @@ class Response
        */
       $Request = &Server::$Request;
       $Response = &Server::$Response;
-      $Route = &Server::$Router->Route;
-      // TODO add variables dinamically according to loaded modules and loaded web classes
-
-      $API = Server::$Web->API ?? null;
-      $App = Server::$Web->App ?? null;
 
       // @ Output/Buffer start()
       ob_start();
@@ -353,7 +365,7 @@ class Response
       try {
          // @ Isolate context with anonymous static function
          (static function (string $__file__, ?array $__data__)
-            use ($Request, $Response, $Route, $API, $App) {
+            use ($Request, $Response) {
             if ($__data__ !== null) {
                extract($__data__);
             }
@@ -372,6 +384,44 @@ class Response
       }
 
       return $this;
+   }
+   public function compress (string $raw, string $method = 'gzip', int $level = 9, ? int $encoding = null)
+   {
+      $encoded = false;
+      $deflated = false;
+      $compressed = false;
+
+      try {
+         switch ($method) {
+            case 'gzip':
+               $encoded = @gzencode($raw, $level, $encoding);
+               break;
+            case 'deflate':
+               $deflated = @gzdeflate($raw, $level, $encoding);
+               break;
+            case 'compress':
+               $compressed = @gzcompress($raw, $level, $encoding);
+               break;
+         }
+      } catch (\Throwable) {
+         // ...
+      }
+
+      if ($encoded) {
+         $this->encoded = true;
+         $this->Header->set('Content-Encoding', 'gzip');
+         return $encoded;
+      } else if ($deflated) {
+         $this->encoded = true;
+         $this->Header->set('Content-Encoding', 'deflate');
+         return $deflated;
+      } else if ($compressed) {
+         $this->encoded = true;
+         $this->Header->set('Content-Encoding', 'gzip');
+         return $compressed;
+      }
+
+      return false;
    }
 
    public function send ($body = null, ...$options) : self
@@ -426,7 +476,6 @@ class Response
                case 'image/x-icon':
                case 'ico':
                   $this->Header->set('Content-Type', 'image/x-icon');
-                  $this->Header->set('Content-Length', $File->size);
 
                   $body = $File->contents;
 
@@ -438,15 +487,10 @@ class Response
 
                   $Request = &Server::$Request;
                   $Response = &Server::$Response;
-                  $Route = &Server::$Router->Route;
-
-                  // TODO add variables dinamically according to loaded modules and loaded web classes
-                  $API = Server::$Web->API ?? null;
-                  $App = Server::$Web->App ?? null;
 
                   // @ Isolate context with anonymous static function
                   (static function (string $__file__)
-                     use ($Request, $Response, $Route, $API, $App) {
+                     use ($Request, $Response) {
                      require $__file__;
                   })($File);
 
@@ -456,7 +500,7 @@ class Response
             break;
          default: // * HTTP Status Code || (string) $body
             if ($body === null) {
-               $this->end();
+               $this->sent = true;
                return $this;
             }
 
@@ -471,16 +515,14 @@ class Response
       }
 
       // @ Output
-      print $body ?? $this->body;
+      $this->Content->raw = $body ?? $this->body;
 
-      $this->end();
+      $this->sent = true;
 
       return $this;
    }
    public function upload ($content = null, int $offset = 0, ? int $length = null, bool $close = true) : self
    {
-      // TODO support to upload multiple files
-
       if ($content === null) {
          $content = $this->body;
       }
@@ -496,51 +538,267 @@ class Response
          return $this;
       }
 
-      // @ Set HTTP headers
-      $this->Header->prepare([
-         'Content-Type' => 'application/octet-stream',
-         'Content-Disposition' => 'attachment; filename="'.$File->basename.'"',
+      $size = $File->size;
 
+      // @ Prepare HTTP headers
+      $this->Header->prepare([
          'Last-Modified' => gmdate('D, d M Y H:i:s', $File->modified) . ' GMT',
          // Cache
          'Cache-Control' => 'no-cache, must-revalidate',
          'Expires' => '0',
       ]);
 
-      // @ Send File Content
-      $this->Header->set('Content-Length', $File->size);
+      // @ Return null Response if client Purpose === prefetch
+      if (Server::$Request->Header->get('Purpose') === 'prefetch') {
+         $this->Meta->status = 204;
+         $this->Header->set('Cache-Control', 'no-store');
+         $this->Header->set('Expires', '0');
+         return $this;
+      }
+
+      $ranges = [];
+      $parts = [];
+      if ( $Range = Server::$Request->Header->get('Range') ) {
+         // @ Parse Client range requests
+         $ranges = Server::$Request->range($size, $Range);
+
+         switch ($ranges) {
+            case -2: // Malformed Range header string
+               return $this->end(400);
+            case -1:
+               return $this->end(416, $size);
+            default:
+               $type = array_pop($ranges);
+               // @ Check Range type
+               if ($type !== 'bytes') {
+                  return $this->end(416, $size);
+               }
+
+               foreach ($ranges as $range) {
+                  $start = $range['start'];
+                  $end = $range['end'];
+
+                  $offset = $start;
+                  $length = 0;
+                  if ($end > $start) {
+                     $length += ($end - $start);
+                  }
+                  $length += 1;
+
+                  $parts[] = [
+                     'offset' => $offset,
+                     'length' => $length
+                  ];
+               }
+         }
+      } else {
+         // @ Set User offset / length
+         $ranges[] = [
+            'start' => $offset,
+            'end' => $length
+         ];
+         $parts[] = [
+            'offset' => $offset,
+            'length' => $length ?? $size - $offset
+         ];
+      }
+
+      // ! Header
+      $rangesCount = count($ranges);
+      // @ Set Content Length Header
+      if ($rangesCount === 1) {
+         $this->Header->set('Content-Length', $parts[0]['length']);
+      }
+      // @ Set HTTP range requests Headers
+      $pads = [];
+      if ($ranges[0]['end'] !== null || $ranges[0]['start']) {
+         // @ Set Response status
+         $this->Meta->status = 206; // 206 Partial Content
+
+         if ($rangesCount > 1) { // @ HTTP Multipart ranges
+            $boundary = str_pad(++Server::$Request::$multiparts, 20, '0', STR_PAD_LEFT);
+
+            $this->Header->set('Content-Type', 'multipart/byteranges; boundary=' . $boundary);
+
+            $length = 0;
+            foreach ($ranges as $index => $range) {
+               $start = $range['start'];
+               $end = $range['end'];
+
+               if ($end > $size - 1) $end += 1;
+
+               $prepend = <<<HTTP_RAW
+               \r\n--$boundary
+               Content-Type: application/octet-stream
+               Content-Range: bytes {$start}-{$end}/{$size}\r\n\r\n
+               HTTP_RAW;
+
+               $append = null;
+               if ($index === $rangesCount - 1) {
+                  $append = <<<HTTP_RAW
+                  \r\n--$boundary--\r\n
+                  HTTP_RAW;
+               }
+
+               $length += $parts[$index]['length'];
+               $length += strlen($prepend);
+               $length += strlen($append ?? '');
+
+               $pads[] = [
+                  'prepend' => $prepend,
+                  'append' => $append
+               ];
+            }
+
+            $this->Header->set('Content-Length', $length);
+         } else { // @ HTTP Single part ranges
+            $start = $ranges[0]['start'];
+            $end = $ranges[0]['end'];
+
+            if ($end > $size - 1) $end += 1;
+
+            $this->Header->set('Content-Range', "bytes {$start}-{$end}/{$size}");
+         }
+      } else {
+         $this->Header->set('Accept-Ranges', 'bytes');
+      }
+      // @ Set Content-Disposition Header
+      if ($rangesCount === 1) {
+         $this->Header->set('Content-Type', 'application/octet-stream');
+         $this->Header->set('Content-Disposition', 'attachment; filename="'.$File->basename.'"');
+      }
+      // @ Build Response Header
       $this->Header->build();
 
-      flush();
+      // @ Prepare upstream
+      $this->stream = true;
+      // @ Prepare writing
+      $this->files[] = [
+         'file' => $File->File, // @ Set file path to open handler
 
-      $File->read(); // FIX MEMORY RAM USAGE OR LIMIT FILE SIZE TO UPLOAD
+         'parts' => $parts,
+         'pads' => $pads,
 
-      $this->end();
+         'close' => $close
+      ];
+
+      $this->sent = true;
+
+      return $this;
+   }
+   public function output ($Package, &$length)
+   {
+      if (! $this->stream && ! $this->chunked && ! $this->encoded) {
+         // ? Response Content
+         $this->Content->length = strlen($this->Content->raw);
+         // ? Response Header
+         $this->Header->set('Content-Length', $this->Content->length);
+         // ? Response Meta
+         // ...
+      }
+
+      $this->raw = <<<HTTP_RAW
+      {$this->Meta->raw}\r
+      {$this->Header->raw}\r
+      \r
+      {$this->Content->raw}
+      HTTP_RAW;
+
+      if ($this->stream) {
+         $length = strlen($this->Meta->raw) + 1 + strlen($this->Header->raw) + 5;
+
+         $Package->uploading = $this->files;
+
+         $this->files = [];
+         $this->stream = false;
+      }
+
+      return $this->raw;
+   }
+
+   /**
+    * Sets the authentication headers for basic authentication with 401 (Unauthorized) HTTP status code.
+    *
+    * @param string $realm The realm string to set in the WWW-Authenticate header. Default is "Protected area".
+    *
+    * @return self Returns Response.
+    */
+   public function authenticate (string $realm = 'Protected area') : self
+   {
+      $this->code = 401;
+      $this->Header->set('WWW-Authenticate', 'Basic realm="'.$realm.'"');
+      $this->sent = true;
+
+      return $this;
+   }
+   /**
+    * Redirects to a new URI. Default return is 307 for GET (Temporary Redirect) and 303 (See Other) for POST.
+    *
+    * @param string $uri The new URI to redirect to.
+    * @param int $code The HTTP status code to use for the redirection.
+    *
+    *
+    * @return self Returns Response.
+    */
+   public function redirect (string $uri, ? int $code = null): self
+   {
+      // @ Set default code
+      if ($code === null) {
+         $code = match (Server::$Request->method) {
+            'POST' => 303, // See Other
+            'GET'  => 307, // Temporary Redirect
+            default => null
+         };
+      }
+
+      switch ($code) {
+         case 300: // Multiple Choices
+         case 301: // Moved Permanently
+         case 302: // Found (or Moved Temporarily)
+         case 303: // See Other
+         case 307: // Temporary Redirect
+         case 308: // Permanent Redirect
+            $this->code = $code;
+            break;
+         default:
+            // TODO throw invalid code;
+            return $this;
+      }
+
+      $this->Header->set('Location', $uri);
+      $this->sent = true;
 
       return $this;
    }
 
-   public function redirect (string $uri, $code = 302) // Code 302 = temporary; 301 = permanent;
+   public function end (int|string|null $status = null, ? string $context = null) : self
    {
-      // $this->code = $code;
-      header('Location: '.$uri, true, $code);
-      $this->end();
-   }
+      if ($status) {
+         // @ Preset
+         switch ($status) {
+            case 400: // Bad Request
+            case 416: // Range Not Satisfiable
+               $this->Meta->status = 416;
+               // Clean prepared headers / header fields already set
+               $this->Header->clean();
+               $this->Content->raw = ' '; // Needs body non-empty
+               break;
+            default:
+               $this->status = $status;
+         }
 
-   public function authenticate (string $realm = 'Protected area')
-   {
-      if (Server::$Request->headers['x-requested-with'] !== 'XMLHttpRequest') {
-         header('WWW-Authenticate: Basic realm="'.$realm.'"');
+         // @ Contextualize
+         switch ($status) {
+            case 416: // Range Not Satisfiable
+               if ($context) {
+                  $this->Header->set('Content-Range', 'bytes */' . $context);
+               }
+               break;
+         }
       }
 
-      $this->code = 401;
-      // header('HTTP/1.0 401 Unauthorized');
-   }
-
-   public function end ($status = null)
-   {
       $this->sent = true;
 
-      exit($status);
+      return $this;
    }
 }

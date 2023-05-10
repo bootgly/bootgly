@@ -12,7 +12,6 @@ namespace Bootgly\Web\HTTP\Server\Request;
 
 
 use Bootgly\Web\HTTP\Server\Request;
-use Bootgly\Web\HTTP\Server\Request\_\Header;
 use Bootgly\Web\HTTP\Server\Request\_\Content;
 
 

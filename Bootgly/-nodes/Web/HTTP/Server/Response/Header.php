@@ -47,6 +47,7 @@ class Header
       $this->raw = '';
       $this->sent = false;
 
+
       $this->Cookie = new Cookie($this);
    }
    public function __get (string $name)
@@ -59,8 +60,6 @@ class Header
          // * Data
          case 'fields':
          case 'headers':
-            $this->fields = apache_response_headers();
-
             return $this->fields;
          // * Meta
          case 'queued':
@@ -75,7 +74,7 @@ class Header
             return $this->raw;
 
          case 'sent':
-            return headers_sent();
+            return $this->sent;
 
          default:
             return $this->get($name);
@@ -87,7 +86,6 @@ class Header
          // * Config
          case 'preset':
             $this->preset = (array) $value;
-
             break;
          case 'prepared':
          // * Data
@@ -108,11 +106,45 @@ class Header
    public function clean ()
    {
       $this->fields = [];
+      $this->prepared = [];
    }
 
    public function prepare (array $fields) // @ Prepare to build
    {
       $this->prepared = $fields;
+   }
+   public function append (string $field, string $value = '', ? string $separator = ', ') // TODO refactor
+   {
+      // TODO map separator (with const?) Header that can have only value to append, only entire header, etc.
+
+      if ( isSet($this->fields[$field]) ) {
+         $this->fields[$field] .= $separator . $value;
+      } else {
+         $this->fields[$field] = $value;
+      }
+   }
+   public function queue (string $field, string $value = '')
+   {
+      $this->queued[] = "$field: $value";
+   }
+
+   public function translate (string $field, ...$values) : string
+   {
+      switch ($field) {
+         case 'Content-Range':
+            // @ bytes Context
+            $start = $values[0];
+            $end = $values[1];
+            $size = $values[2];
+
+            if ($end > $size - 1) {
+               $end += 1;
+            }
+
+            return "bytes {$start}-{$end}/{$size}";
+         default:
+            return '';
+      }
    }
 
    // TODO increase performance
@@ -154,26 +186,8 @@ class Header
       return (string) $this->fields[$name] ?? (string) $this->fields[strtolower($name)] ?? '';
    }
 
-   public function set (string $field, string $value = '') // TODO refactor
+   public function set (string $field, string $value)
    {
       $this->fields[$field] = $value;
-
-      header($field . ': ' . $value, true);
-   }
-   public function append (string $field, string $value = '', ? string $separator = ', ') // TODO refactor
-   {
-      // TODO map separator (with const?) Header that can have only value to append, only entire header, etc.
-
-      if ( isSet($this->fields[$field]) ) {
-         $this->fields[$field] .= $separator . $value;
-      } else {
-         $this->fields[$field] = $value;
-      }
-
-      header($field . ': ' . $value, false);
-   }
-   public function queue (string $field, string $value = '')
-   {
-      $this->queued[] = "$field: $value";
    }
 }
