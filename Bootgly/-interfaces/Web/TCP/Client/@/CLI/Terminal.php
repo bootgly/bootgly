@@ -12,12 +12,8 @@ namespace Bootgly\Web\TCP\Client\_\CLI;
 
 
 use Bootgly\CLI;
-use Bootgly\CLI\Terminal\_\ {
-   Logger\Logging
-};
-use Bootgly\Web\TCP\ {
-   Client
-};
+use Bootgly\CLI\Terminal\_\Logger\Logging;
+use Bootgly\Web\TCP\Client;
 
 
 class Terminal extends CLI\Terminal

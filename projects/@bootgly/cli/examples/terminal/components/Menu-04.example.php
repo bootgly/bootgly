@@ -3,9 +3,7 @@ namespace Bootgly\CLI;
 
 
 use Bootgly\CLI;
-use Bootgly\CLI\Terminal\components\Menu\ {
-   Menu,
-};
+use Bootgly\CLI\Terminal\components\Menu\Menu;
 
 $Input = CLI::$Terminal->Input;
 $Output = CLI::$Terminal->Output;

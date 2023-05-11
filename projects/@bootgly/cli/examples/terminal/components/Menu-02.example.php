@@ -2,19 +2,11 @@
 namespace Bootgly\CLI;
 
 
-use Bootgly\ {
-   CLI
-};
-use Bootgly\CLI\Terminal\components\Menu\ {
-   Menu,
-};
-use Bootgly\CLI\Terminal\components\Menu\Items\ {
-   Option,
-};
-use Bootgly\CLI\Terminal\components\Menu\Items\extensions\Divisors\ {
-   Divisors,
-   Divisor,
-};
+use Bootgly\CLI;
+use Bootgly\CLI\Terminal\components\Menu\Menu;
+use Bootgly\CLI\Terminal\components\Menu\Items\Option;
+use Bootgly\CLI\Terminal\components\Menu\Items\extensions\Divisors\Divisors;
+use Bootgly\CLI\Terminal\components\Menu\Items\extensions\Divisors\Divisor;
 
 
 $Input = CLI::$Terminal->Input;

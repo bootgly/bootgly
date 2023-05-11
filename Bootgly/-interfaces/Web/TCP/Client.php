@@ -13,28 +13,14 @@ namespace Bootgly\Web\TCP;
 
 // use
 use Closure;
-use Bootgly\ {
-   Debugger,
-};
-use Bootgly\Logger\ {
-   Logger
-};
-use Bootgly\CLI\Terminal\_\Logger\ {
-   Logging,
-};
-use Bootgly\Web\_\Events\ {
-   Select
-};
-use Bootgly\Web\TCP\Client\_\ {
-   Process,
-};
-use Bootgly\Web\TCP\Client\_\CLI\ {
-   Terminal,
-};
+use Bootgly\Debugger;
+use Bootgly\Logger\Logger;
+use Bootgly\CLI\Terminal\_\Logger\Logging;
+use Bootgly\Web\_\Events\Select;
+use Bootgly\Web\TCP\Client\_\Process;
+use Bootgly\Web\TCP\Client\_\CLI\Terminal;
 // inherit
-use Bootgly\Web\TCP\Client\ {
-   Connections,
-};
+use Bootgly\Web\TCP\Client\Connections;
 
 
 class Client

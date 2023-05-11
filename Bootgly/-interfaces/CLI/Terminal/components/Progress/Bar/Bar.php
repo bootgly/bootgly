@@ -12,9 +12,7 @@ namespace Bootgly\CLI\Terminal\components\Progress\Bar;
 
 
 use Bootgly\CLI\Terminal;
-use Bootgly\CLI\Terminal\components\Progress\ {
-   Progress
-};
+use Bootgly\CLI\Terminal\components\Progress\Progress;
 
 
 class Bar

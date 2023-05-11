@@ -1,11 +1,7 @@
 <?php
 
-use Bootgly\Logger\ {
-   Logger
-};
-use Bootgly\Web\TCP\Server\Connections\ {
-   Connection
-};
+use Bootgly\Logger\Logger;
+use Bootgly\Web\TCP\Server\Connections\Connection;
 
 use function Bootgly\formatBytes;
 

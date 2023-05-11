@@ -13,9 +13,7 @@ namespace Bootgly\Web\_\Events;
 
 use Bootgly\Event;
 
-use Bootgly\CLI\Terminal\_\ {
-   Logger\Logging
-};
+use Bootgly\CLI\Terminal\_\Logger\Logging;
 
 use Bootgly\Web\Connections;
 

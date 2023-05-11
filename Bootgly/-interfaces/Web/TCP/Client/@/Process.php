@@ -12,20 +12,12 @@ namespace Bootgly\Web\TCP\Client\_;
 
 
 // use
-use Bootgly\Logger\ {
-   Logger,
-};
-use Bootgly\Event\ {
-   Timer,
-};
+use Bootgly\Logger\Logger;
+use Bootgly\Event\Timer;
 // ?
-use Bootgly\Web\TCP\ {
-   Client,
-};
+use Bootgly\Web\TCP\Client;
 // extend
-use Bootgly\CLI\Terminal\_\Logger\ {
-   Logging,
-};
+use Bootgly\CLI\Terminal\_\Logger\Logging;
 
 
 class Process

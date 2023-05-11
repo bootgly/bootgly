@@ -12,37 +12,19 @@ namespace Bootgly\Web\TCP;
 
 
 // use
-use Bootgly\ {
-   Debugger,
-   Logs,
-   API,
-};
-use Bootgly\Logger\ {
-   Logger,
-};
-use Bootgly\Event\ {
-   Timer
-};
+use Bootgly\Debugger;
+use Bootgly\Logs;
+use Bootgly\API;
+use Bootgly\Logger\Logger;
+use Bootgly\Event\Timer;
 // extend
-use Bootgly\CLI\Terminal\_\Logger\ {
-   Logging
-};
-use Bootgly\Web\_\Events\ {
-   Select,
-};
-use Bootgly\Web\ {
-   Servers,
-};
-use Bootgly\Web\TCP\Server\_\ {
-   Process,
-};
-use Bootgly\Web\TCP\Server\_\CLI\ {
-   Terminal,
-};
+use Bootgly\CLI\Terminal\_\Logger\Logging;
+use Bootgly\Web\_\Events\Select;
+use Bootgly\Web\Servers;
+use Bootgly\Web\TCP\Server\_\Process;
+use Bootgly\Web\TCP\Server\_\CLI\Terminal;
 // inherit
-use Bootgly\Web\TCP\Server\ {
-   Connections,
-};
+use Bootgly\Web\TCP\Server\Connections;
 
 
 class Server implements Servers, Logs

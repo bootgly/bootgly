@@ -34,8 +34,8 @@ include 'Bootgly/-abstract/__String/Path.php';
 include 'Bootgly/-abstract/data/Dir.php';
 include 'Bootgly/-abstract/data/Table.php';
 include 'Bootgly/-abstract/iterators/Iterator.php';
-include 'Bootgly/-abstract/streams/File.php';
 include 'Bootgly/-abstract/sockets/Pipe.php';
+include 'Bootgly/-abstract/streams/File.php';
 include 'Bootgly/-abstract/templates/ANSI/Escaped.php';
 include 'Bootgly/-abstract/templates/Template.php';
 // 1-base
@@ -50,7 +50,6 @@ include 'Bootgly/-base/Logger/functions.php';
 include 'Bootgly/-base/functions.php';
 // 2-core
 include 'Bootgly/-core/Database.php';
-include 'Bootgly/-core/Event/Event.php';
 include 'Bootgly/-core/Event/Loops.php';
 include 'Bootgly/-core/Event/On.php';
 include 'Bootgly/-core/Event/Timer.php';

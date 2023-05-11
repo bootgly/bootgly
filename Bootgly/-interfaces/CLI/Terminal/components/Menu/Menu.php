@@ -14,15 +14,12 @@ namespace Bootgly\CLI\Terminal\components\Menu;
 use Bootgly\CLI\Terminal\Input;
 use Bootgly\CLI\Terminal\Output;
 
-use Bootgly\CLI\Terminal\components\Menu\Items\ {
-   Option,
-   Options,
-};
+use Bootgly\CLI\Terminal\components\Menu\Items\Option;
+use Bootgly\CLI\Terminal\components\Menu\Items\Options;
+
 // TODO remove:
-use Bootgly\CLI\Terminal\components\Menu\Items\extensions\ {
-   Divisors\Divisor,
-   Headers\Header,
-};
+use Bootgly\CLI\Terminal\components\Menu\Items\extensions\Divisors\Divisor;
+use Bootgly\CLI\Terminal\components\Menu\Items\extensions\Headers\Header;
 
 
 class Menu
