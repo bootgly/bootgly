@@ -1,10 +1,10 @@
 <?php
 // ? Database
-require 'Database.php';
+include 'Database.php';
 // ? Event
-require 'Event/Event.php';
-require 'Event/Loops.php'; // @interface
-require 'Event/On.php';
-require 'Event/Timer.php';
+include 'Event/Event.php';
+include 'Event/Loops.php'; // @interface
+include 'Event/On.php';
+include 'Event/Timer.php';
 // ? Project
-require 'Project.php';
+include 'Project.php';

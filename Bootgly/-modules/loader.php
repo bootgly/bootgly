@@ -2,5 +2,5 @@
 // ! Web
 // protocols
 // ? HTTP
-require 'Web/protocols/HTTP.php';
-require 'Web/protocols/HTTP/Request/Ranging.php'; // @trait
+include 'Web/protocols/HTTP.php';
+include 'Web/protocols/HTTP/Request/Ranging.php'; // @trait

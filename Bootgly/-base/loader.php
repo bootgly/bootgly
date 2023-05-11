@@ -1,19 +1,19 @@
 <?php
-require 'Debugger.php';
+include 'Debugger.php';
 
 // @interfaces
-require 'Logs.php';
-require 'Tests.php';
+include 'Logs.php';
+include 'Tests.php';
 
 // ! Benchmark
-require 'Benchmark/Benchmark.php';
+include 'Benchmark/Benchmark.php';
 // ! Debugger
-require 'Debugger/Backtrace.php';
+include 'Debugger/Backtrace.php';
 // ! Logger
-require 'Logger/Logger.php';
-require 'Logger/Logging.php';
-require 'Logger/functions.php';
+include 'Logger/Logger.php';
+include 'Logger/Logging.php';
+include 'Logger/functions.php';
 // ! Tester
 // TODO
 
-require 'functions.php';
+include 'functions.php';

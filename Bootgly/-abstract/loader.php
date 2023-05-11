@@ -1,50 +1,50 @@
 <?php
-require '@functions.php';
-require '@traits.php';
+include '@functions.php';
+include '@traits.php';
 
 // __Array
-require '__Array.php';
+include '__Array.php';
 // __Class
-require '__Class.php';
+include '__Class.php';
 // __String
-require '__String.php';
+include '__String.php';
 
 // > Escapeable
-require '__String/Escapeable.php';
+include '__String/Escapeable.php';
 // > Escapeable/cursor
-require '__String/Escapeable/cursor/Positionable.php';
-require '__String/Escapeable/cursor/Shapeable.php';
-require '__String/Escapeable/cursor/Visualizable.php';
+include '__String/Escapeable/cursor/Positionable.php';
+include '__String/Escapeable/cursor/Shapeable.php';
+include '__String/Escapeable/cursor/Visualizable.php';
 // > Escapeable/mouse
-require '__String/Escapeable/mouse/Reportable.php';
+include '__String/Escapeable/mouse/Reportable.php';
 // > Escapeable/text
-require '__String/Escapeable/text/Formattable.php';
-require '__String/Escapeable/text/Modifiable.php';
+include '__String/Escapeable/text/Formattable.php';
+include '__String/Escapeable/text/Modifiable.php';
 // > Escapeable/viewport
-require '__String/Escapeable/viewport/Scrollable.php';
+include '__String/Escapeable/viewport/Scrollable.php';
 
 // > Path
-require '__String/Path.php';
+include '__String/Path.php';
 
 
 // - data
 // Dir
-require 'data/Dir.php';
+include 'data/Dir.php';
 // Table
-require 'data/Table.php';
+include 'data/Table.php';
 // - iterators
-require 'iterators/Iterator.php';
+include 'iterators/Iterator.php';
 
 
 // - streams
 // File
-require 'streams/File.php';
+include 'streams/File.php';
 
 
 // - socket
-require 'sockets/Pipe.php';
+include 'sockets/Pipe.php';
 
 
 // - templates
-require 'templates/ANSI/Escaped.php';
-require 'templates/Template.php';
+include 'templates/ANSI/Escaped.php';
+include 'templates/Template.php';
