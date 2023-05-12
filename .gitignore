@@ -55,10 +55,7 @@ _*.test.php
 #-- Workables --#
 
 #- /projects
-/projects/cli.constructor.php
-/projects/cli.*.api.php
-/projects/web.constructor.php
-/projects/web.*.api.php
+# ...
 
 # /public
 /public/test

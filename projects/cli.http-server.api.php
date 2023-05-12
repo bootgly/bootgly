@@ -32,14 +32,18 @@ return static function
 
    #debug($_POST, $_FILES, $Request->input); // $Request->input ↔ file_get_contents('php://input')
 
+
    // ! Response examples
    // ? Meta (first line of HTTP Response Header)
    #return $Response->send(302); // 302 Not Found
+
    // ? Header
    #$Response->Header->set('Content-Type', 'text/plain');
+
    // Cookies
    #$Response->Header->Cookie->append('Test', 'value1');
    #$Response->Header->Cookie->append('Test2', 'value2');
+
    // ? Content
    // @ output
    // raw ?
@@ -55,16 +59,20 @@ return static function
    */
    // content
    return $Response(content: 'Hello World!'); // text
+
    // @ send
    #return $Response->Json->send(['Hello' => 'World!']); // JSON
+
    // @ upload
    // Small files
    #return $Response('statics/image1.jpg')->upload();
-   // Large files
+   #return $Response('statics/alphanumeric.txt')->upload(offset: 0, length: 2);
+   // Medium files
    #return $Response('statics/screenshot.gif')->upload();
-   #return $Response('statics/screenshot.gif')->upload(offset: 0, length: 2);
+
    // @ authenticate
    #return $Response->authenticate(realm: 'Protected area');
+
    // @ redirect
    #return $Response->redirect(uri: 'https://docs.bootgly.com/', code: 302);
 };

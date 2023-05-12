@@ -3,10 +3,13 @@ namespace Bootgly\CLI;
 
 
 use Bootgly\CLI;
+use Bootgly\Debugger;
 
+
+Debugger::$debug = true;
+Debugger::$exit = false;
 
 $Output = CLI::$Terminal->Output;
-
 $Output->expand(lines: CLI::$Terminal::$lines);
 
 
@@ -45,20 +48,32 @@ $examples = [
 
    // Terminal -> components - Alert component
    'terminal/components/Alert-01.example.php',
+
+   // Terminal -> components - Menu component
+   'terminal/components/Menu-01.example.php',
+   'terminal/components/Menu-02.example.php',
+   'terminal/components/Menu-03.example.php',
+   'terminal/components/Menu-04.example.php',
+   'terminal/components/Menu-05.example.php',
+   'terminal/components/Menu-06.example.php',
+
    // Terminal -> components - Progress component
    'terminal/components/Progress-01.example.php',
-   // Terminal -> Output components - Progress component: indeterminate state
    'terminal/components/Progress-02.example.php',
-   // Terminal -> Output components - Table component
+
+   // Terminal -> components - Table component
    'terminal/components/Table-01.example.php'
 ];
 
 foreach ($examples as $index => $example) {
    $file = '@bootgly/cli/examples/' . $example;
+
+   $wait = 3;
    $location = 'projects/' . $file;
+
    require $file;
 
-   sleep(3);
+   sleep($wait);
 
    CLI::$Terminal->clear();
 }

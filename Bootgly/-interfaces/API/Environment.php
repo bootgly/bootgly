@@ -19,13 +19,13 @@ class Environment
     *
     * @var string|null
     */
-   protected static $prefix = '';
+   public static $prefix = '';
    /**
     * Suffix for environment variable keys.
     *
     * @var string|null
     */
-   protected static $suffix = '';
+   public static $suffix = '';
 
 
    /**

@@ -29,6 +29,4 @@ RUN composer install --optimize-autoloader --classmap-authoritative --no-dev
 ENV PORT=8080
 EXPOSE $PORT
 
-COPY projects/cli.http-server.api.php.example projects/cli.http-server.api.php
-
 CMD ["sh", "-c", "php /bootgly/scripts/http-server-cli -- --port=$PORT"]
