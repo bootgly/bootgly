@@ -3,7 +3,8 @@ namespace Bootgly;
 
 switch (\PHP_SAPI) {
    case 'cli':
-      new CLI;
+      $CLI = new CLI;
+      break;
    default:
-      new Web;
+      $Web = new Web;
 }

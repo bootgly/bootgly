@@ -1,8 +1,8 @@
 <?php
 use Bootgly\Bootgly;
 
-use Bootgly\CLI\HTTP\Server\Request;
-use Bootgly\CLI\HTTP\Server\Response;
+use Bootgly\Web\HTTP\Server\Request;
+use Bootgly\Web\HTTP\Server\Response;
 
 
 Bootgly::$Project->vendor = '@bootgly/';
