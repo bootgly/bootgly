@@ -4,24 +4,15 @@
 define('BOOTGLY_BASE', __DIR__);
 define('BOOTGLY_DIR', __DIR__ . DIRECTORY_SEPARATOR);
 
-// TODO load with autoloader
-const BOOTGLY_SUBMODULES = [
-   'Bootgly/-abstract/',
-   'Bootgly/-base/',
-   'Bootgly/-core/',
-   'Bootgly/-interfaces/',
-   'Bootgly/-modules/',
-   'Bootgly/-nodes/',
-   'Bootgly/-platforms/'
-];
-
-// @ Bootables [0-9]
+// ? Bootgly
+// ! Bootables [0-9]
 // 0-abstract
 include 'Bootgly/-abstract/@functions.php';
 include 'Bootgly/-abstract/@traits.php';
 include 'Bootgly/-abstract/__Array.php';
 include 'Bootgly/-abstract/__Class.php';
 include 'Bootgly/-abstract/__String.php';
+// TODO convert to interface
 include 'Bootgly/-abstract/__String/Escapeable.php';
 include 'Bootgly/-abstract/__String/Escapeable/cursor/Positionable.php';
 include 'Bootgly/-abstract/__String/Escapeable/cursor/Shapeable.php';
@@ -54,99 +45,109 @@ include 'Bootgly/-core/Event/Loops.php';
 include 'Bootgly/-core/Event/On.php';
 include 'Bootgly/-core/Event/Timer.php';
 include 'Bootgly/-core/Project.php';
-// 3-interfaces
-include 'Bootgly/-interfaces/API/Environment.php';
-include 'Bootgly/-interfaces/API/Server.php';
-include 'Bootgly/-interfaces/CLI/Commands.php';
-include 'Bootgly/-interfaces/CLI/Terminal.php';
-include 'Bootgly/-interfaces/CLI/Terminal/@/Logger/Logging.php'; // @ trait
-include 'Bootgly/-interfaces/CLI/Terminal/@/Tester/Tests.php';
-include 'Bootgly/-interfaces/CLI/Terminal/@/Tester/Tests/Test.php';
-include 'Bootgly/-interfaces/CLI/Terminal/Input.php';
-include 'Bootgly/-interfaces/CLI/Terminal/Output.php';
-include 'Bootgly/-interfaces/CLI/Terminal/Output/Cursor.php';
-include 'Bootgly/-interfaces/CLI/Terminal/Output/Text.php';
-include 'Bootgly/-interfaces/CLI/Terminal/Output/Viewport.php';
-include 'Bootgly/-interfaces/CLI/Terminal/components/Alert/Alert.php';
-include 'Bootgly/-interfaces/CLI/Terminal/components/Menu/Item.php';
-include 'Bootgly/-interfaces/CLI/Terminal/components/Menu/Items.php';
-include 'Bootgly/-interfaces/CLI/Terminal/components/Menu/Menu.php';
-include 'Bootgly/-interfaces/CLI/Terminal/components/Menu/Items/Option.php';
-include 'Bootgly/-interfaces/CLI/Terminal/components/Menu/Items/Options.php';
-include 'Bootgly/-interfaces/CLI/Terminal/components/Menu/Items/extensions/Headers/Header.php';
-include 'Bootgly/-interfaces/CLI/Terminal/components/Menu/Items/extensions/Headers/Headers.php';
-include 'Bootgly/-interfaces/CLI/Terminal/components/Menu/Items/extensions/Divisors/Divisor.php';
-include 'Bootgly/-interfaces/CLI/Terminal/components/Menu/Items/extensions/Divisors/Divisors.php';
-include 'Bootgly/-interfaces/CLI/Terminal/components/Progress/Progress.php';
-include 'Bootgly/-interfaces/CLI/Terminal/components/Progress/Bar/Bar.php';
-include 'Bootgly/-interfaces/CLI/Terminal/components/Table/Table.php';
-include 'Bootgly/-interfaces/CLI/Terminal/components/Table/Cells.php';
-include 'Bootgly/-interfaces/CLI/Terminal/components/Table/Columns.php';
-include 'Bootgly/-interfaces/CLI/Terminal/components/Table/Row.php';
-include 'Bootgly/-interfaces/CLI/Terminal/components/Table/Rows.php';
-include 'Bootgly/-interfaces/Web/Connections.php'; // @interface
-include 'Bootgly/-interfaces/Web/Packages.php';    // @interface
-include 'Bootgly/-interfaces/Web/Servers.php';     // @interface
-include 'Bootgly/-interfaces/Web/@/Events/Select.php';
-include 'Bootgly/-interfaces/Web/TCP/Client.php';
-include 'Bootgly/-interfaces/Web/TCP/Client/Connections.php';
-include 'Bootgly/-interfaces/Web/TCP/Client/Packages.php';
-include 'Bootgly/-interfaces/Web/TCP/Client/@/Process.php';
-include 'Bootgly/-interfaces/Web/TCP/Client/@/CLI/Terminal.php';
-include 'Bootgly/-interfaces/Web/TCP/Client/Connections/Connection.php';
-include 'Bootgly/-interfaces/Web/TCP/Server.php';
-include 'Bootgly/-interfaces/Web/TCP/Server/Connections.php';
-include 'Bootgly/-interfaces/Web/TCP/Server/Packages.php';
-include 'Bootgly/-interfaces/Web/TCP/Server/@/Process.php';
-include 'Bootgly/-interfaces/Web/TCP/Server/@/CLI/Terminal.php';
-include 'Bootgly/-interfaces/Web/TCP/Server/Connections/Connection.php';
-// 4-modules
-include 'Bootgly/-modules/Web/protocols/HTTP.php';
-include 'Bootgly/-modules/Web/protocols/HTTP/Request/Ranging.php'; // @trait
-// 5-nodes
+
+// ! Classes [A-Z]
+spl_autoload_register (function (string $class) {
+   $paths = explode('\\', $class);
+   $file = implode('/', $paths) . '.php';
+   require $file;
+});
+
+// @ API
 /*
-include 'Bootgly/-nodes/CLI/HTTP/Server.php';
-include 'Bootgly/-nodes/CLI/HTTP/Server/Request.php';
-include 'Bootgly/-nodes/CLI/HTTP/Server/Request/@/Meta.php';
-include 'Bootgly/-nodes/CLI/HTTP/Server/Request/@/Header.php';
-include 'Bootgly/-nodes/CLI/HTTP/Server/Request/@/Header/Cookie.php';
-include 'Bootgly/-nodes/CLI/HTTP/Server/Request/@/Content.php';
-include 'Bootgly/-nodes/CLI/HTTP/Server/Request/Downloader.php';
-include 'Bootgly/-nodes/CLI/HTTP/Server/Response.php';
-include 'Bootgly/-nodes/CLI/HTTP/Server/Response/Content.php';
-include 'Bootgly/-nodes/CLI/HTTP/Server/Response/Header.php';
-include 'Bootgly/-nodes/CLI/HTTP/Server/Response/Header/Cookie.php';
-include 'Bootgly/-nodes/CLI/HTTP/Server/Response/Meta.php';
+@include 'Bootgly/API/Environment.php';
+@include 'Bootgly/API/Server.php';
+
+// @ CLI
+@include BOOTGLY_DIR . 'Bootgly/CLI/Commands.php';
+@include BOOTGLY_DIR . 'Bootgly/CLI/Terminal.php';
+@include BOOTGLY_DIR . 'Bootgly/CLI/Terminal/Input.php';
+@include BOOTGLY_DIR . 'Bootgly/CLI/Terminal/Output.php';
+@include BOOTGLY_DIR . 'Bootgly/CLI/Terminal/Output/Cursor.php';
+@include BOOTGLY_DIR . 'Bootgly/CLI/Terminal/Output/Text.php';
+@include BOOTGLY_DIR . 'Bootgly/CLI/Terminal/Output/Viewport.php';
+// TODO move
+@include BOOTGLY_DIR . 'Bootgly/CLI/Terminal/_/Logger/Logging.php'; // @ trait
+@include BOOTGLY_DIR . 'Bootgly/CLI/Terminal/_/Tester/Tests.php';
+@include BOOTGLY_DIR . 'Bootgly/CLI/Terminal/_/Tester/Tests/Test.php';
+// TODO reduce Bootgly/CLI/Terminal/components/ => Bootgly/CLI/components/
+@include BOOTGLY_DIR . 'Bootgly/CLI/Terminal/components/Alert/Alert.php';
+@include BOOTGLY_DIR . 'Bootgly/CLI/Terminal/components/Menu/Item.php';
+@include BOOTGLY_DIR . 'Bootgly/CLI/Terminal/components/Menu/Items.php';
+@include BOOTGLY_DIR . 'Bootgly/CLI/Terminal/components/Menu/Menu.php';
+@include BOOTGLY_DIR . 'Bootgly/CLI/Terminal/components/Menu/Items/Option.php';
+@include BOOTGLY_DIR . 'Bootgly/CLI/Terminal/components/Menu/Items/Options.php';
+// TODO reduce ...extensions/Headers/Header.php => extensions/Header.php
+@include BOOTGLY_DIR . 'Bootgly/CLI/Terminal/components/Menu/Items/extensions/Headers/Header.php';
+@include BOOTGLY_DIR . 'Bootgly/CLI/Terminal/components/Menu/Items/extensions/Headers/Headers.php';
+@include BOOTGLY_DIR . 'Bootgly/CLI/Terminal/components/Menu/Items/extensions/Divisors/Divisor.php';
+@include BOOTGLY_DIR . 'Bootgly/CLI/Terminal/components/Menu/Items/extensions/Divisors/Divisors.php';
+@include BOOTGLY_DIR . 'Bootgly/CLI/Terminal/components/Progress/Progress.php';
+@include BOOTGLY_DIR . 'Bootgly/CLI/Terminal/components/Progress/Bar/Bar.php';
+@include BOOTGLY_DIR . 'Bootgly/CLI/Terminal/components/Table/Table.php';
+@include BOOTGLY_DIR . 'Bootgly/CLI/Terminal/components/Table/Cells.php';
+@include BOOTGLY_DIR . 'Bootgly/CLI/Terminal/components/Table/Columns.php';
+@include BOOTGLY_DIR . 'Bootgly/CLI/Terminal/components/Table/Row.php';
+@include BOOTGLY_DIR . 'Bootgly/CLI/Terminal/components/Table/Rows.php';
+// programs
+#include 'Bootgly/CLI/programs/Script.php';
+
+@include BOOTGLY_DIR . 'Bootgly/CLI.php';
+
+// @ Web
+@include BOOTGLY_DIR . 'Bootgly/Web/Connections.php'; // @interface
+@include BOOTGLY_DIR . 'Bootgly/Web/Packages.php';    // @interface
+// TODO move to endpoints
+@include BOOTGLY_DIR . 'Bootgly/Web/Servers.php';     // @interface
+// events
+@include BOOTGLY_DIR . 'Bootgly/Web/events/Select.php';
+// interfaces
+@include BOOTGLY_DIR . 'Bootgly/Web/interfaces/TCP/Client.php';
+@include BOOTGLY_DIR . 'Bootgly/Web/interfaces/TCP/Client/Connections.php';
+@include BOOTGLY_DIR . 'Bootgly/Web/interfaces/TCP/Client/Packages.php';
+@include BOOTGLY_DIR . 'Bootgly/Web/interfaces/TCP/Client/Connections/Connection.php';
+// TODO normalize path
+@include BOOTGLY_DIR . 'Bootgly/Web/interfaces/TCP/Client/_/Process.php';
+@include BOOTGLY_DIR . 'Bootgly/Web/interfaces/TCP/Client/_/CLI/Terminal.php';
+@include BOOTGLY_DIR . 'Bootgly/Web/interfaces/TCP/Server.php';
+@include BOOTGLY_DIR . 'Bootgly/Web/interfaces/TCP/Server/Connections.php';
+@include BOOTGLY_DIR . 'Bootgly/Web/interfaces/TCP/Server/Packages.php';
+// TODO normalize path
+@include BOOTGLY_DIR . 'Bootgly/Web/interfaces/TCP/Server/_/Process.php';
+@include BOOTGLY_DIR . 'Bootgly/Web/interfaces/TCP/Server/_/CLI/Terminal.php';
+@include BOOTGLY_DIR . 'Bootgly/Web/interfaces/TCP/Server/Connections/Connection.php';
+// modules
+@include BOOTGLY_DIR . 'Bootgly/Web/modules/HTTP.php';
+@include BOOTGLY_DIR . 'Bootgly/Web/modules/HTTP/Request/Ranging.php'; // @trait
+// nodes
+@include BOOTGLY_DIR . 'Bootgly/Web/nodes/HTTP/Server.php';
+@include BOOTGLY_DIR . 'Bootgly/Web/nodes/HTTP/Server/Request.php';
+// TODO normalize path
+@include BOOTGLY_DIR . 'Bootgly/Web/nodes/HTTP/Server/Request/_/Meta.php';
+@include BOOTGLY_DIR . 'Bootgly/Web/nodes/HTTP/Server/Request/_/Header.php';
+@include BOOTGLY_DIR . 'Bootgly/Web/nodes/HTTP/Server/Request/_/Header/Cookie.php';
+@include BOOTGLY_DIR . 'Bootgly/Web/nodes/HTTP/Server/Request/_/Content.php';
+@include BOOTGLY_DIR . 'Bootgly/Web/nodes/HTTP/Server/Request/Downloader.php';
+#@include BOOTGLY_DIR . 'Bootgly/Web/nodes/HTTP/Server/Request/Session.php';
+@include BOOTGLY_DIR . 'Bootgly/Web/nodes/HTTP/Server/Response.php';
+@include BOOTGLY_DIR . 'Bootgly/Web/nodes/HTTP/Server/Response/Content.php';
+@include BOOTGLY_DIR . 'Bootgly/Web/nodes/HTTP/Server/Response/Header.php';
+@include BOOTGLY_DIR . 'Bootgly/Web/nodes/HTTP/Server/Response/Header/Cookie.php';
+@include BOOTGLY_DIR . 'Bootgly/Web/nodes/HTTP/Server/Response/Meta.php';
+#@include BOOTGLY_DIR . 'Bootgly/Web/nodes/HTTP/Server/Router.php';
+#@include BOOTGLY_DIR . 'Bootgly/Web/nodes/HTTP/Server/Router/@constants.php';
+#@include BOOTGLY_DIR . 'Bootgly/Web/nodes/HTTP/Server/Router/Route.php';
+// programs
+@include BOOTGLY_DIR . 'Bootgly/Web/programs/API.php';
+@include BOOTGLY_DIR . 'Bootgly/Web/programs/App.php';
+#include BOOTGLY_DIR . 'Bootgly/Web/programs/System.php';
+
+@include BOOTGLY_DIR . 'Bootgly/Web.php';
 */
-include 'Bootgly/-nodes/Web/HTTP/Server.php';
-include 'Bootgly/-nodes/Web/HTTP/Server/Request.php';
-include 'Bootgly/-nodes/Web/HTTP/Server/Request/@/Meta.php';
-include 'Bootgly/-nodes/Web/HTTP/Server/Request/@/Header.php';
-include 'Bootgly/-nodes/Web/HTTP/Server/Request/@/Header/Cookie.php';
-include 'Bootgly/-nodes/Web/HTTP/Server/Request/@/Content.php';
-include 'Bootgly/-nodes/Web/HTTP/Server/Request/Downloader.php';
-#include 'Bootgly/-nodes/Web/HTTP/Server/Request/Session.php';
-include 'Bootgly/-nodes/Web/HTTP/Server/Response.php';
-include 'Bootgly/-nodes/Web/HTTP/Server/Response/Content.php';
-include 'Bootgly/-nodes/Web/HTTP/Server/Response/Header.php';
-include 'Bootgly/-nodes/Web/HTTP/Server/Response/Header/Cookie.php';
-include 'Bootgly/-nodes/Web/HTTP/Server/Response/Meta.php';
-#include 'Bootgly/-nodes/Web/HTTP/Server/Router.php';
-#include 'Bootgly/-nodes/Web/HTTP/Server/Router/@constants.php';
-#include 'Bootgly/-nodes/Web/HTTP/Server/Router/Route.php';
-// 6-platforms
-#include 'Bootgly/-platforms/CLI/Script.php';
-include 'Bootgly/-platforms/Web/API.php';
-include 'Bootgly/-platforms/Web/App.php';
-
-// @ Classes (Interfaces) [A-Z]
-@include BOOTGLY_BASE . '/Bootgly/CLI.php';
-@include BOOTGLY_BASE . '/Bootgly/Web.php';
-
-// @ Resources [a-z]
+// ! Resources [a-z]
 // ...
 
-// @ Workables
+// ? Workables
 // composer?
 $installed = BOOTGLY_BASE . '/../../composer/installed.php';
 if ( is_file($installed) ) {

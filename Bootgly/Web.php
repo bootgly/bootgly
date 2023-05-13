@@ -11,10 +11,10 @@
 namespace Bootgly;
 
 
-use Bootgly\Web\HTTP;
-use Bootgly\Web\HTTP\Server\Request;
-use Bootgly\Web\HTTP\Server\Response;
-use Bootgly\Web\HTTP\Server\Router;
+use Bootgly\Web\nodes\HTTP;
+use Bootgly\Web\nodes\HTTP\Server\Request;
+use Bootgly\Web\nodes\HTTP\Server\Response;
+use Bootgly\Web\nodes\HTTP\Server\Router;
 
 use Bootgly\Web\App;
 use Bootgly\Web\API;
