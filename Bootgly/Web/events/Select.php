@@ -209,7 +209,7 @@ class Select implements Event\Loops
                }
                else if ( isSet($this->reading[$id]) ) {
                   $Package = &$this->reading[$id];
-                  $Package->read($Socket);
+                  $Package->reading($Socket);
                }
             }
          }
@@ -220,7 +220,7 @@ class Select implements Event\Loops
 
                if ( isSet($this->writing[$id]) ) {
                   $Package = &$this->writing[$id];
-                  $Package->write($Socket);
+                  $Package->writing($Socket);
                }
             }
          }

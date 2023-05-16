@@ -263,6 +263,7 @@ class Response
       $this->body .= $body . "\n";
    }
 
+   // TODO move to resource files
    public function process ($data, ? string $resource = null)
    {
       if ($resource === null) {

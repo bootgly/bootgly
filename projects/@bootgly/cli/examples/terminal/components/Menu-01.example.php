@@ -20,6 +20,7 @@ OUTPUT);
 
 $Menu = new Menu($Input, $Output);
 // * Config
+$Menu::$width = 80;
 $Menu->prompt = "Choose one or more options:\n";
 
 // > Items

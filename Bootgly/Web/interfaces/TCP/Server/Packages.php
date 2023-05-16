@@ -109,7 +109,7 @@ abstract class Packages implements Web\Packages
       // TODO (only fread return the data decrypted when using SSL context)
    }
 
-   public function read (&$Socket, ? int $length = null, ? int $timeout = null) : bool
+   public function reading (&$Socket, ? int $length = null, ? int $timeout = null) : bool
    {
       try {
          $input = '';
@@ -190,12 +190,13 @@ abstract class Packages implements Web\Packages
       }
 
       if ($received) {
-         $this->write($Socket);
+         $this->writing($Socket);
       }
 
       return true;
    }
-   public function write (&$Socket, ? int $length = null) : bool
+   // ---
+   public function writing (&$Socket, ? int $length = null) : bool
    {
       if (Server::$Application) {
          self::$output = Server::$Application::encode($this, $length);
@@ -249,6 +250,14 @@ abstract class Packages implements Web\Packages
       }
 
       return true;
+   }
+   public function read (&$Socket)
+   {
+      // TODO
+   }
+   public function write (&$Socket, ? int $length = null)
+   {
+      // TODO
    }
 
    // ! Stream
@@ -394,7 +403,7 @@ abstract class Packages implements Web\Packages
 
       return $written;
    }
-   // @
+   // ---
    public function download (&$Socket, &$Handler, int $rate, int $length) : int
    {
       // TODO test!!!

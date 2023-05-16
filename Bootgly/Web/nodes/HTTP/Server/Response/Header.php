@@ -65,7 +65,7 @@ class Header
          case 'queued':
             return $this->queued;
          case 'raw':
-            if ($this->raw) {
+            if ($this->raw !== '') {
                return $this->raw;
             }
 
