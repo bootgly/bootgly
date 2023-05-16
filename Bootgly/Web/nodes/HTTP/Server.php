@@ -12,6 +12,7 @@ namespace Bootgly\Web\nodes\HTTP;
 
 
 use Bootgly\API;
+use Bootgly\Project;
 use Bootgly\Logger\Logger;
 
 use Bootgly\CLI\Terminal\_\Tester\Tests;
@@ -67,7 +68,7 @@ class Server extends TCP\Server implements HTTP
    {
       // * Config
       if ($production) {
-         API\Server::$production = BOOTGLY_WORKABLES_DIR . 'projects/cli.http-server.api.php';
+         API\Server::$production = Project::PROJECTS_DIR . 'HTTP-Server.API.php';
       }
 
       // * Data

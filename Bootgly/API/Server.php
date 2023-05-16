@@ -17,10 +17,9 @@ use Closure;
 class Server
 {
    // * Config
-   // @ Files
-   public static string $production = BOOTGLY_WORKABLES_DIR . 'projects/cli.tcp-server.api.php';
-   // @ Mode
-   public const MODE_PRODUCTION = 1;
+   // @ Environments
+   public static string $production;
+   public const MODE_PRODUCTION = 1; // TODO rename to WORK?
    public const MODE_TEST = 2;
    public static int $mode = self::MODE_PRODUCTION;
 

@@ -22,13 +22,13 @@ use Bootgly\Web\API;
 
 class Web
 {
-   // @ Nodes
+   // @ nodes
    public HTTP\Server $Server;
 
    public Request $Request;
    public Response $Response;
    public Router $Router;
-   // @ Platforms
+   // @ programs
    public App $App;
    public API $API;
 
@@ -42,23 +42,39 @@ class Web
 
          return;
       }
+      // * Config
+      // Debugger
+      Debugger::$debug = false;
+      Debugger::$cli = false;
+      Debugger::$exit = true;
 
-      $Server = $this->Server = new HTTP\Server($this);
+      // @ Instance
+      $this->Server = new HTTP\Server($this);
+   }
 
-      $Request = $this->Request = &$this->Server->Request;
-      $Response = $this->Response = &$this->Server->Response;
-      $Router = $this->Router = &$this->Server->Router;
+   public function construct () : bool
+   {
+      // @ Extract variables
+      // TODO extract dinamically
+      $Server = $this->Server;
+
+      $Request = $this->Request = &$Server->Request;
+      $Response = $this->Response = &$Server->Response;
+      $Router = $this->Router = &$Server->Router;
 
       // @ Load CLI constructor
-      $projects = Project::PROJECTS_DIR . 'web.constructor.php';
-      if ( is_file($projects) ) {
-         @include $projects;
-         return;
-      }
+      $file = 'Web.constructor.php';
+      $vars = [
+         'Server' => $Server,
+         'Request' => $Request,
+         'Response' => $Response,
+         'Router' => $Router
+      ];
 
-      $project = Project::PROJECT_DIR . 'web.constructor.php';
-      if ( is_file($project) ) {
-         @include $project;
-      }
+      // Multi projects || Single project
+      $projects = Project::PROJECTS_DIR . $file;
+      $project = Project::PROJECT_DIR . $file;
+
+      return Bootgly::extract($projects, $vars) || Bootgly::extract($project, $vars);
    }
 }

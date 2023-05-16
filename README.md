@@ -157,11 +157,11 @@ More **Screenshots**, videos and details can be found in the home page of [Bootg
 
 #### Run CLI demo
 
-See the examples in `projects/@bootgly/cli/examples/`.
+See the examples in `projects/@bootgly/CLI/examples/`.
 
-1) Check the file `projects/cli.constructor.php`;
+1) Check the file `projects/CLI.constructor.php`;
 2) Instantiate your CLI components.
-3) Run the Bootgly CLI in terminal:
+3) Run the Bootgly CLI demo in terminal:
 
 `php bootgly`
 
@@ -172,15 +172,15 @@ See the examples in `projects/@bootgly/cli/examples/`.
 ##### **Option 1: Non-CLI SAPI (Apache, LiteSpeed, Nginx, etc)**
 
 1) Enable support to `rewrite`;
-2) Configure the Web constructor in `projects/web.constructor.php` file;
+2) Configure the Web constructor in `projects/Web.constructor.php` file;
 3) Run the Non-CLI HTTP Server pointing to `index.php`.
 
 ##### **Option 2: CLI SAPI**
 
 Directly in Linux OS *(max performance)*:
 
-1) Configure the Bootgly HTTP Server in `scripts/http-server-cli` file;
-2) Configure the HTTP Server API in `projects/cli.http-server.api.php` file;
+1) Configure the Bootgly HTTP Server script in `scripts/http-server-cli` file;
+2) Configure the HTTP Server API in `projects/HTTP-Server.API.php` file;
 3) Run the Bootgly HTTP Server CLI in the terminal:
 
 `php scripts/http-server-cli`

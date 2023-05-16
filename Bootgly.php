@@ -29,28 +29,40 @@ abstract class Bootgly
       $Template = static::$Template = new Template;
 
       // - Workables
-      // @ Load Bootgly constructor
-      // Multi projects
-      $projects = BOOTGLY_WORKABLES_BASE . '/projects/bootgly.constructor.php';
-      if ( is_file($projects) ) {
-         return require $projects;
-      }
+      // @ Load Bootgly boot
+      $file = 'Bootgly.boot.php';
+      $vars = [
+         'Project' => $Project,
+         'Template' => $Template
+      ];
 
-      // Single project
-      $project = BOOTGLY_WORKABLES_BASE . '/project/bootgly.constructor.php';
-      if ( is_file($project) ) {
-         return require $project;
-      }
+      // Multi projects || Single project
+      $projects = Project::PROJECTS_DIR . $file;
+      $project = Project::PROJECT_DIR . $file;
 
-      // TODO warning or error?
-
-      return false;
+      return self::extract($projects, $vars) || self::extract($project, $vars);
    }
    public static function debug ()
    {
       // TODO
    }
 
+   public static function extract (string $file, array $vars) : bool
+   {
+      if ( is_file($file) ) {
+         $extract = static function ($__file__, $__vars__)
+         {
+            extract($__vars__);
+            @include $__file__;
+         };
+
+         $extract($file, $vars);
+
+         return true;
+      }
+
+      return false;
+   }
    public static function template (string $view, array $parameters) : Template
    {
       $Template = static::$Template;
