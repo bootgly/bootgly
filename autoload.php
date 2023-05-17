@@ -163,7 +163,7 @@ if ( is_file($installed) ) {
 } else {
    define('BOOTGLY_WORKABLES_BASE', BOOTGLY_BASE);
 }
-define('BOOTGLY_WORKABLES_DIR', BOOTGLY_BASE . DIRECTORY_SEPARATOR);
+define('BOOTGLY_WORKABLES_DIR', BOOTGLY_WORKABLES_BASE . DIRECTORY_SEPARATOR);
 
 // ! Bootgly
 require BOOTGLY_DIR . 'Bootgly.php';
