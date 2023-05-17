@@ -59,6 +59,8 @@ spl_autoload_register (function (string $class) {
 @include 'Bootgly/API/Server.php';
 
 // @ CLI
+@include BOOTGLY_DIR . 'Bootgly/CLI/Commading.php';
+@include BOOTGLY_DIR . 'Bootgly/CLI/Command.php';
 @include BOOTGLY_DIR . 'Bootgly/CLI/Commands.php';
 @include BOOTGLY_DIR . 'Bootgly/CLI/Terminal.php';
 @include BOOTGLY_DIR . 'Bootgly/CLI/Terminal/Input.php';
