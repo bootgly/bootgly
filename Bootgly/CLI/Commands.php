@@ -11,6 +11,7 @@
 namespace Bootgly\CLI;
 
 
+use Closure;
 use Bootgly\templates\ANSI\Escaped;
 
 
@@ -38,20 +39,48 @@ class Commands
             public string $name = 'help';
             public string $description = 'Show this help message';
 
-            public function run (array $arguments, array $options)
+
+            public function run (array $arguments, array $options) : bool
             {
                // TODO
+               return true;
             }
          }
       ];
    }
 
-   public function register (Command $Command)
+   public function register (Command|Closure $Command, string $name = '', string $description = '') : bool
    {
-      $this->commands[] = $Command;
+      if ($Command instanceof Command) {
+         $this->commands[] = $Command;
+     } elseif ($Command instanceof Closure) {
+         $Command = new class ($Command, $name, $description) extends Command
+         {
+            public Closure $Command;
+
+            public string $name;
+            public string $description;
+
+
+            public function __construct (Closure $Command, string $name, string $description)
+            {
+               $this->Command = $Command;
+
+               $this->name = $name;
+               $this->description = $description;
+            }
+            public function run (array $arguments, array $options) : bool
+            {
+               return ($this->Command)($arguments, $options);
+            }
+         };
+         $this->commands[] = $Command;
+     }
+
+      return true;
    }
 
-   public function route ()
+   public function route () : bool
    {
       // Argments
       $values = $this->args;
@@ -59,7 +88,7 @@ class Commands
       // @ Verify if a command was provided
       if (count($values) < 2) {
          $this->help();
-         return;
+         return false;
       }
 
       // Command
@@ -67,11 +96,11 @@ class Commands
       $name = $values[1];
 
       // @ Search for the corresponding command
-      $command = $this->find($name);
-      if ($command === null) {
+      $Command = $this->find($name);
+      if ($Command === null) {
          echo "Unknown command: $name" . PHP_EOL;
          $this->help();
-         return;
+         return false;
       }
 
       // @ Remove the command name from the arguments
@@ -103,7 +132,9 @@ class Commands
       }
 
       // @ Run the command
-      $command->run($arguments, $options);
+      $Command->run($arguments, $options);
+
+      return true;
    }
 
    public function find (string $name) : Command|null
@@ -117,18 +148,24 @@ class Commands
       return null;
    }
 
-   public function help ()
+   private function help (bool $scripting = true) : void
    {
-      $help = '@.;Usage: php ' . $this->args[0] . ' [command] @..;';
-      $help .= 'Available commands: @.;';
+      $help = '';
+
+      if ($scripting) {
+         $help = '@.;Usage: php ' . $this->args[0] . ' [command] @..;';
+         $help .= 'Available commands:';
+      }
 
       $help .= '@.;======================================================================' . PHP_EOL;
 
       foreach ($this->commands as $Command) {
-         $help .= '@:i: `' . $Command->name . '` @; = ' . $Command->description . PHP_EOL;
+         // TODO with str_pad
+         $help .= '@:i: `' . $Command->name . '` @; = ';
+         $help .= $Command->description . PHP_EOL;
       }
 
-      $help .= '========================================================================' . PHP_EOL;
+      $help .= '======================================================================' . PHP_EOL;
 
       echo Escaped::render($help);
    }

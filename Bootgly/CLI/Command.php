@@ -24,5 +24,5 @@ abstract class Command
    // ...
 
 
-   abstract public function run (array $arguments, array $options);
+   abstract public function run (array $arguments, array $options) : bool;
 }
