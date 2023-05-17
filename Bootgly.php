@@ -15,13 +15,13 @@ use Bootgly\templates\Template;
 use Bootgly\streams\File;
 
 
-abstract class Bootgly
+class Bootgly
 {
    public static Project $Project;
    public static Template $Template;
 
 
-   public static function boot ()
+   public function __construct ()
    {
       // - Features
       // core
@@ -29,8 +29,8 @@ abstract class Bootgly
       $Template = static::$Template = new Template;
 
       // - Workables
-      // @ Load Bootgly boot
-      $file = 'Bootgly.boot.php';
+      // @ Load Bootgly constructor
+      $file = 'Bootgly.constructor.php';
       $vars = [
          'Project' => $Project,
          'Template' => $Template

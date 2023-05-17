@@ -168,4 +168,4 @@ define('BOOTGLY_WORKABLES_DIR', BOOTGLY_WORKABLES_BASE . DIRECTORY_SEPARATOR);
 // ! Bootgly
 require BOOTGLY_DIR . 'Bootgly.php';
 
-\Bootgly\Bootgly::boot();
+new \Bootgly\Bootgly;
