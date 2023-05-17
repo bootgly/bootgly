@@ -4,9 +4,12 @@ namespace Bootgly;
 switch (\PHP_SAPI) {
    case 'cli':
       $CLI = new CLI;
-      $CLI->construct();
+
+      if (BOOTGLY_DIR === BOOTGLY_WORKABLES_DIR) {
+         $CLI::$Commands->route();
+      }
+
       break;
    default:
       $Web = new Web;
-      $Web->construct();
 }
