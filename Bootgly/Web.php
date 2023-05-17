@@ -49,15 +49,7 @@ class Web
       Debugger::$exit = true;
 
       // @ Instance
-      $this->Server = new HTTP\Server($this);
-   }
-
-   public function construct () : bool
-   {
-      // @ Extract variables
-      // TODO extract dinamically
-      $Server = $this->Server;
-
+      $Server = $this->Server = new HTTP\Server($this);
       $Request = $this->Request = &$Server->Request;
       $Response = $this->Response = &$Server->Response;
       $Router = $this->Router = &$Server->Router;
@@ -75,6 +67,6 @@ class Web
       $projects = Project::PROJECTS_DIR . $file;
       $project = Project::PROJECT_DIR . $file;
 
-      return Bootgly::extract($projects, $vars) || Bootgly::extract($project, $vars);
+      Bootgly::extract($projects, $vars) || Bootgly::extract($project, $vars);
    }
 }

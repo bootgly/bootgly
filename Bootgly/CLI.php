@@ -54,23 +54,15 @@ class CLI
       Debugger::$exit = false;
 
       // @ Instance
-      self::$Commands = new Commands;
-      self::$Terminal = new Terminal;
-   }
+      $Commands = self::$Commands = new Commands;
+      $Terminal = self::$Terminal = new Terminal;
 
-   public function construct () : bool
-   {
       // @ Validate include
       $script = $_SERVER['PWD'] . DIRECTORY_SEPARATOR . $_SERVER['SCRIPT_FILENAME'];
       $included = array_search($script, $this->includes['scripts']);
       if ($included === false) {
-         return false;
+         return;
       }
-
-      // @ Extract variables
-      // TODO extract dinamically
-      $Commands = self::$Commands;
-      $Terminal = self::$Terminal;
 
       // @ Load CLI constructor
       $file = 'CLI.constructor.php';
@@ -83,6 +75,6 @@ class CLI
       $projects = Project::PROJECTS_DIR . $file;
       $project = Project::PROJECT_DIR . $file;
 
-      return Bootgly::extract($projects, $vars) || Bootgly::extract($project, $vars);
+      Bootgly::extract($projects, $vars) || Bootgly::extract($project, $vars);
    }
 }
