@@ -6,7 +6,7 @@ use Bootgly\Web\nodes\HTTP\Server\Response;
 
 
 Bootgly::$Project->vendor = '@bootgly/';
-Bootgly::$Project->container = 'web/';
+Bootgly::$Project->container = 'Web/';
 Bootgly::$Project->package = 'examples/';
 Bootgly::$Project->version = 'app/';
 Bootgly::$Project->setPath();

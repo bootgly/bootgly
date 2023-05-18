@@ -19,7 +19,7 @@ return [
    'sapi' => function (Request $Request, Response $Response) : Response {
       $Project = new Project;
       $Project->vendor = '@bootgly/';
-      $Project->container = 'web/';
+      $Project->container = 'Web/';
       $Project->package = 'examples/';
       $Project->version = 'app/';
 
