@@ -157,13 +157,11 @@ More **Screenshots**, videos and details can be found in the home page of [Bootg
 
 #### Run CLI demo
 
-See the examples in `projects/@bootgly/CLI/examples/`.
-
-1) Check the file `projects/CLI.constructor.php`;
-2) Instantiate your CLI components.
+1) See the examples in `projects/@bootgly/CLI/examples/`;
+2) Check the file `projects/CLI.constructor.php`;
 3) Run the Bootgly CLI demo in terminal:
 
-`php bootgly`
+`php bootgly demo`
 
 ### \- Bootgly Web 🌐:
 
