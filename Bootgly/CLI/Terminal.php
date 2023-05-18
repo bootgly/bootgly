@@ -11,8 +11,7 @@
 namespace Bootgly\CLI;
 
 
-use Bootgly\CLI;
-
+use Bootgly\__String\Escapeable;
 use Bootgly\__String\Escapeable\cursor\Positionable;
 use Bootgly\__String\Escapeable\text\Modifiable;
 
@@ -22,6 +21,7 @@ use Bootgly\CLI\Terminal\Output;
 
 class Terminal
 {
+   use Escapeable;
    use Positionable;
    use Modifiable;
 
@@ -149,8 +149,8 @@ class Terminal
    public function clear () : true
    {
       $this->Output->write(
-         CLI::_START_ESCAPE . self::_CURSOR_POSITION .
-         CLI::_START_ESCAPE . self::_TEXT_ERASE_IN_DISPLAY
+         self::_START_ESCAPE . self::_CURSOR_POSITION .
+         self::_START_ESCAPE . self::_TEXT_ERASE_IN_DISPLAY
       );
 
       return true;

@@ -32,7 +32,7 @@ class Commands
    public function __construct ()
    {
       // * Data
-      $this->args = $argv ?? $_SERVER['argv'] ?? [];
+      $this->args = $_SERVER['argv'] ?? [];
       $this->commands = [
          'help' => new class extends Command
          {
@@ -49,9 +49,9 @@ class Commands
       ];
    }
 
-   public function register (Command|Closure $Command, string $name = '', string $description = '') : bool
+   public function register (Commanding|Command|Closure $Command, string $name = '', string $description = '') : bool
    {
-      if ($Command instanceof Command) {
+      if ($Command instanceof Command || $Command instanceof Commanding) {
          $this->commands[] = $Command;
      } elseif ($Command instanceof Closure) {
          $Command = new class ($Command, $name, $description) extends Command
@@ -137,7 +137,7 @@ class Commands
       return true;
    }
 
-   public function find (string $name) : Command|null
+   public function find (string $name) : Commanding|Command|null
    {
       foreach ($this->commands as $Command) {
          if ($Command->name === $name) {

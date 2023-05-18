@@ -17,6 +17,8 @@ use Bootgly\CLI\Terminal;
 
 class CLI
 {
+   public const BOOT_FILE = 'CLI.constructor.php';
+
    // * Config
    public array $includes;
 
@@ -24,8 +26,7 @@ class CLI
    // ...
 
    // * Meta
-   // ! Escapeable
-   public const _START_ESCAPE = "\033[";
+   // ...
 
    public static Commands $Commands;
    public static Terminal $Terminal;
@@ -52,6 +53,11 @@ class CLI
       Debugger::$debug = true;
       Debugger::$cli = true;
       Debugger::$exit = false;
+      // * Data
+      // ...
+
+      // * Meta
+      // ...
 
       // @ Instance
       $Commands = self::$Commands = new Commands;
@@ -64,16 +70,15 @@ class CLI
          return;
       }
 
-      // @ Load CLI constructor
-      $file = 'CLI.constructor.php';
+      // @ Load constructor file + extract vars
       $vars = [
          'Commands' => $Commands,
          'Terminal' => $Terminal
       ];
 
       // Multi projects || Single project
-      $projects = Project::PROJECTS_DIR . $file;
-      $project = Project::PROJECT_DIR . $file;
+      $projects = Project::PROJECTS_DIR . self::BOOT_FILE;
+      $project = Project::PROJECT_DIR . self::BOOT_FILE;
 
       Bootgly::extract($projects, $vars) || Bootgly::extract($project, $vars);
    }

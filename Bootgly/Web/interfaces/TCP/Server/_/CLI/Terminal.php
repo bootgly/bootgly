@@ -144,7 +144,7 @@ class Terminal extends CLI\Terminal
          default => passthru($command) !== false && true
       };
    }
-   public function saveCommand (string $command, string $context = ''): bool
+   public function saveCommand (string $command, string $context = '') : bool
    {
       $file = BOOTGLY_WORKABLES_DIR . '/workspace/server.command';
 

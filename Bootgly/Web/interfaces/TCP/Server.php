@@ -268,7 +268,7 @@ class Server implements Servers, Logs
    public function on (string $name, \Closure $handler)
    {
       switch ($name) {
-         case 'data': // DEPRECATED -> moved to projects/sapi.*.constructor.php
+         case 'data': // DEPRECATED
             break;
       }
    }
@@ -389,7 +389,7 @@ class Server implements Servers, Logs
       $this->log('@\;Entering in Monitor mode...@\;', self::LOG_INFO_LEVEL);
       $this->log('>_ Type `CTRL + Z` to enter in Interactive mode or `CTRL + C` to stop the Server.@\;');
 
-      // @ Set time to hot reloading of sapi.*.constructor.php file
+      // @ Set time to hot reloading
       Timer::add(2, function () {
          $modified = API\Server::check();
 

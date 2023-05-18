@@ -22,6 +22,8 @@ use Bootgly\Web\API;
 
 class Web
 {
+   public const BOOT_FILE = 'Web.constructor.php';
+
    // @ nodes
    public HTTP\Server $Server;
 
@@ -54,8 +56,7 @@ class Web
       $Response = $this->Response = &$Server->Response;
       $Router = $this->Router = &$Server->Router;
 
-      // @ Load CLI constructor
-      $file = 'Web.constructor.php';
+      // @ Load constructor file + extract vars
       $vars = [
          'Server' => $Server,
          'Request' => $Request,
@@ -64,8 +65,8 @@ class Web
       ];
 
       // Multi projects || Single project
-      $projects = Project::PROJECTS_DIR . $file;
-      $project = Project::PROJECT_DIR . $file;
+      $projects = Project::PROJECTS_DIR . self::BOOT_FILE;
+      $project = Project::PROJECT_DIR . self::BOOT_FILE;
 
       Bootgly::extract($projects, $vars) || Bootgly::extract($project, $vars);
    }

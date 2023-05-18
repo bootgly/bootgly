@@ -12,6 +12,7 @@ namespace Bootgly\CLI\Terminal;
 
 
 // -abstract
+use Bootgly\__String\Escapeable;
 use Bootgly\__String\Escapeable\cursor\Positionable;
 use Bootgly\__String\Escapeable\text\Modifiable;
 use Bootgly\templates\ANSI\Escaped;
@@ -25,6 +26,7 @@ use Bootgly\CLI\Terminal\Output\Viewport;
 
 class Output
 {
+   use Escapeable;
    use Positionable;
    use Modifiable;
 
@@ -76,8 +78,8 @@ class Output
    public function clear () : true
    {
       $this->write(
-         CLI::_START_ESCAPE . self::_CURSOR_POSITION .
-         CLI::_START_ESCAPE . self::_TEXT_ERASE_IN_DISPLAY
+         self::_START_ESCAPE . self::_CURSOR_POSITION .
+         self::_START_ESCAPE . self::_TEXT_ERASE_IN_DISPLAY
       );
 
       return true;
@@ -178,7 +180,7 @@ class Output
    public function escape (string $data) : self
    {
       try {
-         $this->written = @fwrite($this->stream, CLI::_START_ESCAPE . $data);
+         $this->written = @fwrite($this->stream, self::_START_ESCAPE . $data);
       } catch (\Throwable) {
          $this->written = false;
       }
