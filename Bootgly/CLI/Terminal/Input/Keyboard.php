@@ -11,7 +11,7 @@
 namespace Bootgly\CLI\Terminal\Input;
 
 
-class Key
+class Keyboard
 {
    // TODO
 }
