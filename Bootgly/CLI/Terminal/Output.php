@@ -44,7 +44,6 @@ class Output
    // @ Stats
    public int|false $written;
 
-
    public Cursor $Cursor;
    public Text $Text;
    public Viewport $Viewport;

@@ -17,6 +17,7 @@ use Bootgly\__String\Escapeable\text\Modifiable;
 
 use Bootgly\CLI\Terminal\Input;
 use Bootgly\CLI\Terminal\Output;
+use Bootgly\CLI\Terminal\Reporting\Mouse;
 
 
 class Terminal
@@ -49,6 +50,8 @@ class Terminal
    public Input $Input;
    // ? Output
    public Output $Output;
+   // ! Reporting
+   public Mouse $Mouse;
 
 
    public function __construct ()
@@ -85,6 +88,8 @@ class Terminal
       $this->Input = new Input;
       // ? Output
       $this->Output = new Output;
+      // ! Reporting
+      $this->Mouse = new Mouse($this->Input, $this->Output);
    }
 
    // ! Command
