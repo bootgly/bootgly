@@ -11,7 +11,7 @@
 namespace Bootgly\CLI\Terminal\Input;
 
 
-enum Keys : string
+enum Keystrokes : string
 {
    case BACKSPACE = "\177";
    case ESCAPE    = "\e";
@@ -28,8 +28,8 @@ enum Keys : string
    case INSERT    = "\e[2~";
    case DELETE    = "\e[3~";
    case END       = "\e[F";
-   case PAGE_UP   = "\e[5~";
-   case PAGE_DOWN = "\e[6~";
+   case PAGEUP   = "\e[5~";
+   case PAGEDOWN = "\e[6~";
 
    case F1  = "\eOP";
    case F2  = "\eOQ";
@@ -103,6 +103,6 @@ enum Keys : string
    case ALT_DELETE    = "\e[3;3~"; // Alt + Delete
    case ALT_HOME      = "\e[1;3H"; // Alt + Home
    case ALT_END       = "\e[1;3F"; // Alt + End
-   case ALT_PAGE_UP   = "\e[5;3~"; // Alt + Page Up
-   case ALT_PAGE_DOWN = "\e[6;3~"; // Alt + Page Down
+   case ALT_PAGEUP   = "\e[5;3~"; // Alt + Page Up
+   case ALT_PAGEDOWN = "\e[6;3~"; // Alt + Page Down
 }
