@@ -22,32 +22,32 @@ enum Mousestrokes : string
    // TODO 3 ?
    // * Combineds (Actions + Keystrokes)
    // @ Clicks + Keystrokes
-   // SHIFT
+   // Clicks + SHIFT
    case LEFT_CLICK_WITH_SHIFT = "4";
    case MIDDLE_CLICK_WITH_SHIFT = "5";
    case RIGHT_CLICK_WITH_SHIFT = "6";
    // TODO 7 ?
-   // ALT
+   // Clicks + ALT
    case LEFT_CLICK_WITH_ALT = "8";
    case MIDDLE_CLICK_WITH_ALT = "9";
    case RIGHT_CLICK_WITH_ALT = "10";
    // TODO 11 ?
-   // SHIFT + ALT
+   // Clicks + (SHIFT + ALT)
    case LEFT_CLICK_WITH_SHIFT_ALT = "12";
    case MIDDLE_CLICK_WITH_SHIFT_ALT = "13";
    case RIGHT_CLICK_WITH_SHIFT_ALT = "14";
    // TODO 15 ?
-   // CTRL
+   // Clicks + CTRL
    case LEFT_CLICK_WITH_CTRL = "16";
    case MIDDLE_CLICK_WITH_CTRL = "17";
    case RIGHT_CLICK_WITH_CTRL = "18";
    // TODO 19 ?
-   // SHIFT + CTRL
+   // Clicks + (SHIFT + CTRL)
    case LEFT_CLICK_WITH_SHIFT_CTRL = "20";
    case MIDDLE_CLICK_WITH_SHIFT_CTRL = "21";
    case RIGHT_CLICK_WITH_SHIFT_CTRL = "22";
    // TODO 23 ?
-   // ALT + CTRL
+   // Clicks + (ALT + CTRL)
    case LEFT_CLICK_WITH_ALT_CTRL = "24";
    case MIDDLE_CLICK_WITH_ALT_CTRL = "25";
    case RIGHT_CLICK_WITH_ALT_CTRL = "26";
@@ -89,7 +89,7 @@ enum Mousestrokes : string
    case MIDDLE_CLICK_WITH_MOVEMENT_WITH_ALT_CTRL = "57";
    case RIGHT_CLICK_WITH_MOVEMENT_WITH_ALT_CTRL = "58";
    case NONE_CLICK_WITH_MOVEMENT_WITH_ALT_CTRL = "59";
-   // TODO 60-63
+   // TODO 60-63 ?
    // ? Scroll
    case SCROLL_UP = "64";
    case SCROLL_DOWN = "65";
