@@ -17,6 +17,8 @@ use Bootgly\streams\File;
 
 class Bootgly
 {
+   public const BOOT_FILE = 'Bootgly.constructor.php';
+
    public static Project $Project;
    public static Template $Template;
 
@@ -30,17 +32,23 @@ class Bootgly
 
       // - Workables
       // @ Load Bootgly constructor
-      $file = 'Bootgly.constructor.php';
       $vars = [
          'Project' => $Project,
          'Template' => $Template
       ];
 
-      // Multi projects || Single project
-      $projects = Project::PROJECTS_DIR . $file;
-      $project = Project::PROJECT_DIR . $file;
+      // @ Author
+      // TODO
+      $projects = Project::BOOTGLY_PROJECT_DIR . self::BOOT_FILE;
+      Bootgly::extract($projects, $vars);
+      // @ Consumer
+      if (BOOTGLY_DIR !== BOOTGLY_WORKABLES_DIR) {
+         // Multi projects || Single project
+         $projects = Project::PROJECTS_DIR . self::BOOT_FILE;
+         $project = Project::PROJECT_DIR . self::BOOT_FILE;
 
-      return self::extract($projects, $vars) || self::extract($project, $vars);
+         self::extract($projects, $vars) || self::extract($project, $vars);
+      }
    }
    public static function debug ()
    {

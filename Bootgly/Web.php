@@ -35,6 +35,7 @@ class Web
    public API $API;
 
 
+   // TODO REFACTOR
    public function __construct ()
    {
       if (@$_SERVER['REDIRECT_URL'] === NULL) {
@@ -64,10 +65,17 @@ class Web
          'Router' => $Router
       ];
 
-      // Multi projects || Single project
-      $projects = Project::PROJECTS_DIR . self::BOOT_FILE;
-      $project = Project::PROJECT_DIR . self::BOOT_FILE;
+      // @ Author
+      // TODO
+      $projects = Project::BOOTGLY_PROJECT_DIR . self::BOOT_FILE;
+      Bootgly::extract($projects, $vars);
+      // @ Consumer
+      if (BOOTGLY_DIR !== BOOTGLY_WORKABLES_DIR) {
+         // Multi projects || Single project
+         $projects = Project::PROJECTS_DIR . self::BOOT_FILE;
+         $project = Project::PROJECT_DIR . self::BOOT_FILE;
 
-      Bootgly::extract($projects, $vars) || Bootgly::extract($project, $vars);
+         Bootgly::extract($projects, $vars) || Bootgly::extract($project, $vars);
+      }
    }
 }
