@@ -50,7 +50,12 @@ include 'Bootgly/-core/Project.php';
 spl_autoload_register (function (string $class) {
    $paths = explode('\\', $class);
    $file = implode('/', $paths) . '.php';
-   require $file;
+
+   @include BOOTGLY_DIR . $file;
+
+   if (BOOTGLY_DIR !== BOOTGLY_WORKABLES_DIR) {
+      @include BOOTGLY_WORKABLES_DIR . $file;
+   }
 });
 
 // @ API
