@@ -15,7 +15,7 @@ class Project
 {
    // ! Path
    // Bootgly Project (Author)
-   public const BOOTGLY_PROJECT_DIR = BOOTGLY_BASE . '/projects/';
+   public const BOOTGLY_PROJECTS_DIR = BOOTGLY_BASE . '/projects/';
    // Project (Consumer)
    public const PROJECT_DIR = BOOTGLY_WORKABLES_BASE . '/project/';
    public const PROJECTS_DIR = BOOTGLY_WORKABLES_BASE . '/projects/';

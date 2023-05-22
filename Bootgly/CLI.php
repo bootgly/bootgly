@@ -78,7 +78,7 @@ class CLI
 
       // @ Author
       // TODO
-      $projects = Project::BOOTGLY_PROJECT_DIR . self::BOOT_FILE;
+      $projects = Project::BOOTGLY_PROJECTS_DIR . self::BOOT_FILE;
       Bootgly::extract($projects, $vars);
       // TODO
       // @ Consumer
