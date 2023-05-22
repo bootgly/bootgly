@@ -51,10 +51,10 @@ spl_autoload_register (function (string $class) {
    $paths = explode('\\', $class);
    $file = implode('/', $paths) . '.php';
 
-   @include BOOTGLY_DIR . $file;
+   $included = @include BOOTGLY_WORKABLES_DIR . $file;
 
-   if (BOOTGLY_DIR !== BOOTGLY_WORKABLES_DIR) {
-      @include BOOTGLY_WORKABLES_DIR . $file;
+   if ($included === false && BOOTGLY_DIR !== BOOTGLY_WORKABLES_DIR) {
+      @include BOOTGLY_DIR . $file;
    }
 });
 
