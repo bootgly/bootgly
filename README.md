@@ -145,7 +145,7 @@ Bootgly will follow [Semantic Versioning 2.0][SEMANTIC_VERSIONING].
 
 | ![HTTP Server CLI - Faster than Workerman +7%](https://github.com/bootgly/.github/raw/main/screenshots/bootgly-php-framework/Server-CLI-HTTP-Benchmark-Ryzen-9-3900X-WSL2.png "HTTP Server CLI - +7% faster than Workerman (Plain Text test)'") |
 |:--:| 
-| *HTTP Server CLI - +7% faster than Workerman (Plain Text test)* |
+| *HTTP Server CLI - +7% faster than [Workerman](https://www.techempower.com/benchmarks/#section=data-r21&test=plaintext&l=zik073-6bj) (Plain Text test)* |
 
 More **Screenshots**, videos and details can be found in the home page of [Bootgly Docs][PROJECT_DOCS].
 
