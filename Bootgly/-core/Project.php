@@ -21,29 +21,29 @@ class Project
    public const PROJECTS_DIR = BOOTGLY_WORKABLES_BASE . '/projects/';
 
    // * Config
-   public bool $cache;
+   // ...
 
    // * Data
-   public string $vendor;       // @bootgly/
+   public string $vendor;       // Bootgly/
    public string $container;    // examples/
-   public string $package;      // app/
+   public string $package;      // App/
    // ---
-   public string $type;         // spa, pwa, etc.
+   public string $type;         // SPA, PWA, etc.
    public string $public;       // dist/
    public string $version;      // v1/
 
    // * Meta
-   private static array $projects;
-   private static string $selected;
-   #private string $path;
    private array $paths;
+   private static array $projects = [];
+   private int $index;
+   private static array $indexes = [];
 
 
-   public function __construct (? string $path = null)
+   public function __construct ()
    {
       // ! Path
       // * Config
-      $this->cache = true;
+      // ...
 
       // * Data
       // TODO templates
@@ -56,40 +56,21 @@ class Project
       $this->version = '';
 
       // * Meta
-      self::$projects = [];
-      self::$selected = '';
       $this->paths = [];
-
-      // @
-      if ($path) {
-         $path = trim($path, '/');
-
-         $paths = explode('/', $path);
-
-         foreach ($paths as $index => $path) {
-            match ($index) {
-               0 => $this->vendor    = $path . '/',
-               1 => $this->container = $path . '/',
-               2 => $this->package   = $path . '/',
-               3 => $this->type      = $path . '/',
-               4 => $this->public    = $path . '/',
-               5 => $this->version   = $path . '/'
-            };
-         }
-
-         #$this->path = PROJECTS_DIR . $path;
-      }
+      $this->index = count(self::$projects);
    }
 
-   public function __get ($name)
+   public function __get (string $name)
    {
       switch ($name) {
          case 'path':
-            if ($this->cache && isset($this->paths[1]) && !is_dir($this->paths[0])) {
-               return $this->paths[1];
+            foreach ($this->paths as $path) {
+               if ( is_dir($path) ) {
+                  return $path;
+               }
             }
 
-            return $this->paths[0] ?? '';
+            return '';
          default:
             return $this->$name;
       }
@@ -100,74 +81,80 @@ class Project
       return $this->path;
    }
 
-   // ! Path
-   public function construct () : string
+   // ! ID
+   public function name (string $name) : bool
    {
-      $path = self::PROJECTS_DIR;
+      if ($name === '') {
+         return false;
+      }
 
-      // @ 1 - Construct path
-      $path .= $this->vendor ?? $this->name;
-      $path .= $this->container;
-      $path .= $this->package;
+      self::$indexes[$name] ??= $this->index;
 
-      $path .= $this->type;
+      return true;
+   }
+   // ! Path
+   public function construct (? string $path = null) : string
+   {
+      if ($path) {
+         $path = trim($path, '/');
 
-      $path .= $this->public;
+         $paths = explode('/', $path);
 
-      $path .= $this->version;
+         foreach ($paths as $index => $__path__) {
+            match ($index) {
+               0 => $this->vendor    = $__path__ . '/',
+               1 => $this->container = $__path__ . '/',
+               2 => $this->package   = $__path__ . '/',
+               3 => $this->type      = $__path__ . '/',
+               4 => $this->public    = $__path__ . '/',
+               5 => $this->version   = $__path__ . '/'
+            };
+         }
+      } else {
+         $path .= $this->vendor;
+         $path .= $this->container;
+         $path .= $this->package;
 
-      // @ Fix constructed path
+         $path .= $this->type;
+         $path .= $this->public;
+         $path .= $this->version;
+      }
+
       $path = trim($path, '/');
-      $path .= '/';
+      $path = self::PROJECTS_DIR . $path . '/';
 
-      // @ Push constructed path to project paths
       $this->paths[] = $path;
 
       return $path;
    }
-   public function save (? string $backup = null) : bool
+   public function save () : string
    {
-      $key = $this->path;
-      $path = $backup ?? $key;
+      $paths = count($this->paths);
 
-      $project = self::$projects[$key] ?? null;
+      $project = '';
 
-      if ($project === null) {
-         $path = $this->construct();
-
-         // @ Save path to projects list
-         self::$projects[$key][] = $path;
-
-         // @ Set path to selected
-         self::$selected = $key;
-
-         return true;
+      if ($paths > 0) {
+         $path = $this->paths[$paths - 1];
+         $project = self::$projects[$this->index][] = $path;
       }
 
-      return false;
+      return $project;
    }
 
-   public function get (string $version = '@') : string
+   public function get (int $path = 0) : string
    {
-      $project = self::$projects[self::$selected];
-
-      // @ Get project path version
-      $path = $project[$version] ?? '';
-
-      return $path;
+      return $this->paths[$path] ?? '';
    }
 
-   public function select (string $name) : bool
+   public function select (null|string|int $project = null) : string
    {
-      $project = self::$projects[$name] ?? null;
-
-      if ($project === null) {
-         return false;
+      if ( is_string($project) ) {
+         $project = self::$indexes[$project] ?? null;
       }
 
-      self::$selected = $name;
+      $paths = self::$projects[$project] ?? '';
 
-      return true;
+      return $paths[0] ?? '';
    }
    // DEPRECATED
    public function setPath ()
