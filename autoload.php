@@ -37,7 +37,10 @@ include 'Bootgly/-base/Benchmark/Benchmark.php';
 include 'Bootgly/-base/Debugger/Backtrace.php';
 include 'Bootgly/-base/Logger/Logger.php';
 include 'Bootgly/-base/Logger/Logging.php';
+include 'Bootgly/-base/Logger/Escaped/Logging.php';
 include 'Bootgly/-base/Logger/functions.php';
+include 'Bootgly/-base/Tester/UnitTests.php';
+include 'Bootgly/-base/Tester/UnitTests/Test.php';
 include 'Bootgly/-base/functions.php';
 // 2-core
 include 'Bootgly/-core/Database.php';
