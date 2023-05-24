@@ -36,7 +36,7 @@ return [
       // @ Select
       $Project2 = new Project;
       $path2 = $Project2->select(project: 0);
-      assert($path2 !== $expected1, 'Failed to select Project path 2');
+      assert($path2 === $expected1, 'Failed to select Project path 2');
 
       return true;
    }
