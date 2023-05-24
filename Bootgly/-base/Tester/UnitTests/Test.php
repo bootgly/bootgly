@@ -189,7 +189,7 @@ class Test
       $test = str_pad($this->test, $this->Tests->width, '.', STR_PAD_RIGHT);
 
       $this->log(
-         "\033[1;37;42m PASS \033[0m " .
+         "\033[0;30;42m PASS \033[0m " .
          "\033[90m" . $test . "\033[0m" .
          "\033[1;35m +" . $time . "s\033[0m" . PHP_EOL
       );
