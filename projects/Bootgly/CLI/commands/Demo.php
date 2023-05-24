@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace projects\CLI\commands;
+namespace projects\Bootgly\CLI\commands;
 
 
 use Bootgly\CLI;
@@ -79,7 +79,7 @@ class Demo implements Commanding
       ];
       
       foreach ($examples as $index => $example) {
-         $file = '@bootgly/CLI/examples/' . $example;
+         $file = 'Bootgly/CLI/examples/' . $example;
       
          $wait = 3;
          $location = 'projects/' . $file;

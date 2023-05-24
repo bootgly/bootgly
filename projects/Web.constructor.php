@@ -41,7 +41,7 @@ switch ($Request->host) {
 
       #xdebug_break();
 
-      Bootgly::$Project->vendor = '@bootgly/';
+      Bootgly::$Project->vendor = 'Bootgly/';
       Bootgly::$Project->container = 'Web/';
       Bootgly::$Project->package = 'examples/';
       Bootgly::$Project->version = 'app/';

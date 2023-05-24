@@ -2,7 +2,7 @@
 use Bootgly\CLI;
 
 
-$resource = 'CLI/commands';
+$resource = 'Bootgly/CLI/commands';
 $commands = require $resource . '/@.php';
 
 foreach ($commands as $Command) {
