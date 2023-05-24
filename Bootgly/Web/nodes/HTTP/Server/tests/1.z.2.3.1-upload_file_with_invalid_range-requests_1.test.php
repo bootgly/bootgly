@@ -25,7 +25,7 @@ return [
       $Project->package = 'examples/';
       $Project->version = 'app/';
 
-      $Project->setPath();
+      $Project->construct();
 
       return $Response('statics/alphanumeric.txt')->upload(close: false);
    },

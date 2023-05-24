@@ -24,7 +24,7 @@ return [
       $Project->package = 'examples/';
       $Project->version = 'app/';
 
-      $Project->setPath();
+      $Project->construct();
 
       $Response(content: 'Unauthorized page!');
       return $Response->authenticate();

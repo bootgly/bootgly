@@ -25,7 +25,7 @@ class Project
 
    // * Data
    public string $vendor;       // Bootgly/
-   public string $container;    // examples/
+   public string $container;    // Web/
    public string $package;      // App/
    // ---
    public string $type;         // SPA, PWA, etc.
@@ -155,24 +155,5 @@ class Project
       $paths = self::$projects[$project] ?? '';
 
       return $paths[0] ?? '';
-   }
-   // DEPRECATED
-   public function setPath ()
-   {
-      // Join paths
-      $path = self::PROJECTS_DIR;
-
-      $path .= $this->vendor;
-      $path .= $this->container;
-      $path .= $this->package;
-
-      $path .= $this->type;
-
-      $path .= $this->public;
-
-      $path .= $this->version;
-
-      // @ Push to paths array
-      $this->paths[] = $path;
    }
 }

@@ -24,7 +24,7 @@ return [
       $Project->package = 'examples/';
       $Project->version = 'app/';
 
-      $Project->setPath();
+      $Project->construct();
 
       return $Response->redirect('https://docs.bootgly.com/', 302);
    },

@@ -8,18 +8,19 @@ use Bootgly\Debugger;
 
 // ! Global Routes
 switch ($Request->host) {
-   case 'example.com':
-      Bootgly::$Project->vendor = 'example.com/';
-      Bootgly::$Project->container = 'examples/';
+   case 'quasar.bootgly.localhost':
+      Bootgly::$Project->vendor = 'Bootgly/';
+      Bootgly::$Project->container = 'Web/';
 
       switch (@$Request->paths[0]) {
          case 'app':
-            Bootgly::$Project->package = 'app/';
+            Bootgly::$Project->type = 'app-vue-quasar/';
+            Bootgly::$Project->package = 'quasar-project/';
             Bootgly::$Project->public = 'dist/';
             Bootgly::$Project->version = 'spa/';
-            Bootgly::$Project->setPath(); // Set main folder
+            Bootgly::$Project->construct(); // Construct main folder
             Bootgly::$Project->version = 'public/';
-            Bootgly::$Project->setPath(); // Set backup folder
+            Bootgly::$Project->construct(); // Construct backup folder
 
             $App = new App($this);
             $App->pathbase = '/app/';
@@ -45,7 +46,7 @@ switch ($Request->host) {
       Bootgly::$Project->container = 'Web/';
       Bootgly::$Project->package = 'examples/';
       Bootgly::$Project->version = 'app/';
-      Bootgly::$Project->setPath();
+      Bootgly::$Project->construct();
 
       $this->App = new App($this);
       $this->App->load();

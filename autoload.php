@@ -5,7 +5,7 @@ define('BOOTGLY_BASE', __DIR__);
 define('BOOTGLY_DIR', __DIR__ . DIRECTORY_SEPARATOR);
 
 // ? Bootgly
-// ! Bootables [0-9]
+// ! Bootables ([0-9]) || (-[a-z]) || ([0-9]-[a-z])
 // 0-abstract
 include 'Bootgly/-abstract/@functions.php';
 include 'Bootgly/-abstract/@traits.php';
@@ -49,7 +49,7 @@ include 'Bootgly/-core/Event/On.php';
 include 'Bootgly/-core/Event/Timer.php';
 include 'Bootgly/-core/Project.php';
 
-// ! Classes [A-Z]
+// ! Classes ([A-Z])
 spl_autoload_register (function (string $class) {
    $paths = explode('\\', $class);
    $file = implode('/', $paths) . '.php';
@@ -155,7 +155,7 @@ spl_autoload_register (function (string $class) {
 
 @include BOOTGLY_DIR . 'Bootgly/Web.php';
 */
-// ! Resources [a-z]
+// ! Resources ([a-z])
 // ...
 
 // ? Workables
