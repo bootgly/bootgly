@@ -8,6 +8,6 @@ return [
    'exit' => true,
    // * Data
    'files' => [
-      '_1.Project-1' // private file test
+      '1.Project-1' // private file test
    ]
 ];
