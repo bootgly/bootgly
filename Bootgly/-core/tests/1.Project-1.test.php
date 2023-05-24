@@ -6,7 +6,7 @@ return [
    'separators' => [
       'suite' => 'Project class Test'
    ],
-   'describe' => 'Test methods construct, name, save, set and select',
+   'describe' => 'Test methods: construct, name, save, get and select',
    // @ Simulate
    // ...
    // @ Test

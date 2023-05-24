@@ -26,7 +26,7 @@ class CLI
    // ...
 
    // * Meta
-   // ...
+   public static bool $interactive = false;
 
    public static Commands $Commands;
    public static Terminal $Terminal;
