@@ -172,7 +172,7 @@ class Test
       $this->log(
          "\033[1;37;41m FAIL \033[0m "
          . $this->test
-         . " -> \"\033[91m" . $message ?? $this->specifications['except']() . "\033[0m\"" . ':'
+         . " -> \"\033[91m" . ($message ?? $this->specifications['except']()) . "\033[0m\"" . ':'
          . PHP_EOL
       );
 
