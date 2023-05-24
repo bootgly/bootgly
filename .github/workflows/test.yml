@@ -7,7 +7,7 @@ on:
       - 'main'
 
 jobs:
-  build:
+  test:
     runs-on: ubuntu-20.04
 
     steps:
