@@ -8,9 +8,37 @@
 <p align="center">
   <a href="https://packagist.org/packages/bootgly/bootgly">
     <img alt="Bootgly License" src="https://img.shields.io/github/license/bootgly/bootgly"/>
-    <img alt="Github Actions - Build" src="https://img.shields.io/github/actions/workflow/status/bootgly/bootgly/docker.yml"/>
+    <img alt="Github Actions - Bootgly Workflow" src="https://img.shields.io/github/actions/workflow/status/bootgly/bootgly/bootgly.yml?label=bootgly"/>
+    <img alt="Github Actions - Docker Workflow" src="https://img.shields.io/github/actions/workflow/status/bootgly/bootgly/docker.yml?label=docker"/>
   </a>
 </p>
+
+## Table of Contents
+
+- [About](#-about)
+  - [Bootgly CLI 📟](#bootgly-cli-)
+  - [Bootgly Web 🌐](#bootgly-web-)
+- [Boot](#-boot)
+  - [Compatibility](#-compatibility)
+  - [Dependencies](#️-dependencies)
+    - [Bootgly CLI 📟](#-bootgly-cli-)
+    - [Bootgly Web 🌐](#-bootgly-web-)
+- [Community](#-community)
+  - [Contributing](#-contributing)
+  - [Code of Conduct](#-code-of-conduct)
+  - [Social Networks](#-social-networks)
+  - [Sponsorship](#-sponsorship)
+- [Compliances](#-compliances)
+  - [License](#-license)
+  - [Versioning](#-versioning)
+- [Highlights](#-highlights)
+  - [Bootgly CLI 📟](#-bootgly-cli-)
+  - [Bootgly Web 🌐](#-bootgly-web-)
+- [Usage](#-usage)
+  - [Bootgly CLI 📟](#-bootgly-cli-)
+    - [Run CLI demo](#run-cli-demo)
+  - [Bootgly Web 🌐](#-bootgly-web-)
+    - [Running a HTTP Server](#running-a-http-server)
 
 ---
 
