@@ -40,15 +40,32 @@ class Bootgly
       // @ Author
       // TODO
       $projects = Project::BOOTGLY_PROJECTS_DIR . self::BOOT_FILE;
-      \Bootgly::extract($projects, $vars);
+      \Bootgly::boot($projects, $vars);
       // @ Consumer
       if (BOOTGLY_DIR !== BOOTGLY_WORKABLES_DIR) {
          // Multi projects || Single project
          $projects = Project::PROJECTS_DIR . self::BOOT_FILE;
          $project = Project::PROJECT_DIR . self::BOOT_FILE;
 
-         self::extract($projects, $vars) || self::extract($project, $vars);
+         self::boot($projects, $vars) || self::boot($project, $vars);
       }
+   }
+
+   public static function boot (string $file, array $vars) : bool
+   {
+      if ( is_file($file) ) {
+         $extract = static function ($__file__, $__vars__)
+         {
+            extract($__vars__);
+            @include $__file__;
+         };
+
+         $extract($file, $vars);
+
+         return true;
+      }
+
+      return false;
    }
 
    // API
@@ -71,23 +88,6 @@ class Bootgly
       return new Logger($data);
    }
 
-   // TODO change to include?load?
-   public static function extract (string $file, array $vars) : bool
-   {
-      if ( is_file($file) ) {
-         $extract = static function ($__file__, $__vars__)
-         {
-            extract($__vars__);
-            @include $__file__;
-         };
-
-         $extract($file, $vars);
-
-         return true;
-      }
-
-      return false;
-   }
    public static function template (string $view, array $parameters) : Template
    {
       $Template = static::$Template;
