@@ -68,7 +68,7 @@ class Server
          }
 
          // @ Load production
-         self::$Handler = require($file);
+         self::$Handler = require $file;
       }
 
       return self::$Handler;

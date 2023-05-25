@@ -11,7 +11,7 @@
 namespace projects\Bootgly\CLI\commands;
 
 
-use Bootgly\API\Tests;
+use Bootgly\API\Tests\Tester;
 use Bootgly\CLI;
 use Bootgly\CLI\ { Command, Commanding };
 use Bootgly\CLI\Terminal\components\Alert\Alert;
@@ -38,7 +38,7 @@ class TestCommand extends Command implements Commanding
          $tests = (array) $tests;
 
          if ($tests['autoBoot'] ?? false) {
-            $UnitTests = new Tests($tests);
+            $UnitTests = new Tester($tests);
          } else {
             $Output = CLI::$Terminal->Output->render('@.;');
 

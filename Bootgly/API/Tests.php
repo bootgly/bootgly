@@ -11,21 +11,16 @@
 namespace Bootgly\API;
 
 
-use Bootgly\Logger\Escaped\Logging;
-use Bootgly\API\Tests\ { Test, Testing };
+use Bootgly\API\Logs\Escaped\Logable;
 
 
-class Tests implements Testing
+abstract class Tests
 {
-   use Logging;
+   use Logable;
 
 
    // * Config
-   public string $autoBoot;
-   public bool $autoInstance;
-   public bool $autoResult;
-   public bool $autoSummarize;
-   public bool $exitOnFailure;
+   // ...
 
    // * Data
    public array $tests;
@@ -44,83 +39,9 @@ class Tests implements Testing
    public int $width;
 
 
-   public function __construct (array &$tests)
-   {
-      // * Config
-      $this->autoBoot = $tests['autoBoot'] ?? '';
-      $this->autoInstance = $tests['autoInstance'] ?? false;
-      $this->autoResult = $tests['autoResult'] ?? false;
-      $this->autoSummarize = $tests['autoSummarize'] ?? false;
-      $this->exitOnFailure = $tests['exitOnFailure'] ?? false;
+   abstract public function __construct (array &$tests);
 
-      // * Data
-      $this->tests = $tests['files'];
-      $this->specifications = [];
-
-      // * Meta
-      $this->failed = 0;
-      $this->passed = 0;
-      $this->skipped = 0;
-      // @ Stats
-      $this->total = count($this->tests);
-      // @ Time
-      $this->started = microtime(true);
-      // @ Screen
-      // width
-      $width = 0;
-      foreach ($tests['files'] as $file) {
-         $length = strlen($file);
-         if ($length > $width) {
-            $width = $length;
-         }
-      }
-      $this->width = $width;
-
-
-      $this->log('@\;');
-
-      // @ Automate
-      if ($this->autoBoot) {
-         $dir = $this->autoBoot . DIRECTORY_SEPARATOR;
-
-         foreach ($this->tests as $test) {
-            $specifications = require $dir . $test . '.test.php';
-            $this->specifications[] = $specifications;
-         }
-      }
-      if ($this->autoInstance) {
-         foreach ($this->specifications as $specification) {
-            $Test = $this->test($specification);
-   
-            $Test->separate();
-   
-            $Test->test();
-         }
-      }
-      if ($this->autoSummarize) {
-         $this->summarize();
-      }
-
-      if ($this->failed > 0 && $this->exitOnFailure) {
-         exit(1);
-      }
-   }
-
-   public function test (? array &$specifications) : Test|false
-   {
-      if ($specifications === null) {
-         $this->skipped++;
-         return false;
-      }
-
-      $Test = new Test($this, $specifications);
-
-      if (key($this->tests) < $this->total) {
-         next($this->tests);
-      }
-
-      return $Test;
-   }
+   abstract public function test (? array &$specifications) : object|false;
 
    public function summarize ()
    {
