@@ -11,7 +11,6 @@
 namespace Bootgly\Web;
 
 
-use Bootgly\Bootgly;
 use Bootgly\streams\File;
 use Bootgly\Web;
 
@@ -49,19 +48,19 @@ class App
          case 'spa':
          case 'static':
             if ($this->Web->Request->path == $this->pathbase) {
-               readfile(Bootgly::$Project->path . 'index.html');
+               readfile(\Bootgly::$Project->path . 'index.html');
             } else {
                if ($this->pathbase) {
                   $this->Web->Router->Route->prefix = $this->pathbase;
                }
 
-               $Static = new File(Bootgly::$Project->path . $this->Web->Request->path);
+               $Static = new File(\Bootgly::$Project->path . $this->Web->Request->path);
                // TODO save and get list of all files in project->path and compare here to optimize performance
                if ($Static->File) {
                   header('Content-Type: '. $Static->type);
                   $Static->read();
                } else {
-                  readfile(Bootgly::$Project->path . 'index.html');
+                  readfile(\Bootgly::$Project->path . 'index.html');
                }
             }
 
@@ -69,10 +68,10 @@ class App
          default:
             $Web = &$this->Web;
 
-            if ( is_file(Bootgly::$Project->path . 'index.php') ) {
-               require_once Bootgly::$Project->path . 'index.php';
-            } else if ( is_file(Bootgly::$Project->path . 'app.constructor.php') ) {
-               require_once Bootgly::$Project->path . 'app.constructor.php';
+            if ( is_file(\Bootgly::$Project->path . 'index.php') ) {
+               require_once \Bootgly::$Project->path . 'index.php';
+            } else if ( is_file(\Bootgly::$Project->path . 'app.constructor.php') ) {
+               require_once \Bootgly::$Project->path . 'app.constructor.php';
             }
       }
    }

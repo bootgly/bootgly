@@ -11,8 +11,6 @@
 namespace Bootgly\Web\nodes\HTTP\Server;
 
 
-use Bootgly\Bootgly; // TODO remove
-
 use Bootgly\streams\File;
 
 use Bootgly\Web\nodes\HTTP\Server;
@@ -275,7 +273,7 @@ class Response
       switch ($resource) {
          // @ File
          case 'view':
-            $File = new File(Bootgly::$Project->path . 'views/' . $data);
+            $File = new File(\Bootgly::$Project->path . 'views/' . $data);
             $this->body   = $File;
             $this->source = 'file';
             $this->type   = $File->extension;
@@ -317,7 +315,7 @@ class Response
                      } else if ($data[0] === '@') {
                         $File = new File(BOOTGLY_WORKABLES_DIR . 'projects/' . $data);
                      } else {
-                        $File = new File(Bootgly::$Project->path . $data);
+                        $File = new File(\Bootgly::$Project->path . $data);
                      }
 
                      $this->body   = $File;
@@ -531,7 +529,7 @@ class Response
       if ($content instanceof File) {
          $File = $content;
       } else {
-         $File = new File(Bootgly::$Project->path . $content);
+         $File = new File(\Bootgly::$Project->path . $content);
       }
 
       if ($File->readable === false) {

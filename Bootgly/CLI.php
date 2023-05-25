@@ -79,7 +79,7 @@ class CLI
       // @ Author
       // TODO
       $projects = Project::BOOTGLY_PROJECTS_DIR . self::BOOT_FILE;
-      Bootgly::extract($projects, $vars);
+      \Bootgly::extract($projects, $vars);
       // TODO
       // @ Consumer
       if (BOOTGLY_DIR !== BOOTGLY_WORKABLES_DIR) {
@@ -87,7 +87,7 @@ class CLI
          $projects = Project::PROJECTS_DIR . self::BOOT_FILE;
          $project = Project::PROJECT_DIR . self::BOOT_FILE;
 
-         Bootgly::extract($projects, $vars) || Bootgly::extract($project, $vars);
+         \Bootgly::extract($projects, $vars) || \Bootgly::extract($project, $vars);
       }
    }
 }

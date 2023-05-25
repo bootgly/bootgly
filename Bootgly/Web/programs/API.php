@@ -11,7 +11,6 @@
 namespace Bootgly\Web;
 
 
-use Bootgly\Bootgly;
 use Bootgly\Web;
 
 
@@ -143,10 +142,10 @@ class API // TODO extends, implements, uses
    {
       $Web = &$this->Web;
 
-      if (is_file(Bootgly::$Project . 'index.php')) {
-         require_once Bootgly::$Project . 'index.php';
-      } else if ( is_file(Bootgly::$Project . 'api.constructor.php') ) {
-         require_once Bootgly::$Project . 'api.constructor.php';
+      if (is_file(\Bootgly::$Project . 'index.php')) {
+         require_once \Bootgly::$Project . 'index.php';
+      } else if ( is_file(\Bootgly::$Project . 'api.constructor.php') ) {
+         require_once \Bootgly::$Project . 'api.constructor.php';
       }
    }
    public function debug ($data, string $password = '')

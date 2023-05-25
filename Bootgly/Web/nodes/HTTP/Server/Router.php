@@ -11,7 +11,6 @@
 namespace Bootgly\Web\nodes\HTTP\Server;
 
 
-use Bootgly\Bootgly;
 use function Bootgly\__Array;
 use function Bootgly\__String;
 use Bootgly\Debugger;
@@ -101,14 +100,14 @@ class Router
       (static function (string $__default__)
       use ($Request, $Router, $Route) {
          include_once $__default__;
-      })( (string) new File(Bootgly::$Project->path . 'router/' . 'index.php') );
+      })( (string) new File(\Bootgly::$Project->path . 'router/' . 'index.php') );
 
       $instances = (array) $instances;
       foreach ($instances as $instance) {
          (static function (string $__routes__)
          use ($Request, $Router, $Route) {
             @include_once $__routes__;
-         })( (string) new File(Bootgly::$Project->path . 'router/' . $instance . '.php') );
+         })( (string) new File(\Bootgly::$Project->path . 'router/' . $instance . '.php') );
       }
    }
    public function pause ()

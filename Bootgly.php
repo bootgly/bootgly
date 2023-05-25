@@ -8,10 +8,8 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly; // TODO remove namespace
-
-
 use Bootgly\templates\Template;
+use Bootgly\Project;
 use Bootgly\streams\File;
 
 
@@ -40,7 +38,7 @@ class Bootgly
       // @ Author
       // TODO
       $projects = Project::BOOTGLY_PROJECTS_DIR . self::BOOT_FILE;
-      Bootgly::extract($projects, $vars);
+      \Bootgly::extract($projects, $vars);
       // @ Consumer
       if (BOOTGLY_DIR !== BOOTGLY_WORKABLES_DIR) {
          // Multi projects || Single project

@@ -1,15 +1,13 @@
 <?php
-use Bootgly\Bootgly;
-
 use Bootgly\Web\nodes\HTTP\Server\Request;
 use Bootgly\Web\nodes\HTTP\Server\Response;
 
 
-Bootgly::$Project->vendor = 'Bootgly/';
-Bootgly::$Project->container = 'Web/';
-Bootgly::$Project->package = 'examples/';
-Bootgly::$Project->version = 'app/';
-Bootgly::$Project->construct();
+\Bootgly::$Project->vendor = 'Bootgly/';
+\Bootgly::$Project->container = 'Web/';
+\Bootgly::$Project->package = 'examples/';
+\Bootgly::$Project->version = 'app/';
+\Bootgly::$Project->construct();
 
 
 return static function

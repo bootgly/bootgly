@@ -1,7 +1,4 @@
 <?php
-use Bootgly\Bootgly;
-
-
 return static function ($input)
 {
    return <<<HTTP_RAW

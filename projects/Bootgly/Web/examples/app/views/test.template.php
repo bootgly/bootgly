@@ -8,7 +8,7 @@
       <meta name="author" content="Rodrigo Vieira (@rodrigoslayertech)">
    </head>
    <body>
-      <div>Testing Bootgly::template(...)!</div>
+      <div>Testing \Bootgly::template(...)!</div>
       <div>$title: @>> $title;</div>
    </body>
 </html>
