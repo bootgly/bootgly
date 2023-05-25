@@ -21,7 +21,7 @@ class TestCommand extends Command implements Commanding
 {
    // * Config
    public string $name = 'test';
-   public string $description = 'Run Bootgly tests';
+   public string $description = 'Perform Bootgly tests';
    // * Data
    private array $tests = [
       'Bootgly/-core/tests/'

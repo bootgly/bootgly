@@ -16,7 +16,7 @@ use Bootgly\API;
 
 use Bootgly\API\Debugger;
 
-use Bootgly\API\Logging;
+use Bootgly\API\Logs\Logging;
 use Bootgly\API\Logs\Logger;
 
 use Bootgly\Event\Timer;

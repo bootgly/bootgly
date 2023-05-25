@@ -18,7 +18,7 @@ use Bootgly\CLI\ { Command, Commanding };
 class DemoCommand extends Command implements Commanding
 {
    public string $name = 'demo';
-   public string $description = 'Run the CLI demo';
+   public string $description = 'Run the Bootgly CLI demo';
 
 
    public function run (array $arguments, array $options) : bool

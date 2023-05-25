@@ -11,7 +11,8 @@
 use Bootgly\templates\Template;
 use Bootgly\streams\File;
 use Bootgly\ { Project };
-use Bootgly\API\ { Debugger, Logger };
+use Bootgly\API\Debugger;
+use Bootgly\API\Logs\Logger;
 
 
 class Bootgly
@@ -68,7 +69,7 @@ class Bootgly
    public function log ($data) : Logger
    {
       return new Logger($data);
-   }   
+   }
 
    // TODO change to include?load?
    public static function extract (string $file, array $vars) : bool

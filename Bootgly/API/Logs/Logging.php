@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\API;
+namespace Bootgly\API\Logs;
 
 
 interface Logging

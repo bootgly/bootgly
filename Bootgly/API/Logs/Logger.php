@@ -37,8 +37,13 @@ class Logger extends Logs
       $this->channel = $channel;
    }
 
-   public function log ($message)
+   public function log ($message) : bool
    {
-      error_log($message, 3, BOOTGLY_WORKABLES_BASE . '/workspace/logs/bootgly.log');
+      return error_log(
+         message: $message,
+         message_type: 3,
+         destination: BOOTGLY_WORKABLES_BASE . '/workspace/logs/bootgly.log',
+         additional_headers: null
+      );
    }
 }
