@@ -8,13 +8,13 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\Logger;
+namespace Bootgly\API\Logs;
 
 
-use Bootgly\Logs;
+use Bootgly\API\Logs;
 
 
-class Logger implements Logs
+class Logger extends Logs
 {
    // * Config
    // @ Display

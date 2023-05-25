@@ -9,8 +9,9 @@
  */
 
 use Bootgly\templates\Template;
-use Bootgly\Project;
 use Bootgly\streams\File;
+use Bootgly\ { Project };
+use Bootgly\API\ { Debugger, Logger };
 
 
 class Bootgly
@@ -48,11 +49,28 @@ class Bootgly
          self::extract($projects, $vars) || self::extract($project, $vars);
       }
    }
-   public static function debug ()
-   {
-      // TODO
-   }
 
+   // API
+   public static function debug (...$vars) : Debugger
+   {
+      if (Debugger::$trace === null) {
+         Debugger::$trace = debug_backtrace();
+      }
+
+      $Debugger = new Debugger(...$vars);
+
+      if (Debugger::$trace !== false) {
+         Debugger::$trace = null;
+      }
+
+      return $Debugger;
+   }
+   public function log ($data) : Logger
+   {
+      return new Logger($data);
+   }   
+
+   // TODO change to include?load?
    public static function extract (string $file, array $vars) : bool
    {
       if ( is_file($file) ) {

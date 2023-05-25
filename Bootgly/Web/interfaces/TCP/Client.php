@@ -13,9 +13,9 @@ namespace Bootgly\Web\interfaces\TCP;
 
 // use
 use Closure;
-use Bootgly\Debugger;
-use Bootgly\Logger\Logger;
-use Bootgly\API\Logs\Escaped\Loggable;
+use Bootgly\API\Debugger;
+use Bootgly\API\Logs\Logger;
+use Bootgly\API\Logs\Escaped\Loggable as LoggableEscaped;
 use Bootgly\Web\events\Select;
 use Bootgly\Web\interfaces\TCP\Client\_\Process;
 use Bootgly\Web\interfaces\TCP\Client\_\CLI\Terminal;
@@ -25,7 +25,7 @@ use Bootgly\Web\interfaces\TCP\Client\Connections;
 
 class Client
 {
-   use Loggable;
+   use LoggableEscaped;
 
 
    public $Socket;

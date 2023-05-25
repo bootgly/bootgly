@@ -13,12 +13,12 @@ namespace Bootgly\API\Tests;
 
 use AssertionError;
 use Bootgly\API\Tests;
-use Bootgly\API\Logs\Escaped\Loggable;
+use Bootgly\API\Logs\Escaped\Loggable as LoggableEscaped;
 
 
 class Test
 {
-   use Loggable;
+   use LoggableEscaped;
 
 
    public Tests $Tests;

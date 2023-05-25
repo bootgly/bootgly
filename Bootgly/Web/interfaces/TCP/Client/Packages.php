@@ -11,7 +11,7 @@
 namespace Bootgly\Web\interfaces\TCP\Client;
 
 
-use Bootgly\API\Logs\Escaped\Loggable;
+use Bootgly\API\Logs\Escaped\Loggable as LoggableEscaped;
 
 use Bootgly\Web; // @interface
 
@@ -22,7 +22,7 @@ use Bootgly\Web\interfaces\TCP\Client\Connections\Connection;
 
 class Packages implements Web\Packages
 {
-   use Loggable;
+   use LoggableEscaped;
 
 
    public Connection $Connection;

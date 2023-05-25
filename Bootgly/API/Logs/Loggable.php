@@ -8,10 +8,10 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\Logger;
+namespace Bootgly\API\Logs;
 
 
-trait Logging
+trait Loggable
 {
    public Logger $Logger;
 

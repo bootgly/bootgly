@@ -12,13 +12,13 @@ namespace Bootgly\Web\interfaces\TCP\Client\_\CLI;
 
 
 use Bootgly\CLI;
-use Bootgly\API\Logs\Escaped\Loggable;
+use Bootgly\API\Logs\Escaped\Loggable as LoggableEscaped;
 use Bootgly\Web\interfaces\TCP\Client;
 
 
 class Terminal extends CLI\Terminal
 {
-   use Loggable;
+   use LoggableEscaped;
 
 
    public Client $Client;

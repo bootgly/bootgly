@@ -14,13 +14,13 @@ namespace Bootgly\API\Logs\Escaped;
 // -abstract
 use Bootgly\__String\Escapeable\text\Formattable;
 use Bootgly\templates\ANSI\Escaped;
-// -base
-use Bootgly\Logger\Logger;
+
+use Bootgly\API\Logs\Logger;
 
 
 trait Loggable
 {
-   use \Bootgly\Logger\Logging;
+   use \Bootgly\API\Logs\Loggable; // TODO rename
    use Formattable;
 
 

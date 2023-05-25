@@ -12,15 +12,18 @@ namespace Bootgly\Web\interfaces\TCP;
 
 
 // @use
-use Bootgly\Debugger;
-use Bootgly\Logs;
 use Bootgly\API;
-use Bootgly\Logger\Logger;
+
+use Bootgly\API\Debugger;
+
+use Bootgly\API\Logging;
+use Bootgly\API\Logs\Logger;
+
 use Bootgly\Event\Timer;
 use Bootgly\Project;
 
 // @extend
-use Bootgly\API\Logs\Escaped\Loggable;
+use Bootgly\API\Logs\Escaped\Loggable as LoggableEscaped;
 
 use Bootgly\Web\events\Select;
 use Bootgly\Web\Servers;
@@ -30,9 +33,9 @@ use Bootgly\Web\interfaces\TCP\Server\_\CLI\Terminal;
 use Bootgly\Web\interfaces\TCP\Server\Connections;
 
 
-class Server implements Servers, Logs
+class Server implements Servers, Logging
 {
-   use Loggable;
+   use LoggableEscaped;
 
 
    protected $Socket;

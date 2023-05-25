@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\Debugger;
+namespace Bootgly\API\Debugger;
 
 
 class Backtrace

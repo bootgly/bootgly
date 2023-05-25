@@ -12,17 +12,17 @@ namespace Bootgly\Web\interfaces\TCP\Client\_;
 
 
 // use
-use Bootgly\Logger\Logger;
+use Bootgly\API\Logs\Logger;
 use Bootgly\Event\Timer;
 // ?
 use Bootgly\Web\interfaces\TCP\Client;
 // extend
-use Bootgly\API\Logs\Escaped\Loggable;
+use Bootgly\API\Logs\Escaped\Loggable as LoggableEscaped;
 
 
 class Process
 {
-   use Loggable;
+   use LoggableEscaped;
 
 
    public Client $Client;

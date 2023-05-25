@@ -13,7 +13,7 @@ namespace Bootgly\Web\nodes\HTTP\Server;
 
 use function Bootgly\__Array;
 use function Bootgly\__String;
-use Bootgly\Debugger;
+use Bootgly\API\Debugger;
 use Bootgly\streams\File;
 use Bootgly\Web\nodes\HTTP\Server;
 use Bootgly\Web\nodes\HTTP\Server\Router\Route;

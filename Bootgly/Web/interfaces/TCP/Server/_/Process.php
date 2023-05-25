@@ -13,18 +13,18 @@ namespace Bootgly\Web\interfaces\TCP\Server\_;
 
 // use
 use Bootgly\API;
-use Bootgly\Logger\Logger;
+use Bootgly\API\Logs\Logger;
 use Bootgly\Event\Timer;
 use Bootgly\Web\events\Select;
 // ?
 use Bootgly\Web\interfaces\TCP\Server;
 // extend
-use Bootgly\API\Logs\Escaped\Loggable;
+use Bootgly\API\Logs\Escaped\Loggable as LoggableEscaped;
 
 
 class Process
 {
-   use Loggable;
+   use LoggableEscaped;
 
 
    public Server $Server;

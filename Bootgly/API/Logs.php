@@ -8,10 +8,10 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\Logger;
+namespace Bootgly\API;
 
 
-function Log ($data) : Logger
+abstract class Logs
 {
-   return new Logger($data);
+   abstract public function log ($message);
 }

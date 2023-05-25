@@ -13,7 +13,7 @@ namespace Bootgly\Web\nodes\HTTP;
 
 use Bootgly\API;
 use Bootgly\Project;
-use Bootgly\Logger\Logger;
+use Bootgly\API\Logs\Logger;
 
 use Bootgly\API\Tests\Tester;
 

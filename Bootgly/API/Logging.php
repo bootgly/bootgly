@@ -8,10 +8,10 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly;
+namespace Bootgly\API;
 
 
-interface Logs
+interface Logging
 {
    public function log ($message);
 }

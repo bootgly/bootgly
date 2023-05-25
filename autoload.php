@@ -30,14 +30,7 @@ include 'Bootgly/-abstract/streams/File.php';
 include 'Bootgly/-abstract/templates/ANSI/Escaped.php';
 include 'Bootgly/-abstract/templates/Template.php';
 // 1-base
-include 'Bootgly/-base/Debugger.php';
-include 'Bootgly/-base/Logs.php';
-include 'Bootgly/-base/Debugger/Backtrace.php';
-include 'Bootgly/-base/Logger/Logger.php';
-include 'Bootgly/-base/Logger/Logging.php';
-include 'Bootgly/-base/Logger/functions.php';
 
-include 'Bootgly/-base/functions.php';
 // 2-core
 include 'Bootgly/-core/Database.php';
 include 'Bootgly/-core/Event/Loops.php';
@@ -160,7 +153,23 @@ spl_autoload_register (function (string $class) {
 @include BOOTGLY_DIR . 'Bootgly/Web.php';
 */
 // ! Resources ([a-z])
-// ...
+use Bootgly\API\Debugger;
+
+
+function debug (...$vars)
+{
+   if (Debugger::$trace === null) {
+      Debugger::$trace = debug_backtrace();
+   }
+
+   $Debugger = new Debugger(...$vars);
+
+   if (Debugger::$trace !== false) {
+      Debugger::$trace = null;
+   }
+
+   return $Debugger;
+}
 
 // ? Workables
 // composer?

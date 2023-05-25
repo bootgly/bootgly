@@ -12,7 +12,7 @@ namespace Bootgly\API\Tests;
 
 
 use Bootgly\__String\Path;
-use Bootgly\Debugger\Backtrace;
+use Bootgly\API\Debugger\Backtrace;
 
 
 class Benchmark
