@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\Logger\Escaped;
+namespace Bootgly\API\Logs\Escaped;
 
 
 // -abstract
@@ -18,7 +18,7 @@ use Bootgly\templates\ANSI\Escaped;
 use Bootgly\Logger\Logger;
 
 
-trait Logging // TODO change name
+trait Loggable
 {
    use \Bootgly\Logger\Logging;
    use Formattable;
@@ -30,7 +30,7 @@ trait Logging // TODO change name
    // ...
 
 
-   public function log ($message, int $level = self::LOG_DEBUG_LEVEL) : true
+   public function log ($message, int $level = self::LOG_DEBUG_LEVEL) : bool
    {
       if (Logger::$display === Logger::DISPLAY_NONE) {
          return true;

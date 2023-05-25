@@ -11,12 +11,12 @@
 namespace Bootgly\API;
 
 
-use Bootgly\API\Logs\Escaped\Logable;
+use Bootgly\API\Logs\Escaped\Loggable;
 
 
 abstract class Tests
 {
-   use Logable;
+   use Loggable;
 
 
    // * Config
@@ -35,7 +35,7 @@ abstract class Tests
    // @ Time
    public float $started;
    public float $finished;
-   // @ Screen
+   // @ Screen?
    public int $width;
 
 
