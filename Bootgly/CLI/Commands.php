@@ -11,6 +11,7 @@
 namespace Bootgly\CLI;
 
 
+use Bootgly\CLI\components\Header;
 use Closure;
 use Bootgly\templates\ANSI\Escaped;
 
@@ -150,10 +151,13 @@ class Commands
 
    private function help (bool $scripting = true) : void
    {
-      $help = '';
+      $help = '@.;';
 
       if ($scripting) {
-         $help = '@.;Usage: php ' . $this->args[0] . ' [command] @..;';
+         $Header = new Header;
+
+         $help .= $Header->write(word: 'Bootgly', inline: true);
+         $help .= '@.;Usage: php ' . $this->args[0] . ' [command] @..;';
          $help .= 'Available commands:';
       }
 
