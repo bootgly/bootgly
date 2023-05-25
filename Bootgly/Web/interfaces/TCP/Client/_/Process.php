@@ -17,12 +17,12 @@ use Bootgly\Event\Timer;
 // ?
 use Bootgly\Web\interfaces\TCP\Client;
 // extend
-use Bootgly\CLI\Terminal\_\Logger\Logging;
+use Bootgly\API\Logs\Escaped\Loggable;
 
 
 class Process
 {
-   use Logging;
+   use Loggable;
 
 
    public Client $Client;

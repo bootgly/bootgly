@@ -43,7 +43,7 @@ return [
    },
 
    // @ assert
-   'assert' => function ($response) : bool {
+   'test' => function ($response) : bool {
       $expected = <<<HTML_RAW
       HTTP/1.1 416 Range Not Satisfiable\r
       Server: Bootgly\r

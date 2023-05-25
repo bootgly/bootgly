@@ -40,7 +40,7 @@ class Tester extends Tests
       $this->exitOnFailure = $tests['exitOnFailure'] ?? false;
 
       // * Data
-      $this->tests = $tests['files'];
+      $this->tests = $tests['files'] ?? $tests;
       $this->specifications = [];
 
       // * Meta
@@ -54,7 +54,7 @@ class Tester extends Tests
       // @ Screen
       // width
       $width = 0;
-      foreach ($tests['files'] as $file) {
+      foreach ($this->tests as $file) {
          $length = strlen($file);
          if ($length > $width) {
             $width = $length;

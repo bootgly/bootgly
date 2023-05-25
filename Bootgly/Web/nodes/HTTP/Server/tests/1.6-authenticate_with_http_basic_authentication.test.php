@@ -36,7 +36,7 @@ return [
    },
 
    // @ assert
-   'assert' => function ($response) : bool {
+   'test' => function ($response) : bool {
       // ! Asserts
       // @ Assert response raw
       $expected = <<<HTML_RAW

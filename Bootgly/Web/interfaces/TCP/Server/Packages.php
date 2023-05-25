@@ -14,7 +14,7 @@ namespace Bootgly\Web\interfaces\TCP\Server;
 use Bootgly\Logger\Logger;
 
 use Bootgly\API;
-use Bootgly\CLI\Terminal\_\Logger\Logging;
+use Bootgly\API\Logs\Escaped\Loggable;
 use Bootgly\Web; // @interface
 
 use Bootgly\Web\interfaces\TCP\Server;
@@ -24,7 +24,7 @@ use Bootgly\Web\interfaces\TCP\Server\Connections\Connection;
 
 abstract class Packages implements Web\Packages
 {
-   use Logging;
+   use Loggable;
 
 
    public Connection $Connection;

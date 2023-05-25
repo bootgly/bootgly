@@ -26,7 +26,7 @@ return [
    },
 
    // @ assert
-   'assert' => function ($response) : bool {
+   'test' => function ($response) : bool {
       /*
       return $Response->status === '200 OK'
       && $Response->body === 'Hello World!';

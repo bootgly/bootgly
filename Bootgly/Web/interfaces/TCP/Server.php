@@ -20,7 +20,7 @@ use Bootgly\Event\Timer;
 use Bootgly\Project;
 
 // @extend
-use Bootgly\CLI\Terminal\_\Logger\Logging;
+use Bootgly\API\Logs\Escaped\Loggable;
 
 use Bootgly\Web\events\Select;
 use Bootgly\Web\Servers;
@@ -32,7 +32,7 @@ use Bootgly\Web\interfaces\TCP\Server\Connections;
 
 class Server implements Servers, Logs
 {
-   use Logging;
+   use Loggable;
 
 
    protected $Socket;

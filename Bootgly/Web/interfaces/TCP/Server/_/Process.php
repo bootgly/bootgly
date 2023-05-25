@@ -19,12 +19,12 @@ use Bootgly\Web\events\Select;
 // ?
 use Bootgly\Web\interfaces\TCP\Server;
 // extend
-use Bootgly\CLI\Terminal\_\Logger\Logging;
+use Bootgly\API\Logs\Escaped\Loggable;
 
 
 class Process
 {
-   use Logging;
+   use Loggable;
 
 
    public Server $Server;

@@ -13,14 +13,14 @@ namespace Bootgly\Web\events;
 
 use Bootgly\Event;
 
-use Bootgly\CLI\Terminal\_\Logger\Logging;
+use Bootgly\API\Logs\Escaped\Loggable;
 
 use Bootgly\Web\Connections;
 
 
 class Select implements Event\Loops
 {
-   use Logging;
+   use Loggable;
 
 
    public Connections $Connections;

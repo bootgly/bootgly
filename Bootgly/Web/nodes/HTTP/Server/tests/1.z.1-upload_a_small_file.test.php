@@ -37,7 +37,7 @@ return [
    },
 
    // @ assert
-   'assert' => function ($response) : bool {
+   'test' => function ($response) : bool {
       // ! Asserts
       // @ Assert length of response
       $expected = 82928;

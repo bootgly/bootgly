@@ -15,7 +15,7 @@ use Bootgly\API;
 use Bootgly\Project;
 use Bootgly\Logger\Logger;
 
-use Bootgly\CLI\Terminal\_\Tester\Tests;
+use Bootgly\API\Tests\Tester;
 
 use Bootgly\Web\interfaces\TCP;
 use Bootgly\Web\interfaces\TCP\Server\Packages;
@@ -235,7 +235,7 @@ class Server extends TCP\Server implements HTTP
             // @ Get test files
             $tests = API\Server::$tests[self::class];
 
-            $Tests = new Tests($tests);
+            $Tests = new Tester($tests);
 
             // @ Run test cases
             foreach ($tests as $index => $value) {
@@ -275,8 +275,8 @@ class Server extends TCP\Server implements HTTP
                   $input = $Connection::$input;
                }
 
-               // @ Execute Test assert
-               $Test->assert($input);
+               // @ Execute Test
+               $Test->test($input);
                // @ Output Test result
                if (! $Connection->expired && $Test->success) {
                   $Test->pass();
