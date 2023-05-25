@@ -13,11 +13,11 @@ namespace projects\Bootgly\CLI\commands;
 
 use Bootgly\API\Tests;
 use Bootgly\CLI;
-use Bootgly\CLI\Commanding;
+use Bootgly\CLI\ { Command, Commanding };
 use Bootgly\CLI\Terminal\components\Alert\Alert;
 
 
-class Test implements Commanding
+class TestCommand extends Command implements Commanding
 {
    // * Config
    public string $name = 'test';

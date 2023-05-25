@@ -3,6 +3,6 @@ namespace projects\Bootgly\CLI\commands;
 
 
 return [
-   new Demo,
-   new Test
+   new DemoCommand,
+   new TestCommand
 ];
