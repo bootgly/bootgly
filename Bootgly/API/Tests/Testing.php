@@ -8,10 +8,10 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly;
+namespace Bootgly\API\Tests;
 
 
-interface Tests
+interface Testing
 {
    public function __construct (array &$tests);
 

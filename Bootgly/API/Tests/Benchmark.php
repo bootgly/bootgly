@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\Benchmark;
+namespace Bootgly\API\Tests;
 
 
 use Bootgly\__String\Path;

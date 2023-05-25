@@ -8,12 +8,12 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\Tester\UnitTests;
+namespace Bootgly\API\Tests;
 
 
 use AssertionError;
+use Bootgly\API\Tests;
 use Bootgly\Logger\Escaped\Logging;
-use Bootgly\Tester\UnitTests;
 
 
 class Test
@@ -21,7 +21,7 @@ class Test
    use Logging;
 
 
-   public UnitTests $Tests;
+   public Tests $Tests;
 
    // * Config
    // ...
@@ -38,7 +38,7 @@ class Test
    public float $finished;
 
 
-   public function __construct (UnitTests $Tests, array $specifications)
+   public function __construct (Tests $Tests, array $specifications)
    {
       $this->Tests = $Tests;
 
@@ -147,7 +147,7 @@ class Test
 
          $this->assertions[] = true;
 
-         if ($this->Tests->autoresult) {
+         if ($this->Tests->autoResult) {
             $this->finished = microtime(true);
             $this->pass();
          }
@@ -156,7 +156,7 @@ class Test
 
          $message = $AssertionError->getMessage();
 
-         if ($this->Tests->autoresult) {
+         if ($this->Tests->autoResult) {
             $this->finished = microtime(true);
             $this->fail($message);
          }

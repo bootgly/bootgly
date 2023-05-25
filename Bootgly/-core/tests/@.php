@@ -1,11 +1,11 @@
 <?php
 return [
    // * Config
-   'autoboot' => __DIR__,
-   'autoinstance' => true,
-   'autoresult' => true,
-   'autosummarize' => true,
-   'exit' => true,
+   'autoBoot' => __DIR__,
+   'autoInstance' => true,
+   'autoResult' => true,
+   'autoSummarize' => true,
+   'exitOnFailure' => true,
    // * Data
    'files' => [
       '1.Project-1'

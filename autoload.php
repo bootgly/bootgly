@@ -32,15 +32,12 @@ include 'Bootgly/-abstract/templates/Template.php';
 // 1-base
 include 'Bootgly/-base/Debugger.php';
 include 'Bootgly/-base/Logs.php';
-include 'Bootgly/-base/Tests.php';
-include 'Bootgly/-base/Benchmark/Benchmark.php';
 include 'Bootgly/-base/Debugger/Backtrace.php';
 include 'Bootgly/-base/Logger/Logger.php';
 include 'Bootgly/-base/Logger/Logging.php';
 include 'Bootgly/-base/Logger/Escaped/Logging.php';
 include 'Bootgly/-base/Logger/functions.php';
-include 'Bootgly/-base/Tester/UnitTests.php';
-include 'Bootgly/-base/Tester/UnitTests/Test.php';
+
 include 'Bootgly/-base/functions.php';
 // 2-core
 include 'Bootgly/-core/Database.php';
@@ -65,6 +62,11 @@ spl_autoload_register (function (string $class) {
 /*
 @include 'Bootgly/API/Environment.php';
 @include 'Bootgly/API/Server.php';
+
+@include 'Bootgly/API/Tests.php';
+@include 'Bootgly/API/Tests/Benchmark.php';
+@include 'Bootgly/API/Tests/Test.php';
+@include 'Bootgly/API/Tests/Testing.php';
 
 // @ CLI
 @include BOOTGLY_DIR . 'Bootgly/CLI/Commading.php';

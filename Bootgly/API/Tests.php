@@ -8,28 +8,27 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\Tester;
+namespace Bootgly\API;
 
 
-use Bootgly\Tests;
 use Bootgly\Logger\Escaped\Logging;
-use Bootgly\Tester\UnitTests\Test;
+use Bootgly\API\Tests\ { Test, Testing };
 
 
-class UnitTests implements Tests
+class Tests implements Testing
 {
    use Logging;
 
 
    // * Config
-   public string $autoboot;
-   public bool $autoinstance;
-   public bool $autoresult;
-   public bool $autosummarize;
-   public bool $exit;
+   public string $autoBoot;
+   public bool $autoInstance;
+   public bool $autoResult;
+   public bool $autoSummarize;
+   public bool $exitOnFailure;
 
    // * Data
-   public array $tests; // TODO rename to files?
+   public array $tests;
    public array $specifications;
 
    // * Meta
@@ -48,11 +47,11 @@ class UnitTests implements Tests
    public function __construct (array &$tests)
    {
       // * Config
-      $this->autoboot = $tests['autoboot'] ?? '';
-      $this->autoinstance = $tests['autoinstance'] ?? false;
-      $this->autoresult = $tests['autoresult'] ?? false;
-      $this->autosummarize = $tests['autosummarize'] ?? false;
-      $this->exit = $tests['exit'] ?? false;
+      $this->autoBoot = $tests['autoBoot'] ?? '';
+      $this->autoInstance = $tests['autoInstance'] ?? false;
+      $this->autoResult = $tests['autoResult'] ?? false;
+      $this->autoSummarize = $tests['autoSummarize'] ?? false;
+      $this->exitOnFailure = $tests['exitOnFailure'] ?? false;
 
       // * Data
       $this->tests = $tests['files'];
@@ -81,15 +80,15 @@ class UnitTests implements Tests
       $this->log('@\;');
 
       // @ Automate
-      if ($this->autoboot) {
-         $dir = $this->autoboot . DIRECTORY_SEPARATOR;
+      if ($this->autoBoot) {
+         $dir = $this->autoBoot . DIRECTORY_SEPARATOR;
 
          foreach ($this->tests as $test) {
             $specifications = require $dir . $test . '.test.php';
             $this->specifications[] = $specifications;
          }
       }
-      if ($this->autoinstance) {
+      if ($this->autoInstance) {
          foreach ($this->specifications as $specification) {
             $Test = $this->test($specification);
    
@@ -98,11 +97,11 @@ class UnitTests implements Tests
             $Test->test();
          }
       }
-      if ($this->autosummarize) {
+      if ($this->autoSummarize) {
          $this->summarize();
       }
 
-      if ($this->exit && $this->failed > 0) {
+      if ($this->failed > 0 && $this->exitOnFailure) {
          exit(1);
       }
    }
