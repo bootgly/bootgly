@@ -54,11 +54,11 @@ class Server implements Servers, Logging
    protected int $workers;
    protected ? array $ssl; // SSL Stream Context
    // @ Mode
-   public const MODE_PROGRAMMATICALLY = 0;
    public const MODE_DAEMON = 1;
    public const MODE_INTERACTIVE = 2;
    public const MODE_MONITOR = 3;
    public const MODE_TEST = 4;
+   public const MODE_PROGRAMMATICALLY = 5;
    protected int $mode;
    // @ Verbosity
 
@@ -511,7 +511,10 @@ class Server implements Servers, Logging
          case 'master':
             $this->log("{$this->Process->children} worker(s) stopped!@\\;", 3);
             pcntl_wait($status);
-            exit(0);
+
+            if ($this->mode <= self::MODE_TEST) {
+               exit(0);
+            }
          case 'child':
             $this->close();
             exit(0);
