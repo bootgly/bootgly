@@ -30,7 +30,7 @@ return [
       */
 
       $expected = <<<HTML_RAW
-      HTTP/1.1 500 Internal Server Error
+      HTTP/1.1 500 Internal Server Error\r
       Server: Bootgly\r
       Content-Length: 0\r
       Content-Type: text/html; charset=UTF-8\r
