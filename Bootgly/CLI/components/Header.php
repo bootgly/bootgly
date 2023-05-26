@@ -231,7 +231,7 @@ class Header
       ASCII_ART;
    }
 
-   public function write (string $word, bool $inline = true) : string
+   public function generate (string $word, bool $inline = true) : string
    {
       $letters = $this->letters;
 

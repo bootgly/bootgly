@@ -156,7 +156,7 @@ class Commands
       if ($scripting) {
          $Header = new Header;
 
-         $help .= $Header->write(word: 'Bootgly', inline: true);
+         $help .= $Header->generate(word: 'Bootgly', inline: true);
          $help .= '@.;Usage: php ' . $this->args[0] . ' [command] @..;';
          $help .= 'Available commands:';
       }

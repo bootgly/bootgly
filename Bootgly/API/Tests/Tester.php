@@ -33,6 +33,7 @@ class Tester extends Tests
 
    public function __construct (array &$tests)
    {
+      // ✓
       // * Config
       $this->autoBoot = $tests['autoBoot'] ?? '';
       $this->autoInstance = $tests['autoInstance'] ?? false;
