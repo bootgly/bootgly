@@ -11,6 +11,7 @@
 namespace Bootgly\API\Tests;
 
 
+use Closure;
 use Bootgly\API\Environment;
 use Bootgly\API\Tests;
 
@@ -18,8 +19,8 @@ use Bootgly\API\Tests;
 class Tester extends Tests
 {
    // * Config
-   public string $autoBoot;
-   public bool $autoInstance;
+   public bool|string|Closure $autoBoot;
+   public mixed $autoInstance;
    public bool $autoResult;
    public bool $autoSummarize;
    public bool $exitOnFailure;
@@ -28,6 +29,7 @@ class Tester extends Tests
    // ...extended
 
    // * Meta
+   public array $artfacts;
    // ...extended
 
 
@@ -69,27 +71,55 @@ class Tester extends Tests
 
       // @ Automate
       if ($this->autoBoot) {
-         $this->separate(header: $tests['suiteName'] ?? '');
+         $this->autoboot($this->autoBoot, $tests);
+      }
+      if ($this->autoInstance) {
+         $this->autoinstance($this->autoInstance);
+      }
+      if ($this->autoSummarize) {
+         $this->summarize();
+      }
 
-         $dir = $this->autoBoot . DIRECTORY_SEPARATOR;
+      if ($this->failed > 0 && $this->exitOnFailure) {
+         exit(1);
+      }
+   }
+
+   public function autoboot (bool|string|Closure $boot, array $tests)
+   {
+      $this->separate(header: $tests['suiteName'] ?? '');
+
+      if ( is_string($boot) ) {
+         $dir = $boot . DIRECTORY_SEPARATOR;
 
          foreach ($this->tests as $test) {
             $specifications = @include $dir . $test . '.test.php';
-
+   
             if ($specifications === false) {
                $specifications = null;
             }
-
+   
             $this->specifications[] = $specifications;
          }
+      } else {
+         $this->artfacts = $boot();
       }
-      if ($this->autoInstance) {
+   }
+   public function autoinstance (bool|callable $instance)
+   {
+      if ($instance === true) {
          foreach ($this->specifications as $specification) {
             $file = current($this->tests);
 
             // @ Skip test if private (_(.*).test.php) and script is running in a CI/CD enviroment
             // TODO abstract all CI/CD Environment into one
-            if ($file[0] === '_' && Environment::get('GITHUB_ACTIONS')) {
+            $CI_CD = (
+               Environment::get('GITHUB_ACTIONS')
+               || Environment::get('TRAVIS')
+               || Environment::get('CIRCLECI')
+               || Environment::get('GITLAB_CI')
+            );
+            if ($file[0] === '_' && $CI_CD) {
                $this->skip('(private test)');
                continue;
             }
@@ -102,12 +132,11 @@ class Tester extends Tests
             }
          }
       }
-      if ($this->autoSummarize) {
-         $this->summarize();
-      }
 
-      if ($this->failed > 0 && $this->exitOnFailure) {
-         exit(1);
+      // @ Check if is callable
+      if ( is_callable($instance) ) {
+         // @ Pass artfacts returned by autoboot
+         $instance(...$this->artfacts);
       }
    }
 

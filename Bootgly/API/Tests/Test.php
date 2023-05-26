@@ -94,20 +94,11 @@ class Test
 
       $separators = @$this->specifications['separators'] ?? [];
 
-      $suite = @$separators['suite'] ?? null;
       $separator = @$separators['separator'] ?? null;
       $left = @$separators['left'] ?? null;
       $header = @$separators['header'] ?? null;
 
       $width = $this->Tests->width + 25;
-
-      if ($suite) {
-         // @ Text + `=`
-         $suite = '@#Blue: ' . $suite . '  @;';
-         $suite = str_pad($suite, $width + 3, '=', STR_PAD_BOTH);
-
-         $this->log($suite . ' @\;');
-      }
 
       if ($separator) {
          // @ `-`

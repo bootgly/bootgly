@@ -1,6 +1,31 @@
 <?php
+use Bootgly\API\Logs\Logger;
+use Bootgly\Web\nodes\HTTP;
+
 return [
-   'suiteName' => 'HTTP Response',
+   // * Config
+   'autoBoot' => function () {
+      // TODO configure verbosity of server output/echo
+      // TODO like $HTTPServer->verbosity = 0;
+      Logger::$display = Logger::DISPLAY_NONE;
+
+      $HTTPServer = new HTTP\Server;
+      // * Config
+      $HTTPServer->mode = $HTTPServer::MODE_PROGRAMMATICALLY;
+      $HTTPServer->configure(
+         host: '0.0.0.0',
+         port: 8080,
+         workers: 1
+      );
+
+      $HTTPServer->start();
+
+      $HTTPServer->Terminal->command('test');
+
+      return [];
+   },
+   'exitOnFailure' => true,
+   // * Data
    'files' => [
       '1.1-respond_with_a_simple_hello_world',
       // ! Meta

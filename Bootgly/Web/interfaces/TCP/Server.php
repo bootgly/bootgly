@@ -43,9 +43,7 @@ class Server implements Servers, Logging
    // ! Event
    public static string|object $Event = '\Bootgly\Web\events\Select';
 
-   // ! Process
    protected Process $Process;
-   // ! Terminal
    protected Terminal $Terminal;
 
 
@@ -56,10 +54,12 @@ class Server implements Servers, Logging
    protected int $workers;
    protected ? array $ssl; // SSL Stream Context
    // @ Mode
-   protected int $mode;
+   public const MODE_PROGRAMMATICALLY = 0;
    public const MODE_DAEMON = 1;
    public const MODE_INTERACTIVE = 2;
    public const MODE_MONITOR = 3;
+   protected int $mode;
+   // @ Verbosity
 
    // * Data
    public static $Application = null; // OSI Application
@@ -145,11 +145,13 @@ class Server implements Servers, Logging
          case 'Socket':
             return $this->Socket;
 
-         case 'Connections':
-            return $this->Connections;
-
          case 'Process':
             return $this->Process;
+         case 'Terminal':
+            return $this->Terminal;
+
+         case 'Connections':
+            return $this->Connections;
 
          case 'mode':
             return $this->mode;
@@ -236,7 +238,7 @@ class Server implements Servers, Logging
    {
       $this->status = self::STATUS_STARTING;
 
-      Logger::$display = Logger::DISPLAY_MESSAGE;
+      Logger::$display = Logger::$display === 0 ? 0 : Logger::DISPLAY_MESSAGE;
 
       $this->log('@\;Starting Server...', self::LOG_NOTICE_LEVEL);
 
@@ -452,7 +454,7 @@ class Server implements Servers, Logging
          $this->log('@\;Failed to close $this->Socket!');
       } else {
          // TODO $this->alert?
-         $this->log('@\;Sockets closed successful.', self::LOG_INFO_LEVEL);
+         #$this->log('@\;Sockets closed successful.', self::LOG_INFO_LEVEL);
       }
 
       $this->Socket = null;
@@ -504,12 +506,15 @@ class Server implements Servers, Logging
 
       Logger::$display = Logger::DISPLAY_MESSAGE;
 
-      match ($this->Process->level) {
-         'master' => $this->log("{$this->Process->children} worker(s) stopped!@\\;", 3),
-         'child' => $this->close()
-      };
-
-      exit(0);
+      switch ($this->Process->level) {
+         case 'master':
+            $this->log("{$this->Process->children} worker(s) stopped!@\\;", 3);
+            pcntl_wait($status);
+            exit(0);
+         case 'child':
+            $this->close();
+            exit(0);
+      }
    }
 
    public function __destruct ()

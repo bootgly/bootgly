@@ -216,7 +216,7 @@ class Server extends TCP\Server implements HTTP
       return $Response->output($Package, $length); // @ Return Response raw
    }
 
-   protected static function test ($TCPServer)
+   protected static function test (TCP\Server $TCPServer)
    {
       Logger::$display = Logger::DISPLAY_NONE;
 
