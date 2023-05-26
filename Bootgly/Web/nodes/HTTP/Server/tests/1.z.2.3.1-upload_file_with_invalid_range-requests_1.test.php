@@ -10,13 +10,13 @@ use Bootgly\Web\nodes\HTTP\Server\Response;
 // TODO ?
 
 return [
-   // @ arrange
+   // @ configure
    'describe' => 'It should return 416 status: negative range start `-5-10`',
    'separators' => [
       'left' => '.2.3 - Requests Range - Client - Single Part (Invalid)'
    ],
 
-   // @ act
+   // @ simulate
    // Server API
    'sapi' => function (Request $Request, Response $Response) : Response {
       $Project = new Project;
@@ -42,7 +42,7 @@ return [
       return $raw;
    },
 
-   // @ assert
+   // @ test
    'test' => function ($response) : bool {
       $expected = <<<HTML_RAW
       HTTP/1.1 416 Range Not Satisfiable\r

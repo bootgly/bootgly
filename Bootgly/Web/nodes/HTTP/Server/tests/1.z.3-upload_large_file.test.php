@@ -10,13 +10,13 @@ use Bootgly\Web\nodes\HTTP\Server\Response;
 // TODO ?
 
 return [
-   // @ arrange
+   // @ configure
    'response.length' => 3101873,
    'separators' => [
       'separator' => true
    ],
 
-   // @ act
+   // @ simulate
    // Server API
    'sapi' => function (Request $Request, Response $Response) : Response {
       $Project = new Project;
@@ -34,7 +34,7 @@ return [
       return "GET /test/download/large_file/1 HTTP/1.0\r\n\r\n";
    },
 
-   // @ assert
+   // @ test
    'test' => function ($response) : bool {
       // ! Asserts
       // @ Assert length of response

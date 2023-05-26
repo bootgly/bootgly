@@ -237,6 +237,7 @@ class Server extends TCP\Server implements HTTP
 
             $Tests = new Tester($tests);
 
+            $Tests->separate('HTTP Server Response');
             // @ Run test cases
             foreach ($tests as $index => $value) {
                $spec = API\Server::$Tests[self::class][$index] ?? null;

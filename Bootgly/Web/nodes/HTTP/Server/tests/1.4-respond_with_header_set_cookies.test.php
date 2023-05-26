@@ -9,9 +9,9 @@ use Bootgly\Web\nodes\HTTP\Server\Response;
 // TODO ?
 
 return [
-   // @ arrange
+   // @ configure
 
-   // @ act
+   // @ simulate
    // Server API
    'sapi' => function (Request $Request, Response $Response) : Response {
       $Response->Header->Cookie->append('Test1', 'value1');
@@ -25,7 +25,7 @@ return [
       return "GET /header/cookies/1 HTTP/1.0\r\n\r\n";
    },
 
-   // @ assert
+   // @ test
    'test' => function ($response) : bool {
       /*
       return $Response->code === '500'

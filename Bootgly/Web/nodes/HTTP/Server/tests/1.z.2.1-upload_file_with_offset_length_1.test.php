@@ -10,14 +10,14 @@ use Bootgly\Web\nodes\HTTP\Server\Response;
 // TODO ?
 
 return [
-   // @ arrange
+   // @ configure
    'response.length' => 301,
    'separators' => [
       'separator' => true,
       'left' => '.2.1 - Requests Range - Dev'
    ],
 
-   // @ act
+   // @ simulate
    // Server API
    'sapi' => function (Request $Request, Response $Response) : Response {
       $Project = new Project;
@@ -36,7 +36,7 @@ return [
       return "GET /test/download/file_with_offset_length/1 HTTP/1.0\r\n\r\n";
    },
 
-   // @ assert
+   // @ test
    'test' => function ($response) : bool {
       if (preg_match('/Last-Modified: (.*)\r\n/i', $response, $matches)) {
          $lastModified = $matches[1];

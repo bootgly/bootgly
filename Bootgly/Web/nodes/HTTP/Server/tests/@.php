@@ -1,5 +1,6 @@
 <?php
 return [
+   'suiteName' => 'HTTP Response',
    'files' => [
       '1.1-respond_with_a_simple_hello_world',
       // ! Meta

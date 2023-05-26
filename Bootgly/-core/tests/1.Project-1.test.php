@@ -3,9 +3,6 @@ namespace Bootgly;
 
 return [
    // @ Configure
-   'separators' => [
-      'suite' => 'Project class Test'
-   ],
    'describe' => 'Test methods: construct, name, save, get and select',
    // @ Simulate
    // ...

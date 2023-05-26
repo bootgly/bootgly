@@ -10,10 +10,10 @@ use Bootgly\Web\nodes\HTTP\Server\Response;
 // TODO ?
 
 return [
-   // @ arrange
+   // @ configure
    'describe' => 'It should return the content after 5 bytes of file when `bytes=5-`',
 
-   // @ act
+   // @ simulate
    // Server API
    'sapi' => function (Request $Request, Response $Response) : Response {
       $Project = new Project;
@@ -39,7 +39,7 @@ return [
       return $raw;
    },
 
-   // @ assert
+   // @ test
    'test' => function ($response) : bool {
       if (preg_match('/Last-Modified: (.*)\r\n/i', $response, $matches)) {
          $lastModified = $matches[1];

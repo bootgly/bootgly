@@ -9,9 +9,9 @@ use Bootgly\Web\nodes\HTTP\Server\Response;
 // TODO ?
 
 return [
-   // @ arrange
+   // @ configure
 
-   // @ act
+   // @ simulate
    // Server API
    'sapi' => function (Request $Request, Response $Response) : Response {
       return $Response->send(500);
@@ -22,7 +22,7 @@ return [
       return "GET /status/500 HTTP/1.0\r\n\r\n";
    },
 
-   // @ assert
+   // @ test
    'test' => function ($response) : bool {
       /*
       return $Response->code === '500'

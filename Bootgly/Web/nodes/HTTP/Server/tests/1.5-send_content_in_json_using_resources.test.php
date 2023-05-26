@@ -9,13 +9,13 @@ use Bootgly\Web\nodes\HTTP\Server\Response;
 // TODO ?
 
 return [
-   // @ arrange
+   // @ configure
    'separators' => [
       'separator' => 'Response Content',
       'header' => '@send'
    ],
 
-   // @ act
+   // @ simulate
    // Server API
    'sapi' => function (Request $Request, Response $Response) : Response {
       return $Response->Json->send(['Hello' => 'World!']); // JSON
@@ -26,7 +26,7 @@ return [
       return "GET /test/content/json/1 HTTP/1.0\r\n\r\n";
    },
 
-   // @ assert
+   // @ test
    'test' => function ($response) : bool {
       /*
       return $Response->code === '500'

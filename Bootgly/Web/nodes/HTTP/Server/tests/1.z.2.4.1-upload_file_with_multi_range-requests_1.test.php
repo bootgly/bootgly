@@ -10,14 +10,14 @@ use Bootgly\Web\nodes\HTTP\Server\Response;
 // TODO ?
 
 return [
-   // @ arrange
+   // @ configure
    'response.length' => 557,
    'describe' => 'It should return parts of file `bytes=1-2,4-5,-1`',
    'separators' => [
       'left' => '.2.4 - Requests Range - Client - Multi Part (Valid)'
    ],
 
-   // @ act
+   // @ simulate
    // Server API
    'sapi' => function (Request $Request, Response $Response) : Response {
       $Project = new Project;
@@ -43,7 +43,7 @@ return [
       return $raw;
    },
 
-   // @ assert
+   // @ test
    'test' => function ($response) : bool {
       if (preg_match('/Last-Modified: (.*)\r\n/i', $response, $matches)) {
          $lastModified = $matches[1];

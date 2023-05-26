@@ -10,11 +10,11 @@ use Bootgly\Web\nodes\HTTP\Server\Response;
 // TODO ?
 
 return [
-   // @ arrange
+   // @ configure
    'response.length' => 363,
    'describe' => 'It should return the entire file when `bytes=0-$fileSize`',
 
-   // @ act
+   // @ simulate
    // Server API
    'sapi' => function (Request $Request, Response $Response) : Response {
       $Project = new Project;
@@ -40,7 +40,7 @@ return [
       return $raw;
    },
 
-   // @ assert
+   // @ test
    'test' => function ($response) : bool {
       if (preg_match('/Last-Modified: (.*)\r\n/i', $response, $matches)) {
          $lastModified = $matches[1];

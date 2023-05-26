@@ -10,10 +10,10 @@ use Bootgly\Web\nodes\HTTP\Server\Response;
 // TODO ?
 
 return [
-   // @ arrange
+   // @ configure
    'describe' => 'It should return 416 status: NaN `bytes=x-0`',
 
-   // @ act
+   // @ simulate
    // Server API
    'sapi' => function (Request $Request, Response $Response) : Response {
       $Project = new Project;
@@ -39,7 +39,7 @@ return [
       return $raw;
    },
 
-   // @ assert
+   // @ test
    'test' => function ($response) : bool {
       $expected = <<<HTML_RAW
       HTTP/1.1 416 Range Not Satisfiable\r
