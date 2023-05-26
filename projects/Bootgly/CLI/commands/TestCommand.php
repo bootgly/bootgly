@@ -25,8 +25,8 @@ class TestCommand extends Command implements Commanding
    // * Data
    private array $tests = [
       'Bootgly/-core/',
+      'Bootgly/Web/nodes/HTTP/Server/',
       'Bootgly/CLI/',
-      'Bootgly/Web/nodes/HTTP/Server/'
    ];
 
 
