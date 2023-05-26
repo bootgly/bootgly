@@ -147,8 +147,8 @@ class Tester extends Tests
       next($this->tests);
 
       $this->log(
-         "\033[0;30;43m SKIP \033 @;" .
-         "\033[90m $file \033[0m" .
+         "\033[0;30;43m SKIP \033 @; " .
+         "\033[90m" . $file . "\033[0m" .
          "\033[1;35m $info \033[0m" . PHP_EOL
       );
    }
