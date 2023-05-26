@@ -504,15 +504,17 @@ class Server implements Servers, Logging
    {
       $this->status = self::STATUS_STOPING;
 
+      if ($this->mode > self::MODE_PROGRAMMATICALLY) {
+         return;
+      }
+
       Logger::$display = Logger::DISPLAY_MESSAGE;
 
       switch ($this->Process->level) {
          case 'master':
             $this->log("{$this->Process->children} worker(s) stopped!@\\;", 3);
             pcntl_wait($status);
-            if ($this->mode > self::MODE_PROGRAMMATICALLY) {
-               exit(0);
-            }
+            exit(0);
          case 'child':
             $this->close();
             exit(0);
