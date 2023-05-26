@@ -510,7 +510,9 @@ class Server implements Servers, Logging
          case 'master':
             $this->log("{$this->Process->children} worker(s) stopped!@\\;", 3);
             pcntl_wait($status);
-            exit(0);
+            if ($this->mode > self::MODE_PROGRAMMATICALLY) {
+               exit(0);
+            }
          case 'child':
             $this->close();
             exit(0);
