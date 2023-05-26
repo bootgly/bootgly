@@ -20,10 +20,12 @@ abstract class Tests
 
 
    // * Config
+   // auto
    public string $autoBoot;
    public mixed $autoInstance;
    public bool $autoResult;
    public bool $autoSummarize;
+   // exit
    public static bool $exitOnFailure = false;
 
    // * Data
@@ -39,7 +41,7 @@ abstract class Tests
    // @ Time
    public float $started;
    public float $finished;
-   // @ Screen?
+   // @ Screen? Output?
    public int $width;
 
 
@@ -59,6 +61,7 @@ abstract class Tests
       $finished = $this->finished = microtime(true);
 
       // @ Benchmark Tests time
+      // TODO use Benchmark class?
       $duration = number_format(round($finished - $started, 5), 6);
 
       $this->log(<<<TESTS

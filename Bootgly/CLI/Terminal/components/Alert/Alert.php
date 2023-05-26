@@ -35,10 +35,15 @@ class Alert
 
    public function emit (string $message)
    {
+      // * Config
       $type = $this->Type->get();
 
+      // @
+      // @ Prepare
+      $this->Output->write(PHP_EOL);
       $this->Output->Text->stylize('bold');
 
+      // @ Colorize
       match ($type) {
          Type::SUCCESS => $this->Output->Text->colorize('white', 'green'),
          Type::ATTENTION => $this->Output->Text->colorize(0, 'yellow'),
@@ -59,8 +64,8 @@ class Alert
       OUTPUT);
 
       // @ Reset style and color
-      #$this->Output->Text->stylize();
-      #$this->Output->Text->colorize();
+      $this->Output->Text->stylize();
+      $this->Output->Text->colorize();
    }
 }
 

@@ -12,14 +12,17 @@ namespace projects\Bootgly\CLI\commands;
 
 
 use Closure;
+
 use Bootgly\API\Tests;
 use Bootgly\API\Tests\Tester;
+
 use Bootgly\CLI;
-use Bootgly\CLI\ { Command, Commanding };
+use Bootgly\CLI\Command;
+
 use Bootgly\CLI\Terminal\components\Alert\Alert;
 
 
-class TestCommand extends Command implements Commanding
+class TestCommand extends Command
 {
    // * Config
    public string $name = 'test';
@@ -52,14 +55,11 @@ class TestCommand extends Command implements Commanding
          } else if ($autoboot) {
             $UnitTests = new Tester($tests);
          } else {
-            $Output = CLI::$Terminal->Output->render('@.;');
-
-            $Alert = new Alert($Output);
+            $Alert = new Alert(CLI::$Terminal->Output);
             $Alert->Type::FAILURE->set();
             $Alert->emit('AutoBoot test not configured!');
          }
       } else {
-         // TODO autoboot recursively all tests
          foreach ($this->tests as $dir) {
             $this->run([$dir . 'tests/'], []);
          }

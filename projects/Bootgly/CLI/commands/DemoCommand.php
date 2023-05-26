@@ -12,10 +12,10 @@ namespace projects\Bootgly\CLI\commands;
 
 
 use Bootgly\CLI;
-use Bootgly\CLI\ { Command, Commanding };
+use Bootgly\CLI\Command;
 
 
-class DemoCommand extends Command implements Commanding
+class DemoCommand extends Command
 {
    public string $name = 'demo';
    public string $description = 'Run the Bootgly CLI demo';

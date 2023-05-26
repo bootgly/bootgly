@@ -505,10 +505,6 @@ class Server implements Servers, Logging
    {
       $this->status = self::STATUS_STOPING;
 
-      if ($this->mode === self::MODE_PROGRAMMATICALLY | $this->mode === self::MODE_TEST) {
-         return;
-      }
-
       Logger::$display = Logger::DISPLAY_MESSAGE;
 
       switch ($this->Process->level) {

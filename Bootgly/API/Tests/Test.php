@@ -12,11 +12,12 @@ namespace Bootgly\API\Tests;
 
 
 use AssertionError;
+#use Bootgly\API\Tests\Assertions;
 use Bootgly\API\Tests;
 use Bootgly\API\Logs\Escaped\Loggable as LoggableEscaped;
 
 
-class Test
+class Test // extends Assertions
 {
    use LoggableEscaped;
 
@@ -78,7 +79,6 @@ class Test
       };
    }
 
-   // @ Arrange
    public function describe (? string $description)
    {
       if (! $description) {
@@ -154,6 +154,7 @@ class Test
       }
 
       #$this->debugged ??= ob_get_clean();
+
       $this->finished ??= microtime(true);
    }
 
