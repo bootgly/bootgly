@@ -24,7 +24,8 @@ class TestCommand extends Command implements Commanding
    public string $description = 'Perform Bootgly tests';
    // * Data
    private array $tests = [
-      'Bootgly/-core/tests/'
+      'Bootgly/-core/',
+      'Bootgly/CLI/',
    ];
 
 
@@ -44,13 +45,14 @@ class TestCommand extends Command implements Commanding
 
             $Alert = new Alert($Output);
             $Alert->Type::FAILURE->set();
-            $Alert->emit('Autoboot test not configured!');
+            $Alert->emit('AutoBoot test not configured!');
          }
       } else {
          // TODO autoboot recursively all tests
-         foreach ($this->tests as $test) {
-            $this->run([$test], []);
+         foreach ($this->tests as $dir) {
+            $this->run([$dir . 'tests/'], []);
          }
+
          return true;
       }
 

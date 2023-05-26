@@ -11,6 +11,7 @@
 namespace Bootgly\API\Tests;
 
 
+use Bootgly\API\Environment;
 use Bootgly\API\Tests;
 
 
@@ -67,20 +68,37 @@ class Tester extends Tests
 
       // @ Automate
       if ($this->autoBoot) {
+         $this->separate(header: $tests['suiteName'] ?? '');
+
          $dir = $this->autoBoot . DIRECTORY_SEPARATOR;
 
          foreach ($this->tests as $test) {
-            $specifications = require $dir . $test . '.test.php';
+            $specifications = @include $dir . $test . '.test.php';
+
+            if ($specifications === false) {
+               $specifications = null;
+            }
+
             $this->specifications[] = $specifications;
          }
       }
       if ($this->autoInstance) {
          foreach ($this->specifications as $specification) {
+            $file = current($this->tests);
+
+            // @ Skip test if private (_(.*).test.php) and script is running in a CI/CD enviroment
+            // TODO abstract all CI/CD Environment into one
+            if ($file[0] === '_' && Environment::get('GITHUB_ACTIONS')) {
+               $this->skip('(private test)');
+               continue;
+            }
+
             $Test = $this->test($specification);
    
-            $Test->separate();
-   
-            $Test->test();
+            if ($Test instanceof Test) {
+               $Test->separate();
+               $Test->test();
+            }
          }
       }
       if ($this->autoSummarize) {
@@ -96,6 +114,7 @@ class Tester extends Tests
    {
       if ( $specifications === null || empty($specifications) ) {
          $this->skipped++;
+         next($this->tests);
          return false;
       }
 
@@ -106,5 +125,31 @@ class Tester extends Tests
       }
 
       return $Test;
+   }
+
+   public function separate (string $header)
+   {
+      if ($header) {
+         // @ Text + `=`
+         $header = '@#Blue: ' . $header . '  @;';
+         $header = str_pad($header, $this->width + 28, '=', STR_PAD_BOTH);
+
+         $this->log($header . ' @\;');
+      }
+   }
+
+   public function skip (string $info)
+   {
+      $file = current($this->tests);
+
+      $this->skipped++;
+
+      next($this->tests);
+
+      $this->log(
+         "\033[0;30;43m SKIP \033 @;" .
+         "\033[90m $file \033[0m" .
+         "\033[1;35m $info \033[0m" . PHP_EOL
+      );
    }
 }

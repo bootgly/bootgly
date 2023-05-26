@@ -64,8 +64,15 @@ spl_autoload_register (function (string $class) {
 @include 'Bootgly/API/Environment.php';
 @include 'Bootgly/API/Server.php';
 
+// Debug_
+@include 'Bootgly/API/Debugger.php';
+@include 'Bootgly/API/Debugger/Backtrace.php';
 // Log_
+@include 'Bootgly/API/Logs.php'; // @ abstract
 @include 'Bootgly/API/Logs/Loggable.php';
+@include 'Bootgly/API/Logs/Logger.php';
+@include 'Bootgly/API/Logs/Logging.php';
+@include 'Bootgly/API/Logs/Escaped/Loggable.php';
 // Test_
 @include 'Bootgly/API/Tests.php'; // @ abstract
 @include 'Bootgly/API/Tests/Benchmark.php';
@@ -73,9 +80,10 @@ spl_autoload_register (function (string $class) {
 @include 'Bootgly/API/Tests/Tester.php';
 
 // @ CLI
-@include BOOTGLY_DIR . 'Bootgly/CLI/Commading.php';
 @include BOOTGLY_DIR . 'Bootgly/CLI/Command.php';
+@include BOOTGLY_DIR . 'Bootgly/CLI/Commading.php';
 @include BOOTGLY_DIR . 'Bootgly/CLI/Commands.php';
+// Terminal
 @include BOOTGLY_DIR . 'Bootgly/CLI/Terminal.php';
 @include BOOTGLY_DIR . 'Bootgly/CLI/Terminal/Input.php';
 @include BOOTGLY_DIR . 'Bootgly/CLI/Terminal/Output.php';
@@ -105,9 +113,11 @@ spl_autoload_register (function (string $class) {
 @include BOOTGLY_DIR . 'Bootgly/CLI/Terminal/components/Table/Columns.php';
 @include BOOTGLY_DIR . 'Bootgly/CLI/Terminal/components/Table/Row.php';
 @include BOOTGLY_DIR . 'Bootgly/CLI/Terminal/components/Table/Rows.php';
+// components
+@include BOOTGLY_DIR . 'Bootgly/CLI/components/Header.php';
 // programs
 #include 'Bootgly/CLI/programs/Script.php';
-
+// @?!
 @include BOOTGLY_DIR . 'Bootgly/CLI.php';
 
 // @ Web
@@ -158,7 +168,7 @@ spl_autoload_register (function (string $class) {
 @include BOOTGLY_DIR . 'Bootgly/Web/programs/API.php';
 @include BOOTGLY_DIR . 'Bootgly/Web/programs/App.php';
 #include BOOTGLY_DIR . 'Bootgly/Web/programs/System.php';
-
+// @?!
 @include BOOTGLY_DIR . 'Bootgly/Web.php';
 */
 // ! Resources ([a-z])

@@ -3,14 +3,14 @@
  * --------------------------------------------------------------------------
  * Bootgly PHP Framework
  * Developed by Rodrigo Vieira (@rodrigoslayertech)
- * Copyright 2020-present
+ * Copyright 2023-present
  * Licensed under MIT
  * --------------------------------------------------------------------------
  */
 
 use Bootgly\templates\Template;
 use Bootgly\streams\File;
-use Bootgly\ { Project };
+use Bootgly\Project;
 use Bootgly\API\Debugger;
 use Bootgly\API\Logs\Logger;
 
@@ -25,8 +25,6 @@ class Bootgly
 
    public function __construct ()
    {
-      // - Features
-      // core
       $Project = static::$Project = new Project;
       $Template = static::$Template = new Template;
 
@@ -38,7 +36,6 @@ class Bootgly
       ];
 
       // @ Author
-      // TODO
       $projects = Project::BOOTGLY_PROJECTS_DIR . self::BOOT_FILE;
       \Bootgly::boot($projects, $vars);
       // @ Consumer
@@ -54,13 +51,13 @@ class Bootgly
    public static function boot (string $file, array $vars) : bool
    {
       if ( is_file($file) ) {
-         $extract = static function ($__file__, $__vars__)
+         $boot = static function ($__file__, $__vars__)
          {
             extract($__vars__);
             @include $__file__;
          };
 
-         $extract($file, $vars);
+         $boot($file, $vars);
 
          return true;
       }

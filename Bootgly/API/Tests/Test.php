@@ -165,6 +165,7 @@ class Test
       #$this->debugged ??= ob_get_clean();
       $this->finished ??= microtime(true);
    }
+
    public function fail (? string $message = null)
    {
       $this->Tests->failed++;
@@ -196,6 +197,7 @@ class Test
 
       $this->describe($this->specifications['describe'] ?? null);
    }
+
    public function skip ()
    {
       $this->Tests->skipped++;

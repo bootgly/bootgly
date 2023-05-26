@@ -3,7 +3,7 @@
  * --------------------------------------------------------------------------
  * Bootgly PHP Framework
  * Developed by Rodrigo Vieira (@rodrigoslayertech)
- * Copyright 2020-present
+ * Copyright 2023-present
  * Licensed under MIT
  * --------------------------------------------------------------------------
  */
@@ -52,7 +52,7 @@ class Web
       Debugger::$exit = true;
 
       // @ Instance
-      $Server = $this->Server = new HTTP\Server($this);
+      $Server = $this->Server = new HTTP\Server;
       $Request = $this->Request = &$Server->Request;
       $Response = $this->Response = &$Server->Response;
       $Router = $this->Router = &$Server->Router;
@@ -66,7 +66,6 @@ class Web
       ];
 
       // @ Author
-      // TODO
       $projects = Project::BOOTGLY_PROJECTS_DIR . self::BOOT_FILE;
       \Bootgly::boot($projects, $vars);
       // @ Consumer
