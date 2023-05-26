@@ -143,9 +143,9 @@ class Test
 
       try {
          $test = $this->specifications['test'];
-         $test(...$arguments);
+         $result = $test(...$arguments);
 
-         $this->assertions[] = true;
+         $this->assertions[] = $result ?? true;
 
          if ($this->Tests->autoResult) {
             $this->finished = microtime(true);
