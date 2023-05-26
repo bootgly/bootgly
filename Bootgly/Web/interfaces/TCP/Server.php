@@ -58,6 +58,7 @@ class Server implements Servers, Logging
    public const MODE_DAEMON = 1;
    public const MODE_INTERACTIVE = 2;
    public const MODE_MONITOR = 3;
+   public const MODE_TEST = 4;
    protected int $mode;
    // @ Verbosity
 
@@ -504,7 +505,7 @@ class Server implements Servers, Logging
    {
       $this->status = self::STATUS_STOPING;
 
-      if ($this->mode > self::MODE_PROGRAMMATICALLY) {
+      if ($this->mode === self::MODE_PROGRAMMATICALLY | $this->mode === self::MODE_TEST) {
          return;
       }
 

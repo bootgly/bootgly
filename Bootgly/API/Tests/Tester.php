@@ -11,7 +11,6 @@
 namespace Bootgly\API\Tests;
 
 
-use Closure;
 use Bootgly\API\Environment;
 use Bootgly\API\Tests;
 
@@ -19,11 +18,7 @@ use Bootgly\API\Tests;
 class Tester extends Tests
 {
    // * Config
-   public bool|string|Closure $autoBoot;
-   public mixed $autoInstance;
-   public bool $autoResult;
-   public bool $autoSummarize;
-   public bool $exitOnFailure;
+   // ...extended
 
    // * Data
    // ...extended
@@ -41,7 +36,7 @@ class Tester extends Tests
       $this->autoInstance = $tests['autoInstance'] ?? false;
       $this->autoResult = $tests['autoResult'] ?? false;
       $this->autoSummarize = $tests['autoSummarize'] ?? false;
-      $this->exitOnFailure = $tests['exitOnFailure'] ?? false;
+      self::$exitOnFailure = $tests['exitOnFailure'] ?? self::$exitOnFailure;
 
       // * Data
       $this->tests = $tests['files'] ?? $tests;
@@ -79,30 +74,22 @@ class Tester extends Tests
       if ($this->autoSummarize) {
          $this->summarize();
       }
-
-      if ($this->failed > 0 && $this->exitOnFailure) {
-         exit(1);
-      }
    }
 
-   public function autoboot (bool|string|Closure $boot, array $tests)
+   public function autoboot (string $boot, array $tests)
    {
       $this->separate(header: $tests['suiteName'] ?? '');
 
-      if ( is_string($boot) ) {
-         $dir = $boot . DIRECTORY_SEPARATOR;
+      $dir = $boot . DIRECTORY_SEPARATOR;
 
-         foreach ($this->tests as $test) {
-            $specifications = @include $dir . $test . '.test.php';
-   
-            if ($specifications === false) {
-               $specifications = null;
-            }
-   
-            $this->specifications[] = $specifications;
+      foreach ($this->tests as $test) {
+         $specifications = @include $dir . $test . '.test.php';
+
+         if ($specifications === false) {
+            $specifications = null;
          }
-      } else {
-         $this->artfacts = $boot();
+
+         $this->specifications[] = $specifications;
       }
    }
    public function autoinstance (bool|callable $instance)

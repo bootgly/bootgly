@@ -11,6 +11,8 @@
 namespace projects\Bootgly\CLI\commands;
 
 
+use Closure;
+use Bootgly\API\Tests;
 use Bootgly\API\Tests\Tester;
 use Bootgly\CLI;
 use Bootgly\CLI\ { Command, Commanding };
@@ -25,13 +27,18 @@ class TestCommand extends Command implements Commanding
    // * Data
    private array $tests = [
       'Bootgly/-core/',
-      'Bootgly/Web/nodes/HTTP/Server/',
       'Bootgly/CLI/',
+      'Bootgly/Web/nodes/HTTP/Server/',
    ];
 
 
    public function run (array $arguments, array $options) : bool
    {
+      // ! Tester
+      // * Config
+      Tests::$exitOnFailure = true;
+
+      // @
       $testsDir = $arguments[0] ?? null;
 
       if ($testsDir) {
@@ -39,7 +46,10 @@ class TestCommand extends Command implements Commanding
 
          $tests = (array) $tests;
 
-         if ($tests['autoBoot'] ?? false) {
+         $autoboot = $tests['autoBoot'] ?? false;
+         if ($autoboot instanceof Closure) {
+            $autoboot();
+         } else if ($autoboot) {
             $UnitTests = new Tester($tests);
          } else {
             $Output = CLI::$Terminal->Output->render('@.;');

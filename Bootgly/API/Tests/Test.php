@@ -171,6 +171,11 @@ class Test
       $this->describe($this->specifications['describe'] ?? null);
 
       $this->log($this->debugged);
+
+      if (Tests::$exitOnFailure) {
+         $this->Tests->summarize();
+         exit(1);
+      }
    }
    public function pass ()
    {

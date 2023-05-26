@@ -11,7 +11,7 @@ return [
 
       $HTTPServer = new HTTP\Server;
       // * Config
-      $HTTPServer->mode = $HTTPServer::MODE_PROGRAMMATICALLY;
+      $HTTPServer->mode = $HTTPServer::MODE_TEST;
       $HTTPServer->configure(
          host: '0.0.0.0',
          port: 8080,
@@ -24,7 +24,6 @@ return [
 
       return [];
    },
-   'exitOnFailure' => true,
    // * Data
    'files' => [
       '1.1-respond_with_a_simple_hello_world',

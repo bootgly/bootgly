@@ -233,13 +233,13 @@ class Server extends TCP\Server implements HTTP
             Logger::$display = Logger::DISPLAY_MESSAGE;
 
             // @ Get test files
-            $tests = API\Server::$tests[self::class];
+            $testFiles = API\Server::$tests[self::class];
 
-            $Tests = new Tester($tests);
-
+            $Tests = new Tester($testFiles);
             $Tests->separate('HTTP Server Response');
+
             // @ Run test cases
-            foreach ($tests as $index => $value) {
+            foreach ($testFiles as $index => $value) {
                $spec = API\Server::$Tests[self::class][$index] ?? null;
 
                // @ Init Test

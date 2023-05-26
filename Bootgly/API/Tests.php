@@ -20,7 +20,11 @@ abstract class Tests
 
 
    // * Config
-   // ...
+   public string $autoBoot;
+   public mixed $autoInstance;
+   public bool $autoResult;
+   public bool $autoSummarize;
+   public static bool $exitOnFailure = false;
 
    // * Data
    public array $tests;
