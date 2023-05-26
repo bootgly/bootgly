@@ -13,7 +13,7 @@ namespace Bootgly\Web\interfaces\TCP;
 
 // @use
 use Bootgly\API;
-
+use Bootgly\API\Environment;
 use Bootgly\API\Debugger;
 
 use Bootgly\API\Logs\Logging;
@@ -507,14 +507,21 @@ class Server implements Servers, Logging
 
       Logger::$display = Logger::DISPLAY_MESSAGE;
 
+      $CI_CD = (
+         Environment::get('GITHUB_ACTIONS')
+         || Environment::get('TRAVIS')
+         || Environment::get('CIRCLECI')
+         || Environment::get('GITLAB_CI')
+      );
+      if ($this->mode >= self::MODE_TEST && $CI_CD) {
+         return;
+      }
+
       switch ($this->Process->level) {
          case 'master':
             $this->log("{$this->Process->children} worker(s) stopped!@\\;", 3);
             pcntl_wait($status);
-
-            if ($this->mode <= self::MODE_TEST) {
-               exit(0);
-            }
+            exit(0);
          case 'child':
             $this->close();
             exit(0);
