@@ -19,7 +19,7 @@ use Bootgly\Web\events\Select;
 // ?
 use Bootgly\Web\interfaces\TCP\Server;
 // extend
-use Bootgly\API\Logs\Escaped\Loggable as LoggableEscaped;
+use Bootgly\API\Logs\LoggableEscaped;
 
 
 class Process

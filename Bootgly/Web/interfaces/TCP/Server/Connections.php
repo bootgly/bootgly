@@ -14,7 +14,7 @@ namespace Bootgly\Web\interfaces\TCP\Server;
 use Bootgly\Web;
 use Bootgly\Web\Packages; // @interface
 
-use Bootgly\API\Logs\Escaped\Loggable as LoggableEscaped;
+use Bootgly\API\Logs\LoggableEscaped;
 
 use Bootgly\Web\interfaces\TCP\Server;
 use Bootgly\Web\interfaces\TCP\Server\Connections\Connection;

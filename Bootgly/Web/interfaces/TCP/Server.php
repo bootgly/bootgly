@@ -23,7 +23,7 @@ use Bootgly\Event\Timer;
 use Bootgly\Project;
 
 // @extend
-use Bootgly\API\Logs\Escaped\Loggable as LoggableEscaped;
+use Bootgly\API\Logs\LoggableEscaped;
 
 use Bootgly\Web\events\Select;
 use Bootgly\Web\Servers;

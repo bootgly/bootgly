@@ -17,7 +17,7 @@ use Bootgly\Event\Timer;
 // ?
 use Bootgly\Web\interfaces\TCP\Client;
 // extend
-use Bootgly\API\Logs\Escaped\Loggable as LoggableEscaped;
+use Bootgly\API\Logs\LoggableEscaped;
 
 
 class Process

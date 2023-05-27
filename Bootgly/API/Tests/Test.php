@@ -14,7 +14,7 @@ namespace Bootgly\API\Tests;
 use AssertionError;
 #use Bootgly\API\Tests\Assertions;
 use Bootgly\API\Tests;
-use Bootgly\API\Logs\Escaped\Loggable as LoggableEscaped;
+use Bootgly\API\Logs\LoggableEscaped;
 
 
 class Test // extends Assertions

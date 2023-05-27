@@ -8,19 +8,19 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\API\Logs\Escaped;
+namespace Bootgly\API\Logs;
 
 
 // -abstract
 use Bootgly\__String\Escapeable\text\Formattable;
-use Bootgly\templates\ANSI\Escaped;
+use Bootgly\templates\ANSI\Escaped; // TODO rename
 
 use Bootgly\API\Logs\Logger;
 
 
-trait Loggable
+trait LoggableEscaped
 {
-   use \Bootgly\API\Logs\Loggable; // TODO rename
+   use Loggable;
    use Formattable;
 
 

@@ -11,7 +11,7 @@
 namespace Bootgly\API;
 
 
-use Bootgly\API\Logs\Escaped\Loggable as LoggableEscaped;
+use Bootgly\API\Logs\LoggableEscaped;
 
 
 abstract class Tests
