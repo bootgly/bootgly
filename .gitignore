@@ -13,6 +13,8 @@ composer.lock
 ## Global folders
 # Excluded
 **/&
+# Versus
+**/vs
 
 ## Root folders
 # Boot
