@@ -72,9 +72,13 @@ class Test // extends Assertions
    public function __get (string $name)
    {
       return match ($name) {
-         'success' => array_reduce($this->assertions, function ($accumulator, $assertion) {
-            return $accumulator && $assertion;
-         }, true),
+         'success' => array_reduce(
+            $this->assertions,
+            function ($accumulator, $assertion) {
+               return $accumulator && $assertion;
+            },
+            true
+         ),
          default => null
       };
    }
