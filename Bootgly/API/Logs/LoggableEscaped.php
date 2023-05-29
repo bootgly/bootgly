@@ -13,7 +13,7 @@ namespace Bootgly\API\Logs;
 
 use Bootgly\__String\Escapeable\text\Formattable;
 
-use Bootgly\templates\ANSI\Escaped as TemplateEscaped;
+use Bootgly\templates\Template\Escaped as TemplateEscaped;
 
 use Bootgly\API\Logs\Logger;
 

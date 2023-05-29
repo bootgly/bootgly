@@ -15,7 +15,7 @@ namespace Bootgly\CLI\Terminal;
 use Bootgly\__String\Escapeable;
 use Bootgly\__String\Escapeable\cursor\Positionable;
 use Bootgly\__String\Escapeable\text\Modifiable;
-use Bootgly\templates\ANSI\Escaped as TemplateEscaped;
+use Bootgly\templates\Template\Escaped as TemplateEscaped;
 // -interfaces
 use Bootgly\CLI;
 use Bootgly\CLI\Terminal;

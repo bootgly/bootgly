@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\templates\ANSI;
+namespace Bootgly\templates\Template;
 
 
 // -abstract

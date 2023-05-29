@@ -13,7 +13,7 @@ namespace Bootgly\CLI;
 
 use Bootgly\CLI\components\Header;
 use Closure;
-use Bootgly\templates\ANSI\Escaped as TemplateEscaped;
+use Bootgly\templates\Template\Escaped as TemplateEscaped;
 
 
 class Commands
