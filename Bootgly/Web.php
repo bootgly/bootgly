@@ -52,29 +52,26 @@ class Web
       Debugger::$exit = true;
 
       // @ Instance
-      $Server = $this->Server = new HTTP\Server;
-      $Request = $this->Request = &$Server->Request;
-      $Response = $this->Response = &$Server->Response;
-      $Router = $this->Router = &$Server->Router;
-
-      // @ Load constructor file + extract vars
-      $vars = [
-         'Server' => $Server,
-         'Request' => $Request,
-         'Response' => $Response,
-         'Router' => $Router
+      $_ = [
+         'Server' => $this->Server = new HTTP\Server,
+         'Request' => $this->Request = &$this->Server->Request,
+         'Response' => $this->Response = &$this->Server->Response,
+         'Router' => $this->Router = &$this->Server->Router
       ];
 
-      // @ Author
+      // ---
+
+      // @ Boot
+      // Author
       $projects = Project::BOOTGLY_PROJECTS_DIR . self::BOOT_FILE;
-      \Bootgly::boot($projects, $vars);
-      // @ Consumer
+      \Bootgly::boot($projects, $_);
+      // Consumer
       if (BOOTGLY_DIR !== BOOTGLY_WORKABLES_DIR) {
          // Multi projects || Single project
          $projects = Project::PROJECTS_DIR . self::BOOT_FILE;
          $project = Project::PROJECT_DIR . self::BOOT_FILE;
 
-         \Bootgly::boot($projects, $vars) || \Bootgly::boot($project, $vars);
+         \Bootgly::boot($projects, $_) || \Bootgly::boot($project, $_);
       }
    }
 }

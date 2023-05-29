@@ -61,37 +61,34 @@ class CLI
       // * Meta
       // ...
 
-      // @ Instance
-      $Commands = self::$Commands = new Commands;
-      $Terminal = self::$Terminal = new Terminal;
-
-      // @ Validate include
+      // @ Validate
       $script = $_SERVER['PWD'] . DIRECTORY_SEPARATOR . $_SERVER['SCRIPT_FILENAME'];
       $included = array_search($script, $this->includes['scripts']);
       if ($included === false) {
          return;
       }
 
-      // @ Load constructor file + extract vars
-      $vars = [
-         'Commands' => $Commands,
-         'Terminal' => $Terminal
+      // @ Instance
+      $_ = [
+         'Commands' => self::$Commands = new Commands,
+         'Terminal' => self::$Terminal = new Terminal
       ];
 
-      // @ Author
+      // ---
+
+      // @ Boot
+      // Author
       // TODO
-      if (BOOTGLY_DIR === BOOTGLY_WORKABLES_DIR) {
-         $projects = Project::BOOTGLY_PROJECTS_DIR . self::BOOT_FILE;
-         \Bootgly::boot($projects, $vars);
-      }
+      $projects = Project::BOOTGLY_PROJECTS_DIR . self::BOOT_FILE;
+      \Bootgly::boot($projects, $_);
       // TODO
-      // @ Consumer
+      // Consumer
       if (BOOTGLY_DIR !== BOOTGLY_WORKABLES_DIR) {
          // Multi projects || Single project
          $projects = Project::PROJECTS_DIR . self::BOOT_FILE;
          $project = Project::PROJECT_DIR . self::BOOT_FILE;
 
-         \Bootgly::boot($projects, $vars) || \Bootgly::boot($project, $vars);
+         \Bootgly::boot($projects, $_) || \Bootgly::boot($project, $_);
       }
    }
 }
