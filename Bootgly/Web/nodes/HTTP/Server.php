@@ -247,7 +247,7 @@ class Server extends TCP\Server implements HTTP
 
                if ($spec === null || count($spec) < 4) {
                   if ($Test) {
-                     $Test->skip();
+                     $Tests->skip();
                   }
 
                   continue;

@@ -194,9 +194,4 @@ class Test // extends Assertions
 
       $this->describe($this->specifications['describe'] ?? null);
    }
-
-   public function skip ()
-   {
-      $this->Tests->skipped++;
-   }
 }

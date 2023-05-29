@@ -170,7 +170,7 @@ class Tester extends Tests
       }
    }
 
-   public function skip (string $info)
+   public function skip (? string $info = null)
    {
       $file = current($this->tests);
 
@@ -178,10 +178,15 @@ class Tester extends Tests
 
       next($this->tests);
 
+      // @ Set additional info
+      if ($info) {
+         $info = "\033[1;35m $info \033[0m";
+      }
+
       $this->log(
          "\033[0;30;43m SKIP \033 @; " .
          "\033[90m" . $file . "\033[0m" .
-         "\033[1;35m $info \033[0m" . PHP_EOL
+         $info . PHP_EOL
       );
    }
 }
