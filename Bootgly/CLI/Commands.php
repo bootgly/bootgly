@@ -13,7 +13,7 @@ namespace Bootgly\CLI;
 
 use Bootgly\CLI\components\Header;
 use Closure;
-use Bootgly\templates\ANSI\Escaped;
+use Bootgly\templates\ANSI\Escaped as TemplateEscaped;
 
 
 class Commands
@@ -171,6 +171,6 @@ class Commands
 
       $help .= '======================================================================@.;' . PHP_EOL;
 
-      echo Escaped::render($help);
+      echo TemplateEscaped::render($help);
    }
 }

@@ -3,20 +3,19 @@
  * --------------------------------------------------------------------------
  * Bootgly PHP Framework
  * Developed by Rodrigo Vieira (@rodrigoslayertech)
- * Copyright 2020-present
+ * Copyright 2023-present
  * Licensed under MIT
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\API\Logs;
+namespace Bootgly\API\Logs\Levels;
 
 
-trait Loggable
+use Bootgly\API\Logs\Levels;
+
+
+class RFC5424 extends Levels
 {
-   public Logger $Logger;
-
-   // * Config
-   // @ Levels
    public const LOG_EMERGENCY_LEVEL = 1;
    public const LOG_ALERT_LEVEL     = 2;
    public const LOG_CRITICAL_LEVEL  = 3;
@@ -25,20 +24,4 @@ trait Loggable
    public const LOG_NOTICE_LEVEL    = 6;
    public const LOG_INFO_LEVEL      = 7;
    public const LOG_DEBUG_LEVEL     = 8;
-
-   // * Data
-   // ...
-
-   // * Meta
-   // ...
-
-   public function log ($message) : bool
-   {
-      return error_log(
-         message: $message,
-         message_type: 3,
-         destination: BOOTGLY_WORKABLES_BASE . '/workspace/logs/bootgly.log',
-         additional_headers: null
-      );
-   }
 }

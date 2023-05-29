@@ -31,41 +31,19 @@ _*.example.php
 _*.test.php
 
 
-#-- /Bootgly --#
-
-#- /abstract
+#-- /Classes --#
 # ...
 
-#- /base
+#-- /resources --#
 # ...
 
-#- /core
-# ...
-
-#- /interfaces
-# ...
-
-#- /modules
-# ...
-
-#- /nodes
-# ...
-
-#- /platforms
-# ...
-
-#-- Workables --#
-
-#- /projects
-# ...
-
-# /public
+#- /public
 /public/test
 # /scripts
 # Ignore private scripts
 /scripts/_*.php
 
-# /workspace
+#- /workspace
 # Ignore all files here
 /workspace/*.*
 # Ignore all folder starting with @ here

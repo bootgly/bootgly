@@ -12,10 +12,13 @@ namespace Bootgly\API\Logs;
 
 
 use Bootgly\API\Logs;
+use Bootgly\API\Logs\Levels\RFC5424;
 
 
 class Logger extends Logs
 {
+   use Loggable;
+
    // * Config
    // @ Display
    public const DISPLAY_NONE = 0;
@@ -26,6 +29,8 @@ class Logger extends Logs
 
    // * Data
    public string $channel;
+   // @ Levels
+   public static Levels $Levels;
 
    // * Meta
    // ...
@@ -35,15 +40,10 @@ class Logger extends Logs
    {
       // * Data
       $this->channel = $channel;
-   }
-
-   public function log ($message) : bool
-   {
-      return error_log(
-         message: $message,
-         message_type: 3,
-         destination: BOOTGLY_WORKABLES_BASE . '/workspace/logs/bootgly.log',
-         additional_headers: null
-      );
+      // @ Levels
+      // ...static
    }
 }
+
+// @ Boot
+Logger::$Levels = new RFC5424;

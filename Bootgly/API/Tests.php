@@ -11,14 +11,8 @@
 namespace Bootgly\API;
 
 
-use Bootgly\API\Logs\LoggableEscaped;
-
-
 abstract class Tests
 {
-   use LoggableEscaped;
-
-
    // * Config
    // auto
    public string $autoBoot;

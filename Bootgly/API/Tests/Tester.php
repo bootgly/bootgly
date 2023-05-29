@@ -11,12 +11,16 @@
 namespace Bootgly\API\Tests;
 
 
+use Bootgly\API\Logs\LoggableEscaped;
 use Bootgly\API\Environment;
 use Bootgly\API\Tests;
 
 
 class Tester extends Tests
 {
+   use LoggableEscaped;
+
+
    // * Config
    // ...inherited from Tests
 

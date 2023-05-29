@@ -11,20 +11,23 @@
 namespace Bootgly\API\Logs;
 
 
-// -abstract
 use Bootgly\__String\Escapeable\text\Formattable;
-use Bootgly\templates\ANSI\Escaped; // TODO rename
+
+use Bootgly\templates\ANSI\Escaped as TemplateEscaped;
 
 use Bootgly\API\Logs\Logger;
 
 
-trait LoggableEscaped
+trait LoggableEscaped // TODO move to CLI?
 {
-   use Loggable;
    use Formattable;
+
+   use Loggable;
 
 
    // * Config
+   // ...
+   // * Data
    // ...
    // * Meta
    // ...
@@ -40,7 +43,7 @@ trait LoggableEscaped
       [$severity, $color] = $this->translate($level);
 
       // @ Render templating
-      $message = Escaped::render($message);
+      $message = TemplateEscaped::render($message);
 
       // @ Output log
       echo $this->format($message, $severity, $color);
@@ -54,39 +57,38 @@ trait LoggableEscaped
    private function translate (int $level) : array
    {
       switch ($level) {
-         case self::LOG_DEBUG_LEVEL:
-            $severity = 'DEBUG';
-            $color = self::_WHITE_FOREGROUND;
-            break;
-         case self::LOG_INFO_LEVEL:
-            $severity = 'INFO';
-            $color = self::_GREEN_BOLD;
-            break;
-         case self::LOG_NOTICE_LEVEL:
-            $severity = 'NOTICE';
-            $color = self::_CYAN_FOREGROUND;
-            break;
-         case self::LOG_WARNING_LEVEL:
-            $severity = 'WARNING';
-            $color = self::_YELLOW_BOLD;
-            break;
-         case self::LOG_ERROR_LEVEL:
-            $severity = 'ERROR';
-            $color = self::_RED_BRIGHT_FOREGROUND;
-            break;
-         case self::LOG_CRITICAL_LEVEL:
-            $severity = 'CRITICAL';
-            $color = self::_MAGENTA_FOREGROUND;
+         case self::LOG_EMERGENCY_LEVEL:
+            $severity = 'EMERGENCY';
+            $color = self::_RED_BOLD;
             break;
          case self::LOG_ALERT_LEVEL:
             $severity = 'ALERT';
             $color = self::_MAGENTA_BOLD;
             break;
-         case self::LOG_EMERGENCY_LEVEL:
-            $severity = 'EMERGENCY';
-            $color = self::_RED_BOLD;
+         case self::LOG_CRITICAL_LEVEL:
+            $severity = 'CRITICAL';
+            $color = self::_MAGENTA_FOREGROUND;
             break;
-
+         case self::LOG_ERROR_LEVEL:
+            $severity = 'ERROR';
+            $color = self::_RED_BRIGHT_FOREGROUND;
+            break;
+         case self::LOG_WARNING_LEVEL:
+            $severity = 'WARNING';
+            $color = self::_YELLOW_BOLD;
+            break;
+         case self::LOG_NOTICE_LEVEL:
+            $severity = 'NOTICE';
+            $color = self::_CYAN_FOREGROUND;
+            break;
+         case self::LOG_INFO_LEVEL:
+            $severity = 'INFO';
+            $color = self::_GREEN_BOLD;
+            break;
+         case self::LOG_DEBUG_LEVEL:
+            $severity = 'DEBUG';
+            $color = self::_WHITE_FOREGROUND;
+            break;
          default:
             $severity = 'LOG';
             $color = self::_DEFAULT_FOREGROUND;
@@ -98,7 +100,7 @@ trait LoggableEscaped
    }
 
    // @ Formatting
-   private function format ($message, $severity, $color) : string
+   private function format (string $message, string $severity, string $color) : string
    {
       // @ Display when
       $when = '';

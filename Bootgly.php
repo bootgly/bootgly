@@ -80,7 +80,7 @@ class Bootgly
 
       return $Debugger;
    }
-   public function log ($data) : Logger
+   public static function log ($data) : Logger
    {
       return new Logger($data);
    }

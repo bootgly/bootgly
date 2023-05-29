@@ -15,7 +15,7 @@ namespace Bootgly\CLI\Terminal\components\Progress;
 use Bootgly\__String\Escapeable;
 use Bootgly\__String\Escapeable\cursor;
 use Bootgly\__String\Escapeable\text;
-use Bootgly\templates\ANSI\Escaped;
+use Bootgly\templates\ANSI\Escaped as TemplateEscaped;
 // -interfaces
 use Bootgly\CLI\Terminal\Output;
 use Bootgly\CLI\Terminal\components\Progress\Bar\Bar;
@@ -270,7 +270,7 @@ class Progress
          $description = str_pad($description, $describedLength, ' ', STR_PAD_RIGHT);
       }
 
-      $this->description = Escaped::render($description);
+      $this->description = TemplateEscaped::render($description);
    }
 
    public function finish ()
