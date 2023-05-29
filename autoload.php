@@ -36,7 +36,6 @@ include 'Bootgly/-abstract/data/Table.php';
 include 'Bootgly/-abstract/iterators/Iterator.php';
 include 'Bootgly/-abstract/sockets/Pipe.php';
 include 'Bootgly/-abstract/streams/File.php';
-// @ Template
 include 'Bootgly/-abstract/templates/Template/Escaped.php';
 include 'Bootgly/-abstract/templates/Template.php';
 // 1-base

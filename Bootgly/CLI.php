@@ -80,8 +80,10 @@ class CLI
 
       // @ Author
       // TODO
-      $projects = Project::BOOTGLY_PROJECTS_DIR . self::BOOT_FILE;
-      \Bootgly::boot($projects, $vars);
+      if (BOOTGLY_DIR === BOOTGLY_WORKABLES_DIR) {
+         $projects = Project::BOOTGLY_PROJECTS_DIR . self::BOOT_FILE;
+         \Bootgly::boot($projects, $vars);
+      }
       // TODO
       // @ Consumer
       if (BOOTGLY_DIR !== BOOTGLY_WORKABLES_DIR) {
