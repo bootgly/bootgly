@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-#@include __DIR__ . '/@/imports/autoload.php'; // composer
+#@include __DIR__ . '/@imports/autoload.php'; // composer
 
 if (defined('BOOTGLY_BASE') === true) {
    return;

@@ -15,14 +15,12 @@ composer.lock
 **/&
 # Versus
 **/vs
-
-## Root folders
-# Boot
+# Metafolder (@)
 @/*
-!@/autoload.php
-
 !@/__php__/
 !@/__docker__/
+
+@imports/
 
 ## Private files
 # Examples
@@ -35,10 +33,10 @@ _*.test.php
 # ...
 
 #-- /resources --#
-# ...
 
 #- /public
 /public/test
+
 # /scripts
 # Ignore private scripts
 /scripts/_*.php
@@ -52,4 +50,3 @@ _*.test.php
 /workspace/cache/*
 /workspace/logs/*
 /workspace/temp/*
-/workspace/tests/*
