@@ -13,6 +13,14 @@
   </a>
 </p>
 
+🚧
+Do not use it in production environments. The alpha version hasn't even been released yet. 
+
+First beta release is planned for mid-year 2023 (near June).
+
+[Documentation is under construction][PROJECT_DOCS] and will be released alongside the beta.
+🚧
+
 ## Table of Contents
 
 - [About](#-about)
@@ -68,12 +76,6 @@ interfaces | nodes
 --- | ---
 [TCP Client][WEB_TCP_CLIENT_INTERFACE] | [HTTP Server][WEB_HTTP_SERVER_NODE]
 [TCP Server][WEB_TCP_SERVER_INTERFACE] | 
-
-🚧
-Do not use it in production environments. The alpha version hasn't even been released yet. 
-First beta release is planned for mid-year 2023 (near June).
-[Documentation is under construction][PROJECT_DOCS] and will be released alongside the beta.
-🚧
 
 ---
 
