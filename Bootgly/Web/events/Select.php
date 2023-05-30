@@ -11,14 +11,14 @@
 namespace Bootgly\Web\events;
 
 
-use Bootgly\Event;
+use Bootgly\events\Loops;
 
 use Bootgly\API\Logs\LoggableEscaped;
 
 use Bootgly\Web\Connections;
 
 
-class Select implements Event\Loops
+class Select implements Loops
 {
    use LoggableEscaped;
 

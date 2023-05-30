@@ -13,7 +13,7 @@ namespace Bootgly\Web\interfaces\TCP\Client\_;
 
 // use
 use Bootgly\API\Logs\Logger;
-use Bootgly\Event\Timer;
+use Bootgly\events\Timer;
 // ?
 use Bootgly\Web\interfaces\TCP\Client;
 // extend

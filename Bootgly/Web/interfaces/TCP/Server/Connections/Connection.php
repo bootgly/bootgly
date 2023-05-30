@@ -11,7 +11,7 @@
 namespace Bootgly\Web\interfaces\TCP\Server\Connections;
 
 
-use Bootgly\Event\Timer;
+use Bootgly\events\Timer;
 use Bootgly\Web\interfaces\TCP\Server;
 use Bootgly\Web\interfaces\TCP\Server\Connections;
 use Bootgly\Web\interfaces\TCP\Server\Packages;

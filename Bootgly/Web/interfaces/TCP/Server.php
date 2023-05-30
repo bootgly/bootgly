@@ -19,7 +19,7 @@ use Bootgly\API\Debugger;
 use Bootgly\API\Logs\Logging;
 use Bootgly\API\Logs\Logger;
 
-use Bootgly\Event\Timer;
+use Bootgly\events\Timer;
 use Bootgly\Project;
 
 // @extend

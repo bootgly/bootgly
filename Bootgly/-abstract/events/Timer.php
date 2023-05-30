@@ -9,7 +9,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\Event;
+namespace Bootgly\events;
 
 
 use \Throwable;

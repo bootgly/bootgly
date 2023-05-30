@@ -16,7 +16,7 @@ require __DIR__ . '/../autoload.php';
 
 
 use Bootgly\Web\interfaces\TCP;
-use Bootgly\Event\Timer;
+use Bootgly\events\Timer;
 
 
 $TCPClient = new TCP\Client(

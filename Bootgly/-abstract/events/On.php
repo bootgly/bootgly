@@ -8,14 +8,19 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\Event;
+namespace Bootgly\events;
 
 
-interface Loops
+#[\AllowDynamicProperties]
+class On
 {
-   public function add ($data, int $flag, $payload);
-   public function del ($data, int $flag);
+   public function __get ($name) : \Closure
+   {
+      return ($this->$name);
+   }
 
-   public function loop ();
-   public function destroy ();
+   public function __set ($name, \Closure $value)
+   {
+      $this->$name = $value;
+   }
 }
