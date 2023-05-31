@@ -1,4 +1,4 @@
-name: Bootgly Test
+name: Bootgly
 
 on:
   workflow_dispatch:
@@ -23,4 +23,4 @@ jobs:
           ini-file: 'development'
       -
         name: Run Bootgly Test command
-        run: php bootgly test
+        run: php bootgly test --bootgly

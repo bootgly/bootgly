@@ -28,11 +28,7 @@ class TestCommand extends Command
    public string $name = 'test';
    public string $description = 'Perform Bootgly tests';
    // * Data
-   private array $tests = [
-      'Bootgly/-core/',
-      'Bootgly/CLI/',
-      'Bootgly/Web/nodes/HTTP/Server/',
-   ];
+   // ...
 
 
    public function run (array $arguments, array $options) : bool
@@ -60,7 +56,25 @@ class TestCommand extends Command
             $Alert->emit('AutoBoot test not configured!');
          }
       } else {
-         foreach ($this->tests as $dir) {
+         $suiteFiles0 = @include BOOTGLY_DIR . '/tests/@.php';
+
+         $bootglyTests = null;
+         $suiteFiles1 = null;
+         if (BOOTGLY_DIR !== BOOTGLY_WORKABLES_DIR) {
+            $suiteFiles1 = @include BOOTGLY_WORKABLES_DIR . '/tests/@.php';
+         } else {
+            $bootglyTests = true;
+         }
+
+         $bootglyTests ??= $options['bootgly'] ?? $options['all'];
+
+         if ($bootglyTests) {
+            foreach (@$suiteFiles0['filesSuites'] as $dir) {
+               $this->run([$dir . 'tests/'], []);
+            }
+         }
+
+         foreach (@$suiteFiles1['filesSuites'] as $dir) {
             $this->run([$dir . 'tests/'], []);
          }
 
