@@ -20,35 +20,14 @@ define('BOOTGLY_DIR', __DIR__ . DIRECTORY_SEPARATOR);
 // ? Bootgly
 // ! Bootables ([0-9]) || (-[a-z]) || ([0-9]-[a-z])
 // 0-abstract
-include 'Bootgly/-abstract/@functions.php';
-include 'Bootgly/-abstract/@traits.php';
-include 'Bootgly/-abstract/__Array.php';
-include 'Bootgly/-abstract/__Class.php';
-include 'Bootgly/-abstract/__String.php';
-include 'Bootgly/-abstract/__String/Escapeable.php';
-include 'Bootgly/-abstract/__String/Escapeable/cursor/Positionable.php';
-include 'Bootgly/-abstract/__String/Escapeable/cursor/Shapeable.php';
-include 'Bootgly/-abstract/__String/Escapeable/cursor/Visualizable.php';
-include 'Bootgly/-abstract/__String/Escapeable/mouse/Reportable.php';
-include 'Bootgly/-abstract/__String/Escapeable/text/Formattable.php';
-include 'Bootgly/-abstract/__String/Escapeable/text/Modifiable.php';
-include 'Bootgly/-abstract/__String/Escapeable/viewport/Scrollable.php';
-include 'Bootgly/-abstract/__String/Path.php';
-include 'Bootgly/-abstract/data/Dir.php';
-include 'Bootgly/-abstract/data/Table.php';
-include 'Bootgly/-abstract/events/Loops.php';
-include 'Bootgly/-abstract/events/On.php';
-include 'Bootgly/-abstract/events/Timer.php';
-include 'Bootgly/-abstract/iterators/Iterator.php';
-include 'Bootgly/-abstract/sockets/Pipe.php';
-include 'Bootgly/-abstract/streams/File.php';
-include 'Bootgly/-abstract/templates/Template/Escaped.php';
-include 'Bootgly/-abstract/templates/Template.php';
+include BOOTGLY_DIR . 'Bootgly/-abstract/loader.php';
 // 1-base
 
 // 2-core
-include 'Bootgly/-core/Database.php';
-include 'Bootgly/-core/Project.php';
+include BOOTGLY_DIR . 'Bootgly/-core/Database.php';
+
+include BOOTGLY_DIR . 'Bootgly/-core/Project.php';
+
 
 // ! Classes ([A-Z])
 spl_autoload_register (function (string $class) {
@@ -64,23 +43,23 @@ spl_autoload_register (function (string $class) {
 
 // @ API
 /*
-@include 'Bootgly/API/Environment.php';
-@include 'Bootgly/API/Server.php';
+@include BOOTGLY_DIR . 'Bootgly/API/Environment.php';
+@include BOOTGLY_DIR . 'Bootgly/API/Server.php';
 
 // Debug_
-@include 'Bootgly/API/Debugger.php';
-@include 'Bootgly/API/Debugger/Backtrace.php';
+@include BOOTGLY_DIR . 'Bootgly/API/Debugger.php';
+@include BOOTGLY_DIR . 'Bootgly/API/Debugger/Backtrace.php';
 // Log_
-@include 'Bootgly/API/Logs.php'; // @ abstract
-@include 'Bootgly/API/Logs/Loggable.php';
-@include 'Bootgly/API/Logs/Logger.php';
-@include 'Bootgly/API/Logs/Logging.php';
-@include 'Bootgly/API/Logs/Escaped/Loggable.php';
+@include BOOTGLY_DIR . 'Bootgly/API/Logs.php'; // @ abstract
+@include BOOTGLY_DIR . 'Bootgly/API/Logs/Loggable.php';
+@include BOOTGLY_DIR . 'Bootgly/API/Logs/Logger.php';
+@include BOOTGLY_DIR . 'Bootgly/API/Logs/Logging.php';
+@include BOOTGLY_DIR . 'Bootgly/API/Logs/Escaped/Loggable.php';
 // Test_
-@include 'Bootgly/API/Tests.php'; // @ abstract
-@include 'Bootgly/API/Tests/Benchmark.php';
-@include 'Bootgly/API/Tests/Test.php'; 
-@include 'Bootgly/API/Tests/Tester.php';
+@include BOOTGLY_DIR . 'Bootgly/API/Tests.php'; // @ abstract
+@include BOOTGLY_DIR . 'Bootgly/API/Tests/Benchmark.php';
+@include BOOTGLY_DIR . 'Bootgly/API/Tests/Test.php'; 
+@include BOOTGLY_DIR . 'Bootgly/API/Tests/Tester.php';
 
 // @ CLI
 @include BOOTGLY_DIR . 'Bootgly/CLI/Command.php';
@@ -119,7 +98,7 @@ spl_autoload_register (function (string $class) {
 // components
 @include BOOTGLY_DIR . 'Bootgly/CLI/components/Header.php';
 // programs
-#include 'Bootgly/CLI/programs/Script.php';
+#include BOOTGLY_DIR . 'Bootgly/CLI/programs/Script.php';
 // @?!
 @include BOOTGLY_DIR . 'Bootgly/CLI.php';
 
@@ -174,6 +153,7 @@ spl_autoload_register (function (string $class) {
 // @?!
 @include BOOTGLY_DIR . 'Bootgly/Web.php';
 */
+
 // ! Resources ([a-z])
 use Bootgly\API\Debugger;
 
@@ -210,7 +190,7 @@ if ( is_file($installed) ) {
 }
 define('BOOTGLY_WORKABLES_DIR', BOOTGLY_WORKABLES_BASE . DIRECTORY_SEPARATOR);
 
-// ! Bootgly
+// @
 require BOOTGLY_DIR . 'Bootgly.php';
 
 new Bootgly;
