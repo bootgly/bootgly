@@ -67,11 +67,10 @@ class Web
       \Bootgly::boot($projects, $_);
       // Consumer
       if (BOOTGLY_DIR !== BOOTGLY_WORKABLES_DIR) {
-         // Multi projects || Single project
+         // Multi projects
          $projects = Project::PROJECTS_DIR . self::BOOT_FILE;
-         $project = Project::PROJECT_DIR . self::BOOT_FILE;
 
-         \Bootgly::boot($projects, $_) || \Bootgly::boot($project, $_);
+         \Bootgly::boot($projects, $_);
       }
    }
 }

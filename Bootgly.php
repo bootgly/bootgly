@@ -41,11 +41,10 @@ class Bootgly
       }
       // Consumer
       if (BOOTGLY_DIR !== BOOTGLY_WORKABLES_DIR) {
-         // Multi projects || Single project
+         // Multi projects
          $projects = Project::PROJECTS_DIR . self::BOOT_FILE;
-         $project = Project::PROJECT_DIR . self::BOOT_FILE;
 
-         self::boot($projects, $_) || self::boot($project, $_);
+         self::boot($projects, $_);
       }
    }
 

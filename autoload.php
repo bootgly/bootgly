@@ -25,7 +25,6 @@ include 'Bootgly/-abstract/@traits.php';
 include 'Bootgly/-abstract/__Array.php';
 include 'Bootgly/-abstract/__Class.php';
 include 'Bootgly/-abstract/__String.php';
-// TODO convert to interface
 include 'Bootgly/-abstract/__String/Escapeable.php';
 include 'Bootgly/-abstract/__String/Escapeable/cursor/Positionable.php';
 include 'Bootgly/-abstract/__String/Escapeable/cursor/Shapeable.php';
