@@ -189,4 +189,28 @@ class Tester extends Tests
          $info . PHP_EOL
       );
    }
+
+   public function summarize ()
+   {
+      $failed = $this->failed;
+      $passed = $this->passed;
+      $skipped = $this->skipped;
+      // @ Stats
+      $total = $this->total;
+      // @ Time
+      $started = $this->started;
+      $finished = $this->finished = microtime(true);
+
+      // @ Benchmark Tests time
+      // TODO use Benchmark class?
+      $duration = number_format(round($finished - $started, 5), 6);
+
+      $this->log(<<<TESTS
+      
+      Tests: @:e:{$failed} failed @;, @:n:{$skipped} skipped @;, @:s:{$passed} passed @;, {$total} total
+      Duration: \033[1;35m{$duration}s \033[0m
+      \033[90mRan all tests.\033[0m
+      \n
+      TESTS);
+   }
 }
