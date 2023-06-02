@@ -19,11 +19,11 @@ define('BOOTGLY_DIR', __DIR__ . DIRECTORY_SEPARATOR);
 
 // ? Bootgly
 // ! Bootables ([0-9]) || (-[a-z]) || ([0-9]-[a-z])
-// 0-abstract
-include BOOTGLY_DIR . 'Bootgly/-abstract/loader.php';
-// 1-base
+// 1 (-abstract)
+include BOOTGLY_DIR . 'Bootgly/1/loader.php';
+// 2 (-base)
 
-// 2-core
+// 3
 include BOOTGLY_DIR . 'Bootgly/-core/Database.php';
 
 include BOOTGLY_DIR . 'Bootgly/-core/Project.php';
