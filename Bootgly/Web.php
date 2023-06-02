@@ -16,8 +16,8 @@ use Bootgly\Web\nodes\HTTP\Server\Request;
 use Bootgly\Web\nodes\HTTP\Server\Response;
 use Bootgly\Web\nodes\HTTP\Server\Router;
 
-use Bootgly\Web\App;
-use Bootgly\Web\API;
+use Web\App;
+use Web\API;
 
 
 class Web

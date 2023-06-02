@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\Web;
+namespace Web;
 
 
 use Bootgly\Web;
