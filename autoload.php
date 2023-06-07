@@ -142,19 +142,21 @@ spl_autoload_register (function (string $class) {
 use Bootgly\Debugger;
 
 
-function debug (...$vars)
-{
-   if (Debugger::$trace === null) {
-      Debugger::$trace = debug_backtrace();
+if (function_exists('debug') === false) {
+   function debug (...$vars)
+   {
+      if (Debugger::$trace === null) {
+         Debugger::$trace = debug_backtrace();
+      }
+
+      $Debugger = new Debugger(...$vars);
+
+      if (Debugger::$trace !== false) {
+         Debugger::$trace = null;
+      }
+
+      return $Debugger;
    }
-
-   $Debugger = new Debugger(...$vars);
-
-   if (Debugger::$trace !== false) {
-      Debugger::$trace = null;
-   }
-
-   return $Debugger;
 }
 
 // ? Workables
