@@ -12,7 +12,7 @@ namespace Bootgly\Web\interfaces\TCP\Client\_\CLI;
 
 
 use Bootgly\CLI;
-use Bootgly\API\Logs\LoggableEscaped;
+use Bootgly\Logs\LoggableEscaped;
 use Bootgly\Web\interfaces\TCP\Client;
 
 

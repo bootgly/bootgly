@@ -11,15 +11,16 @@
 namespace Bootgly\Web\interfaces\TCP\Server\_;
 
 
-// use
-use Bootgly\API;
-use Bootgly\API\Logs\Logger;
 use Bootgly\events\Timer;
+
+use Bootgly\Logs\Logger;
+use Bootgly\Logs\LoggableEscaped;
+
+use Bootgly\API\Server as SAPI;
+
 use Bootgly\Web\events\Select;
 // ?
 use Bootgly\Web\interfaces\TCP\Server;
-// extend
-use Bootgly\API\Logs\LoggableEscaped;
 
 
 class Process
@@ -195,7 +196,7 @@ class Process
             break;
          // @ reload()
          case SIGUSR2: // 12
-            API\Server::boot(true);
+            SAPI::boot(true);
             break;
 
          // ! \Connection

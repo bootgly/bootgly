@@ -10,9 +10,11 @@
 
 use Bootgly\templates\Template;
 use Bootgly\streams\File;
+
+use Bootgly\Debugger;
+use Bootgly\Logs\Logger;
+
 use Bootgly\Project;
-use Bootgly\API\Debugger;
-use Bootgly\API\Logs\Logger;
 
 
 class Bootgly

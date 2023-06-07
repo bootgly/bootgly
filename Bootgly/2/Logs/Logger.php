@@ -8,11 +8,11 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\API\Logs;
+namespace Bootgly\Logs;
 
 
-use Bootgly\API\Logs;
-use Bootgly\API\Logs\Levels\RFC5424;
+use Bootgly\Logs;
+use Bootgly\Logs\Levels\RFC5424;
 
 
 class Logger extends Logs

@@ -12,18 +12,18 @@ namespace Bootgly\Web\interfaces\TCP;
 
 
 // @use
-use Bootgly\API;
-use Bootgly\API\Environment;
-use Bootgly\API\Debugger;
-
-use Bootgly\API\Logs\Logging;
-use Bootgly\API\Logs\Logger;
-
 use Bootgly\events\Timer;
+
+use Bootgly\Debugger;
+use Bootgly\Logs\Logging;
+use Bootgly\Logs\Logger;
+
 use Bootgly\Project;
 
+use Bootgly\API\Server as SAPI;
+use Bootgly\API\Environment;
 // @extend
-use Bootgly\API\Logs\LoggableEscaped;
+use Bootgly\Logs\LoggableEscaped;
 
 use Bootgly\Web\events\Select;
 use Bootgly\Web\Servers;
@@ -136,8 +136,8 @@ class Server implements Servers, Logging
       if (self::$Application) {
          self::$Application::boot();
       } else {
-         API\Server::$production = Project::PROJECTS_DIR . 'Bootgly/Web/TCP-Server.API.php';
-         API\Server::boot(true);
+         SAPI::$production = Project::PROJECTS_DIR . 'Bootgly/Web/TCP-Server.API.php';
+         SAPI::boot(true);
       }
    }
    public function __get (string $name)
@@ -158,7 +158,7 @@ class Server implements Servers, Logging
             return $this->mode;
 
          case '@test init':
-            API\Server::$mode = API\Server::MODE_TEST;
+            SAPI::$mode = SAPI::MODE_TEST;
 
             if (self::$Application) {
                self::$Application::boot(production: false, test: true);
@@ -172,8 +172,8 @@ class Server implements Servers, Logging
 
             break;
          case '@test end':
-            API\Server::$mode = API\Server::MODE_PRODUCTION;
-            API\Server::boot(true);
+            SAPI::$mode = SAPI::MODE_PRODUCTION;
+            SAPI::boot(true);
 
             break;
       }
@@ -397,7 +397,7 @@ class Server implements Servers, Logging
 
       // @ Set time to hot reloading
       Timer::add(2, function () {
-         $modified = API\Server::check();
+         $modified = SAPI::check();
 
          if ($modified) {
             $this->Process->sendSignal(SIGUSR2, master: false); // @ Send signal to all children to reload

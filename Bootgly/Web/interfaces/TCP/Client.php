@@ -13,9 +13,9 @@ namespace Bootgly\Web\interfaces\TCP;
 
 // use
 use Closure;
-use Bootgly\API\Debugger;
-use Bootgly\API\Logs\Logger;
-use Bootgly\API\Logs\LoggableEscaped;
+use Bootgly\Debugger;
+use Bootgly\Logs\Logger;
+use Bootgly\Logs\LoggableEscaped;
 use Bootgly\Web\events\Select;
 use Bootgly\Web\interfaces\TCP\Client\_\Process;
 use Bootgly\Web\interfaces\TCP\Client\_\CLI\Terminal;

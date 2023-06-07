@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\API;
+namespace Bootgly;
 
 
 abstract class Logs

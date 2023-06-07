@@ -12,12 +12,12 @@ namespace Bootgly\Web\interfaces\TCP\Client\_;
 
 
 // use
-use Bootgly\API\Logs\Logger;
+use Bootgly\Logs\Logger;
 use Bootgly\events\Timer;
 // ?
 use Bootgly\Web\interfaces\TCP\Client;
 // extend
-use Bootgly\API\Logs\LoggableEscaped;
+use Bootgly\Logs\LoggableEscaped;
 
 
 class Process

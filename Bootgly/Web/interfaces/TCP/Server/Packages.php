@@ -11,10 +11,11 @@
 namespace Bootgly\Web\interfaces\TCP\Server;
 
 
-use Bootgly\API\Logs\Logger;
+use Bootgly\Logs\Logger;
+use Bootgly\Logs\LoggableEscaped;
 
-use Bootgly\API;
-use Bootgly\API\Logs\LoggableEscaped;
+use Bootgly\API\Server as SAPI;
+
 use Bootgly\Web; // @interface
 
 use Bootgly\Web\interfaces\TCP\Server;
@@ -201,7 +202,7 @@ abstract class Packages implements Web\Packages
       if (Server::$Application) {
          self::$output = Server::$Application::encode($this, $length);
       } else {
-         self::$output = (API\Server::$Handler)(...$this->callbacks);
+         self::$output = (SAPI::$Handler)(...$this->callbacks);
       }
 
       try {

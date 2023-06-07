@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\API\Logs;
+namespace Bootgly\Logs;
 
 
 trait Loggable

@@ -8,14 +8,14 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\API\Logs;
+namespace Bootgly\Logs;
 
 
 use Bootgly\__String\Escapeable\text\Formattable;
 
 use Bootgly\templates\Template\Escaped as TemplateEscaped;
 
-use Bootgly\API\Logs\Logger;
+use Bootgly\Logs\Logger;
 
 
 trait LoggableEscaped // TODO move to CLI?

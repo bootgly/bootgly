@@ -11,7 +11,7 @@
 namespace Bootgly;
 
 
-use Bootgly\API\Debugger;
+use Bootgly\Debugger;
 
 use Bootgly\CLI\Commands;
 use Bootgly\CLI\Terminal;

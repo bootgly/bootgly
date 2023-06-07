@@ -19,15 +19,14 @@ define('BOOTGLY_DIR', __DIR__ . DIRECTORY_SEPARATOR);
 
 // ? Bootgly
 // ! Bootables ([0-9]) || (-[a-z]) || ([0-9]-[a-z])
-// 1 (-abstract)
+// 1
 include BOOTGLY_DIR . 'Bootgly/1/loader.php';
-// 2 (-base)
-
+// 2
+include BOOTGLY_DIR . 'Bootgly/2/loader.php';
 // 3
-include BOOTGLY_DIR . 'Bootgly/-core/Database.php';
-
-include BOOTGLY_DIR . 'Bootgly/-core/Project.php';
-
+include BOOTGLY_DIR . 'Bootgly/3/loader.php';
+// 4
+include BOOTGLY_DIR . 'Bootgly/4/loader.php';
 
 // ! Classes ([A-Z])
 spl_autoload_register (function (string $class) {
@@ -45,21 +44,6 @@ spl_autoload_register (function (string $class) {
 /*
 @include BOOTGLY_DIR . 'Bootgly/API/Environment.php';
 @include BOOTGLY_DIR . 'Bootgly/API/Server.php';
-
-// Debug_
-@include BOOTGLY_DIR . 'Bootgly/API/Debugger.php';
-@include BOOTGLY_DIR . 'Bootgly/API/Debugger/Backtrace.php';
-// Log_
-@include BOOTGLY_DIR . 'Bootgly/API/Logs.php'; // @ abstract
-@include BOOTGLY_DIR . 'Bootgly/API/Logs/Loggable.php';
-@include BOOTGLY_DIR . 'Bootgly/API/Logs/Logger.php';
-@include BOOTGLY_DIR . 'Bootgly/API/Logs/Logging.php';
-@include BOOTGLY_DIR . 'Bootgly/API/Logs/Escaped/Loggable.php';
-// Test_
-@include BOOTGLY_DIR . 'Bootgly/API/Tests.php'; // @ abstract
-@include BOOTGLY_DIR . 'Bootgly/API/Tests/Benchmark.php';
-@include BOOTGLY_DIR . 'Bootgly/API/Tests/Test.php'; 
-@include BOOTGLY_DIR . 'Bootgly/API/Tests/Tester.php';
 
 // @ CLI
 @include BOOTGLY_DIR . 'Bootgly/CLI/Command.php';
@@ -155,7 +139,7 @@ spl_autoload_register (function (string $class) {
 */
 
 // ! Resources ([a-z])
-use Bootgly\API\Debugger;
+use Bootgly\Debugger;
 
 
 function debug (...$vars)

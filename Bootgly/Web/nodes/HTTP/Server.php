@@ -11,11 +11,10 @@
 namespace Bootgly\Web\nodes\HTTP;
 
 
-use Bootgly\API;
+use Bootgly\Logs\Logger;
+use Bootgly\Tests\Tester;
 use Bootgly\Project;
-use Bootgly\API\Logs\Logger;
-
-use Bootgly\API\Tests\Tester;
+use Bootgly\API\Server as SAPI;
 
 use Bootgly\Web\interfaces\TCP;
 use Bootgly\Web\interfaces\TCP\Server\Packages;
@@ -68,7 +67,7 @@ class Server extends TCP\Server implements HTTP
    {
       // * Config
       if ($production) {
-         API\Server::$production = Project::PROJECTS_DIR . 'Bootgly/Web/HTTP-Server.API.php';
+         SAPI::$production = Project::PROJECTS_DIR . 'Bootgly/Web/HTTP-Server.API.php';
       }
 
       // * Data
@@ -84,11 +83,11 @@ class Server extends TCP\Server implements HTTP
 
             clearstatcache(false, $tests);
 
-            API\Server::$tests[self::class] = (@require $tests)['files'];
+            SAPI::$tests[self::class] = (@require $tests)['files'];
             // * Meta
-            API\Server::$Tests[self::class] = [];
+            SAPI::$Tests[self::class] = [];
 
-            foreach (API\Server::$tests[self::class] as $index => $case) {
+            foreach (SAPI::$tests[self::class] as $index => $case) {
                $file = __DIR__ . '/Server/tests/' . $case . '.test.php';
 
                if (! file_exists($file) ) {
@@ -109,15 +108,15 @@ class Server extends TCP\Server implements HTTP
                   $spec = null;
                }
 
-               // @ Set Closure to API\Server Tests
-               API\Server::$Tests[self::class][] = $spec;
+               // @ Set Closure to SAPI Tests
+               SAPI::$Tests[self::class][] = $spec;
             }
          } catch (\Throwable) {
             // ...
          }
       }
 
-      API\Server::boot(true);
+      SAPI::boot(true);
    }
 
    public static function decode (Packages $Package, string $input, int $length)
@@ -187,8 +186,8 @@ class Server extends TCP\Server implements HTTP
 
          #$Response->reset();
 
-         if (API\Server::$mode === API\Server::MODE_TEST) {
-            API\Server::boot(true, self::class);
+         if (SAPI::$mode === SAPI::MODE_TEST) {
+            SAPI::boot(true, self::class);
          }
       } else if ($Response->Content->raw) {
          // TODO check if Response raw is static or dynamic
@@ -198,7 +197,7 @@ class Server extends TCP\Server implements HTTP
       // ! Response
       // @ Try to Invoke API Closure
       try {
-         (API\Server::$Handler)($Request, $Response);
+         (SAPI::$Handler)($Request, $Response);
       } catch (\Throwable $Throwable) {
          $Response->Meta->status = 500; // @ Set 500 HTTP Server Error Response
 
@@ -233,14 +232,14 @@ class Server extends TCP\Server implements HTTP
             Logger::$display = Logger::DISPLAY_MESSAGE;
 
             // @ Get test files
-            $testFiles = API\Server::$tests[self::class];
+            $testFiles = SAPI::$tests[self::class];
 
             $Tests = new Tester($testFiles);
             $Tests->separate('HTTP Server Response');
 
             // @ Run test cases
             foreach ($testFiles as $index => $value) {
-               $spec = API\Server::$Tests[self::class][$index] ?? null;
+               $spec = SAPI::$Tests[self::class][$index] ?? null;
 
                // @ Init Test
                $Test = $Tests->test($spec);

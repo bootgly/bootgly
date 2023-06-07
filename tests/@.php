@@ -1,8 +1,10 @@
 <?php
 return [
    'filesSuites' => [
-      'Bootgly/-core/',
+      'Bootgly/3/',
+
       'Bootgly/CLI/',
+
       'Bootgly/Web/nodes/HTTP/Server/',
    ]
 ];
