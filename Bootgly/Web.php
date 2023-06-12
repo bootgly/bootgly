@@ -11,13 +11,10 @@
 namespace Bootgly;
 
 
-use Bootgly\Web\nodes\HTTP;
-use Bootgly\Web\nodes\HTTP\Server\Request;
-use Bootgly\Web\nodes\HTTP\Server\Response;
-use Bootgly\Web\nodes\HTTP\Server\Router;
-
-use Web\App;
-use Web\API;
+use Bootgly\Web\modules\HTTP;
+use Bootgly\Web\modules\HTTP\Server\Request;
+use Bootgly\Web\modules\HTTP\Server\Response;
+use Bootgly\Web\modules\HTTP\Server\Router;
 
 
 class Web
@@ -27,17 +24,14 @@ class Web
    // @ nodes
    public HTTP\Server $Server;
 
-   public Request $Request;
-   public Response $Response;
-   public Router $Router;
-   // @ programs
-   public App $App;
-   public API $API;
+   public static Request $Request;
+   public static Response $Response;
+   public static Router $Router;
 
 
-   // TODO REFACTOR
    public function __construct ()
    {
+      // TODO remove or modify
       if (@$_SERVER['REDIRECT_URL'] === NULL) {
          if (\PHP_SAPI !== 'cli') {
             echo 'Missing Rewrite!';
@@ -47,30 +41,26 @@ class Web
       }
       // * Config
       // Debugger
-      Debugger::$debug = false;
+      Debugger::$debug = true;
       Debugger::$cli = false;
       Debugger::$exit = true;
 
       // @ Instance
-      $_ = [
-         'Server' => $this->Server = new HTTP\Server,
-         'Request' => $this->Request = &$this->Server->Request,
-         'Response' => $this->Response = &$this->Server->Response,
-         'Router' => $this->Router = &$this->Server->Router
-      ];
+      $Server = $this->Server = new HTTP\Server($this);
+
+      $Request = self::$Request = &$Server::$Request;
+      $Response = self::$Response = &$Server::$Response;
+      $Router = self::$Router = &$Server::$Router;
 
       // ---
 
       // @ Boot
       // Author
-      $projects = Project::BOOTGLY_PROJECTS_DIR . self::BOOT_FILE;
-      \Bootgly::boot($projects, $_);
+      @include Project::BOOTGLY_PROJECTS_DIR . self::BOOT_FILE;
       // Consumer
       if (BOOTGLY_DIR !== BOOTGLY_WORKABLES_DIR) {
          // Multi projects
-         $projects = Project::PROJECTS_DIR . self::BOOT_FILE;
-
-         \Bootgly::boot($projects, $_);
+         @include Project::PROJECTS_DIR . self::BOOT_FILE;
       }
    }
 }

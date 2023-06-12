@@ -28,25 +28,20 @@ class Bootgly
    public function __construct ()
    {
       // @ Instance
-      $_ = [
-         'Project' => static::$Project = new Project,
-         'Template' => static::$Template = new Template
-      ];
+      $Project = static::$Project = new Project;
+      $Template = static::$Template = new Template;
 
       // ---
 
       // @ Boot
       // Author
       if (BOOTGLY_DIR === BOOTGLY_WORKABLES_DIR) {
-         $projects = Project::BOOTGLY_PROJECTS_DIR . self::BOOT_FILE;
-         \Bootgly::boot($projects, $_);
+         @include Project::BOOTGLY_PROJECTS_DIR . self::BOOT_FILE;
       }
       // Consumer
       if (BOOTGLY_DIR !== BOOTGLY_WORKABLES_DIR) {
          // Multi projects
-         $projects = Project::PROJECTS_DIR . self::BOOT_FILE;
-
-         self::boot($projects, $_);
+         @include Project::PROJECTS_DIR . self::BOOT_FILE;
       }
    }
 

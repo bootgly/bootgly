@@ -63,29 +63,23 @@ class CLI
 
       // @ Validate
       $script = $_SERVER['PWD'] . DIRECTORY_SEPARATOR . $_SERVER['SCRIPT_FILENAME'];
-      $included = array_search($script, $this->includes['scripts']);
-      if ($included === false) {
+      if (array_search($script, $this->includes['scripts']) === false) {
          return;
       }
 
       // @ Instance
-      $_ = [
-         'Commands' => self::$Commands = new Commands,
-         'Terminal' => self::$Terminal = new Terminal
-      ];
+      $Commands = self::$Commands = new Commands;
+      $Terminal = self::$Terminal = new Terminal;
 
       // ---
 
       // @ Boot
       // Author
-      $projects = Project::BOOTGLY_PROJECTS_DIR . self::BOOT_FILE;
-      \Bootgly::boot($projects, $_);
+      @include Project::BOOTGLY_PROJECTS_DIR . self::BOOT_FILE;
       // Consumer
       if (BOOTGLY_DIR !== BOOTGLY_WORKABLES_DIR) {
          // Multi projects
-         $projects = Project::PROJECTS_DIR . self::BOOT_FILE;
-
-         \Bootgly::boot($projects, $_);
+         @include Project::PROJECTS_DIR . self::BOOT_FILE;
       }
    }
 }
