@@ -14,7 +14,7 @@ namespace Web;
 use Bootgly\Web;
 
 
-class API // TODO extends, implements, uses
+class API
 {
    public Web $Web;
 
@@ -36,10 +36,16 @@ class API // TODO extends, implements, uses
    public string $key;
 
 
-   public function __construct (Web $Web)
+   public function __construct ()
    {
-      $this->Web = $Web;
-
+      $Web = $this->Web = new \Web;
+      // ---
+      $Web->API = $this;
+      // ---
+      // TODO TEMP
+      $Web->Request = Web::$Request;
+      $Web->Response = Web::$Response;
+      $Web->Router = Web::$Router;
 
       // * Config
       $this->debugger = true;
@@ -138,14 +144,14 @@ class API // TODO extends, implements, uses
       }
    }
 
-   public function load ()
+   public function boot ()
    {
       $Web = &$this->Web;
 
       if (is_file(\Bootgly::$Project . 'index.php')) {
          require_once \Bootgly::$Project . 'index.php';
-      } else if ( is_file(\Bootgly::$Project . 'api.constructor.php') ) {
-         require_once \Bootgly::$Project . 'api.constructor.php';
+      } else if ( is_file(\Bootgly::$Project . 'API.boot.php') ) {
+         require_once \Bootgly::$Project . 'API.boot.php';
       }
    }
    public function debug ($data, string $password = '')
@@ -154,7 +160,7 @@ class API // TODO extends, implements, uses
          return false;
       }
 
-      $Request = &$this->Web->Request;
+      $Request = &Web::$Request;
       if (@$Request->queries['debug'] === $password || $password === '') {
          $this->data['exception']['debug'] = $data;
          $this->respond();
@@ -163,7 +169,11 @@ class API // TODO extends, implements, uses
    public function respond ()
    {
       error_reporting(0);
-      $this->Web->Response->Json->send($this->data, JSON_PRETTY_PRINT);
-      exit;
+
+      Web::$Response->Json->send($this->data, JSON_PRETTY_PRINT);
+
+      if (\PHP_SAPI !== 'cli') {
+         exit;
+      }
    }
 }

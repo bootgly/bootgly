@@ -17,6 +17,8 @@ use Bootgly\Web;
 
 class App
 {
+   public \Web $Web;
+
    // * Config
    // Dynamic
    public string $indexer1 = 'index.php';
@@ -33,6 +35,17 @@ class App
    // ...
 
 
+   public function __construct ()
+   {
+      $Web = $this->Web = new \Web;
+      // ---
+      $Web->App = $this;
+      // ---
+      // TODO TEMP
+      $Web->Request = Web::$Request;
+      $Web->Response = Web::$Response;
+      $Web->Router = Web::$Router;
+   }
    public function boot ()
    {
       switch ($this->template) {
@@ -57,6 +70,8 @@ class App
 
             break;
          default:
+            $Web = &$this->Web;
+
             $Router = Web::$Router;
 
             if ( is_file(\Bootgly::$Project->path . 'index.php') ) {

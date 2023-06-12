@@ -12,6 +12,7 @@ use Web\App;
 use Web\API;
 
 
+#[\AllowDynamicProperties]
 class Web extends Bootgly\Web
 {
    public App $App;

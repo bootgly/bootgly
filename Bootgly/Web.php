@@ -46,6 +46,9 @@ class Web
       Debugger::$exit = true;
 
       // @ Instance
+      // Bootgly
+      $Project = \Bootgly::$Project;
+      // Web
       $Server = $this->Server = new HTTP\Server($this);
 
       $Request = self::$Request = &$Server::$Request;
