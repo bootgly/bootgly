@@ -7,7 +7,8 @@
 
    RewriteBase /
 
-   # Add trailing slash to any path
+   # Add trailing slash to any path that does not appear to request a file
+   RewriteCond %{REQUEST_URI} !^.*\..*$
    RewriteCond %{REQUEST_URI} !(.*)/$
    RewriteRule ^(.*)$ $1/ [R=301,L]
 
