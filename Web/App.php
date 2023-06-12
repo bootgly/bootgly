@@ -33,13 +33,8 @@ class App
    // ...
 
 
-   public function __construct ()
-   {}
-   // public function preload () {}
-   public function load ()
+   public function boot ()
    {
-      // $this->preload();
-
       switch ($this->template) {
          case 'spa':
          case 'static':
@@ -66,8 +61,8 @@ class App
 
             if ( is_file(\Bootgly::$Project->path . 'index.php') ) {
                require_once \Bootgly::$Project->path . 'index.php';
-            } else if ( is_file(\Bootgly::$Project->path . 'App.constructor.php') ) {
-               require_once \Bootgly::$Project->path . 'App.constructor.php';
+            } else if ( is_file(\Bootgly::$Project->path . 'App.boot.php') ) {
+               require_once \Bootgly::$Project->path . 'App.boot.php';
             }
       }
    }

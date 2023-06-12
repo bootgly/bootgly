@@ -23,7 +23,7 @@ switch ($Request->host) {
             $App = new App;
             $App->pathbase = '/app/';
             $App->template = 'static';
-            $App->load();
+            $App->boot();
 
             return $App;
          default:
@@ -48,7 +48,7 @@ switch ($Request->host) {
       \Bootgly::$Project->construct();
 
       $App = new App;
-      $App->load();
+      $App->boot();
 
       return $App;
 }
