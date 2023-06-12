@@ -2,6 +2,8 @@
 namespace Bootgly\Web;
 
 
+use Web\App;
+
 // ! Global Routes
 switch ($Request->host) {
    case 'quasar.bootgly.localhost':
@@ -18,11 +20,12 @@ switch ($Request->host) {
             \Bootgly::$Project->version = 'public/';
             \Bootgly::$Project->construct(); // Construct backup folder
 
-            $App = new App($this);
+            $App = new App;
             $App->pathbase = '/app/';
             $App->template = 'static';
             $App->load();
-            break;
+
+            return $App;
          default:
             // $Response->redirect('//example.com/app/');
       }
@@ -44,6 +47,8 @@ switch ($Request->host) {
       \Bootgly::$Project->version = 'app/';
       \Bootgly::$Project->construct();
 
-      $this->App = new App($this);
-      $this->App->load();
+      $App = new App;
+      $App->load();
+
+      return $App;
 }

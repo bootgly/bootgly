@@ -17,8 +17,6 @@ use Bootgly\Web;
 
 class App
 {
-   public Web $Web;
-
    // * Config
    // Dynamic
    public string $indexer1 = 'index.php';
@@ -35,10 +33,8 @@ class App
    // ...
 
 
-   public function __construct (Web $Web)
-   {
-      $this->Web = $Web;
-   }
+   public function __construct ()
+   {}
    // public function preload () {}
    public function load ()
    {
@@ -47,14 +43,14 @@ class App
       switch ($this->template) {
          case 'spa':
          case 'static':
-            if ($this->Web->Request->path == $this->pathbase) {
+            if (Web::$Request->path == $this->pathbase) {
                readfile(\Bootgly::$Project->path . 'index.html');
             } else {
                if ($this->pathbase) {
-                  $this->Web->Router->Route->prefix = $this->pathbase;
+                  Web::$Router->Route->prefix = $this->pathbase;
                }
 
-               $Static = new File(\Bootgly::$Project->path . $this->Web->Request->path);
+               $Static = new File(\Bootgly::$Project->path . Web::$Request->path);
                // TODO save and get list of all files in project->path and compare here to optimize performance
                if ($Static->File) {
                   header('Content-Type: '. $Static->type);
@@ -66,12 +62,12 @@ class App
 
             break;
          default:
-            $Web = &$this->Web;
+            $Router = Web::$Router;
 
             if ( is_file(\Bootgly::$Project->path . 'index.php') ) {
                require_once \Bootgly::$Project->path . 'index.php';
-            } else if ( is_file(\Bootgly::$Project->path . 'app.constructor.php') ) {
-               require_once \Bootgly::$Project->path . 'app.constructor.php';
+            } else if ( is_file(\Bootgly::$Project->path . 'App.constructor.php') ) {
+               require_once \Bootgly::$Project->path . 'App.constructor.php';
             }
       }
    }

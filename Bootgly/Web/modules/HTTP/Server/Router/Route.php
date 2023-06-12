@@ -8,11 +8,11 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\Web\nodes\HTTP\Server\Router;
+namespace Bootgly\Web\modules\HTTP\Server\Router;
 
 
-use Bootgly\Web\nodes\HTTP\Server;
-use Bootgly\Web\nodes\HTTP\Server\Router;
+use Bootgly\Web\modules\HTTP\Server;
+use Bootgly\Web\modules\HTTP\Server\Router;
 
 use function Bootgly\__String;
 
@@ -119,7 +119,7 @@ final class Route
 
          case 'base':
          case 'prefix': // TODO refactor
-            Server::$Request->base = $value;
+            $this->Router::$Server::$Request->base = $value;
 
             break;
 

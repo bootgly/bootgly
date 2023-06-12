@@ -22,6 +22,7 @@ use Bootgly\Web\interfaces\TCP\Client;
 use Bootgly\Web\modules\HTTP;
 use Bootgly\Web\nodes\HTTP\Server\Request;
 use Bootgly\Web\nodes\HTTP\Server\Response;
+#use Bootgly\Web\modules\HTTP\Server\Router;
 
 
 class Server extends TCP\Server implements HTTP
@@ -56,11 +57,14 @@ class Server extends TCP\Server implements HTTP
       self::$Request->Meta;
       self::$Request->Header;
       self::$Request->Content;
+
       self::$Response = new Response;
       // TODO initial Response Data API
       #self::$Response->Meta;
       #self::$Response->Header;
       #self::$Response->Content;
+
+      #self::$Router = new Router(static::class);
    }
 
    public static function boot (bool $production = true, bool $test = false)
