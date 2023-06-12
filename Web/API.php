@@ -47,6 +47,8 @@ class API
       $Web->Response = Web::$Response;
       $Web->Router = Web::$Router;
 
+      $Web->Response->use('API', $this);
+      $Web->Response->use('Web', $Web);
       // * Config
       $this->debugger = true;
 

@@ -39,7 +39,7 @@ class Response
    public ? string $type;   //! move to Content->type or Header->Content->type?
 
    public ? array $resources;
-
+   protected array $uses;
    // * Meta
    private ? string $resource;
    // @ Status
@@ -79,6 +79,7 @@ class Response
 
       // TODO rename to sources?
       $this->resources = $resources !== null ? $resources : ['JSON', 'JSONP', 'View', 'HTML/pre'];
+      $this->uses = [];
 
       // * Meta
       $this->resource = null;
@@ -245,6 +246,10 @@ class Response
       $this->initied = true;
       $this->body .= $body . "\n";
    }
+   public function use (string $name, $var)
+   {
+      $this->uses[$name] = $var;
+   }
 
    public function process ($data, ? string $resource = null)
    {
@@ -326,6 +331,7 @@ class Response
 
       return $this;
    }
+
    private function render (? array $data = null, ? \Closure $callback = null)
    {
       $File = $this->body;
@@ -341,23 +347,24 @@ class Response
       $Request = &Server::$Request;
       $Response = &Server::$Response;
       $Route = &Server::$Router->Route;
-      // TODO add variables dinamically according to loaded modules and loaded web classes
 
-      $API = Server::$Web->API ?? null;
-      $App = Server::$Web->App ?? null;
+      $uses = $this->uses;
 
       // @ Output/Buffer start()
       ob_start();
 
       try {
          // @ Isolate context with anonymous static function
-         (static function (string $__file__, ?array $__data__)
-            use ($Request, $Response, $Route, $API, $App) {
+         (static function (string $__file__, array $__vars__, ? array $__data__)
+         use ($Request, $Response, $Route) {
+            extract($__vars__);
+
             if ($__data__ !== null) {
                extract($__data__);
             }
+
             require $__file__;
-         })($File, $data);
+         })($File, $uses, $data);
       } catch (\Exception $Exception) {}
 
       // @ Set $Response properties
@@ -372,7 +379,6 @@ class Response
 
       return $this;
    }
-
    public function send ($body = null, ...$options) : self
    {
       if ($this->processed === false) {
@@ -439,15 +445,14 @@ class Response
                   $Response = &Server::$Response;
                   $Route = &Server::$Router->Route;
 
-                  // TODO add variables dinamically according to loaded modules and loaded web classes
-                  $API = Server::$Web->API ?? null;
-                  $App = Server::$Web->App ?? null;
+                  $uses = $this->uses;
 
                   // @ Isolate context with anonymous static function
-                  (static function (string $__file__)
-                     use ($Request, $Response, $Route, $API, $App) {
+                  (static function (string $__file__, array $__vars__)
+                  use ($Request, $Response, $Route) {
+                     extract($__vars__);
                      require $__file__;
-                  })($File);
+                  })($File, $uses);
 
                   $body = ob_get_clean(); // @ Output/Buffer clean()->get()
             }
@@ -476,6 +481,7 @@ class Response
 
       return $this;
    }
+
    public function upload ($content = null, int $offset = 0, ? int $length = null, bool $close = true) : self
    {
       // TODO support to upload multiple files

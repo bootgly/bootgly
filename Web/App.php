@@ -45,6 +45,9 @@ class App
       $Web->Request = Web::$Request;
       $Web->Response = Web::$Response;
       $Web->Router = Web::$Router;
+
+      $Web->Response->use('App', $this);
+      $Web->Response->use('Web', $Web);
    }
    public function boot ()
    {
