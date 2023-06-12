@@ -59,7 +59,9 @@ class Web
 
       // @ Boot
       // Author
-      @include Project::BOOTGLY_PROJECTS_DIR . self::BOOT_FILE;
+      if (BOOTGLY_DIR === BOOTGLY_WORKABLES_DIR) {
+         @include Project::BOOTGLY_PROJECTS_DIR . self::BOOT_FILE;
+      }
       // Consumer
       if (BOOTGLY_DIR !== BOOTGLY_WORKABLES_DIR) {
          // Multi projects
