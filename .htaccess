@@ -7,9 +7,9 @@
 
    RewriteBase /
 
-   ### OpenLiteSpeed: add this rule below in Virtual Host -> Rewrite -> Rewrite Rules
-   #RewriteCond %{REQUEST_URI} ^/(projects|public|workspace) [NC]
-   #RewriteRule .* - [F,L]
+   # Add trailing slash to any path
+   RewriteCond %{REQUEST_URI} !(.*)/$
+   RewriteRule ^(.*)$ $1/ [R=301,L]
 
    # ! /public
    # @wordpress
