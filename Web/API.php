@@ -16,7 +16,7 @@ use Bootgly\Web;
 
 class API
 {
-   public Web $Web;
+   public \Web $Web;
 
    // * Config
    public bool $debugger;
