@@ -18,7 +18,7 @@ use PDOException;
 use Bootgly\__String;
 
 
-class Database // TODO Refactor class (+2)
+class Database
 {
    // * Config
    public bool $debug;
@@ -110,6 +110,7 @@ class Database // TODO Refactor class (+2)
    public function disconnect () : bool
    {
       $this->PDO = null;
+
       return true;
    }
    public function use (string $database = '') : bool
@@ -152,13 +153,46 @@ class Database // TODO Refactor class (+2)
    }
 
    // ! Table
-   public function select (string $query, array $params = []) : array|null
+   /**
+    * Prepares and executes a SELECT statement with given columns, tables and optional conditions,
+    * then returns the result set as an array.
+    * 
+    * @param array $columns  The columns to be selected.
+    * @param string $table   The table to select from.
+    * @param array $params   Optional conditions for the SQL query.
+    *
+    * @return array|null     The result set as an array; null on failure.
+    */
+   public function select (array $columns, string $table, array $params = []) : PDOStatement|bool|null
    {
       try {
-         $Statement = $this->prepare($query);
-         $Statement->execute($params);
+         // @ Prepare the columns for the SQL query
+         $columnsString = implode(', ', $columns);
 
-         return $Statement->fetchAll();
+         // @ Prepare the conditions for the SQL query
+         $paramsString = '';
+         if ( ! empty($params) ) {
+            $conditions = array_map(fn ($key, $val) => "$key = :$key", array_keys($params), $params);
+            $paramsString = " WHERE " . implode(' AND ', $conditions);
+         }
+
+         // @ Prepare the SQL query
+         $query = "SELECT {$columnsString} FROM {$table}{$paramsString}";
+         $Statement = $this->prepare($query);
+
+         // @ Bind parameters if any
+         if ( ! empty($params) ) {
+            foreach ($params as $key => &$value) {
+               // PDOStatement::bindValue() allows binding parameters by reference
+               $Statement->bindValue(":$key", $value);
+            }
+         }
+
+         // @ Execute the SQL query
+         $Statement->execute();
+
+         // @ Return Statement
+         return $Statement;
       } catch (PDOException $PDOException) {
          $this->Exception = $PDOException;
       }
@@ -247,7 +281,12 @@ class Database // TODO Refactor class (+2)
 
    // ! Database
    // ? User
+
+   // ? Connection
+
    // ? Query
+   // ? Result
+
    // ? Transaction
 
    // ! Table
