@@ -3,7 +3,7 @@
  * --------------------------------------------------------------------------
  * Bootgly PHP Framework
  * Developed by Rodrigo Vieira (@rodrigoslayertech)
- * Copyright 2015-present
+ * Copyright 2023-present
  * Licensed under MIT
  * --------------------------------------------------------------------------
  */
@@ -11,78 +11,67 @@
 namespace Bootgly;
 
 
+use PDO;
+use PDOStatement;
+use PDOException;
+
 use Bootgly\__String;
 
 
-// TODO Refactor class (+1)
-class Database
+class Database // TODO Refactor class (+2)
 {
    // * Config
-   public bool $debug = true;
+   public bool $debug;
 
    // * Data
    protected array $configs;
 
    // * Meta
    // PDO
-   public $PDO;
-   public $query;
-   // PDOException
-   public $PDOException = null;
-   //
+   public ? PDO $PDO;
+   public PDOStatement|bool $Query;
+   public ? PDOException $Exception;
+   // TODO
    private $rows;
 
 
    public function __construct (array $configs)
    {
+      // * Config
+      $this->debug = true;
+
       // * Data
       $this->configs = $configs;
+
       // * Meta
+      // PDO
+      $this->PDO = null;
+      $this->Query = false;
+      $this->Exception = null;
+      // TODO
       $this->rows = [];
    }
 
    public function __get (string $index)
    {
       switch ($index) {
-         case 'PDOException':
-            return $this->PDOException;
          case 'connected':
             if ($this->PDO) {
                return true;
             }
 
             return false;
+         case 'PDOException':
+            return $this->Exception;
          default:
             return null;
       }
    }
 
-   public function __set (string $key, $value)
-   {
-      switch ($key) {
-         case 'row':
-            $this->rows = array_merge($this->rows, $value); break;
-
-         case 'database':
-            $this->db = $value; break;
-      }
-   }
-
-   public function __call ($name, $arguments)
+   public function connect () : bool
    {
       try {
-         if (@$this->PDO) {
-            return $this->$name(...$arguments);
-         }
-      } catch (\PDOException $e) {
-         $this->PDOException = $e->getMessage();
-      }
-   }
-
-   public function connect ()
-   {
-      try {
-         if (@$this->PDO === null) {
+         if ($this->PDO === null) {
             $configs = $this->configs;
             // ---
             $driver = $configs['driver'];
@@ -92,53 +81,58 @@ class Database
             $user = $configs['user'];
             $password = $configs['password'];
             // ---
-            $this->PDO = new \PDO("$driver:host=$host;dbname=$db;", $user, $password);
+            $this->PDO = new PDO("$driver:host=$host;dbname=$db;", $user, $password);
 
-            $this->PDO->setAttribute(\PDO::ATTR_EMULATE_PREPARES, false);
-            $this->PDO->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
-            $this->PDO->setAttribute(\PDO::ATTR_DEFAULT_FETCH_MODE, \PDO::FETCH_ASSOC);
+            $this->PDO->setAttribute(PDO::ATTR_EMULATE_PREPARES, false);
+            $this->PDO->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+            $this->PDO->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
 
-            // $this->PDO->setAttribute(\PDO::MYSQL_ATTR_USE_BUFFERED_QUERY, true);
+            // $this->PDO->setAttribute(PDO::MYSQL_ATTR_USE_BUFFERED_QUERY, true);
          }
 
          return true;
-      } catch (\PDOException $e) {
-         // $code = $e->getCode();
+      } catch (PDOException $PDOException) {
+         $this->Exception = $PDOException;
       }
+
+      return false;
    }
 
-   public function use (string $database = '') {
+   public function use (string $database = '') : bool
+   {
       try {
          if ($database === '') {
             $database = $this->configs['db'];
          }
 
-         if (@$this->PDO) {
+         if ($this->PDO instanceof PDO) {
             // TODO validate database name
             // TODO parameterized query
             $this->PDO->exec('use `'. $database . '`;');
 
-            return TRUE;
+            return true;
          }
-      } catch (\PDOException $e) {
-         // $code = $e->getCode();
+      } catch (PDOException $PDOException) {
+         $this->Exception = $PDOException;
       }
+
+      return false;
    }
-   public function prepare ($query)
+   public function prepare (string $query) : PDOStatement|bool
    {
       try {
          if ($this->configs['driver'] === 'pgsql') {
             $query = __String::replace('`', '"', $query);
          }
 
-         $this->query = $this->PDO->prepare($query);
+         $this->Query = $this->PDO->prepare($query);
 
-         return $this->query;
-      } catch (\PDOException $e) {
-         $this->PDOException = $e->getMessage();
+         return $this->Query;
+      } catch (PDOException $PDOException) {
+         $this->Exception = $PDOException;
       }
 
-      return $this;
+      return false;
    }
 
    // User
