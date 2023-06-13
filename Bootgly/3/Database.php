@@ -107,6 +107,11 @@ class Database // TODO Refactor class (+2)
 
       return false;
    }
+   public function disconnect () : bool
+   {
+      $this->PDO = null;
+      return true;
+   }
    public function use (string $database = '') : bool
    {
       try {
