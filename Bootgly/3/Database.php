@@ -161,7 +161,7 @@ class Database
     * @param string $table   The table to select from.
     * @param array $params   Optional conditions for the SQL query.
     *
-    * @return array|null     The result set as an array; null on failure.
+    * @return PDOStatement|bool|null     The PDOStatement return; null on failure.
     */
    public function select (array $columns, string $table, array $params = []) : PDOStatement|bool|null
    {
