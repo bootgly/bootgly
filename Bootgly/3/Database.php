@@ -29,7 +29,7 @@ class Database // TODO Refactor class (+2)
    // * Meta
    // PDO
    public ? PDO $PDO;
-   public PDOStatement|bool $Query;
+   public PDOStatement|bool $Query; // TODO rename to Statement?
    public ? PDOException $Exception;
    // TODO
    private $rows;
@@ -56,18 +56,28 @@ class Database // TODO Refactor class (+2)
    {
       switch ($index) {
          case 'connected':
-            if ($this->PDO) {
+            if ($this->PDO instanceof PDO) {
                return true;
             }
 
             return false;
+
+         case 'id':
+            if ($this->PDO instanceof PDO) {
+               return $this->PDO->lastInsertId();
+            }
+
+            return null;
+
          case 'PDOException':
             return $this->Exception;
+
          default:
             return null;
       }
    }
 
+   // ! Database
    public function connect () : bool
    {
       try {
@@ -97,7 +107,6 @@ class Database // TODO Refactor class (+2)
 
       return false;
    }
-
    public function use (string $database = '') : bool
    {
       try {
@@ -106,9 +115,9 @@ class Database // TODO Refactor class (+2)
          }
 
          if ($this->PDO instanceof PDO) {
-            // TODO validate database name
-            // TODO parameterized query
-            $this->PDO->exec('use `'. $database . '`;');
+            $Statement = $this->PDO->prepare('USE :database');
+            $Statement->bindParam(':database', $database);
+            $Statement->execute();
 
             return true;
          }
@@ -118,6 +127,8 @@ class Database // TODO Refactor class (+2)
 
       return false;
    }
+
+   // ! Query
    public function prepare (string $query) : PDOStatement|bool
    {
       try {
@@ -135,10 +146,107 @@ class Database // TODO Refactor class (+2)
       return false;
    }
 
-   // User
-   // Database
-   // Table
-   // Column
-   // Row
-   // Cell
+   // ! Table
+   public function select (string $query, array $params = []) : array|null
+   {
+      try {
+         $Statement = $this->prepare($query);
+         $Statement->execute($params);
+
+         return $Statement->fetchAll();
+      } catch (PDOException $PDOException) {
+         $this->Exception = $PDOException;
+      }
+
+      return null;
+   }
+   public function insert (string $table, array $data) : bool|string|null
+   {
+      try {
+         $columns = implode(',', array_keys($data));
+         $values = implode(',', array_fill(0, count($data), '?'));
+
+         $Statement = $this->prepare("INSERT INTO {$table} ({$columns}) VALUES ({$values})");
+         $Statement->execute(array_values($data));
+
+         return $this->PDO->lastInsertId();
+      } catch (PDOException $PDOException) {
+         $this->Exception = $PDOException;
+      }
+
+      return null;
+   }
+   public function update (string $table, array $data, array $where) : int|null
+   {
+      try {
+         $set = implode(',', array_map(fn($col) => "$col = ?", array_keys($data)));
+         $conditions = implode(' AND ', array_map(fn($col) => "$col = ?", array_keys($where)));
+
+         $Statement = $this->prepare("UPDATE {$table} SET {$set} WHERE {$conditions}");
+         $Statement->execute(array_merge(array_values($data), array_values($where)));
+
+         return $Statement->rowCount();
+      } catch (PDOException $PDOException) {
+         $this->Exception = $PDOException;
+      }
+
+      return null;
+   }
+   public function delete (string $table, array $where) : int|null
+   {
+      try {
+         $conditions = implode(' AND ', array_map(fn($col) => "$col = ?", array_keys($where)));
+
+         $Statement = $this->prepare("DELETE FROM {$table} WHERE {$conditions}");
+         $Statement->execute(array_values($where));
+
+         return $Statement->rowCount();
+      } catch (PDOException $PDOException) {
+         $this->Exception = $PDOException;
+      }
+
+      return null;
+   }
+
+   // ! Transaction
+   public function transact () : bool|null
+   {
+      try {
+         return $this->PDO->beginTransaction();
+      } catch (PDOException $PDOException) {
+         $this->Exception = $PDOException;
+      }
+
+      return null;
+   }
+   public function commit () : bool|null
+   {
+      try {
+         return $this->PDO->commit();
+      } catch (PDOException $PDOException) {
+         $this->Exception = $PDOException;
+      }
+
+      return null;
+   }
+   public function rollback () : bool|null
+   {
+      try {
+         return $this->PDO->rollBack();
+      } catch (PDOException $PDOException) {
+         $this->Exception = $PDOException;
+      }
+
+      return null;
+   }
+
+   // ! Database
+   // ? User
+   // ? Query
+   // ? Transaction
+
+   // ! Table
+   // ? Column
+   // ? Row
+   // ? Cell
 }
