@@ -17,7 +17,6 @@
    # @wordpress
    RewriteCond %{DOCUMENT_ROOT}/public/%{HTTP_HOST}/wp-config.php -f
    RewriteCond %{REQUEST_URI} !^/(public|app|api) [NC]
-   #RewriteRule ^ /public/%{HTTP_HOST}/%{REQUEST_URI} [L]
    RewriteRule ^(.*)$ /public/%{HTTP_HOST}/$1 [L]
 
    # ! /projects
