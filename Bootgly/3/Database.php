@@ -14,34 +14,30 @@ namespace Bootgly;
 use Bootgly\__String;
 
 
-// TODO Refactor class (too old)
+// TODO Refactor class (+1)
 class Database
 {
    // * Config
-   public $debug = true;
+   public bool $debug = true;
+
    // * Data
-   public $driver = 'pgsql';
+   protected array $configs;
 
-   public $host = 'localhost';
-
-   public $user = '';
-   public $password = '';
-
-   public $db = '';
-
-   protected $charset = 'UTF8';
-   protected $collate = 'utf8_unicode_ci';
+   // * Meta
    // PDO
    public $PDO;
    public $query;
-
+   // PDOException
    public $PDOException = null;
-
    //
    private $rows;
 
-   public function __construct ()
+
+   public function __construct (array $configs)
    {
+      // * Data
+      $this->configs = $configs;
+      // * Meta
       $this->rows = [];
    }
 
@@ -77,14 +73,6 @@ class Database
       try {
          if (@$this->PDO) {
             return $this->$name(...$arguments);
-         } else {
-            /*
-            $Error = new Error;
-            $Error->title = 'Database -> prepare()';
-            $Error->fatal = true;
-            $Error->message = 'Database not connected!';
-            $Error->throw();
-            */
          }
       } catch (\PDOException $e) {
          $this->PDOException = $e->getMessage();
@@ -95,7 +83,16 @@ class Database
    {
       try {
          if (@$this->PDO === null) {
-            $this->PDO = new \PDO("$this->driver:host=$this->host;dbname=$this->db;", $this->user, $this->password);
+            $configs = $this->configs;
+            // ---
+            $driver = $configs['driver'];
+
+            $host = $configs['host'];
+            $db = $configs['db'];
+            $user = $configs['user'];
+            $password = $configs['password'];
+            // ---
+            $this->PDO = new \PDO("$driver:host=$host;dbname=$db;", $user, $password);
 
             $this->PDO->setAttribute(\PDO::ATTR_EMULATE_PREPARES, false);
             $this->PDO->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
@@ -107,32 +104,13 @@ class Database
          return true;
       } catch (\PDOException $e) {
          // $code = $e->getCode();
-
-         /*
-         $Error = new Error;
-         $Error->title = 'Database -> connect()';
-
-         switch ($code) {
-            case 1045:
-               $Error->fatal = true;
-               $Error->code = 1045;
-               $Error->message = 'Incorrect user or password.';
-               break;
-            default:
-               $Error->fatal = true;
-               $Error->code = $code;
-               $Error->message = $e->getMessage();
-         }
-
-         $Error->throw();
-         */
       }
    }
 
    public function use (string $database = '') {
       try {
          if ($database === '') {
-            $database = $this->db;
+            $database = $this->configs['db'];
          }
 
          if (@$this->PDO) {
@@ -144,22 +122,12 @@ class Database
          }
       } catch (\PDOException $e) {
          // $code = $e->getCode();
-
-         /*
-         $Error = new Error;
-         $Error->title = 'Database -> use()';
-         $Error->fatal = true;
-         $Error->code = $code;
-         $Error->message = $e->getMessage();
-
-         $Error->throw();
-         */
       }
    }
-   private function prepare ($query)
+   public function prepare ($query)
    {
       try {
-         if ($this->driver === 'pgsql') {
+         if ($this->configs['driver'] === 'pgsql') {
             $query = __String::replace('`', '"', $query);
          }
 
@@ -168,18 +136,6 @@ class Database
          return $this->query;
       } catch (\PDOException $e) {
          $this->PDOException = $e->getMessage();
-
-         /*
-         $code = $e->getCode();
-
-         $Error = new Error;
-         $Error->title = 'Database -> prepare()';
-         $Error->fatal = true;
-         $Error->code = $code;
-         $Error->message = $e->getMessage();
-
-         $Error->throw();
-         */
       }
 
       return $this;
