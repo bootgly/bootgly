@@ -8,13 +8,13 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\Tests;
+namespace Bootgly\ACI\Tests;
 
 
 use AssertionError;
-#use Bootgly\Tests\Assertions;
-use Bootgly\Tests;
-use Bootgly\Logs\LoggableEscaped;
+#use Bootgly\ACI\Tests\Assertions;
+use Bootgly\ACI\Tests;
+use Bootgly\ACI\Logs\LoggableEscaped;
 
 
 class Test // extends Assertions

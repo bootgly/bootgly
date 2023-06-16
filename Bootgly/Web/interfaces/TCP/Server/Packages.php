@@ -11,8 +11,8 @@
 namespace Bootgly\Web\interfaces\TCP\Server;
 
 
-use Bootgly\Logs\Logger;
-use Bootgly\Logs\LoggableEscaped;
+use Bootgly\ACI\Logs\Logger;
+use Bootgly\ACI\Logs\LoggableEscaped;
 
 use Bootgly\API\Server as SAPI;
 

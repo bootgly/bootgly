@@ -8,12 +8,12 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\Tests;
+namespace Bootgly\ACI\Tests;
 
 
-use Bootgly\Logs\LoggableEscaped;
+use Bootgly\ACI\Logs\LoggableEscaped;
 use Bootgly\API\Environment;
-use Bootgly\Tests;
+use Bootgly\ACI\Tests;
 
 
 class Tester extends Tests

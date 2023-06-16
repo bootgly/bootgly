@@ -11,8 +11,8 @@
 namespace Bootgly\Web\nodes\HTTP;
 
 
-use Bootgly\Logs\Logger;
-use Bootgly\Tests\Tester;
+use Bootgly\ACI\Logs\Logger;
+use Bootgly\ACI\Tests\Tester;
 use Bootgly\Project;
 use Bootgly\API\Server as SAPI;
 

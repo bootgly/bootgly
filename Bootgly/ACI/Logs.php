@@ -3,15 +3,15 @@
  * --------------------------------------------------------------------------
  * Bootgly PHP Framework
  * Developed by Rodrigo Vieira (@rodrigoslayertech)
- * Copyright 2023-present
+ * Copyright 2020-present
  * Licensed under MIT
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\Logs;
+namespace Bootgly\ACI;
 
 
-abstract class Levels
+abstract class Logs
 {
-   public const LOG_NONE = 0;
+   abstract public function log ($message);
 }

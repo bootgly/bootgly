@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly;
+namespace Bootgly\ACI;
 
 
 class Debugger // TODO refactor (too old!)

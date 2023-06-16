@@ -8,11 +8,11 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\Tests;
+namespace Bootgly\ACI\Tests;
 
 
 use Bootgly\ABI\__String\Path;
-use Bootgly\Debugger\Backtrace;
+use Bootgly\ACI\Debugger\Backtrace;
 
 
 class Benchmark

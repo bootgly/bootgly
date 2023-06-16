@@ -13,8 +13,8 @@ namespace projects\Bootgly\CLI\commands;
 
 use Closure;
 
-use Bootgly\Tests;
-use Bootgly\Tests\Tester;
+use Bootgly\ACI\Tests;
+use Bootgly\ACI\Tests\Tester;
 
 use Bootgly\CLI;
 use Bootgly\CLI\Command;

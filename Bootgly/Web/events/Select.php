@@ -13,7 +13,7 @@ namespace Bootgly\Web\events;
 
 use Bootgly\ABI\events\Loops;
 
-use Bootgly\Logs\LoggableEscaped;
+use Bootgly\ACI\Logs\LoggableEscaped;
 
 use Bootgly\Web\Connections;
 

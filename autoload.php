@@ -22,7 +22,7 @@ define('BOOTGLY_DIR', __DIR__ . DIRECTORY_SEPARATOR);
 // 1 - ABI (Abstract Bootable Interface)
 
 // 2 - ACI (Abstract Core Interface)
-include BOOTGLY_DIR . 'Bootgly/2/loader.php';
+
 // 3 - ADI (Abstract Data Interface)
 include BOOTGLY_DIR . 'Bootgly/3/loader.php';
 
@@ -42,7 +42,7 @@ spl_autoload_register (function (string $class) {
 });
 
 // ! Resources ([a-z])
-use Bootgly\Debugger;
+use Bootgly\ACI\Debugger;
 
 
 if (function_exists('debug') === false) {

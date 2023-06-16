@@ -8,10 +8,10 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\Logs\Levels;
+namespace Bootgly\ACI\Logs\Levels;
 
 
-use Bootgly\Logs\Levels;
+use Bootgly\ACI\Logs\Levels;
 
 
 class RFC5424 extends Levels

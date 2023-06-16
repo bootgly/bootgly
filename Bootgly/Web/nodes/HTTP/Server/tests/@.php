@@ -1,5 +1,5 @@
 <?php
-use Bootgly\Logs\Logger;
+use Bootgly\ACI\Logs\Logger;
 use Bootgly\Web\nodes\HTTP;
 
 return [
