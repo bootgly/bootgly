@@ -11,7 +11,7 @@
 namespace Bootgly\Web\nodes\HTTP\Server;
 
 
-use Bootgly\streams\File;
+use Bootgly\ABI\streams\File;
 
 use Bootgly\Web\nodes\HTTP\Server;
 use Bootgly\Web\nodes\HTTP\Server\Response\Content;

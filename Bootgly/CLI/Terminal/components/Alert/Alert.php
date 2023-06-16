@@ -73,7 +73,7 @@ class Alert
 // * Configs
 enum Type : int
 {
-   use \Bootgly\Set;
+   use \Bootgly\ABI\Set;
 
 
    case DEFAULT   = 0;

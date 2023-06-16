@@ -11,7 +11,7 @@
 namespace Bootgly\Web\events;
 
 
-use Bootgly\events\Loops;
+use Bootgly\ABI\events\Loops;
 
 use Bootgly\Logs\LoggableEscaped;
 

@@ -11,7 +11,7 @@
 namespace Bootgly\Web\modules\HTTP\Server;
 
 
-use Bootgly\__String\Path;
+use Bootgly\ABI\__String\Path;
 
 use Bootgly\Web\modules\HTTP\Request\Ranging;
 

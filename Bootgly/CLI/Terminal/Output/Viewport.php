@@ -11,7 +11,7 @@
 namespace Bootgly\CLI\Terminal\Output;
 
 
-use Bootgly\__String\Escapeable\viewport\Scrollable;
+use Bootgly\ABI\__String\Escapeable\viewport\Scrollable;
 
 use Bootgly\CLI\Terminal\Output;
 

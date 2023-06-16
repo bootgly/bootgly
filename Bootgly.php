@@ -8,8 +8,8 @@
  * --------------------------------------------------------------------------
  */
 
-use Bootgly\templates\Template;
-use Bootgly\streams\File;
+use Bootgly\ABI\templates\Template;
+use Bootgly\ABI\streams\File;
 
 use Bootgly\Debugger;
 use Bootgly\Logs\Logger;

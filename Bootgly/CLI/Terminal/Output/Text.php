@@ -11,8 +11,8 @@
 namespace Bootgly\CLI\Terminal\Output;
 
 
-use Bootgly\__String\Escapeable\text\Formattable;
-use Bootgly\__String\Escapeable\text\Modifiable;
+use Bootgly\ABI\__String\Escapeable\text\Formattable;
+use Bootgly\ABI\__String\Escapeable\text\Modifiable;
 
 use Bootgly\CLI\Terminal\Output;
 
@@ -328,7 +328,7 @@ namespace Bootgly\CLI\Terminal\Output\Text;
 // * Configs
 enum Colors : int
 {
-   use \Bootgly\Set;
+   use \Bootgly\ABI\Set;
 
 
    case Default = 1;

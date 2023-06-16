@@ -11,9 +11,9 @@
 namespace Bootgly\Logs;
 
 
-use Bootgly\__String\Escapeable\text\Formattable;
+use Bootgly\ABI\__String\Escapeable\text\Formattable;
 
-use Bootgly\templates\Template\Escaped as TemplateEscaped;
+use Bootgly\ABI\templates\Template\Escaped as TemplateEscaped;
 
 use Bootgly\Logs\Logger;
 

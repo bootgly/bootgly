@@ -15,7 +15,7 @@ use PDO;
 use PDOStatement;
 use PDOException;
 
-use Bootgly\__String;
+use Bootgly\ABI\__String;
 
 
 class Database

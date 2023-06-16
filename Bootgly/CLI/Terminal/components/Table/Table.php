@@ -11,7 +11,7 @@
 namespace Bootgly\CLI\Terminal\components\Table;
 
 
-use Bootgly\data\Table as DataTable;
+use Bootgly\ABI\data\Table as DataTable;
 
 use Bootgly\CLI\Terminal\components\Table\ { Cells, Columns, Row, Rows };
 use Bootgly\CLI\Terminal\Output;

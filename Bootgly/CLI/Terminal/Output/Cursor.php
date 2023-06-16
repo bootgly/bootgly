@@ -11,9 +11,9 @@
 namespace Bootgly\CLI\Terminal\Output;
 
 
-use Bootgly\__String\Escapeable\cursor\Positionable;
-use Bootgly\__String\Escapeable\cursor\Visualizable;
-use Bootgly\__String\Escapeable\cursor\Shapeable;
+use Bootgly\ABI\__String\Escapeable\cursor\Positionable;
+use Bootgly\ABI\__String\Escapeable\cursor\Visualizable;
+use Bootgly\ABI\__String\Escapeable\cursor\Shapeable;
 
 use Bootgly\CLI\Terminal;
 use Bootgly\CLI\Terminal\Output;

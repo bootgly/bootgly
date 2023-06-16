@@ -1,6 +1,6 @@
 <?php
 
-use Bootgly\__String\Bytes;
+use Bootgly\ABI\__String\Bytes;
 use Bootgly\Logs\Logger;
 use Bootgly\Web\interfaces\TCP\Server\Connections\Connection;
 

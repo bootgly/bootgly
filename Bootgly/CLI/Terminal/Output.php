@@ -12,10 +12,10 @@ namespace Bootgly\CLI\Terminal;
 
 
 // -abstract
-use Bootgly\__String\Escapeable;
-use Bootgly\__String\Escapeable\cursor\Positionable;
-use Bootgly\__String\Escapeable\text\Modifiable;
-use Bootgly\templates\Template\Escaped as TemplateEscaped;
+use Bootgly\ABI\__String\Escapeable;
+use Bootgly\ABI\__String\Escapeable\cursor\Positionable;
+use Bootgly\ABI\__String\Escapeable\text\Modifiable;
+use Bootgly\ABI\templates\Template\Escaped as TemplateEscaped;
 // -interfaces
 use Bootgly\CLI;
 use Bootgly\CLI\Terminal;
