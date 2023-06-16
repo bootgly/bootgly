@@ -16,7 +16,7 @@
 🚧
 Do not use it in production environments. The alpha version hasn't even been released yet. 
 
-First beta release is planned for mid-year 2023 (near June).
+First beta release is planned for mid-year 2023 (near July).
 
 [Documentation is under construction][PROJECT_DOCS] and will be released alongside the beta.
 🚧
