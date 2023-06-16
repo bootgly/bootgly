@@ -3,7 +3,7 @@
  * --------------------------------------------------------------------------
  * Bootgly PHP Framework
  * Developed by Rodrigo Vieira (@rodrigoslayertech)
- * Copyright 2020-present
+ * Copyright 2023-present
  * Licensed under MIT
  * --------------------------------------------------------------------------
  */
@@ -50,18 +50,3 @@ $Output->Text->Colors::Bright->set(); // @ Set bright color
 // $Output->Text->Colors->value;
 $Output->Text->Colors->get(); // @ Get configured color
 */
-
-trait Sets // @ Use with enums
-{
-   public function __call (string $name, array $arguments)
-   {
-      static $values = [];
-
-      return match ($name) {
-         'list'  => $values,
-         'get'   => $values[$this->name] ?? null,
-         'set'   => $values[$this->name] = $arguments[0],
-         default => $this
-      };
-   }
-}

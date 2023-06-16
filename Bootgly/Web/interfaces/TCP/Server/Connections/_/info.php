@@ -1,9 +1,8 @@
 <?php
 
+use Bootgly\__String\Bytes;
 use Bootgly\Logs\Logger;
 use Bootgly\Web\interfaces\TCP\Server\Connections\Connection;
-
-use function Bootgly\formatBytes;
 
 
 switch ($name) {
@@ -23,8 +22,8 @@ switch ($name) {
       $writes = number_format(self::$writes, 0, '', ',');
 
       // @ Format bytes
-      $read = formatBytes(self::$read);
-      $written = formatBytes(self::$written);
+      $read = Bytes::format(self::$read);
+      $written = Bytes::format(self::$written);
 
       $errors = [];
       $errors[0] = self::$errors['connection'];

@@ -19,13 +19,13 @@ define('BOOTGLY_DIR', __DIR__ . DIRECTORY_SEPARATOR);
 
 // ? Bootgly
 // ! Bootables ([0-9]) || (-[a-z]) || ([0-9]-[a-z])
-// 1
+// 1 - ABI (Abstract Bootable Interface)
 include BOOTGLY_DIR . 'Bootgly/1/loader.php';
-// 2
+// 2 - ACI (Abstract Core Interface)
 include BOOTGLY_DIR . 'Bootgly/2/loader.php';
-// 3
+// 3 - ADI (Abstract Data Interface)
 include BOOTGLY_DIR . 'Bootgly/3/loader.php';
-// 4
+// 4 - API (Application Programming Interface)
 include BOOTGLY_DIR . 'Bootgly/4/loader.php';
 
 // ! Classes ([A-Z])
