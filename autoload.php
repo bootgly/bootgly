@@ -24,7 +24,7 @@ define('BOOTGLY_DIR', __DIR__ . DIRECTORY_SEPARATOR);
 // 2 - ACI (Abstract Core Interface)
 
 // 3 - ADI (Abstract Data Interface)
-include BOOTGLY_DIR . 'Bootgly/3/loader.php';
+
 
 // 4 - API (Application Programming Interface)
 include BOOTGLY_DIR . 'Bootgly/4/loader.php';
