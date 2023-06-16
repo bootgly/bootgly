@@ -14,7 +14,7 @@ use Bootgly\ABI\streams\File;
 use Bootgly\ACI\Debugger;
 use Bootgly\ACI\Logs\Logger;
 
-use Bootgly\Project;
+use Bootgly\API\Project;
 
 
 class Bootgly

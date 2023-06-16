@@ -1,7 +1,7 @@
 <?php
 return [
    'filesSuites' => [
-      'Bootgly/3/',
+      'Bootgly/API/',
 
       'Bootgly/CLI/',
 

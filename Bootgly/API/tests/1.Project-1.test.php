@@ -1,6 +1,8 @@
 <?php
 namespace Bootgly;
 
+use Bootgly\API\Project;
+
 return [
    // @ Configure
    'describe' => 'Test methods: construct, name, save, get and select',

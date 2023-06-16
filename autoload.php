@@ -19,17 +19,15 @@ define('BOOTGLY_DIR', __DIR__ . DIRECTORY_SEPARATOR);
 
 // ? Bootgly
 // ! Bootables ([0-9]) || (-[a-z]) || ([0-9]-[a-z])
-// 1 - ABI (Abstract Bootable Interface)
-
-// 2 - ACI (Abstract Core Interface)
-
-// 3 - ADI (Abstract Data Interface)
-
-
-// 4 - API (Application Programming Interface)
-include BOOTGLY_DIR . 'Bootgly/4/loader.php';
+// -- nothing --
 
 // ! Classes ([A-Z])
+// 1 - ABI (Abstract Bootable Interface)
+// 2 - ACI (Abstract Core Interface)
+// 3 - ADI (Abstract Data Interface)
+// 4 - API (Application Programming Interface) -> Bootgly (platform)
+// 5 - CLI (Command Line Interface)            -> Console (platform)
+// 6 - Web (interface)                         -> Web (platform)
 spl_autoload_register (function (string $class) {
    $paths = explode('\\', $class);
    $file = implode('/', $paths) . '.php';
