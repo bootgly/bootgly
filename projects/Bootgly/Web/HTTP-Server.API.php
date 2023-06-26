@@ -33,7 +33,7 @@ return static function
 
    // ! Response examples
    // ? Meta (first line of HTTP Response Header)
-   #return $Response->send(302); // 302 Not Found
+   #return $Response(status: 302); // 302 Not Found
 
    // ? Header
    #$Response->Header->set('Content-Type', 'text/plain');

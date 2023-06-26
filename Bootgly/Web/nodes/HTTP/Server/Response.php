@@ -123,7 +123,9 @@ class Response
       switch ($name) {
          case 'status':
          case 'code':
-            $this->Meta->status = $value;
+            if (is_int($value) && $value > 99 && $value < 600) {
+               $this->Meta->status = $value;
+            }
 
             return $this;
          default: // @ Set custom resource
@@ -164,13 +166,19 @@ class Response
    }
    public function __invoke (
       $x = null,
-      ? int $status = 200,
-      ? array $headers = [],
-      ? string $content = ''
+      ? int $status = null,
+      ? array $headers = null,
+      ? string $content = null
    )
    {
-      if ($x === null && $content) {
-         $this->Content->raw = $content;
+      if ($x === null) {
+         if ($status !== null) {
+            $this->code = $status;
+         }
+
+         if ($content !== null) {
+            $this->Content->raw = $content;
+         }
 
          return $this;
       }
@@ -477,15 +485,6 @@ class Response
             if ($body === null) {
                $this->sent = true;
                return $this;
-            }
-
-            if (is_int($body) && $body > 99 && $body < 600) {
-               $code = $body;
-
-               $body = '';
-               $this->body = '';
-
-               $this->code = $code;
             }
       }
 

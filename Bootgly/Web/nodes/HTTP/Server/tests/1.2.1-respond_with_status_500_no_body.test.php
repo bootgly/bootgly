@@ -14,7 +14,7 @@ return [
    // @ simulate
    // Server API
    'sapi' => function (Request $Request, Response $Response) : Response {
-      return $Response->send(500);
+      return $Response(status: 500);
    },
    // Client API
    'capi' => function () {

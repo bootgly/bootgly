@@ -17,7 +17,7 @@ return [
    // @ simulate
    // Server API
    'sapi' => function (Request $Request, Response $Response) : Response {
-      return $Response->send(302); // 302 Not Found
+      return $Response(status: 302); // 302 Not Found
    },
    // Client API
    'capi' => function () {
