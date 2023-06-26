@@ -208,7 +208,7 @@ More **Screenshots**, videos and details can be found in the home page of [Bootg
 Directly in Linux OS *(max performance)*:
 
 1) Configure the Bootgly HTTP Server script in `scripts/http-server-cli` file;
-2) Configure the HTTP Server API in `projects/HTTP-Server.API.php` file;
+2) Configure the HTTP Server API in `projects/Bootgly/Web/HTTP-Server.API.php` file;
 3) Run the Bootgly HTTP Server CLI in the terminal:
 
 `php scripts/http-server-cli`
