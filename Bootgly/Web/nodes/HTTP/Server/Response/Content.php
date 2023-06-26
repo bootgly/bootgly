@@ -21,6 +21,7 @@ class Content
 
    // * Meta
    public int $length;
+   // TODO move
    public static array $mimes; // @ 'html' => 'text/html'
 
 
@@ -35,6 +36,7 @@ class Content
       // * Meta
       $this->length = 0;
       // mimes
+      /*
       $items = file(__DIR__ . '/resources/mime.types', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
 
       foreach ($items as $content) {
@@ -47,6 +49,7 @@ class Content
             }
          }
       }
+      */
    }
 
    public function __get (string $name) : string
