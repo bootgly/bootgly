@@ -56,6 +56,9 @@ return static function
    HTTP_RAW);
    */
    // content
+   // TODO
+   #return $Response(static: 'Hello World!');
+   $Response->static = true;
    return $Response(content: 'Hello World!'); // text
 
    // @ send

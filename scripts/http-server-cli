@@ -22,7 +22,7 @@ $HTTPServer = new HTTP\Server;
 $HTTPServer->configure(
    host: '0.0.0.0',
    port: getenv('PORT') ? getenv('PORT') : 8080,
-   workers: round( ((int) shell_exec('nproc')) * 0.50 ), // Without JIT: * 0.6
+   workers: round( ((int) shell_exec('nproc')) * 0.55 ), // Without JIT: * 0.6
    /*
    ssl: [
       // SSL Certificate

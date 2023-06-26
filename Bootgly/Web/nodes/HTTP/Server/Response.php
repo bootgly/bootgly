@@ -11,7 +11,10 @@
 namespace Bootgly\Web\nodes\HTTP\Server;
 
 
+use Bootgly\ABI\events\Timer;
 use Bootgly\ABI\streams\File;
+
+use Bootgly\API\Server as SAPI;
 
 use Bootgly\Web\nodes\HTTP\Server;
 use Bootgly\Web\nodes\HTTP\Server\Response\Content;
@@ -35,8 +38,8 @@ class Response
    public $body;
    public array $files;
 
-   public ? string $source; //! move to Content->source? join with type?
-   public ? string $type;   //! move to Content->type or Header->Content->type?
+   public ? string $source;
+   public ? string $type;
 
    public ? array $resources;
 
@@ -46,18 +49,15 @@ class Response
    public bool $initied = false;
    public bool $prepared;
    public bool $processed;
-   public bool $sent;
+   #public float $sent;
    // @ Type
-   #public bool $cacheable;
    #public bool $static;
-   #public bool $dynamic;
-
    public bool $chunked;
    public bool $encoded;
    public bool $stream;
 
 
-   public function __construct (? array $resources = null)
+   public function __construct ()
    {
       // ! HTTP
       $this->Meta = new Meta;
@@ -72,26 +72,29 @@ class Response
       $this->body = null;
       $this->files = [];
 
-      $this->source = null; // TODO rename to resource?
+      $this->source = null;
       $this->type = null;
 
-      // TODO rename to sources?
-      $this->resources = $resources !== null ? $resources : ['JSON', 'JSONP', 'View', 'HTML/pre'];
+      $this->resources = ['JSON', 'JSONP', 'View', 'HTML/pre'];
       // * Meta
       $this->resource = null;
       // @ Status
       $this->initied = false;
       $this->prepared = true;
       $this->processed = true;
-      $this->sent = false;
+      #$this->sent = 0.0;
       // @ Type
-      #$this->cacheable = true;
-      #$this->static = true;
-      #$this->dynamic = false;
-
+      #$this->static = false;
       $this->stream = false;
       $this->chunked = false;
       $this->encoded = false;
+
+      // @
+      if (SAPI::$mode === SAPI::MODE_TEST) {
+         $this->Header->preset('Date', null);
+
+         SAPI::boot(true, Server::class);
+      }
    }
    public function __get ($name)
    {
@@ -168,7 +171,10 @@ class Response
       }
    }
    public function __invoke (
-      $x = null, ? int $status = 200, ? array $headers = [], ? string $content = '', ? string $raw = ''
+      $x = null,
+      ? int $status = 200,
+      ? array $headers = [],
+      ? string $content = '', ? string $raw = ''
    )
    {
       if ($x === null && $raw) {
@@ -184,24 +190,6 @@ class Response
       $this->prepare();
 
       return $this->process($x);
-   }
-
-   public function reset ()
-   {
-      /*
-      // * Data
-      $this->Content->raw = '';
-      $this->raw = '';
-      // * Meta
-      $this->chunked = false;
-      $this->encoded = false;
-      $this->stream = false;
-
-      $this->Meta->__construct();
-      $this->Header->__construct();
-      #$this->Content->__construct();
-      */
-      $this->__construct();
    }
 
    public function prepare (? string $resource = null)
@@ -687,24 +675,30 @@ class Response
    }
    public function output ($Package, &$length)
    {
+      $Meta    = &$this->Meta;
+      $Content = &$this->Content;
+      $Header  = &$this->Header;
+
       if (! $this->stream && ! $this->chunked && ! $this->encoded) {
          // ? Response Content
-         $this->Content->length = strlen($this->Content->raw);
+         $Content->length = strlen($Content->raw);
          // ? Response Header
-         $this->Header->set('Content-Length', $this->Content->length);
+         $Header->set('Content-Length', $Content->length);
          // ? Response Meta
          // ...
       }
 
+      $Header->build();
+
       $this->raw = <<<HTTP_RAW
-      {$this->Meta->raw}\r
-      {$this->Header->raw}\r
+      {$Meta->raw}\r
+      {$Header->raw}\r
       \r
-      {$this->Content->raw}
+      {$Content->raw}
       HTTP_RAW;
 
       if ($this->stream) {
-         $length = strlen($this->Meta->raw) + 1 + strlen($this->Header->raw) + 5;
+         $length = strlen($Meta->raw) + 1 + strlen($Header->raw) + 5;
 
          $Package->uploading = $this->files;
 

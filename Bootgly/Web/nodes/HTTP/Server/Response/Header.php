@@ -17,16 +17,17 @@ use Bootgly\Web\nodes\HTTP\Server\Response\Header\Cookie;
 class Header
 {
    // * Config
-   private array $preset;
-   private array $prepared;
+   // ...
 
    // * Data
-   private array $fields;
+   protected array $preset;
+   protected array $prepared;
+   protected array $fields;
+   public string $raw;
 
    // * Meta
    private array $queued;
-   private string $raw;
-   private bool $sent;
+   private int $built;
 
    public Cookie $Cookie;
 
@@ -34,45 +35,41 @@ class Header
    public function __construct ()
    {
       // * Config
-      $this->preset = [
-         'Server' => 'Bootgly'
-      ];
-      $this->prepared = [];
+      // ...
 
       // * Data
+      $this->preset = [
+         'Server' => 'Bootgly',
+         'Date' => true
+      ];
+      $this->prepared = [];
       $this->fields = [];
+      $this->raw = '';
 
       // * Meta
       $this->queued = [];
-      $this->raw = '';
-      $this->sent = false;
+      $this->built = 0;
 
-
+      // @
       $this->Cookie = new Cookie($this);
    }
    public function __get (string $name)
    {
       switch ($name) {
          // * Config
+         // ...
+
+         // * Data
          case 'preset':
          case 'prepared':
             return $this->$name;
-         // * Data
          case 'fields':
          case 'headers':
             return $this->fields;
+
          // * Meta
          case 'queued':
             return $this->queued;
-         case 'raw':
-            if ($this->raw !== '') {
-               return $this->raw;
-            }
-
-            $this->build();
-
-            return $this->raw;
-
          case 'sent':
             return $this->sent;
 
@@ -84,15 +81,20 @@ class Header
    {
       switch ($name) {
          // * Config
+         // ...
+
+         // * Data
          case 'preset':
             $this->preset = (array) $value;
             break;
          case 'prepared':
-         // * Data
+            break;
          // case 'fields':
+
          // * Meta
          case 'queued':
             break;
+
          // *
          default:
             $this->$name = $value;
@@ -109,6 +111,14 @@ class Header
       $this->prepared = [];
    }
 
+   public function preset (string $name, ? string $value = null)
+   {
+      if ($value) {
+         $this->preset[$name] = $value;
+      } else {
+         unset($this->preset[$name]);
+      }
+   }
    public function prepare (array $fields) // @ Prepare to build
    {
       $this->prepared = $fields;
@@ -125,7 +135,13 @@ class Header
    }
    public function queue (string $field, string $value = '')
    {
-      $this->queued[] = "$field: $value";
+      if ($field) {
+         $this->queued[] = "$field: $value";
+
+         return true;
+      }
+
+      return false;
    }
 
    public function translate (string $field, ...$values) : string
@@ -148,35 +164,36 @@ class Header
    }
 
    // TODO increase performance
-   public function build () // @ raw
+   public function build () : true // @ raw
    {
-      // @ Return if empty
-      if ( empty($this->fields) && empty($this->prepared) ) {
-         return false;
+      if (time() === $this->built) {
+         return true;
       }
 
-      // @ Set / merge headers with prepared fields
-      if ( empty($this->fields) && ! empty($this->prepared) ) {
-         $this->fields = $this->prepared;
-      } else {
-         $this->fields = array_merge($this->fields, $this->prepared);
-      }
+      // @ Merge fields
+      $fields = $this->preset + $this->fields + $this->prepared;
 
       // @ Set default headers
-      $this->fields['Content-Type'] ??= 'text/html; charset=UTF-8';
+      $fields['Content-Type'] ??= 'text/html; charset=UTF-8';
 
-      // @ Build
+      // @ Build headers
       $queued = $this->queued;
-      // Preset Fields
-      foreach ($this->preset as $name => $value) {
-         $queued[] = "$name: $value";
-      }
       // Fields
-      foreach ($this->fields as $name => $value) {
+      foreach ($fields as $name => $value) {
+         // Dynamic fields
+         if ($value === true) {
+            $value = match ($name) {
+               'Date' => gmdate('D, d M Y H:i:s \G\M\T'),
+               default => ''
+            };
+         }
+
          $queued[] = "$name: $value";
       }
 
       $this->raw = implode("\r\n", $queued);
+
+      $this->built = time();
 
       return true;
    }
@@ -186,8 +203,14 @@ class Header
       return (string) $this->fields[$name] ?? (string) $this->fields[strtolower($name)] ?? '';
    }
 
-   public function set (string $field, string $value)
+   public function set (string $field, string $value) : bool
    {
-      $this->fields[$field] = $value;
+      if ($field) {
+         $this->fields[$field] = $value;
+
+         return true;
+      }
+
+      return false;
    }
 }

@@ -424,21 +424,6 @@ class Request
       }
    }
 
-   public function reset ()
-   {
-      // ? Request
-      unSet($this->method);
-      unSet($this->uri);
-      unSet($this->protocol);
-
-      // ? Request Meta
-      $this->Meta->__construct();
-      // ? Request Header
-      $this->Header->__construct();
-      // ? Request Content
-      $this->Content->__construct();
-   }
-
    public function boot (Packages $Package, string &$buffer, int $length) : int // @ return Request length
    {
       // @ Check Request raw separator

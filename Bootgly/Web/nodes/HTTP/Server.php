@@ -11,6 +11,7 @@
 namespace Bootgly\Web\nodes\HTTP;
 
 
+use Bootgly\ABI\events\Timer;
 use Bootgly\ACI\Logs\Logger;
 use Bootgly\ACI\Tests\Tester;
 use Bootgly\API\Project;
@@ -129,7 +130,7 @@ class Server extends TCP\Server implements HTTP
 
       // @ Check local cache and return
       if ( $length <= 512 && isSet($inputs[$input]) ) {
-         #Server::$Request = $inputs[$input];
+         Server::$Request = $inputs[$input];
          return $length;
       }
 
@@ -160,16 +161,13 @@ class Server extends TCP\Server implements HTTP
          $_FILES = [];
 
          $Request = Server::$Request = new Request;
-
-         // $Request->reset();
       }
 
       // @ Write to local cache
       if ($length <= 512) {
-         #$inputs[$input] = clone $Request;
-         $inputs[$input] = $length;
+         $inputs[$input] = clone $Request;
 
-         if (count($inputs) > 1) { // @ Cache only the last Request?
+         if (count($inputs) > 512) {
             unSet($inputs[key($inputs)]);
          }
       }
@@ -187,15 +185,6 @@ class Server extends TCP\Server implements HTTP
       // @ Handle Package cache
       if ($Package->changed) {
          $Response = Server::$Response = new Response;
-
-         #$Response->reset();
-
-         if (SAPI::$mode === SAPI::MODE_TEST) {
-            SAPI::boot(true, self::class);
-         }
-      } else if ($Response->Content->raw) {
-         // TODO check if Response raw is static or dynamic
-         return $Response->raw;
       }
 
       // ! Response
