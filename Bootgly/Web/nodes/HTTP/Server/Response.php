@@ -166,14 +166,10 @@ class Response
       $x = null,
       ? int $status = 200,
       ? array $headers = [],
-      ? string $content = '', ? string $raw = ''
+      ? string $content = ''
    )
    {
-      if ($x === null && $raw) {
-         $this->raw = $raw;
-
-         return $this;
-      } else if ($x === null && $content) {
+      if ($x === null && $content) {
          $this->Content->raw = $content;
 
          return $this;

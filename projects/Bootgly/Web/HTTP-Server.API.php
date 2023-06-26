@@ -44,19 +44,7 @@ return static function
 
    // ? Content
    // @ output
-   // raw ?
-   /*
-   return $Response(raw: <<<HTTP_RAW
-   HTTP/1.1 200 OK
-   Server: Bootgly
-   Content-Type: text/plain; charset=UTF-8
-   Content-Length: 12
-
-   Hello World!
-   HTTP_RAW);
-   */
    // content
-   // TODO
    return $Response(content: 'Hello World!'); // text
 
    // @ send
