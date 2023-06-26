@@ -48,7 +48,7 @@ class Response
    public bool $initied = false;
    public bool $prepared;
    public bool $processed;
-   #public float $sent;
+   public bool $sent;
    // @ Type
    #public bool $static;
    public bool $chunked;
@@ -81,7 +81,7 @@ class Response
       $this->initied = false;
       $this->prepared = true;
       $this->processed = true;
-      #$this->sent = 0.0;
+      $this->sent = false;
       // @ Type
       #$this->static = false;
       $this->stream = false;
