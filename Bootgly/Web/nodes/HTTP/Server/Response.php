@@ -11,7 +11,6 @@
 namespace Bootgly\Web\nodes\HTTP\Server;
 
 
-use Bootgly\ABI\events\Timer;
 use Bootgly\ABI\streams\File;
 
 use Bootgly\API\Server as SAPI;
@@ -88,13 +87,6 @@ class Response
       $this->stream = false;
       $this->chunked = false;
       $this->encoded = false;
-
-      // @
-      if (SAPI::$mode === SAPI::MODE_TEST) {
-         $this->Header->preset('Date', null);
-
-         SAPI::boot(true, Server::class);
-      }
    }
    public function __get ($name)
    {
@@ -529,7 +521,7 @@ class Response
 
       // @ Prepare HTTP headers
       $this->Header->prepare([
-         'Last-Modified' => gmdate('D, d M Y H:i:s', $File->modified) . ' GMT',
+         'Last-Modified' => gmdate('D, d M Y H:i:s \G\M\T', $File->modified),
          // Cache
          'Cache-Control' => 'no-cache, must-revalidate',
          'Expires' => '0',
@@ -655,7 +647,7 @@ class Response
          $this->Header->set('Content-Disposition', 'attachment; filename="'.$File->basename.'"');
       }
       // @ Build Response Header
-      $this->Header->build();
+      #$this->Header->build();
 
       // @ Prepare upstream
       $this->stream = true;

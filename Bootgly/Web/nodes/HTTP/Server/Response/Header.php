@@ -123,9 +123,10 @@ class Header
    {
       $this->prepared = $fields;
    }
-   public function append (string $field, string $value = '', ? string $separator = ', ') // TODO refactor
+   public function append (string $field, string $value = '', ? string $separator = ', ')
    {
-      // TODO map separator (with const?) Header that can have only value to append, only entire header, etc.
+      // TODO map separator (with const?)
+      // Header that can have only value to append, only entire header, etc.
 
       if ( isSet($this->fields[$field]) ) {
          $this->fields[$field] .= $separator . $value;
@@ -163,6 +164,21 @@ class Header
       }
    }
 
+   public function get (string $name) : string
+   {
+      return (string) $this->fields[$name] ?? (string) $this->fields[strtolower($name)] ?? '';
+   }
+   public function set (string $field, string $value) : bool
+   {
+      if ($field) {
+         $this->fields[$field] = $value;
+
+         return true;
+      }
+
+      return false;
+   }
+
    // TODO increase performance
    public function build () : true // @ raw
    {
@@ -196,21 +212,5 @@ class Header
       $this->built = time();
 
       return true;
-   }
-
-   public function get (string $name) : string
-   {
-      return (string) $this->fields[$name] ?? (string) $this->fields[strtolower($name)] ?? '';
-   }
-
-   public function set (string $field, string $value) : bool
-   {
-      if ($field) {
-         $this->fields[$field] = $value;
-
-         return true;
-      }
-
-      return false;
    }
 }

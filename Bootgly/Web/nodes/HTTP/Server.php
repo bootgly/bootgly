@@ -182,9 +182,12 @@ class Server extends TCP\Server implements HTTP
       $Request = Server::$Request;
       $Response = Server::$Response;
 
-      // @ Handle Package cache
-      if ($Package->changed) {
-         $Response = Server::$Response = new Response;
+      // @ Perform test mode
+      if (SAPI::$mode === SAPI::MODE_TEST) {
+         $Response = new Response;
+         $Response->Header->preset('Date', null);
+
+         SAPI::boot(reset: true, base: self::class);
       }
 
       // ! Response

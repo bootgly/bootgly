@@ -77,4 +77,6 @@ interface HTTP
       508 => 'Loop Detected',
       511 => 'Network Authentication Required',
    ];
+
+   public const RESPONSE_DATE_RFC = 'D, d M Y H:i:s \G\M\T';
 }

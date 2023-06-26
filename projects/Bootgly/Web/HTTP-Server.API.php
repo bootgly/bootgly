@@ -57,8 +57,6 @@ return static function
    */
    // content
    // TODO
-   #return $Response(static: 'Hello World!');
-   $Response->static = true;
    return $Response(content: 'Hello World!'); // text
 
    // @ send
