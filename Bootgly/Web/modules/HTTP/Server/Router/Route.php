@@ -11,7 +11,7 @@
 namespace Bootgly\Web\modules\HTTP\Server\Router;
 
 
-use function Bootgly\ABI\__String;
+use Bootgly\ABI\__String;
 use Bootgly\Web\modules\HTTP\Server\Router;
 
 
@@ -98,7 +98,8 @@ final class Route
                return $this->parameterized = false;
             }
          case 'node':
-            return __String($this->path)->separateBefore(':');
+            $String = new __String($this->path);
+            return $String->separateBefore(':');
          default:
             return $this->$name;
       }

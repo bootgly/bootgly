@@ -13,11 +13,9 @@ namespace Bootgly\Web\modules\HTTP\Server;
 
 use Bootgly;
 use Bootgly\ABI\__Array;
-use function Bootgly\ABI\__Array;
-use function Bootgly\ABI\__String;
+use Bootgly\ABI\__String;
 use Bootgly\ACI\Debugger;
 use Bootgly\ABI\streams\File;
-use Bootgly\Web\modules\HTTP\Server;
 use Bootgly\Web\modules\HTTP\Server\Router\Route;
 
 
@@ -320,8 +318,9 @@ class Router
          }
       } else {
          if ($this->Route->nested) {
-            $relative_url = __String(
-               self::$Server::$Request->path)->cut($this->Route->routed[$this->Route->level - 1][0], '^'
+            $String = new __String(self::$Server::$Request->path);
+            $relative_url = $String->cut(
+               $this->Route->routed[$this->Route->level - 1][0], '^'
             );
             return ($this->Route->path === $relative_url ? 1 : 0);
          } else {
