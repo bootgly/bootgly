@@ -11,9 +11,8 @@
 namespace Bootgly\Web\modules\HTTP\Server\Router;
 
 
+use function Bootgly\ABI\__String;
 use Bootgly\Web\modules\HTTP\Server\Router;
-
-use function Bootgly\__String;
 
 
 final class Route

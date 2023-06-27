@@ -110,17 +110,19 @@ class Router
       $Router = &$this;
       $Route = &$this->Route;
 
+      $boot = Bootgly::$Project->path . 'router/';
+
       (static function (string $__default__)
-         use ($Request, $Router, $Route) {
+      use ($Request, $Router, $Route) {
          include_once $__default__;
-      })( (string) new File(Bootgly::$Project->path . 'router/' . 'index.php') );
+      })( (string) new File($boot . 'index.php') );
 
       $instances = (array) $instances;
       foreach ($instances as $instance) {
          (static function (string $__routes__)
-            use ($Request, $Router, $Route) {
+         use ($Request, $Router, $Route) {
             @include_once $__routes__;
-         })( (string) new File(Bootgly::$Project->path . 'router/' . $instance . '.php') );
+         })( (string) new File($boot . $instance . '.php') );
       }
    }
    public function pause ()
@@ -197,7 +199,9 @@ class Router
 
                   break;
                case is_array($condition):
-                  $Result = __Array::search($condition, self::$Server::$Request->method);
+                  $Result = __Array::search(
+                     $condition, self::$Server::$Request->method
+                  );
 
                   if ($Result->found) {
                      $this->Route->matched = 2;
