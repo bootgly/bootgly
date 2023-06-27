@@ -481,7 +481,7 @@ class Response
             }
 
             break;
-         default: // * HTTP Status Code || (string) $body
+         default:
             if ($body === null) {
                $this->sent = true;
                return $this;

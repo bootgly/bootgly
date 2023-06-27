@@ -1,17 +1,23 @@
 <?php
+
+namespace projects\Bootgly\Web;
+
+
+use Bootgly;
+use Bootgly\Web\modules\HTTP\Server\Router;
 use Bootgly\Web\nodes\HTTP\Server\Request;
 use Bootgly\Web\nodes\HTTP\Server\Response;
 
 
-\Bootgly::$Project->vendor = 'Bootgly/';
-\Bootgly::$Project->container = 'Web/';
-\Bootgly::$Project->package = 'examples/';
-\Bootgly::$Project->version = 'app/';
-\Bootgly::$Project->construct();
+Bootgly::$Project->vendor    = 'Bootgly/';
+Bootgly::$Project->container = 'Web/';
+Bootgly::$Project->package   = 'examples/';
+Bootgly::$Project->version   = 'app/';
+Bootgly::$Project->construct();
 
 
 return static function
-(Request $Request, Response $Response) : Response
+(Request $Request, Response $Response, Router $Router)
 {
    // ! Request examples
    // ? Meta (first line of HTTP Request Header)
@@ -45,7 +51,9 @@ return static function
    // ? Content
    // @ output
    // content
-   return $Response(content: 'Hello World!'); // text
+   $Router('/', function ($Response) {
+      return $Response(content: 'Hello World!');
+   }, GET);
 
    // @ send
    #return $Response->Json->send(['Hello' => 'World!']); // JSON

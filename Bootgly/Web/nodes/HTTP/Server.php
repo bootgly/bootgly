@@ -22,7 +22,7 @@ use Bootgly\Web\interfaces\TCP\Client;
 use Bootgly\Web\modules\HTTP;
 use Bootgly\Web\nodes\HTTP\Server\Request;
 use Bootgly\Web\nodes\HTTP\Server\Response;
-#use Bootgly\Web\modules\HTTP\Server\Router;
+use Bootgly\Web\modules\HTTP\Server\Router;
 
 
 class Server extends TCP\Server implements HTTP
@@ -38,6 +38,7 @@ class Server extends TCP\Server implements HTTP
 
    public static Request $Request;
    public static Response $Response;
+   public static Router $Router;
 
 
    public function __construct ()
@@ -64,7 +65,7 @@ class Server extends TCP\Server implements HTTP
       #self::$Response->Header;
       #self::$Response->Content;
 
-      #self::$Router = new Router(static::class);
+      self::$Router = new Router(static::class);
    }
 
    public static function boot (bool $production = true, bool $test = false)
@@ -178,8 +179,9 @@ class Server extends TCP\Server implements HTTP
    public static function encode (Packages $Package, &$length)
    {
       // @ Instance callbacks
-      $Request = Server::$Request;
+      $Request  = Server::$Request;
       $Response = Server::$Response;
+      $Router   = Server::$Router;
 
       // @ Perform test mode
       if (SAPI::$mode === SAPI::MODE_TEST) {
@@ -192,7 +194,7 @@ class Server extends TCP\Server implements HTTP
       // ! Response
       // @ Try to Invoke API Closure
       try {
-         (SAPI::$Handler)($Request, $Response);
+         (SAPI::$Handler)($Request, $Response, $Router);
       } catch (\Throwable $Throwable) {
          $Response->Meta->status = 500; // @ Set 500 HTTP Server Error Response
 

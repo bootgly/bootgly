@@ -1,4 +1,8 @@
 <?php
+
+namespace projects\Bootgly\Web;
+
+
 return static function ($input)
 {
    return <<<HTTP_RAW
