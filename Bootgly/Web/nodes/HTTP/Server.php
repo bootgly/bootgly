@@ -79,22 +79,21 @@ class Server extends TCP\Server implements HTTP
       if ($test) {
          try {
             // * Config
-            $tests = __DIR__ . '/Server/tests/@.php';
+            $loader = __DIR__ . '/Server/tests/@.php';
 
             // @ Reset Cache of Test boot file
             if ( function_exists('opcache_invalidate') ) {
-               opcache_invalidate($tests, true);
+               opcache_invalidate($loader, true);
             }
+            clearstatcache(false, $loader);
 
-            clearstatcache(false, $tests);
-
-            SAPI::$tests[self::class] = (@require $tests)['files'];
+            $files = (@require $loader)['files'];
+            SAPI::$tests[self::class] = Tester::list($files);
             // * Meta
             SAPI::$Tests[self::class] = [];
 
             foreach (SAPI::$tests[self::class] as $index => $case) {
                $file = __DIR__ . '/Server/tests/' . $case . '.test.php';
-
                if (! file_exists($file) ) {
                   continue;
                }
@@ -103,7 +102,6 @@ class Server extends TCP\Server implements HTTP
                if ( function_exists('opcache_invalidate') ) {
                   opcache_invalidate($file, true);
                }
-
                clearstatcache(false, $file);
 
                // @ Load Test case from file
@@ -112,7 +110,6 @@ class Server extends TCP\Server implements HTTP
                } catch (\Throwable) {
                   $spec = null;
                }
-
                // @ Set Closure to SAPI Tests
                SAPI::$Tests[self::class][] = $spec;
             }

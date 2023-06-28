@@ -45,7 +45,7 @@ class Tester extends Tests
       self::$exitOnFailure = $tests['exitOnFailure'] ?? self::$exitOnFailure;
 
       // * Data
-      $this->tests = $tests['files'] ?? $tests;
+      $this->tests = self::list($tests['files'] ?? $tests);
       $this->specifications = [];
 
       // * Meta
@@ -131,6 +131,25 @@ class Tester extends Tests
          // @ Pass artfacts returned by autoboot
          $instance(...$this->artfacts);
       }
+   }
+
+   public static function list (array $tests, $prefix = '') : array
+   {
+      $result = [];
+
+      foreach ($tests as $key => $value) {
+         if ( is_array($value) ) {
+            $newPrefix = $prefix . $key;
+            $result = array_merge(
+               $result,
+               self::list($value, $newPrefix)
+            );
+         } else {
+            $result[] = $prefix . $value;
+         }
+      }
+
+      return $result;
    }
 
    public function test (? array &$specifications) : Test|false

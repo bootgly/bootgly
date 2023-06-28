@@ -49,7 +49,7 @@ class TestCommand extends Command
          if ($autoboot instanceof Closure) {
             $autoboot();
          } else if ($autoboot) {
-            $UnitTests = new Tester($tests);
+            new Tester($tests);
          } else {
             $Alert = new Alert(CLI::$Terminal->Output);
             $Alert->Type::FAILURE->set();
