@@ -121,14 +121,14 @@ class Server extends TCP\Server implements HTTP
       SAPI::boot(true);
    }
 
-   public static function decode (Packages $Package, string $input, int $length)
+   public static function decode (Packages $Package, string $buffer, int $size)
    {
       static $inputs = []; // @ Instance local cache
 
       // @ Check local cache and return
-      if ( $length <= 512 && isSet($inputs[$input]) ) {
-         Server::$Request = $inputs[$input];
-         return $length;
+      if ( $size <= 512 && isSet($inputs[$buffer]) ) {
+         Server::$Request = $inputs[$buffer];
+         return $size;
       }
 
       // @ Instance callbacks
@@ -140,8 +140,8 @@ class Server extends TCP\Server implements HTTP
          // @ Finish filling the Request Content raw with TCP read buffer
          $Content = &$Request->Content;
 
-         $Content->raw .= $input;
-         $Content->downloaded += $length;
+         $Content->raw .= $buffer;
+         $Content->downloaded += $size;
 
          if ($Content->length > $Content->downloaded) {
             return 0;
@@ -158,20 +158,20 @@ class Server extends TCP\Server implements HTTP
       }
 
       // @ Boot HTTP Request
-      $length = $Request->boot($Package, $input, $length);
+      $length = $Request->boot($Package, $buffer, $size);
 
       // @ Write to local cache
       if ($length > 0 && $length <= 512) {
-         $inputs[$input] = clone $Request;
+         $inputs[$buffer] = clone $Request;
 
          if (count($inputs) > 512) {
             unset($inputs[key($inputs)]);
          }
       }
 
-      return $length;
+      return $length; // @ Return Request length (0 = invalid)
    }
-   public static function encode (Packages $Package, &$length)
+   public static function encode (Packages $Package, &$size)
    {
       // @ Instance callbacks
       $Request  = Server::$Request;
@@ -206,7 +206,7 @@ class Server extends TCP\Server implements HTTP
          return '';
       }
       // @ Output/Stream HTTP Response
-      return $Response->output($Package, $length); // @ Return Response raw
+      return $Response->output($Package, $size); // @ Return Response raw
    }
 
    protected static function test (TCP\Server $TCPServer)
