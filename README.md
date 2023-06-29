@@ -57,7 +57,7 @@ Focused on performance, versatility, and easy-to-understand codebase APIs.
 
 ### Bootgly CLI 📟
 
-interfaces | nodes
+interfaces | platforms
 --- | ---
 [Terminal Input][CLI_TERMINAL_INTERFACE_INPUT] | Console (TODO)
 [Terminal Output][CLI_TERMINAL_INTERFACE_OUTPUT] | 
@@ -72,7 +72,7 @@ Terminal components |
 
 ### Bootgly Web 🌐
 
-interfaces | nodes
+Web interfaces | Web nodes
 --- | ---
 [TCP Client][WEB_TCP_CLIENT_INTERFACE] | [HTTP Server][WEB_HTTP_SERVER_NODE]
 [TCP Server][WEB_TCP_SERVER_INTERFACE] | 
