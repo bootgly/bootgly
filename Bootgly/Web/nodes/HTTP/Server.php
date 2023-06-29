@@ -134,7 +134,7 @@ class Server extends TCP\Server implements HTTP
       // @ Instance callbacks
       $Request = Server::$Request;
 
-      // ! Request
+      // TODO move to another decoder
       // @ Check if Request Content is waiting data
       if ($Request->Content->waiting) {
          // @ Finish filling the Request Content raw with TCP read buffer
@@ -154,24 +154,22 @@ class Server extends TCP\Server implements HTTP
 
       // @ Handle Package cache
       if ($Package->changed) {
-         $_POST = [];
-         $_FILES = [];
-
          $Request = Server::$Request = new Request;
       }
+
+      // @ Boot HTTP Request
+      $length = $Request->boot($Package, $input, $length); // @ Return Request length
 
       // @ Write to local cache
       if ($length <= 512) {
          $inputs[$input] = clone $Request;
 
          if (count($inputs) > 512) {
-            unSet($inputs[key($inputs)]);
+            unset($inputs[key($inputs)]);
          }
       }
 
-      // ! Request
-      // @ Boot HTTP Request
-      return $Request->boot($Package, $input, $length); // @ Return Request length
+      return $length;
    }
    public static function encode (Packages $Package, &$length)
    {
@@ -229,7 +227,7 @@ class Server extends TCP\Server implements HTTP
             $testFiles = SAPI::$tests[self::class];
 
             $Tests = new Tester($testFiles);
-            $Tests->separate('HTTP Server Response');
+            $Tests->separate('HTTP Server');
 
             // @ Run test cases
             foreach ($testFiles as $index => $value) {
