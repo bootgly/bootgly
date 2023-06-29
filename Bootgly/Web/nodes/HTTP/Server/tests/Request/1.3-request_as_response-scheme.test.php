@@ -10,14 +10,12 @@ use Bootgly\Web\nodes\HTTP\Server\Response;
 
 return [
    // @ configure
-   'separators' => [
-      'separator' => 'Response'
-   ],
 
    // @ simulate
    // Server API
    'sapi' => function (Request $Request, Response $Response) : Response {
-      return $Response(content: 'Hello World!');
+      $scheme = $Request->scheme;
+      return $Response(content: $scheme);
    },
    // Client API
    'capi' => function () {
@@ -29,28 +27,27 @@ return [
    'test' => function ($response) : bool {
       /*
       return $Response->status === '200 OK'
-      && $Response->body === 'Hello World!';
+      && $Response->code === ...;
       */
 
-      $expected = <<<HTML_RAW
-      HTTP/1.1 200 OK\r
-      Server: Bootgly\r
-      Content-Length: 12\r
-      Content-Type: text/html; charset=UTF-8\r
-      \r
-      Hello World!
-      HTML_RAW;
+      $lines = explode("\r\n", $response);
+      $body = $lines[count($lines) - 1];
+
+      $code = 0;
+      if ($body) {
+         $code = (int) $body;
+      }
 
       // @ Assert
-      if ($response !== $expected) {
-         Debugger::$labels = ['HTTP Response:', 'Expected:'];
-         debug(json_encode($response), json_encode($expected));
+      if ( !($code > 1000 && $code < 65535) ) {
+         Debugger::$labels = ['HTTP Code:'];
+         debug($body, $lines);
          return false;
       }
 
       return true;
    },
    'except' => function () : string {
-      return 'Response not matched';
+      return 'Request not matched';
    }
 ];

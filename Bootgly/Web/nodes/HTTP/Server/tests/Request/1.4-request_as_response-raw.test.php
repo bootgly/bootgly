@@ -10,14 +10,12 @@ use Bootgly\Web\nodes\HTTP\Server\Response;
 
 return [
    // @ configure
-   'separators' => [
-      'separator' => 'Response'
-   ],
 
    // @ simulate
    // Server API
    'sapi' => function (Request $Request, Response $Response) : Response {
-      return $Response(content: 'Hello World!');
+      $raw = $Request->raw;
+      return $Response(content: $raw);
    },
    // Client API
    'capi' => function () {
@@ -27,18 +25,13 @@ return [
 
    // @ test
    'test' => function ($response) : bool {
-      /*
-      return $Response->status === '200 OK'
-      && $Response->body === 'Hello World!';
-      */
-
       $expected = <<<HTML_RAW
       HTTP/1.1 200 OK\r
       Server: Bootgly\r
-      Content-Length: 12\r
+      Content-Length: 16\r
       Content-Type: text/html; charset=UTF-8\r
       \r
-      Hello World!
+      GET / HTTP/1.0\r\n
       HTML_RAW;
 
       // @ Assert
@@ -51,6 +44,6 @@ return [
       return true;
    },
    'except' => function () : string {
-      return 'Response not matched';
+      return 'Request not matched';
    }
 ];

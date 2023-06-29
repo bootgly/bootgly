@@ -110,6 +110,8 @@ class Request
 
       // * Data
       // ... dynamically
+      $_POST = [];
+      $_FILES = [];
 
       // * Meta
       // ...
@@ -145,7 +147,7 @@ class Request
 
          // ! HTTP
          case 'raw': // TODO refactor
-            $raw = "$this->method $this->uri $this->protocol\r\n";
+            $raw = $this->Meta->raw;
             $raw .= $this->Header->raw;
             $raw .= "\r\n";
             $raw .= $this->input;
