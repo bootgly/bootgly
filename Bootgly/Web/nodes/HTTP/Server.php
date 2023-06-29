@@ -158,10 +158,10 @@ class Server extends TCP\Server implements HTTP
       }
 
       // @ Boot HTTP Request
-      $requestLength = $Request->boot($Package, $input, $length);
+      $length = $Request->boot($Package, $input, $length);
 
       // @ Write to local cache
-      if ($length <= 512) {
+      if ($length > 0 && $length <= 512) {
          $inputs[$input] = clone $Request;
 
          if (count($inputs) > 512) {
@@ -169,7 +169,7 @@ class Server extends TCP\Server implements HTTP
          }
       }
 
-      return $requestLength;
+      return $length;
    }
    public static function encode (Packages $Package, &$length)
    {

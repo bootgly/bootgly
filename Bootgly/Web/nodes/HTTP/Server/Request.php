@@ -426,13 +426,13 @@ class Request
       }
    }
 
-   public function boot (Packages $Package, string &$buffer, int $length) : int // @ return Request length
+   public function boot (Packages $Package, string &$buffer, int $size) : int // @ return Request length
    {
       // @ Check Request raw separator
       $separatorPosition = strpos($buffer, "\r\n\r\n");
       if ($separatorPosition === false) { // @ Check if the Request raw has a separator
          // @ Check Request raw length
-         if ($length >= 16384) {
+         if ($size >= 16384) { // Package size
             $Package->reject("HTTP/1.1 413 Request Entity Too Large\r\n\r\n");
          }
 
