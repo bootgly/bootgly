@@ -74,8 +74,8 @@ Terminal components |
 
 Web interfaces | Web nodes
 --- | ---
-[TCP Client][WEB_TCP_CLIENT_INTERFACE] | [HTTP Server][WEB_HTTP_SERVER_NODE]
-[TCP Server][WEB_TCP_SERVER_INTERFACE] | 
+[TCP Client][WEB_TCP_CLIENT_INTERFACE] | HTTP Client (TODO) 
+[TCP Server][WEB_TCP_SERVER_INTERFACE] | [HTTP Server][WEB_HTTP_SERVER_NODE]
 
 ---
 
