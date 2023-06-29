@@ -13,8 +13,6 @@ namespace Bootgly\Web\nodes\HTTP\Server;
 
 use Bootgly\ABI\streams\File;
 
-use Bootgly\API\Server as SAPI;
-
 use Bootgly\Web\nodes\HTTP\Server;
 use Bootgly\Web\nodes\HTTP\Server\Response\Content;
 use Bootgly\Web\nodes\HTTP\Server\Response\Meta;

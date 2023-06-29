@@ -179,6 +179,7 @@ class Server extends TCP\Server implements HTTP
       $Router   = Server::$Router;
 
       // @ Perform test mode
+      // TODO move to another encoder?
       if (SAPI::$mode === SAPI::MODE_TEST) {
          $Response = new Response;
          $Response->Header->preset('Date', null);
@@ -199,6 +200,7 @@ class Server extends TCP\Server implements HTTP
             $Response->Content->raw = ' ';
          }
       }
+      // TODO move to another encoder
       // @ Check if Request Content is waiting data
       if ($Request->Content->waiting) {
          return '';
