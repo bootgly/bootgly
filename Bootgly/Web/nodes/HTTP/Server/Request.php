@@ -160,7 +160,7 @@ class Request
             return $this->Meta = new Meta;
          case 'method':
             return $_SERVER['REQUEST_METHOD'];
-         // case 'uri': break;
+         #case 'uri': ...
          case 'protocol':
             return $_SERVER['SERVER_PROTOCOL'];
 
@@ -169,14 +169,7 @@ class Request
          case 'uri':
          case 'URI': // TODO with __String/URI?
          case 'identifier': // @ base
-            $identifier = $this->uri ?? '';
-
-            $this->uri = $identifier;
-            // $this->URI = $identifier;
-            $this->identifier = $identifier;
-
-            return $identifier;
-
+            return $_SERVER['REDIRECT_URI'] ?? @$_SERVER['REQUEST_URI'];
          // @ URL
          case 'url':
          case 'URL': // TODO with __String/URL?
@@ -185,11 +178,12 @@ class Request
 
             #if ($locator === '/index.php')
             $locator = strtok($this->uri, '?');
-
             $locator = rtrim($locator ?? '/', '/');
 
-            if ($this->base && substr($locator, 0, strlen($this->base)) == $this->base) {
-               $locator = substr($locator, strlen($this->base)); // Return relative location
+            $base = $this->base;
+            if ($base && substr($locator, 0, strlen($base)) == $base) {
+               // @ Return relative location
+               $locator = substr($locator, strlen($this->base));
             }
 
             $this->url = $locator;
@@ -523,17 +517,22 @@ class Request
       $this->Meta->raw = $metaRaw;
 
       // method
-      $this->method = $method;
+      $_SERVER['REQUEST_METHOD'] = $method;
       // uri
-      $this->uri = $uri;
+      $_SERVER['REQUEST_URI'] = $uri;
       // protocol
-      $this->protocol = $protocol;
+      $_SERVER['SERVER_PROTOCOL'] = $protocol;
 
       // length
       $this->Meta->length = $metaLength;
       // ? Request Header
+      // raw
       $this->Header->raw = $headerRaw;
 
+      // host
+      #$_SERVER['HTTP_HOST'] = $this->Header->get('HOST');
+
+      // length
       $this->Header->length = $headerLength;
       // ? Request Content
       $this->Content->position = $separatorPosition + 4;

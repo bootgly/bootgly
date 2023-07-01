@@ -106,6 +106,11 @@ class Server implements Servers, Logging
       $this->status = self::STATUS_BOOTING;
 
 
+      // @
+      if (__CLASS__ !== static::class) {
+         self::$Application = static::class;
+      }
+
       // @ Configure Logger
       $this->Logger = new Logger(channel: 'Server');
       // @ Configure Debugger
@@ -116,9 +121,7 @@ class Server implements Servers, Logging
       // @ Instance Bootables
       // ! Connection(s)
       $this->Connections = new Connections($this);
-      if (__CLASS__ !== static::class) {
-         self::$Application = static::class;
-      }
+
       // ! Web\@\Events
       static::$Event = new Select($this->Connections);
 
