@@ -63,7 +63,10 @@ class Server implements Servers, Logging
    // @ Verbosity
 
    // * Data
-   public static $Application = null; // OSI Application
+   // OSI Application
+   public static $Application = null; 
+   public static $Decoder = null;
+   public static $Encoder = null;
 
    // * Meta
    public const VERSION = '0.0.1';
@@ -222,7 +225,13 @@ class Server implements Servers, Logging
       }
    }
 
-   public function configure (string $host, int $port, int $workers, ? array $ssl = null)
+   public function configure
+   (
+      string $host,
+      int $port,
+      int $workers,
+      ? array $ssl = null
+   )
    {
       $this->status = self::STATUS_CONFIGURING;
 

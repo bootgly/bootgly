@@ -221,6 +221,7 @@ class Request
             return $this->query = $query;
          case 'queries':
             parse_str($this->query, $queries);
+
             return $this->queries = $queries;
          // ? Meta / Authentication
          case 'user':

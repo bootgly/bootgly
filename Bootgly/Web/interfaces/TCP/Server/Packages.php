@@ -179,8 +179,8 @@ abstract class Packages implements Web\Packages
       }
 
       // @ Write data
-      if (Server::$Application) { // @ Decode Application Data if exists
-         $received = Server::$Application::decode($this, $input, $received);
+      if (Server::$Decoder) { // @ Decode Application Data if exists
+         $received = Server::$Decoder::decode($this, $input, $received);
       }
 
       if ($received) {
@@ -192,8 +192,8 @@ abstract class Packages implements Web\Packages
    // ---
    public function writing (&$Socket, ? int $length = null) : bool
    {
-      if (Server::$Application) {
-         self::$output = Server::$Application::encode($this, $length);
+      if (Server::$Encoder) { // @ Encode Application Data if exists
+         self::$output = Server::$Encoder::encode($this, $length);
       } else {
          self::$output = (SAPI::$Handler)(...$this->callbacks);
       }

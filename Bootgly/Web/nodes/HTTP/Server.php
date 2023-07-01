@@ -3,7 +3,7 @@
  * --------------------------------------------------------------------------
  * Bootgly PHP Framework
  * Developed by Rodrigo Vieira (@rodrigoslayertech)
- * Copyright 2020-present
+ * Copyright 2023-present
  * Licensed under MIT
  * --------------------------------------------------------------------------
  */
@@ -20,10 +20,11 @@ use Bootgly\Web\interfaces\TCP;
 use Bootgly\Web\interfaces\TCP\Server\Packages;
 use Bootgly\Web\interfaces\TCP\Client;
 use Bootgly\Web\modules\HTTP;
+use Bootgly\Web\nodes\HTTP\Server\Decoders\_Decoder;
+use Bootgly\Web\nodes\HTTP\Server\Encoders\_Encoder;
 use Bootgly\Web\nodes\HTTP\Server\Request;
 use Bootgly\Web\nodes\HTTP\Server\Response;
 use Bootgly\Web\modules\HTTP\Server\Router;
-
 
 class Server extends TCP\Server implements HTTP
 {
@@ -54,18 +55,23 @@ class Server extends TCP\Server implements HTTP
       // @ Configure Logger
       $this->Logger = new Logger(channel: 'Server.HTTP');
 
+      // @ Configure Request
       self::$Request = new Request;
       self::$Request->Meta;
       self::$Request->Header;
       self::$Request->Content;
-
+      // @ Configure Response
       self::$Response = new Response;
       // TODO initial Response Data API
       #self::$Response->Meta;
       #self::$Response->Header;
       #self::$Response->Content;
-
+      // @ Configure Router
       self::$Router = new Router(static::class);
+
+      // @
+      self::$Decoder = new _Decoder;
+      self::$Encoder = new _Encoder;
    }
 
    public static function boot (bool $production = true, bool $test = false)
@@ -119,94 +125,6 @@ class Server extends TCP\Server implements HTTP
       }
 
       SAPI::boot(true);
-   }
-
-   public static function decode (Packages $Package, string $buffer, int $size)
-   {
-      static $inputs = []; // @ Instance local cache
-
-      // @ Check local cache and return
-      if ( $size <= 512 && isSet($inputs[$buffer]) ) {
-         Server::$Request = $inputs[$buffer];
-         return $size;
-      }
-
-      // @ Instance callbacks
-      $Request = Server::$Request;
-
-      // TODO move to another decoder
-      // @ Check if Request Content is waiting data
-      if ($Request->Content->waiting) {
-         // @ Finish filling the Request Content raw with TCP read buffer
-         $Content = &$Request->Content;
-
-         $Content->raw .= $buffer;
-         $Content->downloaded += $size;
-
-         if ($Content->length > $Content->downloaded) {
-            return 0;
-         }
-
-         $Content->waiting = false;
-
-         return $Content->length;
-      }
-
-      // @ Handle Package cache
-      if ($Package->changed) {
-         $Request = Server::$Request = new Request;
-      }
-
-      // @ Boot HTTP Request
-      $length = $Request->boot($Package, $buffer, $size);
-
-      // @ Write to local cache
-      if ($length > 0 && $length <= 512) {
-         $inputs[$buffer] = clone $Request;
-
-         if (count($inputs) > 512) {
-            unset($inputs[key($inputs)]);
-         }
-      }
-
-      return $length; // @ Return Request length (0 = invalid)
-   }
-   public static function encode (Packages $Package, &$size)
-   {
-      // @ Instance callbacks
-      $Request  = Server::$Request;
-      $Response = Server::$Response;
-      $Router   = Server::$Router;
-
-      // @ Perform test mode
-      // TODO move to another encoder?
-      if (SAPI::$mode === SAPI::MODE_TEST) {
-         $Response = new Response;
-         $Response->Header->preset('Date', null);
-
-         SAPI::boot(reset: true, base: self::class);
-      }
-
-      // ! Response
-      // @ Try to Invoke API Closure
-      try {
-         (SAPI::$Handler)($Request, $Response, $Router);
-      } catch (\Throwable $Throwable) {
-         $Response->Meta->status = 500; // @ Set 500 HTTP Server Error Response
-
-         debug($Throwable->getMessage());
-
-         if ($Response->Content->raw === '') {
-            $Response->Content->raw = ' ';
-         }
-      }
-      // TODO move to another encoder
-      // @ Check if Request Content is waiting data
-      if ($Request->Content->waiting) {
-         return '';
-      }
-      // @ Output/Stream HTTP Response
-      return $Response->output($Package, $size); // @ Return Response raw
    }
 
    protected static function test (TCP\Server $TCPServer)

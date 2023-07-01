@@ -9,7 +9,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly;
+namespace scripts;
 
 
 require __DIR__ . '/../autoload.php';
