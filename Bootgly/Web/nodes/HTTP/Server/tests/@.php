@@ -34,6 +34,8 @@ return [
          '1.5-request_as_response-method',
          '1.6-request_as_response-uri',
          '1.7-request_as_response-protocol',
+         '1.8-request_as_response-url',
+         '1.9-request_as_response-urn',
       ],
       'Response/' => [
          '1.1-respond_with_a_simple_hello_world',
