@@ -46,7 +46,7 @@ use Bootgly\Web\modules\HTTP\Request\Ranging;
  * @property array $paths          ['test', 'foo']
  * @ Query
  * @property object $Query
- * @property string $query          query=abc&query2=xyz
+ * @property string $query         query=abc&query2=xyz
  * @property array $queries        ['query' => 'abc', 'query2' => 'xyz']
  * ? Meta / Authentication
  * @property string $user          boot
@@ -129,17 +129,17 @@ class Request
 
          // * Data
          case 'ip': // TODO IP->...
-         case 'address': // @ CLI OK | Non-CLI OK
+         case 'address':
             // @ Parse CloudFlare remote ip headers
             if ( isSet($this->headers['cf-connecting-ip']) ) {
                return $this->headers['cf-connecting-ip'];
             }
 
             return $_SERVER['REMOTE_ADDR'];
-         case 'port': // @ CLI OK | Non-CLI OK
+         case 'port':
             return $_SERVER['REMOTE_PORT'];
 
-         case 'scheme': // @ CLI ? | Non-CLI OK?
+         case 'scheme':
             return $_SERVER['HTTPS'] ? 'https' : 'http';
 
          // ! HTTP
@@ -171,9 +171,6 @@ class Request
          case 'url':
          case 'URL': // TODO with __String/URL?
          case 'locator':
-            #$locator = @$_SERVER['REDIRECT_URL'];
-
-            #if ($locator === '/index.php')
             $locator = strtok($this->uri, '?');
             $locator = rtrim($locator ?? '/', '/');
 
@@ -201,8 +198,6 @@ class Request
             $this->name = $name;
 
             return $name;
-         // TODO dir, directory, Dir, Directories, ... ?
-         // TODO file, File ?
          // @ Path
          case 'path':
             return $this->locator;
@@ -210,11 +205,20 @@ class Request
             return new Path($this->locator);
          case 'paths':
             return $this->Path->paths;
+         // TODO dir, directory, Dir, Directories, ... ?
+         // TODO file, File ?
          // @ Query
-         case 'parameters': // TODO move to $Route->params ?
-         case 'params':     // TODO move to $Route->params ?
          case 'query':
-            return @$_SERVER['REDIRECT_QUERY_STRING'];
+            $uri = $this->uri;
+
+            $mark = strpos($uri, '?');
+            $query = '';
+
+            if ($mark !== false) {
+               $query = substr($uri, $mark + 1);
+            }
+
+            return $this->query = $query;
          case 'queries':
             parse_str($this->query, $queries);
             return $this->queries = $queries;

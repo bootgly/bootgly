@@ -12,15 +12,15 @@ return [
    // @ configure
 
    // @ simulate
-   // Server API
-   'sapi' => function (Request $Request, Response $Response) : Response {
-      $scheme = $Request->scheme;
-      return $Response(content: $scheme);
-   },
    // Client API
    'capi' => function () {
-      // return $Request->get('/');
-      return "GET / HTTP/1.0\r\n\r\n";
+      // return $Request->get('/test/foo?query=abc&query2=xyz');
+      return "GET /test/foo?query=abc&query2=xyz HTTP/1.1\r\n\r\n";
+   },
+   // Server API
+   'sapi' => function (Request $Request, Response $Response) : Response {
+      $queries = $Request->queries;
+      return $Response->Json->send($queries);
    },
 
    // @ test
@@ -28,10 +28,10 @@ return [
       $expected = <<<HTML_RAW
       HTTP/1.1 200 OK\r
       Server: Bootgly\r
-      Content-Length: 4\r
-      Content-Type: text/html; charset=UTF-8\r
+      Content-Type: application/json\r
+      Content-Length: 30\r
       \r
-      http
+      {"query":"abc","query2":"xyz"}
       HTML_RAW;
 
       // @ Assert

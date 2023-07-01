@@ -48,7 +48,7 @@ switch ($name) {
       @:i: Bootgly Server version: @; {$version}\t\t@:i: PHP version: @; {$php}
 
       @:i: Started time: @; {$runtime['started']}\t@:i: Uptime: @; {$uptimes}
-      @:i: Load average: @; $load\t\t@:i: Workers count: @; {$workers}
+      @:i: Workers count: @; {$workers}\t\t\t@:i: Load average: @; {$load}
       @:i: Socket address: @; {$address}
 
       @:i: Event-loop: @; {$event}

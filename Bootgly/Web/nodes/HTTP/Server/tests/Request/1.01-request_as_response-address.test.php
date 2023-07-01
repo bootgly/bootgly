@@ -10,28 +10,36 @@ use Bootgly\Web\nodes\HTTP\Server\Response;
 
 return [
    // @ configure
+   'separators' => [
+      'separator' => 'Request'
+   ],
 
    // @ simulate
-   // Server API
-   'sapi' => function (Request $Request, Response $Response) : Response {
-      $method = $Request->method;
-      return $Response(content: $method);
-   },
    // Client API
    'capi' => function () {
       // return $Request->get('/');
       return "GET / HTTP/1.0\r\n\r\n";
    },
+   // Server API
+   'sapi' => function (Request $Request, Response $Response) : Response {
+      $address = $Request->address;
+      return $Response(content: $address);
+   },
 
    // @ test
    'test' => function ($response) : bool {
+      /*
+      return $Response->status === '200 OK'
+      && $Response->body === '127.0.0.1';
+      */
+
       $expected = <<<HTML_RAW
       HTTP/1.1 200 OK\r
       Server: Bootgly\r
-      Content-Length: 3\r
+      Content-Length: 9\r
       Content-Type: text/html; charset=UTF-8\r
       \r
-      GET
+      127.0.0.1
       HTML_RAW;
 
       // @ Assert

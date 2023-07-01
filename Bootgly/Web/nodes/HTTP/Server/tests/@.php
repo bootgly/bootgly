@@ -27,15 +27,17 @@ return [
    // * Data
    'files' => [
       'Request/' => [
-         '1.1-request_as_response-address',
-         '1.2-request_as_response-port',
-         '1.3-request_as_response-scheme',
-         '1.4-request_as_response-raw',
-         '1.5-request_as_response-method',
-         '1.6-request_as_response-uri',
-         '1.7-request_as_response-protocol',
-         '1.8-request_as_response-url',
-         '1.9-request_as_response-urn',
+         '1.01-request_as_response-address',
+         '1.02-request_as_response-port',
+         '1.03-request_as_response-scheme',
+         '1.04-request_as_response-raw',
+         '1.05-request_as_response-method',
+         '1.06-request_as_response-uri',
+         '1.07-request_as_response-protocol',
+         '1.08-request_as_response-url',
+         '1.09-request_as_response-urn',
+         '1.10-request_as_response-query',
+         '1.11-request_as_response-queries',
       ],
       'Response/' => [
          '1.1-respond_with_a_simple_hello_world',

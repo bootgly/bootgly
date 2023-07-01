@@ -12,15 +12,15 @@ return [
    // @ configure
 
    // @ simulate
-   // Server API
-   'sapi' => function (Request $Request, Response $Response) : Response {
-      $port = $Request->port;
-      return $Response(content: $port);
-   },
    // Client API
    'capi' => function () {
       // return $Request->get('/');
       return "GET / HTTP/1.0\r\n\r\n";
+   },
+   // Server API
+   'sapi' => function (Request $Request, Response $Response) : Response {
+      $port = $Request->port;
+      return $Response(content: $port);
    },
 
    // @ test
