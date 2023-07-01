@@ -25,23 +25,19 @@ return [
 
    // @ test
    'test' => function ($response) : bool {
-      /*
-      return $Response->status === '200 OK'
-      && $Response->code === ...;
-      */
-
-      $lines = explode("\r\n", $response);
-      $body = $lines[count($lines) - 1];
-
-      $code = 0;
-      if ($body) {
-         $code = (int) $body;
-      }
+      $expected = <<<HTML_RAW
+      HTTP/1.1 200 OK\r
+      Server: Bootgly\r
+      Content-Length: 4\r
+      Content-Type: text/html; charset=UTF-8\r
+      \r
+      http
+      HTML_RAW;
 
       // @ Assert
-      if ( !($code > 1000 && $code < 65535) ) {
-         Debugger::$labels = ['HTTP Code:'];
-         debug($body, $lines);
+      if ($response !== $expected) {
+         Debugger::$labels = ['HTTP Response:', 'Expected:'];
+         debug(json_encode($response), json_encode($expected));
          return false;
       }
 

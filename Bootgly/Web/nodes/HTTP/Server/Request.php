@@ -140,10 +140,7 @@ class Request
             return $_SERVER['REMOTE_PORT'];
 
          case 'scheme': // @ CLI ? | Non-CLI OK?
-            // TODO CLI
-            $scheme = '';
-
-            return $this->scheme = $scheme;
+            return $_SERVER['HTTPS'] ? 'https' : 'http';
 
          // ! HTTP
          case 'raw': // TODO refactor
@@ -510,8 +507,12 @@ class Request
 
       // @ Set Request
       // ? Request
+      // address
       $_SERVER['REMOTE_ADDR'] = $Package->Connection->ip;
+      // port
       $_SERVER['REMOTE_PORT'] = $Package->Connection->port;
+      // scheme
+      $_SERVER['HTTPS'] = $Package->Connection->encrypted;
       // ? Request Meta
       // raw
       $this->Meta->raw = $metaRaw;

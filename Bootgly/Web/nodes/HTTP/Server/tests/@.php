@@ -29,7 +29,7 @@ return [
       'Request/' => [
          '1.1-request_as_response-address',
          '1.2-request_as_response-port',
-         #'1.3-request_as_response-scheme',
+         '1.3-request_as_response-scheme',
          '1.4-request_as_response-raw',
          '1.5-request_as_response-method',
          '1.6-request_as_response-uri',

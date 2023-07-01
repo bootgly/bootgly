@@ -32,6 +32,7 @@ class Connection extends Packages
 
    // * Meta
    public int $id;
+   public bool $encrypted;
    // @ Status
    public const STATUS_INITIAL = 0;
    public const STATUS_CONNECTING = 1;
@@ -60,6 +61,7 @@ class Connection extends Packages
 
       // * Meta
       $this->id = (int) $Socket;
+      $this->encrypted = false;
       // @ Status
       $this->status = self::STATUS_ESTABLISHED;
       // @ Handler
@@ -139,7 +141,7 @@ class Connection extends Packages
 
          return 0;
       } else {
-         // Handshake success!
+         $this->encrypted = true;
       }
 
       return true;
