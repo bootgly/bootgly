@@ -104,12 +104,6 @@ abstract class Packages implements Web\Packages
       return false;
    }
 
-   // @ SSL / TLS context
-   public function decrypt (string $encrypted)
-   {
-      // TODO (only fread return the data decrypted when using SSL context)
-   }
-
    public function reading (&$Socket, ? int $length = null, ? int $timeout = null) : bool
    {
       try {
@@ -123,7 +117,6 @@ abstract class Packages implements Web\Packages
 
          do {
             $buffer = @fread($Socket, $length ?? 65535);
-            #$buffer = @stream_socket_recvfrom($Socket, $length ?? 65535);
 
             if ($buffer === false) break;
             if ($buffer === '') {
@@ -211,7 +204,6 @@ abstract class Packages implements Web\Packages
 
          while ($buffer) {
             $sent = @fwrite($Socket, $buffer, $length);
-            #$sent = @stream_socket_sendto($Socket, $buffer, $length???);
 
             if ($sent === false) break;
             if ($sent === 0) continue; // TODO check EOF?
