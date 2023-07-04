@@ -10,6 +10,9 @@ use Bootgly\Web\nodes\HTTP\Server\Response;
 
 return [
    // @ configure
+   'separators' => [
+      'separator' => 'Request Header'
+   ],
 
    // @ simulate
    // Client API

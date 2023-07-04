@@ -260,7 +260,7 @@ class Request
             return $this->Header = new Header;
          case 'headers':
             return $this->Header->fields;
-         case 'language': // TODO refactor
+         case 'language':
             $httpAcceptLanguage = $this->Header->get('Accept-Language');
 
             if ($httpAcceptLanguage === null) {

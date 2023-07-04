@@ -10,7 +10,9 @@ use Bootgly\Web\nodes\HTTP\Server\Response;
 
 return [
    // @ configure
-
+   'separators' => [
+      'separator' => 'Request Meta'
+   ],
    // @ simulate
    // Client API
    'capi' => function () {
