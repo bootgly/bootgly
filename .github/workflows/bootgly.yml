@@ -1,4 +1,4 @@
-name: Bootgly
+name: Bootgly (test)
 
 on:
   workflow_dispatch:

@@ -36,9 +36,11 @@ use Bootgly\Web\modules\HTTP\Request\Ranging;
  * @property string $method        GET, POST, ...
  * @property string $uri           /test/foo?query=abc&query2=xyz
  * @property string $protocol      HTTP/1.1
- * ? Meta / Resource
+ * @ URI
  * @property string $identifier    (URI) /test/foo?query=abc&query2=xyz
+ * @ URL
  * @property string $locator       (URL) /test/foo
+ * @ URN
  * @property string $name          (URN) foo
  * @ Path
  * @property object $Path
@@ -53,6 +55,12 @@ use Bootgly\Web\modules\HTTP\Request\Ranging;
  * @property string $password      gly
  * ? Header
  * @property object Header         ->{'X-Header'}
+ * @ Host
+ * @property string $host          v1.lab.bootgly.com
+ * @property string $domain        bootgly.com
+ * @property string $subdomain     v1.lab
+ * @property array $subdomains     ['lab', 'v1']
+ * @ Accept-Language
  * @property string $language      pt-BR
  * ? Header / Cookie
  * @property object $Cookie
@@ -67,11 +75,6 @@ use Bootgly\Web\modules\HTTP\Request\Ranging;
  *
  *
  * * Meta
- * @property string $host          v1.lab.bootgly.com
- * @property string $domain        bootgly.com
- * @property string $subdomain     v1.lab
- * @property array $subdomains     ['lab', 'v1']
- *
  * @property string $on            2020-03-10 (Y-m-d)
  * @property string $at            17:16:18 (H:i:s)
  * @property int $timestamp        1586496524
@@ -260,7 +263,7 @@ class Request
             return $this->Header = new Header;
          case 'headers':
             return $this->Header->fields;
-         // @ host
+         // @ Host
          case 'host':
             $host = $this->Header->get('Host');
 
@@ -284,7 +287,7 @@ class Request
             return $this->subdomains = explode('.', $this->subdomain);
          // TODO Domain with __String/Domain
          // TODO Domain->sub, Domain->second (second-level), Domain->top (top-level), Domain->root, tld, ...
-         // @ language
+         // @ Accept-Language
          case 'language':
             $httpAcceptLanguage = $this->Header->get('Accept-Language');
 

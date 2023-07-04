@@ -14,7 +14,7 @@ namespace Bootgly\Web\nodes\HTTP\Server\Request\_;
 use Bootgly\Web\nodes\HTTP\Server\Request\_\Meta\Authentication;
 
 
-class Meta
+class Meta // TODO move/refactor
 {
    // * Config
    // ...
