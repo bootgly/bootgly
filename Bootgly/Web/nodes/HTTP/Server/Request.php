@@ -136,6 +136,7 @@ class Request
             }
 
             return $_SERVER['REMOTE_ADDR'];
+         // case 'ips': // TODO ips based in Header X-Forwarded-For
          case 'port':
             return $_SERVER['REMOTE_PORT'];
 
@@ -161,7 +162,6 @@ class Request
          case 'protocol':
             return $_SERVER['SERVER_PROTOCOL'];
 
-         // ? Meta / Resource
          // @ URI
          case 'uri':
          case 'URI': // TODO with __String/URI?
@@ -223,7 +223,7 @@ class Request
             parse_str($this->query, $queries);
 
             return $this->queries = $queries;
-         // ? Meta / Authentication
+         // @ autenthication
          case 'username':
             $authorization = $this->Header->get('Authorization');
 
@@ -260,6 +260,31 @@ class Request
             return $this->Header = new Header;
          case 'headers':
             return $this->Header->fields;
+         // @ host
+         case 'host':
+            $host = $this->Header->get('Host');
+
+            return $this->host = $host;
+         case 'hostname': // alias
+            return $this->host;
+         case 'domain':
+            // TODO validate all cases
+            $pattern = "/(?P<domain>[a-z0-9][a-z0-9\-]{1,63}\.[a-z\.]{2,6})(:[\d]+)?$/i";
+
+            if (preg_match($pattern, $this->host, $matches)) {
+               return $this->domain = @$matches['domain'];
+            }
+
+            break;
+
+         case 'subdomain':
+            // TODO validate all cases
+            return $this->subdomain = rtrim(strstr($this->host, $this->domain, true), '.');
+         case 'subdomains':
+            return $this->subdomains = explode('.', $this->subdomain);
+         // TODO Domain with __String/Domain
+         // TODO Domain->sub, Domain->second (second-level), Domain->top (top-level), Domain->root, tld, ...
+         // @ language
          case 'language':
             $httpAcceptLanguage = $this->Header->get('Accept-Language');
 
@@ -288,7 +313,6 @@ class Request
             }
 
             return $this->language = $language;
-         // case 'ips': // TODO ips based in Header X-Forwarded-For
          // ? Header / Cookie
          case 'Cookie':
             return $this->Header->Cookie;
@@ -310,30 +334,6 @@ class Request
          case 'files':
             return $_FILES;
          // * Meta
-         case 'host': // @ CLI OK | Non-CLI OK?
-            // ! FIX bad performance
-            $host = $this->Header->get('Host');
-
-            return $this->host = $host;
-         case 'hostname': // alias
-            return $this->host;
-         case 'domain':
-            // TODO validate all cases
-            $pattern = "/(?P<domain>[a-z0-9][a-z0-9\-]{1,63}\.[a-z\.]{2,6})(:[\d]+)?$/i";
-
-            if ( preg_match($pattern, $this->host, $matches) ){
-               return $this->domain = @$matches['domain'];
-            }
-
-            break;
-
-         case 'subdomain':
-            // TODO validate all cases
-            return $this->subdomain = rtrim(strstr($this->host, $this->domain, true), '.');
-         case 'subdomains':
-            return $this->subdomains = explode('.', $this->subdomain);
-         // TODO Domain with __String/Domain
-         // TODO Domain->sub, Domain->second (second-level), Domain->top (top-level), Domain->root, tld, ...
          case 'on':
             return $this->on = date("Y-m-d");
          case 'at':
@@ -518,6 +518,7 @@ class Request
          }
 
          if ($method === 'POST') {
+            debug('POST');
             $this->Content->raw = substr($buffer, $separatorPosition + 4, $contentLength);
             $this->Content->downloaded = strlen($this->Content->raw);
 
