@@ -20,12 +20,12 @@ class Header
    // ...
 
    // * Data
-   protected string $raw;
-   private array $fields;
+   public readonly string $raw;
+   public null|int|false $length;
 
    // * Meta
+   private array $fields;
    private bool $built;
-   public null|int|false $length;
 
    public Cookie $Cookie;
 
@@ -36,11 +36,12 @@ class Header
       // ...
 
       // * Data
-      $this->fields = [];
+      // public $raw (readonly)
+      $this->length = null;
 
       // * Meta
+      $this->fields = [];
       $this->built = false;
-      $this->length = null;
 
 
       $this->Cookie = new Cookie($this);
@@ -48,18 +49,14 @@ class Header
    public function __get (string $name)
    {
       switch ($name) {
+         // * Config
+         // ..
+
          // * Data
-         case 'raw':
-            if ( isSet($this->raw) && $this->raw !== '' ) {
-               return $this->raw;
-            }
+         // public $raw (readonly)
+         // public $length
 
-            $raw = '';
-            foreach ($this->fields as $name => $value) {
-               $raw .= "$name: $value\r\n";
-            }
-
-            return $raw;
+         // * Meta
          case 'fields':
             if ($this->built === false) {
                $this->build();
@@ -71,20 +68,6 @@ class Header
             return $this->get($name);
       }
    }
-   public function __set (string $name, string $value)
-   {
-      switch ($name) {
-         // * Data
-         case 'raw':
-            $this->raw = $value;
-            break;
-         case 'fields':
-            break;
-
-         default:
-            $this->fields[$name] = $value;
-      }
-   }
 
    public function get (string $name) : string
    {
@@ -93,6 +76,10 @@ class Header
       }
 
       return (string) @$this->fields[$name] ?? (string) @$this->fields[strtolower($name)] ?? '';
+   }
+   public function set (string $raw) : void
+   {
+      $this->raw = $raw;
    }
 
    public function build () : bool

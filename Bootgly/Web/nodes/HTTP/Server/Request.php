@@ -293,7 +293,7 @@ class Request
          case 'Cookie':
             return $this->Header->Cookie;
          case 'cookies':
-            return $this->Cookie->cookies;
+            return $this->Header->Cookie->cookies;
          // ? Content
          case 'Content':
             return $this->Content = new Content;
@@ -553,7 +553,7 @@ class Request
       $this->Meta->length = $metaLength;
       // ? Request Header
       // raw
-      $this->Header->raw = $headerRaw;
+      $this->Header->set($headerRaw);
 
       // host
       #$_SERVER['HTTP_HOST'] = $this->Header->get('HOST');
