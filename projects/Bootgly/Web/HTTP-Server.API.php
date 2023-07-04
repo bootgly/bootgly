@@ -49,8 +49,9 @@ return static function
    #$Response->Header->Cookie->append('Test2', 'value2');
 
    // ? Response Content
-   $Router('/', function ($Response) {
-      return $Response(content: 'Hello World!');
+   $Router('/', function ($Response)
+   use ($Request) {
+      return $Response->Json->send($Request->headers);
    }, GET);
 
    // @ send

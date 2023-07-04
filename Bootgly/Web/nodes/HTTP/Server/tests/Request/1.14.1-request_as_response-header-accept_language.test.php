@@ -17,18 +17,16 @@ return [
       // ...
       return <<<HTTP
       GET / HTTP/1.1\r
-      Host: lab.bootgly.com\r
-      Authorization: Basic dXNlcm5hbWU6cGFzc3dvcmQ=\r
+      Accept-Language: en-US,en;q=0.9\r
       \r
-      
+
       HTTP;
    },
    // Server API
    'sapi' => function (Request $Request, Response $Response) : Response {
-      $username = $Request->username;
-      $password = $Request->password;
+      $language = $Request->language;
 
-      return $Response(content: "{$username}:{$password}");
+      return $Response(content: $language);
    },
 
    // @ test
@@ -36,10 +34,10 @@ return [
       $expected = <<<HTML_RAW
       HTTP/1.1 200 OK\r
       Server: Bootgly\r
-      Content-Length: 17\r
+      Content-Length: 5\r
       Content-Type: text/html; charset=UTF-8\r
       \r
-      username:password
+      en-US
       HTML_RAW;
 
       // @ Assert

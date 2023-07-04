@@ -1,4 +1,5 @@
 <?php
+
 use Bootgly\ACI\Debugger;
 // SAPI
 use Bootgly\Web\nodes\HTTP\Server\Request;
@@ -17,41 +18,40 @@ return [
       // ...
       return <<<HTTP
       GET / HTTP/1.1\r
-      Host: lab.bootgly.com\r
-      Authorization: Basic dXNlcm5hbWU6cGFzc3dvcmQ=\r
+      Host: lab.bootgly.com
+      User-Agent: Bootgly/TCP-Server
+      Accept-Language: en-US,en;q=0.9\r
       \r
       
       HTTP;
    },
    // Server API
-   'sapi' => function (Request $Request, Response $Response) : Response {
-      $username = $Request->username;
-      $password = $Request->password;
-
-      return $Response(content: "{$username}:{$password}");
+   'sapi' => function (Request $Request, Response $Response): Response {
+      $headers = $Request->headers;
+      return $Response->Json->send($headers);
    },
 
    // @ test
-   'test' => function ($response) : bool {
+   'test' => function ($response): bool {
       $expected = <<<HTML_RAW
       HTTP/1.1 200 OK\r
       Server: Bootgly\r
-      Content-Length: 17\r
-      Content-Type: text/html; charset=UTF-8\r
+      Content-Type: application/json\r
+      Content-Length: 92\r
       \r
-      username:password
+      {"Host":"lab.bootgly.com\\nUser-Agent: Bootgly\/TCP-Server\\nAccept-Language: en-US,en;q=0.9"}
       HTML_RAW;
 
       // @ Assert
       if ($response !== $expected) {
          Debugger::$labels = ['HTTP Response:', 'Expected:'];
-         debug(json_encode($response), json_encode($expected));
+         debug($response, $expected);
          return false;
       }
 
       return true;
    },
-   'except' => function () : string {
+   'except' => function (): string {
       return 'Request not matched';
    }
 ];

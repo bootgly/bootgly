@@ -44,6 +44,8 @@ return [
          '1.10-request_as_response-query',
          '1.11-request_as_response-queries',
          '1.12-request_as_response-basic-auth',
+         '1.13-request_as_response-headers',
+         '1.14.1-request_as_response-header-accept_language',
       ],
       'Response/' => [
          '1.1-respond_with_a_simple_hello_world',

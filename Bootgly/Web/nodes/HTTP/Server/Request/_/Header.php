@@ -61,6 +61,10 @@ class Header
 
             return $raw;
          case 'fields':
+            if ($this->built === false) {
+               $this->build();
+            }
+
             return $this->fields;
 
          default:
