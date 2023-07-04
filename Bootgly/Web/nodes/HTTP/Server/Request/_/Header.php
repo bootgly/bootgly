@@ -69,13 +69,13 @@ class Header
       }
    }
 
-   public function get (string $name) : string
+   public function get (string $name) : string|array
    {
       if ($this->built === false) {
          $this->build();
       }
 
-      return (string) @$this->fields[$name] ?? (string) @$this->fields[strtolower($name)] ?? '';
+      return @$this->fields[$name] ?? @$this->fields[strtolower($name)] ?? '';
    }
    public function set (string $raw) : void
    {
@@ -93,8 +93,17 @@ class Header
             #if ( strpos($key, ' ') ) {
             #   return false; // @ 400 Bad Request
             #}
+            if ( isSet($fields[$key]) ) {
+               if ( is_string($fields[$key]) ) {
+                  $fields[$key] = [
+                     $fields[$key]
+                  ];
+               }
 
-            $fields[$key] = $value;
+               $fields[$key][] = $value;
+            } else {
+               $fields[$key] = $value;
+            }
          }
       }
 

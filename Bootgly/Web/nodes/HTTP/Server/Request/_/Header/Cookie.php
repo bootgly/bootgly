@@ -66,7 +66,13 @@ final class Cookie
 
       $replaced = preg_replace('/; ?/', '&', $this->Header->get('Cookie'));
 
-      parse_str($replaced, $this->cookies);
+      $cookies = &$this->cookies;
+
+      foreach ($replaced as $cookie) {
+         parse_str($cookie, $value);
+
+         $cookies[] = $value;
+      }
 
       return true;
    }

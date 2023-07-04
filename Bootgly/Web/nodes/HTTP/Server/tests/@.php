@@ -46,6 +46,7 @@ return [
          '1.12-request_as_response-basic-auth',
          '1.13-request_as_response-headers',
          '1.14.1-request_as_response-header-accept_language',
+         '1.15.1-request_as_response-header-cookies',
       ],
       'Response/' => [
          '1.1-respond_with_a_simple_hello_world',
