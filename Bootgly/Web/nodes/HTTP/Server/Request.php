@@ -49,7 +49,7 @@ use Bootgly\Web\modules\HTTP\Request\Ranging;
  * @property string $query         query=abc&query2=xyz
  * @property array $queries        ['query' => 'abc', 'query2' => 'xyz']
  * ? Meta / Authentication
- * @property string $user          boot
+ * @property string $username      boot
  * @property string $password      gly
  * ? Header
  * @property object Header         ->{'X-Header'}
@@ -224,17 +224,37 @@ class Request
 
             return $this->queries = $queries;
          // ? Meta / Authentication
-         case 'user':
-            return $this->user = $_SERVER['PHP_AUTH_USER'] ?? null;
          case 'username':
-            return $this->user;
+            $authorization = $this->Header->get('Authorization');
+
+            if (strpos($authorization,'Basic') === 0) {
+               $encodedCredentials = substr($authorization, 6);
+               $decodedCredentials = base64_decode($encodedCredentials);
+
+               [$username, $password] = explode(':', $decodedCredentials, 2);
+
+               $this->password = $password;
+
+               return $this->user = $username;
+            }
+
+            return $this->user = null;
 
          case 'password':
-            return $this->password = $_SERVER['PHP_AUTH_PW'] ?? null;
-         case 'pass':
-            return $this->password;
-         case 'pw':
-            return $this->password;
+            $authorization = $this->Header->get('Authorization');
+
+            if (strpos($authorization, 'Basic') === 0) {
+               $encodedCredentials = substr($authorization, 6);
+               $decodedCredentials = base64_decode($encodedCredentials);
+
+               [$username, $password] = explode(':', $decodedCredentials, 2);
+
+               $this->user = $username;
+
+               return $this->password = $password;
+            }
+
+            return $this->password = null;
          // ? Header
          case 'Header':
             return $this->Header = new Header;

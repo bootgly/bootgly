@@ -20,13 +20,13 @@ return static function
 (Request $Request, Response $Response, Router $Router)
 {
    // ! Request examples
-   // ? Meta (first line of HTTP Request Header)
+   // ? Request Meta (first line of HTTP Request Header)
    #$Request->method;    // GET
    #$Request->uri;       // /path/to?query1=value2...
    #$Request->protocol;  // HTTP/1.1
-   // ? Header
+   // ? Request Header
    #$host = $Request->Header->get('Host');
-   // ? Content
+   // ? Request Content
    // @ download
    // Form-data ($_POST, $_FILES)
    #$files = $Request->download('file1'); // $_FILES and $Request->files available too
@@ -38,19 +38,17 @@ return static function
 
 
    // ! Response examples
-   // ? Meta (first line of HTTP Response Header)
+   // ? Response Meta (first line of HTTP Response Header)
    #return $Response(status: 302); // 302 Not Found
 
-   // ? Header
+   // ? Response Header
    #$Response->Header->set('Content-Type', 'text/plain');
 
    // Cookies
    #$Response->Header->Cookie->append('Test', 'value1');
    #$Response->Header->Cookie->append('Test2', 'value2');
 
-   // ? Content
-   // @ output
-   // content
+   // ? Response Content
    $Router('/', function ($Response) {
       return $Response(content: 'Hello World!');
    }, GET);

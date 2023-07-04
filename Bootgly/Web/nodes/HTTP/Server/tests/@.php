@@ -43,6 +43,7 @@ return [
          '1.09-request_as_response-urn',
          '1.10-request_as_response-query',
          '1.11-request_as_response-queries',
+         '1.12-request_as_response-basic-auth',
       ],
       'Response/' => [
          '1.1-respond_with_a_simple_hello_world',
