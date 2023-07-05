@@ -521,7 +521,6 @@ class Request
          }
 
          if ($method === 'POST') {
-            debug('POST');
             $this->Content->raw = substr($buffer, $separatorPosition + 4, $contentLength);
             $this->Content->downloaded = strlen($this->Content->raw);
 

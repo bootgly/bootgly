@@ -48,6 +48,7 @@ return [
          '1.14.1-request_as_response-header-host',
          '1.15.1-request_as_response-header-accept_language',
          '1.16.1-request_as_response-header-cookies',
+         '1.17-request_as_response-content-contents',
       ],
       'Response/' => [
          '1.1-respond_with_a_simple_hello_world',
