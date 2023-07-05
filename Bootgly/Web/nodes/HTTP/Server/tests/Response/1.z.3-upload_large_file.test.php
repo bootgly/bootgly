@@ -18,7 +18,7 @@ return [
 
    // @ simulate
    // Server API
-   'sapi' => function (Request $Request, Response $Response) : Response {
+   'response' => function (Request $Request, Response $Response) : Response {
       $Project = new Project;
       $Project->vendor = 'Bootgly/';
       $Project->container = 'Web/';
@@ -30,7 +30,7 @@ return [
       return $Response('statics/screenshot.gif')->upload(close: false);
    },
    // Client API
-   'capi' => function () {
+   'request' => function () {
       return "GET /test/download/large_file/1 HTTP/1.0\r\n\r\n";
    },
 

@@ -19,7 +19,7 @@ return [
 
    // @ simulate
    // Server API
-   'sapi' => function (Request $Request, Response $Response) : Response {
+   'response' => function (Request $Request, Response $Response) : Response {
       $Project = new Project;
       $Project->vendor = 'Bootgly/';
       $Project->container = 'Web/';
@@ -31,7 +31,7 @@ return [
       return $Response('statics/alphanumeric.txt')->upload(offset: 0, length: 2, close: false);
    },
    // Client API
-   'capi' => function () {
+   'request' => function () {
       // return $Request->get('//header/changed/1');
       return "GET /test/download/file_with_offset_length/1 HTTP/1.0\r\n\r\n";
    },

@@ -16,11 +16,11 @@ return [
 
    // @ simulate
    // Server API
-   'sapi' => function (Request $Request, Response $Response) : Response {
+   'response' => function (Request $Request, Response $Response) : Response {
       return $Response(status: 302); // 302 Not Found
    },
    // Client API
-   'capi' => function () {
+   'request' => function () {
       // return $Request->get('/status');
       return "GET /status HTTP/1.0\r\n\r\n";
    },

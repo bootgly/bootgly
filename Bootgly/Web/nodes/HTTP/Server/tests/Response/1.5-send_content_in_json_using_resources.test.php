@@ -17,11 +17,11 @@ return [
 
    // @ simulate
    // Server API
-   'sapi' => function (Request $Request, Response $Response) : Response {
+   'response' => function (Request $Request, Response $Response) : Response {
       return $Response->Json->send(['Hello' => 'World!']); // JSON
    },
    // Client API
-   'capi' => function () {
+   'request' => function () {
       // return $Request->get('//header/changed/1');
       return "GET /test/content/json/1 HTTP/1.0\r\n\r\n";
    },

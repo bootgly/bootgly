@@ -13,14 +13,14 @@ return [
 
    // @ simulate
    // Server API
-   'sapi' => function (Request $Request, Response $Response) : Response {
+   'response' => function (Request $Request, Response $Response) : Response {
       $Response->Header->Cookie->append('Test1', 'value1');
       $Response->Header->Cookie->append('Test2', 'value2');
 
       return $Response(content: 'Hello World!');
    },
    // Client API
-   'capi' => function () {
+   'request' => function () {
       // return $Request->get('//header/changed/1');
       return "GET /header/cookies/1 HTTP/1.0\r\n\r\n";
    },

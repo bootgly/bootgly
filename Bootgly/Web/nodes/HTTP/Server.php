@@ -170,7 +170,7 @@ class Server extends TCP\Server implements HTTP
                $responseLength = @$spec['response.length'] ?? null;
                // ! Client
                // ? Request
-               $requestData = $spec['capi']($TCPClient->host . ':' . $TCPClient->port);
+               $requestData = $spec['request']($TCPClient->host . ':' . $TCPClient->port);
                $requestLength = strlen($requestData);
                // @ Send Request to Server
                $Connection::$output = $requestData;

@@ -45,7 +45,8 @@ class Server
 
             if (count(self::$Tests[$base]) > 0) {
                $test = array_shift(self::$Tests[$base]);
-               self::$Handler = $test['sapi'];
+               // TODO pass name by arg
+               self::$Handler = $test['response'];
             }
 
             return true;

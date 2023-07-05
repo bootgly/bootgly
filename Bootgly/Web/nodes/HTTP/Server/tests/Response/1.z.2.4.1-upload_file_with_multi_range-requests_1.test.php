@@ -19,7 +19,7 @@ return [
 
    // @ simulate
    // Server API
-   'sapi' => function (Request $Request, Response $Response) : Response {
+   'response' => function (Request $Request, Response $Response) : Response {
       $Project = new Project;
       $Project->vendor = 'Bootgly/';
       $Project->container = 'Web/';
@@ -31,7 +31,7 @@ return [
       return $Response('statics/alphanumeric.txt')->upload(close: false);
    },
    // Client API
-   'capi' => function ($host) {
+   'request' => function ($host) {
       $raw = <<<HTTP_RAW
       GET /test/download/file_with_range/multi_range/1 HTTP/1.1\r
       Host: {$host}\r

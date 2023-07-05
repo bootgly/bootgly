@@ -13,11 +13,11 @@ return [
 
    // @ simulate
    // Server API
-   'sapi' => function (Request $Request, Response $Response) : Response {
+   'response' => function (Request $Request, Response $Response) : Response {
       return $Response(status: 500);
    },
    // Client API
-   'capi' => function () {
+   'request' => function () {
       // return $Request->get('/status');
       return "GET /status/500 HTTP/1.0\r\n\r\n";
    },

@@ -17,7 +17,7 @@ return [
 
    // @ simulate
    // Server API
-   'sapi' => function (Request $Request, Response $Response) : Response {
+   'response' => function (Request $Request, Response $Response) : Response {
       $Project = new Project;
       $Project->vendor = 'Bootgly/';
       $Project->container = 'Web/';
@@ -29,7 +29,7 @@ return [
       return $Response->redirect('https://docs.bootgly.com/', 302);
    },
    // Client API
-   'capi' => function () {
+   'request' => function () {
       // return $Request->get('/test/auth/1');
       return "GET /test/redirect/1 HTTP/1.0\r\n\r\n";
    },

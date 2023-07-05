@@ -13,12 +13,12 @@ return [
 
    // @ simulate
    // Client API
-   'capi' => function () {
+   'request' => function () {
       // return $Request->get('/');
       return "GET / HTTP/1.0\r\n\r\n";
    },
    // Server API
-   'sapi' => function (Request $Request, Response $Response) : Response {
+   'response' => function (Request $Request, Response $Response) : Response {
       $port = $Request->port;
       return $Response(content: $port);
    },

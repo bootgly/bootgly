@@ -16,7 +16,7 @@ return [
 
    // @ simulate
    // Client API
-   'capi' => function () {
+   'request' => function () {
       // ...
       return <<<HTTP
       GET / HTTP/1.1\r
@@ -27,7 +27,7 @@ return [
       HTTP;
    },
    // Server API
-   'sapi' => function (Request $Request, Response $Response) : Response {
+   'response' => function (Request $Request, Response $Response) : Response {
       $username = $Request->username;
       $password = $Request->password;
 

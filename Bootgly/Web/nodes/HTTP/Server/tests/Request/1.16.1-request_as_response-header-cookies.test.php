@@ -14,7 +14,7 @@ return [
 
    // @ simulate
    // Client API
-   'capi' => function () {
+   'request' => function () {
       // ...
       return
       <<<HTTP
@@ -27,7 +27,7 @@ return [
       HTTP;
    },
    // Server API
-   'sapi' => function (Request $Request, Response $Response): Response {
+   'response' => function (Request $Request, Response $Response): Response {
       $cookies = $Request->cookies;
       return $Response->Json->send($cookies);
    },
