@@ -115,6 +115,7 @@ class Request
       // ... dynamically
       $_POST = [];
       $_FILES = [];
+      $_SERVER = [];
 
       // * Meta
       // ...
