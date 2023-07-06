@@ -24,7 +24,6 @@ class Content
    public ? int $length;
    public null|int|false $position;
    public ? int $downloaded;
-   public bool $waiting;
 
 
    public function __construct ()
@@ -40,6 +39,5 @@ class Content
       $this->length = null;
       $this->position = null;
       $this->downloaded = null;
-      $this->waiting = false;
    }
 }

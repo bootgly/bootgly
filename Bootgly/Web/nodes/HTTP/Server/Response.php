@@ -159,7 +159,7 @@ class Response
 
             return $this->render($data, $callback);
          default:
-            return $this->$name(...$arguments);
+            return null;
       }
    }
    public function __invoke (

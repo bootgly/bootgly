@@ -50,9 +50,6 @@ use Bootgly\Web\modules\HTTP\Request\Ranging;
  * @property object $Query
  * @property string $query         query=abc&query2=xyz
  * @property array $queries        ['query' => 'abc', 'query2' => 'xyz']
- * ? Meta / Authentication
- * @property string $username      boot
- * @property string $password      gly
  * ? Header
  * @property object Header         ->{'X-Header'}
  * @ Host
@@ -60,6 +57,9 @@ use Bootgly\Web\modules\HTTP\Request\Ranging;
  * @property string $domain        bootgly.com
  * @property string $subdomain     v1.lab
  * @property array $subdomains     ['lab', 'v1']
+ * @ Authorization (Basic)
+ * @property string $username      boot
+ * @property string $password      gly
  * @ Accept-Language
  * @property string $language      pt-BR
  * ? Header / Cookie
@@ -67,19 +67,22 @@ use Bootgly\Web\modules\HTTP\Request\Ranging;
  * @property array $cookies
  * ? Content
  * @property object Content
+ * 
  * @property string $input
+ * @property array $inputs
+ * 
  * @property array $post
+ * 
  * @property array $files
- * ? Content / Downloader
- * @property object Downloader
  *
  *
  * * Meta
  * @property string $on            2020-03-10 (Y-m-d)
  * @property string $at            17:16:18 (H:i:s)
- * @property int $timestamp        1586496524
+ * @property int $time             1586496524
  *
  * @property bool $secure          true
+ * 
  * @property bool $fresh           true
  * @property bool $stale           false
  */
@@ -98,8 +101,10 @@ class Request
    // ...
 
    // * Meta
+   public readonly string $on;
+   public readonly string $at;
+   public readonly int $time;
    // ...
-   // public string $length;
 
    private Downloader $Downloader;
 
@@ -118,14 +123,17 @@ class Request
       $_SERVER = [];
 
       // * Meta
-      // ...
+      $this->on = date("Y-m-d");
+      $this->at = date("H:i:s");
+      $this->time = time();
+
 
       $this->Downloader = new Downloader($this);
    }
 
    public function __get ($name)
    {
-      // TODO move to @/resources
+      // TODO move to @/resources?
       switch ($name) {
          // * Config
          case 'base':
@@ -209,8 +217,8 @@ class Request
             return new Path($this->locator);
          case 'paths':
             return $this->Path->paths;
-         // TODO dir, directory, Dir, Directories, ... ?
-         // TODO file, File ?
+            // TODO dir, directory, Dir, Directories, ... ?
+            // TODO file, File ?
          // @ Query
          case 'query':
             $uri = $this->uri;
@@ -227,38 +235,6 @@ class Request
             parse_str($this->query, $queries);
 
             return $this->queries = $queries;
-         // @ autenthication
-         case 'username':
-            $authorization = $this->Header->get('Authorization');
-
-            if (strpos($authorization,'Basic') === 0) {
-               $encodedCredentials = substr($authorization, 6);
-               $decodedCredentials = base64_decode($encodedCredentials);
-
-               [$username, $password] = explode(':', $decodedCredentials, 2);
-
-               $this->password = $password;
-
-               return $this->user = $username;
-            }
-
-            return $this->user = null;
-
-         case 'password':
-            $authorization = $this->Header->get('Authorization');
-
-            if (strpos($authorization, 'Basic') === 0) {
-               $encodedCredentials = substr($authorization, 6);
-               $decodedCredentials = base64_decode($encodedCredentials);
-
-               [$username, $password] = explode(':', $decodedCredentials, 2);
-
-               $this->user = $username;
-
-               return $this->password = $password;
-            }
-
-            return $this->password = null;
          // ? Header
          case 'Header':
             return $this->Header = new Header;
@@ -286,8 +262,42 @@ class Request
             return $this->subdomain = rtrim(strstr($this->host, $this->domain, true), '.');
          case 'subdomains':
             return $this->subdomains = explode('.', $this->subdomain);
-         // TODO Domain with __String/Domain
-         // TODO Domain->sub, Domain->second (second-level), Domain->top (top-level), Domain->root, tld, ...
+            // TODO Domain with __String/Domain
+            // TODO Domain->sub, Domain->second (second-level), Domain->top (top-level), Domain->root, tld, ...
+
+         // @ Authorization (Basic)
+         case 'username':
+            $authorization = $this->Header->get('Authorization');
+
+            if (strpos($authorization, 'Basic') === 0) {
+               $encodedCredentials = substr($authorization, 6);
+               $decodedCredentials = base64_decode($encodedCredentials);
+
+               [$username, $password] = explode(':', $decodedCredentials, 2);
+
+               $this->password = $password;
+
+               return $this->user = $username;
+            }
+
+            return $this->user = null;
+
+         case 'password':
+            $authorization = $this->Header->get('Authorization');
+
+            if (strpos($authorization, 'Basic') === 0) {
+               $encodedCredentials = substr($authorization, 6);
+               $decodedCredentials = base64_decode($encodedCredentials);
+
+               [$username, $password] = explode(':', $decodedCredentials, 2);
+
+               $this->user = $username;
+
+               return $this->password = $password;
+            }
+
+            return $this->password = null;
+
          // @ Accept-Language
          case 'language':
             $httpAcceptLanguage = $this->Header->get('Accept-Language');
@@ -325,7 +335,9 @@ class Request
          // ? Content
          case 'Content':
             return $this->Content = new Content;
+
          case 'contents':
+         case 'body':
          case 'input':
             return $this->Content->input;
          case 'inputs':
@@ -335,16 +347,11 @@ class Request
             return $_POST;
          case 'posts':
             return json_encode($this->post);
+
          case 'files':
             return $_FILES;
-         // * Meta
-         case 'on':
-            return $this->on = date("Y-m-d");
-         case 'at':
-            return $this->at = date("H:i:s");
-         case 'timestamp':
-            return $this->time = $_SERVER['REQUEST_TIME'];
 
+         // * Meta
          case 'secure':
             return $this->scheme === 'https';
 
@@ -430,7 +437,7 @@ class Request
 
             return true;
          case 'stale':
-            return !$this->fresh;
+            return ! $this->fresh;
       }
    }
    public function __set ($name, $value)
@@ -521,7 +528,7 @@ class Request
             return 0;
          }
 
-         if ($method === 'POST' || $method === 'PUT' || $method === 'PATCH') {
+         if ($contentLength > 0) {
             $this->Content->raw = substr($buffer, $separatorPosition + 4, $contentLength);
             $this->Content->downloaded = strlen($this->Content->raw);
 

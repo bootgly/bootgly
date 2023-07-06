@@ -11,9 +11,6 @@
 namespace Bootgly\Web\nodes\HTTP\Server\Request\_;
 
 
-use Bootgly\Web\nodes\HTTP\Server\Request\_\Meta\Authentication;
-
-
 class Meta // TODO move/refactor
 {
    // * Config
@@ -22,9 +19,9 @@ class Meta // TODO move/refactor
    // * Data
    public string $raw;
 
-   public string $method;
-   public string $uri; // @ Resource
-   public string $protocol;
+   public ? string $method;
+   public ? string $uri; // @ Resource
+   public ? string $protocol;
 
    // * Meta
    public ? int $length;
@@ -35,8 +32,6 @@ class Meta // TODO move/refactor
    // @ Path
    // @ Query
 
-   #public Authentication $Authentication;
-
 
    public function __construct ()
    {
@@ -46,9 +41,9 @@ class Meta // TODO move/refactor
       // * Data
       $this->raw = '';
 
-      $this->method = '';
-      $this->uri = '';
-      $this->protocol = '';
+      $this->method = &$_SERVER['REQUEST_METHOD'];
+      $this->uri = &$_SERVER['REQUEST_URI'];
+      $this->protocol = &$_SERVER['SERVER_PROTOCOL'];
 
       // * Meta
       $this->length = null;

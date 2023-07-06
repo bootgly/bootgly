@@ -11,17 +11,14 @@ use Bootgly\Web\nodes\HTTP\Server\Response;
 
 return [
    // @ configure
-   'separators' => [
-      'separator' => 'Request Content'
-   ],
-   'describe' => 'It should process request body when HTTP verb is POST',
+   'describe' => 'It should process request body when HTTP verb is GET?!',
    // @ simulate
    // Client API
    'request' => function () {
       // ...
       return
       <<<HTTP
-      POST / HTTP/1.1\r
+      GET / HTTP/1.1\r
       User-Agent: Bootgly/TCP-Server\r
       Content-Type: text/plain\r
       Content-Length: 7\r
