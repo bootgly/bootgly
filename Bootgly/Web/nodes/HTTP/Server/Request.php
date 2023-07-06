@@ -520,7 +520,7 @@ class Request
             return 0;
          }
 
-         if ($method === 'POST') {
+         if ($method === 'POST' || $method === 'PUT' || $method === 'PATCH') {
             $this->Content->raw = substr($buffer, $separatorPosition + 4, $contentLength);
             $this->Content->downloaded = strlen($this->Content->raw);
 

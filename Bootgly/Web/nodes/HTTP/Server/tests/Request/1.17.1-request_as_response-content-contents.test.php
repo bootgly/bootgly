@@ -11,7 +11,9 @@ use Bootgly\Web\nodes\HTTP\Server\Response;
 
 return [
    // @ configure
-   #'response.length' => 7,
+   'separators' => [
+      'separator' => 'Request Content'
+   ],
    // @ simulate
    // Client API
    'request' => function () {
