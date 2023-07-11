@@ -193,8 +193,6 @@ class Process
    {
       $this->log("forking $workers workers... ", self::LOG_INFO_LEVEL);
 
-      $script = BOOTGLY_WORKABLES_DIR . $_SERVER['PHP_SELF'];
-
       for ($i = 0; $i < $workers; $i++) {
          $pid = pcntl_fork();
 
@@ -217,7 +215,7 @@ class Process
             $this->Client->stop();
             #exit(1);
          } else if ($pid > 0) { // Master process
-            cli_set_process_title("BootglyWebClient: master process ($script)");
+            cli_set_process_title("BootglyWebClient: master process");
          } else if ($pid === -1) {
             die('Could not fork process!');
          }
