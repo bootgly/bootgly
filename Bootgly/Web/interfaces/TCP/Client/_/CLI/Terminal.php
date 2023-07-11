@@ -61,7 +61,7 @@ class Terminal extends CLI\Terminal
          'help' =>
             $this->help() && true,
 
-         default => passthru($command) !== false && true
+         default => true
       };
    }
    public function help ()

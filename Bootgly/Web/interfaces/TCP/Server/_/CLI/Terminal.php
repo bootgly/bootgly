@@ -141,7 +141,7 @@ class Terminal extends CLI\Terminal
          'help' =>
             $this->help() && true,
 
-         default => passthru($command) !== false && true
+         default => true
       };
    }
    public function saveCommand (string $command, string $context = '') : bool
