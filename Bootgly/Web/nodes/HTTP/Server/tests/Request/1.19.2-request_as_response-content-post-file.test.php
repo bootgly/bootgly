@@ -14,7 +14,7 @@ return [
    'separators' => [
       'separator' => true
    ],
-   'describe' => 'It should process request post file (1 file - 0 field)',
+   'describe' => 'It should process request post file (1 file - 1 field)',
    // @ simulate
    // Client API
    'request' => function () {
@@ -26,20 +26,27 @@ return [
       User-Agent: insomnia/2023.4.0\r
       Content-Type: multipart/form-data; boundary=X-INSOMNIA-BOUNDARY\r
       Accept: */*\r
-      Content-Length: 204\r
+      Content-Length: 283\r
       \r
       --X-INSOMNIA-BOUNDARY\r
       Content-Disposition: form-data; name="test1"; filename="payload1.txt"\r
       Content-Type: text/plain\r
       \r
       Test #1 - Testing upload of file in Bootgly CLI Server!\r
+      --X-INSOMNIA-BOUNDARY\r
+      Content-Disposition: form-data; name="test2"\r
+      \r
+      value2\r
       --X-INSOMNIA-BOUNDARY--\r\n
       HTTP;
    },
    // Server API
    'response' => function (Request $Request, Response $Response): Response {
       $Request->download();
-      return $Response->Json->send($Request->files);
+
+      return $Response->Json->send(
+         $Request->files + $Request->post
+      );
    },
 
    // @ test
@@ -61,7 +68,7 @@ return [
       Content-Type: application/json\r
       Content-Length: $contentLength\r
       \r
-      {"test1":{"name":"payload1.txt","size":55,"error":0,"type":"text\/plain"}}
+      {"test1":{"name":"payload1.txt","size":55,"error":0,"type":"text\/plain"},"test2":"value2"}
       HTML_RAW;
 
       // @ Assert
