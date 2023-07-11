@@ -49,6 +49,9 @@ return [
       $body = json_decode($parts[1], true);
       unset($body['test1']['tmp_name']);
       $body = json_encode($body);
+      // -
+      $_ = strpos($header, "\r\nContent-Length: ");
+      $contentLength = substr($header, $_ + 18, 10);
 
       $response = $header . "\r\n\r\n" . $body;
       // ---
@@ -56,7 +59,7 @@ return [
       HTTP/1.1 200 OK\r
       Server: Bootgly\r
       Content-Type: application/json\r
-      Content-Length: 169\r
+      Content-Length: $contentLength\r
       \r
       {"test1":{"name":"payload1.txt","size":55,"error":0,"type":"text\/plain"}}
       HTML_RAW;
