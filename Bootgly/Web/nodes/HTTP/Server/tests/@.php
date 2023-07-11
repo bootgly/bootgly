@@ -52,9 +52,10 @@ return [
          '1.17.2-request_as_response-content-contents',
          '1.17.3-request_as_response-content-contents',
          '1.17.4-request_as_response-content-contents',
-         '1.18-request_as_response-on',
-         '1.19-request_as_response-at',
-         '1.20-request_as_response-time',
+         '1.18.1-request_as_response-content-post',
+         '1.20-request_as_response-on',
+         '1.21-request_as_response-at',
+         '1.22-request_as_response-time',
       ],
       'Response/' => [
          '1.1-respond_with_a_simple_hello_world',

@@ -17,7 +17,7 @@ return [
       // ...
       return <<<HTTP
       GET / HTTP/1.1\r
-      Accept-Language: en-US,en;q=0.9\r
+      Accept-Language: en-US, fr, es;q=0.8, de;q=0.5, pt-BR;q=0.2\r
       \r
 
       HTTP;

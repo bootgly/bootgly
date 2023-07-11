@@ -93,6 +93,10 @@ class Request
    use Ranging;
 
 
+   #public Meta $Meta;
+   #public Header $Header;
+   #public Content $Content;
+
    // * Config
    private string $base;
 
@@ -300,6 +304,7 @@ class Request
 
          // @ Accept-Language
          case 'language':
+            // TODO move to method?
             $httpAcceptLanguage = $this->Header->get('Accept-Language');
 
             if ($httpAcceptLanguage === null) {
