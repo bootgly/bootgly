@@ -585,7 +585,10 @@ class Request
    public function download (? string $key = null) : array|null
    {
       if ( empty($this->files) ) {
-         $boundary = $this->Content->parse('Form-data', $this->Header->get('Content-Type'));
+         $boundary = $this->Content->parse(
+            content: 'Form-data',
+            type: $this->Header->get('Content-Type')
+         );
 
          if ($boundary) {
             $this->Downloader->downloading($boundary);
@@ -605,7 +608,10 @@ class Request
    public function receive (? string $key = null) : array|null
    {
       if ( empty($this->post) ) {
-         $parsed = $this->Content->parse('raw', $this->Header->get('Content-Type'));
+         $parsed = $this->Content->parse(
+            content: 'raw',
+            type: $this->Header->get('Content-Type')
+         );
 
          if ($parsed) {
             $this->Downloader->downloading($parsed);
