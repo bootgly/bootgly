@@ -371,21 +371,21 @@ class Request
             //    return false;
             // }
 
-            $modifiedSince = $this->Header->get('if-modified-since');
-            $noneMatch = $this->Header->get('if-none-match');
+            $modifiedSince = $this->Header->get('If-Modified-Since');
+            $noneMatch = $this->Header->get('If-None-Match');
             if (!$modifiedSince && !$noneMatch) {
                return false;
             }
 
             // @ cache-control
-            $cacheControl = $this->Header->get('cache-control');
+            $cacheControl = $this->Header->get('Cache-Control');
             if ($cacheControl && preg_match('/(?:^|,)\s*?no-cache\s*?(?:,|$)/', $cacheControl)) {
                return false;
             }
 
             // @ if-none-match
             if ($noneMatch && $noneMatch !== '*') {
-               $eTag = Server::$Response->Header->get('etag');
+               $eTag = Server::$Response->Header->get('Etag');
 
                if (!$eTag) {
                   return false;
@@ -432,7 +432,8 @@ class Request
 
             // @ if-modified-since
             if ($modifiedSince) {
-               $lastModified = Server::$Response->Header->get('last-modified');
+               $lastModified = Server::$Response->Header->get('Last-Modified');
+
                $modifiedStale = !$lastModified && (strtotime($lastModified) < strtotime($modifiedSince));
 
                if ($modifiedStale) {
