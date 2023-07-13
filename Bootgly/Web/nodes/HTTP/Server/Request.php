@@ -371,9 +371,9 @@ class Request
             //    return false;
             // }
 
-            $modifiedSince = $this->Header->get('If-Modified-Since');
-            $noneMatch = $this->Header->get('If-None-Match');
-            if (!$modifiedSince && !$noneMatch) {
+            $ifModifiedSince = $this->Header->get('If-Modified-Since');
+            $ifNoneMatch = $this->Header->get('If-None-Match');
+            if (!$ifModifiedSince && !$ifNoneMatch) {
                return false;
             }
 
@@ -384,7 +384,7 @@ class Request
             }
 
             // @ if-none-match
-            if ($noneMatch && $noneMatch !== '*') {
+            if ($ifNoneMatch && $ifNoneMatch !== '*') {
                $eTag = Server::$Response->Header->get('Etag');
 
                if (!$eTag) {
@@ -398,15 +398,15 @@ class Request
                $start = 0;
                $end = 0;
                // gather tokens
-               for ($i = 0; $i < strlen($noneMatch); $i++) {
-                  switch ($noneMatch[$i]) {
+               for ($i = 0; $i < strlen($ifNoneMatch); $i++) {
+                  switch ($ifNoneMatch[$i]) {
                      case ' ':
                         if ($start === $end) {
                            $start = $end = $i + 1;
                         }
                         break;
                      case ',':
-                        $matches[] = substr($noneMatch, $start, $end);
+                        $matches[] = substr($ifNoneMatch, $start, $end);
                         $start = $end = $i + 1;
                         break;
                      default:
@@ -415,7 +415,7 @@ class Request
                      }
                }
                // final token
-               $matches[] = substr($noneMatch, $start, $end);
+               $matches[] = substr($ifNoneMatch, $start, $end);
 
                for ($i = 0; $i < count($matches); $i++) {
                   $match = $matches[$i];
@@ -431,10 +431,10 @@ class Request
             }
 
             // @ if-modified-since
-            if ($modifiedSince) {
+            if ($ifModifiedSince) {
                $lastModified = Server::$Response->Header->get('Last-Modified');
 
-               $modifiedStale = !$lastModified && (strtotime($lastModified) < strtotime($modifiedSince));
+               $modifiedStale = $lastModified !== '' && (strtotime($lastModified) < strtotime($ifModifiedSince));
 
                if ($modifiedStale) {
                   return false;
