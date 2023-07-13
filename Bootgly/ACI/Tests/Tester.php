@@ -133,25 +133,6 @@ class Tester extends Tests
       }
    }
 
-   public static function list (array $tests, $prefix = '') : array
-   {
-      $result = [];
-
-      foreach ($tests as $key => $value) {
-         if ( is_array($value) ) {
-            $newPrefix = $prefix . $key;
-            $result = array_merge(
-               $result,
-               self::list($value, $newPrefix)
-            );
-         } else {
-            $result[] = $prefix . $value;
-         }
-      }
-
-      return $result;
-   }
-
    public function test (? array &$specifications) : Test|false
    {
       if ( $specifications === null || empty($specifications) ) {

@@ -12,6 +12,7 @@ namespace Bootgly\Web\nodes\HTTP;
 
 
 use Bootgly\ACI\Logs\Logger;
+use Bootgly\ACI\Tests;
 use Bootgly\ACI\Tests\Tester;
 use Bootgly\API\Project;
 use Bootgly\API\Server as SAPI;
@@ -94,7 +95,7 @@ class Server extends TCP\Server implements HTTP
             clearstatcache(false, $loader);
 
             $files = (@require $loader)['files'];
-            SAPI::$tests[self::class] = Tester::list($files);
+            SAPI::$tests[self::class] = Tests::list($files);
             // * Meta
             SAPI::$Tests[self::class] = [];
 
