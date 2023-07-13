@@ -31,7 +31,7 @@ class _Encoder extends Encoders
       // @ Perform test mode
       // TODO move to another encoder?
       if (SAPI::$mode === SAPI::MODE_TEST) {
-         $Response = new Response;
+         Server::$Response = $Response = new Response;
          $Response->Header->preset('Date', null);
 
          SAPI::boot(reset: true, base: Server::class);
