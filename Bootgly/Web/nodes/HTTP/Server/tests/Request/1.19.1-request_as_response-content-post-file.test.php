@@ -14,7 +14,7 @@ return [
    'separators' => [
       'separator' => true
    ],
-   'describe' => 'It should process request post file (1 file - 0 field)',
+   'describe' => 'It should process request post file (1 file, 0 field)',
    // @ simulate
    // Client API
    'request' => function () {

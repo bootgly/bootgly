@@ -14,7 +14,7 @@ return [
    'separators' => [
       'separator' => true
    ],
-   'describe' => 'It should process request $_POST / $_FILE (1 file, 1 field)',
+   'describe' => 'It should process request $_POST / $_FILE (2 files, 1 field)',
    // @ simulate
    // Client API
    'request' => function () {
@@ -26,7 +26,7 @@ return [
       User-Agent: insomnia/2023.4.0\r
       Content-Type: multipart/form-data; boundary=X-INSOMNIA-BOUNDARY\r
       Accept: */*\r
-      Content-Length: 283\r
+      Content-Length: 459\r
       \r
       --X-INSOMNIA-BOUNDARY\r
       Content-Disposition: form-data; name="test1"; filename="payload1.txt"\r
@@ -37,6 +37,11 @@ return [
       Content-Disposition: form-data; name="test2"\r
       \r
       value2\r
+      --X-INSOMNIA-BOUNDARY\r
+      Content-Disposition: form-data; name="test3"; filename="payload2.txt"\r
+      Content-Type: text/plain\r
+      \r
+      #2 Test - Can Bootgly CLI Server download this file?\r
       --X-INSOMNIA-BOUNDARY--\r\n
       HTTP;
    },
@@ -55,6 +60,7 @@ return [
       $header = $parts[0];
       $body = json_decode($parts[1], true);
       unset($body['test1']['tmp_name']);
+      unset($body['test3']['tmp_name']);
       $body = json_encode($body);
       // -
       $_ = strpos($header, "\r\nContent-Length: ");
@@ -68,7 +74,7 @@ return [
       Content-Type: application/json\r
       Content-Length: $contentLength\r
       \r
-      {"test1":{"name":"payload1.txt","size":55,"error":0,"type":"text\/plain"},"test2":"value2"}
+      {"test1":{"name":"payload1.txt","size":55,"error":0,"type":"text\/plain"},"test3":{"name":"payload2.txt","size":52,"error":0,"type":"text\/plain"},"test2":"value2"}
       HTML_RAW;
 
       // @ Assert
