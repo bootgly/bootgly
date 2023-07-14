@@ -64,6 +64,8 @@ return [
          '2.1.1-request_cache-if-modified-since',
          '2.1.2-request_cache-if-modified-since',
          '2.1.3-request_cache-if-modified-since',
+         '2.1.4-request_cache-if-modified-since',
+         '2.1.5-request_cache-if-modified-since',
       ],
       'Response/' => [
          '1.1-respond_with_a_simple_hello_world',

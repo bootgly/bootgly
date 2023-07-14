@@ -11,7 +11,7 @@ use Bootgly\Web\nodes\HTTP\Server\Response;
 
 return [
    // @ configure
-   'describe' => 'It should be stale when Last-Modified is missing',
+   'describe' => 'It should be stale with invalid If-Modified-Since',
    // @ simulate
    // Client API
    'request' => function () {
@@ -21,14 +21,14 @@ return [
       GET / HTTP/1.1\r
       Host: lab.bootgly.com:8080\r
       User-Agent: insomnia/2023.4.0\r
-      If-Modified-Since: Fri, 14 Jul 2023 11:00:00 GMT\r
+      If-Modified-Since: foo\r
       Accept: */*\r
       \r\n\r\n
       HTTP;
    },
    // Server API
    'response' => function (Request $Request, Response $Response) : Response {
-      #$Response->Header->set('Last-Modified', 'Fri, 14 Jul 2023 10:00:00 GMT');
+      $Response->Header->set('Last-Modified', 'Fri, 14 Jul 2023 10:00:00 GMT');
 
       if ($Request->fresh) {
          return $Response(status: 304);
@@ -42,6 +42,7 @@ return [
       $expected = <<<HTML_RAW
       HTTP/1.1 200 OK\r
       Server: Bootgly\r
+      Last-Modified: Fri, 14 Jul 2023 10:00:00 GMT\r
       Content-Length: 4\r
       Content-Type: text/html; charset=UTF-8\r
       \r
