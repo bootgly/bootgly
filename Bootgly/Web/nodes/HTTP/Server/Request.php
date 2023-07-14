@@ -11,6 +11,7 @@
 namespace Bootgly\Web\nodes\HTTP\Server;
 
 
+use Bootgly\ACI\Debugger;
 use Bootgly\ABI\__String\Path;
 
 use Bootgly\Web\interfaces\TCP\Server\Packages;
@@ -385,7 +386,7 @@ class Request
 
             // @ if-none-match
             if ($ifNoneMatch && $ifNoneMatch !== '*') {
-               $eTag = Server::$Response->Header->get('Etag');
+               $eTag = Server::$Response->Header->get('ETag');
 
                if (!$eTag) {
                   return false;
@@ -434,7 +435,11 @@ class Request
             if ($ifModifiedSince) {
                $lastModified = Server::$Response->Header->get('Last-Modified');
 
-               $modifiedStale = $lastModified !== '' && (strtotime($lastModified) < strtotime($ifModifiedSince));
+               if ($lastModified === '') {
+                  return false;
+               }
+
+               $modifiedStale = strtotime($lastModified) > strtotime($ifModifiedSince);
 
                if ($modifiedStale) {
                   return false;
