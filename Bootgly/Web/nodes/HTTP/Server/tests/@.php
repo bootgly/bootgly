@@ -61,8 +61,9 @@ return [
          '1.20-request_as_response-on',
          '1.21-request_as_response-at',
          '1.22-request_as_response-time',
-         '1.23.1-request_fresh-if-modified-since',
-         '1.23.2-request_fresh-if-modified-since',
+         '2.1.1-request_cache-if-modified-since',
+         '2.1.2-request_cache-if-modified-since',
+         '2.1.3-request_cache-if-modified-since',
       ],
       'Response/' => [
          '1.1-respond_with_a_simple_hello_world',
