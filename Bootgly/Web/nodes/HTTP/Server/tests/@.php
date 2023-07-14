@@ -71,6 +71,9 @@ return [
          '2.2.3-request_cache-if-none-match',
          '2.2.4.1-request_cache-if-none-match-etag_weak',
          '2.2.4.2-request_cache-if-none-match-etag_weak',
+         '2.2.5-request_cache-if-none-match-etag_strong',
+         '2.2.6.1-request_cache-if-none-match-catch_all',
+         '2.2.6.2-request_cache-if-none-match-catch_all',
       ],
       'Response/' => [
          '1.1-respond_with_a_simple_hello_world',
