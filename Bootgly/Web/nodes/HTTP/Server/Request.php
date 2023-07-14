@@ -366,12 +366,6 @@ class Request
                return false;
             }
 
-            // TODO 2xx or 304 as per rfc2616 14.26 ?
-            // $status = Server::$Response->code;
-            // if ( ($status >= 200 && $status < 300) || $status === 304) {
-            //    return false;
-            // }
-
             $ifModifiedSince = $this->Header->get('If-Modified-Since');
             $ifNoneMatch = $this->Header->get('If-None-Match');
             if (!$ifModifiedSince && !$ifNoneMatch) {

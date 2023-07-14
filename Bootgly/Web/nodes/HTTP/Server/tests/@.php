@@ -74,6 +74,10 @@ return [
          '2.2.5-request_cache-if-none-match-etag_strong',
          '2.2.6.1-request_cache-if-none-match-catch_all',
          '2.2.6.2-request_cache-if-none-match-catch_all',
+         '2.3.1-request_cache-if-none-match-if-modified-since',
+         '2.3.2-request_cache-if-none-match-if-modified-since',
+         '2.3.3-request_cache-if-none-match-if-modified-since',
+         '2.3.4-request_cache-if-none-match-if-modified-since',
       ],
       'Response/' => [
          '1.1-respond_with_a_simple_hello_world',
