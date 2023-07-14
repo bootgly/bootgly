@@ -398,7 +398,7 @@ class Request
                $matches = [];
                $start = 0;
                $end = 0;
-               // gather tokens
+               // @ Gather tokens
                for ($i = 0; $i < strlen($ifNoneMatch); $i++) {
                   switch ($ifNoneMatch[$i]) {
                      case ' ':

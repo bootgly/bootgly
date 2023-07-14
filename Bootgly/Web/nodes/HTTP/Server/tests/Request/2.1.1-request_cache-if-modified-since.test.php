@@ -12,7 +12,7 @@ use Bootgly\Web\nodes\HTTP\Server\Response;
 return [
    // @ configure
    'separators' => [
-      'left' => 'HTTP/1.1 Caching Specification'
+      'left' => 'HTTP/1.1 Caching Specification (RFC 7234)'
    ],
    'describe' => 'It should return stale when modified since the date',
    // @ simulate

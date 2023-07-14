@@ -11,7 +11,7 @@ use Bootgly\Web\nodes\HTTP\Server\Response;
 
 return [
    // @ configure
-   'describe' => 'It should be fresh when ETags match',
+   'describe' => 'It should be stale when ETags mismatch',
    // @ simulate
    // Client API
    'request' => function () {
@@ -28,7 +28,7 @@ return [
    },
    // Server API
    'response' => function (Request $Request, Response $Response) : Response {
-      $Response->Header->set('ETag', '"foo"');
+      $Response->Header->set('ETag', '"bar"');
 
       if ($Request->fresh) {
          return $Response(status: 304);
@@ -40,13 +40,13 @@ return [
    // @ test
    'test' => function ($response): bool {
       $expected = <<<HTML_RAW
-      HTTP/1.1 304 Not Modified\r
+      HTTP/1.1 200 OK\r
       Server: Bootgly\r
-      ETag: "foo"\r
-      Content-Length: 0\r
+      ETag: "bar"\r
+      Content-Length: 4\r
       Content-Type: text/html; charset=UTF-8\r
       \r
-      
+      test
       HTML_RAW;
 
       // @ Assert
