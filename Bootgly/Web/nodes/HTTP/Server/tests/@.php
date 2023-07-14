@@ -78,6 +78,7 @@ return [
          '2.3.2-request_cache-if-none-match-if-modified-since',
          '2.3.3-request_cache-if-none-match-if-modified-since',
          '2.3.4-request_cache-if-none-match-if-modified-since',
+         '2.4-request_cache-no-cache',
       ],
       'Response/' => [
          '1.1-respond_with_a_simple_hello_world',
