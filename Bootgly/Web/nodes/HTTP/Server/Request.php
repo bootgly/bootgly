@@ -434,13 +434,17 @@ class Request
             // @ if-modified-since
             if ($ifModifiedSince) {
                $lastModified = Server::$Response->Header->get('Last-Modified');
-
                if ($lastModified === '') {
                   return false;
                }
 
-               $modifiedStale = strtotime($lastModified) > strtotime($ifModifiedSince);
+               $lastModifiedTime = strtotime($lastModified);
+               $ifModifiedSinceTime = strtotime($ifModifiedSince);
+               if ($lastModifiedTime === false || $ifModifiedSinceTime === false) {
+                  return false;
+               }
 
+               $modifiedStale = $lastModifiedTime > $ifModifiedSinceTime;
                if ($modifiedStale) {
                   return false;
                }
