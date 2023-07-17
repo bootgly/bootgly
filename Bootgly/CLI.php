@@ -44,12 +44,14 @@ class CLI
       // * Config
       // TODO move to Bootgly config path
       $this->includes = [
-         'scripts' => [
-            BOOTGLY_DIR . 'bootgly',
-            BOOTGLY_DIR . './bootgly', // TODO normalize path
-
-            BOOTGLY_WORKABLES_DIR . 'bootgly',
-            BOOTGLY_WORKABLES_DIR . './bootgly', // TODO normalize path
+         'directories' => [
+            BOOTGLY_DIR,
+            BOOTGLY_WORKABLES_DIR,
+         ],
+         'filenames' => [
+            'bootgly',
+            './bootgly', // TODO normalize path
+            '/usr/local/bin/bootgly',
          ]
       ];
       // Debugger
@@ -63,9 +65,14 @@ class CLI
       // ...
 
       // @ Validate
-      $script = $_SERVER['PWD'] . DIRECTORY_SEPARATOR . $_SERVER['SCRIPT_FILENAME'];
-      if (array_search($script, $this->includes['scripts']) === false) {
-         return;
+      $workdir = $_SERVER['PWD'];
+      $script = $_SERVER['SCRIPT_FILENAME'];
+
+      $matches = [];
+      $matches[0] = array_search($workdir, $this->includes['directories']);
+      $matches[1] = array_search($script, $this->includes['filenames']);
+      if ($matches[0] === false && $matches[1] === false) {
+         return; // TODO output
       }
 
       // @ Instance

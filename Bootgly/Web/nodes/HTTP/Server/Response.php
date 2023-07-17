@@ -346,7 +346,7 @@ class Response
       try {
          // @ Isolate context with anonymous static function
          (static function (string $__file__, ?array $__data__)
-            use ($Request, $Response) {
+         use ($Request, $Response) {
             if ($__data__ !== null) {
                extract($__data__);
             }
