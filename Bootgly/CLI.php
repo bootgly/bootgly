@@ -42,7 +42,7 @@ class CLI
       }
 
       // * Config
-      // TODO move to Bootgly config path
+      // TODO move to Scripts?
       $this->includes = [
          'directories' => [
             BOOTGLY_DIR,
