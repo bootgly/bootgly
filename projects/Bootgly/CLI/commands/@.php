@@ -8,5 +8,5 @@ return [
 
    new TestCommand,
 
-   new ProjectCommand,
+   #new ProjectCommand,
 ];
