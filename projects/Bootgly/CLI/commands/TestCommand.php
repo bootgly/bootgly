@@ -43,7 +43,7 @@ class TestCommand extends Command
       $testsDir = $arguments[0] ?? null;
 
       if ($testsDir) {
-         $tests = @include $testsDir . '@.php';
+         $tests = @include BOOTGLY_DIR . $testsDir . '@.php';
 
          $tests = (array) $tests;
 
