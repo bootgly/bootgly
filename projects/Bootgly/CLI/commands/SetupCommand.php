@@ -15,10 +15,10 @@ use Bootgly\CLI;
 use Bootgly\CLI\Command;
 
 
-class InstallCommand extends Command
+class SetupCommand extends Command
 {
-   public string $name = 'install';
-   public string $description = 'Install bootgly CLI on /usr/local/bin';
+   public string $name = 'setup';
+   public string $description = 'Setup bootgly CLI on /usr/local/bin';
 
 
    public function run (array $arguments, array $options) : bool
