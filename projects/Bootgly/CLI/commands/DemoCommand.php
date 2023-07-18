@@ -17,6 +17,11 @@ use Bootgly\CLI\Command;
 
 class DemoCommand extends Command
 {
+   // * Config
+   public int $group = 0;
+
+   // * Data
+   // @ Command
    public string $name = 'demo';
    public string $description = 'Run the Bootgly CLI demo';
 

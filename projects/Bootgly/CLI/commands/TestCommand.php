@@ -25,10 +25,12 @@ use Bootgly\CLI\Terminal\components\Alert\Alert;
 class TestCommand extends Command
 {
    // * Config
+   public int $group = 1;
+
+   // * Data
+   // @ Command
    public string $name = 'test';
    public string $description = 'Perform Bootgly tests';
-   // * Data
-   // ...
 
 
    public function run (array $arguments, array $options) : bool

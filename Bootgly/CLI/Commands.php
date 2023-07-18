@@ -184,14 +184,30 @@ class Commands
          }
 
          $command = [
+            // * Config
+            'group'       => $Command->group ?? null,
+
+            // * Data
             'name'        => $Command->name,
             'description' => $Command->description,
             'arguments'   => $Command->arguments ?? []
          ];
+
          $commands[] = $command;
       }
+
+      $group = 0;
       foreach ($commands as $command) {
-         $help .= '@:i: ' . str_pad('`' . $command['name'] . '`', $maxCommandNameLength + 2) . ' @; = ';
+         // @ Config
+         if ($command['group'] > $group) {
+            $group = $command['group'];
+            $help .= PHP_EOL;
+         }
+
+         // @ Data
+         $name = '`' . $command['name'] . '`';
+
+         $help .= '@:i: ' . str_pad($name, $maxCommandNameLength + 2) . ' @; = ';
          $help .= $command['description'] . PHP_EOL;
       }
 

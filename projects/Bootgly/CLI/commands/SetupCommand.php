@@ -17,6 +17,11 @@ use Bootgly\CLI\Command;
 
 class SetupCommand extends Command
 {
+   // * Config
+   public int $group = 0;
+
+   // * Data
+   // @ Command
    public string $name = 'setup';
    public string $description = 'Setup bootgly CLI on /usr/local/bin';
 
@@ -36,6 +41,7 @@ class SetupCommand extends Command
       // @ Check if the destination directory exists
       if (is_dir($installDir) === false) {
          echo "The installation directory `$installDir` does not exist." . PHP_EOL;
+         exit(1);
       }
 
       // @ Create a symbolic link to the PHP script in the destination directory

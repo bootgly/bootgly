@@ -1,10 +1,10 @@
 <?php
 return [
    'default' => 0,
-   'projects' => [
+   'list' => [
       [
          'paths' => [
-            'Web/examples/app'
+            'Bootgly/Web/examples/app/'
          ]
       ]
    ]
