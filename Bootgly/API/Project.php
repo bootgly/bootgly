@@ -141,9 +141,9 @@ class Project
       return $project;
    }
 
-   public function get (int $path = 0) : string
+   public function get (int $index = 0) : string
    {
-      return $this->paths[$path] ?? '';
+      return $this->paths[$index] ?? '';
    }
 
    public function select (null|string|int $project = null) : string
