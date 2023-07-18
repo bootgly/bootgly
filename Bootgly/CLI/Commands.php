@@ -11,8 +11,8 @@
 namespace Bootgly\CLI;
 
 
-use Bootgly\CLI\components\Header;
 use Closure;
+use Bootgly\CLI\components\Header;
 use Bootgly\ABI\templates\Template\Escaped as TemplateEscaped;
 
 
@@ -172,10 +172,27 @@ class Commands
 
       $help .= '@.;======================================================================' . PHP_EOL;
 
+      // * Data
+      $commands = [];
+      // * Meta
+      $maxCommandNameLength = 0;
+      // @
       foreach ($this->commands as $Command) {
-         // TODO with str_pad
-         $help .= '@:i: `' . $Command->name . '` @; = ';
-         $help .= $Command->description . PHP_EOL;
+         $commandNameLength = strlen($Command->name);
+         if ($maxCommandNameLength < $commandNameLength) {
+            $maxCommandNameLength = $commandNameLength;
+         }
+
+         $command = [
+            'name'        => $Command->name,
+            'description' => $Command->description,
+            'arguments'   => $Command->arguments ?? []
+         ];
+         $commands[] = $command;
+      }
+      foreach ($commands as $command) {
+         $help .= '@:i: ' . str_pad('`' . $command['name'] . '`', $maxCommandNameLength + 2) . ' @; = ';
+         $help .= $command['description'] . PHP_EOL;
       }
 
       $help .= '======================================================================@.;' . PHP_EOL;
