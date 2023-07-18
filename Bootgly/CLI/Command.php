@@ -19,6 +19,7 @@ abstract class Command
    // * Data
    public string $name;
    public string $description;
+   public array $arguments;
 
    // * Meta
    // ...
