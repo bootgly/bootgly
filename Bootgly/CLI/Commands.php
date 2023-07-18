@@ -154,10 +154,19 @@ class Commands
       $help = '@.;';
 
       if ($scripting) {
+         // @ Header
          $Header = new Header;
-
          $help .= $Header->generate(word: 'Bootgly', inline: true);
-         $help .= '@.;Usage: php ' . $this->args[0] . ' [command] @..;';
+
+         // @ Usage
+         $script = match ($this->args[0]) {
+            '/usr/local/bin/bootgly' => 'bootgly',
+            './bootgly'              => './bootgly',
+            'bootgly'                => 'php bootgly'
+         };
+         $help .= '@.;Usage: ' . $script . ' [command] @..;';
+
+         // @ Command list
          $help .= 'Available commands:';
       }
 
