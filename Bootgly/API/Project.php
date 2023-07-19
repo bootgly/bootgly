@@ -120,10 +120,12 @@ class Project
          $path .= $this->version;
       }
 
-      $path = trim($path, '/');
-      $path = self::PROJECTS_DIR . $path . '/';
+      if ($path) {
+         $path = trim($path, '/');
+         $path = self::PROJECTS_DIR . $path . '/';
 
-      $this->paths[] = $path;
+         $this->paths[] = $path;
+      }
 
       return $path;
    }

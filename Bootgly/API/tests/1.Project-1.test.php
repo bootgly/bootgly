@@ -16,48 +16,44 @@ return [
       // ! Project 1 instance
       $Project1 = new Project;
 
-      // @ Construct Project Path
+      // @ Construct new Project Path
       $path1 = $Project1->construct('Bootgly/');
       assert($path1 === $expected1, 'Failed to construct Project path 1');
-
-      // @ Name Project
+      // @ Name current Project
       $Project1->name('Bootgly');
-
-      // @ Save Project to static variable
+      // @ Save last Project Path
       $path1 = $Project1->save();
       assert($path1 === $expected1, 'Failed to save Project path 1');
 
-      // @ Get Project path by project index
+      // @ Get Project Path by Project Index
       $path1 = $Project1->get(index: 0);
       assert($path1 === $expected1, 'Failed to get Project path 1');
 
       // ---------
 
-      // @ Construct
+      // @ Construct new Project Path
       $Project1->construct('Bootgly/CLI');
 
-      // @ Get Project path by project index
+      // @ Get Project Path by Project Index
       $path2 = $Project1->get(index: 1);
       assert($path2 === $expected2, 'Failed to get Project path 2');
 
       // ! Project 2 instance
       $Project2 = new Project;
 
-      // @ Select
+      // @ Select first Project
       $path1 = $Project2->select(project: 0);
       assert($path1 === $expected1, 'Failed to select Project path 1 by index');
 
       // @ Construct
       $Project2->construct('Bootgly/CLI');
-
-      // @ Name
+      // @ Name current Project
       $Project2->name('BootglyCLI');
-
-      // @ Save
+      // @ Save last Project Path to static variable
       $path2 = $Project2->save();
       assert($path2 === $expected2, 'Failed to save Project path 2');
 
-      // @ Select
+      // @ Select Project
       $path2 = $Project2->select(project: 'BootglyCLI');
       assert($path2 === $expected2, 'Failed to select Project path 2 by name');
 
