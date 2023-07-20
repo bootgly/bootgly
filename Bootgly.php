@@ -61,6 +61,28 @@ class Bootgly
 
       return false;
    }
+   // TODO TEMP
+   public static function export ($expression, bool $return = false)
+   {
+      $export = var_export($expression, TRUE);
+
+      #$export = preg_replace("/^([\s]*)(.*)/m", '$1$1$2', $export);
+
+      $array = preg_split("/\r\n|\n|\r/", $export);
+      $array = preg_replace(
+         pattern: ["/\s*array\s\($/", "/\)(,)?$/", "/\s=>\s$/"],
+         replacement: [null, ']$1', ' => ['],
+         subject: $array
+      );
+
+      $export = join(PHP_EOL, array_filter(["["] + $array));
+
+      if ($return) {
+         return $export;
+      } else {
+         echo $export;
+      }
+   }
 
    // API
    public static function debug (...$vars) : Debugger
