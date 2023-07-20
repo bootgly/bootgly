@@ -45,7 +45,7 @@ class CLI
       // TODO move to Scripts?
       $this->includes = [
          'directories' => [
-            BOOTGLY_DIR,
+            BOOTGLY_ROOT_DIR,
             BOOTGLY_WORKING_DIR,
          ],
          'filenames' => [
@@ -85,7 +85,7 @@ class CLI
       // Author
       @include Project::BOOTGLY_PROJECTS_DIR . self::BOOT_FILE;
       // Consumer
-      if (BOOTGLY_DIR !== BOOTGLY_WORKING_DIR) {
+      if (BOOTGLY_ROOT_DIR !== BOOTGLY_WORKING_DIR) {
          // Multi projects
          @include Project::PROJECTS_DIR . self::BOOT_FILE;
       }

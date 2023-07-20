@@ -45,7 +45,7 @@ class SetupCommand extends Command
       }
 
       // @ Create a symbolic link to the PHP script in the destination directory
-      $scriptPath = BOOTGLY_DIR . $scriptName;
+      $scriptPath = BOOTGLY_ROOT_DIR . $scriptName;
       if (symlink($scriptPath, "$installDir/$scriptName") === false) {
          echo "Failed to create a symbolic link to `$scriptName` in the installation directory." . PHP_EOL;
          exit(1);

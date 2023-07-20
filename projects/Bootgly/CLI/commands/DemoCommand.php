@@ -89,7 +89,7 @@ class DemoCommand extends Command
          $wait = 3;
          $location = 'projects/' . $file;
       
-         require BOOTGLY_DIR . $location;
+         require BOOTGLY_ROOT_DIR . $location;
       
          sleep($wait);
       

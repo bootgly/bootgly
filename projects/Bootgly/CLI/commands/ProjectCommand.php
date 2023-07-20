@@ -54,7 +54,7 @@ class ProjectCommand extends Command
       $Output = CLI::$Terminal->Output;
 
       if (@$options[0] === 'bootgly') {
-         ${'@'} = @include(BOOTGLY_DIR . 'projects/@.php');
+         ${'@'} = @include(BOOTGLY_ROOT_DIR . 'projects/@.php');
       } else {
          ${'@'} = @include(BOOTGLY_WORKING_DIR . 'projects/@.php');  
       }

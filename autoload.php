@@ -15,7 +15,7 @@ if (defined('BOOTGLY_BASE') === true) {
 }
 
 define('BOOTGLY_BASE', __DIR__);
-define('BOOTGLY_DIR', __DIR__ . DIRECTORY_SEPARATOR);
+define('BOOTGLY_ROOT_DIR', __DIR__ . DIRECTORY_SEPARATOR);
 
 // ? Bootgly
 // ! Bootables ([0-9]) || (-[a-z]) || ([0-9]-[a-z])
@@ -36,8 +36,8 @@ spl_autoload_register (function (string $class) {
 
    $included = @include BOOTGLY_WORKING_DIR . $file;
 
-   if ($included === false && BOOTGLY_DIR !== BOOTGLY_WORKING_DIR) {
-      @include BOOTGLY_DIR . $file;
+   if ($included === false && BOOTGLY_ROOT_DIR !== BOOTGLY_WORKING_DIR) {
+      @include BOOTGLY_ROOT_DIR . $file;
    }
 });
 
