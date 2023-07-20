@@ -104,7 +104,7 @@ class Benchmark
       }
 
       $Backtrace = new Backtrace;
-      $relativePath = Path::relativize(from: BOOTGLY_WORKABLES_BASE, to: $Backtrace->file);
+      $relativePath = Path::relativize(from: BOOTGLY_WORKING_BASE, to: $Backtrace->file);
       $file = BOOTGLY_WORKING_DIR . 'workspace/bench.marks';
 
       // @ Build data

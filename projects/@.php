@@ -1,7 +1,7 @@
 <?php
 return [
    'default' => 0,
-   'list' => [
+   'projects' => [
       [
          'interface' => 'CLI',
          'paths' => [

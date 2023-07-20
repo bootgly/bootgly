@@ -60,13 +60,13 @@ class ProjectCommand extends Command
       }
 
       $projects = @${'@'};
-      if ( ! empty($projects['list']) ) {
+      if ( ! empty($projects['projects']) ) {
          $Output->render('@.;@#cyan: Project list: @; @.;');
       } else {
          $Output->render('@.;@#red: Project list is empty: @; @.;');
       }
 
-      foreach ($projects['list'] as $index => $project) {
+      foreach ($projects['projects'] as $index => $project) {
          // * Data
          $default = '';
          if ($projects['default'] === $index) {

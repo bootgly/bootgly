@@ -16,7 +16,7 @@ use Exception;
 
 class Scripts
 {
-   public const SCRIPTS_DIR = BOOTGLY_BASE . '/scripts/';
+   public const SCRIPTS_DIR = BOOTGLY_ROOT_BASE . '/scripts/';
 
 
    public function execute (string $path)

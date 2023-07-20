@@ -10,11 +10,11 @@
 
 #@include __DIR__ . '/@imports/autoload.php'; // composer
 
-if (defined('BOOTGLY_BASE') === true) {
+if (defined('BOOTGLY_ROOT_BASE') === true) {
    return;
 }
 
-define('BOOTGLY_BASE', __DIR__);
+define('BOOTGLY_ROOT_BASE', __DIR__);
 define('BOOTGLY_ROOT_DIR', __DIR__ . DIRECTORY_SEPARATOR);
 
 // ? Bootgly
@@ -64,7 +64,7 @@ if (function_exists('debug') === false) {
 
 // ? Workables
 // composer?
-$installed = BOOTGLY_BASE . '/../../composer/installed.php';
+$installed = BOOTGLY_ROOT_BASE . '/../../composer/installed.php';
 if ( is_file($installed) ) {
    $installed = @include $installed;
 
@@ -73,10 +73,10 @@ if ( is_file($installed) ) {
       $root = realpath($root);
    }
 
-   define('BOOTGLY_WORKABLES_BASE', $root ?? BOOTGLY_BASE);
+   define('BOOTGLY_WORKING_BASE', $root ?? BOOTGLY_ROOT_BASE);
 } else {
-   define('BOOTGLY_WORKABLES_BASE', BOOTGLY_BASE);
+   define('BOOTGLY_WORKING_BASE', BOOTGLY_ROOT_BASE);
 }
-define('BOOTGLY_WORKING_DIR', BOOTGLY_WORKABLES_BASE . DIRECTORY_SEPARATOR);
+define('BOOTGLY_WORKING_DIR', BOOTGLY_WORKING_BASE . DIRECTORY_SEPARATOR);
 
 new Bootgly;
