@@ -11,12 +11,14 @@
 namespace Web;
 
 
-use Bootgly\Web;
+use Bootgly;
+use Bootgly\WPI;
+use Web;
 
 
-class API
+class API // TODO move to Web\API\REST
 {
-   public \Web $Web;
+   public Web $Web;
 
    // * Config
    public bool $debugger;
@@ -38,14 +40,14 @@ class API
 
    public function __construct ()
    {
-      $Web = $this->Web = new \Web;
+      $Web = $this->Web = new Web;
       // ---
       $Web->API = $this;
       // ---
       // TODO TEMP
-      $Web->Request = Web::$Request;
-      $Web->Response = Web::$Response;
-      $Web->Router = Web::$Router;
+      $Web->Request = WPI::$Request;
+      $Web->Response = WPI::$Response;
+      $Web->Router = WPI::$Router;
 
       $Web->Response->use('API', $this);
       $Web->Response->use('Web', $Web);
@@ -150,10 +152,8 @@ class API
    {
       $Web = &$this->Web;
 
-      if (is_file(\Bootgly::$Project . 'index.php')) {
-         require_once \Bootgly::$Project . 'index.php';
-      } else if ( is_file(\Bootgly::$Project . 'API.boot.php') ) {
-         require_once \Bootgly::$Project . 'API.boot.php';
+      if ( is_file(Bootgly::$Project . 'index.php') ) {
+         require_once Bootgly::$Project . 'index.php';
       }
    }
    public function debug ($data, string $password = '')
@@ -162,7 +162,7 @@ class API
          return false;
       }
 
-      $Request = &Web::$Request;
+      $Request = &WPI::$Request;
       if (@$Request->queries['debug'] === $password || $password === '') {
          $this->data['exception']['debug'] = $data;
          $this->respond();
@@ -172,7 +172,7 @@ class API
    {
       error_reporting(0);
 
-      Web::$Response->Json->send($this->data, JSON_PRETTY_PRINT);
+      WPI::$Response->Json->send($this->data, JSON_PRETTY_PRINT);
 
       if (\PHP_SAPI !== 'cli') {
          exit;

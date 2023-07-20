@@ -1,12 +1,12 @@
 <?php
 
-namespace projects\Bootgly\Web;
+namespace projects\Bootgly\WPI;
 
 
 use Bootgly;
-use Bootgly\Web\modules\HTTP\Server\Router;
-use Bootgly\Web\nodes\HTTP\Server\Request;
-use Bootgly\Web\nodes\HTTP\Server\Response;
+use Bootgly\WPI\modules\HTTP\Server\Router;
+use Bootgly\WPI\nodes\HTTP\Server\Request;
+use Bootgly\WPI\nodes\HTTP\Server\Response;
 
 
 Bootgly::$Project->vendor    = 'Bootgly/';

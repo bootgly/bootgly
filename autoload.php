@@ -8,14 +8,14 @@
  * --------------------------------------------------------------------------
  */
 
-@include __DIR__ . '/@imports/autoload.php'; // composer
-
 if (defined('BOOTGLY_ROOT_BASE') === true) {
    return;
 }
 
 define('BOOTGLY_ROOT_BASE', __DIR__);
 define('BOOTGLY_ROOT_DIR', __DIR__ . DIRECTORY_SEPARATOR);
+
+@include(__DIR__ . '/@imports/autoload.php'); // composer
 
 // ? Bootgly
 // ! Bootables ([0-9]) || (-[a-z]) || ([0-9]-[a-z])
@@ -34,10 +34,10 @@ spl_autoload_register (function (string $class) {
    $paths = explode('\\', $class);
    $file = implode('/', $paths) . '.php';
 
-   $included = @include BOOTGLY_WORKING_DIR . $file;
+   $included = @include(BOOTGLY_WORKING_DIR . $file);
 
    if ($included === false && BOOTGLY_ROOT_DIR !== BOOTGLY_WORKING_DIR) {
-      @include BOOTGLY_ROOT_DIR . $file;
+      @include(BOOTGLY_ROOT_DIR . $file);
    }
 });
 

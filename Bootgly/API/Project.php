@@ -25,7 +25,7 @@ class Project
 
    // * Data
    public string $vendor;       // Bootgly/
-   public string $container;    // Web/
+   public string $container;    // WPI/
    public string $package;      // App/
    // ---
    public string $type;         // SPA, PWA, etc.

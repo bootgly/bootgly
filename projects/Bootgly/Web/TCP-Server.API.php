@@ -1,6 +1,6 @@
 <?php
 
-namespace projects\Bootgly\Web;
+namespace projects\Bootgly\WPI;
 
 
 return static function ($input)

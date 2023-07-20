@@ -11,13 +11,15 @@
 namespace Web;
 
 
+use Bootgly;
 use Bootgly\ABI\streams\File;
-use Bootgly\Web;
+use Bootgly\WPI;
+use Web;
 
 
-class App
+class App // TODO REFACTOR
 {
-   public \Web $Web;
+   public Web $Web;
 
    // * Config
    // Dynamic
@@ -37,14 +39,14 @@ class App
 
    public function __construct ()
    {
-      $Web = $this->Web = new \Web;
+      $Web = $this->Web = new Web;
       // ---
       $Web->App = $this;
       // ---
       // TODO TEMP
-      $Web->Request = Web::$Request;
-      $Web->Response = Web::$Response;
-      $Web->Router = Web::$Router;
+      $Web->Request = WPI::$Request;
+      $Web->Response = WPI::$Response;
+      $Web->Router = WPI::$Router;
 
       $Web->Response->use('App', $this);
       $Web->Response->use('Web', $Web);
@@ -54,20 +56,20 @@ class App
       switch ($this->template) {
          case 'spa':
          case 'static':
-            if (Web::$Request->path == $this->pathbase) {
-               readfile(\Bootgly::$Project->path . 'index.html');
+            if (WPI::$Request->path == $this->pathbase) {
+               readfile(Bootgly::$Project->path . 'index.html');
             } else {
                if ($this->pathbase) {
-                  Web::$Router->Route->prefix = $this->pathbase;
+                  WPI::$Router->Route->prefix = $this->pathbase;
                }
 
-               $Static = new File(\Bootgly::$Project->path . Web::$Request->path);
+               $Static = new File(Bootgly::$Project->path . WPI::$Request->path);
                // TODO save and get list of all files in project->path and compare here to optimize performance
                if ($Static->File) {
                   header('Content-Type: '. $Static->type);
                   $Static->read();
                } else {
-                  readfile(\Bootgly::$Project->path . 'index.html');
+                  readfile(Bootgly::$Project->path . 'index.html');
                }
             }
 
@@ -75,12 +77,10 @@ class App
          default:
             $Web = &$this->Web;
 
-            $Router = Web::$Router;
+            $Router = WPI::$Router;
 
-            if ( is_file(\Bootgly::$Project->path . 'index.php') ) {
-               require_once \Bootgly::$Project->path . 'index.php';
-            } else if ( is_file(\Bootgly::$Project->path . 'App.boot.php') ) {
-               require_once \Bootgly::$Project->path . 'App.boot.php';
+            if ( is_file(Bootgly::$Project->path . 'index.php') ) {
+               require_once Bootgly::$Project->path . 'index.php';
             }
       }
    }

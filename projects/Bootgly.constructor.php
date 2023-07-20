@@ -1,10 +1,18 @@
 <?php
-namespace Bootgly;
+
+use Bootgly\ACI\Debugger;
+use Bootgly\CLI;
+use Bootgly\WPI;
 
 switch (\PHP_SAPI) {
+   // Console
    case 'cli':
       $CLI = new CLI;
       break;
+   // Web
+   case 'apache2handler':
+   case 'litespeed':
+   case 'nginx':
    default:
-      $Web = new Web;
+      $WPI = new WPI;
 }

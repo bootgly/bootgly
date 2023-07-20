@@ -9,43 +9,43 @@ return [
          ]
       ],
       [
-         'interface' => 'Web',
+         'platform' => 'Web',
          'paths' => [
             'Bootgly/Web/examples/api/'
          ]
       ],
       [
-         'interface' => 'Web',
+         'platform' => 'Web',
          'paths' => [
             'Bootgly/Web/examples/app/'
          ]
       ],
       [
-         'interface' => 'Web',
+         'platform' => 'Web',
          'paths' => [
             'Bootgly/Web/examples/app-vue/'
          ]
       ],
       [
-         'interface' => 'Web',
+         'platform' => 'Web',
          'paths' => [
             'Bootgly/Web/examples/app-vue-quasar/'
          ]
       ],
       [
-         'interface' => 'Web',
+         'platform' => 'Web',
          'paths' => [
             'Bootgly/Web/examples/static/'
          ]
       ],
       [
-         'interface' => 'Web',
+         'platform' => 'Web',
          'paths' => [
             'Bootgly/Web/examples/static-react/'
          ]
       ],
       [
-         'interface' => 'Web',
+         'platform' => 'Web',
          'paths' => [
             'Bootgly/Web/examples/static-vue/'
          ]

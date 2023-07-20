@@ -1,6 +1,4 @@
 <?php
-namespace Bootgly\Web;
-
 
 use Web\App;
 
