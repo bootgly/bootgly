@@ -158,8 +158,15 @@ class Request
             return $_SERVER['REMOTE_PORT'];
 
          case 'scheme':
-            return $_SERVER['HTTPS'] ? 'https' : 'http';
+            if ( isSet($_SERVER['HTTP_X_FORWARDED_PROTO']) ) {
+               $scheme = $_SERVER['HTTP_X_FORWARDED_PROTO'];
+            } else if ( ! empty($_SERVER['HTTPS']) ) {
+               $scheme = 'https';
+            } else {
+               $scheme = 'http';
+            }
 
+            return $this->scheme = $scheme;
          // ! HTTP
          case 'raw': // TODO refactor
             $raw = $this->Meta->raw;
@@ -360,7 +367,7 @@ class Request
          // * Meta
          case 'secure':
             return $this->scheme === 'https';
-
+         // HTTP Caching Specification (RFC 7234)
          case 'fresh':
             if ($this->method !== 'GET' && $this->method !== 'HEAD') {
                return false;

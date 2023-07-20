@@ -224,8 +224,6 @@ class Request
          case 'paths':
             return $this->Path->paths;
          // @ Query
-         case 'parameters': // TODO move to $Route->params ?
-         case 'params':     // TODO move to $Route->params ?
          case 'query':
             return @$_SERVER['REDIRECT_QUERY_STRING'];
          case 'queries':
