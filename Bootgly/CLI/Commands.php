@@ -170,7 +170,7 @@ class Commands
          $help .= 'Available commands:';
       }
 
-      $help .= '@.;======================================================================' . PHP_EOL;
+      $help .= PHP_EOL . str_repeat('=', 70) . PHP_EOL;
 
       // * Data
       $commands = [];
@@ -185,8 +185,8 @@ class Commands
 
          $command = [
             // * Config
+            'separate'    => $Command->separate ?? false,
             'group'       => $Command->group ?? null,
-
             // * Data
             'name'        => $Command->name,
             'description' => $Command->description,
@@ -198,6 +198,9 @@ class Commands
       $group = 0;
       foreach ($commands as $command) {
          // @ Config
+         if ($command['separate']) {
+            $help .= str_repeat('-', 70);
+         }
          if ($command['group'] > $group) {
             $group = $command['group'];
             $help .= PHP_EOL;
@@ -210,7 +213,7 @@ class Commands
          $help .= $command['description'] . PHP_EOL;
       }
 
-      $help .= '======================================================================@.;' . PHP_EOL;
+      $help .= str_repeat('=', 70) . PHP_EOL . PHP_EOL;
 
       echo TemplateEscaped::render($help);
    }

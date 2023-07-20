@@ -19,15 +19,16 @@ use Bootgly\CLI\Command;
 class ProjectCommand extends Command
 {
    // * Config
+   public bool $separate = true;
    public int $group = 2;
 
    // * Data
    // @ Command
    public string $name = 'project';
-   public string $description = 'Manage Bootgly projects.';
+   public string $description = 'Manage Bootgly projects';
    public array $arguments = [
       'list' => [
-         'description' => 'List Bootgly projects.',
+         'description' => 'List Bootgly projects',
          'options'     => [
             '--bootgly'
          ]
