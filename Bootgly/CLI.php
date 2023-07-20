@@ -64,6 +64,10 @@ class CLI
       // * Meta
       // ...
 
+      // @ Instance
+      $Commands = self::$Commands = new Commands;
+      $Terminal = self::$Terminal = new Terminal;
+
       // @ Validate
       $workdir = $_SERVER['PWD'];
       $script = $_SERVER['SCRIPT_FILENAME'];
@@ -74,10 +78,6 @@ class CLI
       if ($matches[0] === false && $matches[1] === false) {
          return; // TODO output
       }
-
-      // @ Instance
-      $Commands = self::$Commands = new Commands;
-      $Terminal = self::$Terminal = new Terminal;
 
       // ---
 

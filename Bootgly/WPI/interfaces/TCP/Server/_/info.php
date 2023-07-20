@@ -43,7 +43,7 @@ switch ($name) {
 
       $this->log(<<<OUTPUT
 
-      =========================== Server Status ===========================
+      ============================= Server Status =============================
       @:i: Bootgly Server: @; {$server}
       @:i: Bootgly Server version: @; {$version}\t\t@:i: PHP version: @; {$php}
 
@@ -52,7 +52,7 @@ switch ($name) {
       @:i: Socket address: @; {$address}
 
       @:i: Event-loop: @; {$event}
-      =====================================================================
+      =========================================================================
 
       OUTPUT);
 

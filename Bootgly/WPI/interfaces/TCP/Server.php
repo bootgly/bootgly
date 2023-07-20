@@ -22,9 +22,9 @@ use Bootgly\API\Project;
 
 use Bootgly\API\Server as SAPI;
 use Bootgly\API\Environment;
+use Bootgly\CLI;
 // @extend
 use Bootgly\ACI\Logs\LoggableEscaped;
-
 use Bootgly\WPI\events\Select;
 use Bootgly\WPI\Servers;
 use Bootgly\WPI\interfaces\TCP\Server\_\Process;
@@ -94,7 +94,6 @@ class Server implements Servers, Logging
          return false;
       }
 
-
       // * Config
       // @ Mode
       $this->mode = self::MODE_MONITOR;
@@ -130,6 +129,8 @@ class Server implements Servers, Logging
 
       // ! @\Process
       $Process = $this->Process = new Process($this);
+      // ! @\CLI
+      new CLI;
       // ! @\CLI\Terminal
       $this->Terminal = new Terminal($this);
 
@@ -185,13 +186,16 @@ class Server implements Servers, Logging
       }
 
       // ! @info
+      // @ Set log display none
+      $display = Logger::$display;
+      Logger::$display = Logger::DISPLAY_MESSAGE;
+
       $info = __DIR__ . '/Server/_/info.php';
 
       // @ Clear cache of file info
       if ( function_exists('opcache_invalidate') ) {
          opcache_invalidate($info, true);
       }
-
       clearstatcache(false, $info);
 
       // @ Load file info
@@ -200,6 +204,9 @@ class Server implements Servers, Logging
       } catch (\Throwable) {
          // ...
       }
+
+      // @ Restore log display
+      Logger::$display = $display;
    }
    public function __set (string $name, $value)
    {
@@ -266,9 +273,6 @@ class Server implements Servers, Logging
       $this->Process->fork($this->workers);
 
       // ... Continue to master process:
-      $this->log('@\;');
-      $this->{'@status'};
-
       switch ($this->mode) {
          case self::MODE_DAEMON:
             $this->daemonize();
@@ -419,6 +423,10 @@ class Server implements Servers, Logging
       // @ Set Logger to display messages, datetime and level
       Logger::$display = Logger::DISPLAY_MESSAGE_WHEN_ID;
 
+      $Output = CLI::$Terminal->Output;
+
+      $this->{'@status'};
+
       // @ Loop
       while ($this->mode === self::MODE_MONITOR) {
          // @ Calls signal handlers for pending signals
@@ -440,6 +448,12 @@ class Server implements Servers, Logging
          } else if ($pid === -1) { // If error ignore
             // ...
          }
+
+         $Output->Cursor->up(11);
+         $Output->Cursor->moveTo(column: 1);
+         $Output->Text->clear(down: true);
+
+         $this->{'@status'};
       }
 
       // @ Enter in CLI mode
