@@ -301,8 +301,8 @@ class Response
                      // TODO check if string is a valid path
                      $File = match ($data[0]) {
                         #!
-                        '/'     => new File(BOOTGLY_WORKABLES_DIR . 'projects' . $data),
-                        '@'     => new File(BOOTGLY_WORKABLES_DIR . 'projects/' . $data),
+                        '/'     => new File(BOOTGLY_WORKING_DIR . 'projects' . $data),
+                        '@'     => new File(BOOTGLY_WORKING_DIR . 'projects/' . $data),
                         default => new File(Bootgly::$Project->path . $data)
                      };
 

@@ -97,7 +97,7 @@ class Template
    private function cache () : bool
    {
       $this->Output = new File(
-         BOOTGLY_WORKABLES_DIR .
+         BOOTGLY_WORKING_DIR .
          'workspace/cache/' .
          'views/' .
          sha1($this->raw) .

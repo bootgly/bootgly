@@ -46,7 +46,7 @@ class CLI
       $this->includes = [
          'directories' => [
             BOOTGLY_DIR,
-            BOOTGLY_WORKABLES_DIR,
+            BOOTGLY_WORKING_DIR,
          ],
          'filenames' => [
             'bootgly',
@@ -85,7 +85,7 @@ class CLI
       // Author
       @include Project::BOOTGLY_PROJECTS_DIR . self::BOOT_FILE;
       // Consumer
-      if (BOOTGLY_DIR !== BOOTGLY_WORKABLES_DIR) {
+      if (BOOTGLY_DIR !== BOOTGLY_WORKING_DIR) {
          // Multi projects
          @include Project::PROJECTS_DIR . self::BOOT_FILE;
       }

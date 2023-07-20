@@ -293,9 +293,9 @@ class Response
                   case 'string':
                      // TODO check if string is a valid path
                      if ($data[0] === '/') {
-                        $File = new File(BOOTGLY_WORKABLES_DIR . 'projects' . $data);
+                        $File = new File(BOOTGLY_WORKING_DIR . 'projects' . $data);
                      } else if ($data[0] === '@') {
-                        $File = new File(BOOTGLY_WORKABLES_DIR . 'projects/' . $data);
+                        $File = new File(BOOTGLY_WORKING_DIR . 'projects/' . $data);
                      } else {
                         $File = new File(\Bootgly::$Project->path . $data);
                      }

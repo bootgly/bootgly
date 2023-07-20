@@ -34,9 +34,9 @@ spl_autoload_register (function (string $class) {
    $paths = explode('\\', $class);
    $file = implode('/', $paths) . '.php';
 
-   $included = @include BOOTGLY_WORKABLES_DIR . $file;
+   $included = @include BOOTGLY_WORKING_DIR . $file;
 
-   if ($included === false && BOOTGLY_DIR !== BOOTGLY_WORKABLES_DIR) {
+   if ($included === false && BOOTGLY_DIR !== BOOTGLY_WORKING_DIR) {
       @include BOOTGLY_DIR . $file;
    }
 });
@@ -77,6 +77,6 @@ if ( is_file($installed) ) {
 } else {
    define('BOOTGLY_WORKABLES_BASE', BOOTGLY_BASE);
 }
-define('BOOTGLY_WORKABLES_DIR', BOOTGLY_WORKABLES_BASE . DIRECTORY_SEPARATOR);
+define('BOOTGLY_WORKING_DIR', BOOTGLY_WORKABLES_BASE . DIRECTORY_SEPARATOR);
 
 new Bootgly;

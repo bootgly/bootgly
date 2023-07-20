@@ -62,8 +62,8 @@ class TestCommand extends Command
 
          $bootglyTests = null;
          $suiteFiles1 = null;
-         if (BOOTGLY_DIR !== BOOTGLY_WORKABLES_DIR) {
-            $suiteFiles1 = @include BOOTGLY_WORKABLES_DIR . '/tests/@.php';
+         if (BOOTGLY_DIR !== BOOTGLY_WORKING_DIR) {
+            $suiteFiles1 = @include BOOTGLY_WORKING_DIR . '/tests/@.php';
          } else {
             $bootglyTests = true;
          }

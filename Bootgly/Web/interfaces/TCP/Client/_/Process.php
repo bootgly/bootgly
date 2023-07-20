@@ -40,9 +40,9 @@ class Process
    public static int $master;
    public static array $children = [];
    // File
-   public static $commandFile = BOOTGLY_WORKABLES_DIR . '/workspace/client.command';
-   public static $pidFile = BOOTGLY_WORKABLES_DIR . '/workspace/client.pid';
-   public static $pidLockFile = BOOTGLY_WORKABLES_DIR . '/workspace/client.pid.lock';
+   public static $commandFile = BOOTGLY_WORKING_DIR . '/workspace/client.command';
+   public static $pidFile = BOOTGLY_WORKING_DIR . '/workspace/client.pid';
+   public static $pidLockFile = BOOTGLY_WORKING_DIR . '/workspace/client.pid.lock';
 
 
    public function __construct (Client &$Client)
