@@ -28,7 +28,9 @@ class ProjectCommand extends Command
    public array $arguments = [
       'list' => [
          'description' => 'List Bootgly projects.',
-         'options'     => []
+         'options'     => [
+            '--bootgly'
+         ]
       ]
    ];
 
@@ -36,9 +38,12 @@ class ProjectCommand extends Command
    public function run (array $arguments, array $options) : bool
    {
       return match ($arguments[0]) {
-         #'create' => $this->create($options),
-         'list'   => $this->list($options),
-         default  => $this->help($arguments)
+         #'create'   => $this->create($options),
+
+         #'configure' => $this->configure($options),
+         'list'      => $this->list($options),
+
+         default     => $this->help($arguments)
       };
    }
 
@@ -48,24 +53,36 @@ class ProjectCommand extends Command
    {
       $Output = CLI::$Terminal->Output;
 
-      $projects = @include(BOOTGLY_WORKABLES_DIR . 'projects/@.php');
-
-      $projectsList = @$projects['list'];
-      if ( ! empty($projectsList) ) {
-         $Output->render('@.;@#cyan: Projects list: @; @.;');
+      if (@$options[0] === 'bootgly') {
+         ${'@'} = @include(BOOTGLY_DIR . 'projects/@.php');
       } else {
-         $Output->render('@.;@#red: Projects is empty: @; @.;');
+         ${'@'} = @include(BOOTGLY_WORKABLES_DIR . 'projects/@.php');  
       }
 
-      foreach($projectsList as $index => $project) {
+      $projects = @${'@'};
+      if ( ! empty($projects['list']) ) {
+         $Output->render('@.;@#cyan: Project list: @; @.;');
+      } else {
+         $Output->render('@.;@#red: Project list is empty: @; @.;');
+      }
+
+      foreach ($projects['list'] as $index => $project) {
+         // * Data
+         $default = '';
+         if ($projects['default'] === $index) {
+            $default = "@#green: [default] @;";
+         }
+         // * Meta
          $index += 1;
 
          $Output->render(
-            "@#magenta: {$index} @; - "
-            . $project['paths'][0]
-            . PHP_EOL . PHP_EOL
+            "@#magenta: #{$index} @; - "
+            . $project['paths'][0] . $default
+            . PHP_EOL
          );
       }
+
+      $Output->write(PHP_EOL);
 
       return true;
    }
@@ -76,8 +93,13 @@ class ProjectCommand extends Command
       $Output = CLI::$Terminal->Output;
 
       if ( empty($arguments) ) {
-         $Output->render('@#red: Available arguments: @; list. @.;');
-         return false;
+         $output = '@#red: Available arguments: @; @.;';
+         foreach ($this->arguments as $name => $value) {
+            $output .= $name;
+         }
+         $output .= '@.;';
+
+         $Output->render($output);
       } else if ( count($arguments) > 1 ) {
          $Output->render("@#red: Too many arguments! @; @.;");
       } else {

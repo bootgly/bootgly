@@ -12,8 +12,8 @@ namespace Bootgly\CLI;
 
 
 use Closure;
-use Bootgly\CLI\components\Header;
 use Bootgly\ABI\templates\Template\Escaped as TemplateEscaped;
+use Bootgly\CLI\components\Header;
 
 
 class Commands
@@ -190,7 +190,6 @@ class Commands
             // * Data
             'name'        => $Command->name,
             'description' => $Command->description,
-            'arguments'   => $Command->arguments ?? []
          ];
 
          $commands[] = $command;
