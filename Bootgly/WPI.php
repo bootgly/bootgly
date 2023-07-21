@@ -19,7 +19,7 @@ use Bootgly\WPI\modules\HTTP\Server\Response;
 use Bootgly\WPI\modules\HTTP\Server\Router;
 
 
-class WPI
+class WPI // Web Programming Interface
 {
    public const BOOT_FILE = 'Web.constructor.php';
 

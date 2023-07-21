@@ -18,7 +18,7 @@ use Bootgly\CLI\Commands;
 use Bootgly\CLI\Terminal;
 
 
-class CLI
+class CLI // Command Line Interface
 {
    public const BOOT_FILE = 'CLI.constructor.php';
 

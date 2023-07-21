@@ -29,7 +29,7 @@ define('BOOTGLY_ROOT_DIR', __DIR__ . DIRECTORY_SEPARATOR);
 // 4 - API (Application Programming Interface) -> Bootgly (platform)
 
 // 5 - CLI (Command Line Interface)            -> Console (platform)
-// 6 - Web (as interface)                      -> Web (as platform)
+// 6 - WPI (Web Programming Interface)         -> Web (platform)
 spl_autoload_register (function (string $class) {
    $paths = explode('\\', $class);
    $file = implode('/', $paths) . '.php';
