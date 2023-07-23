@@ -15,6 +15,7 @@ use Bootgly\ACI\Debugger;
 use Bootgly\API\Project;
 
 use Bootgly\CLI\Commands;
+use Bootgly\CLI\Scripts;
 use Bootgly\CLI\Terminal;
 
 
@@ -23,7 +24,7 @@ class CLI // Command Line Interface
    public const BOOT_FILE = 'CLI.constructor.php';
 
    // * Config
-   public array $includes;
+   // ...
 
    // * Data
    // ...
@@ -32,6 +33,7 @@ class CLI // Command Line Interface
    public static bool $interactive = false;
 
    public static Commands $Commands;
+   public static Scripts $Scripts;
    public static Terminal $Terminal;
 
 
@@ -42,18 +44,7 @@ class CLI // Command Line Interface
       }
 
       // * Config
-      // TODO move to Scripts?
-      $this->includes = [
-         'directories' => [
-            BOOTGLY_ROOT_DIR,
-            BOOTGLY_WORKING_DIR,
-         ],
-         'filenames' => [
-            'bootgly',
-            './bootgly', // TODO normalize path
-            '/usr/local/bin/bootgly',
-         ]
-      ];
+      // ...
       // Debugger
       Debugger::$debug = true;
       Debugger::$cli = true;
@@ -64,30 +55,25 @@ class CLI // Command Line Interface
       // * Meta
       // ...
 
-      // @ Instance
+      // @ Instance variables
       $Commands = self::$Commands = new Commands;
+      $Scripts  = self::$Scripts  = new Scripts;
       $Terminal = self::$Terminal = new Terminal;
 
-      // @ Validate
-      $workdir = $_SERVER['PWD'];
-      $script = $_SERVER['SCRIPT_FILENAME'];
-
-      $matches = [];
-      $matches[0] = array_search($workdir, $this->includes['directories']);
-      $matches[1] = array_search($script, $this->includes['filenames']);
-      if ($matches[0] === false && $matches[1] === false) {
-         return; // TODO output
+      // @ Validate scripts
+      if ($Scripts->validate() === false) {
+         return;
       }
 
       // ---
 
-      // @ Boot
+      // @ Boot CLI
       // Author
-      @include Project::BOOTGLY_PROJECTS_DIR . self::BOOT_FILE;
+      @include(Project::BOOTGLY_PROJECTS_DIR . self::BOOT_FILE);
       // Consumer
       if (BOOTGLY_ROOT_DIR !== BOOTGLY_WORKING_DIR) {
          // Multi projects
-         @include Project::PROJECTS_DIR . self::BOOT_FILE;
+         @include(Project::PROJECTS_DIR . self::BOOT_FILE);
       }
    }
 }

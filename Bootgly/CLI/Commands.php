@@ -84,17 +84,17 @@ class Commands
    public function route () : bool
    {
       // Argments
-      $values = $this->args;
+      $args = $this->args;
 
       // @ Verify if a command was provided
-      if (count($values) < 2) {
+      if (count($args) < 2) {
          $this->help();
          return false;
       }
 
       // Command
       // @ Get the name of the command to run
-      $name = $values[1];
+      $name = $args[1];
 
       // @ Search for the corresponding command
       $Command = $this->find($name);
@@ -105,8 +105,9 @@ class Commands
       }
 
       // @ Remove the command name from the arguments
-      $args = array_slice($values, 2);
+      $args = array_slice($args, 2);
 
+      // TODO move to Commands\Arguments?
       // @ Process options and argments
       $options = [];
       $arguments = [];
