@@ -271,11 +271,6 @@ class Server implements Servers, Logging
       $this->Process->fork($this->workers);
 
       // ... Continue to master process:
-      if ($this->mode !== self::MODE_TEST) {
-         // DEPRECATED (TEMP)
-         new CLI;
-      }
-
       switch ($this->mode) {
          case self::MODE_DAEMON:
             $this->daemonize();
@@ -284,6 +279,7 @@ class Server implements Servers, Logging
             $this->interact();
             break;
          case self::MODE_MONITOR:
+            new CLI; // TODO remove (temp: use Script exec)
             $this->monitor();
             break;
       }

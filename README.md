@@ -220,7 +220,7 @@ More **Screenshots**, videos and details can be found in the home page of [Bootg
   ##### **Option 1: Non-CLI SAPI (Apache, LiteSpeed, Nginx, etc)**
 
   1) Enable support to `rewrite`;
-  2) Configure the WPI constructor in `projects/WPI.constructor.php` file;
+  2) Configure the Web constructor in `projects/Web.constructor.php` file;
   3) Run the Non-CLI HTTP Server pointing to `index.php`.
 
   ##### **Option 2: CLI SAPI**
