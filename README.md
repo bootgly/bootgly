@@ -186,7 +186,7 @@ More **Screenshots**, videos and details can be found in the home page of [Bootg
 ### 📟 Bootgly CLI:
 
 <details>
-  <summary>Run CLI demo</summary>
+  <summary><b>Run CLI demo</b></summary>
 
   1) See the examples in `projects/Bootgly/CLI/examples/`;
   2) Check the file `projects/CLI.constructor.php`;
@@ -196,7 +196,7 @@ More **Screenshots**, videos and details can be found in the home page of [Bootg
 </details>
 
 <details>
-  <summary>Setup Bootgly CLI globally (on /usr/local/bin)</summary>
+  <summary><b>Setup Bootgly CLI globally (on /usr/local/bin)</b></summary>
 
   1) Run the Bootgly CLI setup command in terminal (with sudo):
 
@@ -204,7 +204,7 @@ More **Screenshots**, videos and details can be found in the home page of [Bootg
 </details>
 
 <details>
-  <summary>Perform Bootgly tests</summary>
+  <summary><b>Perform Bootgly tests</b></summary>
 
   1) Check the bootstrap tests file `tests/@.php`;
   2) Run the Bootgly CLI test command in terminal:
@@ -215,7 +215,7 @@ More **Screenshots**, videos and details can be found in the home page of [Bootg
 ### 🌐 Bootgly Web:
 
 <details>
-  <summary>Running a HTTP Server:</summary>
+  <summary><b>Running a HTTP Server:</b></summary>
 
   ##### **Option 1: Non-CLI SAPI (Apache, LiteSpeed, Nginx, etc)**
 
