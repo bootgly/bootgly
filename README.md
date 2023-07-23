@@ -185,45 +185,49 @@ More **Screenshots**, videos and details can be found in the home page of [Bootg
 
 ### \- Bootgly CLI 📟:
 
-#### Run CLI demo
+<details>
+  <summary>Run CLI demo</summary>
 
-1) See the examples in `projects/Bootgly/CLI/examples/`;
-2) Check the file `projects/CLI.constructor.php`;
-3) Run the Bootgly CLI demo in terminal:
+  1) See the examples in `projects/Bootgly/CLI/examples/`;
+  2) Check the file `projects/CLI.constructor.php`;
+  3) Run the Bootgly CLI demo in terminal:
 
-`php bootgly demo`
+  `php bootgly demo`
+</details>
 
 ### \- Bootgly Web 🌐:
 
-#### Running a HTTP Server:
+<details>
+  <summary>Running a HTTP Server:</summary>
 
-##### **Option 1: Non-CLI SAPI (Apache, LiteSpeed, Nginx, etc)**
+  ##### **Option 1: Non-CLI SAPI (Apache, LiteSpeed, Nginx, etc)**
 
-1) Enable support to `rewrite`;
-2) Configure the WPI constructor in `projects/WPI.constructor.php` file;
-3) Run the Non-CLI HTTP Server pointing to `index.php`.
+  1) Enable support to `rewrite`;
+  2) Configure the WPI constructor in `projects/WPI.constructor.php` file;
+  3) Run the Non-CLI HTTP Server pointing to `index.php`.
 
-##### **Option 2: CLI SAPI**
+  ##### **Option 2: CLI SAPI**
 
-Directly in Linux OS *(max performance)*:
+  Directly in Linux OS *(max performance)*:
 
-1) Configure the Bootgly HTTP Server script in `scripts/http-server-cli` file;
-2) Configure the HTTP Server API in `projects/Bootgly/Web/HTTP-Server.API.php` file;
-3) Run the Bootgly HTTP Server CLI in the terminal:
+  1) Configure the Bootgly HTTP Server script in `scripts/http-server-cli` file;
+  2) Configure the HTTP Server API in `projects/Bootgly/Web/HTTP-Server.API.php` file;
+  3) Run the Bootgly HTTP Server CLI in the terminal:
 
-`php scripts/http-server-cli`
+  `php scripts/http-server-cli`
 
---
+  --
 
-or using Docker:
+  or using Docker:
 
-1) Pull the image:
+  1) Pull the image:
 
-`docker pull bootgly/http-server-cli`
+  `docker pull bootgly/http-server-cli`
 
-2) Run the container in interactive mode and in the host network for max performance:
+  2) Run the container in interactive mode and in the host network for max performance:
 
-`docker run -it --network host bootgly/http-server-cli`
+  `docker run -it --network host bootgly/http-server-cli`
+</details>
 
 
 
