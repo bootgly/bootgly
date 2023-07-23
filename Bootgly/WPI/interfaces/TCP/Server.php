@@ -129,8 +129,6 @@ class Server implements Servers, Logging
 
       // ! @\Process
       $Process = $this->Process = new Process($this);
-      // ! @\CLI
-      new CLI;
       // ! @\CLI\Terminal
       $this->Terminal = new Terminal($this);
 
@@ -273,6 +271,11 @@ class Server implements Servers, Logging
       $this->Process->fork($this->workers);
 
       // ... Continue to master process:
+      if ($this->mode !== self::MODE_TEST) {
+         // DEPRECATED (TEMP)
+         new CLI;
+      }
+
       switch ($this->mode) {
          case self::MODE_DAEMON:
             $this->daemonize();
