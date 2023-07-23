@@ -3,8 +3,7 @@
 use Bootgly\CLI;
 
 
-$resource = 'Bootgly/CLI/commands';
-$commands = require $resource . '/@.php';
+$commands = require('Bootgly/CLI/commands/@.php');
 
 foreach ($commands as $Command) {
    CLI::$Commands->register($Command);

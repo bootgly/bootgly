@@ -42,8 +42,12 @@ class TestCommand extends Command
       // @
       $testsDir = $arguments[0] ?? null;
 
-      if ($testsDir) {
-         $tests = @include BOOTGLY_ROOT_DIR . $testsDir . '@.php';
+      if ($testsDir !== null) {
+         if (BOOTGLY_ROOT_DIR !== BOOTGLY_WORKING_DIR) {
+            $tests = @include(BOOTGLY_WORKING_DIR . $testsDir . '@.php');
+         } else {
+            $tests = @include(BOOTGLY_ROOT_DIR . $testsDir . '@.php');
+         }
 
          $tests = (array) $tests;
 
@@ -58,29 +62,34 @@ class TestCommand extends Command
             $Alert->emit('AutoBoot test not configured!');
          }
       } else {
-         $suiteFiles0 = @include BOOTGLY_ROOT_DIR . '/tests/@.php';
+         $this->load($options);
+      }
 
-         $bootglyTests = null;
-         $suiteFiles1 = null;
-         if (BOOTGLY_ROOT_DIR !== BOOTGLY_WORKING_DIR) {
-            $suiteFiles1 = @include BOOTGLY_WORKING_DIR . '/tests/@.php';
-         } else {
-            $bootglyTests = true;
-         }
+      return true;
+   }
 
-         $bootglyTests ??= $options['bootgly'] ?? $options['all'];
+   public function load (array $options)
+   {
+      $suiteFiles0 = @include(BOOTGLY_ROOT_DIR . '/tests/@.php');
 
-         if ($bootglyTests) {
-            foreach (@$suiteFiles0['filesSuites'] as $dir) {
-               $this->run([$dir . 'tests/'], []);
-            }
-         }
+      $bootglyTests = null;
+      $suiteFiles1 = null;
+      if (BOOTGLY_ROOT_DIR !== BOOTGLY_WORKING_DIR) {
+         $suiteFiles1 = @include(BOOTGLY_WORKING_DIR . '/tests/@.php');
+      } else {
+         $bootglyTests = true;
+      }
 
-         foreach (@$suiteFiles1['filesSuites'] as $dir) {
+      $bootglyTests ??= $options['bootgly'] ?? $options['all'];
+
+      if ($bootglyTests) {
+         foreach (@$suiteFiles0['filesSuites'] as $dir) {
             $this->run([$dir . 'tests/'], []);
          }
+      }
 
-         return true;
+      foreach (@$suiteFiles1['filesSuites'] as $dir) {
+         $this->run([$dir . 'tests/'], []);
       }
 
       return true;
