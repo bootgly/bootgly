@@ -5,6 +5,6 @@ return [
 
       'Bootgly/CLI/',
 
-      'Bootgly/Web/nodes/HTTP/Server/',
+      'Bootgly/WPI/nodes/HTTP/Server/',
    ]
 ];

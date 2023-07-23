@@ -228,18 +228,18 @@ or using Docker:
 
 
 <!-- Links -->
-[CLI_TERMINAL_INTERFACE_INPUT]: https://github.com/bootgly/bootgly/blob/main/interfaces/CLI/Terminal/Input.php
-[CLI_TERMINAL_INTERFACE_OUTPUT]: https://github.com/bootgly/bootgly/blob/main/interfaces/CLI/Terminal/Output.php
-[CLI_TERMINAL_COMPONENTS]: https://github.com/bootgly/bootgly/tree/main/interfaces/CLI/Terminal/components
+[CLI_TERMINAL_INTERFACE_INPUT]: https://github.com/bootgly/bootgly/blob/main/Bootgly/CLI/Terminal/Input.php
+[CLI_TERMINAL_INTERFACE_OUTPUT]: https://github.com/bootgly/bootgly/blob/main/Bootgly/CLI/Terminal/Output.php
+[CLI_TERMINAL_COMPONENTS]: https://github.com/bootgly/bootgly/tree/main/Bootgly/CLI/Terminal/components
 
-[CLI_TERMINAL_ALERT]: https://github.com/bootgly/bootgly/tree/main/interfaces/CLI/Terminal/components/Alert
-[CLI_TERMINAL_MENU]: https://github.com/bootgly/bootgly/tree/main/interfaces/CLI/Terminal/components/Menu
-[CLI_TERMINAL_PROGRESS]: https://github.com/bootgly/bootgly/tree/main/interfaces/CLI/Terminal/components/Progress
-[CLI_TERMINAL_TABLE]: https://github.com/bootgly/bootgly/tree/main/interfaces/CLI/Terminal/components/Table
+[CLI_TERMINAL_ALERT]: https://github.com/bootgly/bootgly/tree/main/Bootgly/CLI/Terminal/components/Alert
+[CLI_TERMINAL_MENU]: https://github.com/bootgly/bootgly/tree/main/Bootgly/CLI/Terminal/components/Menu
+[CLI_TERMINAL_PROGRESS]: https://github.com/bootgly/bootgly/tree/main/Bootgly/CLI/Terminal/components/Progress
+[CLI_TERMINAL_TABLE]: https://github.com/bootgly/bootgly/tree/main/Bootgly/CLI/Terminal/components/Table
 
-[WEB_TCP_CLIENT_INTERFACE]: https://github.com/bootgly/bootgly/blob/main/interfaces/Web/TCP/Client.php
-[WEB_TCP_SERVER_INTERFACE]: https://github.com/bootgly/bootgly/blob/main/interfaces/Web/TCP/Server.php
-[WEB_HTTP_SERVER_NODE]: https://github.com/bootgly/bootgly/blob/main/nodes/CLI/HTTP/Server.php
+[WEB_TCP_CLIENT_INTERFACE]: https://github.com/bootgly/bootgly/blob/main/Bootgly/WPI/interfaces/TCP/Client.php
+[WEB_TCP_SERVER_INTERFACE]: https://github.com/bootgly/bootgly/blob/main/Bootgly/WPI/interfaces/TCP/Server.php
+[WEB_HTTP_SERVER_NODE]: https://github.com/bootgly/bootgly/blob/main/Bootgly/WPI/nodes/CLI/HTTP/Server.php
 
 
 [PROJECT_DOCS]: https://docs.bootgly.com/
