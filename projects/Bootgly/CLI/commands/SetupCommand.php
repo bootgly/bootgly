@@ -23,7 +23,7 @@ class SetupCommand extends Command
    // * Data
    // @ Command
    public string $name = 'setup';
-   public string $description = 'Setup bootgly CLI on /usr/local/bin';
+   public string $description = 'Setup Bootgly CLI globally (on /usr/local/bin)';
 
 
    public function run (array $arguments, array $options) : bool

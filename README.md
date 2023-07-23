@@ -183,7 +183,7 @@ More **Screenshots**, videos and details can be found in the home page of [Bootg
 
 ## 🔧 Usage
 
-### \- Bootgly CLI 📟:
+### 📟 Bootgly CLI:
 
 <details>
   <summary>Run CLI demo</summary>
@@ -195,7 +195,24 @@ More **Screenshots**, videos and details can be found in the home page of [Bootg
   `php bootgly demo`
 </details>
 
-### \- Bootgly Web 🌐:
+<details>
+  <summary>Setup Bootgly CLI globally (on /usr/local/bin)</summary>
+
+  1) Run the Bootgly CLI setup command in terminal (with sudo):
+
+  `sudo php bootgly setup`
+</details>
+
+<details>
+  <summary>Perform Bootgly tests</summary>
+
+  1) Check the bootstrap tests file `tests/@.php`;
+  2) Run the Bootgly CLI test command in terminal:
+
+  `bootgly test`
+</details>
+
+### 🌐 Bootgly Web:
 
 <details>
   <summary>Running a HTTP Server:</summary>
