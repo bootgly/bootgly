@@ -239,7 +239,7 @@ or using Docker:
 
 [WEB_TCP_CLIENT_INTERFACE]: https://github.com/bootgly/bootgly/blob/main/Bootgly/WPI/interfaces/TCP/Client.php
 [WEB_TCP_SERVER_INTERFACE]: https://github.com/bootgly/bootgly/blob/main/Bootgly/WPI/interfaces/TCP/Server.php
-[WEB_HTTP_SERVER_NODE]: https://github.com/bootgly/bootgly/blob/main/Bootgly/WPI/nodes/CLI/HTTP/Server.php
+[WEB_HTTP_SERVER_NODE]: https://github.com/bootgly/bootgly/blob/main/Bootgly/WPI/nodes/HTTP/Server.php
 
 
 [PROJECT_DOCS]: https://docs.bootgly.com/
