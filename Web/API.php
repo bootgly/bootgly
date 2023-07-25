@@ -12,11 +12,10 @@ namespace Web;
 
 
 use Bootgly;
-use Bootgly\WPI;
 use Web;
 
 
-class API // TODO move to Web\API\REST
+abstract class API
 {
    public Web $Web;
 
@@ -24,129 +23,10 @@ class API // TODO move to Web\API\REST
    public bool $debugger;
 
    // * Data
-   public array $data;
-   // ? data['result']
-   // protected $result;
-   // ? data['exception']
-   // protected $debug;
-   // protected $error;
-   // protected $warning;
-   // protected $info;
-   // ? data['metadata']
+   // ...
 
    // * Meta
-   public string $key;
-
-
-   public function __construct ()
-   {
-      $Web = $this->Web = new Web;
-      // ---
-      $Web->API = $this;
-      // ---
-      // TODO TEMP
-      $Web->Request = WPI::$Request;
-      $Web->Response = WPI::$Response;
-      $Web->Router = WPI::$Router;
-
-      $Web->Response->use('API', $this);
-      $Web->Response->use('Web', $Web);
-      // * Config
-      $this->debugger = true;
-
-      // * Data
-      $this->data = [];
-      $this->data['result'] = NULL;
-      $this->data['exception'] = NULL; // TODO rename to events? logging? log?
-      $this->data['metadata'] = NULL;
-
-      // * Meta
-      $this->key = '';
-   }
-   public function __get (string $index)
-   {
-      switch ($index) {
-         // ? data['result']
-         case 'result':
-            $this->key = 'result';
-            return $this;
-         // ? data['exception']
-         case 'exception':
-            $this->key = 'exception';
-            return $this;
-         // ? data['metadata']
-         case 'metadata':
-            $this->key = 'metadata';
-            return $this;
-
-         default:
-            return $this->$index ?? NULL;
-      }
-   }
-   // TODO custom data templating
-   public function __set (string $index, $value)
-   {
-      // ? data['exception']
-      switch ($index) {
-         case 'debug':
-         case 'error':
-         case 'warning':
-         case 'info':
-            if ($this->data['exception'] === NULL) {
-               $this->data['exception'] = [];
-            }
-            break;
-      }
-
-      if ($this->key) { // Walked
-         switch ($this->key) {
-            case 'result':
-               $this->data['result'][$index] = $value;
-               break;
-            case 'exception':
-               $this->data['exception'][$index][] = $value;
-               break;
-            case 'metadata':
-               $this->data['metadata'][$index][] = $value;
-               break;
-         }
-
-         $this->key = '';
-      } else { // Root
-         switch ($index) {
-            case 'data':
-               $this->data = $value;
-               break;
-
-            // ? data['result']
-            case 'result':
-               $this->data['result'] = $value;
-               break;
-            // ? data['exception']
-            case 'debug':
-               if ($this->debugger) {
-                  $this->data['exception']['debug'] = $value;
-               }
-               break;
-            case 'error':
-               if (!$this->debugger) {
-                  unSet($value['message']);
-               }
-               $this->data['exception']['error'] = $value;
-               break;
-            case 'warning':
-               $this->data['exception']['warning'] = $value;
-               break;
-            case 'info':
-               $this->data['exception']['info'] = $value;
-               break;
-            // ? data['metadata']
-
-            default:
-               $this->data[$index] = $value;
-         }
-      }
-   }
+   // ...
 
    public function boot ()
    {
@@ -156,26 +36,6 @@ class API // TODO move to Web\API\REST
          require_once Bootgly::$Project . 'index.php';
       }
    }
-   public function debug ($data, string $password = '')
-   {
-      if ($this->debugger === false) {
-         return false;
-      }
-
-      $Request = &WPI::$Request;
-      if (@$Request->queries['debug'] === $password || $password === '') {
-         $this->data['exception']['debug'] = $data;
-         $this->respond();
-      }
-   }
-   public function respond ()
-   {
-      error_reporting(0);
-
-      WPI::$Response->Json->send($this->data, JSON_PRETTY_PRINT);
-
-      if (\PHP_SAPI !== 'cli') {
-         exit;
-      }
-   }
+   abstract public function debug ($data, string $password = '');
+   abstract public function respond ();
 }
