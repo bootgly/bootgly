@@ -43,10 +43,6 @@ The first beta is planned for mid-year 2023 (near the end of July).
   - [Bootgly CLI 📟](#-bootgly-cli-)
   - [Bootgly Web 🌐](#-bootgly-web-)
 - [Usage](#-usage)
-  - [Bootgly CLI 📟](#-bootgly-cli-)
-    - [Run CLI demo](#run-cli-demo)
-  - [Bootgly Web 🌐](#-bootgly-web-)
-    - [Running a HTTP Server](#running-a-http-server)
 
 ---
 
