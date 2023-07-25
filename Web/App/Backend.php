@@ -8,19 +8,23 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Web;
+namespace Web\App;
 
 
+use Bootgly;
+use Bootgly\ABI\streams\File;
 use Bootgly\WPI;
+
 use Web;
+use Web\App;
 
 
-abstract class App
+class Backend extends App
 {
    public Web $Web;
 
    // * Config
-   // ...
+   public const INDEXER = 'index.php';
 
    // * Data
    // ...
@@ -29,20 +33,14 @@ abstract class App
    // ...
 
 
-   public function __construct ()
+   public function boot ()
    {
-      $Web = $this->Web = new Web;
-      // ---
-      $Web->App = $this;
-      // ---
-      // TODO TEMP
-      $Web->Request = WPI::$Request;
-      $Web->Response = WPI::$Response;
-      $Web->Router = WPI::$Router;
+      $Web = &$this->Web;
 
-      $Web->Response->use('App', $this);
-      $Web->Response->use('Web', $Web);
+      $Router = WPI::$Router;
+
+      if ( is_file(Bootgly::$Project->path . self::INDEXER) ) {
+         require_once(Bootgly::$Project->path . self::INDEXER);
+      }
    }
-
-   abstract public function boot ();
 }
