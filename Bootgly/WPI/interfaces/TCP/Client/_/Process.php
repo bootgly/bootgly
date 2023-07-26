@@ -202,7 +202,7 @@ class Process
             // @ Set child index
             self::$index = $i + 1;
 
-            cli_set_process_title('BootglyWebClient: child process (Worker #' . self::$index . ')');
+            cli_set_process_title('Bootgly_WPI_Client: child process (Worker #' . self::$index . ')');
 
             // @ Set Logging display
             Logger::$display = Logger::DISPLAY_MESSAGE_WHEN_ID;
@@ -215,7 +215,7 @@ class Process
             $this->Client->stop();
             #exit(1);
          } else if ($pid > 0) { // Master process
-            cli_set_process_title("BootglyWebClient: master process");
+            cli_set_process_title("Bootgly_WPI_Client: master process");
          } else if ($pid === -1) {
             die('Could not fork process!');
          }

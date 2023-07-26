@@ -21,7 +21,7 @@ use Bootgly\CLI\Terminal;
 
 class CLI // Command Line Interface
 {
-   public const BOOT_FILE = 'CLI.constructor.php';
+   public const BOOT_FILE = 'CLI.php';
 
    // * Config
    // ...
@@ -69,11 +69,11 @@ class CLI // Command Line Interface
 
       // @ Boot CLI
       // Author
-      @include(Project::BOOTGLY_PROJECTS_DIR . self::BOOT_FILE);
+      @include(Project::BOOTGLY_PROJECTS_DIR . 'Bootgly/' . self::BOOT_FILE);
       // Consumer
       if (BOOTGLY_ROOT_DIR !== BOOTGLY_WORKING_DIR) {
          // Multi projects
-         @include(Project::PROJECTS_DIR . self::BOOT_FILE);
+         @include(Project::PROJECTS_DIR . 'Bootgly/' . self::BOOT_FILE);
       }
    }
 }

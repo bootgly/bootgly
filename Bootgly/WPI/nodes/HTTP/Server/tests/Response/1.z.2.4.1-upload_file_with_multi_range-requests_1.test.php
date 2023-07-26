@@ -22,7 +22,7 @@ return [
    'response' => function (Request $Request, Response $Response) : Response {
       $Project = new Project;
       $Project->vendor = 'Bootgly/';
-      $Project->container = 'Web/';
+      $Project->container = 'WPI/';
       $Project->package = 'examples/';
       $Project->version = 'app/';
 

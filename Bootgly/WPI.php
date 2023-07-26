@@ -21,7 +21,7 @@ use Bootgly\WPI\modules\HTTP\Server\Router;
 
 class WPI // Web Programming Interface
 {
-   public const BOOT_FILE = 'Web.constructor.php';
+   public const BOOT_FILE = 'WPI.php';
 
    // @ nodes
    public HTTP\Server $Server;
@@ -59,15 +59,13 @@ class WPI // Web Programming Interface
 
       // ---
 
-      // @ Boot
+      // @ Boot WPI
       // Author
-      if (BOOTGLY_ROOT_DIR === BOOTGLY_WORKING_DIR) {
-         @include(Project::BOOTGLY_PROJECTS_DIR . self::BOOT_FILE);
-      }
+      @include(Project::BOOTGLY_PROJECTS_DIR . 'Bootgly/' . self::BOOT_FILE);
       // Consumer
       if (BOOTGLY_ROOT_DIR !== BOOTGLY_WORKING_DIR) {
          // Multi projects
-         @include(Project::PROJECTS_DIR . self::BOOT_FILE);
+         @include(Project::PROJECTS_DIR . 'Bootgly/' . self::BOOT_FILE);
       }
    }
 }

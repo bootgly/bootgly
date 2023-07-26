@@ -1,5 +1,6 @@
 <?php
-namespace Bootgly\WPI;
+
+namespace projects\Bootgly\WPI\examples\app;
 
 # $this->Template = new Template($this->Web);
 

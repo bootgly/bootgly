@@ -10,7 +10,7 @@ use Bootgly\WPI\nodes\HTTP\Server\Response;
 
 
 Bootgly::$Project->vendor    = 'Bootgly/';
-Bootgly::$Project->container = 'Web/';
+Bootgly::$Project->container = 'WPI/';
 Bootgly::$Project->package   = 'examples/';
 Bootgly::$Project->version   = 'app/';
 Bootgly::$Project->construct();

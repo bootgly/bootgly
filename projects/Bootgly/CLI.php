@@ -1,9 +1,12 @@
 <?php
 
+namespace projects\Bootgly;
+
+
 use Bootgly\CLI;
 
 
-$commands = require('Bootgly/CLI/commands/@.php');
+$commands = require('CLI/commands/@.php');
 
 foreach ($commands as $Command) {
    CLI::$Commands->register($Command);

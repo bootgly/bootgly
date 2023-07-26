@@ -5,11 +5,11 @@ use Bootgly\CLI;
 use Bootgly\WPI;
 
 switch (\PHP_SAPI) {
-   // Console
+   // CLI / Console
    case 'cli':
       $CLI = new CLI;
       break;
-   // Web
+   // WPI / Web
    case 'apache2handler':
    case 'litespeed':
    case 'nginx':

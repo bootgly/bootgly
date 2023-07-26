@@ -3,7 +3,7 @@
  * --------------------------------------------------------------------------
  * Bootgly PHP Framework
  * Developed by Rodrigo Vieira (@rodrigoslayertech)
- * Copyright 2020-present
+ * Copyright 2023-present
  * Licensed under MIT
  * --------------------------------------------------------------------------
  */
@@ -13,16 +13,11 @@ namespace Bootgly\WPI\events;
 
 use Bootgly\ABI\events\Loops;
 
-use Bootgly\ACI\Logs\LoggableEscaped;
-
 use Bootgly\WPI\Connections;
 
 
 class Select implements Loops
 {
-   use LoggableEscaped;
-
-
    public Connections $Connections;
 
    // * Config
@@ -129,7 +124,6 @@ class Select implements Loops
             $id = (int) $Socket;
 
             unset($this->connecting[$id]);
-
             unset($this->reads[$id]);
 
             return true;
@@ -138,7 +132,6 @@ class Select implements Loops
             $id = (int) $Socket;
 
             unset($this->reading[$id]);
-
             unset($this->reads[$id]);
 
             return true;
@@ -146,7 +139,6 @@ class Select implements Loops
             $id = (int) $Socket;
 
             unset($this->writing[$id]);
-
             unset($this->writes[$id]);
 
             return true;
@@ -154,7 +146,6 @@ class Select implements Loops
             $id = (int) $Socket;
 
             unset($this->excepting[$id]);
-
             unset($this->excepts[$id]);
 
             return true;
@@ -166,8 +157,6 @@ class Select implements Loops
    public function loop ()
    {
       $this->started = microtime(true);
-
-      #$this->log('Event loop started!' . PHP_EOL);
 
       while (true) {
          pcntl_signal_dispatch();

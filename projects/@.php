@@ -9,45 +9,45 @@ return [
          ]
       ],
       [
-         'platform' => 'Web',
+         'interface' => 'WPI',
          'paths' => [
-            'Bootgly/Web/examples/api/'
+            'Bootgly/WPI/examples/api/'
          ]
       ],
       [
-         'platform' => 'Web',
+         'interface' => 'WPI',
          'paths' => [
-            'Bootgly/Web/examples/app/'
+            'Bootgly/WPI/examples/app/'
          ]
       ],
       [
-         'platform' => 'Web',
+         'interface' => 'WPI',
          'paths' => [
-            'Bootgly/Web/examples/app-vue/'
+            'Bootgly/WPI/examples/app-vue/'
          ]
       ],
       [
-         'platform' => 'Web',
+         'interface' => 'WPI',
          'paths' => [
-            'Bootgly/Web/examples/app-vue-quasar/'
+            'Bootgly/WPI/examples/app-vue-quasar/'
          ]
       ],
       [
-         'platform' => 'Web',
+         'interface' => 'WPI',
          'paths' => [
-            'Bootgly/Web/examples/static/'
+            'Bootgly/WPI/examples/static/'
          ]
       ],
       [
-         'platform' => 'Web',
+         'interface' => 'WPI',
          'paths' => [
-            'Bootgly/Web/examples/static-react/'
+            'Bootgly/WPI/examples/static-react/'
          ]
       ],
       [
-         'platform' => 'Web',
+         'interface' => 'WPI',
          'paths' => [
-            'Bootgly/Web/examples/static-vue/'
+            'Bootgly/WPI/examples/static-vue/'
          ]
       ],
    ]
