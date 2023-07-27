@@ -62,21 +62,4 @@ if (function_exists('debug') === false) {
    }
 }
 
-// ? Workables
-// composer?
-$installed = BOOTGLY_ROOT_BASE . '/../../composer/installed.php';
-if ( is_file($installed) ) {
-   $installed = @include $installed;
-
-   $root = $installed['root']['install_path'] ?? null;
-   if ($root) {
-      $root = realpath($root);
-   }
-
-   define('BOOTGLY_WORKING_BASE', $root ?? BOOTGLY_ROOT_BASE);
-} else {
-   define('BOOTGLY_WORKING_BASE', BOOTGLY_ROOT_BASE);
-}
-define('BOOTGLY_WORKING_DIR', BOOTGLY_WORKING_BASE . DIRECTORY_SEPARATOR);
-
 new Bootgly;
