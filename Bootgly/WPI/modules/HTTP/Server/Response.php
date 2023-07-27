@@ -3,7 +3,7 @@
  * --------------------------------------------------------------------------
  * Bootgly PHP Framework
  * Developed by Rodrigo Vieira (@rodrigoslayertech)
- * Copyright 2020-present
+ * Copyright 2023-present
  * Licensed under MIT
  * --------------------------------------------------------------------------
  */
@@ -12,7 +12,9 @@ namespace Bootgly\WPI\modules\HTTP\Server;
 
 
 use Bootgly;
+
 use Bootgly\ABI\streams\File;
+
 use Bootgly\WPI\modules\HTTP\Server;
 use Bootgly\WPI\modules\HTTP\Server\Response\Content;
 use Bootgly\WPI\modules\HTTP\Server\Response\Meta;

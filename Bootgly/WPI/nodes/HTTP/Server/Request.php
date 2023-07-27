@@ -3,7 +3,7 @@
  * --------------------------------------------------------------------------
  * Bootgly PHP Framework
  * Developed by Rodrigo Vieira (@rodrigoslayertech)
- * Copyright 2020-present
+ * Copyright 2023-present
  * Licensed under MIT
  * --------------------------------------------------------------------------
  */
@@ -15,13 +15,13 @@ use Bootgly\ACI\Debugger;
 use Bootgly\ABI\__String\Path;
 
 use Bootgly\WPI\interfaces\TCP\Server\Packages;
-use Bootgly\WPI\nodes\HTTP\Server;
 
+use Bootgly\WPI\nodes\HTTP\Server;
 use Bootgly\WPI\nodes\HTTP\Server\Request\_\Meta;
 use Bootgly\WPI\nodes\HTTP\Server\Request\_\Content;
 use Bootgly\WPI\nodes\HTTP\Server\Request\_\Header;
-
 use Bootgly\WPI\nodes\HTTP\Server\Request\Downloader;
+
 use Bootgly\WPI\modules\HTTP\Request\Ranging;
 
 /**
@@ -94,15 +94,14 @@ class Request
    use Ranging;
 
 
-   #public Meta $Meta;
-   #public Header $Header;
-   #public Content $Content;
+   public Meta $Meta;
+   public Header $Header;
+   public Content $Content;
 
    // * Config
    private string $base;
 
    // * Data
-   // public string $raw;
    // ...
 
    // * Meta
@@ -116,6 +115,10 @@ class Request
 
    public function __construct ()
    {
+      $this->Meta = new Meta;
+      $this->Header = new Header;
+      $this->Content = new Content;
+
       // * Config
       $this->base = '';
       // TODO pre-defined filters
@@ -153,7 +156,6 @@ class Request
             }
 
             return $_SERVER['REMOTE_ADDR'];
-         // case 'ips': // TODO ips based in Header X-Forwarded-For
          case 'port':
             return $_SERVER['REMOTE_PORT'];
 
@@ -168,7 +170,7 @@ class Request
 
             return $this->scheme = $scheme;
          // ! HTTP
-         case 'raw': // TODO refactor
+         case 'raw':
             $raw = $this->Meta->raw;
             $raw .= $this->Header->raw;
             $raw .= "\r\n";
@@ -178,8 +180,6 @@ class Request
 
             return $raw;
          // ? Meta
-         case 'Meta':
-            return $this->Meta = new Meta;
          case 'method':
             return $_SERVER['REQUEST_METHOD'];
          #case 'uri': ...
@@ -201,7 +201,7 @@ class Request
             $base = $this->base;
             if ($base && substr($locator, 0, strlen($base)) == $base) {
                // @ Return relative location
-               $locator = substr($locator, strlen($this->base));
+               $locator = substr($locator, strlen($base));
             }
 
             $this->url = $locator;
@@ -248,13 +248,11 @@ class Request
 
             return $this->queries = $queries;
          // ? Header
-         case 'Header':
-            return $this->Header = new Header;
          case 'headers':
             return $this->Header->fields;
          // @ Host
          case 'host':
-            $host = $this->Header->get('Host');
+            $host = $_SERVER['HTTP_HOST'] ?? $this->Header->get('Host');
 
             return $this->host = $host;
          case 'hostname': // alias
@@ -340,15 +338,13 @@ class Request
             }
 
             return $this->language = $language;
+         // case 'ips': // TODO ips based in Header X-Forwarded-For
          // ? Header / Cookie
          case 'Cookie':
             return $this->Header->Cookie;
          case 'cookies':
             return $this->Header->Cookie->cookies;
          // ? Content
-         case 'Content':
-            return $this->Content = new Content;
-
          case 'contents':
          case 'body':
          case 'input':
@@ -357,6 +353,10 @@ class Request
             return json_decode($this->input, true);
 
          case 'post':
+            if ($this->method === 'POST' && empty($_POST)) {
+               return $this->inputs;
+            }
+
             return $_POST;
          case 'posts':
             return json_encode($this->post);
@@ -367,6 +367,7 @@ class Request
          // * Meta
          case 'secure':
             return $this->scheme === 'https';
+
          // HTTP Caching Specification (RFC 7234)
          case 'fresh':
             if ($this->method !== 'GET' && $this->method !== 'HEAD') {
@@ -381,7 +382,7 @@ class Request
 
             // @ cache-control
             $cacheControl = $this->Header->get('Cache-Control');
-            if ($cacheControl && preg_match('/(?:^|,)\s*?no-cache\s*?(?:,|$)/', $cacheControl)) {
+            if ( $cacheControl && preg_match('/(?:^|,)\s*?no-cache\s*?(?:,|$)/', $cacheControl) ) {
                return false;
             }
 

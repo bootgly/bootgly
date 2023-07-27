@@ -12,20 +12,25 @@ namespace Bootgly\WPI\nodes\HTTP;
 
 
 use Bootgly\ACI\Logs\Logger;
+
 use Bootgly\ACI\Tests;
 use Bootgly\ACI\Tests\Tester;
+
 use Bootgly\API\Project;
+
 use Bootgly\API\Server as SAPI;
 
 use Bootgly\WPI\interfaces\TCP;
-use Bootgly\WPI\interfaces\TCP\Server\Packages;
 use Bootgly\WPI\interfaces\TCP\Client;
+
 use Bootgly\WPI\modules\HTTP;
+use Bootgly\WPI\modules\HTTP\Server\Router;
+
 use Bootgly\WPI\nodes\HTTP\Server\Decoders\_Decoder;
 use Bootgly\WPI\nodes\HTTP\Server\Encoders\_Encoder;
 use Bootgly\WPI\nodes\HTTP\Server\Request;
 use Bootgly\WPI\nodes\HTTP\Server\Response;
-use Bootgly\WPI\modules\HTTP\Server\Router;
+
 
 class Server extends TCP\Server implements HTTP
 {
@@ -58,9 +63,6 @@ class Server extends TCP\Server implements HTTP
 
       // @ Configure Request
       self::$Request = new Request;
-      self::$Request->Meta;
-      self::$Request->Header;
-      self::$Request->Content;
       // @ Configure Response
       self::$Response = new Response;
       // TODO initial Response Data API

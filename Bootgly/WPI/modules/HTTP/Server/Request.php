@@ -3,7 +3,7 @@
  * --------------------------------------------------------------------------
  * Bootgly PHP Framework
  * Developed by Rodrigo Vieira (@rodrigoslayertech)
- * Copyright 2020-present
+ * Copyright 2023-present
  * Licensed under MIT
  * --------------------------------------------------------------------------
  */
@@ -16,11 +16,9 @@ use Bootgly\ABI\__String\Path;
 use Bootgly\WPI\modules\HTTP\Request\Ranging;
 
 use Bootgly\WPI\modules\HTTP\Server;
-use Bootgly\WPI\modules\HTTP\Server\Request\_\ {
-   Meta,
-   Content,
-   Header
-};
+use Bootgly\WPI\modules\HTTP\Server\Request\_\Meta;
+use Bootgly\WPI\modules\HTTP\Server\Request\_\Content;
+use Bootgly\WPI\modules\HTTP\Server\Request\_\Header;
 
 use Bootgly\WPI\modules\HTTP\Server\Request\Session;
 
@@ -37,9 +35,11 @@ use Bootgly\WPI\modules\HTTP\Server\Request\Session;
  * @property string $method        GET, POST, ...
  * @property string $uri           /test/foo?query=abc&query2=xyz
  * @property string $protocol      HTTP/1.1
- * ? Meta / Resource
+ * @ URI
  * @property string $identifier    (URI) /test/foo?query=abc&query2=xyz
+ * @ URL
  * @property string $locator       (URL) /test/foo
+ * @ URN
  * @property string $name          (URN) foo
  * @ Path
  * @property object $Path
@@ -47,37 +47,41 @@ use Bootgly\WPI\modules\HTTP\Server\Request\Session;
  * @property array $paths          ['test', 'foo']
  * @ Query
  * @property object $Query
- * @property string $query          query=abc&query2=xyz
+ * @property string $query         query=abc&query2=xyz
  * @property array $queries        ['query' => 'abc', 'query2' => 'xyz']
- * ? Meta / Authentication
- * @property string $user          boot
- * @property string $password      gly
  * ? Header
  * @property object Header         ->{'X-Header'}
+ * @ Host
+ * @property string $host          v1.lab.bootgly.com
+ * @property string $domain        bootgly.com
+ * @property string $subdomain     v1.lab
+ * @property array $subdomains     ['lab', 'v1']
+ * @ Authorization (Basic)
+ * @property string $username      boot
+ * @property string $password      gly
+ * @ Accept-Language
  * @property string $language      pt-BR
  * ? Header / Cookie
  * @property object $Cookie
  * @property array $cookies
  * ? Content
  * @property object Content
+ * 
  * @property string $input
+ * @property array $inputs
+ * 
  * @property array $post
+ * 
  * @property array $files
- * ? Content / Downloader
- * @property object Downloader
  *
  *
  * * Meta
- * @property string $host          v1.lab.bootgly.com
- * @property string $domain        bootgly.com
- * @property string $subdomain     v1.lab
- * @property array $subdomains     ['lab', 'v1']
- *
  * @property string $on            2020-03-10 (Y-m-d)
  * @property string $at            17:16:18 (H:i:s)
- * @property int $timestamp        1586496524
+ * @property int $time             1586496524
  *
  * @property bool $secure          true
+ * 
  * @property bool $fresh           true
  * @property bool $stale           false
  */
@@ -87,20 +91,32 @@ class Request
 {
    use Ranging;
 
+
+   public Meta $Meta;
+   public Header $Header;
+   public Content $Content;
+
    // * Config
    private string $base;
 
    // * Data
-   // public string $raw;
+   // ...
 
    // * Meta
-   // public string $length;
+   public readonly string $on;
+   public readonly string $at;
+   public readonly int $time;
+   // ...
 
    public Session $Session;
 
 
    public function __construct ()
    {
+      $this->Meta = new Meta;
+      $this->Header = new Header;
+      $this->Content = new Content;
+
       // * Config
       $this->base = '';
       // TODO pre-defined filters
@@ -110,7 +126,9 @@ class Request
       // ... dynamically
 
       // * Meta
-      // ...
+      $this->on = date("Y-m-d");
+      $this->at = date("H:i:s");
+      $this->time = $_SERVER['REQUEST_TIME'];
 
 
       $this->Session = new Session;
@@ -149,7 +167,7 @@ class Request
 
          // ! HTTP
          case 'raw':
-            $raw = "$this->method $this->uri $this->protocol\r\n";
+            $raw = $this->Meta->raw;
             $raw .= $this->Header->raw;
             $raw .= "\r\n";
             $raw .= $this->input;
@@ -158,37 +176,22 @@ class Request
 
             return $raw;
          // ? Meta
-         case 'Meta':
-            return $this->Meta = new Meta;
          case 'method':
             return $_SERVER['REQUEST_METHOD'];
-         // case 'uri': break;
+         // case 'uri': ...
          case 'protocol':
             return $_SERVER['SERVER_PROTOCOL'];
 
-         // ? Meta / Resource
          // @ URI
          case 'uri':
          case 'URI': // TODO with __String/URI?
          case 'identifier': // @ base
-            if (\PHP_SAPI !== 'cli')
-               $identifier = @$_SERVER['REQUEST_URI'];
-            else
-               $identifier = $this->uri ?? '';
-
-            $this->uri = $identifier;
-            // $this->URI = $identifier;
-            $this->identifier = $identifier;
-
-            return $identifier;
+            return $_SERVER['REDIRECT_URI'] ?? @$_SERVER['REQUEST_URI'];
 
          // @ URL
          case 'url':
          case 'URL': // TODO with __String/URL?
          case 'locator':
-            #$locator = @$_SERVER['REDIRECT_URL'];
-
-            #if ($locator === '/index.php') 
             $locator = strtok($this->uri, '?');
 
             $locator = rtrim($locator ?? '/', '/');
@@ -225,28 +228,84 @@ class Request
             return $this->Path->paths;
          // @ Query
          case 'query':
-            return @$_SERVER['REDIRECT_QUERY_STRING'];
+            $uri = $this->uri;
+
+            $mark = strpos($uri, '?');
+            $query = '';
+
+            if ($mark !== false) {
+               $query = substr($uri, $mark + 1);
+            }
+
+            return $this->query = $query;
          case 'queries':
             parse_str($this->query, $queries);
-            return $this->queries = $queries;
-         // ? Meta / Authentication
-         case 'user':
-            return $this->user = $_SERVER['PHP_AUTH_USER'] ?? null;
-         case 'username':
-            return $this->user;
 
-         case 'password':
-            return $this->password = $_SERVER['PHP_AUTH_PW'] ?? null;
-         case 'pass':
-            return $this->password;
-         case 'pw':
-            return $this->password;
+            return $this->queries = $queries;
          // ? Header
-         case 'Header':
-            return $this->Header = new Header;
          case 'headers':
             return $this->Header->fields;
+         // @ Host
+         case 'host':
+            $host = $_SERVER['HTTP_HOST'] ?? $this->Header->get('Host');
+
+            return $this->host = $host;
+         case 'hostname': // alias
+            return $this->host;
+         case 'domain':
+            // TODO validate all cases
+            $pattern = "/(?P<domain>[a-z0-9][a-z0-9\-]{1,63}\.[a-z\.]{2,6})(:[\d]+)?$/i";
+
+            if (preg_match($pattern, $this->host, $matches)) {
+               return $this->domain = @$matches['domain'];
+            }
+
+            break;
+
+         case 'subdomain':
+            // TODO validate all cases
+            return $this->subdomain = rtrim(strstr($this->host, $this->domain, true), '.');
+         case 'subdomains':
+            return $this->subdomains = explode('.', $this->subdomain);
+            // TODO Domain with __String/Domain
+            // TODO Domain->sub, Domain->second (second-level), Domain->top (top-level), Domain->root, tld, ...
+
+         // @ Authorization (Basic)
+         case 'username':
+            $authorization = $this->Header->get('Authorization');
+
+            if (strpos($authorization, 'Basic') === 0) {
+               $encodedCredentials = substr($authorization, 6);
+               $decodedCredentials = base64_decode($encodedCredentials);
+
+               [$username, $password] = explode(':', $decodedCredentials, 2);
+
+               $this->password = $password;
+
+               return $this->user = $username;
+            }
+
+            return $this->user = null;
+
+         case 'password':
+            $authorization = $this->Header->get('Authorization');
+
+            if (strpos($authorization, 'Basic') === 0) {
+               $encodedCredentials = substr($authorization, 6);
+               $decodedCredentials = base64_decode($encodedCredentials);
+
+               [$username, $password] = explode(':', $decodedCredentials, 2);
+
+               $this->user = $username;
+
+               return $this->password = $password;
+            }
+
+            return $this->password = null;
+
+         // @ Accept-Language
          case 'language':
+            // TODO move to method?
             $httpAcceptLanguage = @$_SERVER['HTTP_ACCEPT_LANGUAGE'];
 
             if ($httpAcceptLanguage === null) {
@@ -281,8 +340,6 @@ class Request
          case 'cookies':
             return $this->Cookie->cookies;
          // ? Content
-         case 'Content':
-            return $this->Content = new Content;
          case 'contents':
          case 'input':
             return $this->Content->input;
@@ -300,65 +357,30 @@ class Request
          case 'files':
             return $_FILES;
          // * Meta
-         case 'host': // @ CLI OK | Non-CLI OK?
-            $host = $_SERVER['HTTP_HOST'];
-
-            return $this->host = $host;
-         case 'hostname': // alias
-            return $this->host;
-         case 'domain':
-            // TODO validate all cases
-            $pattern = "/(?P<domain>[a-z0-9][a-z0-9\-]{1,63}\.[a-z\.]{2,6})(:[\d]+)?$/i";
-
-            if ( preg_match($pattern, $this->host, $matches) ){
-               return $this->domain = @$matches['domain'];
-            }
-
-            break;
-
-         case 'subdomain':
-            // TODO validate all cases
-            return $this->subdomain = rtrim(strstr($this->host, $this->domain, true), '.');
-         case 'subdomains':
-            return $this->subdomains = explode('.', $this->subdomain);
-         // TODO Domain with __String/Domain
-         // TODO Domain->sub, Domain->second (second-level), Domain->top (top-level), Domain->root, tld, ...
-         case 'on':
-            return $this->on = date("Y-m-d");
-         case 'at':
-            return $this->at = date("H:i:s");
-         case 'timestamp':
-            return $this->time = $_SERVER['REQUEST_TIME'];
-
          case 'secure':
             return $this->scheme === 'https';
 
-         case 'fresh': // TODO move to trait?
+         // HTTP Caching Specification (RFC 7234)
+         case 'fresh':
             if ($this->method !== 'GET' && $this->method !== 'HEAD') {
                return false;
             }
 
-            // TODO 2xx or 304 as per rfc2616 14.26 ?
-            // $status = Server::$Response->code;
-            // if ( ($status >= 200 && $status < 300) || $status === 304) {
-            //    return false;
-            // }
-
-            $modifiedSince = $this->Header->get('if-modified-since');
-            $noneMatch = $this->Header->get('if-none-match');
-            if (!$modifiedSince && !$noneMatch) {
+            $ifModifiedSince = $this->Header->get('If-Modified-Since');
+            $ifNoneMatch = $this->Header->get('If-None-Match');
+            if (!$ifModifiedSince && !$ifNoneMatch) {
                return false;
             }
 
             // @ cache-control
-            $cacheControl = $this->Header->get('cache-control');
-            if ($cacheControl && preg_match('/(?:^|,)\s*?no-cache\s*?(?:,|$)/', $cacheControl)) {
+            $cacheControl = $this->Header->get('Cache-Control');
+            if ( $cacheControl && preg_match('/(?:^|,)\s*?no-cache\s*?(?:,|$)/', $cacheControl) ) {
                return false;
             }
 
             // @ if-none-match
-            if ($noneMatch && $noneMatch !== '*') {
-               $eTag = Server::$Response->Header->get('etag');
+            if ($ifNoneMatch && $ifNoneMatch !== '*') {
+               $eTag = Server::$Response->Header->get('ETag');
 
                if (!$eTag) {
                   return false;
@@ -370,25 +392,25 @@ class Request
                $matches = [];
                $start = 0;
                $end = 0;
-               // gather tokens
-               for ($i = 0; $i < strlen($noneMatch); $i++) {
-                  switch ($noneMatch[$i]) {
+               // @ Gather tokens
+               for ($i = 0; $i < strlen($ifNoneMatch); $i++) {
+                  switch ($ifNoneMatch[$i]) {
                      case ' ':
                         if ($start === $end) {
                            $start = $end = $i + 1;
                         }
                         break;
                      case ',':
-                        $matches[] = substr($noneMatch, $start, $end);
+                        $matches[] = substr($ifNoneMatch, $start, $end);
                         $start = $end = $i + 1;
                         break;
                      default:
                         $end = $i + 1;
                         break;
-                     }
+                  }
                }
                // final token
-               $matches[] = substr($noneMatch, $start, $end);
+               $matches[] = substr($ifNoneMatch, $start, $end);
 
                for ($i = 0; $i < count($matches); $i++) {
                   $match = $matches[$i];
@@ -404,10 +426,19 @@ class Request
             }
 
             // @ if-modified-since
-            if ($modifiedSince) {
-               $lastModified = Server::$Response->Header->get('last-modified');
-               $modifiedStale = !$lastModified && (strtotime($lastModified) < strtotime($modifiedSince));
+            if ($ifModifiedSince) {
+               $lastModified = Server::$Response->Header->get('Last-Modified');
+               if ($lastModified === '') {
+                  return false;
+               }
 
+               $lastModifiedTime = strtotime($lastModified);
+               $ifModifiedSinceTime = strtotime($ifModifiedSince);
+               if ($lastModifiedTime === false || $ifModifiedSinceTime === false) {
+                  return false;
+               }
+
+               $modifiedStale = $lastModifiedTime > $ifModifiedSinceTime;
                if ($modifiedStale) {
                   return false;
                }
@@ -415,7 +446,7 @@ class Request
 
             return true;
          case 'stale':
-            return !$this->fresh;
+            return ! $this->fresh;
       }
    }
    public function __set ($name, $value)
