@@ -47,8 +47,5 @@ class Meta // TODO move/refactor
 
       // * Meta
       $this->length = null;
-
-
-      #$this->Authentication = $Authentication;
    }
 }

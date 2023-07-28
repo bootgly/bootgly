@@ -32,8 +32,6 @@ class Meta
    // @ Path
    // @ Query
 
-   #public Authentication $Authentication;
-
 
    public function __construct ()
    {
@@ -49,8 +47,5 @@ class Meta
 
       // * Meta
       $this->length = null;
-
-
-      #$this->Authentication = $Authentication;
    }
 }

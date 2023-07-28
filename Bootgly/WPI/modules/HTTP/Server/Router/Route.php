@@ -118,7 +118,7 @@ final class Route
 
          case 'base':
          case 'prefix': // TODO refactor
-            $this->Router::$Server::$Request->base = $value;
+            Router::$Server::$Request->base = $value;
 
             break;
 
