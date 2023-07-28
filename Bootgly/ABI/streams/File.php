@@ -154,18 +154,18 @@ class File
    {
       // use Path
       if ($this->Path) {
-         // @ /path/to/foo.php
+         // < /path/to/foo.php
          switch ($name) { // TODO Refactor, Create alias and Test all
             case 'basename':
-            case 'current':   // @ 'foo.php'
+            case 'current':   // > 'foo.php'
                return $this->Path->current;
-            case 'name':      // @ foo
+            case 'name':      // > foo
                return $this->name = strstr($this->current, '.', true);
-            case 'extension': // @ php
+            case 'extension': // > php
                return $this->extension = substr(strrchr($this->current, '.'), 1);
-            case 'type':      // @ text/html
+            case 'type':      // > text/html
                return $this->type = @self::MIMES[$this->extension];
-            case 'parent':    // @ /path/to/
+            case 'parent':    // > /path/to/
                return $this->Path->parent;
          }
       }

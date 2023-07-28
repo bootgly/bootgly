@@ -56,7 +56,7 @@ class Path // TODO refactor
          case '_':
             return $this->Path;
 
-            //@Data
+         // * Data
          case 'root':
             $root = strstr($this->Path, self::DIR_, true);
 
@@ -163,7 +163,6 @@ class Path // TODO refactor
       return $this->Path;
    }
 
-   // TODO Refactor this function to reduce its Cognitive Complexity from 21 to the 15 allowed.
    public function Path (string $path) : string
    {
       $Path = '';
@@ -216,7 +215,7 @@ class Path // TODO refactor
 
          $paths = glob($Path);
 
-         if (isset($paths[0])) {
+         if ( isSet($paths[0]) ) {
             if ($relative) {
                $Path = self::cut($paths[0], $this->root, -1);
             } else {

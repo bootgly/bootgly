@@ -21,16 +21,17 @@ class Dir
 
    public ? Path $Path = null;
 
+   // * Config
+   public bool $check = true;
+   public bool $convert = false;
+   public bool $clean = false;
+   // * Data
    public string $path = '';
    public string $dir = '';
 
    public string $Dir = '';
-
-   //? @Config
-   public bool $check = true;
-   public bool $convert = false;
-   public bool $clean = false;
-   //? @Access
+   // * Meta
+   // @ Access
    protected $writable;    // bool || Return if the file is writable
 
 
@@ -62,7 +63,7 @@ class Dir
    }
    public function __get (string $name)
    {
-      if (!$this->Dir) {
+      if ( ! $this->Dir ) {
          return @$this->name;
       }
 
@@ -90,24 +91,27 @@ class Dir
       $this->Dir = '';
 
       if ($path) {
-         if ($this->check && is_dir($path)) {
-            // Only check if is Dir
+         // @ Check
+         if ( $this->check && is_dir($path) ) {
+            // @ Check if is Dir
             return $this->Dir = $path;
          }
 
+         // @ Convert
          if ($this->convert) {
-            // Convert base to dir and check if is Dir
+            // @ Convert base to dir and check if is Dir
             $path_ = $path . self::DIR_;
-            if (is_dir($path_)) {
+            if ( is_dir($path_) ) {
                return $this->Dir = $path_;
             }
 
-            // Convert file to dir and check if is Dir
-            if (is_file($path)) {
+            // @ Convert to file, check and return parent dir
+            if ( is_file($path) ) {
                return $this->Dir = dirname($path, 1) . self::DIR_;
             }
          }
 
+         // @ Clean
          if ($this->clean && $this->Dir) {
             // Clean Dir separators to native SO Dir separators
             $this->Dir = rtrim($this->Dir, "\x2F"); // /
@@ -119,7 +123,6 @@ class Dir
       return $this->Dir;
    }
 
-   // TODO Refactor this function to reduce its Cognitive Complexity from 19 to the 15 allowed.
    public static function scan (Dir $Dir, bool $recursive = false) : array
    {
       $paths = [];

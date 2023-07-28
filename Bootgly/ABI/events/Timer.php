@@ -15,7 +15,6 @@ namespace Bootgly\ABI\events;
 use \Throwable;
 
 
-// TODO move
 class Timer
 {
    // * Config

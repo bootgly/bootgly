@@ -34,12 +34,12 @@ class Escaped
 
    public static function boot ()
    {
-      $resource = 'tokens/';
-      $tokens = require $resource . '@.php';
+      $resource = '/Escaped/tokens/';
+      $tokens = require (__DIR__ . $resource . '@.php');
 
       $files = $tokens['files'];
-      foreach ($files as $file) {
-         $Token = require $resource . $file . '.php';
+      foreach ($files as $file) { // TODO add filter
+         $Token = require (__DIR__ . $resource . $file . '.php');
 
          foreach ($Token as $token => $Closure) {
             self::$tokens[$token] = $Closure;
