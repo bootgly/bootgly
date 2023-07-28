@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\WPI\modules\HTTP\Server\Request\_;
+namespace Bootgly\WPI\modules\HTTP\Server\Request;
 
 
 class Meta
@@ -41,9 +41,9 @@ class Meta
       // * Data
       $this->raw = '';
 
-      $this->method = '';
-      $this->uri = '';
-      $this->protocol = '';
+      $this->method = $_SERVER['REQUEST_METHOD'];
+      $this->uri = @$_SERVER['REDIRECT_URI'] ?? $_SERVER['REQUEST_URI'];
+      $this->protocol = $_SERVER['SERVER_PROTOCOL'];
 
       // * Meta
       $this->length = null;

@@ -8,10 +8,10 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\WPI\modules\HTTP\Server\Request\_\Meta;
+namespace Bootgly\WPI\modules\HTTP\Server\Request\Meta;
 
 
-use Bootgly\WPI\modules\HTTP\Server\Request\_\Meta;
+use Bootgly\WPI\modules\HTTP\Server\Request\Meta;
 
 
 final class Authentication

@@ -14,9 +14,9 @@ namespace Bootgly\WPI\modules\HTTP\Server;
 use Bootgly\WPI\modules\HTTP\Request\Ranging;
 
 use Bootgly\WPI\modules\HTTP\Server;
-use Bootgly\WPI\modules\HTTP\Server\Request\_\Meta;
-use Bootgly\WPI\modules\HTTP\Server\Request\_\Content;
-use Bootgly\WPI\modules\HTTP\Server\Request\_\Header;
+use Bootgly\WPI\modules\HTTP\Server\Request\Meta;
+use Bootgly\WPI\modules\HTTP\Server\Request\Content;
+use Bootgly\WPI\modules\HTTP\Server\Request\Header;
 
 use Bootgly\WPI\modules\HTTP\Server\Request\Session;
 

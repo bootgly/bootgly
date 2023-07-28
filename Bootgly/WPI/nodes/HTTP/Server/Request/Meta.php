@@ -8,36 +8,44 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\WPI\modules\HTTP\Server\Request\_;
+namespace Bootgly\WPI\nodes\HTTP\Server\Request;
 
 
-class Content
+class Meta // TODO move/refactor
 {
    // * Config
    // ...
 
    // * Data
    public string $raw;
-   public string $input;
+
+   public ? string $method;
+   public ? string $uri; // @ Resource
+   public ? string $protocol;
 
    // * Meta
    public ? int $length;
-   public null|int|false $position;
-   public ? int $downloaded;
+   // ? Resource
+   // @ URI
+   // @ URL
+   // @ URN
+   // @ Path
+   // @ Query
 
 
    public function __construct ()
    {
       // * Config
-      // ..
+      // ...
 
       // * Data
       $this->raw = '';
-      $this->input = file_get_contents('php://input');
+
+      $this->method = &$_SERVER['REQUEST_METHOD'];
+      $this->uri = &$_SERVER['REQUEST_URI'];
+      $this->protocol = &$_SERVER['SERVER_PROTOCOL'];
 
       // * Meta
       $this->length = null;
-      $this->position = null;
-      $this->downloaded = null;
    }
 }

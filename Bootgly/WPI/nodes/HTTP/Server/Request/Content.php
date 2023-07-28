@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\WPI\nodes\HTTP\Server\Request\_;
+namespace Bootgly\WPI\nodes\HTTP\Server\Request;
 
 
 class Content

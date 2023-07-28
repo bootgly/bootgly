@@ -12,7 +12,7 @@ namespace Bootgly\WPI\nodes\HTTP\Server\Request;
 
 
 use Bootgly\WPI\nodes\HTTP\Server\Request;
-use Bootgly\WPI\nodes\HTTP\Server\Request\_\Content;
+use Bootgly\WPI\nodes\HTTP\Server\Request\Content;
 
 
 class Downloader

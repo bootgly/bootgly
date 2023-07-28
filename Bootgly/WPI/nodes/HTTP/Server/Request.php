@@ -17,9 +17,9 @@ use Bootgly\WPI\modules\HTTP\Request\Ranging;
 use Bootgly\WPI\modules\HTTP\Server\Requestable;
 
 use Bootgly\WPI\nodes\HTTP\Server;
-use Bootgly\WPI\nodes\HTTP\Server\Request\_\Meta;
-use Bootgly\WPI\nodes\HTTP\Server\Request\_\Content;
-use Bootgly\WPI\nodes\HTTP\Server\Request\_\Header;
+use Bootgly\WPI\nodes\HTTP\Server\Request\Meta;
+use Bootgly\WPI\nodes\HTTP\Server\Request\Content;
+use Bootgly\WPI\nodes\HTTP\Server\Request\Header;
 use Bootgly\WPI\nodes\HTTP\Server\Request\Downloader;
 
 
