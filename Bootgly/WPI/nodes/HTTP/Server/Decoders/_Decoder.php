@@ -26,6 +26,7 @@ class _Decoder extends Decoders
       // @ Check local cache and return
       if ($size <= 512 && isset($inputs[$buffer])) {
          Server::$Request = $inputs[$buffer];
+         Server::$Request->restore();
          return $size;
       }
 
