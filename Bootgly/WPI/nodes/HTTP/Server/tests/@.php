@@ -122,7 +122,13 @@ return [
          '1.z.3-upload_large_file',
       ],
       'Router/' => [
-         '1.1-route_callback'
+         '1.1-route_callback-closure',
+         '1.2-route_callback-function',
+         '1.3-route_callback-static_method',
+         #'2.1-route_condition-method-custom',
+         '2.2.1-route_condition-method-multiple',
+         '2.2.2-route_condition-method-multiple',
+         '2.2.3-route_condition-method-multiple',
       ]
    ]
 ];
