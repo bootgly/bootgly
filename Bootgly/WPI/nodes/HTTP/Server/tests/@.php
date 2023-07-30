@@ -129,6 +129,11 @@ return [
          '2.2.1-route_condition-method-multiple',
          '2.2.2-route_condition-method-multiple',
          '2.2.3-route_condition-method-multiple',
+         '3.0-route_route-specific',
+         '3.1-route_route-single_param_id',
+         '3.2.1-route_route-multiple_param-different',
+         '3.2.2-route_route-multiple_param-equals',
+         '3.2.3-route_route-multiple_param-equals-different',
       ]
    ]
 ];
