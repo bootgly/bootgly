@@ -102,7 +102,7 @@ class Request
    private string $base;
 
    // * Data
-   // ...
+   private $_SERVER;
 
    // * Meta
    private string $Server;
@@ -139,6 +139,11 @@ class Request
 
 
       $this->Downloader = new Downloader($this);
+   }
+
+   public function __clone ()
+   {
+      $this->_SERVER = $_SERVER;
    }
 
    public function boot (Packages $Package, string &$buffer, int $size) : int // @ return Request length
@@ -264,6 +269,10 @@ class Request
 
       // @ return Request length
       return $length;
+   }
+   public function restore ()
+   {
+      $_SERVER = $this->_SERVER;
    }
 
    public function download (? string $key = null) : array|null
