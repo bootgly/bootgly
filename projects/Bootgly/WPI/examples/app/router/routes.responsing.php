@@ -1,5 +1,5 @@
 <?php
-$Router('/http-cache-time-based-1', function ($Response, $Request) {
+$Router->route('/http-cache-time-based-1', function ($Response, $Request) {
    // * Data
    // ! HTTP
    $Response->Header->set('Last-Modified', 'Sun, 23 Oct 2022 14:50:00 GMT');
@@ -15,7 +15,7 @@ $Router('/http-cache-time-based-1', function ($Response, $Request) {
    // * Meta
 }, [GET, POST]);
 
-$Router('/send-headers-as-json-1', function ($Response) {
+$Router->route('/send-headers-as-json-1', function ($Response) {
    // * Data
    // ! HTTP
    return $Response->Json->send($Response->headers);
@@ -34,7 +34,7 @@ $Router->get('/simple-file-render-1', function ($Response) {
       )->send();
 })->name = '';
 
-$Router('/simple-view-render-1', function ($Response) {
+$Router->route('/simple-view-render-1', function ($Response) {
    return $Response->View->render('test', [
       'meta' => ['title' => 'Testing Response->View->render(...) in Bootgly!']
    ])->send();

@@ -1,5 +1,5 @@
 <?php
-$Router('/send-file', function ($Response) {
+$Router->route('/send-file', function ($Response) {
   return $Response->send(<<<HTML
   <!DOCTYPE html>
   <html lang="pt-BR">
@@ -17,7 +17,7 @@ $Router('/send-file', function ($Response) {
   HTML);
 }, GET);
 
-$Router('/requesting', function ($Response, $Request) {
+$Router->route('/requesting', function ($Response, $Request) {
   // * Data
   /*
   $Response->append($Request->ip);                  // @ 123.10.20.30

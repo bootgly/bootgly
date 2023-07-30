@@ -270,9 +270,11 @@ class Request
       // @ return Request length
       return $length;
    }
-   public function restore ()
+   public function reboot ()
    {
-      $_SERVER = $this->_SERVER;
+      if ( isSet($this->_SERVER) ) {
+         $_SERVER = $this->_SERVER;
+      }
    }
 
    public function download (? string $key = null) : array|null

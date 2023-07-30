@@ -1,5 +1,5 @@
 <?php
-$Router('/templating-raw', function () use ($Bootgly) {
+$Router->route('/templating-raw', function () use ($Bootgly) {
    $raw = <<<'HTML'
    <h1>Testing raw templating!</h1>
 
@@ -12,7 +12,7 @@ $Router('/templating-raw', function () use ($Bootgly) {
       'title2' => '| Using Bootgly templating'
    ]);
 });
-$Router('/templating-file', function () use ($Bootgly) {
+$Router->route('/templating-file', function () use ($Bootgly) {
    $Bootgly->Template->render('index', [
       'title' => 'Bootgly Testing templating',
       'description' => 'Using Bootgly Template engine!',
@@ -31,7 +31,7 @@ $Router('/templating-file', function () use ($Bootgly) {
    ]);
 });
 
-$Router('/*', function () {
+$Router->route('/*', function () {
    echo 'Bootgly 404 Not found!';
    exit;
 });
