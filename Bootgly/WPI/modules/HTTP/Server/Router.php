@@ -126,7 +126,11 @@ class Router
       // TODO
    }
    // @ default
-   public function route (string $route, mixed $handler, null|string|array $condition = null) : bool
+   public function route (
+      string $route,
+      \Closure|callable $handler,
+      null|string|array $condition = null
+   ) : bool
    {
       $this->routes++;
 
@@ -213,20 +217,21 @@ class Router
          $Route::$level++;
 
          // @ Execute
-         switch ( gettype($handler) ) {
-            case 'object':
-               if ($handler instanceof \Closure) {
-                  $handler(
-                     self::$Server::$Response,
-                     self::$Server::$Request,
-                     $Route
-                  ); // @ Call handler
-               }
-
-               break;
-            case 'array':
-               $callback = array_shift($handler);
-               call_user_func($callback, $handler);
+         if ($handler instanceof \Closure) {
+            $handler(
+               self::$Server::$Response,
+               self::$Server::$Request,
+               $Route
+            ); // @ Call handler
+         } else {
+            call_user_func_array(
+               $handler,
+               [
+                  self::$Server::$Response,
+                  self::$Server::$Request,
+                  $Route
+               ]
+            );
          }
       }
 
@@ -287,14 +292,16 @@ class Router
    }
    public function parse () // @ Parse Route Path (Parameterized)
    {
-      if ($this->active === false) return;
+      if ($this->active === false) return '';
+
+      $Route = &$this->Route;
 
       // ! Prepare Route Path
       // ? Route path
-      $paths = explode('/', str_replace("/", "\/", $this->Route->path));
+      $paths = explode('/', str_replace("/", "\/", $Route->path));
       // ? Request path (full | relative)
-      if ($this->Route->catched) { // Get catched path instead of Request path
-         $locations = explode('/', str_replace("/", "\/", $this->Route->catched));
+      if ($Route->catched) { // Get catched path instead of Request path
+         $locations = explode('/', str_replace("/", "\/", $Route->catched));
       } else {
          $locations = explode('/', str_replace("/", "\/", self::$Server::$Request->path));
       }
@@ -302,17 +309,17 @@ class Router
       $regex_replaced = [];
 
       // ! Reset Route->parsed
-      if ($this->Route->nested) {
-         $this->Route->parsed = '';
+      if ($Route->nested) {
+         $Route->parsed = '';
       } else {
-         $this->Route->parsed = '\\';
+         $Route->parsed = '\\';
       }
 
       foreach ($paths as $index => $node) {
          if ($index > 0 || $node !== '\\') {
             if (@$node[-1] === '*' || @$node[-2] === '*') { //? Catch-All Param
                $node = str_replace(':*', '(.*)', $node); //? Replace with (...) capture everything enclosed
-               $this->Route->catched = '(.*)';
+               $Route->catched = '(.*)';
                // TODO error if detected next node after Catch-All param?
             } else if (@$node[0] === ':') { //? Param
                $param = trim($node, ':\\'); //? Get Param name
@@ -326,50 +333,50 @@ class Router
                   $params = explode('(', rtrim($param, ')'));
                   $param = $params[0];
 
-                  $this->Route->Params->$param = $params[1];
+                  $Route->Params->$param = $params[1];
 
-                  $this->Route->path = str_replace('(' . $params[1] . ')', '', $this->Route->path);
+                  $Route->path = str_replace('(' . $params[1] . ')', '', $Route->path);
                }
 
                // ? Param without Regex
-               if ($this->Route->Params->$param === null) {
+               if ($Route->Params->$param === null) {
                   // TODO Review Regex to all cases to found the best Regex
-                  $this->Route->Params->$param = '(.*)\/?(.*)';
+                  $Route->Params->$param = '(.*)\/?(.*)';
                }
 
-               if (is_string($this->Route->Params->$param)) {
-                  $node = str_replace(':' . $param, $this->Route->Params->$param, $node);
+               if (is_string($Route->Params->$param)) {
+                  $node = str_replace(':' . $param, $Route->Params->$param, $node);
                   // @ Store values to use in equals params
-                  $regex_replaced[$param] = $this->Route->Params->$param;
+                  $regex_replaced[$param] = $Route->Params->$param;
 
                   // @ Replace param by $index + nodes parsed
-                  $this->Route->Params->$param = $index + $this->Route->nodes;
+                  $Route->Params->$param = $index + $Route->nodes;
                } else {
                   $node = str_replace(':' . $param, $regex_replaced[$param], $node);
-                  $this->Route->Params->$param = (array)$this->Route->Params->$param;
-                  $this->Route->Params->$param[] = $index + $this->Route->nodes;
+                  $Route->Params->$param = (array) $Route->Params->$param;
+                  $Route->Params->$param[] = $index + $Route->nodes;
                }
             } else if (@$locations[$index] !== $node) {
-               $this->Route->parsed = false;
+               $Route->parsed = false;
                break;
             }
 
             if ($index > 0) {
-               $this->Route->parsed .= '/';
+               $Route->parsed .= '/';
             }
 
-            $this->Route->parsed .= $node;
+            $Route->parsed .= $node;
 
-            if ($this->Route->catched === '(.*)') break;
+            if ($Route->catched === '(.*)') break;
 
             // TODO FIX BUG
-            if ($this->Route->path[-1] === '*' || $this->Route->path[-2] === '*' || $this->Route->catched) {
-               $this->Route->nodes++;
+            if ($Route->path[-1] === '*' || $Route->path[-2] === '*' || $Route->catched) {
+               $Route->nodes++;
             }
          }
       }
 
-      return $this->Route->parsed;
+      return $Route->parsed;
    }
 
    public function go (int $n)
