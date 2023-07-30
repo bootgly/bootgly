@@ -15,6 +15,11 @@ if (defined('BOOTGLY_ROOT_BASE') === true) {
 define('BOOTGLY_ROOT_BASE', __DIR__);
 define('BOOTGLY_ROOT_DIR', __DIR__ . DIRECTORY_SEPARATOR);
 
+if (defined('BOOTGLY_WORKING_BASE') === false) {
+   define('BOOTGLY_WORKING_BASE', BOOTGLY_ROOT_BASE);
+   define('BOOTGLY_WORKING_DIR', BOOTGLY_ROOT_DIR);
+}
+
 @include(__DIR__ . '/@imports/autoload.php'); // composer
 
 // ? Bootgly
