@@ -21,7 +21,6 @@ final class Route
 
    // * Config
    private ?string $name;
-   public bool $status;
 
    // * Data
    private object $Params;
@@ -52,7 +51,6 @@ final class Route
 
       // * Config
       $this->name = null;
-      $this->status = true;
 
       // * Data
       // TODO deny user to set Catch-All this object

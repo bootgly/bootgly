@@ -36,6 +36,9 @@ define('PATCH', 'PATCH');
 class Router
 {
    // * Config
+   // @ Status
+   private bool $active;
+   // @ Boot
    const MODE_FILE = 1;
    const MODE_DIRECTORIES = 2;
    const MODE_DATABASE = 3;
@@ -57,6 +60,9 @@ class Router
    public function __construct (string $Server)
    {
       // * Config
+      // @ Status
+      $this->active = true;
+      // @ Boot
       $this->mode = self::MODE_FILE;
       //$this->base = '/';
       //$this->methods = [];
@@ -100,11 +106,11 @@ class Router
    }
    public function pause ()
    {
-      $this->Route->status = false;
+      $this->active = false;
    }
    public function continue ()
    {
-      $this->Route->status = true;
+      $this->active = true;
    }
 
    public function build ()
@@ -118,7 +124,7 @@ class Router
       // TODO
    }
    // @ default
-   public function route (string|array $route, mixed $handler, ...$conditions) : bool
+   public function route (string|array $route, mixed $handler, null|string|array $condition = null) : bool
    {
       // ! Route Route
       $Route = &$this->Route;
@@ -134,7 +140,7 @@ class Router
             return false;
          }
 
-         $this->match($route);
+         $Route->matched = $this->match($route);
       }
 
       // @ Reset
@@ -145,7 +151,7 @@ class Router
       }
 
       // @ Check
-      if ($Route->status === false) return false;
+      if ($this->active === false) return false;
       if ($Route->matched === 2) return false;
       if ($Route->nested && $route['path'][0] === '/') return false;
 
@@ -153,9 +159,9 @@ class Router
       $Route->path = $route['path'];
 
       // @ Match
-      if ($Route->nested && $route['path'] === '*') { // 404 Not Matched Route in nested routes
+      if ($Route->nested && $Route->path === '*') { // Not Matched Route (nested level)
          $Route->matched = 1;
-      } else if ($route['path'] === '/*') { // 404 Not Matched Route in root level
+      } else if ($Route->path === '/*') { // Not Matched Route (root level)
          $Route->matched = 1;
       } else {
          $Route->matched = $this->match();
@@ -164,52 +170,27 @@ class Router
       // ! Route Condition
       // @ Match
       if ($Route->matched === 1) {
-         foreach ($conditions as $condition) {
-            switch ($condition) {
-               case is_string($condition):
-                  if (self::$Server::$Request->method === $condition) {
-                     $Route->matched = 2;
-                  }
+         switch ($condition) {
+            case is_string($condition):
+               if (self::$Server::$Request->method === $condition) {
+                  $Route->matched = 2;
+               }
 
-                  break;
-               case is_array($condition):
-                  $Result = __Array::search(
-                     $condition, self::$Server::$Request->method
-                  );
+               break;
+            case is_array($condition):
+               $found = array_search(
+                  needle: self::$Server::$Request->method,
+                  haystack: $condition
+               );
 
-                  if ($Result->found) {
-                     $Route->matched = 2;
+               if ($found !== false) {
+                  $Route->matched = 2;
+               }
 
-                     break;
-                  } else {
-                     $Route->matched = 1;
-
-                     break 2;
-                  }
-               case is_bool($condition):
-                  if ($condition) {
-                     $Route->matched = 2;
-
-                     break;
-                  } else {
-                     $Route->matched = 1;
-
-                     break 2;
-                  }
-               case $condition instanceof \Closure:
-                  if ($condition(self::$Server::$Response) === true) {
-                     $Route->matched = 2;
-
-                     break;
-                  } else {
-                     $Route->matched = 1;
-
-                     break 2;
-                  }
-            }
+               break;
          }
 
-         if (empty($conditions)) {
+         if ( empty($conditions) ) {
             $Route->matched = 2;
          }
       }
@@ -241,7 +222,7 @@ class Router
          $Route->level++;
 
          // @ Execute
-         switch (gettype($handler)) {
+         switch ( gettype($handler) ) {
             case 'object':
                if ($handler instanceof \Closure) {
                   $handler(
@@ -253,8 +234,8 @@ class Router
 
                break;
             case 'array':
-               // TODO
-               call_user_func(...$handler);
+               $callback = array_shift($handler);
+               call_user_func($callback, $handler);
          }
       }
 
@@ -267,27 +248,29 @@ class Router
    }
    private function match (array $route = [])
    {
-      if ($this->Route->status === false) return;
+      $Route = $this->Route;
 
-      if ($this->Route->parameterized) {
+      if ($this->active === false) return $Route->matched;
+
+      if ($Route->parameterized) {
          $this->parse(); // @ Set $Route->parsed and $Route->catched
 
-         if ($this->Route->parsed) {
-            $pattern = '/^' . $this->Route->parsed . '$/m';
+         if ($Route->parsed) {
+            $pattern = '/^' . $Route->parsed . '$/m';
 
-            if ($this->Route->catched && $this->Route->catched !== '(.*)') {
-               $subject = $this->Route->catched;
-               $this->Route->catched = '';
+            if ($Route->catched && $Route->catched !== '(.*)') {
+               $subject = $Route->catched;
+               $Route->catched = '';
             } else {
                $subject = self::$Server::$Request->path;
             }
 
             preg_match($pattern, $subject, $matches);
 
-            if ($this->Route->catched === '(.*)') {
+            if ($Route->catched === '(.*)') {
                #Debug($matches, $pattern, $subject);
                // TODO check if matches[1] is null
-               $this->Route->catched = @$matches[1];
+               $Route->catched = @$matches[1];
             }
 
             if (@$matches[0]) {
@@ -295,14 +278,18 @@ class Router
             }
          }
       } else {
-         if ($this->Route->nested) {
+         if ($Route->nested) {
             $String = new __String(self::$Server::$Request->path);
+
             $relative_url = $String->cut(
-               $this->Route->routed[$this->Route->level - 1][0], '^'
+               $Route->routed[$Route->level - 1][0], '^'
             );
-            return ($this->Route->path === $relative_url ? 1 : 0);
-         } else {
-            return ($this->Route->path === self::$Server::$Request->path ? 1 : 0);
+
+            if ($Route->path === $relative_url) {
+               return 1;
+            }
+         } else if ($Route->path === self::$Server::$Request->path) {
+            return 1;
          }
       }
 
@@ -310,7 +297,7 @@ class Router
    }
    public function parse () // @ Parse Route Path (Parameterized)
    {
-      if ($this->Route->status === false) return;
+      if ($this->active === false) return;
 
       // ! Prepare Route Path
       // ? Route path
