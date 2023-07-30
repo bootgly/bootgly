@@ -166,7 +166,6 @@ class Router
       if ($Route->matched === 1) {
          switch ($condition) {
             case is_string($condition):
-               debug($condition);
                if (self::$Server::$Request->method === $condition) {
                   $Route->matched = 2;
                }

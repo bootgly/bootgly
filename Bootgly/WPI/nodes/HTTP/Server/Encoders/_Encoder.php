@@ -14,6 +14,7 @@ namespace Bootgly\WPI\nodes\HTTP\Server\Encoders;
 use Bootgly\API\Server as SAPI;
 
 use Bootgly\WPI\interfaces\TCP\Server\Packages;
+use Bootgly\WPI\modules\HTTP\Server\Router;
 use Bootgly\WPI\nodes\HTTP\Server;
 use Bootgly\WPI\nodes\HTTP\Server\Encoders;
 use Bootgly\WPI\nodes\HTTP\Server\Response;
@@ -32,6 +33,7 @@ class _Encoder extends Encoders
       // TODO move to another encoder?
       if (SAPI::$mode === SAPI::MODE_TEST) {
          Server::$Response = $Response = new Response;
+         Server::$Router = $Router = new Router(Server::class);
 
          $Response->Header->preset('Date', null);
 
