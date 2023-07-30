@@ -35,8 +35,6 @@ define('PATCH', 'PATCH');
 class Router
 {
    // * Config
-   // @ Status
-   private bool $active;
    // @ Boot
    const MODE_FILE = 1;
    const MODE_DIRECTORIES = 2;
@@ -51,6 +49,9 @@ class Router
    public static string $Server;
 
    // * Meta
+   // @ Status
+   private bool $active;
+   // @ Stats
    public int $routes;
    public array $routed;
 
@@ -165,6 +166,7 @@ class Router
       if ($Route->matched === 1) {
          switch ($condition) {
             case is_string($condition):
+               debug($condition);
                if (self::$Server::$Request->method === $condition) {
                   $Route->matched = 2;
                }
@@ -183,7 +185,7 @@ class Router
                break;
          }
 
-         if ( empty($conditions) ) {
+         if ( empty($condition) ) {
             $Route->matched = 2;
          }
       }
