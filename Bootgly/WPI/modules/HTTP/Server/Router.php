@@ -51,6 +51,7 @@ class Router
    public static string $Server;
 
    // * Meta
+   public int $routes;
    public array $routed;
 
    public ? Route $Route;
@@ -73,6 +74,7 @@ class Router
 
       // * Meta
       // @ History
+      $this->routes = 0;
       $this->routed = [];
 
 
@@ -126,11 +128,10 @@ class Router
    // @ default
    public function route (string $route, mixed $handler, null|string|array $condition = null) : bool
    {
+      $this->routes++;
+
       // ! Route Route
       $Route = &$this->Route;
-      // @ Construct
-      $Route->index++;
-
       // @ Reset
       // If Route nested then process next route
       if ($Route->matched === 2 && !$Route->nested && $route[0] !== '/') {
@@ -202,12 +203,14 @@ class Router
          }
 
          // @ Log
-         $this->routed[] = [
-            $Route->node,
-            $Route->path,
-            $Route->parsed
-         ];
-         $Route->level++;
+         if ($Route->nested) {
+            $this->routed[] = [
+               $Route->node,
+               $Route->path,
+               $Route->parsed
+            ];
+         }
+         $Route::$level++;
 
          // @ Execute
          switch ( gettype($handler) ) {
@@ -269,7 +272,7 @@ class Router
 
             $relative_url = $String->cut(
                // $Route->node
-               $this->routed[$Route->level - 1][0], '^'
+               $this->routed[$Route::$level - 1][0], '^'
             );
 
             if ($Route->path === $relative_url) {
