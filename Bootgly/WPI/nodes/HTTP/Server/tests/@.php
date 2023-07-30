@@ -122,7 +122,7 @@ return [
          '1.z.3-upload_large_file',
       ],
       'Router/' => [
-         '1.0-route_callback'
+         '1.1-route_callback'
       ]
    ]
 ];

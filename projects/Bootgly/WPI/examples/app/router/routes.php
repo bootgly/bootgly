@@ -33,11 +33,6 @@ $Router->route('/multiple', function () {
    echo '[2.1] - Bootgly supports multiple HTTP methods!';
 }, [GET, POST]);
 
-//? 2.3 - Custom Route conditions - OK
-$Router->route('/timed', function () {
-   echo '[4.1] This route only can be executed in 2024!';
-}, GET, $Request->on > '2023-12-31');
-
 //! 3.0 - Route Route
 //? Example 3.0 - Non-default route
 $Router->route('/specify', function () {
