@@ -18,7 +18,6 @@ trait Requestable
 {
    public function __get (string $name)
    {
-      // TODO move to @/resources
       switch ($name) {
          // * Config
          case 'base':

@@ -19,10 +19,10 @@ use Bootgly\WPI\interfaces\TCP;
 use Bootgly\ABI\events\Timer;
 
 
-$TCPClient = new TCP\Client(
+$TCP_Client = new TCP\Client(
    TCP\Client::MODE_MONITOR
 );
-$TCPClient->configure(
+$TCP_Client->configure(
    host: '127.0.0.1',
    port: getenv('PORT') ? getenv('PORT') : 8080,
    workers: 1
@@ -30,7 +30,7 @@ $TCPClient->configure(
 // TODO move to /projects
 // This runs a Benchmark for 10 seconds with 1 Worker \
 // type stats command in Server to get stats of writes
-$TCPClient->on(
+$TCP_Client->on(
    // on Worker instance
    instance: function ($Client) {
       // @ Connect to Server
@@ -63,10 +63,10 @@ $TCPClient->on(
       // @ Add Package write to Event loop
       TCP\Client::$Event->add($Socket, TCP\Client::$Event::EVENT_WRITE, $Connection);
    },
-   disconnect: function ($Connection) use($TCPClient) {
-      $TCPClient->log(
+   disconnect: function ($Connection) use($TCP_Client) {
+      $TCP_Client->log(
          'Connection #' . $Connection->id . ' (' . $Connection->ip . ':' . $Connection->port . ')'
-         . ' from Worker with PID @_' . $TCPClient->Process->id . '_@ was closed! @\;'
+         . ' from Worker with PID @_' . $TCP_Client->Process->id . '_@ was closed! @\;'
       );
    },
    // on Package write / read
@@ -76,4 +76,4 @@ $TCPClient->on(
    },
    read: null,
 );
-$TCPClient->start();
+$TCP_Client->start();

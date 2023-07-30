@@ -18,11 +18,11 @@ require __DIR__ . '/../autoload.php';
 use Bootgly\WPI\interfaces\TCP;
 
 
-$TCPServer = new TCP\Server;
-$TCPServer->configure(
+$TCP_Server = new TCP\Server;
+$TCP_Server->configure(
    host: '0.0.0.0',
    port: getenv('PORT') ? getenv('PORT') : 8080,
    workers: 12
 );
 // on Data -> projects/Bootgly/WPI/TCP-Server.API.php
-$TCPServer->start();
+$TCP_Server->start();
