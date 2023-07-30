@@ -76,30 +76,6 @@ class Router
       Debugger::$to = 10;
    }
 
-   public function __call (string $name, array $arguments)
-   {
-      switch ($name) {
-         case 'get':
-         case 'post':
-         case 'put':
-         case 'delete':
-         case 'head':
-         case 'connect':
-         case 'trace':
-         case 'options':
-            if ($arguments[0] === null || $arguments[1] === null) {
-               break;
-            }
-
-            $arguments[] = strtoupper($name);
-
-            return $this->route(...$arguments);
-
-         default:
-            return $this->$name(...$arguments);
-      }
-   }
-
    public function boot (string|array $instances = ['routes'])
    {
       $Request = self::$Server::$Request;
