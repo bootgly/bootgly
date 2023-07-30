@@ -13,7 +13,6 @@ namespace Bootgly\WPI\modules\HTTP\Server;
 
 use Bootgly;
 
-use Bootgly\ABI\__String;
 use Bootgly\ABI\streams\File;
 
 use Bootgly\ACI\Debugger;
