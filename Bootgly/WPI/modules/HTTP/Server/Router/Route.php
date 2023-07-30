@@ -11,7 +11,6 @@
 namespace Bootgly\WPI\modules\HTTP\Server\Router;
 
 
-use Bootgly\ABI\__String;
 use Bootgly\WPI\modules\HTTP\Server\Router;
 
 
@@ -20,7 +19,7 @@ final class Route
    public Router $Router;
 
    // * Config
-   private ?string $name;
+   private ? string $name;
 
    // * Data
    private object $Params;
@@ -28,9 +27,8 @@ final class Route
 
    // * Meta
    private string $path;
-   public int $matched; // 0 -> none; 1 = route path; 2 = route path and route conditions
+   public int $matched; // 0 -> none; 1 = route path; 2 = route path and route condition(s)
    private bool $parameterized;
-
    // ! Parse
    public string $parsed;
    public string $catched; // Group of (.*) Catch-All Param
@@ -39,8 +37,8 @@ final class Route
    // ! Group
    private bool $nested;
    // ! Log
+   // TODO move?
    public int $index; // Route index invoked | before callback
-   public array $routed; // Route path and parsed | after callback
    public int $level; // Route group level | after callback
 
 
@@ -72,8 +70,6 @@ final class Route
       $this->path = '';
       $this->matched = 0;
       $this->parameterized = false;
-
-
       // ! Parse
       $this->parsed = '';
       $this->catched = false;
@@ -83,7 +79,6 @@ final class Route
       $this->nested = false;
       // ! Log
       $this->index = 0;
-      $this->routed = [];
       $this->level = 0;
    }
    public function __get ($name)
@@ -96,8 +91,8 @@ final class Route
                return $this->parameterized = false;
             }
          case 'node':
-            $String = new __String($this->path);
-            return $String->separateBefore(':');
+            $node = strstr($this->path, ':');
+            return $node;
          default:
             return $this->$name;
       }
@@ -105,15 +100,6 @@ final class Route
    public function __set (string $name, $value)
    {
       switch ($name) {
-         case 'path':
-            if ($value === '/') {
-               $this->path = '';
-            } else {
-               $this->path = rtrim($value, '/');
-            }
-
-            break;
-
          case 'base':
          case 'prefix': // TODO refactor
             Router::$Server::$Request->base = $value;
@@ -122,6 +108,15 @@ final class Route
 
          default:
             $this->$name = $value;
+      }
+   }
+
+   public function set (string $path) : void
+   {
+      if ($path === '/') {
+         $this->path = '';
+      } else {
+         $this->path = rtrim($path, '/');
       }
    }
 }

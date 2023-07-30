@@ -13,7 +13,6 @@ namespace Bootgly\WPI\modules\HTTP\Server;
 
 use Bootgly;
 
-use Bootgly\ABI\__Array;
 use Bootgly\ABI\__String;
 use Bootgly\ABI\streams\File;
 
@@ -52,7 +51,7 @@ class Router
    public static string $Server;
 
    // * Meta
-   // ...
+   public array $routed;
 
    public ? Route $Route;
 
@@ -73,7 +72,8 @@ class Router
       self::$Server = $Server;
 
       // * Meta
-      //$this->history = [];
+      // @ History
+      $this->routed = [];
 
 
       $this->Route = new Route($this);
@@ -124,28 +124,16 @@ class Router
       // TODO
    }
    // @ default
-   public function route (string|array $route, mixed $handler, null|string|array $condition = null) : bool
+   public function route (string $route, mixed $handler, null|string|array $condition = null) : bool
    {
       // ! Route Route
       $Route = &$this->Route;
       // @ Construct
       $Route->index++;
 
-      if ( is_string($route) ) {
-         $route = [
-            'path' => $route
-         ];
-      } else { // @ array
-         if ( ! isSet($route['path']) ) {
-            return false;
-         }
-
-         $Route->matched = $this->match($route);
-      }
-
       // @ Reset
       // If Route nested then process next route
-      if ($Route->matched === 2 && !$Route->nested && $route['path'][0] !== '/') {
+      if ($Route->matched === 2 && !$Route->nested && $route[0] !== '/') {
          $Route->matched = 0;
          $Route->nested = true;
       }
@@ -153,10 +141,10 @@ class Router
       // @ Check
       if ($this->active === false) return false;
       if ($Route->matched === 2) return false;
-      if ($Route->nested && $route['path'][0] === '/') return false;
+      if ($Route->nested && $route[0] === '/') return false;
 
       // @ Set
-      $Route->path = $route['path'];
+      $Route->set(path: $route);
 
       // @ Match
       if ($Route->nested && $Route->path === '*') { // Not Matched Route (nested level)
@@ -214,7 +202,7 @@ class Router
          }
 
          // @ Log
-         $Route->routed[] = [
+         $this->routed[] = [
             $Route->node,
             $Route->path,
             $Route->parsed
@@ -246,11 +234,9 @@ class Router
    {
       // TODO
    }
-   private function match (array $route = [])
+   private function match ()
    {
       $Route = $this->Route;
-
-      if ($this->active === false) return $Route->matched;
 
       if ($Route->parameterized) {
          $this->parse(); // @ Set $Route->parsed and $Route->catched
@@ -282,7 +268,8 @@ class Router
             $String = new __String(self::$Server::$Request->path);
 
             $relative_url = $String->cut(
-               $Route->routed[$Route->level - 1][0], '^'
+               // $Route->node
+               $this->routed[$Route->level - 1][0], '^'
             );
 
             if ($Route->path === $relative_url) {
