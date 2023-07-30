@@ -24,8 +24,16 @@ return [
    // Server API
    'response' => function (Request $Request, Response $Response, Router $Router)
    {
-      $Router('/', function () use ($Response) {
+      $Router('/fail', function ($Response) {
+         $Response(content: 'Fail...');
+      }, GET);
+
+      $Router('/', function ($Response) {
          $Response(content: 'Hello World!');
+      }, GET);
+
+      $Router('/*', function ($Response) {
+         $Response(content: 'Catch-All!');
       }, GET);
    },
 
