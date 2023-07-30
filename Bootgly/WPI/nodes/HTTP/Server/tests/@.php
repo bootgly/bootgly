@@ -139,6 +139,7 @@ return [
          #'3.3.1-route_route-multiple_param-equals-different',
          '4.1-route_group-unparameterized',
          '4.2-route_group-parameterized',
+         '5.1-route_catch_all-generic',
       ]
    ]
 ];
