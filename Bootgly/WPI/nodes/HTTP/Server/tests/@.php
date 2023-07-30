@@ -61,6 +61,7 @@ return [
          '1.20-request_as_response-on',
          '1.21-request_as_response-at',
          '1.22-request_as_response-time',
+         // HTTP/1.1 Caching Specification (RFC 7234)
          '2.1.1-request_cache-if-modified-since',
          '2.1.2-request_cache-if-modified-since',
          '2.1.3-request_cache-if-modified-since',
@@ -130,10 +131,13 @@ return [
          '2.2.2-route_condition-method-multiple',
          '2.2.3-route_condition-method-multiple',
          '3.0-route_route-specific',
+         // Named params
          '3.1-route_route-single_param_id',
          '3.2.1-route_route-multiple_param-different',
          '3.2.2-route_route-multiple_param-equals',
          '3.2.3-route_route-multiple_param-equals-different',
+         #'3.3.1-route_route-multiple_param-equals-different',
+         '4.1-route_group-unparameterized',
       ]
    ]
 ];

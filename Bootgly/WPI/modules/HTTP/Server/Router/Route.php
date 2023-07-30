@@ -37,7 +37,7 @@ final class Route
    // ! Group
    private bool $nested;
    // ! Log
-   public static int $level = 0; // Route group level | after callback
+   public static int $level; // Route group level | after callback
 
 
    public function __construct (Router $Router)
@@ -75,6 +75,8 @@ final class Route
       $this->nodes = 0;
       // ! Group
       $this->nested = false;
+      // ! Log
+      self::$level = 0;
    }
    public function __get ($name)
    {

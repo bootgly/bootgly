@@ -208,13 +208,11 @@ class Router
          }
 
          // @ Log
-         if ($Route->nested) {
-            $this->routed[] = [
-               $Route->node,
-               $Route->path,
-               $Route->parsed
-            ];
-         }
+         $this->routed[] = [
+            $Route->node,
+            $Route->path,
+            $Route->parsed
+         ];
          $Route::$level++;
 
          // @ Execute
@@ -274,14 +272,7 @@ class Router
          }
       } else {
          if ($Route->nested) {
-            $String = new __String(self::$Server::$Request->path);
-
-            $relative_url = $String->cut(
-               // $Route->node
-               $this->routed[$Route::$level - 1][0], '^'
-            );
-
-            if ($Route->path === $relative_url) {
+            if ($Route->path === $Route->catched) {
                return 1;
             }
          } else if ($Route->path === self::$Server::$Request->path) {
