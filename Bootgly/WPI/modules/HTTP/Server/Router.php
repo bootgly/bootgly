@@ -118,7 +118,7 @@ class Router
       // TODO
    }
    // @ default
-   public function route (string|array $route, mixed $handler, ...$conditions)
+   public function route (string|array $route, mixed $handler, ...$conditions) : bool
    {
       // ! Route Route
       $Route = &$this->Route;
@@ -131,7 +131,7 @@ class Router
          ];
       } else { // @ array
          if ( ! isSet($route['path']) ) {
-            return;
+            return false;
          }
 
          $this->match($route);
@@ -145,9 +145,9 @@ class Router
       }
 
       // @ Check
-      if ($Route->status === false) return;
-      if ($Route->matched === 2) return;
-      if ($Route->nested && $route['path'][0] === '/') return;
+      if ($Route->status === false) return false;
+      if ($Route->matched === 2) return false;
+      if ($Route->nested && $route['path'][0] === '/') return false;
 
       // @ Set
       $Route->path = $route['path'];
@@ -258,7 +258,7 @@ class Router
          }
       }
 
-      return $this;
+      return true;
    }
 
    public function validate () // TODO validate Route
