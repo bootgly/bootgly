@@ -11,7 +11,7 @@ use Bootgly\WPI\nodes\HTTP\Server\Response;
 
 return [
    // @ configure
-   'response.length' => 3101873,
+   'response.length' => 3101895,
    'separators' => [
       'separator' => true
    ],
@@ -38,7 +38,7 @@ return [
    'test' => function ($response) : bool {
       // ! Asserts
       // @ Assert length of response
-      $expected = 3101873;
+      $expected = 3101895;
 
       if (strlen($response) !== $expected) {
          Debugger::$labels = ['HTTP Response length:', 'Expected:'];

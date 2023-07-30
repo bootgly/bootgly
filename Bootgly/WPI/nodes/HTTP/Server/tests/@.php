@@ -119,7 +119,7 @@ return [
          // 2.4 - Requests Range - Client - Multi (Valid)
          '1.z.2.4.1-upload_file_with_multi_range-requests_1',
          // .3 - Large Files
-         #'1.z.3-upload_large_file', // FIX me
+         '1.z.3-upload_large_file',
       ],
       'Router/' => [
          '1.0-route_callback'
