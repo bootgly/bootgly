@@ -11,7 +11,7 @@
 namespace Bootgly\API;
 
 
-class Project
+class Project // TODO rename to Projects
 {
    // ! Path
    // Author
@@ -92,9 +92,25 @@ class Project
       return true;
    }
    // ! Path
-   public function boot ()
+   public function boot () : bool
    {
-      
+      ${'@'} = include(self::CONSUMER_DIR . '@.php');
+
+      if (${'@'} === null) {
+         return false;
+      }
+
+      $projects = ${'@'}['projects'];
+      foreach ($projects as $project) {
+         $Project = new self; // TODO use new Project (new class);
+
+         $paths = $project['paths'];
+         foreach ($paths as $path) {
+            $Project->construct($path);
+         }
+      }
+
+      return true;
    }
    public function construct (? string $path = null) : string
    {
