@@ -141,7 +141,7 @@ class Server implements Servers, Logging
       if (self::$Application) {
          self::$Application::boot();
       } else {
-         SAPI::$production = Project::PROJECTS_DIR . 'Bootgly/WPI/TCP-Server.API.php';
+         SAPI::$production = Project::CONSUMER_DIR . 'Bootgly/WPI/TCP-Server.API.php';
          SAPI::boot(true);
       }
    }

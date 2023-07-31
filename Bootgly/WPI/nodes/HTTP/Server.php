@@ -81,7 +81,7 @@ class Server extends TCP\Server implements HTTP
    {
       // * Config
       if ($production) {
-         SAPI::$production = Project::PROJECTS_DIR . 'Bootgly/WPI/HTTP-Server.API.php';
+         SAPI::$production = Project::CONSUMER_DIR . 'Bootgly/WPI/HTTP-Server.API.php';
       }
 
       // * Data

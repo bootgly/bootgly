@@ -36,12 +36,12 @@ class Bootgly
       // @ Boot
       // Author
       if (BOOTGLY_ROOT_DIR === BOOTGLY_WORKING_DIR) {
-         @include Project::BOOTGLY_PROJECTS_DIR . self::BOOT_FILE;
+         @include Project::AUTHOR_DIR . self::BOOT_FILE;
       }
       // Consumer
       if (BOOTGLY_ROOT_DIR !== BOOTGLY_WORKING_DIR) {
          // Multi projects
-         @include Project::PROJECTS_DIR . self::BOOT_FILE;
+         @include Project::CONSUMER_DIR . self::BOOT_FILE;
       }
    }
 

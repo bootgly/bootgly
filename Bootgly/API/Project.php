@@ -14,11 +14,10 @@ namespace Bootgly\API;
 class Project
 {
    // ! Path
-   // Bootgly Project (Author)
-   public const BOOTGLY_PROJECTS_DIR = BOOTGLY_ROOT_BASE . '/projects/';
-   // Project (Consumer)
-   public const PROJECT_DIR = BOOTGLY_WORKING_BASE . '/project/';
-   public const PROJECTS_DIR = BOOTGLY_WORKING_BASE . '/projects/';
+   // Author
+   public const AUTHOR_DIR   = BOOTGLY_ROOT_BASE . '/projects/';
+   // Consumer
+   public const CONSUMER_DIR = BOOTGLY_WORKING_BASE . '/projects/';
 
    // * Config
    // ...
@@ -122,7 +121,7 @@ class Project
 
       if ($path) {
          $path = trim($path, '/');
-         $path = self::PROJECTS_DIR . $path . '/';
+         $path = self::CONSUMER_DIR . $path . '/';
 
          $this->paths[] = $path;
       }

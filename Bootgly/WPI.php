@@ -61,11 +61,11 @@ class WPI // Web Programming Interface
 
       // @ Boot WPI
       // Author
-      @include(Project::BOOTGLY_PROJECTS_DIR . 'Bootgly/' . self::BOOT_FILE);
+      @include(Project::AUTHOR_DIR . 'Bootgly/' . self::BOOT_FILE);
       // Consumer
       if (BOOTGLY_ROOT_DIR !== BOOTGLY_WORKING_DIR) {
          // Multi projects
-         @include(Project::PROJECTS_DIR . 'Bootgly/' . self::BOOT_FILE);
+         @include(Project::CONSUMER_DIR . 'Bootgly/' . self::BOOT_FILE);
       }
    }
 }

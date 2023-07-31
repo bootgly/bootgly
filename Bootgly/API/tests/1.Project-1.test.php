@@ -10,8 +10,8 @@ return [
    // ...
    // @ Test
    'test' => function () {
-      $expected1 = Project::PROJECTS_DIR . 'Bootgly/';
-      $expected2 = Project::PROJECTS_DIR . 'Bootgly/CLI/';
+      $expected1 = Project::CONSUMER_DIR . 'Bootgly/';
+      $expected2 = Project::CONSUMER_DIR . 'Bootgly/CLI/';
 
       // ! Project 1 instance
       $Project1 = new Project;
