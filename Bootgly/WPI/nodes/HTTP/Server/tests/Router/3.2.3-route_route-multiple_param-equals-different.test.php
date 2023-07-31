@@ -47,11 +47,6 @@ return [
 
    // @ test
    'test' => function ($response) : bool {
-      /*
-      return $Response->status === '200 OK'
-      && $Response->body === '127.0.0.1';
-      */
-
       $expected = <<<HTML_RAW
       HTTP/1.1 200 OK\r
       Server: Bootgly\r

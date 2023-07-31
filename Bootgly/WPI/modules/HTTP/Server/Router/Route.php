@@ -3,7 +3,7 @@
  * --------------------------------------------------------------------------
  * Bootgly PHP Framework
  * Developed by Rodrigo Vieira (@rodrigoslayertech)
- * Copyright 2020-present
+ * Copyright 2023-present
  * Licensed under MIT
  * --------------------------------------------------------------------------
  */
@@ -54,11 +54,11 @@ final class Route
       // TODO validate Param name
       $this->Params = new class
       {
-         public function __get($name)
+         public function __get ($name)
          {
             return $this->$name ?? null;
          }
-         public function __set($param, $regex)
+         public function __set ($param, $regex)
          {
             $this->$param = $regex;
          }

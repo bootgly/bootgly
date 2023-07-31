@@ -32,6 +32,7 @@ return [
 
       $Route = $Router->Route;
       $Route->Params->id = '[0-9]+';
+
       $Router->route('/param6/:id/param7/:id', function ($Response) use ($Route) {
          $Params = $Route->Params;
 

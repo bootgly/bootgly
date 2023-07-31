@@ -36,9 +36,11 @@ return [
          $Router->route('default', function ($Response) {
             $Response(content: 'Default Profile!');
          });
+
          $Router->route('user/maria', function ($Response) {
             $Response(content: 'Maria!');
          });
+
          $Router->route('user/bob', function ($Response) {
             $Response(content: 'Bob!');
          });

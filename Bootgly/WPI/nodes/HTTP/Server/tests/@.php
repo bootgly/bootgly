@@ -137,8 +137,10 @@ return [
          '3.2.2-route_route-multiple_param-equals',
          '3.2.3-route_route-multiple_param-equals-different',
          #'3.3.1-route_route-multiple_param-equals-different',
+         // Route group
          '4.1-route_group-unparameterized',
          '4.2-route_group-parameterized',
+         // Route Catch-All
          '5.1-route_catch_all-generic',
       ]
    ]
