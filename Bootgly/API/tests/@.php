@@ -9,6 +9,9 @@ return [
    // * Data
    'suiteName' => 'Project class Test',
    'files' => [
-      '1.Project-1'
+      '1.1-construct_path',
+      '2.1-name_path',
+      '3.1-get_path',
+      '4.1-select_project'
    ]
 ];

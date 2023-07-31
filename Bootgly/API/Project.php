@@ -92,6 +92,10 @@ class Project
       return true;
    }
    // ! Path
+   public function boot ()
+   {
+      
+   }
    public function construct (? string $path = null) : string
    {
       if ($path) {
@@ -124,29 +128,19 @@ class Project
          $path = self::CONSUMER_DIR . $path . '/';
 
          $this->paths[] = $path;
+
+         // @ Save path to static $projects by index
+         self::$projects[$this->index][] = $path;
       }
 
       return $path;
-   }
-   public function save () : string
-   {
-      $paths = count($this->paths);
-
-      $project = '';
-
-      if ($paths > 0) {
-         $path = $this->paths[$paths - 1];
-         $project = self::$projects[$this->index][] = $path;
-      }
-
-      return $project;
    }
 
    public function get (int $index = 0) : string
    {
       return $this->paths[$index] ?? '';
    }
-
+   // ! Project
    public function select (null|string|int $project = null) : string
    {
       if ( is_string($project) ) {

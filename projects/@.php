@@ -8,6 +8,7 @@ return [
             'Bootgly/CLI/examples/Terminal'
          ]
       ],
+
       [
          'interface' => 'WPI',
          'paths' => [
@@ -18,36 +19,6 @@ return [
          'interface' => 'WPI',
          'paths' => [
             'Bootgly/WPI/examples/app/'
-         ]
-      ],
-      [
-         'interface' => 'WPI',
-         'paths' => [
-            'Bootgly/WPI/examples/app-vue/'
-         ]
-      ],
-      [
-         'interface' => 'WPI',
-         'paths' => [
-            'Bootgly/WPI/examples/app-vue-quasar/'
-         ]
-      ],
-      [
-         'interface' => 'WPI',
-         'paths' => [
-            'Bootgly/WPI/examples/static/'
-         ]
-      ],
-      [
-         'interface' => 'WPI',
-         'paths' => [
-            'Bootgly/WPI/examples/static-react/'
-         ]
-      ],
-      [
-         'interface' => 'WPI',
-         'paths' => [
-            'Bootgly/WPI/examples/static-vue/'
          ]
       ],
    ]
