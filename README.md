@@ -8,6 +8,7 @@
 <p align="center">
   <a href="https://packagist.org/packages/bootgly/bootgly">
     <img alt="Bootgly License" src="https://img.shields.io/github/license/bootgly/bootgly"/>
+    </br>
     <img alt="Github Actions - Bootgly Workflow" src="https://img.shields.io/github/actions/workflow/status/bootgly/bootgly/bootgly.yml?label=bootgly"/>
     <img alt="Github Actions - Docker Workflow" src="https://img.shields.io/github/actions/workflow/status/bootgly/bootgly/docker.yml?label=docker"/>
   </a>
@@ -16,23 +17,22 @@
 > Bootgly is the first PHP framework to use the I2P (interface-to-platform) architecture.
 
 🚧
-Do not use it in production environments.
 
-The first beta is planned for mid-year 2023 (near the end of July).
+DO NOT USE IT IN PRODUCTION ENVIRONMENTS.
 
-[Documentation is under construction][PROJECT_DOCS] and will be released alongside the beta.
+Bootgly is in testing.
+A stable release is planned for December 2023.
+
+[Documentation is under construction][PROJECT_DOCS].
+
 🚧
 
 ## Table of Contents
 
 - [About](#-about)
-  - [Bootgly CLI 📟](#bootgly-cli-)
-  - [Bootgly Web 🌐](#bootgly-web-)
 - [Boot](#-boot)
   - [Compatibility](#-compatibility)
   - [Dependencies](#️-dependencies)
-    - [Bootgly CLI 📟](#-bootgly-cli-)
-    - [Bootgly Web 🌐](#-bootgly-web-)
 - [Community](#-community)
   - [Contributing](#-contributing)
   - [Code of Conduct](#-code-of-conduct)
@@ -42,20 +42,18 @@ The first beta is planned for mid-year 2023 (near the end of July).
   - [License](#-license)
   - [Versioning](#-versioning)
 - [Highlights](#-highlights)
-  - [Bootgly CLI 📟](#-bootgly-cli-)
-  - [Bootgly Web 🌐](#-bootgly-web-)
 - [Usage](#-usage)
 
 ---
 
 ## 🤔 About
 
-Bootgly is a base framework for developing APIs and Apps for both command-line interfaces (CLI) 📟 and Web 🌐.
-Focused on performance, versatility, and easy-to-understand codebase APIs.
+Bootgly is a base framework for developing APIs and Apps for both command-line interfaces (Console) 📟 and Web 🌐.
+Focused on performance, efficiency, versatility, and easy-to-understand codebase APIs.
 
-### Bootgly CLI 📟
+### Bootgly Console 📟
 
-interfaces | platforms
+interfaces | platform
 --- | ---
 [Terminal Input][CLI_TERMINAL_INTERFACE_INPUT] | Console (TODO)
 [Terminal Output][CLI_TERMINAL_INTERFACE_OUTPUT] | 
@@ -100,7 +98,7 @@ Above is the native compatibility, of course it is possible to run on Windows an
 - PHP 8.2+ ⚠️
 - Opcache with JIT enabled (+50% performance) 👍
 
-#### \- Bootgly CLI 📟
+#### \- Bootgly Console 📟
 - `php-cli` ⚠️
 - `php-readline` ⚠️
 
@@ -157,13 +155,13 @@ The Bootgly is open-sourced software licensed under the [MIT license][MIT_LICENS
 
 ### 📑 Versioning
 
-Bootgly will follow [Semantic Versioning 2.0][SEMANTIC_VERSIONING].
+Bootgly uses [Semantic Versioning 2.0][SEMANTIC_VERSIONING].
 
 ---
 
 ## 🖼 Highlights
 
-### \- Bootgly CLI 📟
+### \- Bootgly Console 📟
 
 | ![HTTP Server CLI started - Initial output](https://github.com/bootgly/.github/raw/main/screenshots/bootgly-php-framework/Bootgly-Progress-Bar-component.png "Render 6x faster than Symfony / Laravel") |
 |:--:| 
@@ -181,7 +179,7 @@ More **Screenshots**, videos and details can be found in the home page of [Bootg
 
 ## 🔧 Usage
 
-### 📟 Bootgly CLI:
+### 📟 Bootgly Console:
 
 <details>
   <summary><b>Run CLI demo</b></summary>
