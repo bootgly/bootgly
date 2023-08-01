@@ -194,7 +194,7 @@ More **Screenshots**, videos and details can be found in the home page of [Bootg
   2) Check the file `projects/CLI.php`;
   3) Run the Bootgly CLI demo in terminal:
 
-  ```
+  ```bash
   php bootgly demo
   ```
 </details>
@@ -204,7 +204,7 @@ More **Screenshots**, videos and details can be found in the home page of [Bootg
 
   1) Run the Bootgly CLI setup command in terminal (with sudo):
 
-  ```
+  ```bash
   sudo php bootgly setup
   ```
 </details>
@@ -215,7 +215,7 @@ More **Screenshots**, videos and details can be found in the home page of [Bootg
   1) Check the bootstrap tests file `tests/@.php`;
   2) Run the Bootgly CLI test command in terminal:
 
-  ```
+  ```bash
   bootgly test
   ```
 </details>
@@ -239,7 +239,7 @@ More **Screenshots**, videos and details can be found in the home page of [Bootg
   2) Configure the HTTP Server API in `projects/Bootgly/WPI/HTTP-Server.API.php` file;
   3) Run the Bootgly HTTP Server CLI in the terminal:
 
-  ```
+  ```bash
   php scripts/http-server-cli
   ```
 
@@ -249,13 +249,13 @@ More **Screenshots**, videos and details can be found in the home page of [Bootg
 
   1) Pull the image:
 
-  ```
+  ```bash
   docker pull bootgly/http-server-cli
   ```
 
   2) Run the container in interactive mode and in the host network for max performance:
 
-  ```
+  ```bash
   docker run -it --network host bootgly/http-server-cli
   ```
 </details>
