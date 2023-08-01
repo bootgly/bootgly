@@ -53,10 +53,9 @@ Focused on performance, efficiency, versatility, and easy-to-understand codebase
 
 ### Bootgly Console 📟
 
-interfaces | platform
---- | ---
-[Terminal Input][CLI_TERMINAL_INTERFACE_INPUT] | Console (TODO)
-[Terminal Output][CLI_TERMINAL_INTERFACE_OUTPUT] | 
+Interface: [CLI][CLI_INTERFACE]
+
+Platform: [Console][CONSOLE_PLATFORM] (TODO)
 
 Terminal components |
 --- |
@@ -65,8 +64,15 @@ Terminal components |
 [Progress component][CLI_TERMINAL_PROGRESS] | 
 [Table component][CLI_TERMINAL_TABLE] | 
 
+CLI components |
+--- |
+[Header component][CLI_HEADER] | 
 
 ### Bootgly Web 🌐
+
+Interface: [WPI][WPI_INTERFACE]
+
+Platform: [Web][WEB_PLATFORM] (IN DEVELOPMENT)
 
 Web interfaces | Web nodes
 --- | ---
@@ -188,7 +194,9 @@ More **Screenshots**, videos and details can be found in the home page of [Bootg
   2) Check the file `projects/CLI.php`;
   3) Run the Bootgly CLI demo in terminal:
 
-  `php bootgly demo`
+  ```
+  php bootgly demo
+  ```
 </details>
 
 <details>
@@ -196,7 +204,9 @@ More **Screenshots**, videos and details can be found in the home page of [Bootg
 
   1) Run the Bootgly CLI setup command in terminal (with sudo):
 
-  `sudo php bootgly setup`
+  ```
+  sudo php bootgly setup
+  ```
 </details>
 
 <details>
@@ -205,7 +215,9 @@ More **Screenshots**, videos and details can be found in the home page of [Bootg
   1) Check the bootstrap tests file `tests/@.php`;
   2) Run the Bootgly CLI test command in terminal:
 
-  `bootgly test`
+  ```
+  bootgly test
+  ```
 </details>
 
 ### 🌐 Bootgly Web:
@@ -227,7 +239,9 @@ More **Screenshots**, videos and details can be found in the home page of [Bootg
   2) Configure the HTTP Server API in `projects/Bootgly/WPI/HTTP-Server.API.php` file;
   3) Run the Bootgly HTTP Server CLI in the terminal:
 
-  `php scripts/http-server-cli`
+  ```
+  php scripts/http-server-cli
+  ```
 
   --
 
@@ -235,28 +249,35 @@ More **Screenshots**, videos and details can be found in the home page of [Bootg
 
   1) Pull the image:
 
-  `docker pull bootgly/http-server-cli`
+  ```
+  docker pull bootgly/http-server-cli
+  ```
 
   2) Run the container in interactive mode and in the host network for max performance:
 
-  `docker run -it --network host bootgly/http-server-cli`
+  ```
+  docker run -it --network host bootgly/http-server-cli
+  ```
 </details>
 
 
 
 <!-- Links -->
-[CLI_TERMINAL_INTERFACE_INPUT]: https://github.com/bootgly/bootgly/blob/main/Bootgly/CLI/Terminal/Input.php
-[CLI_TERMINAL_INTERFACE_OUTPUT]: https://github.com/bootgly/bootgly/blob/main/Bootgly/CLI/Terminal/Output.php
+[CLI_INTERFACE]: https://github.com/bootgly/bootgly/tree/main/Bootgly/CLI/
 [CLI_TERMINAL_COMPONENTS]: https://github.com/bootgly/bootgly/tree/main/Bootgly/CLI/Terminal/components
 
 [CLI_TERMINAL_ALERT]: https://github.com/bootgly/bootgly/tree/main/Bootgly/CLI/Terminal/components/Alert
 [CLI_TERMINAL_MENU]: https://github.com/bootgly/bootgly/tree/main/Bootgly/CLI/Terminal/components/Menu
 [CLI_TERMINAL_PROGRESS]: https://github.com/bootgly/bootgly/tree/main/Bootgly/CLI/Terminal/components/Progress
 [CLI_TERMINAL_TABLE]: https://github.com/bootgly/bootgly/tree/main/Bootgly/CLI/Terminal/components/Table
+[CLI_HEADER]: https://github.com/bootgly/bootgly/tree/main/Bootgly/CLI/components/Header.php
+[CONSOLE_PLATFORM]: https://github.com/bootgly/bootgly-console
 
+[WPI_INTERFACE]: https://github.com/bootgly/bootgly/tree/main/Bootgly/WPI/
 [WEB_TCP_CLIENT_INTERFACE]: https://github.com/bootgly/bootgly/blob/main/Bootgly/WPI/interfaces/TCP/Client.php
 [WEB_TCP_SERVER_INTERFACE]: https://github.com/bootgly/bootgly/blob/main/Bootgly/WPI/interfaces/TCP/Server.php
 [WEB_HTTP_SERVER_NODE]: https://github.com/bootgly/bootgly/blob/main/Bootgly/WPI/nodes/HTTP/Server.php
+[WEB_PLATFORM]: https://github.com/bootgly/bootgly-web
 
 
 [PROJECT_DOCS]: https://docs.bootgly.com/
