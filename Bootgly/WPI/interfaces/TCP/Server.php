@@ -69,7 +69,7 @@ class Server implements Servers, Logging
    public static $Encoder = null;
 
    // * Meta
-   public const VERSION = '0.0.1';
+   public const VERSION = '0.0.1-alpha';
    // @ State
    protected int $started = 0;
    // @ Socket
@@ -408,7 +408,6 @@ class Server implements Servers, Logging
       $this->status = self::STATUS_RUNNING;
 
       $this->log('@\;Entering in Monitor mode...@\;', self::LOG_INFO_LEVEL);
-      $this->log('>_ Type `CTRL + Z` to enter in Interactive mode or `CTRL + C` to stop the Server.@\;');
 
       // @ Set time to hot reloading
       Timer::add(2, function () {
@@ -423,7 +422,7 @@ class Server implements Servers, Logging
       Logger::$display = Logger::DISPLAY_MESSAGE_WHEN_ID;
 
       $Output = CLI::$Terminal->Output;
-
+      $Output->clear();
       $this->{'@status'};
 
       // @ Loop
@@ -448,10 +447,7 @@ class Server implements Servers, Logging
             // ...
          }
 
-         $Output->Cursor->up(11);
-         $Output->Cursor->moveTo(column: 1);
-         $Output->Text->clear(down: true);
-
+         $Output->clear();
          $this->{'@status'};
       }
 

@@ -1,6 +1,8 @@
 <?php
 switch ($name) {
    case '@status':
+      $this->log('>_ Type `CTRL + Z` to enter in Interactive mode or `CTRL + C` to stop the Server.@\;');
+
       // ! Server
       // @
       $server = (new \ReflectionClass($this))->getName();
@@ -40,19 +42,21 @@ switch ($name) {
       // Event-loop
       $event = (new \ReflectionClass(self::$Event))->getName();
 
+      // Input
+      // TODO
 
       $this->log(<<<OUTPUT
 
-      ============================= Server Status =============================
+      =============================== Server Status ===============================
       @:i: Bootgly Server: @; {$server}
-      @:i: Bootgly Server version: @; {$version}\t\t@:i: PHP version: @; {$php}
+      @:i: PHP version: @; {$php}\t\t\t@:i: Bootgly Server version: @; {$version}
 
       @:i: Started time: @; {$runtime['started']}\t@:i: Uptime: @; {$uptimes}
       @:i: Workers count: @; {$workers}\t\t\t@:i: Load average: @; {$load}
       @:i: Socket address: @; {$address}
 
       @:i: Event-loop: @; {$event}
-      =========================================================================
+      =============================================================================
 
       OUTPUT);
 
