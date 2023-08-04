@@ -191,7 +191,7 @@ More **Screenshots**, videos and details can be found in the home page of [Bootg
   <summary><b>Run CLI demo</b></summary>
 
   1) See the examples in `projects/Bootgly/CLI/examples/`;
-  2) Check the file `projects/CLI.php`;
+  2) Check the file `projects/Bootgly/CLI.php`;
   3) Run the Bootgly CLI demo in terminal:
 
   ```bash
