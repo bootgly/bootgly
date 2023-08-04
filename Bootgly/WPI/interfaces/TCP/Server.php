@@ -82,6 +82,9 @@ class Server implements Servers, Logging
    protected const STATUS_RUNNING = 8;
    protected const STATUS_PAUSED = 16;
    protected const STATUS_STOPING = 32;
+   // @ Stats
+   protected static int $stat = -1;
+   protected static array $stats = [];
 
 
    // ! Connection(s)
@@ -454,7 +457,7 @@ class Server implements Servers, Logging
       // @ Enter in CLI mode
       if ($this->mode === self::MODE_INTERACTIVE) {
          Timer::del(0); // @ Delete all timers
-
+         $Output->clear();
          $this->interact();
       }
    }

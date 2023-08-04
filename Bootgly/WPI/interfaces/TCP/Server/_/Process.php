@@ -84,6 +84,8 @@ class Process
 
          case 'children':
             return count(self::$children);
+         case 'pids':
+            return self::$children;
       }
    }
 
