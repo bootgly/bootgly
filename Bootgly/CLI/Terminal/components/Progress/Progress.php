@@ -119,6 +119,22 @@ class Progress
    public function __clone ()
    {
       $this->current = 0;
+      $this->output = '';
+
+      $this->percent = 0.0;
+      $this->elapsed = 0.0;
+      $this->eta = 0.0;
+      $this->rate = 0.0;
+
+      // ! Bar
+      // * Config
+      $units = $this->Bar->units;
+      // * Data
+      $Symbols = $this->Bar->Symbols;
+      // @ new
+      $this->Bar = new Bar($this);
+      $this->Bar->units = $units;
+      $this->Bar->Symbols = $Symbols;
    }
    public function __get ($name)
    {
