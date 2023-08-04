@@ -14,7 +14,7 @@
   </a>
 </p>
 
-> Bootgly is the first PHP framework to use the I2P (interface-to-platform) architecture.
+> Bootgly is the first PHP framework to use the I2P (Interface-to-Platform) architecture.
 
 🚧
 

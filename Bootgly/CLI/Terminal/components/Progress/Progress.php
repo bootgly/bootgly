@@ -32,15 +32,18 @@ class Progress
    private Output $Output;
 
    // * Config
-   // @
    public float $throttle;
+   // @ render
+   public const RENDER_MODE_OUTPUT = 1;
+   public const RENDER_MODE_RETURN = 2;
+   public int $render = self::RENDER_MODE_OUTPUT;
    // ---
    public object $Precision;
 
    // * Data
-   // @
    public float $current;
    public float $total;
+   public string $output;
    // ! Templating
    public string $template;
 
@@ -72,7 +75,6 @@ class Progress
 
 
       // * Config
-      // @
       $this->throttle = 0.1;
       // ---
       $this->Precision = new class {
@@ -82,9 +84,9 @@ class Progress
       };
 
       // * Data
-      // @
       $this->current = 0.0;
       $this->total = 100;
+      $this->output = '';
       // ! Templating
       $this->template = <<<'TEMPLATE'
       @described;
@@ -113,6 +115,10 @@ class Progress
 
 
       $this->Bar = new Bar($this);
+   }
+   public function __clone ()
+   {
+      $this->current = 0;
    }
    public function __get ($name)
    {
@@ -172,11 +178,17 @@ class Progress
          '@rate;' => $rate
       ]);
 
-      // @ Reset cursor position to initial line
-      $this->Output->Cursor->moveTo(...$this->cursor);
+      switch ($this->render) {
+         case self::RENDER_MODE_RETURN:
+            $this->output = $output;
+            break;
+         default:
+            // @ Reset cursor position to initial line
+            $this->Output->Cursor->moveTo(...$this->cursor);
 
-      // @ Write to output
-      $this->Output->write($output);
+            // @ Write to output
+            $this->Output->write($output);
+      }
    }
 
    public function start ()
@@ -188,21 +200,23 @@ class Progress
       $this->started = microtime(true);
 
       // ---
-      // @ Make vertical space for writing
-      $lines = substr_count($this->template, "\n") + 2;
-      $this->Output->expand($lines);
+      if ($this->render === self::RENDER_MODE_OUTPUT) {
+         // @ Make vertical space for writing
+         $lines = substr_count($this->template, "\n") + 2;
+         $this->Output->expand($lines);
 
-      // @ Hide cursor
-      $this->Output->Cursor->hide();
+         // @ Hide cursor
+         $this->Output->Cursor->hide();
 
-      // @ Format Template
-      // TODO add support to render in multi columns
-      // EOL
-      $this->template = str_replace("\n", "   \n", $this->template);
-      $this->template .= "   \n\n";
+         // @ Format Template
+         // TODO add support to render in multi columns
+         // EOL
+         $this->template = str_replace("\n", "   \n", $this->template);
+         $this->template .= "   \n\n";
 
-      // @ Set the current Cursor position
-      $this->cursor = $this->Output->Cursor->position;
+         // @ Set the current Cursor position
+         $this->cursor = $this->Output->Cursor->position;
+      }
 
       // @ Parse indetermined
       if ($this->total <= 0) {
