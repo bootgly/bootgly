@@ -12,10 +12,12 @@ namespace Bootgly;
 
 
 use Bootgly\ACI\Debugger;
+
 use Bootgly\API\Project;
-use Bootgly\WPI\modules\HTTP;
-use Bootgly\WPI\modules\HTTP\Server\Request;
-use Bootgly\WPI\modules\HTTP\Server\Response;
+
+use Bootgly\WPI\nodes\HTTP\Server\Bridge as Server;
+use Bootgly\WPI\nodes\HTTP\Server\Bridge\Request;
+use Bootgly\WPI\nodes\HTTP\Server\Bridge\Response;
 use Bootgly\WPI\modules\HTTP\Server\Router;
 
 
@@ -23,8 +25,9 @@ class WPI // Web Programming Interface
 {
    public const BOOT_FILE = 'WPI.php';
 
+   // HTTP
    // @ nodes
-   public HTTP\Server $Server;
+   public Server $Server;
 
    public static Request $Request;
    public static Response $Response;
@@ -50,8 +53,9 @@ class WPI // Web Programming Interface
       // @ Instance
       // Bootgly
       $Project = \Bootgly::$Project;
-      // Web
-      $Server = $this->Server = new HTTP\Server($this);
+      // Bootgly\WPI
+      // HTTP
+      $Server = $this->Server = new Server($this);
 
       $Request = self::$Request = &$Server::$Request;
       $Response = self::$Response = &$Server::$Response;

@@ -74,6 +74,7 @@ switch ($name) {
       $Progress[0] = new Progress($Output);
       // * Config
       $Progress[0]->throttle = 0.0;
+      $Progress[0]->Precision->percent = 0;
       // @ render
       $Progress[0]->render = Progress::RENDER_MODE_RETURN;
       // * Data
@@ -96,10 +97,9 @@ switch ($name) {
       OUTPUT);
 
       $pids = $this->Process->pids;
-      foreach ($pids as $i => $worker) {
+      foreach ($pids as $i => $pid) {
          // @ Worker
          $id = sprintf('%02d', $i + 1);
-         $pid = $worker;
          // @ System
          $procPath = "/proc/$pid";
 

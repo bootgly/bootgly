@@ -8,17 +8,13 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\WPI\modules\HTTP;
+namespace Bootgly\WPI\nodes\HTTP\Server\CLI;
 
 
-use Bootgly\WPI\modules\HTTP\Server\Router;
+use Bootgly\WPI\interfaces\TCP\Server\Packages;
 
 
-/**
- * @property static Router $Router
- */
-interface Server
+abstract class Decoders
 {
-   // RFC "Interface properties"!
-   #public static Router $Router;
+   abstract public static function decode(Packages $Package, string $buffer, int $size);
 }

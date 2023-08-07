@@ -11,7 +11,6 @@
 namespace Bootgly\WPI\interfaces\TCP;
 
 
-// @use
 use Bootgly\ABI\events\Timer;
 
 use Bootgly\ACI\Debugger;
@@ -22,14 +21,15 @@ use Bootgly\API\Project;
 
 use Bootgly\API\Server as SAPI;
 use Bootgly\API\Environment;
+
 use Bootgly\CLI;
-// @extend
+
 use Bootgly\ACI\Logs\LoggableEscaped;
+
 use Bootgly\WPI\events\Select;
 use Bootgly\WPI\Servers;
 use Bootgly\WPI\interfaces\TCP\Server\_\Process;
 use Bootgly\WPI\interfaces\TCP\Server\_\CLI\Terminal;
-// @inherit
 use Bootgly\WPI\interfaces\TCP\Server\Connections;
 
 
@@ -58,7 +58,6 @@ class Server implements Servers, Logging
    public const MODE_INTERACTIVE = 2;
    public const MODE_MONITOR = 3;
    public const MODE_TEST = 4;
-   public const MODE_PROGRAMMATICALLY = 5;
    protected int $mode;
    // @ Verbosity
 
