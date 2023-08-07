@@ -278,7 +278,7 @@ More **Screenshots**, videos and details can be found in the home page of [Bootg
 [WPI_INTERFACE]: https://github.com/bootgly/bootgly/tree/main/Bootgly/WPI/
 [WEB_TCP_CLIENT_INTERFACE]: https://github.com/bootgly/bootgly/blob/main/Bootgly/WPI/interfaces/TCP/Client.php
 [WEB_TCP_SERVER_INTERFACE]: https://github.com/bootgly/bootgly/blob/main/Bootgly/WPI/interfaces/TCP/Server.php
-[WEB_HTTP_SERVER_CLI]: https://github.com/bootgly/bootgly/blob/main/Bootgly/WPI/nodes/HTTP/CLI.php
+[WEB_HTTP_SERVER_CLI]: https://github.com/bootgly/bootgly/blob/main/Bootgly/WPI/nodes/HTTP/Server/CLI.php
 [WEB_PLATFORM]: https://github.com/bootgly/bootgly-web
 
 
