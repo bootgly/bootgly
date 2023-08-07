@@ -15,10 +15,10 @@ use Bootgly\WPI;
 
 use Bootgly\WPI\modules\HTTP;
 use Bootgly\WPI\modules\HTTP\Server;
+use Bootgly\WPI\modules\HTTP\Server\Router;
 
 use Bootgly\WPI\nodes\HTTP\Server\Bridge\Request;
 use Bootgly\WPI\nodes\HTTP\Server\Bridge\Response;
-use Bootgly\WPI\modules\HTTP\Server\Router;
 
 
 class Bridge implements HTTP, Server

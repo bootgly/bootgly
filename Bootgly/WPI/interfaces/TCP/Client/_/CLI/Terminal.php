@@ -16,7 +16,7 @@ use Bootgly\ACI\Logs\LoggableEscaped;
 use Bootgly\WPI\interfaces\TCP\Client;
 
 
-class Terminal extends CLI\Terminal
+class Terminal extends CLI\Terminal // TODO rename to Commands
 {
    use LoggableEscaped;
 

@@ -11,12 +11,14 @@
 namespace Bootgly\WPI\interfaces\TCP\Server\_\CLI;
 
 
-use Bootgly\CLI;
 use Bootgly\ACI\Logs\LoggableEscaped;
+
+use Bootgly\CLI;
+
 use Bootgly\WPI\interfaces\TCP\Server;
 
 
-class Terminal extends CLI\Terminal
+class Terminal extends CLI\Terminal // TODO rename to Commands
 {
    use LoggableEscaped;
 

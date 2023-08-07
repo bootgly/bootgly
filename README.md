@@ -77,7 +77,9 @@ Platform: [Web][WEB_PLATFORM] (IN DEVELOPMENT)
 Web interfaces | Web nodes
 --- | ---
 [TCP Client][WEB_TCP_CLIENT_INTERFACE] | HTTP Client (TODO) 
-[TCP Server][WEB_TCP_SERVER_INTERFACE] | [HTTP Server][WEB_HTTP_SERVER_NODE]
+[TCP Server][WEB_TCP_SERVER_INTERFACE] | [HTTP Server CLI][WEB_HTTP_SERVER_CLI]
+UDP Client (TODO) | 
+UDP Server (TODO) |
 
 ---
 
@@ -276,7 +278,7 @@ More **Screenshots**, videos and details can be found in the home page of [Bootg
 [WPI_INTERFACE]: https://github.com/bootgly/bootgly/tree/main/Bootgly/WPI/
 [WEB_TCP_CLIENT_INTERFACE]: https://github.com/bootgly/bootgly/blob/main/Bootgly/WPI/interfaces/TCP/Client.php
 [WEB_TCP_SERVER_INTERFACE]: https://github.com/bootgly/bootgly/blob/main/Bootgly/WPI/interfaces/TCP/Server.php
-[WEB_HTTP_SERVER_NODE]: https://github.com/bootgly/bootgly/blob/main/Bootgly/WPI/nodes/HTTP/Server.php
+[WEB_HTTP_SERVER_CLI]: https://github.com/bootgly/bootgly/blob/main/Bootgly/WPI/nodes/HTTP/CLI.php
 [WEB_PLATFORM]: https://github.com/bootgly/bootgly-web
 
 
