@@ -24,12 +24,15 @@ class Path // TODO refactor
    public $Path = '';
 
    // * Config
+   // @ Convert
    public bool $convert = false;
    public bool $lowercase = false;
+   // @ Fix
    public bool $fix = true;
    public bool $dir_ = true;
    public bool $real = false;
    public bool $utf8 = false;
+   // @ Match
    public bool $match = true;
    public string $pattern = '';
 
@@ -142,15 +145,15 @@ class Path // TODO refactor
             return self::concatenate($this->paths, ...$arguments);
       }
    }
-   public static function __callStatic(string $name, $arguments)
+   public static function __callStatic (string $name, $arguments)
    {
-      if (method_exists(__CLASS__, $name)) {
+      if ( method_exists(__CLASS__, $name) ) {
          return self::$name(...$arguments);
       }
 
       return null;
    }
-   public function __invoke(string $path)
+   public function __invoke (string $path)
    {
       $this->Path = '';
 
@@ -186,12 +189,13 @@ class Path // TODO refactor
                }
             }
 
-            if ($this->real) { // ? (Fix) - RealPath (temp)
+            // The resulting path will have no symbolic link, '/./' or '/../'
+            if ($this->real) {
                $Path = realpath($Path);
             }
 
             // UTF8 Decode: Makes safe paths with utf-8 characters - ONLY WINDOWS?
-            if ($this->utf8 && preg_match('!!u', $Path)) {
+            if ( $this->utf8 && preg_match('!!u', $Path) ) {
                // TODO
                // $Path = utf8_decode($Path);
                // $Path = iconv('utf-8', 'cp1252', $Path);
