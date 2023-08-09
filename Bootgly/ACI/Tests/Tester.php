@@ -28,6 +28,7 @@ class Tester extends Tests
    // ...inherited from Tests
 
    // * Meta
+   private static $instances = 0;
    public array $artfacts;
    // ...inherited from Tests
 
@@ -49,6 +50,8 @@ class Tester extends Tests
       $this->specifications = [];
 
       // * Meta
+      self::$instances++;
+      // @ Status
       $this->failed = 0;
       $this->passed = 0;
       $this->skipped = 0;
@@ -154,10 +157,10 @@ class Tester extends Tests
    {
       if ($header) {
          // @ Add blue color to header text
-         $header = '@#Blue: ' . $header . '  @;';
+         $header = ' @#Cyan:(' . self::$instances . ') @;' . '@#Blue: ' . $header . '  @;';
 
          // @ Pad string with `=`
-         $length = $this->width + 28;
+         $length = $this->width + 38;
          $header = str_pad(
             string: $header,
             length: $length,
