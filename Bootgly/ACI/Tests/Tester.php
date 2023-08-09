@@ -26,10 +26,10 @@ class Tester extends Tests
 
    // * Data
    // ...inherited from Tests
+   public static $instances = 0;
+   public array $artfacts;
 
    // * Meta
-   private static $instances = 0;
-   public array $artfacts;
    // ...inherited from Tests
 
 
@@ -50,7 +50,6 @@ class Tester extends Tests
       $this->specifications = [];
 
       // * Meta
-      self::$instances++;
       // @ Status
       $this->failed = 0;
       $this->passed = 0;

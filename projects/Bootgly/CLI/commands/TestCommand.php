@@ -70,25 +70,33 @@ class TestCommand extends Command
 
    public function load (array $options)
    {
-      $suiteFiles0 = @include(BOOTGLY_ROOT_DIR . '/tests/@.php');
+      $suites = [];
 
-      $bootglyTests = null;
-      $suiteFiles1 = null;
+      // options
+      $bootglyTests = $options['bootgly'] ?? $options['all'];
+      $indexToTest = (int) ($options['index'] ?? $options['i'] ?? 0);
+
+      // @ Load Author tests
+      if (BOOTGLY_ROOT_DIR === BOOTGLY_WORKING_DIR || $bootglyTests) {
+         $bootstrap0 = include(BOOTGLY_ROOT_DIR . '/tests/@.php');
+
+         $suites = $bootstrap0['filesSuites'] ?? [];
+      }
+
+      // @ Load Consumer tests
       if (BOOTGLY_ROOT_DIR !== BOOTGLY_WORKING_DIR) {
-         $suiteFiles1 = @include(BOOTGLY_WORKING_DIR . '/tests/@.php');
-      } else {
-         $bootglyTests = true;
+         $bootstrap1 = include(BOOTGLY_WORKING_DIR . '/tests/@.php');
+
+         $suites = array_merge($suites, $bootstrap1['filesSuites'] ?? []);
       }
 
-      $bootglyTests ??= $options['bootgly'] ?? $options['all'];
+      foreach ($suites as $index => $dir) {
+         Tester::$instances++;
 
-      if ($bootglyTests) {
-         foreach (@$suiteFiles0['filesSuites'] as $dir) {
-            $this->run([$dir . 'tests/'], []);
+         if ($indexToTest > 0 && ($index + 1) !== $indexToTest) {
+            continue;
          }
-      }
 
-      foreach (@$suiteFiles1['filesSuites'] as $dir) {
          $this->run([$dir . 'tests/'], []);
       }
 
