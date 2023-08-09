@@ -30,6 +30,7 @@ class Path // TODO refactor
    // @ Fix
    public bool $fix = true;
    public bool $dir_ = true;
+   public bool $normalize = false;
    public bool $real = false;
    public bool $utf8 = false;
    // @ Match
@@ -189,6 +190,11 @@ class Path // TODO refactor
                }
             }
 
+            // Remove '/./', '/../', '//' in path
+            if ($this->normalize) {
+               $Path = $this->normalize($Path);
+            }
+
             // The resulting path will have no symbolic link, '/./' or '/../'
             if ($this->real) {
                $Path = realpath($Path);
@@ -279,6 +285,23 @@ class Path // TODO refactor
 
       return $paths;
       // return [0 => 'var', 1 => 'www', 2 => 'sys'];
+   }
+   public static function normalize ($path) : string
+   {
+      // $path = '../../etc/passwd';
+      $paths = explode('/', $path);
+      $newPath = [];
+
+      foreach ($paths as $node) {
+         if ($node === '..') {
+            array_pop($newPath);
+         } else if ($node !== '.' && $node !== '') {
+            array_push($newPath, $node);
+         }
+      }
+
+      return implode('/', $newPath);
+      // return 'etc/passwd';
    }
    public static function relativize (string $from, string $to) : string
    {
