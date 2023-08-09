@@ -24,16 +24,16 @@ class Path // TODO refactor
    public $Path = '';
 
    // * Config
-   // @ Convert
+   // @ convert
    public bool $convert = false;
    public bool $lowercase = false;
-   // @ Fix
+   // @ fix
    public bool $fix = true;
    public bool $dir_ = true;
    public bool $normalize = false;
+   // @ valid
    public bool $real = false;
-   public bool $utf8 = false;
-   // @ Match
+   // @ match
    public bool $match = true;
    public string $pattern = '';
 
@@ -51,7 +51,7 @@ class Path // TODO refactor
    public function __construct (string $path = '')
    {
       if ($path) {
-         $this->Path = $this->Path($path);
+         $this->construct($path);
       }
    }
    public function __get (string $key)
@@ -138,6 +138,8 @@ class Path // TODO refactor
             return $this->relative = self::cut($this->Path, ...$arguments);
          case 'split':
             return self::split($this->Path);
+         case 'normalize':
+            return self::normalize($this->Path);
          case 'join':
             return self::join($this->paths, ...$arguments);
          case 'search':
@@ -158,7 +160,7 @@ class Path // TODO refactor
    {
       $this->Path = '';
 
-      $this->__construct($path);
+      $this->construct($path);
 
       return $this;
    }
@@ -167,7 +169,7 @@ class Path // TODO refactor
       return $this->Path;
    }
 
-   public function Path (string $path) : string
+   public function construct (string $path) : string
    {
       $Path = '';
 
@@ -183,41 +185,39 @@ class Path // TODO refactor
          if ($this->fix) {
             // Overwrites all directory separators with the standard separator
             if ($this->dir_) {
-               if (self::DIR_ === '/') {
-                  $Path = str_replace('\\', '/', $Path);
-               } elseif (self::DIR_ === '\\') {
-                  $Path = str_replace('/', '\\', $Path);
-               }
+               $Path = match (self::DIR_) {
+                  '/' => str_replace('\\', '/', $Path),
+                  '\\' => str_replace('/', '\\', $Path),
+                  default => $Path
+               };
             }
 
             // Remove '/./', '/../', '//' in path
             if ($this->normalize) {
                $Path = $this->normalize($Path);
             }
+         }
 
-            // The resulting path will have no symbolic link, '/./' or '/../'
-            if ($this->real) {
-               $Path = realpath($Path);
-            }
-
-            // UTF8 Decode: Makes safe paths with utf-8 characters - ONLY WINDOWS?
-            if ( $this->utf8 && preg_match('!!u', $Path) ) {
-               // TODO
-               // $Path = utf8_decode($Path);
-               // $Path = iconv('utf-8', 'cp1252', $Path);
-            }
+         // @ Valid
+         // The resulting path will have no symbolic link, '/./' or '/../'
+         if ($this->real) {
+            $Path = (string) realpath($Path);
          }
 
          // @ Match
          // TODO
       }
 
-      return $Path;
+      return $this->Path = $Path;
    }
    public function match (string $path, bool $relative = false)
    {
       if ($this->pattern) {
-         $Path = Path::join(Path::split($path), $this->pattern);
+         $Path = Path::join(
+            paths: Path::split($path),
+            format: $this->pattern
+         );
+         debug($Path, $path);
 
          if ($this->root) {
             $Path = $this->root . $Path;
@@ -227,7 +227,7 @@ class Path // TODO refactor
 
          if ( isSet($paths[0]) ) {
             if ($relative) {
-               $Path = self::cut($paths[0], $this->root, -1);
+               $Path = Path::cut($paths[0], $this->root, -1);
             } else {
                $Path = $paths[0];
             }
@@ -289,18 +289,25 @@ class Path // TODO refactor
    public static function normalize ($path) : string
    {
       // $path = '../../etc/passwd';
-      $paths = explode('/', $path);
-      $newPath = [];
+      $paths = explode(self::DIR_, $path);
+      $Paths = [];
+
+      // @ Parse absolute path
+      if ($path[0] === self::DIR_) {
+         $Paths[] = '';
+      }
 
       foreach ($paths as $node) {
          if ($node === '..') {
-            array_pop($newPath);
+            array_pop($Paths);
          } else if ($node !== '.' && $node !== '') {
-            array_push($newPath, $node);
+            array_push($Paths, $node);
          }
       }
 
-      return implode('/', $newPath);
+      $path = implode(self::DIR_, $Paths);
+
+      return $path;
       // return 'etc/passwd';
    }
    public static function relativize (string $from, string $to) : string

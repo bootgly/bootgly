@@ -278,7 +278,7 @@ class File
       }
 
       if ($this->construct) { // Construct the path with $Path->Path($path) and check if file exists
-         $path = $this->Path->Path($path);
+         $path = $this->Path->construct($path);
          if (is_file($path)) {
             return $this->File = $path;
          }

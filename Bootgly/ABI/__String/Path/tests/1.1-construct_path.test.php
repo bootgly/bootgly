@@ -14,8 +14,8 @@ return [
       $Path = new Path(BOOTGLY_ROOT_DIR);
 
       assert(
-         $Path->Path === BOOTGLY_ROOT_DIR,
-         'Path not matched!'
+         assertion: $Path->Path === BOOTGLY_ROOT_DIR,
+         description: 'Path not matched!'
       );
 
       return true;
