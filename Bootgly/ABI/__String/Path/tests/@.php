@@ -9,6 +9,7 @@ return [
    // * Data
    'suiteName' => 'Path',
    'files' => [
-      '1.1-__construct_path-dir'
+      '1.1-__construct_path-dir',
+      '2.1-callstatic-normalize'
    ]
 ];
