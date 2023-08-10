@@ -43,31 +43,8 @@ class TestCommand extends Command
       // @
       $testsDir = $arguments[0] ?? null;
 
-      if ($testsDir !== null && $testsDir != (int) $testsDir) {
-         $testsDir = Path::normalize($testsDir . '/tests/@.php');
-
-         if (BOOTGLY_ROOT_DIR !== BOOTGLY_WORKING_DIR) {
-            $tests = (include BOOTGLY_WORKING_DIR . $testsDir);
-         } else {
-            $tests = (include BOOTGLY_ROOT_DIR . $testsDir);
-         }
-
-         if ($tests === false) {
-            return false;
-         }
-
-         $tests = (array) $tests;
-
-         $autoboot = $tests['autoBoot'] ?? false;
-         if ($autoboot instanceof Closure) {
-            $autoboot();
-         } else if ($autoboot) {
-            new Tester($tests);
-         } else {
-            $Alert = new Alert(CLI::$Terminal->Output);
-            $Alert->Type::FAILURE->set();
-            $Alert->emit('AutoBoot test not configured!');
-         }
+      if (empty($options) && $testsDir !== null && $testsDir != (int) $testsDir) {
+         $this->test($testsDir);
       } else if ($testsDir == (int) $testsDir) {
          $options = array_merge(['i' => $testsDir], $options);
 
@@ -79,7 +56,35 @@ class TestCommand extends Command
       return true;
    }
 
-   // ! Suites
+   // @
+   public function test (string $dir)
+   {
+      $bootstrap = Path::normalize($dir . '/tests/@.php');
+
+      if (BOOTGLY_ROOT_DIR !== BOOTGLY_WORKING_DIR) {
+         $tests = (include BOOTGLY_WORKING_DIR . $bootstrap);
+      } else {
+         $tests = (include BOOTGLY_ROOT_DIR . $bootstrap);
+      }
+
+      if ($tests === false) {
+         return false;
+      }
+
+      $tests = (array) $tests;
+
+      $autoboot = $tests['autoBoot'] ?? false;
+      if ($autoboot instanceof Closure) {
+         $autoboot();
+      } else if ($autoboot) {
+         new Tester($tests);
+      } else {
+         $Alert = new Alert(CLI::$Terminal->Output);
+         $Alert->Type::FAILURE->set();
+         $Alert->emit('AutoBoot test not configured!');
+      }
+   }
+   // @ Suites
    public function load (array $options)
    {
       $suites = [];
@@ -109,7 +114,7 @@ class TestCommand extends Command
             continue;
          }
 
-         $this->run(arguments: [$dir], options: []);
+         $this->test($dir);
       }
 
       return true;
