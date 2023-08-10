@@ -31,18 +31,18 @@ class Path // TODO refactor
    public bool $fix = true;
    public bool $dir_ = true;
    public bool $normalize = false;
+   // @ match
+   public bool $match = false;
+   public string $pattern = '';
    // @ valid
    public bool $real = false;
-   // @ match
-   public bool $match = true;
-   public string $pattern = '';
 
    // * Data
-   //private $root;     // /var/www/sys/index.php => /var
-   //private $parent;   // /var/www/sys/index.php => /var/www/sys/
-   //private $current;  // /var/www/sys/index.php => index.php
-   //private $paths;    // /var/www/sys/ => [0 => 'var', 1 => 'www', 2 => 'sys']
-   //private string $type;     // -> 'dir' or 'file'
+   //private $root;        // /var/www/sys/index.php => /var
+   //private $parent;      // /var/www/sys/index.php => /var/www/sys/
+   //private $current;     // /var/www/sys/index.php => index.php
+   //private $paths;       // /var/www/sys/ => [0 => 'var', 1 => 'www', 2 => 'sys']
+   //private string $type; // => 'dir' or 'file'
 
    // * Meta
    //private $relative;
@@ -176,12 +176,12 @@ class Path // TODO refactor
       if ($path) {
          $Path = $path;
 
-         // @ Convert
+         // @ 1 - convert
          if ($this->convert && $this->lowercase) {
             $Path = strtolower($Path);
          }
 
-         // @ Fix
+         // @ 2 - fix
          if ($this->fix) {
             // Overwrites all directory separators with the standard separator
             if ($this->dir_) {
@@ -198,45 +198,45 @@ class Path // TODO refactor
             }
          }
 
-         // @ Valid
+         // @ 3 - valid
          // The resulting path will have no symbolic link, '/./' or '/../'
          if ($this->real) {
             $Path = (string) realpath($Path);
          }
-
-         // @ Match
-         // TODO
       }
 
       return $this->Path = $Path;
    }
-   public function match (string $path, bool $relative = false)
+   public function match (string $path, string $pattern) : bool
    {
-      if ($this->pattern) {
-         $Path = Path::join(
-            paths: Path::split($path),
-            format: $this->pattern
-         );
-         debug($Path, $path);
+      // path: /etc/php/%
+      // pattern: '8.*'
 
-         if ($this->root) {
-            $Path = $this->root . $Path;
-         }
-
-         $paths = glob($Path);
-
-         if ( isSet($paths[0]) ) {
-            if ($relative) {
-               $Path = Path::cut($paths[0], $this->root, -1);
-            } else {
-               $Path = $paths[0];
-            }
-         } else {
-            $Path = $path;
-         }
-
-         $this->Path = $Path;
+      if ($pattern === '') {
+         return false;
       }
+
+      if ($this->Path && $path[0] === '/') {
+         return false;
+      }
+
+      $Path = str_replace(
+         search: '%',
+         replace: $pattern,
+         subject: $this->Path . $path
+      );
+
+      $paths = glob($Path);
+
+      if ( $paths !== false && isSet($paths[0]) ) {
+         $this->Path = $paths[0]; // Get first path found
+      } else {
+         return false;
+      }
+
+      return true;
+
+      // $this->Path = /etc/php/8.0 or /etc/php/8.1 or /etc/php/8.2...
    }
 
    public static function cut ($path, $path2, int $direction, string $current = '') : string
@@ -329,15 +329,11 @@ class Path // TODO refactor
       return $up . $rest;
       // return 'tests/test2.php';
    }
-   private static function join (array $paths, string $format = '%') : string
+   private static function join (array $paths) : string
    {
       $path = '';
 
-      foreach ($paths as $current) {
-         $path .= __String::replace('%', $current, $format) . self::DIR_;
-      }
-
-      $path = __String::trim($path, self::DIR_, 1);
+      $path = implode(self::DIR_, $paths);
 
       return $path;
    }
