@@ -42,7 +42,7 @@ class TestCommand extends Command
       // @
       $testsDir = $arguments[0] ?? null;
 
-      if ($testsDir !== null) {
+      if ($testsDir !== null && $testsDir != (int) $testsDir) {
          if (BOOTGLY_ROOT_DIR !== BOOTGLY_WORKING_DIR) {
             $tests = @include(BOOTGLY_WORKING_DIR . $testsDir . '@.php');
          } else {
@@ -61,6 +61,10 @@ class TestCommand extends Command
             $Alert->Type::FAILURE->set();
             $Alert->emit('AutoBoot test not configured!');
          }
+      } else if ($testsDir == (int) $testsDir) {
+         $options = array_merge(['i' => $testsDir], $options);
+
+         $this->load($options);
       } else {
          $this->load($options);
       }
