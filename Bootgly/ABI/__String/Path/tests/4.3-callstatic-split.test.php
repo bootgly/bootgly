@@ -6,7 +6,7 @@ use Bootgly\ABI\__String\Path;
 
 return [
    // @ configure
-   'describe' => 'It should split paths',
+   'describe' => 'It should split path',
    // @ simulate
    // ...
    // @ test

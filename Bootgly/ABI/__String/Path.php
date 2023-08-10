@@ -340,11 +340,15 @@ class Path // TODO refactor
 
       return $rest;
    }
-   private static function join (array $paths) : string
+   private static function join (array $paths, bool $absolute = false) : string
    {
       $path = '';
 
-      $path = implode(self::DIR_, $paths);
+      if ($absolute) {
+         $path .= self::DIR_;
+      }
+
+      $path .= implode(self::DIR_, $paths);
 
       return $path;
    }

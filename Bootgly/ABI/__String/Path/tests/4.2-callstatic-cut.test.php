@@ -6,7 +6,7 @@ use Bootgly\ABI\__String\Path;
 
 return [
    // @ configure
-   'describe' => 'It should cut nodes',
+   'describe' => 'It should cut path nodes',
    // @ simulate
    // ...
    // @ test

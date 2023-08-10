@@ -21,5 +21,6 @@ return [
       '4.2-callstatic-cut',
       '4.3-callstatic-split',
       '4.4-callstatic-relativize',
+      '4.5-callstatic-join',
    ]
 ];
