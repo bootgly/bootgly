@@ -6,7 +6,10 @@ use Bootgly\ABI\__String\Path;
 
 return [
    // @ configure
-   'describe' => '',
+   'describe' => 'It should normalize path: `..`, `//`, `.`',
+   'separators' => [
+      'left' => 'Static methods'
+   ],
    // @ simulate
    // ...
    // @ test

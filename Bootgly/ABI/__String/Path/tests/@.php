@@ -14,9 +14,10 @@ return [
       '1.2-construct_path-lowercase',
       '1.3-construct_path-dir_',
       '1.4-construct_path-real',
-      '1.5-construct_path-match',
-      '2.1-construct_path-combined',
+      '2.1-match_path',
+      '3.1-construct_path-combined',
       // Call static
-      '3.1-callstatic-normalize',
+      '4.1-callstatic-normalize',
+      '4.2-callstatic-cut',
    ]
 ];

@@ -85,7 +85,9 @@ class Path // TODO refactor
             $current = '';
 
             if ($this->Path) {
-               $current = substr(strrchr((new self)->Path($this->Path), self::DIR_), 1);
+               $lastNode = strrchr(haystack: $this->Path, needle: self::DIR_);
+
+               $current = substr($lastNode, 1);
 
                if ($current == '') {
                   $current = basename($this->Path);
@@ -239,53 +241,6 @@ class Path // TODO refactor
       // $this->Path = /etc/php/8.0 or /etc/php/8.1 or /etc/php/8.2...
    }
 
-   public static function cut ($path, $path2, int $direction, string $current = '') : string
-   {
-      $Path = '';
-
-      if ($path && $path2) {
-         switch ($direction) {
-            case -1:
-               $path2Len = strlen($path2);
-
-               for ($i = 0; $i < $path2Len; $i++) {
-                  if (@$path[$i] !== @$path2[$i]) {
-                     return $Path;
-                  }
-               }
-
-               $Path = substr($path, $path2Len);
-
-               break;
-            case 1:
-               $Path = rtrim($path, $path2);
-
-               break;
-            case 0:
-               $Path = substr($path, strlen($path2), strlen($current) * -1);
-
-               break;
-         }
-      }
-
-      return $Path;
-   }
-   public static function split (string $path) : array
-   {
-      // $path = '/var/www/sys/';
-      $paths = [];
-
-      if ($path) {
-         $path = trim($path, "\x2F"); // /
-         $path = trim($path, "\x5C"); // \
-         $path = str_replace("\\", "/", $path);
-
-         $paths = explode("/", $path);
-      }
-
-      return $paths;
-      // return [0 => 'var', 1 => 'www', 2 => 'sys'];
-   }
    public static function normalize ($path) : string
    {
       // $path = '../../etc/passwd';
@@ -309,6 +264,63 @@ class Path // TODO refactor
 
       return $path;
       // return 'etc/passwd';
+   }
+   public static function cut (string $path, int ...$cutting) : string
+   {
+      if (count($cutting) > 2) {
+         return $path;
+      }
+
+      foreach ($cutting as $cut) {
+         if ($cut === 0) {
+            continue;
+         }
+
+         // * Meta
+         $paths = explode('/', trim($path, '/'));
+         $nodes = count($paths);
+         $absolute = $path[0] === '/';
+         $dir = $path[-1] === '/';
+
+         if (abs($cut) === $nodes) {
+            return '';
+         }
+
+         if ($cut >= 0) { // + Positive <==
+            $paths = array_slice($paths, 0, $nodes - $cut);
+
+            if ($absolute) {
+               array_unshift($paths, '');
+            }
+            array_push($paths, '');
+         } else { // - Negative ==>
+            $paths = array_slice($paths, abs($cut));
+
+            if ($dir) {
+               array_push($paths, '');
+            }
+         }
+
+         $path = implode('/', $paths);
+      }
+
+      return $path;
+   }
+   public static function split (string $path) : array
+   {
+      // $path = '/var/www/sys/';
+      $paths = [];
+
+      if ($path) {
+         $path = trim($path, "\x2F"); // /
+         $path = trim($path, "\x5C"); // \
+         $path = str_replace("\\", "/", $path);
+
+         $paths = explode("/", $path);
+      }
+
+      return $paths;
+      // return [0 => 'var', 1 => 'www', 2 => 'sys'];
    }
    public static function relativize (string $from, string $to) : string
    {
