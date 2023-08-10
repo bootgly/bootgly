@@ -17,7 +17,8 @@ use Bootgly\ABI\__String;
 
 class Path // TODO refactor
 {
-   const DIR_ = DIRECTORY_SEPARATOR;
+   // separators
+   const DIR_  = DIRECTORY_SEPARATOR;
    const PATH_ = PATH_SEPARATOR;
 
 
@@ -31,18 +32,15 @@ class Path // TODO refactor
    public bool $fix = true;
    public bool $dir_ = true;
    public bool $normalize = false;
-   // @ match
-   public bool $match = false;
-   public string $pattern = '';
    // @ valid
    public bool $real = false;
 
    // * Data
-   //private $root;        // /var/www/sys/index.php => /var
-   //private $parent;      // /var/www/sys/index.php => /var/www/sys/
-   //private $current;     // /var/www/sys/index.php => index.php
-   //private $paths;       // /var/www/sys/ => [0 => 'var', 1 => 'www', 2 => 'sys']
-   //private string $type; // => 'dir' or 'file'
+   //private string $root;    // /var/www/sys/index.php => /var
+   //private string $parent;  // /var/www/sys/index.php => /var/www/sys/
+   //private string $current; // /var/www/sys/index.php => index.php
+   //private array $paths;    // /var/www/sys/ => [0 => 'var', 1 => 'www', 2 => 'sys']
+   //private string $type;    // => 'dir' or 'file'
 
    // * Meta
    //private $relative;
@@ -340,7 +338,8 @@ class Path // TODO refactor
 
       return $rest;
    }
-   private static function join (array $paths, bool $absolute = false) : string
+
+   private static function join (array $paths, bool $absolute = false, bool $dir = false) : string
    {
       $path = '';
 
@@ -350,26 +349,32 @@ class Path // TODO refactor
 
       $path .= implode(self::DIR_, $paths);
 
+      if ($dir) {
+         $path .= self::DIR_;
+      }
+
       return $path;
    }
-   private static function concatenate (array $paths, int $from = 0) : string
+   private static function concatenate (array $paths, int $offset = 0) : string
    {
       $Path = '';
 
-      foreach ($paths as $index => $path) {
-         if ($index >= $from) {
-            $Path .= $path;
+      // * Meta
+      $nodes = 0;
 
-            // ? Concat with "/" if the node is not file
-            $Result = __String::search($path, '.');
-            if ($Result->position === false) {
-               $Path .= self::DIR_;
-            }
+      foreach ($paths as $index => $path) {
+         if ($index >= $offset) {
+            $separator = ($nodes > 0) ? self::DIR_ : '';
+
+            $Path .= $separator . $path;
+
+            $nodes++;
          }
       }
 
       return $Path;
    }
+
    private static function search (array $paths, $needle)
    {
       return __Array::search($paths, $needle);

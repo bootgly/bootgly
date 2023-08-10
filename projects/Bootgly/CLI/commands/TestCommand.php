@@ -13,12 +13,13 @@ namespace projects\Bootgly\CLI\commands;
 
 use Closure;
 
+use Bootgly\ABI\__String\Path;
+
 use Bootgly\ACI\Tests;
 use Bootgly\ACI\Tests\Tester;
 
 use Bootgly\CLI;
 use Bootgly\CLI\Command;
-
 use Bootgly\CLI\Terminal\components\Alert\Alert;
 
 
@@ -43,10 +44,16 @@ class TestCommand extends Command
       $testsDir = $arguments[0] ?? null;
 
       if ($testsDir !== null && $testsDir != (int) $testsDir) {
+         $testsDir = Path::normalize($testsDir . '/tests/@.php');
+
          if (BOOTGLY_ROOT_DIR !== BOOTGLY_WORKING_DIR) {
-            $tests = @include(BOOTGLY_WORKING_DIR . $testsDir . '@.php');
+            $tests = (include BOOTGLY_WORKING_DIR . $testsDir);
          } else {
-            $tests = @include(BOOTGLY_ROOT_DIR . $testsDir . '@.php');
+            $tests = (include BOOTGLY_ROOT_DIR . $testsDir);
+         }
+
+         if ($tests === false) {
+            return false;
          }
 
          $tests = (array) $tests;
@@ -72,6 +79,7 @@ class TestCommand extends Command
       return true;
    }
 
+   // ! Suites
    public function load (array $options)
    {
       $suites = [];
@@ -101,7 +109,7 @@ class TestCommand extends Command
             continue;
          }
 
-         $this->run([$dir . 'tests/'], []);
+         $this->run(arguments: [$dir], options: []);
       }
 
       return true;

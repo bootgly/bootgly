@@ -11,14 +11,21 @@ return [
    // ...
    // @ test
    'test' => function () {
+      $path = Path::join(['home', 'bootgly']);
+      assert(
+         assertion: $path === 'home/bootgly',
+         description: 'Path: ' . $path
+      );
+
       $path = Path::join(['home', 'bootgly'], absolute: true);
       assert(
          assertion: $path === '/home/bootgly',
          description: 'Path: ' . $path
       );
-      $path = Path::join(['home', 'bootgly']);
+
+      $path = Path::join(['home', 'bootgly'], absolute: true, dir: true);
       assert(
-         assertion: $path === 'home/bootgly',
+         assertion: $path === '/home/bootgly/',
          description: 'Path: ' . $path
       );
 
