@@ -324,9 +324,10 @@ class Path // TODO refactor
    }
    public static function relativize (string $from, string $to) : string
    {
-      // $from = '/foo/bar/, $to = '/foo/bar/tests/test2.php';
-      $from = explode(DIRECTORY_SEPARATOR, realpath($from));
-      $to = explode(DIRECTORY_SEPARATOR, realpath($to));
+      // $from = '/foo/bar/'
+      // $to   = '/foo/bar/tests/test2.php'
+      $from = explode(DIRECTORY_SEPARATOR, $from);
+      $to = explode(DIRECTORY_SEPARATOR, $to);
 
       $length = min(count($from), count($to));
       for ($i = 0; $i < $length; $i++) {
@@ -335,11 +336,9 @@ class Path // TODO refactor
          }
       }
 
-      $up = str_pad('', ($length - $i) * 3, '..' . DIRECTORY_SEPARATOR);
       $rest = implode(DIRECTORY_SEPARATOR, array_slice($to, $i));
 
-      return $up . $rest;
-      // return 'tests/test2.php';
+      return $rest;
    }
    private static function join (array $paths) : string
    {
