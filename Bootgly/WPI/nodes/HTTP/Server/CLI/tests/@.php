@@ -30,7 +30,7 @@ return [
       return [];
    },
    // * Data
-   'files' => [
+   'tests' => [
       'Request/' => [
          '1.01-request_as_response-address',
          '1.02-request_as_response-port',

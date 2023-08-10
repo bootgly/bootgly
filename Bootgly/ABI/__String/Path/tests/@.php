@@ -8,7 +8,7 @@ return [
    'exitOnFailure' => true,
    // * Data
    'suiteName' => 'Path',
-   'files' => [
+   'tests' => [
       // construct
       '1.1-construct_path',
       '1.2-construct_path-lowercase',

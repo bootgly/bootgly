@@ -91,7 +91,7 @@ class CLI extends TCP\Server implements HTTP, Server
             }
             clearstatcache(false, $loader);
 
-            $files = (@require $loader)['files'];
+            $files = (@require $loader)['tests'];
             SAPI::$tests[self::class] = Tests::list($files);
             // * Meta
             SAPI::$Tests[self::class] = [];

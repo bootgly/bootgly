@@ -46,7 +46,7 @@ class Tester extends Tests
       self::$exitOnFailure = $tests['exitOnFailure'] ?? self::$exitOnFailure;
 
       // * Data
-      $this->tests = self::list($tests['files'] ?? $tests);
+      $this->tests = self::list($tests['tests'] ?? $tests);
       $this->specifications = [];
 
       // * Meta

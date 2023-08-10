@@ -1,6 +1,6 @@
 <?php
 return [
-   'filesSuites' => [
+   'suites' => [
       'Bootgly/ABI/__String/Path/',
 
       'Bootgly/API/',

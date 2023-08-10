@@ -8,7 +8,7 @@ return [
    'exitOnFailure' => true,
    // * Data
    'suiteName' => 'Project class Test',
-   'files' => [
+   'tests' => [
       '1.1-construct_path',
       '2.1-name_path',
       '3.1-get_path',

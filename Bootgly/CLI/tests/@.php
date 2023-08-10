@@ -8,7 +8,7 @@ return [
    'exitOnFailure' => true,
    // * Data
    'suiteName' => 'Command class test',
-   'files' => [
+   'tests' => [
       '_Commands-register-01',
       '_Commands-register-02',
    ]

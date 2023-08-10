@@ -80,14 +80,14 @@ class TestCommand extends Command
       if (BOOTGLY_ROOT_DIR === BOOTGLY_WORKING_DIR || $bootglyTests) {
          $bootstrap0 = include(BOOTGLY_ROOT_DIR . '/tests/@.php');
 
-         $suites = $bootstrap0['filesSuites'] ?? [];
+         $suites = $bootstrap0['suites'] ?? [];
       }
 
       // @ Load Consumer tests
       if (BOOTGLY_ROOT_DIR !== BOOTGLY_WORKING_DIR) {
          $bootstrap1 = include(BOOTGLY_WORKING_DIR . '/tests/@.php');
 
-         $suites = array_merge($suites, $bootstrap1['filesSuites'] ?? []);
+         $suites = array_merge($suites, $bootstrap1['suites'] ?? []);
       }
 
       foreach ($suites as $index => $dir) {
