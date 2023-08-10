@@ -12,14 +12,13 @@ namespace Bootgly\ABI\__String;
 
 
 use Bootgly\ABI\__Array;
-use Bootgly\ABI\__String;
 
 
-class Path // TODO refactor
+class Path
 {
    // separators
-   const DIR_  = DIRECTORY_SEPARATOR;
-   const PATH_ = PATH_SEPARATOR;
+   const DIR_  = DIRECTORY_SEPARATOR; // DEPRECATED
+   const PATH_ = PATH_SEPARATOR;      // DEPRECATED
 
 
    public $Path = '';
@@ -60,10 +59,10 @@ class Path // TODO refactor
 
          // * Data
          case 'root':
-            $root = strstr($this->Path, self::DIR_, true);
+            $root = strstr($this->Path, DIRECTORY_SEPARATOR, true);
 
             if ($root) {
-               $root = $root . self::DIR_;
+               $root = $root . DIRECTORY_SEPARATOR;
             }
 
             return $root;
@@ -73,8 +72,8 @@ class Path // TODO refactor
             if ($this->Path) {
                $parent = dirname($this->Path);
 
-               if ($parent[-1] !== self::DIR_) {
-                  $parent .= self::DIR_;
+               if ($parent[-1] !== DIRECTORY_SEPARATOR) {
+                  $parent .= DIRECTORY_SEPARATOR;
                }
             }
 
@@ -83,7 +82,7 @@ class Path // TODO refactor
             $current = '';
 
             if ($this->Path) {
-               $lastNode = strrchr(haystack: $this->Path, needle: self::DIR_);
+               $lastNode = strrchr(haystack: $this->Path, needle: DIRECTORY_SEPARATOR);
 
                $current = substr($lastNode, 1);
 
@@ -185,7 +184,7 @@ class Path // TODO refactor
          if ($this->fix) {
             // Overwrites all directory separators with the standard separator
             if ($this->dir_) {
-               $Path = match (self::DIR_) {
+               $Path = match (DIRECTORY_SEPARATOR) {
                   '/' => str_replace('\\', '/', $Path),
                   '\\' => str_replace('/', '\\', $Path),
                   default => $Path
@@ -242,11 +241,11 @@ class Path // TODO refactor
    public static function normalize ($path) : string
    {
       // $path = '../../etc/passwd';
-      $paths = explode(self::DIR_, $path);
+      $paths = explode(DIRECTORY_SEPARATOR, $path);
       $Paths = [];
 
       // @ Parse absolute path
-      if ($path[0] === self::DIR_) {
+      if ($path[0] === DIRECTORY_SEPARATOR) {
          $Paths[] = '';
       }
 
@@ -258,7 +257,7 @@ class Path // TODO refactor
          }
       }
 
-      $path = implode(self::DIR_, $Paths);
+      $path = implode(DIRECTORY_SEPARATOR, $Paths);
 
       return $path;
       // return 'etc/passwd';
@@ -320,21 +319,21 @@ class Path // TODO refactor
       return $paths;
       // return [0 => 'var', 1 => 'www', 2 => 'sys'];
    }
-   public static function relativize (string $from, string $to) : string
+   public static function relativize (string $path, string $from) : string
    {
       // $from = '/foo/bar/'
-      // $to   = '/foo/bar/tests/test2.php'
+      // $path   = '/foo/bar/tests/test2.php'
+      $path = explode(DIRECTORY_SEPARATOR, $path);
       $from = explode(DIRECTORY_SEPARATOR, $from);
-      $to = explode(DIRECTORY_SEPARATOR, $to);
 
-      $length = min(count($from), count($to));
+      $length = min(count($from), count($path));
       for ($i = 0; $i < $length; $i++) {
-         if ($from[$i] !== $to[$i]) {
+         if ($from[$i] !== $path[$i]) {
             break;
          }
       }
 
-      $rest = implode(DIRECTORY_SEPARATOR, array_slice($to, $i));
+      $rest = implode(DIRECTORY_SEPARATOR, array_slice($path, $i));
 
       return $rest;
    }
@@ -344,13 +343,13 @@ class Path // TODO refactor
       $path = '';
 
       if ($absolute) {
-         $path .= self::DIR_;
+         $path .= DIRECTORY_SEPARATOR;
       }
 
-      $path .= implode(self::DIR_, $paths);
+      $path .= implode(DIRECTORY_SEPARATOR, $paths);
 
       if ($dir) {
-         $path .= self::DIR_;
+         $path .= DIRECTORY_SEPARATOR;
       }
 
       return $path;
@@ -364,7 +363,7 @@ class Path // TODO refactor
 
       foreach ($paths as $index => $path) {
          if ($index >= $offset) {
-            $separator = ($nodes > 0) ? self::DIR_ : '';
+            $separator = ($nodes > 0) ? DIRECTORY_SEPARATOR : '';
 
             $Path .= $separator . $path;
 
@@ -373,10 +372,5 @@ class Path // TODO refactor
       }
 
       return $Path;
-   }
-
-   private static function search (array $paths, $needle)
-   {
-      return __Array::search($paths, $needle);
    }
 }

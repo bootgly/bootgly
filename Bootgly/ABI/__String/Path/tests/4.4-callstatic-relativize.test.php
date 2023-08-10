@@ -11,7 +11,7 @@ return [
    // ...
    // @ test
    'test' => function () {
-      $relative = Path::relativize('/foo/bar/', '/foo/bar/tests/test2.php');
+      $relative = Path::relativize('/foo/bar/tests/test2.php', '/foo/bar/');
       assert(
          assertion: $relative === 'tests/test2.php',
          description: 'Relative path: ' . $relative
