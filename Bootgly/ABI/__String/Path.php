@@ -14,14 +14,12 @@ namespace Bootgly\ABI\__String;
 use Bootgly\ABI\__Array;
 
 
+#[\AllowDynamicProperties]
 class Path
 {
    // separators
    const DIR_  = DIRECTORY_SEPARATOR; // DEPRECATED
    const PATH_ = PATH_SEPARATOR;      // DEPRECATED
-
-
-   public $Path = '';
 
    // * Config
    // @ convert
@@ -35,13 +33,18 @@ class Path
    public bool $real = false;
 
    // * Data
+   public $Path = '';
+
+   // * Meta
+   // ->Path
    //private string $root;    // /var/www/sys/index.php => /var
    //private string $parent;  // /var/www/sys/index.php => /var/www/sys/
    //private string $current; // /var/www/sys/index.php => index.php
    //private array $paths;    // /var/www/sys/ => [0 => 'var', 1 => 'www', 2 => 'sys']
    //private string $type;    // => 'dir' or 'file'
-
-   // * Meta
+   // ->paths
+   //private object $Index;   // ->Last->key, Last->value
+   // ->relativize() ?
    //private $relative;
 
 
@@ -54,10 +57,10 @@ class Path
    public function __get (string $key)
    {
       switch ($key) {
-         case '_':
+         // * Meta
+         // ->Path
+         case '_': // DEPRECATED
             return $this->Path;
-
-         // * Data
          case 'root':
             $root = strstr($this->Path, DIRECTORY_SEPARATOR, true);
 
@@ -100,17 +103,24 @@ class Path
             $this->type = (new \SplFileInfo($this->Path))->getType();
 
             break;
-
+         // ->paths
          case 'Index':
             return new class ($this->paths)
             {
-               public $last;
+               // * Meta
+               public object $Last;
+
 
                public function __construct ($paths)
                {
-                  $this->last = (new __Array($paths))->Last->key;
+                  $__Array = new __Array($paths);
+
+                  // * Meta
+                  $this->Last = ($__Array)->Last; // ->key, ->value
                }
             };
+         // ->relativize()
+         // TODO ?
       }
 
       return @$this->$key;
@@ -118,6 +128,8 @@ class Path
    public function __set (string $key, $value)
    {
       switch ($key) {
+         // * Meta
+         // ->Path
          case 'root':
          case 'parent':
          case 'current':
@@ -125,7 +137,10 @@ class Path
          case 'relative':
             $this->$key = $value;
             break;
-
+         // ->paths
+         // ...
+         // ->relativize()
+         // ...
          default:
             $this->$key = new Path($value);
       }
@@ -133,16 +148,18 @@ class Path
    public function __call (string $name, array $arguments)
    {
       switch ($name) {
-         case 'cut':
-            return $this->relative = self::cut($this->Path, ...$arguments);
-         case 'split':
-            return self::split($this->Path);
+         // ->Path
          case 'normalize':
             return self::normalize($this->Path);
+         case 'split':
+            return self::split($this->Path);
+         case 'cut':
+            return self::cut($this->Path, ...$arguments);
+         case 'relativize':
+            return self::relativize($this->Path, ...$arguments);
+         // ->paths
          case 'join':
             return self::join($this->paths, ...$arguments);
-         case 'search':
-            return self::search($this->paths, ...$arguments);
          case 'concatenate':
             return self::concatenate($this->paths, ...$arguments);
       }
@@ -159,7 +176,7 @@ class Path
    {
       $this->Path = '';
 
-      $this->construct($path);
+      $this->__construct($path);
 
       return $this;
    }
@@ -262,8 +279,26 @@ class Path
       return $path;
       // return 'etc/passwd';
    }
+   public static function split(string $path): array
+   {
+      // $path = '/var/www/sys/';
+      $paths = [];
+
+      if ($path) {
+         $path = trim($path, "\x2F"); // /
+         $path = trim($path, "\x5C"); // \
+         $path = str_replace("\\", "/", $path);
+
+         $paths = explode("/", $path);
+      }
+
+      return $paths;
+      // return [0 => 'var', 1 => 'www', 2 => 'sys'];
+   }
    public static function cut (string $path, int ...$cutting) : string
    {
+      // $path = var/www/html/test/;
+      // $nodes = [-2, 1];
       if (count($cutting) > 2) {
          return $path;
       }
@@ -302,27 +337,12 @@ class Path
       }
 
       return $path;
-   }
-   public static function split (string $path) : array
-   {
-      // $path = '/var/www/sys/';
-      $paths = [];
-
-      if ($path) {
-         $path = trim($path, "\x2F"); // /
-         $path = trim($path, "\x5C"); // \
-         $path = str_replace("\\", "/", $path);
-
-         $paths = explode("/", $path);
-      }
-
-      return $paths;
-      // return [0 => 'var', 1 => 'www', 2 => 'sys'];
+      // return 'html/';
    }
    public static function relativize (string $path, string $from) : string
    {
+      // $path = '/foo/bar/tests/test2.php'
       // $from = '/foo/bar/'
-      // $path   = '/foo/bar/tests/test2.php'
       $path = explode(DIRECTORY_SEPARATOR, $path);
       $from = explode(DIRECTORY_SEPARATOR, $from);
 
@@ -336,6 +356,7 @@ class Path
       $rest = implode(DIRECTORY_SEPARATOR, array_slice($path, $i));
 
       return $rest;
+      // return 'tests/test2.php';
    }
 
    private static function join (array $paths, bool $absolute = false, bool $dir = false) : string
