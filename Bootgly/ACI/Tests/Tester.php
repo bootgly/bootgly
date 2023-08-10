@@ -194,24 +194,28 @@ class Tester extends Tests
 
    public function summarize ()
    {
-      $failed = $this->failed;
-      $passed = $this->passed;
-      $skipped = $this->skipped;
+      // @ Result
+      $failed = '@:error:' . $this->failed . ' failed @;';
+      $skipped = '@:notice:' . $this->skipped . ' skipped @;';
+      $passed = '@:success:' . $this->passed . ' passed @;';
       // @ Stats
-      $total = $this->total;
+      $total = $this->total . ' total';
       // @ Time
       $started = $this->started;
       $finished = $this->finished = microtime(true);
 
       // @ Benchmark Tests time
-      // TODO use Benchmark class?
+      // TODO use Benchmark class
       $duration = number_format(round($finished - $started, 5), 6);
+      $duration = "@#Magenta:" . $duration . "s @;";
+
+      $ran = '@#Black:' . 'Ran all tests. @;';
 
       $this->log(<<<TESTS
       
-      Tests: @:e:{$failed} failed @;, @:n:{$skipped} skipped @;, @:s:{$passed} passed @;, {$total} total
-      Duration: \033[1;35m{$duration}s \033[0m
-      \033[90mRan all tests.\033[0m
+      Tests: {$failed}, {$skipped}, {$passed}, {$total}
+      Duration: {$duration}
+      {$ran}
       \n
       TESTS);
    }

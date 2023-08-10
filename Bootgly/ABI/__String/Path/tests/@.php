@@ -19,5 +19,6 @@ return [
       // Call static
       '4.1-callstatic-normalize',
       '4.2-callstatic-cut',
+      '4.3-callstatic-split',
    ]
 ];
