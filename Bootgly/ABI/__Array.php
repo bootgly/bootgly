@@ -11,105 +11,114 @@
 namespace Bootgly\ABI;
 
 
-// TODO refactor
 class __Array
 {
+   // * Data
    public array $array;
 
 
    public function __construct (array $array)
    {
-      $this->array = $array;
+      $this->array = &$array;
    }
    public function __get (string $property)
    {
       switch ($property) {
-         // * Config
-
-         // * Data
-         // ! Array Key
+         // * Meta
+         // @ Key
          case 'keys':
             return array_keys($this->array);
-         // ! Array Value
+         // @ Value
          case 'values':
             return array_values($this->array);
-
-         // * Meta
-         // ! Array Pointer
-         // ? Current
-         case 'Current': // TODO return Current->key, Current->value;
-            break;
+         // @ Pointer
+         // current
          case 'current':
             return current($this->array);
-         // ? Next
-         case 'Next': // TODO return Next->key, Next->value;
-            break;
-         case 'next': // By default return the next Array->Last->value;
+         case 'Current':
+            return (object) [
+               'key' => key($this->array),
+               'value' => current($this->array)
+            ];
+         // next
+         case 'next':
             return next($this->array);
-         // ? Previous
-         case 'Previous': // TODO return Previous->key, Previous->value;
-            break;
+         case 'Next':
+            $nextValue = next($this->array);
+            $nextKey = key($this->array);
+            return (object) [
+               'key' => $nextKey,
+               'value' => $nextValue
+            ];
+         // previous
          case 'previous':
             return prev($this->array);
-         // ? First || Start || Reset() ??
-         case 'First': // TODO
-            break;
-         case 'first': // TODO
-            break;
-         // ? Last || End
+         case 'Previous':
+            $previousValue = prev($this->array);
+            $previousKey = key($this->array);
+            return (object) [
+               'key' => $previousKey,
+               'value' => $previousValue
+            ];
+         // first
+         case 'first':
+            reset($this->array);
+            return current($this->array);
+         case 'First':
+            $firstValue = reset($this->array);
+            return (object) [
+               'key' => key($this->array),
+               'value' => $firstValue
+            ];
+         // last
          case 'Last':
-            return new class($this->array)
-            {
-               private array $array;
-
-               public function __construct(array $array)
-               {
-                  $this->array = $array;
+            $lastValue = end($this->array);
+            return (object) [
+               'key' => key($this->array),
+               'value' => $lastValue
+            ];
+         case 'last':
+            end($this->array);
+            return current($this->array);
+         // @ Type
+         case 'list':
+            #array_is_list()
+            $index = -1;
+            foreach ($this->array as $key => $value) {
+               ++$index;
+               if ($key !== $index) {
+                  return false;
                }
-
-               public function __get(string $property)
-               {
-                  switch ($property) {
-                     case 'Key':
-                        // TODO implement ->Key->number (indexed),
-                        // TODO ->Key->string (associative)
-                        // TODO ->Key->array (multidimensional)
-                     case 'key':
-                        $array = $this->array;
-                        end($array);
-                        return key($array);
-
-                     case 'value':
-                        $array = $this->array;
-                        return end($array);
-                  }
+            }
+            return true;
+         case 'multidimensional':
+            foreach ($this->array as $value) {
+               if ( is_array($value) ) {
+                  return true;
                }
-            };
-         case 'last': // TODO by default return last key or last value???
-            break;
-         // ! Array Type
-         case 'type': // TODO return 'indexed or numeric', 'associative', 'multidimensional', 'mixed??'
-            break;
+            }
+            return false;
       }
    }
-   public function __call ($name, $arguments)
+   public function __call (string $name, array $arguments)
    {
       switch ($name) {
+         // ->array
          case 'search':
             return self::search($this->array, ...$arguments);
       }
    }
-   public static function __callStatic (string $name, $arguments)
+   public static function __callStatic (string $name, array $arguments)
    {
-      return self::$name(...$arguments);
+      if ( method_exists(__CLASS__, $name) ) {
+         return self::$name(...$arguments);
+      }
+
+      return null;
    }
 
-   public static function check ($payload)
-   { //!?!
-      return is_array($payload);
-   }
-   private static function search ($haystack, $needle, bool $strict = false)
-   { // TODO pattern
+   private static function search ($haystack, $needle, bool $strict = false) : object
+   {
       $haystack = (array) $haystack;
       $needles = (array) $needle;
 
@@ -142,20 +151,4 @@ class __Array
          }
       };
    }
-   public static function merge (array $array1, array ...$arrays)
-   {
-      return array_merge($array1, ...$arrays);
-   }
-   public static function sort (array &$array, ...$options) : bool
-   {
-      if (is_int(@$options[0])) {
-         return sort($array, @$options[0]);
-      } else {
-         return usort($array, @$options[0]);
-      }
-   }
-}
-
-function __Array (array $array) {
-   return new __Array($array);
 }

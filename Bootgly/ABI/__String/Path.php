@@ -96,9 +96,9 @@ class Path
 
             return $current;
          case 'paths':
-            $this->paths = self::split($this->Path);
+            self::split($this->Path);
 
-            break; // TODO dynamically ???
+            break;
          case 'type':
             $this->type = (new \SplFileInfo($this->Path))->getType();
 
@@ -120,7 +120,7 @@ class Path
                }
             };
          // ->relativize()
-         // TODO ?
+         // ...
       }
 
       return @$this->$key;
@@ -141,8 +141,6 @@ class Path
          // ...
          // ->relativize()
          // ...
-         default:
-            $this->$key = new Path($value);
       }
    }
    public function __call (string $name, array $arguments)
