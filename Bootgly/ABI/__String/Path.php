@@ -96,9 +96,7 @@ class Path
 
             return $current;
          case 'paths':
-            self::split($this->Path);
-
-            break;
+            return self::split($this->Path);
          case 'type':
             $this->type = (new \SplFileInfo($this->Path))->getType();
 
