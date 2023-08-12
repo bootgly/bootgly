@@ -23,6 +23,7 @@ return [
       // @ valid
       $Path->real = true;
 
+      $Path2 = clone $Path;
       // @
       // Valid
       $Path->construct('\\ETC\/php\\8.2/..');
@@ -31,9 +32,9 @@ return [
          description: 'Combined path is not valid!'
       );
       // Invalid
-      $Path->construct('/usr/bin/fakebootgly');
+      $Path2->construct('/usr/bin/fakebootgly');
       assert(
-         assertion: (string) $Path === '',
+         assertion: (string) $Path2 === '',
          description: 'Fake path valid?!'
       );
 

@@ -34,19 +34,19 @@ return [
       );
 
       // ? Relative
-      // Valid - relative dir (2 parts)
+      // Invalid - relative dir (2 parts)
       $Path = new Path('etc/php/');
       assert(
          assertion: $Path->root === '',
          description: 'Path #21 - root: ' . $Path->root
       );
-      // Valid - relative dir (1 part)
+      // Invalid - relative dir (1 part)
       $Path = new Path('etc/');
       assert(
          assertion: $Path->root === '',
          description: 'Path #22 - root: ' . $Path->root
       );
-      // Valid - relative dir (0 part)
+      // Invalid - relative dir (0 part)
       $Path = new Path('');
       assert(
          assertion: $Path->root === '',

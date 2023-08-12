@@ -16,10 +16,6 @@ use Bootgly\ABI\__Array;
 
 class Path // support to FileSystem Paths only (Linux only)
 {
-   // separators
-   const DIR_  = DIRECTORY_SEPARATOR; // DEPRECATED
-   const PATH_ = PATH_SEPARATOR;      // DEPRECATED
-
    // * Config
    // @ convert
    public bool $convert = false;
@@ -32,25 +28,26 @@ class Path // support to FileSystem Paths only (Linux only)
    public bool $real = false;
 
    // * Data
-   public $Path = '';
+   protected string $Path;
 
    // * Meta
+   protected bool $constructed = false;
    // _ Type
-   private string|false $type;
+   protected string|false $type;
    // _ Position
-   #private bool $absolute;
-   #private bool $relative;
+   protected bool $absolute;
+   protected bool $relative;
    // _ Status
-   private bool $normalized;
+   protected bool $normalized;
    // _ Parts
    // ->Path
-   private string $root;
-   private string $parent;
-   private string $current;
-   #private array $parts;
+   protected string $root;
+   protected string $parent;
+   protected string $current;
+   #protected array $parts;
    // ->parts
-   #private int $indexes;
-   #private object $Index;
+   #protected int $indexes;
+   #protected object $Index;
 
 
    public function __construct (string $path = '')
@@ -62,14 +59,27 @@ class Path // support to FileSystem Paths only (Linux only)
    public function __get (string $key)
    {
       switch ($key) {
+         case 'Path':
+            return $this->Path ?? '';
          // * Meta
          // _ Type
          case 'type':
-            return $this->type = (new \SplFileInfo($this->Path))->getType();
+            $Path = $this->Path ?? '';
+            return $this->type = (new \SplFileInfo($Path))->getType();
+         // _ Position
+         case 'absolute':
+            $Path = $this->Path ?? '';
+            return $this->absolute = $Path[0] === '/';
+         case 'relative':
+            $Path = $this->Path ?? '';
+            return $this->relative = $Path[0] !== '/';
+         // _ Status
+         case 'normalized':
+            return $this->normalized;
          // _ Parts
          // ->Path
          case 'root':
-            $Path = &$this->Path;
+            $Path = $this->Path ?? '';
 
             if ($Path === '') {
                return '';
@@ -85,8 +95,9 @@ class Path // support to FileSystem Paths only (Linux only)
          case 'parent':
             $parent = '';
 
-            if ($this->Path) {
-               $parent = dirname($this->Path);
+            $Path = $this->Path ?? '';
+            if ($Path) {
+               $parent = dirname($Path);
 
                if ($parent[-1] !== DIRECTORY_SEPARATOR) {
                   $parent .= DIRECTORY_SEPARATOR;
@@ -97,7 +108,7 @@ class Path // support to FileSystem Paths only (Linux only)
          case 'current':
             $current = '';
 
-            $Path = &$this->Path;
+            $Path = $this->Path ?? '';
             if ($Path) {
                $lastNode = strrchr(haystack: $Path, needle: DIRECTORY_SEPARATOR);
 
@@ -111,7 +122,8 @@ class Path // support to FileSystem Paths only (Linux only)
             return $this->current = $current;
 
          case 'parts':
-            return self::split($this->Path);
+            $Path = $this->Path ?? '';
+            return self::split($Path);
          // ->parts
          case 'indexes':
             return count($this->parts);
@@ -130,11 +142,9 @@ class Path // support to FileSystem Paths only (Linux only)
                   $this->Last = ($__Array)->Last; // ->key, ->value
                }
             };
-         // ->relativize()
-         // ...
+         default:
+            return null;
       }
-
-      return @$this->$key;
    }
    public function __call (string $name, array $arguments)
    {
@@ -171,8 +181,15 @@ class Path // support to FileSystem Paths only (Linux only)
 
    public function construct (string $path) : string
    {
+      if ($this->constructed) {
+         return '';
+      }
+      if ($path === '') {
+         return '';
+      }
+
       // * Data
-      $Path = '';
+      // @
       // * Meta
       // _ Type
       // ...dynamically
@@ -184,37 +201,37 @@ class Path // support to FileSystem Paths only (Linux only)
       // ...dynamically
 
       // @
-      if ($path) {
-         $Path = $path;
+      $Path = $path;
 
-         // @ 1 - convert
-         if ($this->convert && $this->lowercase) {
-            $Path = strtolower($Path);
-         }
+      // @ 1 - convert
+      if ($this->convert && $this->lowercase) {
+         $Path = strtolower($Path);
+      }
 
-         // @ 2 - fix
-         if ($this->fix) {
-            // Overwrites all directory separators with the standard separator
-            if ($this->dir_) {
-               $Path = match (DIRECTORY_SEPARATOR) {
+      // @ 2 - fix
+      if ($this->fix) {
+         // Overwrites all directory separators with the standard separator
+         if ($this->dir_) {
+            $Path = match (DIRECTORY_SEPARATOR) {
                   '/' => str_replace('\\', '/', $Path),
                   '\\' => str_replace('/', '\\', $Path),
                   default => $Path
                };
-            }
-
-            // Remove '/./', '/../', '//' in path
-            if ($this->normalize) {
-               $Path = $this->normalize($Path);
-            }
          }
 
-         // @ 3 - valid
-         // The resulting path will have no symbolic link, '/./' or '/../'
-         if ($this->real) {
-            $Path = (string) realpath($Path);
+         // Remove '/./', '/../', '//' in path
+         if ($this->normalize) {
+            $Path = $this->normalize($Path);
          }
       }
+
+      // @ 3 - valid
+      // The resulting path will have no symbolic link, '/./' or '/../'
+      if ($this->real) {
+         $Path = (string) realpath($Path);
+      }
+
+      $this->constructed = true;
 
       return $this->Path = $Path;
    }
@@ -227,17 +244,18 @@ class Path // support to FileSystem Paths only (Linux only)
          return false;
       }
 
-      if ($this->Path && $path[0] === '/') {
+      $Path = $this->Path ?? '';
+      if ($Path && $path[0] === '/') {
          return false;
       }
 
-      $Path = str_replace(
+      $pattern = str_replace(
          search: '%',
          replace: $pattern,
-         subject: $this->Path . $path
+         subject: $Path . $path
       );
 
-      $paths = glob($Path);
+      $paths = glob($pattern);
 
       if ( $paths !== false && isSet($paths[0]) ) {
          $this->Path = $paths[0]; // Get first path found

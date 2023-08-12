@@ -290,7 +290,7 @@ class File
             return $this->File = $base;
          }
 
-         $index = __String::trim($path, Path::DIR_, 1) . $this->Path::DIR_ . 'index.php';
+         $index = __String::trim($path, DIRECTORY_SEPARATOR, 1) . DIRECTORY_SEPARATOR . 'index.php';
          if (is_file($index)) {
             return $this->File = $index;
          }

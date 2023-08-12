@@ -24,7 +24,7 @@ return [
          assertion: $Path->current === 'etc',
          description: 'Path #2 - current: ' . $Path->current
       );
-      // Valid - absolute dir (0 part)
+      // Invalid - absolute dir (0 part)
       $Path = new Path('/');
       assert(
          assertion: $Path->current === '',

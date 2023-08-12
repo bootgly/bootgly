@@ -46,7 +46,7 @@ return [
          assertion: $Path->parent === './', // Valid?
          description: 'Path #22 - parent: ' . $Path->parent
       );
-      // Valid - relative dir (0 part)
+      // Invalid - relative dir (0 part)
       $Path = new Path('');
       assert(
          assertion: $Path->parent === '',
