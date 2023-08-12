@@ -15,6 +15,9 @@ return [
       '1.3-construct_path-dir_',
       '1.4-construct_path-real',
       '2.1.1-dynamic-methods-match',
+      '2.2.1-dynamic-properties-root',
+      '2.2.2-dynamic-properties-parent',
+      '2.2.3-dynamic-properties-current',
       '3.1-construct_path-combined',
       // Call static
       '4.1-callstatic-normalize',
