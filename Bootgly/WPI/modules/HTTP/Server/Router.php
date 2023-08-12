@@ -193,14 +193,18 @@ class Router
          // @ Prepare
          // Set Route Params values
          if ($Route->parameterized) {
+            // @ HTTP Server Request
+            // ->Path
+            $parts = self::$Server::$Request->Path->parts;
+            // @ Router Route
             $Params = &$Route->Params;
 
             foreach ($Params as $param => $value) {
                if ( is_int($value) ) {
-                  $Params->$param = @self::$Server::$Request->paths[$value - 1];
-               } elseif ( is_array($value) ) {
-                  foreach ($value as $i => $l) { // $index => $location
-                     $Params->$param[$i] = @self::$Server::$Request->paths[$l - 1];
+                  $Params->$param = @$parts[$value - 1];
+               } else if ( is_array($value) ) {
+                  foreach ($value as $index => $location) {
+                     $Params->$param[$index] = @$parts[$location - 1];
                   }
                }
             }

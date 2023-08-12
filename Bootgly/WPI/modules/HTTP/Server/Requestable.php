@@ -105,8 +105,6 @@ trait Requestable
             return $this->locator;
          case 'Path':
             return new Path($this->locator);
-         case 'paths':
-            return $this->Path->paths;
          // @ Query
          case 'query':
             $uri = $this->uri;

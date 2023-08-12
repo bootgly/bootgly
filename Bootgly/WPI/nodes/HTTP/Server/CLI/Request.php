@@ -45,7 +45,6 @@ use Bootgly\WPI\nodes\HTTP\Server\CLI\Request\Downloader;
  * @ Path
  * @property object $Path
  * @property string $path          /test/foo
- * @property array $paths          ['test', 'foo']
  * @ Query
  * @property object $Query
  * @property string $query         query=abc&query2=xyz
