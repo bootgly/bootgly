@@ -11,7 +11,7 @@
 namespace Bootgly\ABI;
 
 
-class __Array
+class __Array // Simple class (advanced methods coming soon)
 {
    // * Data
    public array $array;
@@ -46,6 +46,7 @@ class __Array
          case 'Next':
             $nextValue = next($this->array);
             $nextKey = key($this->array);
+
             return (object) [
                'key' => $nextKey,
                'value' => $nextValue
@@ -56,41 +57,35 @@ class __Array
          case 'Previous':
             $previousValue = prev($this->array);
             $previousKey = key($this->array);
+
             return (object) [
                'key' => $previousKey,
                'value' => $previousValue
             ];
          // first
          case 'first':
-            reset($this->array);
-            return current($this->array);
+            return reset($this->array);
          case 'First':
             $firstValue = reset($this->array);
+
             return (object) [
                'key' => key($this->array),
                'value' => $firstValue
             ];
          // last
+         case 'last':
+            end($this->array);
+            return current($this->array);
          case 'Last':
             $lastValue = end($this->array);
+
             return (object) [
                'key' => key($this->array),
                'value' => $lastValue
             ];
-         case 'last':
-            end($this->array);
-            return current($this->array);
          // @ Type
          case 'list':
-            #array_is_list()
-            $index = -1;
-            foreach ($this->array as $key => $value) {
-               ++$index;
-               if ($key !== $index) {
-                  return false;
-               }
-            }
-            return true;
+            return array_is_list($this->array);
          case 'multidimensional':
             foreach ($this->array as $value) {
                if ( is_array($value) ) {
@@ -132,23 +127,15 @@ class __Array
             if (@$haystack[$key] === $needle) {
                $value = $haystack[$key];
             }
+
             break;
          }
       }
 
-      return new class ($key, $value)
-      {
-         public $key;
-         public $value;
-         public bool $found;
-
-         public function __construct ($key, $value)
-         {
-            $this->key = $key;
-            $this->value = $value;
-
-            $this->found = $key !== false;
-         }
-      };
+      return (object) [
+         'key'   => $key,
+         'value' => $value,
+         'found' => $key !== false
+      ];
    }
 }
