@@ -53,7 +53,7 @@ class Dir
          $this->Dir = $this->Dir($Path->Path);
 
          if ($this->Dir && $this->Dir !== $this->dir) {
-            $this->Path = $Path($this->Dir);
+            $this->Path = new Path($this->Dir);
 
             $this->dir = $Path->parent;
          }

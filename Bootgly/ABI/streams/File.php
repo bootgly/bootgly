@@ -130,7 +130,7 @@ class File
          $this->Dir = new Dir($this->dir);
 
          if ($this->File && $this->File !== $this->file) {
-            $this->Path = $Path($this->File);
+            $this->Path = new Path($this->File);
 
             // $this->path = $path;
             $this->file = $this->File;
@@ -384,7 +384,7 @@ class File
          }
 
          if ($this->File === '' && $this->handle !== false) {
-            $this->__construct($this->Path->_);
+            $this->__construct($this->Path->Path);
          }
       }
 
