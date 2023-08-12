@@ -64,6 +64,9 @@ class Path // support to FileSystem Paths only (Linux only)
          // * Meta
          // _ Type
          case 'type':
+            if ($this->real === false) {
+               return false;
+            }
             $Path = $this->Path ?? '';
             return $this->type = (new \SplFileInfo($Path))->getType();
          // _ Position

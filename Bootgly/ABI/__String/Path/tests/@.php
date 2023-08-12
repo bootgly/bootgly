@@ -23,6 +23,7 @@ return [
       '2.2.x-dynamic-properties-parts',
       '2.2.x-dynamic-properties-relative',
       '2.2.x-dynamic-properties-root',
+      '2.2.x-dynamic-properties-type',
       '3.1-construct_path-combined',
       // Call static
       '4.1-callstatic-normalize',
