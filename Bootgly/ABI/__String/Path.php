@@ -128,20 +128,11 @@ class Path // support to FileSystem Paths only (Linux only)
          case 'indexes':
             return count($this->parts);
          case 'Index':
-            return new class ($this->parts)
-            {
-               // * Meta
-               public object $Last;
+            $__Array = new __Array($this->parts);
 
-
-               public function __construct ($parts)
-               {
-                  $__Array = new __Array($parts);
-
-                  // * Meta
-                  $this->Last = ($__Array)->Last; // ->key, ->value
-               }
-            };
+            return (object) [
+               'Last' => $__Array->Last
+            ];
          default:
             return null;
       }
@@ -271,28 +262,28 @@ class Path // support to FileSystem Paths only (Linux only)
    public static function normalize ($path) : string
    {
       // $path = '../../etc/passwd';
-      $parts = explode(DIRECTORY_SEPARATOR, $path);
-      $Parts = [];
+      $parts = explode(DIRECTORY_SEPARATOR, $path); // TODO use self::split?
+      $normalizeds = [];
 
       // @ Parse absolute path
       if ($path[0] === DIRECTORY_SEPARATOR) {
-         $Parts[] = '';
+         $normalizeds[] = '';
       }
 
       foreach ($parts as $part) {
          if ($part === '..') {
-            array_pop($Parts);
+            array_pop($normalizeds);
          } else if ($part !== '.' && $part !== '') {
-            array_push($Parts, $part);
+            array_push($normalizeds, $part);
          }
       }
 
-      $Path = implode(DIRECTORY_SEPARATOR, $Parts);
+      $normalized = implode(DIRECTORY_SEPARATOR, $normalizeds);
 
-      return $Path;
+      return $normalized;
       // return 'etc/passwd';
    }
-   public static function split(string $path): array
+   public static function split (string $path) : array
    {
       // $path = '/var/www/sys/';
       $parts = [];
@@ -375,6 +366,7 @@ class Path // support to FileSystem Paths only (Linux only)
 
    private static function join (array $parts, bool $absolute = false, bool $dir = false) : string
    {
+      // $path = [0 => 'var', 1 => 'www', 2 => 'sys'];
       $path = '';
 
       if ($absolute) {
@@ -388,10 +380,13 @@ class Path // support to FileSystem Paths only (Linux only)
       }
 
       return $path;
+      // return '/var/www/sys/';
    }
    private static function concatenate (array $parts, int $offset = 0) : string
    {
-      $Path = '';
+      // $parts = ['home', 'bootgly', 'bootgly', 'index.php'];
+      // $offset = 2;
+      $path = '';
 
       // * Meta
       $indexes = 0;
@@ -400,12 +395,13 @@ class Path // support to FileSystem Paths only (Linux only)
          if ($index >= $offset) {
             $separator = ($indexes > 0) ? DIRECTORY_SEPARATOR : '';
 
-            $Path .= $separator . $part;
+            $path .= $separator . $part;
 
             $indexes++;
          }
       }
 
-      return $Path;
+      return $path;
+      // return 'bootgly/index.php';      
    }
 }
