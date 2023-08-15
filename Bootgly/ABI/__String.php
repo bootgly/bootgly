@@ -14,19 +14,19 @@ namespace Bootgly\ABI;
 #[\AllowDynamicProperties]
 final class __String // TODO refactor old class
 {
-   public string $string;
-
    // * Config
+   public ? string $encoding;
    // public $insensitive;
-   // ! Character Encoding
 
    // * Data
+   public string $string;
+
    public $pattern;
    public $replacement;
    public $limit;
-   public $count; // size?, length?
 
    // * Meta
+   public $count; // size?, length?
    // int $length
    // ! Case
    // string $lowercase
@@ -37,10 +37,12 @@ final class __String // TODO refactor old class
    private array $arguments;
 
 
-   public function __construct (string $string)
+   public function __construct (string $string, ? string $encoding = null)
    {
       $this->string = $string;
 
+      // * Config
+      $this->encoding = $encoding;
       // * Meta
       $this->called = '';
       $this->arguments = [];
@@ -50,7 +52,14 @@ final class __String // TODO refactor old class
       switch ($index) {
          // * Meta
          case 'length':
-            return strlen($this->string); // TODO check encoding before get length
+            // TODO move check to autoload system and cache the results?
+            if ( function_exists('mb_strlen') ) {
+               return mb_strlen($this->string, $this->encoding);
+            } else if ( function_exists('iconv_strlen') ) {
+               return iconv_strlen($this->string, $this->encoding);
+            }
+
+            return strlen($this->string);
          // ! Case
          case 'lowercase':
             return strtolower($this->string);
