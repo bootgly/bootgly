@@ -97,9 +97,9 @@ class Table
       $result = 0;
       foreach ($data as $__row__ => $rows) {
          foreach ($rows as $__column__ => $data) {
-               if ($column === $__column__) {
-                  $result -= $data;
-               }
+            if ($column === $__column__) {
+               $result -= $data;
+            }
          }
       }
 
@@ -118,9 +118,9 @@ class Table
       $result = 1;
       foreach ($data as $__row__ => $rows) {
          foreach ($rows as $__column__ => $data) {
-               if ($column === $__column__) {
-                  $result *= $data;
-               }
+            if ($column === $__column__) {
+               $result *= $data;
+            }
          }
       }
 
@@ -139,13 +139,13 @@ class Table
       $result = null;
       foreach ($data as $__row__ => $rows) {
          foreach ($rows as $__column__ => $data) {
-               if ($column === $__column__) {
-                  if ($result === null) {
-                     $result = $data;
-                  } else {
-                     $result /= $data;
-                  }
+            if ($column === $__column__) {
+               if ($result === null) {
+                  $result = $data;
+               } else {
+                  $result /= $data;
                }
+            }
          }
       }
 
@@ -164,9 +164,9 @@ class Table
 
       foreach ($data as $__row__ => $rows) {
          foreach ($rows as $__column__ => $data) {
-               if ($column === $__column__ && $value === $data) {
-                  return true;
-               }
+            if ($column === $__column__ && $value === $data) {
+               return true;
+            }
          }
       }
 

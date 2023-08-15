@@ -1,4 +1,7 @@
 <?php
+
+namespace Bootgly\ABI\__String\Path;
+
 return [
    // * Config
    'autoBoot' => __DIR__,
@@ -7,7 +10,7 @@ return [
    'autoSummarize' => true,
    'exitOnFailure' => true,
    // * Data
-   'suiteName' => 'Path',
+   'suiteName' => __NAMESPACE__,
    'tests' => [
       // construct
       '1.1-construct_path',

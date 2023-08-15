@@ -52,7 +52,7 @@ final class __String // TODO refactor old class
       switch ($index) {
          // * Meta
          case 'length':
-            // TODO move check to autoload system and cache the results?
+            // TODO move functions check to autoload system and cache the results?
             if ( function_exists('mb_strlen') ) {
                return mb_strlen($this->string, $this->encoding);
             } else if ( function_exists('iconv_strlen') ) {

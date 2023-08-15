@@ -1,4 +1,8 @@
 <?php
+
+namespace Bootgly\ABI\__Array;
+
+
 return [
    // * Config
    'autoBoot' => __DIR__,
@@ -7,7 +11,7 @@ return [
    'autoSummarize' => true,
    'exitOnFailure' => true,
    // * Data
-   'suiteName' => '__Array',
+   'suiteName' => __NAMESPACE__,
    'tests' => [
       '1.x-dynamic-list',
       '1.x-dynamic-multidimensional',
