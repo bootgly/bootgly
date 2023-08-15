@@ -24,6 +24,7 @@ trait Set // @ Use with enums
       };
    }
 }
+
 /* Example:
 // * Config
 namespace Bootgly\CLI\Terminal\Output\Text;
@@ -31,7 +32,7 @@ namespace Bootgly\CLI\Terminal\Output\Text;
 
 enum Colors : int
 {
-   use \Bootgly\Configuring;
+   use \Bootgly\ABI\Set;
 
 
    case Default = 1;

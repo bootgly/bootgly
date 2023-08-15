@@ -42,9 +42,9 @@ class Process
    public static int $master;
    public static array $children = [];
    // File
-   public static $commandFile = BOOTGLY_WORKING_DIR . '/workspace/server.command';
-   public static $pidFile = BOOTGLY_WORKING_DIR . '/workspace/server.pid';
-   public static $pidLockFile = BOOTGLY_WORKING_DIR . '/workspace/server.pid.lock';
+   public static $commandFile = BOOTGLY_WORKING_DIR . '/workdata/server.command';
+   public static $pidFile = BOOTGLY_WORKING_DIR . '/workdata/server.pid';
+   public static $pidLockFile = BOOTGLY_WORKING_DIR . '/workdata/server.pid.lock';
 
 
    public function __construct (Server &$Server)

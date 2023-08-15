@@ -48,18 +48,18 @@ final class __String // TODO refactor old class
    public function __get (string $index)
    {
       switch ($index) {
-            // * Meta
+         // * Meta
          case 'length':
             return strlen($this->string); // TODO check encoding before get length
-            // ! Case
+         // ! Case
          case 'lowercase':
             return strtolower($this->string);
          case 'uppercase':
             return strtoupper($this->string);
          case 'pascalcase':
             return ucwords($this->string);
-            // ! Call ?
-            // ? cut()
+         // ! Call ?
+         // ? cut()
          case 'cutted':
             return $this->cutted;
          case 'rest': // TODO Rest of string cutted

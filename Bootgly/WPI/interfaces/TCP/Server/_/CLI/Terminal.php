@@ -148,7 +148,7 @@ class Terminal extends CLI\Terminal // TODO rename to Commands
    }
    public function saveCommand (string $command, string $context = '') : bool
    {
-      $file = BOOTGLY_WORKING_DIR . '/workspace/server.command';
+      $file = BOOTGLY_WORKING_DIR . '/workdata/server.command';
 
       $line = $command . ':' . $context . PHP_EOL;
 

@@ -45,13 +45,12 @@ class TestCommand extends Command
 
       if (empty($options) && $testsDir !== null && $testsDir != (int) $testsDir) {
          $this->test($testsDir);
+         return true;
       } else if ($testsDir == (int) $testsDir) {
          $options = array_merge(['i' => $testsDir], $options);
-
-         $this->load($options);
-      } else {
-         $this->load($options);
       }
+
+      $this->load($options);
 
       return true;
    }

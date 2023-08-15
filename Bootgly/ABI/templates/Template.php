@@ -98,7 +98,7 @@ class Template
    {
       $this->Output = new File(
          BOOTGLY_WORKING_DIR .
-         'workspace/cache/' .
+         'workdata/cache/' .
          'views/' .
          sha1($this->raw) .
          '.php'

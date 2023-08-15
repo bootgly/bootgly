@@ -41,12 +41,12 @@ _*.test.php
 # Ignore private scripts
 /scripts/_*.php
 
-#- /workspace
+#- /workdata
 # Ignore all files here
-/workspace/*.*
+/workdata/*.*
 # Ignore all folder starting with @ here
-/workspace/@*/
+/workdata/@*/
 # Ignore known folders
-/workspace/cache/*
-/workspace/logs/*
-/workspace/temp/*
+/workdata/cache/*
+/workdata/logs/*
+/workdata/temp/*

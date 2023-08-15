@@ -37,7 +37,7 @@ trait Loggable
       return error_log(
          message: $message,
          message_type: 3,
-         destination: BOOTGLY_WORKING_BASE . '/workspace/logs/bootgly.log',
+         destination: BOOTGLY_WORKING_BASE . '/workdata/logs/bootgly.log',
          additional_headers: null
       );
    }
