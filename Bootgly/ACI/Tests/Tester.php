@@ -80,7 +80,9 @@ class Tester extends Tests
          $this->autoinstance($this->autoInstance);
       }
       if ($this->autoSummarize) {
-         $this->summarize();
+         $summary = $this->summarize();
+
+         $this->log($summary);
       }
    }
 
@@ -190,33 +192,5 @@ class Tester extends Tests
          "\033[90m" . $file . "\033[0m" .
          $info . PHP_EOL
       );
-   }
-
-   public function summarize ()
-   {
-      // @ Result
-      $failed = '@:error:' . $this->failed . ' failed @;';
-      $skipped = '@:notice:' . $this->skipped . ' skipped @;';
-      $passed = '@:success:' . $this->passed . ' passed @;';
-      // @ Stats
-      $total = $this->total . ' total';
-      // @ Time
-      $started = $this->started;
-      $finished = $this->finished = microtime(true);
-
-      // @ Benchmark Tests time
-      // TODO use Benchmark class
-      $duration = number_format(round($finished - $started, 5), 6);
-      $duration = "@#Magenta:" . $duration . "s @;";
-
-      $ran = '@#Black:' . 'Ran all tests. @;';
-
-      $this->log(<<<TESTS
-      
-      Tests: {$failed}, {$skipped}, {$passed}, {$total}
-      Duration: {$duration}
-      {$ran}
-      \n
-      TESTS);
    }
 }

@@ -46,7 +46,7 @@ abstract class Tests
       $result = [];
 
       foreach ($tests as $key => $value) {
-         if (is_array($value)) {
+         if ( is_array($value) ) {
             $newPrefix = $prefix . $key;
             $result = array_merge(
                $result,
@@ -61,4 +61,32 @@ abstract class Tests
    }
 
    abstract public function test (? array &$specifications) : object|false;
+
+   public function summarize ()
+   {
+      // @ Result
+      $failed = '@:error:' . $this->failed . ' failed @;';
+      $skipped = '@:notice:' . $this->skipped . ' skipped @;';
+      $passed = '@:success:' . $this->passed . ' passed @;';
+      // @ Stats
+      $total = $this->total . ' total';
+      // @ Time
+      $started = $this->started;
+      $finished = $this->finished = microtime(true);
+
+      // @ Benchmark Tests time
+      // TODO use Benchmark class
+      $duration = number_format(round($finished - $started, 5), 6);
+      $duration = "@#Magenta:" . $duration . "s @;";
+
+      $ran = '@#Black:' . 'Ran all tests. @;';
+
+      return <<<TESTS
+      
+      Tests: {$failed}, {$skipped}, {$passed}, {$total}
+      Duration: {$duration}
+      {$ran}
+      \n
+      TESTS;
+   }
 }
