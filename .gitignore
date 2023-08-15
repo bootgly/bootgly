@@ -42,11 +42,3 @@ _*.test.php
 /scripts/_*.php
 
 #- /workdata
-# Ignore all files here
-/workdata/*.*
-# Ignore all folder starting with @ here
-/workdata/@*/
-# Ignore known folders
-/workdata/cache/*
-/workdata/logs/*
-/workdata/temp/*
