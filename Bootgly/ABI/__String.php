@@ -26,12 +26,12 @@ final class __String // TODO refactor old class
    public $limit;
 
    // * Meta
-   public $count; // size?, length?
-   // int $length
+   #private int|false $length;
    // ! Case
-   // string $lowercase
-   // string $uppercase
-   // string $pascalcase
+   // False on error.
+   #private string|false $lowercase;
+   #private string|false $uppercase;
+   #private string|false $pascalcase;
    // ! Call ?
    private string $called;
    private array $arguments;
@@ -52,21 +52,49 @@ final class __String // TODO refactor old class
       switch ($index) {
          // * Meta
          case 'length':
-            // TODO move functions check to autoload system and cache the results?
-            if ( function_exists('mb_strlen') ) {
-               return mb_strlen($this->string, $this->encoding);
-            } else if ( function_exists('iconv_strlen') ) {
-               return iconv_strlen($this->string, $this->encoding);
+            if ($this->encoding === 'ASCII') {
+               return strlen($this->string);
             }
 
-            return strlen($this->string);
+            if ( function_exists('mb_strlen') ) {
+               return mb_strlen($this->string, $this->encoding);
+            }
+
+            return iconv_strlen($this->string, $this->encoding);
          // ! Case
          case 'lowercase':
-            return strtolower($this->string);
+            if ($this->encoding === 'ASCII') {
+               return strtolower($this->string);
+            }
+
+            if ( function_exists('mb_strtolower') ) {
+               return mb_strtolower($this->string, $this->encoding);
+            }
+
+            // TODO polyfill?
+            return false;
          case 'uppercase':
-            return strtoupper($this->string);
+            if ($this->encoding === 'ASCII') {
+               return strtoupper($this->string);
+            }
+
+            if ( function_exists('mb_strtoupper') ) {
+               return mb_strtoupper($this->string, $this->encoding);
+            }
+
+            // TODO polyfill?
+            return false;
          case 'pascalcase':
-            return ucwords($this->string);
+            if ($this->encoding === 'ASCII') {
+               return ucwords($this->string);
+            }
+
+            if ( function_exists('mb_convert_case') ) {
+               return mb_convert_case($this->string, \MB_CASE_TITLE, $this->encoding);
+            }
+
+            // TODO polyfill?
+            return false;
          // ! Call ?
          // ? cut()
          case 'cutted':
