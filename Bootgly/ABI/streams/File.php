@@ -11,7 +11,6 @@
 namespace Bootgly\ABI\streams;
 
 
-use Bootgly\ABI\__String;
 use Bootgly\ABI\__String\Path;
 use Bootgly\ABI\data\Dir;
 
@@ -290,8 +289,8 @@ class File
             return $this->File = $base;
          }
 
-         $index = __String::trim($path, DIRECTORY_SEPARATOR, 1) . DIRECTORY_SEPARATOR . 'index.php';
-         if (is_file($index)) {
+         $index = rtrim($path, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'index.php';
+         if ( is_file($index) ) {
             return $this->File = $index;
          }
       }

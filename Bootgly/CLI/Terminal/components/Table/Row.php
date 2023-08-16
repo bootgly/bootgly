@@ -75,7 +75,7 @@ class Row
          }
 
          $output .= __String::pad(
-            input: @$row[$column],
+            string: @$row[$column],
             length: $widths[$column],
             padding: ' ',
             type: $aligment

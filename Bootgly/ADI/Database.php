@@ -15,8 +15,6 @@ use PDO;
 use PDOStatement;
 use PDOException;
 
-use Bootgly\ABI\__String;
-
 
 class Database
 {
@@ -139,7 +137,7 @@ class Database
    {
       try {
          if ($this->configs['driver'] === 'pgsql') {
-            $query = __String::replace('`', '"', $query);
+            $query = str_replace('`', '"', $query);
          }
 
          $this->Query = $this->PDO->prepare($query);

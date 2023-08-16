@@ -13,9 +13,10 @@ return [
    // * Data
    'suiteName' => __NAMESPACE__,
    'tests' => [
-      '1.x-dynamic-length',
-      '1.x-dynamic-lowercase',
-      '1.x-dynamic-pascalcase',
-      '1.x-dynamic-uppercase',
+      '1.x-dynamic-props-length',
+      '1.x-dynamic-props-lowercase',
+      '1.x-dynamic-props-pascalcase',
+      '2.x-dynamic-methods-pad',
+      '2.x-dynamic-methods-search',
    ]
 ];

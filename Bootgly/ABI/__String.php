@@ -11,41 +11,33 @@
 namespace Bootgly\ABI;
 
 
-#[\AllowDynamicProperties]
-final class __String // TODO refactor old class
+class __String // Simple class (advanced methods coming soon)
 {
    // * Config
    public ? string $encoding;
-   // public $insensitive;
 
    // * Data
    public string $string;
 
-   public $pattern;
-   public $replacement;
-   public $limit;
-
    // * Meta
-   #private int|false $length;
+   private int|false $length;
    // ! Case
    // False on error.
-   #private string|false $lowercase;
-   #private string|false $uppercase;
-   #private string|false $pascalcase;
-   // ! Call ?
-   private string $called;
-   private array $arguments;
+   private string|false $lowercase;
+   private string|false $uppercase;
+   private string|false $pascalcase;
 
 
    public function __construct (string $string, ? string $encoding = null)
    {
-      $this->string = $string;
-
       // * Config
       $this->encoding = $encoding;
+
+      // * Data
+      $this->string = $string;
+
       // * Meta
-      $this->called = '';
-      $this->arguments = [];
+      // ...
    }
    public function __get (string $index)
    {
@@ -53,217 +45,110 @@ final class __String // TODO refactor old class
          // * Meta
          case 'length':
             if ($this->encoding === 'ASCII') {
-               return strlen($this->string);
+               return $this->length = strlen($this->string);
             }
 
             if ( function_exists('mb_strlen') ) {
-               return mb_strlen($this->string, $this->encoding);
+               return $this->length = mb_strlen($this->string, $this->encoding);
             }
 
-            return iconv_strlen($this->string, $this->encoding);
+            return $this->length = iconv_strlen($this->string, $this->encoding);
          // ! Case
          case 'lowercase':
             if ($this->encoding === 'ASCII') {
-               return strtolower($this->string);
+               return $this->lowercase = strtolower($this->string);
             }
 
             if ( function_exists('mb_strtolower') ) {
-               return mb_strtolower($this->string, $this->encoding);
+               return $this->lowercase = mb_strtolower($this->string, $this->encoding);
             }
 
             // TODO polyfill?
-            return false;
+            return $this->lowercase = false;
          case 'uppercase':
             if ($this->encoding === 'ASCII') {
-               return strtoupper($this->string);
+               return $this->uppercase = strtoupper($this->string);
             }
 
             if ( function_exists('mb_strtoupper') ) {
-               return mb_strtoupper($this->string, $this->encoding);
+               return $this->uppercase = mb_strtoupper($this->string, $this->encoding);
             }
 
             // TODO polyfill?
-            return false;
+            return $this->uppercase = false;
          case 'pascalcase':
             if ($this->encoding === 'ASCII') {
-               return ucwords($this->string);
+               return $this->pascalcase = ucwords($this->string);
             }
 
             if ( function_exists('mb_convert_case') ) {
-               return mb_convert_case($this->string, \MB_CASE_TITLE, $this->encoding);
+               return $this->pascalcase = mb_convert_case($this->string, \MB_CASE_TITLE, $this->encoding);
             }
 
             // TODO polyfill?
-            return false;
-         // ! Call ?
-         // ? cut()
-         case 'cutted':
-            return $this->cutted;
-         case 'rest': // TODO Rest of string cutted
-            if ($this->called === 'cut' && @$this->arguments[0] === 0) {
-               return substr($this->string, strlen($this->cutted));
-            }
+            return $this->pascalcase = false;
+         default:
+            return null;
       }
    }
    public function __call (string $name, $arguments)
    {
-      $this->called = $name;
-      $this->arguments = $arguments;
-
       switch ($name) {
-         case 'replace':
-            $search = @$arguments[0];
-            $replace = @$arguments[1];
-            return self::replace($search, $replace, @$this->string);
-
-         case 'cut':
-            return $this->cutted = self::cut($this->string, ...$arguments);
-
-         case 'separate':
-            return self::separate($this->string, ...$arguments);
-         case 'separateBefore':
-            return self::separate($this->string, 'before', ...$arguments);
-         case 'separateAfter':
-            return self::separate($this->string, 'after', ...$arguments);
-
-         case 'explode':
-            $delimiter = @$arguments[0];
-            $limit = @$arguments[1];
-            return self::explode($delimiter, @$this->string, $limit);
+         case 'search':
+            return self::search($this->string, ...$arguments);
+         case 'pad':
+            return self::pad(
+               string: $this->string,
+               length: $arguments[0],
+               padding: $arguments[1] ?? ' ',
+               type: $arguments[2] ?? 1,
+               encoding: $arguments[3] ?? $this->encoding ?? 'UTF-8'
+            );
+         default:
+            return null;
       }
    }
    public static function __callStatic (string $name, $arguments)
    {
-      return self::$name(...$arguments);
+      if ( method_exists(__CLASS__, $name) ) {
+         return self::$name(...$arguments);
+      }
+
+      return null;
    }
-   public function __toString ()
+   public function __toString () : string
    {
       return $this->string;
    }
 
-   // TODO Refactor this function to reduce its Cognitive Complexity from 32 to the 15 allowed.
-   private static function cut (string $str, ...$arguments)
+   private static function search (string $string, $search, int $offset = null) : object
    {
-      if (is_int(@$arguments[0])) {
-         $start = $arguments[0];
-         if (is_int(@$arguments[1])) {
-            $length = $arguments[1];
-
-            return substr($str, $start, $length);
-         } else if (is_string(@$arguments[1])) {
-            $at = $arguments[1];
-            $length = strpos($str, $at);
-
-            return substr($str, $start, $length);
-         }
-      } else if (is_string($arguments[0])) {
-         $needle = @$arguments[0];
-         $position = @$arguments[1];
-         $caseSensitive = $arguments[2] ?? true;
-
-         switch ($position) {
-               //! strpos
-            case '^': // Remove $needle if found from the beginning of $str and return the rest
-               $strPosFunction = $caseSensitive ? "strpos" : "stripos";
-
-               if ($strPosFunction($str, $needle) === 0) {
-                  $str = substr($str, strlen($needle));
-               }
-
-               return $str;
-            case '$': // Remove $needle if found from the end of $str and return the rest
-               $strPosFunction = $caseSensitive ? "strpos" : "stripos";
-
-               if ($strPosFunction($str, $needle, strlen($str) - strlen($needle)) !== false) {
-                  $str = substr($str, 0, -strlen($needle));
-               }
-
-               return $str;
-
-               //! strstr
-            case '?|': // (?) Find $needle (|) cut beetween $needle (:) return all before $needle
-               $strstrFunction = $caseSensitive ? "strstr" : "stristr";
-
-               return $strstrFunction($str, $needle, true);
-            case '|?': // Remove portion of a string before a certain character and return the rest
-               $strstrFunction = $caseSensitive ? "strstr" : "stristr";
-
-               return $strstrFunction($str, $needle, false);
-         }
-      }
-   }
-   private static function separate (string $str, string $part, string $needle, bool $caseSensitive = true)
-   {
-      //@ Search direction = left-to-right
-      //@ Limit count = 1 (first occurrence)
-      switch ($part) {
-         case 'before':
-            $strstrFunction = $caseSensitive ? "strstr" : "stristr";
-            return $strstrFunction($str, $needle, true);
-
-         case 'after':
-            $strstrFunction = $caseSensitive ? "strstr" : "stristr";
-            return substr($strstrFunction($str, $needle, false), strlen($needle));
-
-         case 'around':
-         case 'between':
-      }
-   }
-   // Strip (remove) whitespace (or other characters)
-   public static function trim (string $str, string $characters = " \t\n\r\0\x0B", int $direction = 0): string
-   {
-      $result = '';
-      if ($direction === 0) { // beginning and end of a string
-         $result = trim($str, $characters);
-      } elseif ($direction === 1) { // end of a string
-         $result = rtrim($str, $characters);
-      } elseif ($direction === -1) { // beginning of a string
-         $result = ltrim($str, $characters);
-      }
-
-      return $result;
-   }
-   public static function search (string $haystack, $needle, int $offset = null)
-   {
-      $needles = (array)$needle;
+      $terms = (array) $search;
       $found = null;
 
-      foreach ($needles as $needle) {
-         $position = strpos($haystack, $needle, $offset);
+      foreach ($terms as $term) {
+         $position = strpos($string, $term, $offset);
+
          if ($position !== false) {
-            $found = $needle;
+            $found = $term;
             break;
          }
       }
 
-      return new class ($position, $found)
-      {
-         public $position;
-         public $found;
-
-         public function __construct ($position, $found)
-         {
-            $this->position = $position;
-            $this->found = $found;
-         }
-      };
-   }
-   private static function replace ($search, $replace, $subject)
-   {
-      return str_replace($search, $replace, $subject);
-   }
-   private static function explode (string $delimiter, string $string, ?int $limit)
-   {
-      return explode($delimiter, $string, $limit);
+      return (object) [
+         'position' => $position,
+         'found'    => $found
+      ];
    }
 
-   public static function pad ($input, $length, $padding = ' ', $type = STR_PAD_RIGHT, $encoding = 'UTF-8')
+   private static function pad
+   (string $string, int $length, string $padding = ' ', int $type = STR_PAD_RIGHT, string $encoding = 'UTF-8')
    {
-      $inputLength = mb_strlen($input, $encoding);
+      $inputLength = mb_strlen($string, $encoding);
       $padStringLength = mb_strlen($padding, $encoding);
 
       if ($length <= 0 || ($length - $inputLength) <= 0) {
-         return $input;
+         return $string;
       }
 
       $numPadChars = $length - $inputLength;
@@ -290,16 +175,11 @@ final class __String // TODO refactor old class
          $result .= mb_substr($padding, $i % $padStringLength, 1, $encoding);
       }
 
-      $result .= $input;
+      $result .= $string;
       for ($i = 0; $i < $rigthPad; ++$i) {
          $result .= mb_substr($padding, $i % $padStringLength, 1, $encoding);
       }
 
       return $result;
    }
-}
-
-function __String (string $string)
-{
-   return new __String($string);
 }
