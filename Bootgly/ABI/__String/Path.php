@@ -261,7 +261,7 @@ class Path // support to FileSystem Paths only (Linux only)
 
       return true;
 
-      // $this->Path = /etc/php/8.0 or /etc/php/8.1 or /etc/php/8.2...
+      // /etc/php/8.0 or /etc/php/8.1 or /etc/php/8.2...
    }
 
    public static function normalize ($path) : string

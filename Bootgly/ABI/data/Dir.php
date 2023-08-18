@@ -11,7 +11,6 @@
 namespace Bootgly\ABI\data;
 
 
-use function scandir;
 use RecursiveIteratorIterator;
 use RecursiveDirectoryIterator;
 use Bootgly\ABI\__String\Path;

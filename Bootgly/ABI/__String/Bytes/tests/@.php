@@ -13,6 +13,6 @@ return [
    // * Data
    'suiteName' => __NAMESPACE__,
    'tests' => [
-      '1.0-'
+      '1.0-callstatic-format'
    ]
 ];

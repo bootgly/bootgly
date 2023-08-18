@@ -17,16 +17,16 @@ return [
       // @
       $Dir1->construct(__DIR__);
 
-      $filenames = $Dir1->scan(recursive: false);
-      $paths = count($filenames) - 1;
+      $pathnames = $Dir1->scan(recursive: false);
+      $paths = count($pathnames) - 1;
 
       assert(
-         assertion: (string) $filenames[0] === __DIR__ . '/1.1-construct-real_dir.test.php',
-         description: 'Scanned dir paths[0]: ' . $filenames[0]
+         assertion: (string) $pathnames[0] === __DIR__ . '/1.1-construct-real_dir.test.php',
+         description: 'Scanned dir paths[0]: ' . $pathnames[0]
       );
       assert(
-         assertion: (string) $filenames[$paths] === __DIR__ . '/@.php',
-         description: 'Scanned dir paths[-1]: ' . $filenames[$paths]
+         assertion: (string) $pathnames[$paths] === __DIR__ . '/@.php',
+         description: 'Scanned dir paths[-1]: ' . $pathnames[$paths]
       );      
 
       return true;

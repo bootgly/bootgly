@@ -11,11 +11,12 @@
 namespace Bootgly\ABI\streams;
 
 
+use AllowDynamicProperties;
 use Bootgly\ABI\__String\Path;
 use Bootgly\ABI\data\Dir;
 
 
-#[\AllowDynamicProperties]
+#[AllowDynamicProperties]
 class File
 {
    // TODO load MIMES externaly (with use, require?)
@@ -115,7 +116,9 @@ class File
       }
 
       if ($this->Path === null) {
-         $this->Path = new Path($path);
+         $Path = new Path;
+         $Path->construct($path);
+         $this->Path = $Path;
       }
 
       // TODO Refactor or Remove to reduce memory and CPU usage
@@ -126,10 +129,15 @@ class File
          $this->dir = $Path->parent;
 
          $this->File = $this->construct($Path->Path);
-         $this->Dir = new Dir($this->dir);
+
+         $Dir = new Dir;
+         $Dir->construct($this->dir);
+         $this->Dir = $Dir;
 
          if ($this->File && $this->File !== $this->file) {
-            $this->Path = new Path($this->File);
+            $Path = new Path;
+            $Path->construct($this->File);
+            $this->Path = $Path;
 
             // $this->path = $path;
             $this->file = $this->File;
