@@ -24,7 +24,7 @@ class Path // support to FileSystem Paths only (Linux only)
    public bool $fix = true;
    public bool $dir_ = true;
    public bool $normalize = false;
-   // @ valid
+   // @ validate
    public bool $real = false;
 
    // * Data
@@ -158,6 +158,8 @@ class Path // support to FileSystem Paths only (Linux only)
             return self::join($this->parts, ...$arguments);
          case 'concatenate':
             return self::concatenate($this->parts, ...$arguments);
+         default:
+            return null;
       }
    }
    public static function __callStatic (string $name, $arguments)
@@ -170,7 +172,7 @@ class Path // support to FileSystem Paths only (Linux only)
    }
    public function __toString () : string
    {
-      return $this->Path;
+      return (string) $this->Path;
    }
 
    public function construct (string $path) : string

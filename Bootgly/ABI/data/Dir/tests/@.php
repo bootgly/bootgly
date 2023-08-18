@@ -1,6 +1,6 @@
 <?php
 
-# namespace  
+namespace Bootgly\ABI\data\Dir;
 
 return [
    // * Config
@@ -12,6 +12,8 @@ return [
    // * Data
    'suiteName' => __NAMESPACE__,
    'tests' => [
-      '1.0-'
+      '1.1-construct-real_dir',
+      '1.2-construct-fake_dir',
+      '2.x-dynamic-methods-scan',
    ]
 ];

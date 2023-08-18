@@ -11,207 +11,149 @@
 namespace Bootgly\ABI\data;
 
 
+use function scandir;
+use RecursiveIteratorIterator;
+use RecursiveDirectoryIterator;
 use Bootgly\ABI\__String\Path;
 
 
-class Dir
+class Dir extends Path
 {
-   const DIR_ = DIRECTORY_SEPARATOR;
-
-
-   public ? Path $Path = null;
-
    // * Config
-   public bool $check = true;
-   public bool $convert = false;
-   public bool $clean = false;
+   /**
+    * Convert to directory if possible.
+    */
+   public bool $convert = true;
+   /**
+    * Validate if is directory.
+    */
+   public bool $validate = true;
+
    // * Data
-   public string $path = '';
-   public string $dir = '';
+   protected string $Dir;
 
-   public string $Dir = '';
    // * Meta
+   protected bool $constructed = false;
    // @ Access
-   protected $writable;    // bool || Return if the file is writable
+   protected bool $writable;
 
 
-   public function __construct (string $path = null)
-   {
-      if (! $path) {
-         return;
-      }
-
-      if ($this->Path === null) {
-         $this->Path = new Path($path);
-      }
-
-      $Path = &$this->Path;
-      if ($Path->Path) {
-         $this->path = $path;
-         $this->dir = $this->path;
-
-         $this->Dir = $this->Dir($Path->Path);
-
-         if ($this->Dir && $this->Dir !== $this->dir) {
-            $this->Path = new Path($this->Dir);
-
-            $this->dir = $Path->parent;
-         }
-      } else {
-         $this->Dir = '';
-      }
-   }
    public function __get (string $name)
    {
-      if ( ! $this->Dir ) {
-         return @$this->name;
-      }
-
       switch ($name) {
+         // * Meta
+         // @ Access
          case 'writable':
-            return $this->writable = is_writable($this->Dir);
+            $Dir = $this->Dir ?? '';
+            return $this->writable = is_writable($Dir);
       }
    }
-   public function __invoke (string $path)
+   public function __call (string $name, array $arguments)
    {
-      $this->Dir = '';
+      switch ($name) {
+         case 'scan':
+            return self::scan($this->Dir, ...$arguments);
+         default:
+            return null;
+      }
+   }
+   public static function __callStatic (string $name, $arguments)
+   {
+      if ( method_exists(__CLASS__, $name) ) {
+         return self::$name(...$arguments);
+      }
 
-      $this->__construct($path);
-
-      return $this->Dir;
+      return null;
    }
 
    public function __toString () : string
    {
-      return $this->Dir;
+      return $this->Dir ?? '';
    }
 
-   public function Dir (string $path) : string
+   public function construct (string $path) : string
    {
-      $this->Dir = '';
+      if ($this->constructed) {
+         return '';
+      }
+      if ($path === '') {
+         return '';
+      }
 
-      if ($path) {
-         // @ Check
-         if ( $this->check && is_dir($path) ) {
-            // @ Check if is Dir
-            return $this->Dir = $path;
-         }
+      // @
+      $Path = parent::construct($path);
 
-         // @ Convert
-         if ($this->convert) {
-            // @ Convert base to dir and check if is Dir
-            $path_ = $path . self::DIR_;
-            if ( is_dir($path_) ) {
-               return $this->Dir = $path_;
-            }
+      if ($Path === '') {
+         return '';
+      }
 
-            // @ Convert to file, check and return parent dir
-            if ( is_file($path) ) {
-               return $this->Dir = dirname($path, 1) . self::DIR_;
-            }
-         }
-
-         // @ Clean
-         if ($this->clean && $this->Dir) {
-            // Clean Dir separators to native SO Dir separators
-            $this->Dir = rtrim($this->Dir, "\x2F"); // /
-            $this->Dir = rtrim($this->Dir, "\x5C"); // \
-            return $this->Dir .= self::DIR_;
+      if ($this->convert && $this->real) {
+         if (is_file($Path) === true) {
+            $Path = dirname($Path, 1) . DIRECTORY_SEPARATOR;
+         } else if ($Path[-1] !== DIRECTORY_SEPARATOR) {
+            $Path .= DIRECTORY_SEPARATOR;
          }
       }
 
-      return $this->Dir;
+      if ($this->validate) {
+         if ($this->real && is_dir($Path) === false) {
+            $Path = '';
+         }
+
+         if ($Path[-1] !== DIRECTORY_SEPARATOR) {
+            $Path = '';
+         }
+      }
+
+      $this->constructed = true;
+
+      return $this->Dir = $Path;
    }
 
-   public static function scan (Dir $Dir, bool $recursive = false) : array
+   private static function scan (string $dir, bool $recursive = false) : array
    {
+      if ($dir === '') {
+         return [];
+      }
+
       $paths = [];
 
-      if ($Dir->Path) {
-         if ($recursive) {
-            $iterator = new \RecursiveIteratorIterator(
-               new \RecursiveDirectoryIterator($Dir->Path, \RecursiveDirectoryIterator::SKIP_DOTS),
-               \RecursiveIteratorIterator::SELF_FIRST,
-               \RecursiveIteratorIterator::CATCH_GET_CHILD
-            );
+      if ($recursive) {
+         $iterator = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($dir, RecursiveDirectoryIterator::SKIP_DOTS),
+            RecursiveIteratorIterator::SELF_FIRST,
+            RecursiveIteratorIterator::CATCH_GET_CHILD
+         );
 
-            $paths[] = $Dir->Path;
+         $paths[] = $dir;
 
-            foreach ($iterator as $object => $path) {
-               if ($path->isDir()) {
-                  $paths[] = $path->getPathname() . self::DIR_;
-               }
+         foreach ($iterator as $SplFileInfo) {
+            $path = $SplFileInfo->getPathname();
+
+            if ( $SplFileInfo->isDir() ) {
+               $path .= DIRECTORY_SEPARATOR;
             }
-         } else {
-            $results = \scandir($Dir->Path);
 
-            foreach ($results as $path) {
-               if ($path === '.' || $path === '..') {
-                  continue;
-               }
+            $paths[] = $path;
+         }
+      } else {
+         $results = scandir($dir);
 
-               $paths[] = $Dir->Path . $path . self::DIR_;
+         foreach ($results as $relative) {
+            if ($relative === '.' || $relative === '..') {
+               continue;
             }
+
+            $path = $dir . $relative;
+
+            if ( is_dir($path) ) {
+               $path .= DIRECTORY_SEPARATOR;
+            }
+
+            $paths[] = $path;
          }
       }
 
       return $paths;
    }
-   public static function build (string $path, string $prefix)
-   {
-      // Constants Path
-      // TODO
-   }
-
-   /*
-   public function tree(
-      string $path,
-      int $floorDirection = -1,
-      int $untilLevel = 0,
-      bool $reverseTree = false
-   ): array // TODO rename
-   {
-      $this->Tree = [];
-
-      if ($path) {
-         $Path = new Path($path);
-         $Dir = $Path->Path($Path->dir);
-
-         if (!$Dir or $Dir === $Path->Path(BOOTGLY_ROOT_DIR)) {
-            return [];
-         }
-
-         if ($untilLevel === 1) {
-            $this->Tree = [$Dir];
-         } else {
-            if ($floorDirection === 1) {
-               $this->Tree = self::Scan($Dir, $untilLevel);
-            } elseif ($floorDirection === -1) {
-               // tempDirTree
-               $tempDirTree = [];
-               $i = 0;
-               foreach (self::split($Dir) as $key => $value) {
-                  $tempDirTree[$i] = @end($tempDirTree) . $value . DIR_;
-                  $i++;
-               }
-
-               // Tree
-               if ($untilLevel === 0 or $untilLevel < HOME_LEVELS_DIR) {
-                  $untilLevel = HOME_LEVELS_DIR;
-               }
-               $fromKey = $untilLevel;
-               for ($i = 0; $i < count($tempDirTree) - $untilLevel; $i++) {
-                  $this->Tree[$i] = $tempDirTree[$fromKey++];
-               }
-            }
-
-            if ($reverseTree) {
-               $this->Tree = array_reverse($this->Tree);
-            }
-         }
-      }
-
-      return $this->Tree;
-   }
-   */
 }

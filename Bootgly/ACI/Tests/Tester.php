@@ -80,9 +80,7 @@ class Tester extends Tests
          $this->autoinstance($this->autoInstance);
       }
       if ($this->autoSummarize) {
-         $summary = $this->summarize();
-
-         $this->log($summary);
+         $this->summarize();
       }
    }
 

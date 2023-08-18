@@ -11,8 +11,14 @@
 namespace Bootgly\ACI;
 
 
+use Bootgly\ACI\Logs\LoggableEscaped;
+
+
 abstract class Tests
 {
+   use LoggableEscaped;
+
+
    // * Config
    // auto
    public string $autoBoot;
@@ -73,20 +79,20 @@ abstract class Tests
       // @ Time
       $started = $this->started;
       $finished = $this->finished = microtime(true);
-
-      // @ Benchmark Tests time
+      // duration
       // TODO use Benchmark class
       $duration = number_format(round($finished - $started, 5), 6);
       $duration = "@#Magenta:" . $duration . "s @;";
 
       $ran = '@#Black:' . 'Ran all tests. @;';
 
-      return <<<TESTS
+      // TODO temp
+      $this->log(<<<TESTS
       
       Tests: {$failed}, {$skipped}, {$passed}, {$total}
       Duration: {$duration}
       {$ran}
       \n
-      TESTS;
+      TESTS);
    }
 }

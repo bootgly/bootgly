@@ -5,6 +5,7 @@ return [
       'Bootgly/ABI/__String/',
       'Bootgly/ABI/__String/Bytes/',
       'Bootgly/ABI/__String/Path/',
+      'Bootgly/ABI/data/Dir/',
 
       'Bootgly/API/',
 

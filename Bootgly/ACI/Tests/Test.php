@@ -89,8 +89,10 @@ class Test // extends Assertions
          return;
       }
 
-      # ⮡ ↳
-      $this->log("       ⮡ " . $description . '@\;');
+      $description = "       ⮡ " . $description . '@\;';
+
+      # ⮡ ↳➡️
+      $this->log($description);
    }
    public function separate ()
    {
