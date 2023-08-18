@@ -52,7 +52,7 @@ final class Route
       // TODO deny user to set Catch-All this object
       // TODO validate Param value (Regex)
       // TODO validate Param name
-      $this->Params = new class
+      $this->Params = new class // TODO move to class
       {
          public function __get ($name)
          {
@@ -60,7 +60,7 @@ final class Route
          }
          public function __set ($param, $regex)
          {
-            $this->$param = $regex;
+            @$this->$param = $regex;
          }
       };
 

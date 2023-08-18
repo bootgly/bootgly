@@ -10,14 +10,6 @@ use Bootgly\WPI\nodes\HTTP\Server\CLI\Response;
 #use Bootgly\WPI\nodes\HTTP\Client\Response;
 // TODO ?
 
-class World
-{
-   public static function response (Response $Response)
-   {
-      $Response(content: 'Hello World!!!');
-   }
-}
-
 return [
    // @ configure
    // ...
@@ -30,6 +22,14 @@ return [
    },
    // Server API
    'response' => function (Request $Request, Response $Response, Router $Router) {
+      class World
+      {
+         public static function response(Response $Response)
+         {
+            $Response(content: 'Hello World!!!');
+         }
+      }
+
       $Router->route('/route3', __NAMESPACE__ . 'World::response', GET);
    },
 

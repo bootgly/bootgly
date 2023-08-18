@@ -9,11 +9,6 @@ use Bootgly\WPI\nodes\HTTP\Server\CLI\Response;
 #use Bootgly\WPI\nodes\HTTP\Client\Response;
 // TODO ?
 
-function response (Response $Response)
-{
-   $Response(content: 'Hello!');
-}
-
 return [
    // @ configure
    // ...
@@ -27,6 +22,11 @@ return [
    // Server API
    'response' => function (Request $Request, Response $Response, Router $Router)
    {
+      function response(Response $Response)
+      {
+         $Response(content: 'Hello!');
+      }
+
       $Router->route('/route2', 'response', GET);
    },
 
