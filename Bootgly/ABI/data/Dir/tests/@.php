@@ -15,5 +15,6 @@ return [
       '1.1-construct-real_dir',
       '1.2-construct-fake_dir',
       '2.x-dynamic-methods-scan',
+      '3.x-dynamic-properties-writable',
    ]
 ];
