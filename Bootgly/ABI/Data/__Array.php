@@ -11,7 +11,10 @@
 namespace Bootgly\ABI\Data;
 
 
-class __Array // Simple class (advanced methods coming soon)
+use Bootgly\ABI\Data;
+
+
+class __Array implements Data // Simple class (advanced methods coming soon)
 {
    // * Data
    public array $array;

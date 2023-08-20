@@ -8,13 +8,14 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\ABI\IO;
+namespace Bootgly\ACI\Events;
 
 
-use Bootgly\ABI\IO;
-
-
-interface FS extends IO // File System
+interface Loops
 {
-   // TODO
+   public function add ($data, int $flag, $payload);
+   public function del ($data, int $flag);
+
+   public function loop ();
+   public function destroy ();
 }

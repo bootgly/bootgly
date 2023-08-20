@@ -15,9 +15,10 @@ use RecursiveIteratorIterator;
 use RecursiveDirectoryIterator;
 
 use Bootgly\ABI\Data\__String\Path;
+use Bootgly\ABI\IO\FS;
 
 
-class Dir extends Path
+class Dir extends Path implements FS
 {
    // * Config
    /**

@@ -11,7 +11,7 @@
 namespace Bootgly\WPI\events;
 
 
-use Bootgly\ABI\events\Loops;
+use Bootgly\ACI\Events\Loops;
 
 use Bootgly\WPI\Connections;
 

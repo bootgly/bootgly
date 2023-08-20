@@ -12,12 +12,14 @@ namespace Bootgly\ABI\IO\FS;
 
 
 use AllowDynamicProperties;
+
 use Bootgly\ABI\Data\__String\Path;
+use Bootgly\ABI\IO\FS;
 use Bootgly\ABI\IO\FS\Dir;
 
 
 #[AllowDynamicProperties]
-class File
+class File implements FS
 {
    // TODO load MIMES externaly (with use, require?)
    const MIMES = [

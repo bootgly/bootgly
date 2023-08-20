@@ -8,14 +8,10 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\ABI\events;
+namespace Bootgly\ABI;
 
 
-interface Loops
+interface IO
 {
-   public function add ($data, int $flag, $payload);
-   public function del ($data, int $flag);
-
-   public function loop ();
-   public function destroy ();
+   // TODO
 }

@@ -8,13 +8,10 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\ABI\IO;
+namespace Bootgly\ABI;
 
 
-use Bootgly\ABI\IO;
-
-
-interface FS extends IO // File System
+interface Data
 {
    // TODO
 }

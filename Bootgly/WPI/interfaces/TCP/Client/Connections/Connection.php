@@ -11,7 +11,7 @@
 namespace Bootgly\WPI\interfaces\TCP\Client\Connections;
 
 
-use Bootgly\ABI\events\Timer;
+use Bootgly\ACI\Events\Timer;
 use Bootgly\WPI\interfaces\TCP\Client;
 use Bootgly\WPI\interfaces\TCP\Client\Connections;
 use Bootgly\WPI\interfaces\TCP\Client\Packages;

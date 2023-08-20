@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\ABI\events;
+namespace Bootgly\ACI\Events;
 
 
 #[\AllowDynamicProperties]

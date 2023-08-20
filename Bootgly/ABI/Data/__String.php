@@ -11,7 +11,10 @@
 namespace Bootgly\ABI\Data;
 
 
-class __String // Simple class (advanced methods coming soon)
+use Bootgly\ABI\Data;
+
+
+class __String implements Data // Simple class (advanced methods coming soon)
 {
    // * Config
    public ? string $encoding;
