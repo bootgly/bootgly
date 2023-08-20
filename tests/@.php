@@ -7,6 +7,8 @@ return [
       'Bootgly/ABI/__String/Path/',
       'Bootgly/ABI/data/Dir/',
 
+      'Bootgly/ADI/Table/',
+
       'Bootgly/API/',
 
       'Bootgly/CLI/',
