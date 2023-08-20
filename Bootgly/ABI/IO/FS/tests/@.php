@@ -1,6 +1,6 @@
 <?php
 
-namespace Bootgly\ABI\data\Dir;
+namespace Bootgly\ABI\IO\FS\Dir;
 
 return [
    // * Config

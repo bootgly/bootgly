@@ -8,11 +8,12 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\ABI\data;
+namespace Bootgly\ABI\IO\FS;
 
 
 use RecursiveIteratorIterator;
 use RecursiveDirectoryIterator;
+
 use Bootgly\ABI\Data\__String\Path;
 
 

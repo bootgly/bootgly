@@ -13,7 +13,7 @@ namespace Bootgly\WPI\nodes\HTTP\Server\Bridge;
 
 use Bootgly;
 
-use Bootgly\ABI\streams\File;
+use Bootgly\ABI\IO\FS\File;
 
 use Bootgly\WPI\nodes\HTTP\Server\Bridge as Server;
 use Bootgly\WPI\nodes\HTTP\Server\Bridge\Response\Content;

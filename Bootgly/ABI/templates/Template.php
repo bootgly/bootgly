@@ -11,7 +11,7 @@
 namespace Bootgly\ABI\templates;
 
 
-use Bootgly\ABI\streams\File;
+use Bootgly\ABI\IO\FS\File;
 
 
 class Template

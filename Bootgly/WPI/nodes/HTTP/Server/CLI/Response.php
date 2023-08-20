@@ -11,7 +11,7 @@
 namespace Bootgly\WPI\nodes\HTTP\Server\CLI;
 
 
-use Bootgly\ABI\streams\File;
+use Bootgly\ABI\IO\FS\File;
 
 use Bootgly\WPI\nodes\HTTP\Server\CLI as Server;
 use Bootgly\WPI\nodes\HTTP\Server\CLI\Response\Content;

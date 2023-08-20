@@ -8,12 +8,12 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\ABI\streams;
+namespace Bootgly\ABI\IO\FS;
 
 
 use AllowDynamicProperties;
 use Bootgly\ABI\Data\__String\Path;
-use Bootgly\ABI\data\Dir;
+use Bootgly\ABI\IO\FS\Dir;
 
 
 #[AllowDynamicProperties]

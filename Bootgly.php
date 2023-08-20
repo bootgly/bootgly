@@ -9,7 +9,7 @@
  */
 
 use Bootgly\ABI\templates\Template;
-use Bootgly\ABI\streams\File;
+use Bootgly\ABI\IO\FS\File;
 
 use Bootgly\ACI\Debugger;
 use Bootgly\ACI\Logs\Logger;

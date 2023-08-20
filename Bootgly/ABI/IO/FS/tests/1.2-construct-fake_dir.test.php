@@ -1,6 +1,6 @@
 <?php
 
-use Bootgly\ABI\data\Dir;
+use Bootgly\ABI\IO\FS\Dir;
 
 
 return [
