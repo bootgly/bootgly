@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\ABI\data;
+namespace Bootgly\ADI;
 
 
 class Table
@@ -17,11 +17,14 @@ class Table
    // ...
 
    // * Data
+   #private ? array $header;
+   #private ? array $body;
+   #private ? array $footer;
+
+   // * Meta
    public ? array $columns;
    public ? array $rows;
 
-   // * Meta
-   // ...
 
    public function __construct ()
    {
@@ -62,24 +65,29 @@ class Table
    }
 
    // @ Operations
-   // Body
    /**
     * Sums the values in a specified column of the body.
     *
     * @param int $column The column index to sum.
-    * @return int The sum of the values in the specified column.
+    * @return int The sum of the values in the specified column or false on error.
     */
-   public function sum (int $column) : int|float
+   public function sum (int $column) : false|int|float
    {
-      $data = $this->rows['body'];
+      if ($column < 0) return 0;
+
+      $body = $this->rows['body'];
 
       $sum = 0;
-      foreach ($data as $__row__ => $rows) {
-         foreach ($rows as $__column__ => $data) {
-            if ($column === $__column__) {
-               $sum += $data;
+      try {
+         foreach ($body as $rowIndex => $rows) {
+            foreach ($rows as $columnIndex => $data) {
+               if ($column === $columnIndex) {
+                  $sum += $data;
+               }
             }
          }
+      } catch (\Throwable) {
+         return false;
       }
 
       return $sum;
@@ -88,19 +96,25 @@ class Table
     * Subtracts the values in a specified column of the body.
     *
     * @param int $column The column index to subtract.
-    * @return int The result of subtracting the values in the specified column.
+    * @return int The result of subtracting the values in the specified column or false on error.
     */
-   public function subtract (int $column) : int|float
+   public function subtract (int $column) : false|int|float
    {
+      if ($column < 0) return 0;
+
       $data = $this->rows['body'];
 
       $result = 0;
-      foreach ($data as $__row__ => $rows) {
-         foreach ($rows as $__column__ => $data) {
-            if ($column === $__column__) {
-               $result -= $data;
+      try {
+         foreach ($data as $rowIndex => $rows) {
+            foreach ($rows as $columnIndex => $data) {
+               if ($column === $columnIndex) {
+                  $result -= $data;
+               }
             }
          }
+      } catch (\Throwable) {
+         return false;
       }
 
       return $result;
@@ -109,19 +123,25 @@ class Table
     * Multiplies the values in a specified column of the body.
     *
     * @param int $column The column index to multiply.
-    * @return int The result of multiplying the values in the specified column.
+    * @return int The result of multiplying the values in the specified column or false on error.
     */
    public function multiply (int $column) : int|float
    {
+      if ($column < 0) return 0;
+
       $data = $this->rows['body'];
 
       $result = 1;
-      foreach ($data as $__row__ => $rows) {
-         foreach ($rows as $__column__ => $data) {
-            if ($column === $__column__) {
-               $result *= $data;
+      try {
+         foreach ($data as $rowIndex => $rows) {
+            foreach ($rows as $columnIndex => $data) {
+               if ($column === $columnIndex) {
+                  $result *= $data;
+               }
             }
          }
+      } catch (\Throwable) {
+         return false;
       }
 
       return $result;
@@ -130,27 +150,35 @@ class Table
     * Divides the values in a specified column of the body.
     *
     * @param int $column The column index to divide.
-    * @return float The result of dividing the values in the specified column.
+    * @return float The result of dividing the values in the specified column or false on error.
     */
-   public function divide (int $column) : null|float
+   public function divide (int $column) : false|null|float
    {
+      if ($column < 0) return 0;
+
       $data = $this->rows['body'];
 
       $result = null;
-      foreach ($data as $__row__ => $rows) {
-         foreach ($rows as $__column__ => $data) {
-            if ($column === $__column__) {
-               if ($result === null) {
-                  $result = $data;
-               } else {
-                  $result /= $data;
+      try {
+         foreach ($data as $rowIndex => $rows) {
+            foreach ($rows as $columnIndex => $data) {
+               if ($column === $columnIndex) {
+                  if ($result === null) {
+                     $result = $data;
+                  } else {
+                     $result /= $data;
+                  }
                }
             }
          }
+      } catch (\Throwable) {
+         return false;
       }
 
       return $result;
    }
+
+   // @ Searchs
    /**
     * Searches for a specific value in a specified column of the body.
     *
@@ -162,9 +190,9 @@ class Table
    {
       $data = $this->rows['body'];
 
-      foreach ($data as $__row__ => $rows) {
-         foreach ($rows as $__column__ => $data) {
-            if ($column === $__column__ && $value === $data) {
+      foreach ($data as $rowIndex => $rows) {
+         foreach ($rows as $columnIndex => $data) {
+            if ($column === $columnIndex && $value === $data) {
                return true;
             }
          }

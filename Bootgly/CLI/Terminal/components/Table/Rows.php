@@ -71,9 +71,9 @@ class Rows
             default => null
          };
 
-         foreach ($rows as $metadata => $rows) {
+         foreach ($rows as $metadata => $row) {
             // TODO use $metadata to set configurations per row
-            $this->Row->render($rows);
+            $this->Row->render($row);
          }
 
          // @ Post

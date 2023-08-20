@@ -11,7 +11,7 @@
 namespace Bootgly\CLI\Terminal\components\Table;
 
 
-use Bootgly\ABI\data\Table as DataTable;
+use Bootgly\ADI\Table as DataTable;
 
 use Bootgly\CLI\Terminal\components\Table\ { Cells, Columns, Row, Rows };
 use Bootgly\CLI\Terminal\Output;
@@ -96,34 +96,40 @@ class Table
    // @ Border
    public function border (string $position)
    {
+      // * Data
+      $borders = $this->borders;
+
+      // @
       $line = match ($position) {
-         'top' => $this->borders['top-left'],
-         'mid' => $this->borders['mid-left'],
-         'bottom' => $this->borders['bottom-left']
+         'top' => $borders['top-left'],
+         'mid' => $borders['mid-left'],
+         'bottom' => $borders['bottom-left']
       };
 
       foreach ($this->Columns->widths as $index => $width) {
          if ($index > 0) {
             $line .= match($position) {
-               'top' => $this->borders['top-mid'],
-               'mid' => $this->borders['mid-mid'],
-               'bottom' => $this->borders['bottom-mid']
+               'top' => $borders['top-mid'],
+               'mid' => $borders['mid-mid'],
+               'bottom' => $borders['bottom-mid']
             };
          }
 
          $border = match ($position) {
-            'top' => $this->borders['top'],
-            'mid' => $this->borders['mid'],
-            'bottom' => $this->borders['bottom']
+            'top' => $borders['top'],
+            'mid' => $borders['mid'],
+            'bottom' => $borders['bottom']
          };
+
          $line .= str_repeat($border, $width + 2);
       }
 
       $line .= match ($position) {
-         'top' => $this->borders['top-right'],
-         'mid' => $this->borders['mid-right'],
-         'bottom' => $this->borders['bottom-right']
+         'top' => $borders['top-right'],
+         'mid' => $borders['mid-right'],
+         'bottom' => $borders['bottom-right']
       };
+
       $line .= "\n";
 
       $this->Output->write($line);
