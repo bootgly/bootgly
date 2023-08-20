@@ -6,7 +6,7 @@ return [
       'Bootgly/ABI/Data/__String/',
       'Bootgly/ABI/Data/__String/Bytes/',
       'Bootgly/ABI/Data/__String/Path/',
-      'Bootgly/ABI/data/Dir/',
+      'Bootgly/ABI/IO/FS/Dir/',
       // Abstract Data Interface (ADI)
       'Bootgly/ADI/Table/',
 

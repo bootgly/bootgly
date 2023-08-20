@@ -96,7 +96,7 @@ class Items
 // @ Displaying
 enum Orientation
 {
-   use \Bootgly\ABI\Set;
+   use \Bootgly\ABI\Configs\Set;
 
 
    case Vertical;
@@ -104,7 +104,7 @@ enum Orientation
 }
 enum Aligment : int
 {
-   use \Bootgly\ABI\Set;
+   use \Bootgly\ABI\Configs\Set;
 
 
    case Left = 1;
@@ -122,7 +122,7 @@ enum Padding
 */
 enum Margin
 {
-   use \Bootgly\ABI\Sets;
+   use \Bootgly\ABI\Configs\Sets;
 
 
    case All;

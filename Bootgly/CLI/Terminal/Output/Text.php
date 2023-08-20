@@ -328,7 +328,7 @@ namespace Bootgly\CLI\Terminal\Output\Text;
 // * Configs
 enum Colors : int
 {
-   use \Bootgly\ABI\Set;
+   use \Bootgly\ABI\Configs\Set;
 
 
    case Default = 1;

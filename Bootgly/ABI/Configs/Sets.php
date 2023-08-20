@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\ABI;
+namespace Bootgly\ABI\Configs;
 
 
 trait Sets // @ Use with enums

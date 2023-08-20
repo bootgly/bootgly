@@ -1,6 +1,6 @@
 <?php
 
-namespace Bootgly\ABI\__String\Bytes;
+namespace Bootgly\ABI\Data\__String\Bytes;
 
 
 return [

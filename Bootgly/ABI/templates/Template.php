@@ -154,7 +154,7 @@ class Template
 // * Config
 enum Mode
 {
-   use \Bootgly\ABI\Set;
+   use \Bootgly\ABI\Configs\Set;
 
    case REQUIRE;
    case EVAL;

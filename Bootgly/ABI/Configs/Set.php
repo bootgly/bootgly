@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\ABI;
+namespace Bootgly\ABI\Configs;
 
 
 trait Set // @ Use with enums
@@ -32,7 +32,7 @@ namespace Bootgly\CLI\Terminal\Output\Text;
 
 enum Colors : int
 {
-   use \Bootgly\ABI\Set;
+   use \Bootgly\ABI\Configs\Set;
 
 
    case Default = 1;
