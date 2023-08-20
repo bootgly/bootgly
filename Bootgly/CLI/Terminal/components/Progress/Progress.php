@@ -12,9 +12,9 @@ namespace Bootgly\CLI\Terminal\components\Progress;
 
 
 // -abstract
-use Bootgly\ABI\__String\Escapeable;
-use Bootgly\ABI\__String\Escapeable\cursor;
-use Bootgly\ABI\__String\Escapeable\text;
+use Bootgly\ABI\Data\__String\Escapeable;
+use Bootgly\ABI\Data\__String\Escapeable\cursor;
+use Bootgly\ABI\Data\__String\Escapeable\text;
 use Bootgly\ABI\templates\Template\Escaped as TemplateEscaped;
 // -interfaces
 use Bootgly\CLI\Terminal\Output;

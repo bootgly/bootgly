@@ -12,10 +12,10 @@ namespace Bootgly\ABI\templates\Template;
 
 
 // -abstract
-use Bootgly\ABI\__String\Escapeable;
-use Bootgly\ABI\__String\Escapeable\cursor;
-use Bootgly\ABI\__String\Escapeable\text;
-use Bootgly\ABI\__String\Escapeable\viewport;
+use Bootgly\ABI\Data\__String\Escapeable;
+use Bootgly\ABI\Data\__String\Escapeable\cursor;
+use Bootgly\ABI\Data\__String\Escapeable\text;
+use Bootgly\ABI\Data\__String\Escapeable\viewport;
 
 
 class Escaped

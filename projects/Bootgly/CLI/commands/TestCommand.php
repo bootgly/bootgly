@@ -13,7 +13,7 @@ namespace projects\Bootgly\CLI\commands;
 
 use Closure;
 
-use Bootgly\ABI\__String\Path;
+use Bootgly\ABI\Data\__String\Path;
 
 use Bootgly\ACI\Tests;
 use Bootgly\ACI\Tests\Tester;

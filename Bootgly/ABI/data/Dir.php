@@ -13,7 +13,7 @@ namespace Bootgly\ABI\data;
 
 use RecursiveIteratorIterator;
 use RecursiveDirectoryIterator;
-use Bootgly\ABI\__String\Path;
+use Bootgly\ABI\Data\__String\Path;
 
 
 class Dir extends Path

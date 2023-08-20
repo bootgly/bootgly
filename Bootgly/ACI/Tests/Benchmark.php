@@ -11,7 +11,7 @@
 namespace Bootgly\ACI\Tests;
 
 
-use Bootgly\ABI\__String\Path;
+use Bootgly\ABI\Data\__String\Path;
 use Bootgly\ACI\Debugger\Backtrace;
 
 

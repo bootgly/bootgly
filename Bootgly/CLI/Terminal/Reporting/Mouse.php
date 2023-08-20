@@ -11,7 +11,7 @@
 namespace Bootgly\CLI\Terminal\Reporting;
 
 
-use Bootgly\ABI\__String\Escapeable\mouse\Reportable;
+use Bootgly\ABI\Data\__String\Escapeable\mouse\Reportable;
 
 use Bootgly\CLI\Terminal\Reporting;
 use Bootgly\CLI\Terminal\Input;

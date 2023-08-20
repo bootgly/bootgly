@@ -11,7 +11,7 @@
 namespace Bootgly\CLI\Terminal\components\Table;
 
 
-use Bootgly\ABI\__String;
+use Bootgly\ABI\Data\__String;
 use Bootgly\CLI\Terminal\components\Table\Table;
 
 
