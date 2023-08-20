@@ -170,4 +170,11 @@ class Cursor
    {
       return $this->Output->escape(self::_CURSOR_HIDDEN);
    }
+
+
+   function __destruct()
+   {
+      $this->shape();
+      $this->show();
+   }
 }
