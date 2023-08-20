@@ -28,8 +28,21 @@ class DemoCommand extends Command
 
    public function run (array $arguments, array $options) : bool
    {
+      // * Config
+      $id = $arguments[0] ?? null;
+      if ($id !== null) {
+         $id = (int) $id;
+      }
+
+      // @
       $Output = CLI::$Terminal->Output;
       $Output->expand(lines: CLI::$Terminal::$lines);
+
+      // @ Reset Output
+      if ($id === 0) {
+         $Output->reset();
+         return true;
+      }
 
       $examples = [
          // ! Terminal
@@ -84,6 +97,10 @@ class DemoCommand extends Command
       ];
       
       foreach ($examples as $index => $example) {
+         if ($id && ($index + 1) !== $id) {
+            continue;
+         }
+
          $file = 'Bootgly/CLI/examples/' . $example;
       
          $wait = 3;
