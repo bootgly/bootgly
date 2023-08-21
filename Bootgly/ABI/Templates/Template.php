@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\ABI\templates;
+namespace Bootgly\ABI\Templates;
 
 
 use Bootgly\ABI\IO\FS\File;

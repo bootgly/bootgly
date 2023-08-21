@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-use Bootgly\ABI\templates\Template;
+use Bootgly\ABI\Templates\Template;
 use Bootgly\ABI\IO\FS\File;
 
 use Bootgly\ACI\Debugger;

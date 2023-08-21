@@ -15,7 +15,7 @@ namespace Bootgly\CLI\Terminal\components\Progress;
 use Bootgly\ABI\Data\__String\Escapeable;
 use Bootgly\ABI\Data\__String\Escapeable\cursor;
 use Bootgly\ABI\Data\__String\Escapeable\text;
-use Bootgly\ABI\templates\Template\Escaped as TemplateEscaped;
+use Bootgly\ABI\Templates\Template\Escaped as TemplateEscaped;
 // -interfaces
 use Bootgly\CLI\Terminal\Output;
 use Bootgly\CLI\Terminal\components\Progress\Bar\Bar;

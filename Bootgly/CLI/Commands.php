@@ -12,7 +12,7 @@ namespace Bootgly\CLI;
 
 
 use Closure;
-use Bootgly\ABI\templates\Template\Escaped as TemplateEscaped;
+use Bootgly\ABI\Templates\Template\Escaped as TemplateEscaped;
 use Bootgly\CLI\components\Header;
 
 
