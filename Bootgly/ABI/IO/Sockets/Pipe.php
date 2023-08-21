@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\ABI\sockets;
+namespace Bootgly\ABI\IO\Sockets;
 
 
 use Generator;
