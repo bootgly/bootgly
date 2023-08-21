@@ -12,9 +12,10 @@ namespace Bootgly\ABI\Templates;
 
 
 use Bootgly\ABI\IO\FS\File;
+use Bootgly\ABI\Templates;
 
 
-class Template
+class Template implements Templates
 {
    // * Config
    public array $parameters;

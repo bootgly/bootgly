@@ -13,8 +13,10 @@ namespace Bootgly\ABI\IO\Sockets;
 
 use Generator;
 
+use Bootgly\ABI\IO\Sockets;
 
-class Pipe
+
+class Pipe implements Sockets
 {
    // * Config
    // ! Stream
