@@ -31,7 +31,7 @@ class Dir extends Path implements FS
    public bool $validate = true;
 
    // * Data
-   protected string $Dir;
+   protected string $dir;
 
    // * Meta
    protected bool $constructed = false;
@@ -45,15 +45,15 @@ class Dir extends Path implements FS
          // * Meta
          // @ Access
          case 'writable':
-            $Dir = $this->Dir ?? '';
-            return $this->writable = is_writable($Dir);
+            $dir = $this->dir ?? '';
+            return $this->writable = is_writable($dir);
       }
    }
    public function __call (string $name, array $arguments)
    {
       switch ($name) {
          case 'scan':
-            return self::scan($this->Dir, ...$arguments);
+            return self::scan($this->dir, ...$arguments);
          default:
             return null;
       }
@@ -69,7 +69,7 @@ class Dir extends Path implements FS
 
    public function __toString () : string
    {
-      return $this->Dir ?? '';
+      return $this->dir ?? '';
    }
 
    public function construct (string $path) : string
@@ -108,7 +108,7 @@ class Dir extends Path implements FS
 
       $this->constructed = true;
 
-      return $this->Dir = $Path;
+      return $this->dir = $Path;
    }
 
    private static function scan (string $dir, bool $recursive = false) : array
