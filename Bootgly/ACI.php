@@ -11,7 +11,7 @@
 namespace Bootgly;
 
 
-abstract class ACI // Abstract Core Interface
+abstract class ACI // Abstract Common Interface
 {
 
 }

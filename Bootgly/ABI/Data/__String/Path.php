@@ -28,7 +28,7 @@ class Path // support to FileSystem Paths only (Linux only)
    public bool $real = false;
 
    // * Data
-   protected string $Path;
+   protected string $path;
 
    // * Meta
    protected bool $constructed = false;
@@ -40,7 +40,7 @@ class Path // support to FileSystem Paths only (Linux only)
    // _ Status
    protected bool $normalized;
    // _ Parts
-   // ->Path
+   // ->path
    protected string $root;
    protected string $parent;
    protected string $current;
@@ -59,48 +59,48 @@ class Path // support to FileSystem Paths only (Linux only)
    public function __get (string $key)
    {
       switch ($key) {
-         case 'Path':
-            return $this->Path ?? '';
+         case 'path':
+            return $this->path ?? '';
          // * Meta
          // _ Type
          case 'type':
             if ($this->real === false) {
                return false;
             }
-            $Path = $this->Path ?? '';
-            return $this->type = (new \SplFileInfo($Path))->getType();
+            $path = $this->path ?? '';
+            return $this->type = (new \SplFileInfo($path))->getType();
          // _ Position
          case 'absolute':
-            $Path = $this->Path ?? '';
-            return $this->absolute = $Path[0] === '/';
+            $path = $this->path ?? '';
+            return $this->absolute = $path[0] === '/';
          case 'relative':
-            $Path = $this->Path ?? '';
-            return $this->relative = $Path[0] !== '/';
+            $path = $this->path ?? '';
+            return $this->relative = $path[0] !== '/';
          // _ Status
          case 'normalized':
             return $this->normalized;
          // _ Parts
-         // ->Path
+         // ->path
          case 'root':
-            $Path = $this->Path ?? '';
+            $path = $this->path ?? '';
 
-            if ($Path === '') {
+            if ($path === '') {
                return '';
             }
-            if ($Path[0] !== '/') {
+            if ($path[0] !== '/') {
                return '';
             }
 
-            $root = strstr($Path, DIRECTORY_SEPARATOR, true);
+            $root = strstr($path, DIRECTORY_SEPARATOR, true);
             $root .= DIRECTORY_SEPARATOR;
 
             return $this->root = $root;
          case 'parent':
             $parent = '';
 
-            $Path = $this->Path ?? '';
-            if ($Path) {
-               $parent = dirname($Path);
+            $path = $this->path ?? '';
+            if ($path) {
+               $parent = dirname($path);
 
                if ($parent[-1] !== DIRECTORY_SEPARATOR) {
                   $parent .= DIRECTORY_SEPARATOR;
@@ -111,22 +111,22 @@ class Path // support to FileSystem Paths only (Linux only)
          case 'current':
             $current = '';
 
-            $Path = $this->Path ?? '';
-            if ($Path) {
-               $lastNode = strrchr(haystack: $Path, needle: DIRECTORY_SEPARATOR);
+            $path = $this->path ?? '';
+            if ($path) {
+               $lastNode = strrchr(haystack: $path, needle: DIRECTORY_SEPARATOR);
 
                $current = substr($lastNode, 1);
 
                if ($current === '') {
-                  $current = basename($Path);
+                  $current = basename($path);
                }
             }
 
             return $this->current = $current;
 
          case 'parts':
-            $Path = $this->Path ?? '';
-            return self::split($Path);
+            $path = $this->path ?? '';
+            return self::split($path);
          // ->parts
          case 'indexes':
             return count($this->parts);
@@ -143,16 +143,16 @@ class Path // support to FileSystem Paths only (Linux only)
    public function __call (string $name, array $arguments)
    {
       switch ($name) {
-         // ->Path
+         // ->path
          case 'normalize':
             $this->normalized = true;
-            return $this->Path = self::normalize($this->Path);
+            return $this->path = self::normalize($this->path);
          case 'split':
-            return self::split($this->Path);
+            return self::split($this->path);
          case 'cut':
-            return self::cut($this->Path, ...$arguments);
+            return self::cut($this->path, ...$arguments);
          case 'relativize':
-            return self::relativize($this->Path, ...$arguments);
+            return self::relativize($this->path, ...$arguments);
          // ->parts
          case 'join':
             return self::join($this->parts, ...$arguments);
@@ -172,7 +172,7 @@ class Path // support to FileSystem Paths only (Linux only)
    }
    public function __toString () : string
    {
-      return (string) $this->Path;
+      return (string) $this->path;
    }
 
    public function construct (string $path) : string
@@ -197,39 +197,37 @@ class Path // support to FileSystem Paths only (Linux only)
       // ...dynamically
 
       // @
-      $Path = $path;
-
       // @ 1 - convert
       if ($this->convert && $this->lowercase) {
-         $Path = strtolower($Path);
+         $path = strtolower($path);
       }
 
       // @ 2 - fix
       if ($this->fix) {
          // Overwrites all directory separators with the standard separator
          if ($this->dir_) {
-            $Path = match (DIRECTORY_SEPARATOR) {
-                  '/' => str_replace('\\', '/', $Path),
-                  '\\' => str_replace('/', '\\', $Path),
-                  default => $Path
+            $path = match (DIRECTORY_SEPARATOR) {
+                  '/' => str_replace('\\', '/', $path),
+                  '\\' => str_replace('/', '\\', $path),
+                  default => $path
                };
          }
 
          // Remove '/./', '/../', '//' in path
          if ($this->normalize) {
-            $Path = $this->normalize($Path);
+            $path = $this->normalize($path);
          }
       }
 
       // @ 3 - valid
       // The resulting path will have no symbolic link, '/./' or '/../'
       if ($this->real) {
-         $Path = (string) realpath($Path);
+         $path = (string) realpath($path);
       }
 
       $this->constructed = true;
 
-      return $this->Path = $Path;
+      return $this->path = $path;
    }
    public function match (string $path, string $pattern) : bool
    {
@@ -240,21 +238,20 @@ class Path // support to FileSystem Paths only (Linux only)
          return false;
       }
 
-      $Path = $this->Path ?? '';
-      if ($Path && $path[0] === '/') {
+      if (isSet($this->path) && $path[0] === '/') {
          return false;
       }
 
       $pattern = str_replace(
          search: '%',
          replace: $pattern,
-         subject: $Path . $path
+         subject: ($this->path ?? '') . $path
       );
 
       $paths = glob($pattern);
 
       if ( $paths !== false && isSet($paths[0]) ) {
-         $this->Path = $paths[0]; // Get first path found
+         $this->path = $paths[0]; // Get first path found
       } else {
          return false;
       }
@@ -318,7 +315,7 @@ class Path // support to FileSystem Paths only (Linux only)
          }
 
          // * Meta
-         // @ Path
+         // @ path
          $parts = explode('/', trim($path, '/'));
          $indexes = count($parts);
          $isAbsolute = $path[0] === '/';

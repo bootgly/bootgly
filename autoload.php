@@ -28,7 +28,7 @@ if (defined('BOOTGLY_WORKING_BASE') === false) {
 
 // ! Classes ([A-Z])
 // 1 - ABI (Abstract Bootable Interface)
-// 2 - ACI (Abstract Core Interface)
+// 2 - ACI (Abstract Common Interface)
 // 3 - ADI (Abstract Data Interface)
 
 // 4 - API (Application Programming Interface) -> Bootgly (platform)
