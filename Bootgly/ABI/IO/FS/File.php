@@ -69,12 +69,13 @@ class File implements FS
    // * Config
    public bool $check = true;
    public bool $convert = true;
+
    protected $pointer;           // Line pointer positions array
    protected $mode;              // Open mode: r, r+, w, w+, a...
    protected $method;            // Read method: fread, require, file_get_contents
 
    // * Data
-   public ? Path $Path = null;
+   public Path $Path;
    public ? Dir $Dir = null;
 
    public readonly string $file;
@@ -83,31 +84,37 @@ class File implements FS
 
    // * Meta
    protected bool $constructed = false;
+
    private $handle;
 
-   protected $exists;             // bool
-   protected $size;               // int 51162
-   protected $status;             // accessed, created, modified
-   protected $lines;              // int 15
+   protected bool $exists;           // bool true|false
 
-   #protected string $name;       // foo.html -> 'foo'
-   #protected string $extension;  // foo.html -> 'html'
-   #protected string $type;       // 'text/html'
+   protected int|false $size;        // int 51162
+   protected int|false $lines;       // int 15
+   // @ Path
+   protected string $basename;      // /path/to/foo.html -> foo.html
+   protected string $name;          // foo.html -> 'foo'
+   #protected string $extension;     // foo.html -> 'html'
+   #protected string $type;          // 'text/html'
    // _ Access
-   protected int $permissions;    // 0644
-   protected bool $readable;      // true | false
-   protected bool $executable;    // true | false
-   protected bool $writable;      // true | false
-   protected string $owner;       // 'bootgly'
-   protected string $group;       // 'bootgly'
+   protected int|false $permissions; // 0644
+   protected bool $readable;         // true | false
+   protected bool $executable;       // true | false
+   protected bool $writable;         // true | false
+   protected int|false $owner;       // 0
+   protected int|false $group;       // 0
    // _ Stat
-   protected int $accessed;       // accessed file (timestamp)
-   protected int $created;        // only Windows / in Unix is changed inode
-   protected int $modified;       // modified content (timestamp)
+   protected int|false $accessed;    // accessed file (timestamp)
+   protected int|false $created;     // only Windows / in Unix is changed inode
+   protected int|false $modified;    // modified content (timestamp)
    // _ System
-   protected $inode;              // int inode number
-   protected $link;               // string link of file if exists
+   protected int|false $inode;       // 
+   protected string|false $link;     // 
+   // _ Type
+   #protected string $parent;        // /path/to/foo.html -> /path/to/
    // _ Event
+   protected string|false $status;   // accessed, created, modified
+   // @ write
    protected ? bool $written = null;
 
 
@@ -118,20 +125,28 @@ class File implements FS
    public function __get (string $name)
    {
       // use Path
-      // < /path/to/foo.php
       switch ($name) {
          case 'basename':
-         case 'current':   // > 'foo.php'
-            return $this->Path->current;
-         case 'name':      // > foo
-            return $this->name = strstr($this->Path->current, '.', true);
-         case 'extension': // > php
-            return $this->extension = substr(strrchr($this->Path->current, '.'), 1);
-         case 'type':      // > text/html
-            return $this->type = @self::MIMES[$this->extension];
+            $current = $this->Path->current;
 
+            return $this->basename = $current;
+         case 'name':      // > foo
+            $name = strstr($this->Path->current, '.', true);
+
+            return $this->name = $name;
+         case 'extension': // > php
+            $extension = '';
+
+            $dot = strrchr($this->Path->current, '.');
+            if ($dot !== false) {
+               $extension = substr($dot, 1);
+            }
+
+            return $this->extension = $extension;
          case 'parent':    // > /path/to/
-            return $this->Path->parent;
+            $parent = $this->Path->parent;
+
+            return $this->parent = $parent;
       }
 
       // use File
@@ -171,6 +186,9 @@ class File implements FS
                return $this->inode = (new \SplFileInfo($this->file))->getInode();
             case 'link':
                return $this->link = (new \SplFileInfo($this->file))->getLinkTarget();
+            // _ Type
+            case 'type': // > text/html
+               return $this->type = @self::MIMES[$this->extension];
          }
       }
 
@@ -249,6 +267,8 @@ class File implements FS
       $Path = $this->Path;
 
       if ($this->handle === null && $Path->path !== null) {
+         $this->status = 'accessed';
+
          $this->mode = $mode;
 
          switch ($mode) {
