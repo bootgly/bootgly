@@ -66,8 +66,6 @@ class File implements FS
    const READFILE_READ_METHOD = 'readfile';
 
 
-   public ? Path $Path = null;
-
    // * Config
    public bool $check = true;
    public bool $construct = true;
@@ -76,15 +74,15 @@ class File implements FS
    protected $mode;              // Open mode: r, r+, w, w+, a...
    protected $method;            // Read method: fread, require, file_get_contents
 
-   // * Data (set public or injetable)
-   public string $path = '';
-   public string $file = '';
-   public string $dir = '';
-   protected $contents;
+   // * Data
+   public ? Path $Path = null;
+   public ? Dir $Dir = null;
 
-   // * Meta (set private|protected and not injetable)
-   public string $File = '';
-   public ? Dir $Dir  = null;
+   public string $file = '';
+
+   protected string|false $contents;
+
+   // * Meta
    private $handle;
    protected $exists;             // @ bool
    protected $size;               // @ int 51162
@@ -117,37 +115,19 @@ class File implements FS
          return;
       }
 
-      if ($this->Path === null) {
-         $Path = new Path;
-         $Path->construct($path);
-         $this->Path = $Path;
-      }
+      $Path = new Path;
+      $Path->construct($path);
 
-      // TODO Refactor or Remove to reduce memory and CPU usage
-      $Path = &$this->Path;
-      if ($Path->Path) {
+      if ($Path->path) {
          $this->path = $path;
-         $this->file = $this->path;
+         $this->Path = $Path;
+
          $this->dir = $Path->parent;
-
-         $this->File = $this->construct($Path->Path);
-
          $Dir = new Dir;
          $Dir->construct($this->dir);
          $this->Dir = $Dir;
 
-         if ($this->File && $this->File !== $this->file) {
-            $Path = new Path;
-            $Path->construct($this->File);
-            $this->Path = $Path;
-
-            // $this->path = $path;
-            $this->file = $this->File;
-            $this->dir = $Path->parent;
-         }
-      } else {
-         // TODO
-         $this->Dir = null;
+         $this->file = $this->construct($Path->path);
       }
    }
    public function __invoke (string $path)
@@ -180,7 +160,7 @@ class File implements FS
       }
 
       // use Dir
-      if ($this->Dir) {
+      if ($this->file) {
          switch ($name) {
             case 'writable':  // @ true
                return $this->Dir->writable;
@@ -188,41 +168,41 @@ class File implements FS
       }
 
       // use File
-      if ($this->File) {
+      if ($this->file) {
          switch ($name) {
             // * Data
             case 'contents':
-               return file_get_contents($this->File, false);
+               return file_get_contents($this->file, false);
             // * Meta
             case 'exists':
-               return is_file($this->File);
+               return is_file($this->file);
             case 'size':
-               return $this->size = (new \SplFileInfo($this->File))->getSize();
+               return $this->size = (new \SplFileInfo($this->file))->getSize();
             // ! Access
             case 'permissions':
-               return $this->permissions = (new \SplFileInfo($this->File))->getPerms();
+               return $this->permissions = (new \SplFileInfo($this->file))->getPerms();
             case 'readable':
-               return $this->readable = (new \SplFileInfo($this->File))->isReadable();
+               return $this->readable = (new \SplFileInfo($this->file))->isReadable();
             case 'executable':
-               return $this->executable = (new \SplFileInfo($this->File))->isExecutable();
+               return $this->executable = (new \SplFileInfo($this->file))->isExecutable();
             case 'writable':
-               return $this->writable = (new \SplFileInfo($this->File))->isWritable();
+               return $this->writable = (new \SplFileInfo($this->file))->isWritable();
             case 'owner':
-               return $this->owner = (new \SplFileInfo($this->File))->getOwner();
+               return $this->owner = (new \SplFileInfo($this->file))->getOwner();
             case 'group':
-               return $this->group = (new \SplFileInfo($this->File))->getGroup();
+               return $this->group = (new \SplFileInfo($this->file))->getGroup();
             // ! Stat
             case 'accessed':
-               return $this->accessed = (new \SplFileInfo($this->File))->getATime();
+               return $this->accessed = (new \SplFileInfo($this->file))->getATime();
             case 'created':
-               return $this->created = (new \SplFileInfo($this->File))->getCTime();
+               return $this->created = (new \SplFileInfo($this->file))->getCTime();
             case 'modified':
-               return $this->modified = (new \SplFileInfo($this->File))->getMTime();
+               return $this->modified = (new \SplFileInfo($this->file))->getMTime();
             // ! System
             case 'inode':
-               return $this->inode = (new \SplFileInfo($this->File))->getInode();
+               return $this->inode = (new \SplFileInfo($this->file))->getInode();
             case 'link':
-               return $this->link = (new \SplFileInfo($this->File))->getLinkTarget();
+               return $this->link = (new \SplFileInfo($this->file))->getLinkTarget();
          }
       }
 
@@ -248,11 +228,7 @@ class File implements FS
       switch ($name) {
          // * Data
          case 'contents':
-            if ($this->File) {
-               $file = $this->File;
-            } else {
-               $file = $this->file;
-            }
+            $file = $this->file;
 
             $this->contents = file_put_contents($file, $value); // TODO rest of arguments
 
@@ -282,7 +258,7 @@ class File implements FS
 
       $this->File = '';
 
-      if ($this->check && is_file($path)) { // Only check if the path exists as file
+      if ( $this->check && is_file($path) ) { // Only check if the path exists as file
          return $this->File = $path;
       }
 
@@ -311,12 +287,10 @@ class File implements FS
    // TODO Refactor this function to reduce its Cognitive Complexity from 29 to the 15 allowed.
    public function open (string $mode)
    {
-      if ($this->handle === null && $this->Path !== null) {
-         $this->mode = $mode;
+      $Path = $this->Path;
 
-         // if ($this->File === '') {
-            // $this->__construct((string) $this->Path);
-         // }
+      if ($this->handle === null && $Path->path !== null) {
+         $this->mode = $mode;
 
          switch ($mode) {
             // Read
@@ -325,7 +299,7 @@ class File implements FS
                // Place the file pointer at the beginning of the file. (?)
                // If the file does not exist, return false.
 
-               $this->handle = @fopen($this->Path, 'r');
+               $this->handle = @fopen($Path, 'r');
 
                break;
             case 'r+':
@@ -335,14 +309,14 @@ class File implements FS
 
                if ($this->File === '') {
                   // Create directory base if not exists
-                  if (is_dir($this->parent) === false) {
-                     mkdir($this->parent, 0775);
+                  if (is_dir($Path->parent) === false) {
+                     mkdir($Path->parent, 0775);
                   }
                   // Create empty file if file not exists
-                  file_put_contents($this->Path, '');
+                  file_put_contents($Path, '');
                }
 
-               $this->handle = fopen($this->Path, 'r+');
+               $this->handle = fopen($Path, 'r+');
 
                break;
             // Write
@@ -354,7 +328,7 @@ class File implements FS
                if ($this->File === '') {
                   $this->handle = false;
                } else {
-                  $this->handle = fopen($this->Path, 'w');
+                  $this->handle = fopen($Path, 'w');
                }
 
                break;
@@ -363,12 +337,12 @@ class File implements FS
                // Place the file pointer at the end of the file. (?)
                // If the file does not exist, attempt to create it. (+)
 
-               if ($this->File === '' && is_dir($this->parent) === false) {
+               if ($this->File === '' && is_dir($Path->parent) === false) {
                   // Create dir if not exists
-                  mkdir($this->parent, 0775);
+                  mkdir($Path->parent, 0775);
                }
 
-               $this->handle = fopen($this->Path, 'w+');
+               $this->handle = fopen($Path, 'w+');
 
                break;
             case 'rw+':
@@ -378,11 +352,11 @@ class File implements FS
 
                if ($this->File === '') {
                   // Create directory base if not exists
-                  if (is_dir($this->parent) === false) {
-                     mkdir($this->parent, 0775);
+                  if (is_dir($Path->parent) === false) {
+                     mkdir($Path->parent, 0775);
                   }
                   // Create empty file if file not exists
-                  file_put_contents($this->Path, '');
+                  file_put_contents($Path, '');
                }
 
                $this->handle = true;
@@ -390,10 +364,6 @@ class File implements FS
                break;
             default:
                $this->handle = true;
-         }
-
-         if ($this->File === '' && $this->handle !== false) {
-            $this->__construct($this->Path->Path);
          }
       }
 
