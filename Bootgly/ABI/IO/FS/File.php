@@ -137,7 +137,7 @@ class File implements FS
 
       $this->__construct($path);
 
-      return $this->File;
+      return $this->file;
    }
    public function __get (string $name)
    {
@@ -247,7 +247,7 @@ class File implements FS
    }
    public function __toString () : string
    {
-      return $this->File;
+      return $this->file;
    }
 
    public function construct (string $path) : string
@@ -256,32 +256,32 @@ class File implements FS
          return '';
       }
 
-      $this->File = '';
+      $this->file = '';
 
       if ( $this->check && is_file($path) ) { // Only check if the path exists as file
-         return $this->File = $path;
+         return $this->file = $path;
       }
 
-      if ($this->construct) { // Construct the path with $Path->Path($path) and check if file exists
+      if ($this->construct) { // Construct the Path and check if file exists
          $path = $this->Path->construct($path);
-         if (is_file($path)) {
-            return $this->File = $path;
+         if ( is_file($path) ) {
+            return $this->file = $path;
          }
       }
 
       if ($this->convert) { // Convert the path to base or index and check if file exists
          $base = $path . '.php';
          if (is_file($base)) {
-            return $this->File = $base;
+            return $this->file = $base;
          }
 
          $index = rtrim($path, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'index.php';
          if ( is_file($index) ) {
-            return $this->File = $index;
+            return $this->file = $index;
          }
       }
 
-      return $this->File;
+      return $this->file;
    }
 
    // TODO Refactor this function to reduce its Cognitive Complexity from 29 to the 15 allowed.
@@ -307,7 +307,7 @@ class File implements FS
                // Place the file pointer at the beginning of the file. (?)
                // If the file does not exist, attempt to create it. (+)
 
-               if ($this->File === '') {
+               if ($this->file === '') {
                   // Create directory base if not exists
                   if (is_dir($Path->parent) === false) {
                      mkdir($Path->parent, 0775);
@@ -325,7 +325,7 @@ class File implements FS
                // Place the file pointer at the end of the file. (?)
                // If the file does not exist, return false.
 
-               if ($this->File === '') {
+               if ($this->file === '') {
                   $this->handle = false;
                } else {
                   $this->handle = fopen($Path, 'w');
@@ -337,7 +337,7 @@ class File implements FS
                // Place the file pointer at the end of the file. (?)
                // If the file does not exist, attempt to create it. (+)
 
-               if ($this->File === '' && is_dir($Path->parent) === false) {
+               if ($this->file === '' && is_dir($Path->parent) === false) {
                   // Create dir if not exists
                   mkdir($Path->parent, 0775);
                }
@@ -350,7 +350,7 @@ class File implements FS
                // Place the file pointer at the beginning of the file in read and at the end in write. (?)
                // If the file does not exist, attempt to create it. (+)
 
-               if ($this->File === '') {
+               if ($this->file === '') {
                   // Create directory base if not exists
                   if (is_dir($Path->parent) === false) {
                      mkdir($Path->parent, 0775);
@@ -372,7 +372,7 @@ class File implements FS
 
    public function read ($method = self::READFILE_READ_METHOD, int $offset = 0, ? int $length = null)
    {
-      if ($this->File === '') {
+      if ($this->file === '') {
          return false;
       }
 
@@ -385,7 +385,7 @@ class File implements FS
             case self::REQUIRE_READ_METHOD: // TODO refactor
                ob_start();
 
-               require $this->File;
+               require $this->file;
 
                $contents = ob_get_contents();
 
@@ -403,9 +403,9 @@ class File implements FS
 
       switch ($this->method) {
          case self::CONTENTS_READ_METHOD:
-            return $this->contents = file_get_contents($this->File, false, null, $offset, $length);
+            return $this->contents = file_get_contents($this->file, false, null, $offset, $length);
          case self::READFILE_READ_METHOD:
-            return readfile($this->File);
+            return readfile($this->file);
       }
 
       return false;

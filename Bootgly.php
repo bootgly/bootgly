@@ -117,7 +117,7 @@ class Bootgly
       $File->convert = false;
       $File($file);
 
-      if ($File->File) {
+      if ($File->file) {
          $Template->raw = $File->contents;
       } else {
          $Template->raw = $view;

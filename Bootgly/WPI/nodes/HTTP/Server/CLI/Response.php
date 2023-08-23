@@ -499,6 +499,8 @@ class Response
          $content = $this->body;
       }
 
+      // TODO REFACTOR
+      // FIX REVIEW SECURITY
       if ($content instanceof File) {
          $File = $content;
       } else {
@@ -646,7 +648,7 @@ class Response
       $this->stream = true;
       // @ Prepare writing
       $this->files[] = [
-         'file' => $File->File, // @ Set file path to open handler
+         'file' => $File->file, // @ Set file path to open handler
 
          'parts' => $parts,
          'pads' => $pads,
