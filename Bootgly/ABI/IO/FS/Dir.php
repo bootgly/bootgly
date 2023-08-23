@@ -75,40 +75,40 @@ class Dir extends Path implements FS
    public function construct (string $path) : string
    {
       if ($this->constructed) {
-         return '';
+         return $this->dir; // TODO return error?
       }
       if ($path === '') {
          return '';
       }
 
       // @
-      $Path = parent::construct($path);
+      $path = $this->path ?? parent::construct($path);
 
-      if ($Path === '') {
+      if ($path === '') {
          return '';
       }
 
       if ($this->convert && $this->real) {
-         if (is_file($Path) === true) {
-            $Path = dirname($Path, 1) . DIRECTORY_SEPARATOR;
-         } else if ($Path[-1] !== DIRECTORY_SEPARATOR) {
-            $Path .= DIRECTORY_SEPARATOR;
+         if (is_file($path) === true) {
+            $path = dirname($path, 1) . DIRECTORY_SEPARATOR;
+         } else if ($path[-1] !== DIRECTORY_SEPARATOR) {
+            $path .= DIRECTORY_SEPARATOR;
          }
       }
 
       if ($this->validate) {
-         if ($this->real && is_dir($Path) === false) {
-            $Path = '';
+         if ($this->real && is_dir($path) === false) {
+            $path = '';
          }
 
-         if ($Path[-1] !== DIRECTORY_SEPARATOR) {
-            $Path = '';
+         if ($path[-1] !== DIRECTORY_SEPARATOR) {
+            $path = '';
          }
       }
 
       $this->constructed = true;
 
-      return $this->dir = $Path;
+      return $this->dir = $path;
    }
 
    private static function scan (string $dir, bool $recursive = false) : array

@@ -255,10 +255,13 @@ class Response
       switch ($resource) {
          // @ File
          case 'view':
-            $File = new File(\Bootgly::$Project->path . 'views/' . $data);
+            $File = new File;
+            $File->construct(\Bootgly::$Project->path . 'views/' . $data);
+
             $this->body   = $File;
             $this->source = 'file';
             $this->type   = $File->extension;
+
             break;
 
          // @ Content
@@ -292,13 +295,14 @@ class Response
                switch ( getType($data) ) { // _()->type
                   case 'string':
                      // TODO check if string is a valid path
-                     if ($data[0] === '/') {
-                        $File = new File(BOOTGLY_WORKING_DIR . 'projects' . $data);
-                     } else if ($data[0] === '@') {
-                        $File = new File(BOOTGLY_WORKING_DIR . 'projects/' . $data);
-                     } else {
-                        $File = new File(\Bootgly::$Project->path . $data);
-                     }
+                     $File = new File;
+
+                     match ($data[0]) {
+                        #!
+                        '/' => $File->construct(BOOTGLY_WORKING_DIR . 'projects' . $data),
+                        '@' => $File->construct(BOOTGLY_WORKING_DIR . 'projects/' . $data),
+                        default => $File->construct(\Bootgly::$Project->path . $data)
+                     };
 
                      $this->body   = $File;
                      $this->source = 'file';
@@ -504,7 +508,8 @@ class Response
       if ($content instanceof File) {
          $File = $content;
       } else {
-         $File = new File(\Bootgly::$Project->path . $content);
+         $File = new File;
+         $File->construct(\Bootgly::$Project->path . $content);
       }
 
       if ($File->readable === false) {

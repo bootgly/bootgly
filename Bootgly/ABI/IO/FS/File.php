@@ -59,7 +59,7 @@ class File implements FS
    const READ_WRITE_MODE = 'rw';
    const READ_WRITE_NEW_MODE = 'rw+';
    const READ_APPEND_MODE = 'ra';
-   // ! Read method
+   // @ read
    const DEFAULT_READ_METHOD = 'fread';
    const REQUIRE_READ_METHOD = 'require';
    const CONTENTS_READ_METHOD = 'file_get_contents';
@@ -68,7 +68,6 @@ class File implements FS
 
    // * Config
    public bool $check = true;
-   public bool $construct = true;
    public bool $convert = true;
    protected $pointer;           // Line pointer positions array
    protected $mode;              // Open mode: r, r+, w, w+, a...
@@ -78,93 +77,61 @@ class File implements FS
    public ? Path $Path = null;
    public ? Dir $Dir = null;
 
-   public string $file = '';
+   public readonly string $file;
 
    protected string|false $contents;
 
    // * Meta
+   protected bool $constructed = false;
    private $handle;
-   protected $exists;             // @ bool
-   protected $size;               // @ int 51162
-   protected $status;             // @ accessed, created, modified
-   protected $lines;              // @ int 15
-   #protected string $name;       // @ foo.html -> 'foo'
-   #protected string $extension;  // @ foo.html -> 'html'
-   #protected string $type;       // @ 'text/html'
-   // ! Access
-   protected int $permissions;    // @ 0644
-   protected bool $readable;      // @ true | false
-   protected bool $executable;    // @ true | false
-   protected bool $writable;      // @ true | false
-   protected string $owner;       // @ 'bootgly'
-   protected string $group;       // @ 'bootgly'
-   // ! Stat
-   protected int $accessed;       // @ accessed file (timestamp)
-   protected int $created;        // @ only Windows / in Unix is changed inode
-   protected int $modified;       // @ modified content (timestamp)
-   // ! System
-   protected $inode;              // @ int inode number
-   protected $link;               // @ string link of file if exists
-   // ! Event
+
+   protected $exists;             // bool
+   protected $size;               // int 51162
+   protected $status;             // accessed, created, modified
+   protected $lines;              // int 15
+
+   #protected string $name;       // foo.html -> 'foo'
+   #protected string $extension;  // foo.html -> 'html'
+   #protected string $type;       // 'text/html'
+   // _ Access
+   protected int $permissions;    // 0644
+   protected bool $readable;      // true | false
+   protected bool $executable;    // true | false
+   protected bool $writable;      // true | false
+   protected string $owner;       // 'bootgly'
+   protected string $group;       // 'bootgly'
+   // _ Stat
+   protected int $accessed;       // accessed file (timestamp)
+   protected int $created;        // only Windows / in Unix is changed inode
+   protected int $modified;       // modified content (timestamp)
+   // _ System
+   protected $inode;              // int inode number
+   protected $link;               // string link of file if exists
+   // _ Event
    protected ? bool $written = null;
 
 
-   public function __construct (? string $path = null)
+   public function __construct ()
    {
-      if ($path === null || $path === '') {
-         return;
-      }
-
-      $Path = new Path;
-      $Path->construct($path);
-
-      if ($Path->path) {
-         $this->path = $path;
-         $this->Path = $Path;
-
-         $this->dir = $Path->parent;
-         $Dir = new Dir;
-         $Dir->construct($this->dir);
-         $this->Dir = $Dir;
-
-         $this->file = $this->construct($Path->path);
-      }
-   }
-   public function __invoke (string $path)
-   {
-      // TODO Reset all properties needed
-      unset($this->size);
-
-      $this->__construct($path);
-
-      return $this->file;
+      $this->Path = new Path;
    }
    public function __get (string $name)
    {
       // use Path
-      if ($this->Path) {
-         // < /path/to/foo.php
-         switch ($name) { // TODO Refactor, Create alias and Test all
-            case 'basename':
-            case 'current':   // > 'foo.php'
-               return $this->Path->current;
-            case 'name':      // > foo
-               return $this->name = strstr($this->current, '.', true);
-            case 'extension': // > php
-               return $this->extension = substr(strrchr($this->current, '.'), 1);
-            case 'type':      // > text/html
-               return $this->type = @self::MIMES[$this->extension];
-            case 'parent':    // > /path/to/
-               return $this->Path->parent;
-         }
-      }
+      // < /path/to/foo.php
+      switch ($name) {
+         case 'basename':
+         case 'current':   // > 'foo.php'
+            return $this->Path->current;
+         case 'name':      // > foo
+            return $this->name = strstr($this->Path->current, '.', true);
+         case 'extension': // > php
+            return $this->extension = substr(strrchr($this->Path->current, '.'), 1);
+         case 'type':      // > text/html
+            return $this->type = @self::MIMES[$this->extension];
 
-      // use Dir
-      if ($this->file) {
-         switch ($name) {
-            case 'writable':  // @ true
-               return $this->Dir->writable;
-         }
+         case 'parent':    // > /path/to/
+            return $this->Path->parent;
       }
 
       // use File
@@ -173,12 +140,13 @@ class File implements FS
             // * Data
             case 'contents':
                return file_get_contents($this->file, false);
+
             // * Meta
             case 'exists':
                return is_file($this->file);
             case 'size':
                return $this->size = (new \SplFileInfo($this->file))->getSize();
-            // ! Access
+            // _ Access
             case 'permissions':
                return $this->permissions = (new \SplFileInfo($this->file))->getPerms();
             case 'readable':
@@ -191,14 +159,14 @@ class File implements FS
                return $this->owner = (new \SplFileInfo($this->file))->getOwner();
             case 'group':
                return $this->group = (new \SplFileInfo($this->file))->getGroup();
-            // ! Stat
+            // _ Stat
             case 'accessed':
                return $this->accessed = (new \SplFileInfo($this->file))->getATime();
             case 'created':
                return $this->created = (new \SplFileInfo($this->file))->getCTime();
             case 'modified':
                return $this->modified = (new \SplFileInfo($this->file))->getMTime();
-            // ! System
+            // _ System
             case 'inode':
                return $this->inode = (new \SplFileInfo($this->file))->getInode();
             case 'link':
@@ -206,21 +174,7 @@ class File implements FS
          }
       }
 
-      if ($this->file) {
-         switch ($name) {
-            // * Meta
-            case 'exists':
-               return is_file($this->file);
-            case 'readable':
-               return $this->readable = (new \SplFileInfo($this->file))->isReadable();
-            case 'executable':
-               return $this->executable = (new \SplFileInfo($this->file))->isExecutable();
-            case 'writable':
-               return $this->writable = (new \SplFileInfo($this->file))->isWritable();
-         }
-      }
-
-      return @$this->$name;
+      return $this->$name;
    }
    public function __set (string $name, $value)
    {
@@ -252,31 +206,36 @@ class File implements FS
 
    public function construct (string $path) : string
    {
-      if (! $path) {
+      if ($this->constructed) {
+         return $this->file;
+      }
+      if ($path === '') {
          return '';
       }
 
-      $this->file = '';
+      // @
+      // | Path
+      $path = $this->Path->construct($path);
 
-      if ( $this->check && is_file($path) ) { // Only check if the path exists as file
+      if ($this->check && is_file($path) === true) { // Only check if the path exists as file
          return $this->file = $path;
       }
 
-      if ($this->construct) { // Construct the Path and check if file exists
-         $path = $this->Path->construct($path);
-         if ( is_file($path) ) {
-            return $this->file = $path;
+      if ($this->convert) {
+         // @ Convert path dir to base if needed
+         if ($path[-1] === DIRECTORY_SEPARATOR) {
+            $path = rtrim($path, DIRECTORY_SEPARATOR);
          }
-      }
 
-      if ($this->convert) { // Convert the path to base or index and check if file exists
+         // @ Convert base to file with .php
          $base = $path . '.php';
-         if (is_file($base)) {
+         if (is_file($base) === true) {
             return $this->file = $base;
          }
 
-         $index = rtrim($path, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'index.php';
-         if ( is_file($index) ) {
+         // @ Convert base to file with index.php
+         $index = $path . DIRECTORY_SEPARATOR . 'index.php';
+         if (is_file($index) === true) {
             return $this->file = $index;
          }
       }
@@ -370,7 +329,7 @@ class File implements FS
       return $this->handle;
    }
 
-   public function read ($method = self::READFILE_READ_METHOD, int $offset = 0, ? int $length = null)
+   public function read ($method = self::READFILE_READ_METHOD, int $offset = 0, ? int $length = null): string|int|false
    {
       if ($this->file === '') {
          return false;
@@ -382,14 +341,21 @@ class File implements FS
 
       if ($this->handle) {
          switch ($this->method) {
-            case self::REQUIRE_READ_METHOD: // TODO refactor
+            case self::REQUIRE_READ_METHOD:
                ob_start();
 
-               require $this->file;
+               // @ Require file with isolated scope / context
+               (static function ($file) {
+                  require $file;
+               })($this->file);
 
                $contents = ob_get_contents();
 
                ob_end_clean();
+
+               if ($offset > 0 || $length > 0) {
+                  $contents = substr($contents, $offset, $length);
+               }
 
                return $this->contents = $contents;
             default:

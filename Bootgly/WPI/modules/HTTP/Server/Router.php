@@ -93,17 +93,21 @@ class Router
 
       $boot = Bootgly::$Project->path . 'router/';
 
+      $Index = new File;
+      $Index->construct($boot . 'index.php');
       (static function (string $__default__)
       use ($Request, $Router, $Route) {
          include_once $__default__;
-      })( (string) new File($boot . 'index.php') );
+      })($Index->file);
 
       $instances = (array) $instances;
       foreach ($instances as $instance) {
+         $Instance = new File;
+         $Instance->construct($boot . $instance . '.php');
          (static function (string $__routes__)
          use ($Request, $Router, $Route) {
             @include_once $__routes__;
-         })( (string) new File($boot . $instance . '.php') );
+         })($Instance->file);
       }
    }
    public function pause ()

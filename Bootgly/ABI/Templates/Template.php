@@ -97,21 +97,21 @@ class Template implements Templates
 
    private function cache () : bool
    {
-      $this->Output = new File(
+      $Output = $this->Output = new File;
+      $Output->construct(
          BOOTGLY_WORKING_DIR .
          'workdata/cache/' .
          'views/' .
-         sha1($this->raw) .
-         '.php'
+         sha1($this->raw) . '.php'
       );
 
-      if ($this->Output->exists) {
+      if ($Output->exists) {
          return false;
       }
 
-      $this->Output->open('w+');
-      $this->Output->write($this->compiled);
-      $this->Output->close();
+      $Output->open('w+');
+      $Output->write($this->compiled);
+      $Output->close();
 
       return true;
    }

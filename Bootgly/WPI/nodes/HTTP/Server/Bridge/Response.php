@@ -264,7 +264,9 @@ class Response
       switch ($resource) {
          // @ File
          case 'view':
-            $File = new File(Bootgly::$Project->path . 'views/' . $data);
+            $File = new File;
+            $File->construct(Bootgly::$Project->path . 'views/' . $data);
+
             $this->body   = $File;
             $this->source = 'file';
             $this->type   = $File->extension;
@@ -298,14 +300,16 @@ class Response
             if ($resource) {
                // TODO Inject resource with custom process() created by user
             } else {
-               switch ( getType($data) ) { // _()->type
+               switch ( getType($data) ) {
                   case 'string':
                      // TODO check if string is a valid path
-                     $File = match ($data[0]) {
+                     $File = new File;
+
+                     match ($data[0]) {
                         #!
-                        '/'     => new File(BOOTGLY_WORKING_DIR . 'projects' . $data),
-                        '@'     => new File(BOOTGLY_WORKING_DIR . 'projects/' . $data),
-                        default => new File(Bootgly::$Project->path . $data)
+                        '/' => $File->construct(BOOTGLY_WORKING_DIR . 'projects' . $data),
+                        '@' => $File->construct(BOOTGLY_WORKING_DIR . 'projects/' . $data),
+                        default => $File->construct(Bootgly::$Project->path . $data)
                      };
 
                      $this->body   = $File;
@@ -495,7 +499,8 @@ class Response
       if ($content instanceof File) {
          $File = $content;
       } else {
-         $File = new File(Bootgly::$Project->path . $content);
+         $File = new File;
+         $File->construct(Bootgly::$Project->path . $content);
       }
 
       if ($File->readable === false) {
