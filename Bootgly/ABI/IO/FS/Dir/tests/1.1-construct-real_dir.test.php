@@ -14,7 +14,6 @@ return [
       // absolute real base to real dir
       $Dir10 = new Dir;
       // * Config
-      $Dir10->real = true;
       // @
       $Dir10->construct(__DIR__);
       assert(
@@ -24,7 +23,6 @@ return [
       // absolute real dir to real dir
       $Dir11 = new Dir;
       // * Config
-      $Dir11->real = true;
       // @
       $Dir11->construct(__DIR__ . DIRECTORY_SEPARATOR);
       assert(
@@ -34,7 +32,6 @@ return [
       // absolute real file to real dir
       $Dir12 = new Dir;
       // * Config
-      $Dir12->real = true;
       // @
       $Dir12->construct(__DIR__ . '/@.php');
       assert(
@@ -46,7 +43,6 @@ return [
       // empty string to real dir
       $Dir20 = new Dir;
       // * Config
-      $Dir20->real = true;
       // @
       $Dir20->construct('');
       assert(
@@ -56,7 +52,6 @@ return [
       // root dir to real dir
       $Dir21 = new Dir;
       // * Config
-      $Dir21->real = true;
       // @
       $Dir21->construct('/');
       assert(
@@ -68,7 +63,6 @@ return [
       // absolute fake base to real dir
       $Dir31 = new Dir;
       // * Config
-      $Dir31->real = true;
       // @
       $Dir31->construct('/fake/path/base');
       assert(

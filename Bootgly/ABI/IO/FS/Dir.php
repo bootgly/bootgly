@@ -18,7 +18,7 @@ use Bootgly\ABI\Data\__String\Path;
 use Bootgly\ABI\IO\FS;
 
 
-class Dir extends Path implements FS
+class Dir implements FS
 {
    // * Config
    /**
@@ -31,21 +31,37 @@ class Dir extends Path implements FS
    public bool $validate = true;
 
    // * Data
-   protected string $dir;
+   public Path $Path;
+
+   public readonly string|false $dir;
 
    // * Meta
    protected bool $constructed = false;
-   // @ Access
+   // _ Access
    protected bool $writable;
 
 
+   public function __construct ()
+   {
+      $this->Path = new Path;
+   }
    public function __get (string $name)
    {
+      if ( isSet($this->$name) ) {
+         return $this->$name;
+      }
+
+      $dir = $this->dir ?? false;
+
+      if ($dir === false) {
+         return false;
+      }
+
+      // Only constructed successfully
       switch ($name) {
          // * Meta
          // @ Access
          case 'writable':
-            $dir = $this->dir ?? '';
             return $this->writable = is_writable($dir);
       }
    }
@@ -75,20 +91,24 @@ class Dir extends Path implements FS
    public function construct (string $path) : string
    {
       if ($this->constructed) {
-         return $this->dir; // TODO return error?
+         return $this->dir;
       }
       if ($path === '') {
          return '';
       }
 
       // @
-      $path = $this->path ?? parent::construct($path);
+      // | Path
+      $Path = $this->Path;
+      $Path->real = true;
+
+      $path = $Path->construct($path);
 
       if ($path === '') {
          return '';
       }
 
-      if ($this->convert && $this->real) {
+      if ($this->convert) {
          if (is_file($path) === true) {
             $path = dirname($path, 1) . DIRECTORY_SEPARATOR;
          } else if ($path[-1] !== DIRECTORY_SEPARATOR) {
