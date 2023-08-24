@@ -13,5 +13,6 @@ return [
    'suiteName' => __NAMESPACE__,
    'tests' => [
       '1.1-construct-real_file',
+      '2.x-dynamic-properties-lines',
    ]
 ];

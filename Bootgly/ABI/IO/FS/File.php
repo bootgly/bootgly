@@ -16,37 +16,15 @@ use AllowDynamicProperties;
 use Bootgly\ABI\Data\__String\Path;
 use Bootgly\ABI\IO\FS;
 use Bootgly\ABI\IO\FS\Dir;
+use Bootgly\ABI\IO\FS\File\MIMES;
 
 
 #[AllowDynamicProperties]
 class File implements FS
 {
-   // TODO load MIMES externaly (with use, require?)
-   const MIMES = [
-      'php' => 'text/html',
-      'pdf' => 'application/pdf',
+   use MIMES;
 
-      'eot' => 'application/vnd.ms-fontobject',
-      'ttf' => 'application/x-font-ttf',
-      'woff' => 'application/x-font-woff',
-      'woff2' => 'application/x-font-woff',
-      'js' => 'application/javascript',
 
-      'png' => 'image/png',
-      'jpg' => 'image/jpeg',
-      'jpeg' => 'image/jpeg',
-      'gif' => 'image/gif',
-      'ico' => 'image/x-icon',
-      'svg' => 'image/svg+xml',
-      'webp' => 'image/webp',
-
-      'css' => 'text/css',
-      'map' => 'application/x-navimap',
-      'less' => 'text/css',
-
-      'html' => 'text/html',
-      'txt' => 'text/plain'
-   ];
    // ! Open mode
    // ? Read
    const READ_MODE = 'r';
@@ -70,9 +48,9 @@ class File implements FS
    public bool $check = true;
    public bool $convert = true;
 
-   protected $pointer;           // Line pointer positions array
-   protected $mode;              // Open mode: r, r+, w, w+, a...
-   protected $method;            // Read method: fread, require, file_get_contents
+   protected $line;                  // Line pointer positions array
+   protected $mode;                  // Open mode: r, r+, w, w+, a...
+   protected $method;                // Read method: fread, require, file_get_contents
 
    // * Data
    public Path $Path;
@@ -85,17 +63,18 @@ class File implements FS
    // * Meta
    protected bool $constructed = false;
 
-   private $handle;
+   private $handler;
 
    protected bool $exists;           // bool true|false
 
    protected int|false $size;        // int 51162
    protected int|false $lines;       // int 15
+   protected string|false $type;     // 'text/html'
    // @ Path
-   protected string $basename;      // /path/to/foo.html -> foo.html
-   protected string $name;          // foo.html -> 'foo'
-   #protected string $extension;     // foo.html -> 'html'
-   #protected string $type;          // 'text/html'
+   protected string $basename;       // /path/to/foo.html -> foo.html
+   protected string $name;           // foo.html -> 'foo'
+   protected string $extension;      // foo.html -> 'html'
+   protected string $parent;        // /path/to/foo.html -> /path/to/
    // _ Access
    protected int|false $permissions; // 0644
    protected bool $readable;         // true | false
@@ -110,8 +89,6 @@ class File implements FS
    // _ System
    protected int|false $inode;       // 
    protected string|false $link;     // 
-   // _ Type
-   #protected string $parent;        // /path/to/foo.html -> /path/to/
    // _ Event
    protected string|false $status;   // accessed, created, modified
    // @ write
@@ -124,9 +101,13 @@ class File implements FS
    }
    public function __get (string $name)
    {
-      // use Path
+      if ( isSet($this->$name) ) {
+         return $this->$name;
+      }
+
+      // < /path/to/foo.php
       switch ($name) {
-         case 'basename':
+         case 'basename':  // > foo.php
             $current = $this->Path->current;
 
             return $this->basename = $current;
@@ -149,7 +130,6 @@ class File implements FS
             return $this->parent = $parent;
       }
 
-      // use File
       if ($this->file) {
          switch ($name) {
             // * Data
@@ -159,8 +139,36 @@ class File implements FS
             // * Meta
             case 'exists':
                return is_file($this->file);
+
             case 'size':
                return $this->size = (new \SplFileInfo($this->file))->getSize();
+            case 'lines':
+               $size = $this->size ?? $this->__get('size');
+
+               if ($size < 100000) { // if file < 100kb use + perf method
+                  $linesArray = @file($this->file);
+                  $linesCount = ($linesArray !== false) ? count($linesArray) : false;
+               } else { // else use more memory-efficient method
+                  $handler = @fopen($this->file, 'r');
+
+                  if ($handler) {
+                     $linesCount = 0;
+
+                     while (@fgets($handler) !== false) {
+                        $linesCount++;
+                     }
+
+                     @fclose($handler);
+                  } else {
+                     $linesCount = false;
+                  }
+               }
+
+               return $this->lines = $linesCount;
+            case 'type': // > text/html
+               $extension = $this->extension ?? $this->__get('extension');
+               $MIME = self::EXTENSIONS_TO_MIME[$this->extension] ?? false;
+               return $this->type = $MIME;
             // _ Access
             case 'permissions':
                return $this->permissions = (new \SplFileInfo($this->file))->getPerms();
@@ -186,13 +194,10 @@ class File implements FS
                return $this->inode = (new \SplFileInfo($this->file))->getInode();
             case 'link':
                return $this->link = (new \SplFileInfo($this->file))->getLinkTarget();
-            // _ Type
-            case 'type': // > text/html
-               return $this->type = @self::MIMES[$this->extension];
          }
       }
 
-      return $this->$name;
+      return null;
    }
    public function __set (string $name, $value)
    {
@@ -266,7 +271,7 @@ class File implements FS
    {
       $Path = $this->Path;
 
-      if ($this->handle === null && $Path->path !== null) {
+      if ($this->handler === null && $Path->path !== null) {
          $this->status = 'accessed';
 
          $this->mode = $mode;
@@ -278,7 +283,7 @@ class File implements FS
                // Place the file pointer at the beginning of the file. (?)
                // If the file does not exist, return false.
 
-               $this->handle = @fopen($Path, 'r');
+               $this->handler = @fopen($Path, 'r');
 
                break;
             case 'r+':
@@ -295,7 +300,7 @@ class File implements FS
                   file_put_contents($Path, '');
                }
 
-               $this->handle = fopen($Path, 'r+');
+               $this->handler = fopen($Path, 'r+');
 
                break;
             // Write
@@ -305,9 +310,9 @@ class File implements FS
                // If the file does not exist, return false.
 
                if ($this->file === '') {
-                  $this->handle = false;
+                  $this->handler = false;
                } else {
-                  $this->handle = fopen($Path, 'w');
+                  $this->handler = fopen($Path, 'w');
                }
 
                break;
@@ -321,7 +326,7 @@ class File implements FS
                   mkdir($Path->parent, 0775);
                }
 
-               $this->handle = fopen($Path, 'w+');
+               $this->handler = fopen($Path, 'w+');
 
                break;
             case 'rw+':
@@ -338,15 +343,15 @@ class File implements FS
                   file_put_contents($Path, '');
                }
 
-               $this->handle = true;
+               $this->handler = true;
 
                break;
             default:
-               $this->handle = true;
+               $this->handler = true;
          }
       }
 
-      return $this->handle;
+      return $this->handler;
    }
 
    public function read ($method = self::READFILE_READ_METHOD, int $offset = 0, ? int $length = null): string|int|false
@@ -359,7 +364,7 @@ class File implements FS
          $this->method = $method;
       }
 
-      if ($this->handle) {
+      if ($this->handler) {
          switch ($this->method) {
             case self::REQUIRE_READ_METHOD:
                ob_start();
@@ -380,10 +385,10 @@ class File implements FS
                return $this->contents = $contents;
             default:
                if ($this->mode == 'rw+') {
-                  $this->handle = fopen($this->Path, 'r');
+                  $this->handler = fopen($this->Path, 'r');
                }
 
-               return $this->contents = fread($this->handle, $this->size);
+               return $this->contents = fread($this->handler, $this->size);
          }
       }
 
@@ -400,11 +405,11 @@ class File implements FS
    {
       if ($this->mode == 'rw+') {
          $this->close();
-         $this->handle = fopen($this->Path, 'w');
+         $this->handler = fopen($this->Path, 'w');
       }
 
-      if ($this->handle) {
-         $bytes = fwrite($this->handle, $data);
+      if ($this->handler) {
+         $bytes = fwrite($this->handler, $data);
 
          if ($bytes) {
             $this->written = true;
@@ -416,11 +421,11 @@ class File implements FS
    }
    public function close ()
    {
-      if (is_resource($this->handle)) {
-         fclose($this->handle);
+      if (is_resource($this->handler)) {
+         fclose($this->handler);
       }
 
-      $this->handle = null;
+      $this->handler = null;
    }
 
    public function __destruct ()
