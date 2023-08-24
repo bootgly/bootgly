@@ -15,7 +15,6 @@ use AllowDynamicProperties;
 
 use Bootgly\ABI\Data\__String\Path;
 use Bootgly\ABI\IO\FS;
-use Bootgly\ABI\IO\FS\Dir;
 use Bootgly\ABI\IO\FS\File\MIMES;
 
 
@@ -45,16 +44,20 @@ class File implements FS
 
 
    // * Config
+   /**
+    * Simple check file.
+    */
    public bool $check = true;
+   /**
+    * Convert file (+.php or +/index.php).
+    */
    public bool $convert = true;
 
-   protected $line;                  // Line pointer positions array
    protected $mode;                  // Open mode: r, r+, w, w+, a...
    protected $method;                // Read method: fread, require, file_get_contents
 
    // * Data
    public Path $Path;
-   public ? Dir $Dir = null;
 
    public readonly string|false $file;
 
@@ -238,7 +241,7 @@ class File implements FS
    }
    public function __toString () : string
    {
-      return $this->file;
+      return $this->file ?? '';
    }
 
    public function construct (string $path) : string|false
@@ -254,6 +257,10 @@ class File implements FS
       $this->constructed = true;
       // | Path
       $path = $this->Path->construct($path);
+
+      if ($path === '') {
+         return $this->file = '';
+      }
 
       if ($this->check && is_file($path) === true) { // Only check if the path exists as file
          return $this->file = $path;
@@ -281,7 +288,6 @@ class File implements FS
       return $this->file = false;
    }
 
-   // TODO Refactor this function to reduce its Cognitive Complexity from 29 to the 15 allowed.
    public function open (string $mode)
    {
       $Path = $this->Path;

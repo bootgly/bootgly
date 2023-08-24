@@ -11,24 +11,30 @@ return [
    // @ test
    'test' => function () {
       // @ Valid
-      $File = new File;
-      $File->construct(__DIR__ . '/1.1-construct-real_file.test.php');
+      $File1 = new File;
+      $File1->construct(__DIR__ . '/1.1-construct-real_file.test.php');
 
       assert(
-         assertion: $File->exists,
-         description: 'File should exist!'
+         assertion: $File1->exists,
+         description: 'File #1 should exist!'
       );
 
       // @ Neutral
-      // ...
-
-      // @ Invalid
-      $File = new File;
-      $File->construct(__DIR__ . '/1.1.3-fake.test.php');
+      $File2 = new File;
+      $File2->construct('');
 
       assert(
-         assertion: $File->exists === false,
-         description: 'File should not exist!'
+         assertion: $File2->basename === '',
+         description: 'File #2 basename: ' . $File2->basename
+      );
+
+      // @ Invalid
+      $File3 = new File;
+      $File3->construct(__DIR__ . '/1.1.3-fake.test.php');
+
+      assert(
+         assertion: $File3->exists === false,
+         description: 'File #3 should not exist!'
       );
 
       return true;
