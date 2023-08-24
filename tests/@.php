@@ -2,7 +2,6 @@
 return [
    'suites' => [
       // Abstract Bootable Interface (ABI)
-      #'Bootgly/ABI/Data/Iterator/', // Not testable
       'Bootgly/ABI/Data/__Array/',
       'Bootgly/ABI/Data/__String/',
       'Bootgly/ABI/Data/__String/Bytes/',
@@ -10,6 +9,7 @@ return [
       'Bootgly/ABI/Data/__String/Path/',
       'Bootgly/ABI/IO/FS/Dir/',
       'Bootgly/ABI/IO/FS/File/',
+      #'Bootgly/ABI/Templates/Iterator/', // Not testable
       // Abstract Common Interface (ACI)
       // ...
       // Abstract Data Interface (ADI)

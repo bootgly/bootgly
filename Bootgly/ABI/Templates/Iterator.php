@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\ABI\Data;
+namespace Bootgly\ABI\Templates;
 
 
 use Iterator as Iterating;

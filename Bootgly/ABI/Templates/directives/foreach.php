@@ -10,7 +10,7 @@ return [
       $iteration = $_matches[2];
 
       $init = <<<PHP
-      \$_ = new \Bootgly\ABI\Data\Iterator(\$$iteratee);
+      \$_ = new \Bootgly\ABI\Templates\Iterator(\$$iteratee);
       PHP;
 
       return <<<PHP
