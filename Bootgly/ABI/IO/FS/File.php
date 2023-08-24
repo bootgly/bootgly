@@ -56,7 +56,7 @@ class File implements FS
    public Path $Path;
    public ? Dir $Dir = null;
 
-   public readonly string $file;
+   public readonly string|false $file;
 
    protected string|false $contents;
 
@@ -69,12 +69,13 @@ class File implements FS
 
    protected int|false $size;        // int 51162
    protected int|false $lines;       // int 15
+
    protected string|false $type;     // 'text/html'
    // @ Path
    protected string $basename;       // /path/to/foo.html -> foo.html
    protected string $name;           // foo.html -> 'foo'
    protected string $extension;      // foo.html -> 'html'
-   protected string $parent;        // /path/to/foo.html -> /path/to/
+   protected string $parent;         // /path/to/foo.html -> /path/to/
    // _ Access
    protected int|false $permissions; // 0644
    protected bool $readable;         // true | false
@@ -105,17 +106,18 @@ class File implements FS
          return $this->$name;
       }
 
-      // < /path/to/foo.php
+      // Not constructed || constructed
+      # < /path/to/foo.php
       switch ($name) {
-         case 'basename':  // > foo.php
+         case 'basename':  # > foo.php
             $current = $this->Path->current;
 
             return $this->basename = $current;
-         case 'name':      // > foo
+         case 'name':      # > foo
             $name = strstr($this->Path->current, '.', true);
 
             return $this->name = $name;
-         case 'extension': // > php
+         case 'extension': # > php
             $extension = '';
 
             $dot = strrchr($this->Path->current, '.');
@@ -124,110 +126,122 @@ class File implements FS
             }
 
             return $this->extension = $extension;
-         case 'parent':    // > /path/to/
+         case 'parent':    # > /path/to/
             $parent = $this->Path->parent;
 
             return $this->parent = $parent;
       }
 
-      if ($this->file) {
-         switch ($name) {
-            // * Data
-            case 'contents':
-               return file_get_contents($this->file, false);
+      $file = $this->file ?? false;
 
-            // * Meta
-            case 'exists':
-               return is_file($this->file);
+      if ($file === false) {
+         return false;
+      }
 
-            case 'size':
-               return $this->size = (new \SplFileInfo($this->file))->getSize();
-            case 'lines':
-               $size = $this->size ?? $this->__get('size');
+      // Only constructed successfully
+      switch ($name) {
+         // * Data
+         case 'contents':
+            return file_get_contents($file, false);
 
-               if ($size < 100000) { // if file < 100kb use + perf method
-                  $linesArray = @file($this->file);
-                  $linesCount = ($linesArray !== false) ? count($linesArray) : false;
-               } else { // else use more memory-efficient method
-                  $handler = @fopen($this->file, 'r');
+         // * Meta
+         case 'exists':
+            return is_file($file);
 
-                  if ($handler) {
-                     $linesCount = 0;
+         case 'size':
+            return $this->size = (new \SplFileInfo($file))->getSize();
+         case 'lines':
+            $size = $this->size ?? $this->__get('size');
 
-                     while (@fgets($handler) !== false) {
-                        $linesCount++;
-                     }
+            if ($size < 100000) { // if file < 100kb use + perf method
+               $linesArray = @file($file);
+               $linesCount = ($linesArray !== false) ? count($linesArray) : false;
+            } else { // else use more memory-efficient method
+               $handler = @fopen($file, 'r');
 
-                     @fclose($handler);
-                  } else {
-                     $linesCount = false;
+               if ($handler) {
+                  $linesCount = 0;
+
+                  while (@fgets($handler) !== false) {
+                     $linesCount++;
                   }
-               }
 
-               return $this->lines = $linesCount;
-            case 'type': // > text/html
-               $extension = $this->extension ?? $this->__get('extension');
-               $MIME = self::EXTENSIONS_TO_MIME[$this->extension] ?? false;
-               return $this->type = $MIME;
-            // _ Access
-            case 'permissions':
-               return $this->permissions = (new \SplFileInfo($this->file))->getPerms();
-            case 'readable':
-               return $this->readable = (new \SplFileInfo($this->file))->isReadable();
-            case 'executable':
-               return $this->executable = (new \SplFileInfo($this->file))->isExecutable();
-            case 'writable':
-               return $this->writable = (new \SplFileInfo($this->file))->isWritable();
-            case 'owner':
-               return $this->owner = (new \SplFileInfo($this->file))->getOwner();
-            case 'group':
-               return $this->group = (new \SplFileInfo($this->file))->getGroup();
-            // _ Stat
-            case 'accessed':
-               return $this->accessed = (new \SplFileInfo($this->file))->getATime();
-            case 'created':
-               return $this->created = (new \SplFileInfo($this->file))->getCTime();
-            case 'modified':
-               return $this->modified = (new \SplFileInfo($this->file))->getMTime();
-            // _ System
-            case 'inode':
-               return $this->inode = (new \SplFileInfo($this->file))->getInode();
-            case 'link':
-               return $this->link = (new \SplFileInfo($this->file))->getLinkTarget();
-         }
+                  @fclose($handler);
+               } else {
+                  $linesCount = false;
+               }
+            }
+
+            return $this->lines = $linesCount;
+         case 'type': // > text/html
+            $extension = $this->extension ?? $this->__get('extension');
+            $MIME = self::EXTENSIONS_TO_MIME[$this->extension] ?? false;
+            return $this->type = $MIME;
+         // _ Access
+         case 'permissions':
+            return $this->permissions = (new \SplFileInfo($file))->getPerms();
+         case 'readable':
+            return $this->readable = (new \SplFileInfo($file))->isReadable();
+         case 'executable':
+            return $this->executable = (new \SplFileInfo($file))->isExecutable();
+         case 'writable':
+            return $this->writable = (new \SplFileInfo($file))->isWritable();
+         case 'owner':
+            return $this->owner = (new \SplFileInfo($file))->getOwner();
+         case 'group':
+            return $this->group = (new \SplFileInfo($file))->getGroup();
+         // _ Stat
+         case 'accessed':
+            return $this->accessed = (new \SplFileInfo($file))->getATime();
+         case 'created':
+            return $this->created = (new \SplFileInfo($file))->getCTime();
+         case 'modified':
+            return $this->modified = (new \SplFileInfo($file))->getMTime();
+         // _ System
+         case 'inode':
+            return $this->inode = (new \SplFileInfo($file))->getInode();
+         case 'link':
+            return $this->link = (new \SplFileInfo($file))->getLinkTarget();
       }
 
       return null;
    }
    public function __set (string $name, $value)
    {
-      // Generic
+      $file = $this->file ?? false;
+
+      if ($file === false) {
+         return false;
+      }
+
+      // Only constructed successfully
       switch ($name) {
          // * Data
          case 'contents':
-            $file = $this->file;
+            $contents = file_put_contents($file, $value);
 
-            $this->contents = file_put_contents($file, $value); // TODO rest of arguments
-
-            if ($this->contents !== false) {
+            if ($contents !== false) {
                $this->written = true;
 
-               $this->construct($file);
+               unset($this->size);
+               unset($this->lines);
+
+               unset($this->accessed);
+               unset($this->created);
+               unset($this->modified);
             } else {
                $this->written = false;
             }
 
-            return $this->contents;
+            return $this->contents = $contents;
       }
-
-      return $this->$name = $value;
    }
    public function __toString () : string
    {
       return $this->file;
    }
 
-   public function construct (string $path) : string
+   public function construct (string $path) : string|false
    {
       if ($this->constructed) {
          return $this->file;
@@ -237,6 +251,7 @@ class File implements FS
       }
 
       // @
+      $this->constructed = true;
       // | Path
       $path = $this->Path->construct($path);
 
@@ -263,7 +278,7 @@ class File implements FS
          }
       }
 
-      return $this->file;
+      return $this->file = false;
    }
 
    // TODO Refactor this function to reduce its Cognitive Complexity from 29 to the 15 allowed.
