@@ -13,7 +13,7 @@ return [
    'test' => function () {
       // @ Valid
       $File1 = new File;
-      $File1->construct(__DIR__ . '/1.1-construct-real_file.test.php');
+      $File1->pathify(__DIR__ . '/1.1-construct-real_file.test.php');
 
       // @ get file contents
       $contents = $File1->contents;
@@ -35,7 +35,7 @@ return [
 
       // @ Invalid
       $File2 = new File;
-      $File2->construct('');
+      $File2->pathify('');
 
       // @ get file contents
       $contents = $File2->contents;
@@ -50,7 +50,7 @@ return [
       // ---
 
       $File3 = new File;
-      $File3->construct(__DIR__ . '/1.1.3-fake.test.php');
+      $File3->pathify(__DIR__ . '/1.1.3-fake.test.php');
 
       // @ get file contents
       $contents = $File3->contents;

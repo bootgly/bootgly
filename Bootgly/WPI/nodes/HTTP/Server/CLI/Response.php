@@ -256,7 +256,7 @@ class Response
          // @ File
          case 'view':
             $File = new File;
-            $File->construct(\Bootgly::$Project->path . 'views/' . $data);
+            $File->pathify(\Bootgly::$Project->path . 'views/' . $data);
 
             $this->body   = $File;
             $this->source = 'file';
@@ -299,9 +299,9 @@ class Response
 
                      match ($data[0]) {
                         #!
-                        '/' => $File->construct(BOOTGLY_WORKING_DIR . 'projects' . $data),
-                        '@' => $File->construct(BOOTGLY_WORKING_DIR . 'projects/' . $data),
-                        default => $File->construct(\Bootgly::$Project->path . $data)
+                        '/' => $File->pathify(BOOTGLY_WORKING_DIR . 'projects' . $data),
+                        '@' => $File->pathify(BOOTGLY_WORKING_DIR . 'projects/' . $data),
+                        default => $File->pathify(\Bootgly::$Project->path . $data)
                      };
 
                      $this->body   = $File;
@@ -509,7 +509,7 @@ class Response
          $File = $content;
       } else {
          $File = new File;
-         $File->construct(\Bootgly::$Project->path . $content);
+         $File->pathify(\Bootgly::$Project->path . $content);
       }
 
       if ($File->readable === false) {

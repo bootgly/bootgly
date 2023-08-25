@@ -114,7 +114,7 @@ class Bootgly
       // @ Load Raw file/string
       $File = new File;
       $File->convert = false;
-      $File->construct($file);
+      $File->pathify($file);
 
       if ($File->file) {
          $Template->raw = $File->contents;

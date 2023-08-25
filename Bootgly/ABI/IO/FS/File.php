@@ -255,7 +255,7 @@ class File implements FS
       return $this->file ?? '';
    }
 
-   public function construct (string $path) : string|false
+   public function pathify (string $path) : string|false
    {
       if ($this->constructed) {
          return $this->file;

@@ -12,7 +12,7 @@ return [
    'test' => function () {
       // @ Valid
       $File1 = new File;
-      $File1->construct(__DIR__ . '/1.1-construct-real_file.test.php');
+      $File1->pathify(__DIR__ . '/1.1-construct-real_file.test.php');
 
       assert(
          assertion: $File1->lines === 31,
@@ -21,7 +21,7 @@ return [
 
       // @ Neutral
       $File2 = new File;
-      $File2->construct('');
+      $File2->pathify('');
 
       assert(
          assertion: $File2->lines === false,
@@ -30,7 +30,7 @@ return [
 
       // @ Invalid
       $File = new File;
-      $File->construct(__DIR__ . '/1.1.3-fake.test.php');
+      $File->pathify(__DIR__ . '/1.1.3-fake.test.php');
 
       assert(
          assertion: $File->lines === false,

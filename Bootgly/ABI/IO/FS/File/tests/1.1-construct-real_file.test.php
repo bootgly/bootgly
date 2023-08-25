@@ -13,7 +13,7 @@ return [
       // @ Valid
       // absolute real file to real file
       $File10 = new File;
-      $File10->construct(__DIR__ . '/@.php');
+      $File10->pathify(__DIR__ . '/@.php');
 
       assert(
          assertion: (string) $File10 === __DIR__ . '/@.php',

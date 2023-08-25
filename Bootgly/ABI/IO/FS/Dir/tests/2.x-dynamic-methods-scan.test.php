@@ -15,7 +15,7 @@ return [
       // * Config
       $Dir1->real = true;
       // @
-      $Dir1->construct(__DIR__);
+      $Dir1->pathify(__DIR__);
 
       $pathnames = $Dir1->scan(recursive: false);
       $paths = count($pathnames) - 1;

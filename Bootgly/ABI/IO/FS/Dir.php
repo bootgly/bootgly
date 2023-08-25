@@ -88,7 +88,7 @@ class Dir implements FS
       return $this->dir ?? '';
    }
 
-   public function construct (string $path) : string
+   public function pathify (string $path) : string
    {
       if ($this->constructed) {
          return $this->dir;

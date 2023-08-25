@@ -16,7 +16,7 @@ return [
       // * Config
       $Dir1->real = true;
       // @
-      $Dir1->construct(__DIR__);
+      $Dir1->pathify(__DIR__);
       assert(
          assertion: $Dir1->writable === true,
          description: 'Current directory is writable!'
@@ -27,7 +27,7 @@ return [
       // * Config
       $Dir2->real = true;
       // @
-      $Dir2->construct('/sbin');
+      $Dir2->pathify('/sbin');
       assert(
          assertion: $Dir2->writable === false,
          description: '/sbin directory is non-writable!'
