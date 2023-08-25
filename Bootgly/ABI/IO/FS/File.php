@@ -117,7 +117,11 @@ class File implements FS
 
             return $this->basename = $current;
          case 'name':      # > foo
-            $name = strstr($this->Path->current, '.', true);
+            $name = substr(
+               string: $this->Path->current,
+               offset: 0,
+               length: strrpos($this->Path->current, '.')
+            );
 
             return $this->name = $name;
          case 'extension': # > php
