@@ -98,11 +98,9 @@ class Test // extends Assertions
    {
       static $separatorLength;
 
-      $separators = @$this->specifications['separators'] ?? [];
-
-      $separator = @$separators['separator'] ?? null;
-      $left = @$separators['left'] ?? null;
-      $header = @$separators['header'] ?? null;
+      $separator = $this->specifications['separator.line']   ?? null;
+      $left      = $this->specifications['separator.left']   ?? null;
+      $header    = $this->specifications['separator.header'] ?? null;
 
       $width = $this->Tests->width + 25;
 

@@ -11,9 +11,7 @@ use Bootgly\WPI\nodes\HTTP\Server\CLI\Response;
 
 return [
    // @ configure
-   'separators' => [
-      'separator' => true
-   ],
+   'separator.line' => true,
    // @ simulate
    // Client API
    'request' => function () {

@@ -11,10 +11,8 @@ use Bootgly\WPI\nodes\HTTP\Server\CLI\Response;
 
 return [
    // @ configure
-   'separators' => [
-      'left' => 'HTTP/1.1 Caching Specification (RFC 7234)'
-   ],
    'describe' => 'It should return stale when modified since the date',
+   'separator.left' => 'HTTP/1.1 Caching Specification (RFC 7234)',
    // @ simulate
    // Client API
    'request' => function () {

@@ -11,9 +11,7 @@ use Bootgly\WPI\nodes\HTTP\Server\CLI\Response;
 
 return [
    // @ configure
-   'separators' => [
-      'header' => '@authenticate'
-   ],
+   'separator.header' => '@authenticate',
 
    // @ simulate
    // Server API

@@ -12,9 +12,7 @@ use Bootgly\WPI\nodes\HTTP\Server\CLI\Response;
 return [
    // @ configure
    'describe' => 'It should return 416 status: negative range start `-5-10`',
-   'separators' => [
-      'left' => '.2.3 - Requests Range - Client - Single Part (Invalid)'
-   ],
+   'separator.left' => '.2.3 - Requests Range - Client - Single Part (Invalid)',
 
    // @ simulate
    // Server API

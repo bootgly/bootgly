@@ -11,9 +11,7 @@ use Bootgly\WPI\nodes\HTTP\Server\CLI\Response;
 
 return [
    // @ configure
-   'separators' => [
-      'left' => 'Route Catch-All'
-   ],
+   'separator.left' => 'Route Catch-All',
 
    // @ simulate
    // Client API

@@ -11,11 +11,10 @@ use Bootgly\WPI\nodes\HTTP\Server\CLI\Response;
 
 return [
    // @ configure
-   'response.length' => 557,
    'describe' => 'It should return parts of file `bytes=1-2,4-5,-1`',
-   'separators' => [
-      'left' => '.2.4 - Requests Range - Client - Multi Part (Valid)'
-   ],
+   'separator.left' => '.2.4 - Requests Range - Client - Multi Part (Valid)',
+
+   'response.length' => 557,
 
    // @ simulate
    // Server API

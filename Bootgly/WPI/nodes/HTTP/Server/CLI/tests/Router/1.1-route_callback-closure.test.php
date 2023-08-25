@@ -11,9 +11,7 @@ use Bootgly\WPI\nodes\HTTP\Server\CLI\Response;
 
 return [
    // @ configure
-   'separators' => [
-      'separator' => 'Router'
-   ],
+   'separator.line' => 'Router',
 
    // @ simulate
    // Client API

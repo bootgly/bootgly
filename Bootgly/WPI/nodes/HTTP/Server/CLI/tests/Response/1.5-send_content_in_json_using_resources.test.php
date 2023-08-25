@@ -10,10 +10,8 @@ use Bootgly\WPI\nodes\HTTP\Server\CLI\Response;
 
 return [
    // @ configure
-   'separators' => [
-      'separator' => 'Response Content',
-      'header' => '@send'
-   ],
+   'separator.line' => 'Response Content',
+   'separator.header' => '@send',
 
    // @ simulate
    // Server API

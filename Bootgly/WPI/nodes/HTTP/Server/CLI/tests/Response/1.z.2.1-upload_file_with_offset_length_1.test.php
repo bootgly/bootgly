@@ -11,11 +11,10 @@ use Bootgly\WPI\nodes\HTTP\Server\CLI\Response;
 
 return [
    // @ configure
+   'separator.line' => true,
+   'separator.left' => '.2.1 - Requests Range - Dev',
+
    'response.length' => 301,
-   'separators' => [
-      'separator' => true,
-      'left' => '.2.1 - Requests Range - Dev'
-   ],
 
    // @ simulate
    // Server API

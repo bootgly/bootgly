@@ -11,9 +11,7 @@ use Bootgly\WPI\nodes\HTTP\Server\CLI\Response;
 
 return [
    // @ configure
-   'separators' => [
-      'header' => '@upload'
-   ],
+   'separator.header' => '@upload',
 
    'response.length' => 82928,
 

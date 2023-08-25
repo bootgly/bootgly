@@ -11,9 +11,7 @@ use Bootgly\WPI\nodes\HTTP\Server\CLI\Response;
 
 return [
    // @ configure
-   'separators' => [
-      'separator' => true
-   ],
+   'separator.line' => true,
    'describe' => 'It should process request post (multipart/form-data)!',
    #'response.length' => 50,
    // @ simulate

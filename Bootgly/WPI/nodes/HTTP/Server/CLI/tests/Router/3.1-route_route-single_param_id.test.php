@@ -11,9 +11,7 @@ use Bootgly\WPI\nodes\HTTP\Server\CLI\Response;
 
 return [
    // @ configure
-   'separators' => [
-      'left' => 'Named params'
-   ],
+   'separator.left' => 'Named params',
 
    // @ simulate
    // Client API

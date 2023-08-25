@@ -11,10 +11,9 @@ use Bootgly\WPI\nodes\HTTP\Server\CLI\Response;
 
 return [
    // @ configure
+   'separator.line' => true,
+
    'response.length' => 3101895,
-   'separators' => [
-      'separator' => true
-   ],
 
    // @ simulate
    // Server API

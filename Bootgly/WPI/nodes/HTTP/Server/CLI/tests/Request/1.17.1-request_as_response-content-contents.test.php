@@ -11,10 +11,8 @@ use Bootgly\WPI\nodes\HTTP\Server\CLI\Response;
 
 return [
    // @ configure
-   'separators' => [
-      'separator' => 'Request Content'
-   ],
    'describe' => 'It should process request body when HTTP verb is POST',
+   'separator.line' => 'Request Content',
    // @ simulate
    // Client API
    'request' => function () {

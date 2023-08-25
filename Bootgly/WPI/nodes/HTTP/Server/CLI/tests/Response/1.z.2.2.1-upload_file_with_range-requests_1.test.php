@@ -11,11 +11,10 @@ use Bootgly\WPI\nodes\HTTP\Server\CLI\Response;
 
 return [
    // @ configure
-   'response.length' => 302,
    'describe' => 'It should return first 3 bytes of file when `bytes=0-2`',
-   'separators' => [
-      'left' => '.2.2 - Requests Range - Client - Single Part (Valid)'
-   ],
+   'separator.left' => '.2.2 - Requests Range - Client - Single Part (Valid)',
+
+   'response.length' => 302,
 
    // @ simulate
    // Server API

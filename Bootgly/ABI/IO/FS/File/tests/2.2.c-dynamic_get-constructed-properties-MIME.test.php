@@ -5,10 +5,8 @@ use Bootgly\ABI\IO\FS\File;
 
 return [
    // @ configure
-   'separators' => [
-      'left' => '__get - Content'
-   ],
    'describe' => '',
+   'separator.left' => '__get - Content',
    // @ simulate
    // ...
    // @ test
