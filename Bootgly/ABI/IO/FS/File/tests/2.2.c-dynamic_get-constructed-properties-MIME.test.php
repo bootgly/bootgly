@@ -6,7 +6,7 @@ use Bootgly\ABI\IO\FS\File;
 return [
    // @ configure
    'separators' => [
-      'separator' => true
+      'left' => '__get - Content'
    ],
    'describe' => '',
    // @ simulate
@@ -16,28 +16,28 @@ return [
       // @ Valid
       $File1 = new File;
       $File1->construct(__DIR__ . '/1.1-construct-real_file.test.php');
-
+      $MIME1 = $File1->MIME;
       assert(
-         assertion: $File1->basename === '1.1-construct-real_file.test.php',
-         description: 'File #1 basename: ' . $File1->basename
+         assertion: $MIME1->type === 'text/x-php',
+         description: 'File #1 - MIME type: ' . $MIME1->type
       );
 
       // @ Neutral
       $File2 = new File;
       $File2->construct('');
-
+      $MIME2 = $File2->MIME;
       assert(
-         assertion: $File2->basename === '',
-         description: 'File #2 basename: ' . $File2->basename
+         assertion: $MIME2 === false,
+         description: 'File #2 - MIME should be false'
       );
 
       // @ Invalid
       $File3 = new File;
       $File3->construct(__DIR__ . '/1.1.3-fake.test.php');
-
+      $MIME3 = $File3->MIME;
       assert(
-         assertion: $File3->basename === '1.1.3-fake.test.php',
-         description: 'File #3 (fake) basename: ' . $File3->basename
+         assertion: $MIME3 === false,
+         description: 'File #3 (fake) - MIME should be false'
       );
 
       return true;

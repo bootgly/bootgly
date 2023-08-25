@@ -5,6 +5,9 @@ use Bootgly\ABI\IO\FS\File;
 
 return [
    // @ configure
+   'separators' => [
+      'separator' => true
+   ],
    'describe' => '',
    // @ simulate
    // ...

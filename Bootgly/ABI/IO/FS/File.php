@@ -15,15 +15,12 @@ use AllowDynamicProperties;
 
 use Bootgly\ABI\Data\__String\Path;
 use Bootgly\ABI\IO\FS;
-use Bootgly\ABI\IO\FS\File\MIMES;
+use Bootgly\ABI\IO\FS\File\MIME;
 
 
 #[AllowDynamicProperties]
 class File implements FS
 {
-   use MIMES;
-
-
    // ! Open mode
    // ? Read
    const READ_MODE = 'r';
@@ -72,8 +69,6 @@ class File implements FS
 
    protected int|false $size;        // int 51162
    protected int|false $lines;       // int 15
-
-   protected string|false $type;     // 'text/html'
    // @ Path
    protected string $basename;       // /path/to/foo.html -> foo.html
    protected string $name;           // foo.html -> 'foo'
@@ -86,6 +81,11 @@ class File implements FS
    protected bool $writable;         // true | false
    protected int|false $owner;       // 0
    protected int|false $group;       // 0
+   // _ Content
+   # < foo.jpg
+   protected object|false $MIME;     // > object (real MIME based content)
+   protected string|false $format;   // > 'image'
+   protected string|false $subtype;  // > 'jpeg'
    // _ Stat
    protected int|false $accessed;    // accessed file (timestamp)
    protected int|false $created;     // only Windows / in Unix is changed inode
@@ -117,17 +117,19 @@ class File implements FS
 
             return $this->basename = $current;
          case 'name':      # > foo
+            $basename = $this->basename ?? $this->__get('basename');
             $name = substr(
-               string: $this->Path->current,
+               string: $basename,
                offset: 0,
-               length: strrpos($this->Path->current, '.')
+               length: strrpos($basename, '.')
             );
 
             return $this->name = $name;
          case 'extension': # > php
+            $basename = $this->basename ?? $this->__get('basename');
             $extension = '';
 
-            $dot = strrchr($this->Path->current, '.');
+            $dot = strrchr($basename, '.');
             if ($dot !== false) {
                $extension = substr($dot, 1);
             }
@@ -180,10 +182,6 @@ class File implements FS
             }
 
             return $this->lines = $linesCount;
-         case 'type': // > text/html
-            $extension = $this->extension ?? $this->__get('extension');
-            $MIME = self::EXTENSIONS_TO_MIME[$this->extension] ?? false;
-            return $this->type = $MIME;
          // _ Access
          case 'permissions':
             return $this->permissions = (new \SplFileInfo($file))->getPerms();
@@ -197,6 +195,15 @@ class File implements FS
             return $this->owner = (new \SplFileInfo($file))->getOwner();
          case 'group':
             return $this->group = (new \SplFileInfo($file))->getGroup();
+         // _ Content
+         case 'MIME':
+            return $this->MIME = new MIME($file);
+         case 'format':
+            $MIME = $this->MIME ?? $this->__get('MIME');
+            return $MIME->format;
+         case 'subtype':
+            $MIME = $this->MIME ?? $this->__get('MIME');
+            return $MIME->subtype;
          // _ Stat
          case 'accessed':
             return $this->accessed = (new \SplFileInfo($file))->getATime();
@@ -444,6 +451,7 @@ class File implements FS
 
       return false;
    }
+
    public function close ()
    {
       if (is_resource($this->handler)) {

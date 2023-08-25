@@ -18,8 +18,11 @@ return [
       '2.1.x-dynamic_get-not_constructed-properties-name',
       '2.1.x-dynamic_get-not_constructed-properties-extension',
       '2.1.x-dynamic_get-not_constructed-properties-parent',
-      '2.2.x-dynamic_get-constructed-properties-exists',
-      '2.2.x-dynamic_get-constructed-properties-lines',
+      // ---
+      '2.2.1-dynamic_get-constructed-properties-exists',
+      '2.2.2-dynamic_get-constructed-properties-size',
+      '2.2.3-dynamic_get-constructed-properties-lines',
+      '2.2.c-dynamic_get-constructed-properties-MIME',
 
       '3.1.x-dynamic_set-constructed-properties-contents',
    ]
