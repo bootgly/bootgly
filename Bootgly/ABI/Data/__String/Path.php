@@ -172,7 +172,7 @@ class Path // support to FileSystem Paths only (Linux only)
    }
    public function __toString () : string
    {
-      return (string) $this->path;
+      return $this->path ?? '';
    }
 
    public function construct (string $path) : string
