@@ -34,6 +34,13 @@ return [
       '2.2.c-dynamic_get-constructed-properties-format',
       '2.2.c-dynamic_get-constructed-properties-subtype',
 
+      '2.2.d-dynamic_get-constructed-properties-accessed',
+      '2.2.d-dynamic_get-constructed-properties-created',
+      '2.2.d-dynamic_get-constructed-properties-modified',
+
+      '2.2.e-dynamic_get-constructed-properties-inode',
+      '2.2.e-dynamic_get-constructed-properties-link',
+
       '3.1.x-dynamic_set-constructed-properties-contents',
    ]
 ];
