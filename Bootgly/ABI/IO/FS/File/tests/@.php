@@ -31,6 +31,8 @@ return [
       '2.2.9-dynamic_get-constructed-properties-group',
 
       '2.2.c-dynamic_get-constructed-properties-MIME',
+      '2.2.c-dynamic_get-constructed-properties-format',
+      '2.2.c-dynamic_get-constructed-properties-subtype',
 
       '3.1.x-dynamic_set-constructed-properties-contents',
    ]

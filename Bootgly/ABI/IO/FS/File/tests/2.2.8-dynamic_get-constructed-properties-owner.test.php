@@ -28,7 +28,7 @@ return [
       $File3 = new File(__DIR__ . '/1.1.3-fake.test.php');
       assert(
          assertion: $File3->owner === false,
-         description: 'File #3 (fake) - fake file - owner should be false'
+         description: 'File #3 - fake file - owner should be false'
       );
 
       return true;
