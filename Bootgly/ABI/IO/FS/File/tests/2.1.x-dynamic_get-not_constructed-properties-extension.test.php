@@ -26,8 +26,8 @@ return [
       // @ Neutral
       $File3 = new File('');
       assert(
-         assertion: $File3->extension === '',
-         description: 'File #3 extension: ' . $File3->extension
+         assertion: $File3->extension === false,
+         description: 'File #3 extension should be false!'
       );
 
       // @ Invalid

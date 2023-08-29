@@ -32,8 +32,8 @@ return [
       // @ Neutral
       $File4 = new File('');
       assert(
-         assertion: $File4->parent === '',
-         description: 'File #4 parent: ' . $File3->parent
+         assertion: $File4->parent === false,
+         description: 'File #4 parent should be false!'
       );
 
       // @ Invalid

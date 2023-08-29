@@ -26,8 +26,8 @@ return [
       // @ Neutral
       $File3 = new File('');
       assert(
-         assertion: $File3->name === '',
-         description: 'File #3 name: ' . $File3->name
+         assertion: $File3->name === false,
+         description: 'File #3 name should be false!'
       );
 
       // @ Invalid
