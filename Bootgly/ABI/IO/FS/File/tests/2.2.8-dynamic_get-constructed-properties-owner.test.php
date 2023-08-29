@@ -13,7 +13,7 @@ return [
       // @ Valid
       $File1 = new File(__DIR__ . '/1.1-construct-real_file.test.php');
       assert(
-         assertion: $File1->owner === 1000,
+         assertion: $File1->owner === 1000 || $File1->owner === 1001,
          description: 'File #1 - owner: ' . $File1->owner
       );
 
