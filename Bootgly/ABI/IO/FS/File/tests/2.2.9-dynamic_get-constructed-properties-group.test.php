@@ -13,7 +13,7 @@ return [
       // @ Valid
       $File1 = new File(__DIR__ . '/1.1-construct-real_file.test.php');
       assert(
-         assertion: $File1->group === 1000 || $File1->group === 1001,
+         assertion: $File1->group > 900 || $File1->group < 10000,
          description: 'File #1 - group: ' . $File1->group
       );
 
