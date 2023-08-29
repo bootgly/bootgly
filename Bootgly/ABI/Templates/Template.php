@@ -97,8 +97,7 @@ class Template implements Templates
 
    private function cache () : bool
    {
-      $Output = $this->Output = new File;
-      $Output->pathify(
+      $Output = $this->Output = new File(
          BOOTGLY_WORKING_DIR .
          'workdata/cache/' .
          'views/' .

@@ -207,15 +207,15 @@ class Path // support to FileSystem Paths only (Linux only)
          // Overwrites all directory separators with the standard separator
          if ($this->dir_) {
             $path = match (DIRECTORY_SEPARATOR) {
-                  '/' => str_replace('\\', '/', $path),
-                  '\\' => str_replace('/', '\\', $path),
-                  default => $path
-               };
+               '/' => str_replace('\\', '/', $path),
+               '\\' => str_replace('/', '\\', $path),
+               default => $path
+            };
          }
 
          // Remove '/./', '/../', '//' in path
          if ($this->normalize) {
-            $path = $this->normalize($path);
+            $path = self::normalize($path);
          }
       }
 

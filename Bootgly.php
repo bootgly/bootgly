@@ -112,9 +112,8 @@ class Bootgly
 
       $file = static::$Project . $view . '.template.php';
       // @ Load Raw file/string
-      $File = new File;
+      $File = new File($file);
       $File->convert = false;
-      $File->pathify($file);
 
       if ($File->file) {
          $Template->raw = $File->contents;

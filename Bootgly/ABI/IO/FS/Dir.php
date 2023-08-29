@@ -31,9 +31,9 @@ class Dir implements FS
    public bool $validate = true;
 
    // * Data
+   protected string $path;
    public Path $Path;
-
-   public readonly string|false $dir;
+   protected readonly string|false $dir;
 
    // * Meta
    protected bool $constructed = false;
@@ -41,8 +41,10 @@ class Dir implements FS
    protected bool $writable;
 
 
-   public function __construct ()
+   public function __construct (string $path)
    {
+      // * Data
+      $this->path = $path;
       $this->Path = new Path;
    }
    public function __get (string $name)
@@ -51,25 +53,44 @@ class Dir implements FS
          return $this->$name;
       }
 
+      // Path
+      if ($this->constructed === false) {
+         $this->pathify($this->path);
+      }
+
+      // Only constructed successfully
       $dir = $this->dir ?? false;
 
       if ($dir === false) {
          return false;
       }
-
-      // Only constructed successfully
       switch ($name) {
+         // * Data
+         case 'dir':
+            return $dir;
          // * Meta
-         // @ Access
+         // _ Access
          case 'writable':
             return $this->writable = is_writable($dir);
       }
    }
    public function __call (string $name, array $arguments)
    {
+      // Path
+      if ($this->constructed === false) {
+         $this->pathify($this->path);
+      }
+
+      // Only constructed successfully
+      $dir = $this->dir ?? false;
+
+      if ($dir === false) {
+         return false;
+      }
+
       switch ($name) {
          case 'scan':
-            return self::scan($this->dir, ...$arguments);
+            return self::scan($dir, ...$arguments);
          default:
             return null;
       }
@@ -85,16 +106,20 @@ class Dir implements FS
 
    public function __toString () : string
    {
+      // Path
+      if ($this->constructed === false) {
+         $this->pathify($this->path);
+      }
+
       return $this->dir ?? '';
    }
 
-   public function pathify (string $path) : string
+   private function pathify (string $path) : string
    {
-      if ($this->constructed) {
-         return $this->dir;
-      }
+      $this->constructed = true;
+
       if ($path === '') {
-         return '';
+         return $this->dir = '';
       }
 
       // @
@@ -105,7 +130,7 @@ class Dir implements FS
       $path = $Path->construct($path);
 
       if ($path === '') {
-         return '';
+         return $this->dir = '';
       }
 
       if ($this->convert) {
@@ -125,8 +150,6 @@ class Dir implements FS
             $path = '';
          }
       }
-
-      $this->constructed = true;
 
       return $this->dir = $path;
    }

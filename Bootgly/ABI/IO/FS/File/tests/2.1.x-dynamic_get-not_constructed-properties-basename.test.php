@@ -12,30 +12,24 @@ return [
    // @ test
    'test' => function () {
       // @ Valid
-      $File1 = new File;
-      $File1->pathify(__DIR__ . '/1.1-construct-real_file.test.php');
-
+      $File10 = new File(__DIR__ . '/1.1-construct-real_file.test.php');
       assert(
-         assertion: $File1->basename === '1.1-construct-real_file.test.php',
-         description: 'File #1 basename: ' . $File1->basename
+         assertion: $File10->basename === '1.1-construct-real_file.test.php',
+         description: 'File #1.0 basename: ' . $File10->basename
       );
 
       // @ Neutral
-      $File2 = new File;
-      $File2->pathify('');
-
+      $File20 = new File('');
       assert(
-         assertion: $File2->basename === '',
-         description: 'File #2 basename: ' . $File2->basename
+         assertion: $File20->basename === '',
+         description: 'File #2.0 basename: ' . $File20->basename
       );
 
       // @ Invalid
-      $File3 = new File;
-      $File3->pathify(__DIR__ . '/1.1.3-fake.test.php');
-
+      $File30 = new File(__DIR__ . '/1.1.3-fake.test.php');
       assert(
-         assertion: $File3->basename === '1.1.3-fake.test.php',
-         description: 'File #3 (fake) basename: ' . $File3->basename
+         assertion: $File30->basename === '1.1.3-fake.test.php',
+         description: 'File #3.0 (fake) basename: ' . $File30->basename
       );
 
       return true;

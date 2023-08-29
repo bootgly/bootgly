@@ -93,8 +93,7 @@ class Router
 
       $boot = Bootgly::$Project->path . 'router/';
 
-      $Index = new File;
-      $Index->pathify($boot . 'index.php');
+      $Index = new File($boot . 'index.php');
       (static function (string $__default__)
       use ($Request, $Router, $Route) {
          include_once $__default__;
@@ -102,8 +101,7 @@ class Router
 
       $instances = (array) $instances;
       foreach ($instances as $instance) {
-         $Instance = new File;
-         $Instance->pathify($boot . $instance . '.php');
+         $Instance = new File($boot . $instance . '.php');
          (static function (string $__routes__)
          use ($Request, $Router, $Route) {
             @include_once $__routes__;

@@ -16,5 +16,5 @@ use Bootgly\ABI\IO;
 
 interface FS extends IO // File System
 {
-   public function pathify (string $path);
+   public function __construct (string $path);
 }
