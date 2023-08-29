@@ -36,6 +36,7 @@ class Dir implements FS
 
    // * Meta
    // _ Access
+   protected int|false $permissions; // 0644
    protected bool $writable;
 
 
@@ -46,42 +47,79 @@ class Dir implements FS
    }
    public function __get (string $name)
    {
+      if ($name === 'dir') {
+         return $this->dir ?? false;
+      }
       if ( isSet($this->$name) ) {
          return $this->$name;
       }
 
-      // Path
-      if ( ! isSet($this->dir) ) {
+      // @ Construct $this->dir
+      if (isSet($this->dir) === false) {
          $this->pathify();
       }
 
-      // Only constructed successfully
+      // Only if $this->dir was successfully constructed
       $dir = $this->dir ?? false;
-
-      if ( ! $dir ) {
+      if ($dir === '' || $dir === false) {
          return false;
       }
+
       switch ($name) {
          // * Data
-         case 'dir':
-            return $dir;
+         // ...
          // * Meta
          // _ Access
+         case 'permissions':
+            $permissions = fileperms($dir);
+
+            $permissions = substr(sprintf('%o', $permissions), -4);
+
+            // @ Convert to octal and return
+            return $this->permissions = intval($permissions, 8);
          case 'writable':
             return $this->writable = is_writable($dir);
+      }
+   }
+   public function __set (string $name, $value)
+   {
+      // @ Construct $this->dir
+      if (isSet($this->dir) === false) {
+         $this->pathify();
+      }
+
+      // Only if $this->dir was successfully constructed
+      $dir = $this->dir ?? false;
+      if ($dir === '' || $dir === false) {
+         return false;
+      }
+
+      switch ($name) {
+         // * Data
+         // ...
+         // * Meta
+         // _ Access
+         case 'permissions':
+            $changed = chmod($dir, $value);
+
+            if ($changed) {
+               $this->permissions = $value;
+            }
+
+            break;
       }
    }
    public function __call (string $name, array $arguments)
    {
       // Path
-      if ( ! isSet($this->dir) ) {
+      if (isSet($this->dir) === false) {
          $this->pathify();
       }
 
-      // Only constructed successfully
+      // Only if $this->dir was successfully constructed
       $dir = $this->dir ?? false;
 
-      if ( ! $dir ) {
+      if ($dir === '' || $dir === false) {
          return false;
       }
 
@@ -104,7 +142,7 @@ class Dir implements FS
    public function __toString () : string
    {
       // Path
-      if ( ! isSet($this->dir) ) {
+      if (isSet($this->dir) === false) {
          $this->pathify();
       }
 
