@@ -57,8 +57,6 @@ class File implements FS
    public Path $Path;
    protected readonly string|false $file;
 
-   protected string|false $contents;
-
    // * Meta
    private $handler;
 
@@ -79,6 +77,7 @@ class File implements FS
    protected int|false $owner;       // 0
    protected int|false $group;       // 0
    // _ Content
+   protected string|false $contents;
    # < foo.jpg
    protected object|false $MIME;     // > object (real MIME based content)
    protected string|false $format;   // > 'image'
@@ -156,7 +155,7 @@ class File implements FS
          case 'file':
             return $file;
          case 'contents':
-            return file_get_contents($file, false);
+            return $this->contents = file_get_contents($file, false);
 
          // * Meta
          case 'exists':
