@@ -54,15 +54,12 @@ class File implements FS
    protected $method;                // Read method: fread, require, file_get_contents
 
    // * Data
-   protected string $path;
    public Path $Path;
    protected readonly string|false $file;
 
    protected string|false $contents;
 
    // * Meta
-   protected bool $constructed = false;
-
    private $handler;
 
    protected bool $exists;           // bool true|false
@@ -102,8 +99,7 @@ class File implements FS
    public function __construct (string $path)
    {
       // * Data
-      $this->path = $path;
-      $this->Path = new Path;
+      $this->Path = new Path($path);
    }
    public function __get (string $name)
    {
@@ -112,11 +108,11 @@ class File implements FS
       }
 
       // Path
-      if ($this->constructed === false) {
-         $this->pathify($this->path);
+      if ( ! isSet($this->file) ) {
+         $this->pathify();
       }
 
-      // Not constructed || constructed
+      // ...
       # < /path/to/foo.php
       switch ($name) {
          case 'basename':  # > foo.php
@@ -151,7 +147,7 @@ class File implements FS
       // Only constructed successfully
       $file = $this->file ?? false;
 
-      if ($file === false) {
+      if ( ! $file ) {
          return false;
       }
 
@@ -232,14 +228,14 @@ class File implements FS
    public function __set (string $name, $value)
    {
       // Path
-      if ($this->constructed === false) {
-         $this->pathify($this->path);
+      if ( ! isSet($this->file) ) {
+         $this->pathify();
       }
 
       // Only constructed successfully
       $file = $this->file ?? false;
 
-      if ($file === false) {
+      if ( ! $file ) {
          return false;
       }
 
@@ -267,31 +263,23 @@ class File implements FS
    public function __toString () : string
    {
       // Path
-      if ($this->constructed === false) {
-         $this->pathify($this->path);
+      if ( ! isSet($this->file) ) {
+         $this->pathify();
       }
 
       return $this->file ?? '';
    }
 
-   private function pathify (string $path) : string|false
+   private function pathify () : string|false
    {
-      if ($this->constructed) {
-         return $this->file;
-      }
-      if ($path === '') {
-         return '';
-      }
-
-      // @
-      $this->constructed = true;
-      // | Path
-      $path = $this->Path->construct($path);
+      // ?
+      $path = $this->Path->path;
 
       if ($path === '') {
          return $this->file = '';
       }
 
+      // @
       if ($this->check && is_file($path) === true) { // Only check if the path exists as file
          return $this->file = $path;
       }

@@ -31,12 +31,10 @@ class Dir implements FS
    public bool $validate = true;
 
    // * Data
-   protected string $path;
    public Path $Path;
    protected readonly string|false $dir;
 
    // * Meta
-   protected bool $constructed = false;
    // _ Access
    protected bool $writable;
 
@@ -44,8 +42,7 @@ class Dir implements FS
    public function __construct (string $path)
    {
       // * Data
-      $this->path = $path;
-      $this->Path = new Path;
+      $this->Path = new Path($path);
    }
    public function __get (string $name)
    {
@@ -54,14 +51,14 @@ class Dir implements FS
       }
 
       // Path
-      if ($this->constructed === false) {
-         $this->pathify($this->path);
+      if ( ! isSet($this->dir) ) {
+         $this->pathify();
       }
 
       // Only constructed successfully
       $dir = $this->dir ?? false;
 
-      if ($dir === false) {
+      if ( ! $dir ) {
          return false;
       }
       switch ($name) {
@@ -77,14 +74,14 @@ class Dir implements FS
    public function __call (string $name, array $arguments)
    {
       // Path
-      if ($this->constructed === false) {
-         $this->pathify($this->path);
+      if ( ! isSet($this->dir) ) {
+         $this->pathify();
       }
 
       // Only constructed successfully
       $dir = $this->dir ?? false;
 
-      if ($dir === false) {
+      if ( ! $dir ) {
          return false;
       }
 
@@ -107,32 +104,28 @@ class Dir implements FS
    public function __toString () : string
    {
       // Path
-      if ($this->constructed === false) {
-         $this->pathify($this->path);
+      if ( ! isSet($this->dir) ) {
+         $this->pathify();
       }
 
       return $this->dir ?? '';
    }
 
-   private function pathify (string $path) : string
+   private function pathify () : string
    {
-      $this->constructed = true;
+      // ?
+      $Path = $this->Path;
+
+      $path = $Path->path;
 
       if ($path === '') {
          return $this->dir = '';
       }
 
-      // @
-      // | Path
-      $Path = $this->Path;
+      // * Config
       $Path->real = true;
 
-      $path = $Path->construct($path);
-
-      if ($path === '') {
-         return $this->dir = '';
-      }
-
+      // @
       if ($this->convert) {
          if (is_file($path) === true) {
             $path = dirname($path, 1) . DIRECTORY_SEPARATOR;
@@ -142,7 +135,7 @@ class Dir implements FS
       }
 
       if ($this->validate) {
-         if ($this->real && is_dir($path) === false) {
+         if (is_dir($path) === false) {
             $path = '';
          }
 

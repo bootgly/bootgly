@@ -261,7 +261,7 @@ class Path // support to FileSystem Paths only (Linux only)
       // /etc/php/8.0 or /etc/php/8.1 or /etc/php/8.2...
    }
 
-   public static function normalize ($path) : string
+   private static function normalize ($path) : string
    {
       // $path = '../../etc/passwd';
       $parts = explode(DIRECTORY_SEPARATOR, $path); // TODO use self::split?
@@ -285,7 +285,7 @@ class Path // support to FileSystem Paths only (Linux only)
       return $normalized;
       // return 'etc/passwd';
    }
-   public static function split (string $path) : array
+   private static function split (string $path) : array
    {
       // $path = '/var/www/sys/';
       $parts = [];
@@ -301,7 +301,7 @@ class Path // support to FileSystem Paths only (Linux only)
       return $parts;
       // return [0 => 'var', 1 => 'www', 2 => 'sys'];
    }
-   public static function cut (string $path, int ...$cutting) : string
+   private static function cut (string $path, int ...$cutting) : string
    {
       // $path = var/www/html/test/;
       // $cutting = [-2, 1];
@@ -346,7 +346,7 @@ class Path // support to FileSystem Paths only (Linux only)
       return $path;
       // return 'html/';
    }
-   public static function relativize (string $path, string $from) : string
+   private static function relativize (string $path, string $from) : string
    {
       // $path = '/foo/bar/tests/test2.php'
       // $from = '/foo/bar/'
