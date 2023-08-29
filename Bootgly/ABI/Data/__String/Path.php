@@ -62,6 +62,8 @@ class Path // support to FileSystem Paths only (Linux only)
          case 'path':
             return $this->path ?? '';
          // * Meta
+         case 'constructed':
+            return $this->constructed;
          // _ Type
          case 'type':
             if ($this->real === false) {

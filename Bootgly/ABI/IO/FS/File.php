@@ -23,21 +23,31 @@ class File implements FS
 {
    // ! Open mode
    // ? Read
-   const READ_MODE = 'r';
-   const READ_NEW_MODE = 'r+';
+   /**
+    * Open to Read (r).
+    * Place the file pointer at the beginning of the file (^).
+    * If the file does not exist, return false (.).
+    */
+   public const READ_MODE = 'r';
+   /**
+    * Open to Read (r).
+    * Place the file pointer at the beginning of the file (^).
+    * If the file does not exist, attempt to create it (+).
+    */
+   public const READ_NEW_MODE = 'r+';
    // ? Write
-   const WRITE_MODE = 'w';
-   const WRITE_NEW_MODE = 'w+';
-   const WRITE_APPEND_MODE = 'a';
+   public const WRITE_MODE = 'w';
+   public const WRITE_NEW_MODE = 'w+';
+   public const WRITE_APPEND_MODE = 'a';
    // ? Read / Write
-   const READ_WRITE_MODE = 'rw';
-   const READ_WRITE_NEW_MODE = 'rw+';
-   const READ_APPEND_MODE = 'ra';
+   public const READ_WRITE_MODE = 'rw';
+   public const READ_WRITE_NEW_MODE = 'rw+';
+   public const READ_APPEND_MODE = 'ra';
    // @ read
-   const DEFAULT_READ_METHOD = 'fread';
-   const REQUIRE_READ_METHOD = 'require';
-   const CONTENTS_READ_METHOD = 'file_get_contents';
-   const READFILE_READ_METHOD = 'readfile';
+   public const DEFAULT_READ_METHOD = 'fread';
+   public const REQUIRE_READ_METHOD = 'require';
+   public const CONTENTS_READ_METHOD = 'file_get_contents';
+   public const READFILE_READ_METHOD = 'readfile';
 
 
    // * Config
@@ -55,6 +65,7 @@ class File implements FS
 
    // * Data
    public Path $Path;
+   public Dir $Dir;
    protected readonly string|false $file;
 
    // * Meta
@@ -102,58 +113,58 @@ class File implements FS
    }
    public function __get (string $name)
    {
+      if ($name === 'file') {
+         return $this->file ?? false;
+      }
       if ( isSet($this->$name) ) {
          return $this->$name;
       }
+      if ($this->Path->constructed) {
+         # < /path/to/foo.php
+         switch ($name) {
+            case 'basename':  # > foo.php
+               $current = $this->Path->current;
 
-      // Path
-      if ( ! isSet($this->file) ) {
+               return $this->basename = $current;
+            case 'name':      # > foo
+               $basename = $this->basename ?? $this->__get('basename');
+               $name = substr(
+                  string: $basename,
+                  offset: 0,
+                  length: strrpos($basename, '.')
+               );
+
+               return $this->name = $name;
+            case 'extension': # > php
+               $basename = $this->basename ?? $this->__get('basename');
+               $extension = '';
+
+               $dot = strrchr($basename, '.');
+               if ($dot !== false) {
+                  $extension = substr($dot, 1);
+               }
+
+               return $this->extension = $extension;
+            case 'parent':    # > /path/to/
+               $parent = $this->Path->parent;
+
+               return $this->parent = $parent;
+         }
+      }
+
+      // @ Construct $this->file
+      if (isSet($this->file) === false) {
          $this->pathify();
       }
 
-      // ...
-      # < /path/to/foo.php
-      switch ($name) {
-         case 'basename':  # > foo.php
-            $current = $this->Path->current;
-
-            return $this->basename = $current;
-         case 'name':      # > foo
-            $basename = $this->basename ?? $this->__get('basename');
-            $name = substr(
-               string: $basename,
-               offset: 0,
-               length: strrpos($basename, '.')
-            );
-
-            return $this->name = $name;
-         case 'extension': # > php
-            $basename = $this->basename ?? $this->__get('basename');
-            $extension = '';
-
-            $dot = strrchr($basename, '.');
-            if ($dot !== false) {
-               $extension = substr($dot, 1);
-            }
-
-            return $this->extension = $extension;
-         case 'parent':    # > /path/to/
-            $parent = $this->Path->parent;
-
-            return $this->parent = $parent;
-      }
-
-      // Only constructed successfully
+      // Only if $this->file was successfully constructed
       $file = $this->file ?? false;
-
-      if ( ! $file ) {
+      if ($file === '' || $file === false) {
          return false;
       }
 
       switch ($name) {
          // * Data
-         case 'file':
-            return $file;
          case 'contents':
             return $this->contents = file_get_contents($file, false);
 
@@ -226,15 +237,13 @@ class File implements FS
    }
    public function __set (string $name, $value)
    {
-      // Path
-      if ( ! isSet($this->file) ) {
+      if (isSet($this->file) === false) {
          $this->pathify();
       }
 
-      // Only constructed successfully
+      // Only if $this->file was successfully constructed
       $file = $this->file ?? false;
-
-      if ( ! $file ) {
+      if ($file === '' || $file === false) {
          return false;
       }
 
@@ -262,7 +271,7 @@ class File implements FS
    public function __toString () : string
    {
       // Path
-      if ( ! isSet($this->file) ) {
+      if (isSet($this->file) === false) {
          $this->pathify();
       }
 
@@ -305,11 +314,16 @@ class File implements FS
       return $this->file = false;
    }
 
-   public function open (string $mode)
+   public function open (string $mode = self::READ_MODE)
    {
       $Path = $this->Path;
+      $path = $Path->path;
+      $file = $this->file ?? false;
 
-      if ($this->handler === null && $Path->path !== null) {
+      // @
+      $handler = false;
+
+      if ($this->handler === null && $path) {
          $this->status = 'accessed';
 
          $this->mode = $mode;
@@ -318,83 +332,92 @@ class File implements FS
             // Read
             case 'r':
                // Open to Read (r)
-               // Place the file pointer at the beginning of the file. (?)
+               // Place the file pointer at the beginning of the file. (^)
                // If the file does not exist, return false.
 
-               $this->handler = @fopen($Path, 'r');
+               $handler = @fopen($path, 'r');
 
                break;
             case 'r+':
                // Open to Read (r)
-               // Place the file pointer at the beginning of the file. (?)
+               // Place the file pointer at the beginning of the file. (^)
                // If the file does not exist, attempt to create it. (+)
 
-               if ($this->file === '') {
-                  // Create directory base if not exists
-                  if (is_dir($Path->parent) === false) {
-                     mkdir($Path->parent, 0775);
+               if ( ! $file ) {
+                  $dirbase = $Path->parent;
+
+                  // @ Create directory base if not exists
+                  if (is_dir($dirbase) === false) {
+                     if (mkdir($dirbase, 0775) === true) {
+                        $this->Dir = new Dir($dirbase);
+                     }
                   }
-                  // Create empty file if file not exists
-                  file_put_contents($Path, '');
+
+                  // @ Create empty file if file not exists
+                  file_put_contents($path, '');
                }
 
-               $this->handler = fopen($Path, 'r+');
+               $handler = fopen($path, 'r+');
+
+               if ($handler !== false) {
+                  $this->file = $path;
+               }
 
                break;
             // Write
             case 'w':
                // Open to Write
-               // Place the file pointer at the end of the file. (?)
-               // If the file does not exist, return false.
+               // Place the file pointer at the end of the file. (^)
+               // If the file does not exist, return false. (.)
 
-               if ($this->file === '') {
-                  $this->handler = false;
+               if ( ! $file ) {
+                  $handler = false;
                } else {
-                  $this->handler = fopen($Path, 'w');
+                  $handler = fopen($path, 'w');
                }
 
                break;
             case 'w+':
                // Open to Write (w)
-               // Place the file pointer at the end of the file. (?)
+               // Place the file pointer at the end of the file. (^)
                // If the file does not exist, attempt to create it. (+)
 
-               if ($this->file === '' && is_dir($Path->parent) === false) {
-                  // Create dir if not exists
+               if ( ! $file && is_dir($Path->parent) === false) {
+                  // @ Create dir if not exists
                   mkdir($Path->parent, 0775);
                }
 
-               $this->handler = fopen($Path, 'w+');
+               $handler = fopen($path, 'w+');
 
                break;
             case 'rw+':
                // Open to Read (r) and Write (w)
-               // Place the file pointer at the beginning of the file in read and at the end in write. (?)
+               // Place the file pointer at the beginning of the file in read and at the end in write. (^$!)
                // If the file does not exist, attempt to create it. (+)
 
-               if ($this->file === '') {
-                  // Create directory base if not exists
+               if ( ! $file ) {
+                  // @ Create directory base if not exists
                   if (is_dir($Path->parent) === false) {
                      mkdir($Path->parent, 0775);
                   }
-                  // Create empty file if file not exists
-                  file_put_contents($Path, '');
+                  // @ Create empty file if file not exists
+                  file_put_contents($path, '');
                }
 
-               $this->handler = true;
+               $handler = true;
 
                break;
-            default:
-               $this->handler = true;
          }
       }
 
-      return $this->handler;
+      $this->handler = $handler;
+
+      return $handler;
    }
 
-   public function read ($method = self::READFILE_READ_METHOD, int $offset = 0, ? int $length = null): string|int|false
+   public function read ($method = self::READFILE_READ_METHOD, int $offset = 0, ? int $length = null) : string|int|false
    {
-      if ($this->file === '') {
+      if ( ! $this->file ) {
          return false;
       }
 

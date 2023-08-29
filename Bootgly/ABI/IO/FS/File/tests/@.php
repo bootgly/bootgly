@@ -42,5 +42,7 @@ return [
       '2.2.e-dynamic_get-constructed-properties-link',
 
       '3.1.x-dynamic_set-constructed-properties-contents',
+
+      '4.0.1-dynamic_call-open_file-only_read',
    ]
 ];
