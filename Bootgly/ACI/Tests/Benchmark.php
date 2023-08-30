@@ -49,9 +49,7 @@ class Benchmark
          $initial = self::$initial[$tag]['time'];
          $final = self::$final[$tag]['time'];
 
-         $result = round($final - $initial, 5);
-
-         self::$results[$tag]['time'] = number_format($result, 6);
+         self::$results[$tag]['time'] = self::format($final, $initial);
       }
 
       if (self::$memory) {
@@ -69,6 +67,14 @@ class Benchmark
       return Benchmark::class;
    }
 
+   public static function format (float $initial, float $final)
+   {
+      $result = round($final - $initial, 5);
+
+      $elapsed = number_format($result, 6);
+
+      return $elapsed;
+   }
    public static function show (? string $tag = null)
    {
       if (!$tag && self::$tag) {

@@ -16,6 +16,7 @@ use Closure;
 use Bootgly\ABI\Data\__String\Path;
 
 use Bootgly\ACI\Tests;
+use Bootgly\ACI\Tests\Suites;
 use Bootgly\ACI\Tests\Tester;
 
 use Bootgly\CLI;
@@ -106,15 +107,24 @@ class TestCommand extends Command
          $suites = array_merge($suites, $bootstrap1['suites'] ?? []);
       }
 
+      // @
+      $Suites = new Suites;
+      $Suites->total = count($suites);
+
       foreach ($suites as $index => $dir) {
          Tester::$instances++;
 
          if ($indexToTest > 0 && ($index + 1) !== $indexToTest) {
+            $Suites->skipped++;
             continue;
          }
 
          $this->test($dir);
+
+         $Suites->passed++;
       }
+
+      $Suites->summarize();
 
       return true;
    }

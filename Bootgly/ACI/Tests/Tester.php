@@ -191,4 +191,33 @@ class Tester extends Tests
          $info . PHP_EOL
       );
    }
+
+   public function summarize ()
+   {
+      // @ Result
+      $failed = '@:error:' . $this->failed . ' failed @;';
+      $skipped = '@:notice:' . $this->skipped . ' skipped @;';
+      $passed = '@:success:' . $this->passed . ' passed @;';
+      // @ Stats
+      $total = $this->total . ' total';
+      // @ Time
+      $started = $this->started;
+      $finished = $this->finished = microtime(true);
+      // duration
+      $duration = Benchmark::format($started, $finished);
+      $duration = "@#Magenta:" . $duration . "s @;";
+
+      $ran = '@#Black:' . 'Ran all tests. @;';
+
+      // TODO temp
+      $this->log(<<<TESTS
+
+      -------------------------------------------------
+      Tests: {$failed}, {$skipped}, {$passed}, {$total}
+      Duration: {$duration}
+      {$ran}
+      -------------------------------------------------
+      \n
+      TESTS);
+   }
 }

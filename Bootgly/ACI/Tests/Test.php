@@ -167,7 +167,7 @@ class Test // extends Assertions
    {
       $this->finished ??= microtime(true);
 
-      $this->elapsed ??= number_format(round($this->finished - $this->started, 5), 6);
+      $this->elapsed ??= Benchmark::format($this->started, $this->finished);
    }
    public function fail (? string $message = null)
    {
