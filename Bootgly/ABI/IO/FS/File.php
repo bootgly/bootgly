@@ -21,29 +21,72 @@ use Bootgly\ABI\IO\FS\File\MIME;
 #[AllowDynamicProperties]
 class File implements FS
 {
-   // ! Open mode
-   // ? Read
+   // @ open modes
+   // (r)ead
    /**
-    * Open to Read (r).
-    * Place the file pointer at the beginning of the file (^).
-    * If the file does not exist, return false (.).
+    * Open for reading only.
+    * 
+    * Place the file pointer at the beginning of the file.
+    * 
+    * If the file does not exist, return false.
     */
-   public const READ_MODE = 'r';
+   public const READ_ONLY_MODE = 'r';
    /**
-    * Open to Read (r).
-    * Place the file pointer at the beginning of the file (^).
-    * If the file does not exist, attempt to create it (+).
+    * Open for reading and writing.
+    * 
+    * Place the file pointer at the beginning of the file.
+    * 
+    * If the file does not exist, return false.
     */
-   public const READ_NEW_MODE = 'r+';
-   // ? Write
-   public const WRITE_MODE = 'w';
-   public const WRITE_NEW_MODE = 'w+';
-   public const WRITE_APPEND_MODE = 'a';
-   // ? Read / Write
-   public const READ_WRITE_MODE = 'rw';
-   public const READ_WRITE_NEW_MODE = 'rw+';
-   public const READ_APPEND_MODE = 'ra';
-   // @ read
+   public const READ_WRITE_MODE = 'r+';
+
+   // @ (w)rite
+   /**
+    * Open for writing only.
+    * ⚠️ Truncate the file to zero length.
+    * 
+    * Place the file pointer at the beginning of the file.
+    * 
+    * If the file does not exist and basedir exists, create the file.
+    */
+   public const WRITE_ONLY_MODE = 'w';
+   /**
+    * Open for writing and reading.
+    * ⚠️ Truncate the file to zero length.
+    * 
+    * Place the file pointer at the beginning of the file.
+    * 
+    * If the file does not exist and basedir exists, create the file.
+    */
+   public const WRITE_READ_MODE = 'w+';
+
+   // @ (a)ppend
+   /**
+    * Open for writing only.
+    * 
+    * Place the file pointer at the end of the file.
+    * 
+    * If the file does not exist and basedir exists, create the file.
+    */
+   public const APPEND_WRITE_ONLY_MODE = 'a';
+   /**
+    * Open for reading and writing.
+    * 
+    * Place the file pointer at the end of the file.
+    * 
+    * If the file does not exist and basedir exists, create the file.
+    */
+   public const APPEND_WRITE_READ_MODE = 'a+';
+
+   // e(x)clusive
+   public const EXCLUSIVE_WRITE_ONLY_MODE = 'x';
+   public const EXCLUSIVE_WRITE_READ_MODE = 'x+';
+
+   // (c)ontiguous
+   public const CONTIGUOUS_WRITE_MODE = 'c';
+   public const CONTIGUOUS_READ_MODE = 'c+';
+
+   // @ read methods
    public const DEFAULT_READ_METHOD = 'fread';
    public const REQUIRE_READ_METHOD = 'require';
    public const CONTENTS_READ_METHOD = 'file_get_contents';
@@ -65,7 +108,7 @@ class File implements FS
 
    // * Data
    public Path $Path;
-   public Dir $Dir;
+   public Dir $Basedir;
    protected readonly string|false $file;
 
    // * Meta
@@ -101,7 +144,6 @@ class File implements FS
    protected int|false $inode;       // 
    protected string|false $link;     // 
    // _ Event
-   protected string|false $status;   // accessed, created, modified
    // @ write
    protected ? bool $written = null;
 
@@ -110,6 +152,7 @@ class File implements FS
    {
       // * Data
       $this->Path = new Path($path);
+      $this->Basedir = new Dir($this->Path->parent);
    }
    public function __get (string $name)
    {
@@ -165,6 +208,8 @@ class File implements FS
 
       switch ($name) {
          // * Data
+         case 'handler':
+            return $this->handler;
          case 'contents':
             return $this->contents = file_get_contents($file, false);
 
@@ -314,99 +359,21 @@ class File implements FS
       return $this->file = false;
    }
 
-   public function open (string $mode = self::READ_MODE)
+   public function open (string $mode = self::READ_ONLY_MODE)
    {
       $Path = $this->Path;
       $path = $Path->path;
-      $file = $this->file ?? false;
 
       // @
       $handler = false;
 
       if ($this->handler === null && $path) {
-         $this->status = 'accessed';
-
          $this->mode = $mode;
 
-         switch ($mode) {
-            // Read
-            case 'r':
-               // Open to Read (r)
-               // Place the file pointer at the beginning of the file. (^)
-               // If the file does not exist, return false.
-
-               $handler = @fopen($path, 'r');
-
-               break;
-            case 'r+':
-               // Open to Read (r)
-               // Place the file pointer at the beginning of the file. (^)
-               // If the file does not exist, attempt to create it. (+)
-
-               if ( ! $file ) {
-                  $dirbase = $Path->parent;
-
-                  // @ Create directory base if not exists
-                  if (is_dir($dirbase) === false) {
-                     if (mkdir($dirbase, 0775) === true) {
-                        $this->Dir = new Dir($dirbase);
-                     }
-                  }
-
-                  // @ Create empty file if file not exists
-                  file_put_contents($path, '');
-               }
-
-               $handler = fopen($path, 'r+');
-
-               if ($handler !== false) {
-                  $this->file = $path;
-               }
-
-               break;
-            // Write
-            case 'w':
-               // Open to Write
-               // Place the file pointer at the end of the file. (^)
-               // If the file does not exist, return false. (.)
-
-               if ( ! $file ) {
-                  $handler = false;
-               } else {
-                  $handler = fopen($path, 'w');
-               }
-
-               break;
-            case 'w+':
-               // Open to Write (w)
-               // Place the file pointer at the end of the file. (^)
-               // If the file does not exist, attempt to create it. (+)
-
-               if ( ! $file && is_dir($Path->parent) === false) {
-                  // @ Create dir if not exists
-                  mkdir($Path->parent, 0775);
-               }
-
-               $handler = fopen($path, 'w+');
-
-               break;
-            case 'rw+':
-               // Open to Read (r) and Write (w)
-               // Place the file pointer at the beginning of the file in read and at the end in write. (^$!)
-               // If the file does not exist, attempt to create it. (+)
-
-               if ( ! $file ) {
-                  // @ Create directory base if not exists
-                  if (is_dir($Path->parent) === false) {
-                     mkdir($Path->parent, 0775);
-                  }
-                  // @ Create empty file if file not exists
-                  file_put_contents($path, '');
-               }
-
-               $handler = true;
-
-               break;
+         try {
+            $handler = @fopen($path, $mode);
+         } catch (\Throwable) {
+            $handler = false;
          }
       }
 
