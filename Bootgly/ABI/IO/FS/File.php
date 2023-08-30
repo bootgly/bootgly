@@ -47,7 +47,7 @@ class File implements FS
     * 
     * Place the file pointer at the beginning of the file.
     * 
-    * If the file does not exist and basedir exists, create the file.
+    * If the file does not exist and basedir exists, attempt to create the file.
     */
    public const WRITE_ONLY_MODE = 'w';
    /**
@@ -56,7 +56,7 @@ class File implements FS
     * 
     * Place the file pointer at the beginning of the file.
     * 
-    * If the file does not exist and basedir exists, create the file.
+    * If the file does not exist and basedir exists, attempt to create the file.
     */
    public const WRITE_READ_MODE = 'w+';
 
@@ -66,7 +66,7 @@ class File implements FS
     * 
     * Place the file pointer at the end of the file.
     * 
-    * If the file does not exist and basedir exists, create the file.
+    * If the file does not exist and basedir exists, attempt to create the file.
     */
    public const APPEND_WRITE_ONLY_MODE = 'a';
    /**
@@ -74,12 +74,28 @@ class File implements FS
     * 
     * Place the file pointer at the end of the file.
     * 
-    * If the file does not exist and basedir exists, create the file.
+    * If the file does not exist and basedir exists, attempt to create the file.
     */
    public const APPEND_WRITE_READ_MODE = 'a+';
 
-   // e(x)clusive
+   // @ e(x)clusive
+   /**
+    * Open for writing only.
+    * 
+    * Place the file pointer at the beginning of the file.
+    * 
+    * If the file exists, the opening will fail. 
+    * If the file does not exist and basedir exists, attempt to create the file.
+    */
    public const EXCLUSIVE_WRITE_ONLY_MODE = 'x';
+   /**
+    * Open for reading and writing.
+    * 
+    * Place the file pointer at the beginning of the file.
+    * 
+    * If the file exists, the opening will fail. 
+    * If the file does not exist and basedir exists, attempt to create the file.
+    */
    public const EXCLUSIVE_WRITE_READ_MODE = 'x+';
 
    // (c)ontiguous
@@ -377,7 +393,10 @@ class File implements FS
          }
       }
 
-      $this->handler = $handler;
+      // Only set this->handler if no error
+      if ($handler !== false) {
+         $this->handler = $handler;
+      }
 
       return $handler;
    }
@@ -448,17 +467,42 @@ class File implements FS
       return false;
    }
 
-   public function close ()
+   public function close () : bool
    {
-      if (is_resource($this->handler)) {
-         fclose($this->handler);
+      // @
+      try {
+         @fclose($this->handler);
+      } catch (\Throwable) {
+         return false;
       }
 
       $this->handler = null;
+
+      return true;
+   }
+   public function delete () : bool
+   {
+      $this->handler !== null && $this->close();
+
+      // * Data
+      $filename = $this->file ?? $this->Path->path;
+
+      if ( ! $filename ) {
+         return false;
+      }
+
+      // @
+      try {
+         unlink($filename);
+      } catch (\Throwable) {
+         return false;
+      }
+
+      return true;
    }
 
    public function __destruct ()
    {
-      $this->close();
+      $this->handler !== null && $this->close();
    }
 }

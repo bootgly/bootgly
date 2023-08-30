@@ -46,5 +46,6 @@ return [
       '4.0.1-dynamic_call-open_file-read_modes',
       '4.0.2-dynamic_call-open_file-write_modes',
       '4.0.3-dynamic_call-open_file-append_modes',
+      '4.0.4-dynamic_call-open_file-exclusive_modes',
    ]
 ];
