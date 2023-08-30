@@ -98,9 +98,25 @@ class File implements FS
     */
    public const EXCLUSIVE_WRITE_READ_MODE = 'x+';
 
-   // (c)ontiguous
-   public const CONTIGUOUS_WRITE_MODE = 'c';
-   public const CONTIGUOUS_READ_MODE = 'c+';
+   // @ (c)ontinuous
+   /**
+    * Open for writing only.
+    * 
+    * Place the file pointer at the beginning of the file.
+    * 
+    * If the file does not exist and basedir exists, attempt to create the file.
+    * If it exists, it is neither truncated (as opposed to 'w'), nor the call to this function fails (as is the case with 'x').
+    */
+   public const CONTINUOUS_WRITE_ONLY_MODE = 'c';
+   /**
+    * Open for reading and writing.
+    * 
+    * Place the file pointer at the beginning of the file.
+    * 
+    * If the file does not exist and basedir exists, attempt to create the file.
+    * If it exists, it is neither truncated (as opposed to 'w'), nor the call to this function fails (as is the case with 'x').
+    */
+   public const CONTINUOUS_WRITE_READ_MODE = 'c+';
 
    // @ read methods
    public const DEFAULT_READ_METHOD = 'fread';
@@ -377,17 +393,16 @@ class File implements FS
 
    public function open (string $mode = self::READ_ONLY_MODE)
    {
-      $Path = $this->Path;
-      $path = $Path->path;
+      $filename = $this->file ?? $this->Path->path;
 
       // @
       $handler = false;
 
-      if ($this->handler === null && $path) {
+      if ($this->handler === null && $filename) {
          $this->mode = $mode;
 
          try {
-            $handler = @fopen($path, $mode);
+            $handler = @fopen($filename, $mode);
          } catch (\Throwable) {
             $handler = false;
          }
