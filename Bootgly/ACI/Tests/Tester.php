@@ -67,7 +67,7 @@ class Tester extends Tests
             $width = $length;
          }
       }
-      $this->width = $width;
+      $this->width = $width + 1;
 
 
       $this->log('@\;');

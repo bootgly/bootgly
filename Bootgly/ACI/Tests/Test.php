@@ -37,6 +37,7 @@ class Test // extends Assertions
    // @ Time
    public float $started;
    public float $finished;
+   public string $elapsed;
 
 
    public function __construct (Tests $Tests, array $specifications)
@@ -89,9 +90,9 @@ class Test // extends Assertions
          return;
       }
 
-      $description = "       ⮡ " . $description . '@\;';
+      $description = "       ↪️ " . $description . '@\;';
 
-      # ⮡ ↳➡️
+      # ⮡ ↳➡️↪↪️
       $this->log($description);
    }
    public function separate ()
@@ -143,7 +144,7 @@ class Test // extends Assertions
          $this->assertions[] = $result ?? true;
 
          if ($this->Tests->autoResult) {
-            $this->finished = microtime(true);
+            $this->end();
             $this->pass();
          }
       } catch (AssertionError $AssertionError) {
@@ -152,31 +153,42 @@ class Test // extends Assertions
          $message = $AssertionError->getMessage();
 
          if ($this->Tests->autoResult) {
-            $this->finished = microtime(true);
+            $this->end();
             $this->fail($message);
          }
       }
 
       #$this->debugged ??= ob_get_clean();
 
-      $this->finished ??= microtime(true);
+      $this->end();
    }
 
+   private function end ()
+   {
+      $this->finished ??= microtime(true);
+
+      $this->elapsed ??= number_format(round($this->finished - $this->started, 5), 6);
+   }
    public function fail (? string $message = null)
    {
       $this->Tests->failed++;
 
+      $test = str_pad($this->test . ':', $this->Tests->width, ' ', STR_PAD_RIGHT);
+      $elapsed = $this->elapsed;
+      $help = $message ?? $this->specifications['except']();
+
+      // @ output
       $this->log(
          "\033[0;30;41m FAIL \033[0m "
-         . $this->test
-         . " -> \"\033[91m" . ($message ?? $this->specifications['except']()) . "\033[0m\"" . ':'
+         . $test
+         . "\033[1;35m +" . $elapsed . "s\033[0m" . PHP_EOL
+         . "       ↪️ \"\033[91m" . $help . "\033[0m\""
          . PHP_EOL
       );
-
       $this->describe($this->specifications['describe'] ?? null);
-
       $this->log($this->debugged);
 
+      // @ exit
       if (Tests::$exitOnFailure) {
          $this->Tests->summarize();
          exit(1);
@@ -186,16 +198,15 @@ class Test // extends Assertions
    {
       $this->Tests->passed++;
 
-      $time = number_format(round($this->finished - $this->started, 5), 6);
-
       $test = str_pad($this->test, $this->Tests->width, '.', STR_PAD_RIGHT);
+      $elapsed = $this->elapsed;
 
+      // @ output
       $this->log(
          "\033[0;30;42m PASS \033[0m " .
          "\033[90m" . $test . "\033[0m" .
-         "\033[1;35m +" . $time . "s\033[0m" . PHP_EOL
+         "\033[1;35m +" . $elapsed . "s\033[0m" . PHP_EOL
       );
-
       $this->describe($this->specifications['describe'] ?? null);
    }
 }
