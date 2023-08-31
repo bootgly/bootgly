@@ -407,13 +407,13 @@ class File implements FS
          }
       }
 
-      // Only set this->handler if no error
+      // Only set this->handler / pathify() if no error
       if ($handler !== false) {
          $this->handler = $handler;
-      }
-      // @ Pathify the (new?) file
-      if (isSet($this->file) === false) {
-         $this->pathify();
+
+         if (isSet($this->file) === false) {
+            $this->pathify();
+         }
       }
 
       return $handler;
