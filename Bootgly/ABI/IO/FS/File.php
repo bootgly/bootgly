@@ -120,7 +120,7 @@ class File implements FS
 
    // @ read methods
    public const DEFAULT_READ_METHOD = 'fread';
-   public const REQUIRE_READ_METHOD = 'require';
+   public const INCLUDE_READ_METHOD = 'include';
    public const CONTENTS_READ_METHOD = 'file_get_contents';
    public const READFILE_READ_METHOD = 'readfile';
 
@@ -139,8 +139,8 @@ class File implements FS
    protected $method;                // Read method: fread, require, file_get_contents
 
    // * Data
-   public Path $Path;
-   public Dir $Basedir;
+   public readonly Path $Path;
+   public readonly Dir $Basedir;
    protected readonly string|false $file;
 
    // * Meta
@@ -397,7 +397,6 @@ class File implements FS
 
       // @
       $handler = false;
-
       if ($this->handler === null && $filename) {
          $this->mode = $mode;
 
@@ -412,11 +411,15 @@ class File implements FS
       if ($handler !== false) {
          $this->handler = $handler;
       }
+      // @ Pathify the (new?) file
+      if (isSet($this->file) === false) {
+         $this->pathify();
+      }
 
       return $handler;
    }
 
-   public function read ($method = self::READFILE_READ_METHOD, int $offset = 0, ? int $length = null) : string|int|false
+   public function read (string $method = self::DEFAULT_READ_METHOD, int $offset = 0, ? int $length = null) : string|int|false
    {
       if ( ! $this->file ) {
          return false;
@@ -426,60 +429,70 @@ class File implements FS
          $this->method = $method;
       }
 
+      // * Data
+      $data = false;
+      // * Meta
+      $filter = $method !== self::CONTENTS_READ_METHOD && ($offset > 0 || $length > 0);
+
+      // Methods with valid handler
       if ($this->handler) {
-         switch ($this->method) {
-            case self::REQUIRE_READ_METHOD:
-               ob_start();
+         switch ($method) {
+            case self::INCLUDE_READ_METHOD:
+               try {
+                  ob_start();
 
-               // @ Require file with isolated scope / context
-               (static function ($file) {
-                  require $file;
-               })($this->file);
+                  // @ Require file with isolated scope / context
+                  (static function ($file) {
+                     include $file;
+                  })($this->file);
 
-               $contents = ob_get_contents();
-
-               ob_end_clean();
-
-               if ($offset > 0 || $length > 0) {
-                  $contents = substr($contents, $offset, $length);
+                  $data = ob_get_clean();
+               } catch (\Throwable) {
+                  $data = false;
                }
 
-               return $this->contents = $contents;
+               break;
+            case self::CONTENTS_READ_METHOD:
+               $data = file_get_contents($this->file, false, null, $offset, $length);
+               break;
+            case self::READFILE_READ_METHOD:
+               $data = readfile($this->file);
+               break;
             default:
-               if ($this->mode == 'rw+') {
-                  $this->handler = fopen($this->Path, 'r');
+               if ( ! $this->handler) {
+                  $data = false;
+                  break;
                }
 
-               return $this->contents = fread($this->handler, $this->size);
+               try {
+                  $size = $this->size ?? $this->__get('size');
+
+                  $data = @fread($this->handler, $size);
+               } catch (\Throwable) {
+                  $data = false;
+               }
          }
       }
 
-      switch ($this->method) {
-         case self::CONTENTS_READ_METHOD:
-            return $this->contents = file_get_contents($this->file, false, null, $offset, $length);
-         case self::READFILE_READ_METHOD:
-            return readfile($this->file);
+      if ($filter) {
+         return substr($data, $offset, $length);
       }
 
-      return false;
+      return $this->contents = $data;
    }
-   public function write ($data)
+   public function write ($data) : int|false
    {
-      if ($this->mode == 'rw+') {
-         $this->close();
-         $this->handler = fopen($this->Path, 'w');
+      try {
+         $bytes = @fwrite($this->handler, $data);
+      } catch (\Throwable) {
+         $bytes = false;
       }
 
-      if ($this->handler) {
-         $bytes = fwrite($this->handler, $data);
-
-         if ($bytes) {
-            $this->written = true;
-            return $bytes;
-         }
+      if ($bytes) {
+         $this->written = true;
       }
 
-      return false;
+      return $bytes;
    }
 
    public function close () : bool
@@ -508,7 +521,7 @@ class File implements FS
 
       // @
       try {
-         unlink($filename);
+         @unlink($filename);
       } catch (\Throwable) {
          return false;
       }
