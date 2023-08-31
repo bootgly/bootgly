@@ -135,9 +135,6 @@ class File implements FS
     */
    public bool $convert = true;
 
-   protected $mode;                  // Open mode: r, r+, w, w+, a...
-   protected $method;                // Read method: fread, require, file_get_contents
-
    // * Data
    public readonly Path $Path;
    public readonly Dir $Basedir;
@@ -398,8 +395,6 @@ class File implements FS
       // @
       $handler = false;
       if ($this->handler === null && $filename) {
-         $this->mode = $mode;
-
          try {
             $handler = @fopen($filename, $mode);
          } catch (\Throwable) {
@@ -423,10 +418,6 @@ class File implements FS
    {
       if ( ! $this->file ) {
          return false;
-      }
-
-      if ($method) {
-         $this->method = $method;
       }
 
       // * Data
