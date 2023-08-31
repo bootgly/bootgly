@@ -12,6 +12,7 @@ namespace Bootgly\ABI\IO\FS;
 
 
 use AllowDynamicProperties;
+use Throwable;
 
 use Bootgly\ABI\Data\__String\Path;
 use Bootgly\ABI\IO\FS;
@@ -78,26 +79,6 @@ class File implements FS
     */
    public const APPEND_WRITE_READ_MODE = 'a+';
 
-   // @ e(x)clusive
-   /**
-    * Open for writing only.
-    * 
-    * Place the file pointer at the beginning of the file.
-    * 
-    * If the file exists, the opening will fail. 
-    * If the file does not exist and basedir exists, attempt to create the file.
-    */
-   public const EXCLUSIVE_WRITE_ONLY_MODE = 'x';
-   /**
-    * Open for reading and writing.
-    * 
-    * Place the file pointer at the beginning of the file.
-    * 
-    * If the file exists, the opening will fail. 
-    * If the file does not exist and basedir exists, attempt to create the file.
-    */
-   public const EXCLUSIVE_WRITE_READ_MODE = 'x+';
-
    // @ (c)ontinuous
    /**
     * Open for writing only.
@@ -117,6 +98,26 @@ class File implements FS
     * If it exists, it is neither truncated (as opposed to 'w'), nor the call to this function fails (as is the case with 'x').
     */
    public const CONTINUOUS_WRITE_READ_MODE = 'c+';
+
+   // @ e(x)clusive
+   /**
+    * Open for writing only.
+    * 
+    * Place the file pointer at the beginning of the file.
+    * 
+    * If the file exists, the opening will fail. 
+    * If the file does not exist and basedir exists, attempt to create the file.
+    */
+   public const EXCLUSIVE_WRITE_ONLY_MODE = 'x';
+   /**
+    * Open for reading and writing.
+    * 
+    * Place the file pointer at the beginning of the file.
+    * 
+    * If the file exists, the opening will fail. 
+    * If the file does not exist and basedir exists, attempt to create the file.
+    */
+   public const EXCLUSIVE_WRITE_READ_MODE = 'x+';
 
    // @ read methods
    public const DEFAULT_READ_METHOD = 'fread';
@@ -145,7 +146,7 @@ class File implements FS
 
    protected bool $exists;           // bool true|false
 
-   protected int|false $size;        // int 51162
+   protected int|false $size;        // int 51162 (bytes)
    protected int|false $lines;       // int 15
    // @ Path
    protected string $basename;       // /path/to/foo.html -> foo.html
@@ -154,6 +155,7 @@ class File implements FS
    protected string $parent;         // /path/to/foo.html -> /path/to/
    // _ Access
    protected int|false $permissions; // 0644
+   // TODO rename to is*
    protected bool $readable;         // true | false
    protected bool $executable;       // true | false
    protected bool $writable;         // true | false
@@ -166,6 +168,7 @@ class File implements FS
    protected string|false $format;   // > 'image'
    protected string|false $subtype;  // > 'jpeg'
    // _ Stat
+   // TODO rename to *At
    protected int|false $accessed;    // accessed file (timestamp)
    protected int|false $created;     // only Windows / in Unix is changed inode
    protected int|false $modified;    // modified content (timestamp)
@@ -388,6 +391,12 @@ class File implements FS
       return $this->file = false;
    }
 
+   /**
+    * Opens a file in the specified mode or read-only mode by default.
+    *
+    * @param string $mode The mode in which to open the file (optional, default: read-only mode).
+    * @return false|resource Returns the file handler on success, or false on failure.
+    */
    public function open (string $mode = self::READ_ONLY_MODE)
    {
       $filename = $this->file ?? $this->Path->path;
@@ -397,7 +406,7 @@ class File implements FS
       if ($this->handler === null && $filename) {
          try {
             $handler = @fopen($filename, $mode);
-         } catch (\Throwable) {
+         } catch (Throwable) {
             $handler = false;
          }
       }
@@ -414,6 +423,15 @@ class File implements FS
       return $handler;
    }
 
+   /**
+    * Read data from the file using various methods.
+    *
+    * @param string $method The method to use for reading (default: DEFAULT_READ_METHOD).
+    * @param int $offset The offset to start reading from (default: 0).
+    * @param int|null $length The number of bytes to read (default: null, reads until the end).
+    *
+    * @return string|int|false The read data as a string, number of bytes read as an integer, or false on failure.
+    */
    public function read (string $method = self::DEFAULT_READ_METHOD, int $offset = 0, ? int $length = null) : string|int|false
    {
       if ( ! $this->file ) {
@@ -423,8 +441,11 @@ class File implements FS
       // * Data
       $data = false;
       // * Meta
-      $filter = $method !== self::CONTENTS_READ_METHOD && ($offset > 0 || $length > 0);
+      // @
+      $size ??= ($offset === 0 && $length) ? $length : null;
+      $filterable ??= $method !== self::CONTENTS_READ_METHOD && ($offset > 0 || $length > 0);
 
+      // @
       // Methods with valid handler
       if ($this->handler) {
          switch ($method) {
@@ -432,13 +453,13 @@ class File implements FS
                try {
                   ob_start();
 
-                  // @ Require file with isolated scope / context
+                  // @ Include file with isolated scope / context
                   (static function ($file) {
                      include $file;
                   })($this->file);
 
                   $data = ob_get_clean();
-               } catch (\Throwable) {
+               } catch (Throwable) {
                   $data = false;
                }
 
@@ -456,26 +477,36 @@ class File implements FS
                }
 
                try {
-                  $size = $this->size ?? $this->__get('size');
-
-                  $data = @fread($this->handler, $size);
-               } catch (\Throwable) {
+                  $data = @fread(
+                     $this->handler,
+                     $size ?? $this->size ?? $this->__get('size')
+                  );
+               } catch (Throwable) {
                   $data = false;
                }
          }
       }
 
-      if ($filter) {
+      // :
+      if ($filterable) {
          return substr($data, $offset, $length);
       }
 
       return $this->contents = $data;
    }
-   public function write ($data) : int|false
+   /**
+    * Write data to the file handler.
+    *
+    * @param string $data The data to be written to the file.
+    * @param int|null $length [optional] If the length argument is given,
+    * writing will stop after length bytes have been written or the end of string is reached, whichever comes first.
+    * @return int|false The number of bytes written, or false on failure.
+    */
+   public function write (string $data, ? int $length = null) : int|false
    {
       try {
-         $bytes = @fwrite($this->handler, $data);
-      } catch (\Throwable) {
+         $bytes = @fwrite($this->handler, $data, $length);
+      } catch (Throwable) {
          $bytes = false;
       }
 
@@ -486,12 +517,20 @@ class File implements FS
       return $bytes;
    }
 
+   /**
+    * Closes the file handler.
+    *
+    * This method attempts to close the file handler associated with the object.
+    *
+    * @return bool Returns `true` if the file handler was successfully closed or if it was already closed,
+    *              returns `false` if an error occurred while trying to close the file handler.
+    */
    public function close () : bool
    {
       // @
       try {
          @fclose($this->handler);
-      } catch (\Throwable) {
+      } catch (Throwable) {
          return false;
       }
 
@@ -499,9 +538,18 @@ class File implements FS
 
       return true;
    }
+   /**
+    * Delete the file associated with this instance.
+    *
+    * If a file handler is open, it will be closed before deletion.
+    *
+    * @return bool Returns true on successful deletion, false otherwise.
+    */
    public function delete () : bool
    {
-      $this->handler !== null && $this->close();
+      if ($this->handler !== null) {
+         $this->close();
+      }
 
       // * Data
       $filename = $this->file ?? $this->Path->path;
@@ -513,7 +561,7 @@ class File implements FS
       // @
       try {
          @unlink($filename);
-      } catch (\Throwable) {
+      } catch (Throwable) {
          return false;
       }
 
