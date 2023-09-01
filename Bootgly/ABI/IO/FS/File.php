@@ -31,7 +31,7 @@ class File implements FS
     * 
     * If the file does not exist, return false.
     */
-   public const READ_ONLY_MODE = 'r';
+   public const READONLY_MODE = 'r';
    /**
     * Open for reading and writing.
     * 
@@ -41,25 +41,45 @@ class File implements FS
     */
    public const READ_WRITE_MODE = 'r+';
 
+   // @ (c)reate
+   /**
+    * Open for writing only.
+    * 
+    * Place the file pointer at the beginning of the file.
+    * 
+    * If the file does not exist and basedir exists, attempt to create the file.
+    * If it exists, it is neither truncated (as opposed to 'w'), nor the call to this function fails (as is the case with 'x').
+    */
+   public const CREATE_WRITEONLY_MODE = 'c';
+   /**
+    * Open for reading and writing.
+    * 
+    * Place the file pointer at the beginning of the file.
+    * 
+    * If the file does not exist and basedir exists, attempt to create the file.
+    * If it exists, it is neither truncated (as opposed to 'w'), nor the call to this function fails (as is the case with 'x').
+    */
+   public const CREATE_READ_WRITE_MODE = 'c+';
+
    // @ (w)rite
    /**
     * Open for writing only.
-    * ⚠️ Truncate the file to zero length.
+    * ⚠️ Truncate the file to zero length (wipe all file data)!
     * 
     * Place the file pointer at the beginning of the file.
     * 
     * If the file does not exist and basedir exists, attempt to create the file.
     */
-   public const WRITE_ONLY_MODE = 'w';
+   public const CREATE_TRUNCATE_WRITEONLY_MODE = 'w';
    /**
     * Open for writing and reading.
-    * ⚠️ Truncate the file to zero length.
+    * ⚠️ Truncate the file to zero length (wipe all file data)!
     * 
     * Place the file pointer at the beginning of the file.
     * 
     * If the file does not exist and basedir exists, attempt to create the file.
     */
-   public const WRITE_READ_MODE = 'w+';
+   public const CREATE_TRUNCATE_READ_WRITE_MODE = 'w+';
 
    // @ (a)ppend
    /**
@@ -69,7 +89,7 @@ class File implements FS
     * 
     * If the file does not exist and basedir exists, attempt to create the file.
     */
-   public const APPEND_WRITE_ONLY_MODE = 'a';
+   public const CREATE_APPEND_WRITEONLY_MODE = 'a';
    /**
     * Open for reading and writing.
     * 
@@ -77,27 +97,7 @@ class File implements FS
     * 
     * If the file does not exist and basedir exists, attempt to create the file.
     */
-   public const APPEND_WRITE_READ_MODE = 'a+';
-
-   // @ (c)ontinuous
-   /**
-    * Open for writing only.
-    * 
-    * Place the file pointer at the beginning of the file.
-    * 
-    * If the file does not exist and basedir exists, attempt to create the file.
-    * If it exists, it is neither truncated (as opposed to 'w'), nor the call to this function fails (as is the case with 'x').
-    */
-   public const CONTINUOUS_WRITE_ONLY_MODE = 'c';
-   /**
-    * Open for reading and writing.
-    * 
-    * Place the file pointer at the beginning of the file.
-    * 
-    * If the file does not exist and basedir exists, attempt to create the file.
-    * If it exists, it is neither truncated (as opposed to 'w'), nor the call to this function fails (as is the case with 'x').
-    */
-   public const CONTINUOUS_WRITE_READ_MODE = 'c+';
+   public const CREATE_APPEND_READ_WRITE_MODE = 'a+';
 
    // @ e(x)clusive
    /**
@@ -108,7 +108,7 @@ class File implements FS
     * If the file exists, the opening will fail. 
     * If the file does not exist and basedir exists, attempt to create the file.
     */
-   public const EXCLUSIVE_WRITE_ONLY_MODE = 'x';
+   public const CREATE_EXCLUSIVE_WRITEONLY_MODE = 'x';
    /**
     * Open for reading and writing.
     * 
@@ -117,7 +117,7 @@ class File implements FS
     * If the file exists, the opening will fail. 
     * If the file does not exist and basedir exists, attempt to create the file.
     */
-   public const EXCLUSIVE_WRITE_READ_MODE = 'x+';
+   public const CREATE_EXCLUSIVE_READ_WRITE_MODE = 'x+';
 
    // @ read methods
    public const DEFAULT_READ_METHOD = 'fread';
@@ -155,7 +155,6 @@ class File implements FS
    protected string $parent;         // /path/to/foo.html -> /path/to/
    // _ Access
    protected int|false $permissions; // 0644
-   // TODO rename to is*
    protected bool $readable;         // true | false
    protected bool $executable;       // true | false
    protected bool $writable;         // true | false
@@ -168,7 +167,6 @@ class File implements FS
    protected string|false $format;   // > 'image'
    protected string|false $subtype;  // > 'jpeg'
    // _ Stat
-   // TODO rename to *At
    protected int|false $accessed;    // accessed file (timestamp)
    protected int|false $created;     // only Windows / in Unix is changed inode
    protected int|false $modified;    // modified content (timestamp)
@@ -426,7 +424,7 @@ class File implements FS
     * @param string $mode The mode in which to open the file (optional, default: read-only mode).
     * @return false|resource Returns the file handler on success, or false on failure.
     */
-   public function open (string $mode = self::READ_ONLY_MODE)
+   public function open (string $mode = self::READONLY_MODE)
    {
       $filename = $this->file ?? $this->Path->path;
 
@@ -529,7 +527,8 @@ class File implements FS
     *
     * @param string $data The data to be written to the file.
     * @param int|null $length [optional] If the length argument is given,
-    * writing will stop after length bytes have been written or the end of string is reached, whichever comes first.
+    *                 writing will stop after length bytes have been written or the end of string is reached,
+    *                 whichever comes first.
     * @return int|false The number of bytes written, or false on failure.
     */
    public function write (string $data, ? int $length = null) : int|false
