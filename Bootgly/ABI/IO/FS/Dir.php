@@ -11,6 +11,8 @@
 namespace Bootgly\ABI\IO\FS;
 
 
+use Throwable;
+
 use RecursiveIteratorIterator;
 use RecursiveDirectoryIterator;
 
@@ -184,6 +186,20 @@ class Dir implements FS
       return $this->dir = $path;
    }
 
+   public function create (int $permissions = 0775, bool $recursively = true) : bool
+   {
+      // * Data
+      $basedir = $this->Path->path;
+
+      // @
+      try {
+         $created = mkdir($basedir, $permissions, $recursively);
+      } catch (Throwable) {
+         $created = false;
+      }
+
+      return $created;
+   }
    private static function scan (string $dir, bool $recursive = false) : array
    {
       if ($dir === '') {
