@@ -14,7 +14,7 @@ namespace Bootgly\ABI\IO;
 use Bootgly\ABI\IO;
 
 
-interface Sockets extends IO
+interface IPC extends IO
 {
    // TODO
 }

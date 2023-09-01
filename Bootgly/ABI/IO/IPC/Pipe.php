@@ -8,15 +8,15 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\ABI\IO\Sockets;
+namespace Bootgly\ABI\IO\IPC;
 
 
 use Generator;
 
-use Bootgly\ABI\IO\Sockets;
+use Bootgly\ABI\IO\IPC;
 
 
-class Pipe implements Sockets
+class Pipe implements IPC
 {
    // * Config
    // ! Stream
