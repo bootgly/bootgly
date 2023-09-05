@@ -393,7 +393,7 @@ class File implements FS
     * Creates a file (touch).
     *
     * @param bool $recursively Whether to create base directories if they don't exist.
-    * @return bool Returns true if the file was successfully created or already exists, false otherwise.
+    * @return bool Returns true if the file was successfully created, false otherwise.
     */
    public function create (bool $recursively = true) : bool
    {
@@ -403,20 +403,23 @@ class File implements FS
       // Path
       $filename = $this->file ?? $Path->path;
       // * Meta
-      $created = false;
+      $dir  = null;
+      $file = null;
 
       // @
       if ($recursively === true) {
-         $this->Basedir->create();
+         $dir = $this->Basedir->create();
       }
 
       try {
-         $created = touch($filename);
+         if (is_file($filename) === false) {
+            $file = touch($filename);
+         }
       } catch (Throwable) {
-         $created = false;
+         $file = false;
       }
 
-      return $created;
+      return $dir || $file;
    }
    /**
     * Opens a file in the specified mode or read-only mode by default.
