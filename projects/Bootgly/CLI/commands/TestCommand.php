@@ -73,8 +73,6 @@ class TestCommand extends Command
 
       $tests = (array) $tests;
 
-      Tests::$cases += count($tests);
-
       $autoboot = $tests['autoBoot'] ?? false;
       if ($autoboot instanceof Closure) {
          $autoboot();

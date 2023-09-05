@@ -55,6 +55,7 @@ class Tester extends Tests
       $this->skipped = 0;
       // @ Stats
       $this->total = count($this->tests);
+      Tests::$cases += $this->total;
       // @ Time
       $this->started = microtime(true);
       // @ Screen? Output?
