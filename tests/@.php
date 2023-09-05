@@ -5,10 +5,11 @@ return [
       'Bootgly/ABI/Data/__Array/',
       'Bootgly/ABI/Data/__String/',
       'Bootgly/ABI/Data/__String/Bytes/',
-      #'Bootgly/ABI/Data/__String/Escapeable/', // Not testable directly (traits)
+      #'Bootgly/ABI/Data/__String/Escapeable/', // ! Not testable directly (traits)
       'Bootgly/ABI/Data/__String/Path/',
       'Bootgly/ABI/IO/FS/Dir/',
       'Bootgly/ABI/IO/FS/File/',
+      'Bootgly/ABI/IO/IPC/Pipe/', // ! Testable only individually
       #'Bootgly/ABI/Templates/Iterator/', // Not testable
       // Abstract Common Interface (ACI)
       // ...

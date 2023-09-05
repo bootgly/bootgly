@@ -68,7 +68,7 @@ class Input
 
    public function reading (\Closure $CAPI, \Closure $SAPI)
    {
-      $Pipe = new Pipe;
+      $Pipe = new Pipe(blocking: false);
 
       $stream = $this->stream;
 

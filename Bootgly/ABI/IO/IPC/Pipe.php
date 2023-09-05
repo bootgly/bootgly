@@ -11,6 +11,7 @@
 namespace Bootgly\ABI\IO\IPC;
 
 
+use Throwable;
 use Generator;
 
 use Bootgly\ABI\IO\IPC;
@@ -19,8 +20,7 @@ use Bootgly\ABI\IO\IPC;
 class Pipe implements IPC
 {
    // * Config
-   // ! Stream
-   public ? int $timeout;
+   // ...
 
    // * Data
    private array $pair;
@@ -29,18 +29,16 @@ class Pipe implements IPC
    public bool $paired;
 
 
-   public function __construct (? int $timeout = null, ? bool $blocking = false, ? array $pair = null)
+   public function __construct (bool $blocking)
    {
       // * Config
-      // ! Stream
-      $this->timeout = $timeout;
+      // ...
 
       // * Data
-      $this->pair = $pair ?? stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+      $this->pair = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
 
       // * Meta
       $this->paired = true;
-
 
       try {
          // @ Set non-blocking to pipes
@@ -48,35 +46,37 @@ class Pipe implements IPC
          stream_set_blocking($this->pair[0], $blocking);
          // Write pipe
          stream_set_blocking($this->pair[1], $blocking);
-      } catch (\Throwable) {
+      } catch (Throwable) {
          $this->paired = false;
       }
    }
 
    public function reading (int $length = 1024, ? int $timeout = null) : Generator
    {
-      $read = [@$this->pair[0]];
+      // * Config
+      // ...
+      // * Data
+      $read = [$this->pair[0]];
       $write = null;
       $except = null;
 
-      $microseconds = $timeout ?? $this->timeout ?? null;
-
-      // @ Read output from pair
+      // @
       while (true) {
          pcntl_signal_dispatch();
 
          try {
-            $streams = @stream_select($read, $write, $except, 0, $microseconds);
-         } catch (\Throwable) {
+            $streams = stream_select($read, $write, $except, 0, $timeout);
+         } catch (Throwable $Throwable) {
+            var_dump($Throwable, $read);
             $streams = false;
          }
 
-         // @ Check result
+         // :
          if ($streams === false) {
             yield false;
 
             break;
-         } elseif ($streams === 0) {
+         } else if ($streams === 0) {
             yield null;
 
             continue;
@@ -89,12 +89,8 @@ class Pipe implements IPC
    {
       try {
          $read = @fread($this->pair[0], $length);
-      } catch (\Throwable) {
+      } catch (Throwable) {
          $read = false;
-      }
-
-      if ($read === false) {
-         // TODO check errors
       }
 
       return $read;
@@ -104,25 +100,37 @@ class Pipe implements IPC
    {
       try {
          $written = @fwrite($this->pair[1], $data, $length);
-      } catch (\Throwable) {
+      } catch (Throwable) {
          $written = false;
-      }
-
-      if ($written === false) {
-         // TODO check errors
       }
 
       return $written;
    }
 
-   public function __destruct ()
+   public function close (bool $read = true, bool $write = true) : bool
    {
+      $closed0 = false;
+      $closed1 = false;
+
       // @ Close the ends of the communication channel
       try {
-         @fclose($this->pair[0]);
-         @fclose($this->pair[1]);
-      } catch (\Throwable) {
-         // ...
+         if ($read) {
+            $closed0 = fclose($this->pair[0]);
+         }
+
+         if ($write) {
+            $closed1 = fclose($this->pair[1]);
+         }
+      } catch (Throwable) {
+         $closed0 = false;
+         $closed1 = false;
       }
+
+      return $closed0 && $closed1;
+   }
+
+   public function __destruct () : void
+   {
+      $this->close();
    }
 }
