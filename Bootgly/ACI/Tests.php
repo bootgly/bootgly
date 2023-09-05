@@ -37,6 +37,8 @@ abstract class Tests
    public int $passed;
    public int $skipped;
    // @ Stats
+   public static int $index = 0;
+   public static int $cases = 0;
    public int $total;
    // @ Time
    public float $started;

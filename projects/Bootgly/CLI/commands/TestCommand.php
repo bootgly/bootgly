@@ -73,6 +73,8 @@ class TestCommand extends Command
 
       $tests = (array) $tests;
 
+      Tests::$cases += count($tests);
+
       $autoboot = $tests['autoBoot'] ?? false;
       if ($autoboot instanceof Closure) {
          $autoboot();
@@ -112,7 +114,7 @@ class TestCommand extends Command
       $Suites->total = count($suites);
 
       foreach ($suites as $index => $dir) {
-         Tester::$instances++;
+         Tester::$index++;
 
          if ($indexToTest > 0 && ($index + 1) !== $indexToTest) {
             $Suites->skipped++;

@@ -26,7 +26,6 @@ class Tester extends Tests
 
    // * Data
    // ...inherited from Tests
-   public static $instances = 0;
    public array $artfacts;
 
    // * Meta
@@ -156,7 +155,7 @@ class Tester extends Tests
    {
       if ($header) {
          // @ Add blue color to header text
-         $header = ' @#Cyan:(' . self::$instances . ') @;' . '@#Blue: ' . $header . '  @;';
+         $header = ' @#Cyan:(' . self::$index . ') @;' . '@#Blue: ' . $header . '  @;';
 
          // @ Pad string with `=`
          $length = $this->width + 38;

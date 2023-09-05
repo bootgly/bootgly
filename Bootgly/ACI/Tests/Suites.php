@@ -12,6 +12,7 @@ namespace Bootgly\ACI\Tests;
 
 
 use Bootgly\ACI\Logs\LoggableEscaped;
+use Bootgly\ACI\Tests;
 
 
 class Suites
@@ -50,6 +51,7 @@ class Suites
       $skipped = '@:notice:' . $this->skipped . ' skipped @;';
       $passed = '@:success:' . $this->passed . ' passed @;';
       // @ Stats
+      $cases = '@:info:' . Tests::$cases . ' @;';
       $total = $this->total . ' total';
       // @ Time
       $started = $this->started;
@@ -65,7 +67,8 @@ class Suites
 
       ==================================================
       Suites: {$failed}, {$skipped}, {$passed}, {$total}
-      Total Duration: {$duration}
+      Test Cases (total): {$cases}
+      Duration (total): {$duration}
       {$ran}
       ==================================================
       \n
