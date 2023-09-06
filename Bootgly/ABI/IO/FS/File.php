@@ -412,9 +412,7 @@ class File implements FS
       }
 
       try {
-         if (is_file($filename) === false) {
-            $file = touch($filename);
-         }
+         is_file($filename) ? ($this->file = $filename) : ($file = touch($filename));
       } catch (Throwable) {
          $file = false;
       }

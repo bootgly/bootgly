@@ -8,6 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
+use Bootgly\ABI\Data\__String\Path;
 use Bootgly\ABI\Templates\Template;
 use Bootgly\ABI\IO\FS\File;
 
@@ -29,7 +30,6 @@ class Bootgly
    {
       // @ Instance
       $Project = static::$Project = new Project;
-      $Template = static::$Template = new Template;
 
       // ---
 
@@ -104,25 +104,13 @@ class Bootgly
       return new Logger($data);
    }
 
-   public static function template (string $view, array $parameters) : Template
+   public static function template (string $view) : Template
    {
-      $Template = static::$Template;
+      $view = Path::normalize($view);
 
-      // TODO check Template cache
-
-      $file = static::$Project . $view . '.template.php';
-      // @ Load Raw file/string
-      $File = new File($file);
-      $File->convert = false;
-
-      if ($File->file) {
-         $Template->raw = $File->contents;
-      } else {
-         $Template->raw = $view;
-      }
-
-      // @ Set Parameters
-      $Template->parameters = $parameters;
+      $Template = static::$Template = new Template(
+         static::$Project . $view . '.template.php'
+      );
 
       return $Template;
    }

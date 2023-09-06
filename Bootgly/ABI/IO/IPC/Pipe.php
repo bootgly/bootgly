@@ -67,7 +67,6 @@ class Pipe implements IPC
          try {
             $streams = stream_select($read, $write, $except, 0, $timeout);
          } catch (Throwable $Throwable) {
-            var_dump($Throwable, $read);
             $streams = false;
          }
 

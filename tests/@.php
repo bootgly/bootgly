@@ -10,7 +10,8 @@ return [
       'Bootgly/ABI/IO/FS/Dir/',
       'Bootgly/ABI/IO/FS/File/',
       'Bootgly/ABI/IO/IPC/Pipe/', // ! Testable only individually
-      #'Bootgly/ABI/Templates/Iterator/', // Not testable
+      #'Bootgly/ABI/Templates/Iterator/', // ! Not testable (for now)
+      'Bootgly/ABI/Templates/Template/',
       // Abstract Common Interface (ACI)
       // ...
       // Abstract Data Interface (ADI)
