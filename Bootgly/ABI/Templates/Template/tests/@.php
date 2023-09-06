@@ -12,6 +12,8 @@ return [
    // * Data
    'suiteName' => __NAMESPACE__,
    'tests' => [
-      '1.0-construct-Template',
+      '1.1.1-render-outputs-1',
+      '2.1.1-render-loops-for',
+      '3.1.1-render-conditionals-singly-ifs',
    ]
 ];
