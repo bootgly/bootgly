@@ -11,7 +11,6 @@
 namespace Bootgly\ABI\Templates;
 
 
-use Closure;
 use Throwable;
 
 use Bootgly\ABI\IO\FS\File;
@@ -24,8 +23,8 @@ class Template implements Templates
    public Renderization $Renderization;
 
    // * Data
-   protected array $directives;
-   public string|File $raw;
+   public Directives $Directives;
+   public readonly string|File $raw;
 
    // * Meta
    // Cache
@@ -41,8 +40,7 @@ class Template implements Templates
       $this->Renderization = Renderization::FILE_HASHED_MODE->set();
 
       // * Data
-      $this->directives = [];
-      $this->raw = $raw;
+      // @
 
       // * Meta
       // Cache
@@ -52,38 +50,26 @@ class Template implements Templates
       $this->output = '';
 
       // @
-      // directives
-      $resource = 'directives/';
-      $bootables = require($resource . '@.php');
-      $files = $bootables['files'];
-      foreach ($files as $file) {
-         $directives = require($resource . $file . '.php');
-         foreach ($directives as $directive => $Closure) {
-            $this->directives[$directive] = $Closure;
-         }
-      }
+      // Directives
+      $this->Directives = new Directives;
       // raw
-      $raw = $this->raw;
       if ($raw instanceof File) {
          $this->raw = $raw->contents;
+      } else {
+         $this->raw = $raw;
       }
-   }
-
-   public function extend (string $pattern, Closure $Callback)
-   {
-      $this->directives[$pattern] ??= $Callback;
    }
 
    private function compile () : bool
    {
       // * Data
-      $directives = $this->directives;
+      $Directives = $this->Directives;
       $raw        = $this->raw;
 
       // @
       try {
          $compiled = preg_replace_callback_array(
-            pattern: $directives,
+            pattern: $Directives->directives,
             subject: $raw,
          );
       } catch (Throwable) {
