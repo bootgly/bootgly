@@ -10,7 +10,8 @@ return [
    // ...
    // @ test
    'test' => function () {
-      $Template = new Template(
+      // @ Valid
+      $Template1 = new Template(
          <<<'TEMPLATE'
          @if ($cool) :
          Bootgly Template is cool!
@@ -29,24 +30,20 @@ return [
          @if;
          TEMPLATE
       );
-      $Template->render([
+      $Template1->render([
          'cool'     => true,
          'powerful' => true,
          // undef
          'poor'     => false
-      ], $Template->Renderization::JIT_EVAL_MODE);
-
-      $output = <<<OUTPUT
-      Bootgly Template is cool!
-
-      Bootgly is powerful!
-      \n\n
-      OUTPUT;
-
-      // @ Valid
+      ], $Template1->Renderization::JIT_EVAL_MODE);
       assert(
-         assertion: $Template->output === $output,
-         description: "Rendered output does not match: \n`" . $Template->output . '`'
+         assertion: $Template1->output === <<<OUTPUT
+         Bootgly Template is cool!
+
+         Bootgly is powerful!
+         \n\n
+         OUTPUT,
+         description: "Template #1: output does not match: \n`" . $Template1->output . '`'
       );
 
       // @ Neutral

@@ -67,8 +67,8 @@ class Suites
 
       ==================================================
       Suites: {$failed}, {$skipped}, {$passed}, {$total}
-      Test Cases (total): {$cases}
-      Duration (total): {$duration}
+      Test Cases #: {$cases}
+      Total Duration: {$duration}
       {$ran}
       ==================================================
       \n
