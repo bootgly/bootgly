@@ -34,6 +34,18 @@ return [
          description: "Template #1: output does not match: \n`" . $Template1->output . '`'
       );
 
+      $Template2 = new Template(
+         <<<'TEMPLATE'
+         Echo PHP Code: @>> 123456;!
+         TEMPLATE
+      );
+      $Template2->render([], $Template2->Renderization::JIT_EVAL_MODE);
+      assert(
+         assertion: $Template2->output === <<<'OUTPUT'
+         Echo PHP Code: 123456!
+         OUTPUT,
+         description: "Template #2: output does not match: \n`" . $Template2->output . '`'
+      );
       // @ Neutral
       // ...
 

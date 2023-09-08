@@ -16,16 +16,21 @@ use Closure;
 use Bootgly\ABI\Data\__String\Path;
 
 
-class Directives
-{   // * Data
+class Directives // TODO use Resources interface
+{
+   // * Config
+   // ...
+   // * Data
    protected array $directives;
+   // * Meta
+   // ...
 
 
    public function __construct ()
    {
       // * Data
       // ->directives
-      $resource = 'directives/';
+      $resource = __DIR__ . '/directives/';
       $bootables = require($resource . '@.php');
 
       $directives = $bootables['directives'];
