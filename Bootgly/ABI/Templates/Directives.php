@@ -10,9 +10,10 @@
 
 namespace Bootgly\ABI\Templates;
 
-
 use Closure;
 #use Throwable;
+
+use Bootgly\ABI\Data\__String\Path;
 
 
 class Directives
@@ -27,13 +28,15 @@ class Directives
       $resource = 'directives/';
       $bootables = require($resource . '@.php');
 
-      $files = $bootables['files'];
+      $directives = $bootables['directives'];
 
-      foreach ($files as $file) {
-         $directives = require($resource . $file . '.php');
+      foreach ($directives as $path) {
+         $filename = Path::normalize($path);
 
-         foreach ($directives as $directive => $Closure) {
-            $this->directives[$directive] = $Closure;
+         $directive = require($resource . $filename . '.php');
+
+         foreach ($directive as $pattern => $Closure) {
+            $this->directives[$pattern] = $Closure;
          }
       }
    }

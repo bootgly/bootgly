@@ -1,6 +1,6 @@
 <?php
 return [
-   'files' => [
+   'directives' => [
       'break',
       'continue',
       'for',
