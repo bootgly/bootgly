@@ -15,13 +15,13 @@ return [
          <<<'TEMPLATE'
          @foreach ($items as $key => $item):
             @if ($@->isFirst):
-               @>> 'First!';
+               @>. 'First!';
             @if;
 
-            @>> $@->index;
+            @.>. $@->index;
 
             @if ($@->isLast):
-               @>> 'Last!';
+               @.> 'Last!';
             @if;
          @foreach;
          TEMPLATE
@@ -30,8 +30,16 @@ return [
          'items' => ['a', 'b', 'c']
       ], $Template11->Renderization::JIT_EVAL_MODE);
       assert(
-         assertion: $Template11->output === <<<'OUTPUT'
-         First!012Last!
+         assertion: $Template11->output === <<<OUTPUT
+         First!
+
+         0
+
+         1
+
+         2
+
+         Last!
          OUTPUT,
          description: "Template #1.1: output does not match: \n`" . $Template11->output . '`'
       );

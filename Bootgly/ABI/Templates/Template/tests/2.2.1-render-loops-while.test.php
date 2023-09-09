@@ -14,7 +14,7 @@ return [
       $Template11 = new Template(
          <<<'TEMPLATE'
          @while $tenth:
-            @>> $tenth--;
+            @> $tenth--;
          @while;
          TEMPLATE
       );
@@ -33,7 +33,7 @@ return [
       $Template21 = new Template(
          <<<'TEMPLATE'
          @@while $tenth:
-            @@>> $tenth--;
+            @@> $tenth--;
          @@while;
          TEMPLATE
       );
@@ -43,7 +43,7 @@ return [
       assert(
          assertion: $Template21->output === <<<'OUTPUT'
          @while $tenth:
-            @>> $tenth--;
+            @> $tenth--;
          @while;
          OUTPUT,
          description: "Template #2.1: output does not match: \n`" . $Template21->output . '`'

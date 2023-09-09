@@ -13,10 +13,10 @@ return [
       // @ Valid
       $Template11 = new Template(
          <<<'TEMPLATE'
-         Bootgly Template is @>> $a;!
-         Bootgly Template is @>> $b;!
-         Bootgly Template is @>> "$c";!
-         Bootgly Template is @>> '$d';!
+         Bootgly Template is @> $a;!
+         Bootgly Template is @> $b;!
+         Bootgly Template is @> "$c";!
+         Bootgly Template is @> '$d';!
          TEMPLATE
       );
       $Template11->render([
@@ -36,7 +36,7 @@ return [
 
       $Template12 = new Template(
          <<<'TEMPLATE'
-         Echo PHP Code: @>> 123456;!
+         Echo PHP Code: @> 123456;!
          TEMPLATE
       );
       $Template12->render([], $Template12->Renderization::JIT_EVAL_MODE);
@@ -51,13 +51,13 @@ return [
       // Escaped
       $Template21 = new Template(
          <<<'TEMPLATE'
-         Echo PHP Code: @@>> 123456;!
+         Echo PHP Code: @@> 123456;!
          TEMPLATE
       );
       $Template21->render([], $Template21->Renderization::JIT_EVAL_MODE);
       assert(
          assertion: $Template21->output === <<<'OUTPUT'
-         Echo PHP Code: @>> 123456;!
+         Echo PHP Code: @> 123456;!
          OUTPUT,
          description: "Template #2.1: output does not match: \n`" . $Template21->output . '`'
       );

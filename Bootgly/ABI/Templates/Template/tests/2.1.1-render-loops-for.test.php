@@ -15,7 +15,7 @@ return [
       $Template1 = new Template(<<<'TEMPLATE'
       @for ($i = 0; $i <= 10; $i++):
          @break in $i === 3;
-         @>> $i;
+         @> $i;
       @for;
       TEMPLATE);
       $Template1->render([], $Template1->Renderization::JIT_EVAL_MODE);
@@ -30,7 +30,7 @@ return [
       $Template2 = new Template(<<<'TEMPLATE'
       @for ($i = 0; $i <= 10; $i++):
          @continue in $i === 0;
-         @>> $i;
+         @> $i;
          @break;
       @for;
       TEMPLATE);

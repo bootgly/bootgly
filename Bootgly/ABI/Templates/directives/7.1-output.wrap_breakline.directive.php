@@ -1,6 +1,6 @@
 <?php
 return [
-   '/(@)?@>>\s*(.+?)\s*;(\r?\n)?/s' => function ($matches) {
+   '/(@)?@\.>\.\s*(.+?)\s*;(\r?\n)?/s' => function ($matches) {
       if ($matches[1]) {
          return substr($matches[0], 1);
       }
@@ -10,7 +10,7 @@ return [
       $whitespace = $matches[3] ?? '';
 
       return <<<PHP
-      <?php echo {$wrapped}; ?>{$whitespace}
+      <?php echo PHP_EOL . {$wrapped} . PHP_EOL; ?>{$whitespace}
       PHP;
    },
 ];
