@@ -11,7 +11,7 @@ return [
    // @ test
    'test' => function () {
       // @ Valid
-      $Template1 = new Template(
+      $Template11 = new Template(
          <<<'TEMPLATE'
          Bootgly Template is @>> $a;!
          Bootgly Template is @>> $b;!
@@ -19,35 +19,48 @@ return [
          Bootgly Template is @>> '$d';!
          TEMPLATE
       );
-      $Template1->render([
+      $Template11->render([
          'a'     => 'easy',
          'b'     => true,
          #'c' => false
-      ], $Template1->Renderization::JIT_EVAL_MODE);
+      ], $Template11->Renderization::JIT_EVAL_MODE);
       assert(
-         assertion: $Template1->output === <<<'OUTPUT'
+         assertion: $Template11->output === <<<'OUTPUT'
          Bootgly Template is easy!
          Bootgly Template is 1!
          Bootgly Template is !
          Bootgly Template is $d!
          OUTPUT,
-         description: "Template #1: output does not match: \n`" . $Template1->output . '`'
+         description: "Template #1.1: output does not match: \n`" . $Template11->output . '`'
       );
 
-      $Template2 = new Template(
+      $Template12 = new Template(
          <<<'TEMPLATE'
          Echo PHP Code: @>> 123456;!
          TEMPLATE
       );
-      $Template2->render([], $Template2->Renderization::JIT_EVAL_MODE);
+      $Template12->render([], $Template12->Renderization::JIT_EVAL_MODE);
       assert(
-         assertion: $Template2->output === <<<'OUTPUT'
+         assertion: $Template12->output === <<<'OUTPUT'
          Echo PHP Code: 123456!
          OUTPUT,
-         description: "Template #2: output does not match: \n`" . $Template2->output . '`'
+         description: "Template #1.2: output does not match: \n`" . $Template12->output . '`'
       );
+
       // @ Neutral
-      // ...
+      // Escaped
+      $Template21 = new Template(
+         <<<'TEMPLATE'
+         Echo PHP Code: @@>> 123456;!
+         TEMPLATE
+      );
+      $Template21->render([], $Template21->Renderization::JIT_EVAL_MODE);
+      assert(
+         assertion: $Template21->output === <<<'OUTPUT'
+         Echo PHP Code: @>> 123456;!
+         OUTPUT,
+         description: "Template #2.1: output does not match: \n`" . $Template21->output . '`'
+      );
 
       // @ Invalid
       // ...

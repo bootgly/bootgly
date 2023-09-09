@@ -10,7 +10,6 @@
 
 use Bootgly\ABI\Data\__String\Path;
 use Bootgly\ABI\Templates\Template;
-use Bootgly\ABI\IO\FS\File;
 
 use Bootgly\ACI\Debugger;
 use Bootgly\ACI\Logs\Logger;
@@ -84,7 +83,17 @@ class Bootgly
       }
    }
 
-   // API
+   // ABI
+   public static function template(string $view): Template
+   {
+      $Template = static::$Template = new Template(
+         static::$Project . Path::normalize($view) . '.template.php'
+      );
+
+      return $Template;
+   }
+
+   // ACI
    public static function debug (...$vars) : Debugger
    {
       if (Debugger::$trace === null) {
@@ -102,16 +111,5 @@ class Bootgly
    public static function log ($data) : Logger
    {
       return new Logger($data);
-   }
-
-   public static function template (string $view) : Template
-   {
-      $view = Path::normalize($view);
-
-      $Template = static::$Template = new Template(
-         static::$Project . $view . '.template.php'
-      );
-
-      return $Template;
    }
 }

@@ -36,10 +36,14 @@ class Directives // TODO use Resources interface
 
       $directives = $bootables['directives'];
 
-      foreach ($directives as $path) {
-         $filename = Path::normalize($path);
+      foreach ($directives as $value) {
+         if (is_string($value) === true) {
+            $filename = Path::normalize($value);
 
-         $directive = require($resource . $filename . '.php');
+            $directive = require($resource . $filename . '.php');
+         } else if (is_array($value) === true) {
+            $directive = $value;
+         }
 
          foreach ($directive as $pattern => $Closure) {
             $this->directives[$pattern] = $Closure;

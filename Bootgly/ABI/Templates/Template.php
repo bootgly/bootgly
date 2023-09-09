@@ -108,7 +108,7 @@ class Template implements Templates
    {
       debug('<code>' . htmlspecialchars($this->compiled) . '</code>');
    }
-   public function render (array $parameters = [], Renderization $mode = Renderization::FILE_HASHED_MODE) : bool
+   public function render (array $parameters = [], Renderization $mode = Renderization::FILE_HASHED_MODE) : string|false
    {
       // @
       try {
