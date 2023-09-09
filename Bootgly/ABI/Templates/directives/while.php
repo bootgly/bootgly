@@ -1,6 +1,10 @@
 <?php
 return [
-   "/(@while)[ ]+?(.+?)[ ]?:/sx" => function ($matches) {
+   "/(@)?@while[ ]+?(.+?)[ ]?:/sx" => function ($matches) {
+      if ($matches[1]) {
+         return substr($matches[0], 1);
+      }
+
       // @ <expression>
       $expression = $matches[2];
 
@@ -8,9 +12,13 @@ return [
       <?php while ({$expression}): ?>
       PHP;
    },
-   "/@while[ ]?;/sx" => function () {
+   "/(@)?@while[ ]?;/sx" => function ($matches) {
+      if ($matches[1]) {
+         return substr($matches[0], 1);
+      }
+
       return <<<PHP
       <?php endwhile; ?>
       PHP;
-   }
+   },
 ];

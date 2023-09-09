@@ -1,12 +1,16 @@
 <?php
 return [
-   '/@>>\s*(.+?)\s*;(\r?\n)?/s' => function ($matches) {
-      $wrapped = $matches[1];
+   '/(@)?@>>\s*(.+?)\s*;(\r?\n)?/s' => function ($matches) {
+      if ($matches[1]) {
+         return substr($matches[0], 1);
+      }
 
-      $whitespace = $matches[2] ?? '';
+      $wrapped = $matches[2];
+
+      $whitespace = $matches[3] ?? '';
 
       return <<<PHP
       <?php echo {$wrapped}; ?>{$whitespace}
       PHP;
-   }
+   },
 ];

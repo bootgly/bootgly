@@ -1,6 +1,10 @@
 <?php
 return [
-   "/(@foreach)[ ]+?(.+?)[ ]?:/sx" => function ($matches) {
+   "/(@)?@foreach[ ]+?(.+?)[ ]?:/sx" => function ($matches) {
+      if ($matches[1]) {
+         return substr($matches[0], 1);
+      }
+
       // @ <expression> as $key
       $iterable = trim($matches[2], '()');
 
@@ -17,9 +21,13 @@ return [
       <?php {$init} foreach (\$_ as {$iteration}): ?>
       PHP;
    },
-   "/@foreach[ ]?;/sx" => function () {
+   "/(@)?@foreach[ ]?;/sx" => function ($matches) {
+      if ($matches[1]) {
+         return substr($matches[0], 1);
+      }
+
       return <<<PHP
       <?php endforeach; ?>
       PHP;
-   }
+   },
 ];
