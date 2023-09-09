@@ -1,19 +1,25 @@
 <?php
 return [
    'directives' => [
-      'break' => '1-break',
-      'continue' => '2-continue',
-      'for' => '3-for',
-      'foreach' => '4-foreach',
-      'if' => '5.1-ifs',
-      'else' => '5.2-elses',
-      '6-metavar',
+      'break' => '0.1-break',
+      'continue' => '0.2-continue',
+      '0.3-metavar',
 
-      '.>.' => '7.1-output.wrap_breakline',
-      '.>' => '7.2-output.breakline_before',
-      '>.' => '7.3-output.breakline_after',
-      '>' => '7.z-output',
+      // 1 - Conditionals
+      'if' => '1.1-ifs',
+      'else' => '1.2-elses',
 
-      'while' => '8-while',
+      // 2 - Loops
+      'for' => '2.1-for',
+      'foreach' => '2.2-foreach',
+      'while' => '2.3-while',
+
+      // 3 - Outputs
+      '.>.' => '3.1-output.wrap_breakline',
+      '.>' => '3.2-output.breakline_before',
+      '>.' => '3.3-output.breakline_after',
+      '>' => '3.z-output',
+
+      // _
    ]
 ];
