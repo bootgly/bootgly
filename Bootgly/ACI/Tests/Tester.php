@@ -168,7 +168,7 @@ class Tester extends Tests
          );
 
          // @ Output header separator
-         $this->log($header . ' @\;');
+         $this->log('@#white:' . $header . ' @;@\;');
       }
    }
 
@@ -199,7 +199,7 @@ class Tester extends Tests
       $skipped = '@:notice:' . $this->skipped . ' skipped @;';
       $passed = '@:success:' . $this->passed . ' passed @;';
       // @ Stats
-      $total = $this->total . ' total';
+      $total = '@#white:' . $this->total . ' total @;';
       // @ Time
       $started = $this->started;
       $finished = $this->finished = microtime(true);
@@ -213,8 +213,8 @@ class Tester extends Tests
       $this->log(<<<TESTS
 
       -------------------------------------------------
-      Tests: {$failed}, {$skipped}, {$passed}, {$total}
-      Duration: {$duration}
+      @#white:Tests: @; {$failed}, {$skipped}, {$passed}, {$total}
+      @#white:Duration: @; {$duration}
       {$ran}
       -------------------------------------------------
       \n

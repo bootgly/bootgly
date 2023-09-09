@@ -52,7 +52,7 @@ class Suites
       $passed = '@:success:' . $this->passed . ' passed @;';
       // @ Stats
       $cases = '@:info:' . Tests::$cases . ' @;';
-      $total = $this->total . ' total';
+      $total = '@#white:' . $this->total . ' total @;';
       // @ Time
       $started = $this->started;
       $finished = $this->finished = microtime(true);
@@ -65,12 +65,12 @@ class Suites
       // TODO temp
       $this->log(<<<TESTS
 
-      ==================================================
-      Suites: {$failed}, {$skipped}, {$passed}, {$total}
-      Test Cases #: {$cases}
-      Total Duration: {$duration}
+      ============================================================
+      @#white:Test Suites: @; {$failed}, {$skipped}, {$passed}, {$total}
+      @#white:# of Test Cases: @; {$cases}
+      @#white:Total Duration: @; {$duration}
       {$ran}
-      ==================================================
+      ============================================================
       \n
       TESTS);
    }

@@ -129,7 +129,7 @@ class Test // extends Assertions
          $header = '\\' .str_pad($header, $separatorLength ?? 0, ' ', STR_PAD_BOTH) . '/';
          $header = str_pad($header, $width - 7, ' ', STR_PAD_BOTH);
 
-         $this->log($header . ' @\;');
+         $this->log('@#white:' . $header . ' @;@\;');
       }
    }
    // @
