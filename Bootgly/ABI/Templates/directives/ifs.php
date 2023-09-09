@@ -1,30 +1,30 @@
 <?php
 return [
-   "/(@)?(@if)[ ]+?(.+?)[ ]?:/sx" => function ($matches) {
+   "/(@)?@if[ ]+?(.+?)[ ]?:/sx" => function ($matches) {
       if ($matches[1]) {
          return substr($matches[0], 1);
       }
 
       // @ Conditional
-      $conditional = $matches[3];
+      $conditional = $matches[2];
 
       return <<<PHP
       <?php if ({$conditional}): ?>
       PHP;
    },
-   "/(@)?(@elseif)[ ]+?(.+?)[ ]?:/sx" => function ($matches) {
+   "/(@)?@else[\s]?if[\s]+?(.+?)[\s]?:/sx" => function ($matches) {
       if ($matches[1]) {
          return substr($matches[0], 1);
       }
 
       // @ Conditional
-      $conditional = $matches[3];
+      $conditional = $matches[2];
 
       return <<<PHP
       <?php elseif ({$conditional}): ?>
       PHP;
    },
-   "/(@)?(@else)[ ]?:/sx" => function ($matches) {
+   "/(@)?@else[ ]?:/sx" => function ($matches) {
       if ($matches[1]) {
          return substr($matches[0], 1);
       }

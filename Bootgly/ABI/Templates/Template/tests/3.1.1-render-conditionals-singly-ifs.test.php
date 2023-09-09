@@ -11,39 +11,41 @@ return [
    // @ test
    'test' => function () {
       // @ Valid
-      $Template1 = new Template(
+      $Template11 = new Template(
          <<<'TEMPLATE'
          @if ($cool) :
          Bootgly Template is cool!
          @if;
+         TEMPLATE
+      );
+      $Template11->render([
+         'cool'     => true,
+      ], $Template11->Renderization::JIT_EVAL_MODE);
+      assert(
+         assertion: $Template11->output === <<<OUTPUT
+         Bootgly Template is cool!\n
+         OUTPUT,
+         description: "Template #1.1: output does not match: \n`" . $Template11->output . '`'
+      );
 
-         @if ($powerful) :
-         Bootgly is powerful!
-         @if;
-
-         @if ($undef) :
-         Bootgly is ?!
-         @if;
-
-         @if ($poor) :
-         Bootgly is poor!
+      $Template12 = new Template(
+         <<<'TEMPLATE'
+         @if $poor:
+         Bootgly Template is poor!
+         @else if $cool:
+         Bootgly Template is cool!
          @if;
          TEMPLATE
       );
-      $Template1->render([
+      $Template12->render([
+         'poor'     => false,
          'cool'     => true,
-         'powerful' => true,
-         // undef
-         'poor'     => false
-      ], $Template1->Renderization::JIT_EVAL_MODE);
+      ], $Template12->Renderization::JIT_EVAL_MODE);
       assert(
-         assertion: $Template1->output === <<<OUTPUT
-         Bootgly Template is cool!
-
-         Bootgly is powerful!
-         \n\n
+         assertion: $Template12->output === <<<OUTPUT
+         Bootgly Template is cool!\n
          OUTPUT,
-         description: "Template #1: output does not match: \n`" . $Template1->output . '`'
+         description: "Template #1.2: output does not match: \n`" . $Template12->output . '`'
       );
 
       // @ Neutral
