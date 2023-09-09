@@ -14,11 +14,15 @@ return [
       $Template11 = new Template(
          <<<'TEMPLATE'
          @foreach ($items as $key => $item):
-            @if ($@->index === 1):
+            @if ($@->isFirst):
                @>> 'First!';
             @if;
 
             @>> $@->index;
+
+            @if ($@->isLast):
+               @>> 'Last!';
+            @if;
          @foreach;
          TEMPLATE
       );
@@ -27,10 +31,7 @@ return [
       ], $Template11->Renderization::JIT_EVAL_MODE);
       assert(
          assertion: $Template11->output === <<<'OUTPUT'
-            
-            0         First!   
-            1   
-            2
+         First!012Last!
          OUTPUT,
          description: "Template #1.1: output does not match: \n`" . $Template11->output . '`'
       );

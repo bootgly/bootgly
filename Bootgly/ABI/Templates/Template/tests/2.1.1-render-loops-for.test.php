@@ -21,7 +21,7 @@ return [
       $Template1->render([], $Template1->Renderization::JIT_EVAL_MODE);
       assert(
          assertion: $Template1->output === <<<'OUTPUT'
-               0      1      2   
+         012
          OUTPUT,
          description: "Template #1: output does not match: \n`" . $Template1->output . '`'
       );
@@ -37,7 +37,7 @@ return [
       $Template2->render([], $Template2->Renderization::JIT_EVAL_MODE);
       assert(
          assertion: $Template2->output === <<<'OUTPUT'
-                  1   
+         1
          OUTPUT,
          description: "Template #2: output does not match: \n`" . $Template2->output . '`'
       );

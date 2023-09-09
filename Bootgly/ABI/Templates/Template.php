@@ -29,7 +29,7 @@ class Template implements Templates
    // * Meta
    // Cache
    private ? File $Cache;
-   // Output
+   // Pipeline
    private string $compiled;
    public string $output;
 
@@ -45,21 +45,36 @@ class Template implements Templates
       // * Meta
       // Cache
       $this->Cache = null;
-      // Output
+      // Pipeline
       $this->compiled = '';
       $this->output = '';
 
       // @
-      // Directives
+      // $Directives
       $this->Directives = new Directives;
-      // raw
+      // $raw
       if ($raw instanceof File) {
-         $this->raw = $raw->contents;
-      } else {
-         $this->raw = $raw;
+         $raw = $raw->contents;
       }
+      // @ Preprocess
+      // Minify
+      $raw = $this->minify($raw);
+      // @ Set
+      $this->raw = $raw;
    }
 
+   private function minify(string $compiled): string
+   {
+      $directives = $this->Directives->tokens;
+
+      $minified = preg_replace(
+         "/(?<!\S)(@[$directives].*[:;])\s+/m",
+         '$1',
+         $compiled
+      );
+
+      return (string) $minified;
+   }
    private function compile () : bool
    {
       // * Data
@@ -80,6 +95,7 @@ class Template implements Templates
 
       return true;
    }
+
    private function cache () : bool
    {
       // * Data

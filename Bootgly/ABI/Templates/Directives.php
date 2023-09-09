@@ -21,22 +21,30 @@ class Directives // TODO use Resources interface
 {
    // * Config
    // ...
+
    // * Data
    protected array $directives;
+
    // * Meta
-   // ...
+   protected array $names;
+   // @ Regex
+   protected string $tokens;
 
 
    public function __construct ()
    {
-      // * Data
-      // ->directives
       $resource = __DIR__ . '/directives/';
       $bootables = require($resource . '@.php');
 
       $directives = $bootables['directives'];
 
-      foreach ($directives as $value) {
+      foreach ($directives as $name => $value) {
+         // @ Register directive name
+         if (is_string($name) === true) {
+            $this->names[] = $name;
+         }
+
+         // @ Set directive value
          if (is_string($value) === true) {
             $filename = Path::normalize($value);
 
@@ -49,16 +57,27 @@ class Directives // TODO use Resources interface
             $this->directives[$pattern] = $Closure;
          }
       }
+
+      $this->tokens = implode('|', $this->names);
    }
    public function __get ($name)
    {
-      if ($name === 'directives') {
-         return $this->directives;
+      switch ($name) {
+         // * Data
+         case 'directives':
+            return $this->directives;
+
+         // * Meta
+         case 'names':
+            return $this->names;
+         // @ Regex
+         case 'tokens':
+            return $this->tokens;
+
+         default:
+            return null;
       }
-
-      return null;
    }
-
 
    public function extend (string $pattern, Closure $Callback)
    {
