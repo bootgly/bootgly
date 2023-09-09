@@ -16,7 +16,7 @@ $Output->reset();
 $Output->render(<<<OUTPUT
 /* @*:
  * @#green: Bootgly CLI Terminal - Menu component @;
- * @#yellow: @@ Demo - Example #2 - Options: divisors in Builder @;
+ * @#yellow: @@: Demo - Example #2 - Options: divisors in Builder @;
  * {$location}
  */\n\n
 OUTPUT);

@@ -12,7 +12,7 @@ $Output->reset();
 $Output->render(<<<OUTPUT
 /* @*:
  * @#green: Bootgly CLI Terminal - Menu component @;
- * @#yellow: @@ Demo - Example #3 - Options: unique selection mode @;
+ * @#yellow: @@: Demo - Example #3 - Options: unique selection mode @;
  * {$location}
  */\n\n
 OUTPUT);

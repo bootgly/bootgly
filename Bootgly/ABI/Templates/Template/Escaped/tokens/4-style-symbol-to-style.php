@@ -1,6 +1,6 @@
 <?php
 return [
-   '/@([@*~_-])[\s:]?/m' => function ($matches) {
+   '/@([@*~_-]):[\s]?/m' => function ($matches) {
       $style = match ($matches[1]) {
          '@' => self::_BLINK_STYLE,
 

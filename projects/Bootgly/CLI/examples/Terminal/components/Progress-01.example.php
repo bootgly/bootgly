@@ -10,7 +10,7 @@ $Output->reset();
 $Output->render(<<<OUTPUT
 /* @*:
  * @#green: Bootgly CLI Terminal - Progress component @;
- * @#yellow: @@ Demo - Example #1 @;
+ * @#yellow: @@: Demo - Example #1 @;
  * {$location}
  */\n\n
 OUTPUT);

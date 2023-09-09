@@ -12,7 +12,7 @@ $Output->reset();
 $Output->render(<<<OUTPUT
 /* @*:
  * @#green: Bootgly CLI Terminal - Menu component @;
- * @#yellow: @@ Demo - Example #5 - Options: center aligment @;
+ * @#yellow: @@: Demo - Example #5 - Options: center aligment @;
  * {$location}
  */\n\n
 OUTPUT);

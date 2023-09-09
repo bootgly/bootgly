@@ -66,7 +66,7 @@ $TCP_Client->on(
    disconnect: function ($Connection) use($TCP_Client) {
       $TCP_Client->log(
          'Connection #' . $Connection->id . ' (' . $Connection->ip . ':' . $Connection->port . ')'
-         . ' from Worker with PID @_' . $TCP_Client->Process->id . '_@ was closed! @\;'
+         . ' from Worker with PID @_:' . $TCP_Client->Process->id . '_@ was closed! @\;'
       );
    },
    // on Package write / read
