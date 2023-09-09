@@ -23,7 +23,7 @@ class Template implements Templates
    public Renderization $Renderization;
 
    // * Data
-   public Directives $Directives;
+   public static Directives $Directives;
    public readonly string|File $raw;
 
    // * Meta
@@ -51,7 +51,7 @@ class Template implements Templates
 
       // @
       // $Directives
-      $this->Directives = new Directives;
+      self::$Directives ??= new Directives;
       // $raw
       if ($raw instanceof File) {
          $raw = $raw->contents;
@@ -65,7 +65,7 @@ class Template implements Templates
 
    private function minify(string $compiled): string
    {
-      $directives = $this->Directives->tokens;
+      $directives = self::$Directives->tokens;
 
       $minified = preg_replace(
          "/(?<!\S)(@[$directives].*[:;])\s+/m",
@@ -78,7 +78,7 @@ class Template implements Templates
    private function compile () : bool
    {
       // * Data
-      $Directives = $this->Directives;
+      $Directives = self::$Directives;
       $raw        = $this->raw;
 
       // @
