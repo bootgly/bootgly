@@ -63,7 +63,7 @@ class Template implements Templates
       $this->raw = $raw;
    }
 
-   private function minify(string $compiled): string
+   private function minify (string $compiled) : string
    {
       $directives = self::$Directives->tokens;
 

@@ -48,7 +48,7 @@ class Directives // TODO use Resources interface
          if (is_string($value) === true) {
             $filename = Path::normalize($value);
 
-            $directive = require($resource . $filename . '.php');
+            $directive = require($resource . $filename . '.directive.php');
          } else if (is_array($value) === true) {
             $directive = $value;
          }
