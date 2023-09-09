@@ -38,6 +38,11 @@ class Iterator implements Iterating
 
       #iteration
       #remaining
+
+      #isFirst
+      #isLast
+      #isOdd
+      #isEven
    }
 
    public function __get ($name)
@@ -57,6 +62,10 @@ class Iterator implements Iterating
          case 'isLast':
             $count = $this->count ??= count($this->iteratee);
             return $count === ($this->index + 1);
+         case 'isOdd':
+            return ($this->index + 1) % 2 === 0;
+         case 'isEven':
+            return ($this->index + 1) % 2 !== 0;
 
          default:
             return null;
