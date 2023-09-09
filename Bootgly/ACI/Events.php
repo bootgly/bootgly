@@ -13,5 +13,5 @@ namespace Bootgly\ACI;
 
 interface Events
 {
-   // TODO
+   // ...Used to define and indentify subclasses (instance of).
 }

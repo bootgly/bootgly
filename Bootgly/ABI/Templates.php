@@ -13,5 +13,5 @@ namespace Bootgly\ABI;
 
 interface Templates
 {
-   // TODO
+   // ...Used to define and indentify subclasses (instance of).
 }

@@ -13,5 +13,5 @@ namespace Bootgly\ABI;
 
 trait Configs
 {
-   // TODO
+   // Used as base trait
 }
