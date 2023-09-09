@@ -16,14 +16,51 @@ use Iterator as Iterating;
 
 class Iterator implements Iterating
 {
+   // * Data
    private array|object $iteratee;
+   // * Meta
    public int $index;
+
+   protected int $count;
+
+   protected int $iteration;
+   protected int $remaining;
 
 
    public function __construct (array|object $iteratee)
    {
+      // * Data
       $this->iteratee = $iteratee;
+      // * Meta
       $this->index = 0;
+      // ...dynamically
+      #count
+
+      #iteration
+      #remaining
+   }
+
+   public function __get ($name)
+   {
+      switch ($name) {
+         case 'count':
+            return $this->count = count($this->iteratee);
+
+         case 'iteration':
+            return $this->index + 1;
+         case 'remaining':
+            $count = $this->count ??= count($this->iteratee);
+            return $count - ($this->index + 1);
+
+         case 'isFirst':
+            return $this->index === 0;
+         case 'isLast':
+            $count = $this->count ??= count($this->iteratee);
+            return $count === ($this->index + 1);
+
+         default:
+            return null;
+      }
    }
 
    public function rewind () : void
