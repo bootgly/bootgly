@@ -15,10 +15,10 @@ use Bootgly\ACI\Debugger;
 
 use Bootgly\API\Project;
 
-use Bootgly\WPI\nodes\HTTP\Server\Bridge as Server;
-use Bootgly\WPI\nodes\HTTP\Server\Bridge\Request;
-use Bootgly\WPI\nodes\HTTP\Server\Bridge\Response;
-use Bootgly\WPI\modules\HTTP\Server\Router;
+use Bootgly\WPI\Nodes\HTTP\Server\Bridge as Server;
+use Bootgly\WPI\Nodes\HTTP\Server\Bridge\Request;
+use Bootgly\WPI\Nodes\HTTP\Server\Bridge\Response;
+use Bootgly\WPI\Modules\HTTP\Server\Router;
 
 
 class WPI // Web Programming Interface

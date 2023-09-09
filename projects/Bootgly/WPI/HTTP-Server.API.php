@@ -5,9 +5,9 @@ namespace projects\Bootgly\WPI;
 
 use Bootgly;
 
-use Bootgly\WPI\modules\HTTP\Server\Router;
-use Bootgly\WPI\nodes\HTTP\Server\CLI\Request;
-use Bootgly\WPI\nodes\HTTP\Server\CLI\Response;
+use Bootgly\WPI\Modules\HTTP\Server\Router;
+use Bootgly\WPI\Nodes\HTTP\Server\CLI\Request;
+use Bootgly\WPI\Nodes\HTTP\Server\CLI\Response;
 
 
 Bootgly::$Project->vendor    = 'Bootgly/';

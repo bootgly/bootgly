@@ -119,7 +119,7 @@ class Template implements Templates
          switch ($mode) {
             case Renderization::FILE_HASHED_MODE:
                $this->cache();
-               include (string) $this->Cache->file;
+               include $this->Cache->file;
                break;
             case Renderization::JIT_EVAL_MODE:
                $this->compile();
@@ -127,7 +127,7 @@ class Template implements Templates
                break;
          }
 
-         $this->output = ob_get_clean();
+         $output = ob_get_clean();
       } catch (Throwable $Throwable) {
          ob_end_clean();
 
@@ -137,10 +137,10 @@ class Template implements Templates
             $Throwable->getLine()
          );
 
-         $this->output = '';
+         $output = '';
       }
 
-      return true;
+      return $this->output = $output;
    }
 }
 

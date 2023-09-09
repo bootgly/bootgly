@@ -15,7 +15,7 @@ namespace Bootgly;
 require __DIR__ . '/../autoload.php';
 
 
-use Bootgly\WPI\interfaces\TCP;
+use Bootgly\WPI\Interfaces\TCP;
 
 
 $TCP_Server = new TCP\Server;

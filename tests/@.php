@@ -23,6 +23,6 @@ return [
       // Command Line Interface (CLI)
       'Bootgly/CLI/',
       // Web Programming Interface (WPI)
-      'Bootgly/WPI/nodes/HTTP/Server/CLI/',
+      'Bootgly/WPI/Nodes/HTTP/Server/CLI/',
    ]
 ];
