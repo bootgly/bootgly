@@ -23,7 +23,7 @@ return [
          'a'     => 'easy',
          'b'     => true,
          #'c' => false
-      ], $Template11->Renderization::JIT_EVAL_MODE);
+      ]);
       assert(
          assertion: $Template11->output === <<<'OUTPUT'
          Bootgly Template is easy!
@@ -39,7 +39,7 @@ return [
          Echo PHP Code: @> 123456;!
          TEMPLATE
       );
-      $Template12->render([], $Template12->Renderization::JIT_EVAL_MODE);
+      $Template12->render([]);
       assert(
          assertion: $Template12->output === <<<'OUTPUT'
          Echo PHP Code: 123456!
@@ -54,7 +54,7 @@ return [
          Echo PHP Code: @@> 123456;!
          TEMPLATE
       );
-      $Template21->render([], $Template21->Renderization::JIT_EVAL_MODE);
+      $Template21->render([]);
       assert(
          assertion: $Template21->output === <<<'OUTPUT'
          Echo PHP Code: @> 123456;!

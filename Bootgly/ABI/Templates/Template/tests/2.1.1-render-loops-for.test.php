@@ -18,7 +18,7 @@ return [
          @> $i;
       @for;
       TEMPLATE);
-      $Template1->render([], $Template1->Renderization::JIT_EVAL_MODE);
+      $Template1->render([]);
       assert(
          assertion: $Template1->output === <<<'OUTPUT'
          012
@@ -34,7 +34,7 @@ return [
          @break;
       @for;
       TEMPLATE);
-      $Template2->render([], $Template2->Renderization::JIT_EVAL_MODE);
+      $Template2->render([]);
       assert(
          assertion: $Template2->output === <<<'OUTPUT'
          1

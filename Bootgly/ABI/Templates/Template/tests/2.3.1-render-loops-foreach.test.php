@@ -28,7 +28,7 @@ return [
       );
       $Template11->render([
          'items' => ['a', 'b', 'c']
-      ], $Template11->Renderization::JIT_EVAL_MODE);
+      ]);
       assert(
          assertion: $Template11->output === <<<OUTPUT
          First!

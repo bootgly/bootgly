@@ -20,7 +20,7 @@ return [
       );
       $Template11->render([
          'tenth' => 10
-      ], $Template11->Renderization::JIT_EVAL_MODE);
+      ]);
       assert(
          assertion: $Template11->output === <<<'OUTPUT'
          10987654321
@@ -39,7 +39,7 @@ return [
       );
       $Template21->render([
          'tenth' => 10
-      ], $Template21->Renderization::JIT_EVAL_MODE);
+      ]);
       assert(
          assertion: $Template21->output === <<<'OUTPUT'
          @while $tenth:

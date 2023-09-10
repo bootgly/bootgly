@@ -20,7 +20,7 @@ use Bootgly\ABI\Templates;
 class Template implements Templates
 {
    // * Config
-   public Renderization $Renderization;
+   // ...
 
    // * Data
    public static Directives $Directives;
@@ -37,7 +37,7 @@ class Template implements Templates
    public function __construct (string|File $raw, bool $minify = true)
    {
       // * Config
-      $this->Renderization = Renderization::FILE_HASHED_MODE->set();
+      // ...
 
       // * Data
       // @
@@ -126,24 +126,19 @@ class Template implements Templates
    {
       debug('<code>' . htmlspecialchars($this->compiled) . '</code>');
    }
-   public function render (array $parameters = [], Renderization $mode = Renderization::FILE_HASHED_MODE) : string|false
+   public function render (array $parameters = []) : string|false
    {
       // @
       try {
+         $started = ob_start();
+         if ($started === false) {
+            return false;
+         }
+
          extract($parameters);
 
-         ob_start();
-
-         switch ($mode) {
-            case Renderization::FILE_HASHED_MODE:
-               $this->cache();
-               include $this->Cache->file;
-               break;
-            case Renderization::JIT_EVAL_MODE:
-               $this->compile();
-               eval('?>' . $this->compiled);
-               break;
-         }
+         $this->cache();
+         include $this->Cache->file;
 
          $output = ob_get_clean();
       } catch (Throwable $Throwable) {
@@ -160,14 +155,4 @@ class Template implements Templates
 
       return $this->output = $output;
    }
-}
-
-
-// * Config
-enum Renderization
-{
-   use \Bootgly\ABI\Configs\Set;
-
-   case FILE_HASHED_MODE;
-   case JIT_EVAL_MODE;
 }

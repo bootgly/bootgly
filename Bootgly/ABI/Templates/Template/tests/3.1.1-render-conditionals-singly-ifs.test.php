@@ -19,8 +19,8 @@ return [
          TEMPLATE
       );
       $Template11->render([
-         'cool'     => true,
-      ], $Template11->Renderization::JIT_EVAL_MODE);
+         'cool' => true,
+      ]);
       assert(
          assertion: $Template11->output === <<<OUTPUT
          Bootgly Template is cool!\n
@@ -38,9 +38,9 @@ return [
          TEMPLATE
       );
       $Template12->render([
-         'poor'     => false,
-         'cool'     => true,
-      ], $Template12->Renderization::JIT_EVAL_MODE);
+         'poor' => false,
+         'cool' => true,
+      ]);
       assert(
          assertion: $Template12->output === <<<OUTPUT
          Bootgly Template is cool!\n
