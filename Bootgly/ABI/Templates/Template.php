@@ -34,7 +34,7 @@ class Template implements Templates
    public string $output;
 
 
-   public function __construct (string|File $raw)
+   public function __construct (string|File $raw, bool $minify = true)
    {
       // * Config
       $this->Renderization = Renderization::FILE_HASHED_MODE->set();
@@ -58,7 +58,9 @@ class Template implements Templates
       }
       // @ Preprocess
       // Minify
-      $raw = $this->minify($raw);
+      if ($minify) {
+         $raw = $this->minify($raw);
+      }
       // @ Set
       $this->raw = $raw;
    }
@@ -87,10 +89,11 @@ class Template implements Templates
             pattern: $Directives->directives,
             subject: $raw,
          );
-      } catch (Throwable) {
+      } catch (Throwable $Throwable) {
          return false;
       }
 
+      debug($compiled);
       $this->compiled = $compiled;
 
       return true;
