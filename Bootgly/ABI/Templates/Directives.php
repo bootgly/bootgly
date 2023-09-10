@@ -79,8 +79,12 @@ class Directives // TODO use Resources interface
       }
    }
 
-   public function extend (string $pattern, Closure $Callback)
+   public function extend (? string $name = null, string $pattern, Closure $Callback)
    {
+      if ($name) {
+         $this->names[] = $name;
+      }
+
       $this->directives[$pattern] ??= $Callback;
    }
 }
