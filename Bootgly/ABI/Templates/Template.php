@@ -89,11 +89,10 @@ class Template implements Templates
             pattern: $Directives->directives,
             subject: $raw,
          );
-      } catch (Throwable $Throwable) {
+      } catch (Throwable) {
          return false;
       }
 
-      debug($compiled);
       $this->compiled = $compiled;
 
       return true;
