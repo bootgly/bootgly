@@ -33,9 +33,8 @@ class Iterator implements Iterating
       $this->iteratee = $iteratee;
       // * Meta
       $this->index = 0;
-      // ...dynamically
-      #count
-
+      $this->count = count($iteratee);
+      // ...dynamically:
       #iteration
       #remaining
 
@@ -49,19 +48,17 @@ class Iterator implements Iterating
    {
       switch ($name) {
          case 'count':
-            return $this->count = count($this->iteratee);
+            return $this->count;
 
          case 'iteration':
             return $this->index + 1;
          case 'remaining':
-            $count = $this->count ??= count($this->iteratee);
-            return $count - ($this->index + 1);
+            return $this->count - ($this->index + 1);
 
          case 'isFirst':
             return $this->index === 0;
          case 'isLast':
-            $count = $this->count ??= count($this->iteratee);
-            return $count === ($this->index + 1);
+            return $this->count === ($this->index + 1);
          case 'isOdd':
             return ($this->index + 1) % 2 === 0;
          case 'isEven':
@@ -72,30 +69,36 @@ class Iterator implements Iterating
       }
    }
 
+   #[\ReturnTypeWillChange]
    public function rewind () : void
    {
       $this->index = 0;
+      reset($this->iteratee);
    }
 
    #[\ReturnTypeWillChange]
-   public function current ()
+   public function current () : mixed
    {
-      return $this->iteratee[$this->index];
+      return current($this->iteratee);
    }
 
    #[\ReturnTypeWillChange]
-   public function key ()
+   public function key () : mixed
    {
-      return $this->index;
+      return key($this->iteratee);
    }
 
+   #[\ReturnTypeWillChange]
    public function next () : void
    {
       ++$this->index;
+      next($this->iteratee);
    }
 
+   #[\ReturnTypeWillChange]
    public function valid () : bool
    {
-      return isSet($this->iteratee[$this->index]);
+      $key = $this->key();
+      return isSet($this->iteratee[$key]);
    }
 }
