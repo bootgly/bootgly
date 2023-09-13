@@ -20,7 +20,7 @@ return [
 
             @.>. "Level #$@->depth - key: " . $@->key;
 
-            @foreach ($subitems as $subitems):
+            @foreach ($subitems as $subitem):
                @>. "Level #2 - value: " . $@->value;
 
                @if ($@->Parent->remaining === 0):
