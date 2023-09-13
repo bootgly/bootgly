@@ -18,23 +18,29 @@ class Iterator implements Iterating
 {
    // * Data
    private array|object $iteratee;
+   public ? Iterator $Parent;
+   public int $depth;
    // * Meta
    public int $index;
-
    protected int $count;
 
    protected int $iteration;
    protected int $remaining;
 
 
-   public function __construct (array|object $iteratee)
+   public function __construct (array|object &$iteratee, ? Iterator $Parent = null, int $depth)
    {
       // * Data
       $this->iteratee = $iteratee;
+      $this->Parent = $Parent;
+      $this->depth = $depth;
       // * Meta
       $this->index = 0;
       $this->count = count($iteratee);
       // ...dynamically:
+      #key
+      #value
+
       #iteration
       #remaining
 
@@ -43,7 +49,6 @@ class Iterator implements Iterating
       #isOdd
       #isEven
    }
-
    public function __get ($name)
    {
       switch ($name) {
