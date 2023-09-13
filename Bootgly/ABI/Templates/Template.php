@@ -19,6 +19,8 @@ use Bootgly\ABI\Templates;
 
 class Template implements Templates
 {
+   private Iterators $Iterators;
+
    // * Config
    // ...
 
@@ -30,12 +32,15 @@ class Template implements Templates
    // Cache
    private ? File $Cache;
    // Pipeline
+   private string $precompiled;
    private string $compiled;
    public string $output;
 
 
    public function __construct (string|File $raw, bool $minify = true)
    {
+      $this->Iterators = new Iterators;
+
       // * Config
       // ...
 
@@ -56,38 +61,46 @@ class Template implements Templates
       if ($raw instanceof File) {
          $raw = $raw->contents;
       }
-      // @ Preprocess
-      // Minify
-      if ($minify) {
-         $raw = $this->minify($raw);
-      }
-      // @ Set
       $this->raw = $raw;
+
+      $this->precompile(minify: $minify);
    }
 
-   private function minify (string $compiled) : string
+   private function precompile (bool $minify = true) : bool
    {
-      $directives = self::$Directives->tokens;
+      $precompiled = $this->raw;
 
-      $minified = preg_replace(
-         "/(?<!\S)(@[$directives].*[:;])\s+/m",
-         '$1',
-         $compiled
-      );
+      try {
+         if ($minify) {
+            $directives = self::$Directives->tokens;
+            $minified = preg_replace(
+               "/(?<!\S)(@[$directives].*[:;])\s+/m",
+               '$1',
+               $precompiled
+            );
+            $precompiled = (string) $minified;
+         }
+      } catch (Throwable $Throwable) {
+         debug($Throwable);
+      }
 
-      return (string) $minified;
+      $this->precompiled = $precompiled;
+
+      return true;
    }
    private function compile () : bool
    {
-      // * Data
-      $Directives = self::$Directives;
-      $raw        = $this->raw;
+      $Directives  = &self::$Directives;
+      $precompiled = &$this->precompiled;
 
-      // @
+      if ($precompiled === '') {
+         return false;
+      }
+
       try {
          $compiled = preg_replace_callback_array(
             pattern: $Directives->directives,
-            subject: $raw,
+            subject: $precompiled,
          );
       } catch (Throwable) {
          return false;
@@ -110,13 +123,16 @@ class Template implements Templates
 
       // @ Cache
       $created = $Cache->create(recursively: true);
-      if ($created) {
+      if ($created || $Cache->contents === '') {
          $compiled = $this->compile();
-         if ($compiled) {
-            $Cache->open(File::CREATE_READ_WRITE_MODE);
-            $Cache->write($this->compiled);
-            $Cache->close();
+
+         if ($compiled === false || $this->compiled === '') {
+            return false;
          }
+
+         $Cache->open(File::CREATE_READ_WRITE_MODE);
+         $Cache->write($this->compiled);
+         $Cache->close();
       }
 
       return true;
@@ -130,24 +146,35 @@ class Template implements Templates
    {
       // @
       try {
-         $started = ob_start();
-         if ($started === false) {
+         $cached = $this->cache();
+         if ($cached === false) {
             return false;
          }
 
-         extract($parameters);
+         $started = ob_start();
+         if ($started === false) {
+            @ob_end_clean();
+            return false;
+         }
 
-         $this->cache();
-         include $this->Cache->file;
-
-         $output = ob_get_clean();
+         (static function ($__file__, $parameters, $_) {
+            extract($parameters);
+            include $__file__;
+         })(
+            $this->Cache->file,
+            $parameters,
+            $this->Iterators
+         );
+ 
+         $output = @ob_get_clean();
       } catch (Throwable $Throwable) {
          ob_end_clean();
 
          debug(
             'Error!',
             $Throwable->getMessage(),
-            $Throwable->getLine()
+            $Throwable->getLine(),
+            $Throwable->getFile()
          );
 
          $output = '';

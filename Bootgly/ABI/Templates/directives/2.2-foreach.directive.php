@@ -8,17 +8,16 @@ return [
       // @ <expression> as $key
       $iterable = trim($matches[2], '()');
 
-      // TODO Add Loop Variables only if meta variable ($@) exists inside foreach
       preg_match('/\$(.*) +as *(.*)$/is', $iterable, $_matches);
       $iteratee = $_matches[1];
       $iteration = $_matches[2];
 
       $init = <<<PHP
-      \$_ = new \Bootgly\ABI\Templates\Iterator(\$$iteratee);
+      \$_ = \Bootgly\ABI\Templates\Iterators::queue(\$$iteratee)
       PHP;
 
       return <<<PHP
-      <?php {$init} foreach (\$_ as {$iteration}): ?>
+      <?php foreach ({$init} as {$iteration}): ?>
       PHP;
    },
    "/(@)?@foreach[ ]?;/sx" => function ($matches) {
@@ -27,7 +26,7 @@ return [
       }
 
       return <<<PHP
-      <?php endforeach; ?>
+      <?php endforeach; \$_ = \Bootgly\ABI\Templates\Iterators::dequeue(); ?>
       PHP;
    },
 ];
