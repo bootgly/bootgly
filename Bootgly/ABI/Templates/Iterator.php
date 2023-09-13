@@ -52,6 +52,9 @@ class Iterator implements Iterating
    public function __get ($name)
    {
       switch ($name) {
+         case 'key': return $this->key();
+         case 'value': return $this->current();
+
          case 'count':
             return $this->count;
 
