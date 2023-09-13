@@ -33,7 +33,7 @@ class Iterators
 
       return $Iterator;
    }
-   public static function dequeue () : ? Iterator
+   public static function dequeue () : Iterator|string
    {
       self::$depth--;
 
@@ -44,6 +44,6 @@ class Iterators
          return self::$Iterators[$iterators - 1];
       }
 
-      return null;
+      return static::class;
    }
 }

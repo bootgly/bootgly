@@ -39,7 +39,7 @@ class Template implements Templates
 
    public function __construct (string|File $raw, bool $minify = true)
    {
-      $this->Iterators = new Iterators;
+      $this->Iterators = new Iterators; // @ Used to preload Iterators
 
       // * Config
       // ...
@@ -49,9 +49,8 @@ class Template implements Templates
 
       // * Meta
       // Cache
-      $this->Cache = null;
+      // ...
       // Pipeline
-      $this->compiled = '';
       $this->output = '';
 
       // @
@@ -157,13 +156,12 @@ class Template implements Templates
             return false;
          }
 
-         (static function ($__file__, $parameters, $_) {
+         (static function ($__file__, $parameters) {
             extract($parameters);
             include $__file__;
          })(
             $this->Cache->file,
-            $parameters,
-            $this->Iterators
+            $parameters
          );
  
          $output = @ob_get_clean();

@@ -13,15 +13,19 @@ return [
       // @ Valid
       $Template11 = new Template(
          <<<'TEMPLATE'
-         @foreach ($items as $key => $value):
-            @if ($@->isFirst):
+         @foreach ($items as $group => $subitems):
+            @if $@->isFirst:
                @>. 'First!';
             @if;
 
-            @.>. "Level #1 - key: " . $@->key;
+            @.>. "Level #$@->depth - key: " . $@->key;
 
-            @foreach ($value as $subitems):
+            @foreach ($subitems as $subitems):
                @>. "Level #2 - value: " . $@->value;
+
+               @if ($@->Parent->remaining === 0):
+                  @> "Level #1 - key: " . $@->Parent->key . PHP_EOL;
+               @if;
             @foreach;
 
             @if ($@->isLast):
@@ -53,8 +57,11 @@ return [
 
          Level #1 - key: c
          Level #2 - value: helmet
+         Level #1 - key: c
          Level #2 - value: legs
+         Level #1 - key: c
          Level #2 - value: t-shirt
+         Level #1 - key: c
 
          Last!
          OUTPUT,
