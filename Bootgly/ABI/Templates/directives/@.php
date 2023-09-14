@@ -1,6 +1,8 @@
 <?php
 return [
    'directives' => [
+      '0.0-php',
+
       'break' => '0.1-break',
       'continue' => '0.2-continue',
       '0.3-metavar',
