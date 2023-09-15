@@ -17,6 +17,7 @@ return [
       #'2.1.1-render-loops-for',
       #'2.2.1-render-loops-while',
       #'2.3.1-render-loops-foreach',
-      #'3.1.1-render-conditionals-singly-ifs',
+      '3.1.1-render-conditionals-singly_ifs',
+      '3.1.2-render-conditionals-short_empty_ifs',
    ]
 ];

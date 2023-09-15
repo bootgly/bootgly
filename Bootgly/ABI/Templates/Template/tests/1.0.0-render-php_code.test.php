@@ -2,7 +2,6 @@
 
 use Bootgly\ABI\Templates\Template;
 
-
 return [
    // @ configure
    'describe' => 'It should render pure PHP',
