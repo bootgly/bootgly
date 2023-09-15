@@ -193,7 +193,7 @@ class Dir implements FS
 
       // @
       try {
-         $created = mkdir($basedir, $permissions, $recursively);
+         $created = @mkdir($basedir, $permissions, $recursively);
       } catch (Throwable) {
          $created = false;
       }

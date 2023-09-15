@@ -9,7 +9,7 @@ return [
       $level = $matches[2] ?? '';
 
       return <<<PHP
-      <?php continue $level; ?>
+      <?php \$_->next(); continue $level; ?>
       PHP;
    },
    "/(@)?@continue[ ]+?(\d+)?[ ]?in[ ]+?(.+?)[ ]?;/sx" => function ($matches) {
@@ -23,7 +23,7 @@ return [
       $conditional = $matches[3];
 
       return <<<PHP
-      <?php if ($conditional) continue $level; ?>
+      <?php if ($conditional) {\$_?->next(); continue $level;} ?>
       PHP;
    },
 ];

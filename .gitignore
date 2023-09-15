@@ -23,6 +23,8 @@ composer.lock
 @imports/
 
 ## Private files
+# Benchmarks
+_*.benchmark.php
 # Examples
 _*.example.php
 # Tests

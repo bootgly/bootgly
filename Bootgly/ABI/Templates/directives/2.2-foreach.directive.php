@@ -13,11 +13,11 @@ return [
       $iteration = $_matches[2];
 
       $init = <<<PHP
-      \$_ = \Bootgly\ABI\Templates\Iterators::queue(\$$iteratee)
+      \$_ = \Bootgly\ABI\Templates\Iterators::queue(\${$iteratee});
       PHP;
 
       return <<<PHP
-      <?php foreach ({$init} as {$iteration}): ?>
+      <?php {$init} foreach (\${$iteratee} as {$iteration}): ?>
       PHP;
    },
    "/(@)?@foreach[ ]?;/sx" => function ($matches) {
@@ -26,7 +26,7 @@ return [
       }
 
       return <<<PHP
-      <?php endforeach; \$_ = \Bootgly\ABI\Templates\Iterators::dequeue(); ?>
+      <?php \$_?->next(); endforeach; \$_ = \Bootgly\ABI\Templates\Iterators::dequeue(); ?>
       PHP;
    },
 ];

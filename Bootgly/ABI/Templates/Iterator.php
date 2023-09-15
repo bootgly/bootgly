@@ -11,10 +11,7 @@
 namespace Bootgly\ABI\Templates;
 
 
-use Iterator as Iterating;
-
-
-class Iterator implements Iterating
+class Iterator
 {
    // * Data
    private array|object $iteratee;
@@ -31,7 +28,7 @@ class Iterator implements Iterating
    public function __construct (array|object &$iteratee, ? Iterator $Parent = null, int $depth)
    {
       // * Data
-      $this->iteratee = $iteratee;
+      $this->iteratee = &$iteratee;
       $this->Parent = $Parent;
       $this->depth = $depth;
       // * Meta
@@ -52,8 +49,8 @@ class Iterator implements Iterating
    public function __get ($name)
    {
       switch ($name) {
-         case 'key': return $this->key();
-         case 'value': return $this->current();
+         case 'key': return key($this->iteratee);
+         case 'value': return current($this->iteratee);
 
          case 'count':
             return $this->count;
@@ -77,36 +74,9 @@ class Iterator implements Iterating
       }
    }
 
-   #[\ReturnTypeWillChange]
-   public function rewind () : void
-   {
-      $this->index = 0;
-      reset($this->iteratee);
-   }
-
-   #[\ReturnTypeWillChange]
-   public function current () : mixed
-   {
-      return current($this->iteratee);
-   }
-
-   #[\ReturnTypeWillChange]
-   public function key () : mixed
-   {
-      return key($this->iteratee);
-   }
-
-   #[\ReturnTypeWillChange]
    public function next () : void
    {
-      ++$this->index;
       next($this->iteratee);
-   }
-
-   #[\ReturnTypeWillChange]
-   public function valid () : bool
-   {
-      $key = $this->key();
-      return isSet($this->iteratee[$key]);
+      $this->index++;
    }
 }
