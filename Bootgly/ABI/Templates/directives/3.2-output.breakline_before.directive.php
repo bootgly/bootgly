@@ -1,7 +1,7 @@
 <?php
 return [
    '/(@)?@\.>\s*(.+?)\s*;(\r?\n)?/s' => function ($matches) {
-      if ($matches[1]) {
+      if (@$matches[1]) {
          return substr($matches[0], 1);
       }
 

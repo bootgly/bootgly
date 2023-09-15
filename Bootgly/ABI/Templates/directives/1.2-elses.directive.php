@@ -1,7 +1,7 @@
 <?php
 return [
    "/(@)?@else[\s]?if[\s]+?(.+?)[\s]?:/sx" => function ($matches) {
-      if ($matches[1]) {
+      if (@$matches[1]) {
          return substr($matches[0], 1);
       }
 
@@ -13,7 +13,7 @@ return [
       PHP;
    },
    "/(@)?@else[ ]?:/sx" => function ($matches) {
-      if ($matches[1]) {
+      if (@$matches[1]) {
          return substr($matches[0], 1);
       }
 
