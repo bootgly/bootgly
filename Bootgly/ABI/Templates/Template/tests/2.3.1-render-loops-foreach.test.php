@@ -13,57 +13,44 @@ return [
       // @ Valid
       $Template11 = new Template(
          <<<'TEMPLATE'
-         @foreach ($items as $group => $subitems):
-            @if ($@->isFirst):
-               @>. 'First!';
-            @if;
-
-            @.>. "Level #$@->depth - key: " . $@->key;
-
-            @foreach $subitems as $subitem:
-               @>. "Level #2 - value: " . $@->value;
-
-               @if ($@->Parent->remaining === 0 && $@->remaining === 0):
-                  @> "Level #1 - key: " . $@->Parent->key . PHP_EOL;
-               @if;
-            @foreach;
-
-            @if $@->isLast:
-               @.> 'Last!';
-            @if;
+         @foreach ($items as $index => $item):
+            @>. $index;
          @foreach;
          TEMPLATE
       );
       $Template11->render([
-         'items' => [
-            'a' => ['orange', 'lemon', 'watermelon'],
-            'b' => ['mouse', 'keyboard', 'monitor'],
-            'c' => ['helmet', 'legs', 't-shirt']
-         ]
+         'items' => ['a', 'b', 'c']
       ]);
       assert(
          assertion: $Template11->output === <<<OUTPUT
-         First!
-
-         Level #1 - key: a
-         Level #2 - value: orange
-         Level #2 - value: lemon
-         Level #2 - value: watermelon
-
-         Level #1 - key: b
-         Level #2 - value: mouse
-         Level #2 - value: keyboard
-         Level #2 - value: monitor
-
-         Level #1 - key: c
-         Level #2 - value: helmet
-         Level #2 - value: legs
-         Level #2 - value: t-shirt
-         Level #1 - key: c
-
-         Last!
+         0
+         1
+         2\n
          OUTPUT,
          description: "Template #1.1: output does not match: \n`" . $Template11->output . '`'
+      );
+
+      // with break
+      $Template12 = new Template(
+         <<<'TEMPLATE'
+         @foreach ($items as $index => $item):
+            @>. $index;
+
+            @if ($index === 1):
+               @break;
+            @if;
+         @foreach;
+         TEMPLATE
+      );
+      $Template12->render([
+         'items' => ['a', 'b', 'c']
+      ]);
+      assert(
+         assertion: $Template12->output === <<<OUTPUT
+         0
+         1\n
+         OUTPUT,
+         description: "Template #1.1: output does not match: \n`" . $Template12->output . '`'
       );
 
       // @ Neutral

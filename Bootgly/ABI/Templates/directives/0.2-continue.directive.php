@@ -9,7 +9,7 @@ return [
       $level = $matches[2] ?? '';
 
       return <<<PHP
-      <?php \$_->next(); continue $level; ?>
+      <?php \$_?->next(); continue $level; ?>
       PHP;
    },
    "/(@)?@continue[ ]+?(\d+)?[ ]?in[ ]+?(.+?)[ ]?;/sx" => function ($matches) {
