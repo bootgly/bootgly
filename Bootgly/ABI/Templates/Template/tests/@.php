@@ -2,6 +2,8 @@
 
 namespace Bootgly\ABI\Templates\Template;
 
+use Bootgly\ABI\Templates\Template;
+
 return [
    // * Config
    'autoBoot' => __DIR__,
@@ -9,6 +11,7 @@ return [
    'autoResult' => true,
    'autoSummarize' => true,
    'exitOnFailure' => true,
+   'testables' => [new Template('')],
    // * Data
    'suiteName' => __NAMESPACE__,
    'tests' => [

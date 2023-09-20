@@ -31,8 +31,9 @@ class Test // extends Assertions
    public array $specifications;
 
    // * Meta
-   public $test;
+   public mixed $test;
    public array $assertions;
+   // @ Output
    public false|string $debugged;
    // @ Time
    public float $started;
@@ -53,6 +54,7 @@ class Test // extends Assertions
       // * Meta
       $this->test = current($this->Tests->tests); // @ file
       $this->assertions = [];
+      // @ Output
       $this->debugged = false;
       // @ Time
       $this->started = microtime(true);
@@ -74,11 +76,11 @@ class Test // extends Assertions
    {
       return match ($name) {
          'success' => array_reduce(
-            $this->assertions,
-            function ($accumulator, $assertion) {
+            array: $this->assertions,
+            callback: function ($accumulator, $assertion) {
                return $accumulator && $assertion;
             },
-            true
+            initial: true
          ),
          default => null
       };
@@ -99,26 +101,24 @@ class Test // extends Assertions
    {
       static $separatorLength;
 
-      $separator = $this->specifications['separator.line']   ?? null;
-      $left      = $this->specifications['separator.left']   ?? null;
-      $header    = $this->specifications['separator.header'] ?? null;
+      $line   = $this->specifications['separator.line']   ?? null;
+      $left   = $this->specifications['separator.left']   ?? null;
+      $header = $this->specifications['separator.header'] ?? null;
 
       $width = $this->Tests->width + 25;
 
-      if ($separator) {
-         // @ `-`
-         if ($separator !== true) {
-            $separatorLength = strlen($separator);
-            $separator = '@:i: ' . $separator . '  @;';
+      if ($line) {
+         if ($line !== true) {
+            $separatorLength = strlen($line);
+            $line = '@:i: ' . $line . '  @;';
 
-            // @ Text + `-`
-            $separator = str_pad($separator, $width, '-', STR_PAD_BOTH);
+            // Text + `-`
+            $line = str_pad($line, $width, '-', STR_PAD_BOTH);
          } else {
-            // @ `-`
-            $separator = str_repeat('-', $width - 7);
+            $line = str_repeat('-', $width - 7);
          }
 
-         $this->log($separator . ' @\;');
+         $this->log($line . ' @\;');
       }
 
       if ($left) {
@@ -133,9 +133,13 @@ class Test // extends Assertions
       }
    }
    // @
-   public function test (...$arguments)
+   private function pretest ()
    {
       #ob_start();
+   }
+   public function test (...$arguments)
+   {
+      $this->pretest();
 
       try {
          $test = $this->specifications['test'];
@@ -144,7 +148,7 @@ class Test // extends Assertions
          $this->assertions[] = $result ?? true;
 
          if ($this->Tests->autoResult) {
-            $this->end();
+            $this->postest();
             $this->pass();
          }
       } catch (AssertionError $AssertionError) {
@@ -153,22 +157,22 @@ class Test // extends Assertions
          $message = $AssertionError->getMessage();
 
          if ($this->Tests->autoResult) {
-            $this->end();
+            $this->postest();
             $this->fail($message);
          }
       }
 
+      $this->postest();
+   }
+   private function postest ()
+   {
       #$this->debugged ??= ob_get_clean();
 
-      $this->end();
-   }
-
-   private function end ()
-   {
       $this->finished ??= microtime(true);
 
       $this->elapsed ??= Benchmark::format($this->started, $this->finished);
    }
+
    public function fail (? string $message = null)
    {
       $this->Tests->failed++;

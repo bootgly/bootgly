@@ -32,20 +32,22 @@ class Tester extends Tests
    // ...inherited from Tests
 
 
-   public function __construct (array &$tests)
+   public function __construct (array &$specifications)
    {
       // ✓
       // * Config
       // auto
-      $this->autoBoot = $tests['autoBoot'] ?? '';
-      $this->autoInstance = $tests['autoInstance'] ?? false;
-      $this->autoResult = $tests['autoResult'] ?? false;
-      $this->autoSummarize = $tests['autoSummarize'] ?? false;
+      $this->autoBoot = $specifications['autoBoot'] ?? '';
+      $this->autoInstance = $specifications['autoInstance'] ?? false;
+      $this->autoResult = $specifications['autoResult'] ?? false;
+      $this->autoSummarize = $specifications['autoSummarize'] ?? false;
       // exit
-      self::$exitOnFailure = $tests['exitOnFailure'] ?? self::$exitOnFailure;
+      self::$exitOnFailure = $specifications['exitOnFailure'] ?? self::$exitOnFailure;
+      // pretesting
+      $this->testables = $specifications['testables'] ?? [];
 
       // * Data
-      $this->tests = self::list($tests['tests'] ?? $tests);
+      $this->tests = self::list($specifications['tests'] ?? $specifications);
       $this->specifications = [];
 
       // * Meta
@@ -74,7 +76,7 @@ class Tester extends Tests
 
       // @ Automate
       if ($this->autoBoot) {
-         $this->autoboot($this->autoBoot, $tests);
+         $this->autoboot($this->autoBoot, $specifications);
       }
       if ($this->autoInstance) {
          $this->autoinstance($this->autoInstance);
@@ -82,11 +84,16 @@ class Tester extends Tests
       if ($this->autoSummarize) {
          $this->summarize();
       }
+      // @ Pretest
+      $testables = $this->testables;
+      foreach ($testables as $testable) {
+         method_exists($testable, 'pretest') ? $testable::pretest() : false;
+      }
    }
 
-   public function autoboot (string $boot, array $tests)
+   public function autoboot (string $boot, array $specifications)
    {
-      $this->separate(header: $tests['suiteName'] ?? '');
+      $this->separate(header: $specifications['suiteName'] ?? '');
 
       $dir = $boot . DIRECTORY_SEPARATOR;
 
@@ -103,7 +110,7 @@ class Tester extends Tests
    public function autoinstance (bool|callable $instance)
    {
       if ($instance === true) {
-         foreach ($this->specifications as $specification) {
+         foreach ($this->specifications as $specifications) {
             $file = current($this->tests);
 
             // @ Skip test if private (_(.*).test.php) && script is running in a CI/CD enviroment
@@ -119,7 +126,7 @@ class Tester extends Tests
                continue;
             }
 
-            $Test = $this->test($specification);
+            $Test = $this->test($specifications);
    
             if ($Test instanceof Test) {
                $Test->separate();

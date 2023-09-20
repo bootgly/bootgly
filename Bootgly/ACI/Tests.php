@@ -27,6 +27,8 @@ abstract class Tests
    public bool $autoSummarize;
    // exit
    public static bool $exitOnFailure = false;
+   // pretesting
+   public array $testables;
 
    // * Data
    public array $tests;
@@ -48,7 +50,7 @@ abstract class Tests
    public int $width;
 
 
-   abstract public function __construct (array &$tests);
+   abstract public function __construct (array &$specifications); // Suite Specifications
 
    public static function list (array $tests, $prefix = '') : array
    {
@@ -69,7 +71,7 @@ abstract class Tests
       return $result;
    }
 
-   abstract public function test (? array &$specifications) : object|false;
+   abstract public function test (? array &$specifications) : object|false; // Test Specifications
 
    abstract public function summarize ();
 }
