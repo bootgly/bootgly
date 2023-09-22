@@ -25,6 +25,7 @@ return [
       '2.3.2-render-loops-foreach_with_metavar',
       '2.3.3-render-loops-nested_foreachs_with_metavar',
       '3.1.1-render-conditionals-singly_ifs',
-      '3.1.2-render-conditionals-short_empty_ifs',
+      '3.1.2.1-render-conditionals-short_conditional_ifs',
+      '3.1.2.2-render-conditionals-short_conditional_ifs',
    ]
 ];

@@ -16,5 +16,5 @@ use Bootgly\ABI\IO;
 
 interface IPC extends IO // Inter-Process Communication
 {
-   // TODO
+   // ...Used to define and indentify subclasses (instance of).
 }

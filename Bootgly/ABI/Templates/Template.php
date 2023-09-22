@@ -12,6 +12,14 @@ namespace Bootgly\ABI\Templates;
 
 
 use Throwable;
+use function extract;
+use function htmlspecialchars;
+use function ob_end_clean;
+use function ob_get_clean;
+use function ob_start;
+use function preg_replace;
+use function preg_replace_callback_array;
+use function sha1;
 
 use Bootgly\ABI\IO\FS\File;
 use Bootgly\ABI\Templates;
