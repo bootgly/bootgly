@@ -143,6 +143,7 @@ Wait for the "contributing guidelines" to start your contribution.
 Help us keep Bootgly open and inclusive. Please read and follow our [Code of Conduct][CODE_OF_CONDUCT].
 
 ### 🔗 Social networks
+- [Bootgly on LinkedIn][LINKEDIN]
 - [Bootgly on Telegram][TELEGRAM]
 - [Bootgly on Reddit][REDDIT]
 - [Bootgly on Discord][DISCORD]
@@ -289,6 +290,7 @@ More **Screenshots**, videos and details can be found in the home page of [Bootg
 [TELEGRAM]: https://t.me/bootgly/
 [REDDIT]: https://www.reddit.com/r/bootgly/
 [DISCORD]: https://discord.gg/SKRHsYmtyJ/
+[LINKEDIN]: https://www.linkedin.com/company/bootgly/
 
 
 [CODE_OF_CONDUCT]: CODE_OF_CONDUCT.md
