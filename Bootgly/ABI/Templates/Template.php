@@ -29,6 +29,7 @@ class Template implements Templates
    public readonly string|File $raw;
 
    // * Meta
+   private ? string $file = null;
    // Cache
    private ? File $Cache;
    // Pipeline
@@ -59,6 +60,7 @@ class Template implements Templates
       // $raw
       if ($raw instanceof File) {
          $raw = $raw->contents;
+         $this->file = $raw->file;
       }
       $this->raw = $raw;
 
@@ -131,6 +133,11 @@ class Template implements Templates
 
          $Cache->open(File::CREATE_READ_WRITE_MODE);
          $Cache->write($this->compiled);
+         if ($this->file) {
+            $Cache->write(<<<TAG
+            <?php // FILE: {$Cache->file} FILE; ?>
+            TAG);
+         }
          $Cache->close();
       }
 
