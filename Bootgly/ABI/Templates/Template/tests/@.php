@@ -21,6 +21,7 @@ return [
       '2.2.1-render-loops-while',
       '2.3.1.1-render-loops-foreach',
       '2.3.1.2-render-loops-foreach-break',
+      '2.3.1.3-render-loops-foreach-continue',
       '2.3.2-render-loops-foreach_with_metavar',
       '2.3.3-render-loops-nested_foreachs_with_metavar',
       '3.1.1-render-conditionals-singly_ifs',
