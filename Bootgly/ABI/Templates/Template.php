@@ -33,12 +33,18 @@ class Template implements Templates
    // Cache
    private ? File $Cache;
    // Pipeline
+   // 1
+   // 1.1
    private string $precompiled;
+   // 1.2
    private string $compiled;
+   // 1.3
+   private string $postcompiled;
+   // 2
    public string $output;
 
 
-   public function __construct (string|File $raw, bool $minify = true)
+   public function __construct (string|File $raw)
    {
       $this->Iterators = new Iterators; // @ Used to preload Iterators
 
@@ -64,22 +70,32 @@ class Template implements Templates
       }
       $this->raw = $raw;
 
-      $this->precompile(minify: $minify);
+      $this->precompile(minify: false, unindent: true);
    }
 
-   private function precompile (bool $minify = true) : bool
+   private function precompile (bool $minify = true, bool $unindent = false) : bool
    {
       $precompiled = $this->raw;
 
       try {
+         $directives = self::$Directives->tokens;
+
          if ($minify) {
-            $directives = self::$Directives->tokens;
             $minified = preg_replace(
                "/(?<!\S)(@[$directives].*[:;])\s+/m",
                '$1',
                $precompiled
             );
             $precompiled = (string) $minified;
+         }
+
+         if ($unindent) {
+            $unindented = preg_replace(
+               "/^[\t ]+(@[$directives].*[:;])/m",
+               '$1',
+               $precompiled
+            );
+            $precompiled = (string) $unindented;
          }
       } catch (Throwable $Throwable) {
          debug($Throwable);
@@ -111,6 +127,24 @@ class Template implements Templates
 
       return true;
    }
+   private function postcompile () : bool
+   {
+      $compiled = &$this->compiled;
+
+      try {
+         $postcompiled = preg_replace(
+            '/\?>\n+<\?php /m',
+            "\n",
+            $compiled
+         );
+      } catch (Throwable) {
+         return false;
+      }
+
+      $this->postcompiled = $postcompiled;
+
+      return true;
+   }
 
    private function cache () : bool
    {
@@ -125,14 +159,16 @@ class Template implements Templates
       // @ Cache
       $created = $Cache->create(recursively: true);
       if ($created || $Cache->contents === '') {
+         // @ Compile
          $compiled = $this->compile();
-
          if ($compiled === false || $this->compiled === '') {
             return false;
          }
+         // @ Postcompile
+         $this->postcompile();
 
          $Cache->open(File::CREATE_READ_WRITE_MODE);
-         $Cache->write($this->compiled);
+         $Cache->write($this->postcompiled);
          if ($this->file) {
             $Cache->write(<<<TAG
             <?php // FILE: {$Cache->file} FILE; ?>
