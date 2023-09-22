@@ -188,10 +188,6 @@ class Template implements Templates
       return true;
    }
 
-   public function debug ()
-   {
-      debug('<code>' . htmlspecialchars($this->compiled) . '</code>');
-   }
    public function render (array $parameters = []) : string|false
    {
       // @
@@ -219,6 +215,7 @@ class Template implements Templates
       } catch (Throwable $Throwable) {
          ob_end_clean();
 
+         // TODO use custom exceptions
          debug(
             'Error!',
             $Throwable->getMessage(),

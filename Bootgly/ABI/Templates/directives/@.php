@@ -9,6 +9,7 @@ return [
       // 1 - Conditionals
       'if' => '1.1-ifs',
       'else' => '1.2-elses',
+      'switch' => '1.3-switchs',
 
       // 2 - Loops
       'for' => '2.1-for',
