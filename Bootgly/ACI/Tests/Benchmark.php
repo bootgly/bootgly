@@ -67,11 +67,11 @@ class Benchmark
       return Benchmark::class;
    }
 
-   public static function format (float $initial, float $final)
+   public static function format (float $initial, float $final, int $precision = 6)
    {
-      $result = round($final - $initial, 5);
+      $result = round($final - $initial, $precision);
 
-      $elapsed = number_format($result, 6);
+      $elapsed = number_format($result, $precision);
 
       return $elapsed;
    }
