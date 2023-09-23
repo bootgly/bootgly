@@ -92,7 +92,7 @@ class Test // extends Assertions
          return;
       }
 
-      $description = "       ↪️ " . $description . '@..;';
+      $description = "            ↪️ " . $description . '@.;';
 
       # ⮡ ↳➡️↪↪️
       $this->log($description);
@@ -105,7 +105,7 @@ class Test // extends Assertions
       $left   = $this->specifications['separator.left']   ?? null;
       $header = $this->specifications['separator.header'] ?? null;
 
-      $width = $this->Tests->width + 25;
+      $width = Tests::$width + 30;
 
       if ($line) {
          if ($line !== true) {
@@ -122,7 +122,7 @@ class Test // extends Assertions
       }
 
       if ($left) {
-         $this->log("@.;       \033[3;90m" . $left . ":\033[0m @.;");
+         $this->log("@.;            \033[3;90m" . $left . ":\033[0m @.;");
       }
 
       if ($header) {
@@ -136,6 +136,7 @@ class Test // extends Assertions
    private function pretest ()
    {
       #ob_start();
+      Tests::$case++;
    }
    public function test (...$arguments)
    {
@@ -177,19 +178,24 @@ class Test // extends Assertions
    {
       $this->Tests->failed++;
 
-      $test = str_pad($this->test . ':', $this->Tests->width, ' ', STR_PAD_RIGHT);
+      $case = sprintf('%03d', Tests::$case);
+      $test = str_pad($this->test . ':', Tests::$width, ' ', STR_PAD_RIGHT);
       $elapsed = $this->elapsed;
       $help = $message ?? $this->specifications['except']();
 
       // @ output
       $this->log(
-         "\033[0;30;41m FAIL \033[0m "
-         . $test
-         . "\033[1;35m +" . $elapsed . "s\033[0m" . PHP_EOL
-         . "       ↪️ \"\033[91m" . $help . "\033[0m\""
-         . PHP_EOL
+         "\033[30m\033[47m " . $case . " \033[0m" .
+         "\033[0;30;41m FAIL \033[0m " .
+         "@@:" . $test . "@;" .
+         "\033[1;35m +" . $elapsed . "s\033[0m" . PHP_EOL
       );
       $this->describe($this->specifications['describe'] ?? null);
+
+      $this->log(
+         "            ↪️ \"\033[91m" . $help . "\033[0m\""
+         . PHP_EOL
+      );
       $this->log($this->debugged);
 
       // @ exit
@@ -202,11 +208,13 @@ class Test // extends Assertions
    {
       $this->Tests->passed++;
 
-      $test = str_pad($this->test, $this->Tests->width, '.', STR_PAD_RIGHT);
+      $case = sprintf('%03d', Tests::$case);
+      $test = str_pad($this->test, Tests::$width, '.', STR_PAD_RIGHT);
       $elapsed = $this->elapsed;
 
       // @ output
       $this->log(
+         "\033[47;30m " . $case . " \033[0m" .
          "\033[0;30;42m PASS \033[0m " .
          "\033[90m" . $test . "\033[0m" .
          "\033[1;35m +" . $elapsed . "s\033[0m" . PHP_EOL

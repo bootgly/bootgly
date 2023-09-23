@@ -69,7 +69,7 @@ class Tester extends Tests
             $width = $length;
          }
       }
-      $this->width = $width + 1;
+      Tests::$width = $width + 1;
 
 
       $this->log('@\;');
@@ -93,15 +93,22 @@ class Tester extends Tests
 
    public function autoboot (string $boot, array $specifications)
    {
-      $this->separate(header: $specifications['suiteName'] ?? '');
+      $this->separate(header: $specifications['suiteName'] ?? ''); // Test Suite Specs
 
       $dir = $boot . DIRECTORY_SEPARATOR;
 
-      foreach ($this->tests as $test) {
-         $specifications = @include $dir . $test . '.test.php';
+      // * Config
+      $testCaseTarget = ($specifications['index'] ?? 0);
+      // @
+      foreach ($this->tests as $index => $test) {
+         $specifications = @include($dir . $test . '.test.php'); // Test Case Specs
 
          if ($specifications === false) {
             $specifications = null;
+         }
+
+         if ($testCaseTarget > 0 && ($index + 1) !== $testCaseTarget) {
+            $specifications['skip'] = true;
          }
 
          $this->specifications[] = $specifications;
@@ -113,22 +120,21 @@ class Tester extends Tests
          foreach ($this->specifications as $specifications) {
             $file = current($this->tests);
 
-            // @ Skip test if private (_(.*).test.php) && script is running in a CI/CD enviroment
-            // TODO abstract all CI/CD Environment into one
-            $CI_CD = (
-               Environment::get('GITHUB_ACTIONS')
-               || Environment::get('TRAVIS')
-               || Environment::get('CIRCLECI')
-               || Environment::get('GITLAB_CI')
-            );
-            if ($file[0] === '_' && $CI_CD) {
+            // @ Skip test
+            // if private (_(.*).test.php) && script is running in a CI/CD enviroment
+            if ($file[0] === '_' && Environment::match(Environment::CI_CD) === true) {
                $this->skip('(@private)');
                continue;
             }
+            // if skippable
+            if ($specifications['skip'] ?? false) {
+               $this->skip();
+               continue;
+            }
 
+            // @ Test
             $Test = $this->test($specifications);
-   
-            if ($Test instanceof Test) {
+            if ($Test !== false) {
                $Test->separate();
                $Test->test();
             }
@@ -163,10 +169,11 @@ class Tester extends Tests
    {
       if ($header) {
          // @ Add blue color to header text
-         $header = ' @#Cyan:(' . self::$index . ') @;' . '@#Blue: ' . $header . '  @;';
+         $header = ' @#Cyan:(' . self::$suite . ') @;' . '@#Blue: ' . $header . '  @;';
 
          // @ Pad string with `=`
-         $length = $this->width + 38;
+         $length = Tests::$width + 43;
+
          $header = str_pad(
             string: $header,
             length: $length,
@@ -183,16 +190,19 @@ class Tester extends Tests
    {
       $file = current($this->tests);
 
+      Tests::$case++;
       $this->skipped++;
 
       next($this->tests);
 
+      $case = sprintf('%03d', Tests::$case);
       // @ Set additional info
       if ($info) {
          $info = "\033[1;35m $info \033[0m";
       }
 
       $this->log(
+         "\033[30m\033[47m " . $case . " \033[0m" .
          "\033[0;30;43m SKIP \033 @; " .
          "\033[90m" . $file . "\033[0m" .
          $info . PHP_EOL

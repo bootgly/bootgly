@@ -42,56 +42,13 @@ class TestCommand extends Command
       Tests::$exitOnFailure = true;
 
       // @
-      $testsDir = $arguments[0] ?? null;
-
-      if (empty($options) && $testsDir !== null && $testsDir != (int) $testsDir) {
-         $this->test($testsDir);
-         return true;
-      } else if ($testsDir == (int) $testsDir) {
-         $options = array_merge(['i' => $testsDir], $options);
-      }
-
-      $this->load($options);
-
-      return true;
-   }
-
-   // @
-   public function test (string $dir)
-   {
-      $bootstrap = Path::normalize($dir . '/tests/@.php');
-
-      if (BOOTGLY_ROOT_DIR !== BOOTGLY_WORKING_DIR) {
-         $tests = (include BOOTGLY_WORKING_DIR . $bootstrap);
-      } else {
-         $tests = (include BOOTGLY_ROOT_DIR . $bootstrap);
-      }
-
-      if ($tests === false) {
-         return false;
-      }
-
-      $tests = (array) $tests;
-
-      $autoboot = $tests['autoBoot'] ?? false;
-      if ($autoboot instanceof Closure) {
-         $autoboot();
-      } else if ($autoboot) {
-         new Tester($tests);
-      } else {
-         $Alert = new Alert(CLI::$Terminal->Output);
-         $Alert->Type::FAILURE->set();
-         $Alert->emit('AutoBoot test not configured!');
-      }
-   }
-   // @ Suites
-   public function load (array $options)
-   {
-      $suites = [];
-
+      // arguments
+      $indexOfSuiteToTest = (int) ($arguments[0] ?? 0);
+      $indexOfCaseToTest = (int) ($arguments[1] ?? 0);
       // options
       $bootglyTests = $options['bootgly'] ?? $options['all'];
-      $indexToTest = (int) ($options['index'] ?? $options['i'] ?? 0);
+
+      $suites = [];
 
       // @ Load Author tests
       if (BOOTGLY_ROOT_DIR === BOOTGLY_WORKING_DIR || $bootglyTests) {
@@ -112,14 +69,14 @@ class TestCommand extends Command
       $Suites->total = count($suites);
 
       foreach ($suites as $index => $dir) {
-         Tester::$index++;
+         Tester::$suite++;
 
-         if ($indexToTest > 0 && ($index + 1) !== $indexToTest) {
+         if ($indexOfSuiteToTest > 0 && ($index + 1) !== $indexOfSuiteToTest) {
             $Suites->skipped++;
             continue;
          }
 
-         $this->test($dir);
+         $this->test($dir, $indexOfCaseToTest);
 
          $Suites->passed++;
       }
@@ -127,5 +84,38 @@ class TestCommand extends Command
       $Suites->summarize();
 
       return true;
+   }
+
+   // @
+   public function test (string $dir, ? int $index)
+   {
+      $bootstrap = Path::normalize($dir . '/tests/@.php');
+
+      if (BOOTGLY_ROOT_DIR !== BOOTGLY_WORKING_DIR) {
+         $tests = (include BOOTGLY_WORKING_DIR . $bootstrap);
+      } else {
+         $tests = (include BOOTGLY_ROOT_DIR . $bootstrap);
+      }
+
+      if ($tests === false) {
+         return false;
+      }
+
+      $tests = (array) $tests;
+
+      if ($index) {
+         $tests['index'] = $index;
+      }
+
+      $autoboot = $tests['autoBoot'] ?? false;
+      if ($autoboot instanceof Closure) {
+         $autoboot();
+      } else if ($autoboot) {
+         new Tester($tests, $index);
+      } else {
+         $Alert = new Alert(CLI::$Terminal->Output);
+         $Alert->Type::FAILURE->set();
+         $Alert->emit('AutoBoot test not configured!');
+      }
    }
 }

@@ -40,14 +40,15 @@ abstract class Tests
    public int $skipped;
    // @ Stats
    public int $total;
-   public static int $index = 0;
+   public static int $suite = 0;
+   public static int $case = 0;
    public static int $cases = 0;
    // @ Time
    public float $started;
    public float $finished;
    public float $elapsed;
    // @ Output
-   public int $width;
+   public static int $width = 0;
 
 
    abstract public function __construct (array &$specifications); // Suite Specifications
