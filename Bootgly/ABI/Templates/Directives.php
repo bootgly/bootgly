@@ -15,9 +15,10 @@ use Closure;
 #use Throwable;
 
 use Bootgly\ABI\Data\__String\Path;
+use Bootgly\ABI\Resources;
 
 
-class Directives // TODO use Resources interface
+class Directives implements Resources
 {
    // * Config
    // ...
@@ -34,10 +35,9 @@ class Directives // TODO use Resources interface
    public function __construct ()
    {
       $resource = __DIR__ . '/Template/directives/';
-      $bootables = require($resource . '@.php');
+      $bootstrap = require($resource . '@.php');
 
-      $directives = $bootables['directives'];
-
+      $directives = $bootstrap['directives'];
       foreach ($directives as $name => $value) {
          // @ Register directive name
          if (is_string($name) === true) {

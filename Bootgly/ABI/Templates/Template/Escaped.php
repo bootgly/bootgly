@@ -11,14 +11,15 @@
 namespace Bootgly\ABI\Templates\Template;
 
 
-// -abstract
 use Bootgly\ABI\Data\__String\Escapeable;
 use Bootgly\ABI\Data\__String\Escapeable\cursor;
 use Bootgly\ABI\Data\__String\Escapeable\text;
 use Bootgly\ABI\Data\__String\Escapeable\viewport;
+use Bootgly\ABI\Data\__String\Path;
+use Bootgly\ABI\Resources;
 
 
-class Escaped
+class Escaped implements Resources
 {
    use Escapeable;
    use cursor\Positionable;
@@ -28,34 +29,50 @@ class Escaped
    use text\Modifiable;
    use viewport\Scrollable;
 
+   // * Config
+   // ...
 
-   public static array $tokens = [];
+   // * Data
+   protected static array $directives = [];
+
+   // * Meta
+   protected static array $names = [];
 
 
    public static function boot ()
    {
-      if ( ! empty(self::$tokens) ) {
+      if ( ! empty(self::$directives) ) {
          return;
       }
 
-      $resource = '/Escaped/directives/';
-      $directives = require (__DIR__ . $resource . '@.php');
+      $resource = __DIR__ . '/Escaped/directives/';
+      $bootstrap = require($resource . '@.php');
 
-      $files = $directives['directives'];
-      foreach ($files as $file) { // TODO add filter
-         $Token = require (__DIR__ . $resource . $file . '.directive.php');
+      $directives = $bootstrap['directives'];
+      foreach ($directives as $name => $value) {
+         // @ Register directive name
+         if (is_string($name) === true) {
+            self::$names[] = $name;
+         }
 
-         foreach ($Token as $token => $Closure) {
-            self::$tokens[$token] = $Closure;
+         // @ Set directive value
+         if (is_string($value) === true) {
+            $filename = Path::normalize($value);
+
+            $directive = require($resource . $filename . '.directive.php');
+         } else if (is_array($value) === true) {
+            $directive = $value;
+         }
+
+         foreach ($directive as $pattern => $Closure) {
+            self::$directives[$pattern] = $Closure;
          }
       }
    }
 
    public static function render (string $message) : string
    {
-      #$line = "\033[1A\n\033[K";
-
-      $message = preg_replace_callback_array(self::$tokens, $message);
+      $message = preg_replace_callback_array(self::$directives, $message);
 
       return $message;
    }
