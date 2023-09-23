@@ -87,31 +87,33 @@ class TestCommand extends Command
    }
 
    // @
-   public function test (string $dir, ? int $index)
+   public function test (string $suiteDir, ? int $index)
    {
-      $bootstrap = Path::normalize($dir . '/tests/@.php');
-
+      $bootstrapFile = Path::normalize($suiteDir . '/tests/@.php');
       if (BOOTGLY_ROOT_DIR !== BOOTGLY_WORKING_DIR) {
-         $tests = (include BOOTGLY_WORKING_DIR . $bootstrap);
+         $suiteSpecs = (include BOOTGLY_WORKING_DIR . $bootstrapFile);
       } else {
-         $tests = (include BOOTGLY_ROOT_DIR . $bootstrap);
+         $suiteSpecs = (include BOOTGLY_ROOT_DIR . $bootstrapFile);
       }
 
-      if ($tests === false) {
+      if ($suiteSpecs === false) {
          return false;
       }
 
-      $tests = (array) $tests;
+      $suiteSpecs = (array) $suiteSpecs;
 
+      // * Config
       if ($index) {
-         $tests['index'] = $index;
+         $suiteSpecs['index'] = $index;
       }
 
-      $autoboot = $tests['autoBoot'] ?? false;
-      if ($autoboot instanceof Closure) {
-         $autoboot();
-      } else if ($autoboot) {
-         new Tester($tests, $index);
+      // @
+      $autoBoot = $suiteSpecs['autoBoot'] ?? false;
+      if ($autoBoot instanceof Closure) {
+         unset($suiteSpecs['autoBoot']);
+         $autoBoot($suiteSpecs);
+      } else if ($autoBoot) {
+         new Tester($suiteSpecs);
       } else {
          $Alert = new Alert(CLI::$Terminal->Output);
          $Alert->Type::FAILURE->set();

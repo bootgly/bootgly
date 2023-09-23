@@ -136,9 +136,9 @@ class Test // extends Assertions
    private function pretest () : bool
    {
       #ob_start();
+
       Tests::$case++;
 
-      // if skippable
       if ($this->specifications['skip'] ?? false) {
          $this->Tests->skipped++;
          return false;

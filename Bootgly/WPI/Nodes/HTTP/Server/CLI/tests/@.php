@@ -9,7 +9,7 @@ use Bootgly\WPI\Nodes\HTTP;
 
 return [
    // * Config
-   'autoBoot' => function () {
+   'autoBoot' => function () { // function ($suiteSpecs)
       // TODO configure verbosity of server output/echo
       // TODO like $HTTPServer->verbosity = 0;
       Logger::$display = Logger::DISPLAY_NONE;
@@ -25,7 +25,7 @@ return [
 
       $HTTP_Server_CLI->start();
 
-      $HTTP_Server_CLI->Terminal->command('test');
+      $HTTP_Server_CLI->Terminal->command('test'); // TODO up command method to parent class as trait|interface|parent
 
       return [];
    },
