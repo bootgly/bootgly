@@ -128,7 +128,7 @@ class Pipe implements IPC
       return $closed0 && $closed1;
    }
 
-   public function __destruct () : void
+   public function __destruct ()
    {
       $this->close();
    }
