@@ -43,8 +43,11 @@ class TestCommand extends Command
 
       // @
       // arguments
-      $indexOfSuiteToTest = (int) ($arguments[0] ?? 0);
-      $indexOfCaseToTest = (int) ($arguments[1] ?? 0);
+      $indexOfTestableSuite = (int) ($arguments[0] ?? 0);
+      $indexOfTestableCase = (int) ($arguments[1] ?? 0);
+      if ($indexOfTestableSuite < 1) {
+         $indexOfTestableCase = 0;
+      }
       // options
       $bootglyTests = $options['bootgly'] ?? $options['all'];
 
@@ -71,12 +74,12 @@ class TestCommand extends Command
       foreach ($suites as $index => $dir) {
          Tester::$suite++;
 
-         if ($indexOfSuiteToTest > 0 && ($index + 1) !== $indexOfSuiteToTest) {
+         if ($indexOfTestableSuite > 0 && ($index + 1) !== $indexOfTestableSuite) {
             $Suites->skipped++;
             continue;
          }
 
-         $this->test($dir, $indexOfCaseToTest);
+         $this->test($dir, $indexOfTestableCase);
 
          $Suites->passed++;
       }

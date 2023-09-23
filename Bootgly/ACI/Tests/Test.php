@@ -86,15 +86,22 @@ class Test // extends Assertions
       };
    }
 
-   public function describe (? string $description)
+   public function describe (? string $description, bool $status)
    {
       if (! $description) {
          return;
       }
 
-      $description = "            ↪️ " . $description . '@.;';
+      // Icon
+      // ╚•╟
+      // ⮡ ↳➡️↪↪️ ✓✘ ✅❌
+      $icon = match ($status) {
+         true  => '@#green:✓ @; ',
+         false => '@#red:✘ @; '
+      };
+      // Description
+      $description = $icon . $description . '@..;';
 
-      # ⮡ ↳➡️↪↪️
       $this->log($description);
    }
    public function separate ()
@@ -199,13 +206,13 @@ class Test // extends Assertions
       $this->log(
          "\033[30m\033[47m " . $case . " \033[0m" .
          "\033[0;30;41m FAIL \033[0m " .
-         "@@:" . $test . "@;" .
+         "@@:" . $test . "@; " .
          "\033[1;35m +" . $elapsed . "s\033[0m" . PHP_EOL
       );
-      $this->describe($this->specifications['describe'] ?? null);
+      $this->describe($this->specifications['describe'] ?? null, false);
 
       $this->log(
-         "            ↪️ \"\033[91m" . $help . "\033[0m\""
+         "             ↪️ \033[91m" . $help . "\033[0m"
          . PHP_EOL
       );
       $this->log($this->debugged);
@@ -231,6 +238,6 @@ class Test // extends Assertions
          "\033[90m" . $test . "\033[0m" .
          "\033[1;35m +" . $elapsed . "s\033[0m" . PHP_EOL
       );
-      $this->describe($this->specifications['describe'] ?? null);
+      $this->describe($this->specifications['describe'] ?? null, true);
    }
 }
