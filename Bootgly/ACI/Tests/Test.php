@@ -41,7 +41,7 @@ class Test // extends Assertions
    public string $elapsed;
 
 
-   public function __construct (Tests $Tests, array $specifications)
+   public function __construct (Tests&Tester $Tests, array $specifications)
    {
       $this->Tests = $Tests;
 
@@ -133,14 +133,26 @@ class Test // extends Assertions
       }
    }
    // @
-   private function pretest ()
+   private function pretest () : bool
    {
       #ob_start();
       Tests::$case++;
+
+      // if skippable
+      if ($this->specifications['skip'] ?? false) {
+         $this->Tests->skipped++;
+         return false;
+      }
+
+      return true;
    }
    public function test (...$arguments)
    {
-      $this->pretest();
+      $prepass = $this->pretest();
+      if ($prepass === false) {
+         $this->postest();
+         return;
+      }
 
       try {
          $test = $this->specifications['test'];

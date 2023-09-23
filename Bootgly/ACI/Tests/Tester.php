@@ -126,11 +126,6 @@ class Tester extends Tests
                $this->skip('(@private)');
                continue;
             }
-            // if skippable
-            if ($specifications['skip'] ?? false) {
-               $this->skip();
-               continue;
-            }
 
             // @ Test
             $Test = $this->test($specifications);
