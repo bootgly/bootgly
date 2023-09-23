@@ -13,6 +13,8 @@ namespace Bootgly\API;
 
 class Environment
 {
+   public const CI_CD = 1;
+
    // * Config
    /**
     * Prefix for environment variable keys.
@@ -87,6 +89,18 @@ class Environment
       }
 
       return $value;
+   }
+   public static function match (int $type) : bool
+   {
+      return match ($type) {
+         Environment::CI_CD => (
+            Environment::get('GITHUB_ACTIONS')
+            || Environment::get('TRAVIS')
+            || Environment::get('CIRCLECI')
+            || Environment::get('GITLAB_CI')
+         ),
+         default => false
+      };
    }
 
    /**
