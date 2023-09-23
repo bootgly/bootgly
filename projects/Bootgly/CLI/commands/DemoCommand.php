@@ -95,21 +95,21 @@ class DemoCommand extends Command
          // Terminal -> components - Table component
          'Terminal/components/Table-01.example.php'
       ];
-      
+
       foreach ($examples as $index => $example) {
          if ($id && ($index + 1) !== $id) {
             continue;
          }
 
          $file = 'Bootgly/CLI/examples/' . $example;
-      
+
          $wait = 3;
-         $location = 'projects/' . $file;
-      
-         require BOOTGLY_ROOT_DIR . $location;
-      
+
+         $location = ' projects/' . $file;
+         require BOOTGLY_ROOT_DIR . 'projects/' . $file;
+
          sleep($wait);
-      
+
          CLI::$Terminal->clear();
       }
 

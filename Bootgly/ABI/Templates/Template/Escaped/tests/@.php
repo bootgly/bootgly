@@ -17,6 +17,7 @@ return [
       '2.1-render-dots_to_EOL',
       '3.1-render-log_level_to_style',
       '4.1-render-style_symbol_to_style',
-      '9.1-render-end_of_to_reset_format',
+      '9.1.1-render-end_of_to_reset_format',
+      '9.1.2-render-end_of_to_reset_format',
    ]
 ];
