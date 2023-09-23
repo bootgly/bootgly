@@ -13,7 +13,7 @@ return [
       #'Bootgly/ABI/Templates/Directives/', // ! Not testable directly (part of Template)
       #'Bootgly/ABI/Templates/Iterator/', // ! Not testable (for now)
       'Bootgly/ABI/Templates/Template/',
-      #'Bootgly/ABI/Templates/Template/Escaped/', // TODO test
+      'Bootgly/ABI/Templates/Template/Escaped/',
       // Abstract Common Interface (ACI)
       // ...
       // Abstract Data Interface (ADI)
