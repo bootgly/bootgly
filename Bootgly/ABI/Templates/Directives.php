@@ -33,7 +33,7 @@ class Directives // TODO use Resources interface
 
    public function __construct ()
    {
-      $resource = __DIR__ . '/directives/';
+      $resource = __DIR__ . '/Template/directives/';
       $bootables = require($resource . '@.php');
 
       $directives = $bootables['directives'];
