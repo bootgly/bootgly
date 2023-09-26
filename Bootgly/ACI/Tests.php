@@ -11,10 +11,12 @@
 namespace Bootgly\ACI;
 
 
+use Bootgly\ABI\Resources;
+
 use Bootgly\ACI\Logs\LoggableEscaped;
 
 
-abstract class Tests
+abstract class Tests implements Resources
 {
    use LoggableEscaped;
 

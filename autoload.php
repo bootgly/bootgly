@@ -47,24 +47,8 @@ spl_autoload_register (function (string $class) {
 });
 
 // ! Resources ([a-z])
-use Bootgly\ACI\Debugger;
+require(BOOTGLY_ROOT_DIR . 'Bootgly/ABI/autoload.php');
+require(BOOTGLY_ROOT_DIR . 'Bootgly/ACI/autoload.php');
 
-
-if (function_exists('debug') === false) {
-   function debug (...$vars)
-   {
-      if (Debugger::$trace === null) {
-         Debugger::$trace = debug_backtrace();
-      }
-
-      $Debugger = new Debugger(...$vars);
-
-      if (Debugger::$trace !== false) {
-         Debugger::$trace = null;
-      }
-
-      return $Debugger;
-   }
-}
-
+// @
 new Bootgly;

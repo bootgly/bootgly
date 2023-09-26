@@ -84,7 +84,7 @@ class Bootgly
    }
 
    // ABI
-   public static function template(string $view): Template
+   public static function template (string $view) : Template
    {
       $Template = static::$Template = new Template(
          static::$Project . Path::normalize($view) . '.template.php'
