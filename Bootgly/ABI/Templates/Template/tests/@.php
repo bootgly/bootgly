@@ -15,6 +15,7 @@ return [
    // * Data
    'suiteName' => __NAMESPACE__,
    'tests' => [
+      '0.0.1-render-template_file',
       '1.0.0-render-php_code',
       '1.1.1-render-outputs-1',
       '2.1.1-render-loops-for',
