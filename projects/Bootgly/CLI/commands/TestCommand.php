@@ -49,7 +49,7 @@ class TestCommand extends Command
          $indexOfTestableCase = 0;
       }
       // options
-      $bootglyTests = $options['bootgly'] ?? $options['all'];
+      $bootglyTests = $options['bootgly'] ?? $options['all'] ?? null;
 
       $suites = [];
 

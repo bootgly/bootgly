@@ -11,9 +11,11 @@
 namespace Bootgly\ABI;
 
 
-use Bootgly\ABI\Errors\Handler as ErrorHandler;
-use Bootgly\ABI\Exceptions\Handler as ExceptionHandler;
+use Exception;
 
 
-#set_error_handler(callback: ErrorHandler::handle(...), error_levels: E_ALL | E_STRICT);
-#set_exception_handler(callback: ExceptionHandler::handle(...));
+abstract class Exceptions extends Exception
+{
+   // * Data
+   protected static array $exceptions = [];
+}

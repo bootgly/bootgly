@@ -21,8 +21,10 @@ use function preg_replace;
 use function preg_replace_callback_array;
 use function sha1;
 
+use Bootgly\ABI\Exceptions;
 use Bootgly\ABI\IO\FS\File;
 use Bootgly\ABI\Templates;
+use Bootgly\ABI\Templates\Template\Exceptions\TemplateRenderException;
 
 
 class Template implements Templates
@@ -73,10 +75,11 @@ class Template implements Templates
       self::$Directives ??= new Directives;
       // $raw
       if ($raw instanceof File) {
-         $raw = $raw->contents;
+         $contents = $raw->contents;
+
          $this->file = $raw->file;
       }
-      $this->raw = $raw;
+      $this->raw = $contents ?? $raw;
 
       $this->precompile(minify: false, unindent: true);
    }
@@ -176,12 +179,14 @@ class Template implements Templates
          $this->postcompile();
 
          $Cache->open(File::CREATE_READ_WRITE_MODE);
+
          $Cache->write($this->postcompiled);
          if ($this->file) {
             $Cache->write(<<<TAG
-            <?php // FILE: {$Cache->file} FILE; ?>
+            <?php // FILE: {$this->file} FILE; ?>
             TAG);
          }
+
          $Cache->close();
       }
 
@@ -212,15 +217,15 @@ class Template implements Templates
          );
  
          $output = @ob_get_clean();
-      } catch (Throwable $Throwable) {
+      }
+      catch (Throwable $Throwable) {
          ob_end_clean();
 
-         // TODO use custom exceptions
-         debug(
-            'Error!',
-            $Throwable->getMessage(),
-            $Throwable->getLine(),
-            $Throwable->getFile()
+         Exceptions\Handler::handle(
+            new TemplateRenderException(
+               ($this->file) ? ($this->file) : $Throwable->getFile(),
+               $Throwable
+            )
          );
 
          $output = '';

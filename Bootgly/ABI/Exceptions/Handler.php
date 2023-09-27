@@ -8,12 +8,27 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\ABI;
+namespace Bootgly\ABI\Exceptions;
 
 
-use Bootgly\ABI\Errors\Handler as ErrorHandler;
-use Bootgly\ABI\Exceptions\Handler as ExceptionHandler;
+use Error;
+use Exception;
+
+use Bootgly\ABI\Exceptions;
 
 
-#set_error_handler(callback: ErrorHandler::handle(...), error_levels: E_ALL | E_STRICT);
-#set_exception_handler(callback: ExceptionHandler::handle(...));
+class Handler extends Exceptions
+{
+   // * Config
+   // ...
+
+   // * Data
+   // ...
+
+   // * Meta
+   // ...
+
+   public static function handle (Error|Exception $E) {
+      self::$exceptions[] = $E;
+   }
+}
