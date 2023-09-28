@@ -41,6 +41,7 @@ abstract class Tests implements Resources
    public int $passed;
    public int $skipped;
    // @ Stats
+   public int $assertions;
    public int $total;
    public static int $suite = 0;
    public static int $case = 0;
