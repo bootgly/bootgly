@@ -16,7 +16,7 @@ return [
          @@: Is this text blinking? @;
          TEMPLATE
       );
-      assert(
+      yield assert(
          assertion: $output === "\033[5mIs this text blinking?\033[0m",
          description: "Template: output does not match: \n`" . json_encode($output) . '`'
       );
@@ -26,7 +26,5 @@ return [
 
       // @ Invalid
       // ...
-
-      return true;
    }
 ];

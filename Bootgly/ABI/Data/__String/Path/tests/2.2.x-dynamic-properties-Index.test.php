@@ -16,16 +16,14 @@ return [
       $Path = new Path('/var/www/bootgly/index.php');
 
       $lastKey = $Path->Index->Last->key;
-      assert(
+      yield assert(
          assertion: $lastKey === 3,
          description: 'Last index key returned: ' . $lastKey
       );
       $lastValue = $Path->Index->Last->value;
-      assert(
+      yield assert(
          assertion: $lastValue === 'index.php',
          description: 'Last index value returned: ' . $lastValue
       );
-
-      return true;
    }
 ];

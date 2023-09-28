@@ -19,7 +19,7 @@ return [
          TEMPLATE
       );
       $Template11->render();
-      assert(
+      yield assert(
          assertion: $Template11->output === <<<'OUTPUT'
          Bootgly Template Engine
          OUTPUT,
@@ -33,7 +33,7 @@ return [
          TEMPLATE
       );
       $Template12->render();
-      assert(
+      yield assert(
          assertion: $Template12->output === <<<'OUTPUT'
          Bootgly Template Engine Inline
          OUTPUT,
@@ -45,7 +45,5 @@ return [
 
       // @ Invalid
       // ...
-
-      return true;
    }
 ];

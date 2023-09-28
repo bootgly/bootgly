@@ -23,51 +23,49 @@ return [
       $Last = $__Array->Last;
       $First = $__Array->First;
 
-      assert(
+      yield assert(
          assertion: $Current->key === 0,
          description: 'Current key is: ' . $Current->key
       );
-      assert(
+      yield assert(
          assertion: $Current->value === 'a',
          description: 'Current value is: ' . $Current->value
       );
 
-      assert(
+      yield assert(
          assertion: $Next->key === 1,
          description: 'Next key is: ' . $Next->key
       );
-      assert(
+      yield assert(
          assertion: $Next->value === 'b',
          description: 'Next value is: ' . $Next->value
       );
 
-      assert(
+      yield assert(
          assertion: $Previous->key === 0,
          description: 'Previous key is: ' . $Previous->key
       );
-      assert(
+      yield assert(
          assertion: $Previous->value === 'a',
          description: 'Previous value is: ' . $Previous->value
       );
 
-      assert(
+      yield assert(
          assertion: $Last->key === 2,
          description: 'Last key is: ' . $Last->key
       );
-      assert(
+      yield assert(
          assertion: $Last->value === 'c',
          description: 'Last value is: ' . $Last->value
       );
 
-      assert(
+      yield assert(
          assertion: $First->key === 0,
          description: 'First key is: ' . $First->key
       );
-      assert(
+      yield assert(
          assertion: $First->value === 'a',
          description: 'First value is: ' . $First->value
       );
-
-      return true;
    }
 ];

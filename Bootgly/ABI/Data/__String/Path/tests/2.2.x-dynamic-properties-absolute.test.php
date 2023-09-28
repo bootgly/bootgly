@@ -14,17 +14,15 @@ return [
       // @
       // Valid - absolute
       $Path = new Path('/etc/php/');
-      assert(
+      yield assert(
          assertion: $Path->absolute === true,
          description: 'Path is absolute!'
       );
       // Invalid - relative
       $Path = new Path('www/bootgly/index.php');
-      assert(
+      yield assert(
          assertion: $Path->absolute === false,
          description: 'Path is relative!'
       );
-
-      return true;
    }
 ];

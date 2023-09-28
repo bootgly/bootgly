@@ -17,11 +17,9 @@ return [
       $Project1->construct('Bootgly/');
       // @ Get Project Path by Project Index
       $path1 = $Project1->get(index: 0);
-      assert(
+      yield assert(
          assertion: $path1 === Project::CONSUMER_DIR . 'Bootgly/',
          description: 'Failed to get Project path 1'
       );
-
-      return true;
    }
 ];

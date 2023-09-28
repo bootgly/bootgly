@@ -14,11 +14,9 @@ return [
    'test' => function () {
       $normalized = Path::normalize('../../etc/passwd');
 
-      assert(
+      yield assert(
          $normalized === 'etc/passwd',
          'Path not normalized!'
       );
-
-      return true;
    }
 ];

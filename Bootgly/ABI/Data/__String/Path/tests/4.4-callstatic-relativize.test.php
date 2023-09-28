@@ -12,11 +12,9 @@ return [
    // @ test
    'test' => function () {
       $relative = Path::relativize('/foo/bar/tests/test2.php', '/foo/bar/');
-      assert(
+      yield assert(
          assertion: $relative === 'tests/test2.php',
          description: 'Relative path: ' . $relative
       );
-
-      return true;
    }
 ];

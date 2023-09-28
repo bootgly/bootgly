@@ -15,13 +15,11 @@ return [
 
       $Result = $String1->search('is');
 
-      assert(
+      yield assert(
          assertion: $Result->found === 'is' && $Result->position === 8,
          description: 'Result found / position: ' . $Result->found . ' / ' . $Result->position
       );
       // @ Invalid
       // ...
-
-      return true;
    }
 ];

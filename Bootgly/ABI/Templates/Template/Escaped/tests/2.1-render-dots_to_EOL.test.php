@@ -16,7 +16,7 @@ return [
          2 Breaklines after this text @..;
          TEMPLATE
       );
-      assert(
+      yield assert(
          assertion: $output === "2 Breaklines after this text \n\n",
          description: "Template: output does not match: \n`" . json_encode($output) . '`'
       );
@@ -26,7 +26,5 @@ return [
 
       // @ Invalid
       // ...
-
-      return true;
    }
 ];

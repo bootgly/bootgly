@@ -15,13 +15,11 @@ return [
 
       $result = $String1->pad(22, '_', STR_PAD_BOTH);
 
-      assert(
+      yield assert(
          assertion: $result === '_Bootgly é eficiente!_',
          description: 'String1 with pad: ' . $result
       );
       // @ Invalid
       // ...
-
-      return true;
    }
 ];

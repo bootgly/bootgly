@@ -16,7 +16,7 @@ return [
          @:warning: Warning! Bootgly is very cool! @;
          TEMPLATE
       );
-      assert(
+      yield assert(
          assertion: $output === "\033[95m Warning! Bootgly is very cool!\033[0m",
          description: "Template: output does not match: \n`" . json_encode($output) . '`'
       );
@@ -26,7 +26,5 @@ return [
 
       // @ Invalid
       // ...
-
-      return true;
    }
 ];

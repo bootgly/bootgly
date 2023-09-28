@@ -16,7 +16,7 @@ return [
       // @
       // Valid - absolute
       $Path->match(path: '/etc/php/%', pattern: '8.*');
-      assert(
+      yield assert(
          assertion: (string) $Path === '/etc/php/8.0'
          || (string) $Path === '/etc/php/8.1'
          || (string) $Path === '/etc/php/8.2',
@@ -25,13 +25,11 @@ return [
       // Valid - relative
       $Path = new Path('/etc/php/');
       $Path->match(path: '%', pattern: '8.*');
-      assert(
+      yield assert(
          assertion: (string) $Path === '/etc/php/8.0'
          || (string) $Path === '/etc/php/8.1'
          || (string) $Path === '/etc/php/8.2',
          description: 'PHP path #2 (relative) not matched!'
       );
-
-      return true;
    }
 ];

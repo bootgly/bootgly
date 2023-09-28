@@ -15,19 +15,17 @@ return [
       $__Array = new __Array(['Bootgly', 'base', 'PHP', 'framework', 'to', 'Multi', 'Projects']);
 
       $Result = $__Array->search('framework');
-      assert(
+      yield assert(
          assertion: $Result->key === 3,
          description: 'Found key is: ' . $Result->key
       );
-      assert(
+      yield assert(
          assertion: $Result->value === 'framework',
          description: 'Found value is: ' . $Result->value
       );
-      assert(
+      yield assert(
          assertion: $Result->found === true,
          description: 'Result not found!'
       );
-
-      return true;
    }
 ];

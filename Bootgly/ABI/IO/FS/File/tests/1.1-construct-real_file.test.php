@@ -13,7 +13,7 @@ return [
       // @ Valid
       // absolute real file to real file
       $File10 = new File(__DIR__ . '/@.php');
-      assert(
+      yield assert(
          assertion: (string) $File10 === __DIR__ . '/@.php',
          description: 'Invalid Real File #1.0 (absolute real file): ' . $File10
       );
@@ -23,7 +23,5 @@ return [
 
       // @ Invalid
       // ...
-
-      return true;
    }
 ];

@@ -19,7 +19,7 @@ return [
          'b'     => true,
          #'c' => false
       ]);
-      assert(
+      yield assert(
          assertion: $Template->output === <<<'OUTPUT'
          Bootgly Template is easy!
          Bootgly Template is 1!
@@ -34,7 +34,5 @@ return [
 
       // @ Invalid
       // ...
-
-      return true;
    }
 ];

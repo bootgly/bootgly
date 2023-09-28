@@ -18,7 +18,7 @@ return [
       // @ valid
       $Path->real = true;
       $Path->construct('/usr/bin');
-      assert(
+      yield assert(
          assertion: (string) $Path === '/usr/bin',
          description: 'Real path not exists!'
       );
@@ -29,11 +29,9 @@ return [
       // @ valid
       $Path->real = true;
       $Path->construct('/usr/bin/fakebootgly');
-      assert(
+      yield assert(
          assertion: (string) $Path === '',
          description: 'Fake path valid?!'
       );
-
-      return true;
    }
 ];

@@ -19,7 +19,7 @@ return [
       @for;
       TEMPLATE);
       $Template1->render([]);
-      assert(
+      yield assert(
          assertion: $Template1->output === <<<'OUTPUT'
          012
          OUTPUT,
@@ -35,7 +35,7 @@ return [
       @for;
       TEMPLATE);
       $Template2->render([]);
-      assert(
+      yield assert(
          assertion: $Template2->output === <<<'OUTPUT'
          1
          OUTPUT,
@@ -46,7 +46,5 @@ return [
 
       // @ Invalid
       // ...
-
-      return true;
    }
 ];

@@ -19,11 +19,9 @@ return [
 
       // @
       $Path->construct('\home/bootgly\\');
-      assert(
+      yield assert(
          assertion: (string) $Path === '/home/bootgly/',
          description: 'Path directory separators not fixed!'
       );
-
-      return true;
    }
 ];

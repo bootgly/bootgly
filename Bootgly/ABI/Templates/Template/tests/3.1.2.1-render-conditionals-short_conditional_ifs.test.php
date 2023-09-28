@@ -24,7 +24,7 @@ return [
       $Template->render([
          'items' => 0,
       ]);
-      assert(
+      yield assert(
          assertion: $Template->output === <<<OUTPUT
          No items found.
          OUTPUT,
@@ -36,7 +36,5 @@ return [
 
       // @ Invalid
       // ...
-
-      return true;
    }
 ];

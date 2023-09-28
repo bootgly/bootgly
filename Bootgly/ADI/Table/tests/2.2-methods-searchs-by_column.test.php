@@ -22,18 +22,16 @@ return [
       // @ Valid
       // Test find operation
       $findResult = $Table->find(column: 0, value: 'Alice'); // Searching for 'Alice' in the first column
-      assert(
+      yield assert(
          assertion: $findResult === true,
          description: 'Valid find result: ' . $findResult
       );
 
       // @ Invalid
       $findResult = $Table->find(column: 0, value: 'Test'); // Searching for 'Test' in the first column
-      assert(
+      yield assert(
          assertion: $findResult === false,
          description: 'Invalid find result: ' . $findResult
       );
-
-      return true;
    }
 ];

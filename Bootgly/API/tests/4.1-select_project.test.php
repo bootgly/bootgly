@@ -25,11 +25,9 @@ return [
 
       // @ Select Project
       $path2 = $Project2->select(project: 'Bootgly');
-      assert(
+      yield assert(
          assertion: $path2 === Project::CONSUMER_DIR . 'Bootgly/',
          description: 'Failed to select Project by name'
       );
-
-      return true;
    }
 ];

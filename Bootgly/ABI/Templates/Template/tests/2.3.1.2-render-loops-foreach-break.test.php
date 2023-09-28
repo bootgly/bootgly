@@ -26,7 +26,7 @@ return [
       $Template->render([
          'items' => ['a', 'b', 'c']
       ]);
-      assert(
+      yield assert(
          assertion: $Template->output === <<<OUTPUT
          0
          1\n
@@ -40,7 +40,5 @@ return [
 
       // @ Invalid
       // ...
-
-      return true;
    }
 ];

@@ -24,7 +24,7 @@ return [
          'b'     => true,
          #'c' => false
       ]);
-      assert(
+      yield assert(
          assertion: $Template11->output === <<<'OUTPUT'
          Bootgly Template is easy!
          Bootgly Template is 1!
@@ -40,7 +40,7 @@ return [
          TEMPLATE
       );
       $Template12->render([]);
-      assert(
+      yield assert(
          assertion: $Template12->output === <<<'OUTPUT'
          Echo PHP Code: 123456!
          OUTPUT,
@@ -55,7 +55,7 @@ return [
          TEMPLATE
       );
       $Template21->render([]);
-      assert(
+      yield assert(
          assertion: $Template21->output === <<<'OUTPUT'
          Echo PHP Code: @> 123456;!
          OUTPUT,
@@ -64,7 +64,5 @@ return [
 
       // @ Invalid
       // ...
-
-      return true;
    }
 ];

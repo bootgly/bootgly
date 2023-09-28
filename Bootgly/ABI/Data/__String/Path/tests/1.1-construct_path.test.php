@@ -13,11 +13,9 @@ return [
    'test' => function () {
       $Path = new Path(BOOTGLY_ROOT_DIR);
 
-      assert(
+      yield assert(
          assertion: $Path->path === BOOTGLY_ROOT_DIR,
          description: 'Path not matched!'
       );
-
-      return true;
    }
 ];

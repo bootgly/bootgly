@@ -21,7 +21,7 @@ return [
       $Template11->render([
          'cool' => true,
       ]);
-      assert(
+      yield assert(
          assertion: $Template11->output === <<<OUTPUT
          Bootgly Template is cool!\n
          OUTPUT,
@@ -41,7 +41,7 @@ return [
          'poor' => false,
          'cool' => true,
       ]);
-      assert(
+      yield assert(
          assertion: $Template12->output === <<<OUTPUT
          Bootgly Template is cool!\n
          OUTPUT,
@@ -53,7 +53,5 @@ return [
 
       // @ Invalid
       // ...
-
-      return true;
    }
 ];

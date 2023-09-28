@@ -41,7 +41,7 @@ return [
             'c' => ['helmet', 'legs', 't-shirt']
          ]
       ]);
-      assert(
+      yield assert(
          assertion: $Template11->output === <<<OUTPUT
          First!
 
@@ -72,7 +72,5 @@ return [
 
       // @ Invalid
       // ...
-
-      return true;
    }
 ];

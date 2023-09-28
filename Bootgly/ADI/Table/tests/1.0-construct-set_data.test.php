@@ -22,37 +22,35 @@ return [
       // @ Valid
       // Test header
       $header0 = $Table->rows['header'][0];
-      assert(
+      yield assert(
          assertion: $header0[0] === 'Name',
          description: 'Header 0 - Column 0:' . $header0[0]
       );
-      assert(
+      yield assert(
          assertion: $header0[1] === 'Age',
          description: 'Header 0 - Column 1: ' . $header0[1]
       );
       // Test body
       $body0 = $Table->rows['body'][0];
-      assert(
+      yield assert(
          assertion: $body0[0] === 'Alice',
          description: 'Body 0 - Column 0:' . $body0[0]
       );
-      assert(
+      yield assert(
          assertion: $body0[1] === 25,
          description: 'Body 0 - Column 1: ' . $body0[1]
       );
       // Test footer
       $footer0 = $Table->rows['footer'][0];
-      assert(
+      yield assert(
          assertion: $footer0[0] === 'Total',
          description: 'Footer 0 - Column 0:' . $footer0[0]
       );
-      assert(
+      yield assert(
          assertion: $footer0[1] === 0,
          description: 'Footer 0 - Column 1: ' . $footer0[1]
       );
       // @ Invalid
       // ...
-
-      return true;
    }
 ];

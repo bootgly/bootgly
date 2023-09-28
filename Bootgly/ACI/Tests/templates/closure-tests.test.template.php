@@ -13,6 +13,12 @@ return [
    'test' => function () {
       // ...
 
-      return true;
+      // Subtests
+      #yield assert(...);
+
+      return assert(
+         assertion: true,
+         description: null
+      );
    }
 ];

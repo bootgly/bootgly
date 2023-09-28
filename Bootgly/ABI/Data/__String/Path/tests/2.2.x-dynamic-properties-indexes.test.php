@@ -14,11 +14,9 @@ return [
       // @
       // Valid
       $Path = new Path('/var/www/bootgly/index.php');
-      assert(
+      yield assert(
          assertion: $Path->indexes === 4,
          description: 'Returned path parts count: ' . $Path->indexes
       );
-
-      return true;
    }
 ];

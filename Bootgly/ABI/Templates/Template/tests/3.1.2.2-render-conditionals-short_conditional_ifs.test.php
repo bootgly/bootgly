@@ -24,7 +24,7 @@ return [
       $Template->render([
          'items' => null,
       ]);
-      assert(
+      yield assert(
          assertion: $Template->output === <<<OUTPUT
          Items is not set!
          OUTPUT,
@@ -36,7 +36,5 @@ return [
 
       // @ Invalid
       // ...
-
-      return true;
    }
 ];

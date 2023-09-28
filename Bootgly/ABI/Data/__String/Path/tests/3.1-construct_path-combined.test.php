@@ -27,17 +27,15 @@ return [
       // @
       // Valid
       $Path->construct('\\ETC\/php\\8.2/..');
-      assert(
+      yield assert(
          assertion: (string) $Path === '/etc/php',
          description: 'Combined path is not valid!'
       );
       // Invalid
       $Path2->construct('/usr/bin/fakebootgly');
-      assert(
+      yield assert(
          assertion: (string) $Path2 === '',
          description: 'Fake path valid?!'
       );
-
-      return true;
    }
 ];

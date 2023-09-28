@@ -16,7 +16,7 @@ return [
          Reseting formatting?*@
          TEMPLATE
       );
-      assert(
+      yield assert(
          assertion: $output === "Reseting formatting?\033[0m",
          description: "Assertion #2: output does not match: \n`" . json_encode($output) . '`'
       );
@@ -26,7 +26,5 @@ return [
 
       // @ Invalid
       // ...
-
-      return true;
    }
 ];

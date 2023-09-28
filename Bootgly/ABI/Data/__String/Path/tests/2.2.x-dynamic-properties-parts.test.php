@@ -14,11 +14,9 @@ return [
       // @
       // Valid
       $Path = new Path('/var/www/bootgly/index.php');
-      assert(
+      yield assert(
          assertion: $Path->parts === ['var', 'www', 'bootgly', 'index.php'],
          description: 'Returned path parts: ' . json_encode($Path->parts)
       );
-
-      return true;
    }
 ];

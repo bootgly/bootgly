@@ -20,11 +20,9 @@ return [
 
       // @
       $Path->construct('/HOME/BOotGly/');
-      assert(
+      yield assert(
          assertion: (string) $Path === '/home/bootgly/',
          description: 'Path not converted to lowercase!'
       );
-
-      return true;
    }
 ];

@@ -17,15 +17,15 @@ return [
       $contents = $File1->contents;
       // @ set new file contents
       $File1->contents = PHP_EOL . '--TEST--';
-      assert(
+      yield assert(
          assertion: $File1->lines === 2,
          description: 'Invalid Modified File lines count: ' . $File1->lines
       );
 
       // @ revert file contents
       $File1->contents = $contents;
-      assert(
-         assertion: $File1->lines === 29,
+      yield assert(
+         assertion: $File1->lines === 27,
          description: 'Invalid Reverted File lines count: ' . $File1->lines
       );
 
@@ -35,7 +35,7 @@ return [
       $contents = $File2->contents;
       // @ set new file contents
       $File2->contents = PHP_EOL . '--TEST--';
-      assert(
+      yield assert(
          assertion: $File2->lines === false,
          description: 'File #2 lines to invalid file should be false!'
       );
@@ -47,11 +47,9 @@ return [
       $contents = $File3->contents;
       // @ set new file contents
       $File3->contents = PHP_EOL . '--TEST--';
-      assert(
+      yield assert(
          assertion: $File3->lines === false,
          description: 'File #3 lines to invalid file should be false!'
       );
-
-      return true;
    }
 ];

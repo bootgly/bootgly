@@ -17,11 +17,9 @@ return [
       $Path->real = true;
       $Path->construct('/etc/php/8.2/');
 
-      assert(
+      yield assert(
          assertion: $Path->type === 'dir',
          description: 'Return Path type: ' . $Path->type
       );
-
-      return true;
    }
 ];

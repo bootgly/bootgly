@@ -12,11 +12,9 @@ return [
    // @ test
    'test' => function () {
       $path = Path::concatenate(['home', 'bootgly', 'bootgly', 'index.php'], offset: 2);
-      assert(
+      yield assert(
          assertion: $path === 'bootgly/index.php',
          description: 'Path: ' . $path
       );
-
-      return true;
    }
 ];

@@ -11,7 +11,6 @@
 namespace Bootgly\ACI\Tests;
 
 
-use AssertionError;
 #use Bootgly\ACI\Tests\Assertions;
 use Bootgly\ACI\Tests;
 use Bootgly\ACI\Logs\LoggableEscaped;
@@ -174,16 +173,26 @@ class Test // extends Assertions
       }
 
       try {
-         $test = $this->specifications['test'];
-         $result = $test(...$arguments);
+         $Results = $this->specifications['test'](...$arguments);
 
-         $this->assertions[] = $result ?? true;
+         if ($Results instanceof \Generator !== true) {
+            $Results = match ($Results) {
+               false, true => [$Results],
+               default => throw new \AssertionError(
+                  'The test function must return boolean or a Generator<boolean>!'
+               )
+            };
+         }
+
+         foreach ($Results as $result) {
+            $this->assertions[] = $result ?? true;
+         }
 
          if ($this->Tests->autoResult) {
             $this->postest();
             $this->pass();
          }
-      } catch (AssertionError $AssertionError) {
+      } catch (\AssertionError $AssertionError) {
          $this->assertions[] = false;
 
          $message = $AssertionError->getMessage();

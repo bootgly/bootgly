@@ -21,7 +21,7 @@ return [
       $Template11->render([
          'tenth' => 10
       ]);
-      assert(
+      yield assert(
          assertion: $Template11->output === <<<'OUTPUT'
          10987654321
          OUTPUT,
@@ -40,7 +40,7 @@ return [
       $Template21->render([
          'tenth' => 10
       ]);
-      assert(
+      yield assert(
          assertion: $Template21->output === <<<'OUTPUT'
          @while $tenth:
             @> $tenth--;
@@ -51,7 +51,5 @@ return [
 
       // @ Invalid
       // ...
-
-      return true;
    }
 ];
