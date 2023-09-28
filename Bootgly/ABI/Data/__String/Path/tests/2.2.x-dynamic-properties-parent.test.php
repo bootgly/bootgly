@@ -78,7 +78,7 @@ return [
       $Path = new Path('/test');
       yield assert(
          assertion: $Path->parent === '/',
-         description: 'Path #33 - parent: ' . $Path->parent
+         description: 'Path #34 - parent: ' . $Path->parent
       );
    }
 ];

@@ -56,11 +56,12 @@ class Tester extends Tests
       $this->passed = 0;
       $this->skipped = 0;
       // @ Stats
+      $this->assertions = 0;
       $this->total = count($this->tests);
       Tests::$cases += $this->total;
       // @ Time
       $this->started = microtime(true);
-      // @ Screen? Output?
+      // @ Output
       // width
       $width = 0;
       foreach ($this->tests as $file) {
@@ -97,7 +98,7 @@ class Tester extends Tests
 
       $dir = $boot . DIRECTORY_SEPARATOR;
 
-      // * Config
+      // * Config (Test Suite)
       $testCaseTarget = ($specifications['index'] ?? 0);
       // @
       foreach ($this->tests as $index => $test) {
@@ -107,6 +108,10 @@ class Tester extends Tests
             $specifications = null;
          }
 
+         // * Meta (Test Case)
+         if ($this->total === $index + 1) {
+            $specifications['last'] = true;
+         }
          if ($testCaseTarget > 0 && ($index + 1) !== $testCaseTarget) {
             $specifications['skip'] = true;
          }
@@ -145,7 +150,7 @@ class Tester extends Tests
 
    public function test (? array &$specifications) : Test|false
    {
-      if ( $specifications === null || empty($specifications) ) {
+      if ( empty($specifications) ) {
          $this->skipped++;
          next($this->tests);
          return false;
@@ -215,6 +220,8 @@ class Tester extends Tests
       // @ Time
       $started = $this->started;
       $finished = $this->finished = microtime(true);
+      // assertions
+      $assertions = '@:info:' . $this->assertions . ' @;';
       // duration
       $duration = Benchmark::format($started, $finished);
       $duration = "@#Magenta:" . $duration . "s @;";
@@ -224,11 +231,12 @@ class Tester extends Tests
       // TODO temp
       $this->log(<<<TESTS
 
-      @#white:------------------------------------------------- @;
+      @#white:-------------------------------------------------- @;
       @#white:Tests: @; {$failed}, {$skipped}, {$passed}, {$total}
+      @#white:# of Assertions: @; {$assertions}
       @#white:Duration: @; {$duration}
       {$ran}
-      @#white:------------------------------------------------- @;
+      @#white:-------------------------------------------------- @;
       \n
       TESTS);
    }

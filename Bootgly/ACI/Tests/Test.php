@@ -31,7 +31,8 @@ class Test // extends Assertions
 
    // * Meta
    public mixed $test;
-   public array $assertions;
+   public array $results;
+   public array $descriptions;
    // @ Output
    public false|string $debugged;
    // @ Time
@@ -52,13 +53,17 @@ class Test // extends Assertions
 
       // * Meta
       $this->test = current($this->Tests->tests); // @ file
-      $this->assertions = [];
+      $this->results = [];
+      $this->descriptions = [
+         $specifications['describe'] ?? null
+      ];
       // @ Output
       $this->debugged = false;
       // @ Time
       $this->started = microtime(true);
 
 
+      // @
       // @ Set PHP assert options
       // 1
       assert_options(ASSERT_ACTIVE, 1);
@@ -75,7 +80,7 @@ class Test // extends Assertions
    {
       return match ($name) {
          'success' => array_reduce(
-            array: $this->assertions,
+            array: $this->results,
             callback: function ($accumulator, $assertion) {
                return $accumulator && $assertion;
             },
@@ -85,17 +90,14 @@ class Test // extends Assertions
       };
    }
 
-   public function describe (? string $description, bool $status)
+   public function describe (? string $description, bool $status, string $indicator = '╟')
    {
       if (! $description) {
          return;
       }
 
       // Indicator
-      # ╚•╟
-      $indicator = match ($status) {
-         default => '╚'
-      };
+      # ╚ • ╟ ─
       // Icon
       # ⮡ ↳➡️↪↪️ ✓✘ ✅❌
       $icon = match ($status) {
@@ -104,15 +106,43 @@ class Test // extends Assertions
       };
       // Description
       # ...
-      // Breaklines
-      $breaklines = match ($status) {
-         true  => '@..;',
-         false => '@.;'
-      };
+      // Breakline
+      $breakline = '@.;';
 
-      $description = $indicator . $icon . $description . $breaklines;
+      $description = $indicator . $icon . $description . $breakline;
 
       $this->log($description);
+   }
+   public function describing (bool $status)
+   {
+      $descriptions = $this->descriptions;
+      $descriptions_count = count($descriptions);
+
+      if (!$descriptions[0] || $descriptions_count === 1) return;
+
+      $index = 1;
+      foreach ($descriptions as $description) {
+         if ($descriptions_count === 2 && $description === null && $index === 2)
+            break;
+
+         $indicator = match ($index) {
+            1                   => '╟',
+            $descriptions_count => '╚══',
+            default             => '╟──',
+         };
+
+         $this->describe(
+            $description ?? 'Assertion @:info:#' . ($index - 1) . '@;',
+            (!$status && ($index === $descriptions_count || $index === 1)) ? false : true,
+            $indicator
+         );
+
+         $index++;
+      }
+
+      if (!$this->specifications['last'] ?? false) {
+         $this->log(PHP_EOL);
+      }
    }
    public function separate ()
    {
@@ -185,7 +215,9 @@ class Test // extends Assertions
          }
 
          foreach ($Results as $result) {
-            $this->assertions[] = $result ?? true;
+            $this->descriptions[] = null;
+            $this->results[] = $result ?? true;
+            $this->Tests->assertions++;
          }
 
          if ($this->Tests->autoResult) {
@@ -193,7 +225,7 @@ class Test // extends Assertions
             $this->pass();
          }
       } catch (\AssertionError $AssertionError) {
-         $this->assertions[] = false;
+         $this->results[] = false;
 
          $message = $AssertionError->getMessage();
 
@@ -217,6 +249,7 @@ class Test // extends Assertions
    public function fail (? string $message = null)
    {
       $this->Tests->failed++;
+      $this->descriptions[] = null;
 
       $case = sprintf('%03d', Tests::$case);
       $test = str_pad($this->test . ':', Tests::$width, ' ', STR_PAD_RIGHT);
@@ -230,7 +263,7 @@ class Test // extends Assertions
          "@@:" . $test . " @;" .
          "\033[1;35m +" . $elapsed . "s\033[0m" . PHP_EOL
       );
-      $this->describe($this->specifications['describe'] ?? null, false, false);
+      $this->describing(status: false);
 
       $this->log(
          " ↪️ \033[91m" . $help . "\033[0m" .
@@ -259,6 +292,6 @@ class Test // extends Assertions
          "\033[90m" . $test . "\033[0m" .
          "\033[1;35m +" . $elapsed . "s\033[0m" . PHP_EOL
       );
-      $this->describe($this->specifications['describe'] ?? null, true);
+      $this->describing(status: true);
    }
 }
