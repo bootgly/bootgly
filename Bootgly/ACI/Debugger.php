@@ -11,41 +11,37 @@
 namespace Bootgly\ACI;
 
 
-class Debugger // TODO refactor (too old!)
+class Debugger
 {
    // * Config
-   public static $debug = false;
-   public static $print = true;
-   public static $exit = true;
-
-   public static $cli = false;
-
-   public static $traces = 2;
-
-   // Identifiers
-   public static $call = 1; // int
-   public static $title; // string
-   public static $trace; // array
-   public static $vars; // array
-   public static $labels; // array
-
-   // Delimiters
+   public static bool $debug = false;
+   public static bool $print = true;
+   public static bool $exit = true;
+   // _ Stack
+   public static int $traces = 2;
+   // _ Identifiers
+   public static int $call = 1;
+   public static string $title = '';
+   public static array $labels = [];
+   // _ Delimiters
    // Call
-   public static $from;
-   public static $to;
+   public static ? int $from = null;
+   public static ? int $to = null;
    // Title
-   public static $search;
-   // Stack
-   public static $stacks;
-   public static $ips;
+   public static ? string $search = null;
+   // _ Validators
+   public static array $ips;
 
-   // .Output
-   public static $Output;
+   // * Meta
+   protected static array $backtrace;
+   // >> Output
+   protected static bool $CLI = false;
+   protected static string $Output;
 
 
-   // TODO Refactor this function to reduce its Cognitive Complexity from 41 to the 15 allowed.
    public function __construct (...$vars)
    {
+      // ?
       if (self::$debug === false) {
          return;
       }
@@ -64,18 +60,17 @@ class Debugger // TODO refactor (too old!)
          }
       }
 
-      // CLI
+      // * Meta
+      // Output
       if (@PHP_SAPI === 'cli') {
-         self::$cli = true;
+         self::$CLI = true;
       }
+
+      // @
+      self::$backtrace = debug_backtrace();
 
       // Title
       $title = self::$title;
-      // Vars
-      if (empty($vars) && self::$vars) {
-         $vars = self::$vars;
-      }
-
       // Count
       $call = self::$call;
 
@@ -99,27 +94,20 @@ class Debugger // TODO refactor (too old!)
 
       // Catch
       if ((($from && $call >= $from) || $call >= $to) && $search == $title) {
-         if (self::$trace !== false && self::$trace === null) {
-            $trace = debug_backtrace();
-            self::$trace = $trace;
-         }
-
-         $this->generate($vars);
+         $this->format($vars);
 
          // Print
          if (self::$print) {
             print self::$Output;
          }
 
-         self::$trace = null;
+         self::$backtrace = [];
 
          if (self::$exit) {
             if (self::$from == null) {
                exit;
-            } else {
-               if (self::$to == self::$call) {
-                  exit;
-               }
+            } else if (self::$to == self::$call) {
+               exit;
             }
          }
       }
@@ -133,21 +121,23 @@ class Debugger // TODO refactor (too old!)
       }
    }
 
-   public static function input (...$vars)
-   {
-      self::$vars = $vars;
-   }
    public static function reset ()
    {
+      // * Config
+      // _ Stack
+      self::$traces = 2;
+      // _ Identifiers
       self::$call = 1;
-      self::$from = null;
-      self::$to = null;
-      self::$search = null;
       self::$title = null;
       self::$labels = null;
+      // _ Delimiters
+      // Call
+      self::$from = null;
+      self::$to = null;
+      // Title
+      self::$search = null;
    }
 
-   // TODO Refactor this function to reduce its Cognitive Complexity from 46 to the 15 allowed.
    public static function dump ($value)
    {
       switch (gettype($value)) {
@@ -163,7 +153,7 @@ class Debugger // TODO refactor (too old!)
                $var = 'false';
             }
 
-            if (self::$cli) {
+            if (self::$CLI) {
                $var = "\033[31m" . $var . "\033[0m";
             }
 
@@ -177,7 +167,7 @@ class Debugger // TODO refactor (too old!)
 
             $var = $value;
 
-            if (self::$cli) {
+            if (self::$CLI) {
                $var = "\033[33m" . $var . "\033[0m";
             }
 
@@ -190,7 +180,7 @@ class Debugger // TODO refactor (too old!)
 
             $var = $value;
 
-            if (self::$cli) {
+            if (self::$CLI) {
                $var = "\033[33m" . $var . "\033[0m";
             }
 
@@ -202,7 +192,7 @@ class Debugger // TODO refactor (too old!)
             $info = ' (length=' . strlen($value) . ')';
             $color = '#cc0000';
 
-            if (! self::$cli) {
+            if (! self::$CLI) {
                $var = "'" . $value . "'";
             } else {
                $var = "\033[92m'" . $value . "'\033[0m";
@@ -216,13 +206,13 @@ class Debugger // TODO refactor (too old!)
             $info = ' (size=' . count($value) . ") ";
             $color = '';
             $array = $value;
-            $identity = self::$cli ? "   " : "\t\t\t";
+            $identity = self::$CLI ? "   " : "\t\t\t";
 
             $var = '';
             foreach ($array as $key => $value) {
                // @@ Key
                if ( is_string($key) ) {
-                  if (! self::$cli) {
+                  if (! self::$CLI) {
                      $key = "'" . $key . "'";
                   } else {
                      $key = "\033[92m'" . $key . "'\033[0m";
@@ -233,7 +223,7 @@ class Debugger // TODO refactor (too old!)
                if ( is_array($value) ) {
                   $arrayValueCount = count($value);
 
-                  if (! self::$cli) {
+                  if (! self::$CLI) {
                      $value = '<b>array</b>';
                   } else {
                      $value = "\033[95marray\033[0m";
@@ -280,7 +270,7 @@ class Debugger // TODO refactor (too old!)
             $color = '#3465a4';
             $var = 'null';
 
-            if (self::$cli) {
+            if (self::$CLI) {
                $var = "\033[31m" . $var . "\033[0m";
             }
 
@@ -302,7 +292,7 @@ class Debugger // TODO refactor (too old!)
             }
       }
 
-      if (! self::$cli) {
+      if (! self::$CLI) {
          $dump = $prefix . $info . '<span style="color: ' . $color . '">' . $var . '</span>';
       }
       else {
@@ -311,52 +301,52 @@ class Debugger // TODO refactor (too old!)
 
       return $dump;
    }
-   // TODO Refactor this function to reduce its Cognitive Complexity from 36 to the 15 allowed.
-   private function generate ($vars)
+
+   private function format ($vars)
    {
-      self::$Output = "";
+      self::$Output = match (self::$CLI) {
+         false => '<pre>',
+         true  => ''
+      };
+
+      // @ Title
+      if (self::$title) {
+         self::$Output .= match (self::$CLI) {
+            false => '<b>',
+            true  => "\033[93m"
+         };
+         self::$Output .= self::$title;
+         self::$Output .= match (self::$CLI) {
+            false => '</b>',
+            true  => "\033[0m"
+         };
+      }
 
       // @ Call
-      if (! self::$cli) {
-         self::$Output = "<pre>";
-      }
-
-      if (self::$title) {
-         if (! self::$cli) {
-            self::$Output .= '<b>';
-         }
-
-         self::$Output .= self::$title;
-
-         if (! self::$cli) {
-            self::$Output .= '</b>';
-         }
-      }
-
-      if (! self::$cli) {
-         self::$Output .= '<small>';
-      } else {
-         self::$Output .= "\n\033[96m";
-      }
-
+      self::$Output .= match (self::$CLI) {
+         false => '<small>',
+         true  => "\n\033[96m"
+      };
       self::$Output .= ' in call number: ' . self::$call;
-
-      if (! self::$cli) {
-         self::$Output .= '</small>';
-      } else {
-         self::$Output .= "\033[0m";
-      }
-
+      self::$Output .= match (self::$CLI) {
+         false => '</small>',
+         true  => "\033[0m"
+      };
       self::$Output .= "\n";
 
-      // @ Trace
-      if (self::$trace && self::$trace[0]['file'] && self::$trace[0]['line']) {
-         if (! self::$cli) {
-            self::$Output .= '<small>';
-         }
+      // @ Backtrace
+      if (self::$backtrace && self::$backtrace[0]['file'] && self::$backtrace[0]['line']) {
+         self::$Output .= match (self::$CLI) {
+            false => '<small>',
+            true  => ''
+         };
 
          $n = 1;
-         foreach (self::$trace as $trace) {
+         foreach (self::$backtrace as $index => $trace) {
+            if ($index === 0) {
+               continue;
+            }
+
             if (isSet($trace['file']) && isSet($trace['line'])) {
                self::$Output .= $trace['file'] . ':' . $trace['line'];
             }
@@ -370,42 +360,37 @@ class Debugger // TODO refactor (too old!)
             $n++;
          }
 
-         if (! self::$cli) {
-            self::$Output .= "</small>";
-         }
-
+         self::$Output .= match (self::$CLI) {
+            false => '</small>',
+            true  => ''
+         };
          self::$Output .= "\n";
       }
 
       self::$Output .= "\n";
 
-      // @ Value
+      // Value
       foreach ($vars as $key => $value) {
-         // @ Labels
+         // Labels
          if (@self::$labels[$key]) {
-            if (! self::$cli) {
-               self::$Output .= '<b style="color:#7d7d7d">';
-            } else {
-               self::$Output .= "\033[93m";
-            }
-
+            self::$Output .= match (self::$CLI) {
+               false => '<b style="color:#7d7d7d">',
+               true  => "\033[93m"
+            };
             self::$Output .= self::$labels[$key] . "\n";
-
-            if (! self::$cli) {
-               self::$Output .= '</b>';
-            } else {
-               self::$Output .= "\033[0m";
-            }
+            self::$Output .= match (self::$CLI) {
+               false => '</b>',
+               true  => "\033[0m"
+            };
          }
 
          self::$Output .= self::dump($value) . "\n";
       }
 
       self::$Output .= "\n";
-
-      if (! self::$cli) {
-         self::$Output .= "</pre>";
-         self::$Output .= "<style>pre{-moz-tab-size: 1; tab-size: 1;}</style>";
-      }
+      self::$Output .= match (self::$CLI) {
+         false => '</pre><style>pre{-moz-tab-size: 1; tab-size: 1;}</style>',
+         true  => ''
+      };
    }
 }

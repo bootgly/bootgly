@@ -47,7 +47,6 @@ class CLI // Command Line Interface
       // ...
       // Debugger
       Debugger::$debug = true;
-      Debugger::$cli = true;
       Debugger::$exit = false;
       // * Data
       // ...

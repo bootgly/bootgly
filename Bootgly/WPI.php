@@ -47,7 +47,6 @@ class WPI // Web Programming Interface
       // * Config
       // Debugger
       Debugger::$debug = false;
-      Debugger::$cli = false;
       Debugger::$exit = true;
 
       // @ Instance
