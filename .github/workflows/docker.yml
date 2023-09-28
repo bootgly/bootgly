@@ -5,8 +5,8 @@ on:
   push:
     branches:
       - 'main'
-    paths-ignore:
-      - '**/README.md'
+    paths:
+      - 'Bootgly/ABI/**'
 
 jobs:
   build:
