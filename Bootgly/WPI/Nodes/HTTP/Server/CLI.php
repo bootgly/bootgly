@@ -162,8 +162,6 @@ class CLI extends TCP\Server implements HTTP, Server
                   continue;
                }
 
-               $Test->separate(); // @ Output Test separators
-
                // ! Server
                $responseLength = @$spec['response.length'] ?? null;
                // ! Client
