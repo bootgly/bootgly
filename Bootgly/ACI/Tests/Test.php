@@ -105,7 +105,7 @@ class Test // extends Assertions
          false => ' @#red:✘ @; '
       };
       // Description
-      # ...
+      $description = '@#white:' . $description . '@;';
       // Breakline
       $breakline = '@.;';
 
