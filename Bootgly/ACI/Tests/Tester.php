@@ -135,7 +135,6 @@ class Tester extends Tests
             // @ Test
             $Test = $this->test($specifications);
             if ($Test !== false) {
-               $Test->separate();
                $Test->test();
             }
          }

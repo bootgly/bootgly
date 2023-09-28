@@ -24,7 +24,7 @@ class Test // extends Assertions
    public Tests $Tests;
 
    // * Config
-   // ...
+   public static ? string $description;
 
    // * Data
    public array $specifications;
@@ -46,7 +46,7 @@ class Test // extends Assertions
       $this->Tests = $Tests;
 
       // * Config
-      // ...
+      self::$description = null;
 
       // * Data
       $this->specifications = $specifications;
@@ -113,7 +113,7 @@ class Test // extends Assertions
 
       $this->log($description);
    }
-   public function describing (bool $status)
+   private function describing (bool $status)
    {
       $descriptions = $this->descriptions;
       $descriptions_count = count($descriptions);
@@ -192,6 +192,8 @@ class Test // extends Assertions
          return false;
       }
 
+      $this->separate();
+
       return true;
    }
    public function test (...$arguments)
@@ -205,7 +207,7 @@ class Test // extends Assertions
       try {
          $test = $this->specifications['test'];
          unset($this->specifications['test']);
-         $test = $test->bindTo($this, 'static');
+         $test = $test->bindTo($this, self::class);
 
          $Results = $test(...$arguments);
 
@@ -219,9 +221,12 @@ class Test // extends Assertions
          }
 
          foreach ($Results as $result) {
-            $this->descriptions[] = null;
+            $this->descriptions[] = self::$description;
+
             $this->results[] = $result ?? true;
             $this->Tests->assertions++;
+
+            self::$description = null;
          }
 
          if ($this->Tests->autoResult) {
