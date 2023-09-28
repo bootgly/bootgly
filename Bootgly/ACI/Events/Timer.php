@@ -12,9 +12,6 @@
 namespace Bootgly\ACI\Events;
 
 
-use \Throwable;
-
-
 class Timer
 {
    // * Config
@@ -63,7 +60,6 @@ class Timer
       return self::$id;
    }
 
-   // TODO Refactor this function to reduce its Cognitive Complexity from 21 to the 15 allowed.
    public static function tick ()
    {
       if ( empty(self::$tasks) ) {
@@ -83,7 +79,7 @@ class Timer
 
                try {
                   call_user_func_array($handler, $args);
-               } catch (Throwable) {
+               } catch (\Throwable) {
                   // ...
                }
 

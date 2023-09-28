@@ -30,15 +30,15 @@ class Test // extends Assertions
    public array $specifications;
 
    // * Meta
-   public mixed $test;
-   public array $results;
-   public array $descriptions;
+   private mixed $test;
+   private array $results;
+   private array $descriptions;
    // @ Output
-   public false|string $debugged;
+   private false|string $debugged;
    // @ Time
-   public float $started;
-   public float $finished;
-   public string $elapsed;
+   private float $started;
+   private float $finished;
+   private string $elapsed;
 
 
    public function __construct (Tests&Tester $Tests, array $specifications)
@@ -203,7 +203,11 @@ class Test // extends Assertions
       }
 
       try {
-         $Results = $this->specifications['test'](...$arguments);
+         $test = $this->specifications['test'];
+         unset($this->specifications['test']);
+         $test = $test->bindTo($this, 'static');
+
+         $Results = $test(...$arguments);
 
          if ($Results instanceof \Generator !== true) {
             $Results = match ($Results) {

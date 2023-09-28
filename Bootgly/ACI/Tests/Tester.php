@@ -12,8 +12,8 @@ namespace Bootgly\ACI\Tests;
 
 
 use Bootgly\ACI\Logs\LoggableEscaped;
-use Bootgly\API\Environment;
 use Bootgly\ACI\Tests;
+use Bootgly\API\Environment;
 
 
 class Tester extends Tests
