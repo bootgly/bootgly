@@ -10,22 +10,23 @@
 
 #namespace Bootgly\ACI;
 
-
 use Bootgly\ACI\Debugger;
 
 
 if (function_exists('debug') === false) {
-   function debug(...$vars)
+   function debug (...$vars)
    {
-      if (Debugger::$trace === null) {
-         Debugger::$trace = debug_backtrace();
-      }
-
       $Debugger = new Debugger(...$vars);
 
-      if (Debugger::$trace !== false) {
-         Debugger::$trace = null;
-      }
+      return $Debugger;
+   }
+}
+if (function_exists('dd') === false) {
+   function dd (...$vars)
+   {
+      Debugger::$exit = true;
+
+      $Debugger = new Debugger(...$vars);
 
       return $Debugger;
    }
