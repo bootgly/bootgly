@@ -30,7 +30,7 @@ class Test // extends Assertions
    public array $specifications;
 
    // * Meta
-   private mixed $test;
+   private mixed $filename;
    private array $results;
    private array $descriptions;
    // @ Output
@@ -52,7 +52,7 @@ class Test // extends Assertions
       $this->specifications = $specifications;
 
       // * Meta
-      $this->test = current($this->Tests->tests); // @ file
+      $this->filename = current($this->Tests->tests); // @ file
       $this->results = [];
       $this->descriptions = [
          $specifications['describe'] ?? null
@@ -256,7 +256,7 @@ class Test // extends Assertions
       $this->descriptions[] = null;
 
       $case = sprintf('%03d', Tests::$case);
-      $test = str_pad($this->test . ':', Tests::$width, ' ', STR_PAD_RIGHT);
+      $test = str_pad($this->filename . ':', Tests::$width, ' ', STR_PAD_RIGHT);
       $elapsed = $this->elapsed;
       $help = $message ?? $this->specifications['except']();
 
@@ -286,7 +286,7 @@ class Test // extends Assertions
       $this->Tests->passed++;
 
       $case = sprintf('%03d', Tests::$case);
-      $test = str_pad($this->test, Tests::$width, '.', STR_PAD_RIGHT);
+      $test = str_pad($this->filename, Tests::$width, '.', STR_PAD_RIGHT);
       $elapsed = $this->elapsed;
 
       // @ output
