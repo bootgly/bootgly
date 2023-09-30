@@ -2,7 +2,7 @@
 
 
 use Bootgly\ABI\Data\__String\Path;
-
+use Bootgly\ACI\Tests\Assertions\Assertion;
 
 return [
    // @ configure
@@ -14,7 +14,7 @@ return [
       $Path = new Path;
 
       // @
-      // Valid - absolute
+      Assertion::$description = 'Valid absolute path';
       $Path->match(path: '/etc/php/%', pattern: '8.*');
       yield assert(
          assertion: (string) $Path === '/etc/php/8.0'
@@ -22,7 +22,8 @@ return [
          || (string) $Path === '/etc/php/8.2',
          description: 'PHP path #1 (absolute) not matched!'
       );
-      // Valid - relative
+
+      Assertion::$description = 'Valid relative path';
       $Path = new Path('/etc/php/');
       $Path->match(path: '%', pattern: '8.*');
       yield assert(

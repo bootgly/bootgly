@@ -2,7 +2,7 @@
 
 
 use Bootgly\ABI\Data\__String\Path;
-
+use Bootgly\ACI\Tests\Assertions\Assertion;
 
 return [
    // @ configure
@@ -13,9 +13,9 @@ return [
    'test' => function () {
       // @
       // Valid
+      Assertion::$description = 'Valid path';
       $Path = new Path;
       // * Config
-      // @ valid
       $Path->real = true;
       $Path->construct('/usr/bin');
       yield assert(
@@ -24,9 +24,9 @@ return [
       );
 
       // Invalid
+      Assertion::$description = 'Invalid path';
       $Path = new Path;
       // * Config
-      // @ valid
       $Path->real = true;
       $Path->construct('/usr/bin/fakebootgly');
       yield assert(

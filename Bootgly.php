@@ -96,15 +96,7 @@ class Bootgly
    // ACI
    public static function debug (...$vars) : Debugger
    {
-      if (Debugger::$trace === null) {
-         Debugger::$trace = debug_backtrace();
-      }
-
       $Debugger = new Debugger(...$vars);
-
-      if (Debugger::$trace !== false) {
-         Debugger::$trace = null;
-      }
 
       return $Debugger;
    }

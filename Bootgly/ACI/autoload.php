@@ -10,9 +10,12 @@
 
 #namespace Bootgly\ACI;
 
+
 use Bootgly\ACI\Debugger;
+use Bootgly\ACI\Tests\Assertions\Assertion;
 
 
+// Debugger
 if (function_exists('debug') === false) {
    function debug (...$vars)
    {
@@ -31,3 +34,18 @@ if (function_exists('dd') === false) {
       return $Debugger;
    }
 }
+
+// Tests
+// @ Set PHP assert options
+// 1
+assert_options(ASSERT_ACTIVE, 1);
+// 2
+assert_options(ASSERT_CALLBACK, function (string $file, int $line, ? string $message) {
+   Assertion::$fallback = $message;
+});
+// 3
+assert_options(ASSERT_BAIL, 0);
+// 4
+assert_options(ASSERT_WARNING, 0);
+// 5
+assert_options(ASSERT_EXCEPTION, 0);

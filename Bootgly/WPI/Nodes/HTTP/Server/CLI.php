@@ -186,7 +186,7 @@ class CLI extends TCP\Server implements HTTP, Server
                // @ Execute Test
                $Test->test($input);
                // @ Output Test result
-               if (! $Connection->expired && $Test->success) {
+               if (! $Connection->expired && $Test->passed) {
                   $Test->pass();
                } else {
                   $Test->fail();

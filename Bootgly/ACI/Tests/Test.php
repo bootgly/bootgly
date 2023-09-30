@@ -11,12 +11,13 @@
 namespace Bootgly\ACI\Tests;
 
 
-#use Bootgly\ACI\Tests\Assertions;
-use Bootgly\ACI\Tests;
 use Bootgly\ACI\Logs\LoggableEscaped;
+use Bootgly\ACI\Tests;
+use Bootgly\ACI\Tests\Assertions;
+use Bootgly\ACI\Tests\Assertions\Assertion;
 
 
-class Test // extends Assertions
+class Test extends Assertions
 {
    use LoggableEscaped;
 
@@ -24,18 +25,17 @@ class Test // extends Assertions
    public Tests $Tests;
 
    // * Config
-   public static ? string $description;
+   // ...inherited
 
    // * Data
    public array $specifications;
+   // ...inherited
 
    // * Meta
    private mixed $filename;
-   private array $results;
-   private array $descriptions;
    // @ Output
    private false|string $debugged;
-   // @ Time
+   // @ Benchmark
    private float $started;
    private float $finished;
    private string $elapsed;
@@ -46,40 +46,27 @@ class Test // extends Assertions
       $this->Tests = $Tests;
 
       // * Config
-      self::$description = null;
-
-      // * Data
-      $this->specifications = $specifications;
-
-      // * Meta
-      $this->filename = current($this->Tests->tests); // @ file
-      $this->results = [];
+      // ...inherited:
       $this->descriptions = [
          $specifications['describe'] ?? null
       ];
+
+      // * Data
+      $this->specifications = $specifications;
+      // ...inherited:
+      $this->results = [];
+
+      // * Meta
+      $this->filename = current($this->Tests->tests); // @ file
       // @ Output
       $this->debugged = false;
-      // @ Time
+      // @ Benchmark
       $this->started = microtime(true);
-
-
-      // @
-      // @ Set PHP assert options
-      // 1
-      assert_options(ASSERT_ACTIVE, 1);
-      // 2
-      #assert_options(ASSERT_CALLBACK, function ($file, $line, $code) {});
-      // 3
-      assert_options(ASSERT_BAIL, 0);
-      // 4
-      assert_options(ASSERT_WARNING, 0);
-      // 5
-      assert_options(ASSERT_EXCEPTION, 1);
    }
    public function __get (string $name)
    {
       return match ($name) {
-         'success' => array_reduce(
+         'passed' => array_reduce(
             array: $this->results,
             callback: function ($accumulator, $assertion) {
                return $accumulator && $assertion;
@@ -90,9 +77,9 @@ class Test // extends Assertions
       };
    }
 
-   public function describe (? string $description, bool $status, string $indicator = '╟')
+   private function describe (? string $description, bool $status, string $indicator = '╟')
    {
-      if (! $description) {
+      if ($description === null) {
          return;
       }
 
@@ -115,13 +102,12 @@ class Test // extends Assertions
    }
    private function describing (bool $status)
    {
-      $descriptions = $this->descriptions;
-      $descriptions_count = count($descriptions);
+      $descriptions_count = count($this->descriptions);
 
-      if (!$descriptions[0] || $descriptions_count === 1) return;
+      if (!$this->descriptions[0] || $descriptions_count === 1) return;
 
       $index = 1;
-      foreach ($descriptions as $description) {
+      foreach ($this->descriptions as $description) {
          if ($descriptions_count === 2 && $description === null && $index === 2)
             break;
 
@@ -212,35 +198,41 @@ class Test // extends Assertions
          $Results = $test(...$arguments);
 
          if ($Results instanceof \Generator !== true) {
-            $Results = match ($Results) {
-               false, true => [$Results],
-               default => throw new \AssertionError(
-                  'The test function must return boolean or a Generator<boolean>!'
-               )
+            $message = 'The test function must return boolean, string, Assertion or a Generator!';
+
+            $Results = match (gettype($Results)) {
+               'boolean', 'string' => [$Results],
+               'object' => $Results instanceof Assertion ?: throw new \AssertionError($message),
+               default => throw new \AssertionError($message)
             };
          }
 
-         foreach ($Results as $result) {
-            $this->descriptions[] = self::$description;
+         foreach ($Results as $Result) {
+            if ($Result instanceof Assertion) {
+               Assertion::$fallback === null ?:
+                  throw new \AssertionError(message: Assertion::$fallback);
 
-            $this->results[] = $result ?? true;
+               $this->descriptions[] = $Result::$description;
+            } else if ($Result === false || $Result !== true) {
+               throw new \AssertionError(message: Assertion::$fallback);
+            } else {
+               $this->descriptions[] = Assertion::$description;
+               Assertion::$description = null;
+            }
+
+            $this->results[] = true;
             $this->Tests->assertions++;
-
-            self::$description = null;
          }
 
          if ($this->Tests->autoResult) {
-            $this->postest();
             $this->pass();
          }
       } catch (\AssertionError $AssertionError) {
+         $this->descriptions[] = Assertion::$description;
          $this->results[] = false;
 
-         $message = $AssertionError->getMessage();
-
          if ($this->Tests->autoResult) {
-            $this->postest();
-            $this->fail($message);
+            $this->fail($AssertionError->getMessage());
          }
       }
 
@@ -257,8 +249,9 @@ class Test // extends Assertions
 
    public function fail (? string $message = null)
    {
+      $this->postest();
+
       $this->Tests->failed++;
-      $this->descriptions[] = null;
 
       $case = sprintf('%03d', Tests::$case);
       $test = str_pad($this->filename . ':', Tests::$width, ' ', STR_PAD_RIGHT);
@@ -288,6 +281,8 @@ class Test // extends Assertions
    }
    public function pass ()
    {
+      $this->postest();
+
       $this->Tests->passed++;
 
       $case = sprintf('%03d', Tests::$case);
