@@ -24,7 +24,7 @@ return [
    },
 
    // @ test
-   'test' => function ($response) : bool {
+   'test' => function ($response) {
       /*
       return $Response->status === '302 Found'
       && $Response->body === '';
@@ -42,12 +42,9 @@ return [
       if ($response !== $expected) {
          Debugger::$labels = ['HTTP Response:', 'Expected:'];
          debug(json_encode($response), json_encode($expected));
-         return false;
+         return 'Response Status not matched';
       }
 
       return true;
-   },
-   'except' => function () : string {
-      return 'Status not matched';
    }
 ];

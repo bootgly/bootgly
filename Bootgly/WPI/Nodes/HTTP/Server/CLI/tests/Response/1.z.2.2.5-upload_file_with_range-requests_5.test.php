@@ -41,7 +41,7 @@ return [
    },
 
    // @ test
-   'test' => function ($response) : bool {
+   'test' => function ($response) {
       if (preg_match('/Last-Modified: (.*)\r\n/i', $response, $matches)) {
          $lastModified = $matches[1];
       } else {
@@ -65,12 +65,9 @@ return [
       if ($response !== $expected) {
          Debugger::$labels = ['HTTP Response:', 'Expected string:', 'Expected length:'];
          debug(json_encode($response), json_encode($expected), strlen($expected));
-         return false;
+         return 'Response body did not return the last 5 bytes of file?';
       }
 
       return true;
-   },
-   'except' => function () : string {
-      return 'Response did not return the last 5 bytes of file?';
    }
 ];

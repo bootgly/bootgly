@@ -10,7 +10,7 @@
 
 namespace Bootgly\ACI\Tests;
 
-
+use AssertionError;
 use Bootgly\ACI\Logs\LoggableEscaped;
 use Bootgly\ACI\Tests;
 use Bootgly\ACI\Tests\Assertions;
@@ -35,10 +35,12 @@ class Test extends Assertions
    private mixed $filename;
    // @ Output
    private false|string $debugged;
-   // @ Benchmark
+   // @ Profiling
    private float $started;
    private float $finished;
    private string $elapsed;
+   // @ Reporting
+   private ? AssertionError $AssertionError;
 
 
    public function __construct (Tests&Tester $Tests, array $specifications)
@@ -60,8 +62,10 @@ class Test extends Assertions
       $this->filename = current($this->Tests->tests); // @ file
       // @ Output
       $this->debugged = false;
-      // @ Benchmark
+      // @ Profiling
       $this->started = microtime(true);
+      // @ Reporting
+      $this->AssertionError = null;
    }
    public function __get (string $name)
    {
@@ -214,7 +218,7 @@ class Test extends Assertions
 
                $this->descriptions[] = $Result::$description;
             } else if ($Result === false || $Result !== true) {
-               throw new \AssertionError(message: Assertion::$fallback);
+               throw new \AssertionError(message: Assertion::$fallback ?? $Result);
             } else {
                $this->descriptions[] = Assertion::$description;
                Assertion::$description = null;
@@ -230,6 +234,8 @@ class Test extends Assertions
       } catch (\AssertionError $AssertionError) {
          $this->descriptions[] = Assertion::$description;
          $this->results[] = false;
+
+         $this->AssertionError = $AssertionError;
 
          if ($this->Tests->autoResult) {
             $this->fail($AssertionError->getMessage());
@@ -256,7 +262,7 @@ class Test extends Assertions
       $case = sprintf('%03d', Tests::$case);
       $test = str_pad($this->filename . ':', Tests::$width, ' ', STR_PAD_RIGHT);
       $elapsed = $this->elapsed;
-      $help = $message ?? $this->specifications['except']();
+      $help = $message ?? $this->AssertionError?->getMessage();
 
       // @ output
       $this->log(

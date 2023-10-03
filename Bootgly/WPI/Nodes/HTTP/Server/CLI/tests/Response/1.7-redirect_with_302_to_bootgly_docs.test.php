@@ -33,7 +33,7 @@ return [
    },
 
    // @ test
-   'test' => function ($response) : bool {
+   'test' => function ($response) {
       // ! Asserts
       // @ Assert response raw
       $expected = <<<HTML_RAW
@@ -49,12 +49,9 @@ return [
       if ($response !== $expected) {
          Debugger::$labels = ['HTTP Response:', 'Expected:'];
          debug(json_encode($response), json_encode($expected));
-         return false;
+         return 'Response raw not matched';
       }
 
       return true;
-   },
-   'except' => function () : string {
-      return 'Response raw not matched';
    }
 ];

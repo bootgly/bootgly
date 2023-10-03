@@ -24,7 +24,7 @@ return [
    },
 
    // @ test
-   'test' => function ($response) : bool {
+   'test' => function ($response) {
       /*
       return $Response->status === '200 OK'
       && $Response->code === ...;
@@ -42,12 +42,9 @@ return [
       if ( !($code > 1000 && $code < 65535) ) {
          Debugger::$labels = ['HTTP Code:'];
          debug($lastLine);
-         return false;
+         return 'Response raw not matched';
       }
 
       return true;
-   },
-   'except' => function () : string {
-      return 'Request not matched';
    }
 ];

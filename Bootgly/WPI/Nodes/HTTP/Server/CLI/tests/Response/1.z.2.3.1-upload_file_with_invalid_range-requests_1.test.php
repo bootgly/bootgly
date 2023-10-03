@@ -41,7 +41,7 @@ return [
    },
 
    // @ test
-   'test' => function ($response) : bool {
+   'test' => function ($response) {
       $expected = <<<HTML_RAW
       HTTP/1.1 416 Range Not Satisfiable\r
       Server: Bootgly\r
@@ -55,12 +55,9 @@ return [
       if ($response !== $expected) {
          Debugger::$labels = ['HTTP Response:', 'Expected:'];
          debug(json_encode($response), json_encode($expected));
-         return false;
+         return 'Response Status did not return 416 HTTP Status?';
       }
 
       return true;
-   },
-   'except' => function () : string {
-      return 'Response did not return 416 HTTP Status?';
    }
 ];

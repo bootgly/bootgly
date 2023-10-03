@@ -43,7 +43,7 @@ return [
    },
 
    // @ test
-   'test' => function ($response) : bool {
+   'test' => function ($response) {
       if (preg_match('/Last-Modified: (.*)\r\n/i', $response, $matches)) {
          $lastModified = $matches[1];
       } else {
@@ -82,12 +82,9 @@ return [
       if ($response !== $expected) {
          Debugger::$labels = ['HTTP Response:', 'Expected:'];
          debug(json_encode($response), json_encode($expected));
-         return false;
+         return 'Response Status did not return multiple parts of file?';
       }
 
       return true;
-   },
-   'except' => function () : string {
-      return 'Response did not return multiple parts of file?';
    }
 ];

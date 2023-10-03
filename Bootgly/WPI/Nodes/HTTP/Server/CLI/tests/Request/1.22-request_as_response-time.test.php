@@ -31,7 +31,7 @@ return [
    },
 
    // @ test
-   'test' => function ($response): bool {
+   'test' => function ($response) {
       $time = time();
 
       $expected = <<<HTML_RAW
@@ -47,12 +47,9 @@ return [
       if ($response !== $expected) {
          Debugger::$labels = ['HTTP Response:', 'Expected:'];
          debug(json_encode($response), json_encode($expected));
-         return false;
+         return 'Response raw not matched';
       }
 
       return true;
-   },
-   'except' => function (): string {
-      return 'Request not matched';
    }
 ];

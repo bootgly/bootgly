@@ -41,7 +41,7 @@ return [
    },
 
    // @ test
-   'test' => function ($response): bool {
+   'test' => function ($response) {
       $parts = explode("\r\n\r\n", $response);
       $header = $parts[0];
       $body = json_decode($parts[1], true);
@@ -66,12 +66,9 @@ return [
       if ($response !== $expected) {
          Debugger::$labels = ['HTTP Response:', 'Expected:'];
          debug(json_encode($response), json_encode($expected));
-         return false;
+         return 'Response raw not matched';
       }
 
       return true;
-   },
-   'except' => function (): string {
-      return 'Request not matched';
    }
 ];

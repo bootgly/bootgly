@@ -43,7 +43,7 @@ return [
    },
 
    // @ test
-   'test' => function ($response) : bool {
+   'test' => function ($response) {
       if (preg_match('/Last-Modified: (.*)\r\n/i', $response, $matches)) {
          $lastModified = $matches[1];
       } else {
@@ -67,12 +67,9 @@ return [
       if ($response !== $expected) {
          Debugger::$labels = ['HTTP Response:', 'Expected:'];
          debug(json_encode($response), json_encode($expected));
-         return false;
+         return 'Response body contains part of file uploaded by server?';
       }
 
       return true;
-   },
-   'except' => function () : string {
-      return 'Response contains part of file uploaded by server?';
    }
 ];

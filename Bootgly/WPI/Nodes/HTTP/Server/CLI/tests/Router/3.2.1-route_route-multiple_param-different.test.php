@@ -44,7 +44,7 @@ return [
    },
 
    // @ test
-   'test' => function ($response) : bool {
+   'test' => function ($response) {
       /*
       return $Response->status === '200 OK'
       && $Response->body === '127.0.0.1';
@@ -63,12 +63,9 @@ return [
       if ($response !== $expected) {
          Debugger::$labels = ['HTTP Response:', 'Expected:'];
          debug(json_encode($response), json_encode($expected));
-         return false;
+         return 'Response raw not matched';
       }
 
       return true;
-   },
-   'except' => function () : string {
-      return 'Request not matched';
    }
 ];

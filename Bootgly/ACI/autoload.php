@@ -19,19 +19,15 @@ use Bootgly\ACI\Tests\Assertions\Assertion;
 if (function_exists('debug') === false) {
    function debug (...$vars)
    {
-      $Debugger = new Debugger(...$vars);
-
-      return $Debugger;
+      Debugger::debug(...$vars);
    }
 }
 if (function_exists('dd') === false) {
    function dd (...$vars)
    {
       Debugger::$exit = true;
-
-      $Debugger = new Debugger(...$vars);
-
-      return $Debugger;
+      Debugger::$debug = true;
+      Debugger::debug(...$vars);
    }
 }
 

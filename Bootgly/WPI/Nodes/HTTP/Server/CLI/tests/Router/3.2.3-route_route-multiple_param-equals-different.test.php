@@ -46,7 +46,7 @@ return [
    },
 
    // @ test
-   'test' => function ($response) : bool {
+   'test' => function ($response) {
       $expected = <<<HTML_RAW
       HTTP/1.1 200 OK\r
       Server: Bootgly\r
@@ -60,12 +60,9 @@ return [
       if ($response !== $expected) {
          Debugger::$labels = ['HTTP Response:', 'Expected:'];
          debug(json_encode($response), json_encode($expected));
-         return false;
+         return 'Response raw not matched';
       }
 
       return true;
-   },
-   'except' => function () : string {
-      return 'Request not matched';
    }
 ];

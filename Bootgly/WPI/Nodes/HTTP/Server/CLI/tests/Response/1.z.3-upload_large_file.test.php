@@ -34,7 +34,7 @@ return [
    },
 
    // @ test
-   'test' => function ($response) : bool {
+   'test' => function ($response) {
       // ! Asserts
       // @ Assert length of response
       $expected = 3101895;
@@ -42,12 +42,9 @@ return [
       if (strlen($response) !== $expected) {
          Debugger::$labels = ['HTTP Response length:', 'Expected:'];
          debug(strlen($response), $expected);
-         return false;
+         return 'Response length of uploaded file by server is correct?';
       }
 
       return true;
-   },
-   'except' => function () : string {
-      return 'Response length of uploaded file by server is correct?';
    }
 ];

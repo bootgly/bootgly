@@ -23,7 +23,7 @@ return [
    },
 
    // @ test
-   'test' => function ($response) : bool {
+   'test' => function ($response) {
       /*
       return $Response->code === '500'
       && $Response->body === ' ';
@@ -41,12 +41,9 @@ return [
       if ($response !== $expected) {
          Debugger::$labels = ['HTTP Response:', 'Expected:'];
          debug(json_encode($response), json_encode($expected));
-         return false;
+         return 'Response Status not matched';
       }
 
       return true;
-   },
-   'except' => function () : string {
-      return '500 Status not matched';
    }
 ];

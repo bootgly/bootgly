@@ -39,7 +39,7 @@ class Debugger
    protected static string $Output;
 
 
-   public function __construct (...$vars)
+   public static function debug (...$vars)
    {
       // ?
       if (self::$debug === false) {
@@ -94,7 +94,7 @@ class Debugger
 
       // Catch
       if ((($from && $call >= $from) || $call >= $to) && $search == $title) {
-         $this->format($vars);
+         self::format($vars);
 
          // Print
          if (self::$print) {
@@ -302,7 +302,7 @@ class Debugger
       return $dump;
    }
 
-   private function format ($vars)
+   private static function format ($vars)
    {
       self::$Output = match (self::$CLI) {
          false => '<pre>',

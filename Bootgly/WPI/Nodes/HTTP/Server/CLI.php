@@ -154,7 +154,7 @@ class CLI extends TCP\Server implements HTTP, Server
                // @ Init Test
                $Test = $Tests->test($spec);
 
-               if ($spec === null || count($spec) < 4) {
+               if ($spec === null || count($spec) < 3) {
                   if ($Test) {
                      $Tests->skip();
                   }
