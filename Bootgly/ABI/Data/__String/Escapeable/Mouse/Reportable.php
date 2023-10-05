@@ -8,11 +8,17 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\ABI\Data\__String\Escapeable\mouse;
+namespace Bootgly\ABI\Data\__String\Escapeable\Mouse;
+
+
+use Bootgly\ABI\Data\__String\Escapeable\Mouse;
 
 
 trait Reportable
 {
+   use Mouse;
+
+
    /**
     * [?1000x] (Mouse Click Reporting)
     */
@@ -55,6 +61,6 @@ trait Reportable
     * Use the same mouse response format as the 1006 control, but
     *     report position in pixels rather than character cells.
     */
-    public const _MOUSE_SET_PIXEL_POSITION_MODE = '?1016h';
-    public const _MOUSE_UNSET_PIXEL_POSITION_MODE = '?1016l';
+   public const _MOUSE_SET_PIXEL_POSITION_MODE = '?1016h';
+   public const _MOUSE_UNSET_PIXEL_POSITION_MODE = '?1016l';
 }

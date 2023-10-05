@@ -8,11 +8,17 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\ABI\Data\__String\Escapeable\text;
+namespace Bootgly\ABI\Data\__String\Escapeable\Text;
+
+
+use Bootgly\ABI\Data\__String\Escapeable\Text;
 
 
 trait Modifiable
 {
+   use Text;
+
+
    // * Meta
    // [<n>@] (Insert Character)
    // "Insert <n> spaces at the current cursor position, shifting all existing text to the right.

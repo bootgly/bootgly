@@ -11,7 +11,7 @@
 namespace Bootgly\ACI\Logs;
 
 
-use Bootgly\ABI\Data\__String\Escapeable\text\Formattable;
+use Bootgly\ABI\Data\__String\Escapeable\Text\Formattable;
 
 use Bootgly\ABI\Templates\Template\Escaped as TemplateEscaped;
 

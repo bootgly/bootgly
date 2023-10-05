@@ -13,8 +13,8 @@ namespace Bootgly\CLI\Terminal;
 
 // -abstract
 use Bootgly\ABI\Data\__String\Escapeable;
-use Bootgly\ABI\Data\__String\Escapeable\cursor\Positionable;
-use Bootgly\ABI\Data\__String\Escapeable\text\Modifiable;
+use Bootgly\ABI\Data\__String\Escapeable\Cursor\Positionable;
+use Bootgly\ABI\Data\__String\Escapeable\Text\Modifiable;
 use Bootgly\ABI\Templates\Template\Escaped as TemplateEscaped;
 // -interfaces
 use Bootgly\CLI;

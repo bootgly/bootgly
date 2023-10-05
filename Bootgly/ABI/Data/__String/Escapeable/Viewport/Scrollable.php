@@ -8,11 +8,17 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\ABI\Data\__String\Escapeable\viewport;
+namespace Bootgly\ABI\Data\__String\Escapeable\Viewport;
+
+
+use Bootgly\ABI\Data\__String\Escapeable\Viewport;
 
 
 trait Scrollable
 {
+   use Viewport;
+
+
    // * Meta
    // ! Scrolling
    /**

@@ -11,8 +11,8 @@
 namespace Bootgly\CLI\Terminal\Output;
 
 
-use Bootgly\ABI\Data\__String\Escapeable\text\Formattable;
-use Bootgly\ABI\Data\__String\Escapeable\text\Modifiable;
+use Bootgly\ABI\Data\__String\Escapeable\Text\Formattable;
+use Bootgly\ABI\Data\__String\Escapeable\Text\Modifiable;
 
 use Bootgly\CLI\Terminal\Output;
 

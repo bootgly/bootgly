@@ -12,9 +12,12 @@ namespace Bootgly\ABI\Templates\Template;
 
 
 use Bootgly\ABI\Data\__String\Escapeable;
-use Bootgly\ABI\Data\__String\Escapeable\cursor;
-use Bootgly\ABI\Data\__String\Escapeable\text;
-use Bootgly\ABI\Data\__String\Escapeable\viewport;
+use Bootgly\ABI\Data\__String\Escapeable\Cursor\Positionable;
+use Bootgly\ABI\Data\__String\Escapeable\Cursor\Shapeable;
+use Bootgly\ABI\Data\__String\Escapeable\Cursor\Visualizable;
+use Bootgly\ABI\Data\__String\Escapeable\Text\Formattable;
+use Bootgly\ABI\Data\__String\Escapeable\Text\Modifiable;
+use Bootgly\ABI\Data\__String\Escapeable\Viewport\Scrollable;
 use Bootgly\ABI\Data\__String\Path;
 use Bootgly\ABI\Resources;
 
@@ -22,12 +25,12 @@ use Bootgly\ABI\Resources;
 class Escaped implements Resources
 {
    use Escapeable;
-   use cursor\Positionable;
-   use cursor\Shapeable;
-   use cursor\Visualizable;
-   use text\Formattable;
-   use text\Modifiable;
-   use viewport\Scrollable;
+   use Positionable;
+   use Shapeable;
+   use Visualizable;
+   use Formattable;
+   use Modifiable;
+   use Scrollable;
 
    // * Config
    // ...

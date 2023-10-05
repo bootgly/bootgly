@@ -13,8 +13,9 @@ namespace Bootgly\CLI\Terminal\components\Progress;
 
 // -abstract
 use Bootgly\ABI\Data\__String\Escapeable;
-use Bootgly\ABI\Data\__String\Escapeable\cursor;
-use Bootgly\ABI\Data\__String\Escapeable\text;
+use Bootgly\ABI\Data\__String\Escapeable\Cursor\Positionable;
+use Bootgly\ABI\Data\__String\Escapeable\Cursor\Visualizable;
+use Bootgly\ABI\Data\__String\Escapeable\Text\Modifiable;
 use Bootgly\ABI\Templates\Template\Escaped as TemplateEscaped;
 // -interfaces
 use Bootgly\CLI\Terminal\Output;
@@ -24,9 +25,9 @@ use Bootgly\CLI\Terminal\components\Progress\Bar\Bar;
 class Progress
 {
    use Escapeable;
-   use cursor\Positionable;
-   use cursor\Visualizable;
-   use text\Modifiable;
+   use Positionable;
+   use Visualizable;
+   use Modifiable;
 
 
    private Output $Output;

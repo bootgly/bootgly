@@ -8,15 +8,17 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\ABI\Data\__String\Escapeable\text;
+namespace Bootgly\ABI\Data\__String\Escapeable\Text;
 
 
 use Bootgly\ABI\Data\__String\Escapeable;
+use Bootgly\ABI\Data\__String\Escapeable\Text;
 
 
 trait Formattable
 {
    use Escapeable;
+   use Text;
 
 
    public const _END_FORMAT = 'm';

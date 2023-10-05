@@ -8,11 +8,17 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\ABI\Data\__String\Escapeable\cursor;
+namespace Bootgly\ABI\Data\__String\Escapeable\Cursor;
+
+
+use Bootgly\ABI\Data\__String\Escapeable\Cursor;
 
 
 trait Positionable
 {
+   use Cursor;
+
+
    // ! Moving
    // ? Vertical (<l>) "<l> = line"
    /**

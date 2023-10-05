@@ -12,8 +12,8 @@ namespace Bootgly\CLI;
 
 
 use Bootgly\ABI\Data\__String\Escapeable;
-use Bootgly\ABI\Data\__String\Escapeable\cursor\Positionable;
-use Bootgly\ABI\Data\__String\Escapeable\text\Modifiable;
+use Bootgly\ABI\Data\__String\Escapeable\Cursor\Positionable;
+use Bootgly\ABI\Data\__String\Escapeable\Text\Modifiable;
 
 use Bootgly\CLI\Terminal\Input;
 use Bootgly\CLI\Terminal\Output;

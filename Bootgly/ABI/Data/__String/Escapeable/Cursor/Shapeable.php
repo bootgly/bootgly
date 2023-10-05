@@ -8,11 +8,17 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\ABI\Data\__String\Escapeable\cursor;
+namespace Bootgly\ABI\Data\__String\Escapeable\Cursor;
+
+
+use Bootgly\ABI\Data\__String\Escapeable\Cursor;
 
 
 trait Shapeable
 {
+   use Cursor;
+
+
    /**
     * [0q] (User Shape) "Default cursor shape configured by the user"
     */
