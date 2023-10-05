@@ -130,7 +130,7 @@ class Test extends Assertions
          $index++;
       }
 
-      if (!$this->specifications['last'] ?? false) {
+      if (isSet($this->specifications['last']) === false) {
          $this->log(PHP_EOL);
       }
    }
