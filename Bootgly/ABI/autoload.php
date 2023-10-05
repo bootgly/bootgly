@@ -18,12 +18,15 @@ use Bootgly\ABI\Debugging;
 // Backtrace
 
 // Errors
-use Bootgly\ABI\Debugging\Errors\Handler as ErrorHandler;
-#set_error_handler(callback: ErrorHandler::handle(...), error_levels: E_ALL | E_STRICT);
+set_error_handler(
+   callback: Debugging\Errors::collect(...),
+   error_levels: E_ALL | E_STRICT
+);
 
 // Exceptions
-use Bootgly\ABI\Debugging\Exceptions\Handler as ExceptionHandler;
-#set_exception_handler(callback: ExceptionHandler::handle(...));
+set_exception_handler(
+   callback: Debugging\Exceptions::collect(...)
+);
 
 // Vars
 if (function_exists('dump') === false) {
@@ -40,6 +43,8 @@ if (function_exists('dd') === false) { // dd = dump and die
       Debugging\Vars::dump(...$vars);
    }
 }
-#dd('Test');
 
 // Shutdown
+register_shutdown_function(
+   Debugging\Shutdown::collect(...)
+);

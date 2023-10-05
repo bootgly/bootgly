@@ -11,15 +11,24 @@
 namespace Bootgly\ABI\Debugging;
 
 
-abstract class Exceptions
+abstract class Shutdown
 {
    // * Data
-   protected static array $exceptions = [];
+   protected static ? array $errors = [];
 
 
-   public static function collect (\Error|\Exception $E)
+   public static function collect () : bool
    {
-      self::$exceptions[] = $E;
+      $error = error_get_last();
+      if ($error === null) {
+         return false;
+      }
+
+      self::$errors[] = [
+         ...error_get_last()
+      ];
+
+      return true;
    }
 
    public static function dump (...$data)
