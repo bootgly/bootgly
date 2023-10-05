@@ -8,13 +8,10 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\ABI\Exceptions;
+namespace Bootgly\ABI\Debugging\Exceptions;
 
 
-use Error;
-use Exception;
-
-use Bootgly\ABI\Exceptions;
+use Bootgly\ABI\Debugging\Exceptions;
 
 
 class Handler extends Exceptions
@@ -28,7 +25,7 @@ class Handler extends Exceptions
    // * Meta
    // ...
 
-   public static function handle (Error|Exception $E) {
+   public static function handle (\Error|\Exception $E) {
       self::$exceptions[] = $E;
    }
 }

@@ -1,5 +1,5 @@
 <?php
-use Bootgly\ACI\Debugger;
+use Bootgly\ABI\Debugging\Vars;
 // SAPI
 use Bootgly\WPI\Nodes\HTTP\Server\CLI\Request;
 use Bootgly\WPI\Nodes\HTTP\Server\CLI\Response;
@@ -36,7 +36,7 @@ return [
 
       // @ Assert
       if ($response !== $expected) {
-         Debugger::$labels = ['HTTP Response:', 'Expected:'];
+         Vars::$labels = ['HTTP Response:', 'Expected:'];
          dump(json_encode($response), json_encode($expected));
          return 'Response raw not matched';
       }

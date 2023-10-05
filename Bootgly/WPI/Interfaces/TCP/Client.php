@@ -13,7 +13,7 @@ namespace Bootgly\WPI\Interfaces\TCP;
 
 // use
 use Closure;
-use Bootgly\ACI\Debugger;
+use Bootgly\ABI\Debugging\Vars;
 use Bootgly\ACI\Logs\Logger;
 use Bootgly\ACI\Logs\LoggableEscaped;
 use Bootgly\WPI\Events\Select;
@@ -102,10 +102,10 @@ class Client
       self::$status = self::STATUS_BOOTING;
 
 
-      // @ Configure Debugger
-      Debugger::$debug = true;
-      Debugger::$print = true;
-      Debugger::$exit = false;
+      // @ Configure Debugging Vars
+      Vars::$debug = true;
+      Vars::$print = true;
+      Vars::$exit = false;
 
       // @ Instance Bootables
       // ! Connection(s)

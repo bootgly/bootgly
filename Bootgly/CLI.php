@@ -11,7 +11,7 @@
 namespace Bootgly;
 
 
-use Bootgly\ACI\Debugger;
+use Bootgly\ABI\Debugging\Vars;
 use Bootgly\API\Project;
 
 use Bootgly\CLI\Commands;
@@ -45,9 +45,9 @@ class CLI // Command Line Interface
 
       // * Config
       // ...
-      // Debugger
-      Debugger::$debug = true;
-      Debugger::$exit = false;
+      // Debugging Vars
+      Vars::$debug = true;
+      Vars::$exit = false;
       // * Data
       // ...
 

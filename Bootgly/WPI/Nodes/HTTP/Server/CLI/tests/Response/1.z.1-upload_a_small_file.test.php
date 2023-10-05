@@ -1,6 +1,6 @@
 <?php
 use Bootgly\API\Project;
-use Bootgly\ACI\Debugger;
+use Bootgly\ABI\Debugging\Vars;
 // SAPI
 use Bootgly\WPI\Nodes\HTTP\Server\CLI\Request;
 use Bootgly\WPI\Nodes\HTTP\Server\CLI\Response;
@@ -41,7 +41,7 @@ return [
       $expected = 82928;
 
       if (strlen($response) !== $expected) {
-         Debugger::$labels = ['HTTP Response length:', 'Expected:'];
+         Vars::$labels = ['HTTP Response length:', 'Expected:'];
          dump(strlen($response), $expected);
          return 'Response length of uploaded file by server is correct?';
       }

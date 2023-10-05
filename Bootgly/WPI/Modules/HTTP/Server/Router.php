@@ -15,7 +15,7 @@ use Bootgly;
 
 use Bootgly\ABI\IO\FS\File;
 
-use Bootgly\ACI\Debugger;
+use Bootgly\ABI\Debugging\Vars;
 
 use Bootgly\WPI\Modules\HTTP\Server\Router\Route;
 
@@ -80,8 +80,8 @@ class Router
 
       $this->Route = new Route($this);
 
-      Debugger::$from = 1;
-      Debugger::$to = 10;
+      Vars::$from = 1;
+      Vars::$to = 10;
    }
 
    public function boot (string|array $instances = ['routes'])

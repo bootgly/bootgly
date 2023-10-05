@@ -11,7 +11,7 @@
 namespace Bootgly;
 
 
-use Bootgly\ACI\Debugger;
+use Bootgly\ABI\Debugging\Vars;
 
 use Bootgly\API\Project;
 
@@ -45,9 +45,9 @@ class WPI // Web Programming Interface
          return;
       }
       // * Config
-      // Debugger
-      Debugger::$debug = false;
-      Debugger::$exit = true;
+      // Debugging Vars
+      Vars::$debug = false;
+      Vars::$exit = true;
 
       // @ Instance
       // Bootgly

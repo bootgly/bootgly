@@ -12,7 +12,7 @@ namespace Bootgly\ACI\Tests;
 
 
 use Bootgly\ABI\Data\__String\Path;
-use Bootgly\ACI\Debugger\Backtrace;
+use Bootgly\ABI\Debugging\Backtrace;
 
 
 class Benchmark

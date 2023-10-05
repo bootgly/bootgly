@@ -13,7 +13,7 @@ namespace Bootgly\WPI\Interfaces\TCP;
 
 use Bootgly\ACI\Events\Timer;
 
-use Bootgly\ACI\Debugger;
+use Bootgly\ABI\Debugging\Vars;
 use Bootgly\ACI\Logs\Logging;
 use Bootgly\ACI\Logs\Logger;
 
@@ -117,10 +117,10 @@ class Server implements Servers, Logging
 
       // @ Configure Logger
       $this->Logger = new Logger(channel: 'Server');
-      // @ Configure Debugger
-      Debugger::$debug = true;
-      Debugger::$print = true;
-      Debugger::$exit = false;
+      // @ Configure Debugging Vars
+      Vars::$debug = true;
+      Vars::$print = true;
+      Vars::$exit = false;
 
       // @ Instance Bootables
       // ! Connection(s)

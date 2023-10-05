@@ -8,10 +8,13 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\ACI;
+namespace Bootgly\ABI\Debugging;
 
 
-class Debugger
+use Bootgly\ABI\Debugging;
+
+
+class Vars implements Debugging
 {
    // * Config
    public static bool $debug = false;
@@ -41,89 +44,6 @@ class Debugger
    protected static string $Output;
 
 
-   public static function debug (...$vars)
-   {
-      // ?
-      if (self::$debug === false) {
-         return;
-      }
-
-      if ( ! empty(self::$ips) ) {
-         foreach (self::$ips as $ip) {
-            $founded = false;
-            if ($_SERVER['REMOTE_ADDR'] == $ip || $ip === '*') {
-               $founded = true;
-               break;
-            }
-         }
-
-         if ($founded === false) {
-            return;
-         }
-      }
-
-      // * Data
-      // Backtrace
-      self::$backtrace = debug_backtrace();
-
-      // * Meta
-      // Output
-      if (@PHP_SAPI === 'cli') {
-         self::$CLI = true;
-      }
-
-      // Title
-      $title = self::$title;
-      // Count
-      $call = self::$call;
-
-      // To
-      if (self::$to === null) {
-         $to = self::$call;
-      } else {
-         $to = self::$to;
-      }
-      // From
-      if (self::$from && (self::$from <=> self::$to) !== -1) {
-         self::$from = null;
-      }
-      $from = self::$from;
-      // Search
-      if (self::$search === null) {
-         $search = self::$title;
-      } else {
-         $search = self::$search;
-      }
-
-      // Catch
-      if ((($from && $call >= $from) || $call >= $to) && $search == $title) {
-         self::format($vars);
-
-         // Print
-         if (self::$print) {
-            print self::$Output;
-         }
-
-         self::$backtrace = [];
-
-         if (self::$exit) {
-            if (self::$from == null) {
-               exit;
-            } else if (self::$to == self::$call) {
-               exit;
-            }
-         }
-      }
-
-      if (self::$to && self::$search) {
-         if ($search == self::$title) {
-            self::$call++;
-         }
-      } else {
-         self::$call++;
-      }
-   }
-
    public static function reset ()
    {
       // * Config
@@ -141,7 +61,7 @@ class Debugger
       self::$search = null;
    }
 
-   public static function dump ($value)
+   private static function composite ($value) : string
    {
       switch (gettype($value)) {
          case 'boolean':
@@ -195,7 +115,7 @@ class Debugger
             $info = ' (length=' . strlen($value) . ')';
             $color = '#cc0000';
 
-            if (! self::$CLI) {
+            if (!self::$CLI) {
                $var = "'" . $value . "'";
             } else {
                $var = "\033[92m'" . $value . "'\033[0m";
@@ -214,8 +134,8 @@ class Debugger
             $var = '';
             foreach ($array as $key => $value) {
                // @@ Key
-               if ( is_string($key) ) {
-                  if (! self::$CLI) {
+               if (is_string($key)) {
+                  if (!self::$CLI) {
                      $key = "'" . $key . "'";
                   } else {
                      $key = "\033[92m'" . $key . "'\033[0m";
@@ -223,10 +143,10 @@ class Debugger
                }
 
                // @@ Value
-               if ( is_array($value) ) {
+               if (is_array($value)) {
                   $arrayValueCount = count($value);
 
-                  if (! self::$CLI) {
+                  if (!self::$CLI) {
                      $value = '<b>array</b>';
                   } else {
                      $value = "\033[95marray\033[0m";
@@ -295,17 +215,16 @@ class Debugger
             }
       }
 
-      if (! self::$CLI) {
+      if (!self::$CLI) {
          $dump = $prefix . $info . '<span style="color: ' . $color . '">' . $var . '</span>';
-      }
-      else {
-         $dump = "\033[95m".$type."\033[0m" . $info . ' ' . $var;
+      } else {
+         $dump = "\033[95m" . $type . "\033[0m" . $info . ' ' . $var;
       }
 
       return $dump;
    }
 
-   private static function format ($vars)
+   private static function boot (array $vars)
    {
       self::$Output = match (self::$CLI) {
          false => '<pre>',
@@ -352,7 +271,7 @@ class Debugger
                continue;
             }
 
-            if (isSet($trace['file']) && isSet($trace['line'])) {
+            if (isset($trace['file']) && isset($trace['line'])) {
                self::$Output .= $trace['file'] . ':' . $trace['line'];
             }
 
@@ -389,7 +308,7 @@ class Debugger
             };
          }
 
-         self::$Output .= self::dump($value) . "\n";
+         self::$Output .= self::composite($value) . "\n";
       }
 
       self::$Output .= "\n";
@@ -397,5 +316,88 @@ class Debugger
          false => '</pre><style>pre{-moz-tab-size: 1; tab-size: 1;}</style>',
          true  => ''
       };
+   }
+
+   public static function dump (...$vars)
+   {
+      // ?
+      if (self::$debug === false) {
+         return;
+      }
+
+      if (!empty(self::$ips)) {
+         foreach (self::$ips as $ip) {
+            $founded = false;
+            if ($_SERVER['REMOTE_ADDR'] == $ip || $ip === '*') {
+               $founded = true;
+               break;
+            }
+         }
+
+         if ($founded === false) {
+            return;
+         }
+      }
+
+      // * Data
+      // Backtrace
+      self::$backtrace = debug_backtrace();
+
+      // * Meta
+      // Output
+      if (@PHP_SAPI === 'cli') {
+         self::$CLI = true;
+      }
+
+      // Title
+      $title = self::$title;
+      // Count
+      $call = self::$call;
+
+      // To
+      if (self::$to === null) {
+         $to = self::$call;
+      } else {
+         $to = self::$to;
+      }
+      // From
+      if (self::$from && (self::$from <=> self::$to) !== -1) {
+         self::$from = null;
+      }
+      $from = self::$from;
+      // Search
+      if (self::$search === null) {
+         $search = self::$title;
+      } else {
+         $search = self::$search;
+      }
+
+      // Catch
+      if ((($from && $call >= $from) || $call >= $to) && $search == $title) {
+         self::boot($vars);
+
+         // Print
+         if (self::$print) {
+            print self::$Output;
+         }
+
+         self::$backtrace = [];
+
+         if (self::$exit) {
+            if (self::$from == null) {
+               exit;
+            } else if (self::$to == self::$call) {
+               exit;
+            }
+         }
+      }
+
+      if (self::$to && self::$search) {
+         if ($search == self::$title) {
+            self::$call++;
+         }
+      } else {
+         self::$call++;
+      }
    }
 }

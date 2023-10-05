@@ -228,13 +228,13 @@ More **Screenshots**, videos and details can be found in the home page of [Bootg
 <details>
   <summary><b>Running a HTTP Server:</b></summary>
 
-  ##### **Option 1️⃣: Non-CLI SAPI (Apache, LiteSpeed, Nginx, etc)**
+  ##### **Option 1: Non-CLI SAPI (Apache, LiteSpeed, Nginx, etc)**
 
   1) Enable support to `rewrite`;
   2) Configure the WPI constructor in `projects/Bootgly/WPI.php` file;
   3) Run the Non-CLI HTTP Server pointing to `index.php`.
 
-  ##### **Option 2️⃣: CLI SAPI**
+  ##### **Option 2: CLI SAPI**
 
   Directly in Linux OS *(max performance)*:
 

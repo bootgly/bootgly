@@ -1,6 +1,6 @@
 <?php
 use Bootgly\API\Project;
-use Bootgly\ACI\Debugger;
+use Bootgly\ABI\Debugging\Vars;
 // SAPI
 use Bootgly\WPI\Nodes\HTTP\Server\CLI\Request;
 use Bootgly\WPI\Nodes\HTTP\Server\CLI\Response;
@@ -53,7 +53,7 @@ return [
       HTML_RAW;
 
       if ($response !== $expected) {
-         Debugger::$labels = ['HTTP Response:', 'Expected:'];
+         Vars::$labels = ['HTTP Response:', 'Expected:'];
          dump(json_encode($response), json_encode($expected));
          return 'Response Status did not return 416 HTTP Status?';
       }

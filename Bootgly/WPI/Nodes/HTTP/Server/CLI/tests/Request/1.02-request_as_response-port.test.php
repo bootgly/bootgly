@@ -1,5 +1,5 @@
 <?php
-use Bootgly\ACI\Debugger;
+use Bootgly\ABI\Debugging\Vars;
 // SAPI
 use Bootgly\WPI\Nodes\HTTP\Server\CLI\Request;
 use Bootgly\WPI\Nodes\HTTP\Server\CLI\Response;
@@ -40,7 +40,7 @@ return [
 
       // @ Assert
       if ( !($code > 1000 && $code < 65535) ) {
-         Debugger::$labels = ['HTTP Code:'];
+         Vars::$labels = ['HTTP Code:'];
          dump($lastLine);
          return 'Response raw not matched';
       }

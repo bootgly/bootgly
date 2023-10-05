@@ -8,36 +8,12 @@
  * --------------------------------------------------------------------------
  */
 
-#namespace Bootgly\ACI;
+namespace Bootgly\ACI;
 
-
-use Bootgly\ACI\Debugger;
-use Bootgly\ACI\Tests\Assertions\Assertion;
-
-
-// Debugger
-if (function_exists('dump') === false) {
-   function dump (...$vars)
-   {
-      Debugger::debug(...$vars);
-   }
-}
-if (function_exists('dd') === false) { // dd = Dump and die
-   function dd (...$vars)
-   {
-      Debugger::$exit = true;
-      Debugger::$debug = true;
-      Debugger::debug(...$vars);
-   }
-}
-
-// Backtrace
-// Exception
-// File
-// Variable
-#dd('Test');
 
 // Tests
+use Bootgly\ACI\Tests\Assertions\Assertion;
+
 // @ Set PHP assert options
 // 1
 assert_options(ASSERT_ACTIVE, 1);

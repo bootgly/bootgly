@@ -9,9 +9,9 @@
  */
 
 use Bootgly\ABI\Data\__String\Path;
+use Bootgly\ABI\Debugging;
 use Bootgly\ABI\Templates\Template;
 
-use Bootgly\ACI\Debugger;
 use Bootgly\ACI\Logs\Logger;
 
 use Bootgly\API\Project;
@@ -94,11 +94,9 @@ class Bootgly
    }
 
    // ACI
-   public static function debug (...$vars) : Debugger
+   public static function debug (...$data)
    {
-      $Debugger = new Debugger(...$vars);
-
-      return $Debugger;
+      // TODO
    }
    public static function log ($data) : Logger
    {

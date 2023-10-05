@@ -1,6 +1,6 @@
 <?php
 use Bootgly\API\Project;
-use Bootgly\ACI\Debugger;
+use Bootgly\ABI\Debugging\Vars;
 // SAPI
 use Bootgly\WPI\Nodes\HTTP\Server\CLI\Request;
 use Bootgly\WPI\Nodes\HTTP\Server\CLI\Response;
@@ -62,7 +62,7 @@ return [
       HTML_RAW;
 
       if (substr($response, 0, 358) !== $expected) {
-         Debugger::$labels = ['HTTP Response:', 'Expected:'];
+         Vars::$labels = ['HTTP Response:', 'Expected:'];
          dump(json_encode(substr($response, 0, 358)), json_encode($expected));
          return 'Response body did not return the content after 5 bytes of the file?';
       }
