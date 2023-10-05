@@ -65,7 +65,7 @@ class Scripts
       return true;
    }
 
-   public function execute (string $path)
+   public static function execute (string $path)
    {
       // TODO normalize path
       $location = self::SCRIPTS_DIR . $path;

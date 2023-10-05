@@ -9,4 +9,5 @@ return [
    new TestCommand,
 
    new ProjectCommand,
+   new ServeCommand,
 ];
