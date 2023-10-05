@@ -45,7 +45,7 @@ return [
       // @ Assert
       if ($response !== $expected) {
          Debugger::$labels = ['HTTP Response:', 'Expected:'];
-         debug($response, $expected);
+         dump($response, $expected);
          return 'Response raw not matched';
       }
 

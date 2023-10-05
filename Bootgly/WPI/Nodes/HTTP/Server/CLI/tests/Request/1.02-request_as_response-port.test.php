@@ -41,7 +41,7 @@ return [
       // @ Assert
       if ( !($code > 1000 && $code < 65535) ) {
          Debugger::$labels = ['HTTP Code:'];
-         debug($lastLine);
+         dump($lastLine);
          return 'Response raw not matched';
       }
 

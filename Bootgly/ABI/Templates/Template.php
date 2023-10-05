@@ -109,7 +109,7 @@ class Template implements Templates
             $precompiled = (string) $unindented;
          }
       } catch (Throwable $Throwable) {
-         debug($Throwable);
+         dump($Throwable);
       }
 
       $this->precompiled = $precompiled;

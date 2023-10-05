@@ -66,7 +66,7 @@ return [
 
       if ($response !== $expected) {
          Debugger::$labels = ['HTTP Response:', 'Expected:'];
-         debug(json_encode($response), json_encode($expected));
+         dump(json_encode($response), json_encode($expected));
          return 'Response body contains part of file uploaded by server?';
       }
 

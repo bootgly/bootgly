@@ -40,7 +40,7 @@ return [
       // @ Assert
       if ($response !== $expected) {
          Debugger::$labels = ['HTTP Response:', 'Expected:'];
-         debug(json_encode($response), json_encode($expected));
+         dump(json_encode($response), json_encode($expected));
          return 'Response Status not matched';
       }
 

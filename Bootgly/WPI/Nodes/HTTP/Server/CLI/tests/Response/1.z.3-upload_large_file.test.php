@@ -41,7 +41,7 @@ return [
 
       if (strlen($response) !== $expected) {
          Debugger::$labels = ['HTTP Response length:', 'Expected:'];
-         debug(strlen($response), $expected);
+         dump(strlen($response), $expected);
          return 'Response length of uploaded file by server is correct?';
       }
 

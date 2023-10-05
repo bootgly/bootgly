@@ -63,7 +63,7 @@ return [
 
       if (substr($response, 0, 358) !== $expected) {
          Debugger::$labels = ['HTTP Response:', 'Expected:'];
-         debug(json_encode(substr($response, 0, 358)), json_encode($expected));
+         dump(json_encode(substr($response, 0, 358)), json_encode($expected));
          return 'Response body did not return the content after 5 bytes of the file?';
       }
 

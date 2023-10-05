@@ -32,8 +32,10 @@ class Debugger
    // _ Validators
    public static array $ips;
 
-   // * Meta
+   // * Data
    protected static array $backtrace;
+
+   // * Meta
    // >> Output
    protected static bool $CLI = false;
    protected static string $Output;
@@ -60,14 +62,15 @@ class Debugger
          }
       }
 
+      // * Data
+      // Backtrace
+      self::$backtrace = debug_backtrace();
+
       // * Meta
       // Output
       if (@PHP_SAPI === 'cli') {
          self::$CLI = true;
       }
-
-      // @
-      self::$backtrace = debug_backtrace();
 
       // Title
       $title = self::$title;
@@ -323,16 +326,18 @@ class Debugger
       }
 
       // @ Call
-      self::$Output .= match (self::$CLI) {
-         false => '<small>',
-         true  => "\n\033[96m"
-      };
-      self::$Output .= ' in call number: ' . self::$call;
-      self::$Output .= match (self::$CLI) {
-         false => '</small>',
-         true  => "\033[0m"
-      };
-      self::$Output .= "\n";
+      if (self::$call) {
+         self::$Output .= match (self::$CLI) {
+            false => '<small>',
+            true  => "\n\033[96m"
+         };
+         self::$Output .= ' in call number: ' . self::$call;
+         self::$Output .= match (self::$CLI) {
+            false => '</small>',
+            true  => "\033[0m"
+         };
+         self::$Output .= "\n";
+      }
 
       // @ Backtrace
       if (self::$backtrace && self::$backtrace[0]['file'] && self::$backtrace[0]['line']) {

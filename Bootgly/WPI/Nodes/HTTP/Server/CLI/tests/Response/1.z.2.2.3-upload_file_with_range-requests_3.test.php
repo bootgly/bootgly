@@ -64,7 +64,7 @@ return [
 
       if ($response !== $expected) {
          Debugger::$labels = ['HTTP Response:', 'Expected string:', 'Expected length:'];
-         debug(json_encode($response), json_encode($expected), strlen($expected));
+         dump(json_encode($response), json_encode($expected), strlen($expected));
          return 'Response body did not return the entire contents of the file?';
       }
 

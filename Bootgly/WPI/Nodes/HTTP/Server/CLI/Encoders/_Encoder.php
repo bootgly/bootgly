@@ -47,7 +47,7 @@ class _Encoder extends Encoders
       } catch (\Throwable $Throwable) {
          $Response->Meta->status = 500; // @ Set 500 HTTP Server Error Response
 
-         debug($Throwable->getMessage());
+         dump($Throwable->getMessage());
 
          if ($Response->Content->raw === '') {
             $Response->Content->raw = ' ';

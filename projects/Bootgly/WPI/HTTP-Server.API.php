@@ -35,7 +35,7 @@ return static function
    // Raw - JSON, URL Encoded, Text, etc.
    #$Request->receive();
 
-   #debug($_POST, $_FILES, $Request->input); // $Request->input ↔ file_get_contents('php://input')
+   #dump($_POST, $_FILES, $Request->input); // $Request->input ↔ file_get_contents('php://input')
 
 
    // ! Response examples

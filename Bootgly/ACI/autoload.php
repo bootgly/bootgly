@@ -16,13 +16,13 @@ use Bootgly\ACI\Tests\Assertions\Assertion;
 
 
 // Debugger
-if (function_exists('debug') === false) {
-   function debug (...$vars)
+if (function_exists('dump') === false) {
+   function dump (...$vars)
    {
       Debugger::debug(...$vars);
    }
 }
-if (function_exists('dd') === false) {
+if (function_exists('dd') === false) { // dd = Dump and die
    function dd (...$vars)
    {
       Debugger::$exit = true;
@@ -30,6 +30,12 @@ if (function_exists('dd') === false) {
       Debugger::debug(...$vars);
    }
 }
+
+// Backtrace
+// Exception
+// File
+// Variable
+#dd('Test');
 
 // Tests
 // @ Set PHP assert options
