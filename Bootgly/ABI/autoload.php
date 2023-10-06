@@ -12,39 +12,46 @@
 
 
 use Bootgly\ABI\Debugging;
-
+use Bootgly\ABI\Debugging\Backtrace;
 
 // @ Debugging
 // Backtrace
 
 // Errors
-set_error_handler(
+\set_error_handler(
    callback: Debugging\Errors::collect(...),
    error_levels: E_ALL | E_STRICT
 );
 
 // Exceptions
-set_exception_handler(
+\set_exception_handler(
    callback: Debugging\Exceptions::collect(...)
+);
+
+// Shutdown
+\register_shutdown_function(
+   callback: Debugging\Shutdown::collect(...)
 );
 
 // Vars
 if (function_exists('dump') === false) {
-   function dump(...$vars)
+   function dump (...$vars)
    {
+      // * Data
+      Debugging\Vars::$Backtrace = new Backtrace;
+
       Debugging\Vars::dump(...$vars);
    }
 }
 if (function_exists('dd') === false) { // dd = dump and die
-   function dd(...$vars)
+   function dd (...$vars)
    {
+      // * Config
       Debugging\Vars::$exit = true;
       Debugging\Vars::$debug = true;
+      // * Data
+      Debugging\Vars::$Backtrace = new Backtrace;
+
       Debugging\Vars::dump(...$vars);
    }
 }
-
-// Shutdown
-register_shutdown_function(
-   Debugging\Shutdown::collect(...)
-);

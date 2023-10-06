@@ -17,9 +17,9 @@ class Backtrace
    private array $trace;
 
 
-   public function __construct (int $limit = 1)
+   public function __construct (int $limit = 0)
    {
-      $backtraces = $this->backtraces = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, $limit + 1);
+      $backtraces = $this->backtraces = \debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, $limit);
 
       $this->trace = $backtraces[$limit];
    }
@@ -27,7 +27,7 @@ class Backtrace
    {
       switch ($name) {
          case 'dir':
-            return dirname($this->trace['file']);
+            return \dirname($this->trace['file']);
          default:
             return $this->trace[$name];
       }

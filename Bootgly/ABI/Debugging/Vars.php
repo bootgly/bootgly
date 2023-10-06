@@ -21,7 +21,7 @@ class Vars implements Debugging
    public static bool $print = true;
    public static bool $exit = true;
    // _ Stack
-   public static int $traces = 2;
+   public static int $traces = 4;
    // _ Identifiers
    public static int $call = 1;
    public static string $title = '';
@@ -36,7 +36,7 @@ class Vars implements Debugging
    public static array $ips;
 
    // * Data
-   protected static array $backtrace;
+   public static ? Backtrace $Backtrace = null;
 
    // * Meta
    // >> Output
@@ -259,14 +259,15 @@ class Vars implements Debugging
       }
 
       // @ Backtrace
-      if (self::$backtrace && self::$backtrace[0]['file'] && self::$backtrace[0]['line']) {
+      $backtrace = self::$Backtrace->backtraces;
+      if ($backtrace && $backtrace[0]['file'] && $backtrace[0]['line']) {
          self::$Output .= match (self::$CLI) {
             false => '<small>',
             true  => ''
          };
 
          $n = 1;
-         foreach (self::$backtrace as $index => $trace) {
+         foreach ($backtrace as $index => $trace) {
             if ($index === 0) {
                continue;
             }
@@ -341,7 +342,7 @@ class Vars implements Debugging
 
       // * Data
       // Backtrace
-      self::$backtrace = debug_backtrace();
+      self::$Backtrace ??= new Backtrace();
 
       // * Meta
       // Output
@@ -381,7 +382,7 @@ class Vars implements Debugging
             print self::$Output;
          }
 
-         self::$backtrace = [];
+         self::$Backtrace = null;
 
          if (self::$exit) {
             if (self::$from == null) {
