@@ -160,7 +160,7 @@ class Vars implements Debugging
                      $value .= '[]';
                   }
                } else {
-                  $value = self::dump($value);
+                  $value = self::composite($value);
                }
 
                $var .= "\n" . $identity . $key . ' => ' . $value;
