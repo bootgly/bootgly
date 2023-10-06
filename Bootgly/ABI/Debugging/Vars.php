@@ -20,6 +20,7 @@ class Vars implements Debugging
    public static bool $debug = false;
    public static bool $print = true;
    public static bool $exit = true;
+   public const DEFAULT_IDENTATIONS = 3;
    // _ Stack
    public static int $traces = 4;
    // _ Identifiers
@@ -61,7 +62,7 @@ class Vars implements Debugging
       self::$search = null;
    }
 
-   private static function composite ($value) : string
+   private static function composite ($value, int $indentations = self::DEFAULT_IDENTATIONS) : string
    {
       switch (gettype($value)) {
          case 'boolean':
@@ -71,9 +72,9 @@ class Vars implements Debugging
             $color = '#75507b';
 
             if ($value) {
-               $var = 'true';
+               $var = 'TRUE';
             } else {
-               $var = 'false';
+               $var = 'FALSE';
             }
 
             if (self::$CLI) {
@@ -124,56 +125,65 @@ class Vars implements Debugging
             break;
 
          case 'array':
-            $type = 'array';
+            switch ($indentations) {
+               case self::DEFAULT_IDENTATIONS:
+                  $type = 'array';
+                  $info = ' (size=' . count($value) . ") [";
+                  break;
+
+               default:
+                  $type = '';
+                  $info = '';
+            }
+
+            // * Meta
+            $indentation = self::$CLI ? str_repeat(" ", $indentations) : str_repeat("\t", $indentations);
+
             $prefix = "<b>$type</b>";
-            $info = ' (size=' . count($value) . ") ";
             $color = '';
             $array = $value;
-            $identity = self::$CLI ? "   " : "\t\t\t";
 
             $var = '';
-            foreach ($array as $key => $value) {
+            foreach ($array as $_key => $_value) {
                // @@ Key
-               if (is_string($key)) {
-                  if (!self::$CLI) {
-                     $key = "'" . $key . "'";
-                  } else {
-                     $key = "\033[92m'" . $key . "'\033[0m";
-                  }
+               if (is_string($_key) === true) {
+                  $key = match (self::$CLI) {
+                     false => "'" . $_key . "'",
+                     true => "\033[92m'" . $_key . "'\033[0m"
+                  };
+               } else {
+                  $key = match (self::$CLI) {
+                     false => (string) $_key,
+                     true => "\033[36m" . (string) $_key . "\033[0m"
+                  };
                }
 
                // @@ Value
-               if (is_array($value)) {
-                  $arrayValueCount = count($value);
+               if (is_array($_value) === true) {
+                  $arrayValueCount = count($_value);
 
-                  if (!self::$CLI) {
-                     $value = '<b>array</b>';
-                  } else {
-                     $value = "\033[95marray\033[0m";
-                  }
-
-                  $value .= ' (size=' . $arrayValueCount . ") ";
+                  $value = match (self::$CLI) {
+                     false => '<b>array</b>',
+                     true => "\033[95marray\033[0m"
+                  };
+                  $value .= ' (size=' . (string) $arrayValueCount . ") [";
 
                   if ($arrayValueCount > 0) {
-                     $value .= '[...]';
+                     $value .= self::composite($_value, $indentations + self::DEFAULT_IDENTATIONS);
                   } else {
-                     $value .= '[]';
+                     $value .= ']';
                   }
                } else {
-                  $value = self::composite($value);
+                  $value = self::composite($_value);
                }
 
-               $var .= "\n" . $identity . $key . ' => ' . $value;
+               $var .= "\n" . $indentation . $key . ' => ' . $value;
             }
 
-            break;
+            // * Meta
+            $indentation = substr($indentation, self::DEFAULT_IDENTATIONS);
 
-         case 'object':
-            $type = 'object';
-            $prefix = "<b>$type</b>";
-            $info = ' (' . get_class($value) . ')';
-            $color = '';
-            $var = '';
+            $var .= "\n" . $indentation . ']';
 
             break;
 
@@ -191,7 +201,7 @@ class Vars implements Debugging
             $prefix = '';
             $info = '';
             $color = '#3465a4';
-            $var = 'null';
+            $var = 'NULL';
 
             if (self::$CLI) {
                $var = "\033[31m" . $var . "\033[0m";
@@ -200,10 +210,16 @@ class Vars implements Debugging
             break;
 
          default:
-            if (is_callable($value)) {
+            if (is_callable($value) === true) {
                $type = 'callable';
                $prefix = "<small>$type</small> ";
                $info = '';
+               $color = '';
+               $var = '';
+            } else if (is_object($value) === true) {
+               $type = 'object';
+               $prefix = "<b>$type</b>";
+               $info = ' (' . get_class($value) . ')';
                $color = '';
                $var = '';
             } else {
@@ -218,7 +234,12 @@ class Vars implements Debugging
       if (!self::$CLI) {
          $dump = $prefix . $info . '<span style="color: ' . $color . '">' . $var . '</span>';
       } else {
-         $dump = "\033[95m" . $type . "\033[0m" . $info . ' ' . $var;
+         $additional = match ($type) {
+            '' => '',
+            default => "\033[95m" . $type . "\033[0m" . $info . ' '
+         };
+
+         $dump = $additional . $var;
       }
 
       return $dump;
