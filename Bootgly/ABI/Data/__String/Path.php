@@ -356,15 +356,18 @@ class Path // support to FileSystem Paths only (Linux only)
       $from = explode(DIRECTORY_SEPARATOR, $from);
 
       $length = min(count($from), count($path));
+      $target = 0;
       for ($i = 0; $i < $length; $i++) {
          if ($from[$i] !== $path[$i]) {
+            $target = $i;
             break;
          }
       }
 
-      $rest = implode(DIRECTORY_SEPARATOR, array_slice($path, $i));
+      $relative_parts = array_slice($path, $target);
+      $relative_path = implode(DIRECTORY_SEPARATOR, $relative_parts);
 
-      return $rest;
+      return $relative_path;
       // return 'tests/test2.php';
    }
 
