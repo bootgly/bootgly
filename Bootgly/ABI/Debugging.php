@@ -14,5 +14,5 @@ namespace Bootgly\ABI;
 interface Debugging
 {
    // ...Used to define and indentify subclasses (instance of).
-   public static function dump (...$data);
+   public static function debug (...$data);
 }

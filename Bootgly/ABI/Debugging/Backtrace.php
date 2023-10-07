@@ -13,15 +13,28 @@ namespace Bootgly\ABI\Debugging;
 
 class Backtrace
 {
-   public array $backtraces;
+   // * Config
+   // ...
+
+   // * Data
+   public array $calls;
+
+   // * Meta
    private array $trace;
 
 
    public function __construct (int $limit = 0)
    {
-      $backtraces = $this->backtraces = \debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, $limit);
+      $calls = \debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, $limit);
 
-      $this->trace = $backtraces[$limit];
+      // * Config
+      // ...
+
+      // * Data
+      $this->calls = $calls;
+
+      // * Meta
+      $this->trace = $calls[$limit];
    }
    public function __get (string $name)
    {

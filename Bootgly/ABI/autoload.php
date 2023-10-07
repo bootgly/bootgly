@@ -40,7 +40,7 @@ if (function_exists('dump') === false) {
       // * Data
       Debugging\Vars::$Backtrace = new Backtrace;
 
-      Debugging\Vars::dump(...$vars);
+      Debugging\Vars::debug(...$vars);
    }
 }
 if (function_exists('dd') === false) { // dd = dump and die
@@ -52,6 +52,6 @@ if (function_exists('dd') === false) { // dd = dump and die
       // * Data
       Debugging\Vars::$Backtrace = new Backtrace;
 
-      Debugging\Vars::dump(...$vars);
+      Debugging\Vars::debug(...$vars);
    }
 }
