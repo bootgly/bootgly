@@ -38,6 +38,7 @@ class Vars implements Debugging
    public static ? string $search = null;
 
    // * Data
+   // + Backtrace
    public static ? Backtrace $Backtrace = null;
 
    // * Meta
@@ -343,17 +344,20 @@ class Vars implements Debugging
 
       // * Data
       // @ Backtrace
-      self::$Backtrace ??= new Backtrace();
+      $Backtrace = self::$Backtrace ??= new Backtrace();
+      self::$Backtrace = null;
 
       // * Meta
-      // @ Output
+      // ! Templating
       if (@PHP_SAPI === 'cli') {
          self::$CLI = true;
       }
+      // >> Output
+      self::$Output = '';
 
       // @
       if ((($from && $call >= $from) || $call >= $to) && $search == $title) {
-         self::$Output = match (self::$CLI) {
+         self::$Output .= match (self::$CLI) {
             false => '<pre>',
             true  => ''
          };
@@ -386,23 +390,19 @@ class Vars implements Debugging
          }
          // ---
          // @ Backtrace
-         $backtrace = self::$Backtrace->calls;
+         $backtrace = $Backtrace->calls;
          if ($backtrace && $backtrace[0]['file'] && $backtrace[0]['line']) {
             self::$Output .= match (self::$CLI) {
                false => '<small>',
                true  => ''
             };
             $n = 1;
-            foreach ($backtrace as $index => $trace) {
-               if ($index === 0) {
-                  continue;
-               }
-               if (isSet($trace['file']) && isset($trace['line'])) {
+            foreach ($backtrace as $trace) {
+               if (isSet($trace['file']) && isSet($trace['line'])) {
                   self::$Output .= $trace['file'] . ':' . $trace['line'];
                }
-               if ($n > self::$traces) {
+               if ($n > self::$traces)
                   break;
-               }
                self::$Output .= "\n";
                $n++;
             }
@@ -436,8 +436,6 @@ class Vars implements Debugging
             false => '</pre><style>pre{-moz-tab-size: 1; tab-size: 1;}</style>',
             true  => ''
          };
-
-         self::$Backtrace = null;
 
          // Print
          if (self::$print) {

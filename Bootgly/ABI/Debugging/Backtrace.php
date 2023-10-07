@@ -14,19 +14,26 @@ namespace Bootgly\ABI\Debugging;
 class Backtrace
 {
    // * Config
-   // ...
+   public static int $options = \DEBUG_BACKTRACE_IGNORE_ARGS;
 
    // * Data
    public array $calls;
 
    // * Meta
+   // @ Last
    private array $trace;
 
 
    public function __construct (int $limit = 0)
    {
-      $calls = \debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, $limit);
-
+      // ?
+      if ($limit < 0) {
+         return;
+      }
+      // <
+      $calls = \debug_backtrace(self::$options, $limit);
+      unSet($calls[0]);
+      $calls = \array_values($calls);
       // * Config
       // ...
 
@@ -34,10 +41,15 @@ class Backtrace
       $this->calls = $calls;
 
       // * Meta
-      $this->trace = $calls[$limit];
+      // @ Last
+      foreach ($calls as $call) {
+         $this->trace = $call; break;
+      }
    }
    public function __get (string $name)
    {
+      // * Meta
+      // @ Last
       switch ($name) {
          case 'dir':
             return \dirname($this->trace['file']);
