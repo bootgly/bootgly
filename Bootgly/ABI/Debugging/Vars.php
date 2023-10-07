@@ -113,7 +113,13 @@ class Vars implements Debugging
          case 'string':
             $type = 'string';
             $prefix = "<small>$type</small> ";
-            $info = ' (length=' . strlen($value) . ')';
+            // @ info
+            $strLen = strlen($value);
+            $lengthStr = match (self::$CLI) {
+               false => (string) $strLen,
+               true  => "\033[96m" . $strLen . "\033[0m"
+            };
+            $info = ' (length=' . $lengthStr . ')';
             $color = '#cc0000';
 
             if (!self::$CLI) {
@@ -125,16 +131,15 @@ class Vars implements Debugging
             break;
 
          case 'array':
-            switch ($indentations) {
-               case self::DEFAULT_IDENTATIONS:
-                  $type = 'array';
-                  $info = ' (size=' . count($value) . ") [";
-                  break;
-
-               default:
-                  $type = '';
-                  $info = '';
-            }
+            // @ type
+            $type = 'array';
+            // @ info
+            $size = count($value);
+            $sizeStr = match (self::$CLI) {
+               false => (string) $size,
+               true => "\033[96m" . $size . "\033[0m"
+            };
+            $info = ' (size=' . $sizeStr . ") [";
 
             // * Meta
             $indentation = self::$CLI ? str_repeat(" ", $indentations) : str_repeat("\t", $indentations);
@@ -160,18 +165,12 @@ class Vars implements Debugging
 
                // @@ Value
                if (is_array($_value) === true) {
-                  $arrayValueCount = count($_value);
+                  $value = '';
 
-                  $value = match (self::$CLI) {
-                     false => '<b>array</b>',
-                     true => "\033[95marray\033[0m"
-                  };
-                  $value .= ' (size=' . (string) $arrayValueCount . ") [";
-
-                  if ($arrayValueCount > 0) {
+                  if (count($_value) > 0) {
                      $value .= self::composite($_value, $indentations + self::DEFAULT_IDENTATIONS);
                   } else {
-                     $value .= ']';
+                     $value .= '[]';
                   }
                } else {
                   $value = self::composite($_value);
@@ -204,7 +203,7 @@ class Vars implements Debugging
             $var = 'NULL';
 
             if (self::$CLI) {
-               $var = "\033[31m" . $var . "\033[0m";
+               $var = "\033[90m" . $var . "\033[0m";
             }
 
             break;
