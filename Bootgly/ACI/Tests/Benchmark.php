@@ -15,7 +15,7 @@ use Bootgly\ABI\Data\__String\Path;
 use Bootgly\ABI\Debugging\Backtrace;
 
 
-class Benchmark
+abstract class Benchmark
 {
    // * Config
    public static bool $time = true;
@@ -77,24 +77,21 @@ class Benchmark
    }
    public static function show (? string $tag = null)
    {
-      if (!$tag && self::$tag) {
-         $tag = self::$tag;
-      } else {
-         return Benchmark::class;
+      // ?!
+      if (!$tag && !self::$tag) {
+         return Benchmark::class; // TODO Exception or Error
       }
+      $tag ??= self::$tag;
 
+      // @
       $result = PHP_EOL . '=-=-=-=-=-=-' . PHP_EOL;
-
       $result .= 'Benchmark results for: ' . $tag . PHP_EOL . PHP_EOL;
-
       if (self::$time) {
          $result .= 'CPU time spent: ' . (string) self::$results[$tag]['time'] . 's' . PHP_EOL;
       }
-
       if (self::$memory) {
          $result .= 'RAM memory usage: ' . (string) self::$results[$tag]['memory'] . PHP_EOL;
       }
-
       $result .= PHP_EOL . '=-=-=-=-=-=-';
 
       echo $result;
@@ -103,38 +100,49 @@ class Benchmark
    }
    public static function save (? string $tag = null)
    {
-      if (!$tag && self::$tag) {
-         $tag = self::$tag;
-      } else {
-         return Benchmark::class;
+      // ?!
+      if (!$tag && !self::$tag) {
+         return Benchmark::class; // TODO Exception or Error
       }
+      $tag ??= self::$tag;
 
-      $Backtrace = new Backtrace;
-      $relativePath = Path::relativize(path: BOOTGLY_WORKING_BASE, from: $Backtrace->file);
-      $file = BOOTGLY_WORKING_DIR . 'workdata/bench.marks';
+      // @
+      try {
+         $Backtrace = new Backtrace();
 
-      // @ Build data
-      $header = "[$tag@$relativePath:$Backtrace->line]:";
-      $body = self::$results[$tag]['time'];
+         // @ Prepare file
+         $relativePath = Path::relativize(path: $Backtrace->file, from: BOOTGLY_WORKING_DIR);
+         if ($relativePath === '') {
+            throw new \ErrorException('Relative path is empty!');
+         }
+         $file = BOOTGLY_WORKING_DIR . 'workdata/bench.marks';
+         \touch($file);
 
-      // @ Read file if exists
-      $lines = file($file, FILE_IGNORE_NEW_LINES);
+         // @ Build data
+         $header = "[$tag@$relativePath:$Backtrace->line]:";
+         $body = self::$results[$tag]['time'];
 
-      // @ Search line to write
-      $line = array_search($header, $lines);
+         // @ Read file if exists
+         $lines = \file($file, FILE_IGNORE_NEW_LINES);
 
-      // @ Insert new line
-      if ($line) {
-         array_splice($lines, $line + 1, 0, $body);
-      } else {
-         $lines[] =  "\n" . $header . "\n" . $body . "\n";
+         // @ Search line to write
+         $line = \array_search($header, $lines);
+
+         // @ Insert new line
+         if ($line) {
+            \array_splice($lines, $line + 1, 0, $body);
+         } else {
+            $lines[] =  "\n" . $header . "\n" . $body . "\n";
+         }
+
+         // @ Build new file data
+         $data = \implode("\n", $lines);
+
+         // @ Write to file
+         \file_put_contents($file, $data);
+      } catch (\Throwable $T) {
+         // Debugging\Exceptions::debug($T);
       }
-
-      // @ Build new file data
-      $data = implode("\n", $lines);
-
-      // @ Write to file
-      file_put_contents($file, $data);
 
       return Benchmark::class;
    }
