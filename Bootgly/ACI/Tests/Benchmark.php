@@ -115,7 +115,7 @@ abstract class Benchmark
          if ($relativePath === '') {
             throw new \ErrorException('Relative path is empty!');
          }
-         $file = BOOTGLY_WORKING_DIR . 'workdata/bench.marks';
+         $file = BOOTGLY_WORKING_DIR . 'workdata/logs/benchmarks.log';
          \touch($file);
 
          // @ Build data
