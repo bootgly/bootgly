@@ -38,6 +38,7 @@ if (function_exists('dump') === false) {
    function dump (...$vars)
    {
       // * Data
+      // + Backtrace
       Debugging\Vars::$Backtrace = new Backtrace;
 
       Debugging\Vars::debug(...$vars);
@@ -50,6 +51,7 @@ if (function_exists('dd') === false) { // dd = dump and die
       Debugging\Vars::$exit = true;
       Debugging\Vars::$debug = true;
       // * Data
+      // + Backtrace
       Debugging\Vars::$Backtrace = new Backtrace;
 
       Debugging\Vars::debug(...$vars);
