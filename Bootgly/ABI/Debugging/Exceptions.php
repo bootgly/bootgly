@@ -10,8 +10,11 @@
 
 namespace Bootgly\ABI\Debugging;
 
+use Bootgly\ABI\Data\__String\Tokens\Highlighter;
+use Bootgly\ABI\Debugging;
 
-abstract class Exceptions
+
+abstract class Exceptions implements Debugging
 {
    // * Data
    protected static array $exceptions = [];
@@ -22,16 +25,27 @@ abstract class Exceptions
       self::$exceptions[] = $E;
    }
 
-   public static function dump (\Error|\Exception $E)
+   public static function report (\Error|\Exception $E)
    {
+      $Highligher = new Highlighter;
+
+      // * Data
+      $class = \get_class($E);
+      $message = $E->getMessage();
+      // @ file
+      $file = $E->getFile();
+      $line = $E->getLine();
+      $contents = \file_get_contents($file);
+
       // @ Output
+      // TODO use Theme
       $output = "\n";
       // class
       $output .= match (\PHP_SAPI) {
          'cli' => "\033[0;30;41m ",
          default => ''
       };
-      $output .= get_class($E);
+      $output .= $class;
       $output .= match (\PHP_SAPI) {
          'cli' => " \033[0m\n\n",
          default => ''
@@ -41,7 +55,7 @@ abstract class Exceptions
          'cli' => "\033[97m ",
          default => ''
       };
-      $output .= $E->getMessage();
+      $output .= $message;
       $output .= match (\PHP_SAPI) {
          'cli' => " \033[0m\n\n",
          default => ''
@@ -52,22 +66,35 @@ abstract class Exceptions
          'cli' => "\033[92m",
          default => ''
       };
-      $output .= $E->getFile();
+      $output .= $file;
       $output .= match (\PHP_SAPI) {
          'cli' => "\033[0m",
          default => ''
       };
-      // line
+      // file line
       $output .= match (\PHP_SAPI) {
          'cli' => ":\033[96m",
          default => ''
       };
-      $output .= $E->getLine();
+      $output .= $line;
       $output .= match (\PHP_SAPI) {
-         'cli' => "\033[0m\n\n",
+         'cli' => "\033[0m",
          default => ''
       };
+      $output .= "\n";
+      // file content
+      // TODO file content filters
+      $output .= $Highligher->highlight($contents, $line);
+
+      $output .= "\n\n";
 
       echo $output;
+   }
+
+   public static function debug (...$Throwables)
+   {
+      foreach ($Throwables as $E) {
+         self::report($E);
+      }
    }
 }

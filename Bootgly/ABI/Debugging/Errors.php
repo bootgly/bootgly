@@ -10,6 +10,7 @@
 
 namespace Bootgly\ABI\Debugging;
 
+use Bootgly\ABI\Data\__String\Tokens\Highlighter;
 
 abstract class Errors
 {
@@ -40,6 +41,17 @@ abstract class Errors
 
    public static function report (\Error $Error)
    {
+      $Highligher = new Highlighter;
+
+      // * Data
+      $class = \get_class($Error);
+      $code = $Error->getCode();
+      $message = $Error->getMessage();
+      // @ file
+      $file = $Error->getFile();
+      $line = $Error->getLine();
+      $contents = \file_get_contents($file);
+
       // @ Output
       $output = "\n";
       // class
@@ -47,7 +59,7 @@ abstract class Errors
          'cli' => "\033[0;30;41m ",
          default => ''
       };
-      $output .= get_class($Error);
+      $output .= $class;
       $output .= match (\PHP_SAPI) {
          'cli' => " \033[0m",
          default => ''
@@ -58,7 +70,7 @@ abstract class Errors
          default => ''
       };
       $output .= "#";
-      $output .= $Error->getCode();
+      $output .= $code;
       $output .= match (\PHP_SAPI) {
          'cli' => " \033[0m\n\n",
          default => ''
@@ -68,7 +80,7 @@ abstract class Errors
          'cli' => "\033[97m ",
          default => ''
       };
-      $output .= $Error->getMessage();
+      $output .= $message;
       $output .= match (\PHP_SAPI) {
          'cli' => " \033[0m\n\n",
          default => ''
@@ -79,7 +91,7 @@ abstract class Errors
          'cli' => "\033[92m",
          default => ''
       };
-      $output .= $Error->getFile();
+      $output .= $file;
       $output .= match (\PHP_SAPI) {
          'cli' => "\033[0m",
          default => ''
@@ -89,14 +101,17 @@ abstract class Errors
          'cli' => ":\033[96m",
          default => ''
       };
-      $output .= $Error->getLine();
+      $output .= $line;
       $output .= match (\PHP_SAPI) {
-         'cli' => "\033[0m\n\n",
+         'cli' => "\033[0m",
          default => ''
       };
       $output .= "\n";
       // file content
-      // TODO
+      // TODO file content filters
+      $output .= $Highligher->highlight($contents, $line);
+
+      $output .= "\n\n";
 
       echo $output;
    }
