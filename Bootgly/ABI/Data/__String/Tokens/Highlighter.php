@@ -45,8 +45,9 @@ class Highlighter extends Tokens
             self::TOKEN_VARIABLE   => self::_CYAN_FOREGROUND,
             self::TOKEN_NUMBER     => self::_YELLOW_FOREGROUND,
 
+            self::TOKEN_OPERATOR   => self::_RED_BRIGHT_FOREGROUND,
             self::TOKEN_PONTUATION => self::_WHITE_FOREGROUND,
-            self::TOKEN_DELIMITERS => self::_YELLOW_BRIGHT_FOREGROUND,
+            self::TOKEN_DELIMITER  => self::_YELLOW_BRIGHT_FOREGROUND,
 
             self::TOKEN_KEYWORD    => self::_MAGENTA_BRIGHT_FOREGROUND,
             self::TOKEN_DEFAULT    => self::_RED_BRIGHT_FOREGROUND,
@@ -84,7 +85,7 @@ class Highlighter extends Tokens
       // ---
       $Theme = new Theme;
       $Theme->add($theme);
-      $Theme->select('CLI');
+      $Theme->select();
 
       $this->Theme = $Theme;
 
