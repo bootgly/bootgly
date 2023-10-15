@@ -8,10 +8,11 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\ABI\Debugging;
+namespace Bootgly\ABI\Debugging\Code;
 
 
 use Bootgly\ABI\Debugging;
+use Bootgly\ABI\Debugging\Backtrace;
 
 
 class Vars implements Debugging
@@ -390,33 +391,12 @@ class Vars implements Debugging
          }
          // ---
          // @ Backtrace
-         $backtrace = $Backtrace->calls;
-         if ($backtrace && $backtrace[0]['file'] && $backtrace[0]['line']) {
-            self::$Output .= match (self::$CLI) {
-               false => '<small>',
-               true  => ''
-            };
-            $n = 1;
-            foreach ($backtrace as $trace) {
-               if (isSet($trace['file']) && isSet($trace['line'])) {
-                  self::$Output .= $trace['file'] . ':' . $trace['line'];
-               }
-               if ($n > self::$traces)
-                  break;
-               self::$Output .= "\n";
-               $n++;
-            }
-            self::$Output .= match (self::$CLI) {
-               false => '</small>',
-               true  => ''
-            };
-            self::$Output .= "\n";
-         }
+         self::$Output .= $Backtrace->dump();
          // ---
          // @ Dump
          foreach ($vars as $key => $value) {
             // labels
-            if (@self::$labels[$key]) {
+            if ( ! empty(self::$labels) && @self::$labels[$key]) {
                self::$Output .= match (self::$CLI) {
                   false => '<b style="color:#7d7d7d">',
                   true  => "\033[93m"

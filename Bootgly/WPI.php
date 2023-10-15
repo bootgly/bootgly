@@ -11,7 +11,7 @@
 namespace Bootgly;
 
 
-use Bootgly\ABI\Debugging\Vars;
+use Bootgly\ABI\Debugging\Code\Vars;
 
 use Bootgly\API\Project;
 

@@ -13,7 +13,7 @@ namespace Bootgly\WPI\Interfaces\TCP;
 
 use Bootgly\ACI\Events\Timer;
 
-use Bootgly\ABI\Debugging\Vars;
+use Bootgly\ABI\Debugging\Code\Vars;
 use Bootgly\ACI\Logs\Logging;
 use Bootgly\ACI\Logs\Logger;
 

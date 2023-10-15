@@ -15,6 +15,7 @@ class Backtrace
 {
    // * Config
    public static int $options = \DEBUG_BACKTRACE_IGNORE_ARGS;
+   public static int $traces = 4;
 
    // * Data
    public array $calls;
@@ -56,5 +57,59 @@ class Backtrace
          default:
             return $this->trace[$name];
       }
+   }
+
+   public function dump () : string
+   {
+      // * Meta
+      $output = '';
+
+      // @
+      // TODO use Theme
+      $calls = $this->calls;
+      if ($calls && $calls[0]['file'] && $calls[0]['line']) {
+         $output .= match (\PHP_SAPI) {
+            'cli'  => '',
+            default => '<small>',
+         };
+         $n = 1;
+         foreach ($calls as $trace) {
+            if (isSet($trace['file']) && isSet($trace['line'])) {
+               // Trace count
+               $output .= match (\PHP_SAPI) {
+                  'cli' => "\033[93m ",
+                  default => ' '
+               };
+               $output .= $n;
+               $output .= match (\PHP_SAPI) {
+                  'cli' => "\033[0m ",
+                  default => ''
+               };
+               // Trace file
+               $output .= $trace['file'];
+               // Trace line
+               $output .= ':';
+               $output .= match (\PHP_SAPI) {
+                  'cli' => "\033[96m",
+                  default => ''
+               };
+               $output .= $trace['line'];
+               $output .= match (\PHP_SAPI) {
+                  'cli' => "\033[0m",
+                  default => ''
+               };
+            }
+            if ($n > self::$traces) break;
+            $output .= "\n";
+            $n++;
+         }
+         $output .= match (\PHP_SAPI) {
+            'cli'  => '',
+            default => '</small>',
+         };
+         $output .= "\n";
+      }
+
+      return $output;
    }
 }

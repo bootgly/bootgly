@@ -8,32 +8,28 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\ABI\Debugging;
+namespace Bootgly\ABI\Debugging\Code\Throwables;
 
 
 use Bootgly\ABI\Debugging;
+use Bootgly\ABI\Debugging\Code\Throwables;
 
 
-abstract class Shutdown implements Debugging
+abstract class Exceptions extends Throwables implements Debugging
 {
    // * Data
-   protected static ? array $errors = [];
+   protected static array $exceptions = [];
 
 
-   public static function collect ($args = 0) : bool
+   public static function collect (\Error|\Exception $E)
    {
-      $error = error_get_last();
-      if ($error === NULL) {
-         return false;
-      }
-
-      self::$errors[] = [...$error];
-
-      return true;
+      self::$exceptions[] = $E;
    }
 
    public static function debug (...$Throwables)
    {
-      // TODO
+      foreach ($Throwables as $E) {
+         self::report($E);
+      }
    }
 }

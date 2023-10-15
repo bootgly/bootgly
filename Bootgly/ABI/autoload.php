@@ -11,26 +11,30 @@
 #namespace Bootgly\ABI; // TODO temp
 
 
-use Bootgly\ABI\Debugging;
 use Bootgly\ABI\Debugging\Backtrace;
+use Bootgly\ABI\Debugging\Code\Throwables\Errors;
+use Bootgly\ABI\Debugging\Code\Throwables\Exceptions;
+use Bootgly\ABI\Debugging\Code\Vars;
+use Bootgly\ABI\Debugging\Shutdown;
+
 
 // @ Debugging
 // Backtrace
 
 // Errors
 \set_error_handler(
-   callback: Debugging\Errors::collect(...),
+   callback: Errors::collect(...),
    error_levels: E_ALL | E_STRICT
 );
 
 // Exceptions
 \set_exception_handler(
-   callback: Debugging\Exceptions::collect(...)
+   callback: Exceptions::collect(...)
 );
 
 // Shutdown
 \register_shutdown_function(
-   callback: Debugging\Shutdown::collect(...)
+   callback: Shutdown::collect(...)
 );
 
 // Vars
@@ -39,21 +43,21 @@ if (function_exists('dump') === false) {
    {
       // * Data
       // + Backtrace
-      Debugging\Vars::$Backtrace = new Backtrace;
+      Vars::$Backtrace = new Backtrace;
 
-      Debugging\Vars::debug(...$vars);
+      Vars::debug(...$vars);
    }
 }
 if (function_exists('dd') === false) { // dd = dump and die
    function dd (...$vars)
    {
       // * Config
-      Debugging\Vars::$exit = true;
-      Debugging\Vars::$debug = true;
+      Vars::$exit = true;
+      Vars::$debug = true;
       // * Data
       // + Backtrace
-      Debugging\Vars::$Backtrace = new Backtrace;
+      Vars::$Backtrace = new Backtrace;
 
-      Debugging\Vars::debug(...$vars);
+      Vars::debug(...$vars);
    }
 }
