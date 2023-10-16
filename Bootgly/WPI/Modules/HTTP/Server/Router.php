@@ -15,7 +15,7 @@ use Bootgly;
 
 use Bootgly\ABI\IO\FS\File;
 
-use Bootgly\ABI\Debugging\Code\Vars;
+use Bootgly\ABI\Debugging\Data\Vars;
 
 use Bootgly\WPI\Modules\HTTP\Server\Router\Route;
 

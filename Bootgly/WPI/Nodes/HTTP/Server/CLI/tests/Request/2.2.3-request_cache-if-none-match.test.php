@@ -1,6 +1,6 @@
 <?php
 
-use Bootgly\ABI\Debugging\Code\Vars;
+use Bootgly\ABI\Debugging\Data\Vars;
 // SAPI
 use Bootgly\WPI\Nodes\HTTP\Server\CLI\Request;
 use Bootgly\WPI\Nodes\HTTP\Server\CLI\Response;

@@ -12,9 +12,9 @@
 
 
 use Bootgly\ABI\Debugging\Backtrace;
-use Bootgly\ABI\Debugging\Code\Throwables\Errors;
-use Bootgly\ABI\Debugging\Code\Throwables\Exceptions;
-use Bootgly\ABI\Debugging\Code\Vars;
+use Bootgly\ABI\Debugging\Data\Throwables\Errors;
+use Bootgly\ABI\Debugging\Data\Throwables\Exceptions;
+use Bootgly\ABI\Debugging\Data\Vars;
 use Bootgly\ABI\Debugging\Shutdown;
 
 

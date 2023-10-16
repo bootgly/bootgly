@@ -13,7 +13,7 @@ namespace Bootgly\WPI\Interfaces\TCP;
 
 // use
 use Closure;
-use Bootgly\ABI\Debugging\Code\Vars;
+use Bootgly\ABI\Debugging\Data\Vars;
 use Bootgly\ACI\Logs\Logger;
 use Bootgly\ACI\Logs\LoggableEscaped;
 use Bootgly\WPI\Events\Select;

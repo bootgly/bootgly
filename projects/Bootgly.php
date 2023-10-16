@@ -1,6 +1,6 @@
 <?php
 
-use Bootgly\ABI\Debugging\Code\Vars;
+use Bootgly\ABI\Debugging\Data\Vars;
 use Bootgly\CLI;
 use Bootgly\WPI;
 

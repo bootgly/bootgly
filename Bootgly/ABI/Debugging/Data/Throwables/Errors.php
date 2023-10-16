@@ -8,13 +8,14 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\ABI\Debugging\Code\Throwables;
+namespace Bootgly\ABI\Debugging\Data\Throwables;
 
 
 use Bootgly\ABI\Data\__String\Tokens\Highlighter;
+use Bootgly\ABI\Debugging\Data\Throwables;
 
 
-abstract class Errors
+abstract class Errors extends Throwables
 {
    // * Data
    protected static array $errors = [];
@@ -41,17 +42,17 @@ abstract class Errors
       return true;
    }
 
-   public static function report (\Error $Error)
+   public static function report (\Throwable $Throwable)
    {
       $Highligher = new Highlighter;
 
       // * Data
-      $class = \get_class($Error);
-      $code = $Error->getCode();
-      $message = $Error->getMessage();
+      $class = \get_class($Throwable);
+      $code = $Throwable->getCode();
+      $message = $Throwable->getMessage();
       // @ file
-      $file = $Error->getFile();
-      $line = $Error->getLine();
+      $file = $Throwable->getFile();
+      $line = $Throwable->getLine();
       $contents = \file_get_contents($file);
 
       // @ Output
@@ -114,7 +115,7 @@ abstract class Errors
       $output .= $Highligher->highlight($contents, $line);
       $output .= "\n";
       // backtrace
-      $backtrace = self::trace($Error);
+      $backtrace = self::trace($Throwable);
       $traces = count($backtrace);
       $limit = 1; // TODO dynamic with verbosity?
 
@@ -177,9 +178,9 @@ abstract class Errors
       echo $output;
    }
 
-   public static function trace (\Error|\Exception $E): array
+   public static function trace (\Throwable $Throwable) : array
    {
-      $traces = explode("\n", $E->getTraceAsString());
+      $traces = explode("\n", $Throwable->getTraceAsString());
       // @ Reverse array to make steps line up chronologically
       $traces = array_reverse($traces);
       array_shift($traces); // @ Remove {main}
@@ -193,8 +194,7 @@ abstract class Errors
          // @ Replace '#someNum' with '$i', set the right ordering
          $trace = substr($traces[$i], strpos($traces[$i], ' ') + 1);
          // @ Extract file, line, call
-         [$file, $call
-         ] = explode(": ", $trace);
+         [$file, $call] = explode(": ", $trace);
 
          $parentesis_position = strrpos($file, '(');
 
@@ -210,5 +210,14 @@ abstract class Errors
       }
 
       return $result;
+   }
+
+   public static function debug (...$Throwables)
+   {
+      $Errors = $Throwables ?: self::$errors;
+
+      foreach ($Errors as $Error) {
+         self::report($Error);
+      }
    }
 }

@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\ABI\Debugging\Code;
+namespace Bootgly\ABI\Debugging\Data;
 
 
 use Bootgly\ABI\Debugging;

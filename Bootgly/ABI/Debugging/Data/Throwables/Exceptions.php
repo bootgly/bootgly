@@ -8,14 +8,14 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\ABI\Debugging\Code\Throwables;
+namespace Bootgly\ABI\Debugging\Data\Throwables;
 
 
 use Bootgly\ABI\Debugging;
-use Bootgly\ABI\Debugging\Code\Throwables;
+use Bootgly\ABI\Debugging\Data\Throwables;
 
 
-abstract class Exceptions extends Throwables implements Debugging
+abstract class Exceptions extends Throwables
 {
    // * Data
    protected static array $exceptions = [];
@@ -28,8 +28,10 @@ abstract class Exceptions extends Throwables implements Debugging
 
    public static function debug (...$Throwables)
    {
-      foreach ($Throwables as $E) {
-         self::report($E);
+      $Exceptions = $Throwables ?: self::$exceptions;
+
+      foreach ($Exceptions as $Exception) {
+         self::report($Exception);
       }
    }
 }

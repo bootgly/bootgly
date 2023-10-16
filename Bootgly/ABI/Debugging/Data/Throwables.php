@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\ABI\Debugging\Code;
+namespace Bootgly\ABI\Debugging\Data;
 
 
 use Bootgly\ABI\Data\__String\Tokens\Highlighter;
@@ -174,5 +174,12 @@ abstract class Throwables implements Debugging
       }
 
       return $result;
+   }
+
+   public static function debug (...$Throwables)
+   {
+      foreach ($Throwables as $Throwable) {
+         self::report($Throwable);
+      }
    }
 }
