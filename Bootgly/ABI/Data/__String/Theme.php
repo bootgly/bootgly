@@ -50,14 +50,14 @@ class Theme
       $options = $this->options;
       $values = $this->values;
 
-      $value = $values[$key];
+      $input = $values[$key];
 
       $output = '';
       // @ prepending
       $prepending = $options['prepending'];
       if ($prepending) {
          $output .= match ($prepending['type']) {
-            'callback' => $prepending['value']($value),
+            'callback' => $prepending['value'](... (array) $input),
             'string' => $prepending['value'],
             default => ''
          };
@@ -68,7 +68,7 @@ class Theme
       $appending = $options['appending'];
       if ($appending) {
          $output .= match ($appending['type']) {
-            'callback' => $appending['value']($value),
+            'callback' => $appending['value'](... (array) $input),
             'string' => $appending['value'],
             default => ''
          };

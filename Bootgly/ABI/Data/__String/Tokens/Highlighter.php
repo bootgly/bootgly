@@ -42,18 +42,19 @@ class Highlighter extends Tokens
             self::TOKEN_STRING     => self::_GREEN_BRIGHT_FOREGROUND,
             self::TOKEN_COMMENT    => self::_BLACK_BRIGHT_FOREGROUND,
             self::TOKEN_FUNCTION   => self::_YELLOW_FOREGROUND,
-            self::TOKEN_VARIABLE   => self::_CYAN_FOREGROUND,
+            self::TOKEN_VARIABLE   => self::_CYAN_BRIGHT_FOREGROUND,
             self::TOKEN_NUMBER     => self::_YELLOW_FOREGROUND,
 
             self::TOKEN_OPERATOR   => self::_RED_BRIGHT_FOREGROUND,
             self::TOKEN_PONTUATION => self::_WHITE_FOREGROUND,
             self::TOKEN_DELIMITER  => self::_YELLOW_BRIGHT_FOREGROUND,
 
-            self::TOKEN_KEYWORD    => self::_MAGENTA_BRIGHT_FOREGROUND,
-            self::TOKEN_DEFAULT    => self::_RED_BRIGHT_FOREGROUND,
             self::TOKEN_HTML       => self::_CYAN_FOREGROUND,
 
-            self::ACTUAL_LINE_MARK    => self::_BLINK_STYLE . ';' . self::_RED_FOREGROUND,
+            self::TOKEN_KEYWORD    => self::_CYAN_FOREGROUND,
+            self::TOKEN_DEFAULT    => self::_RED_BRIGHT_FOREGROUND,
+
+            self::ACTUAL_LINE_MARK    => [self::_BLINK_STYLE, self::_RED_FOREGROUND],
             self::LINE_NUMBER         => self::_BLACK_BRIGHT_FOREGROUND,
             self::MARKED_LINE_NUMBER  => self::_RED_BRIGHT_FOREGROUND,
             self::LINE_NUMBER_DIVIDER => self::_BLACK_BRIGHT_FOREGROUND,
