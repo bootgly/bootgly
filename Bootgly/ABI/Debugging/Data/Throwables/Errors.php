@@ -10,7 +10,7 @@
 
 namespace Bootgly\ABI\Debugging\Data\Throwables;
 
-
+use Bootgly\ABI\Data\__String\Path;
 use Bootgly\ABI\Data\__String\Tokens\Highlighter;
 use Bootgly\ABI\Debugging\Data\Throwables;
 
@@ -54,6 +54,7 @@ abstract class Errors extends Throwables
       $file = $Throwable->getFile();
       $line = $Throwable->getLine();
       $contents = \file_get_contents($file);
+      $file = Path::relativize($file, BOOTGLY_WORKING_DIR);
 
       // @ Output
       $output = "\n";
@@ -176,40 +177,6 @@ abstract class Errors extends Throwables
       $output .= "\n\n";
 
       echo $output;
-   }
-
-   public static function trace (\Throwable $Throwable) : array
-   {
-      $traces = explode("\n", $Throwable->getTraceAsString());
-      // @ Reverse array to make steps line up chronologically
-      $traces = array_reverse($traces);
-      array_shift($traces); // @ Remove {main}
-      #array_pop($traces); // @ Remove call to this method
-      $length = count($traces);
-
-      $result = [];
-      for ($i = 0; $i < $length; $i++) {
-         // @ trace
-         $index = (string) ($i + 1);
-         // @ Replace '#someNum' with '$i', set the right ordering
-         $trace = substr($traces[$i], strpos($traces[$i], ' ') + 1);
-         // @ Extract file, line, call
-         [$file, $call] = explode(": ", $trace);
-
-         $parentesis_position = strrpos($file, '(');
-
-         $line = substr($file, $parentesis_position + 1, -1);
-         $file = substr($file, 0, $parentesis_position);
-
-         $result[] = [
-            'index' => $index,
-            'file' => $file,
-            'line' => $line,
-            'call' => $call
-         ];
-      }
-
-      return $result;
    }
 
    public static function debug (...$Throwables)

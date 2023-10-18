@@ -10,7 +10,7 @@
 
 namespace Bootgly\ABI\Debugging\Data;
 
-
+use Bootgly\ABI\Data\__String\Path;
 use Bootgly\ABI\Data\__String\Tokens\Highlighter;
 use Bootgly\ABI\Debugging;
 
@@ -28,6 +28,7 @@ abstract class Throwables implements Debugging
       $file = $Throwable->getFile();
       $line = $Throwable->getLine();
       $contents = \file_get_contents($file);
+      $file = Path::relativize($file, BOOTGLY_WORKING_DIR);
 
       // @ Output
       // TODO use Theme
@@ -87,7 +88,7 @@ abstract class Throwables implements Debugging
          $backtrace = array_slice($backtrace, -$limit);
 
          $output .= match (\PHP_SAPI) {
-            'cli' => "\033[90m",
+            'cli' => "\033[90;4m",
             default => ''
          };
          $output .= '+' . (string) ($traces - $limit) . ' trace calls';
@@ -164,6 +165,7 @@ abstract class Throwables implements Debugging
 
          $line = substr($file, $parentesis_position + 1, -1);
          $file = substr($file, 0, $parentesis_position);
+         $file = Path::relativize($file, BOOTGLY_WORKING_DIR);
 
          $result[] = [
             'index' => $index,
