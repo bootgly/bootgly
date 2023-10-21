@@ -196,6 +196,11 @@ Bootgly uses [Semantic Versioning 2.0][SEMANTIC_VERSIONING].
 |:--:| 
 | *HTTP Server CLI - +7% faster than [Workerman](https://www.techempower.com/benchmarks/#section=data-r21&test=plaintext&l=zik073-6bj) (Plain Text test)* |
 
+| ![HTTP Server CLI - started in Monitor mode](https://github.com/bootgly/.github/raw/main/screenshots/bootgly-php-framework/Bootgly_WPI_-_HTTP_Server_CLI.png "HTTP Server CLI - started in Monitor mode") |
+|:--:| 
+| HTTP Server CLI - started in `monitor` mode
+
+
 More **Screenshots**, videos and details can be found in the home page of [Bootgly Docs][PROJECT_DOCS].
 
 ---
