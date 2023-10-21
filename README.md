@@ -14,7 +14,7 @@
   </a>
 </p>
 
-> Bootgly is the first PHP framework to use the I2P (Interface-to-Platform) architecture.
+> Bootgly is the first PHP framework to use the [I2P (Interface-to-Platform) architecture][I2P_ARQUITECTURE].
 
 🚧
 
@@ -48,10 +48,15 @@ A stable release is planned for December 2023.
 
 ## 🤔 About
 
-Bootgly is a base framework for developing APIs and Apps for both command-line interfaces (Console) 📟 and Web 🌐.
-Focused on performance, efficiency, versatility, and easy-to-understand codebase APIs.
+Bootgly is a base framework for developing APIs and Apps for both CLI (Console) 📟 and WPI (Web) 🌐.
 
-### Bootgly Console 📟
+Focused on **efficiency**, for adopting a minimum dependency policy.
+
+Due to this policy, its unique I2P architecture, and some unusual code conventions and design patterns, Bootgly has superior **performance** and **versatility**, and has **easy-to-understand Code API**.
+
+### Bootgly CLI 📟
+
+> Command Line Interface
 
 Interface: [CLI][CLI_INTERFACE]
 
@@ -68,7 +73,9 @@ CLI components |
 --- |
 [Header component][CLI_HEADER] | 
 
-### Bootgly Web 🌐
+### Bootgly WPI 🌐
+
+> Web Programming Interface 
 
 Interface: [WPI][WPI_INTERFACE]
 
@@ -76,10 +83,14 @@ Platform: [Web][WEB_PLATFORM] (IN DEVELOPMENT)
 
 Web interfaces | Web nodes
 --- | ---
-[TCP Client][WEB_TCP_CLIENT_INTERFACE] | HTTP Client (TODO) 
+[TCP Client][WEB_TCP_CLIENT_INTERFACE] | HTTP Client CLI (🤔)
 [TCP Server][WEB_TCP_SERVER_INTERFACE] | [HTTP Server CLI][WEB_HTTP_SERVER_CLI]
-UDP Client (TODO) | 
-UDP Server (TODO) |
+UDP Client (🤔) | WS Client
+UDP Server (🤔) | WS Server
+
+-- 
+
+🤔 = TODO
 
 ---
 
@@ -96,7 +107,9 @@ Operation System |
 --
 
 ✅ = Compatible
+
 ❌ = Incompatible
+
 ❔ = Untested
 
 Above is the native compatibility, of course it is possible to run on Windows and Unix using containers.
@@ -106,21 +119,22 @@ Above is the native compatibility, of course it is possible to run on Windows an
 - PHP 8.2+ ⚠️
 - Opcache with JIT enabled (+50% performance) 👍
 
-#### \- Bootgly Console 📟
+#### \- Bootgly CLI 📟
 - `php-cli` ⚠️
 - `php-readline` ⚠️
 
-#### \- Bootgly Web 🌐
+#### \- Bootgly WPI 🌐
 
-##### CLI + Web *API ¹ (eg. Bootgly HTTP Server CLI):
+##### CLI + WPI *API ¹ (eg. Bootgly HTTP Server CLI):
 - \* See Bootgly CLI dependencies \*
 
-##### Web in Non-CLI (apache2handler, litespeed and nginx) SAPI ²:
+##### WPI in Non-CLI (apache2handler, litespeed and nginx) SAPI ²:
 - `rewrite` module enabled ⚠️
 
 --
 
 ⚠️ = Required
+
 👍 = Recommended
 
 ¹ *API = Can be Server API (SAPI), Client API (CAPI), etc.
@@ -143,10 +157,10 @@ Wait for the "contributing guidelines" to start your contribution.
 Help us keep Bootgly open and inclusive. Please read and follow our [Code of Conduct][CODE_OF_CONDUCT].
 
 ### 🔗 Social networks
-- [Bootgly on LinkedIn][LINKEDIN]
-- [Bootgly on Telegram][TELEGRAM]
-- [Bootgly on Reddit][REDDIT]
-- [Bootgly on Discord][DISCORD]
+- Bootgly on **LinkedIn**: [[Company Page][LINKEDIN]]
+- Bootgly on **Telegram**: [[Telegram Group][TELEGRAM]]
+- Bootgly on **Reddit**: [[Reddit Community][REDDIT]]
+- Bootgly on **Discord**: [[Discord Channel][DISCORD]]
 
 ### 💖 Sponsorship
 
@@ -170,13 +184,13 @@ Bootgly uses [Semantic Versioning 2.0][SEMANTIC_VERSIONING].
 
 ## 🖼 Highlights
 
-### \- Bootgly Console 📟
+### \- Bootgly CLI 📟
 
 | ![HTTP Server CLI started - Initial output](https://github.com/bootgly/.github/raw/main/screenshots/bootgly-php-framework/Bootgly-Progress-Bar-component.png "Render 6x faster than Symfony / Laravel") |
 |:--:| 
 | *Progress component (with Bar) - Render 6x faster than Symfony / Laravel* |
 
-### \- Bootgly Web 🌐
+### \- Bootgly WPI 🌐
 
 | ![HTTP Server CLI - Faster than Workerman +7%](https://github.com/bootgly/.github/raw/main/screenshots/bootgly-php-framework/Server-CLI-HTTP-Benchmark-Ryzen-9-3900X-WSL2.png "HTTP Server CLI - +7% faster than Workerman (Plain Text test)'") |
 |:--:| 
@@ -188,7 +202,7 @@ More **Screenshots**, videos and details can be found in the home page of [Bootg
 
 ## 🔧 Usage
 
-### 📟 Bootgly Console:
+### 📟 Bootgly CLI:
 
 <details>
   <summary><b>Run CLI demo</b></summary>
@@ -223,7 +237,7 @@ More **Screenshots**, videos and details can be found in the home page of [Bootg
   ```
 </details>
 
-### 🌐 Bootgly Web:
+### 🌐 Bootgly WPI:
 
 <details>
   <summary><b>Running a HTTP Server:</b></summary>
@@ -270,6 +284,7 @@ More **Screenshots**, videos and details can be found in the home page of [Bootg
 
 
 <!-- Links -->
+[I2P_ARQUITECTURE]: https://docs.bootgly.com/manual/Bootgly/basic/architecture/overview
 [CLI_INTERFACE]: https://github.com/bootgly/bootgly/tree/main/Bootgly/CLI/
 [CLI_TERMINAL_COMPONENTS]: https://github.com/bootgly/bootgly/tree/main/Bootgly/CLI/Terminal/components
 
