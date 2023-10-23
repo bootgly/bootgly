@@ -50,6 +50,7 @@ class Server implements Servers, Logging
 
    // * Config
    #protected ? string $domain;
+   protected ? string $socket;
    protected ? string $host;
    protected ? int $port;
    protected int $workers;
@@ -98,6 +99,11 @@ class Server implements Servers, Logging
       }
 
       // * Config
+      $this->socket = null;
+      $this->host = null;
+      $this->port = null;
+      // $this->workers
+      $this->ssl = null;
       // @ Mode
       $this->mode = self::MODE_MONITOR;
 

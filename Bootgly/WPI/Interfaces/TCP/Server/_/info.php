@@ -43,7 +43,7 @@ switch ($name) {
 
       // @ Socket
       // address
-      $address = 'tcp://' . $this->host . ':' . $this->port;
+      $address = $this->socket . $this->host . ':' . $this->port;
 
       // Event-loop
       $event = (new \ReflectionClass(self::$Event))->getName();

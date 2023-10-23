@@ -11,6 +11,7 @@
 namespace Bootgly\WPI\Nodes\HTTP\Server;
 
 
+use Bootgly\ABI\Debugging\Data\Throwables\Exceptions;
 use Bootgly\ACI\Logs\Logger;
 
 use Bootgly\ACI\Tests;
@@ -34,12 +35,13 @@ use Bootgly\WPI\Nodes\HTTP\Server\CLI\Response;
 class CLI extends TCP\Server implements HTTP, Server
 {
    // * Config
-   // ...
+   // ...inherited from TCP\Server
 
    // * Data
-   // ...
+   // ...inherited from TCP\Server
 
    // * Meta
+   // ...inherited from TCP\Server
    public readonly array $versions;
 
    public static Request $Request;
@@ -49,6 +51,12 @@ class CLI extends TCP\Server implements HTTP, Server
 
    public function __construct ()
    {
+      // * Config
+      // ...inherited from TCP\Server
+
+      // * Data
+      // ...inherited from TCP\Server
+
       // * Meta
       $this->versions = [ // @ HTTP 1.1
          'min' => '1.1',
@@ -56,6 +64,12 @@ class CLI extends TCP\Server implements HTTP, Server
       ];
 
       parent::__construct();
+
+      // * Config
+      $this->socket = ($this->ssl !== null
+         ? 'https'
+         : 'http'
+      );
 
       // @ Configure Logger
       $this->Logger = new Logger(channel: 'Server.HTTP');
@@ -72,6 +86,22 @@ class CLI extends TCP\Server implements HTTP, Server
       self::$Encoder = new _Encoder;
    }
 
+   public function configure (
+      string $host, int $port, int $workers, ? array $ssl = null
+   )
+   {
+      parent::configure($host, $port, $workers, $ssl);
+
+      try {
+         // * Config
+         $this->socket = ($this->ssl !== null
+            ? 'https://'
+            : 'http://'
+         );
+      } catch (\Throwable $Throwable) {
+         Exceptions::report($Throwable);
+      }
+   }
    public static function boot (bool $production = true, bool $test = false)
    {
       // * Config
