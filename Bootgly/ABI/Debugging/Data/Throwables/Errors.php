@@ -181,10 +181,12 @@ abstract class Errors extends Throwables
 
    public static function debug (...$Throwables)
    {
-      $Errors = $Throwables ?: self::$errors;
+      $errors = $Throwables ?: self::$errors;
 
-      foreach ($Errors as $Error) {
-         self::report($Error);
+      foreach ($errors as $Error) {
+         if ($Error instanceof \Throwable) {
+            self::report($Error);
+         }
       }
    }
 }

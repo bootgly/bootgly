@@ -12,6 +12,8 @@ namespace Bootgly\ABI\Debugging;
 
 
 use Bootgly\ABI\Debugging;
+use Bootgly\ABI\Debugging\Data\Throwables\Errors;
+use Bootgly\ABI\Debugging\Data\Throwables\Exceptions;
 
 
 abstract class Shutdown implements Debugging
@@ -34,6 +36,7 @@ abstract class Shutdown implements Debugging
 
    public static function debug (...$Throwables)
    {
-      // TODO
+      Errors::debug();
+      Exceptions::debug();
    }
 }

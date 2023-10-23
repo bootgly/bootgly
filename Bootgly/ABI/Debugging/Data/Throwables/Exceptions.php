@@ -28,10 +28,12 @@ abstract class Exceptions extends Throwables
 
    public static function debug (...$Throwables)
    {
-      $Exceptions = $Throwables ?: self::$exceptions;
+      $exceptions = $Throwables ?: self::$exceptions;
 
-      foreach ($Exceptions as $Exception) {
-         self::report($Exception);
+      foreach ($exceptions as $Exception) {
+         if ($Exception instanceof \Throwable) {
+            self::report($Exception);
+         }
       }
    }
 }
