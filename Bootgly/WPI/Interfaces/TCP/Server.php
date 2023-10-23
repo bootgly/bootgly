@@ -49,8 +49,8 @@ class Server implements Servers, Logging
 
 
    // * Config
-   #protected ? string $domain;
    protected ? string $socket;
+   #protected ? string $domain;
    protected ? string $host;
    protected ? int $port;
    protected int $workers;
@@ -64,7 +64,6 @@ class Server implements Servers, Logging
    // @ Verbosity
 
    // * Data
-   // OSI Application
    public static $Application = null; 
    public static $Decoder = null;
    public static $Encoder = null;
@@ -99,7 +98,7 @@ class Server implements Servers, Logging
       }
 
       // * Config
-      $this->socket = null;
+      $this->socket = 'tcp://';
       $this->host = null;
       $this->port = null;
       // $this->workers

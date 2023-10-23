@@ -1,5 +1,7 @@
 <?php
 
+use Bootgly\ABI\Data\__String\Path;
+use Bootgly\API\Server as SAPI;
 use Bootgly\CLI;
 use Bootgly\CLI\Terminal\components\Progress\Progress;
 
@@ -48,6 +50,9 @@ switch ($name) {
       // Event-loop
       $event = (new \ReflectionClass(self::$Event))->getName();
 
+      // SAPI
+      $SAPI = Path::relativize(SAPI::$production, BOOTGLY_ROOT_DIR);
+
       // Input
       // TODO
 
@@ -62,6 +67,8 @@ switch ($name) {
       @:i: Socket address: @; {$address}
 
       @:i: Event-loop: @; {$event}
+
+      @#yellow: Server API script: @; {$SAPI}
       =========================================================================
 
       OUTPUT);
