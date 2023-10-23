@@ -14,6 +14,7 @@ namespace Bootgly\WPI\Interfaces\TCP;
 use Bootgly\ACI\Events\Timer;
 
 use Bootgly\ABI\Debugging\Data\Vars;
+use Bootgly\ABI\Debugging\Shutdown;
 use Bootgly\ACI\Logs\Logging;
 use Bootgly\ACI\Logs\Logger;
 
@@ -136,6 +137,7 @@ class Server implements Servers, Logging
 
       // @ Register shutdown function to avoid orphaned children
       register_shutdown_function(function () use ($Process) {
+         Shutdown::debug();
          $Process->sendSignal(SIGINT);
       });
 
@@ -232,8 +234,7 @@ class Server implements Servers, Logging
       }
    }
 
-   public function configure
-   (
+   public function configure (
       string $host,
       int $port,
       int $workers,
