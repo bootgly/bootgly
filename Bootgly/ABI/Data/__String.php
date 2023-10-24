@@ -144,43 +144,51 @@ class __String implements Data // Simple class (advanced methods coming soon)
       ];
    }
 
-   private static function pad
-   (string $string, int $length, string $padding = ' ', int $type = STR_PAD_RIGHT, string $encoding = 'UTF-8')
-   {
-      $inputLength = mb_strlen($string, $encoding);
-      $padStringLength = mb_strlen($padding, $encoding);
+   public static function pad (
+      string $string,
+      int $length,
+      string $padding = ' ',
+      int $type = STR_PAD_RIGHT,
+      string $encoding = 'UTF-8'
+   ) {
+      // Remove ANSI escape characters from the string when calculating length.
+      $string_without_ansi = preg_replace('/\x1B\[[0-9;]*[mK]/', '', $string);
+      $input_length = mb_strlen($string_without_ansi, $encoding);
+      $pad_string_length = mb_strlen($padding, $encoding);
 
-      if ($length <= 0 || ($length - $inputLength) <= 0) {
+      if ($length <= 0 || ($length - $input_length) <= 0) {
          return $string;
       }
 
-      $numPadChars = $length - $inputLength;
+      $num_pad_chars = $length - $input_length;
 
       switch ($type) {
          case STR_PAD_RIGHT:
-            $leftPad = 0;
-            $rigthPad = $numPadChars;
+            $left_pad = 0;
+            $right_pad = $num_pad_chars;
             break;
 
          case STR_PAD_LEFT:
-            $leftPad = $numPadChars;
-            $rigthPad = 0;
+            $left_pad = $num_pad_chars;
+            $right_pad = 0;
             break;
 
          case STR_PAD_BOTH:
-            $leftPad = floor($numPadChars / 2);
-            $rigthPad = $numPadChars - $leftPad;
+            $left_pad = floor($num_pad_chars / 2);
+            $right_pad = $num_pad_chars - $left_pad;
             break;
       }
 
       $result = '';
-      for ($i = 0; $i < $leftPad; ++$i) {
-         $result .= mb_substr($padding, $i % $padStringLength, 1, $encoding);
+
+      for ($i = 0; $i < $left_pad; ++$i) {
+         $result .= mb_substr($padding, $i % $pad_string_length, 1, $encoding);
       }
 
       $result .= $string;
-      for ($i = 0; $i < $rigthPad; ++$i) {
-         $result .= mb_substr($padding, $i % $padStringLength, 1, $encoding);
+
+      for ($i = 0; $i < $right_pad; ++$i) {
+         $result .= mb_substr($padding, $i % $pad_string_length, 1, $encoding);
       }
 
       return $result;
