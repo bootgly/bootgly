@@ -28,6 +28,26 @@ class Table
 
    // * Data
    // @ Style
+   public const NO_BORDER_STYLE = [
+      'top'          => '',
+      'top-left'     => '',
+      'top-mid'      => '',
+      'top-right'    => '',
+
+      'bottom'       => '',
+      'bottom-left'  => '',
+      'bottom-mid'   => '',
+      'bottom-right' => '',
+
+      'mid'          => '',
+      'mid-left'     => '',
+      'mid-mid'      => '',
+      'mid-right'    => '',
+      'middle'       => '',
+
+      'left'         => '',
+      'right'        => '',
+   ];
    public array $borders;
 
    // * Meta
@@ -130,7 +150,9 @@ class Table
          'bottom' => $borders['bottom-right']
       };
 
-      $line .= "\n";
+      if ($line !== '') {
+         $line .= "\n";
+      }
 
       $this->Output->write($line);
    }
