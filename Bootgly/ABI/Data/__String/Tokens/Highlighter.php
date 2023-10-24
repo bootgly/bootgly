@@ -99,15 +99,15 @@ class Highlighter extends Tokens
    public function highlight (string $source, ? int $marked_line = null, int $lines_before = 4, int $lines_after = 4) : string
    {
       // <<
-      $source = str_replace(["\r\n", "\r"], "\n", $source);
+      $source = \str_replace(["\r\n", "\r"], "\n", $source);
       $tokens = $this->tokenize($source);
 
       // |:|
       if ($marked_line !== null) {
          // @ Offset lines - x before and x after marked line number
-         $offset = max($marked_line - $lines_before - 1, 0);
+         $offset = \max($marked_line - $lines_before - 1, 0);
          $length = $lines_after + $lines_before + 1;
-         $tokens = array_slice($tokens, $offset, $length, true);
+         $tokens = \array_slice($tokens, $offset, $length, true);
       }
 
       // >
@@ -138,7 +138,7 @@ class Highlighter extends Tokens
       // * Config
       $mark = ' ' . self::ARROW_SYMBOL . ' ';
       // * Data
-      $line_string_length = \strlen((string) ((int) array_key_last($lines) + 1));
+      $line_string_length = \strlen((string) ((int) \array_key_last($lines) + 1));
       $line_string_length = ($line_string_length < self::WIDTH
          ? self::WIDTH
          : $line_string_length

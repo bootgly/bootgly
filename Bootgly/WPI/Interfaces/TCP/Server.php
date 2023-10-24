@@ -49,7 +49,6 @@ class Server implements Servers, Logging
 
 
    // * Config
-   protected ? string $socket;
    #protected ? string $domain;
    protected ? string $host;
    protected ? int $port;
@@ -73,6 +72,7 @@ class Server implements Servers, Logging
    // @ State
    protected int $started = 0;
    // @ Socket
+   protected ? string $socket;
    public static array $context;
    // @ Status
    protected int $status = 0;
@@ -146,7 +146,7 @@ class Server implements Servers, Logging
          $Process->sendSignal(SIGINT);
       });
 
-      // @ Boot API
+      // @ Boot Server API
       if (self::$Application) {
          self::$Application::boot();
       } else {
