@@ -16,6 +16,8 @@ use Bootgly\ABI\Data;
 
 class __String implements Data // Simple class (advanced methods coming soon)
 {
+   public const ANSI_ESCAPE_SEQUENCE_REGEX = '/\x1B\[[0-9;]*[mK]/';
+
    // * Config
    public ? string $encoding;
 
@@ -152,7 +154,7 @@ class __String implements Data // Simple class (advanced methods coming soon)
       string $encoding = 'UTF-8'
    ) {
       // Remove ANSI escape characters from the string when calculating length.
-      $string_without_ansi = preg_replace('/\x1B\[[0-9;]*[mK]/', '', $string);
+      $string_without_ansi = preg_replace(self::ANSI_ESCAPE_SEQUENCE_REGEX, '', $string);
       $input_length = mb_strlen($string_without_ansi, $encoding);
       $pad_string_length = mb_strlen($padding, $encoding);
 

@@ -17,13 +17,15 @@ class Table
    // ...
 
    // * Data
+   public ? array $columns; // set table data by columns...
+   public ? array $rows; // set table data by rows...
+   // ---
    #private ? array $header;
    #private ? array $body;
    #private ? array $footer;
 
    // * Meta
-   public ? array $columns;
-   public ? array $rows;
+   // ...
 
 
    public function __construct ()
@@ -49,6 +51,15 @@ class Table
       }
    }
 
+   public function get (string $section = '')
+   {
+      return match ($section) {
+         'header' => $this->rows['header'],
+         'body'   => $this->rows['body'],
+         'footer' => $this->rows['footer'],
+         default  => $this->rows
+      };
+   }
    public function set (? array $header = null, ? array $body = null, ? array $footer = null)
    {
       if ($header) {

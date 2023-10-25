@@ -10,7 +10,7 @@
 
 namespace Bootgly\CLI\Terminal\components\Table;
 
-
+use Bootgly\ABI\Data\__String;
 use Bootgly\CLI\Terminal\components\Table\Table;
 
 
@@ -22,11 +22,12 @@ class Columns
    // ...
 
    // * Data
-   // ...
+   public int $count;
+   // @ Width
+   public array $widths;
 
    // * Meta
-   public array $widths;
-   public int $count;
+   // ...
 
 
    public function __construct ($Table)
@@ -37,11 +38,12 @@ class Columns
       // ...
 
       // * Data
-      // ...
+      $this->count = 0;
+      // @ Width
+      $this->widths = [];
 
       // * Meta
-      $this->widths = [];
-      $this->count = 0;
+      // ...
    }
    public function __get ($name)
    {
@@ -54,15 +56,25 @@ class Columns
 
    public function calculate () : bool
    {
-      $widths = [];
-
-      foreach ($this->Table->Data->rows as $section => $rows) {
+      $data = $this->Table->Data->get();
+      foreach ($data as $section => $rows) {
          // @ Pre
          // ...
 
-         foreach ($rows as $row) {
-            foreach ($row as $column => $data) {
-               $widths[$column] = max($widths[$column] ?? 0, mb_strlen($data));
+         foreach ($rows as $row_index => $row_data) {
+            // TODO add per section auto width rows
+
+            foreach ($row_data as $column_index => $column_data) {
+               // @ Remove ANSI code characters from the string
+               $column_data = preg_replace(__String::ANSI_ESCAPE_SEQUENCE_REGEX, '', $column_data);
+
+               // @ Get column data length
+               $column_data_length = mb_strlen($column_data);
+               // @ Get current column width
+               $column_index_width = $this->widths[$column_index];
+
+               // @ Set column width
+               $this->widths[$column_index] = max($column_data_length, $column_index_width);
             }
          }
 
@@ -70,8 +82,8 @@ class Columns
          // ...
       }
 
-      $this->count = count($widths);
-      $this->widths = $widths;
+      $this->count = count($this->widths);
+      $this->widths = array_values($this->widths);
 
       return true;
    }
