@@ -24,9 +24,6 @@ class Table
    private Output $Output;
 
    // * Config
-   // ...
-
-   // * Data
    // @ Style
    public const NO_BORDER_STYLE = [
       'top'          => '',
@@ -48,7 +45,30 @@ class Table
       'left'         => '',
       'right'        => '',
    ];
+   public const DEFAULT_STYLE = [
+      'top'          => '═',
+      'top-left'     => '╔',
+      'top-mid'      => '╤',
+      'top-right'    => '╗',
+
+      'bottom'       => '═',
+      'bottom-left'  => '╚',
+      'bottom-mid'   => '╧',
+      'bottom-right' => '╝',
+
+      'mid'          => '─',
+      'mid-left'     => '╟',
+      'mid-mid'      => '┼',
+      'mid-right'    => '╢',
+      'middle'       => '│ ',
+
+      'left'         => '║',
+      'right'        => '║',
+   ];
    public array $borders;
+
+   // * Data
+   // ...
 
    // * Meta
    // ...
@@ -66,30 +86,11 @@ class Table
       $this->Output = $Output;
 
       // * Config
-      // ...
+      // @ Style
+      $this->borders = self::DEFAULT_STYLE;
 
       // * Data
-      // @ Style
-      $this->borders = [
-         'top'          => '═',
-         'top-left'     => '╔',
-         'top-mid'      => '╤',
-         'top-right'    => '╗',
-
-         'bottom'       => '═',
-         'bottom-left'  => '╚',
-         'bottom-mid'   => '╧',
-         'bottom-right' => '╝',
-
-         'mid'          => '─',
-         'mid-left'     => '╟',
-         'mid-mid'      => '┼',
-         'mid-right'    => '╢',
-         'middle'       => '│ ',
-
-         'left'         => '║',
-         'right'        => '║',
-      ];
+      // ...
 
       // * Meta
       // ...
@@ -121,8 +122,10 @@ class Table
       $Columns->section = $section;
 
       // @
-      // * Data
+      // * Config
       $borders = $this->borders;
+      // * Data
+      // ...
       // * Meta
       $line = match ($position) {
          'top' => $borders['top-left'],

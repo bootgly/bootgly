@@ -12,6 +12,7 @@ namespace Bootgly\CLI\Terminal\components\Table;
 
 
 use Bootgly\ABI\Data\__String;
+use Bootgly\CLI;
 use Bootgly\CLI\Terminal\components\Table\Table;
 
 
@@ -42,14 +43,6 @@ class Row
       // * Meta
       // ...
    }
-   public function __get ($name)
-   {
-      return $this->Table->$name;
-   }
-   public function __call ($name, $arguments)
-   {
-      return $this->Table->$name(...$arguments);
-   }
 
    public function render (array $row, string $section)
    {
@@ -59,15 +52,18 @@ class Row
       }
 
       // ! Table
-      $borders = &$this->Table->borders;
+      $borders = $this->Table->borders;
       // > Cells
-      $aligment = $this->Cells->alignment;
+      $aligment = $this->Table->Cells->alignment;
       // > Columns
-      $Columns = $this->Columns;
+      $Columns = $this->Table->Columns;
       $Columns->section = $section;
       $widths = $Columns->widths;
 
-      $output = $borders['left'] . ' ';
+      $output = $borders['left'];
+      if ($borders['left']) {
+         $output .= ' ';
+      }
 
       foreach ($widths as $column_index => $width) {
          if ($column_index > 0) {
@@ -90,6 +86,6 @@ class Row
       $output .= "\n";
 
       // TODO use Output as trait?
-      $this->Output->write($output);
+      CLI::$Terminal->Output->write($output);
    }
 }

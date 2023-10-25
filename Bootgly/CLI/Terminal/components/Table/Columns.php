@@ -29,7 +29,7 @@ class Columns
    // * Meta
    private int $count;
    // @ Width
-   private array $widths; // [...section => ...column_index]
+   private array $widths; // [... ? section => ...column_index]
 
 
    public function __construct ($Table)

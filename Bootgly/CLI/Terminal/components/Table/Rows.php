@@ -45,14 +45,6 @@ class Rows
       // * Meta
       // ...
    }
-   public function __get ($name)
-   {
-      return $this->Table->$name;
-   }
-   public function __call ($name, $arguments)
-   {
-      return $this->Table->$name(...$arguments);
-   }
 
    public function render ()
    {

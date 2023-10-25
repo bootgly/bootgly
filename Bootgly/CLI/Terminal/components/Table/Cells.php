@@ -19,10 +19,10 @@ class Cells
    private Table $Table;
 
    // * Config
-   // ...
+   public int $alignment;
 
    // * Data
-   public int $alignment;
+   // ...
 
    // * Meta
    // ...
@@ -33,21 +33,13 @@ class Cells
       $this->Table = $Table;
 
       // * Config
-      // ...
+      $this->alignment = 1;
 
       // * Data
-      $this->alignment = 1;
+      // ...
 
       // * Meta
       // ...
-   }
-   public function __get ($name)
-   {
-      return $this->Table->$name;
-   }
-   public function __call ($name, $arguments)
-   {
-      return $this->Table->$name(...$arguments);
    }
 
    public function align (string $aligment) : int

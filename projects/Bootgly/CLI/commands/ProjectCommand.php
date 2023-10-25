@@ -102,7 +102,7 @@ class ProjectCommand extends Command
 
          $Table = new Table($Output);
          // * Data
-         $Table->borders = $Table::NO_BORDER_STYLE;
+         $Table->borders = Table::NO_BORDER_STYLE;
          // > Columns
          // * Config
          $Table->Columns->Autowiden::BASED_ON_SECTION->set();
