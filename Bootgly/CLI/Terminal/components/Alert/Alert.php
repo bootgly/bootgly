@@ -20,7 +20,14 @@ class Alert
 
    // * Config
    public Type $Type;
+   public Style $Style;
    public int $width;
+
+   // * Data
+   // ...
+
+   // * Meta
+   // ...
 
 
    public function __construct (Output &$Output)
@@ -29,7 +36,14 @@ class Alert
 
       // * Config
       $this->Type = Type::DEFAULT;
+      $this->Style = Style::DEFAULT;
       $this->width = 80;
+
+      // * Data
+      // ...
+
+      // * Meta
+      // ...
    }
 
 
@@ -37,47 +51,83 @@ class Alert
    {
       // * Config
       $type = $this->Type->get();
+      $style = $this->Style->get();
 
       // @
+      $Output = $this->Output;
+      $Text = $Output->Text;
       // @ Prepare
-      $this->Output->write(PHP_EOL);
-      $this->Output->Text->stylize('bold');
+      $Output->write(PHP_EOL);
+      $Text->stylize('bold');
 
-      // @ Colorize
-      match ($type) {
-         Type::SUCCESS => $this->Output->Text->colorize('white', 'green'),
-         Type::ATTENTION => $this->Output->Text->colorize(0, 'yellow'),
-         Type::FAILURE => $this->Output->Text->colorize('white', 'red'),
-         default => $this->Output->Text->colorize(0, 7)
-      };
-
-      // @ Padding
-      $padding = str_pad('', $this->width, ' ', STR_PAD_RIGHT);
-      $message = str_pad($message, $this->width, ' ', STR_PAD_RIGHT);
-
-      // @ Output
-      $this->Output->render(<<<OUTPUT
-       $padding
-       $message
-       $padding
-       @;\n
-      OUTPUT);
-
-      // @ Reset style and color
-      $this->Output->Text->stylize();
-      $this->Output->Text->colorize();
+      switch ($style) {
+         case STYLE::FULLCOLOR:
+            // @ Colorize
+            match ($type) {
+               Type::SUCCESS => $Text->colorize('white', 'green'),
+               Type::ATTENTION => $Text->colorize(0, 'yellow'),
+               Type::FAILURE => $Text->colorize('white', 'red'),
+               default => $Text->colorize(0, 7)
+            };
+            // @ Padding
+            $padding = str_pad('', $this->width, ' ', STR_PAD_RIGHT);
+            $message = str_pad($message, $this->width, ' ', STR_PAD_RIGHT);
+            // @ Output
+            $Output->render(<<<OUTPUT
+             $padding
+             $message
+             $padding
+            @;\n
+            OUTPUT);
+            // @ Reset style and color
+            $Text->stylize();
+            $Text->colorize();
+            break;
+         default:
+            // @ Colorize alert type
+            match ($type) {
+               Type::SUCCESS => $Text->colorize('white', 'green'),
+               Type::ATTENTION => $Text->colorize(0, 'yellow'),
+               Type::FAILURE => $Text->colorize('white', 'red'),
+               default => $Text->colorize('white', 'blue')
+            };
+            // @ Write alert type
+            match ($type) {
+               Type::SUCCESS => $Output->write(' SUCCESS '),
+               Type::ATTENTION => $Output->write(' ATTENTION '),
+               Type::FAILURE => $Output->write(' FAIL '),
+               default => $Output->write(' ALERT ')
+            };
+            // @ Reset color
+            $Text->colorize();
+            // @ Write message
+            $Output->render(<<<OUTPUT
+             $message
+            @;\n
+            OUTPUT);
+            // @ Reset style
+            $Text->stylize();
+      }
    }
 }
 
 
 // * Configs
-enum Type : int
+enum Type
 {
    use \Bootgly\ABI\Configs\Set;
 
 
-   case DEFAULT   = 0;
-   case SUCCESS   = 1;
-   case ATTENTION = 2;
-   case FAILURE   = 4;
+   case DEFAULT;
+   case SUCCESS;
+   case ATTENTION;
+   case FAILURE;
+}
+
+enum Style
+{
+   use \Bootgly\ABI\Configs\Set;
+
+   case DEFAULT;
+   case FULLCOLOR;
 }
