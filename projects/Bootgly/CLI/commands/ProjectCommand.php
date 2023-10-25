@@ -39,7 +39,7 @@ class ProjectCommand extends Command
 
    public function run (array $arguments, array $options) : bool
    {
-      return match ($arguments[0]) {
+      return match ($arguments[0] ?? null) {
          #'create'   => $this->create($options),
 
          #'configure' => $this->configure($options),
@@ -103,31 +103,33 @@ class ProjectCommand extends Command
          $Table = new Table($Output);
          // * Data
          $Table->borders = $Table::NO_BORDER_STYLE;
+         // > Columns
+         // * Config
+         $Table->Columns->Autowiden::BASED_ON_SECTION->set();
 
          $Table->Data->set(header: [
             TemplateEscaped::render('@#Yellow: Arguments: @;'),
             ''
          ]);
 
+         $body = [];
          foreach ($this->arguments as $name => $value) {
-            $Table->Data->set(body: [
+            $body[] = [
                TemplateEscaped::render('@#Green:' . $name . '@;'),
                TemplateEscaped::render($value['description'])
-            ]);
+            ];
          }
+         $Table->Data->set(body: $body);
 
          $Table->render();
       } else if ( count($arguments) > 1 ) {
          $Alert = new Alert($Output);
-
          $Alert->Type::FAILURE->set();
-
          $Alert->emit('Too many arguments!');
       } else {
          $Alert = new Alert($Output);
-
          $Alert->Type::FAILURE->set();
-         $Alert->emit("Argument invalid: @#cyan:{$arguments[0]}@;.");
+         $Alert->emit("Invalid argument: @#cyan:{$arguments[0]}@;.");
       }
 
       $output .= '@.;';

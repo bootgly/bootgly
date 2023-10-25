@@ -51,41 +51,39 @@ class Row
       return $this->Table->$name(...$arguments);
    }
 
-   public function render (array $row)
+   public function render (array $row, string $section)
    {
       if ( count($row) === 1 && @$row[0] === '@---;' ) {
-         $this->Table->border(position: 'mid');
+         $this->Table->border(position: 'mid', section: $section);
          return;
       }
 
       // ! Table
       $borders = &$this->Table->borders;
-      // ! Cells
+      // > Cells
       $aligment = $this->Cells->alignment;
-      // ! Columns
-      $widths = &$this->Columns->widths;
-      $columns = $this->Columns->count;
+      // > Columns
+      $Columns = $this->Columns;
+      $Columns->section = $section;
+      $widths = $Columns->widths;
 
       $output = $borders['left'] . ' ';
 
-      $column = 0;
-      while ($column < $columns) {
-         if ($column > 0) {
+      foreach ($widths as $column_index => $width) {
+         if ($column_index > 0) {
             $output .= ' ' . $borders['middle'];
          }
 
          $output .= __String::pad(
-            string: @$row[$column],
-            length: $widths[$column],
+            string: $row[$column_index] ?? '',
+            length: $widths[$column_index],
             padding: ' ',
             type: $aligment
          );
 
-         if ($column > 0) {
+         if ($column_index > 0) {
             $output .= ' ';
          }
-
-         $column++;
       }
 
       $output .= $borders['right'];

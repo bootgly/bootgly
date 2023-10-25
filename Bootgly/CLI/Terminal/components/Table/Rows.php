@@ -65,22 +65,22 @@ class Rows
       foreach ($data as $section => $rows) {
          // @ Pre
          match ($section) {
-            'header' => $this->Table->border(position: 'top'),
-            'body' => $this->Table->border(position: 'top'),
-            'footer' => $this->Table->border(position: 'bottom'),
+            'header' => $this->Table->border(position: 'top', section: $section),
+            'body' => $this->Table->border(position: 'top', section: $section),
+            'footer' => $this->Table->border(position: 'bottom', section: $section),
             default => null
          };
 
          foreach ($rows as $metadata => $row) {
             // TODO use $metadata to set configurations per row
-            $this->Row->render($row);
+            $this->Row->render($row, $section);
          }
 
          // @ Post
          match ($section) {
-            #'header' => $this->Table->border(position: 'top'),
-            #'body' => $this->Table->border(position: 'bottom'),
-            'footer' => $this->Table->border(position: 'bottom'),
+            #'header' => $this->Table->border(position: 'top', section: $section),
+            #'body' => $this->Table->border(position: 'bottom', section: $section),
+            'footer' => $this->Table->border(position: 'bottom', section: $section),
             default => null
          };
       }

@@ -114,20 +114,24 @@ class Table
    }
 
    // @ Border
-   public function border (string $position)
+   public function border (string $position, string $section)
    {
-      // * Data
-      $borders = $this->borders;
+      // ! Columns
+      $Columns = $this->Columns;
+      $Columns->section = $section;
 
       // @
+      // * Data
+      $borders = $this->borders;
+      // * Meta
       $line = match ($position) {
          'top' => $borders['top-left'],
          'mid' => $borders['mid-left'],
          'bottom' => $borders['bottom-left']
       };
 
-      foreach ($this->Columns->widths as $index => $width) {
-         if ($index > 0) {
+      foreach ($Columns->widths as $column_index => $column_width) {
+         if ($column_index > 0) {
             $line .= match($position) {
                'top' => $borders['top-mid'],
                'mid' => $borders['mid-mid'],
@@ -141,7 +145,7 @@ class Table
             'bottom' => $borders['bottom']
          };
 
-         $line .= str_repeat($border, $width + 2);
+         $line .= str_repeat($border, $column_width + 2);
       }
 
       $line .= match ($position) {
@@ -159,11 +163,11 @@ class Table
 
    public function render ()
    {
-      // ! Columns
-      // Calculate columns width and count
-      $this->Columns->calculate(); // TODO rename???
+      // > Columns
+      // @ Auto widen columns based on column data width
+      $this->Columns->autowiden();
 
-      // ! Rows
+      // > Rows
       $this->Rows->render();
    }
 }

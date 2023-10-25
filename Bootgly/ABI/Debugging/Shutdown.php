@@ -31,6 +31,7 @@ abstract class Shutdown implements Debugging
 
       self::$errors[] = [...$error];
       // TODO
+      #dump(self::$errors);
 
       return true;
    }
