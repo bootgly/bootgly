@@ -11,10 +11,11 @@
 namespace projects\Bootgly\CLI\commands;
 
 
-use Bootgly;
 use Bootgly\CLI;
 use Bootgly\CLI\Command;
-
+use Bootgly\CLI\Terminal\components\Table\Table;
+use Bootgly\ABI\Templates\Template\Escaped as TemplateEscaped;
+use Bootgly\CLI\Terminal\components\Alert\Alert;
 
 class ProjectCommand extends Command
 {
@@ -32,7 +33,7 @@ class ProjectCommand extends Command
          'options'     => [
             '--bootgly'
          ]
-      ]
+      ],
    ];
 
 
@@ -93,19 +94,45 @@ class ProjectCommand extends Command
    {
       $Output = CLI::$Terminal->Output;
 
-      if ( empty($arguments) ) {
-         $output = '@#red: Available arguments: @; @.;';
-         foreach ($this->arguments as $name => $value) {
-            $output .= $name;
-         }
-         $output .= '@.;';
+      // @
+      $output = '';
 
-         $Output->render($output);
+      if ( empty($arguments) ) {
+         $Output->write(PHP_EOL);
+
+         $Table = new Table($Output);
+         // * Data
+         $Table->borders = $Table::NO_BORDER_STYLE;
+
+         $Table->Data->set(header: [
+            TemplateEscaped::render('@#Yellow: Arguments: @;'),
+            ''
+         ]);
+
+         foreach ($this->arguments as $name => $value) {
+            $Table->Data->set(body: [
+               TemplateEscaped::render('@#Green:' . $name . '@;'),
+               TemplateEscaped::render($value['description'])
+            ]);
+         }
+
+         $Table->render();
       } else if ( count($arguments) > 1 ) {
-         $Output->render("@#red: Too many arguments! @; @.;");
+         $Alert = new Alert($Output);
+
+         $Alert->Type::FAILURE->set();
+
+         $Alert->emit('Too many arguments!');
       } else {
-         $Output->render("@#red: Argument invalid: `{$arguments[0]}`. @; @.;");
+         $Alert = new Alert($Output);
+
+         $Alert->Type::FAILURE->set();
+         $Alert->emit("Argument invalid: @#cyan:{$arguments[0]}@;.");
       }
+
+      $output .= '@.;';
+
+      $Output->render($output);
 
       return true;
    }
