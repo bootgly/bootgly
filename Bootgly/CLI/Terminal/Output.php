@@ -175,6 +175,34 @@ class Output
       return $this;
    }
 
+   public function pad (string $data, int $length, string $pad = ' ', int $type = \STR_PAD_RIGHT) : self
+   {
+      try {
+         $this->written = @fwrite(
+            $this->stream,
+            str_pad($data, $length, $pad, $type)
+         );
+      } catch (\Throwable) {
+         $this->written = false;
+      }
+
+      return $this;
+   }
+
+   public function render (string $data) : self
+   {
+      try {
+         $this->written = @fwrite(
+            $this->stream,
+            TemplateEscaped::render($data)
+         );
+      } catch (\Throwable) {
+         $this->written = false;
+      }
+
+      return $this;
+   }
+
    // @ ANSI Code
    public function escape (string $data) : self
    {
@@ -200,20 +228,6 @@ class Output
    {
       try {
          $this->written = @fwrite($this->stream, json_encode($data));
-      } catch (\Throwable) {
-         $this->written = false;
-      }
-
-      return $this;
-   }
-
-   public function render (string $data) : self
-   {
-      try {
-         $this->written = @fwrite(
-            $this->stream,
-            TemplateEscaped::render($data)
-         );
       } catch (\Throwable) {
          $this->written = false;
       }
