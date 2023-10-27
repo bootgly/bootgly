@@ -26,6 +26,7 @@ class Field
       'top-left'     => '┌',
       'top-right'    => '┐',
 
+      'mid'          => '─',
       'left'         => '│',
       'right'        => '│',
 
@@ -114,6 +115,13 @@ class Field
             break;
       }
    }
+   public function separate (int $length)
+   {
+      $Output = $this->Output;
+
+      $Output->write($this->borders['mid'], $length);
+   }
+
    public function render (? string $content = null)
    {
       $Output = $this->Output;
@@ -136,7 +144,12 @@ class Field
       // @ Render content lines
       foreach ($content_lines as $content_line) {
          $this->border('left');
-         $Output->pad($content_line, $line_length);
+
+         match ($content_line) {
+            '@---;' => $this->separate($line_length),
+            default => $Output->pad($content_line, $line_length)
+         };
+
          $this->border('right');
       }
       $this->border('bottom', $line_length + 2);
