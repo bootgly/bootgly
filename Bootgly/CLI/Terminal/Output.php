@@ -12,6 +12,8 @@ namespace Bootgly\CLI\Terminal;
 
 
 // -abstract
+
+use Bootgly\ABI\Data\__String;
 use Bootgly\ABI\Data\__String\Escapeable;
 use Bootgly\ABI\Data\__String\Escapeable\Cursor\Positionable;
 use Bootgly\ABI\Data\__String\Escapeable\Text\Modifiable;
@@ -180,7 +182,7 @@ class Output
       try {
          $this->written = @fwrite(
             $this->stream,
-            str_pad($data, $length, $pad, $type)
+            __String::pad($data, $length, $pad, $type)
          );
       } catch (\Throwable) {
          $this->written = false;
