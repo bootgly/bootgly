@@ -109,7 +109,9 @@ class Packages implements WPI\Packages
       return false;
    }
 
-   public function write (&$Socket, ? int $length = null)
+   public function write (&$Socket)
+   {}
+   public function writing (&$Socket, ? int $length = null)
    {
       try {
          $buffer = self::$output;
@@ -160,7 +162,9 @@ class Packages implements WPI\Packages
       return true;
    }
 
-   public function read (&$Socket, ? int $length = null, ? int $timeout = null)
+   public function read (&$Socket)
+   {}
+   public function reading (&$Socket, ? int $length = null, ? int $timeout = null)
    {
       try {
          $input = '';

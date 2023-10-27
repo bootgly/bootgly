@@ -96,6 +96,9 @@ class Scripts
       $this->validations[] = array_search($this->path, $this->includes['paths']);
       $this->validations[] = array_search($this->filename, $this->includes['filenames']);
 
+      if ($this->validations[1] === false) {
+         return false;
+      }
       if ($this->validations[0] === false && $this->validations[1] === false) {
          return false;
       }
