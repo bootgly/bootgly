@@ -8,7 +8,7 @@ $Output = CLI::$Terminal->Output;
 $Output->reset();
 
 $Output->render(<<<OUTPUT
-/* @*:
+/* @*: 
  * @#green: Bootgly CLI Terminal - Progress component @;
  * @#yellow: @@: Demo - Example #2: Indeterminate state @;
  * {$location}

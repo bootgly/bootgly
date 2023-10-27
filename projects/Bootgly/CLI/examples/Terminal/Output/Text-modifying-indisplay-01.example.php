@@ -8,7 +8,7 @@ $Output->reset();
 $Output->waiting = 50000; // @ Wait time in miliseconds to "writing" (per character written)
 
 $Output->render(<<<OUTPUT
-/* @*:
+/* @*: 
  * @#green: Bootgly CLI Terminal (>>) - Text Modifying - Line - In Display @;
  * @#yellow: @@: Demo - Example #1 @;
  * {$location}

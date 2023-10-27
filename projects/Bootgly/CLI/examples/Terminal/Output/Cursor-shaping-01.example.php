@@ -7,7 +7,7 @@ $Output = CLI::$Terminal->Output;
 $Output->reset();
 
 $Output->render(<<<OUTPUT
-/* @*:
+/* @*: 
  * @#green: Bootgly CLI Terminal (>>) - Cursor Shaping @;
  * @#yellow: @@: Demo - Example #1 @;
  * {$location}

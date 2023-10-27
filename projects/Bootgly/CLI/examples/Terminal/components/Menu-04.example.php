@@ -10,7 +10,7 @@ $Output = CLI::$Terminal->Output;
 $Output->reset();
 
 $Output->render(<<<OUTPUT
-/* @*:
+/* @*: 
  * @#green: Bootgly CLI Terminal - Menu component @;
  * @#yellow: @@: Demo - Example #4 - Options: horizontal orientation @;
  * {$location}
