@@ -21,14 +21,24 @@ OUTPUT);
 
 
 $Field = new Field(CLI::$Terminal->Output);
+
+// @ Content length > Title length
 // * Config
 $Field->title = 'Example title';
 // * Data
 $Field->content = 'Some content here...';
 $Field->render();
 
+// @ Title length > Content length
 // * Config
 $Field->title = 'Example title';
 // * Data
 $Field->content = '...';
+$Field->render();
+
+// @ No title
+// * Config
+$Field->title = null;
+// * Data
+$Field->content = 'Some content here...';
 $Field->render();

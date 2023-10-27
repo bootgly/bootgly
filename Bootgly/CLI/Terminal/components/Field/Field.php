@@ -19,7 +19,6 @@ class Field
    private Output $Output;
 
    // * Config
-   public ? string $title;
    // @ Style
    public string $color;
    public const DEFAULT_BORDERS = [
@@ -36,6 +35,7 @@ class Field
    ];
    public array $borders;
    // * Data
+   protected ? string $title;
    protected ? string $content;
 
 
@@ -53,9 +53,14 @@ class Field
    }
    public function __set ($name, $value)
    {
+      // TODO emit event
       match ($name) {
-         'content' => $this->content = $value, // TODO emit event
-         default => null
+         'content' => $this->content = $value,
+         'title'   => $this->title = ($value
+            ? " $value "
+            : ''
+         ),
+         default   => null
       };
    }
 
@@ -68,7 +73,7 @@ class Field
 
       switch ($position) {
          case 'top':
-            $title = " $this->title ";
+            $title = $this->title;
 
             $border_top_left = $borders['top-left'];
             $border_top_right = $borders['top-right'];
@@ -114,9 +119,8 @@ class Field
       $Output = $this->Output;
       $Text = $Output->Text;
 
-      // * Config
-      $title_length = mb_strlen($this->title);
       // * Meta
+      $title_length = mb_strlen($this->title);
       $content_lines = explode(PHP_EOL, $this->content);
 
       // @ Determine max line length (based on content line and title)
@@ -128,7 +132,7 @@ class Field
          }
       }
 
-      $this->border('top', $line_length - $title_length);
+      $this->border('top', ($line_length - $title_length) + 2);
       // @ Render content lines
       foreach ($content_lines as $content_line) {
          $this->border('left');
