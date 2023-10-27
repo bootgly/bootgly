@@ -15,13 +15,13 @@ use Bootgly\CLI;
 use Bootgly\ABI\Data\__String\Path;
 use Bootgly\ABI\Templates\Template\Escaped as TemplateEscaped;
 use Bootgly\CLI\components\Header;
-
+use Bootgly\CLI\Terminal\components\Field\Field;
 
 // $Commands, $Scripts, $Terminal availables...
 
 // @ Set Commands Helper
 CLI::$Commands->help(function ($scripting = true) {
-   $output = '@.;';
+   $Output = CLI::$Terminal->Output;
 
    $script = $this->args[0];
    $script = match ($script[0]) {
@@ -30,29 +30,32 @@ CLI::$Commands->help(function ($scripting = true) {
       default => 'php ' . $script
    };
 
+   $output = '@.;';
    if ($scripting) {
-      // @ Header
+      // @ Banner
       $Header = new Header;
       $output .= $Header->generate(word: 'Bootgly', inline: true);
 
       // @ Usage
       $output .= '@.;Usage: ' . $script . ' [command] @..;';
-
-      // @ Command list
-      $output .= 'Available commands:';
    }
+   $Output->render($output);
 
-   $output .= PHP_EOL . str_repeat('=', 70) . PHP_EOL;
+   // @ Command list
+   $Field = new Field($Output);
+   $Field->title = 'Available commands:';
+
+   $output = '';
 
    // * Data
    $commands = [];
    // * Meta
-   $maxCommandNameLength = 0;
+   $max_command_name_length = 0;
    // @
    foreach ($this->commands as $Command) {
-      $commandNameLength = strlen($Command->name);
-      if ($maxCommandNameLength < $commandNameLength) {
-         $maxCommandNameLength = $commandNameLength;
+      $command_name_length = strlen($Command->name);
+      if ($max_command_name_length < $command_name_length) {
+         $max_command_name_length = $command_name_length;
       }
 
       $command = [
@@ -71,7 +74,7 @@ CLI::$Commands->help(function ($scripting = true) {
    foreach ($commands as $command) {
       // @ Config
       if ($command['separate']) {
-         $output .= str_repeat('-', 70);
+         $output .= '@---;';
       }
       if ($command['group'] > $group) {
          $group = $command['group'];
@@ -79,15 +82,13 @@ CLI::$Commands->help(function ($scripting = true) {
       }
 
       // @ Data
-      $name = '`' . $command['name'] . '`';
+      $name = $command['name'];
 
-      $output .= '@:i: ' . str_pad($name, $maxCommandNameLength + 2) . ' @; = ';
+      $output .= '@#Yellow:' . str_pad($name, $max_command_name_length + 2) . ' @; = ';
       $output .= $command['description'] . PHP_EOL;
    }
 
-   $output .= str_repeat('=', 70) . PHP_EOL . PHP_EOL;
-
-   echo TemplateEscaped::render($output);
+   $Field->render(TemplateEscaped::render($output));
 });
 // ---
 $commands = require('CLI/commands/@.php');
