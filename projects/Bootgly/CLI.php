@@ -37,7 +37,7 @@ CLI::$Commands->help(function ($scripting = true) {
       $output .= $Header->generate(word: 'Bootgly', inline: true);
 
       // @ Usage
-      $output .= '@.;Usage: ' . $script . ' [command] @..;';
+      $output .= '@.;Usage: ' . $script . '@#Black:  [command] @;@..;';
    }
    $Output->render($output);
 
@@ -45,17 +45,15 @@ CLI::$Commands->help(function ($scripting = true) {
    $Field = new Field($Output);
    $Field->title = 'Available commands:';
 
-   $output = '';
-
    // * Data
    $commands = [];
    // * Meta
-   $max_command_name_length = 0;
+   $largest_command_name = 0;
    // @
    foreach ($this->commands as $Command) {
       $command_name_length = strlen($Command->name);
-      if ($max_command_name_length < $command_name_length) {
-         $max_command_name_length = $command_name_length;
+      if ($largest_command_name < $command_name_length) {
+         $largest_command_name = $command_name_length;
       }
 
       $command = [
@@ -70,6 +68,9 @@ CLI::$Commands->help(function ($scripting = true) {
       $commands[] = $command;
    }
 
+   // * Data
+   $output = '';
+   // * Meta
    $group = 0;
    foreach ($commands as $command) {
       // @ Config
@@ -81,18 +82,19 @@ CLI::$Commands->help(function ($scripting = true) {
          $output .= PHP_EOL;
       }
 
-      // @ Data
-      $name = $command['name'];
-
-      $output .= '@#Yellow:' . str_pad($name, $max_command_name_length + 2) . ' @; = ';
+      $output .= '@#Yellow:' . str_pad($command['name'], $largest_command_name + 2) . ' @; ';
       $output .= $command['description'] . PHP_EOL;
    }
 
-   $Field->render(TemplateEscaped::render($output));
+   // :
+   $output = rtrim($output);
+   $content = TemplateEscaped::render($output);
+   $Field->render($content);
 });
-// ---
+// @ Register commands
 $commands = require('CLI/commands/@.php');
 foreach ($commands as $Command) {
    CLI::$Commands->register($Command);
 }
+// @ Route commands
 CLI::$Commands->route();

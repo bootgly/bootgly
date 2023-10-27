@@ -42,7 +42,6 @@ class Commands
 
             public function run (array $arguments, array $options) : bool
             {
-               // TODO
                return true;
             }
          }
@@ -104,6 +103,10 @@ class Commands
       $Command = $this->find($name);
       if ($Command === null) {
          echo "Unknown command: $name" . PHP_EOL;
+         $this->help();
+         return false;
+      }
+      if ($name === 'help') {
          $this->help();
          return false;
       }

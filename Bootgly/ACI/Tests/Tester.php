@@ -168,7 +168,7 @@ class Tester extends Tests
    {
       if ($header) {
          // @ Add blue color to header text
-         $header = ' @#Cyan:(' . self::$suite . ') @;' . '@#Blue: ' . $header . '  @;';
+         $header = ' @#Cyan:(' . self::$suite . ') @;' . ' @#Blue: ' . $header . '  @;';
 
          // @ Pad string with `=`
          $length = Tests::$width + 43;
