@@ -47,57 +47,60 @@ class DemoCommand extends Command
       $examples = [
          // ! Terminal
          // ? Input
-         'Terminal/Input/@reading-01.example.php',
-      
+         1 => 'Terminal/Input/@reading-01.example.php',
+
          // ? Output
          // Terminal -> Output @ writing
-         'Terminal/Output/@writing-01.example.php',
-      
-      
+         2 => 'Terminal/Output/@writing-01.example.php',
+
+
          // Terminal -> Output -> Cursor Positioning
-         'Terminal/Output/Cursor-positioning-01.example.php',
+         3 => 'Terminal/Output/Cursor-positioning-01.example.php',
          // Terminal -> Output -> Cursor Shaping
-         'Terminal/Output/Cursor-shaping-01.example.php',
+         4 => 'Terminal/Output/Cursor-shaping-01.example.php',
          // Terminal -> Output -> Cursor Visualizing
-         'Terminal/Output/Cursor-visualizing-01.example.php',
-      
-      
+         5 => 'Terminal/Output/Cursor-visualizing-01.example.php',
+
+
          // Terminal -> Output -> Text Formatting - Coloring
-         'Terminal/Output/Text-formatting-coloring-01.example.php',
+         6 => 'Terminal/Output/Text-formatting-coloring-01.example.php',
          // Terminal -> Output -> Text Formatting - Styling
-         'Terminal/Output/Text-formatting-styling-01.example.php',
-      
+         7 => 'Terminal/Output/Text-formatting-styling-01.example.php',
+
          // Terminal -> Output -> Text Modifying
-         'Terminal/Output/Text-modifying-01.example.php',
+         8 => 'Terminal/Output/Text-modifying-01.example.php',
          // Terminal -> Output -> Text Modifying - In Display
-         'Terminal/Output/Text-modifying-indisplay-01.example.php',
+         9 => 'Terminal/Output/Text-modifying-indisplay-01.example.php',
          // Terminal -> Output -> Text Modifying - Inline
-         'Terminal/Output/Text-modifying-inline-01.example.php',
+         10 => 'Terminal/Output/Text-modifying-inline-01.example.php',
          // Terminal -> Output -> Text Modifying - Line
-         'Terminal/Output/Text-modifying-line-01.example.php',
-      
-      
+         11 => 'Terminal/Output/Text-modifying-line-01.example.php',
+
+
          // Terminal -> components - Alert component
-         'Terminal/components/Alert-01.example.php',
-      
+         12 => 'Terminal/components/Alert-01.example.php',
+
          // Terminal -> components - Menu component
-         'Terminal/components/Menu-01.example.php',
-         'Terminal/components/Menu-02.example.php',
-         'Terminal/components/Menu-03.example.php',
-         'Terminal/components/Menu-04.example.php',
-         'Terminal/components/Menu-05.example.php',
-         'Terminal/components/Menu-06.example.php',
-      
+         13 => 'Terminal/components/Menu-01.example.php',
+         14 => 'Terminal/components/Menu-02.example.php',
+         15 => 'Terminal/components/Menu-03.example.php',
+         16 => 'Terminal/components/Menu-04.example.php',
+         17 => 'Terminal/components/Menu-05.example.php',
+         18 => 'Terminal/components/Menu-06.example.php',
+
          // Terminal -> components - Progress component
-         'Terminal/components/Progress-01.example.php',
-         'Terminal/components/Progress-02.example.php',
-      
+         19 => 'Terminal/components/Progress-01.example.php',
+         20 => 'Terminal/components/Progress-02.example.php',
+
          // Terminal -> components - Table component
-         'Terminal/components/Table-01.example.php'
+         21 => 'Terminal/components/Table-01.example.php',
+
+         // Terminal -> components - Field component
+         22 => 'Terminal/components/Field-01.example.php',
       ];
 
       foreach ($examples as $index => $example) {
-         if ($id && ($index + 1) !== $id) {
+         if ($id && $index !== $id) {
             continue;
          }
 
@@ -105,7 +108,7 @@ class DemoCommand extends Command
 
          $wait = 3;
 
-         $location = ' projects/' . $file;
+         $location = 'projects/' . $file;
          require BOOTGLY_ROOT_DIR . 'projects/' . $file;
 
          sleep($wait);
