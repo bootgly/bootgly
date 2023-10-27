@@ -200,7 +200,8 @@ class CLI extends TCP\Server implements HTTP, Server
                $requestLength = strlen($requestData);
                // @ Send Request to Server
                $Connection::$output = $requestData;
-               if ( ! $Connection->write($Socket, $requestLength) ) {
+
+               if ( ! $Connection->writing($Socket, $requestLength) ) {
                   $Test->fail();
                   break;
                }
@@ -209,7 +210,7 @@ class CLI extends TCP\Server implements HTTP, Server
                $timeout = 2;
                $input = '';
                // @ Get Response from Server
-               if ( $Connection->read($Socket, $responseLength, $timeout) ) {
+               if ( $Connection->reading($Socket, $responseLength, $timeout) ) {
                   $input = $Connection::$input;
                }
 
