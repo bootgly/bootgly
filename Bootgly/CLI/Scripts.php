@@ -11,24 +11,34 @@
 namespace Bootgly\CLI;
 
 
-use Exception;
+use Bootgly\ABI\Data\__String\Path;
 
 
 class Scripts
 {
-   public const SCRIPTS_DIR = BOOTGLY_ROOT_BASE . '/scripts/';
+   public const ROOT_BASE = BOOTGLY_ROOT_BASE . '/scripts';
+   public const WORKING_BASE = BOOTGLY_WORKING_BASE . '/scripts';
+
+   public const ROOT_DIR = BOOTGLY_ROOT_BASE . '/scripts/';
+   public const WORKING_DIR = BOOTGLY_WORKING_BASE . '/scripts/';
 
    // * Config
-   protected array $includes;
+
    // * Data
-   // ...
+   protected array $includes;
+   protected array $scripts;
    // * Meta
-   // ...
+   // @ Validating
+   private ? string $path;
+   private ? string $filename;
+   private array $validations;
 
 
    public function __construct ()
    {
       // * Config
+      // ...
+      // * Data
       $this->includes = [
          'paths' => [
             BOOTGLY_ROOT_BASE,
@@ -36,32 +46,57 @@ class Scripts
 
             BOOTGLY_ROOT_DIR,
             BOOTGLY_WORKING_DIR,
+
+            self::WORKING_BASE,
+            self::WORKING_DIR,
          ],
          'filenames' => [
             'bootgly',
-            './bootgly', // TODO normalize path
             '/usr/local/bin/bootgly',
          ]
       ];
-      // * Data
-      // ...
       // * Meta
-      // ...
+      $this->path = null;
+      $this->filename = null;
+
+
+      // @
+      $bootstrap = include(self::WORKING_DIR . '@.php');
+      $this->scripts = $bootstrap['scripts'];
+
+      foreach ($this->scripts as $filename) {
+         $this->includes['filenames'][] = $filename;
+      }
    }
+   public function __get ($name)
+   {
+      return match ($name) {
+         'path' => $this->path,
+         'filename' => $this->filename,
+         'validations' => $this->validations,
+         default => null
+      };
+   }
+
    public function validate () : bool
    {
-      $script_path = @$_SERVER['PWD'];
-      $script_filename  = @$_SERVER['SCRIPT_FILENAME'];
-
-      if ($script_path === null || $script_filename === null) {
+      $this->path ??= @$_SERVER['PWD'];
+      $this->filename ??= @$_SERVER['SCRIPT_FILENAME'];
+      // ?
+      if ($this->path === null || $this->filename === null) {
          return false;
       }
 
-      $matches = [];
-      $matches[0] = array_search($script_path, $this->includes['paths']);
-      $matches[1] = array_search($script_filename, $this->includes['filenames']);
+      // !
+      $this->filename = Path::normalize($this->filename);
+      $this->filename = Path::relativize($this->filename, 'scripts/');
 
-      if ($matches[0] === false && $matches[1] === false) {
+      // @
+      $this->validations = [];
+      $this->validations[] = array_search($this->path, $this->includes['paths']);
+      $this->validations[] = array_search($this->filename, $this->includes['filenames']);
+
+      if ($this->validations[0] === false && $this->validations[1] === false) {
          return false;
       }
 
@@ -70,13 +105,14 @@ class Scripts
 
    public static function execute (string $path)
    {
-      // TODO normalize path
-      $location = self::SCRIPTS_DIR . $path;
+      $path = Path::normalize($path);
+      $location = self::ROOT_DIR . $path;
 
       if ( file_exists($location) ) {
          include $location;
+         // TODO register commands, etc.
       } else {
-         throw new Exception("Script not found: $path");
+         throw new \Exception("Script not found: $path");
       }
    }
 }

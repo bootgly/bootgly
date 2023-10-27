@@ -163,7 +163,8 @@ class Commands
          $script = match ($this->args[0]) {
             '/usr/local/bin/bootgly' => 'bootgly',
             './bootgly'              => './bootgly',
-            'bootgly'                => 'php bootgly'
+            'bootgly'                => 'php bootgly',
+            default => ''
          };
          $help .= '@.;Usage: ' . $script . ' [command] @..;';
 

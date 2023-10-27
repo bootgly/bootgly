@@ -61,7 +61,6 @@ class CLI // Command Line Interface
 
       // @ Validate scripts
       if ($Scripts->validate() === false) {
-         throw new \Error('Invalid script');
          return;
       }
 
