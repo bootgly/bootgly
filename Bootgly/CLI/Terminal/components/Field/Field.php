@@ -11,6 +11,8 @@
 namespace Bootgly\CLI\Terminal\components\Field;
 
 
+use Bootgly\ABI\Data\__String;
+use Bootgly\ABI\Templates\Template\Escaped as TemplateEscaped;
 use Bootgly\CLI\Terminal\Output;
 
 
@@ -58,7 +60,7 @@ class Field
       match ($name) {
          'content' => $this->content = $value,
          'title'   => $this->title = ($value
-            ? " $value "
+            ? TemplateEscaped::render(" $value ")
             : ''
          ),
          default   => null
@@ -79,10 +81,10 @@ class Field
             $border_top_left = $borders['top-left'];
             $border_top_right = $borders['top-right'];
 
-            $line = str_repeat('─', $length);
+            $line = \str_repeat('─', $length);
 
             $Output->render(<<<OUTPUT
-            {$color}{$border_top_left}{$title}{$line}{$border_top_right}@;\n
+            {$color}{$border_top_left}@;{$title}{$color}{$line}{$border_top_right}@;\n
             OUTPUT);
 
             break;
@@ -107,7 +109,7 @@ class Field
             $border_bottom = $borders['bottom'];
             $border_bottom_right = $borders['bottom-right'];
 
-            $line = str_repeat($border_bottom, $length);
+            $line = \str_repeat($border_bottom, $length);
 
             $Output->render(<<<OUTPUT
             {$color}{$border_bottom_left}{$line}{$border_bottom_right}\n
@@ -128,13 +130,16 @@ class Field
       $Text = $Output->Text;
 
       // * Meta
-      $title_length = mb_strlen($this->title);
-      $content_lines = explode(PHP_EOL, $content ?? $this->content);
+      $title_length = \mb_strlen(
+         \preg_replace(__String::ANSI_ESCAPE_SEQUENCE_REGEX, '', $this->title)
+      );
+      // ---
+      $content_lines = \explode(PHP_EOL, $content ?? $this->content);
 
       // @ Determine max line length (based on content line and title)
       $line_length = $title_length;
       foreach ($content_lines as $content_line) {
-         $content_line_length = mb_strlen($content_line);
+         $content_line_length = \mb_strlen($content_line);
          if ($content_line_length > $line_length) {
             $line_length = $content_line_length;
          }

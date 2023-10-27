@@ -37,13 +37,13 @@ CLI::$Commands->help(function ($scripting = true) {
       $output .= $Header->generate(word: 'Bootgly', inline: true);
 
       // @ Usage
-      $output .= '@.;Usage: ' . $script . '@#Black:  [command] @;@..;';
+      $output .= '@.;@#Cyan:Usage:@; ' . $script . '@#Black:  [command] @;@..;';
    }
    $Output->render($output);
 
    // @ Command list
    $Field = new Field($Output);
-   $Field->title = 'Available commands:';
+   $Field->title = '@#Cyan: Available commands: @;';
 
    // * Data
    $commands = [];
