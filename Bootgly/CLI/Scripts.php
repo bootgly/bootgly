@@ -30,7 +30,10 @@ class Scripts
    {
       // * Config
       $this->includes = [
-         'directories' => [
+         'paths' => [
+            BOOTGLY_ROOT_BASE,
+            BOOTGLY_WORKING_BASE,
+
             BOOTGLY_ROOT_DIR,
             BOOTGLY_WORKING_DIR,
          ],
@@ -47,16 +50,16 @@ class Scripts
    }
    public function validate () : bool
    {
-      $workdir = @$_SERVER['PWD'];
-      $script  = @$_SERVER['SCRIPT_FILENAME'];
+      $script_path = @$_SERVER['PWD'];
+      $script_filename  = @$_SERVER['SCRIPT_FILENAME'];
 
-      if ($workdir === null || $script === null) {
+      if ($script_path === null || $script_filename === null) {
          return false;
       }
 
       $matches = [];
-      $matches[0] = array_search($workdir, $this->includes['directories']);
-      $matches[1] = array_search($script, $this->includes['filenames']);
+      $matches[0] = array_search($script_path, $this->includes['paths']);
+      $matches[1] = array_search($script_filename, $this->includes['filenames']);
 
       if ($matches[0] === false && $matches[1] === false) {
          return false;
