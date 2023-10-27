@@ -114,14 +114,14 @@ class Field
             break;
       }
    }
-   public function render ()
+   public function render (? string $content = null)
    {
       $Output = $this->Output;
       $Text = $Output->Text;
 
       // * Meta
       $title_length = mb_strlen($this->title);
-      $content_lines = explode(PHP_EOL, $this->content);
+      $content_lines = explode(PHP_EOL, $content ?? $this->content);
 
       // @ Determine max line length (based on content line and title)
       $line_length = $title_length;
