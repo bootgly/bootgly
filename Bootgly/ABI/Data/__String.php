@@ -146,7 +146,7 @@ class __String implements Data // Simple class (advanced methods coming soon)
       ];
    }
 
-   public static function pad (
+   private static function pad (
       string $string,
       int $length,
       string $padding = ' ',
