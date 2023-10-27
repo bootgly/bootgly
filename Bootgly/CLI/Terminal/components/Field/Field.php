@@ -26,12 +26,12 @@ class Field
       'top-left'     => '┌',
       'top-right'    => '┐',
 
+      'left'         => '│',
+      'right'        => '│',
+
       'bottom'       => '─',
       'bottom-left'  => '└',
       'bottom-right' => '┘',
-
-      'left'         => '│',
-      'right'        => '│',
    ];
    public array $borders;
    // * Data
@@ -142,6 +142,6 @@ class Field
       $this->border('bottom', $line_length + 2);
 
       // @ Reset Text
-      $Text->stylize('reset');
+      $Text->stylize();
    }
 }

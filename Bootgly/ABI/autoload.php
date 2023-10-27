@@ -34,7 +34,7 @@ use Bootgly\ABI\Debugging\Shutdown;
 
 // Shutdown
 \register_shutdown_function(
-   callback: Shutdown::collect(...)
+   callback: Shutdown::debug(...)
 );
 
 // Vars
