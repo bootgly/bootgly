@@ -49,6 +49,7 @@ spl_autoload_register (function (string $class) {
 // ! Resources ([a-z])
 require(BOOTGLY_ROOT_DIR . 'Bootgly/ABI/autoload.php');
 require(BOOTGLY_ROOT_DIR . 'Bootgly/ACI/autoload.php');
+require(BOOTGLY_ROOT_DIR . 'Bootgly/CLI/autoload.php');
 
 // @
 new Bootgly;

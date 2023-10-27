@@ -11,11 +11,6 @@
 namespace Bootgly\CLI;
 
 
-use Closure;
-use Bootgly\ABI\Templates\Template\Escaped as TemplateEscaped;
-use Bootgly\CLI\components\Header;
-
-
 class Commands
 {
    // * Config
@@ -24,6 +19,7 @@ class Commands
    // * Data
    public array $args;
    public array $commands;
+   protected ? \Closure $Helper;
    // ...
 
    // * Meta
@@ -32,6 +28,9 @@ class Commands
 
    public function __construct ()
    {
+      // * Config
+      // ...
+
       // * Data
       $this->args = $_SERVER['argv'] ?? [];
       $this->commands = [
@@ -48,22 +47,27 @@ class Commands
             }
          }
       ];
+      $this->Helper = null;
+
+      // * Meta
+      // ...
    }
 
-   public function register (Commanding|Command|Closure $Command, string $name = '', string $description = '') : bool
+   public function register (Commanding|Command|\Closure $Command, string $name = '', string $description = '') : bool
    {
       if ($Command instanceof Command || $Command instanceof Commanding) {
          $this->commands[] = $Command;
-     } elseif ($Command instanceof Closure) {
+     } elseif ($Command instanceof \Closure) {
+         // TODO use Closure bind
          $Command = new class ($Command, $name, $description) extends Command
          {
-            public Closure $Command;
+            public \Closure $Command;
 
             public string $name;
             public string $description;
 
 
-            public function __construct (Closure $Command, string $name, string $description)
+            public function __construct (\Closure $Command, string $name, string $description)
             {
                $this->Command = $Command;
 
@@ -115,17 +119,17 @@ class Commands
       foreach ($args as $arg) {
          if (strpos($arg, '--') === 0) {
             // Option (--op1[=val1])
-            $optionParts = explode('=', substr($arg, 2), 2);
-            $optionName = $optionParts[0];
-            $optionValue = isSet($optionParts[1]) ? $optionParts[1] : true;
+            $option_parts = explode('=', substr($arg, 2), 2);
+            $option_name = $option_parts[0];
+            $option_value = isSet($option_parts[1]) ? $option_parts[1] : true;
 
-            $options[$optionName] = $optionValue;
+            $options[$option_name] = $option_value;
          } elseif (strpos($arg, '-') === 0) {
             // Short Option (-opt1)
-            $optionNames = str_split(substr($arg, 1));
+            $option_names = str_split(substr($arg, 1));
 
-            foreach ($optionNames as $optionName) {
-               $options[$optionName] = true;
+            foreach ($option_names as $option_name) {
+               $options[$option_name] = true;
             }
          } else {
             // Argument
@@ -150,73 +154,20 @@ class Commands
       return null;
    }
 
-   private function help (bool $scripting = true) : void
+   public function help (? \Closure $Helper = null) : bool
    {
-      $help = '@.;';
-
-      if ($scripting) {
-         // @ Header
-         $Header = new Header;
-         $help .= $Header->generate(word: 'Bootgly', inline: true);
-
-         // @ Usage
-         $script = match ($this->args[0]) {
-            '/usr/local/bin/bootgly' => 'bootgly',
-            './bootgly'              => './bootgly',
-            'bootgly'                => 'php bootgly',
-            default => ''
-         };
-         $help .= '@.;Usage: ' . $script . ' [command] @..;';
-
-         // @ Command list
-         $help .= 'Available commands:';
+      if ($Helper !== null) {
+         $Helper = $Helper->bindTo($this, $this);
+         $this->Helper = $Helper;
+         return true;
       }
 
-      $help .= PHP_EOL . str_repeat('=', 70) . PHP_EOL;
+      $Helper = $this->Helper;
 
-      // * Data
-      $commands = [];
-      // * Meta
-      $maxCommandNameLength = 0;
-      // @
-      foreach ($this->commands as $Command) {
-         $commandNameLength = strlen($Command->name);
-         if ($maxCommandNameLength < $commandNameLength) {
-            $maxCommandNameLength = $commandNameLength;
-         }
-
-         $command = [
-            // * Config
-            'separate'    => $Command->separate ?? false,
-            'group'       => $Command->group ?? null,
-            // * Data
-            'name'        => $Command->name,
-            'description' => $Command->description,
-         ];
-
-         $commands[] = $command;
+      if ($Helper) {
+         $Helper();
       }
 
-      $group = 0;
-      foreach ($commands as $command) {
-         // @ Config
-         if ($command['separate']) {
-            $help .= str_repeat('-', 70);
-         }
-         if ($command['group'] > $group) {
-            $group = $command['group'];
-            $help .= PHP_EOL;
-         }
-
-         // @ Data
-         $name = '`' . $command['name'] . '`';
-
-         $help .= '@:i: ' . str_pad($name, $maxCommandNameLength + 2) . ' @; = ';
-         $help .= $command['description'] . PHP_EOL;
-      }
-
-      $help .= str_repeat('=', 70) . PHP_EOL . PHP_EOL;
-
-      echo TemplateEscaped::render($help);
+      return true;
    }
 }
