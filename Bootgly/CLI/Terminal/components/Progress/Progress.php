@@ -201,7 +201,7 @@ class Progress
             break;
          default:
             // @ Reset cursor position to initial line
-            $this->Output->Cursor->moveTo(...$this->cursor);
+            $this->Output->Cursor->moveTo(line: $this->cursor['row'], column: $this->cursor['column']);
 
             // @ Write to output
             $this->Output->write($output);
