@@ -3,11 +3,14 @@
 use Bootgly\ABI\Data\__String\Path;
 use Bootgly\API\Server as SAPI;
 use Bootgly\CLI;
+use Bootgly\CLI\Terminal\components\Field\Field;
 use Bootgly\CLI\Terminal\components\Progress\Progress;
 
 switch ($name) {
    case '@status':
-      $this->log('>_ Type `CTRL + Z` to enter in Interactive mode or `CTRL + C` to stop the Server.@\;');
+      $Output = CLI::$Terminal->Output;
+
+      $Output->render('>_ Type `@#Green:CTRL + Z@;` to enter in Interactive mode or `@#Green:CTRL + C@;` to stop the Server.@..;');
 
       // ! Server
       // @
@@ -50,15 +53,21 @@ switch ($name) {
       // Event-loop
       $event = (new \ReflectionClass(self::$Event))->getName();
 
+      // Script
+      // TODO
+
       // SAPI
       $SAPI = Path::relativize(SAPI::$production, BOOTGLY_ROOT_DIR);
 
-      // Input
-      // TODO
+      // @ Server Status
+      $Field = new Field($Output);
+      // * Config
+      $Field->width = 70;
+      // * Data
+      $Field->title = 'Server Status';
 
-      $this->log(<<<OUTPUT
+      $Field->render(content: <<<OUTPUT
 
-      ============================= Server Status =============================
       @:i: Bootgly Server: @; {$server}
       @:i: PHP version: @; {$php}\t\t\t@:i: Server version: @; {$version}
 
@@ -68,14 +77,11 @@ switch ($name) {
 
       @:i: Event-loop: @; {$event}
 
-      @#yellow: Server API script: @; {$SAPI}
-      =========================================================================
+      @#yellow:  Server API script: @; {$SAPI}
 
       OUTPUT);
 
-      // ! Workers
-      $Output = CLI::$Terminal->Output;
-
+      // @ Workers Load
       // TODO use only Progress\Bar
       $Progress = [];
       $Progress[0] = new Progress($Output);

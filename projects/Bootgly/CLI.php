@@ -88,8 +88,7 @@ CLI::$Commands->help(function ($scripting = true) {
 
    // :
    $output = rtrim($output);
-   $content = TemplateEscaped::render($output);
-   $Field->render($content);
+   $Field->render($output);
 });
 // @ Register commands
 $commands = require('CLI/commands/@.php');
