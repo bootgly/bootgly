@@ -65,6 +65,7 @@ Platform: [Console][CONSOLE_PLATFORM] (TODO)
 Terminal components |
 --- |
 [Alert component][CLI_TERMINAL_ALERT] | 
+[Field component][CLI_TERMINAL_FIELD] | 
 [Menu component][CLI_TERMINAL_MENU] | 
 [Progress component][CLI_TERMINAL_PROGRESS] | 
 [Table component][CLI_TERMINAL_TABLE] | 
@@ -294,6 +295,7 @@ More **Screenshots**, videos and details can be found in the home page of [Bootg
 [CLI_TERMINAL_COMPONENTS]: https://github.com/bootgly/bootgly/tree/main/Bootgly/CLI/Terminal/components
 
 [CLI_TERMINAL_ALERT]: https://github.com/bootgly/bootgly/tree/main/Bootgly/CLI/Terminal/components/Alert
+[CLI_TERMINAL_FIELD]: https://github.com/bootgly/bootgly/tree/main/Bootgly/CLI/Terminal/components/Field
 [CLI_TERMINAL_MENU]: https://github.com/bootgly/bootgly/tree/main/Bootgly/CLI/Terminal/components/Menu
 [CLI_TERMINAL_PROGRESS]: https://github.com/bootgly/bootgly/tree/main/Bootgly/CLI/Terminal/components/Progress
 [CLI_TERMINAL_TABLE]: https://github.com/bootgly/bootgly/tree/main/Bootgly/CLI/Terminal/components/Table
