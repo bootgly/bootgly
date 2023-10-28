@@ -313,7 +313,7 @@ More **Screenshots**, videos and details can be found in the home page of [Bootg
 
 [TELEGRAM]: https://t.me/bootgly/
 [REDDIT]: https://www.reddit.com/r/bootgly/
-[DISCORD]: https://discord.gg/SKRHsYmtyJ/
+[DISCORD]: https://discord.com/invite/SKRHsYmtyJ/
 [LINKEDIN]: https://www.linkedin.com/company/bootgly/
 
 
