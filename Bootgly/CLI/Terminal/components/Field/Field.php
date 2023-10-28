@@ -21,6 +21,8 @@ class Field
    private Output $Output;
 
    // * Config
+   // @ Dimension
+   public ? int $width;
    // @ Style
    public string $color;
    public const DEFAULT_BORDERS = [
@@ -47,11 +49,13 @@ class Field
       $this->Output = $Output;
 
       // * Config
-      $this->title = null;
+      // @ Dimension
+      $this->width = null;
       // @ Style
       $this->color = '@#Black:';
       $this->borders = self::DEFAULT_BORDERS;
       // * Data
+      $this->title = null;
       $this->content = null;
    }
    public function __set ($name, $value)
@@ -99,6 +103,10 @@ class Field
          case 'right':
             $border_right = $borders['right'];
 
+            if ($length) {
+               $Output->Cursor->moveTo(null, $length + 3);
+            }
+
             $Output->render(<<<OUTPUT
              {$color}{$border_right}@;\n
             OUTPUT);
@@ -129,19 +137,26 @@ class Field
       $Output = $this->Output;
       $Text = $Output->Text;
 
+      // * Config
+      // @ Dimension
+      $width = $this->width;
       // * Meta
       $title_length = \mb_strlen(
          \preg_replace(__String::ANSI_ESCAPE_SEQUENCE_REGEX, '', $this->title)
       );
       // ---
-      $content_lines = \explode(PHP_EOL, $content ?? $this->content);
+      $content = TemplateEscaped::render($content ?? $this->content);
+      $content_lines = \explode("\n", $content);
 
-      // @ Determine max line length (based on content line and title)
-      $line_length = $title_length;
-      foreach ($content_lines as $content_line) {
-         $content_line_length = \mb_strlen($content_line);
-         if ($content_line_length > $line_length) {
-            $line_length = $content_line_length;
+      $line_length = $width;
+      if ($line_length === null) {
+         // @ Determine max line length (based on content line and title)
+         $line_length = $title_length;
+         foreach ($content_lines as $content_line) {
+            $content_line_length = \mb_strlen($content_line);
+            if ($content_line_length > $line_length) {
+               $line_length = $content_line_length;
+            }
          }
       }
 
@@ -152,10 +167,13 @@ class Field
 
          match ($content_line) {
             '@---;' => $this->separate($line_length),
-            default => $Output->pad($content_line, $line_length)
+            default => ($width !== null
+               ? $Output->write($content_line)
+               : $Output->pad($content_line, $line_length)
+            )
          };
 
-         $this->border('right');
+         $this->border('right', $width);
       }
       $this->border('bottom', $line_length + 2);
 
