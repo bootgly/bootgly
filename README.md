@@ -211,7 +211,7 @@ More **Screenshots**, videos and details can be found in the home page of [Bootg
 ### 📟 Bootgly CLI:
 
 <details>
-  <summary><b>Run CLI demo</b></summary>
+  <summary><b>Run CLI demo</b></summary><br>
 
   1) See the examples in `projects/Bootgly/CLI/examples/`;
   2) Check the file `projects/Bootgly/CLI.php`;
@@ -223,7 +223,7 @@ More **Screenshots**, videos and details can be found in the home page of [Bootg
 </details>
 
 <details>
-  <summary><b>Setup Bootgly CLI globally (on /usr/local/bin)</b></summary>
+  <summary><b>Setup Bootgly CLI globally (on /usr/local/bin)</b></summary><br>
 
   1) Run the Bootgly CLI setup command in terminal (with sudo):
 
@@ -233,7 +233,7 @@ More **Screenshots**, videos and details can be found in the home page of [Bootg
 </details>
 
 <details>
-  <summary><b>Perform Bootgly tests</b></summary>
+  <summary><b>Perform Bootgly tests</b></summary><br>
 
   1) Check the bootstrap tests file `tests/@.php`;
   2) Run the Bootgly CLI test command in terminal:
@@ -246,7 +246,7 @@ More **Screenshots**, videos and details can be found in the home page of [Bootg
 ### 🌐 Bootgly WPI:
 
 <details>
-  <summary><b>Running a HTTP Server:</b></summary>
+  <summary><b>Running a HTTP Server</b></summary>
 
   ##### **Option 1: Non-CLI SAPI (Apache, LiteSpeed, Nginx, etc)**
 
@@ -287,6 +287,82 @@ More **Screenshots**, videos and details can be found in the home page of [Bootg
   ```
 </details>
 
+<details>
+  <summary><b>Routing HTTP Requests with Bootgly HTTP Server Router</b></summary><br>
+
+  [The Router][HTTP_SERVER_ROUTER_CLASS] for HTTP Servers provides a flexible and powerful web routing system. The `route` method is used to route routes, with the schema as follows:
+
+  ```php
+  route (string $route, \Closure|callable $handler, null|string|array $condition = null) : bool
+  ```
+
+  - `$route` is the URL pattern to match that accepts params.
+  - `$handler` is the callback to be executed when the route is matched.
+  - `$condition` is the HTTP method(s) that this route should respond to.
+
+  **Basic Usage**
+
+  ```php
+  $Router->route('/', function ($Response, $Request, $Route) {
+    echo 'Hello World!';
+  }, GET);
+  ```
+
+  Handler arguments:
+  - `$Response` is the HTTP Server Response
+  - `$Request` is the HTTP Server Request
+  - `$Route` is the Route matched
+
+  <!-- (WIP) "I commented this because some things are going to change soon."
+  ## Some examples
+
+  **1. Route Callbacks**
+
+  ```php
+  $Router->route('/', function () {echo 'Hello World!';}, GET); // Closure
+  $Router->route('/hello', ['talk', 'world'], GET); // Function
+  $Router->route('/world', ['HelloWorld::talk'], GET); // Static Class
+  ```
+
+  **2. Route with Parameters**
+
+  ```php
+  $Router->route('/user/:id', function () use ($Route) {
+    echo 'User ID: ' . $Route->Params->id;
+  }, GET);
+  ```
+
+  **3. Route with Multiple Methods**
+
+  ```php
+  $Router->route('/data', function () {
+    echo 'Data!';
+  }, [GET, POST]);
+  ```
+
+  **4. Nested Routes**
+
+  ```php
+  $Router->route('/profile/:*', function () use ($Router, $Route) {
+    echo 'Hello ';
+
+    $Router->route('user/:id', function () use ($Route) {
+        echo 'User ID: ' . $Route->Params->id;
+    });
+  }, GET);
+  ```
+
+  **5. Catch-All Route**
+
+  ```php
+  $Router->route('/*', function ($Response) {
+    $Response->code = 404;
+    $Response('pages/404')->send();
+  });
+  ```
+  -->
+</details>
+
 
 
 <!-- Links -->
@@ -303,6 +379,7 @@ More **Screenshots**, videos and details can be found in the home page of [Bootg
 [CONSOLE_PLATFORM]: https://github.com/bootgly/bootgly-console
 
 [WPI_INTERFACE]: https://github.com/bootgly/bootgly/tree/main/Bootgly/WPI/
+[HTTP_SERVER_ROUTER_CLASS]: https://github.com/bootgly/bootgly/blob/main/Bootgly/WPI/Modules/HTTP/Server/Router.php
 [WEB_TCP_CLIENT_INTERFACE]: https://github.com/bootgly/bootgly/blob/main/Bootgly/WPI/Interfaces/TCP/Client.php
 [WEB_TCP_SERVER_INTERFACE]: https://github.com/bootgly/bootgly/blob/main/Bootgly/WPI/Interfaces/TCP/Server.php
 [WEB_HTTP_SERVER_CLI]: https://github.com/bootgly/bootgly/blob/main/Bootgly/WPI/Nodes/HTTP/Server/CLI.php
