@@ -20,17 +20,6 @@ use Bootgly\ABI\Debugging\Data\Vars;
 use Bootgly\WPI\Modules\HTTP\Server\Router\Route;
 
 
-define('GET', 'GET');
-define('HEAD', 'HEAD');
-define('POST', 'POST');
-define('PUT', 'PUT');
-define('DELETE', 'DELETE');
-define('CONNECT', 'CONNECT');
-define('OPTIONS', 'OPTIONS');
-define('TRACE', 'TRACE');
-define('PATCH', 'PATCH');
-
-
 class Router
 {
    // * Config
@@ -128,11 +117,7 @@ class Router
       // TODO
    }
    // @ default
-   public function route (
-      string $route,
-      \Closure|callable $handler,
-      null|string|array $condition = null
-   ) : bool
+   public function route (string $route, \Closure|callable $handler, null|string|array $condition = null) : bool
    {
       $this->routes++;
 
@@ -212,7 +197,7 @@ class Router
             }
          }
 
-         // @ Log
+         // @ Log Route matched
          $this->routed[] = [
             $Route->node,
             $Route->path,
@@ -220,21 +205,15 @@ class Router
          ];
          $Route::$level++;
 
-         // @ Execute
+         // @ Execute Route callback handler
+         // Closure
          if ($handler instanceof \Closure) {
-            $handler(
-               self::$Server::$Response,
-               self::$Server::$Request,
-               $Route
-            ); // @ Call handler
+            $handler(self::$Server::$Response, self::$Server::$Request, $Route);
          } else {
+            // callable
             call_user_func_array(
                $handler,
-               [
-                  self::$Server::$Response,
-                  self::$Server::$Request,
-                  $Route
-               ]
+               [self::$Server::$Response, self::$Server::$Request, $Route]
             );
          }
       }
