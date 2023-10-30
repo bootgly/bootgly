@@ -41,7 +41,7 @@ class Field
    public array $borders;
    // * Data
    protected ? string $title;
-   protected ? string $content;
+   public ? string $content;
 
 
    public function __construct (Output $Output)
@@ -62,7 +62,6 @@ class Field
    {
       // TODO emit event
       match ($name) {
-         'content' => $this->content = $value,
          'title'   => $this->title = ($value
             ? TemplateEscaped::render(" $value ")
             : ''
@@ -132,7 +131,7 @@ class Field
       $Output->write($this->borders['mid'], $length);
    }
 
-   public function render (? string $content = null)
+   public function render ()
    {
       $Output = $this->Output;
       $Text = $Output->Text;
@@ -145,7 +144,7 @@ class Field
          \preg_replace(__String::ANSI_ESCAPE_SEQUENCE_REGEX, '', $this->title)
       );
       // ---
-      $content = TemplateEscaped::render($content ?? $this->content);
+      $content = TemplateEscaped::render($this->content);
       $content_lines = \explode("\n", $content);
 
       $line_length = $width;
