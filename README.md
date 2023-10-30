@@ -303,14 +303,14 @@ More **Screenshots**, videos and details can be found in the home page of [Bootg
   **Basic Usage**
 
   ```php
-  $Router->route('/', function ($Response, $Request, $Route) {
+  $Router->route('/', function ($Request, $Response, $Route) {
     echo 'Hello World!';
   }, GET);
   ```
 
   Handler arguments:
-  - `$Response` is the HTTP Server Response
   - `$Request` is the HTTP Server Request
+  - `$Response` is the HTTP Server Response
   - `$Route` is the Route matched
 
   <!-- (WIP) "I commented this because some things are going to change soon."
