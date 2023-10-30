@@ -187,17 +187,17 @@ Bootgly uses [Semantic Versioning 2.0][SEMANTIC_VERSIONING].
 
 ### \- Bootgly CLI 📟
 
-| ![HTTP Server CLI started - Initial output](https://github.com/bootgly/.github/raw/main/screenshots/bootgly-php-framework/Bootgly-Progress-Bar-component.png "Render 6x faster than Symfony / Laravel") |
+| ![](https://github.com/bootgly/.github/raw/main/screenshots/bootgly-php-framework/Bootgly-CLI-Terminal-components-Progress.png "Render 7x faster than Laravel / Symfony") |
 |:--:| 
-| *Progress component (with Bar) - Render 6x faster than Symfony / Laravel* |
+| *Progress component (with Bar) - [Render ≈7x faster than Laravel / Symfony][BENCHMARK_1]* |
 
 ### \- Bootgly WPI 🌐
 
-| ![HTTP Server CLI - Faster than Workerman +7%](https://github.com/bootgly/.github/raw/main/screenshots/bootgly-php-framework/Server-CLI-HTTP-Benchmark-Ryzen-9-3900X-WSL2.png "HTTP Server CLI - +7% faster than Workerman (Plain Text test)'") |
+| ![](https://github.com/bootgly/.github/raw/main/screenshots/bootgly-php-framework/Server-CLI-HTTP-Benchmark-Ryzen-9-3900X-WSL2.png "Bootgly HTTP Server CLI (wrk benchmark) - +7% faster than Workerman in the Plain Text test") |
 |:--:| 
-| *HTTP Server CLI - +7% faster than [Workerman](https://www.techempower.com/benchmarks/#section=data-r21&test=plaintext&l=zik073-6bj) (Plain Text test)* |
-
-| ![HTTP Server CLI - started in Monitor mode](https://github.com/bootgly/.github/raw/main/screenshots/bootgly-php-framework/Bootgly_WPI_-_HTTP_Server_CLI.png "HTTP Server CLI - started in Monitor mode") |
+| *Bootgly HTTP Server CLI (wrk benchmark) - +7% faster than [Workerman](https://www.techempower.com/benchmarks/#section=data-r21&test=plaintext&l=zik073-6bj) in the [Plain Text test](https://github.com/TechEmpower/FrameworkBenchmarks/wiki/Project-Information-Framework-Tests-Overview#plaintext)* |
+---
+| ![](https://github.com/bootgly/.github/raw/main/screenshots/bootgly-php-framework/Bootgly-WPI-Nodes-HTTP-Server-CLI.png "Bootgly HTTP Server CLI - started in Monitor mode") |
 |:--:| 
 | HTTP Server CLI - started in `monitor` mode
 
@@ -386,6 +386,7 @@ More **Screenshots**, videos and details can be found in the home page of [Bootg
 [WEB_PLATFORM]: https://github.com/bootgly/bootgly-web
 
 
+[BENCHMARK_1]: https://github.com/bootgly/bootgly_benchmarks/tree/main/progress_bar
 [PROJECT_DOCS]: https://docs.bootgly.com/
 [GITHUB_REPOSITORY]: https://github.com/bootgly/bootgly/
 [GITHUB_SPONSOR]: https://github.com/sponsors/bootgly/
