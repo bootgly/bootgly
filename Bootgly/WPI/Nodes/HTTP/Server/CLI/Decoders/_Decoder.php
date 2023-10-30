@@ -67,8 +67,8 @@ class _Decoder extends Decoders
       if ($length > 0 && $length <= 512) {
          $inputs[$buffer] = clone $Request;
 
-         if (count($inputs) > 512) {
-            unset($inputs[key($inputs)]);
+         if (\count($inputs) > 512) {
+            unset($inputs[\key($inputs)]);
          }
       }
 

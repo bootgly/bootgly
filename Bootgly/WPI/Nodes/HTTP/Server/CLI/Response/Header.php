@@ -166,7 +166,7 @@ class Header
 
    public function get (string $name) : string
    {
-      return (string) @$this->fields[$name] ?? (string) @$this->fields[strtolower($name)] ?? '';
+      return (string) @$this->fields[$name] ?? (string) @$this->fields[\strtolower($name)] ?? '';
    }
    public function set (string $field, string $value) : bool
    {
@@ -182,7 +182,7 @@ class Header
    // TODO increase performance
    public function build () : true // @ raw
    {
-      if (time() === $this->built) {
+      if (\time() === $this->built) {
          return true;
       }
 
@@ -199,7 +199,7 @@ class Header
          // Dynamic fields
          if ($value === true) {
             $value = match ($name) {
-               'Date' => gmdate('D, d M Y H:i:s \G\M\T'),
+               'Date' => \gmdate('D, d M Y H:i:s \G\M\T'),
                default => ''
             };
          }
@@ -207,9 +207,9 @@ class Header
          $queued[] = "$name: $value";
       }
 
-      $this->raw = implode("\r\n", $queued);
+      $this->raw = \implode("\r\n", $queued);
 
-      $this->built = time();
+      $this->built = \time();
 
       return true;
    }

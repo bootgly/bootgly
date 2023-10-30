@@ -90,11 +90,11 @@ class Connections implements WPI\Connections
       $info = __DIR__ . '/Connections/_/info.php';
 
       // @ Clear cache of file info
-      if ( function_exists('opcache_invalidate') ) {
-         opcache_invalidate($info, true);
+      if ( \function_exists('opcache_invalidate') ) {
+         \opcache_invalidate($info, true);
       }
 
-      clearstatcache(false, $info);
+      \clearstatcache(false, $info);
 
       // @ Load file info
       try {
@@ -108,11 +108,11 @@ class Connections implements WPI\Connections
    public function connect () : bool
    {
       try {
-         $Socket = @stream_socket_accept($this->Server->Socket, null);
+         $Socket = @\stream_socket_accept($this->Server->Socket, null);
 
-         stream_set_timeout($Socket, 0);
+         \stream_set_timeout($Socket, 0);
 
-         stream_set_blocking($Socket, false); // +15% performance
+         \stream_set_blocking($Socket, false); // +15% performance
 
          #stream_set_chunk_size($Socket, 65535);
 

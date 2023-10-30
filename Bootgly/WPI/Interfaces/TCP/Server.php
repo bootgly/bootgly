@@ -111,7 +111,7 @@ class Server implements Servers, Logging
 
       // * Meta
       // @ State
-      $this->started = time();
+      $this->started = \time();
       // @ Status
       $this->status = self::STATUS_BOOTING;
 
@@ -141,7 +141,7 @@ class Server implements Servers, Logging
       $this->Terminal = new Terminal($this);
 
       // @ Register shutdown function to avoid orphaned children
-      register_shutdown_function(function () use ($Process) {
+      \register_shutdown_function(function () use ($Process) {
          Shutdown::debug();
          $Process->sendSignal(SIGINT);
       });
@@ -180,7 +180,7 @@ class Server implements Servers, Logging
 
             break;
          case '@test':
-            if ($this->Process->level === 'master' && self::$Application && method_exists(self::$Application, 'test')) {
+            if ($this->Process->level === 'master' && self::$Application && \method_exists(self::$Application, 'test')) {
                self::$Application::test($this);
             }
 
@@ -200,10 +200,10 @@ class Server implements Servers, Logging
       $info = __DIR__ . '/Server/_/info.php';
 
       // @ Clear cache of file info
-      if ( function_exists('opcache_invalidate') ) {
-         opcache_invalidate($info, true);
+      if ( \function_exists('opcache_invalidate') ) {
+         \opcache_invalidate($info, true);
       }
-      clearstatcache(false, $info);
+      \clearstatcache(false, $info);
 
       // @ Load file info
       try {
@@ -326,11 +326,11 @@ class Server implements Servers, Logging
       }
 
       // @ Create context
-      $Context = stream_context_create(self::$context);
+      $Context = \stream_context_create(self::$context);
 
       // @ Create server socket
       try {
-         $this->Socket = @stream_socket_server(
+         $this->Socket = @\stream_socket_server(
             'tcp://' . $this->host . ':' . $this->port,
             $error_code,
             $error_message,
@@ -350,12 +350,12 @@ class Server implements Servers, Logging
 
       // @ Disable Crypto in Main Socket
       if ( ! empty($this->ssl) ) {
-         stream_socket_enable_crypto($this->Socket, false);
+         \stream_socket_enable_crypto($this->Socket, false);
       }
       // @ Enable Keep Alive if possible
-      if (function_exists('socket_import_stream')) {
-         $Socket = socket_import_stream($this->Socket);
-         socket_set_option($Socket, SOL_SOCKET, SO_KEEPALIVE, 1);
+      if (\function_exists('socket_import_stream')) {
+         $Socket = \socket_import_stream($this->Socket);
+         \socket_set_option($Socket, SOL_SOCKET, SO_KEEPALIVE, 1);
       }
 
       $this->status = self::STATUS_RUNNING;
@@ -384,10 +384,10 @@ class Server implements Servers, Logging
 
       while ($this->mode === self::MODE_INTERACTIVE) {
          // @ Calls signal handlers for pending signals
-         pcntl_signal_dispatch();
+         \pcntl_signal_dispatch();
 
          // @ Suspends execution of the current process until a child has exited, or until a signal is delivered
-         $pid = pcntl_wait($status, WNOHANG | WUNTRACED);
+         $pid = \pcntl_wait($status, WNOHANG | WUNTRACED);
 
          // If child is running?
          if ($pid === 0) {
@@ -397,7 +397,7 @@ class Server implements Servers, Logging
 
             // @ Wait for command output before looping
             if ($interact === false) {
-               usleep(100000 * $this->workers); // @ wait 0.1 s * qt workers
+               \usleep(100000 * $this->workers); // @ wait 0.1 s * qt workers
             }
          } else if ($pid > 0) { // If a child has already exited?
             $this->log('@\;Process child exited!@\;', self::LOG_ERROR_LEVEL);
@@ -437,13 +437,13 @@ class Server implements Servers, Logging
       // @ Loop
       while ($this->mode === self::MODE_MONITOR) {
          // @ Calls signal handlers for pending signals
-         pcntl_signal_dispatch();
+         \pcntl_signal_dispatch();
 
          // @ Suspends execution of the current process until a child has exited, or until a signal is delivered
-         $pid = pcntl_wait($status, WUNTRACED);
+         $pid = \pcntl_wait($status, WUNTRACED);
 
          // @ Calls signal handlers for pending signals again
-         pcntl_signal_dispatch();
+         \pcntl_signal_dispatch();
 
          // If child is running?
          if ($pid === 0) {
@@ -476,7 +476,7 @@ class Server implements Servers, Logging
       }
 
       try {
-         $closed = @fclose($this->Socket);
+         $closed = @\fclose($this->Socket);
       } catch (\Throwable) {
          $closed = false;
       }
@@ -550,7 +550,7 @@ class Server implements Servers, Logging
       switch ($this->Process->level) {
          case 'master':
             $this->log("{$this->Process->children} worker(s) stopped!@\\;", 3);
-            pcntl_wait($status);
+            \pcntl_wait($status);
             exit(0);
          case 'child':
             $this->close();

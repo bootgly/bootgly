@@ -61,7 +61,7 @@ class Select implements Loops
          // Client/Server
          case self::EVENT_CONNECT:
             // System call select exceeded the maximum number of connections 1024.
-            if (count($this->reads) >= 1000) {
+            if (\count($this->reads) >= 1000) {
                return false;
             }
 
@@ -75,7 +75,7 @@ class Select implements Loops
          // Package
          case self::EVENT_READ:
             // System call select exceeded the maximum number of connections 1024.
-            if (count($this->reads) >= 1000) {
+            if (\count($this->reads) >= 1000) {
                return false;
             }
 
@@ -88,7 +88,7 @@ class Select implements Loops
             return true;
          case self::EVENT_WRITE:
             // System call select exceeded the maximum number of connections 1024.
-            if (count($this->writes) >= 1000) {
+            if (\count($this->writes) >= 1000) {
                return false;
             }
 
@@ -101,7 +101,7 @@ class Select implements Loops
             return true;
          case self::EVENT_EXCEPT:
             // System call select exceeded the maximum number of connections 1024.
-            if (count($this->excepts) >= 1000) {
+            if (\count($this->excepts) >= 1000) {
                return false;
             }
 
@@ -156,10 +156,10 @@ class Select implements Loops
 
    public function loop ()
    {
-      $this->started = microtime(true);
+      $this->started = \microtime(true);
 
       while (true) {
-         pcntl_signal_dispatch();
+         \pcntl_signal_dispatch();
 
          $read   = $this->reads;
          $write  = $this->writes;
@@ -168,13 +168,13 @@ class Select implements Loops
          if ($read || $write || $except) {
             try {
                // Waiting $this->timeout for read / write / excepts events.
-               $streams = @stream_select($read, $write, $except, null);
+               $streams = @\stream_select($read, $write, $except, null);
             } catch (\Throwable) {
                $streams = false;
             }
          } else {
             // @ Sleep for 1 second and continue (Used to pause the Server)
-            sleep(1);
+            \sleep(1);
 
             if ($this->loop === false) {
                break;
@@ -218,7 +218,7 @@ class Select implements Loops
          // if ($except) {}
       }
 
-      $this->finished = microtime(true);
+      $this->finished = \microtime(true);
    }
    public function destroy ()
    {

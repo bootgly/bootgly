@@ -77,7 +77,7 @@ abstract class Packages implements WPI\Packages
    public function fail ($Socket, string $operation, $result)
    {
       try {
-         $eof = @feof($Socket);
+         $eof = @\feof($Socket);
       } catch (\Throwable) {
          $eof = false;
       }
@@ -94,7 +94,7 @@ abstract class Packages implements WPI\Packages
          #$this->log('Failed to ' . $operation . ' package: 0 byte handled!' . PHP_EOL);
       }
 
-      if (is_resource($Socket) && get_resource_type($Socket) === 'stream') {
+      if (\is_resource($Socket) && \get_resource_type($Socket) === 'stream') {
          #$this->log('Failed to ' . $operation . ' package: closing connection...' . PHP_EOL);
          $this->Connection->close();
       }
@@ -112,15 +112,15 @@ abstract class Packages implements WPI\Packages
          $total = $length ?? 0; // @ Total length of packet = the expected length of packet or 0
 
          if ($length > 0 || $timeout > 0) {
-            $started = microtime(true);
+            $started = \microtime(true);
          }
 
          do {
-            $buffer = @fread($Socket, $length ?? 65535);
+            $buffer = @\fread($Socket, $length ?? 65535);
 
             if ($buffer === false) break;
             if ($buffer === '') {
-               if (! $timeout > 0 || microtime(true) - $started >= $timeout) {
+               if (! $timeout > 0 || \microtime(true) - $started >= $timeout) {
                   $this->expired = true;
                   break;
                }
@@ -130,7 +130,7 @@ abstract class Packages implements WPI\Packages
 
             $input .= $buffer;
 
-            $bytes = strlen($buffer);
+            $bytes = \strlen($buffer);
             $received += $bytes;
 
             if ($length) {
@@ -203,7 +203,7 @@ abstract class Packages implements WPI\Packages
          $written = 0;
 
          while ($buffer) {
-            $sent = @fwrite($Socket, $buffer, $length);
+            $sent = @\fwrite($Socket, $buffer, $length);
 
             if ($sent === false) break;
             if ($sent === 0) continue; // TODO check EOF?
@@ -211,12 +211,12 @@ abstract class Packages implements WPI\Packages
             $written += $sent;
 
             if ($sent < $length) {
-               $buffer = substr($buffer, $sent);
+               $buffer = \substr($buffer, $sent);
                $length -= $sent;
                continue;
             }
 
-            if ( count($this->uploading) ) {
+            if ( \count($this->uploading) ) {
                $written += $this->uploading($Socket);
             }
 
@@ -258,7 +258,7 @@ abstract class Packages implements WPI\Packages
    {
       // TODO test!!!
       $file = $this->downloading[0]['file'];
-      $Handler = @fopen($file, 'w+');
+      $Handler = @\fopen($file, 'w+');
 
       $length = $this->downloading[0]['length'];
       $close = $this->downloading[0]['close'];
@@ -267,7 +267,7 @@ abstract class Packages implements WPI\Packages
 
       // @ Check free space in dir of file
       try {
-         if (disk_free_space(dirname($file)) < $length) {
+         if (\disk_free_space(\dirname($file)) < $length) {
             return false;
          }
       } catch (\Throwable) {
@@ -294,7 +294,7 @@ abstract class Packages implements WPI\Packages
    
       // @ Try to close the file Handler
       try {
-         @fclose($Handler);
+         @\fclose($Handler);
       } catch (\Throwable) {}
 
       // @ Unset current downloading
@@ -311,7 +311,7 @@ abstract class Packages implements WPI\Packages
    }
    public function uploading ($Socket) : int
    { // TODO support to upload multiple files
-      $Handler = @fopen($this->uploading[0]['file'], 'r');
+      $Handler = @\fopen($this->uploading[0]['file'], 'r');
       $parts = $this->uploading[0]['parts'];
       $pads = $this->uploading[0]['pads'];
       $close = $this->uploading[0]['close'];
@@ -326,7 +326,7 @@ abstract class Packages implements WPI\Packages
 
          // @ Move pointer of file to offset
          try {
-            @fseek($Handler, $offset, SEEK_SET);
+            @\fseek($Handler, $offset, SEEK_SET);
          } catch (\Throwable) {
             return $written;
          }
@@ -334,7 +334,7 @@ abstract class Packages implements WPI\Packages
          // @ Prepend
          if ( ! empty($pad['prepend']) ) {
             try {
-               $sent = @fwrite($Socket, $pad['prepend']);
+               $sent = @\fwrite($Socket, $pad['prepend']);
             } catch (\Throwable) {
                break;
             }
@@ -367,7 +367,7 @@ abstract class Packages implements WPI\Packages
          // @ Append
          if ( ! empty($pad['append']) ) {
             try {
-               $sent = @fwrite($Socket, $pad['append']);
+               $sent = @\fwrite($Socket, $pad['append']);
             } catch (\Throwable) {
                break;
             }
@@ -381,7 +381,7 @@ abstract class Packages implements WPI\Packages
 
       // @ Try to close the file Handler
       try {
-         @fclose($Handler);
+         @\fclose($Handler);
       } catch (\Throwable) {}
 
       // @ Unset current uploading
@@ -407,20 +407,20 @@ abstract class Packages implements WPI\Packages
          // ! Socket
          // @ Read buffer from Client
          try {
-            $buffer = @fread($Socket, $rate);
+            $buffer = @\fread($Socket, $rate);
          } catch (\Throwable) {
             break;
          }
 
          if ($buffer === false) break;
 
-         $read += strlen($buffer);
+         $read += \strlen($buffer);
 
          // @ Write part of data (if exists) using Handler
          while ($read) {
             // ! File
             try {
-               $written = @fwrite($Handler, $buffer, $read);
+               $written = @\fwrite($Handler, $buffer, $read);
             } catch (\Throwable) {
                break;
             }
@@ -431,7 +431,7 @@ abstract class Packages implements WPI\Packages
             $stored += $written;
 
             if ($written < $read) {
-               $buffer = substr($buffer, $written);
+               $buffer = \substr($buffer, $written);
                $read -= $written;
                continue;
             }
@@ -441,7 +441,7 @@ abstract class Packages implements WPI\Packages
 
          // @ Check Socket EOF (End-Of-File)
          try {
-            $end = @feof($Socket);
+            $end = @\feof($Socket);
          } catch (\Throwable) {
             break;
          }
@@ -461,20 +461,20 @@ abstract class Packages implements WPI\Packages
          // ! Stream
          // @ Read buffer using Handler
          try {
-            $buffer = @fread($Handler, $rate);
+            $buffer = @\fread($Handler, $rate);
          } catch (\Throwable) {
             break;
          }
 
          if ($buffer === false) break;
 
-         $read = strlen($buffer);
+         $read = \strlen($buffer);
 
          // @ Write part of data (if exists) to Client
          while ($read) {
             // ! Socket
             try {
-               $sent = @fwrite($Socket, $buffer, $read);
+               $sent = @\fwrite($Socket, $buffer, $read);
             } catch (\Throwable) {
                break;
             }
@@ -485,7 +485,7 @@ abstract class Packages implements WPI\Packages
             $written += $sent;
 
             if ($sent < $read) {
-               $buffer = substr($buffer, $sent);
+               $buffer = \substr($buffer, $sent);
                $read -= $sent;
                continue;
             }
@@ -495,7 +495,7 @@ abstract class Packages implements WPI\Packages
 
          // @ Check Handler EOF (End-Of-File)
          try {
-            $end = @feof($Handler);
+            $end = @\feof($Handler);
          } catch (\Throwable) {
             break;
          }
@@ -509,7 +509,7 @@ abstract class Packages implements WPI\Packages
    public function reject (string $raw)
    {
       try {
-         @fwrite($this->Connection->Socket, $raw);
+         @\fwrite($this->Connection->Socket, $raw);
       } catch (\Throwable) {
          // ...
       }

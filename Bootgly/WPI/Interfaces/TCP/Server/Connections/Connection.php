@@ -65,8 +65,8 @@ class Connection extends Packages
       // @ Status
       $this->status = self::STATUS_ESTABLISHED;
       // @ Handler
-      $this->started = time();
-      $this->used = time();
+      $this->started = \time();
+      $this->used = \time();
       // @ Stats
       #$this->reads = 0;
       $this->writes = 0;
@@ -74,13 +74,13 @@ class Connection extends Packages
 
       // @ Set Remote Data if possible
       // IP:port
-      $peer = stream_socket_get_name($Socket, true);
+      $peer = \stream_socket_get_name($Socket, true);
       if ($peer === false) {
          return $this->close();
       }
       // * Data
       // @ Remote
-      @[$this->ip, $this->port] = explode(':', $peer, 2); // TODO IPv6
+      @[$this->ip, $this->port] = \explode(':', $peer, 2); // TODO IPv6
 
       parent::__construct($this);
 
@@ -113,15 +113,15 @@ class Connection extends Packages
       static $tries = 1;
 
       try {
-         stream_set_blocking($this->Socket, true);
+         \stream_set_blocking($this->Socket, true);
 
-         $negotiation = @stream_socket_enable_crypto(
+         $negotiation = @\stream_socket_enable_crypto(
             $this->Socket,
             true,
             STREAM_CRYPTO_METHOD_TLSv1_2_SERVER | STREAM_CRYPTO_METHOD_TLSv1_3_SERVER
          );
 
-         stream_set_blocking($this->Socket, false);
+         \stream_set_blocking($this->Socket, false);
       } catch (\Throwable) {
          $negotiation = false;
       }
@@ -167,10 +167,10 @@ class Connection extends Packages
       }
 
       if ($writes < $this->writes) {
-         $this->used = time();
+         $this->used = \time();
       }
 
-      if (time() - $this->used >= $timeout) {
+      if (\time() - $this->used >= $timeout) {
          return $this->close();
       }
 
@@ -220,7 +220,7 @@ class Connection extends Packages
       #Server::$Event->del($Socket, Server::$Event::EVENT_WRITE);
 
       try {
-         @fclose($Socket);
+         @\fclose($Socket);
          #@stream_socket_shutdown($Socket);
       } catch (\Throwable) {
          // ...
