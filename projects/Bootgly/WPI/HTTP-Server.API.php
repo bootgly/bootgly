@@ -50,7 +50,7 @@ return static function
    #$Response->Header->Cookie->append('Test2', 'value2');
 
    // ? Response Content
-   $Router->route('/', function ($Response) {
+   $Router->route('/', function (Response $Response) {
       return $Response(content: 'Hello World!');
    }, GET);
 

@@ -48,7 +48,7 @@ switch ($name) {
 
       // @ Socket
       // address
-      $address = $this->socket . $this->host . ':' . $this->port;
+      $address = $this->socket . ($this->domain ?? $this->host) . ':' . $this->port;
 
       // Event-loop
       $event = (new \ReflectionClass(self::$Event))->getName();
@@ -64,9 +64,8 @@ switch ($name) {
       // * Config
       $Field->width = 70;
       // * Data
-      $Field->title = 'Server Status';
-
-      $Field->render(content: <<<OUTPUT
+      $Field->title = '@#Black: Server Status @;';
+      $Field->content = <<<OUTPUT
 
       @:i: Bootgly Server: @; {$server}
       @:i: PHP version: @; {$php}\t\t\t@:i: Server version: @; {$version}
@@ -79,9 +78,17 @@ switch ($name) {
 
       @#yellow:  Server API script: @; {$SAPI}
 
-      OUTPUT);
+      OUTPUT;
+      $Field->render();
 
       // @ Workers Load
+      $Field2 = new Field($Output);
+      // * Config
+      $Field2->width = 70;
+      // * Data
+      $Field2->title = '@#Black: Workers Load (CPU usage) @;';
+      $Field2->content = PHP_EOL;
+
       // TODO use only Progress\Bar
       $Progress = [];
       $Progress[0] = new Progress($Output);
@@ -102,12 +109,6 @@ switch ($name) {
       $Bar->Symbols->incomplete = '▁';
       $Bar->Symbols->current = '';
       $Bar->Symbols->complete = '▉';
-
-      $this->log(<<<OUTPUT
-
-      ======================= Workers Load (CPU usage) ========================
-      \n
-      OUTPUT);
 
       $pids = $this->Process->pids;
       foreach ($pids as $i => $pid) {
@@ -155,28 +156,24 @@ switch ($name) {
             $Progress[$i]->finish();
 
             $CPU_usage = $Progress[$i]->output;
-            $Output->write("Worker #{$id}: {$CPU_usage}");
+
+            $Field2->content .= " Worker #{$id}: {$CPU_usage}";
 
             // new Progress
             $Progress[$i + 1] = clone $Progress[0];
          } else {
-            $this->log(<<<OUTPUT
-            Worker #{$id} with PID $pid not found.\n
-            OUTPUT);
+            $Field2->content .= <<<OUTPUT
+             Worker #{$id} with PID $pid not found. \n
+            OUTPUT;
          }
       }
+      $Field2->render();
 
       self::$stat = match (self::$stat) {
          0 => 1,
          1 => 0,
          default => 0
       };
-
-      $this->log(<<<OUTPUT
-
-      =========================================================================
-
-      OUTPUT);
 
       break;
 }

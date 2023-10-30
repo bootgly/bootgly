@@ -49,7 +49,7 @@ class Server implements Servers, Logging
 
 
    // * Config
-   #protected ? string $domain;
+   protected ? string $domain;
    protected ? string $host;
    protected ? int $port;
    protected int $workers;
@@ -377,8 +377,9 @@ class Server implements Servers, Logging
 
       Logger::$display = Logger::DISPLAY_MESSAGE;
 
-      $this->log('@\;Entering in CLI mode...@\;', self::LOG_INFO_LEVEL);
-      $this->log('>_ Type `quit` to stop the Server or `help` to list commands.@\;');
+      $this->log('@\;Entering in Interactive mode...@\;', self::LOG_INFO_LEVEL);
+      $this->log('>_ Type `@#Green:quit@;` to stop the Server or `@#Green:help@;` to list commands.@\;');
+      $this->log('>_ Type `@#Green:monitor@;` to enter in Monitor mode.@\;');
       $this->log('>_ Autocompletation and history enabled.@\\\;', self::LOG_NOTICE_LEVEL);
 
       while ($this->mode === self::MODE_INTERACTIVE) {

@@ -93,6 +93,10 @@ class CLI extends TCP\Server implements HTTP, Server
       parent::configure($host, $port, $workers, $ssl);
 
       try {
+         if ($host === '0.0.0.0') {
+            $this->domain ??= 'localhost';
+         }
+
          // * Config
          $this->socket = ($this->ssl !== null
             ? 'https://'
