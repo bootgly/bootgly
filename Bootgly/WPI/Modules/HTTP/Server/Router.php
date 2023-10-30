@@ -207,7 +207,7 @@ class Router
             );
          }
          // @ ?
-         if ($Response !== self::$Server::$Response) {
+         if ($Response && $Response !== self::$Server::$Response) {
             self::$Server::$Response = $Response;
          }
          // @ Log

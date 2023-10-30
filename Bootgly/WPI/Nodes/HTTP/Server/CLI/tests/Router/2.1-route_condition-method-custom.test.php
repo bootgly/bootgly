@@ -22,8 +22,8 @@ return [
    },
    // Server API
    'response' => function (Request $Request, Response $Response, Router $Router) {
-      $Router->route('/route4', function ($Response) {
-         $Response(content: 'TEST1 HTTP method!');
+      $Router->route('/route4', function ($Request, $Response) {
+         return $Response(content: 'TEST1 HTTP method!');
       }, 'TEST1');
    },
 

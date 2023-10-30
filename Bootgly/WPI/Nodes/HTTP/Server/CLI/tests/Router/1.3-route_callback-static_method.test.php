@@ -24,9 +24,9 @@ return [
    'response' => function (Request $Request, Response $Response, Router $Router) {
       class World
       {
-         public static function response(Response $Response)
+         public static function response ($Request, Response $Response)
          {
-            $Response(content: 'Hello World!!!');
+            return $Response(content: 'Hello World!!!');
          }
       }
 

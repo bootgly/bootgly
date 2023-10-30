@@ -37,8 +37,6 @@ class _Encoder extends Encoders
 
             SAPI::boot(reset: true, base: Server::class);
             break;
-         default:
-            null;
       }
 
       // @ Instance callbacks

@@ -22,29 +22,29 @@ return [
    // Server API
    'response' => function (Request $Request, Response $Response, Router $Router)
    {
-      $Router->route('/', function ($Response) {
-         $Response(content: 'Fail...');
+      $Router->route('/', function ($Request, $Response) {
+         return $Response(content: 'Fail...');
       }, GET);
 
-      $Router->route('/fail', function ($Response) {
-         $Response(content: 'Fail...');
+      $Router->route('/fail', function ($Request, $Response) {
+         return $Response(content: 'Fail...');
       }, GET);
 
       $Router->route('/profile/:*', function () use ($Router) {
-         $Router->route('default', function ($Response) {
-            $Response(content: 'Default Profile!');
+         $Router->route('default', function ($Request, $Response) {
+            return $Response(content: 'Default Profile!');
          });
          $Route = $Router->Route;
-         $Router->route('user/:id', function ($Response) use ($Route) {
-            $Response(content: 'User ID: ' . $Route->Params->id);
+         $Router->route('user/:id', function ($Request, $Response) use ($Route) {
+            return $Response(content: 'User ID: ' . $Route->Params->id);
          });
-         $Router->route('user/bob', function ($Response) {
-            $Response(content: 'Bob!');
+         $Router->route('user/bob', function ($Request, $Response) {
+            return $Response(content: 'Bob!');
          });
       }, GET);
 
-      $Router->route('/*', function ($Response) {
-         $Response(content: 'Catch-All!');
+      $Router->route('/*', function ($Request, $Response) {
+         return $Response(content: 'Catch-All!');
       }, GET);
    },
 

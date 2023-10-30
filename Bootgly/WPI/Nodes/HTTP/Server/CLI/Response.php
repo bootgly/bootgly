@@ -54,10 +54,9 @@ class Response
 
 
    public function __construct (
-      $x = null,
-      int $status = 200,
+      int $code = 200,
+      string $content = '',
       ? array $headers = null,
-      string $content = ''
    )
    {
       // ! HTTP
@@ -91,23 +90,15 @@ class Response
       $this->encoded = false;
 
       // @
-      if ($x === null) {
-         if ($status !== 200) {
-            $this->code = $status;
-         }
-
-         // TODO headers
-
-         if ($content !== '') {
-            $this->Content->raw = $content;
-         }
-
-         return;
+      if ($code !== 200) {
+         $this->code = $code;
       }
 
-      $this->prepare();
+      // TODO headers
 
-      $this->process($x);
+      if ($content !== '') {
+         $this->Content->raw = $content;
+      }
    }
    public function __get ($name)
    {

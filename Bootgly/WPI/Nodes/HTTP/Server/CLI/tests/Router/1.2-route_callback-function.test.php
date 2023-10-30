@@ -22,9 +22,9 @@ return [
    // Server API
    'response' => function (Request $Request, Response $Response, Router $Router)
    {
-      function response(Response $Response)
+      function response($Request, Response $Response)
       {
-         $Response(content: 'Hello!');
+         return $Response(content: 'Hello!');
       }
 
       $Router->route('/route2', 'response', GET);

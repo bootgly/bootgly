@@ -50,8 +50,8 @@ return static function
    #$Response->Header->Cookie->append('Test2', 'value2');
 
    // ? Response Content
-   $Router->route('/', function () {
-      return new Response(content: 'Hello World!');
+   $Router->route('/', function ($Request, $Response) {
+      return $Response(content: 'Hello World!');
    }, GET);
    $Router->route('/test', function () {
       return new Response(content: 'Testing Bootgly HTTP Router!');

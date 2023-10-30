@@ -22,20 +22,20 @@ return [
    // Server API
    'response' => function (Request $Request, Response $Response, Router $Router)
    {
-      $Router->route('/', function ($Response) {
-         $Response(content: 'Fail...');
+      $Router->route('/', function ($Request, $Response) {
+         return $Response(content: 'Fail...');
       }, GET);
 
-      $Router->route('/fail', function ($Response) {
-         $Response(content: 'Fail...');
+      $Router->route('/fail', function ($Request, $Response) {
+         return $Response(content: 'Fail...');
       }, GET);
 
-      $Router->route('/specific', function ($Response) {
-         $Response(content: 'Hello World!');
+      $Router->route('/specific', function ($Request, $Response) {
+         return $Response(content: 'Hello World!');
       }, GET);
 
-      $Router->route('/*', function ($Response) {
-         $Response(content: 'Catch-All!');
+      $Router->route('/*', function ($Request, $Response) {
+         return $Response(content: 'Catch-All!');
       }, GET);
    },
 

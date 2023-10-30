@@ -22,8 +22,8 @@ return [
    },
    // Server API
    'response' => function (Request $Request, Response $Response, Router $Router) {
-      $Router->route('/route7', function ($Response) {
-         $Response(content: 'Multiple HTTP methods!');
+      $Router->route('/route7', function ($Request, $Response) {
+         return $Response(content: 'Multiple HTTP methods!');
       }, [GET, POST]);
    },
 

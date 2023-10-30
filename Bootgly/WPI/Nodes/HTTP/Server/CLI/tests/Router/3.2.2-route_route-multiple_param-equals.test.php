@@ -22,25 +22,25 @@ return [
    // Server API
    'response' => function (Request $Request, Response $Response, Router $Router)
    {
-      $Router->route('/', function ($Response) {
-         $Response(content: 'Fail...');
+      $Router->route('/', function ($Request, $Response) {
+         return $Response(content: 'Fail...');
       }, GET);
 
-      $Router->route('/fail', function ($Response) {
-         $Response(content: 'Fail...');
+      $Router->route('/fail', function ($Request, $Response) {
+         return $Response(content: 'Fail...');
       }, GET);
 
       $Route = $Router->Route;
       $Route->Params->id = '[0-9]+';
 
-      $Router->route('/param6/:id/param7/:id', function ($Response) use ($Route) {
+      $Router->route('/param6/:id/param7/:id', function ($Request, $Response) use ($Route) {
          $Params = $Route->Params;
 
-         $Response(content: 'Equals named params: ' . $Params->id[0] . ', ' . $Params->id[1]);
+         return $Response(content: 'Equals named params: ' . $Params->id[0] . ', ' . $Params->id[1]);
       }, GET);
 
-      $Router->route('/*', function ($Response) {
-         $Response(content: 'Catch-All!');
+      $Router->route('/*', function ($Request, $Response) {
+         return $Response(content: 'Catch-All!');
       }, GET);
    },
 
