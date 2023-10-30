@@ -50,8 +50,11 @@ return static function
    #$Response->Header->Cookie->append('Test2', 'value2');
 
    // ? Response Content
-   $Router->route('/', function (Response $Response) {
-      return $Response(content: 'Hello World!');
+   $Router->route('/', function () {
+      return new Response(content: 'Hello World!');
+   }, GET);
+   $Router->route('/test', function () {
+      return new Response(content: 'Testing Bootgly HTTP Router!');
    }, GET);
 
    // @ send
@@ -69,4 +72,6 @@ return static function
 
    // @ redirect
    #return $Response->redirect(uri: 'https://docs.bootgly.com/', code: 302);
+
+   return $Response(status: 404, content: '404 Not Found!');
 };

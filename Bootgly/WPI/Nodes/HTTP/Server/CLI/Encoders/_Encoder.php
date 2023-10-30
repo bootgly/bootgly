@@ -11,10 +11,12 @@
 namespace Bootgly\WPI\Nodes\HTTP\Server\CLI\Encoders;
 
 
+use Bootgly\ABI\Debugging\Data\Throwables;
 use Bootgly\API\Server as SAPI;
 
 use Bootgly\WPI\Interfaces\TCP\Server\Packages;
 use Bootgly\WPI\Modules\HTTP\Server\Router;
+use Bootgly\WPI\Modules\HTTP\Server\Router\Exceptions\RouteMatchedException;
 use Bootgly\WPI\Nodes\HTTP\Server\CLI as Server;
 use Bootgly\WPI\Nodes\HTTP\Server\CLI\Encoders;
 use Bootgly\WPI\Nodes\HTTP\Server\CLI\Response;
@@ -22,43 +24,56 @@ use Bootgly\WPI\Nodes\HTTP\Server\CLI\Response;
 
 class _Encoder extends Encoders
 {
-   public static function encode (Packages $Package, &$size)
+   public static function encode (Packages $Packages, &$size)
    {
-      // @ Instance callbacks
-      $Request  = Server::$Request;
-      $Response = Server::$Response;
-      $Router   = Server::$Router;
-
       // @ Perform test mode
       // TODO move to another encoder?
-      if (SAPI::$mode === SAPI::MODE_TEST) {
-         Server::$Response = $Response = new Response;
-         Server::$Router = $Router = new Router(Server::class);
+      switch (SAPI::$mode) {
+         case SAPI::MODE_TEST:
+            Server::$Response = new Response;
+            Server::$Router = new Router(Server::class);
 
-         $Response->Header->preset('Date', null);
+            Server::$Response->Header->preset('Date', null);
 
-         SAPI::boot(reset: true, base: Server::class);
+            SAPI::boot(reset: true, base: Server::class);
+            break;
+         default:
+            null;
       }
 
+      // @ Instance callbacks
+      $Request  = &Server::$Request;
+      $Response = &Server::$Response;
+      $Router   = &Server::$Router;
+
       // ! Response
-      // @ Try to Invoke API Closure
+      // @ Try to Invoke SAPI Closure
       try {
          (SAPI::$Handler)($Request, $Response, $Router);
-      } catch (\Throwable $Throwable) {
+      }
+      catch (RouteMatchedException) {
+         // ...
+         $Router->reset();
+      }
+      catch (\Throwable $Throwable) {
+         // @ Prepare HTTP 500 Error
+         // Meta
          $Response->Meta->status = 500; // @ Set 500 HTTP Server Error Response
-
-         dump($Throwable->getMessage());
-
+         // Content
          if ($Response->Content->raw === '') {
             $Response->Content->raw = ' ';
          }
+
+         Throwables::debug($Throwable);
+      } finally {
+         // TODO move to another encoder
+         // @ Check if Request Content is waiting data
+         if ($Request->Content->waiting) {
+            return '';
+         }
+
+         // @ Output/Stream HTTP Response
+         return $Response->output($Packages, $size);
       }
-      // TODO move to another encoder
-      // @ Check if Request Content is waiting data
-      if ($Request->Content->waiting) {
-         return '';
-      }
-      // @ Output/Stream HTTP Response
-      return $Response->output($Package, $size); // @ Return Response raw
    }
 }

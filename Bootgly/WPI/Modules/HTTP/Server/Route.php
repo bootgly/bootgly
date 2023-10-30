@@ -8,16 +8,11 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\WPI\Modules\HTTP\Server\Router;
+namespace Bootgly\WPI\Modules\HTTP\Server;
 
 
-use Bootgly\WPI\Modules\HTTP\Server\Router;
-
-
-final class Route
+class Route
 {
-   public Router $Router;
-
    // * Config
    private ? string $name;
 
@@ -27,7 +22,6 @@ final class Route
 
    // * Meta
    private string $path;
-   public int $matched; // 0 -> none; 1 = route path; 2 = route path and route condition(s)
    private bool $parameterized;
    // ! Parse
    public string $parsed;
@@ -40,11 +34,8 @@ final class Route
    public static int $level; // Route group level | after callback
 
 
-   public function __construct (Router $Router)
+   public function __construct ()
    {
-      $this->Router = $Router;
-
-
       // * Config
       $this->name = null;
 
@@ -66,7 +57,6 @@ final class Route
 
       // * Meta
       $this->path = '';
-      $this->matched = 0;
       $this->parameterized = false;
       // ! Parse
       $this->parsed = '';
@@ -82,13 +72,13 @@ final class Route
    {
       switch ($name) {
          case 'parameterized':
-            if (strpos($this->path, ':') !== false) {
+            if (\strpos($this->path, ':') !== false) {
                return $this->parameterized = true;
             } else {
                return $this->parameterized = false;
             }
          case 'node':
-            $node = strstr($this->path, ':');
+            $node = \strstr($this->path, ':');
             return $node;
          default:
             return $this->$name;
@@ -113,7 +103,7 @@ final class Route
       if ($path === '/') {
          $this->path = '';
       } else {
-         $this->path = rtrim($path, '/');
+         $this->path = \rtrim($path, '/');
       }
    }
 }

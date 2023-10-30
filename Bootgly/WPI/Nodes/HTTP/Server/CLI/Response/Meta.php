@@ -25,7 +25,7 @@ class Meta
 
    // * Meta
    private string $raw;
-   // @ status
+   // @ Status
    private int $code;
    private string $message;
 
@@ -40,26 +40,49 @@ class Meta
       $this->status = '200 OK';
 
       // * Meta
-      $this->reset();
+      // ...
+
+      // @
+      // raw
+      $this->raw = $this->protocol . ' ' . $this->status;
+      // @ status
+      // code
+      unset($this->code);
    }
    public function __get (string $name)
    {
       switch ($name) {
+         // * Data
+         case 'protocol': return $this->protocol;
+         case 'status': return $this->status;
+
          // * Meta
-         // @ status
+         case 'raw': return $this->raw;
+         // @ Status
          case 'code':
             if ( isSet($this->code) && $this->code !== 0 ) {
                return $this->code;
             }
 
-            $code = \array_search($this->status, HTTP::RESPONSE_STATUS);
+            #$code = \array_search($this->status, HTTP::RESPONSE_STATUS);
+            @[$code, $message] = explode(' ', $this->status);
 
-            $this->code = $code;
+            $this->code = (int) $code;
+
+            break;
+         case 'message':
+            if (isset($this->message) && $this->message !== '') {
+               return $this->message;
+            }
+
+            @[$code, $message] = explode(' ', $this->status);
+
+            $this->message = $message;
 
             break;
 
          default:
-            return $this->$name;
+            return null;
       }
    }
    public function __set (string $name, $value)
@@ -83,15 +106,16 @@ class Meta
             }
 
             break;
+
          // * Meta
          case 'raw':
-         // @ status
+         // @ Status
          case 'code':
          case 'message':
             break;
 
          default:
-            $this->$name = $value;
+            null;
       }
    }
 

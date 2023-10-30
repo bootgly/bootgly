@@ -177,7 +177,7 @@ Your sponsorship will keep this project always **up to date** with **new feature
 
 The Bootgly is open-sourced software licensed under the [MIT license][MIT_LICENSE].
 
-### 📑 Versioning
+### 📑 Versioning System
 
 Bootgly uses [Semantic Versioning 2.0][SEMANTIC_VERSIONING].
 
@@ -199,7 +199,7 @@ Bootgly uses [Semantic Versioning 2.0][SEMANTIC_VERSIONING].
 ---
 | ![](https://github.com/bootgly/.github/raw/main/screenshots/bootgly-php-framework/Bootgly-WPI-Nodes-HTTP-Server-CLI.png "Bootgly HTTP Server CLI - started in Monitor mode") |
 |:--:| 
-| HTTP Server CLI - started in `monitor` mode
+| *HTTP Server CLI - started in `monitor` mode*
 
 
 More **Screenshots**, videos and details can be found in the home page of [Bootgly Docs][PROJECT_DOCS].
@@ -211,7 +211,7 @@ More **Screenshots**, videos and details can be found in the home page of [Bootg
 ### 📟 Bootgly CLI:
 
 <details>
-  <summary><b>Run CLI demo</b></summary><br>
+  <summary><b>Run Bootgly CLI demo</b></summary><br>
 
   1) See the examples in `projects/Bootgly/CLI/examples/`;
   2) Check the file `projects/Bootgly/CLI.php`;

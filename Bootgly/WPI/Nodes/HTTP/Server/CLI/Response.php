@@ -12,7 +12,6 @@ namespace Bootgly\WPI\Nodes\HTTP\Server\CLI;
 
 
 use Bootgly\ABI\IO\FS\File;
-
 use Bootgly\WPI\Nodes\HTTP\Server\CLI as Server;
 use Bootgly\WPI\Nodes\HTTP\Server\CLI\Response\Content;
 use Bootgly\WPI\Nodes\HTTP\Server\CLI\Response\Meta;
@@ -54,7 +53,12 @@ class Response
    public bool $stream;
 
 
-   public function __construct ()
+   public function __construct (
+      $x = null,
+      int $status = 200,
+      ? array $headers = null,
+      string $content = ''
+   )
    {
       // ! HTTP
       $this->Meta = new Meta;
@@ -85,6 +89,25 @@ class Response
       $this->stream = false;
       $this->chunked = false;
       $this->encoded = false;
+
+      // @
+      if ($x === null) {
+         if ($status !== 200) {
+            $this->code = $status;
+         }
+
+         // TODO headers
+
+         if ($content !== '') {
+            $this->Content->raw = $content;
+         }
+
+         return;
+      }
+
+      $this->prepare();
+
+      $this->process($x);
    }
    public function __get ($name)
    {
@@ -121,7 +144,7 @@ class Response
       switch ($name) {
          case 'status':
          case 'code':
-            if (is_int($value) && $value > 99 && $value < 600) {
+            if (\is_int($value) && $value > 99 && $value < 600) {
                $this->Meta->status = $value;
             }
 
@@ -139,7 +162,7 @@ class Response
             $callback = null;
 
             foreach ($arguments as $argument) {
-               switch (gettype($argument)) {
+               switch (\gettype($argument)) {
                   case 'string':
                      $view = $argument;
                      break;
@@ -249,7 +272,7 @@ class Response
       if ($resource === null) {
          $resource = $this->resource;
       } else {
-         $resource = strtolower($resource);
+         $resource = \strtolower($resource);
       }
 
       switch ($resource) {
@@ -266,12 +289,12 @@ class Response
          // @ Content
          case 'json':
          case 'jsonp':
-            if ( is_array($data) ) {
+            if ( \is_array($data) ) {
                $this->body = $data;
                break;
             }
 
-            $this->body = json_decode($data, true);
+            $this->body = \json_decode($data, true);
 
             break;
          case 'pre':
@@ -342,14 +365,14 @@ class Response
       $Response = &Server::$Response;
 
       // @ Output/Buffer start()
-      ob_start();
+      \ob_start();
 
       try {
          // @ Isolate context with anonymous static function
          (static function (string $__file__, ?array $__data__)
          use ($Request, $Response) {
             if ($__data__ !== null) {
-               extract($__data__);
+               \extract($__data__);
             }
             require $__file__;
          })($File, $data);
@@ -358,7 +381,7 @@ class Response
       // @ Set $Response properties
       $this->source = 'content';
       $this->type = '';
-      $this->body = ob_get_clean(); // Output/Buffer clean()->get()
+      $this->body = \ob_get_clean(); // Output/Buffer clean()->get()
 
       // @ Call callback
       if ($callback !== null && $callback instanceof \Closure) {
@@ -376,13 +399,13 @@ class Response
       try {
          switch ($method) {
             case 'gzip':
-               $encoded = @gzencode($raw, $level, $encoding);
+               $encoded = @\gzencode($raw, $level, $encoding);
                break;
             case 'deflate':
-               $deflated = @gzdeflate($raw, $level, $encoding);
+               $deflated = @\gzdeflate($raw, $level, $encoding);
                break;
             case 'compress':
-               $compressed = @gzcompress($raw, $level, $encoding);
+               $compressed = @\gzcompress($raw, $level, $encoding);
                break;
          }
       } catch (\Throwable) {
@@ -427,14 +450,14 @@ class Response
                   // TODO move to prepare or process
                   $this->Header->set('Content-Type', 'application/json');
 
-                  $body = json_encode($body, $options[0] ?? 0);
+                  $body = \json_encode($body, $options[0] ?? 0);
 
                   break;
                case 'jsonp':
                   // TODO move to prepare or process
                   $this->Header->set('Content-Type', 'application/json');
 
-                  $body = Server::$Request->queries['callback'].'('.json_encode($body).')';
+                  $body = Server::$Request->queries['callback'].'('.\json_encode($body).')';
 
                   break;
             }
@@ -465,7 +488,7 @@ class Response
 
                default: // Dynamic (PHP)
                   // @ Output/Buffer start()
-                  ob_start();
+                  \ob_start();
 
                   $Request = &Server::$Request;
                   $Response = &Server::$Response;
@@ -476,7 +499,7 @@ class Response
                      require $__file__;
                   })($File);
 
-                  $body = ob_get_clean(); // @ Output/Buffer clean()->get()
+                  $body = \ob_get_clean(); // @ Output/Buffer clean()->get()
             }
 
             break;
@@ -543,7 +566,7 @@ class Response
             case -1:
                return $this->end(416, $size);
             default:
-               $type = array_pop($ranges);
+               $type = \array_pop($ranges);
                // @ Check Range type
                if ($type !== 'bytes') {
                   return $this->end(416, $size);
@@ -579,7 +602,7 @@ class Response
       }
 
       // ! Header
-      $rangesCount = count($ranges);
+      $rangesCount = \count($ranges);
       // @ Set Content Length Header
       if ($rangesCount === 1) {
          $this->Header->set('Content-Length', $parts[0]['length']);
@@ -591,7 +614,7 @@ class Response
          $this->Meta->status = 206; // 206 Partial Content
 
          if ($rangesCount > 1) { // @ HTTP Multipart ranges
-            $boundary = str_pad(++Server::$Request::$multiparts, 20, '0', STR_PAD_LEFT);
+            $boundary = \str_pad(++Server::$Request::$multiparts, 20, '0', \STR_PAD_LEFT);
 
             $this->Header->set('Content-Type', 'multipart/byteranges; boundary=' . $boundary);
 
@@ -616,8 +639,8 @@ class Response
                }
 
                $length += $parts[$index]['length'];
-               $length += strlen($prepend);
-               $length += strlen($append ?? '');
+               $length += \strlen($prepend);
+               $length += \strlen($append ?? '');
 
                $pads[] = [
                   'prepend' => $prepend,
@@ -661,7 +684,7 @@ class Response
 
       return $this;
    }
-   public function output ($Package, &$length)
+   public function output ($Package, &$length) : string
    {
       $Meta    = &$this->Meta;
       $Content = &$this->Content;
@@ -686,7 +709,7 @@ class Response
       HTTP_RAW;
 
       if ($this->stream) {
-         $length = strlen($Meta->raw) + 1 + strlen($Header->raw) + 5;
+         $length = \strlen($Meta->raw) + 1 + \strlen($Header->raw) + 5;
 
          $Package->uploading = $this->files;
 
