@@ -88,7 +88,8 @@ CLI::$Commands->help(function ($scripting = true) {
 
    // :
    $output = rtrim($output);
-   $Field->render($output);
+   $Field->content = $output;
+   $Field->render();
 });
 // @ Register commands
 $commands = require('CLI/commands/@.php');

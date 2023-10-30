@@ -139,12 +139,15 @@ class Field
       // * Config
       // @ Dimension
       $width = $this->width;
+      // * Data
+      $title = $this->title ?? '';
+      $content = $this->content ?? '';
       // * Meta
       $title_length = \mb_strlen(
-         \preg_replace(__String::ANSI_ESCAPE_SEQUENCE_REGEX, '', $this->title)
+         \preg_replace(__String::ANSI_ESCAPE_SEQUENCE_REGEX, '', $title)
       );
       // ---
-      $content = TemplateEscaped::render($this->content);
+      $content = TemplateEscaped::render($content);
       $content_lines = \explode("\n", $content);
 
       $line_length = $width;
