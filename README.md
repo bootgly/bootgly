@@ -304,7 +304,7 @@ More **Screenshots**, videos and details can be found in the home page of [Bootg
 
   ```php
   $Router->route('/', function ($Request, $Response, $Route) {
-    echo 'Hello World!';
+    return $Response(content: 'Hello World!');
   }, GET);
   ```
 
@@ -313,41 +313,40 @@ More **Screenshots**, videos and details can be found in the home page of [Bootg
   - `$Response` is the HTTP Server Response
   - `$Route` is the Route matched
 
-  <!-- (WIP) "I commented this because some things are going to change soon."
   ## Some examples
 
   **1. Route Callbacks**
 
   ```php
-  $Router->route('/', function () {echo 'Hello World!';}, GET); // Closure
+  $Router->route('/', fn ($Request, $Response) => $Response, GET); // Closure
   $Router->route('/hello', ['talk', 'world'], GET); // Function
   $Router->route('/world', ['HelloWorld::talk'], GET); // Static Class
   ```
 
-  **2. Route with Parameters**
+  **2. Route with Route Params**
 
   ```php
-  $Router->route('/user/:id', function () use ($Route) {
-    echo 'User ID: ' . $Route->Params->id;
+  $Router->route('/user/:id', function ($Request, $Response, $Route) {
+    return $Response(content: 'User ID: ' . $Route->Params->id);
   }, GET);
   ```
 
-  **3. Route with Multiple Methods**
+  **3. Route with multiple HTTP methods**
 
   ```php
-  $Router->route('/data', function () {
-    echo 'Data!';
+  $Router->route('/data', function ($Request, $Response) {
+    return $Response(content: 'Data!');
   }, [GET, POST]);
   ```
 
   **4. Nested Routes**
 
   ```php
-  $Router->route('/profile/:*', function () use ($Router, $Route) {
-    echo 'Hello ';
+  $Router->route('/profile/:*', function ($Request, $Response, $Route) use ($Router) {
+    // ...
 
-    $Router->route('user/:id', function () use ($Route) {
-        echo 'User ID: ' . $Route->Params->id;
+    $Router->route('user/:id', function ($Request, $Response, $Route) {
+        return $Response(content: 'User ID: ' . $Route->Params->id);
     });
   }, GET);
   ```
@@ -355,9 +354,8 @@ More **Screenshots**, videos and details can be found in the home page of [Bootg
   **5. Catch-All Route**
 
   ```php
-  $Router->route('/*', function ($Response) {
-    $Response->code = 404;
-    $Response('pages/404')->send();
+  $Router->route('/*', function ($Request, $Response) {
+    return $Response(status: 404, content: 'pages/404');
   });
   ```
   -->
