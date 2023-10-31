@@ -318,9 +318,9 @@ More **Screenshots**, videos and details can be found in the home page of [Bootg
   **1. Route Callbacks**
 
   ```php
-  $Router->route('/', fn ($Request, $Response) => $Response, GET); // Closure
-  $Router->route('/hello', ['talk', 'world'], GET); // Function
-  $Router->route('/world', ['HelloWorld::talk'], GET); // Static Class
+  $Router->route('/', fn ($Request, $Response) => $Response, GET); // Closures
+  $Router->route('/hello', ['talk', 'world'], GET); // functions
+  $Router->route('/world', ['HelloWorld::talk'], GET); // Static Classes
   ```
 
   **2. Route with Route Params**
@@ -328,6 +328,18 @@ More **Screenshots**, videos and details can be found in the home page of [Bootg
   ```php
   $Router->route('/user/:id', function ($Request, $Response, $Route) {
     return $Response(content: 'User ID: ' . $Route->Params->id);
+  }, GET);
+  ```
+
+  ```php
+  $Route->Params->id = '[0-9]+'; // Set Param Regex pattern
+
+  $Router->route('/param6/:id/param7/:id', function ($Request, $Response, $Route) {
+    return $Response(content: <<<HTML
+    [3.3] Equals named params with Regex:<br>
+    Param 1: {$Route->Params->id[0]}<br>
+    Param 2: {$Route->Params->id[1]}
+    HTML);
   }, GET);
   ```
 
@@ -358,7 +370,6 @@ More **Screenshots**, videos and details can be found in the home page of [Bootg
     return $Response(status: 404, content: 'pages/404');
   });
   ```
-  -->
 </details>
 
 
