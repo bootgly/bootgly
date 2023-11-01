@@ -17,7 +17,7 @@ return [
       $Response->Header->Cookie->append('Test1', 'value1');
       $Response->Header->Cookie->append('Test2', 'value2');
 
-      return $Response(content: 'Hello World!');
+      return $Response(body: 'Hello World!');
    },
    // Client API
    'request' => function () {

@@ -23,7 +23,7 @@ return static function
    // ! Request examples
    // ? Request Meta (first line of HTTP Request Header)
    #$Request->method;    // GET
-   #$Request->uri;       // /path/to?query1=value2...
+   #$Request->URI;       // /path/to?query1=value2...
    #$Request->protocol;  // HTTP/1.1
    // ? Request Header
    #$host = $Request->Header->get('Host');
@@ -51,10 +51,10 @@ return static function
 
    // ? Response Content
    $Router->route('/', function ($Request, $Response) {
-      return $Response(content: 'Hello World!');
+      return $Response(body: 'Hello World!');
    }, GET);
    $Router->route('/test', function () {
-      return new Response(content: 'Testing Bootgly HTTP Router!');
+      return new Response(body: 'Testing Bootgly HTTP Router!');
    }, GET);
 
    // @ send
@@ -71,7 +71,7 @@ return static function
    #return $Response->authenticate(realm: 'Protected area');
 
    // @ redirect
-   #return $Response->redirect(uri: 'https://docs.bootgly.com/', code: 302);
+   #return $Response->redirect(URI: 'https://docs.bootgly.com/', code: 302);
 
-   return $Response(status: 404, content: '404 Not Found!');
+   return $Response(status: 404, body: '404 Not Found!');
 };

@@ -15,7 +15,7 @@ return [
    // @ simulate
    // Server API
    'response' => function (Request $Request, Response $Response) : Response {
-      return $Response(content: 'Hello World!');
+      return $Response(body: 'Hello World!');
    },
    // Client API
    'request' => function () {

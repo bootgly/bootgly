@@ -20,7 +20,7 @@ return [
    // Server API
    'response' => function (Request $Request, Response $Response) : Response {
       $urn = $Request->urn;
-      return $Response(content: $urn);
+      return $Response(body: $urn);
    },
 
    // @ test

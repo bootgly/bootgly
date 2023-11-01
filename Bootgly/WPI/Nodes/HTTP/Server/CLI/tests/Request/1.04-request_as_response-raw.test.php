@@ -20,7 +20,7 @@ return [
    // Server API
    'response' => function (Request $Request, Response $Response) : Response {
       $raw = $Request->raw;
-      return $Response(content: $raw);
+      return $Response(body: $raw);
    },
 
    // @ test

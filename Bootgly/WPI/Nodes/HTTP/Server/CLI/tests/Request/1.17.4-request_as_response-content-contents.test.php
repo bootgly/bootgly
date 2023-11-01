@@ -29,7 +29,7 @@ return [
    // Server API
    'response' => function (Request $Request, Response $Response): Response {
       $Request->receive();
-      return $Response(content: $Request->contents);
+      return $Response(body: $Request->contents);
    },
 
    // @ test

@@ -24,7 +24,7 @@ return [
    {
       function response($Request, Response $Response)
       {
-         return $Response(content: 'Hello!');
+         return $Response(body: 'Hello!');
       }
 
       $Router->route('/route2', 'response', GET);

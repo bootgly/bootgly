@@ -20,7 +20,7 @@ return [
    // Server API
    'response' => function (Request $Request, Response $Response) : Response {
       $method = $Request->method;
-      return $Response(content: $method);
+      return $Response(body: $method);
    },
 
    // @ test

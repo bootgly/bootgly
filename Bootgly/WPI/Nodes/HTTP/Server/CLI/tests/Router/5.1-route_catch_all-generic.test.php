@@ -23,30 +23,30 @@ return [
    'response' => function (Request $Request, Response $Response, Router $Router)
    {
       $Router->route('/', function ($Request, $Response) {
-         return $Response(content: 'Fail...');
+         return $Response(body: 'Fail...');
       }, GET);
 
       $Router->route('/fail', function ($Request, $Response) {
-         return $Response(content: 'Fail...');
+         return $Response(body: 'Fail...');
       }, GET);
 
       $Router->route('/profile/:*', function () use ($Router) {
          $Router->route('default', function ($Request, $Response) {
-            return $Response(content: 'Default Profile!');
+            return $Response(body: 'Default Profile!');
          });
 
          $Route = $Router->Route;
          $Router->route('user/:id', function ($Request, $Response) use ($Route) {
-            return $Response(content: 'User ID: ' . $Route->Params->id);
+            return $Response(body: 'User ID: ' . $Route->Params->id);
          });
 
          $Router->route('user/bob', function ($Request, $Response) {
-            return $Response(content: 'Bob!');
+            return $Response(body: 'Bob!');
          });
       }, GET);
 
       $Router->route('/*', function ($Request, $Response) {
-         return $Response(content: 'Catch-All!');
+         return $Response(body: 'Catch-All!');
       }, GET);
    },
 

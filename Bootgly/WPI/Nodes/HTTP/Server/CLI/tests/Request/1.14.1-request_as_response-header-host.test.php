@@ -27,7 +27,7 @@ return [
    // Server API
    'response' => function (Request $Request, Response $Response): Response {
       $host = $Request->host;
-      return $Response(content: $host);
+      return $Response(body: $host);
    },
 
    // @ test

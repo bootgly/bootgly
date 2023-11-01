@@ -27,7 +27,7 @@ return [
    },
    // Server API
    'response' => function (Request $Request, Response $Response): Response {
-      return $Response(content: $Request->at);
+      return $Response(body: $Request->at);
    },
 
    // @ test

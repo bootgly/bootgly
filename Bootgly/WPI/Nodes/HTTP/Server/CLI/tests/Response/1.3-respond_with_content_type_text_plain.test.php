@@ -16,7 +16,7 @@ return [
    // Server API
    'response' => function (Request $Request, Response $Response) : Response {
       $Response->Header->set('Content-Type', 'text/plain');
-      return $Response(content: 'Hello World!');
+      return $Response(body: 'Hello World!');
    },
    // Client API
    'request' => function () {

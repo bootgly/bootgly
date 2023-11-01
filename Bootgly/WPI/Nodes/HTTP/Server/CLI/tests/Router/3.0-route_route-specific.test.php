@@ -23,19 +23,19 @@ return [
    'response' => function (Request $Request, Response $Response, Router $Router)
    {
       $Router->route('/', function ($Request, $Response) {
-         return $Response(content: 'Fail...');
+         return $Response(body: 'Fail...');
       }, GET);
 
       $Router->route('/fail', function ($Request, $Response) {
-         return $Response(content: 'Fail...');
+         return $Response(body: 'Fail...');
       }, GET);
 
       $Router->route('/specific', function ($Request, $Response) {
-         return $Response(content: 'Hello World!');
+         return $Response(body: 'Hello World!');
       }, GET);
 
       $Router->route('/*', function ($Request, $Response) {
-         return $Response(content: 'Catch-All!');
+         return $Response(body: 'Catch-All!');
       }, GET);
    },
 

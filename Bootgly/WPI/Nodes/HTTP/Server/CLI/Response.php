@@ -23,7 +23,7 @@ class Response
    // ! HTTP
    public Meta $Meta;
    public Header $Header;
-   public Content $Content;
+   public Content $Body;
 
    // * Config
    public bool $debugger;
@@ -55,13 +55,13 @@ class Response
 
    public function __construct (
       int $code = 200,
-      string $content = '',
+      string $body = '',
       ? array $headers = null,
    )
    {
       // ! HTTP
       $this->Meta = new Meta;
-      $this->Content = new Content;
+      $this->Body = new Content;
       $this->Header = new Header;
 
       // * Config
@@ -94,10 +94,12 @@ class Response
          $this->code = $code;
       }
 
-      // TODO headers
+      if ($headers !== null) {
+         $this->Header->prepare($headers);
+      }
 
-      if ($content !== '') {
-         $this->Content->raw = $content;
+      if ($body !== '') {
+         $this->Body->raw = $body;
       }
    }
    public function __get ($name)
@@ -110,14 +112,14 @@ class Response
          // ? Response Headers
          case 'headers':
             return $this->Header->fields;
-         // ? Response Content
+         // ? Response Body
          case 'chunked':
             if (! $this->chunked) {
                $this->chunked = true;
                $this->Header->append('Transfer-Encoding', 'chunked');
             }
 
-            return $this->Content->chunked;
+            return $this->Body->chunked;
 
          default: // @ Construct resource
             $this->resource = $name;
@@ -178,18 +180,22 @@ class Response
    }
    public function __invoke (
       $x = null,
-      ? int $status = null,
+      int $status = 200,
       ? array $headers = null,
-      ? string $content = null
+      string $body = ''
    )
    {
       if ($x === null) {
-         if ($status !== null) {
+         if ($status !== 200) {
             $this->code = $status;
          }
 
-         if ($content !== null) {
-            $this->Content->raw = $content;
+         if ($headers !== null) {
+            $this->Header->prepare($headers);
+         }
+
+         if ($body !== '') {
+            $this->Body->raw = $body;
          }
 
          return $this;
@@ -217,13 +223,13 @@ class Response
       }
 
       switch ($resource) {
-         // @ File
+         // @ Resource File
          case 'view':
             $this->source = 'file';
             $this->type = 'php';
             break;
 
-         // @ Content
+         // @ Resource Content
          case 'json':
             $this->source   = 'content';
             $this->type     = 'json';
@@ -267,7 +273,7 @@ class Response
       }
 
       switch ($resource) {
-         // @ File
+         // @ Resource File
          case 'view':
             $File = new File(\Bootgly::$Project->path . 'views/' . $data);
 
@@ -277,7 +283,7 @@ class Response
 
             break;
 
-         // @ Content
+         // @ Resource Content
          case 'json':
          case 'jsonp':
             if ( \is_array($data) ) {
@@ -502,7 +508,7 @@ class Response
       }
 
       // @ Output
-      $this->Content->raw = $body ?? $this->body;
+      $this->Body->raw = $body ?? $this->body;
 
       $this->sent = true;
 
@@ -678,14 +684,14 @@ class Response
    public function output ($Package, &$length) : string
    {
       $Meta    = &$this->Meta;
-      $Content = &$this->Content;
+      $Body = &$this->Body;
       $Header  = &$this->Header;
 
       if (! $this->stream && ! $this->chunked && ! $this->encoded) {
-         // ? Response Content
-         $Content->length = strlen($Content->raw);
+         // ? Response Body
+         $Body->length = strlen($Body->raw);
          // ? Response Header
-         $Header->set('Content-Length', $Content->length);
+         $Header->set('Content-Length', $Body->length);
          // ? Response Meta
          // ...
       }
@@ -696,7 +702,7 @@ class Response
       {$Meta->raw}\r
       {$Header->raw}\r
       \r
-      {$Content->raw}
+      {$Body->raw}
       HTTP_RAW;
 
       if ($this->stream) {
@@ -729,13 +735,13 @@ class Response
    /**
     * Redirects to a new URI. Default return is 307 for GET (Temporary Redirect) and 303 (See Other) for POST.
     *
-    * @param string $uri The new URI to redirect to.
+    * @param string $URI The new URI to redirect to.
     * @param int $code The HTTP status code to use for the redirection.
     *
     *
     * @return self Returns Response.
     */
-   public function redirect (string $uri, ? int $code = null): self
+   public function redirect (string $URI, ? int $code = null) : self
    {
       // @ Set default code
       if ($code === null) {
@@ -760,7 +766,7 @@ class Response
             return $this;
       }
 
-      $this->Header->set('Location', $uri);
+      $this->Header->set('Location', $URI);
       $this->sent = true;
 
       return $this;
@@ -776,7 +782,7 @@ class Response
                $this->Meta->status = 416;
                // Clean prepared headers / header fields already set
                $this->Header->clean();
-               $this->Content->raw = ' '; // Needs body non-empty
+               $this->Body->raw = ' '; // Needs body non-empty
                break;
             default:
                $this->status = $status;

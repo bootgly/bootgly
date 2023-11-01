@@ -20,7 +20,7 @@ return [
    // Server API
    'response' => function (Request $Request, Response $Response) : Response {
       $port = $Request->port;
-      return $Response(content: $port);
+      return $Response(body: $port);
    },
 
    // @ test

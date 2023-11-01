@@ -26,7 +26,7 @@ return [
       {
          public static function response ($Request, Response $Response)
          {
-            return $Response(content: 'Hello World!!!');
+            return $Response(body: 'Hello World!!!');
          }
       }
 

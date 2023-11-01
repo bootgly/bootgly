@@ -21,7 +21,7 @@ return [
    // Server API
    'response' => function (Request $Request, Response $Response) : Response {
       $address = $Request->address;
-      return $Response(content: $address);
+      return $Response(body: $address);
    },
 
    // @ test

@@ -24,7 +24,7 @@ return [
 
       $Project->construct();
 
-      $Response(content: 'Unauthorized page!');
+      $Response(body: 'Unauthorized page!');
       return $Response->authenticate();
    },
    // Client API

@@ -26,7 +26,7 @@ return [
    'response' => function (Request $Request, Response $Response) : Response {
       $language = $Request->language;
 
-      return $Response(content: $language);
+      return $Response(body: $language);
    },
 
    // @ test

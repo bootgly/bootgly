@@ -23,21 +23,21 @@ return [
    'response' => function (Request $Request, Response $Response, Router $Router)
    {
       $Router->route('/', function ($Request, $Response) {
-         return $Response(content: 'Fail...');
+         return $Response(body: 'Fail...');
       }, GET);
 
       $Router->route('/fail', function ($Request, $Response) {
-         return $Response(content: 'Fail...');
+         return $Response(body: 'Fail...');
       }, GET);
 
       $Route = $Router->Route;
       $Route->Params->id = '[0-9]+';
       $Router->route('/param1/:id', function ($Request, $Response) use ($Route) {
-         return $Response(content: 'Single named param: ' . $Route->Params->id);
+         return $Response(body: 'Single named param: ' . $Route->Params->id);
       }, GET);
 
       $Router->route('/*', function ($Request, $Response) {
-         return $Response(content: 'Catch-All!');
+         return $Response(body: 'Catch-All!');
       }, GET);
    },
 

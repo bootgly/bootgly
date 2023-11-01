@@ -35,7 +35,7 @@ return [
       if ($Request->fresh) {
          return $Response(status: 304);
       } else {
-         return $Response(content: 'test')->send();
+         return $Response(body: 'test')->send();
       }
    },
 

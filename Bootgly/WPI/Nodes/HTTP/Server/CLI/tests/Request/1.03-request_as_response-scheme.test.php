@@ -20,7 +20,7 @@ return [
    // Server API
    'response' => function (Request $Request, Response $Response) : Response {
       $scheme = $Request->scheme;
-      return $Response(content: $scheme);
+      return $Response(body: $scheme);
    },
 
    // @ test

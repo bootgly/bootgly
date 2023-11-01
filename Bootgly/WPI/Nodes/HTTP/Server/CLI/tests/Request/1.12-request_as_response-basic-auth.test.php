@@ -29,7 +29,7 @@ return [
       $username = $Request->username;
       $password = $Request->password;
 
-      return $Response(content: "{$username}:{$password}");
+      return $Response(body: "{$username}:{$password}");
    },
 
    // @ test

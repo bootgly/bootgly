@@ -23,11 +23,11 @@ return [
    'response' => function (Request $Request, Response $Response, Router $Router)
    {
       $Router->route('/', function ($Request, $Response) {
-         return $Response(content: 'Fail...');
+         return $Response(body: 'Fail...');
       }, GET);
 
       $Router->route('/fail', function ($Request, $Response) {
-         return $Response(content: 'Fail...');
+         return $Response(body: 'Fail...');
       }, GET);
 
       $Route = $Router->Route;
@@ -35,13 +35,13 @@ return [
       $Router->route('/param8/:id/param9/:id/param10/:abc', function ($Request, $Response) use ($Route) {
          $Params = $Route->Params;
 
-         return $Response(content: <<<TEXT
+         return $Response(body: <<<TEXT
          Equals, Different named params: {$Params->id[0]}, {$Params->id[1]}, $Params->abc
          TEXT);
       }, GET);
 
       $Router->route('/*', function ($Request, $Response) {
-         return $Response(content: 'Catch-All!');
+         return $Response(body: 'Catch-All!');
       }, GET);
    },
 
