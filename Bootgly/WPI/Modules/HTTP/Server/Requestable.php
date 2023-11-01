@@ -83,16 +83,11 @@ trait Requestable
 
             return $locator;
 
-         // @ URN
-         case 'urn':
+         // @ URN (Uniform Resource Name)
          case 'URN':
-         case 'name':
             $name = $this->Path->current;
 
-            $this->urn = $name;
-
-            // $this->URN = $name;
-            $this->name = $name;
+            $this->URN = $name;
 
             return $name;
             // TODO dir, directory, Dir, Directories, ... ?

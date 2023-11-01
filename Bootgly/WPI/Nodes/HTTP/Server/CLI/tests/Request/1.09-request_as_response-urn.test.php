@@ -19,8 +19,8 @@ return [
    },
    // Server API
    'response' => function (Request $Request, Response $Response) : Response {
-      $urn = $Request->urn;
-      return $Response(body: $urn);
+      $URN = $Request->URN;
+      return $Response(body: $URN);
    },
 
    // @ test
