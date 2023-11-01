@@ -15,7 +15,7 @@ return [
    // @ simulate
    // Server API
    'response' => function (Request $Request, Response $Response) : Response {
-      return $Response(status: 302); // 302 Not Found
+      return $Response(code: 302); // 302 Not Found
    },
    // Client API
    'request' => function () {

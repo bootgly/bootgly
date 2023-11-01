@@ -132,9 +132,9 @@ class Request
 
       // * Meta
       $this->Server = Server::class;
-      $this->on = date("Y-m-d");
-      $this->at = date("H:i:s");
-      $this->time = time();
+      $this->on = \date("Y-m-d");
+      $this->at = \date("H:i:s");
+      $this->time = \time();
 
 
       $this->Downloader = new Downloader($this);
@@ -148,7 +148,7 @@ class Request
    public function boot (Packages $Package, string &$buffer, int $size) : int // @ return Request length
    {
       // @ Check Request raw separator
-      $separatorPosition = strpos($buffer, "\r\n\r\n");
+      $separatorPosition = \strpos($buffer, "\r\n\r\n");
       if ($separatorPosition === false) { // @ Check if the Request raw has a separator
          // @ Check Request raw length
          if ($size >= 16384) { // Package size
@@ -163,7 +163,7 @@ class Request
       // ? Request Meta
       // @ Boot Request Meta raw
       // Sample: GET /path HTTP/1.1
-      $metaRaw = strstr($buffer, "\r\n", true);
+      $metaRaw = \strstr($buffer, "\r\n", true);
       #$metaRaw = strtok($buffer, "\r\n");
 
       @[$method, $URI, $protocol] = explode(' ', $metaRaw, 3);
@@ -191,22 +191,22 @@ class Request
       // protocol
 
       // @ Prepare Request Meta length
-      $metaLength = strlen($metaRaw);
+      $metaLength = \strlen($metaRaw);
 
       // ? Request Header
       // @ Boot Request Header raw
       $headerRaw = substr($buffer, $metaLength + 2, $separatorPosition - $metaLength);
 
       // @ Prepare Request Header length
-      $headerLength = strlen($headerRaw);
+      $headerLength = \strlen($headerRaw);
 
       // ? Request Content
       // @ Prepare Request Content length if possible
-      if ( $_ = strpos($headerRaw, "\r\nContent-Length: ") ) {
-         $contentLength = (int) substr($headerRaw, $_ + 18, 10);
-      } else if (preg_match("/\r\ncontent-length: ?(\d+)/i", $headerRaw, $match) === 1) {
+      if ( $_ = \strpos($headerRaw, "\r\nContent-Length: ") ) {
+         $contentLength = (int) \substr($headerRaw, $_ + 18, 10);
+      } else if (\preg_match("/\r\ncontent-length: ?(\d+)/i", $headerRaw, $match) === 1) {
          $contentLength = $match[1];
-      } else if (stripos($headerRaw, "\r\nTransfer-Encoding:") !== false) {
+      } else if (\stripos($headerRaw, "\r\nTransfer-Encoding:") !== false) {
          $Package->reject("HTTP/1.1 400 Bad Request\r\n\r\n");
          return 0;
       }
@@ -221,8 +221,8 @@ class Request
          }
 
          if ($contentLength > 0) {
-            $this->Content->raw = substr($buffer, $separatorPosition + 4, $contentLength);
-            $this->Content->downloaded = strlen($this->Content->raw);
+            $this->Content->raw = \substr($buffer, $separatorPosition + 4, $contentLength);
+            $this->Content->downloaded = \strlen($this->Content->raw);
 
             #if ($contentLength > $this->Content->downloaded) {
             #   $this->Content->waiting = true;
@@ -326,7 +326,7 @@ class Request
    // TODO implement https://www.php.net/manual/pt_BR/ref.filter.php
    public function filter (int $type, string $var_name, int $filter, array|int $options)
    {
-      return filter_input($type, $var_name, $filter, $options);
+      return \filter_input($type, $var_name, $filter, $options);
    }
    public function sanitize ()
    {
@@ -341,11 +341,11 @@ class Request
    {
       // @ Delete files downloaded by server in temp folder
       if ( ! empty($_FILES) ) {
-         clearstatcache();
+         \clearstatcache();
 
-         array_walk_recursive($_FILES, function ($value, $key) {
-            if (is_file($value) && $key === 'tmp_name') {
-               unlink($value);
+         \array_walk_recursive($_FILES, function ($value, $key) {
+            if (\is_file($value) && $key === 'tmp_name') {
+               \unlink($value);
             }
          });
       }

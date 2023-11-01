@@ -6,7 +6,7 @@ $Router->route('/http-cache-time-based-1', function ($Response, $Request) {
    #return $Response->Json->send($Response->Header->headers);
 
    if ($Request->fresh) {
-      return $Response(status: 304);
+      return $Response(code: 304);
    } else {
       return $Response->Json->send([
          'requested_at' => $Request->at

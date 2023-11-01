@@ -40,7 +40,7 @@ return static function
 
    // ! Response examples
    // ? Response Meta (first line of HTTP Response Header)
-   #return $Response(status: 302); // 302 Not Found
+   #return $Response(code: 302); // 302 Not Found
 
    // ? Response Header
    #$Response->Header->set('Content-Type', 'text/plain');
@@ -73,5 +73,5 @@ return static function
    // @ redirect
    #return $Response->redirect(URI: 'https://docs.bootgly.com/', code: 302);
 
-   return $Response(status: 404, body: '404 Not Found!');
+   return $Response(code: 404, body: '404 Not Found!');
 };

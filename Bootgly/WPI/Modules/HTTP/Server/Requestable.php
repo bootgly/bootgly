@@ -26,12 +26,7 @@ trait Requestable
          // * Data
          case 'ip': // TODO IP->...
          case 'address':
-            // @ Parse CloudFlare remote ip headers
-            if (isset($this->headers['cf-connecting-ip'])) {
-               return $this->headers['cf-connecting-ip'];
-            }
-
-            return $_SERVER['REMOTE_ADDR'];
+            return $this->headers['cf-connecting-ip'] ?? $_SERVER['REMOTE_ADDR'];
          case 'port':
             return $_SERVER['REMOTE_PORT'];
 

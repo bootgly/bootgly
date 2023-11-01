@@ -368,7 +368,7 @@ More **Screenshots**, videos and details can be found in the home page of [Bootg
 
   ```php
   $Router->route('/*', function ($Request, $Response) {
-    return $Response(status: 404, body: 'pages/404');
+    return $Response(code: 404, body: 'pages/404');
   });
   ```
 </details>

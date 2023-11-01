@@ -34,7 +34,7 @@ return [
       $Response->Header->set('ETag', '"foo"');
 
       if ($Request->fresh) {
-         return $Response(status: 304);
+         return $Response(code: 304);
       } else {
          return $Response(body: 'test')->send();
       }

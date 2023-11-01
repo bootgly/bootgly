@@ -31,7 +31,7 @@ return [
       $Response->Header->set('Last-Modified', 'foo');
 
       if ($Request->fresh) {
-         return $Response(status: 304);
+         return $Response(code: 304);
       } else {
          return $Response(body: 'test')->send();
       }

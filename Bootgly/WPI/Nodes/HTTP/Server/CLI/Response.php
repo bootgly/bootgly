@@ -11,6 +11,7 @@
 namespace Bootgly\WPI\Nodes\HTTP\Server\CLI;
 
 
+use Bootgly;
 use Bootgly\ABI\IO\FS\File;
 use Bootgly\WPI\Nodes\HTTP\Server\CLI as Server;
 use Bootgly\WPI\Nodes\HTTP\Server\CLI\Response\Content;
@@ -180,14 +181,13 @@ class Response
    }
    public function __invoke (
       $x = null,
-      int $status = 200,
+      int $code = 200,
       ? array $headers = null,
-      string $body = ''
-   )
+      string $body = '')
    {
       if ($x === null) {
-         if ($status !== 200) {
-            $this->code = $status;
+         if ($code !== 200) {
+            $this->code = $code;
          }
 
          if ($headers !== null) {
@@ -219,7 +219,7 @@ class Response
       if ($resource === null) {
          $resource = $this->resource;
       } else {
-         $resource = strtolower($resource);
+         $resource = \strtolower($resource);
       }
 
       switch ($resource) {
@@ -275,7 +275,7 @@ class Response
       switch ($resource) {
          // @ Resource File
          case 'view':
-            $File = new File(\Bootgly::$Project->path . 'views/' . $data);
+            $File = new File(Bootgly::$Project->path . 'views/' . $data);
 
             $this->body   = $File;
             $this->source = 'file';
@@ -311,14 +311,14 @@ class Response
             if ($resource) {
                // TODO Inject resource with custom process() created by user
             } else {
-               switch ( getType($data) ) { // _()->type
+               switch ( \getType($data) ) { // _()->type
                   case 'string':
                      // TODO check if string is a valid path
                      $File = match ($data[0]) {
                         #!
                         '/' => new File(BOOTGLY_WORKING_DIR . 'projects' . $data),
                         '@' => new File(BOOTGLY_WORKING_DIR . 'projects/' . $data),
-                        default => new File(\Bootgly::$Project->path . $data)
+                        default => new File(Bootgly::$Project->path . $data)
                      };
 
                      $this->body   = &$File;
@@ -537,7 +537,7 @@ class Response
 
       // @ Prepare HTTP headers
       $this->Header->prepare([
-         'Last-Modified' => gmdate('D, d M Y H:i:s \G\M\T', $File->modified),
+         'Last-Modified' => \gmdate('D, d M Y H:i:s \G\M\T', $File->modified),
          // Cache
          'Cache-Control' => 'no-cache, must-revalidate',
          'Expires' => '0',
@@ -689,7 +689,7 @@ class Response
 
       if (! $this->stream && ! $this->chunked && ! $this->encoded) {
          // ? Response Body
-         $Body->length = strlen($Body->raw);
+         $Body->length = \strlen($Body->raw);
          // ? Response Header
          $Header->set('Content-Length', $Body->length);
          // ? Response Meta

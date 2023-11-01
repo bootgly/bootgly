@@ -14,7 +14,7 @@ return [
    // @ simulate
    // Server API
    'response' => function (Request $Request, Response $Response) : Response {
-      return $Response(status: 500);
+      return $Response(code: 500);
    },
    // Client API
    'request' => function () {
