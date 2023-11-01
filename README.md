@@ -288,9 +288,10 @@ More **Screenshots**, videos and details can be found in the home page of [Bootg
 </details>
 
 <details>
-  <summary><b>Routing HTTP Requests with Bootgly HTTP Server Router</b></summary><br>
+  <summary><b>Routing HTTP Requests</b></summary><br>
 
-  [The Router][HTTP_SERVER_ROUTER_CLASS] for HTTP Servers provides a flexible and powerful web routing system. The `route` method is used to route routes, with the schema as follows:
+  [The Router][HTTP_SERVER_ROUTER_CLASS] for HTTP Servers provides a flexible and powerful web routing system. 
+  The `route` method is used to define routes, with the schema as follows:
 
   ```php
   route (string $route, \Closure|callable $handler, null|string|array $condition = null) : bool
@@ -304,7 +305,7 @@ More **Screenshots**, videos and details can be found in the home page of [Bootg
 
   ```php
   $Router->route('/', function ($Request, $Response, $Route) {
-    return $Response(content: 'Hello World!');
+    return $Response(body: 'Hello World!');
   }, GET);
   ```
 
@@ -327,7 +328,7 @@ More **Screenshots**, videos and details can be found in the home page of [Bootg
 
   ```php
   $Router->route('/user/:id', function ($Request, $Response, $Route) {
-    return $Response(content: 'User ID: ' . $Route->Params->id);
+    return $Response(body: 'User ID: ' . $Route->Params->id);
   }, GET);
   ```
 
@@ -335,7 +336,7 @@ More **Screenshots**, videos and details can be found in the home page of [Bootg
   $Route->Params->id = '[0-9]+'; // Set Param Regex pattern
 
   $Router->route('/param6/:id/param7/:id', function ($Request, $Response, $Route) {
-    return $Response(content: <<<HTML
+    return $Response(body: <<<HTML
     [3.3] Equals named params with Regex:<br>
     Param 1: {$Route->Params->id[0]}<br>
     Param 2: {$Route->Params->id[1]}
@@ -347,7 +348,7 @@ More **Screenshots**, videos and details can be found in the home page of [Bootg
 
   ```php
   $Router->route('/data', function ($Request, $Response) {
-    return $Response(content: 'Data!');
+    return $Response(body: 'Data!');
   }, [GET, POST]);
   ```
 
@@ -358,7 +359,7 @@ More **Screenshots**, videos and details can be found in the home page of [Bootg
     // ...
 
     $Router->route('user/:id', function ($Request, $Response, $Route) {
-        return $Response(content: 'User ID: ' . $Route->Params->id);
+        return $Response(body: 'User ID: ' . $Route->Params->id);
     });
   }, GET);
   ```
@@ -367,7 +368,7 @@ More **Screenshots**, videos and details can be found in the home page of [Bootg
 
   ```php
   $Router->route('/*', function ($Request, $Response) {
-    return $Response(status: 404, content: 'pages/404');
+    return $Response(status: 404, body: 'pages/404');
   });
   ```
 </details>
