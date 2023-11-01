@@ -13,6 +13,8 @@ namespace Bootgly\WPI\Modules\HTTP\Server;
 
 class Route
 {
+   public const START_PARAM = ':';
+
    // * Config
    private ? string $name;
 
@@ -72,14 +74,19 @@ class Route
       // * Meta
       switch ($name) {
          case 'parameterized':
-            if (\strpos($this->path, ':') !== false) {
-               return $this->parameterized = true;
-            } else {
-               return $this->parameterized = false;
+            $parameterized = false;
+
+            if (\strpos($this->path, self::START_PARAM) !== false) {
+               $parameterized = true;
             }
+
+            return $this->parameterized = $parameterized;
+
          case 'node':
             $node = \strstr($this->path, ':');
+
             return $node;
+
          default:
             return $this->$name;
       }

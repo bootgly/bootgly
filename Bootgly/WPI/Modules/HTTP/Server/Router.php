@@ -98,7 +98,11 @@ class Router
    }
 
    // @ default
-   public function route (string $route, \Closure|callable $handler, null|string|array $condition = null) : bool
+   public function route (
+      string $route,
+      \Closure|callable $handler,
+      null|string|array $methods = null
+   ) : bool
    {
       $Route = &$this->Route;
 
@@ -126,11 +130,15 @@ class Router
          $Route->set(path: $route);
 
          // @ Match
-         if ($Route->nested && $Route->path === '*') { // Not Matched Route (nested level)
+         // Not Matched Route (nested level)
+         if ($Route->nested && $Route->path === '*') {
             $this->matched = 1;
-         } else if ($Route->path === '/*') { // Not Matched Route (root level)
+         }
+         // Not Matched Route (root level)
+         else if ($Route->path === '/*') {
             $this->matched = 1;
-         } else {
+         }
+         else {
             $this->matched = $this->match();
          }
       }
@@ -138,27 +146,10 @@ class Router
       // ! Route Condition
       if ($this->matched === 1) {
          // @ Match
-         switch ($condition) {
-            case \is_string($condition):
-               if (self::$Server::$Request->method === $condition) {
-                  $this->matched = 2;
-               }
-
-               break;
-            case \is_array($condition):
-               $found = \array_search(
-                  needle: self::$Server::$Request->method,
-                  haystack: $condition
-               );
-
-               if ($found !== false) {
-                  $this->matched = 2;
-               }
-
-               break;
-         }
-
-         if ( empty($condition) ) {
+         if (
+            empty($methods) ||
+            \in_array(self::$Server::$Request->method, (array) $methods)
+         ) {
             $this->matched = 2;
          }
       }
@@ -177,7 +168,8 @@ class Router
             foreach ($Params as $param => $value) {
                if ( \is_int($value) ) {
                   $Params->$param = @$parts[$value - 1];
-               } else if ( \is_array($value) ) {
+               }
+               else if ( \is_array($value) ) {
                   foreach ($value as $index => $location) {
                      $Params->$param[$index] = @$parts[$location - 1];
                   }
@@ -194,11 +186,12 @@ class Router
                self::$Server::$Request,
                self::$Server::$Response
             );
-         } else {
+         }
+         else {
             // callable
             $Response = \call_user_func_array(
-               $handler,
-               [
+               callback: $handler,
+               args: [
                   self::$Server::$Request,
                   self::$Server::$Response,
                   $Route
@@ -215,7 +208,7 @@ class Router
          $this->routed[$route] = [
             $handler
          ];
-
+         // @ Throw
          throw new RouteMatchedException;
       }
 
@@ -239,7 +232,8 @@ class Router
             if ($Route->catched && $Route->catched !== '(.*)') {
                $subject = $Route->catched;
                $Route->catched = '';
-            } else {
+            }
+            else {
                $subject = self::$Server::$Request->URL;
             }
 
@@ -280,8 +274,9 @@ class Router
       // ? Request path (full | relative)
       if ($Route->catched) { // Get catched path instead of Request path
          $locations = \explode('/', \str_replace("/", "\/", $Route->catched));
-      } else {
-         $locations = \explode('/', \str_replace("/", "\/", self::$Server::$Request->path));
+      }
+      else {
+         $locations = \explode('/', \str_replace("/", "\/", self::$Server::$Request->URL));
       }
       // ? Route Path Node replaced by Regex
       $regex_replaced = [];
@@ -289,7 +284,8 @@ class Router
       // ! Reset Route->parsed
       if ($Route->nested) {
          $Route->parsed = '';
-      } else {
+      }
+      else {
          $Route->parsed = '\\';
       }
 
@@ -299,7 +295,8 @@ class Router
                $node = \str_replace(':*', '(.*)', $node); //? Replace with (...) capture everything enclosed
                $Route->catched = '(.*)';
                // TODO error if detected next node after Catch-All param?
-            } else if (@$node[0] === ':') { //? Param
+            }
+            else if (@$node[0] === ':') { //? Param
                $param = \trim($node, ':\\'); //? Get Param name
                // TODO get param name with In-URL Regex
                // TODO validate all $param name 😓 - only accept a-z, A-Z, 0-9 and "-"?
@@ -334,7 +331,8 @@ class Router
                   $Route->Params->$param = (array) $Route->Params->$param;
                   $Route->Params->$param[] = $index + $Route->nodes;
                }
-            } else if (@$locations[$index] !== $node) {
+            }
+            else if (@$locations[$index] !== $node) {
                $Route->parsed = false;
                break;
             }

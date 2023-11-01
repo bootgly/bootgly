@@ -211,166 +211,168 @@ More **Screenshots**, videos and details can be found in the home page of [Bootg
 ### 📟 Bootgly CLI:
 
 <details>
-  <summary><b>Run Bootgly CLI demo</b></summary><br>
+   <summary><b>Run Bootgly CLI demo</b></summary><br>
 
-  1) See the examples in `projects/Bootgly/CLI/examples/`;
-  2) Check the file `projects/Bootgly/CLI.php`;
-  3) Run the Bootgly CLI demo in terminal:
+   1) See the examples in `projects/Bootgly/CLI/examples/`;
+   2) Check the file `projects/Bootgly/CLI.php`;
+   3) Run the Bootgly CLI demo in terminal:
 
-  ```bash
-  php bootgly demo
-  ```
+   ```bash
+   php bootgly demo
+   ```
 </details>
 
 <details>
-  <summary><b>Setup Bootgly CLI globally (on /usr/local/bin)</b></summary><br>
+   <summary><b>Setup Bootgly CLI globally (on /usr/local/bin)</b></summary><br>
 
-  1) Run the Bootgly CLI setup command in terminal (with sudo):
+   1) Run the Bootgly CLI setup command in terminal (with sudo):
 
-  ```bash
-  sudo php bootgly setup
-  ```
+   ```bash
+   sudo php bootgly setup
+   ```
 </details>
 
 <details>
-  <summary><b>Perform Bootgly tests</b></summary><br>
+   <summary><b>Perform Bootgly tests</b></summary><br>
 
-  1) Check the bootstrap tests file `tests/@.php`;
-  2) Run the Bootgly CLI test command in terminal:
+   1) Check the bootstrap tests file `tests/@.php`;
+   2) Run the Bootgly CLI test command in terminal:
 
-  ```bash
-  bootgly test
-  ```
+   ```bash
+   bootgly test
+   ```
 </details>
 
 ### 🌐 Bootgly WPI:
 
 <details>
-  <summary><b>Running a HTTP Server</b></summary>
+   <summary><b>Running a HTTP Server</b></summary>
 
-  ##### **Option 1: Non-CLI SAPI (Apache, LiteSpeed, Nginx, etc)**
+   ##### **Option 1: Non-CLI SAPI (Apache, LiteSpeed, Nginx, etc)**
 
-  1) Enable support to `rewrite`;
-  2) Configure the WPI constructor in `projects/Bootgly/WPI.php` file;
-  3) Run the Non-CLI HTTP Server pointing to `index.php`.
+   1) Enable support to `rewrite`;
+   2) Configure the WPI constructor in `projects/Bootgly/WPI.php` file;
+   3) Run the Non-CLI HTTP Server pointing to `index.php`.
 
-  ##### **Option 2: CLI SAPI**
+   ##### **Option 2: CLI SAPI**
 
-  Directly in Linux OS *(max performance)*:
+   Directly in Linux OS *(max performance)*:
 
-  1) Configure the Bootgly HTTP Server script in `scripts/http-server-cli` file;
-  2) Configure the HTTP Server API in `projects/Bootgly/WPI/HTTP-Server.API.php` file;
-  3) Run the Bootgly HTTP Server CLI in the terminal:
+   1) Configure the Bootgly HTTP Server script in `scripts/http-server-cli` file;
+   2) Configure the HTTP Server API in `projects/Bootgly/WPI/HTTP-Server.API.php` file;
+   3) Run the Bootgly HTTP Server CLI in the terminal:
 
-  ```bash
-  bootgly serve
-  ```
-  or
-  ```bash
-  php scripts/http-server-cli
-  ```
+   ```bash
+   bootgly serve
+   ```
+   or
+   ```bash
+   php scripts/http-server-cli
+   ```
 
-  --
+   --
 
-  or using Docker:
+   or using Docker:
 
-  1) Pull the image:
+   1) Pull the image:
 
-  ```bash
-  docker pull bootgly/http-server-cli
-  ```
+   ```bash
+   docker pull bootgly/http-server-cli
+   ```
 
-  2) Run the container in interactive mode and in the host network for max performance:
+   2) Run the container in interactive mode and in the host network for max performance:
 
-  ```bash
-  docker run -it --network host bootgly/http-server-cli
-  ```
+   ```bash
+   docker run -it --network host bootgly/http-server-cli
+   ```
 </details>
 
 <details>
-  <summary><b>Routing HTTP Requests</b></summary><br>
+   <summary><b>Routing HTTP Requests on the Server-side</b></summary><br>
 
-  [The Router][HTTP_SERVER_ROUTER_CLASS] for HTTP Servers provides a flexible and powerful web routing system. 
-  The `route` method is used to define routes, with the schema as follows:
+   [The Router][HTTP_SERVER_ROUTER_CLASS] for HTTP Servers provides a flexible and powerful web routing system. 
+   The `route` method is used to define routes, with the schema as follows:
 
-  ```php
-  route (string $route, \Closure|callable $handler, null|string|array $condition = null) : bool
-  ```
+   ```php
+   route (string $route, \Closure|callable $handler, null|string|array $methods = null) : bool
+   ```
 
-  - `$route` is the URL pattern to match that accepts params.
-  - `$handler` is the callback to be executed when the route is matched.
-  - `$condition` is the HTTP method(s) that this route should respond to.
+   - `$route` is the URL pattern to match that accepts params.
+   - `$handler` is the callback to be executed when the route is matched.
+   - `$methods` is the HTTP method(s) that this route should respond to.
 
-  **Basic Usage**
+   **Basic Usage**
 
-  ```php
-  $Router->route('/', function ($Request, $Response) {
-    return $Response(body: 'Hello World!');
-  }, GET);
-  ```
+   ```php
+   $Router->route('/', function ($Request, $Response) {
+      return $Response(body: 'Hello World!');
+   }, GET);
+   ```
 
-  Handler arguments:
-  - `$Request` is the HTTP Server Request
-  - `$Response` is the HTTP Server Response
+   Handler arguments:
+   - `$Request` is the HTTP Server Request
+   - `$Response` is the HTTP Server Response
 
-  ## Some examples
+   ## Some examples
 
-  **1. Route Callbacks**
+   **1. Route Callbacks**
 
-  ```php
-  $Router->route('/', fn ($Request, $Response) => $Response, GET); // Closures
-  $Router->route('/hello', ['talk', 'world'], GET); // functions
-  $Router->route('/world', ['HelloWorld::talk'], GET); // Static Classes
-  ```
+   ```php
+   $Router->route('/', fn ($Request, $Response) => $Response, GET); // Closures
+   $Router->route('/hello', ['talk', 'world'], GET); // functions
+   $Router->route('/world', ['HelloWorld::talk'], GET); // Static Classes
+   ```
 
-  **2. Route with Route Params**
+   **2. Route with Route Params**
 
-  ```php
-  $Router->route('/user/:id', function ($Request, $Response) {
-    return $Response(body: 'User ID: ' . $this->Params->id);
-  }, GET);
-  ```
+   ```php
+   $Router->route('/user/:id', function ($Request, $Response) {
+      return $Response(body: 'User ID: ' . $this->Params->id);
+   }, GET);
+   ```
 
-  ```php
-  $Route->Params->id = '[0-9]+'; // Set Param Regex pattern
+   ```php
+   $Route->Params->id = '[0-9]+'; // Set Param Regex pattern
 
-  $Router->route('/param6/:id/param7/:id', function ($Request, $Response) {
-    return $Response(body: <<<HTML
-    Equals named params with Regex:<br>
-    Param 1: {$this->Params->id[0]}<br>
-    Param 2: {$this->Params->id[1]}
-    HTML);
-  }, GET);
-  ```
+   $Router->route('/param6/:id/param7/:id', function ($Request, $Response) {
+      return $Response(body: <<<HTML
+      Equals named params with Regex:<br>
+      Param 1: {$this->Params->id[0]}<br>
+      Param 2: {$this->Params->id[1]}
+      HTML);
+   }, GET);
+   ```
 
-  **3. Route with multiple HTTP methods**
+   **3. Route with multiple HTTP methods**
 
-  ```php
-  $Router->route('/data', function ($Request, $Response) {
-    return $Response(body: 'Data!');
-  }, [GET, POST]);
-  ```
+   ```php
+   $Router->route('/data', function ($Request, $Response) {
+      return $Response(body: 'Data!');
+   }, [GET, POST]);
+   ```
 
-  **4. Nested Routes**
+   **4. Nested Routes**
 
-  ```php
-  $Router->route('/profile/:*', function ($Request, $Response)
-    use ($Router) {
-    // ...
+   ```php
+   $Router->route('/profile/:*', function ($Request, $Response)
+      use ($Router) {
+      // ...
 
-    $Router->route('user/:id', function ($Request, $Response) {
-        return $Response(body: 'User ID: ' . $this->Params->id);
-    });
-  }, GET);
-  ```
+      $Router->route('user/:id', function ($Request, $Response) {
+         return $Response(body: 'User ID: ' . $this->Params->id);
+      });
 
-  **5. Catch-All Route**
+      return $Response;
+   }, GET);
+   ```
 
-  ```php
-  $Router->route('/*', function ($Request, $Response) {
-    return $Response(code: 404, body: 'pages/404');
-  });
-  ```
+   **5. Catch-All Route**
+
+   ```php
+   $Router->route('/*', function ($Request, $Response) {
+      return $Response(code: 404, body: 'pages/404');
+   });
+   ```
 </details>
 
 
