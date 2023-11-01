@@ -227,6 +227,10 @@ class Router
    {
       $Route = &$this->Route;
 
+      if ($Route->path === self::$Server::$Request->URL) {
+         return 1;
+      }
+
       if ($Route->parameterized) {
          $this->parse(); // @ Set $Route->parsed and $Route->catched
 
@@ -261,10 +265,6 @@ class Router
          }
 
          return 0;
-      }
-
-      if ($Route->path === self::$Server::$Request->URL) {
-         return 1;
       }
 
       return 0;
