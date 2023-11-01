@@ -188,12 +188,11 @@ class Router
          // @ Call
          // Closure
          if ($handler instanceof \Closure) {
-            // TODO bind $handler to $Route?
+            $handler = $handler->bindTo($Route, $Route);
 
             $Response = $handler(
                self::$Server::$Request,
-               self::$Server::$Response,
-               $Route
+               self::$Server::$Response
             );
          } else {
             // callable

@@ -32,8 +32,8 @@ return [
 
       $Route = $Router->Route;
       $Route->Params->id = '[0-9]+';
-      $Router->route('/param1/:id', function ($Request, $Response) use ($Route) {
-         return $Response(body: 'Single named param: ' . $Route->Params->id);
+      $Router->route('/param1/:id', function ($Request, $Response) {
+         return $Response(body: 'Single named param: ' . $this->Params->id);
       }, GET);
 
       $Router->route('/*', function ($Request, $Response) {

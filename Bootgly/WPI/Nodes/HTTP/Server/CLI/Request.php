@@ -166,7 +166,7 @@ class Request
       $metaRaw = \strstr($buffer, "\r\n", true);
       #$metaRaw = strtok($buffer, "\r\n");
 
-      @[$method, $URI, $protocol] = explode(' ', $metaRaw, 3);
+      @[$method, $URI, $protocol] = \explode(' ', $metaRaw, 3);
 
       // @ Check Request Meta
       if (! $method || ! $URI || ! $protocol) {
@@ -195,7 +195,7 @@ class Request
 
       // ? Request Header
       // @ Boot Request Header raw
-      $headerRaw = substr($buffer, $metaLength + 2, $separatorPosition - $metaLength);
+      $headerRaw = \substr($buffer, $metaLength + 2, $separatorPosition - $metaLength);
 
       // @ Prepare Request Header length
       $headerLength = \strlen($headerRaw);

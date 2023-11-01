@@ -304,7 +304,7 @@ More **Screenshots**, videos and details can be found in the home page of [Bootg
   **Basic Usage**
 
   ```php
-  $Router->route('/', function ($Request, $Response, $Route) {
+  $Router->route('/', function ($Request, $Response) {
     return $Response(body: 'Hello World!');
   }, GET);
   ```
@@ -312,7 +312,6 @@ More **Screenshots**, videos and details can be found in the home page of [Bootg
   Handler arguments:
   - `$Request` is the HTTP Server Request
   - `$Response` is the HTTP Server Response
-  - `$Route` is the Route matched
 
   ## Some examples
 
@@ -327,19 +326,19 @@ More **Screenshots**, videos and details can be found in the home page of [Bootg
   **2. Route with Route Params**
 
   ```php
-  $Router->route('/user/:id', function ($Request, $Response, $Route) {
-    return $Response(body: 'User ID: ' . $Route->Params->id);
+  $Router->route('/user/:id', function ($Request, $Response) {
+    return $Response(body: 'User ID: ' . $this->Params->id);
   }, GET);
   ```
 
   ```php
   $Route->Params->id = '[0-9]+'; // Set Param Regex pattern
 
-  $Router->route('/param6/:id/param7/:id', function ($Request, $Response, $Route) {
+  $Router->route('/param6/:id/param7/:id', function ($Request, $Response) {
     return $Response(body: <<<HTML
-    [3.3] Equals named params with Regex:<br>
-    Param 1: {$Route->Params->id[0]}<br>
-    Param 2: {$Route->Params->id[1]}
+    Equals named params with Regex:<br>
+    Param 1: {$this->Params->id[0]}<br>
+    Param 2: {$this->Params->id[1]}
     HTML);
   }, GET);
   ```
@@ -355,11 +354,12 @@ More **Screenshots**, videos and details can be found in the home page of [Bootg
   **4. Nested Routes**
 
   ```php
-  $Router->route('/profile/:*', function ($Request, $Response, $Route) use ($Router) {
+  $Router->route('/profile/:*', function ($Request, $Response)
+    use ($Router) {
     // ...
 
-    $Router->route('user/:id', function ($Request, $Response, $Route) {
-        return $Response(body: 'User ID: ' . $Route->Params->id);
+    $Router->route('user/:id', function ($Request, $Response) {
+        return $Response(body: 'User ID: ' . $this->Params->id);
     });
   }, GET);
   ```

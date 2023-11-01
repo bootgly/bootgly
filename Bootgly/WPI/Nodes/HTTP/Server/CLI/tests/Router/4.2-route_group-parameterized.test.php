@@ -34,9 +34,9 @@ return [
          $Router->route('default', function ($Request, $Response) {
             return $Response(body: 'Default Profile!');
          });
-         $Route = $Router->Route;
-         $Router->route('user/:id', function ($Request, $Response) use ($Route) {
-            return $Response(body: 'User ID: ' . $Route->Params->id);
+
+         $Router->route('user/:id', function ($Request, $Response) {
+            return $Response(body: 'User ID: ' . $this->Params->id);
          });
          $Router->route('user/bob', function ($Request, $Response) {
             return $Response(body: 'Bob!');
