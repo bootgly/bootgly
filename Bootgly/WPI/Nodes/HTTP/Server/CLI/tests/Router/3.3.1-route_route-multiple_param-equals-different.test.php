@@ -22,18 +22,18 @@ return [
    // Server API
    'response' => function (Request $Request, Response $Response, Router $Router)
    {
-      $Router->route('/', function ($Request, $Response) {
+      yield $Router->route('/', function ($Request, $Response) {
          return $Response(body: 'Fail...');
       }, GET);
 
-      $Router->route('/fail', function ($Request, $Response) {
+      yield $Router->route('/fail', function ($Request, $Response) {
          return $Response(body: 'Fail...');
       }, GET);
 
       $Route = $Router->Route;
       $Route->Params->id = '[0-9]+';
 
-      $Router->route('/param8/:id/param9/:id/param10/:abc', function ($Request, $Response) {
+      yield $Router->route('/param8/:id/param9/:id/param10/:abc', function ($Request, $Response) {
          $Params = $this->Params;
 
          return $Response(body: <<<TEXT
@@ -41,7 +41,7 @@ return [
          TEXT);
       }, GET);
 
-      $Router->route('/*', function ($Request, $Response) {
+      yield $Router->route('/*', function ($Request, $Response) {
          return $Response(body: 'Catch-All!');
       }, GET);
    },

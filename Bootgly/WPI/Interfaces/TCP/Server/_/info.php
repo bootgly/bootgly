@@ -76,7 +76,7 @@ switch ($name) {
 
       @:i: Event-loop: @; {$event}
 
-      @#yellow:  Server API script: @; {$SAPI}
+      @#yellow:  Server API: @; {$SAPI}
 
       OUTPUT;
       $Field->render();

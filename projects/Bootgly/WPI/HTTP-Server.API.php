@@ -50,11 +50,24 @@ return static function
    #$Response->Header->Cookie->append('Test2', 'value2');
 
    // ? Response Content
-   $Router->route('/', function ($Request, $Response) {
+   yield $Router->route('/', function ($Request, $Response) {
       return $Response(body: 'Hello World!');
    }, GET);
-   $Router->route('/test', function () {
+   yield $Router->route('/test', function () {
       return new Response(body: 'Testing Bootgly HTTP Router!');
+   }, GET);
+   yield $Router->route('/profile/:*', function () use ($Router) {
+      yield $Router->route('default', function ($Request, $Response) {
+         return $Response(body: 'Default profile!');
+      });
+
+      yield $Router->route('user/maria', function ($Request, $Response) {
+         return $Response(body: 'Maria\'s user profile!');
+      });
+
+      yield $Router->route('user/bob', function ($Request, $Response) {
+         return $Response(body: 'Bob\'s user profile!');
+      });
    }, GET);
 
    // @ send
@@ -73,5 +86,5 @@ return static function
    // @ redirect
    #return $Response->redirect(URI: 'https://docs.bootgly.com/', code: 302);
 
-   return $Response(code: 404, body: '404 Not Found!');
+   return yield $Response(code: 404, body: '404 Not Found!');
 };

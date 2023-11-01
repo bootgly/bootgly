@@ -19,8 +19,8 @@ class Route
    private ? string $name;
 
    // * Data
-   private string $path;
-   private object $Params;
+   protected string $path;
+   protected object $Params;
 
    // * Meta
    private bool $parameterized;
@@ -93,25 +93,20 @@ class Route
    }
    public function __set (string $name, $value)
    {
-      // * Meta
       switch ($name) {
+         // * Data
+         case 'path':
+            $this->path = $value;
+            break;
+
+         // * Meta
          case 'base':
          case 'prefix': // TODO refactor
             Router::$Server::$Request->base = $value;
-
             break;
 
          default:
             $this->$name = $value;
-      }
-   }
-
-   public function set (string $path) : void
-   {
-      if ($path === '/') {
-         $this->path = '';
-      } else {
-         $this->path = \rtrim($path, '/');
       }
    }
 }

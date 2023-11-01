@@ -22,29 +22,29 @@ return [
    // Server API
    'response' => function (Request $Request, Response $Response, Router $Router)
    {
-      $Router->route('/', function ($Request, $Response) {
+      yield $Router->route('/', function ($Request, $Response) {
          return $Response(body: 'Fail...');
       }, GET);
 
-      $Router->route('/fail', function ($Request, $Response) {
+      yield $Router->route('/fail', function ($Request, $Response) {
          return $Response(body: 'Fail...');
       }, GET);
 
-      $Router->route('/profile/:*', function () use ($Router) {
-         $Router->route('default', function ($Request, $Response) {
+      yield $Router->route('/profile/:*', function () use ($Router) {
+         yield $Router->route('default', function ($Request, $Response) {
             return $Response(body: 'Default Profile!');
          });
 
-         $Router->route('user/maria', function ($Request, $Response) {
+         yield $Router->route('user/maria', function ($Request, $Response) {
             return $Response(body: 'Maria!');
          });
 
-         $Router->route('user/bob', function ($Request, $Response) {
+         yield $Router->route('user/bob', function ($Request, $Response) {
             return $Response(body: 'Bob!');
          });
       }, GET);
 
-      $Router->route('/*', function ($Request, $Response) {
+      yield $Router->route('/*', function ($Request, $Response) {
          return $Response(body: 'Catch-All!');
       }, GET);
    },

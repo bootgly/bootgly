@@ -57,6 +57,7 @@ class Content
       switch ($name) {
          case 'chunked':
             return \dechex($this->length) . "\r\n$this->raw\r\n";
+
          default:
             return '';
       }

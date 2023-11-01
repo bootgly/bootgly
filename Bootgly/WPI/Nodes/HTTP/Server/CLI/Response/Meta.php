@@ -21,7 +21,7 @@ class Meta
 
    // * Data
    protected string $protocol;
-   protected int|string $status;
+   protected string $status;
 
    // * Meta
    private string $raw;
@@ -40,14 +40,10 @@ class Meta
       $this->status = '200 OK';
 
       // * Meta
-      // ...
-
-      // @
-      // raw
-      $this->raw = $this->protocol . ' ' . $this->status;
-      // @ status
-      // code
-      unset($this->code);
+      $this->raw = 'HTTP/1.1 200 OK';
+      // @ Status
+      $this->code = 200;
+      $this->message = 'OK';
    }
    public function __get (string $name)
    {
@@ -59,27 +55,8 @@ class Meta
          // * Meta
          case 'raw': return $this->raw;
          // @ Status
-         case 'code':
-            if ( isSet($this->code) && $this->code !== 0 ) {
-               return $this->code;
-            }
-
-            #$code = \array_search($this->status, HTTP::RESPONSE_STATUS);
-            @[$code, $message] = explode(' ', $this->status);
-
-            $this->code = (int) $code;
-
-            break;
-         case 'message':
-            if (isset($this->message) && $this->message !== '') {
-               return $this->message;
-            }
-
-            @[$code, $message] = explode(' ', $this->status);
-
-            $this->message = $message;
-
-            break;
+         case 'code': return $this->code;
+         case 'message': return $this->message;
 
          default:
             return null;
@@ -101,8 +78,13 @@ class Meta
             @[$code, $message] = explode(' ', $status);
 
             if ($code && $message) {
+               // * Data
                $this->status = $status;
-               $this->reset();
+               // * Meta
+               $this->raw = $this->protocol . ' ' . $status;
+               // @ Status
+               $this->code = $code;
+               $this->message = $message;
             }
 
             break;
@@ -111,21 +93,23 @@ class Meta
          case 'raw':
          // @ Status
          case 'code':
+            $code = (int) $value;
+            $message = HTTP::RESPONSE_STATUS[$code];
+
+            // * Meta
+            $this->raw = <<<RAW
+            {$this->protocol} {$code} {$message}
+            RAW;
+            // @ Status
+            $this->code = $code;
+            $this->message = $message;
+
+            break;
          case 'message':
             break;
 
          default:
             null;
       }
-   }
-
-   public function reset ()
-   {
-      // * Meta
-      // raw
-      $this->raw = $this->protocol . ' ' . $this->status;
-      // @ status
-      // code
-      unSet($this->code);
    }
 }

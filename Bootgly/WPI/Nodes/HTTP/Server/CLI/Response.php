@@ -12,6 +12,7 @@ namespace Bootgly\WPI\Nodes\HTTP\Server\CLI;
 
 
 use Bootgly;
+use Bootgly\ABI\Data\__String\Path;
 use Bootgly\ABI\IO\FS\File;
 use Bootgly\WPI\Nodes\HTTP\Server\CLI as Server;
 use Bootgly\WPI\Nodes\HTTP\Server\CLI\Response\Content;
@@ -92,7 +93,7 @@ class Response
 
       // @
       if ($code !== 200) {
-         $this->code = $code;
+         $this->Meta->code = $code;
       }
 
       if ($headers !== null) {
@@ -182,21 +183,13 @@ class Response
    public function __invoke (
       $x = null,
       int $code = 200,
-      ? array $headers = null,
+      array $headers = [],
       string $body = '')
    {
       if ($x === null) {
-         if ($code !== 200) {
-            $this->code = $code;
-         }
-
-         if ($headers !== null) {
-            $this->Header->prepare($headers);
-         }
-
-         if ($body !== '') {
-            $this->Body->raw = $body;
-         }
+         $this->Meta->code = $code;
+         $this->Header->prepare($headers);
+         $this->Body->raw = $body;
 
          return $this;
       }
@@ -366,7 +359,7 @@ class Response
 
       try {
          // @ Isolate context with anonymous static function
-         (static function (string $__file__, ?array $__data__)
+         (static function (string $__file__, ? array $__data__)
          use ($Request, $Response) {
             if ($__data__ !== null) {
                \extract($__data__);
@@ -525,6 +518,7 @@ class Response
       if ($content instanceof File) {
          $File = $content;
       } else {
+         $content = Path::normalize($content);
          $File = new File(\Bootgly::$Project->path . $content);
       }
 

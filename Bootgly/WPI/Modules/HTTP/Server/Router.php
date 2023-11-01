@@ -16,7 +16,6 @@ use Bootgly;
 use Bootgly\ABI\IO\FS\File;
 
 use Bootgly\WPI\Modules\HTTP\Server\Route;
-use Bootgly\WPI\Modules\HTTP\Server\Router\Exceptions\RouteMatchedException;
 
 
 class Router
@@ -34,9 +33,9 @@ class Router
    public ? Route $Route;
    // @ Stats
    private int $routes;
-   private int $matched; // 0 -> none; 1 = route path; 2 = route path and route condition(s)
+   private int $matched; // 0 -> none; 1 = path; 2 = path and method(s)
    // @ History
-   private array $routed;
+   private array $routeds;
 
 
    public function __construct (string $Server)
@@ -54,9 +53,9 @@ class Router
       $this->Route = new Route;
       // @ Stats
       $this->routes = 0;
-      $this->matched = 0;
+      #$this->matched = 0;
       // @ History
-      $this->routed = [];
+      $this->routeds = [];
    }
 
    public function boot (string|array $instances = ['routes'])
@@ -92,72 +91,59 @@ class Router
       $this->active = true;
    }
 
-   public function reset ()
-   {
-      $this->matched = 0;
-   }
-
    // @ default
    public function route (
       string $route,
-      \Closure|callable $handler,
+      callable $handler,
       null|string|array $methods = null
-   ) : bool
+   ) : false|object
    {
       $Route = &$this->Route;
 
-      // @ Reset
-      // If Route nested then process next route
-      if ($this->matched === 2 && $Route->nested === false && $route[0] !== '/') {
-         $this->matched = 0;
-         $Route->nested = true;
-      }
+      $routed = 0;
 
       // @ Check
       if ($this->active === false) {
          return false;
       }
-      if ($this->matched === 2) {
-         return false;
-      }
       if ($Route->nested && $route[0] === '/') {
-         return false;
+         throw new \Exception('Nested route path must be relative!');
       }
 
       // ! Route Route
-      if ($this->matched === 0) {
-         // @ Set
-         $Route->set(path: $route);
+      // @ Boot
+      $route = ($route === '/'
+         ? ''
+         : \rtrim($route, '/')
+      );
+      $Route->path = $route;
 
-         // @ Match
+      // @ Match
+      $routed = match (true) {
+         $route === self::$Server::$Request->URL,
          // Not Matched Route (nested level)
-         if ($Route->nested && $Route->path === '*') {
-            $this->matched = 1;
-         }
+         $Route->nested && $route === '*',
          // Not Matched Route (root level)
-         else if ($Route->path === '/*') {
-            $this->matched = 1;
-         }
-         else {
-            $this->matched = $this->match();
-         }
-      }
+         $route === '/*',
+            => 1,
+         default => $this->match($route)
+      };
 
       // ! Route Condition
-      if ($this->matched === 1) {
+      if ($routed === 1) {
          // @ Match
          if (
             empty($methods) ||
             \in_array(self::$Server::$Request->method, (array) $methods)
          ) {
-            $this->matched = 2;
+            $routed = 2;
          }
       }
 
       // ! Route Callback
-      if ($this->matched === 2) {
+      if ($routed === 2) {
          // @ Prepare
-         // Set Route Params values
+         // Route Params values
          if ($Route->parameterized) {
             // @ HTTP Server Request
             // ->Path
@@ -198,33 +184,43 @@ class Router
                ]
             );
          }
-         // @ ?
-         if ($Response && $Response !== self::$Server::$Response) {
-            self::$Server::$Response = $Response;
-         }
+
          // @ Log
          $this->routes++;
          $Route::$level++;
-         $this->routed[$route] = [
+         $this->routeds[$route] = [
             $handler
          ];
-         // @ Throw
-         throw new RouteMatchedException;
+
+         // @ Reset
+         if ($Response instanceof \Generator) {
+            $Routes = $Response;
+            // Route nested
+            $Route->nested = true;
+            // @ Reroute
+            foreach ($Routes as $Response) {
+               if ($Response !== false) {
+                  break;
+               }
+            }
+         }
+         else if ($Response && $Response !== self::$Server::$Response) {
+            self::$Server::$Response = $Response;
+         }
+         $Route->nested = false;
+
+         return $Response;
       }
 
-      return true;
+      return false;
    }
 
-   private function match () : int
+   private function match (string $route) : int
    {
       $Route = &$this->Route;
 
-      if ($Route->path === self::$Server::$Request->URL) {
-         return 1;
-      }
-
       if ($Route->parameterized) {
-         $this->parse(); // @ Set $Route->parsed and $Route->catched
+         $this->parse($route); // @ Set $Route->parsed and $Route->catched
 
          if ($Route->parsed) {
             $pattern = '/^' . $Route->parsed . '$/m';
@@ -253,7 +249,7 @@ class Router
       }
 
       if ($Route->nested) {
-         if ($Route->path === $Route->catched) {
+         if ($route === $Route->catched) {
             return 1;
          }
 
@@ -262,7 +258,7 @@ class Router
 
       return 0;
    }
-   public function parse () // @ Parse Route Path (Parameterized)
+   public function parse (string $route) // @ Parse Route Path (Parameterized)
    {
       if ($this->active === false) return '';
 
@@ -272,7 +268,8 @@ class Router
       // ? Route path
       $paths = \explode('/', \str_replace("/", "\/", $Route->path));
       // ? Request path (full | relative)
-      if ($Route->catched) { // Get catched path instead of Request path
+      // Get catched path instead of Request path
+      if ($Route->catched) {
          $locations = \explode('/', \str_replace("/", "\/", $Route->catched));
       }
       else {

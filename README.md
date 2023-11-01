@@ -294,7 +294,7 @@ More **Screenshots**, videos and details can be found in the home page of [Bootg
    The `route` method is used to define routes, with the schema as follows:
 
    ```php
-   route (string $route, \Closure|callable $handler, null|string|array $methods = null) : bool
+   route (string $route, callable $handler, null|string|array $methods = null) : bool
    ```
 
    - `$route` is the URL pattern to match that accepts params.
@@ -304,10 +304,12 @@ More **Screenshots**, videos and details can be found in the home page of [Bootg
    **Basic Usage**
 
    ```php
-   $Router->route('/', function ($Request, $Response) {
+   yield $Router->route('/', function ($Request, $Response) {
       return $Response(body: 'Hello World!');
    }, GET);
    ```
+
+   > You should use `yield` (Generator) if you define more than one route. This ensures consistency and performance in HTTP Responses under the hood.
 
    Handler arguments:
    - `$Request` is the HTTP Server Request
@@ -318,15 +320,15 @@ More **Screenshots**, videos and details can be found in the home page of [Bootg
    **1. Route Callbacks**
 
    ```php
-   $Router->route('/', fn ($Request, $Response) => $Response, GET); // Closures
-   $Router->route('/hello', ['talk', 'world'], GET); // functions
-   $Router->route('/world', ['HelloWorld::talk'], GET); // Static Classes
+   yield $Router->route('/', fn ($Request, $Response) => $Response, GET); // Closures
+   yield $Router->route('/hello', ['talk', 'world'], GET); // functions
+   yield $Router->route('/world', ['HelloWorld::talk'], GET); // Static Classes
    ```
 
    **2. Route with Route Params**
 
    ```php
-   $Router->route('/user/:id', function ($Request, $Response) {
+   yield $Router->route('/user/:id', function ($Request, $Response) {
       return $Response(body: 'User ID: ' . $this->Params->id);
    }, GET);
    ```
@@ -334,7 +336,7 @@ More **Screenshots**, videos and details can be found in the home page of [Bootg
    ```php
    $Route->Params->id = '[0-9]+'; // Set Param Regex pattern
 
-   $Router->route('/param6/:id/param7/:id', function ($Request, $Response) {
+   yield $Router->route('/param6/:id/param7/:id', function ($Request, $Response) {
       return $Response(body: <<<HTML
       Equals named params with Regex:<br>
       Param 1: {$this->Params->id[0]}<br>
@@ -346,7 +348,7 @@ More **Screenshots**, videos and details can be found in the home page of [Bootg
    **3. Route with multiple HTTP methods**
 
    ```php
-   $Router->route('/data', function ($Request, $Response) {
+   yield $Router->route('/data', function ($Request, $Response) {
       return $Response(body: 'Data!');
    }, [GET, POST]);
    ```
@@ -358,11 +360,12 @@ More **Screenshots**, videos and details can be found in the home page of [Bootg
       use ($Router) {
       // ...
 
-      $Router->route('user/:id', function ($Request, $Response) {
+      yield $Router->route('default', function ($Request, $Response) {
+         return $Response(body: 'User Default!');
+      });
+      yield $Router->route('user/:id', function ($Request, $Response) {
          return $Response(body: 'User ID: ' . $this->Params->id);
       });
-
-      return $Response;
    }, GET);
    ```
 
