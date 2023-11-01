@@ -33,7 +33,7 @@ use Bootgly\WPI\Nodes\HTTP\Server\Bridge\Request\Session;
  * @property string $raw
  * ? Meta
  * @property string $method        GET, POST, ...
- * @property string $uri           /test/foo?query=abc&query2=xyz
+ * @property string $URI           /test/foo?query=abc&query2=xyz
  * @property string $protocol      HTTP/1.1
  * @ URI
  * @property string $identifier    (URI) /test/foo?query=abc&query2=xyz

@@ -17,11 +17,10 @@ class Route
    private ? string $name;
 
    // * Data
+   private string $path;
    private object $Params;
-   // private object $Path;
 
    // * Meta
-   private string $path;
    private bool $parameterized;
    // ! Parse
    public string $parsed;
@@ -40,6 +39,7 @@ class Route
       $this->name = null;
 
       // * Data
+      $this->path = '';
       // TODO deny user to set Catch-All this object
       // TODO validate Param value (Regex)
       // TODO validate Param name
@@ -56,7 +56,6 @@ class Route
       };
 
       // * Meta
-      $this->path = '';
       $this->parameterized = false;
       // ! Parse
       $this->parsed = '';
@@ -70,6 +69,7 @@ class Route
    }
    public function __get ($name)
    {
+      // * Meta
       switch ($name) {
          case 'parameterized':
             if (\strpos($this->path, ':') !== false) {
@@ -86,6 +86,7 @@ class Route
    }
    public function __set (string $name, $value)
    {
+      // * Meta
       switch ($name) {
          case 'base':
          case 'prefix': // TODO refactor

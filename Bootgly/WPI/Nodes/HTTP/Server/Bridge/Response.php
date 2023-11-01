@@ -528,10 +528,10 @@ class Response
       return $this;
    }
 
-   public function redirect (string $uri, $code = 302) // Code 302 = temporary; 301 = permanent;
+   public function redirect (string $URI, $code = 302) // Code 302 = temporary; 301 = permanent;
    {
       // $this->code = $code;
-      header('Location: '.$uri, true, $code);
+      header('Location: '. $URI, true, $code);
       $this->end();
    }
 

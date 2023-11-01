@@ -59,30 +59,27 @@ trait Requestable
          // ? Meta
          case 'method':
             return $_SERVER['REQUEST_METHOD'];
-         // case 'uri': ...
+         // case 'URI': ...
          case 'protocol':
             return $_SERVER['SERVER_PROTOCOL'];
 
-         // @ URI
-         case 'uri':
-         case 'URI': // TODO with __String/URI?
-         case 'identifier': // @ base
+         // @ URI (Uniform Resource Identifier)
+         case 'URI':
             return $_SERVER['REDIRECT_URI'] ?? @$_SERVER['REQUEST_URI'];
 
-         // @ URL
-         case 'url':
-         case 'URL': // TODO with __String/URL?
-         case 'locator':
-            $locator = strtok($this->uri, '?');
+         // @ URL (Uniform Resource Locator)
+         case 'URL':
+            $locator = \strtok($this->URI, '?');
 
-            $locator = rtrim($locator ?? '/', '/');
+            $locator = \rtrim($locator ?? '/', '/');
 
-            if ($this->base && substr($locator, 0, strlen($this->base)) == $this->base)
-               $locator = substr($locator, strlen($this->base)); // Return relative location
+            $base = &$this->base;
+            if ($base && \substr($locator, 0, \strlen($base)) === $base) {
+               // @ Return relative location
+               $locator = \substr($locator, \strlen($base));
+            }
 
-            $this->url = $locator;
-            // $this->URL = $locator;
-            $this->locator = $locator;
+            $this->URL = $locator;
 
             return $locator;
 
@@ -102,25 +99,25 @@ trait Requestable
             // TODO file, File ?
          // @ Path
          case 'path':
-            return $this->locator;
+            return $this->URL;
          case 'Path':
             $Path = new Path;
-            $Path->construct($this->locator);
+            $Path->construct($this->URL);
             return $Path;
          // @ Query
          case 'query':
-            $uri = $this->uri;
+            $URI = $this->URI;
 
-            $mark = strpos($uri, '?');
+            $mark = \strpos($URI, '?');
             $query = '';
 
             if ($mark !== false) {
-               $query = substr($uri, $mark + 1);
+               $query = \substr($URI, $mark + 1);
             }
 
             return $this->query = $query;
          case 'queries':
-            parse_str($this->query, $queries);
+            \parse_str($this->query, $queries);
 
             return $this->queries = $queries;
          // ? Header
@@ -137,7 +134,7 @@ trait Requestable
             // TODO validate all cases
             $pattern = "/(?P<domain>[a-z0-9][a-z0-9\-]{1,63}\.[a-z\.]{2,6})(:[\d]+)?$/i";
 
-            if (preg_match($pattern, $this->host, $matches)) {
+            if (\preg_match($pattern, $this->host, $matches)) {
                return $this->domain = @$matches['domain'];
             }
 
@@ -145,9 +142,9 @@ trait Requestable
 
          case 'subdomain':
             // TODO validate all cases
-            return $this->subdomain = rtrim(strstr($this->host, $this->domain, true), '.');
+            return $this->subdomain = \rtrim(\strstr($this->host, $this->domain, true), '.');
          case 'subdomains':
-            return $this->subdomains = explode('.', $this->subdomain);
+            return $this->subdomains = \explode('.', $this->subdomain);
             // TODO Domain with __String/Domain
             // TODO Domain->sub, Domain->second (second-level), Domain->top (top-level), Domain->root, tld, ...
 
@@ -155,11 +152,11 @@ trait Requestable
          case 'username':
             $authorization = $this->Header->get('Authorization');
 
-            if (strpos($authorization, 'Basic') === 0) {
-               $encodedCredentials = substr($authorization, 6);
-               $decodedCredentials = base64_decode($encodedCredentials);
+            if (\strpos($authorization, 'Basic') === 0) {
+               $encodedCredentials = \substr($authorization, 6);
+               $decodedCredentials = \base64_decode($encodedCredentials);
 
-               [$username, $password] = explode(':', $decodedCredentials, 2);
+               [$username, $password] = \explode(':', $decodedCredentials, 2);
 
                $this->password = $password;
 
@@ -171,11 +168,11 @@ trait Requestable
          case 'password':
             $authorization = $this->Header->get('Authorization');
 
-            if (strpos($authorization, 'Basic') === 0) {
-               $encodedCredentials = substr($authorization, 6);
-               $decodedCredentials = base64_decode($encodedCredentials);
+            if (\strpos($authorization, 'Basic') === 0) {
+               $encodedCredentials = \substr($authorization, 6);
+               $decodedCredentials = \base64_decode($encodedCredentials);
 
-               [$username, $password] = explode(':', $decodedCredentials, 2);
+               [$username, $password] = \explode(':', $decodedCredentials, 2);
 
                $this->user = $username;
 
@@ -193,23 +190,23 @@ trait Requestable
                return null;
             }
 
-            preg_match_all(
+            \preg_match_all(
                '/([a-z]{1,8}(-[a-z]{1,8})?)\s*(;\s*q\s*=\s*(1|0\.[0-9]+))?/i',
                $httpAcceptLanguage,
                $matches
             );
 
             $language = '';
-            if (count($matches[1])) {
-               $languages = array_combine($matches[1], $matches[4]);
+            if (\count($matches[1])) {
+               $languages = \array_combine($matches[1], $matches[4]);
                foreach ($languages as $language => $weight) {
                   if ($weight === '') {
                      $languages[$language] = 1;
                   }
                }
-               arsort($languages, SORT_NUMERIC);
-               $language = array_keys($languages);
-               $language = array_merge($language, $languages);
+               \arsort($languages, SORT_NUMERIC);
+               $language = \array_keys($languages);
+               $language = \array_merge($language, $languages);
                $language = $language[0];
             }
 
@@ -225,7 +222,7 @@ trait Requestable
          case 'input':
             return $this->Content->input;
          case 'inputs':
-            return json_decode($this->input, true);
+            return \json_decode($this->input, true);
 
          case 'post':
             if ($this->method === 'POST' && empty($_POST)) {
@@ -234,7 +231,7 @@ trait Requestable
 
             return $_POST;
          case 'posts':
-            return json_encode($this->post);
+            return \json_encode($this->post);
          case 'files':
             return $_FILES;
          // * Meta
@@ -251,11 +248,12 @@ trait Requestable
    public function __set (string $name, $value)
    {
       switch ($name) {
-         case 'base': // TODO refactor
-            unset($this->url);
-            unset($this->locator);
+         // * Config
+         case 'base':
+            unSet($this->URL);
 
             return $this->base = $value;
+
          default:
             return $this->$name = $value;
       }
@@ -275,7 +273,7 @@ trait Requestable
 
       // @ cache-control
       $cacheControl = $this->Header->get('Cache-Control');
-      if ($cacheControl && preg_match('/(?:^|,)\s*?no-cache\s*?(?:,|$)/', $cacheControl)) {
+      if ($cacheControl && \preg_match('/(?:^|,)\s*?no-cache\s*?(?:,|$)/', $cacheControl)) {
          return false;
       }
 
@@ -294,7 +292,7 @@ trait Requestable
          $start = 0;
          $end = 0;
          // @ Gather tokens
-         for ($i = 0; $i < strlen($ifNoneMatch); $i++) {
+         for ($i = 0; $i < \strlen($ifNoneMatch); $i++) {
             switch ($ifNoneMatch[$i]) {
                case ' ':
                   if ($start === $end) {
@@ -302,7 +300,7 @@ trait Requestable
                   }
                   break;
                case ',':
-                  $matches[] = substr($ifNoneMatch, $start, $end);
+                  $matches[] = \substr($ifNoneMatch, $start, $end);
                   $start = $end = $i + 1;
                   break;
                default:
@@ -311,9 +309,9 @@ trait Requestable
             }
          }
          // final token
-         $matches[] = substr($ifNoneMatch, $start, $end);
+         $matches[] = \substr($ifNoneMatch, $start, $end);
 
-         for ($i = 0; $i < count($matches); $i++) {
+         for ($i = 0; $i < \count($matches); $i++) {
             $match = $matches[$i];
             if ($match === $eTag || $match === 'W/' . $eTag || 'W/' . $match === $eTag) {
                $eTagStale = false;
@@ -333,8 +331,8 @@ trait Requestable
             return false;
          }
 
-         $lastModifiedTime = strtotime($lastModified);
-         $ifModifiedSinceTime = strtotime($ifModifiedSince);
+         $lastModifiedTime = \strtotime($lastModified);
+         $ifModifiedSinceTime = \strtotime($ifModifiedSince);
          if ($lastModifiedTime === false || $ifModifiedSinceTime === false) {
             return false;
          }

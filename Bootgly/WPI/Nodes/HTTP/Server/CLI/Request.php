@@ -34,7 +34,7 @@ use Bootgly\WPI\Nodes\HTTP\Server\CLI\Request\Downloader;
  * @property string $raw
  * ? Meta
  * @property string $method        GET, POST, ...
- * @property string $uri           /test/foo?query=abc&query2=xyz
+ * @property string $URI           /test/foo?query=abc&query2=xyz
  * @property string $protocol      HTTP/1.1
  * @ URI
  * @property string $identifier    (URI) /test/foo?query=abc&query2=xyz
@@ -166,10 +166,10 @@ class Request
       $metaRaw = strstr($buffer, "\r\n", true);
       #$metaRaw = strtok($buffer, "\r\n");
 
-      @[$method, $uri, $protocol] = explode(' ', $metaRaw, 3);
+      @[$method, $URI, $protocol] = explode(' ', $metaRaw, 3);
 
       // @ Check Request Meta
-      if (! $method || ! $uri || ! $protocol) {
+      if (! $method || ! $URI || ! $protocol) {
          $Package->reject("HTTP/1.1 400 Bad Request\r\n\r\n");
          return 0;
       }
@@ -187,7 +187,7 @@ class Request
             $Package->reject("HTTP/1.1 405 Method Not Allowed\r\n\r\n");
             return 0;
       }
-      // uri
+      // URI
       // protocol
 
       // @ Prepare Request Meta length
@@ -247,8 +247,8 @@ class Request
 
       // method
       $_SERVER['REQUEST_METHOD'] = $method;
-      // uri
-      $_SERVER['REQUEST_URI'] = $uri;
+      // URI
+      $_SERVER['REQUEST_URI'] = $URI;
       // protocol
       $_SERVER['SERVER_PROTOCOL'] = $protocol;
 

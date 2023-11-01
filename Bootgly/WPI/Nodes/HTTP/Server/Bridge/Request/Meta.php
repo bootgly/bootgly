@@ -20,7 +20,7 @@ class Meta
    public string $raw;
 
    public string $method;
-   public string $uri; // @ Resource
+   public string $URI; // @ Resource
    public string $protocol;
 
    // * Meta
@@ -42,7 +42,7 @@ class Meta
       $this->raw = '';
 
       $this->method = $_SERVER['REQUEST_METHOD'];
-      $this->uri = @$_SERVER['REDIRECT_URI'] ?? $_SERVER['REQUEST_URI'];
+      $this->URI = @$_SERVER['REDIRECT_URI'] ?? $_SERVER['REQUEST_URI'];
       $this->protocol = $_SERVER['SERVER_PROTOCOL'];
 
       // * Meta

@@ -223,7 +223,7 @@ class Router
       return true;
    }
 
-   private function match ()
+   private function match () : int
    {
       $Route = &$this->Route;
 
@@ -237,13 +237,12 @@ class Router
                $subject = $Route->catched;
                $Route->catched = '';
             } else {
-               $subject = self::$Server::$Request->path;
+               $subject = self::$Server::$Request->URL;
             }
 
             \preg_match($pattern, $subject, $matches);
 
             if ($Route->catched === '(.*)') {
-               #Debug($matches, $pattern, $subject);
                // TODO check if matches[1] is null
                $Route->catched = @$matches[1];
             }
@@ -252,14 +251,20 @@ class Router
                return 1;
             }
          }
-      } else {
-         if ($Route->nested) {
-            if ($Route->path === $Route->catched) {
-               return 1;
-            }
-         } else if ($Route->path === self::$Server::$Request->path) {
+
+         return 0;
+      }
+
+      if ($Route->nested) {
+         if ($Route->path === $Route->catched) {
             return 1;
          }
+
+         return 0;
+      }
+
+      if ($Route->path === self::$Server::$Request->URL) {
+         return 1;
       }
 
       return 0;
