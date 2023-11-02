@@ -358,7 +358,7 @@ More **Screenshots**, videos and details can be found in the home page of [Bootg
    **4. Nested Routes**
 
    ```php
-   $Router->route('/profile/:*', function ($Request, $Response)
+   yield $Router->route('/profile/:*', function ($Request, $Response)
       use ($Router) {
       // ...
 
@@ -374,7 +374,7 @@ More **Screenshots**, videos and details can be found in the home page of [Bootg
    **5. Catch-All Route**
 
    ```php
-   $Router->route('/*', function ($Request, $Response) {
+   yield $Router->route('/*', function ($Request, $Response) {
       return $Response(code: 404, body: 'pages/404');
    });
    ```
