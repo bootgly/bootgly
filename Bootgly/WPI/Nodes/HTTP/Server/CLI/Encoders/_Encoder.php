@@ -49,8 +49,10 @@ class _Encoder extends Encoders
          $Routes = (SAPI::$Handler)($Request, $Response, $Router);
 
          if ($Routes instanceof \Generator) {
-            foreach ($Router->routing($Routes) as $Response) {
-               // Check $Response?
+            foreach ($Router->routing($Routes) as $Responses) {
+               if ($Responses instanceof Response) {
+                  $Response = $Responses;
+               }
             }
          }
       }

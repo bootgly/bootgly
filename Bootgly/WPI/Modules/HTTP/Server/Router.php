@@ -220,7 +220,7 @@ class Router
             break;
          } else {
             #$this->Route->nested = false;
-            $this->Route = new Route;
+            #$this->Route = new Route;
             yield $Response;
          }
       }

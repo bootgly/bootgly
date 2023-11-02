@@ -11,12 +11,16 @@
 namespace Bootgly\ABI\Debugging\Data\Throwables;
 
 
-use Bootgly\ABI\Debugging;
 use Bootgly\ABI\Debugging\Data\Throwables;
 
 
 abstract class Exceptions extends Throwables
 {
+   // * Config
+   #public static bool $debug = false;
+   #public static bool $print = true;
+   #public static bool $return = false;
+   #public static bool $exit = true;
    // * Data
    protected static array $exceptions = [];
 

@@ -17,6 +17,11 @@ use Bootgly\ABI\Debugging\Data\Throwables;
 
 abstract class Errors extends Throwables
 {
+   // * Config
+   #public static bool $debug = false;
+   #public static bool $print = true;
+   #public static bool $return = false;
+   #public static bool $exit = true;
    // * Data
    protected static array $errors = [];
 
@@ -118,7 +123,7 @@ abstract class Errors extends Throwables
       // backtrace
       $backtrace = self::trace($Throwable);
       $traces = count($backtrace);
-      $limit = 1; // TODO dynamic with verbosity?
+      $limit = 2; // TODO dynamic with verbosity?
 
       if ($traces > $limit) {
          $backtrace = array_slice($backtrace, -$limit);

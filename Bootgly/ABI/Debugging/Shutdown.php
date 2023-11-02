@@ -18,6 +18,11 @@ use Bootgly\ABI\Debugging\Data\Throwables\Exceptions;
 
 abstract class Shutdown implements Debugging
 {
+   // * Config
+   public static bool $debug = true;
+   #public static bool $print = true;
+   #public static bool $return = false;
+   #public static bool $exit = true;
    // * Data
    protected static ? array $error = [];
 
@@ -39,8 +44,10 @@ abstract class Shutdown implements Debugging
 
    public static function debug (...$Throwables)
    {
-      // TODO with self::$error
-      Errors::debug();
-      Exceptions::debug();
+      if (self::$debug === true) {
+         // TODO with self::$error
+         Errors::debug();
+         Exceptions::debug();
+      }
    }
 }

@@ -10,7 +10,7 @@
 
 namespace Bootgly\ACI\Tests;
 
-use AssertionError;
+
 use Bootgly\ACI\Logs\LoggableEscaped;
 use Bootgly\ACI\Tests;
 use Bootgly\ACI\Tests\Assertions;
@@ -40,7 +40,7 @@ class Test extends Assertions
    private float $finished;
    private string $elapsed;
    // @ Reporting
-   private ? AssertionError $AssertionError;
+   private ? \AssertionError $AssertionError;
 
 
    public function __construct (Tests&Tester $Tests, array $specifications)
@@ -173,8 +173,6 @@ class Test extends Assertions
    // @
    private function pretest () : bool
    {
-      #ob_start();
-
       Tests::$case++;
 
       if ($this->specifications['skip'] ?? false) {
@@ -199,7 +197,11 @@ class Test extends Assertions
          unset($this->specifications['test']);
          $test = $test->bindTo($this, self::class);
 
+         ob_start();
+
          $Results = $test(...$arguments);
+
+         $this->debugged = \ob_get_clean();
 
          if ($Results instanceof \Generator !== true) {
             $message = 'The test function must return boolean, string, Assertion or a Generator!';
@@ -277,6 +279,8 @@ class Test extends Assertions
          " ↪️ \033[91m" . $help . "\033[0m" .
          PHP_EOL
       );
+
+      // @ Debugging
       $this->log($this->debugged);
 
       // @ exit

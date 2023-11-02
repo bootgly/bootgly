@@ -242,20 +242,7 @@ class Vars implements Debugging
             break;
 
          default:
-            if (is_callable($value) === true) {
-               // @ header
-               // type
-               $type = 'callable';
-               $prefix = "<small>$type</small> ";
-               // info
-               $info = '';
-
-               // @ value
-               // color
-               $color = '';
-               // dump
-               $dump = '';
-            } else if (is_object($value) === true) {
+            if (is_object($value) === true) {
                // @ header
                // type
                $type = 'object';
@@ -268,7 +255,22 @@ class Vars implements Debugging
                $color = '';
                // dump
                $dump = '';
-            } else {
+            }
+            else if (is_callable($value) === true) {
+               // @ header
+               // type
+               $type = 'callable';
+               $prefix = "<small>$type</small> ";
+               // info
+               $info = '';
+
+               // @ value
+               // color
+               $color = '';
+               // dump
+               $dump = '';
+            }
+            else {
                // @ header
                // type
                $type = 'Unknown type';

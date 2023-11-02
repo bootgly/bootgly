@@ -17,6 +17,13 @@ use Bootgly\ABI\Debugging;
 
 abstract class Throwables implements Debugging
 {
+   // * Config
+   #public static bool $debug = true;
+   #public static bool $print = true;
+   #public static bool $return = false;
+   #public static bool $exit = true;
+
+
    public static function report (\Throwable $Throwable)
    {
       $Highligher = new Highlighter;
@@ -82,7 +89,7 @@ abstract class Throwables implements Debugging
       // backtrace
       $backtrace = self::trace($Throwable);
       $traces = count($backtrace);
-      $limit = 1; // TODO dynamic with verbosity?
+      $limit = 2; // TODO dynamic with verbosity?
 
       if ($traces > $limit) {
          $backtrace = array_slice($backtrace, -$limit);
