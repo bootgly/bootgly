@@ -194,15 +194,7 @@ class Router
 
          // @ Reset
          if ($Response instanceof \Generator) {
-            $Routes = $Response;
             // Route nested
-            $Route->nested = true;
-            // @ Reroute
-            foreach ($Routes as $Response) {
-               if ($Response !== false) {
-                  break;
-               }
-            }
          }
          else if ($Response && $Response !== self::$Server::$Response) {
             self::$Server::$Response = $Response;
@@ -213,6 +205,25 @@ class Router
       }
 
       return false;
+   }
+   public function routing (\Generator $Routes)
+   {
+      foreach ($Routes as $Response) {
+         if ($Response instanceof \Generator) {
+            $this->Route->nested = true;
+            yield from $this->routing($Response);
+            break;
+         } else if ($Response !== false) {
+            #$this->Route->nested = false;
+            $this->Route = new Route;
+            yield $Response;
+            break;
+         } else {
+            #$this->Route->nested = false;
+            $this->Route = new Route;
+            yield $Response;
+         }
+      }
    }
 
    private function match (string $route) : int

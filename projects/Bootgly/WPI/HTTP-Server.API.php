@@ -53,7 +53,7 @@ return static function
    yield $Router->route('/', function ($Request, $Response) {
       return $Response(body: 'Hello World!');
    }, GET);
-   yield $Router->route('/test', function () {
+   yield $Router->route('/new', function () {
       return new Response(body: 'Testing Bootgly HTTP Router!');
    }, GET);
    yield $Router->route('/profile/:*', function () use ($Router) {

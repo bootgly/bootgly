@@ -301,7 +301,9 @@ More **Screenshots**, videos and details can be found in the home page of [Bootg
    - `$handler` is the callback to be executed when the route is matched.
    - `$methods` is the HTTP method(s) that this route should respond to.
 
-   **Basic Usage**
+   #### **Routing when using HTTP Server with SAPI CLI**
+
+   Basic Usage:
 
    ```php
    yield $Router->route('/', function ($Request, $Response) {
@@ -309,13 +311,13 @@ More **Screenshots**, videos and details can be found in the home page of [Bootg
    }, GET);
    ```
 
-   > You should use `yield` (Generator) if you define more than one route. This ensures consistency and performance in HTTP Responses under the hood.
+   > You should use `yield` (Generator) if you define more than one route. This ensures consistency and performance in HTTP Responses under the hood due to the stateful nature of the SAPI CLI.
 
    Handler arguments:
    - `$Request` is the HTTP Server Request
    - `$Response` is the HTTP Server Response
 
-   ## Some examples
+   Some examples:
 
    **1. Route Callbacks**
 

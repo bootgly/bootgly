@@ -46,13 +46,11 @@ class _Encoder extends Encoders
       // ! Response
       // @ Try to Invoke SAPI Closure
       try {
-         $Responses = (SAPI::$Handler)($Request, $Response, $Router);
+         $Routes = (SAPI::$Handler)($Request, $Response, $Router);
 
-         if ($Responses instanceof \Generator) {
-            foreach ($Responses as $Response) {
-               if ($Response instanceof Response) {
-                  break;
-               }
+         if ($Routes instanceof \Generator) {
+            foreach ($Router->routing($Routes) as $Response) {
+               // Check $Response?
             }
          }
       }
