@@ -50,9 +50,7 @@ A stable release is planned for December 2023.
 
 Bootgly is a base framework for developing APIs and Apps for both CLI (Console) 📟 and WPI (Web) 🌐.
 
-Focused on **efficiency**, for adopting a minimum dependency policy.
-
-Due to this policy, its unique I2P architecture, and some unusual code conventions and design patterns, Bootgly has superior **performance** and **versatility**, and has **easy-to-understand Code API**.
+> "Bootgly is focused on **efficiency** and follows a minimum dependency policy. Thanks to this approach, its **unique I2P architecture**, along with some uncommon code conventions and design patterns, allows Bootgly to offer **superior performance** while providing an **easy-to-understand Code APIs**."
 
 ### Bootgly CLI 📟
 
@@ -113,7 +111,7 @@ Operation System |
 
 ❔ = Untested
 
-Above is the native compatibility, of course it is possible to run on Windows and Unix using containers.
+Above is the native compatibility, of course it is possible to run on Windows and Unix using Docker containers.
 
 ### ⚙️ Dependencies
 
@@ -126,10 +124,10 @@ Above is the native compatibility, of course it is possible to run on Windows an
 
 #### \- Bootgly WPI 🌐
 
-##### CLI + WPI *API ¹ (eg. Bootgly HTTP Server CLI):
+##### WPI in CLI *API¹ (eg. Bootgly HTTP Server CLI):
 - \* See Bootgly CLI dependencies \*
 
-##### WPI in Non-CLI (apache2handler, litespeed and nginx) SAPI ²:
+##### WPI in Non-CLI (apache2handler, litespeed and nginx) SAPI²:
 - `rewrite` module enabled ⚠️
 
 --
@@ -139,6 +137,7 @@ Above is the native compatibility, of course it is possible to run on Windows an
 👍 = Recommended
 
 ¹ *API = Can be Server API (SAPI), Client API (CAPI), etc.
+
 ² SAPI = Server API
 
 ---
@@ -183,34 +182,7 @@ Bootgly uses [Semantic Versioning 2.0][SEMANTIC_VERSIONING].
 
 ---
 
-## 🖼 Highlights
-
-### \- Bootgly CLI 📟
-
-| ![](https://github.com/bootgly/.github/raw/main/screenshots/bootgly-php-framework/Bootgly-CLI.png "Bootgly CLI - initial output") |
-|:--:| 
-| *Bootgly CLI - initial output* |
----
-| ![](https://github.com/bootgly/.github/raw/main/screenshots/bootgly-php-framework/Bootgly-CLI-Terminal-components-Progress.png "Render 7x faster than Laravel / Symfony") |
-|:--:| 
-| *Progress component (with Bar) - [Render ≈7x faster than Laravel / Symfony][BENCHMARK_1]* |
-
-### \- Bootgly WPI 🌐
-
-| ![](https://github.com/bootgly/.github/raw/main/screenshots/bootgly-php-framework/Server-CLI-HTTP-Benchmark-Ryzen-9-3900X-WSL2.png "Bootgly HTTP Server CLI (wrk benchmark) - +7% faster than Workerman in the Plain Text test") |
-|:--:| 
-| *Bootgly HTTP Server CLI (wrk benchmark) - +7% faster than [Workerman](https://www.techempower.com/benchmarks/#section=data-r21&test=plaintext&l=zik073-6bj) in the [Plain Text test](https://github.com/TechEmpower/FrameworkBenchmarks/wiki/Project-Information-Framework-Tests-Overview#plaintext)* |
----
-| ![](https://github.com/bootgly/.github/raw/main/screenshots/bootgly-php-framework/Bootgly-WPI-Nodes-HTTP-Server-CLI.png "Bootgly HTTP Server CLI - started in Monitor mode") |
-|:--:| 
-| *HTTP Server CLI - started in `monitor` mode*
-
-
-More **Screenshots**, videos and details can be found in the home page of [Bootgly Docs][PROJECT_DOCS].
-
----
-
-## 🔧 Usage
+## 🚀 Get starting
 
 ### 📟 Bootgly CLI:
 
@@ -383,6 +355,33 @@ More **Screenshots**, videos and details can be found in the home page of [Bootg
    });
    ```
 </details>
+
+---
+
+## 🖼 Highlights
+
+### \- Bootgly CLI 📟
+
+| ![](https://github.com/bootgly/.github/raw/main/screenshots/bootgly-php-framework/Bootgly-CLI.png "Bootgly CLI - initial output") |
+|:--:| 
+| *Bootgly CLI - initial output* |
+---
+| ![](https://github.com/bootgly/.github/raw/main/screenshots/bootgly-php-framework/Bootgly-CLI-Terminal-components-Progress.png "Render 7x faster than Laravel / Symfony") |
+|:--:| 
+| *Progress component (with Bar) - [Render ≈7x faster than Laravel / Symfony][BENCHMARK_1]* |
+
+### \- Bootgly WPI 🌐
+
+| ![](https://github.com/bootgly/.github/raw/main/screenshots/bootgly-php-framework/Server-CLI-HTTP-Benchmark-Ryzen-9-3900X-WSL2.png "Bootgly HTTP Server CLI (wrk benchmark) - +7% faster than Workerman in the Plain Text test") |
+|:--:| 
+| *Bootgly HTTP Server CLI (wrk benchmark) - +7% faster than [Workerman](https://www.techempower.com/benchmarks/#section=data-r21&test=plaintext&l=zik073-6bj) in the [Plain Text test](https://github.com/TechEmpower/FrameworkBenchmarks/wiki/Project-Information-Framework-Tests-Overview#plaintext)* |
+---
+| ![](https://github.com/bootgly/.github/raw/main/screenshots/bootgly-php-framework/Bootgly-WPI-Nodes-HTTP-Server-CLI.png "Bootgly HTTP Server CLI - started in Monitor mode") |
+|:--:| 
+| *HTTP Server CLI - started in `monitor` mode*
+
+
+More **Screenshots**, videos and details can be found in the home page of [Bootgly Docs][PROJECT_DOCS].
 
 
 
