@@ -41,8 +41,8 @@ A stable release is planned for December 2023.
 - [Compliances](#-compliances)
   - [License](#-license)
   - [Versioning](#-versioning)
+- [Get starting](#-get-starting)
 - [Highlights](#-highlights)
-- [Usage](#-usage)
 
 ---
 
