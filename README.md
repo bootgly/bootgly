@@ -187,6 +187,10 @@ Bootgly uses [Semantic Versioning 2.0][SEMANTIC_VERSIONING].
 
 ### \- Bootgly CLI 📟
 
+| ![](https://github.com/bootgly/.github/raw/main/screenshots/bootgly-php-framework/Bootgly-CLI.png "Bootgly CLI - initial output") |
+|:--:| 
+| *Bootgly CLI - initial output* |
+---
 | ![](https://github.com/bootgly/.github/raw/main/screenshots/bootgly-php-framework/Bootgly-CLI-Terminal-components-Progress.png "Render 7x faster than Laravel / Symfony") |
 |:--:| 
 | *Progress component (with Bar) - [Render ≈7x faster than Laravel / Symfony][BENCHMARK_1]* |
@@ -294,7 +298,7 @@ More **Screenshots**, videos and details can be found in the home page of [Bootg
    The `route` method is used to define routes, with the schema as follows:
 
    ```php
-   route (string $route, callable $handler, null|string|array $methods = null) : bool
+   route (string $route, callable $handler, null|string|array $methods = null) : false|object
    ```
 
    - `$route` is the URL pattern to match that accepts params.
