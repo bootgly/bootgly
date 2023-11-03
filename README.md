@@ -43,6 +43,8 @@ A stable release is planned for December 2023.
   - [Versioning](#-versioning)
 - [Get starting](#-get-starting)
 - [Highlights](#-highlights)
+- [License](#-license)
+- [Versioning System](#-versioning-system)
 
 ---
 
@@ -56,40 +58,22 @@ Bootgly is a base framework for developing APIs and Apps for both CLI (Console) 
 
 > Command Line Interface
 
-Interface: [CLI][CLI_INTERFACE]
+- Interface: [CLI][CLI_INTERFACE]
+- Platform: [Console][CONSOLE_PLATFORM] (TODO)
 
-Platform: [Console][CONSOLE_PLATFORM] (TODO)
-
-Terminal components |
---- |
-[Alert component][CLI_TERMINAL_ALERT] | 
-[Field component][CLI_TERMINAL_FIELD] | 
-[Menu component][CLI_TERMINAL_MENU] | 
-[Progress component][CLI_TERMINAL_PROGRESS] | 
-[Table component][CLI_TERMINAL_TABLE] | 
-
-CLI components |
---- |
-[Header component][CLI_HEADER] | 
+For the base CLI development, Bootgly already has the following components:
+[Alert][CLI_TERMINAL_ALERT], [Field][CLI_TERMINAL_FIELD], [Header][CLI_HEADER], [Menu][CLI_TERMINAL_MENU], [Progress][CLI_TERMINAL_PROGRESS], [Table][CLI_TERMINAL_TABLE].
 
 ### Bootgly WPI 🌐
 
 > Web Programming Interface 
 
-Interface: [WPI][WPI_INTERFACE]
+- Interface: [WPI][WPI_INTERFACE]
+- Platform: [Web][WEB_PLATFORM] (IN DEVELOPMENT)
 
-Platform: [Web][WEB_PLATFORM] (IN DEVELOPMENT)
+For the base Web development, Bootgly has a [HTTP Server CLI][WEB_HTTP_SERVER_CLI], a [TCP Client][WEB_TCP_CLIENT_INTERFACE] and a [TCP Server][WEB_TCP_SERVER_INTERFACE].
 
-Web interfaces | Web nodes
---- | ---
-[TCP Client][WEB_TCP_CLIENT_INTERFACE] | HTTP Client CLI (🤔)
-[TCP Server][WEB_TCP_SERVER_INTERFACE] | [HTTP Server CLI][WEB_HTTP_SERVER_CLI]
-UDP Client (🤔) | WS Client
-UDP Server (🤔) | WS Server
-
--- 
-
-🤔 = TODO
+More news may come until the release of v1.0. Stay tuned.
 
 ---
 
@@ -167,18 +151,6 @@ Help us keep Bootgly open and inclusive. Please read and follow our [Code of Con
 A lot of time and energy is devoted to Bootgly projects. To accelerate your growth, if you like this project or depend on it for your stack to work, consider [sponsoring it][GITHUB_SPONSOR].
 
 Your sponsorship will keep this project always **up to date** with **new features** and **improvements** / **bug fixes**.
-
----
-
-## 📝 Compliances
-
-### 📃 License
-
-The Bootgly is open-sourced software licensed under the [MIT license][MIT_LICENSE].
-
-### 📑 Versioning System
-
-Bootgly uses [Semantic Versioning 2.0][SEMANTIC_VERSIONING].
 
 ---
 
@@ -383,7 +355,17 @@ Bootgly uses [Semantic Versioning 2.0][SEMANTIC_VERSIONING].
 
 More **Screenshots**, videos and details can be found in the home page of [Bootgly Docs][PROJECT_DOCS].
 
+---
 
+## 📃 License
+
+The Bootgly is open-sourced software licensed under the [MIT license][MIT_LICENSE].
+
+---
+
+## 📑 Versioning System
+
+Bootgly uses [Semantic Versioning 2.0][SEMANTIC_VERSIONING].
 
 <!-- Links -->
 [I2P_ARQUITECTURE]: https://docs.bootgly.com/manual/Bootgly/basic/architecture/overview
