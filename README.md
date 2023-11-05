@@ -38,7 +38,7 @@ A stable release is planned for December 2023.
   - [Code of Conduct](#-code-of-conduct)
   - [Social Networks](#-social-networks)
   - [Sponsorship](#-sponsorship)
-- [Get starting](#-get-starting)
+- [Getting started](#-getting-started)
 - [Highlights](#-highlights)
 - [License](#-license)
 - [Versioning System](#-versioning-system)
@@ -151,7 +151,7 @@ Your sponsorship will keep this project always **up to date** with **new feature
 
 ---
 
-## 🚀 Get starting
+## 🚀 Getting started
 
 ### 📟 Bootgly CLI:
 
