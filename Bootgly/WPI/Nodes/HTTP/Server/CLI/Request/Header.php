@@ -79,7 +79,7 @@ class Header
    }
    public function set (string $raw) : void
    {
-      $this->raw = $raw;
+      $this->raw ??= $raw;
    }
 
    public function build () : bool
