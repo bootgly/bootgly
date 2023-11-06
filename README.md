@@ -232,43 +232,7 @@ Your sponsorship will keep this project always **up to date** with **new feature
    ```
 </details>
 
-<details>
-   <summary><b>Routing HTTP Requests on the Server-side</b></summary><br>
-
-   [The Router][HTTP_SERVER_ROUTER_CLASS] for HTTP Servers provides a flexible and powerful web routing system. 
-   The `route` method is used to define routes, with the schema as follows:
-
-   ```php
-   route (string $route, callable $handler, null|string|array $methods = null) : false|object
-   ```
-
-   - `$route` is the URL pattern to match that accepts params.
-   - `$handler` is the callback to be executed when the route is matched.
-   - `$methods` is the HTTP method(s) that this route should respond to.
-
-   #### **Routing when using HTTP Server with SAPI CLI**
-
-   Basic Usage:
-
-   ```php
-   use Bootgly\WPI\Nodes\HTTP\Server\CLI\Request;
-   use Bootgly\WPI\Nodes\HTTP\Server\CLI\Response;
-
-   yield $Router->route('/', function (Request $Request, Response $Response) {
-      $Route = $this;
-
-      return $Response(body: 'Hello World!');
-   }, GET);
-   ```
-
-   > You should use `yield` (Generator) if you define more than one route. This ensures consistency and performance in HTTP Responses under the hood due.
-
-   Handler arguments:
-   - `$Request` is the HTTP Server Request
-   - `$Response` is the HTTP Server Response
-
-   [Learn more about on Bootgly Docs][ROUTING]
-</details>
+<b>[Routing HTTP Requests on the Server-side][ROUTING]</b>
 
 ---
 
