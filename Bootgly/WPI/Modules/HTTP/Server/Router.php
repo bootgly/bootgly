@@ -110,34 +110,31 @@ class Router
          throw new \Exception('Nested route path must be relative!');
       }
 
+      // ! Route Methods
+      // @ Match
+      if (empty($methods) || \in_array(self::$Server::$Request->method, (array) $methods)) {
+         $routed = 1;
+      }
+
       // ! Route Route
       // @ Boot
-      $route = ($route === '/'
-         ? ''
-         : \rtrim($route, '/')
-      );
-      $Route->path = $route;
-
-      // @ Match
-      $routed = match (true) {
-         $route === self::$Server::$Request->URL,
-         // Not Matched Route (nested level)
-         $Route->nested && $route === '*',
-         // Not Matched Route (root level)
-         $route === '/*',
-            => 1,
-         default => $this->match($route)
-      };
-
-      // ! Route Condition
       if ($routed === 1) {
+         $route = ($route === '/'
+            ? ''
+            : \rtrim($route, '/')
+         );
+         $Route->path = $route;
+
          // @ Match
-         if (
-            empty($methods) ||
-            \in_array(self::$Server::$Request->method, (array) $methods)
-         ) {
-            $routed = 2;
-         }
+         $routed = match (true) {
+            $route === self::$Server::$Request->URL,
+            // Not Matched Route (nested level)
+            $Route->nested && $route === '*',
+            // Not Matched Route (root level)
+            $route === '/*',
+               => 2,
+            default => $this->match($route)
+         };
       }
 
       // ! Route Callback
@@ -252,7 +249,7 @@ class Router
             }
 
             if (@$matches[0]) {
-               return 1;
+               return 2;
             }
          }
 
@@ -261,7 +258,7 @@ class Router
 
       if ($Route->nested) {
          if ($route === $Route->catched) {
-            return 1;
+            return 2;
          }
 
          return 0;

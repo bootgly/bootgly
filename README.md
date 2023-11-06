@@ -251,78 +251,23 @@ Your sponsorship will keep this project always **up to date** with **new feature
    Basic Usage:
 
    ```php
-   yield $Router->route('/', function ($Request, $Response) {
+   use Bootgly\WPI\Nodes\HTTP\Server\CLI\Request;
+   use Bootgly\WPI\Nodes\HTTP\Server\CLI\Response;
+
+   yield $Router->route('/', function (Request $Request, Response $Response) {
+      $Route = $this;
+
       return $Response(body: 'Hello World!');
    }, GET);
    ```
 
-   > You should use `yield` (Generator) if you define more than one route. This ensures consistency and performance in HTTP Responses under the hood due to the stateful nature of the SAPI CLI.
+   > You should use `yield` (Generator) if you define more than one route. This ensures consistency and performance in HTTP Responses under the hood due.
 
    Handler arguments:
    - `$Request` is the HTTP Server Request
    - `$Response` is the HTTP Server Response
 
-   Some examples:
-
-   **1. Route Callbacks**
-
-   ```php
-   yield $Router->route('/', fn ($Request, $Response) => $Response, GET); // Closures
-   yield $Router->route('/hello', ['talk', 'world'], GET); // functions
-   yield $Router->route('/world', ['HelloWorld::talk'], GET); // Static Classes
-   ```
-
-   **2. Route with Route Params**
-
-   ```php
-   yield $Router->route('/user/:id', function ($Request, $Response) {
-      return $Response(body: 'User ID: ' . $this->Params->id);
-   }, GET);
-   ```
-
-   ```php
-   $Route->Params->id = '[0-9]+'; // Set Param Regex pattern
-
-   yield $Router->route('/param6/:id/param7/:id', function ($Request, $Response) {
-      return $Response(body: <<<HTML
-      Equals named params with Regex:<br>
-      Param 1: {$this->Params->id[0]}<br>
-      Param 2: {$this->Params->id[1]}
-      HTML);
-   }, GET);
-   ```
-
-   **3. Route with multiple HTTP methods**
-
-   ```php
-   yield $Router->route('/data', function ($Request, $Response) {
-      return $Response(body: 'Data!');
-   }, [GET, POST]);
-   ```
-
-   **4. Nested Routes**
-
-   ```php
-   yield $Router->route('/profile/:*', function ($Request, $Response)
-      use ($Router) {
-      // ...
-
-      yield $Router->route('default', function ($Request, $Response) {
-         return $Response(body: 'User Default!');
-      });
-      yield $Router->route('user/:id', function ($Request, $Response) {
-         return $Response(body: 'User ID: ' . $this->Params->id);
-      });
-   }, GET);
-   ```
-
-   **5. Catch-All Route**
-
-   ```php
-   yield $Router->route('/*', function ($Request, $Response) {
-      return $Response(code: 404, body: 'pages/404');
-   });
-   ```
+   [Learn more about on Bootgly Docs][ROUTING]
 </details>
 
 ---
@@ -366,6 +311,8 @@ Bootgly uses [Semantic Versioning 2.0][SEMANTIC_VERSIONING].
 
 <!-- Links -->
 [I2P_ARQUITECTURE]: https://docs.bootgly.com/manual/Bootgly/basic/architecture/overview
+[ROUTING]: https://docs.bootgly.com/manual/WPI/HTTP/HTTP_Server_Router/overview
+
 [CLI_INTERFACE]: https://github.com/bootgly/bootgly/tree/main/Bootgly/CLI/
 [CLI_TERMINAL_COMPONENTS]: https://github.com/bootgly/bootgly/tree/main/Bootgly/CLI/Terminal/components
 
