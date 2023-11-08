@@ -62,24 +62,29 @@ class Router
    {
       $Request = self::$Server::$Request;
 
-      $Router = &$this;
       $Route = &$this->Route;
+      $Router = &$this;
 
       $boot = Bootgly::$Project->path . 'router/';
 
       $Index = new File($boot . 'index.php');
-      (static function (string $__default__)
-      use ($Request, $Router, $Route) {
-         include_once $__default__;
-      })($Index->file);
+      if ($Index->exists) {
+         (static function (string $__default__)
+            use ($Request, $Router, $Route) {
+            include_once $__default__;
+         })($Index->file);
+      }
 
       $instances = (array) $instances;
       foreach ($instances as $instance) {
          $Instance = new File($boot . $instance . '.php');
-         (static function (string $__routes__)
-         use ($Request, $Router, $Route) {
-            @include_once $__routes__;
-         })($Instance->file);
+
+         if ($Instance->exists) {
+            (static function (string $__routes__)
+               use ($Request, $Router, $Route) {
+               @include_once $__routes__;
+            })($Instance->file);
+         }
       }
    }
    public function pause ()
@@ -231,8 +236,9 @@ class Router
          $this->parse($route); // @ Set $Route->parsed and $Route->catched
 
          if ($Route->parsed) {
+            // $pattern
             $pattern = '/^' . $Route->parsed . '$/m';
-
+            // $subject
             if ($Route->catched && $Route->catched !== '(.*)') {
                $subject = $Route->catched;
                $Route->catched = '';
@@ -240,7 +246,7 @@ class Router
             else {
                $subject = self::$Server::$Request->URL;
             }
-
+            // @
             \preg_match($pattern, $subject, $matches);
 
             if ($Route->catched === '(.*)') {
@@ -295,6 +301,8 @@ class Router
       }
 
       foreach ($paths as $index => $node) {
+         dump($node);
+
          if ($index > 0 || $node !== '\\') {
             if (@$node[-1] === '*' || @$node[-2] === '*') { //? Catch-All Param
                $node = \str_replace(':*', '(.*)', $node); //? Replace with (...) capture everything enclosed
@@ -313,7 +321,7 @@ class Router
                   $params = \explode('(', \rtrim($param, ')'));
                   $param = $params[0];
 
-                  $Route->Params->$param = $params[1];
+                  $Route->Params->$param = $params[1]; // @ Set Param Regex
 
                   $Route->path = \str_replace('(' . $params[1] . ')', '', $Route->path);
                }
