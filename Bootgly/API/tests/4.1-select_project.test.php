@@ -3,6 +3,7 @@
 namespace Bootgly;
 
 use Bootgly\API\Project;
+use Bootgly\API\Projects;
 
 return [
    // @ Configure
@@ -24,9 +25,9 @@ return [
       $Project2 = new Project;
 
       // @ Select Project
-      $path2 = $Project2->select(project: 'Bootgly');
+      $Project = Projects::select(project: 'Bootgly');
       yield assert(
-         assertion: $path2 === Project::CONSUMER_DIR . 'Bootgly/',
+         assertion: $Project->path === Projects::CONSUMER_DIR . 'Bootgly/',
          description: 'Failed to select Project by name'
       );
    }

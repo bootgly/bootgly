@@ -1,4 +1,6 @@
 <?php
+use Bootgly\WPI\Nodes\HTTP\Server\Bridge\Response;
+
 function hello($who)
 {
    echo 'Hello ' . $who . '!';
@@ -13,14 +15,15 @@ class World
 
 //! 1 - Route Callback - OK
 //? 1.1 - Closure in Callback - OK
-$Router->route('/', function ($Request, $Response) {
-   echo '[1.1] - Closure in Callback!';
+$Router->route('/', function ($Request, Response $Response) {
+   #echo '[1.1] - Closure in Callback!';
    // render(['title' => 'Testing']);
+   return $Response->send('Test');
 }, GET);
 //? 1.2 - Function in Callback - OK
-$Router->route('/hello', ['hello', 'world'], GET);
+$Router->route('/hello', 'hello', GET);
 //? 1.3 - Static Class in Callback - OK
-$Router->route('/staticclass', [__NAMESPACE__ . 'World::hello'], GET);
+$Router->route('/staticclass', __NAMESPACE__ . 'World::hello', GET);
 
 //! 2 - Route Conditions - OK
 //? 2.1 - Custom Method - OK

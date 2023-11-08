@@ -2,6 +2,7 @@
 namespace Bootgly;
 
 use Bootgly\API\Project;
+use Bootgly\API\Projects;
 
 return [
    // @ Configure
@@ -17,10 +18,10 @@ return [
       // @ Name current Project
       $Project1->name('BootglyCLI');
       // @ Select Project by name
-      $path2 = $Project1->select(project: 'BootglyCLI');
+      $Project = Projects::select(project: 'BootglyCLI');
+
       yield assert(
-         assertion: $path2 === Project::CONSUMER_DIR . 'Bootgly/CLI/',
-         description: 'Failed to select Project path by name'
-      );
+         $Project->path === Projects::CONSUMER_DIR . 'Bootgly/CLI/'
+      ) ?: 'Failed to select Project path by name';
    }
 ];

@@ -12,7 +12,7 @@ namespace Bootgly;
 
 
 use Bootgly\ABI\Debugging\Data\Vars;
-use Bootgly\API\Project;
+use Bootgly\API\Projects;
 
 use Bootgly\CLI\Commands;
 use Bootgly\CLI\Scripts;
@@ -68,11 +68,11 @@ class CLI // Command Line Interface
 
       // @ Boot CLI
       // Author
-      @include(Project::AUTHOR_DIR . 'Bootgly/' . self::BOOT_FILE);
+      @include(Projects::AUTHOR_DIR . 'Bootgly/' . self::BOOT_FILE);
       // Consumer
       if (BOOTGLY_ROOT_DIR !== BOOTGLY_WORKING_DIR) {
          // Multi projects
-         @include(Project::CONSUMER_DIR . 'Bootgly/' . self::BOOT_FILE);
+         @include(Projects::CONSUMER_DIR . 'Bootgly/' . self::BOOT_FILE);
       }
    }
 }

@@ -15,6 +15,7 @@ use Bootgly\ABI\Templates\Template;
 use Bootgly\ACI\Logs\Logger;
 
 use Bootgly\API\Project;
+use Bootgly\API\Projects;
 
 
 class Bootgly
@@ -35,12 +36,12 @@ class Bootgly
       // @ Boot
       // Author
       if (BOOTGLY_ROOT_DIR === BOOTGLY_WORKING_DIR) {
-         @include Project::AUTHOR_DIR . self::BOOT_FILE;
+         @include Projects::AUTHOR_DIR . self::BOOT_FILE;
       }
       // Consumer
       if (BOOTGLY_ROOT_DIR !== BOOTGLY_WORKING_DIR) {
          // Multi projects
-         @include Project::CONSUMER_DIR . self::BOOT_FILE;
+         @include Projects::CONSUMER_DIR . self::BOOT_FILE;
       }
    }
 

@@ -8,10 +8,10 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\API;
+namespace Bootgly\API; // namespace Bootgly\API\Projects
 
 
-class Project // TODO rename to Projects
+class Project
 {
    // ! Path
    // Author
@@ -20,32 +20,28 @@ class Project // TODO rename to Projects
    public const CONSUMER_DIR = BOOTGLY_WORKING_BASE . '/projects/';
 
    // * Config
-   // ...
-
-   // * Data
+   // @ path
    public string $vendor;       // Bootgly/
    public string $container;    // WPI/
    public string $package;      // App/
    // ---
-   public string $type;         // SPA, PWA, etc.
+   public string $type;         // Quasar
    public string $public;       // dist/
-   public string $version;      // v1/
+   public string $version;      // spa/
+
+   // * Data
+   protected string $name;
+   protected array $paths;
 
    // * Meta
-   private array $paths;
-   private static array $projects = [];
-   private int $index;
-   private static array $indexes = [];
+   private ? int $index;
 
 
    public function __construct ()
    {
-      // ! Path
       // * Config
-      // ...
-
-      // * Data
-      // TODO templates
+      // @ path
+      // TODO template path
       $this->vendor = '';
       $this->container = '';
       $this->package = '';
@@ -54,9 +50,11 @@ class Project // TODO rename to Projects
       $this->public = '';
       $this->version = '';
 
+      // * Data
+      $this->name = '';
+
       // * Meta
-      $this->paths = [];
-      $this->index = count(self::$projects);
+      $this->index = null;
    }
 
    public function __get (string $name)
@@ -80,38 +78,7 @@ class Project // TODO rename to Projects
       return $this->path;
    }
 
-   // ! ID
-   public function name (string $name) : bool
-   {
-      if ($name === '') {
-         return false;
-      }
-
-      self::$indexes[$name] ??= $this->index;
-
-      return true;
-   }
    // ! Path
-   public function boot () : bool
-   {
-      ${'@'} = include(self::CONSUMER_DIR . '@.php');
-
-      if (${'@'} === null) {
-         return false;
-      }
-
-      $projects = ${'@'}['projects'];
-      foreach ($projects as $project) {
-         $Project = new self; // TODO use new Project (new class);
-
-         $paths = $project['paths'];
-         foreach ($paths as $path) {
-            $Project->construct($path);
-         }
-      }
-
-      return true;
-   }
    public function construct (? string $path = null) : string
    {
       if ($path) {
@@ -141,30 +108,34 @@ class Project // TODO rename to Projects
 
       if ($path) {
          $path = trim($path, '/');
-         $path = self::CONSUMER_DIR . $path . '/';
+         $path = Projects::CONSUMER_DIR . $path . '/';
 
          $this->paths[] = $path;
 
-         // @ Save path to static $projects by index
-         self::$projects[$this->index][] = $path;
+         // @ Add Project to Projects
+         $this->index = Projects::add($this);
       }
 
       return $path;
    }
-
-   public function get (int $index = 0) : string
+   public function get (int $path = 0) : string
    {
-      return $this->paths[$index] ?? '';
+      return $this->paths[$path] ?? '';
    }
-   // ! Project
-   public function select (null|string|int $project = null) : string
+   // ! ID
+   public function name (string $name) : bool
    {
-      if ( is_string($project) ) {
-         $project = self::$indexes[$project] ?? null;
+      if ($this->index === null) {
+         return false;
       }
 
-      $paths = self::$projects[$project] ?? '';
+      $indexed = Projects::index($name);
+      if ($indexed === false) {
+         return false;
+      }
 
-      return $paths[0] ?? '';
+      $this->name = $name;
+
+      return true;
    }
 }

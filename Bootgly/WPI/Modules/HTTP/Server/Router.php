@@ -301,8 +301,6 @@ class Router
       }
 
       foreach ($paths as $index => $node) {
-         dump($node);
-
          if ($index > 0 || $node !== '\\') {
             if (@$node[-1] === '*' || @$node[-2] === '*') { //? Catch-All Param
                $node = \str_replace(':*', '(.*)', $node); //? Replace with (...) capture everything enclosed

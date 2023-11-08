@@ -55,16 +55,16 @@ return static function
    yield $Router->route('/new', function () {
       return new Response(body: 'Testing Bootgly HTTP Router!');
    }, GET);
-   yield $Router->route('/profile/:*', function () use ($Router) {
-      yield $Router->route('default', function ($Request, $Response) {
-         return $Response(body: 'Default profile!');
+   yield $Router->route('/user/:*', function () use ($Router) {
+      yield $Router->route('', function ($Request, $Response) {
+         return $Response(body: 'Your profile!');
       });
 
-      yield $Router->route('user/maria', function ($Request, $Response) {
+      yield $Router->route('maria', function ($Request, $Response) {
          return $Response(body: 'Maria\'s user profile!');
       });
 
-      yield $Router->route('user/bob', function ($Request, $Response) {
+      yield $Router->route('bob', function ($Request, $Response) {
          return $Response(body: 'Bob\'s user profile!');
       });
    }, GET);

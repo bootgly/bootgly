@@ -18,7 +18,7 @@ use Bootgly\ABI\Debugging\Shutdown;
 use Bootgly\ACI\Logs\Logging;
 use Bootgly\ACI\Logs\Logger;
 
-use Bootgly\API\Project;
+use Bootgly\API\Projects;
 
 use Bootgly\API\Server as SAPI;
 use Bootgly\API\Environment;
@@ -150,7 +150,7 @@ class Server implements Servers, Logging
       if (self::$Application) {
          self::$Application::boot();
       } else {
-         SAPI::$production = Project::CONSUMER_DIR . 'Bootgly/WPI/TCP-Server.API.php';
+         SAPI::$production = Projects::CONSUMER_DIR . 'Bootgly/WPI/TCP-Server.API.php';
          SAPI::boot(true);
       }
    }

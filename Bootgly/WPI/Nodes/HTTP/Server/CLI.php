@@ -17,7 +17,7 @@ use Bootgly\ACI\Logs\Logger;
 use Bootgly\ACI\Tests;
 use Bootgly\ACI\Tests\Tester;
 
-use Bootgly\API\Project;
+use Bootgly\API\Projects;
 
 use Bootgly\API\Server as SAPI;
 
@@ -110,7 +110,7 @@ class CLI extends TCP\Server implements HTTP, Server
    {
       // * Config
       if ($production) {
-         SAPI::$production = Project::CONSUMER_DIR . 'Bootgly/WPI/HTTP-Server.API.php';
+         SAPI::$production = Projects::CONSUMER_DIR . 'Bootgly/WPI/HTTP-Server.API.php';
       }
 
       // * Data
