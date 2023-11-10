@@ -58,8 +58,10 @@ $Divisor1->...;
 $Items->push($Divisor1);
 */
 
-$selected = $Menu->open();
-
+foreach ($Menu->rendering() as $Output) {
+   // ...
+}
+$selected = $Menu->selected;
 
 echo "\n";
 if ( ! empty($selected) ) {

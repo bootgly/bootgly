@@ -56,8 +56,10 @@ $Items->push(
    new Divisor(characters: '='),
 );
 
-$selected = $Menu->open();
-
+foreach ($Menu->rendering() as $Output) {
+   // ...
+}
+$selected = $Menu->selected;
 
 echo "\n";
 if ( ! empty($selected) ) {

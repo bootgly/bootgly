@@ -30,12 +30,13 @@ class Menu extends Component
    // * Config
    public static int $width;
    public string $prompt;
+   public static int $level;
 
    // * Data
    public Items $Items;
 
    // * Meta
-   public static int $level;
+   public array $selected;
 
 
    public function __construct (Input &$Input, Output &$Output)
@@ -46,6 +47,7 @@ class Menu extends Component
       // * Config
       self::$width = 80;
       $this->prompt = '';
+      self::$level = 0;
 
       // * Data
       $this->Items = new Items($this);
@@ -53,7 +55,7 @@ class Menu extends Component
       // ...Items extensions loaded dynamically
 
       // * Meta
-      self::$level = 0;
+      $this->selected = [];
    }
 
    // @ Templating
@@ -70,7 +72,7 @@ class Menu extends Component
       $Headers = $Items->Headers ?? null;
 
       // @
-      $rendered = '';
+      $rendered = $this->prompt . "\n";
       // ---
       $Options = $Items->Options;
 
@@ -115,10 +117,14 @@ class Menu extends Component
          $rendered .= "\n";
       }
 
-      $this->Output->render($rendered);
+      return match ($this->render) {
+         self::WRITE_OUTPUT => $this->Output->render($rendered),
+         self::RETURN_OUTPUT => $rendered,
+         default => null
+      };
    }
 
-   public function open ()
+   public function rendering () : \Generator
    {
       // Save Cursor position
       $this->Output->Cursor->save();
@@ -137,11 +143,8 @@ class Menu extends Component
       while (true) {
          $this->Output->Cursor->restore();
 
-         // @ Render Menu prompt
-         $this->Output->render($this->prompt . "\n");
-
          // @ Render Menu
-         $this->render();
+         yield $this->render();
 
          // @ Read 3 characters from Input
          $char = $this->Input->read(3);
@@ -154,11 +157,16 @@ class Menu extends Component
             #usleep(250000);
             #usleep(500000);
 
+            // @ Return selected in real time
+            yield $Items->Options::$selected[self::$level];
+
             continue;
          }
 
          break;
       }
+
+      $this->selected = $Items->Options::$selected[self::$level];
 
       // Restore Input settings
       $this->Input->configure(
@@ -169,6 +177,6 @@ class Menu extends Component
       // Show Cursor
       $this->Output->Cursor->show();
 
-      return $Items->Options::$selected[self::$level];
+      return false;
    }
 }

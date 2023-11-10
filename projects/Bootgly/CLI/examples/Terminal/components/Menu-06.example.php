@@ -47,7 +47,10 @@ $Items->Options->add(label: 'Option 1');
 $Items->Options->add(label: 'Option 2');
 $Items->Options->add(label: 'Option 3');
 
-$selected = $Menu->open();
+foreach ($Menu->rendering() as $Output) {
+   // ...
+}
+$selected = $Menu->selected;
 
 
 echo "\n";
