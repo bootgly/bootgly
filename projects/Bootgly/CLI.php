@@ -32,8 +32,10 @@ CLI::$Commands->help(function ($scripting = true) {
    $output = '@.;';
    if ($scripting) {
       // @ Banner
-      $Header = new Header;
-      $output .= $Header->generate(word: 'Bootgly', inline: true);
+      $Header = new Header($Output);
+      $output .= $Header
+         ->generate(word: 'Bootgly', inline: true)
+         ->render($Header::RETURN_OUTPUT);
 
       // @ Usage
       $output .= '@.;@#Cyan:Usage:@; ' . $script . '@#Black:  [command] @;@..;';

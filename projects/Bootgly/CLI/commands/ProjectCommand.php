@@ -125,11 +125,13 @@ class ProjectCommand extends Command
       } else if ( count($arguments) > 1 ) {
          $Alert = new Alert($Output);
          $Alert->Type::FAILURE->set();
-         $Alert->emit('Too many arguments!');
+         $Alert->message = 'Too many arguments!';
+         $Alert->render();
       } else {
          $Alert = new Alert($Output);
          $Alert->Type::FAILURE->set();
-         $Alert->emit("Invalid argument: @#cyan:{$arguments[0]}@;.");
+         $Alert->message = "Invalid argument: @#cyan:{$arguments[0]}@;.";
+         $Alert->render();
       }
 
       $output .= '@.;';

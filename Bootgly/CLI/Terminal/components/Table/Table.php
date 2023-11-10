@@ -13,11 +13,13 @@ namespace Bootgly\CLI\Terminal\components\Table;
 
 use Bootgly\ADI\Table as DataTable;
 
+use Bootgly\API\Component;
+
 use Bootgly\CLI\Terminal\components\Table\ { Cells, Columns, Row, Rows };
 use Bootgly\CLI\Terminal\Output;
 
 
-class Table
+class Table extends Component
 {
    public DataTable $Data;
 
@@ -164,8 +166,10 @@ class Table
       $this->Output->write($line);
    }
 
-   public function render ()
+   public function render (int $mode = self::WRITE_OUTPUT)
    {
+      // TODO on render RETURN OUTPUT
+
       // > Columns
       // @ Auto widen columns based on column data width
       $this->Columns->autowiden();

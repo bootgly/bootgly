@@ -11,18 +11,19 @@
 namespace Bootgly\CLI\Terminal\components\Progress;
 
 
-// -abstract
 use Bootgly\ABI\Data\__String\Escapeable;
 use Bootgly\ABI\Data\__String\Escapeable\Cursor\Positionable;
 use Bootgly\ABI\Data\__String\Escapeable\Cursor\Visualizable;
 use Bootgly\ABI\Data\__String\Escapeable\Text\Modifiable;
 use Bootgly\ABI\Templates\Template\Escaped as TemplateEscaped;
-// -interfaces
+
+use Bootgly\API\Component;
+
 use Bootgly\CLI\Terminal\Output;
 use Bootgly\CLI\Terminal\components\Progress\Bar\Bar;
 
 
-class Progress
+class Progress extends Component
 {
    use Escapeable;
    use Positionable;
@@ -34,21 +35,17 @@ class Progress
 
    // * Config
    public float $throttle;
-   // @ render
-   public const RENDER_MODE_OUTPUT = 1;
-   public const RENDER_MODE_RETURN = 2;
-   public int $render = self::RENDER_MODE_OUTPUT;
    // ---
    public object $Precision;
 
    // * Data
    public float $current;
    public float $total;
-   public string $output;
    // ! Templating
    public string $template;
 
    // * Meta
+   public string $output;
    // @ State
    private bool $indetermined;
    private bool $determined;
@@ -87,7 +84,6 @@ class Progress
       // * Data
       $this->current = 0.0;
       $this->total = 100;
-      $this->output = '';
       // ! Templating
       $this->template = <<<'TEMPLATE'
       @described;
@@ -96,6 +92,7 @@ class Progress
       TEMPLATE;
 
       // * Meta
+      $this->output = '';
       // @ State
       $this->indetermined = false;
       $this->determined = true;
@@ -150,7 +147,7 @@ class Progress
       }
    }
 
-   private function render ()
+   protected function render (int $mode = self::WRITE_OUTPUT)
    {
       $this->rendered = microtime(true);
 
@@ -196,7 +193,7 @@ class Progress
       ]);
 
       switch ($this->render) {
-         case self::RENDER_MODE_RETURN:
+         case self::RETURN_OUTPUT:
             $this->output = $output;
             break;
          default:
@@ -217,7 +214,7 @@ class Progress
       $this->started = microtime(true);
 
       // ---
-      if ($this->render === self::RENDER_MODE_OUTPUT) {
+      if ($this->render === self::WRITE_OUTPUT) {
          // @ Make vertical space for writing
          $lines = substr_count($this->template, "\n") + 2;
          $this->Output->expand($lines);

@@ -96,7 +96,7 @@ switch ($name) {
       $Progress[0]->throttle = 0.0;
       $Progress[0]->Precision->percent = 0;
       // @ render
-      $Progress[0]->render = Progress::RENDER_MODE_RETURN;
+      $Progress[0]->render = Progress::RETURN_OUTPUT;
       // * Data
       $Progress[0]->total = 100;
       // ! Templating

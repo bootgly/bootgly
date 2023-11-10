@@ -11,10 +11,12 @@
 namespace Bootgly\CLI\Terminal\components\Alert;
 
 
+use Bootgly\API\Component;
+
 use Bootgly\CLI\Terminal\Output;
 
 
-class Alert
+class Alert extends Component
 {
    private Output $Output;
 
@@ -24,7 +26,7 @@ class Alert
    public int $width;
 
    // * Data
-   // ...
+   public string $message;
 
    // * Meta
    // ...
@@ -40,23 +42,28 @@ class Alert
       $this->width = 80;
 
       // * Data
-      // ...
+      $this->message = '';
 
       // * Meta
       // ...
    }
 
 
-   public function emit (string $message)
+   public function render (int $mode = self::WRITE_OUTPUT)
    {
       // * Config
       $type = $this->Type->get();
       $style = $this->Style->get();
+      // * Data
+      $message = $this->message;
 
       // @
-      $Output = $this->Output;
+      if ($mode === self::RETURN_OUTPUT) {
+         $Output = new Output('php://memory');
+      }
+      $Output ??= $this->Output;
       $Text = $Output->Text;
-      // @ Prepare
+      // ---
       $Output->write(PHP_EOL);
       $Text->stylize('bold');
 
@@ -69,9 +76,11 @@ class Alert
                Type::FAILURE => $Text->colorize('white', 'red'),
                default => $Text->colorize(0, 7)
             };
+
             // @ Padding
             $padding = str_pad('', $this->width, ' ', STR_PAD_RIGHT);
             $message = str_pad($message, $this->width, ' ', STR_PAD_RIGHT);
+
             // @ Output
             $Output->render(<<<OUTPUT
              $padding
@@ -79,6 +88,7 @@ class Alert
              $padding
             @;\n
             OUTPUT);
+
             // @ Reset style and color
             $Text->stylize();
             $Text->colorize();
@@ -91,6 +101,7 @@ class Alert
                Type::FAILURE => $Text->colorize('white', 'red'),
                default => $Text->colorize('white', 'blue')
             };
+
             // @ Write alert type
             match ($type) {
                Type::SUCCESS => $Output->write(' SUCCESS '),
@@ -98,15 +109,24 @@ class Alert
                Type::FAILURE => $Output->write(' FAIL '),
                default => $Output->write(' ALERT ')
             };
+
             // @ Reset color
             $Text->colorize();
+
             // @ Write message
             $Output->render(<<<OUTPUT
              $message
             @;\n
             OUTPUT);
+
             // @ Reset style
             $Text->stylize();
+      }
+
+      if ($mode === self::RETURN_OUTPUT) {
+         rewind($Output->stream);
+         $output = stream_get_contents($Output->stream);
+         return $output;
       }
    }
 }

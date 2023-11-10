@@ -11,15 +11,12 @@
 namespace Bootgly\CLI\Terminal;
 
 
-// -abstract
-
 use Bootgly\ABI\Data\__String;
 use Bootgly\ABI\Data\__String\Escapeable;
 use Bootgly\ABI\Data\__String\Escapeable\Cursor\Positionable;
 use Bootgly\ABI\Data\__String\Escapeable\Text\Modifiable;
 use Bootgly\ABI\Templates\Template\Escaped as TemplateEscaped;
-// -interfaces
-use Bootgly\CLI;
+
 use Bootgly\CLI\Terminal;
 use Bootgly\CLI\Terminal\Output\Cursor;
 use Bootgly\CLI\Terminal\Output\Text;
@@ -51,7 +48,7 @@ class Output
    public Viewport $Viewport;
 
 
-   public function __construct ($stream = STDOUT)
+   public function __construct ($stream = \STDOUT)
    {
       // * Config
       $this->stream = $stream;
@@ -70,6 +67,11 @@ class Output
       $this->Cursor = new Cursor($this);
       $this->Text = new Text($this);
       $this->Viewport = new Viewport($this);
+
+      // @
+      if ($stream !== \STDOUT) {
+         $this->stream = @fopen($stream, 'r+');
+      }
    }
 
    public function reset ()

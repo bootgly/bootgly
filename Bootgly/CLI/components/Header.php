@@ -11,232 +11,252 @@
 namespace Bootgly\CLI\components;
 
 
-class Header
+use Bootgly\API\Component;
+
+use Bootgly\CLI\Terminal\Output;
+
+
+class Header extends Component
 {
+   private Output $Output;
+
+   // * Config
+   // ...
+
    // * Data
-   public array $letters;
+   public array $font;
+
+   // * Meta
+   private string $output;
 
 
-   public function __construct ()
+   public function __construct (Output &$Output)
    {
+      $this->Output = $Output;
+
       // TODO move to resources fonts
       // * Data
-      $this->letters['A'] = <<<ASCII_ART
+      $this->font = [
+         'A' => <<<ASCII_ART
        ██████╗ 
       ██╔═══██╗
       ████████║
       ██║   ██║
       ██║   ██║
       ╚═╝   ╚═╝
-      ASCII_ART;
-      $this->letters['B'] = <<<ASCII_ART
+      ASCII_ART,
+         'B' => <<<ASCII_ART
       ███████╗ 
       ██╔═══██╗
       ███████╔╝
       ██╔═══██╗
       ███████╔╝
       ╚══════╝ 
-      ASCII_ART;
-      $this->letters['C'] = <<<ASCII_ART
+      ASCII_ART,
+         'C' => <<<ASCII_ART
       ████████╗
       ██╔═════╝
       ██║      
       ██║      
       ████████╗
       ╚═══════╝
-      ASCII_ART;
-      $this->letters['D'] = <<<ASCII_ART
+      ASCII_ART,
+         'D' => <<<ASCII_ART
       ███████╗ 
       ██╔═══██╗
       ██║   ██║
       ██║   ██║
       ███████╔╝
       ╚══════╝ 
-      ASCII_ART;
-      $this->letters['E'] = <<<ASCII_ART
+      ASCII_ART,
+         'E' => <<<ASCII_ART
       ████████╗
       ██╔═════╝
       ████████╗
       ██╔═════╝
       ████████╗
       ╚═══════╝
-      ASCII_ART;
-      $this->letters['F'] = <<<ASCII_ART
+      ASCII_ART,
+         'F' => <<<ASCII_ART
       ████████╗
       ██╔═════╝
       ████████╗
       ██╔═════╝
       ██║      
       ╚═╝      
-      ASCII_ART;
-      $this->letters['G'] = <<<ASCII_ART
+      ASCII_ART,
+         'G' => <<<ASCII_ART
       ███████╗ 
       ██╔════╝ 
       ██║  ███╗
       ██║   ██║
       ╚██████╔╝
        ╚═════╝ 
-      ASCII_ART;
-      $this->letters['H'] = <<<ASCII_ART
+      ASCII_ART,
+         'H' => <<<ASCII_ART
       ██╗   ██╗
       ██║   ██║
       ████████║
       ██╔═══██║
       ██║   ██║
       ╚═╝   ╚═╝
-      ASCII_ART;
-      $this->letters['I'] = <<<ASCII_ART
+      ASCII_ART,
+         'I' => <<<ASCII_ART
       ████████╗
       ╚══██╔══╝
          ██║   
          ██║   
       ████████╗
       ╚═══════╝
-      ASCII_ART;
-      $this->letters['J'] = <<<ASCII_ART
+      ASCII_ART,
+         'J' => <<<ASCII_ART
        ███████╗
        ╚════██║
             ██║
       ██   ██║ 
       ╚█████╔╝ 
        ╚════╝  
-      ASCII_ART;
-      $this->letters['K'] = <<<ASCII_ART
+      ASCII_ART,
+         'K' => <<<ASCII_ART
       ██╗   ██╗
       ██║  ██╔╝
       █████╔╝  
       ██╔═██╗  
       ██║   ██╗
       ╚═╝   ╚═╝
-      ASCII_ART;
-      $this->letters['L'] = <<<ASCII_ART
+      ASCII_ART,
+         'L' => <<<ASCII_ART
       ██╗      
       ██║      
       ██║      
       ██║      
       ████████╗
       ╚═══════╝
-      ASCII_ART;
-      $this->letters['M'] = <<<ASCII_ART
+      ASCII_ART,
+         'M' => <<<ASCII_ART
       ███   ███╗
       ██║█ █ ██║
       ██║ █  ██║
       ██║    ██║
       ██║    ██║
       ╚═╝    ╚═╝
-      ASCII_ART;
-      $this->letters['N'] = <<<ASCII_ART
+      ASCII_ART,
+         'N' => <<<ASCII_ART
       ██╗   ██╗
       ██║   ██║
       ██║█╗ ██║
       ██║ █╗██║
       ██║  ███║
       ╚═╝  ╚══╝
-     ASCII_ART;
-      $this->letters['O'] = <<<ASCII_ART
+      ASCII_ART,
+         'O' => <<<ASCII_ART
        ██████╗ 
       ██╔═══██╗
       ██║   ██║
       ██║   ██║
       ╚██████╔╝
        ╚═════╝ 
-      ASCII_ART;
-      $this->letters['P'] = <<<ASCII_ART
+      ASCII_ART,
+         'P' => <<<ASCII_ART
       ███████╗ 
       ██╔═══██╗
       ███████╔╝
       ██╔═══╝  
       ██║      
       ╚═╝      
-      ASCII_ART;
-      $this->letters['Q'] = <<<ASCII_ART
+      ASCII_ART,
+         'Q' => <<<ASCII_ART
       ██████╗ 
       ██╔═══██╗
       ██║   ██║
       ██║ ▄ ██║
       ╚██████╔╝
        ╚══▀▀═╝ 
-      ASCII_ART;
-      $this->letters['R'] = <<<ASCII_ART
+      ASCII_ART,
+         'R' => <<<ASCII_ART
       ███████╗ 
       ██╔═══██╗
       ███████╔╝
       ██╔═══██╗
       ██║   ██║
       ╚═╝   ╚═╝
-      ASCII_ART;
-      $this->letters['S'] = <<<ASCII_ART
+      ASCII_ART,
+         'S' => <<<ASCII_ART
        ██████╗
       ██╔════╝
       ╚█████╗ 
        ╚═══██╗
       ██████╔╝
       ╚═════╝ 
-      ASCII_ART;
-      $this->letters['T'] = <<<ASCII_ART
+      ASCII_ART,
+         'T' => <<<ASCII_ART
       ████████╗
       ╚══██╔══╝
          ██║   
          ██║   
          ██║   
          ╚═╝   
-      ASCII_ART;
-      $this->letters['U'] = <<<ASCII_ART
+      ASCII_ART,
+         'U' => <<<ASCII_ART
       ██╗   ██╗
       ██║   ██║
       ██║   ██║
       ██║   ██║
        ██████╔╝
        ╚═════╝ 
-      ASCII_ART;
-      $this->letters['V'] = <<<ASCII_ART
+      ASCII_ART,
+         'V' => <<<ASCII_ART
       ██╗   ██╗
       ██║   ██║
       ██║   ██║
       ╚██  ██╔╝
         ╚██╔═╝ 
          ╚═╝   
-      ASCII_ART;
-      $this->letters['W'] = <<<ASCII_ART
+      ASCII_ART,
+         'W' => <<<ASCII_ART
       ██╗    ██╗
       ██║    ██║
       ██║ █╗ ██║
       ██║███╗██║
       ╚███╔███╔╝
        ╚══╝╚══╝ 
-      ASCII_ART;
-      $this->letters['X'] = <<<ASCII_ART
+      ASCII_ART,
+         'X' => <<<ASCII_ART
       ██╗   ██╗
        ██╗ ██╔╝
         ████╔╝ 
        ██║ ██╗ 
       ██║   ██╗
       ╚═╝   ╚═╝
-      ASCII_ART;
-      $this->letters['Y'] = <<<ASCII_ART
+      ASCII_ART,
+         'Y' => <<<ASCII_ART
       ██╗   ██╗
       ╚██╗ ██╔╝
        ╚████╔╝ 
         ╚██╔╝  
          ██║   
          ╚═╝   
-      ASCII_ART;
-      $this->letters['Z'] = <<<ASCII_ART
+      ASCII_ART,
+         'Z' => <<<ASCII_ART
       ███████▌╗
             ▄██
          ▄███▀ 
       ▄███▀    
       ████████╗
       ╚═══════╝
-      ASCII_ART;
+      ASCII_ART,
+      ];
+
+      // * Meta
+      $this->output = '';
    }
 
-   public function generate (string $word, bool $inline = true) : string
+   public function generate (string $word, bool $inline = true) : self
    {
-      $letters = $this->letters;
+      $font = $this->font;
 
       $word = strtoupper($word); // @ Convert to Uppercase
-      $lines = explode(PHP_EOL, $letters[$word[0]]);
+      $lines = explode(PHP_EOL, $font[$word[0]]);
       $padding = max(array_map('strlen', $lines));
 
       $combinedLetters = '';
@@ -246,7 +266,7 @@ class Header
       if ($inline) {
          foreach ($lines as $lineIndex => $line) {
             foreach ($chars as $char) {
-               $letter = $letters[$char];
+               $letter = $font[$char];
                $letterLines = explode(PHP_EOL, $letter);
    
                if ( isSet($letterLines[$lineIndex]) ) {
@@ -263,7 +283,7 @@ class Header
          }
       } else {
          foreach ($chars as $char) {
-            $letter = $letters[$char];
+            $letter = $font[$char];
             $lines = explode(PHP_EOL, $letter);
    
             foreach ($lines as &$line) {
@@ -275,6 +295,17 @@ class Header
          }
       }
 
-      return $combinedLetters;
+      $this->output = $combinedLetters;
+
+      return $this;
+   }
+
+   public function render (int $mode = self::WRITE_OUTPUT)
+   {
+      return match ($mode) {
+         self::WRITE_OUTPUT => $this->Output->write($this->output),
+         self::RETURN_OUTPUT => $this->output,
+         default => null
+      };
    }
 }

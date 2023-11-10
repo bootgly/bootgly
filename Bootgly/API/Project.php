@@ -13,12 +13,6 @@ namespace Bootgly\API; // namespace Bootgly\API\Projects
 
 class Project
 {
-   // ! Path
-   // Author
-   public const AUTHOR_DIR   = BOOTGLY_ROOT_BASE . '/projects/';
-   // Consumer
-   public const CONSUMER_DIR = BOOTGLY_WORKING_BASE . '/projects/';
-
    // * Config
    // @ path
    public string $vendor;       // Bootgly/

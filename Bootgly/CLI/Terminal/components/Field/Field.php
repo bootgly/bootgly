@@ -13,10 +13,13 @@ namespace Bootgly\CLI\Terminal\components\Field;
 
 use Bootgly\ABI\Data\__String;
 use Bootgly\ABI\Templates\Template\Escaped as TemplateEscaped;
+
+use Bootgly\API\Component;
+
 use Bootgly\CLI\Terminal\Output;
 
 
-class Field
+class Field extends Component
 {
    private Output $Output;
 
@@ -131,7 +134,7 @@ class Field
       $Output->write($this->borders['mid'], $length);
    }
 
-   public function render ()
+   public function render (int $mode = self::WRITE_OUTPUT)
    {
       $Output = $this->Output;
       $Text = $Output->Text;

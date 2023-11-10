@@ -11,18 +11,18 @@
 namespace Bootgly\CLI\Terminal\components\Menu;
 
 
+use Bootgly\API\Component;
+
 use Bootgly\CLI\Terminal\Input;
 use Bootgly\CLI\Terminal\Output;
-
 use Bootgly\CLI\Terminal\components\Menu\Items\Option;
 use Bootgly\CLI\Terminal\components\Menu\Items\Options;
-
 // TODO remove:
 use Bootgly\CLI\Terminal\components\Menu\Items\extensions\Divisors\Divisor;
 use Bootgly\CLI\Terminal\components\Menu\Items\extensions\Headers\Header;
 
 
-class Menu
+class Menu extends Component
 {
    public Input $Input;
    public Output $Output;
@@ -57,7 +57,7 @@ class Menu
    }
 
    // @ Templating
-   private function render ()
+   protected function render (int $mode = self::WRITE_OUTPUT)
    {
       $Items = &$this->Items;
       // * Config
