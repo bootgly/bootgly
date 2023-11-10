@@ -59,7 +59,7 @@ Bootgly is a base framework for developing APIs and Apps for both CLI (Console) 
 - Platform: [Console][CONSOLE_PLATFORM] (TODO)
 
 For the base CLI development, Bootgly already has the following components:
-[Alert][CLI_TERMINAL_ALERT], [Field][CLI_TERMINAL_FIELD], [Header][CLI_HEADER], [Menu][CLI_TERMINAL_MENU], [Progress][CLI_TERMINAL_PROGRESS], [Table][CLI_TERMINAL_TABLE].
+[Alert][CLI_TERMINAL_ALERT], [Fieldset][CLI_TERMINAL_FIELDSET], [Header][CLI_HEADER], [Menu][CLI_TERMINAL_MENU], [Progress][CLI_TERMINAL_PROGRESS], [Table][CLI_TERMINAL_TABLE].
 
 ### Bootgly WPI 🌐
 
@@ -281,7 +281,7 @@ Bootgly uses [Semantic Versioning 2.0][SEMANTIC_VERSIONING].
 [CLI_TERMINAL_COMPONENTS]: https://github.com/bootgly/bootgly/tree/main/Bootgly/CLI/Terminal/components
 
 [CLI_TERMINAL_ALERT]: https://github.com/bootgly/bootgly/tree/main/Bootgly/CLI/Terminal/components/Alert
-[CLI_TERMINAL_FIELD]: https://github.com/bootgly/bootgly/tree/main/Bootgly/CLI/Terminal/components/Field
+[CLI_TERMINAL_FIELDSET]: https://github.com/bootgly/bootgly/tree/main/Bootgly/CLI/Terminal/components/Fieldset
 [CLI_TERMINAL_MENU]: https://github.com/bootgly/bootgly/tree/main/Bootgly/CLI/Terminal/components/Menu
 [CLI_TERMINAL_PROGRESS]: https://github.com/bootgly/bootgly/tree/main/Bootgly/CLI/Terminal/components/Progress
 [CLI_TERMINAL_TABLE]: https://github.com/bootgly/bootgly/tree/main/Bootgly/CLI/Terminal/components/Table

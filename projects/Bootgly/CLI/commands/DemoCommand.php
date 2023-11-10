@@ -95,8 +95,8 @@ class DemoCommand extends Command
          // Terminal -> components - Table component
          21 => 'Terminal/components/Table-01.example.php',
 
-         // Terminal -> components - Field component
-         22 => 'Terminal/components/Field-01.example.php',
+         // Terminal -> components - Fieldset component
+         22 => 'Terminal/components/Fieldset-01.example.php',
       ];
 
       foreach ($examples as $index => $example) {

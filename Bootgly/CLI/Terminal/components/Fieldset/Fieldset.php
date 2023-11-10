@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\CLI\Terminal\components\Field;
+namespace Bootgly\CLI\Terminal\components\Fieldset;
 
 
 use Bootgly\ABI\Data\__String;
@@ -19,7 +19,7 @@ use Bootgly\API\Component;
 use Bootgly\CLI\Terminal\Output;
 
 
-class Field extends Component
+class Fieldset extends Component
 {
    private Output $Output;
 

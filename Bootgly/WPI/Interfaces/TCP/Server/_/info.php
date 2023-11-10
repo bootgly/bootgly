@@ -3,7 +3,7 @@
 use Bootgly\ABI\Data\__String\Path;
 use Bootgly\API\Server as SAPI;
 use Bootgly\CLI;
-use Bootgly\CLI\Terminal\components\Field\Field;
+use Bootgly\CLI\Terminal\components\Fieldset\Fieldset;
 use Bootgly\CLI\Terminal\components\Progress\Progress;
 
 switch ($name) {
@@ -60,12 +60,12 @@ switch ($name) {
       $SAPI = Path::relativize(SAPI::$production, BOOTGLY_ROOT_DIR);
 
       // @ Server Status
-      $Field = new Field($Output);
+      $Fieldset = new Fieldset($Output);
       // * Config
-      $Field->width = 70;
+      $Fieldset->width = 70;
       // * Data
-      $Field->title = '@#Black: Server Status @;';
-      $Field->content = <<<OUTPUT
+      $Fieldset->title = '@#Black: Server Status @;';
+      $Fieldset->content = <<<OUTPUT
 
       @:i: Bootgly Server: @; {$server}
       @:i: PHP version: @; {$php}\t\t\t@:i: Server version: @; {$version}
@@ -79,15 +79,15 @@ switch ($name) {
       @#yellow:  Server API: @; {$SAPI}
 
       OUTPUT;
-      $Field->render();
+      $Fieldset->render();
 
       // @ Workers Load
-      $Field2 = new Field($Output);
+      $Fieldset2 = new Fieldset($Output);
       // * Config
-      $Field2->width = 70;
+      $Fieldset2->width = 70;
       // * Data
-      $Field2->title = '@#Black: Workers Load (CPU usage) @;';
-      $Field2->content = PHP_EOL;
+      $Fieldset2->title = '@#Black: Workers Load (CPU usage) @;';
+      $Fieldset2->content = PHP_EOL;
 
       // TODO use only Progress\Bar
       $Progress = [];
@@ -157,17 +157,17 @@ switch ($name) {
 
             $CPU_usage = $Progress[$i]->output;
 
-            $Field2->content .= " Worker #{$id}: {$CPU_usage}";
+            $Fieldset2->content .= " Worker #{$id}: {$CPU_usage}";
 
             // new Progress
             $Progress[$i + 1] = clone $Progress[0];
          } else {
-            $Field2->content .= <<<OUTPUT
+            $Fieldset2->content .= <<<OUTPUT
              Worker #{$id} with PID $pid not found. \n
             OUTPUT;
          }
       }
-      $Field2->render();
+      $Fieldset2->render();
 
       self::$stat = match (self::$stat) {
          0 => 1,

@@ -14,7 +14,7 @@ namespace projects\Bootgly;
 use Bootgly\CLI;
 use Bootgly\ABI\Data\__String\Path;
 use Bootgly\CLI\components\Header;
-use Bootgly\CLI\Terminal\components\Field\Field;
+use Bootgly\CLI\Terminal\components\Fieldset\Fieldset;
 
 // $Commands, $Scripts, $Terminal availables...
 
@@ -43,8 +43,8 @@ CLI::$Commands->help(function ($scripting = true) {
    $Output->render($output);
 
    // @ Command list
-   $Field = new Field($Output);
-   $Field->title = '@#Cyan: Available commands: @;';
+   $Fieldset = new Fieldset($Output);
+   $Fieldset->title = '@#Cyan: Available commands: @;';
 
    // * Data
    $commands = [];
@@ -89,8 +89,8 @@ CLI::$Commands->help(function ($scripting = true) {
 
    // :
    $output = rtrim($output);
-   $Field->content = $output;
-   $Field->render();
+   $Fieldset->content = $output;
+   $Fieldset->render();
 });
 // @ Register commands
 $commands = require('CLI/commands/@.php');

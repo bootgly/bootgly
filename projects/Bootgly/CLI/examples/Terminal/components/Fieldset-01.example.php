@@ -4,7 +4,7 @@ namespace Bootgly\CLI;
 
 
 use Bootgly\CLI;
-use Bootgly\CLI\Terminal\components\Field\Field;
+use Bootgly\CLI\Terminal\components\Fieldset\Fieldset;
 use Bootgly\CLI\Terminal\components\Menu\Menu;
 
 $Input = CLI::$Terminal->Input;
@@ -13,40 +13,40 @@ $Output->reset();
 
 $Output->render(<<<OUTPUT
 /* @*: 
- * @#green: Bootgly CLI Terminal - Field component @;
+ * @#green: Bootgly CLI Terminal - Fieldset component @;
  * @#yellow: @@: Demo - Example #1 @;
  * {$location}
  */\n\n
 OUTPUT);
 
 
-$Field = new Field($Output);
+$Fieldset = new Fieldset($Output);
 
 // @ Content length > Title length
 // * Config
-$Field->title = 'Example title';
+$Fieldset->title = 'Example title';
 // * Data
-$Field->content = 'Some content here...';
-$Field->render();
+$Fieldset->content = 'Some content here...';
+$Fieldset->render();
 
 // @ Title length > Content length
 // * Config
-$Field->title = 'Example title';
+$Fieldset->title = 'Example title';
 // * Data
-$Field->content = '...';
-$Field->render();
+$Fieldset->content = '...';
+$Fieldset->render();
 
 // @ No title
 // * Config
-$Field->title = null;
+$Fieldset->title = null;
 // * Data
-$Field->content = 'Some content here...';
-$Field->render();
+$Fieldset->content = 'Some content here...';
+$Fieldset->render();
 
 
 
-$Field2 = new Field($Output);
-$Field2->title = 'Using another component inside!!';
+$Fieldset2 = new Fieldset($Output);
+$Fieldset2->title = 'Using another component inside!!';
 // ---
 $Menu = new Menu($Input, $Output);
 // * Config
@@ -84,7 +84,7 @@ foreach ($Menu->rendering() as $output) {
    }
 
    if (is_string($output) === true) {
-      $Field2->content = $output;
-      $Field2->render();
+      $Fieldset2->content = $output;
+      $Fieldset2->render();
    }
 }
