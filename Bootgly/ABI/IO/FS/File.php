@@ -187,7 +187,7 @@ class File implements FS
    public function __get (string $name)
    {
       if ($name === 'file') {
-         return $this->file ?? false;
+         return $this->file ?? $this->pathify();
       }
       if ( isSet($this->$name) ) {
          return $this->$name;
