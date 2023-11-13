@@ -58,14 +58,14 @@ class Router
       $this->routeds = [];
    }
 
-   public function boot (string|array $instances = ['routes'])
+   public function boot (string $path, string|array $instances = ['routes'])
    {
       $Request = self::$Server::$Request;
 
       $Route = &$this->Route;
       $Router = &$this;
 
-      $boot = Bootgly::$Project->path . 'router/';
+      $boot = $path . '/router/';
 
       $Index = new File($boot . 'index.php');
       if ($Index->exists) {

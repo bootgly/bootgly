@@ -55,7 +55,8 @@ class Project
    {
       switch ($name) {
          case 'path':
-            foreach ($this->paths as $path) {
+            $paths = $this->paths ?? [];
+            foreach ($paths as $path) {
                if ( is_dir($path) ) {
                   return $path;
                }
@@ -107,7 +108,7 @@ class Project
          $this->paths[] = $path;
 
          // @ Add Project to Projects
-         $this->index = Projects::add($this);
+         #$this->index = Projects::add($this);
       }
 
       return $path;

@@ -21,7 +21,7 @@ use Bootgly\WPI\Nodes\HTTP\Server\Bridge\Response;
 use Bootgly\WPI\Modules\HTTP\Server\Router;
 
 
-class WPI // Web Programming Interface
+class WPI extends Projects // Web Programming Interface
 {
    public const BOOT_FILE = 'WPI.php';
 
@@ -49,10 +49,7 @@ class WPI // Web Programming Interface
       Vars::$debug = false;
       Vars::$exit = true;
 
-      // @ Instance
-      // Bootgly
-      $Project = \Bootgly::$Project;
-      // Bootgly\WPI
+      // @ Instance variables
       // HTTP
       $Server = $this->Server = new Server($this);
 
@@ -63,12 +60,14 @@ class WPI // Web Programming Interface
       // ---
 
       // @ Boot WPI
-      // Author
-      @include(Projects::AUTHOR_DIR . 'Bootgly/' . self::BOOT_FILE);
       // Consumer
       if (BOOTGLY_ROOT_DIR !== BOOTGLY_WORKING_DIR) {
+         self::autoboot(self::CONSUMER_DIR);
+
          // Multi projects
          @include(Projects::CONSUMER_DIR . 'Bootgly/' . self::BOOT_FILE);
       }
+      // Author
+      @include(Projects::AUTHOR_DIR . 'Bootgly/' . self::BOOT_FILE);
    }
 }

@@ -17,6 +17,11 @@ return [
       $Project1->construct('Bootgly/CLI');
       // @ Name current Project
       $Project1->name('BootglyCLI');
+
+      // @ Add Project to list
+      Projects::add($Project1);
+      // @ Index Project
+      Projects::index('BootglyCLI');
       // @ Select Project by name
       $Project = Projects::select(project: 'BootglyCLI');
 

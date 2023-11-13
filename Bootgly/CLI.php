@@ -19,7 +19,7 @@ use Bootgly\CLI\Scripts;
 use Bootgly\CLI\Terminal;
 
 
-class CLI // Command Line Interface
+class CLI extends Projects // Command Line Interface
 {
    public const BOOT_FILE = 'CLI.php';
 
@@ -48,11 +48,6 @@ class CLI // Command Line Interface
       // Debugging Vars
       Vars::$debug = true;
       Vars::$exit = false;
-      // * Data
-      // ...
-
-      // * Meta
-      // ...
 
       // @ Instance variables
       $Commands = self::$Commands = new Commands;
@@ -67,6 +62,8 @@ class CLI // Command Line Interface
       // ---
 
       // @ Boot CLI
+      self::autoboot(self::CONSUMER_DIR);
+
       // Author
       @include(Projects::AUTHOR_DIR . 'Bootgly/' . self::BOOT_FILE);
       // Consumer

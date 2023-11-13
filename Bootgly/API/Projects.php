@@ -16,6 +16,7 @@ use Bootgly\ABI\Resources;
 
 abstract class Projects implements Resources
 {
+   // @ Environment
    // Author
    public const AUTHOR_DIR   = BOOTGLY_ROOT_BASE . '/projects/';
    // Consumer
@@ -25,6 +26,7 @@ abstract class Projects implements Resources
    protected static array $projects = [];
 
    // * Meta
+   private static bool $booted = false;
    private static array $indexes = [];
 
 
@@ -36,29 +38,36 @@ abstract class Projects implements Resources
 
       return $index;
    }
-   public static function boot () : bool
+   protected static function autoboot (string $environment) : bool
    {
-      ${'@'} = include(self::CONSUMER_DIR . '@.php');
+      if (self::$booted) {
+         return false;
+      }
 
+      ${'@'} = include($environment . '@.php');
       if (${'@'} === null) {
          return false;
       }
 
       $projects = ${'@'}['projects'];
       foreach ($projects as $project) {
+         $Project = new Project;
+
          foreach ($project['paths'] as $path) {
-            $Project = new Project;
             $Project->construct($path);
-            self::add($Project);
+         }
+
+         self::add($Project);
+
+         if ($name = $project['name'] ?? false) {
+            $Project->name($name);
+            self::index($name);
          }
       }
 
-      return true;
-   }
+      self::$booted = true;
 
-   public static function count () : int
-   {
-      return count(self::$projects);
+      return true;
    }
 
    public static function index (string $project) : bool
@@ -74,7 +83,12 @@ abstract class Projects implements Resources
 
       return true;
    }
-   public static function select (string|int $project) : false|Project
+
+   public static function count () : int
+   {
+      return count(self::$projects);
+   }
+   public static function select (null|string|int $project) : false|Project
    {
       if (is_string($project)) {
          $project = self::$indexes[$project] ?? null;

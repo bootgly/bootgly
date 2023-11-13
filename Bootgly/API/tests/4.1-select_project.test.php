@@ -19,6 +19,11 @@ return [
       $Project1->construct('Bootgly/');
       $Project1->name('Bootgly');
 
+      // @ Add Project to list
+      Projects::add($Project1);
+      // @ Index Project
+      Projects::index('Bootgly');
+
       // ---------
 
       // ! Project 2 instance
