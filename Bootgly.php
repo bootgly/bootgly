@@ -25,8 +25,11 @@ class Bootgly
    public static Project $Project;
    public static Template $Template;
 
+   // * Meta
+   public readonly bool $booted;
 
-   public function __construct ()
+
+   public function __construct()
    {
       // @ Instance
       $Project = static::$Project = new Project;
@@ -34,14 +37,14 @@ class Bootgly
       // ---
 
       // @ Boot
-      // Author
-      if (BOOTGLY_ROOT_DIR === BOOTGLY_WORKING_DIR) {
-         @include Projects::AUTHOR_DIR . self::BOOT_FILE;
-      }
       // Consumer
       if (BOOTGLY_ROOT_DIR !== BOOTGLY_WORKING_DIR) {
          // Multi projects
-         @include Projects::CONSUMER_DIR . self::BOOT_FILE;
+         $this->booted = (@include Projects::CONSUMER_DIR . self::BOOT_FILE);
+      }
+      // Author
+      if (BOOTGLY_ROOT_DIR === BOOTGLY_WORKING_DIR || $this->booted === false) {
+         @include Projects::AUTHOR_DIR . self::BOOT_FILE;
       }
    }
 
