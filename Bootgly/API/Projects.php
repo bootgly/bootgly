@@ -16,7 +16,7 @@ use Bootgly\ABI\Resources;
 
 abstract class Projects implements Resources
 {
-   // @ Environment
+   // _Dir
    // Author
    public const AUTHOR_DIR   = BOOTGLY_ROOT_BASE . '/projects/';
    // Consumer
@@ -26,8 +26,9 @@ abstract class Projects implements Resources
    protected static array $projects = [];
 
    // * Meta
-   private static bool $booted = false;
    private static array $indexes = [];
+   // @autoboot
+   private static array $booted = [];
 
 
    public static function add (Project $Project) : int
@@ -38,18 +39,20 @@ abstract class Projects implements Resources
 
       return $index;
    }
-   protected static function autoboot (string $environment) : bool
+   protected static function autoboot (string $_dir) : bool
    {
-      if (self::$booted) {
+      if ( isSet(self::$booted[$_dir]) ) {
          return false;
       }
 
-      ${'@'} = include($environment . '@.php');
-      if (${'@'} === null) {
+      $bootstrap = include($_dir . '@.php');
+      if ($bootstrap === null) {
          return false;
       }
 
-      $projects = ${'@'}['projects'];
+      $interface = substr(strrchr(static::class, '\\'), 1);
+      $projects = $bootstrap['projects'][$interface];
+
       foreach ($projects as $project) {
          $Project = new Project;
 
@@ -65,7 +68,7 @@ abstract class Projects implements Resources
          }
       }
 
-      self::$booted = true;
+      self::$booted[$_dir] = true;
 
       return true;
    }
