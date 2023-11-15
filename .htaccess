@@ -1,24 +1,22 @@
-<IfModule mod_rewrite.c>
-    <IfModule mod_negotiation.c>
-        Options -MultiViews -Indexes
-    </IfModule>
-
-   RewriteEngine On
-
-   RewriteBase /
-
-   # Add trailing slash to any path that does not appear to request a file
-   RewriteCond %{REQUEST_URI} !^/(public|app|api) [NC]
-   RewriteCond %{REQUEST_URI} !^.*\..*$
-   RewriteCond %{REQUEST_URI} !(.*)/$
-   RewriteRule ^(.*)$ $1/ [R=301,L]
-
-   # ! /public
-   # @wordpress
-   RewriteCond %{DOCUMENT_ROOT}/public/%{HTTP_HOST}/wp-config.php -f
-   RewriteCond %{REQUEST_URI} !^/(public|app|api) [NC]
-   RewriteRule ^(.*)$ /public/%{HTTP_HOST}/$1 [L]
-
-   # ! /projects
-   RewriteRule ^ index.php [L]
+<IfModule mod_negotiation.c>
+    Options -MultiViews -Indexes
 </IfModule>
+
+RewriteEngine On
+
+RewriteBase /
+
+# Add trailing slash to any path that does not appear to request a file
+#RewriteCond %{REQUEST_URI} !^/(public|app|api) [NC]
+#RewriteCond %{REQUEST_URI} !\..+$
+#RewriteCond %{REQUEST_URI} !(.*)/$
+#RewriteRule ^(.+)$ $1/ [R=301,L]
+
+# ! /public
+# @wordpress
+RewriteCond %{DOCUMENT_ROOT}/public/%{HTTP_HOST}/wp-config.php -f
+RewriteCond %{REQUEST_URI} !^/(public|app|api) [NC]
+RewriteRule ^(.*)$ /public/%{HTTP_HOST}/$1 [L]
+
+# ! /projects
+RewriteRule ^ index.php [L]
