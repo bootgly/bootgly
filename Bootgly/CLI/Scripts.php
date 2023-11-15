@@ -61,11 +61,19 @@ class Scripts
 
 
       // @
-      $bootstrap = include(self::WORKING_DIR . '@.php');
-      $this->scripts = $bootstrap['scripts'];
+      $resource_dirs = [
+         self::ROOT_DIR,
+         self::WORKING_DIR,
+      ];
+      foreach ($resource_dirs as $dir) {
+         $bootstrap = (include $dir . '@.php');
+         if ($bootstrap !== false) {
+            $this->scripts = $bootstrap['scripts'];
 
-      foreach ($this->scripts as $filename) {
-         $this->includes['filenames'][] = $filename;
+            foreach ($this->scripts as $filename) {
+               $this->includes['filenames'][] = $filename;
+            }
+         }
       }
    }
    public function __get ($name)
