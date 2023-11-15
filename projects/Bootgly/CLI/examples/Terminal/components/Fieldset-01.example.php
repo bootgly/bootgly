@@ -79,7 +79,6 @@ $Items->Options->advance();
 // ---
 foreach ($Menu->rendering() as $output) {
    if ($output === false) {
-      $selected = $output;
       break;
    }
 

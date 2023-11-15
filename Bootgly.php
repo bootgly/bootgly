@@ -20,7 +20,7 @@ use Bootgly\API\Projects;
 
 class Bootgly
 {
-   public const BOOT_FILE = 'Bootgly.php';
+   public const BOOT_FILE = 'Bootgly.boot.php';
 
    public static Project $Project;
    public static Template $Template;

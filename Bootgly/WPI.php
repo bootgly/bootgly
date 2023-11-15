@@ -23,7 +23,7 @@ use Bootgly\WPI\Modules\HTTP\Server\Router;
 
 class WPI extends Projects // Web Programming Interface
 {
-   public const BOOT_FILE = 'WPI.php';
+   public const BOOT_FILE = 'WPI.boot.php';
 
    // HTTP
    // @ nodes
