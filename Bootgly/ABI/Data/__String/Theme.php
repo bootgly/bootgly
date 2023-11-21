@@ -88,8 +88,33 @@ class Theme
             throw new \Exception('Invalid theme structure.');
          }
 
-         $specifications['options'] ?? throw new \Exception('Invalid theme structure.');
-         $specifications['values'] ?? throw new \Exception('Invalid theme structure.');
+         // @ Validate
+         $specifications['options']
+            ?? throw new \Exception('Invalid theme structure: options not defined');
+         $specifications['values']
+            ?? throw new \Exception('Invalid theme structure: values not defined');
+         // options
+         $options = [
+            'prepending',
+            'appending'
+         ];
+         foreach ($options as $option) {
+            $specifications['options'][$option]
+               ?? throw new \Exception("Invalid theme structure: $option options not defined");
+            $specifications['options'][$option]['type']
+               ?? throw new \Exception("Invalid theme structure: $option options type not defined");
+            $specifications['options'][$option]['value']
+               ?? throw new \Exception("Invalid theme structure: $option options value not defined");
+
+            $specifications['options'][$option]['type'] === 'callback' && (
+               is_callable($specifications['options'][$option]['value']) === true ?
+               : throw new \Exception("Invalid theme structure: $option options value should be callable!")
+            );
+            $specifications['options'][$option]['type'] === 'string' && (
+               is_string($specifications['options'][$option]['value']) === true ?
+               : throw new \Exception("Invalid theme structure: $option options value should be string!")
+            );
+         }
 
          // * Data
          self::$themes[$name] = $specifications;
