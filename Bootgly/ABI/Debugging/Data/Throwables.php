@@ -42,7 +42,7 @@ abstract class Throwables implements Debugging
       $output = "\n";
       // class
       $output .= match (\PHP_SAPI) {
-         'cli' => "\033[0;37;41m ",
+         'cli' => "\033[0;30;41m ",
          default => ''
       };
       $output .= $class;
