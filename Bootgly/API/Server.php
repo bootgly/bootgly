@@ -62,7 +62,6 @@ class Server
          if (file_exists($file) === false) {
             $copied = copy($file . '.example', $file);
 
-            var_dump($file . '.example', $file);
             if ($copied === false) {
                return false;
             }

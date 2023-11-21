@@ -10,19 +10,56 @@
 
 namespace Bootgly\ABI\Debugging\Data;
 
+
+use Bootgly\ABI\Data\__String\Escapeable\Text\Formattable;
 use Bootgly\ABI\Data\__String\Path;
+use Bootgly\ABI\Data\__String\Theme;
 use Bootgly\ABI\Data\__String\Tokens\Highlighter;
 use Bootgly\ABI\Debugging;
 
 
 abstract class Throwables implements Debugging
 {
+   use Formattable;
    // * Config
    #public static bool $debug = true;
    #public static bool $print = true;
    #public static bool $return = false;
    #public static bool $exit = true;
 
+   // @ Theme
+   protected const DEFAULT_THEME = [
+      'CLI' => [
+         'values' => [
+            '@double_line' => "\n\n",
+            'class_name' => [self::_BLACK_FOREGROUND, self::_RED_BACKGROUND],
+            'message' => self::_WHITE_BRIGHT_FOREGROUND,
+            'file' => self::_GREEN_BRIGHT_FOREGROUND,
+            'file_line' => self::_CYAN_BRIGHT_FOREGROUND,
+            'trace_calls' => [self::_BLACK_BRIGHT_FOREGROUND, self::_UNDERLINE_STYLE],
+            'trace_index' => self::_YELLOW_BRIGHT_FOREGROUND,
+            'trace_file' => '',
+            'trace_line' => self::_CYAN_BRIGHT_FOREGROUND,
+            'trace_call' => self::_BLACK_BRIGHT_FOREGROUND
+         ]
+      ]
+   ];
+   protected const DEFAULT_THEME_HTML = [
+      'HTML' => [
+         'values' => [
+            '@double_line' => "<br><br>",
+            // TODO HTML theme
+            'class_name' => '',
+            'message' => '',
+            'file' => '',
+            'trace_calls' => '',
+            'trace_index' => '',
+            'trace_file' => '',
+            'trace_line' => '',
+            'trace_call' => '',
+         ]
+      ]
+   ];
 
    public static function report (\Throwable $Throwable)
    {
@@ -37,50 +74,43 @@ abstract class Throwables implements Debugging
       $contents = \file_get_contents($file);
       $file = Path::relativize($file, BOOTGLY_WORKING_DIR);
 
+      switch (\PHP_SAPI) {
+         case 'cli':
+            $theme = self::DEFAULT_THEME;
+            // @ Init options
+            $theme['CLI']['options'] = [
+               'prepending' => [
+                  'type'  => 'callback',
+                  'value' => self::wrap(...)
+               ],
+               'appending' => [
+                  'type' => 'string',
+                  'value' => self::_RESET_FORMAT
+               ]
+            ];
+            break;
+         default:
+            $theme = self::DEFAULT_THEME_HTML;
+            // TODO
+      }
+
+      $Theme = new Theme;
+      $Theme->add($theme)->select();
+
       // @ Output
-      // TODO use Theme
       $output = "\n";
-      // class
-      $output .= match (\PHP_SAPI) {
-         'cli' => "\033[0;30;41m ",
-         default => ''
-      };
-      $output .= $class;
-      $output .= match (\PHP_SAPI) {
-         'cli' => " \033[0m\n\n",
-         default => ''
-      };
+      // class name
+      $output .= $Theme->apply('class_name', " $class ");
+      $output .= $Theme->apply('@double_line');
       // message
-      $output .= match (\PHP_SAPI) {
-         'cli' => "\033[97m ",
-         default => ''
-      };
-      $output .= $message;
-      $output .= match (\PHP_SAPI) {
-         'cli' => " \033[0m\n\n",
-         default => ''
-      };
+      $output .= $Theme->apply('message', " $message ");
+      $output .= $Theme->apply('@double_line');
       // file
       $output .= " at ";
-      $output .= match (\PHP_SAPI) {
-         'cli' => "\033[92m",
-         default => ''
-      };
-      $output .= $file;
-      $output .= match (\PHP_SAPI) {
-         'cli' => "\033[0m",
-         default => ''
-      };
+      $output .=  $Theme->apply('file', $file);
       // file line
-      $output .= match (\PHP_SAPI) {
-         'cli' => ":\033[96m",
-         default => ''
-      };
-      $output .= $line;
-      $output .= match (\PHP_SAPI) {
-         'cli' => "\033[0m",
-         default => ''
-      };
+      $output .= ':';
+      $output .= $Theme->apply('file_line', $line);
       $output .= "\n";
       // file content
       // TODO file content filters
@@ -94,54 +124,29 @@ abstract class Throwables implements Debugging
       if ($traces > $limit) {
          $backtrace = array_slice($backtrace, -$limit);
 
-         $output .= match (\PHP_SAPI) {
-            'cli' => "\033[90;4m",
-            default => ''
-         };
-         $output .= '+' . (string) ($traces - $limit) . ' trace calls';
-         $output .= match (\PHP_SAPI) {
-            'cli' => "\033[0m",
-            default => ''
-         };
+         $output .= $Theme->apply(
+            key: 'trace_calls',
+            content: '+' . (string) ($traces - $limit) . ' trace calls...'
+         );
+
          $output .= "\n";
       }
 
-      foreach ($backtrace as $index => $trace) {
+      foreach ($backtrace as $trace) {
          // @ trace
          // index
-         $output .= match (\PHP_SAPI) {
-            'cli' => "\033[93m ",
-            default => ''
-         };
-         $output .= $trace['index'];
-         $output .= match (\PHP_SAPI) {
-            'cli' => "\033[0m ",
-            default => ''
-         };
+         $output .= $Theme->apply('trace_index', " {$trace['index']} ");
          // file
          $output .= $trace['file'];
          // line
          $output .= ':';
-         $output .= match (\PHP_SAPI) {
-            'cli' => "\033[96m",
-            default => ''
-         };
-         $output .= $trace['line'];
-         $output .= match (\PHP_SAPI) {
-            'cli' => "\033[0m",
-            default => ''
-         };
+         $output .= $Theme->apply('trace_line', $trace['line']);
          // call
-         $output .= match (\PHP_SAPI) {
-            'cli' => "\033[90m",
-            default => ''
-         };
-         $output .= "\n " . str_repeat(' ', strlen((string) $trace['index']) + 1);
-         $output .= $trace['call'];
-         $output .= match (\PHP_SAPI) {
-            'cli' => "\033[0m",
-            default => ''
-         };
+         $output .= $Theme->apply(
+            key: 'trace_call',
+            content: "\n " . str_repeat(' ', strlen((string) $trace['index']) + 1) . $trace['call']
+         );
+
          $output .= "\n";
       }
 
