@@ -21,6 +21,7 @@ use Bootgly\ABI\Debugging;
 abstract class Throwables implements Debugging
 {
    use Formattable;
+
    // * Config
    #public static bool $debug = true;
    #public static bool $print = true;
@@ -31,6 +32,8 @@ abstract class Throwables implements Debugging
    protected const DEFAULT_THEME = [
       'CLI' => [
          'values' => [
+            '@start' => "\n",
+
             '@double_line' => "\n\n",
             'class_name' => [self::_BLACK_FOREGROUND, self::_RED_BACKGROUND],
             'message' => self::_WHITE_BRIGHT_FOREGROUND,
@@ -40,30 +43,42 @@ abstract class Throwables implements Debugging
             'trace_index' => self::_YELLOW_BRIGHT_FOREGROUND,
             'trace_file' => '',
             'trace_line' => self::_CYAN_BRIGHT_FOREGROUND,
-            'trace_call' => self::_BLACK_BRIGHT_FOREGROUND
+            'trace_call' => self::_BLACK_BRIGHT_FOREGROUND,
+
+            '@finish' => "\n\n"
          ]
       ]
    ];
    protected const DEFAULT_THEME_HTML = [
       'HTML' => [
          'values' => [
+            '@start' => '<pre>',
+
             '@double_line' => "<br><br>",
-            // TODO HTML theme
             'class_name' => '',
             'message' => '',
             'file' => '',
+            'file_line' => '',
             'trace_calls' => '',
             'trace_index' => '',
             'trace_file' => '',
             'trace_line' => '',
             'trace_call' => '',
+
+            '@finish' => '</pre>'
          ]
       ]
    ];
 
    public static function report (\Throwable $Throwable)
    {
-      $Highligher = new Highlighter;
+      switch (\PHP_SAPI) {
+         case 'cli':
+            $theme = Highlighter::DEFAULT_THEME;
+         default:
+            $theme = Highlighter::HTML_THEME;
+      }
+      $Highligher = new Highlighter($theme);
 
       // * Data
       $class = \get_class($Throwable);
@@ -92,13 +107,24 @@ abstract class Throwables implements Debugging
          default:
             $theme = self::DEFAULT_THEME_HTML;
             // TODO
+            $theme['HTML']['options'] = [
+               'prepending' => [
+                  'type'  => 'callback',
+                  'value' => function ($value) {
+                     return $value;
+                  }
+               ],
+               'appending' => [
+                  'type' => 'string',
+                  'value' => ''
+               ]
+            ];
       }
-
       $Theme = new Theme;
       $Theme->add($theme)->select();
 
       // @ Output
-      $output = "\n";
+      $output = $Theme->apply('@start');
       // class name
       $output .= $Theme->apply('class_name', " $class ");
       $output .= $Theme->apply('@double_line');
@@ -150,7 +176,7 @@ abstract class Throwables implements Debugging
          $output .= "\n";
       }
 
-      $output .= "\n\n";
+      $output .= $Theme->apply('@finish');
 
       echo $output;
    }

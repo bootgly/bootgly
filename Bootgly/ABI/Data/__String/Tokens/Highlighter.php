@@ -22,21 +22,12 @@ class Highlighter extends Tokens
 
 
    public Theme $Theme;
-
    public const ACTUAL_LINE_MARK = 'actual_line_mark';
    public const LINE_NUMBER = 'line_number';
-
-   private const ARROW_SYMBOL = '▶'; // >,➜, ▶
-
-   private const DELIMITER = '▕'; // |,▕
-
-   private const NO_MARK = ' ';
-
    private const LINE_NUMBER_DIVIDER = 'line_divider';
    private const MARKED_LINE_NUMBER = 'marked_line';
-   private const WIDTH = 3;
 
-   private const DEFAULT_THEME = [
+   public const DEFAULT_THEME = [
       'CLI' => [
          'values' => [
             self::TOKEN_STRING     => self::_GREEN_BRIGHT_FOREGROUND,
@@ -61,9 +52,39 @@ class Highlighter extends Tokens
          ]
       ]
    ];
+   public const HTML_THEME = [
+      'HTML' => [
+         'values' => [
+            self::TOKEN_STRING     => '',
+            self::TOKEN_COMMENT    => '',
+            self::TOKEN_FUNCTION   => '',
+            self::TOKEN_VARIABLE   => '',
+            self::TOKEN_NUMBER     => '',
+
+            self::TOKEN_OPERATOR   => '',
+            self::TOKEN_PONTUATION => '',
+            self::TOKEN_DELIMITER  => '',
+
+            self::TOKEN_HTML       => '',
+
+            self::TOKEN_KEYWORD    => '',
+            self::TOKEN_DEFAULT    => '',
+
+            self::ACTUAL_LINE_MARK    => '',
+            self::LINE_NUMBER         => '',
+            self::MARKED_LINE_NUMBER  => '',
+            self::LINE_NUMBER_DIVIDER => '',
+         ]
+      ]
+   ];
 
    // * Config
+   private const ARROW_SYMBOL = '▶'; // >,➜, ▶
+   private const DELIMITER = '▕'; // |,▕
+   private const NO_MARK = ' ';
+   private const WIDTH = 3;
    // * Data
+   // ...
    // * Meta
    // ...
 
@@ -80,6 +101,17 @@ class Highlighter extends Tokens
             'appending' => [
                'type' => 'string',
                'value' => self::_RESET_FORMAT
+            ]
+         ];
+      } else if ($theme === self::HTML_THEME) {
+         $theme['HTML']['options'] = [
+            'prepending' => [
+               'type'  => 'string',
+               'value' => ''
+            ],
+            'appending' => [
+               'type' => 'string',
+               'value' => ''
             ]
          ];
       }
