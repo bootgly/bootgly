@@ -75,6 +75,7 @@ abstract class Throwables implements Debugging
       switch (\PHP_SAPI) {
          case 'cli':
             $theme = Highlighter::DEFAULT_THEME;
+            break;
          default:
             $theme = Highlighter::HTML_THEME;
       }

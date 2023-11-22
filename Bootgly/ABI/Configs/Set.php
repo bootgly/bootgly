@@ -19,7 +19,7 @@ trait Set // @ Use with enums
 
       return match ($name) {
          'get' => $value ?? $this, // $this->value;
-         'set' => $value = $this,  // $this->value = $this; // @ PHP team: Why readonly here???
+         'set' => $value = $this,  // $this->value = $this;
          default => $this
       };
    }

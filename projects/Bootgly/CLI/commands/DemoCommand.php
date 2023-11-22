@@ -47,56 +47,56 @@ class DemoCommand extends Command
       $examples = [
          // ! Terminal
          // ? Input
-         1 => 'Terminal/Input/@reading-01.example.php',
+         #1 => 'Terminal/Input/@reading-01.demo.php',
 
          // ? Output
          // Terminal -> Output @ writing
-         2 => 'Terminal/Output/@writing-01.example.php',
+         #2 => 'Terminal/Output/@writing-01.demo.php',
 
 
          // Terminal -> Output -> Cursor Positioning
-         3 => 'Terminal/Output/Cursor-positioning-01.example.php',
+         #3 => 'Terminal/Output/Cursor-positioning-01.demo.php',
          // Terminal -> Output -> Cursor Shaping
-         4 => 'Terminal/Output/Cursor-shaping-01.example.php',
+         #4 => 'Terminal/Output/Cursor-shaping-01.demo.php',
          // Terminal -> Output -> Cursor Visualizing
-         5 => 'Terminal/Output/Cursor-visualizing-01.example.php',
+         #5 => 'Terminal/Output/Cursor-visualizing-01.demo.php',
 
 
          // Terminal -> Output -> Text Formatting - Coloring
-         6 => 'Terminal/Output/Text-formatting-coloring-01.example.php',
+         #6 => 'Terminal/Output/Text-formatting-coloring-01.demo.php',
          // Terminal -> Output -> Text Formatting - Styling
-         7 => 'Terminal/Output/Text-formatting-styling-01.example.php',
+         #7 => 'Terminal/Output/Text-formatting-styling-01.demo.php',
 
          // Terminal -> Output -> Text Modifying
-         8 => 'Terminal/Output/Text-modifying-01.example.php',
+         #8 => 'Terminal/Output/Text-modifying-01.demo.php',
          // Terminal -> Output -> Text Modifying - In Display
-         9 => 'Terminal/Output/Text-modifying-indisplay-01.example.php',
+         #9 => 'Terminal/Output/Text-modifying-indisplay-01.demo.php',
          // Terminal -> Output -> Text Modifying - Inline
-         10 => 'Terminal/Output/Text-modifying-inline-01.example.php',
+         #10 => 'Terminal/Output/Text-modifying-inline-01.demo.php',
          // Terminal -> Output -> Text Modifying - Line
-         11 => 'Terminal/Output/Text-modifying-line-01.example.php',
+         #11 => 'Terminal/Output/Text-modifying-line-01.demo.php',
 
+         // ! UI
+         // UI - Alert component
+         12 => 'UI/Alert-01.demo.php',
 
-         // Terminal -> components - Alert component
-         12 => 'Terminal/components/Alert-01.example.php',
+         // UI - Menu component
+         13 => 'UI/Menu-01.demo.php',
+         14 => 'UI/Menu-02.demo.php',
+         15 => 'UI/Menu-03.demo.php',
+         16 => 'UI/Menu-04.demo.php',
+         17 => 'UI/Menu-05.demo.php',
+         18 => 'UI/Menu-06.demo.php',
 
-         // Terminal -> components - Menu component
-         13 => 'Terminal/components/Menu-01.example.php',
-         14 => 'Terminal/components/Menu-02.example.php',
-         15 => 'Terminal/components/Menu-03.example.php',
-         16 => 'Terminal/components/Menu-04.example.php',
-         17 => 'Terminal/components/Menu-05.example.php',
-         18 => 'Terminal/components/Menu-06.example.php',
+         // UI - Progress component
+         19 => 'UI/Progress-01.demo.php',
+         20 => 'UI/Progress-02.demo.php',
 
-         // Terminal -> components - Progress component
-         19 => 'Terminal/components/Progress-01.example.php',
-         20 => 'Terminal/components/Progress-02.example.php',
+         // UI - Table component
+         21 => 'UI/Table-01.demo.php',
 
-         // Terminal -> components - Table component
-         21 => 'Terminal/components/Table-01.example.php',
-
-         // Terminal -> components - Fieldset component
-         22 => 'Terminal/components/Fieldset-01.example.php',
+         // UI - Fieldset component
+         22 => 'UI/Fieldset-01.demo.php',
       ];
 
       foreach ($examples as $index => $example) {
@@ -104,7 +104,7 @@ class DemoCommand extends Command
             continue;
          }
 
-         $file = 'Bootgly/CLI/examples/' . $example;
+         $file = 'Bootgly/CLI/demo/' . $example;
 
          $wait = 3;
 
