@@ -6,16 +6,16 @@ return [
          [
             'name' => 'Bootgly.CLI.demo',
             'paths' => [
-               'Bootgly/CLI/examples/Terminal'
+               'Bootgly/CLI/demo/'
             ]
          ]
       ],
 
       'WPI' => [
          [
-            'name' => 'Bootgly.WPI.example',
+            'name' => 'Bootgly.WPI.demo',
             'paths' => [
-               'Bootgly/WPI/examples/app/'
+               'Bootgly/WPI/demo/'
             ]
          ]
       ],

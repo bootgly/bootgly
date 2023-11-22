@@ -11,8 +11,7 @@ use Bootgly\WPI\Nodes\HTTP\Server\CLI\Response;
 
 Bootgly::$Project->vendor    = 'Bootgly/';
 Bootgly::$Project->container = 'WPI/';
-Bootgly::$Project->package   = 'examples/';
-Bootgly::$Project->version   = 'app/';
+Bootgly::$Project->package   = 'demo/';
 Bootgly::$Project->construct();
 
 
