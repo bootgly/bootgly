@@ -8,29 +8,30 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\CLI\Terminal\components\Menu\Items\extensions\Divisors;
+namespace Bootgly\CLI\Terminal\UI\Menu;
 
 
-use Bootgly\CLI\Terminal\components\Menu\Item;
-
-
-final class Divisor extends Item
+class Item
 {
    // * Config
    // ...
 
    // * Data
-   public string $characters;
-
-   // * Meta
    // ...
 
+   // * Meta
+   public readonly string $type;
 
-   public function __construct (string $characters = '')
+
+   public function __construct ()
    {
-      parent::__construct();
+      // * Config
+      // ...
 
       // * Data
-      $this->characters = $characters;
+      // ...
+
+      // * Meta
+      $this->type = static::class;
    }
 }

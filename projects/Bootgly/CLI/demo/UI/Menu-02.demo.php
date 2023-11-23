@@ -3,10 +3,10 @@ namespace Bootgly\CLI;
 
 
 use Bootgly\CLI;
-use Bootgly\CLI\Terminal\components\Menu\Menu;
-use Bootgly\CLI\Terminal\components\Menu\Items\Option;
-use Bootgly\CLI\Terminal\components\Menu\Items\extensions\Divisors\Divisors;
-use Bootgly\CLI\Terminal\components\Menu\Items\extensions\Divisors\Divisor;
+use Bootgly\CLI\Terminal\UI\Menu\Menu;
+use Bootgly\CLI\Terminal\UI\Menu\Items\Option;
+use Bootgly\CLI\Terminal\UI\Menu\Items\extensions\Divisors\Divisors;
+use Bootgly\CLI\Terminal\UI\Menu\Items\extensions\Divisors\Divisor;
 
 
 $Input = CLI::$Terminal->Input;
@@ -15,7 +15,7 @@ $Output->reset();
 
 $Output->render(<<<OUTPUT
 /* @*: 
- * @#green: Bootgly CLI Terminal - Menu component @;
+ * @#green: Bootgly CLI UI - Menu component @;
  * @#yellow: @@: Demo - Example #2 - Options: divisors in Builder @;
  * {$location}
  */\n\n

@@ -13,9 +13,9 @@ namespace projects\Bootgly\CLI\commands;
 
 use Bootgly\CLI;
 use Bootgly\CLI\Command;
-use Bootgly\CLI\Terminal\components\Table\Table;
+use Bootgly\CLI\Terminal\UI\Table\Table;
 use Bootgly\ABI\Templates\Template\Escaped as TemplateEscaped;
-use Bootgly\CLI\Terminal\components\Alert\Alert;
+use Bootgly\CLI\Terminal\UI\Alert\Alert;
 
 class ProjectCommand extends Command
 {

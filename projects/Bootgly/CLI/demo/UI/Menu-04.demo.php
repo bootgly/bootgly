@@ -3,7 +3,7 @@ namespace Bootgly\CLI;
 
 
 use Bootgly\CLI;
-use Bootgly\CLI\Terminal\components\Menu\Menu;
+use Bootgly\CLI\Terminal\UI\Menu\Menu;
 
 $Input = CLI::$Terminal->Input;
 $Output = CLI::$Terminal->Output;
@@ -11,7 +11,7 @@ $Output->reset();
 
 $Output->render(<<<OUTPUT
 /* @*: 
- * @#green: Bootgly CLI Terminal - Menu component @;
+ * @#green: Bootgly CLI UI - Menu component @;
  * @#yellow: @@: Demo - Example #4 - Options: horizontal orientation @;
  * {$location}
  */\n\n

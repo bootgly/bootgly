@@ -4,8 +4,8 @@ namespace Bootgly\CLI;
 
 
 use Bootgly\CLI;
-use Bootgly\CLI\Terminal\components\Fieldset\Fieldset;
-use Bootgly\CLI\Terminal\components\Menu\Menu;
+use Bootgly\CLI\Terminal\UI\Fieldset\Fieldset;
+use Bootgly\CLI\Terminal\UI\Menu\Menu;
 
 $Input = CLI::$Terminal->Input;
 $Output = CLI::$Terminal->Output;
@@ -13,7 +13,7 @@ $Output->reset();
 
 $Output->render(<<<OUTPUT
 /* @*: 
- * @#green: Bootgly CLI Terminal - Fieldset component @;
+ * @#green: Bootgly CLI UI - Fieldset component @;
  * @#yellow: @@: Demo - Example #1 @;
  * {$location}
  */\n\n

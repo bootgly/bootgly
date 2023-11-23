@@ -47,34 +47,34 @@ class DemoCommand extends Command
       $examples = [
          // ! Terminal
          // ? Input
-         #1 => 'Terminal/Input/@reading-01.demo.php',
+         1 => 'Terminal/Input/@reading-01.demo.php',
 
          // ? Output
          // Terminal -> Output @ writing
-         #2 => 'Terminal/Output/@writing-01.demo.php',
+         2 => 'Terminal/Output/@writing-01.demo.php',
 
 
          // Terminal -> Output -> Cursor Positioning
-         #3 => 'Terminal/Output/Cursor-positioning-01.demo.php',
+         3 => 'Terminal/Output/Cursor-positioning-01.demo.php',
          // Terminal -> Output -> Cursor Shaping
-         #4 => 'Terminal/Output/Cursor-shaping-01.demo.php',
+         4 => 'Terminal/Output/Cursor-shaping-01.demo.php',
          // Terminal -> Output -> Cursor Visualizing
-         #5 => 'Terminal/Output/Cursor-visualizing-01.demo.php',
+         5 => 'Terminal/Output/Cursor-visualizing-01.demo.php',
 
 
          // Terminal -> Output -> Text Formatting - Coloring
-         #6 => 'Terminal/Output/Text-formatting-coloring-01.demo.php',
+         6 => 'Terminal/Output/Text-formatting-coloring-01.demo.php',
          // Terminal -> Output -> Text Formatting - Styling
-         #7 => 'Terminal/Output/Text-formatting-styling-01.demo.php',
+         7 => 'Terminal/Output/Text-formatting-styling-01.demo.php',
 
          // Terminal -> Output -> Text Modifying
-         #8 => 'Terminal/Output/Text-modifying-01.demo.php',
+         8 => 'Terminal/Output/Text-modifying-01.demo.php',
          // Terminal -> Output -> Text Modifying - In Display
-         #9 => 'Terminal/Output/Text-modifying-indisplay-01.demo.php',
+         9 => 'Terminal/Output/Text-modifying-indisplay-01.demo.php',
          // Terminal -> Output -> Text Modifying - Inline
-         #10 => 'Terminal/Output/Text-modifying-inline-01.demo.php',
+         10 => 'Terminal/Output/Text-modifying-inline-01.demo.php',
          // Terminal -> Output -> Text Modifying - Line
-         #11 => 'Terminal/Output/Text-modifying-line-01.demo.php',
+         11 => 'Terminal/Output/Text-modifying-line-01.demo.php',
 
          // ! UI
          // UI - Alert component

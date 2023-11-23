@@ -8,30 +8,29 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\CLI\Terminal\components\Menu;
+namespace Bootgly\CLI\Terminal\UI\Menu\Items\extensions\Headers;
 
 
-class Item
+use Bootgly\CLI\Terminal\UI\Menu\Item;
+
+
+final class Header extends Item
 {
    // * Config
    // ...
 
    // * Data
-   // ...
+   public string $header;
 
    // * Meta
-   public readonly string $type;
+   // ...
 
 
-   public function __construct ()
+   public function __construct (string $characters = '')
    {
-      // * Config
-      // ...
+      parent::__construct();
 
       // * Data
-      // ...
-
-      // * Meta
-      $this->type = static::class;
+      $this->header = $characters;
    }
 }

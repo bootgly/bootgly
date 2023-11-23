@@ -2,14 +2,14 @@
 namespace Bootgly\CLI;
 
 use Bootgly\CLI;
-use Bootgly\CLI\Terminal\components\Alert\Alert;
+use Bootgly\CLI\Terminal\UI\Alert\Alert;
 
 $Output = CLI::$Terminal->Output;
 $Output->reset();
 
 $Output->render(<<<OUTPUT
 /* @*: 
- * @#green: Bootgly CLI Terminal - Alert component @;
+ * @#green: Bootgly CLI UI - Alert component @;
  * @#yellow: @@: Demo - Example #1 @;
  * {$location}
  */\n\n

@@ -8,14 +8,14 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\CLI\Terminal\components\Table;
+namespace Bootgly\CLI\Terminal\UI\Table;
 
 
 use Bootgly\ADI\Table as DataTable;
 
 use Bootgly\API\Component;
 
-use Bootgly\CLI\Terminal\components\Table\ { Cells, Columns, Row, Rows };
+use Bootgly\CLI\Terminal\UI\Table\ { Cells, Columns, Row, Rows };
 use Bootgly\CLI\Terminal\Output;
 
 

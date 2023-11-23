@@ -8,10 +8,10 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\CLI\Terminal\components\Table;
+namespace Bootgly\CLI\Terminal\UI\Table;
 
 
-use Bootgly\CLI\Terminal\components\Table\Table;
+use Bootgly\CLI\Terminal\UI\Table\Table;
 
 
 class Cells

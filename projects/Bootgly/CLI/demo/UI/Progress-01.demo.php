@@ -2,14 +2,14 @@
 namespace Bootgly\CLI;
 
 use Bootgly\CLI;
-use Bootgly\CLI\Terminal\components\Progress\Progress;
+use Bootgly\CLI\Terminal\UI\Progress\Progress;
 
 $Output = CLI::$Terminal->Output;
 $Output->reset();
 
 $Output->render(<<<OUTPUT
 /* @*: 
- * @#green: Bootgly CLI Terminal - Progress component @;
+ * @#green: Bootgly CLI UI - Progress component @;
  * @#yellow: @@: Demo - Example #1 @;
  * {$location}
  */\n\n

@@ -2,14 +2,14 @@
 namespace Bootgly\CLI;
 
 use Bootgly\CLI;
-use Bootgly\CLI\Terminal\components\Table\Table;
+use Bootgly\CLI\Terminal\UI\Table\Table;
 
 $Output = CLI::$Terminal->Output;
 $Output->reset();
 
 $Output->render(<<<OUTPUT
 /* @*: 
- * @#green: Bootgly CLI Terminal - Table component @;
+ * @#green: Bootgly CLI UI - Table component @;
  * @#yellow: @@: Demo - Example #1 @;
  * {$location}
  */\n\n

@@ -8,18 +8,18 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\CLI\Terminal\components\Menu;
+namespace Bootgly\CLI\Terminal\UI\Menu;
 
 
 use Bootgly\API\Component;
 
 use Bootgly\CLI\Terminal\Input;
 use Bootgly\CLI\Terminal\Output;
-use Bootgly\CLI\Terminal\components\Menu\Items\Option;
-use Bootgly\CLI\Terminal\components\Menu\Items\Options;
+use Bootgly\CLI\Terminal\UI\Menu\Items\Option;
+use Bootgly\CLI\Terminal\UI\Menu\Items\Options;
 // TODO remove:
-use Bootgly\CLI\Terminal\components\Menu\Items\extensions\Divisors\Divisor;
-use Bootgly\CLI\Terminal\components\Menu\Items\extensions\Headers\Header;
+use Bootgly\CLI\Terminal\UI\Menu\Items\extensions\Divisors\Divisor;
+use Bootgly\CLI\Terminal\UI\Menu\Items\extensions\Headers\Header;
 
 
 class Menu extends Component
