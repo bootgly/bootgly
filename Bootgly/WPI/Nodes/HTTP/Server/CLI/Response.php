@@ -104,7 +104,7 @@ class Response
          $this->Body->raw = $body;
       }
    }
-   public function __get ($name)
+   public function __get (string $name)
    {
       switch ($name) {
          // ? Response Meta
@@ -134,7 +134,7 @@ class Response
             return $this;
       }
    }
-   public function __set ($name, $value)
+   public function __set (string $name, $value)
    {
       switch ($name) {
          case 'status':
@@ -184,7 +184,8 @@ class Response
       $x = null,
       int $code = 200,
       array $headers = [],
-      string $body = '')
+      string $body = ''
+   )
    {
       if ($x === null) {
          $this->Meta->code = $code;

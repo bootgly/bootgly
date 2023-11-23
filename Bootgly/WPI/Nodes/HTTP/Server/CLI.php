@@ -77,7 +77,7 @@ class CLI extends TCP\Server implements HTTP, Server
       // @ Configure Request
       self::$Request = new Request;
       // @ Configure Response
-      self::$Response = new Response;
+      self::$Response ??= new Response;
       // @ Configure Router
       self::$Router = new Router(static::class);
 

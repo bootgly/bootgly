@@ -74,6 +74,7 @@ class Server
       return self::$Handler;
    }
 
+   // @ Hot reload
    public static function check () : bool
    {
       static $modified = 0;

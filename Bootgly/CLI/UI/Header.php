@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\CLI\components;
+namespace Bootgly\CLI\UI;
 
 
 use Bootgly\API\Component;
