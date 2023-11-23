@@ -3,8 +3,8 @@
 use Bootgly\ABI\Data\__String\Path;
 use Bootgly\API\Server as SAPI;
 use Bootgly\CLI;
-use Bootgly\CLI\Terminal\UI\Fieldset\Fieldset;
-use Bootgly\CLI\Terminal\UI\Progress\Progress;
+use Bootgly\CLI\UI\Fieldset\Fieldset;
+use Bootgly\CLI\UI\Progress\Progress;
 
 switch ($name) {
    case '@status':

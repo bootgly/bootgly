@@ -2,7 +2,7 @@
 namespace Bootgly\CLI;
 
 use Bootgly\CLI;
-use Bootgly\CLI\Terminal\UI\Table\Table;
+use Bootgly\CLI\UI\Table\Table;
 
 $Output = CLI::$Terminal->Output;
 $Output->reset();

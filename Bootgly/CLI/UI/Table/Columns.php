@@ -8,10 +8,10 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\CLI\Terminal\UI\Table;
+namespace Bootgly\CLI\UI\Table;
 
 use Bootgly\ABI\Data\__String;
-use Bootgly\CLI\Terminal\UI\Table\Table;
+use Bootgly\CLI\UI\Table\Table;
 
 
 class Columns

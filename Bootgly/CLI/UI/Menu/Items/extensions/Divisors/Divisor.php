@@ -8,10 +8,10 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\CLI\Terminal\UI\Menu\Items\extensions\Divisors;
+namespace Bootgly\CLI\UI\Menu\Items\extensions\Divisors;
 
 
-use Bootgly\CLI\Terminal\UI\Menu\Item;
+use Bootgly\CLI\UI\Menu\Item;
 
 
 final class Divisor extends Item

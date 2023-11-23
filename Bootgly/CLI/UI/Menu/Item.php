@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\CLI\Terminal\UI\Menu;
+namespace Bootgly\CLI\UI\Menu;
 
 
 class Item

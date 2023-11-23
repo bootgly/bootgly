@@ -8,11 +8,11 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\CLI\Terminal\UI\Progress\Bar;
+namespace Bootgly\CLI\UI\Progress\Bar;
 
 
 use Bootgly\CLI\Terminal;
-use Bootgly\CLI\Terminal\UI\Progress\Progress;
+use Bootgly\CLI\UI\Progress\Progress;
 
 
 class Bar

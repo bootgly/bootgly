@@ -8,10 +8,10 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\CLI\Terminal\UI\Menu\Items;
+namespace Bootgly\CLI\UI\Menu\Items;
 
 
-use Bootgly\CLI\Terminal\UI\Menu\Item;
+use Bootgly\CLI\UI\Menu\Item;
 
 
 final class Option extends Item

@@ -4,8 +4,8 @@ namespace Bootgly\CLI;
 
 
 use Bootgly\CLI;
-use Bootgly\CLI\Terminal\UI\Fieldset\Fieldset;
-use Bootgly\CLI\Terminal\UI\Menu\Menu;
+use Bootgly\CLI\UI\Fieldset\Fieldset;
+use Bootgly\CLI\UI\Menu\Menu;
 
 $Input = CLI::$Terminal->Input;
 $Output = CLI::$Terminal->Output;

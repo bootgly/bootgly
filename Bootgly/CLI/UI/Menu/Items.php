@@ -8,12 +8,12 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\CLI\Terminal\UI\Menu;
+namespace Bootgly\CLI\UI\Menu;
 
 
 use AllowDynamicProperties;
-use Bootgly\CLI\Terminal\UI\Menu\Menu;
-use Bootgly\CLI\Terminal\UI\Menu\Items\Options;
+use Bootgly\CLI\UI\Menu\Menu;
+use Bootgly\CLI\UI\Menu\Items\Options;
 
 
 #[AllowDynamicProperties]

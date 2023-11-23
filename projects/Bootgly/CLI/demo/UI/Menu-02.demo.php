@@ -3,10 +3,10 @@ namespace Bootgly\CLI;
 
 
 use Bootgly\CLI;
-use Bootgly\CLI\Terminal\UI\Menu\Menu;
-use Bootgly\CLI\Terminal\UI\Menu\Items\Option;
-use Bootgly\CLI\Terminal\UI\Menu\Items\extensions\Divisors\Divisors;
-use Bootgly\CLI\Terminal\UI\Menu\Items\extensions\Divisors\Divisor;
+use Bootgly\CLI\UI\Menu\Menu;
+use Bootgly\CLI\UI\Menu\Items\Option;
+use Bootgly\CLI\UI\Menu\Items\extensions\Divisors\Divisors;
+use Bootgly\CLI\UI\Menu\Items\extensions\Divisors\Divisor;
 
 
 $Input = CLI::$Terminal->Input;
