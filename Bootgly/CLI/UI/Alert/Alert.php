@@ -37,8 +37,8 @@ class Alert extends Component
       $this->Output = $Output;
 
       // * Config
-      $this->Type = Type::DEFAULT;
-      $this->Style = Style::DEFAULT;
+      $this->Type = Type::Default;
+      $this->Style = Style::Default;
       $this->width = 80;
 
       // * Data
@@ -68,12 +68,12 @@ class Alert extends Component
       $Text->stylize('bold');
 
       switch ($style) {
-         case STYLE::FULLCOLOR:
+         case Style::Fullcolor:
             // @ Colorize
             match ($type) {
-               Type::SUCCESS => $Text->colorize('white', 'green'),
-               Type::ATTENTION => $Text->colorize(0, 'yellow'),
-               Type::FAILURE => $Text->colorize('white', 'red'),
+               Type::Success => $Text->colorize('white', 'green'),
+               Type::Attention => $Text->colorize(0, 'yellow'),
+               Type::Failure => $Text->colorize('white', 'red'),
                default => $Text->colorize(0, 7)
             };
 
@@ -96,17 +96,17 @@ class Alert extends Component
          default:
             // @ Colorize alert type
             match ($type) {
-               Type::SUCCESS => $Text->colorize('white', 'green'),
-               Type::ATTENTION => $Text->colorize(0, 'yellow'),
-               Type::FAILURE => $Text->colorize('white', 'red'),
+               Type::Success => $Text->colorize('white', 'green'),
+               Type::Attention => $Text->colorize(0, 'yellow'),
+               Type::Failure => $Text->colorize('white', 'red'),
                default => $Text->colorize('white', 'blue')
             };
 
             // @ Write alert type
             match ($type) {
-               Type::SUCCESS => $Output->write(' SUCCESS '),
-               Type::ATTENTION => $Output->write(' ATTENTION '),
-               Type::FAILURE => $Output->write(' FAIL '),
+               Type::Success => $Output->write(' SUCCESS '),
+               Type::Attention => $Output->write(' ATTENTION '),
+               Type::Failure => $Output->write(' FAIL '),
                default => $Output->write(' ALERT ')
             };
 
@@ -138,16 +138,17 @@ enum Type
    use \Bootgly\ABI\Configs\Set;
 
 
-   case DEFAULT;
-   case SUCCESS;
-   case ATTENTION;
-   case FAILURE;
+   case Default;
+   case Success;
+   case Attention;
+   case Failure;
 }
 
 enum Style
 {
    use \Bootgly\ABI\Configs\Set;
 
-   case DEFAULT;
-   case FULLCOLOR;
+
+   case Default;
+   case Fullcolor;
 }

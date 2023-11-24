@@ -105,7 +105,7 @@ class ProjectCommand extends Command
          $Table->borders = Table::NO_BORDER_STYLE;
          // > Columns
          // * Config
-         $Table->Columns->Autowiden::BASED_ON_SECTION->set();
+         $Table->Columns->Autowiden::Based_On_Section->set();
 
          $Table->Data->set(header: [
             TemplateEscaped::render('@#Yellow: Arguments: @;'),
@@ -124,12 +124,12 @@ class ProjectCommand extends Command
          $Table->render();
       } else if ( count($arguments) > 1 ) {
          $Alert = new Alert($Output);
-         $Alert->Type::FAILURE->set();
+         $Alert->Type::Failure->set();
          $Alert->message = 'Too many arguments!';
          $Alert->render();
       } else {
          $Alert = new Alert($Output);
-         $Alert->Type::FAILURE->set();
+         $Alert->Type::Failure->set();
          $Alert->message = "Invalid argument: @#cyan:{$arguments[0]}@;.";
          $Alert->render();
       }

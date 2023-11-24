@@ -119,7 +119,7 @@ class TestCommand extends Command
          new Tester($suiteSpecs);
       } else {
          $Alert = new Alert(CLI::$Terminal->Output);
-         $Alert->Type::FAILURE->set();
+         $Alert->Type::Failure->set();
          $Alert->message = 'AutoBoot test not configured!';
          $Alert->render();
       }

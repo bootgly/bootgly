@@ -25,8 +25,17 @@ class WPI extends Projects // Web Programming Interface
 {
    public const BOOT_FILE = 'WPI.boot.php';
 
-   // HTTP
-   // @ nodes
+   // * Config
+   // ...
+
+   // * Data
+   // ...
+
+   // * Meta
+   // ...
+
+   // @ HTTP
+   // @ Nodes
    public Server $Server;
 
    public static Request $Request;
@@ -44,7 +53,12 @@ class WPI extends Projects // Web Programming Interface
 
          return;
       }
+
       // * Config
+      // ...
+
+
+      // @
       // Debugging Vars
       Vars::$debug = false;
       Vars::$exit = true;
@@ -64,7 +78,6 @@ class WPI extends Projects // Web Programming Interface
       if (BOOTGLY_ROOT_DIR !== BOOTGLY_WORKING_DIR) {
          self::autoboot(self::CONSUMER_DIR);
 
-         // Multi projects
          @include(Projects::CONSUMER_DIR . 'Bootgly/' . self::BOOT_FILE);
       }
       // Author

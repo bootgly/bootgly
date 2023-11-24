@@ -39,7 +39,7 @@ class Columns
       // * Config
       $this->section = null;
       // @ Width
-      $this->Autowiden = Autowiden::BASED_ON_ENTIRY_COLUMN->set();
+      $this->Autowiden = Autowiden::Based_On_Entiry_Column->set();
 
       // * Data
       // ...
@@ -53,7 +53,7 @@ class Columns
    {
       switch ($name) {
          case 'widths':
-            $widths = ($this->Autowiden->get() === Autowiden::BASED_ON_SECTION && $this->section
+            $widths = ($this->Autowiden->get() === Autowiden::Based_On_Section && $this->section
                ? ($this->widths[$this->section] ?? [])
                : $this->widths
             );
@@ -88,7 +88,7 @@ class Columns
 
                // @ Set maximum column width
                switch ($Autowiden) {
-                  case Autowiden::BASED_ON_SECTION:
+                  case Autowiden::Based_On_Section:
                      if ($last_section !== null && $section !== $last_section) {
                         $this->widths[$section][$column_index] = $column_data_length;
                         break;
@@ -100,7 +100,7 @@ class Columns
                      );
 
                      break;
-                  case Autowiden::BASED_ON_ENTIRY_COLUMN:
+                  case Autowiden::Based_On_Entiry_Column:
                      $this->widths[$column_index] = max($column_data_length, $this->widths[$column_index] ?? 0);
                }
             }
@@ -117,7 +117,7 @@ class Columns
 
    public function count (? string $section = null) : int
    {
-      $widths = ($this->Autowiden->get() === Autowiden::BASED_ON_SECTION && $section
+      $widths = ($this->Autowiden->get() === Autowiden::Based_On_Section && $section
          ? $this->widths[$section]
          : $this->widths
       );
@@ -133,6 +133,6 @@ enum Autowiden
 {
    use \Bootgly\ABI\Configs\Set;
 
-   case BASED_ON_ENTIRY_COLUMN;
-   case BASED_ON_SECTION;
+   case Based_On_Entiry_Column;
+   case Based_On_Section;
 }

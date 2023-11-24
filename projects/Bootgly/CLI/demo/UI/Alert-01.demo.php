@@ -17,18 +17,18 @@ OUTPUT);
 
 $Alert = new Alert($Output);
 
-$Alert->Type::SUCCESS->set();
+$Alert->Type::Success->set();
 $Alert->message = 'Success message.';
 $Alert->render();
 
-$Alert->Type::ATTENTION->set();
+$Alert->Type::Attention->set();
 $Alert->message = 'Attention message.';
 $Alert->render();
 
-$Alert->Type::FAILURE->set();
+$Alert->Type::Failure->set();
 $Alert->message = 'Failure message.';
 $Alert->render();
 
-$Alert->Type::DEFAULT->set();
+$Alert->Type::Default->set();
 $Alert->message = 'Default message.';
 $Alert->render();
