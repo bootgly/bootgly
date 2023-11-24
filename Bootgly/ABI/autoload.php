@@ -8,56 +8,83 @@
  * --------------------------------------------------------------------------
  */
 
-#namespace Bootgly\ABI; // TODO temp
+// @ Local namespace
+namespace Bootgly\ABI {
+
+   use Bootgly\ABI\Debugging\Data\Throwables\Errors;
+   use Bootgly\ABI\Debugging\Data\Throwables\Exceptions;
+
+   use Bootgly\ABI\Debugging\Shutdown;
 
 
-use Bootgly\ABI\Debugging\Backtrace;
-use Bootgly\ABI\Debugging\Data\Throwables\Errors;
-use Bootgly\ABI\Debugging\Data\Throwables\Exceptions;
-use Bootgly\ABI\Debugging\Data\Vars;
-use Bootgly\ABI\Debugging\Shutdown;
+   // @ Debugging\Data\Errors
+   \set_error_handler(
+      callback: Errors::collect(...),
+      error_levels: E_ALL | E_STRICT
+   );
 
+   // @ Debugging\Data\Exceptions
+   \set_exception_handler(
+      callback: Exceptions::collect(...)
+   );
 
-// @ Debugging
-// Backtrace
+   // @ Debugging\Shutdown
+   \register_shutdown_function(
+      callback: Shutdown::debug(...)
+   );
 
-// Errors
-\set_error_handler(
-   callback: Errors::collect(...),
-   error_levels: E_ALL | E_STRICT
-);
+   // @ IO\FS
+   // functions
+   if (\function_exists('\Bootgly\ABI\copy_recursively') === false) {
+      function copy_recursively (string $source, string $destination)
+      {
+         if (\is_dir($source) === true) {
+            \mkdir($destination);
 
-// Exceptions
-\set_exception_handler(
-   callback: Exceptions::collect(...)
-);
+            $paths = \scandir($source);
 
-// Shutdown
-\register_shutdown_function(
-   callback: Shutdown::debug(...)
-);
-
-// Vars
-if (function_exists('dump') === false) {
-   function dump (...$vars)
-   {
-      // * Data
-      // + Backtrace
-      Vars::$Backtrace = new Backtrace;
-
-      Vars::debug(...$vars);
+            foreach ($paths as $path) {
+               if ($path !== '.' && $path !== '..') {
+                  copy_recursively("$source/$path", "$destination/$path");
+               }
+            }
+         }
+         else if (\file_exists($source) === true) {
+            \copy($source, $destination);
+         }
+      }
    }
 }
-if (function_exists('dd') === false) { // dd = dump and die
-   function dd (...$vars)
-   {
-      // * Config
-      Vars::$exit = true;
-      Vars::$debug = true;
-      // * Data
-      // + Backtrace
-      Vars::$Backtrace = new Backtrace;
 
-      Vars::debug(...$vars);
+// @ Global namespace
+namespace {
+
+   use Bootgly\ABI\Debugging\Backtrace;
+   use Bootgly\ABI\Debugging\Data\Vars;
+
+   // @ Debugging\Data\Vars
+   // functions
+   if (\function_exists('dump') === false) {
+      function dump (...$vars)
+      {
+         // * Data
+         // + Backtrace
+         Vars::$Backtrace = new Backtrace;
+
+         Vars::debug(...$vars);
+      }
+   }
+   if (\function_exists('dd') === false) { // dd = dump and die
+      function dd (...$vars)
+      {
+         // * Config
+         Vars::$exit = true;
+         Vars::$debug = true;
+         // * Data
+         // + Backtrace
+         Vars::$Backtrace = new Backtrace;
+
+         Vars::debug(...$vars);
+      }
    }
 }
