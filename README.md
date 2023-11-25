@@ -19,9 +19,7 @@
 > [!WARNING]
 > 🚧 DO NOT USE IT IN PRODUCTION ENVIRONMENTS. 🚧
 > 
-> Bootgly is in beta testing.
-> 
-> A stable release is planned for December 2023.
+> Bootgly is in beta testing. A stable release is planned for December 2023.
 > 
 > [Documentation is under construction][PROJECT_DOCS].
 
