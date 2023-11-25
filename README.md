@@ -16,16 +16,11 @@
 
 > Bootgly is the first PHP framework to use the [I2P (Interface-to-Platform) architecture][I2P_ARQUITECTURE].
 
-🚧
-
-DO NOT USE IT IN PRODUCTION ENVIRONMENTS.
-
-Bootgly is in testing.
-A stable release is planned for December 2023.
-
-[Documentation is under construction][PROJECT_DOCS].
-
-🚧
+> [!WARNING]
+> 🚧 DO NOT USE IT IN PRODUCTION ENVIRONMENTS. 🚧
+> Bootgly is in beta testing.
+> A stable release is planned for December 2023.
+> [Documentation is under construction][PROJECT_DOCS].
 
 ## Table of Contents
 
