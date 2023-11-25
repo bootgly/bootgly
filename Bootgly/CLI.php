@@ -24,13 +24,13 @@ class CLI extends Projects // Command Line Interface
    public const BOOT_FILE = 'CLI.boot.php';
 
    // * Config
-   // ...
+   public static bool $interactive = false;
 
    // * Data
    // ...
 
    // * Meta
-   public static bool $interactive = false;
+   private bool $booted;
 
    public static Commands $Commands;
    public static Scripts $Scripts;
@@ -45,6 +45,15 @@ class CLI extends Projects // Command Line Interface
 
       // * Config
       // ...
+
+      // * Data
+      // ...
+
+      // * Meta
+      $this->booted = false;
+
+
+      // @
       // Debugging Vars
       Vars::$debug = true;
       Vars::$exit = false;
@@ -64,12 +73,14 @@ class CLI extends Projects // Command Line Interface
       // @ Boot CLI
       self::autoboot(self::CONSUMER_DIR);
 
-      // Author
-      @include(Projects::AUTHOR_DIR . 'Bootgly/' . self::BOOT_FILE);
       // Consumer
       if (BOOTGLY_ROOT_DIR !== BOOTGLY_WORKING_DIR) {
-         // Multi projects
-         @include(Projects::CONSUMER_DIR . 'Bootgly/' . self::BOOT_FILE);
+         $this->booted = (@include Projects::CONSUMER_DIR . 'Bootgly/' . self::BOOT_FILE);
+      }
+
+      // Author
+      if ($this->booted === false) {
+         @include(Projects::AUTHOR_DIR . 'Bootgly/' . self::BOOT_FILE);
       }
    }
 }
