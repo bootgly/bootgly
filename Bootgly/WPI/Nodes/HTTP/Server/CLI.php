@@ -110,7 +110,7 @@ class CLI extends TCP\Server implements HTTP, Server
    {
       // * Config
       if ($production) {
-         SAPI::$production = Projects::CONSUMER_DIR . 'Bootgly/WPI/HTTP-Server.API.php';
+         SAPI::$production = Projects::CONSUMER_DIR . 'Bootgly/WPI/HTTP_Server_CLI-1.SAPI.php';
       }
 
       // * Data

@@ -26,7 +26,7 @@
 ## Table of Contents
 
 - [About](#-about)
-- [Boot](#-boot)
+- [Boot Requirements](#-boot-requirements)
   - [Compatibility](#-compatibility)
   - [Dependencies](#️-dependencies)
 - [Community](#-community)
@@ -54,7 +54,7 @@ Bootgly is a base framework for developing APIs and Apps for both CLI (Console) 
 - Interface: [CLI][CLI_INTERFACE]
 - Platform: [Console][CONSOLE_PLATFORM] (TODO)
 
-For the base CLI development, Bootgly already has the following components:
+For the base CLI development, Bootgly already has the following UI components:
 [Alert][CLI_TERMINAL_ALERT], [Fieldset][CLI_TERMINAL_FIELDSET], [Header][CLI_HEADER], [Menu][CLI_TERMINAL_MENU], [Progress][CLI_TERMINAL_PROGRESS], [Table][CLI_TERMINAL_TABLE].
 
 ### Bootgly WPI 🌐
@@ -70,7 +70,7 @@ More news may come until the release of v1.0. Stay tuned.
 
 ---
 
-## 🟢 Boot
+## 🟢 Boot Requirements
 
 ### 🤝 Compatibility
 
@@ -200,7 +200,7 @@ Your sponsorship will keep this project always **up to date** with **new feature
    Directly in Linux OS *(max performance)*:
 
    1) Configure the Bootgly HTTP Server script in `scripts/http-server-cli` file;
-   2) Configure the HTTP Server API in `projects/Bootgly/WPI/HTTP-Server.API.php` file;
+   2) Configure the HTTP Server API in `projects/Bootgly/WPI/HTTP_Server_CLI-1.SAPI.php` file;
    3) Run the Bootgly HTTP Server CLI in the terminal:
 
    ```bash
