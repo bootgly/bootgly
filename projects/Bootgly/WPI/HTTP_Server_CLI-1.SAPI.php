@@ -3,16 +3,9 @@
 namespace projects\Bootgly\WPI;
 
 
-use Bootgly;
 use Bootgly\WPI\Modules\HTTP\Server\Router;
 use Bootgly\WPI\Nodes\HTTP\Server\CLI\Request;
 use Bootgly\WPI\Nodes\HTTP\Server\CLI\Response;
-
-
-Bootgly::$Project->vendor    = 'Bootgly/';
-Bootgly::$Project->container = 'WPI/';
-Bootgly::$Project->package   = 'demo/';
-Bootgly::$Project->construct();
 
 
 return static function

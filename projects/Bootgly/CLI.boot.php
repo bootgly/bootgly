@@ -11,15 +11,17 @@
 namespace projects\Bootgly;
 
 
-use Bootgly\CLI;
 use Bootgly\ABI\Data\__String\Path;
+
+use Bootgly\CLI;
 use Bootgly\CLI\UI\Fieldset\Fieldset;
 use Bootgly\CLI\UI\Header;
+
 
 // $Commands, $Scripts, $Terminal availables...
 
 // @ Set Commands Helper
-CLI::$Commands->help(function ($scripting = true) {
+$Commands->help(function ($scripting = true) {
    $Output = CLI::$Terminal->Output;
 
    $script = $this->args[0];
@@ -95,7 +97,7 @@ CLI::$Commands->help(function ($scripting = true) {
 // @ Register commands
 $commands = require('CLI/commands/@.php');
 foreach ($commands as $Command) {
-   CLI::$Commands->register($Command);
+   $Commands->register($Command);
 }
 // @ Route commands
-CLI::$Commands->route();
+$Commands->route();

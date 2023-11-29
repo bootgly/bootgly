@@ -174,15 +174,23 @@ class Response
             return $this->$name(...$arguments);
       }
    }
-   public function __invoke
-   ($x = null, ? int $status = 200, ? array $headers = [], ? string $content = '', ? string $raw = '')
+   public function __invoke (
+      $x = null,
+      int $code = 200,
+      array $headers = [],
+      string $body = ''
+   ) : self
    {
-      if ($x === null && $raw) {
-         $this->raw = $raw;
-
-         return $this;
-      } else if ($x === null && $content) {
-         $this->Content->raw = $content;
+      if ($x === null) {
+         if ($code !== 200) {
+            $this->code = $code;
+         }
+         if (count($headers) > 0) {
+            $this->Header->prepare($headers);
+         }
+         if ($body !== '') {
+            $this->Content->raw = $body;
+         }
 
          return $this;
       }
@@ -264,7 +272,7 @@ class Response
       switch ($resource) {
          // @ File
          case 'view':
-            $File = new File(Bootgly::$Project->path . 'views/' . $data);
+            $File = new File(BOOTGLY_PROJECT?->path . 'views/' . $data);
 
             $this->body   = $File;
             $this->source = 'file';
@@ -306,7 +314,7 @@ class Response
                         #!
                         '/' => new File(BOOTGLY_WORKING_DIR . 'projects' . $data),
                         '@' => new File(BOOTGLY_WORKING_DIR . 'projects/' . $data),
-                        default => new File(Bootgly::$Project->path . $data)
+                        default => new File(BOOTGLY_PROJECT?->path . $data)
                      };
 
                      $this->body   = &$File;
@@ -496,7 +504,7 @@ class Response
       if ($content instanceof File) {
          $File = $content;
       } else {
-         $File = new File(Bootgly::$Project->path . $content);
+         $File = new File(BOOTGLY_PROJECT?->path . $content);
       }
 
       if ($File->readable === false) {

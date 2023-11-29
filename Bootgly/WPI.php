@@ -48,7 +48,7 @@ class WPI extends Projects // Web Programming Interface
       // TODO remove or modify
       if (@$_SERVER['REDIRECT_URL'] === NULL) {
          if (\PHP_SAPI !== 'cli') {
-            echo 'Missing Rewrite!';
+            throw new \Exception('Missing Rewrite!');
          }
 
          return;
@@ -57,6 +57,11 @@ class WPI extends Projects // Web Programming Interface
       // * Config
       // ...
 
+      // * Data
+      // ...
+
+      // * Meta
+      // ...
 
       // @
       // Debugging Vars
@@ -76,11 +81,9 @@ class WPI extends Projects // Web Programming Interface
       // @ Boot WPI
       // Consumer
       if (BOOTGLY_ROOT_DIR !== BOOTGLY_WORKING_DIR) {
-         self::autoboot(self::CONSUMER_DIR);
-
-         @include(Projects::CONSUMER_DIR . 'Bootgly/' . self::BOOT_FILE);
+         (@include Projects::CONSUMER_DIR . 'Bootgly/' . self::BOOT_FILE);
       }
       // Author
-      @include(Projects::AUTHOR_DIR . 'Bootgly/' . self::BOOT_FILE);
+      require(Projects::AUTHOR_DIR . 'Bootgly/' . self::BOOT_FILE);
    }
 }

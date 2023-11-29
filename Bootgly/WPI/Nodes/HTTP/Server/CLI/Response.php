@@ -269,7 +269,7 @@ class Response
       switch ($resource) {
          // @ Resource File
          case 'view':
-            $File = new File(Bootgly::$Project->path . 'views/' . $data);
+            $File = new File(BOOTGLY_PROJECT?->path . 'views/' . $data);
 
             $this->body   = $File;
             $this->source = 'file';
@@ -312,7 +312,7 @@ class Response
                         #!
                         '/' => new File(BOOTGLY_WORKING_DIR . 'projects' . $data),
                         '@' => new File(BOOTGLY_WORKING_DIR . 'projects/' . $data),
-                        default => new File(Bootgly::$Project->path . $data)
+                        default => new File(BOOTGLY_PROJECT?->path . $data)
                      };
 
                      $this->body   = &$File;
@@ -520,7 +520,7 @@ class Response
          $File = $content;
       } else {
          $content = Path::normalize($content);
-         $File = new File(\Bootgly::$Project->path . $content);
+         $File = new File(BOOTGLY_PROJECT?->path . $content);
       }
 
       if ($File->readable === false) {

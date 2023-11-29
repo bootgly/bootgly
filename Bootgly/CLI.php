@@ -12,6 +12,7 @@ namespace Bootgly;
 
 
 use Bootgly\ABI\Debugging\Data\Vars;
+
 use Bootgly\API\Projects;
 
 use Bootgly\CLI\Commands;
@@ -30,7 +31,7 @@ class CLI extends Projects // Command Line Interface
    // ...
 
    // * Meta
-   private bool $booted;
+   private static bool $booted = false;
 
    public static Commands $Commands;
    public static Scripts $Scripts;
@@ -39,9 +40,8 @@ class CLI extends Projects // Command Line Interface
 
    public function __construct ()
    {
-      if (PHP_SAPI !== 'cli') {
-         return;
-      }
+      if (PHP_SAPI !== 'cli')
+         throw new \Exception("CLI class can only be instantiated using SAPI CLI.");
 
       // * Config
       // ...
@@ -50,7 +50,7 @@ class CLI extends Projects // Command Line Interface
       // ...
 
       // * Meta
-      $this->booted = false;
+      self::$booted = false;
 
 
       // @
@@ -71,16 +71,13 @@ class CLI extends Projects // Command Line Interface
       // ---
 
       // @ Boot CLI
-      self::autoboot(self::CONSUMER_DIR);
-
       // Consumer
       if (BOOTGLY_ROOT_DIR !== BOOTGLY_WORKING_DIR) {
-         $this->booted = (@include Projects::CONSUMER_DIR . 'Bootgly/' . self::BOOT_FILE);
+         self::$booted = (@include Projects::CONSUMER_DIR . 'Bootgly/' . self::BOOT_FILE);
       }
-
       // Author
-      if ($this->booted === false) {
-         @include(Projects::AUTHOR_DIR . 'Bootgly/' . self::BOOT_FILE);
+      if (self::$booted === false) {
+         require(Projects::AUTHOR_DIR . 'Bootgly/' . self::BOOT_FILE);
       }
    }
 }

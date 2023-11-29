@@ -1,5 +1,5 @@
 <?php
-use Bootgly\API\Project;
+
 use Bootgly\ABI\Debugging\Data\Vars;
 // SAPI
 use Bootgly\WPI\Nodes\HTTP\Server\CLI\Request;
@@ -18,14 +18,6 @@ return [
    // @ simulate
    // Server API
    'response' => function (Request $Request, Response $Response) : Response {
-      $Project = new Project;
-      $Project->vendor = 'Bootgly/';
-      $Project->container = 'WPI/';
-      $Project->package = 'examples/';
-      $Project->version = 'app/';
-
-      $Project->construct();
-
       return $Response('statics/screenshot.gif')->upload(close: false);
    },
    // Client API

@@ -22,13 +22,18 @@ abstract class Projects implements Resources
    // Consumer
    public const CONSUMER_DIR = BOOTGLY_WORKING_BASE . '/projects/';
 
+   // * Config
+   // ...
+
    // * Data
    protected static array $projects = [];
 
    // * Meta
+   private static Project $Default;
+   // @ index
    private static array $indexes = [];
    // @autoboot
-   private static array $booted = [];
+   private static bool $booted;
 
 
    public static function add (Project $Project) : int
@@ -39,21 +44,18 @@ abstract class Projects implements Resources
 
       return $index;
    }
-   protected static function autoboot (string $_dir) : bool
+   public static function autoboot () : null|Project
    {
-      if ( isSet(self::$booted[$_dir]) ) {
-         return false;
-      }
+      if ( isSet(self::$booted) )
+         throw new \Exception("Project autoboot can only be called once.");
 
-      $bootstrap = include($_dir . '@.php');
+      $bootstrap = @include(Projects::CONSUMER_DIR . '@.php');
       if ($bootstrap === null) {
-         return false;
+         return null;
       }
 
-      $interface = substr(strrchr(static::class, '\\'), 1);
-      $projects = $bootstrap['projects'][$interface];
-
-      foreach ($projects as $project) {
+      $projects = $bootstrap['projects'];
+      foreach ($projects as $index => $project) {
          $Project = new Project;
 
          foreach ($project['paths'] as $path) {
@@ -66,11 +68,15 @@ abstract class Projects implements Resources
             $Project->name($name);
             self::index($name);
          }
+
+         if ($index === 'default') {
+            self::$Default = $Project;
+         }
       }
 
-      self::$booted[$_dir] = true;
+      self::$booted = true;
 
-      return true;
+      return self::$Default ?? null;
    }
 
    public static function index (string $project) : bool

@@ -1,20 +1,21 @@
 <?php
+
 namespace Bootgly\WPI\Nodes\HTTP\Server\CLI\tests;
 
 
 use Bootgly\ACI\Logs\Logger;
 
-use Bootgly\WPI\Nodes\HTTP;
+use Bootgly\WPI\Nodes\HTTP\Server\CLI as HTTP_Server_CLI;
 
 
 return [
    // * Config
    'autoBoot' => function () { // function ($suiteSpecs)
       // TODO configure verbosity of server output/echo
-      // TODO like $HTTPServer->verbosity = 0;
+      // TODO like $HTTP_Server_CLI->verbosity = 0;
       Logger::$display = Logger::DISPLAY_NONE;
 
-      $HTTP_Server_CLI = new HTTP\Server\CLI;
+      $HTTP_Server_CLI = new HTTP_Server_CLI;
       // * Config
       $HTTP_Server_CLI->mode = $HTTP_Server_CLI::MODE_TEST;
       $HTTP_Server_CLI->configure(
