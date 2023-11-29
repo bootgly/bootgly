@@ -292,7 +292,8 @@ Bootgly uses [Semantic Versioning 2.0][SEMANTIC_VERSIONING].
 [WEB_PLATFORM]: https://github.com/bootgly/bootgly-web
 
 
-[BENCHMARK_1]: https://github.com/bootgly/bootgly_benchmarks/tree/main/progress_bar
+[BENCHMARK_1]: https://github.com/bootgly/bootgly_benchmarks/tree/main/Progress_Bar
+
 [PROJECT_DOCS]: https://docs.bootgly.com/
 [GITHUB_REPOSITORY]: https://github.com/bootgly/bootgly/
 [GITHUB_SPONSOR]: https://github.com/sponsors/bootgly/
