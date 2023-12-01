@@ -15,9 +15,8 @@ return [
       // TODO like $HTTP_Server_CLI->verbosity = 0;
       Logger::$display = Logger::DISPLAY_NONE;
 
-      $HTTP_Server_CLI = new HTTP_Server_CLI;
+      $HTTP_Server_CLI = new HTTP_Server_CLI(mode: HTTP_Server_CLI::MODE_TEST);
       // * Config
-      $HTTP_Server_CLI->mode = $HTTP_Server_CLI::MODE_TEST;
       $HTTP_Server_CLI->configure(
          host: '0.0.0.0',
          port: 8080,

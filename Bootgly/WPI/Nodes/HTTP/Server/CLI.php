@@ -27,7 +27,8 @@ use Bootgly\WPI\Modules\HTTP;
 use Bootgly\WPI\Modules\HTTP\Server;
 use Bootgly\WPI\Modules\HTTP\Server\Router;
 use Bootgly\WPI\Nodes\HTTP\Server\CLI\Decoders\_Decoder;
-use Bootgly\WPI\Nodes\HTTP\Server\CLI\Encoders\_Encoder;
+use Bootgly\WPI\Nodes\HTTP\Server\CLI\Encoders\Encoder_;
+use Bootgly\WPI\Nodes\HTTP\Server\CLI\Encoders\Encoder_Testing;
 use Bootgly\WPI\Nodes\HTTP\Server\CLI\Request;
 use Bootgly\WPI\Nodes\HTTP\Server\CLI\Response;
 
@@ -49,7 +50,7 @@ class CLI extends TCP\Server implements HTTP, Server
    public static Router $Router;
 
 
-   public function __construct ()
+   public function __construct (int $mode = self::MODE_MONITOR)
    {
       // * Config
       // ...inherited from TCP\Server
@@ -83,7 +84,16 @@ class CLI extends TCP\Server implements HTTP, Server
 
       // @
       self::$Decoder = new _Decoder;
-      self::$Encoder = new _Encoder;
+
+      $this->mode = $mode;
+      switch ($mode) {
+         case self::MODE_TEST:
+
+            self::$Encoder = new Encoder_Testing;
+            break;
+         default:
+            self::$Encoder = new Encoder_;
+      }
    }
 
    public function configure (
@@ -108,14 +118,20 @@ class CLI extends TCP\Server implements HTTP, Server
    }
    public static function boot (bool $production = true, bool $test = false)
    {
-      // * Config
       if ($production) {
-         SAPI::$production = Projects::CONSUMER_DIR . 'Bootgly/WPI/HTTP_Server_CLI-1.SAPI.php';
+         try {
+            SAPI::$production = Projects::CONSUMER_DIR . 'Bootgly/WPI/HTTP_Server_CLI-1.SAPI.php';
+            self::$Encoder = new Encoder_;
+         }
+         catch (\Throwable $Throwable) {
+            Exceptions::report($Throwable);
+         }
       }
 
-      // * Data
       if ($test) {
          try {
+            self::$Encoder = new Encoder_Testing;
+
             // * Config
             $loader = __DIR__ . '/CLI/tests/@.php';
 
@@ -151,8 +167,9 @@ class CLI extends TCP\Server implements HTTP, Server
                // @ Set Closure to SAPI Tests
                SAPI::$Tests[self::class][] = $spec;
             }
-         } catch (\Throwable) {
-            // ...
+         }
+         catch (\Throwable $Throwable) {
+            Exceptions::report($Throwable);
          }
       }
 
@@ -176,7 +193,7 @@ class CLI extends TCP\Server implements HTTP, Server
             Logger::$display = Logger::DISPLAY_MESSAGE;
 
             // @ Get test files
-            $testFiles = SAPI::$tests[self::class];
+            $testFiles = SAPI::$tests[self::class] ?? [];
 
             $Tests = new Tester($testFiles);
             $Tests->separate('HTTP Server');

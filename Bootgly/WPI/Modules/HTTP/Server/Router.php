@@ -11,8 +11,6 @@
 namespace Bootgly\WPI\Modules\HTTP\Server;
 
 
-use Bootgly;
-
 use Bootgly\ABI\IO\FS\File;
 
 use Bootgly\WPI\Modules\HTTP\Server\Route;
@@ -33,7 +31,6 @@ class Router
    public ? Route $Route;
    // @ Stats
    private int $routes;
-   private int $matched; // 0 -> none; 1 = path; 2 = path and method(s)
    // @ History
    private array $routeds;
 
@@ -163,10 +160,11 @@ class Router
                   }
                }
             }
+
+            $Route->nested = true;
          }
 
          // @ Call
-         // Closure
          if ($handler instanceof \Closure) {
             $handler = $handler->bindTo($Route, $Route);
 
@@ -176,7 +174,6 @@ class Router
             );
          }
          else {
-            // callable
             $Response = \call_user_func_array(
                callback: $handler,
                args: [
@@ -272,7 +269,7 @@ class Router
 
       return 0;
    }
-   public function parse (string $route) // @ Parse Route Path (Parameterized)
+   private function parse (string $route) // @ Parse Route Path (Parameterized)
    {
       if ($this->active === false) return '';
 

@@ -21,24 +21,11 @@ use Bootgly\WPI\Nodes\HTTP\Server\CLI\Encoders;
 use Bootgly\WPI\Nodes\HTTP\Server\CLI\Response;
 
 
-class _Encoder extends Encoders
+class Encoder_ extends Encoders
 {
    public static function encode (Packages $Packages, &$size)
    {
-      // @ Perform test mode
-      // TODO move to another encoder?
-      switch (SAPI::$mode) {
-         case SAPI::MODE_TEST:
-            Server::$Response = new Response;
-            Server::$Router = new Router(Server::class);
-
-            Server::$Response->Header->preset('Date', null);
-
-            SAPI::boot(reset: true, base: Server::class);
-            break;
-      }
-
-      // @ Instance callbacks
+      // @ Get callbacks
       $Request  = Server::$Request;
       $Response = Server::$Response;
       $Router   = Server::$Router;

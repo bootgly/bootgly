@@ -187,6 +187,12 @@ class Server implements Servers, Logging
             break;
          case '@test end':
             SAPI::$mode = SAPI::MODE_PRODUCTION;
+
+            if (self::$Application) {
+               self::$Application::boot();
+               break;
+            }
+
             SAPI::boot(true);
 
             break;
