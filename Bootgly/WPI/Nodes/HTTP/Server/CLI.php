@@ -26,7 +26,7 @@ use Bootgly\WPI\Interfaces\TCP;
 use Bootgly\WPI\Modules\HTTP;
 use Bootgly\WPI\Modules\HTTP\Server;
 use Bootgly\WPI\Modules\HTTP\Server\Router;
-use Bootgly\WPI\Nodes\HTTP\Server\CLI\Decoders\_Decoder;
+use Bootgly\WPI\Nodes\HTTP\Server\CLI\Decoders\Decoder_;
 use Bootgly\WPI\Nodes\HTTP\Server\CLI\Encoders\Encoder_;
 use Bootgly\WPI\Nodes\HTTP\Server\CLI\Encoders\Encoder_Testing;
 use Bootgly\WPI\Nodes\HTTP\Server\CLI\Request;
@@ -83,7 +83,7 @@ class CLI extends TCP\Server implements HTTP, Server
       self::$Router = new Router(static::class);
 
       // @
-      self::$Decoder = new _Decoder;
+      self::$Decoder = new Decoder_;
 
       $this->mode = $mode;
       switch ($mode) {

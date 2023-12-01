@@ -12,6 +12,7 @@ namespace Bootgly\WPI\Nodes\HTTP\Server\CLI\Encoders;
 
 
 use Bootgly\ABI\Debugging\Data\Throwables;
+
 use Bootgly\API\Server as SAPI;
 
 use Bootgly\WPI\Interfaces\TCP\Server\Packages;

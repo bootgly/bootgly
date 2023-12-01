@@ -17,7 +17,7 @@ use Bootgly\WPI\Nodes\HTTP\Server\CLI\Decoders;
 use Bootgly\WPI\Nodes\HTTP\Server\CLI\Request;
 
 
-class _Decoder extends Decoders
+class Decoder_ extends Decoders
 {
    public static function decode (Packages $Package, string $buffer, int $size)
    {
