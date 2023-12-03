@@ -28,10 +28,10 @@ return [
       $expected = <<<HTML_RAW
       HTTP/1.1 200 OK\r
       Server: Bootgly\r
-      Content-Length: 16\r
+      Content-Length: 18\r
       Content-Type: text/html; charset=UTF-8\r
       \r
-      GET / HTTP/1.0\r\n
+      GET / HTTP/1.0\r\n\r\n
       HTML_RAW;
 
       // @ Assert

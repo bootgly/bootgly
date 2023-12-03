@@ -40,7 +40,6 @@ return [
          '1.06-request_as_response-uri',
          '1.07-request_as_response-protocol',
          '1.08-request_as_response-url',
-         '1.09-request_as_response-urn',
          '1.10-request_as_response-query',
          '1.11-request_as_response-queries',
          '1.12-request_as_response-basic-auth',

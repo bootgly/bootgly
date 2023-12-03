@@ -34,9 +34,6 @@ $Router->route('/requesting', function ($Response, $Request) {
   // ! Resource
   #return $Response->send($Request->URI);           // @ /test/foo/?query1=123&query2=xyz
   #return $Response->send($Request->URL);           // @ /test/foo
-  #return $Response->send($Request->URN);           // @ foo
-  // ? URL/Path
-  #return $Response->send($Request->path);          // @ /test/foo
   // ? URI/Query
   #return $Response->send($Request->query);         // @ query1=abc&query2=xyz
   #return $Response->Json->send($Request->queries); // @ {"query1":"abc", "query2":"xyz"}

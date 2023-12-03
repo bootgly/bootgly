@@ -44,6 +44,7 @@ trait Requestable
             // ! HTTP
          case 'raw':
             $raw = $this->Meta->raw;
+            $raw .= "\r\n";
             $raw .= $this->Header->raw;
             $raw .= "\r\n";
             $raw .= $this->input;
@@ -57,13 +58,11 @@ trait Requestable
          // case 'URI': ...
          case 'protocol':
             return $_SERVER['SERVER_PROTOCOL'];
-
-         // @ URI (Uniform Resource Identifier)
-         case 'URI':
+         // @ Uniform Resources
+         case 'URI': // (Uniform Resource Identifier)
             return $_SERVER['REDIRECT_URI'] ?? @$_SERVER['REQUEST_URI'];
 
-         // @ URL (Uniform Resource Locator)
-         case 'URL':
+         case 'URL': // (Uniform Resource Locator)
             $locator = \strtok($this->URI, '?');
 
             $locator = \rtrim($locator ?? '/', '/');
@@ -78,22 +77,16 @@ trait Requestable
 
             return $locator;
 
-         // @ URN (Uniform Resource Name)
-         case 'URN':
-            $name = $this->Path->current;
+         case 'URN': // (Uniform Resource Name)
+            $URL = $this->URL;
 
-            $this->URN = $name;
+            // @ Extract the URN after the last slash
+            $URN = substr($URL, strrpos($URL, '/') + 1);
 
-            return $name;
-            // TODO dir, directory, Dir, Directories, ... ?
-            // TODO file, File ?
-         // @ Path
-         case 'path':
-            return $this->URL;
-         case 'Path':
-            $Path = new Path;
-            $Path->construct($this->URL);
-            return $Path;
+            $this->URN = $URN;
+
+            return $URN;
+
          // @ Query
          case 'query':
             $URI = $this->URI;

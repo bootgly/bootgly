@@ -10,7 +10,7 @@
 
 namespace Bootgly\WPI\Modules\HTTP\Server;
 
-
+use Bootgly\ABI\Data\__String\Path;
 use Bootgly\ABI\IO\FS\File;
 
 use Bootgly\WPI\Modules\HTTP\Server\Route;
@@ -145,8 +145,8 @@ class Router
          // Route Params values
          if ($Route->parameterized) {
             // @ HTTP Server Request
-            // ->Path
-            $parts = self::$Server::$Request->Path->parts;
+            $Path = new Path(self::$Server::$Request->URL);
+            $parts = $Path->parts;
             // @ Router Route
             $Params = &$Route->Params;
 

@@ -34,7 +34,7 @@ class Decoder_ extends Decoders
          return $size;
       }
 
-      // @ Instance callbacks
+      // @ Get callbacks
       $Request = Server::$Request;
 
       // TODO move to another decoder

@@ -33,28 +33,22 @@ use Bootgly\WPI\Nodes\HTTP\Server\Bridge\Request\Session;
  * @property string $raw
  * ? Meta
  * @property string $method        GET, POST, ...
- * @property string $URI           /test/foo?query=abc&query2=xyz
  * @property string $protocol      HTTP/1.1
- * @ URI
- * @property string $identifier    (URI) /test/foo?query=abc&query2=xyz
- * @ URL
- * @property string $locator       (URL) /test/foo
- * @ URN
- * @property string $name          (URN) foo
- * @ Path
- * @property object $Path
- * @property string $path          /test/foo
+ * @ Resource
+ * @property string $URI          /test/foo?query=abc&query2=xyz
+ * @property string $URL          /test/foo
+ * @property string $URN          foo
  * @ Query
  * @property object $Query
  * @property string $query         query=abc&query2=xyz
  * @property array $queries        ['query' => 'abc', 'query2' => 'xyz']
  * ? Header
- * @property object Header         ->{'X-Header'}
+ * @property object Header         
  * @ Host
- * @property string $host          v1.lab.bootgly.com
+ * @property string $host          v1.docs.bootgly.com
  * @property string $domain        bootgly.com
- * @property string $subdomain     v1.lab
- * @property array $subdomains     ['lab', 'v1']
+ * @property string $subdomain     v1.docs
+ * @property array $subdomains     ['docs', 'v1']
  * @ Authorization (Basic)
  * @property string $username      boot
  * @property string $password      gly
