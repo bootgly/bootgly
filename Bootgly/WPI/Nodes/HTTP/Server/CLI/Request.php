@@ -34,28 +34,22 @@ use Bootgly\WPI\Nodes\HTTP\Server\CLI\Request\Downloader;
  * @property string $raw
  * ? Meta
  * @property string $method        GET, POST, ...
- * @property string $URI           /test/foo?query=abc&query2=xyz
  * @property string $protocol      HTTP/1.1
- * @ URI
- * @property string $identifier    (URI) /test/foo?query=abc&query2=xyz
- * @ URL
- * @property string $locator       (URL) /test/foo
- * @ URN
- * @property string $name          (URN) foo
- * @ Path
- * @property object $Path
- * @property string $path          /test/foo
+ * @ Resource
+ * @property string $URI          /test/foo?query=abc&query2=xyz
+ * @property string $URL          /test/foo
+ * @property string $URN          foo
  * @ Query
  * @property object $Query
  * @property string $query         query=abc&query2=xyz
  * @property array $queries        ['query' => 'abc', 'query2' => 'xyz']
  * ? Header
- * @property object Header         ->{'X-Header'}
+ * @property object Header         
  * @ Host
- * @property string $host          v1.lab.bootgly.com
+ * @property string $host          v1.docs.bootgly.com
  * @property string $domain        bootgly.com
- * @property string $subdomain     v1.lab
- * @property array $subdomains     ['lab', 'v1']
+ * @property string $subdomain     v1.docs
+ * @property array $subdomains     ['docs', 'v1']
  * @ Authorization (Basic)
  * @property string $username      boot
  * @property string $password      gly
@@ -127,7 +121,7 @@ class Request
       // * Data
       // ... dynamically
       $_POST = [];
-      $_FILES = [];
+      #$_FILES = []; // Reseted on __destruct only
       $_SERVER = [];
 
       // * Meta
@@ -323,6 +317,7 @@ class Request
       return null;
    }
 
+   // > Middlewares
    // TODO implement https://www.php.net/manual/pt_BR/ref.filter.php
    public function filter (int $type, string $var_name, int $filter, array|int $options)
    {
@@ -340,14 +335,19 @@ class Request
    public function __destruct ()
    {
       // @ Delete files downloaded by server in temp folder
-      if ( ! empty($_FILES) ) {
+      if (empty($_FILES) === false) {
+         // @ Clear cache
          \clearstatcache();
 
+         // @ Delete temp files
          \array_walk_recursive($_FILES, function ($value, $key) {
-            if (\is_file($value) && $key === 'tmp_name') {
+            if ($key === 'tmp_name' && \is_file($value) === true) {
                \unlink($value);
             }
          });
+
+         // @ Reset $_FILES
+         $_FILES = [];
       }
    }
 }
