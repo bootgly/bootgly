@@ -10,6 +10,7 @@
 
 namespace Bootgly\ABI\Debugging;
 
+use Bootgly\ABI\Data\__String\Path;
 
 class Backtrace
 {
@@ -74,7 +75,12 @@ class Backtrace
          };
          $n = 1;
          foreach ($calls as $trace) {
-            if (isSet($trace['file']) && isSet($trace['line'])) {
+            $line = $trace['line'] ?? null;
+            $file = $trace['file'] ?? null;
+
+            if ($file && $line) {
+               $file = Path::relativize($file, BOOTGLY_WORKING_DIR);
+
                // Trace count
                $output .= match (\PHP_SAPI) {
                   'cli' => "\033[93m ",
@@ -86,20 +92,22 @@ class Backtrace
                   default => ''
                };
                // Trace file
-               $output .= $trace['file'];
+               $output .= $file;
                // Trace line
                $output .= ':';
                $output .= match (\PHP_SAPI) {
                   'cli' => "\033[96m",
                   default => ''
                };
-               $output .= $trace['line'];
+               $output .= $line;
                $output .= match (\PHP_SAPI) {
                   'cli' => "\033[0m",
                   default => ''
                };
             }
+
             if ($n > self::$traces) break;
+
             $output .= "\n";
             $n++;
          }
