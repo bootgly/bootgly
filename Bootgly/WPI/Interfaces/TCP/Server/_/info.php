@@ -5,6 +5,7 @@ use Bootgly\API\Server as SAPI;
 use Bootgly\CLI;
 use Bootgly\CLI\UI\Fieldset\Fieldset;
 use Bootgly\CLI\UI\Progress\Progress;
+use Bootgly\WPI\Interfaces\TCP\Server;
 
 switch ($name) {
    case '@status':
@@ -58,6 +59,8 @@ switch ($name) {
 
       // SAPI
       $SAPI = Path::relativize(SAPI::$production, BOOTGLY_ROOT_DIR);
+      $Decoder = Server::$Decoder::class;
+      $Encoder = Server::$Encoder::class;
 
       // @ Server Status
       $Fieldset = new Fieldset($Output);
@@ -67,16 +70,18 @@ switch ($name) {
       $Fieldset->title = '@#Black: Server Status @;';
       $Fieldset->content = <<<OUTPUT
 
-      @:i: Bootgly Server: @; {$server}
-      @:i: PHP version: @; {$php}\t\t\t@:i: Server version: @; {$version}
+      @#Cyan:  Bootgly Server: @; {$server}
+      @#Cyan:  PHP version: @; {$php}\t\t\t@:i: Server version: @; {$version}
 
-      @:i: Started time: @; {$runtime['started']}\t@:i: Uptime: @; {$uptimes}
-      @:i: Workers count: @; {$workers}\t\t\t@:i: Load average: @; {$load}
-      @:i: Socket address: @; {$address}
+      @#Cyan:  Started time: @; {$runtime['started']}\t@:i: Uptime: @; {$uptimes}
+      @#Cyan:  Workers count: @; {$workers}\t\t\t@:i: Load average: @; {$load}
+      @#Cyan:  Socket address: @; {$address}
 
-      @:i: Event-loop: @; {$event}
+      @#cyan:  Event-loop: @; {$event}
 
       @#yellow:  Server API: @; {$SAPI}
+      @#yellow:  Server Decoder: @; {$Decoder}
+      @#yellow:  Server Encoder: @; {$Encoder}
 
       OUTPUT;
       $Fieldset->render();
