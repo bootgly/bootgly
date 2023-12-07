@@ -16,5 +16,5 @@ use Bootgly\WPI\Interfaces\TCP\Server\Packages;
 
 abstract class Decoders
 {
-   abstract public static function decode(Packages $Package, string $buffer, int $size);
+   abstract public static function decode(Packages $Package, string $buffer, int $size) : int;
 }

@@ -17,6 +17,7 @@ use Bootgly\WPI\Modules\HTTP\Request\Ranging;
 use Bootgly\WPI\Modules\HTTP\Server\Requestable;
 
 use Bootgly\WPI\Nodes\HTTP\Server\CLI as Server;
+use Bootgly\WPI\Nodes\HTTP\Server\CLI\Decoders\Decoder_Waiting;
 use Bootgly\WPI\Nodes\HTTP\Server\CLI\Request\Meta;
 use Bootgly\WPI\Nodes\HTTP\Server\CLI\Request\Content;
 use Bootgly\WPI\Nodes\HTTP\Server\CLI\Request\Header;
@@ -44,7 +45,7 @@ use Bootgly\WPI\Nodes\HTTP\Server\CLI\Request\Downloader;
  * @property string $query         query=abc&query2=xyz
  * @property array $queries        ['query' => 'abc', 'query2' => 'xyz']
  * ? Header
- * @property object Header         
+ * @property Header $Header         
  * @ Host
  * @property string $host          v1.docs.bootgly.com
  * @property string $domain        bootgly.com
@@ -215,13 +216,16 @@ class Request
          }
 
          if ($contentLength > 0) {
-            $this->Content->raw = \substr($buffer, $separatorPosition + 4, $contentLength);
-            $this->Content->downloaded = \strlen($this->Content->raw);
+            // @ Check if HTTP content is not empty
+            if (\strlen($buffer) >= $separatorPosition + 4) {
+               $this->Content->raw = \substr($buffer, $separatorPosition + 4, $contentLength);
+               $this->Content->downloaded = \strlen($this->Content->raw);
+            }
 
-            #if ($contentLength > $this->Content->downloaded) {
-            #   $this->Content->waiting = true;
-            #   return 0;
-            #}
+            if ($contentLength > $this->Content->downloaded) {
+               $this->Content->waiting = true;
+               Server::$Decoder = new Decoder_Waiting;
+            }
          }
 
          $this->Content->length = $contentLength;
@@ -272,25 +276,23 @@ class Request
 
    public function download (? string $key = null) : array|null
    {
-      if ( empty($this->files) ) {
-         $boundary = $this->Content->parse(
-            content: 'Form-data',
-            type: $this->Header->get('Content-Type')
-         );
+      // ?
+      $boundary = $this->Content->parse(
+         content: 'Form-data',
+         type: $this->Header->get('Content-Type')
+      );
 
-         if ($boundary) {
-            $this->Downloader->downloading($boundary);
-         }
+      if ($boundary) {
+         $this->Downloader->downloading($boundary);
       }
 
+      // :
       if ($key === null) {
-         return $this->files;
+         return $_FILES;
       }
-
-      if ( isSet($this->files[$key]) ) {
-         return $this->files[$key];
+      if ( isSet($_FILES[$key]) ) {
+         return $_FILES[$key];
       }
-
       return null;
    }
    public function receive (? string $key = null) : array|null

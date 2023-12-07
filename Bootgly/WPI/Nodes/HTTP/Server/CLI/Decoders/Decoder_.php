@@ -19,7 +19,7 @@ use Bootgly\WPI\Nodes\HTTP\Server\CLI\Request;
 
 class Decoder_ extends Decoders
 {
-   public static function decode (Packages $Package, string $buffer, int $size)
+   public static function decode (Packages $Package, string $buffer, int $size) : int
    {
       static $inputs = []; // @ Instance local cache
 
@@ -36,24 +36,6 @@ class Decoder_ extends Decoders
 
       // @ Get callbacks
       $Request = Server::$Request;
-
-      // TODO move to another decoder
-      // @ Check if Request Content is waiting data
-      if ($Request->Content->waiting) {
-         // @ Finish filling the Request Content raw with TCP read buffer
-         $Content = &$Request->Content;
-
-         $Content->raw .= $buffer;
-         $Content->downloaded += $size;
-
-         if ($Content->length > $Content->downloaded) {
-            return 0;
-         }
-
-         $Content->waiting = false;
-
-         return $Content->length;
-      }
 
       // @ Handle Package cache
       if ($Package->changed) {

@@ -16,5 +16,5 @@ use Bootgly\WPI\Interfaces\TCP\Server\Packages;
 
 abstract class Encoders
 {
-   abstract public static function encode(Packages $Package, &$size);
+   abstract public static function encode(Packages $Package, &$size) : string;
 }

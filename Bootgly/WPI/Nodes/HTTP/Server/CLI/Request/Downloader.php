@@ -63,7 +63,6 @@ class Downloader
          $Content->waiting = true;
          return 0;
       }
-
       // @ Check if Content downloaded length is minor than Content length
       if ($Content->downloaded < $Content->length) {
          $Content->waiting = true;
@@ -77,7 +76,6 @@ class Downloader
          $Content->waiting = false;
          return 0;
       }
-
       // @ Set content lines end position
       // @ Check if content lines end position exists
       $contentLinesEnd = strpos($Content->raw, "\r\n\r\n", $sectionStart);
