@@ -74,32 +74,28 @@ abstract class Packages implements WPI\Packages
       $this->expired = false;
    }
 
-   public function fail ($Socket, string $operation, $result)
+   public function fail ($Socket, string $operation)
    {
       try {
-         $eof = @\feof($Socket);
+         $EOF = @\feof($Socket);
       } catch (\Throwable) {
-         $eof = false;
+         $EOF = false;
       }
 
-      // @ Check connection reset?
-      if ($eof) {
-         #$this->log('Failed to ' . $operation . ' package: End-of-file!' . PHP_EOL);
+      // @ Check connection reset (End-Of-File)?
+      if ($EOF) {
+         #$this->log('Failed to ' . $operation . ' package: End-Of-File!' . PHP_EOL);
+         Connections::$errors[$operation]++;
          $this->Connection->close();
          return true;
       }
 
-      // @ Check connection close intention?
-      if ($result === 0) {
-         #$this->log('Failed to ' . $operation . ' package: 0 byte handled!' . PHP_EOL);
-      }
-
-      if (\is_resource($Socket) && \get_resource_type($Socket) === 'stream') {
+      if (\is_resource($Socket) && \get_resource_type($Socket) !== 'stream') {
          #$this->log('Failed to ' . $operation . ' package: closing connection...' . PHP_EOL);
+         Connections::$errors[$operation]++;
          $this->Connection->close();
+         return true;
       }
-
-      Connections::$errors[$operation]++;
 
       return false;
    }
@@ -154,7 +150,7 @@ abstract class Packages implements WPI\Packages
 
       // @ Check issues
       if ($buffer === false) {
-         return $this->fail($Socket, 'read', $buffer);
+         return $this->fail($Socket, 'read');
       }
 
       // @ On success
@@ -193,14 +189,13 @@ abstract class Packages implements WPI\Packages
    public function writing (&$Socket, ? int $length = null) : bool
    {
       if (Server::$Encoder) { // @ Encode Application Data if exists
-         self::$output = Server::$Encoder::encode($this, $length);
+         $buffer = Server::$Encoder::encode($this, $length);
       } else {
-         self::$output = (SAPI::$Handler)(...$this->callbacks);
+         $buffer = (SAPI::$Handler)(...$this->callbacks);
       }
 
       try {
-         $buffer = self::$output;
-         $written = 0;
+         $written = null;
 
          while ($buffer) {
             $sent = @\fwrite($Socket, $buffer, $length);
@@ -221,14 +216,14 @@ abstract class Packages implements WPI\Packages
             }
 
             break;
-         }
+         };
       } catch (\Throwable) {
          $sent = false;
       }
 
       // @ Check issues
-      if (! $written || ! $sent) {
-         return $this->fail($Socket, 'write', $written);
+      if ($written === 0 || $sent === false) {
+         return $this->fail($Socket, 'write');
       }
 
       // @ Set Stats
@@ -246,11 +241,11 @@ abstract class Packages implements WPI\Packages
    }
    public function read (&$Socket)
    {
-      // TODO
+      // N/A
    }
    public function write (&$Socket, ? int $length = null)
    {
-      // TODO
+      // N/A
    }
 
    // ! Stream
