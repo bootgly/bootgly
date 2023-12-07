@@ -11,15 +11,12 @@
 namespace Bootgly\API;
 
 
-use Closure;
-
-
 class Server
 {
    // * Config
    // @ Environments
    public static string $production;
-   public const MODE_PRODUCTION = 1; // TODO rename to WORK?
+   public const MODE_PRODUCTION = 1;
    public const MODE_TEST = 2;
    public static int $mode = self::MODE_PRODUCTION;
 
@@ -27,7 +24,7 @@ class Server
    public static array $tests;
 
    // * Meta
-   public static Closure $Handler;
+   public static \Closure $Handler;
    public static array $Tests;
 
 
@@ -43,8 +40,8 @@ class Server
                break;
             }
 
-            if (count(self::$Tests[$base]) > 0) {
-               $test = array_shift(self::$Tests[$base]);
+            if (\count(self::$Tests[$base]) > 0) {
+               $test = \array_shift(self::$Tests[$base]);
                // TODO pass name by arg
                self::$Handler = $test['response'];
             }
@@ -54,13 +51,13 @@ class Server
 
       if ($reset) {
          // @ Clear cache
-         if ( function_exists('opcache_invalidate') ) {
-            opcache_invalidate($file, true);
+         if ( \function_exists('opcache_invalidate') ) {
+            \opcache_invalidate($file, true);
          }
 
          // @ Copy example production if loaded not exists
-         if (file_exists($file) === false) {
-            $copied = copy($file . '.example', $file);
+         if (\file_exists($file) === false) {
+            $copied = \copy($file . '.example', $file);
 
             if ($copied === false) {
                return false;
@@ -79,12 +76,12 @@ class Server
    {
       static $modified = 0;
 
-      if (file_exists(self::$production) === true) {
+      if (\file_exists(self::$production) === true) {
          // @ Clear production cache
-         clearstatcache(false, self::$production);
+         \clearstatcache(false, self::$production);
 
          // @ Get last modified timestamp of production
-         $lastModified = filemtime(self::$production);
+         $lastModified = \filemtime(self::$production);
 
          // @ Set initial value to $modified
          if ($modified === 0) {
