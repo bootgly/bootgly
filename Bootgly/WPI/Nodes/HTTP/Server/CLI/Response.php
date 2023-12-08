@@ -41,7 +41,7 @@ class Response
 
    public ? array $resources;
 
-   // * Meta
+   // * Metadata
    private ? string $resource;
    // @ Status
    public bool $initied = false;
@@ -78,7 +78,7 @@ class Response
       $this->type = null;
 
       $this->resources = ['JSON', 'JSONP', 'View', 'HTML/pre'];
-      // * Meta
+      // * Metadata
       $this->resource = null;
       // @ Status
       $this->initied = false;

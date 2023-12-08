@@ -17,7 +17,7 @@ class Iterator
    private array|object $iteratee;
    public ? Iterator $Parent;
    public int $depth;
-   // * Meta
+   // * Metadata
    public int $index;
    protected int $count;
 
@@ -31,7 +31,7 @@ class Iterator
       $this->iteratee = &$iteratee;
       $this->Parent = $Parent;
       $this->depth = $depth;
-      // * Meta
+      // * Metadata
       $this->index = 0;
       $this->count = count($iteratee);
       // ...dynamically:

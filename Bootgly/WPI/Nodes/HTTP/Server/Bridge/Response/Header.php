@@ -23,7 +23,7 @@ class Header
    // * Data
    private array $fields;
 
-   // * Meta
+   // * Metadata
    private array $queued;
    private string $raw;
    private bool $sent;
@@ -42,7 +42,7 @@ class Header
       // * Data
       $this->fields = [];
 
-      // * Meta
+      // * Metadata
       $this->queued = [];
       $this->raw = '';
       $this->sent = false;
@@ -62,7 +62,7 @@ class Header
             $this->fields = apache_response_headers();
 
             return $this->fields;
-         // * Meta
+         // * Metadata
          case 'queued':
             return $this->queued;
          case 'raw':
@@ -92,7 +92,7 @@ class Header
          case 'prepared':
          // * Data
          // case 'fields':
-         // * Meta
+         // * Metadata
          case 'queued':
             break;
          // *

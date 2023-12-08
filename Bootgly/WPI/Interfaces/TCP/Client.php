@@ -60,7 +60,7 @@ class Client
    public static ? Closure $onRead = null;
    public static ? Closure $onWrite = null;
 
-   // * Meta
+   // * Metadata
    public const VERSION = '0.0.1';
    // @ Error
    public array $error = [];
@@ -93,7 +93,7 @@ class Client
       // * Data
       // ...
 
-      // * Meta
+      // * Metadata
       // @ Error
       $this->error = [];
       // @ State

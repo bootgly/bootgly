@@ -145,7 +145,7 @@ class Fieldset extends Component
       // * Data
       $title = $this->title ?? '';
       $content = $this->content ?? '';
-      // * Meta
+      // * Metadata
       $title_length = \mb_strlen(
          \preg_replace(__String::ANSI_ESCAPE_SEQUENCE_REGEX, '', $title)
       );

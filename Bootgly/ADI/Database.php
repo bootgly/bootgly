@@ -24,7 +24,7 @@ class Database
    // * Data
    protected array $configs;
 
-   // * Meta
+   // * Metadata
    // PDO
    public ? PDO $PDO;
    public PDOStatement|bool $Query; // TODO rename to Statement?
@@ -41,7 +41,7 @@ class Database
       // * Data
       $this->configs = $configs;
 
-      // * Meta
+      // * Metadata
       // PDO
       $this->PDO = null;
       $this->Query = false;

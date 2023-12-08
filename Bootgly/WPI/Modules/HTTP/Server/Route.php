@@ -22,7 +22,7 @@ class Route
    protected string $path;
    protected object $Params;
 
-   // * Meta
+   // * Metadata
    private bool $parameterized;
    // ! Parse
    public string $parsed;
@@ -57,7 +57,7 @@ class Route
          }
       };
 
-      // * Meta
+      // * Metadata
       $this->parameterized = false;
       // ! Parse
       $this->parsed = '';
@@ -71,7 +71,7 @@ class Route
    }
    public function __get ($name)
    {
-      // * Meta
+      // * Metadata
       switch ($name) {
          case 'parameterized':
             $parameterized = false;
@@ -99,7 +99,7 @@ class Route
             $this->path = $value;
             break;
 
-         // * Meta
+         // * Metadata
          case 'base':
          case 'prefix': // TODO refactor
             Router::$Server::$Request->base = $value;

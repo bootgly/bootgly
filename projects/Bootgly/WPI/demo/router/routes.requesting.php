@@ -58,7 +58,7 @@ $Router->route('/requesting', function ($Response, $Request) {
   #return $Response->send($Request->post);          // @ {...}
   #return $Response->Json->send($Request->files);   // @ [...]
 
-  // * Meta
+  // * Metadata
   #return $Response->send($Request->on);            // @ 2022-10-17
   #return $Response->send($Request->at);            // @ 12:00:00
   #return $Response->send($Request->time);           // @ 1666011216

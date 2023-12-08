@@ -36,7 +36,7 @@ class Dir implements FS
    public Path $Path;
    protected readonly string|false $dir;
 
-   // * Meta
+   // * Metadata
    // _ Access
    protected int|false $permissions; // 0644
    protected bool $writable;
@@ -70,7 +70,7 @@ class Dir implements FS
       switch ($name) {
          // * Data
          // ...
-         // * Meta
+         // * Metadata
          // _ Access
          case 'permissions':
             $permissions = fileperms($dir);
@@ -99,7 +99,7 @@ class Dir implements FS
       switch ($name) {
          // * Data
          // ...
-         // * Meta
+         // * Metadata
          // _ Access
          case 'permissions':
             $changed = chmod($dir, $value);

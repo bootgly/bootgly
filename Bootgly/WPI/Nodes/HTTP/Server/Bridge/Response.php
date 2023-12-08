@@ -42,7 +42,7 @@ class Response
 
    public ? array $resources;
    protected array $uses;
-   // * Meta
+   // * Metadata
    private ? string $resource;
    // @ Status
    public bool $initied = false;
@@ -83,7 +83,7 @@ class Response
       $this->resources = $resources !== null ? $resources : ['JSON', 'JSONP', 'View', 'HTML/pre'];
       $this->uses = [];
 
-      // * Meta
+      // * Metadata
       $this->resource = null;
       // @ Status
       $this->initied = false;

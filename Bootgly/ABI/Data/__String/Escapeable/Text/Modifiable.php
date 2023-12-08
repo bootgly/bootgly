@@ -19,7 +19,7 @@ trait Modifiable
    use Text;
 
 
-   // * Meta
+   // * Metadata
    // [<n>@] (Insert Character)
    // "Insert <n> spaces at the current cursor position, shifting all existing text to the right.
    // Text exiting the screen to the right is removed."

@@ -72,7 +72,7 @@ class Table extends Component
    // * Data
    // ...
 
-   // * Meta
+   // * Metadata
    // ...
 
    public Cells $Cells;
@@ -94,7 +94,7 @@ class Table extends Component
       // * Data
       // ...
 
-      // * Meta
+      // * Metadata
       // ...
 
       // @compose
@@ -128,7 +128,7 @@ class Table extends Component
       $borders = $this->borders;
       // * Data
       // ...
-      // * Meta
+      // * Metadata
       $line = match ($position) {
          'top' => $borders['top-left'],
          'mid' => $borders['mid-left'],

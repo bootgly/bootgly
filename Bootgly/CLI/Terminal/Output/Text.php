@@ -87,7 +87,7 @@ class Text
    public Text\Colors $Colors;
    // * Data
    // ...
-   // * Meta
+   // * Metadata
    private ? string $color;
 
 
@@ -102,7 +102,7 @@ class Text
       // * Data
       // ...
 
-      // * Meta
+      // * Metadata
       $this->color = null;
    }
 

@@ -26,7 +26,7 @@ class Row
    // * Data
    // ...
 
-   // * Meta
+   // * Metadata
    // ...
 
 
@@ -40,7 +40,7 @@ class Row
       // * Data
       // ...
 
-      // * Meta
+      // * Metadata
       // ...
    }
 

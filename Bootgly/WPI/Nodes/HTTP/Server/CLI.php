@@ -41,7 +41,7 @@ class CLI extends TCP\Server implements HTTP, Server
    // * Data
    // ...inherited from TCP\Server
 
-   // * Meta
+   // * Metadata
    // ...inherited from TCP\Server
    public readonly array $versions;
 
@@ -58,7 +58,7 @@ class CLI extends TCP\Server implements HTTP, Server
       // * Data
       // ...inherited from TCP\Server
 
-      // * Meta
+      // * Metadata
       $this->versions = [ // @ HTTP 1.1
          'min' => '1.1',
          'max' => '1.1' // TODO HTTP 2
@@ -143,7 +143,7 @@ class CLI extends TCP\Server implements HTTP, Server
 
             $files = (@require $loader)['tests'];
             SAPI::$tests[self::class] = Tests::list($files);
-            // * Meta
+            // * Metadata
             SAPI::$Tests[self::class] = [];
 
             foreach (SAPI::$tests[self::class] as $index => $case) {

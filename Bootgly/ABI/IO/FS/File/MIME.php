@@ -15,7 +15,7 @@ class MIME
 {
    // * Data
    public readonly string $type;
-   // * Meta
+   // * Metadata
    public readonly string $format;
    public readonly string $subtype;
 
@@ -28,7 +28,7 @@ class MIME
 
       // * Data
       $this->type = $mime_content_type;
-      // * Meta
+      // * Metadata
       $this->format = $format;
       $this->subtype = $subtype;
    }

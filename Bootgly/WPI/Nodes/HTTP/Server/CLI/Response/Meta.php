@@ -23,7 +23,7 @@ class Meta
    protected string $protocol;
    protected string $status;
 
-   // * Meta
+   // * Metadata
    private string $raw;
    // @ Status
    private int $code;
@@ -39,7 +39,7 @@ class Meta
       $this->protocol = 'HTTP/1.1';
       $this->status = '200 OK';
 
-      // * Meta
+      // * Metadata
       $this->raw = 'HTTP/1.1 200 OK';
       // @ Status
       $this->code = 200;
@@ -52,7 +52,7 @@ class Meta
          case 'protocol': return $this->protocol;
          case 'status': return $this->status;
 
-         // * Meta
+         // * Metadata
          case 'raw': return $this->raw;
          // @ Status
          case 'code': return $this->code;
@@ -80,7 +80,7 @@ class Meta
             if ($code && $message) {
                // * Data
                $this->status = $status;
-               // * Meta
+               // * Metadata
                $this->raw = $this->protocol . ' ' . $status;
                // @ Status
                $this->code = $code;
@@ -89,14 +89,14 @@ class Meta
 
             break;
 
-         // * Meta
+         // * Metadata
          case 'raw':
          // @ Status
          case 'code':
             $code = (int) $value;
             $message = HTTP::RESPONSE_STATUS[$code];
 
-            // * Meta
+            // * Metadata
             $this->raw = <<<RAW
             {$this->protocol} {$code} {$message}
             RAW;

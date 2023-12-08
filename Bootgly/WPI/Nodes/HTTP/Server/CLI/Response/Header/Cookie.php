@@ -24,7 +24,7 @@ final class Cookie
    // * Data
    private array $cookies;
 
-   // * Meta
+   // * Metadata
    // ...
 
 
@@ -38,7 +38,7 @@ final class Cookie
       // * Data
       $this->cookies = [];
 
-      // * Meta
+      // * Metadata
       // ...
    }
 

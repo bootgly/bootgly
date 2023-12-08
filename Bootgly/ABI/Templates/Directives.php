@@ -26,7 +26,7 @@ class Directives implements Resources
    // * Data
    protected array $directives;
 
-   // * Meta
+   // * Metadata
    protected array $names;
    // @ Regex
    protected string $tokens;
@@ -67,7 +67,7 @@ class Directives implements Resources
          case 'directives':
             return $this->directives;
 
-         // * Meta
+         // * Metadata
          case 'names':
             return $this->names;
          // @ Regex

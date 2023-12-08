@@ -21,7 +21,7 @@ class Timer
    protected static array $tasks = [];
    protected static array $status = [];
 
-   // * Meta
+   // * Metadata
    protected static int $id = 0;
 
 

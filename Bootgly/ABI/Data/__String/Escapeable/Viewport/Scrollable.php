@@ -19,7 +19,7 @@ trait Scrollable
    use Viewport;
 
 
-   // * Meta
+   // * Metadata
    // ! Scrolling
    /**
    * [\<n\>S] (Scroll Up)

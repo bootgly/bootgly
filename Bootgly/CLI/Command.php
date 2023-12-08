@@ -21,7 +21,7 @@ abstract class Command
    public string $description;
    public array $arguments;
 
-   // * Meta
+   // * Metadata
    // ...
 
 

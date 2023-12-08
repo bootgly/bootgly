@@ -217,7 +217,7 @@ trait Requestable
             return \json_encode($this->post);
          case 'files':
             return $_FILES;
-         // * Meta
+         // * Metadata
          case 'secure':
             return $this->scheme === 'https';
 

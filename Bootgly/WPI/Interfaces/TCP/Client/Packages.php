@@ -35,7 +35,7 @@ class Packages implements WPI\Packages
    public static string $output;
    public static string $input;
 
-   // * Meta
+   // * Metadata
    public int $written;
    public int $read;
    // @ Stats
@@ -58,7 +58,7 @@ class Packages implements WPI\Packages
       self::$output ='';
       self::$input = '';
 
-      // * Meta
+      // * Metadata
       $this->written = 0;         // Output Data length (bytes written).
       $this->read = 0;            // Input Data length (bytes read).
       // @ Stats

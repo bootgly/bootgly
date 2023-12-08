@@ -28,7 +28,7 @@ class Tester extends Tests
    // ...inherited from Tests
    public array $artfacts;
 
-   // * Meta
+   // * Metadata
    // ...inherited from Tests
 
 
@@ -50,7 +50,7 @@ class Tester extends Tests
       $this->tests = self::list($specifications['tests'] ?? $specifications);
       $this->specifications = [];
 
-      // * Meta
+      // * Metadata
       // @ Status
       $this->failed = 0;
       $this->passed = 0;
@@ -108,7 +108,7 @@ class Tester extends Tests
             $specifications = null;
          }
 
-         // * Meta (Test Case)
+         // * Metadata (Test Case)
          if ($this->total === $index + 1) {
             $specifications['last'] = true;
          }

@@ -21,7 +21,7 @@ class Backtrace
    // * Data
    public array $calls;
 
-   // * Meta
+   // * Metadata
    // @ Last
    private array $trace;
 
@@ -42,7 +42,7 @@ class Backtrace
       // * Data
       $this->calls = $calls;
 
-      // * Meta
+      // * Metadata
       // @ Last
       foreach ($calls as $call) {
          $this->trace = $call; break;
@@ -50,7 +50,7 @@ class Backtrace
    }
    public function __get (string $name)
    {
-      // * Meta
+      // * Metadata
       // @ Last
       switch ($name) {
          case 'dir':
@@ -62,7 +62,7 @@ class Backtrace
 
    public function dump () : string
    {
-      // * Meta
+      // * Metadata
       $output = '';
 
       // @

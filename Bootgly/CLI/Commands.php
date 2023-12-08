@@ -22,7 +22,7 @@ class Commands
    protected ? \Closure $Helper;
    // ...
 
-   // * Meta
+   // * Metadata
    // ...
 
 
@@ -48,7 +48,7 @@ class Commands
       ];
       $this->Helper = null;
 
-      // * Meta
+      // * Metadata
       // ...
    }
 

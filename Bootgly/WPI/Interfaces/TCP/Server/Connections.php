@@ -33,7 +33,7 @@ class Connections implements WPI\Connections
    // * Data
    // ...
 
-   // * Meta
+   // * Metadata
    // @ Remote
    public static array $Connections;
    // @ Limiter
@@ -63,7 +63,7 @@ class Connections implements WPI\Connections
       // * Data
       // ..
 
-      // * Meta
+      // * Metadata
       // @ Remote
       self::$Connections = []; // Connections peers
       // @ Limiter

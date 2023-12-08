@@ -22,7 +22,7 @@ final class Divisor extends Item
    // * Data
    public string $characters;
 
-   // * Meta
+   // * Metadata
    // ...
 
 

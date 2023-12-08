@@ -23,7 +23,7 @@ class Header
    protected string $raw;
    private array $fields;
 
-   // * Meta
+   // * Metadata
    private bool $built;
    public null|int|false $length;
 
@@ -46,7 +46,7 @@ class Header
 
       // * Data
       $this->fields = $fields;
-      // * Meta
+      // * Metadata
       $this->length = null;
 
 

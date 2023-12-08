@@ -27,7 +27,7 @@ class Router
    // @ Status
    protected bool $active;
 
-   // * Meta
+   // * Metadata
    public ? Route $Route;
    // @ Stats
    private int $routes;
@@ -46,7 +46,7 @@ class Router
       // @ Status
       $this->active = true;
 
-      // * Meta
+      // * Metadata
       $this->Route = new Route;
       // @ Stats
       $this->routes = 0;

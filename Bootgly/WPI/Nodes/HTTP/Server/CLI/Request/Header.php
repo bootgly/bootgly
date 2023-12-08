@@ -23,7 +23,7 @@ class Header
    public readonly string $raw;
    public null|int|false $length;
 
-   // * Meta
+   // * Metadata
    private array $fields;
    private bool $built;
 
@@ -39,7 +39,7 @@ class Header
       // public $raw (readonly)
       $this->length = null;
 
-      // * Meta
+      // * Metadata
       $this->fields = [];
       $this->built = false;
 
@@ -56,7 +56,7 @@ class Header
          // public $raw (readonly)
          // public $length
 
-         // * Meta
+         // * Metadata
          case 'fields':
             if ($this->built === false) {
                $this->build();

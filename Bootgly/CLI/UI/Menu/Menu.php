@@ -35,7 +35,7 @@ class Menu extends Component
    // * Data
    public Items $Items;
 
-   // * Meta
+   // * Metadata
    public array $selected;
 
 
@@ -54,7 +54,7 @@ class Menu extends Component
       $this->Items->Options = new Options($this);
       // ...Items extensions loaded dynamically
 
-      // * Meta
+      // * Metadata
       $this->selected = [];
    }
 

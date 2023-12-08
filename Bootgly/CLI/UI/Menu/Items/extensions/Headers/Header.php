@@ -22,7 +22,7 @@ final class Header extends Item
    // * Data
    public string $header;
 
-   // * Meta
+   // * Metadata
    // ...
 
 

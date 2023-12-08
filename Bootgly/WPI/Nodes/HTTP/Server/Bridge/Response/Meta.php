@@ -23,7 +23,7 @@ class Meta
    protected string $protocol;
    protected int|string $status;
 
-   // * Meta
+   // * Metadata
    private string $raw;
    // @ status
    private int $code;
@@ -39,13 +39,13 @@ class Meta
       $this->protocol = 'HTTP/1.1';
       $this->status = '200 OK';
 
-      // * Meta
+      // * Metadata
       $this->reset();
    }
    public function __get (string $name)
    {
       switch ($name) {
-         // * Meta
+         // * Metadata
          // @ status
          case 'code':
             if ( isSet($this->code) && $this->code !== 0 ) {
@@ -82,7 +82,7 @@ class Meta
             }
 
             break;
-         // * Meta
+         // * Metadata
          case 'raw':
          // @ status
          case 'code':
@@ -96,7 +96,7 @@ class Meta
 
    public function reset ()
    {
-      // * Meta
+      // * Metadata
       // raw
       $this->raw = $this->protocol . ' ' . $this->status;
       // @ status

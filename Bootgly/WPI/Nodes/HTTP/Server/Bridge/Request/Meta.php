@@ -23,7 +23,7 @@ class Meta
    public string $URI; // @ Resource
    public string $protocol;
 
-   // * Meta
+   // * Metadata
    public ? int $length;
    // ? Resource
    // @ URI
@@ -45,7 +45,7 @@ class Meta
       $this->URI = @$_SERVER['REDIRECT_URI'] ?? $_SERVER['REQUEST_URI'];
       $this->protocol = $_SERVER['SERVER_PROTOCOL'];
 
-      // * Meta
+      // * Metadata
       $this->length = null;
    }
 }

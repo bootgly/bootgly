@@ -31,7 +31,7 @@ class Test extends Assertions
    public array $specifications;
    // ...inherited
 
-   // * Meta
+   // * Metadata
    private mixed $filename;
    // @ Output
    private false|string $debugged;
@@ -58,7 +58,7 @@ class Test extends Assertions
       // ...inherited:
       $this->results = [];
 
-      // * Meta
+      // * Metadata
       $this->filename = current($this->Tests->tests); // @ file
       // @ Output
       $this->debugged = false;

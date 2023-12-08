@@ -19,7 +19,7 @@ class Content
    // * Data
    public string $raw;
 
-   // * Meta
+   // * Metadata
    public int $length;
    public static array $mimes; // @ 'html' => 'text/html'
 
@@ -32,7 +32,7 @@ class Content
       // * Data
       $this->raw = '';
 
-      // * Meta
+      // * Metadata
       $this->length = 0;
       // mimes
    }

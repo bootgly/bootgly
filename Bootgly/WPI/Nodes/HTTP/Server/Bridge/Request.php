@@ -96,7 +96,7 @@ class Request
    // * Data
    // ...
 
-   // * Meta
+   // * Metadata
    private string $Server;
    public readonly string $on;
    public readonly string $at;
@@ -120,7 +120,7 @@ class Request
       // * Data
       // ...
 
-      // * Meta
+      // * Metadata
       $this->Server = Server::class;
       $this->on = date("Y-m-d");
       $this->at = date("H:i:s");

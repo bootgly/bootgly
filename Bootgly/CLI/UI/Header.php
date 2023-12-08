@@ -26,7 +26,7 @@ class Header extends Component
    // * Data
    public array $font;
 
-   // * Meta
+   // * Metadata
    private string $output;
 
 
@@ -247,7 +247,7 @@ class Header extends Component
       ASCII_ART,
       ];
 
-      // * Meta
+      // * Metadata
       $this->output = '';
    }
 

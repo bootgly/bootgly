@@ -35,7 +35,7 @@ class Connections implements WPI\Connections
    // * Data
    public $Socket;
 
-   // * Meta
+   // * Metadata
    // @ Error
    public array $error = [];
    // @ Local
@@ -67,7 +67,7 @@ class Connections implements WPI\Connections
       // * Data
       // ... dynamicaly
 
-      // * Meta
+      // * Metadata
       // @ Error
       $this->error = [];
       // @ Remote

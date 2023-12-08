@@ -20,7 +20,7 @@ class Theme
    protected static array $themes = [];
    protected ? string $active;
 
-   // * Meta
+   // * Metadata
    private array $theme;
    private array $options;
    private array $values;
@@ -34,7 +34,7 @@ class Theme
       // * Data
       $this->active = $name;
 
-      // * Meta
+      // * Metadata
       $this->theme = [];
       $this->options = [];
       $this->values = [];
@@ -130,7 +130,7 @@ class Theme
       if (isSet(self::$themes[$name])) {
          // * Data
          $this->active = $name;
-         // * Meta
+         // * Metadata
          $this->theme = self::$themes[$name];
          $this->options = $this->theme['options'];
          $this->values = $this->theme['values'];

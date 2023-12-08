@@ -31,7 +31,7 @@ class Connection extends Packages
    public string $ip;
    public int $port;
 
-   // * Meta
+   // * Metadata
    public int $id;
    // @ Status
    public const STATUS_INITIAL = 0;
@@ -60,7 +60,7 @@ class Connection extends Packages
       // * Data
       // ... dynamicaly
 
-      // * Meta
+      // * Metadata
       $this->id = (int) $Socket;
       // @ Status
       $this->status = self::STATUS_ESTABLISHED;

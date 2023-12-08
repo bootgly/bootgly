@@ -25,7 +25,7 @@ class Bar
    // * Data
    public Symbols $Symbols;
 
-   // * Meta
+   // * Metadata
    // @ State
    // indetermined
    public bool $completing;
@@ -43,7 +43,7 @@ class Bar
       // * Data
       $this->Symbols = new Symbols;
 
-      // * Meta
+      // * Metadata
       // @ State
       // indetermined
       $this->completing = true;

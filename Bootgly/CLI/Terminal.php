@@ -35,7 +35,7 @@ class Terminal
    public static array $commands = [];
    public static array $subcommands = [];
 
-   // * Meta
+   // * Metadata
    public static int $width;
    public static int $height;
 
@@ -62,7 +62,7 @@ class Terminal
       // * Data
       // ...
 
-      // * Meta
+      // * Metadata
       // columns
       // @ Get the terminal columns (width)
       $columns = exec("tput cols 2>/dev/null");

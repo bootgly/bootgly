@@ -26,7 +26,7 @@ class Rows
    // * Data
    public ? array $rows;
 
-   // * Meta
+   // * Metadata
    // ...
 
 
@@ -42,7 +42,7 @@ class Rows
       // * Data
       $this->rows = &$Table->Data->rows;
 
-      // * Meta
+      // * Metadata
       // ...
    }
 

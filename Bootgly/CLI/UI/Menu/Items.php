@@ -36,7 +36,7 @@ class Items
    public Options $Options;
    public static array $data;
 
-   // * Meta
+   // * Metadata
    // @ Aiming
    protected int $aimed;
 
@@ -55,7 +55,7 @@ class Items
       // * Data
       self::$data[0] = [];
 
-      // * Meta
+      // * Metadata
       // @ Aiming
       $this->aimed = 0;
    }

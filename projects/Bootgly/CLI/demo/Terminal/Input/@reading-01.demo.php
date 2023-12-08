@@ -32,7 +32,7 @@ $Input->reading(
       // * Data
       $line = '';
       $decoded = '';
-      // * Meta
+      // * Metadata
       $started = microtime(true);
       // @ ANSI Code
       $decoding = false;

@@ -23,7 +23,7 @@ final class Divisors extends Items
    // * Data
    // ...
 
-   // * Meta
+   // * Metadata
    // ...
 
 
@@ -49,7 +49,7 @@ final class Divisors extends Items
       $Orientation = $this->Orientation->get();
       // * Data
       // ...
-      // * Meta
+      // * Metadata
       // ...
 
       // @ Divisor
@@ -57,7 +57,7 @@ final class Divisors extends Items
       // ...
       // * Data
       $characters = $Divisor->characters;
-      // * Meta
+      // * Metadata
       $length = strlen($characters);
 
       // @

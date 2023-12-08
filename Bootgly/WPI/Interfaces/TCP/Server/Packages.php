@@ -39,7 +39,7 @@ abstract class Packages implements WPI\Packages
    public static string $input;
    public static string $output;
 
-   // * Meta
+   // * Metadata
    // @ Handler
    public array $callbacks;
    // @ Stream
@@ -64,7 +64,7 @@ abstract class Packages implements WPI\Packages
       self::$input = '';
       self::$output = '';
 
-      // * Meta
+      // * Metadata
       // @ Handler
       $this->callbacks = [&self::$input];
       // @ Stream

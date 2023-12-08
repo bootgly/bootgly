@@ -44,7 +44,7 @@ class Progress extends Component
    // ! Templating
    public string $template;
 
-   // * Meta
+   // * Metadata
    public string $output;
    // @ State
    private bool $indetermined;
@@ -91,7 +91,7 @@ class Progress extends Component
       ⏱️ @elapsed;s - 🏁 @eta;s - 📈 @rate; loops/s
       TEMPLATE;
 
-      // * Meta
+      // * Metadata
       $this->output = '';
       // @ State
       $this->indetermined = false;

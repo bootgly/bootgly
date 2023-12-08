@@ -27,7 +27,7 @@ class Scripts
    // * Data
    protected array $includes;
    protected array $scripts;
-   // * Meta
+   // * Metadata
    // @ Validating
    private ? string $path;
    private ? string $filename;
@@ -55,7 +55,7 @@ class Scripts
             '/usr/local/bin/bootgly',
          ]
       ];
-      // * Meta
+      // * Metadata
       $this->path = null;
       $this->filename = null;
 

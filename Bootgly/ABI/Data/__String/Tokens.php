@@ -33,7 +33,7 @@ class Tokens
       // * Data
       $tokens = \token_get_all($source);
 
-      // * Meta
+      // * Metadata
       $output = [];
       $token_buffer = '';
       $token_type_current = null;

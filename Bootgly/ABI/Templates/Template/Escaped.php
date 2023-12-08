@@ -38,7 +38,7 @@ class Escaped implements Resources
    // * Data
    protected static array $directives = [];
 
-   // * Meta
+   // * Metadata
    protected static array $names = [];
 
 

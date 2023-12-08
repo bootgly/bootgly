@@ -26,7 +26,7 @@ class Columns
    // * Data
    // ...
 
-   // * Meta
+   // * Metadata
    private int $count;
    // @ Width
    private array $widths; // [... ? section => ...column_index]
@@ -44,7 +44,7 @@ class Columns
       // * Data
       // ...
 
-      // * Meta
+      // * Metadata
       $this->count = 0;
       // @ Width
       $this->widths = [];
@@ -69,7 +69,7 @@ class Columns
       $data = $this->Table->Data->get();
 
       // @
-      // * Meta
+      // * Metadata
       $last_section = null;
 
       foreach ($data as $section => $rows) {

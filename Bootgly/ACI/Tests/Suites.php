@@ -21,7 +21,7 @@ class Suites
 
    // * Data
    public array $suites;
-   // * Meta
+   // * Metadata
    // @ Status
    public int $failed;
    public int $passed;
@@ -35,7 +35,7 @@ class Suites
 
    public function __construct ()
    {
-      // * Meta
+      // * Metadata
       // @ Status
       $this->failed = 0;
       $this->passed = 0;

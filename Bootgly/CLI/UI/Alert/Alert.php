@@ -28,7 +28,7 @@ class Alert extends Component
    // * Data
    public string $message;
 
-   // * Meta
+   // * Metadata
    // ...
 
 
@@ -44,7 +44,7 @@ class Alert extends Component
       // * Data
       $this->message = '';
 
-      // * Meta
+      // * Metadata
       // ...
    }
 

@@ -74,7 +74,7 @@ class ProjectCommand extends Command
          if ($projects['default'] === $index) {
             $default = "@#green: [default] @;";
          }
-         // * Meta
+         // * Metadata
          $index += 1;
 
          $Output->render(

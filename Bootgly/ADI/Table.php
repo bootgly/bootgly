@@ -24,7 +24,7 @@ class Table
    #private ? array $body;
    #private ? array $footer;
 
-   // * Meta
+   // * Metadata
    // ...
 
 

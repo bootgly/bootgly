@@ -15,7 +15,7 @@ class Iterators
 {
    // * Data
    private static array $Iterators = [];
-   // * Meta
+   // * Metadata
    public static int $depth = 0;
 
 

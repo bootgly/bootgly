@@ -16,7 +16,7 @@ namespace Bootgly\WPI\Modules\HTTP\Request;
 
 trait Ranging
 {
-   // * Meta
+   // * Metadata
    public static int $multiparts = 0;
 
 

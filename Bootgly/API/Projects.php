@@ -28,7 +28,7 @@ abstract class Projects implements Resources
    // * Data
    protected static array $projects = [];
 
-   // * Meta
+   // * Metadata
    private static Project $Default;
    // @ index
    private static array $indexes = [];

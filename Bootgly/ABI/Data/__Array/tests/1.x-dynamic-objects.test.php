@@ -14,7 +14,7 @@ return [
 
       $__Array = new __Array(['a', 'b', 'c']);
 
-      // * Meta
+      // * Metadata
       // @ Pointer
       $Current = $__Array->Current;
       $Next = $__Array->Next;

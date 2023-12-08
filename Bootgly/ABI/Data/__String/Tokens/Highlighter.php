@@ -85,7 +85,7 @@ class Highlighter extends Tokens
    private const WIDTH = 3;
    // * Data
    // ...
-   // * Meta
+   // * Metadata
    // ...
 
 
@@ -124,7 +124,7 @@ class Highlighter extends Tokens
 
       // * Config
       // * Data
-      // * Meta
+      // * Metadata
       // ...
    }
 
@@ -175,7 +175,7 @@ class Highlighter extends Tokens
          ? self::WIDTH
          : $line_string_length
       );
-      // * Meta
+      // * Metadata
       $output = '';
 
       foreach ($lines as $line_number => $line_content) {

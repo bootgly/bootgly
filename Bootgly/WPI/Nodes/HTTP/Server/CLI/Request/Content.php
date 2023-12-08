@@ -20,7 +20,7 @@ class Content
    public string $raw;
    public string $input;
 
-   // * Meta
+   // * Metadata
    public ? int $length;
    public null|int|false $position;
    public ? int $downloaded;
@@ -36,7 +36,7 @@ class Content
       $this->raw = '';
       $this->input = '';
 
-      // * Meta
+      // * Metadata
       $this->length = null;
       $this->position = null;
       $this->downloaded = null;

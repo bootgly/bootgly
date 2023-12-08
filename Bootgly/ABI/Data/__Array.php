@@ -27,7 +27,7 @@ class __Array implements Data // Simple class (advanced methods coming soon)
    public function __get (string $property)
    {
       switch ($property) {
-         // * Meta
+         // * Metadata
          // @ Key
          case 'keys':
             return array_keys($this->array);

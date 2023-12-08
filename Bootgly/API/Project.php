@@ -27,7 +27,7 @@ class Project
    protected string $name;
    protected array $paths;
 
-   // * Meta
+   // * Metadata
    private ? int $index;
 
 
@@ -47,7 +47,7 @@ class Project
       // * Data
       $this->name = '';
 
-      // * Meta
+      // * Metadata
       $this->index = null;
    }
 

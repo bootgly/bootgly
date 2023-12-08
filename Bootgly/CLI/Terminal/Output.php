@@ -39,7 +39,7 @@ class Output
    // * Data
    public string $text;
 
-   // * Meta
+   // * Metadata
    // @ Stats
    public int|false $written;
 
@@ -59,7 +59,7 @@ class Output
       // * Data
       $this->text = '';
 
-      // * Meta
+      // * Metadata
       // @ Stats
       $this->written = 0;
 
@@ -146,7 +146,7 @@ class Output
       // * Data
       // ...
 
-      // * Meta
+      // * Metadata
       $written = 0;
 
 

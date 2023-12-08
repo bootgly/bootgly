@@ -30,7 +30,7 @@ final class Option extends Item
    public string $prepend;
    public string $append;
 
-   // * Meta
+   // * Metadata
    public int $index;
 
 
@@ -60,7 +60,7 @@ final class Option extends Item
       $this->prepend = $prepend;
       $this->append = $append;
 
-      // * Meta
+      // * Metadata
       $this->index = Options::$indexes++;
    }
 }

@@ -50,7 +50,7 @@ $Commands->help(function ($scripting = true) {
 
    // * Data
    $commands = [];
-   // * Meta
+   // * Metadata
    $largest_command_name = 0;
    // @
    foreach ($this->commands as $Command) {
@@ -73,7 +73,7 @@ $Commands->help(function ($scripting = true) {
 
    // * Data
    $output = '';
-   // * Meta
+   // * Metadata
    $group = 0;
    foreach ($commands as $command) {
       // @ Config

@@ -18,7 +18,7 @@ use Bootgly\WPI\Nodes\HTTP\Server\CLI\Decoders;
 
 class Decoder_Waiting extends Decoders
 {
-   // * Meta
+   // * Metadata
    private static int $decoded;
    // @ Request Content
    private static int $read;
@@ -32,7 +32,7 @@ class Decoder_Waiting extends Decoders
 
       // @ Check if Request Content is waiting data
       if ($Content->waiting) {
-         // * Meta
+         // * Metadata
          self::$decoded ??= time();
          self::$read ??= 0;
          // <<

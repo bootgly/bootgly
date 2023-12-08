@@ -22,7 +22,7 @@ final class Headers extends Items
    // * Data
    // ...
 
-   // * Meta
+   // * Metadata
    // ...
 
 
@@ -46,7 +46,7 @@ final class Headers extends Items
       // ...
       // * Data
       // ...
-      // * Meta
+      // * Metadata
       // ...
 
       // @ Header
@@ -54,7 +54,7 @@ final class Headers extends Items
       // ...
       // * Data
       // ...
-      // * Meta
+      // * Metadata
       // ...
 
       // @

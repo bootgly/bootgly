@@ -37,7 +37,7 @@ class Select implements Loops
    private array $writes = [];
    private array $excepts = [];
 
-   // * Meta
+   // * Metadata
    // @ Events
    // Client/Server
    private array $connecting = [];

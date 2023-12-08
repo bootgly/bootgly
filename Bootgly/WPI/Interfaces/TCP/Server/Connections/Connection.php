@@ -30,7 +30,7 @@ class Connection extends Packages
    public string $ip;
    public int $port;
 
-   // * Meta
+   // * Metadata
    public int $id;
    public bool $encrypted;
    // @ Status
@@ -59,7 +59,7 @@ class Connection extends Packages
       // * Data
       // ... dynamicaly
 
-      // * Meta
+      // * Metadata
       $this->id = (int) $Socket;
       $this->encrypted = false;
       // @ Status

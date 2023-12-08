@@ -25,7 +25,7 @@ class Header
    protected array $fields;
    public string $raw;
 
-   // * Meta
+   // * Metadata
    private array $queued;
    private int $built;
 
@@ -46,7 +46,7 @@ class Header
       $this->fields = [];
       $this->raw = '';
 
-      // * Meta
+      // * Metadata
       $this->queued = [];
       $this->built = 0;
 
@@ -67,7 +67,7 @@ class Header
          case 'headers':
             return $this->fields;
 
-         // * Meta
+         // * Metadata
          case 'queued':
             return $this->queued;
          case 'sent':
@@ -91,7 +91,7 @@ class Header
             break;
          // case 'fields':
 
-         // * Meta
+         // * Metadata
          case 'queued':
             break;
 

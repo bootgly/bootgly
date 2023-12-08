@@ -36,7 +36,7 @@ class Process
    // * Data
    // ...
 
-   // * Meta
+   // * Metadata
    // @ Id
    public static int $index;
    public static int $master;
@@ -58,7 +58,7 @@ class Process
       // * Data
       // ...
 
-      // * Meta
+      // * Metadata
       self::$master = posix_getpid();
 
 

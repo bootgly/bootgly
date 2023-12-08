@@ -25,7 +25,7 @@ class Pipe implements IPC
    // * Data
    private array $pair;
 
-   // * Meta
+   // * Metadata
    public bool $paired;
 
 
@@ -37,7 +37,7 @@ class Pipe implements IPC
       // * Data
       $this->pair = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
 
-      // * Meta
+      // * Metadata
       $this->paired = true;
 
       try {

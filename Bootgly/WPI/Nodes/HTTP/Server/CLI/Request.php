@@ -98,7 +98,7 @@ class Request
    // * Data
    protected array $_SERVER;
 
-   // * Meta
+   // * Metadata
    private string $Server;
    public readonly string $on;
    public readonly string $at;
@@ -125,7 +125,7 @@ class Request
       #$_FILES = []; // Reseted on __destruct only
       $_SERVER = [];
 
-      // * Meta
+      // * Metadata
       $this->Server = Server::class;
       $this->on = \date("Y-m-d");
       $this->at = \date("H:i:s");

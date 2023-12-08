@@ -22,7 +22,7 @@ class Input
    // * Data
    public $stream;
 
-   // * Meta
+   // * Metadata
    // ...
 
 
@@ -34,7 +34,7 @@ class Input
       // * Data
       $this->stream = $stream;
 
-      // * Meta
+      // * Metadata
       // ...
    }
 

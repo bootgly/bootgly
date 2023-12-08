@@ -36,7 +36,7 @@ abstract class Tests implements Resources
    public array $tests;
    public array $specifications;
 
-   // * Meta
+   // * Metadata
    public int $failed;
    public int $passed;
    public int $skipped;

@@ -29,7 +29,7 @@ trait Loggable
    // * Data
    // ...
 
-   // * Meta
+   // * Metadata
    // ...
 
    public function log ($message) : bool

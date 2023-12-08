@@ -24,7 +24,7 @@ class Cells
    // * Data
    // ...
 
-   // * Meta
+   // * Metadata
    // ...
 
 
@@ -38,7 +38,7 @@ class Cells
       // * Data
       // ...
 
-      // * Meta
+      // * Metadata
       // ...
    }
 

@@ -24,7 +24,7 @@ class __String implements Data // Simple class (advanced methods coming soon)
    // * Data
    public string $string;
 
-   // * Meta
+   // * Metadata
    private int|false $length;
    // ! Case
    // False on error.
@@ -41,13 +41,13 @@ class __String implements Data // Simple class (advanced methods coming soon)
       // * Data
       $this->string = $string;
 
-      // * Meta
+      // * Metadata
       // ...
    }
    public function __get (string $index)
    {
       switch ($index) {
-         // * Meta
+         // * Metadata
          case 'length':
             if ($this->encoding === 'ASCII') {
                return $this->length = strlen($this->string);

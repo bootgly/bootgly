@@ -19,7 +19,7 @@ class Item
    // * Data
    // ...
 
-   // * Meta
+   // * Metadata
    public readonly string $type;
 
 
@@ -31,7 +31,7 @@ class Item
       // * Data
       // ...
 
-      // * Meta
+      // * Metadata
       $this->type = static::class;
    }
 }

@@ -12,14 +12,14 @@ $Router->route('/http-cache-time-based-1', function ($Response, $Request) {
          'requested_at' => $Request->at
       ]);
    }
-   // * Meta
+   // * Metadata
 }, [GET, POST]);
 
 $Router->route('/send-headers-as-json-1', function ($Response) {
    // * Data
    // ! HTTP
    return $Response->Json->send($Response->headers);
-   // * Meta
+   // * Metadata
 }, GET);
 
 $Router->get('/simple-file-render-1', function ($Response) {

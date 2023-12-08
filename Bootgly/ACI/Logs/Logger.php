@@ -32,7 +32,7 @@ class Logger extends Logs
    // @ Levels
    public static Levels $Levels;
 
-   // * Meta
+   // * Metadata
    // ...
 
 

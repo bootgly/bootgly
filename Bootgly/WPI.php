@@ -31,7 +31,7 @@ class WPI extends Projects // Web Programming Interface
    // * Data
    // ...
 
-   // * Meta
+   // * Metadata
    // ...
 
    // @ HTTP
@@ -60,7 +60,7 @@ class WPI extends Projects // Web Programming Interface
       // * Data
       // ...
 
-      // * Meta
+      // * Metadata
       // ...
 
       // @

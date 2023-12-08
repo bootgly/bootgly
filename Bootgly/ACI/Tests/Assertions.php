@@ -19,6 +19,6 @@ class Assertions
    // * Data
    public array $results = [];
 
-   // * Meta
+   // * Metadata
    // ...
 }

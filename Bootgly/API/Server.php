@@ -23,7 +23,7 @@ class Server
    // * Data
    public static array $tests;
 
-   // * Meta
+   // * Metadata
    public static \Closure $Handler;
    public static array $Tests;
 

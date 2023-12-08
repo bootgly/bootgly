@@ -22,7 +22,7 @@ class Assertion
    // * Data
    // ...
 
-   // * Meta
+   // * Metadata
    public static ? string $fallback = null;
 
 
@@ -38,7 +38,7 @@ class Assertion
       // * Data
       // ...
 
-      // * Meta
+      // * Metadata
       self::$fallback = null;
 
 
@@ -51,7 +51,7 @@ class Assertion
       // * Config
       self::$description = null;
 
-      // * Meta
+      // * Metadata
       self::$fallback = null;
    }
 }

@@ -30,7 +30,7 @@ class Path // support to FileSystem Paths only (Linux only)
    // * Data
    protected string $path;
 
-   // * Meta
+   // * Metadata
    protected bool $constructed = false;
    // _ Type
    protected string|false $type;
@@ -61,7 +61,7 @@ class Path // support to FileSystem Paths only (Linux only)
       switch ($key) {
          case 'path':
             return $this->path ?? '';
-         // * Meta
+         // * Metadata
          case 'constructed':
             return $this->constructed;
          // _ Type
@@ -188,7 +188,7 @@ class Path // support to FileSystem Paths only (Linux only)
 
       // * Data
       // @
-      // * Meta
+      // * Metadata
       // _ Type
       // ...dynamically
       // _ Position
@@ -316,7 +316,7 @@ class Path // support to FileSystem Paths only (Linux only)
             continue;
          }
 
-         // * Meta
+         // * Metadata
          // @ path
          $parts = explode('/', trim($path, '/'));
          $indexes = count($parts);
@@ -395,7 +395,7 @@ class Path // support to FileSystem Paths only (Linux only)
       // $offset = 2;
       $path = '';
 
-      // * Meta
+      // * Metadata
       $indexes = 0;
 
       foreach ($parts as $index => $part) {

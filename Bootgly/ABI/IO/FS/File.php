@@ -141,7 +141,7 @@ class File implements FS
    public readonly Dir $Basedir;
    protected readonly string|false $file;
 
-   // * Meta
+   // * Metadata
    private $handler;
 
    protected bool $exists;           // bool true|false
@@ -243,7 +243,7 @@ class File implements FS
          case 'contents':
             return $this->contents = file_get_contents($file, false);
 
-         // * Meta
+         // * Metadata
          case 'exists':
             return is_file($file);
 
@@ -402,7 +402,7 @@ class File implements FS
       // * Data
       // Path
       $filename = $this->file ?? $Path->path;
-      // * Meta
+      // * Metadata
       $dir  = null;
       $file = null;
 
@@ -469,7 +469,7 @@ class File implements FS
 
       // * Data
       $data = false;
-      // * Meta
+      // * Metadata
       // @
       $size ??= ($offset === 0 && $length) ? $length : null;
       $filterable ??= $method !== self::CONTENTS_READ_METHOD && ($offset > 0 || $length > 0);

@@ -30,7 +30,7 @@ class CLI extends Projects // Command Line Interface
    // * Data
    // ...
 
-   // * Meta
+   // * Metadata
    private static bool $booted = false;
 
    public static Commands $Commands;
@@ -49,7 +49,7 @@ class CLI extends Projects // Command Line Interface
       // * Data
       // ...
 
-      // * Meta
+      // * Metadata
       self::$booted = false;
 
 

@@ -26,7 +26,7 @@ final class Options extends Items
    // * Data
    // ...
 
-   // * Meta
+   // * Metadata
    public static int $indexes;
    // @ Selecting
    public static array $selected;
@@ -52,7 +52,7 @@ final class Options extends Items
       // * Data
       // ...
 
-      // * Meta
+      // * Metadata
       self::$indexes = 0;
       // @ Selecting
       self::$selected[0] = [];
@@ -192,7 +192,7 @@ final class Options extends Items
       $divisors = $this->divisors;
       // * Data
       // ...
-      // * Meta
+      // * Metadata
       // @ Aiming
       $aimed = $this->aimed;
       // @ Selecting
@@ -203,7 +203,7 @@ final class Options extends Items
       $label = $Option->label;
       $prepend = $Option->prepend ?? '';
       $append = $Option->append ?? '';
-      // * Meta
+      // * Metadata
       $index = $Option->index;
 
       // @

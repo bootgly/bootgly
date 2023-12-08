@@ -21,7 +21,7 @@ class Bootgly
    // * Data
    // ...
 
-   // * Meta
+   // * Metadata
    private static bool $booted = false;
 
 

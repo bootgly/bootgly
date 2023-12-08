@@ -26,7 +26,7 @@ abstract class Benchmark
    private static array $final = [];
    public static array $results = [];
 
-   // * Meta
+   // * Metadata
    private static string $tag = '';
 
 

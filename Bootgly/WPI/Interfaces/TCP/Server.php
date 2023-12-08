@@ -67,7 +67,7 @@ class Server implements Servers, Logging
    public static $Decoder = null;
    public static $Encoder = null;
 
-   // * Meta
+   // * Metadata
    public const VERSION = '0.0.1-alpha';
    // @ State
    protected int $started = 0;
@@ -109,7 +109,7 @@ class Server implements Servers, Logging
       // * Data
       // ...
 
-      // * Meta
+      // * Metadata
       // @ State
       $this->started = \time();
       // @ Status

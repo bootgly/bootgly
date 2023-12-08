@@ -34,7 +34,7 @@ class Template implements Templates
    public static Directives $Directives;
    public readonly string|File $raw;
 
-   // * Meta
+   // * Metadata
    private ? string $file = null;
    // Cache
    private ? File $Cache;
@@ -60,7 +60,7 @@ class Template implements Templates
       // * Data
       // @
 
-      // * Meta
+      // * Metadata
       // Cache
       // ...
       // Pipeline
@@ -158,7 +158,7 @@ class Template implements Templates
    {
       // * Data
       $raw = $this->raw;
-      // * Meta
+      // * Metadata
       $Cache = $this->Cache = new File(
          BOOTGLY_WORKING_DIR . 'workdata/cache/views/' . sha1($raw) . '.php'
       );

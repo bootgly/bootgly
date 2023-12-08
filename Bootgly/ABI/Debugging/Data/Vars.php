@@ -42,7 +42,7 @@ class Vars implements Debugging
    // + Backtrace
    public static ? Backtrace $Backtrace = null;
 
-   // * Meta
+   // * Metadata
    // ! Templating
    protected static bool $CLI = false;
    // >> Output
@@ -170,7 +170,7 @@ class Vars implements Debugging
             $color = '';
             // dump
             $dump = '';
-            // * Meta
+            // * Metadata
             $indentation = self::$CLI
                ? str_repeat(" ", $indentations)
                : str_repeat("\t", $indentations);
@@ -200,7 +200,7 @@ class Vars implements Debugging
                }
                $dump .= "\n" . $indentation . $array_key . ' => ' . $array_value;
             }
-            // * Meta
+            // * Metadata
             $indentation = substr($indentation, self::DEFAULT_IDENTATIONS);
             $dump .= "\n" . $indentation . ']';
 
@@ -350,7 +350,7 @@ class Vars implements Debugging
       $Backtrace = self::$Backtrace ??= new Backtrace();
       self::$Backtrace = null;
 
-      // * Meta
+      // * Metadata
       // ! Templating
       if (@PHP_SAPI === 'cli') {
          self::$CLI = true;
