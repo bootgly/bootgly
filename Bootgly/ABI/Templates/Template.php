@@ -11,9 +11,7 @@
 namespace Bootgly\ABI\Templates;
 
 
-use Throwable;
 use function extract;
-use function htmlspecialchars;
 use function ob_end_clean;
 use function ob_get_clean;
 use function ob_start;
@@ -21,10 +19,8 @@ use function preg_replace;
 use function preg_replace_callback_array;
 use function sha1;
 
-use Bootgly\ABI\Exceptions;
 use Bootgly\ABI\IO\FS\File;
 use Bootgly\ABI\Templates;
-use Bootgly\ABI\Templates\Template\Exceptions\TemplateRenderException;
 
 
 class Template implements Templates
@@ -108,8 +104,9 @@ class Template implements Templates
             );
             $precompiled = (string) $unindented;
          }
-      } catch (Throwable $Throwable) {
-         dump($Throwable);
+      }
+      catch (\Throwable) {
+         $precompiled = '';
       }
 
       $this->precompiled = $precompiled;
@@ -130,7 +127,7 @@ class Template implements Templates
             pattern: $Directives->directives,
             subject: $precompiled,
          );
-      } catch (Throwable) {
+      } catch (\Throwable) {
          return false;
       }
 
@@ -148,7 +145,7 @@ class Template implements Templates
             "\n",
             $compiled
          );
-      } catch (Throwable) {
+      } catch (\Throwable) {
          return false;
       }
 
@@ -218,15 +215,8 @@ class Template implements Templates
  
          $output = @ob_get_clean();
       }
-      catch (Throwable $Throwable) {
+      catch (\Throwable) {
          ob_end_clean();
-
-         Exceptions\Handler::handle(
-            new TemplateRenderException(
-               ($this->file) ? ($this->file) : $Throwable->getFile(),
-               $Throwable
-            )
-         );
 
          $output = '';
       }
