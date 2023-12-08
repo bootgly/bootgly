@@ -59,8 +59,14 @@ switch ($name) {
 
       // SAPI
       $SAPI = Path::relativize(SAPI::$production, BOOTGLY_ROOT_DIR);
-      $Decoder = Server::$Decoder::class;
-      $Encoder = Server::$Encoder::class;
+      $Decoder = (Server::$Decoder
+         ? Server::$Decoder::class
+         : 'N/A'
+      );
+      $Encoder = (Server::$Encoder
+         ? Server::$Encoder::class
+         : 'N/A'
+      );
 
       // @ Server Status
       $Fieldset = new Fieldset($Output);
