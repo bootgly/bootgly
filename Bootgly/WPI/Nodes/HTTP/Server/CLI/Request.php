@@ -96,7 +96,7 @@ class Request
    private string $base;
 
    // * Data
-   private $_SERVER;
+   protected array $_SERVER;
 
    // * Meta
    private string $Server;

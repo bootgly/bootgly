@@ -12,5 +12,5 @@ return static function
 (Request $Request, Response $Response, Router $Router)
 {
    // Check HTTP_Server_CLI-example.SAPI.php for more examples
-   return $Response(body: 'Hello World!');
+   return $Response(body: 'Hello, World!');
 };

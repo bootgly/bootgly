@@ -78,7 +78,8 @@ abstract class Packages implements WPI\Packages
    {
       try {
          $EOF = @\feof($Socket);
-      } catch (\Throwable) {
+      }
+      catch (\Throwable) {
          $EOF = false;
       }
 
@@ -90,7 +91,7 @@ abstract class Packages implements WPI\Packages
          return true;
       }
 
-      if (\is_resource($Socket) && \get_resource_type($Socket) !== 'stream') {
+      if (\is_resource($Socket) === false || \get_resource_type($Socket) !== 'stream') {
          #$this->log('Failed to ' . $operation . ' package: closing connection...' . PHP_EOL);
          Connections::$errors[$operation]++;
          $this->Connection->close();
@@ -136,7 +137,8 @@ abstract class Packages implements WPI\Packages
 
             break;
          } while ($received < $total || $total === 0);
-      } catch (\Throwable) {
+      }
+      catch (\Throwable) {
          $buffer = false;
       }
 
@@ -154,11 +156,7 @@ abstract class Packages implements WPI\Packages
       }
 
       // @ On success
-      if (self::$input !== $input) {
-         $this->changed = true;
-      } else {
-         $this->changed = false;
-      }
+      $this->changed = (self::$input !== $input);
 
       // @ Handle cache and set Input
       if ($this->cache === false || $this->changed === true) {
@@ -190,7 +188,8 @@ abstract class Packages implements WPI\Packages
    {
       if (Server::$Encoder) { // @ Encode Application Data if exists
          $buffer = Server::$Encoder::encode($this, $length);
-      } else {
+      }
+      else {
          $buffer = (SAPI::$Handler)(...$this->callbacks);
       }
 
@@ -217,7 +216,8 @@ abstract class Packages implements WPI\Packages
 
             break;
          };
-      } catch (\Throwable) {
+      }
+      catch (\Throwable) {
          $sent = false;
       }
 
@@ -265,7 +265,8 @@ abstract class Packages implements WPI\Packages
          if (\disk_free_space(\dirname($file)) < $length) {
             return false;
          }
-      } catch (\Throwable) {
+      }
+      catch (\Throwable) {
          return false;
       }
 
@@ -275,7 +276,8 @@ abstract class Packages implements WPI\Packages
 
       if ($length > 0 && $length < $rate) {
          $rate = $length;
-      } else if ($length > $rate) {
+      }
+      else if ($length > $rate) {
          $over = $length % $rate;
       }
 
@@ -290,7 +292,8 @@ abstract class Packages implements WPI\Packages
       // @ Try to close the file Handler
       try {
          @\fclose($Handler);
-      } catch (\Throwable) {}
+      }
+      catch (\Throwable) {}
 
       // @ Unset current downloading
       unSet($this->downloading[0]);
@@ -299,7 +302,8 @@ abstract class Packages implements WPI\Packages
       if ($close) {
          try {
             $this->Connection->close();
-         } catch (\Throwable) {}
+         }
+         catch (\Throwable) {}
       }
    
       return $read;
@@ -322,7 +326,8 @@ abstract class Packages implements WPI\Packages
          // @ Move pointer of file to offset
          try {
             @\fseek($Handler, $offset, SEEK_SET);
-         } catch (\Throwable) {
+         }
+         catch (\Throwable) {
             return $written;
          }
 
@@ -346,7 +351,8 @@ abstract class Packages implements WPI\Packages
 
          if ($length < $rate) {
             $rate = $length;
-         } else if ($length > $rate) {
+         }
+         else if ($length > $rate) {
             $over = $length % $rate;
          }
 
@@ -363,7 +369,8 @@ abstract class Packages implements WPI\Packages
          if ( ! empty($pad['append']) ) {
             try {
                $sent = @\fwrite($Socket, $pad['append']);
-            } catch (\Throwable) {
+            }
+            catch (\Throwable) {
                break;
             }
 
@@ -377,7 +384,8 @@ abstract class Packages implements WPI\Packages
       // @ Try to close the file Handler
       try {
          @\fclose($Handler);
-      } catch (\Throwable) {}
+      }
+      catch (\Throwable) {}
 
       // @ Unset current uploading
       unSet($this->uploading[0]);
@@ -386,7 +394,8 @@ abstract class Packages implements WPI\Packages
       if ($close) {
          try {
             $this->Connection->close();
-         } catch (\Throwable) {}
+         }
+         catch (\Throwable) {}
       }
 
       return $written;
@@ -403,7 +412,8 @@ abstract class Packages implements WPI\Packages
          // @ Read buffer from Client
          try {
             $buffer = @\fread($Socket, $rate);
-         } catch (\Throwable) {
+         }
+         catch (\Throwable) {
             break;
          }
 
@@ -416,7 +426,8 @@ abstract class Packages implements WPI\Packages
             // ! File
             try {
                $written = @\fwrite($Handler, $buffer, $read);
-            } catch (\Throwable) {
+            }
+            catch (\Throwable) {
                break;
             }
 
@@ -437,7 +448,8 @@ abstract class Packages implements WPI\Packages
          // @ Check Socket EOF (End-Of-File)
          try {
             $end = @\feof($Socket);
-         } catch (\Throwable) {
+         }
+         catch (\Throwable) {
             break;
          }
 
@@ -457,7 +469,8 @@ abstract class Packages implements WPI\Packages
          // @ Read buffer using Handler
          try {
             $buffer = @\fread($Handler, $rate);
-         } catch (\Throwable) {
+         }
+         catch (\Throwable) {
             break;
          }
 
@@ -470,7 +483,8 @@ abstract class Packages implements WPI\Packages
             // ! Socket
             try {
                $sent = @\fwrite($Socket, $buffer, $read);
-            } catch (\Throwable) {
+            }
+            catch (\Throwable) {
                break;
             }
 
@@ -491,7 +505,8 @@ abstract class Packages implements WPI\Packages
          // @ Check Handler EOF (End-Of-File)
          try {
             $end = @\feof($Handler);
-         } catch (\Throwable) {
+         }
+         catch (\Throwable) {
             break;
          }
 
@@ -505,7 +520,8 @@ abstract class Packages implements WPI\Packages
    {
       try {
          @\fwrite($this->Connection->Socket, $raw);
-      } catch (\Throwable) {
+      }
+      catch (\Throwable) {
          // ...
       }
 
