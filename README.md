@@ -192,7 +192,7 @@ Your sponsorship will keep this project always **up to date** with **new feature
    ##### **Option 1: Non-CLI SAPI (Apache, LiteSpeed, Nginx, etc)**
 
    1) Enable support to `rewrite`;
-   2) Configure the WPI constructor in `projects/Bootgly/WPI.php` file;
+   2) Configure the WPI boot file in `projects/Bootgly/WPI.boot.php` file;
    3) Run the Non-CLI HTTP Server pointing to `index.php`.
 
    ##### **Option 2: CLI SAPI**
