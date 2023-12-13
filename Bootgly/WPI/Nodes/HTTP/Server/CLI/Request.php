@@ -199,9 +199,11 @@ class Request
       // @ Prepare Request Content length if possible
       if ( $_ = \strpos($headerRaw, "\r\nContent-Length: ") ) {
          $contentLength = (int) \substr($headerRaw, $_ + 18, 10);
-      } else if (\preg_match("/\r\ncontent-length: ?(\d+)/i", $headerRaw, $match) === 1) {
+      }
+      else if (\preg_match("/\r\ncontent-length: ?(\d+)/i", $headerRaw, $match) === 1) {
          $contentLength = $match[1];
-      } else if (\stripos($headerRaw, "\r\nTransfer-Encoding:") !== false) {
+      }
+      else if (\stripos($headerRaw, "\r\nTransfer-Encoding:") !== false) {
          $Package->reject("HTTP/1.1 400 Bad Request\r\n\r\n");
          return 0;
       }
@@ -239,28 +241,27 @@ class Request
       $_SERVER['REMOTE_PORT'] = $Package->Connection->port;
       // scheme
       $_SERVER['HTTPS'] = $Package->Connection->encrypted;
+
       // ? Request Meta
       // raw
       $this->Meta->raw = $metaRaw;
-
       // method
       $_SERVER['REQUEST_METHOD'] = $method;
       // URI
       $_SERVER['REQUEST_URI'] = $URI;
       // protocol
       $_SERVER['SERVER_PROTOCOL'] = $protocol;
-
       // length
       $this->Meta->length = $metaLength;
+
       // ? Request Header
       // raw
       $this->Header->set($headerRaw);
-
       // host
       #$_SERVER['HTTP_HOST'] = $this->Header->get('HOST');
-
       // length
       $this->Header->length = $headerLength;
+
       // ? Request Content
       $this->Content->position = $separatorPosition + 4;
 

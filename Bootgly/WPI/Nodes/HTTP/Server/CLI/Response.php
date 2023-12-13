@@ -28,7 +28,7 @@ class Response
    public Content $Body;
 
    // * Config
-   public bool $debugger;
+   // ...
 
    // * Data
    public string $raw;
@@ -57,8 +57,8 @@ class Response
 
    public function __construct (
       int $code = 200,
-      string $body = '',
       ? array $headers = null,
+      string $body = '',
    )
    {
       // ! HTTP
@@ -67,7 +67,8 @@ class Response
       $this->Header = new Header;
 
       // * Config
-      $this->debugger = true;
+      // ...
+
       // * Data
       $this->raw = '';
 
@@ -129,7 +130,7 @@ class Response
             $this->prepared = false;
             $this->processed = false;
 
-            $this->prepare($this->resource);
+            $this->prepare($name);
 
             return $this;
       }
@@ -200,7 +201,7 @@ class Response
       return $this->process($x);
    }
 
-   public function prepare (? string $resource = null)
+   protected function prepare (? string $resource = null)
    {
       if ($this->initied === false) {
          $this->body   = null;
@@ -679,7 +680,7 @@ class Response
    public function output ($Package, &$length) : string
    {
       $Meta    = &$this->Meta;
-      $Body = &$this->Body;
+      $Body    = &$this->Body;
       $Header  = &$this->Header;
 
       if (! $this->stream && ! $this->chunked && ! $this->encoded) {

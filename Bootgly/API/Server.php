@@ -14,61 +14,58 @@ namespace Bootgly\API;
 class Server
 {
    // * Config
-   // @ Environments
    public static string $production;
-   public const MODE_PRODUCTION = 1;
-   public const MODE_TEST = 2;
-   public static int $mode = self::MODE_PRODUCTION;
+   public static Environments $Environment = Environments::Production;
 
    // * Data
+   private static string $key;
+   public static \Closure $Handler;
    public static array $tests;
 
    // * Metadata
-   public static \Closure $Handler;
    public static array $Tests;
 
 
-   public static function boot ($reset = false, string $base = '')
+   public static function boot (
+      bool $reset = false, string $base = '', ? string $key = null
+   )
    {
-      switch (self::$mode) {
-         case self::MODE_PRODUCTION:
-            $file = self::$production;
+      // * Data
+      $key ??= self::$key;
+      self::$key = $key;
+
+      // @
+      switch (self::$Environment) {
+         case Environments::Production:
+            $bootstrap = self::$production;
             break;
-         case self::MODE_TEST:
+         case Environments::Test:
             if ($base === '') {
-               $file = self::$production;
+               $bootstrap = self::$production;
                break;
             }
 
             if (\count(self::$Tests[$base]) > 0) {
                $test = \array_shift(self::$Tests[$base]);
-               // TODO pass name by arg
-               self::$Handler = $test['response'];
+               self::$Handler = $test[$key];
             }
 
             return true;
       }
 
       if ($reset) {
-         // @ Clear cache
-         if ( \function_exists('opcache_invalidate') ) {
-            \opcache_invalidate($file, true);
+         // @ Clear Bootstrap File Cache
+         if (\function_exists('opcache_invalidate')) {
+            \opcache_invalidate($bootstrap, true);
          }
 
-         // @ Copy example production if loaded not exists
-         if (\file_exists($file) === false) {
-            $copied = \copy($file . '.example', $file);
+         // @ Load Bootstrap File SAPI
+         $SAPI = require $bootstrap;
 
-            if ($copied === false) {
-               return false;
-            }
-         }
-
-         // @ Load production
-         self::$Handler = require $file;
+         self::$Handler = $SAPI[$key];
       }
 
-      return self::$Handler;
+      return true;
    }
 
    // @ Hot reload

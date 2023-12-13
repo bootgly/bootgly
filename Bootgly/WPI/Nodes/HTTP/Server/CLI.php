@@ -16,7 +16,7 @@ use Bootgly\ACI\Logs\Logger;
 
 use Bootgly\ACI\Tests;
 use Bootgly\ACI\Tests\Tester;
-
+use Bootgly\API\Environments;
 use Bootgly\API\Projects;
 
 use Bootgly\API\Server as SAPI;
@@ -43,7 +43,6 @@ class CLI extends TCP\Server implements HTTP, Server
 
    // * Metadata
    // ...inherited from TCP\Server
-   public readonly array $versions;
 
    public static Request $Request;
    public static Response $Response;
@@ -59,22 +58,19 @@ class CLI extends TCP\Server implements HTTP, Server
       // ...inherited from TCP\Server
 
       // * Metadata
-      $this->versions = [ // @ HTTP 1.1
-         'min' => '1.1',
-         'max' => '1.1' // TODO HTTP 2
-      ];
+      // ...inherited from TCP\Server
 
+      // \
       parent::__construct();
-
       // * Config
       $this->socket = ($this->ssl !== null
          ? 'https'
          : 'http'
       );
-
       // @ Configure Logger
-      $this->Logger = new Logger(channel: 'Server.HTTP');
+      $this->Logger = new Logger(channel: 'HTTP.Server.CLI');
 
+      // .
       // @ Configure Request
       self::$Request = new Request;
       // @ Configure Response
@@ -88,7 +84,6 @@ class CLI extends TCP\Server implements HTTP, Server
       $this->mode = $mode;
       switch ($mode) {
          case self::MODE_TEST:
-
             self::$Encoder = new Encoder_Testing;
             break;
          default:
@@ -116,71 +111,87 @@ class CLI extends TCP\Server implements HTTP, Server
          Exceptions::report($Throwable);
       }
    }
-   public static function boot (bool $production = true, bool $test = false)
+
+   public function on (string $name, \Closure $handler) : bool
    {
-      if ($production) {
-         try {
-            SAPI::$production = Projects::CONSUMER_DIR . 'Bootgly/WPI/HTTP_Server_CLI-1.SAPI.php';
-            self::$Encoder = new Encoder_;
-         }
-         catch (\Throwable $Throwable) {
-            Exceptions::report($Throwable);
-         }
+      switch ($name) {
+         case 'encode':
+            
+            break;
       }
 
-      if ($test) {
-         try {
-            self::$Encoder = new Encoder_Testing;
+      return true;
+   }
 
-            // * Config
-            $loader = __DIR__ . '/CLI/tests/@.php';
+   public static function boot (Environments $Environment)
+   {
+      switch ($Environment) {
+         case Environments::Test:
+            try {
+               self::$Encoder = new Encoder_Testing;
 
-            // @ Reset Cache of Test boot file
-            if ( function_exists('opcache_invalidate') ) {
-               opcache_invalidate($loader, true);
+               // * Config
+               $loader = __DIR__ . '/CLI/tests/@.php';
+
+               // @ Reset Cache of Test boot file
+               if (\function_exists('opcache_invalidate')) {
+                  \opcache_invalidate($loader, true);
+               }
+               \clearstatcache(false, $loader);
+
+               $files = (@require $loader)['tests'];
+               SAPI::$tests[self::class] = Tests::list($files);
+
+               // * Metadata
+               SAPI::$Tests[self::class] = [];
+               foreach (SAPI::$tests[self::class] as $index => $case) {
+                  $file = __DIR__ . '/CLI/tests/' . $case . '.test.php';
+
+                  // ?
+                  if (!\file_exists($file)) {
+                     continue;
+                  }
+
+                  // @ Reset Cache of Test case file
+                  if (\function_exists('opcache_invalidate')) {
+                     \opcache_invalidate($file, true);
+                  }
+                  \clearstatcache(false, $file);
+
+                  // @ Load Test case from file
+                  try {
+                     $spec = require $file;
+                  }
+                  catch (\Throwable) {
+                     $spec = null;
+                  }
+
+                  // @ Set Closure to SAPI Tests
+                  SAPI::$Tests[self::class][] = $spec;
+               }
             }
-            clearstatcache(false, $loader);
-
-            $files = (@require $loader)['tests'];
-            SAPI::$tests[self::class] = Tests::list($files);
-            // * Metadata
-            SAPI::$Tests[self::class] = [];
-
-            foreach (SAPI::$tests[self::class] as $index => $case) {
-               $file = __DIR__ . '/CLI/tests/' . $case . '.test.php';
-               if (! file_exists($file) ) {
-                  continue;
-               }
-
-               // @ Reset Cache of Test case file
-               if ( function_exists('opcache_invalidate') ) {
-                  opcache_invalidate($file, true);
-               }
-               clearstatcache(false, $file);
-
-               // @ Load Test case from file
-               try {
-                  $spec = @require $file;
-               } catch (\Throwable) {
-                  $spec = null;
-               }
-               // @ Set Closure to SAPI Tests
-               SAPI::$Tests[self::class][] = $spec;
+            catch (\Throwable $Throwable) {
+               Exceptions::report($Throwable);
             }
-         }
-         catch (\Throwable $Throwable) {
-            Exceptions::report($Throwable);
-         }
+
+            break;
+         default:
+            try {
+               SAPI::$production = Projects::CONSUMER_DIR . 'Bootgly/WPI/HTTP_Server_CLI-1.SAPI.php';
+               self::$Encoder = new Encoder_;
+            } catch (\Throwable $Throwable) {
+               Exceptions::report($Throwable);
+            }
+
+            SAPI::boot(reset: true, key: 'on.Request');
       }
-
-      SAPI::boot(true);
    }
 
    protected static function test (TCP\Server $TCPServer)
    {
       Logger::$display = Logger::DISPLAY_NONE;
 
-      self::boot(production: false, test: true);
+      self::boot(Environments::Test);
 
       $TCPClient = new TCP\Client;
       $TCPClient->configure(

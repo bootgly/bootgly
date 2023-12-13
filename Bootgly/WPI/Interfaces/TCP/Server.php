@@ -11,21 +11,20 @@
 namespace Bootgly\WPI\Interfaces\TCP;
 
 
-use Bootgly\ACI\Events\Timer;
-
 use Bootgly\ABI\Debugging\Data\Vars;
 use Bootgly\ABI\Debugging\Shutdown;
+
+use Bootgly\ACI\Events\Timer;
 use Bootgly\ACI\Logs\Logging;
 use Bootgly\ACI\Logs\Logger;
+use Bootgly\ACI\Logs\LoggableEscaped;
 
-use Bootgly\API\Projects;
-
-use Bootgly\API\Server as SAPI;
 use Bootgly\API\Environment;
+use Bootgly\API\Environments;
+use Bootgly\API\Projects;
+use Bootgly\API\Server as SAPI;
 
 use Bootgly\CLI;
-
-use Bootgly\ACI\Logs\LoggableEscaped;
 
 use Bootgly\WPI\Events\Select;
 use Bootgly\WPI\Servers;
@@ -122,7 +121,7 @@ class Server implements Servers, Logging
       }
 
       // @ Configure Logger
-      $this->Logger = new Logger(channel: 'Server');
+      $this->Logger = new Logger(channel: 'TCP.Server.CLI');
       // @ Configure Debugging Vars
       Vars::$debug = true;
       Vars::$print = true;
@@ -148,10 +147,10 @@ class Server implements Servers, Logging
 
       // @ Boot Server API
       if (self::$Application) {
-         self::$Application::boot();
+         self::$Application::boot(Environments::Production);
       } else {
          SAPI::$production = Projects::CONSUMER_DIR . 'Bootgly/WPI/TCP_Server_CLI.SAPI.php';
-         SAPI::boot(true);
+         SAPI::boot(reset: true, key: 'on.Package.Receive');
       }
    }
    public function __get (string $name)
@@ -172,10 +171,10 @@ class Server implements Servers, Logging
             return $this->mode;
 
          case '@test init':
-            SAPI::$mode = SAPI::MODE_TEST;
+            SAPI::$Environment = Environments::Test;
 
             if (self::$Application) {
-               self::$Application::boot(production: false, test: true);
+               self::$Application::boot(Environments::Test);
             }
 
             break;
@@ -186,14 +185,14 @@ class Server implements Servers, Logging
 
             break;
          case '@test end':
-            SAPI::$mode = SAPI::MODE_PRODUCTION;
+            SAPI::$Environment = Environments::Production;
 
             if (self::$Application) {
-               self::$Application::boot();
+               self::$Application::boot(Environments::Production);
                break;
             }
 
-            SAPI::boot(true);
+            SAPI::boot(reset: true);
 
             break;
       }
@@ -300,12 +299,14 @@ class Server implements Servers, Logging
 
       return true;
    }
-   public function on (string $name, \Closure $handler)
+   public function on (string $name, \Closure $handler) : bool
    {
       switch ($name) {
-         case 'data': // DEPRECATED
+         case 'encode':
             break;
       }
+
+      return true;
    }
 
    private function instance ()

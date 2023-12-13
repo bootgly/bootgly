@@ -71,7 +71,7 @@ switch ($name) {
       // @ Server Status
       $Fieldset = new Fieldset($Output);
       // * Config
-      $Fieldset->width = 70;
+      $Fieldset->width = 80;
       // * Data
       $Fieldset->title = '@#Black: Server Status @;';
       $Fieldset->content = <<<OUTPUT
@@ -95,7 +95,7 @@ switch ($name) {
       // @ Workers Load
       $Fieldset2 = new Fieldset($Output);
       // * Config
-      $Fieldset2->width = 70;
+      $Fieldset2->width = 80;
       // * Data
       $Fieldset2->title = '@#Black: Workers Load (CPU usage) @;';
       $Fieldset2->content = PHP_EOL;

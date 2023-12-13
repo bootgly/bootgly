@@ -198,7 +198,7 @@ class Process
             break;
          // @ reload()
          case SIGUSR2: // 12
-            SAPI::boot(true);
+            SAPI::boot(reset: true);
             break;
 
          // ! \Connection

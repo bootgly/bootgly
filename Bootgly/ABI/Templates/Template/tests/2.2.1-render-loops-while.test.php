@@ -1,7 +1,7 @@
 <?php
 
 use Bootgly\ABI\Templates\Template;
-
+use Bootgly\ACI\Tests\Assertions\Assertion;
 
 return [
    // @ configure
@@ -21,6 +21,7 @@ return [
       $Template11->render([
          'tenth' => 10
       ]);
+      Assertion::$description = 'Normal while';
       yield assert(
          assertion: $Template11->output === <<<'OUTPUT'
          10987654321
@@ -40,6 +41,7 @@ return [
       $Template21->render([
          'tenth' => 10
       ]);
+      Assertion::$description = 'While escaped';
       yield assert(
          assertion: $Template21->output === <<<'OUTPUT'
          @while $tenth:

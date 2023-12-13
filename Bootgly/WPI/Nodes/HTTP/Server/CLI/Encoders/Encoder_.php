@@ -49,7 +49,6 @@ class Encoder_ extends Encoders
          Throwables::debug($Throwable);
       }
       finally {
-         // TODO move to another encoder
          // @ Check if Request Content is waiting data
          if ($Request->Content->waiting) {
             return '';

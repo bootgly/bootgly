@@ -34,7 +34,7 @@ class Encoder_Testing extends Encoders
       Server::$Response->Header->preset('Date', null);
 
       // @ Reset SAPI
-      SAPI::boot(reset: true, base: Server::class);
+      SAPI::boot(reset: true, base: Server::class, key: 'response');
 
       // @ Get callbacks
       $Request  = Server::$Request;
@@ -60,7 +60,6 @@ class Encoder_Testing extends Encoders
          Throwables::debug($Throwable);
       }
       finally {
-         // TODO move to another encoder
          // @ Check if Request Content is waiting data
          if ($Request->Content->waiting) {
             return '';
