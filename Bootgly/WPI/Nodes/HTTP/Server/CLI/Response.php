@@ -182,23 +182,16 @@ class Response
       }
    }
    public function __invoke (
-      $x = null,
       int $code = 200,
       array $headers = [],
       string $body = ''
    )
    {
-      if ($x === null) {
-         $this->Meta->code = $code;
-         $this->Header->prepare($headers);
-         $this->Body->raw = $body;
+      $this->Meta->code = $code;
+      $this->Header->prepare($headers);
+      $this->Body->raw = $body;
 
-         return $this;
-      }
-
-      $this->prepare();
-
-      return $this->process($x);
+      return $this;
    }
 
    protected function prepare (? string $resource = null)
