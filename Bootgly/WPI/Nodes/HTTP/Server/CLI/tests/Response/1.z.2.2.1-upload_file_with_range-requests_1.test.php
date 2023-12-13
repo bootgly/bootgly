@@ -19,7 +19,7 @@ return [
    // @ simulate
    // Server API
    'response' => function (Request $Request, Response $Response) : Response {
-      return $Response('statics/alphanumeric.txt')->upload(close: false);
+      return $Response->upload('statics/alphanumeric.txt', close: false);
    },
    // Client API
    'request' => function ($host) {

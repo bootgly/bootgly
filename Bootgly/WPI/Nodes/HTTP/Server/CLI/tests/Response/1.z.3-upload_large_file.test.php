@@ -18,7 +18,7 @@ return [
    // @ simulate
    // Server API
    'response' => function (Request $Request, Response $Response) : Response {
-      return $Response('statics/screenshot.gif')->upload(close: false);
+      return $Response->upload('statics/screenshot.gif', close: false);
    },
    // Client API
    'request' => function () {

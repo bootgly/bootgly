@@ -502,19 +502,13 @@ class Response
 
       return $this;
    }
-   public function upload ($content = null, int $offset = 0, ? int $length = null, bool $close = true) : self
+   public function upload (string|File $file, int $offset = 0, ? int $length = null, bool $close = true) : self
    {
-      if ($content === null) {
-         $content = $this->body;
+      if ($file instanceof File) {
+         $File = $file;
       }
-
-      // TODO REFACTOR
-      // FIX REVIEW SECURITY
-      if ($content instanceof File) {
-         $File = $content;
-      } else {
-         $content = Path::normalize($content);
-         $File = new File(BOOTGLY_PROJECT?->path . $content);
+      else {
+         $File = new File(BOOTGLY_PROJECT?->path . Path::normalize($file));
       }
 
       if ($File->readable === false) {
