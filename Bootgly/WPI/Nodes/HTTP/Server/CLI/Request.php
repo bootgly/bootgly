@@ -140,11 +140,12 @@ class Request
       $this->_SERVER = $_SERVER;
    }
 
-   public function boot (Packages $Package, string &$buffer, int $size) : int // @ return Request length
+   public function input (Packages $Package, string &$buffer, int $size) : int // @ return Request length
    {
       // @ Check Request raw separator
-      $separatorPosition = \strpos($buffer, "\r\n\r\n");
-      if ($separatorPosition === false) { // @ Check if the Request raw has a separator
+      $separator_position = \strpos($buffer, "\r\n\r\n");
+      // @ Check if the Request raw has a separator
+      if ($separator_position === false) {
          // @ Check Request raw length
          if ($size >= 16384) { // Package size
             $Package->reject("HTTP/1.1 413 Request Entity Too Large\r\n\r\n");
@@ -153,15 +154,15 @@ class Request
          return 0;
       }
 
-      $length = $separatorPosition + 4; // @ Boot Request length
+      // @ Init Request length
+      $length = $separator_position + 4;
 
-      // ? Request Meta
-      // @ Boot Request Meta raw
+      // ? Request Meta (first line of HTTP Header)
+      // @ Get Request Meta raw
       // Sample: GET /path HTTP/1.1
-      $metaRaw = \strstr($buffer, "\r\n", true);
-      #$metaRaw = strtok($buffer, "\r\n");
+      $meta_raw = \strstr($buffer, "\r\n", true);
 
-      @[$method, $URI, $protocol] = \explode(' ', $metaRaw, 3);
+      @[$method, $URI, $protocol] = \explode(' ', $meta_raw, 3);
 
       // @ Check Request Meta
       if (! $method || ! $URI || ! $protocol) {
@@ -185,56 +186,56 @@ class Request
       // URI
       // protocol
 
-      // @ Prepare Request Meta length
-      $metaLength = \strlen($metaRaw);
+      // @ Set Request Meta length
+      $meta_length = \strlen($meta_raw);
 
       // ? Request Header
-      // @ Boot Request Header raw
-      $headerRaw = \substr($buffer, $metaLength + 2, $separatorPosition - $metaLength);
+      // @ Get Request Header raw
+      $header_raw = \substr($buffer, $meta_length + 2, $separator_position - $meta_length);
 
       // @ Prepare Request Header length
-      $headerLength = \strlen($headerRaw);
+      $header_length = \strlen($header_raw);
 
       // ? Request Content
-      // @ Prepare Request Content length if possible
-      if ( $_ = \strpos($headerRaw, "\r\nContent-Length: ") ) {
-         $contentLength = (int) \substr($headerRaw, $_ + 18, 10);
+      // @ Set Request Content length if possible
+      if ( $_ = \strpos($header_raw, "\r\nContent-Length: ") ) {
+         $content_length = (int) \substr($header_raw, $_ + 18, 10);
       }
-      else if (\preg_match("/\r\ncontent-length: ?(\d+)/i", $headerRaw, $match) === 1) {
-         $contentLength = $match[1];
+      else if (\preg_match("/\r\ncontent-length: ?(\d+)/i", $header_raw, $match) === 1) {
+         $content_length = $match[1];
       }
-      else if (\stripos($headerRaw, "\r\nTransfer-Encoding:") !== false) {
+      else if (\stripos($header_raw, "\r\nTransfer-Encoding:") !== false) {
          $Package->reject("HTTP/1.1 400 Bad Request\r\n\r\n");
          return 0;
       }
 
-      // @ Set Request Content raw / length if possible
-      if ( isSet($contentLength) ) {
-         $length += $contentLength; // @ Add Request Content length
+      // @ Set Request Content raw if possible
+      if ( isSet($content_length) ) {
+         $length += $content_length; // @ Add Request Content length
 
          if ($length > 10485760) { // @ 10 megabytes
             $Package->reject("HTTP/1.1 413 Request Entity Too Large\r\n\r\n");
             return 0;
          }
 
-         if ($contentLength > 0) {
+         if ($content_length > 0) {
             // @ Check if HTTP content is not empty
-            if (\strlen($buffer) >= $separatorPosition + 4) {
-               $this->Content->raw = \substr($buffer, $separatorPosition + 4, $contentLength);
+            if ($size >= $separator_position + 4) {
+               $this->Content->raw = \substr($buffer, $separator_position + 4, $content_length);
                $this->Content->downloaded = \strlen($this->Content->raw);
             }
 
-            if ($contentLength > $this->Content->downloaded) {
+            if ($content_length > $this->Content->downloaded) {
                $this->Content->waiting = true;
                Server::$Decoder = new Decoder_Waiting;
             }
          }
 
-         $this->Content->length = $contentLength;
+         $this->Content->length = $content_length;
       }
 
       // @ Set Request
-      // ? Request
+      // ! Request
       // address
       $_SERVER['REMOTE_ADDR'] = $Package->Connection->ip;
       // port
@@ -242,9 +243,9 @@ class Request
       // scheme
       $_SERVER['HTTPS'] = $Package->Connection->encrypted;
 
-      // ? Request Meta
+      // ! Request Meta
       // raw
-      $this->Meta->raw = $metaRaw;
+      $this->Meta->raw = $meta_raw;
       // method
       $_SERVER['REQUEST_METHOD'] = $method;
       // URI
@@ -252,18 +253,18 @@ class Request
       // protocol
       $_SERVER['SERVER_PROTOCOL'] = $protocol;
       // length
-      $this->Meta->length = $metaLength;
+      $this->Meta->length = $meta_length;
 
-      // ? Request Header
+      // ! Request Header
       // raw
-      $this->Header->set($headerRaw);
+      $this->Header->set(raw: $header_raw);
       // host
       #$_SERVER['HTTP_HOST'] = $this->Header->get('HOST');
       // length
-      $this->Header->length = $headerLength;
+      $this->Header->length = $header_length;
 
-      // ? Request Content
-      $this->Content->position = $separatorPosition + 4;
+      // ! Request Content
+      $this->Content->position = $separator_position + 4;
 
       // @ return Request length
       return $length;

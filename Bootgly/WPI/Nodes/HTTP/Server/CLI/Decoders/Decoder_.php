@@ -42,8 +42,8 @@ class Decoder_ extends Decoders
          $Request = Server::$Request = new Request;
       }
 
-      // @ Boot HTTP Request
-      $length = $Request->boot($Package, $buffer, $size);
+      // @ Input HTTP Request
+      $length = $Request->input($Package, $buffer, $size);
 
       // @ Write to local cache
       if ($length > 0 && $length <= 512) {

@@ -2,7 +2,7 @@
 
 use Bootgly\ABI\Data\__String\Bytes;
 use Bootgly\ACI\Logs\Logger;
-use Bootgly\WPI\Interfaces\TCP\Server\Connections\Connection;
+use Bootgly\WPI\Interfaces\TCP\Server\Connections;
 
 
 switch ($name) {
@@ -92,11 +92,11 @@ switch ($name) {
             switch ($key) {
                case 'status':
                   $status = match ($value) {
-                     Connection::STATUS_INITIAL     => 'INITIAL',
-                     Connection::STATUS_CONNECTING  => 'CONNECTING',
-                     Connection::STATUS_ESTABLISHED => 'ESTABLISHED',
-                     Connection::STATUS_CLOSING     => 'CLOSING',
-                     Connection::STATUS_CLOSED      => 'CLOSED'
+                     Connections::STATUS_INITIAL     => 'INITIAL',
+                     Connections::STATUS_CONNECTING  => 'CONNECTING',
+                     Connections::STATUS_ESTABLISHED => 'ESTABLISHED',
+                     Connections::STATUS_CLOSING     => 'CLOSING',
+                     Connections::STATUS_CLOSED      => 'CLOSED'
                   };
 
                   $this->log($status . PHP_EOL);
