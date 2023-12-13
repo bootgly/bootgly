@@ -169,7 +169,7 @@ abstract class Packages implements WPI\Packages
          Connections::$reads++;
          Connections::$read += $received;
          // Per client
-         #Connections::$Connections[(int) $Socket]['reads']++;
+         #Connections::$Connections[(int) $Socket]->reads++;
       }
 
       // @ Write data

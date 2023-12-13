@@ -49,6 +49,12 @@ class Connections implements WPI\Connections
    public static int $writes;
    public static int $read;
    public static int $written;
+   // @ Status
+   public const STATUS_INITIAL = 0;
+   public const STATUS_CONNECTING = 1;
+   public const STATUS_ESTABLISHED = 2;
+   public const STATUS_CLOSING = 4;
+   public const STATUS_CLOSED = 8;
 
    public Packages $Packages;
 

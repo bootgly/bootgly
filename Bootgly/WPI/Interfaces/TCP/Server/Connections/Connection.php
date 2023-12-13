@@ -34,16 +34,10 @@ class Connection extends Packages
    public int $id;
    public bool $encrypted;
    // @ Status
-   public const STATUS_INITIAL = 0;
-   public const STATUS_CONNECTING = 1;
-   public const STATUS_ESTABLISHED = 2;
-   public const STATUS_CLOSING = 4;
-   public const STATUS_CLOSED = 8;
    public int $status;
-   // @ Handler
+   // @ Stats
    public int $started;
    public int $used;
-   // @ Stats
    #public int $reads;
    public int $writes;
 
@@ -63,11 +57,10 @@ class Connection extends Packages
       $this->id = (int) $Socket;
       $this->encrypted = false;
       // @ Status
-      $this->status = self::STATUS_ESTABLISHED;
-      // @ Handler
+      $this->status = Connections::STATUS_ESTABLISHED;
+      // @ Stats
       $this->started = \time();
       $this->used = \time();
-      // @ Stats
       #$this->reads = 0;
       $this->writes = 0;
 
@@ -122,7 +115,8 @@ class Connection extends Packages
          );
 
          \stream_set_blocking($this->Socket, false);
-      } catch (\Throwable) {
+      }
+      catch (\Throwable) {
          $negotiation = false;
       }
 
@@ -130,7 +124,8 @@ class Connection extends Packages
       if ($negotiation === false) {
          $this->close();
          return false;
-      } elseif ($negotiation === 0) {
+      }
+      else if ($negotiation === 0) {
          if ($tries > 2) {
             return false;
          }
@@ -140,7 +135,8 @@ class Connection extends Packages
          $this->handshake();
 
          return 0;
-      } else {
+      }
+      else {
          $this->encrypted = true;
       }
 
@@ -160,17 +156,21 @@ class Connection extends Packages
    }
    public function expire (int $timeout)
    {
-      static $writes = 0;
-
-      if ($this->status > self::STATUS_ESTABLISHED) {
+      if ($this->status > Connections::STATUS_ESTABLISHED) {
          return true;
       }
+
+      static $writes = 0;
 
       if ($writes < $this->writes) {
          $this->used = \time();
       }
+      if ($writes > $this->writes) {
+         $writes = $this->writes;
+         $this->used = \time();
+      }
 
-      if (\time() - $this->used >= $timeout) {
+      if ((\time() - $this->used) >= $timeout) {
          return $this->close();
       }
 
@@ -180,11 +180,11 @@ class Connection extends Packages
    }
    public function limit (int $packages)
    {
-      static $writes = 0;
-
-      if ($this->status > self::STATUS_ESTABLISHED) {
+      if ($this->status > Connections::STATUS_ESTABLISHED) {
          return true;
       }
+
+      static $writes = 0;
 
       if (($this->writes - $writes) >= $packages) {
          Connections::$blacklist[$this->ip] = true;
@@ -198,21 +198,22 @@ class Connection extends Packages
 
    public function close () : true
    {
-      if ($this->status > self::STATUS_ESTABLISHED) {
+      if ($this->status > Connections::STATUS_ESTABLISHED) {
          return true;
       }
 
-      $this->status = self::STATUS_CLOSING;
+      $this->status = Connections::STATUS_CLOSING;
 
       $Socket = &$this->Socket;
 
       /*
       if ( isSet(Server::$context['ssl'] ) {
          try {
-            stream_set_blocking($this->Socket, true);
+            stream_set_blocking($Socket, true);
             stream_socket_enable_crypto($Socket, false);
-            stream_set_blocking($this->Socket, false);
-         } catch (\Throwable) {}
+            stream_set_blocking($Socket, false);
+         }
+         catch (\Throwable) {}
       }
       */
 
@@ -221,12 +222,12 @@ class Connection extends Packages
 
       try {
          @\fclose($Socket);
-         #@stream_socket_shutdown($Socket);
-      } catch (\Throwable) {
+      }
+      catch (\Throwable) {
          // ...
       }
 
-      $this->status = self::STATUS_CLOSED;
+      $this->status = Connections::STATUS_CLOSED;
 
       // @ Destroy itself
       unset(Connections::$Connections[$this->id]);
