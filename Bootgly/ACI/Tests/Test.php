@@ -151,7 +151,8 @@ class Test extends Assertions
 
             // Text + `-`
             $line = str_pad($line, $width, '-', STR_PAD_BOTH);
-         } else {
+         }
+         else {
             $line = str_repeat('-', $width - 7);
          }
 
@@ -219,9 +220,11 @@ class Test extends Assertions
                   throw new \AssertionError(message: Assertion::$fallback);
 
                $this->descriptions[] = $Result::$description;
-            } else if ($Result === false || $Result !== true) {
+            }
+            else if ($Result === false || $Result !== true) {
                throw new \AssertionError(message: Assertion::$fallback ?? $Result);
-            } else {
+            }
+            else { // $Result is TRUE
                $this->descriptions[] = Assertion::$description;
                Assertion::$description = null;
             }

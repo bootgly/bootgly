@@ -11,6 +11,15 @@
 namespace Bootgly\ACI;
 
 
+use Bootgly\ABI\Debugging\Data\Throwables;
+
+
+// @ Get Throwables Verbosity
+$verbosity = Throwables::$verbosity;
+// @ Set Throwables Verbosity
+Throwables::$verbosity = 1;
+
+
 // Tests
 // @ Check zend.assertions configuration
 if (\function_exists('ini_get') && \ini_get('zend.assertions') !== '1') {
@@ -24,3 +33,7 @@ if (\function_exists('ini_get') && \ini_get('assert.exception') !== '') {
       message: 'Please, set `assert.exception` to `Off` in php.ini [Assertion].'
    );
 }
+
+
+// @ Restore Throwables Verbosity
+Throwables::$verbosity = $verbosity;

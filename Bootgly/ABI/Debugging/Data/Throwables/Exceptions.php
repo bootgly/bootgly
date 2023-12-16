@@ -17,10 +17,12 @@ use Bootgly\ABI\Debugging\Data\Throwables;
 abstract class Exceptions extends Throwables
 {
    // * Config
-   #public static bool $debug = false;
-   #public static bool $print = true;
-   #public static bool $return = false;
+   #public static bool $debug = true;
    #public static bool $exit = true;
+   #public static bool $output = true;
+   #public static bool $return = false;
+   public static int $verbosity = 3;
+
    // * Data
    protected static array $exceptions = [];
 

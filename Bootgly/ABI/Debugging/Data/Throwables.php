@@ -22,19 +22,22 @@ abstract class Throwables implements Debugging
 {
    use Formattable;
 
+
    // * Config
    #public static bool $debug = true;
-   #public static bool $print = true;
-   #public static bool $return = false;
    #public static bool $exit = true;
+   #public static bool $output = true;
+   #public static bool $return = false;
+   public static int $verbosity = 3;
 
+   // * Data
    // @ Theme
    protected const DEFAULT_THEME = [
       'CLI' => [
          'values' => [
             '@start' => "\n",
 
-            '@double_line' => "\n\n",
+            '@double_break_line' => "\n\n",
             'class_name' => [self::_BLACK_FOREGROUND, self::_RED_BACKGROUND],
             'message' => self::_WHITE_BRIGHT_FOREGROUND,
             'file' => self::_GREEN_BRIGHT_FOREGROUND,
@@ -54,7 +57,7 @@ abstract class Throwables implements Debugging
          'values' => [
             '@start' => '<pre>',
 
-            '@double_line' => "<br><br>",
+            '@double_break_line' => "<br><br>",
             'class_name' => '',
             'message' => '',
             'file' => '',
@@ -69,6 +72,7 @@ abstract class Throwables implements Debugging
          ]
       ]
    ];
+
 
    public static function report (\Throwable $Throwable)
    {
@@ -126,55 +130,63 @@ abstract class Throwables implements Debugging
 
       // @ Output
       $output = $Theme->apply('@start');
+
       // class name
       $output .= $Theme->apply('class_name', " $class ");
-      $output .= $Theme->apply('@double_line');
+      $output .= $Theme->apply('@double_break_line');
       // message
       $output .= $Theme->apply('message', " $message ");
-      $output .= $Theme->apply('@double_line');
-      // file
-      $output .= " at ";
-      $output .=  $Theme->apply('file', $file);
-      // file line
-      $output .= ':';
-      $output .= $Theme->apply('file_line', $line);
-      $output .= "\n";
-      // file content
-      // TODO file content filters
-      $output .= $Highligher->highlight($contents, $line);
-      $output .= "\n";
-      // backtrace
-      $backtrace = self::trace($Throwable);
-      $traces = count($backtrace);
-      $limit = 2; // TODO dynamic with verbosity?
 
-      if ($traces > $limit) {
-         $backtrace = array_slice($backtrace, -$limit);
+      if (self::$verbosity >= 2) {
+         $output .= $Theme->apply('@double_break_line');
 
-         $output .= $Theme->apply(
-            key: 'trace_calls',
-            content: '+' . (string) ($traces - $limit) . ' trace calls...'
-         );
-
+         // file
+         $output .= " at ";
+         $output .=  $Theme->apply('file', $file);
+         // file line
+         $output .= ':';
+         $output .= $Theme->apply('file_line', $line);
+         $output .= "\n";
+         // file content
+         // TODO file content filters
+         $output .= $Highligher->highlight($contents, $line);
          $output .= "\n";
       }
 
-      foreach ($backtrace as $trace) {
-         // @ trace
-         // index
-         $output .= $Theme->apply('trace_index', " {$trace['index']} ");
-         // file
-         $output .= $trace['file'];
-         // line
-         $output .= ':';
-         $output .= $Theme->apply('trace_line', $trace['line']);
-         // call
-         $output .= $Theme->apply(
-            key: 'trace_call',
-            content: "\n " . str_repeat(' ', strlen((string) $trace['index']) + 1) . $trace['call']
-         );
+      if (self::$verbosity >= 3) {
+         // backtrace
+         $backtrace = self::trace($Throwable);
+         $traces = count($backtrace);
+         $limit = 2; // TODO dynamic with verbosity?
 
-         $output .= "\n";
+         if ($traces > $limit) {
+            $backtrace = array_slice($backtrace, -$limit);
+
+            $output .= $Theme->apply(
+               key: 'trace_calls',
+               content: '+' . (string) ($traces - $limit) . ' trace calls...'
+            );
+
+            $output .= "\n";
+         }
+
+         foreach ($backtrace as $trace) {
+            // @ trace
+            // index
+            $output .= $Theme->apply('trace_index', " {$trace['index']} ");
+            // file
+            $output .= $trace['file'];
+            // line
+            $output .= ':';
+            $output .= $Theme->apply('trace_line', $trace['line']);
+            // call
+            $output .= $Theme->apply(
+               key: 'trace_call',
+               content: "\n " . str_repeat(' ', strlen((string) $trace['index']) + 1) . $trace['call']
+            );
+
+            $output .= "\n";
+         }
       }
 
       $output .= $Theme->apply('@finish');

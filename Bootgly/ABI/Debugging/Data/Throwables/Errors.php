@@ -20,10 +20,12 @@ use Bootgly\ABI\Debugging\Data\Throwables;
 abstract class Errors extends Throwables
 {
    // * Config
-   #public static bool $debug = false;
-   #public static bool $print = true;
-   #public static bool $return = false;
+   #public static bool $debug = true;
    #public static bool $exit = true;
+   #public static bool $output = true;
+   #public static bool $return = false;
+   public static int $verbosity = 3;
+
    // * Data
    protected static array $errors = [];
 
@@ -93,60 +95,67 @@ abstract class Errors extends Throwables
 
       // @ Output
       $output = "\n";
+
       // error class name
       $output .= $Theme->apply('class_name', " $class ");
       // error code
       $output .= $Theme->apply('error_code', " #$code ");
-      $output .= $Theme->apply('@double_line');
+      $output .= $Theme->apply('@double_break_line');
       // message
       $output .= $Theme->apply('message', " $message ");
-      $output .= $Theme->apply('@double_line');
-      // file
-      $output .= " at ";
-      $output .=  $Theme->apply('file', $file);
-      // file line
-      $output .= ':';
-      $output .= $Theme->apply('file_line', $line);
-      $output .= "\n";
-      // file content
-      // TODO file content filters
-      $output .= $Highligher->highlight($contents, $line);
-      $output .= "\n";
-      // backtrace
-      $backtrace = self::trace($Throwable);
-      $traces = count($backtrace);
-      $limit = 2; // TODO dynamic with verbosity?
+      $output .= $Theme->apply('@double_break_line');
 
-      if ($traces > $limit) {
-         $backtrace = array_slice($backtrace, -$limit);
-
-         $output .= $Theme->apply(
-            key: 'trace_calls',
-            content: '+' . (string) ($traces - $limit) . ' trace calls'
-         );
-
-         $output .= "\n";
-      }
-
-      foreach ($backtrace as $trace) {
-         // @ trace
-         // index
-         $output .= $Theme->apply('trace_index', " {$trace['index']} ");
+      if (self::$verbosity >= 2) {
          // file
-         $output .= $trace['file'];
-         // line
+         $output .= " at ";
+         $output .=  $Theme->apply('file', $file);
+         // file line
          $output .= ':';
-         $output .= $Theme->apply('trace_line', $trace['line']);
-         // call
-         $output .= $Theme->apply(
-            key: 'trace_call',
-            content: "\n " . str_repeat(' ', strlen((string) $trace['index']) + 1) . $trace['call']
-         );
-
+         $output .= $Theme->apply('file_line', $line);
+         $output .= "\n";
+         // file content
+         // TODO file content filters
+         $output .= $Highligher->highlight($contents, $line);
          $output .= "\n";
       }
 
-      $output .= "\n\n";
+      if (self::$verbosity >= 3) {
+         // backtrace
+         $backtrace = self::trace($Throwable);
+         $traces = count($backtrace);
+         $limit = 2; // TODO dynamic with verbosity?
+
+         if ($traces > $limit) {
+            $backtrace = array_slice($backtrace, -$limit);
+
+            $output .= $Theme->apply(
+               key: 'trace_calls',
+               content: '+' . (string) ($traces - $limit) . ' trace calls'
+            );
+
+            $output .= "\n";
+         }
+
+         foreach ($backtrace as $trace) {
+            // @ trace
+            // index
+            $output .= $Theme->apply('trace_index', " {$trace['index']} ");
+            // file
+            $output .= $trace['file'];
+            // line
+            $output .= ':';
+            $output .= $Theme->apply('trace_line', $trace['line']);
+            // call
+            $output .= $Theme->apply(
+               key: 'trace_call',
+               content: "\n " . str_repeat(' ', strlen((string) $trace['index']) + 1) . $trace['call']
+            );
+
+            $output .= "\n";
+         }
+
+         $output .= "\n\n";
+      }
 
       echo $output;
    }
