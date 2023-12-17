@@ -236,7 +236,8 @@ class Test extends Assertions
          if ($this->Tests->autoResult) {
             $this->pass();
          }
-      } catch (\AssertionError $AssertionError) {
+      }
+      catch (\AssertionError $AssertionError) {
          $this->descriptions[] = Assertion::$description;
          $this->results[] = false;
 

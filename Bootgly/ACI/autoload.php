@@ -27,12 +27,6 @@ if (\function_exists('ini_get') && \ini_get('zend.assertions') !== '1') {
       message: 'Please, set `zend.assertions` to `1` in php.ini [Assertion].'
    );
 }
-// @ Check assert.exception configuration
-if (\function_exists('ini_get') && \ini_get('assert.exception') !== '') {
-   throw new \Exception(
-      message: 'Please, set `assert.exception` to `Off` in php.ini [Assertion].'
-   );
-}
 
 
 // @ Restore Throwables Verbosity
