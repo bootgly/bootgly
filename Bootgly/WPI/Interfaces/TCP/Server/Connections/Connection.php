@@ -31,13 +31,13 @@ class Connection extends Packages
    public int $port;
 
    // * Metadata
-   public int $id;
+   public readonly int $id;
    public bool $encrypted;
-   // @ Status
    public int $status;
-   // @ Stats
+   // @ State
    public int $started;
    public int $used;
+   // @ Stats
    #public int $reads;
    public int $writes;
 
@@ -56,11 +56,11 @@ class Connection extends Packages
       // * Metadata
       $this->id = (int) $Socket;
       $this->encrypted = false;
-      // @ Status
       $this->status = Connections::STATUS_ESTABLISHED;
-      // @ Stats
+      // @ State
       $this->started = \time();
       $this->used = \time();
+      // @ Stats
       #$this->reads = 0;
       $this->writes = 0;
 
@@ -218,7 +218,7 @@ class Connection extends Packages
       */
 
       Server::$Event->del($Socket, Server::$Event::EVENT_READ);
-      #Server::$Event->del($Socket, Server::$Event::EVENT_WRITE);
+      Server::$Event->del($Socket, Server::$Event::EVENT_WRITE);
 
       try {
          @\fclose($Socket);
