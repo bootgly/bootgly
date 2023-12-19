@@ -157,7 +157,7 @@ abstract class Throwables implements Debugging
          // backtrace
          $backtrace = self::trace($Throwable);
          $traces = count($backtrace);
-         $limit = 2; // TODO dynamic with verbosity?
+         $limit = 3; // TODO dynamic with verbosity?
 
          if ($traces > $limit) {
             $backtrace = array_slice($backtrace, -$limit);
