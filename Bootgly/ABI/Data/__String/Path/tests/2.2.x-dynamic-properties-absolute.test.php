@@ -13,9 +13,9 @@ return [
       // @
       $Path = new Path('/etc/php/');
 
-      Assertion::$description = 'Valid absolute path';
       yield new Assertion(
-         assertion: $Path->absolute === false,
+         assertion: $Path->absolute === true,
+         description: 'Valid absolute path',
          fallback: 'Path is absolute!'
       );
 
