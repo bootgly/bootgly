@@ -136,7 +136,8 @@ abstract class Packages implements WPI\Packages
             }
 
             break;
-         } while ($received < $total || $total === 0);
+         }
+         while ($received < $total || $total === 0);
       }
       catch (\Throwable) {
          $buffer = false;
@@ -200,7 +201,9 @@ abstract class Packages implements WPI\Packages
             $sent = @\fwrite($Socket, $buffer, $length);
 
             if ($sent === false) break;
-            if ($sent === 0) continue; // TODO check EOF?
+            if ($sent === 0) {
+               continue; // TODO check EOF?
+            }
 
             $written += $sent;
 
@@ -221,8 +224,12 @@ abstract class Packages implements WPI\Packages
          $sent = false;
       }
 
-      // @ Check issues
-      if ($written === 0 || $sent === false) {
+      // @ Close Connection
+      if ($sent === false) {
+         $this->Connection->close();
+      }
+      // @ Fail
+      if ($written === 0) {
          return $this->fail($Socket, 'write');
       }
 
@@ -461,8 +468,6 @@ abstract class Packages implements WPI\Packages
    public function upload (&$Socket, &$Handler, int $rate, int $length) : int
    {
       $written = 0;
-
-      // TODO Exceptions in breaks
 
       while ($written < $length) {
          // ! Stream
