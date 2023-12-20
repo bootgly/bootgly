@@ -1,7 +1,7 @@
 <?php
 
-use Bootgly\WPI\Nodes\HTTP\Server\Bridge\Request;
-use Bootgly\WPI\Nodes\HTTP\Server\Bridge\Response;
+use Bootgly\WPI\Nodes\HTTP_Server_\Request;
+use Bootgly\WPI\Nodes\HTTP_Server_\Response;
 
 
 //! 1 - Route Callback - OK

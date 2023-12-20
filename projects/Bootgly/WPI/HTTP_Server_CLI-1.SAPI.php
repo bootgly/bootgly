@@ -4,8 +4,8 @@ namespace projects\Bootgly\WPI;
 
 
 use Bootgly\WPI\Modules\HTTP\Server\Router;
-use Bootgly\WPI\Nodes\HTTP\Server\CLI\Request;
-use Bootgly\WPI\Nodes\HTTP\Server\CLI\Response;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 
 
 return [

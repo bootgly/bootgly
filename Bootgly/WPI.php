@@ -15,9 +15,9 @@ use Bootgly\ABI\Debugging\Data\Vars;
 
 use Bootgly\API\Projects;
 
-use Bootgly\WPI\Nodes\HTTP\Server\Bridge as Server;
-use Bootgly\WPI\Nodes\HTTP\Server\Bridge\Request;
-use Bootgly\WPI\Nodes\HTTP\Server\Bridge\Response;
+use Bootgly\WPI\Nodes\HTTP_Server_ as Server;
+use Bootgly\WPI\Nodes\HTTP_Server_\Request;
+use Bootgly\WPI\Nodes\HTTP_Server_\Response;
 use Bootgly\WPI\Modules\HTTP\Server\Router;
 
 

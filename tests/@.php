@@ -38,6 +38,6 @@ return [
       'Bootgly/CLI/',
 
       // Web Programming Interface (WPI)
-      'Bootgly/WPI/Nodes/HTTP/Server/CLI/',
+      'Bootgly/WPI/Nodes/HTTP_Server_CLI/',
    ]
 ];

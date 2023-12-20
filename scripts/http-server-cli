@@ -15,7 +15,7 @@ namespace scripts;
 require __DIR__ . '/../autoload.php';
 
 
-use Bootgly\WPI\Nodes\HTTP\Server\CLI as HTTP_Server_CLI;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI;
 
 
 $HTTP_Server_CLI = new HTTP_Server_CLI;
