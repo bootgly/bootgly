@@ -14,28 +14,21 @@ namespace Bootgly\WPI\Events;
 use Bootgly\ACI\Events\Loops;
 
 use Bootgly\WPI\Connections;
+use Bootgly\WPI\Events;
 
 
-class Select implements Loops
+class Select implements Events, Loops
 {
    public Connections $Connections;
 
    // * Config
-   // @ Events
-   // Client/Server
-   const EVENT_CONNECT = 1;
-   // Package
-   const EVENT_READ = 2;
-   const EVENT_WRITE = 3;
-   const EVENT_EXCEPT = 4;
-   // @ Loop
-   private bool $loop = true;
+   public bool $loop = true;
 
    // * Data
    // @ Sockets
-   private array $reads = [];
-   private array $writes = [];
-   private array $excepts = [];
+   protected array $reads = [];
+   protected array $writes = [];
+   protected array $excepts = [];
 
    // * Metadata
    // @ Events
@@ -46,8 +39,8 @@ class Select implements Loops
    private array $writing = [];
    private array $excepting = [];
    // @ Loop
-   private float $started;
-   private float $finished;
+   public readonly float $started;
+   public readonly float $finished;
 
 
    public function __construct (Connections &$Connections)
@@ -158,6 +151,8 @@ class Select implements Loops
    {
       $this->started = \microtime(true);
 
+      $Connections = $this->Connections;
+
       while (true) {
          \pcntl_signal_dispatch();
 
@@ -169,10 +164,12 @@ class Select implements Loops
             try {
                // Waiting $this->timeout for read / write / excepts events.
                $streams = @\stream_select($read, $write, $except, null);
-            } catch (\Throwable) {
+            }
+            catch (\Throwable) {
                $streams = false;
             }
-         } else {
+         }
+         else {
             // @ Sleep for 1 second and continue (Used to pause the Server)
             \sleep(1);
 
@@ -194,7 +191,7 @@ class Select implements Loops
 
                // @ Select action
                if ( isSet($this->connecting[$id]) ) {
-                  $this->Connections->connect();
+                  $Connections->connect();
                }
                else if ( isSet($this->reading[$id]) ) {
                   $Package = &$this->reading[$id];

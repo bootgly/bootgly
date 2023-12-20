@@ -105,7 +105,8 @@ class Connections implements WPI\Connections
       // @ Load file info
       try {
          require $info;
-      } catch (\Throwable) {
+      }
+      catch (\Throwable) {
          // ...
       }
    }
@@ -124,7 +125,8 @@ class Connections implements WPI\Connections
 
          #stream_set_read_buffer($Socket, 65535);
          #stream_set_write_buffer($Socket, 65535);
-      } catch (\Throwable) {
+      }
+      catch (\Throwable) {
          $Socket = false;
       }
 
@@ -171,7 +173,8 @@ class Connections implements WPI\Connections
       // @ Close specific Connection
       if ( isSet(self::$Connections[$connection]) ) {
          $closed = self::$Connections[$connection]->close();
-      } else {
+      }
+      else {
          $closed = false;
       }
 

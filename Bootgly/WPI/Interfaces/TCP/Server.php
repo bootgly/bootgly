@@ -13,7 +13,7 @@ namespace Bootgly\WPI\Interfaces\TCP;
 
 use Bootgly\ABI\Debugging\Data\Vars;
 use Bootgly\ABI\Debugging\Shutdown;
-
+use Bootgly\ACI\Events\Loops;
 use Bootgly\ACI\Events\Timer;
 use Bootgly\ACI\Logs\Logging;
 use Bootgly\ACI\Logs\Logger;
@@ -26,6 +26,7 @@ use Bootgly\API\Server as SAPI;
 
 use Bootgly\CLI;
 
+use Bootgly\WPI\Events;
 use Bootgly\WPI\Events\Select;
 use Bootgly\WPI\Servers;
 use Bootgly\WPI\Interfaces\TCP\Server\_\Process;
@@ -38,14 +39,12 @@ class Server implements Servers, Logging
    use LoggableEscaped;
 
 
+   // !
    protected $Socket;
 
-   // ! Event
-   public static string|object $Event = '\Bootgly\WPI\Events\Select';
-
+   public static Events&Loops $Event;
    protected Process $Process;
    protected Terminal $Terminal;
-
 
    // * Config
    protected ? string $domain;
@@ -85,8 +84,7 @@ class Server implements Servers, Logging
    protected static int $stat = -1;
    protected static array $stats = [];
 
-
-   // ! Connection(s)
+   // .
    protected Connections $Connections;
 
 
@@ -213,7 +211,8 @@ class Server implements Servers, Logging
       // @ Load file info
       try {
          require $info;
-      } catch (\Throwable) {
+      }
+      catch (\Throwable) {
          // ...
       }
 
@@ -344,7 +343,8 @@ class Server implements Servers, Logging
             STREAM_SERVER_BIND | STREAM_SERVER_LISTEN,
             $Context
          );
-      } catch (\Throwable) {
+      }
+      catch (\Throwable) {
          $this->Socket = false;
       }
 
@@ -406,11 +406,13 @@ class Server implements Servers, Logging
             if ($interact === false) {
                \usleep(100000 * $this->workers); // @ wait 0.1 s * qt workers
             }
-         } else if ($pid > 0) { // If a child has already exited?
+         }
+         else if ($pid > 0) { // If a child has already exited?
             $this->log('@\;Process child exited!@\;', self::LOG_ERROR_LEVEL);
             $this->Process->sendSignal(SIGINT);
             break;
-         } else if ($pid === -1) { // If error
+         }
+         else if ($pid === -1) { // If error
             break;
          }
       }
@@ -455,11 +457,13 @@ class Server implements Servers, Logging
          // If child is running?
          if ($pid === 0) {
             // ...
-         } else if ($pid > 0) { // If a child has already exited?
+         }
+         else if ($pid > 0) { // If a child has already exited?
             $this->log('@\;Process child exited!@\;', self::LOG_ERROR_LEVEL);
             $this->Process->sendSignal(SIGINT);
             break;
-         } else if ($pid === -1) { // If error ignore
+         }
+         else if ($pid === -1) { // If error ignore
             // ...
          }
 
@@ -484,13 +488,15 @@ class Server implements Servers, Logging
 
       try {
          $closed = @\fclose($this->Socket);
-      } catch (\Throwable) {
+      }
+      catch (\Throwable) {
          $closed = false;
       }
 
       if ($closed === false) {
          $this->log('@\;Failed to close $this->Socket!');
-      } else {
+      }
+      else {
          // TODO $this->alert?
          #$this->log('@\;Sockets closed successful.', self::LOG_INFO_LEVEL);
       }
