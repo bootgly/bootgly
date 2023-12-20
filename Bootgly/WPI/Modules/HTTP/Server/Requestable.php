@@ -11,9 +11,6 @@
 namespace Bootgly\WPI\Modules\HTTP\Server;
 
 
-use Bootgly\ABI\Data\__String\Path;
-
-
 trait Requestable
 {
    public function __get (string $name)
@@ -26,16 +23,18 @@ trait Requestable
          // * Data
          case 'ip': // TODO IP->...
          case 'address':
-            return $this->headers['cf-connecting-ip'] ?? $_SERVER['REMOTE_ADDR'];
+            return (string) ($this->Header->fields['cf-connecting-ip'] ?? $_SERVER['REMOTE_ADDR']);
          case 'port':
-            return $_SERVER['REMOTE_PORT'];
+            return (int) ($_SERVER['REMOTE_PORT']);
 
          case 'scheme':
-            if (isset($_SERVER['HTTP_X_FORWARDED_PROTO'])) {
+            if (isSet($_SERVER['HTTP_X_FORWARDED_PROTO']) === true) {
                $scheme = $_SERVER['HTTP_X_FORWARDED_PROTO'];
-            } else if (!empty($_SERVER['HTTPS'])) {
+            }
+            else if (empty($_SERVER['HTTPS']) === false) {
                $scheme = 'https';
-            } else {
+            }
+            else {
                $scheme = 'http';
             }
 
