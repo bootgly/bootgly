@@ -51,4 +51,4 @@ _*.test.php
 # Ignore known folders
 /workdata/cache/*
 /workdata/logs/*
-/workdata/temp/*
+#/workdata/temp/*
