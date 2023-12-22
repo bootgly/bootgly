@@ -14,20 +14,22 @@ namespace Bootgly\ACI;
 use Bootgly\ABI\Debugging\Data\Throwables;
 
 
-// @ Get Throwables Verbosity
-$verbosity = Throwables::$verbosity;
-// @ Set Throwables Verbosity
-Throwables::$verbosity = 1;
+if (\PHP_SAPI === 'cli') {
+   // @ Get Throwables Verbosity
+   $verbosity = Throwables::$verbosity;
+   // @ Set Throwables Verbosity
+   Throwables::$verbosity = 1;
 
 
-// Tests
-// @ Check zend.assertions configuration
-if (\function_exists('ini_get') && \ini_get('zend.assertions') !== '1') {
-   throw new \Exception(
-      message: 'Please, set `zend.assertions` to `1` in php.ini [Assertion].'
-   );
+   // Tests
+   // @ Check zend.assertions configuration
+   if (\function_exists('ini_get') && \ini_get('zend.assertions') !== '1') {
+      throw new \Exception(
+         message: 'Please, set `zend.assertions` to `1` in php.ini [Assertion].'
+      );
+   }
+
+
+   // @ Restore Throwables Verbosity
+   Throwables::$verbosity = $verbosity;
 }
-
-
-// @ Restore Throwables Verbosity
-Throwables::$verbosity = $verbosity;
