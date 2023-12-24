@@ -62,9 +62,11 @@ class Scripts
 
       // @
       $resource_dirs = [
-         self::ROOT_DIR,
-         self::WORKING_DIR,
+         self::ROOT_DIR
       ];
+      if (self::ROOT_DIR !== self::WORKING_DIR) {
+         $resource_dirs[] = self::WORKING_DIR;
+      }
       foreach ($resource_dirs as $dir) {
          $bootstrap = (include $dir . '@.php');
          if ($bootstrap !== false) {
@@ -104,7 +106,7 @@ class Scripts
       $this->validations[] = array_search($this->path, $this->includes['paths']);
       $this->validations[] = array_search($this->filename, $this->includes['filenames']);
 
-      if ($this->validations[1] === false) {
+      if ($this->validations[1] !== false) {
          return false;
       }
       if ($this->validations[0] === false && $this->validations[1] === false) {
