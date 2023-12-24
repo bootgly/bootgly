@@ -8,13 +8,13 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\WPI\Interfaces\TCP\Client\Connections;
+namespace Bootgly\WPI\Interfaces\TCP_Client_CLI\Connections;
 
 
 use Bootgly\ACI\Events\Timer;
-use Bootgly\WPI\Interfaces\TCP\Client;
-use Bootgly\WPI\Interfaces\TCP\Client\Connections;
-use Bootgly\WPI\Interfaces\TCP\Client\Packages;
+use Bootgly\WPI\Interfaces\TCP_Client_CLI as Client;
+use Bootgly\WPI\Interfaces\TCP_Client_CLI\Connections;
+use Bootgly\WPI\Interfaces\TCP_Client_CLI\Packages;
 
 
 class Connection extends Packages
@@ -40,7 +40,7 @@ class Connection extends Packages
    public const STATUS_CLOSING = 4;
    public const STATUS_CLOSED = 8;
    public int $status;
-   // @ Handler
+   // @ State
    public int $started;
    public int $used;
    // @ Stats
@@ -103,7 +103,8 @@ class Connection extends Packages
 
       try {
          @fclose($this->Socket);
-      } catch (\Throwable) {
+      }
+      catch (\Throwable) {
          // ...
       }
 

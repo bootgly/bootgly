@@ -8,22 +8,22 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\WPI\Interfaces\TCP;
+namespace Bootgly\WPI\Interfaces;
 
 
-// use
-use Closure;
 use Bootgly\ABI\Debugging\Data\Vars;
+
 use Bootgly\ACI\Logs\Logger;
 use Bootgly\ACI\Logs\LoggableEscaped;
+
 use Bootgly\WPI\Events\Select;
-use Bootgly\WPI\Interfaces\TCP\Client\_\Process;
-use Bootgly\WPI\Interfaces\TCP\Client\_\CLI\Terminal;
-// inherit
-use Bootgly\WPI\Interfaces\TCP\Client\Connections;
+use Bootgly\WPI\Interfaces\TCP_Client_CLI\_\Process;
+use Bootgly\WPI\Interfaces\TCP_Client_CLI\_\CLI\Terminal;
+
+use Bootgly\WPI\Interfaces\TCP_Client_CLI\Connections;
 
 
-class Client
+class TCP_Client_CLI
 {
    use LoggableEscaped;
 
@@ -52,13 +52,13 @@ class Client
    // * Data
    // ! On
    // @ on Worker
-   public static ? Closure $onInstance = null;
+   public static ? \Closure $onInstance = null;
    // @ on Connection
-   public static ? Closure $onConnect = null;
-   public static ? Closure $onDisconnect = null;
+   public static ? \Closure $onConnect = null;
+   public static ? \Closure $onDisconnect = null;
    // @ on Packages
-   public static ? Closure $onRead = null;
-   public static ? Closure $onWrite = null;
+   public static ? \Closure $onRead = null;
+   public static ? \Closure $onWrite = null;
 
    // * Metadata
    public const VERSION = '0.0.1';
@@ -162,9 +162,9 @@ class Client
    }
    public function on
    (
-      ? Closure $instance = null,
-      ? Closure $connect = null, ? Closure $disconnect = null,
-      ? Closure $read = null, ? Closure $write = null
+      ? \Closure $instance = null,
+      ? \Closure $connect = null, ? \Closure $disconnect = null,
+      ? \Closure $read = null, ? \Closure $write = null
    )
    {
       // @ Worker
@@ -196,9 +196,10 @@ class Client
       // ... Continue to master process:
       switch ($this->mode) {
          case self::MODE_DEFAULT:
-            if (Client::$onInstance) {
-               (Client::$onInstance)($this);
-            } else {
+            if (self::$onInstance) {
+               (self::$onInstance)($this);
+            }
+            else {
                if ( $this->connect() ) {
                   self::$Event->loop();
                }

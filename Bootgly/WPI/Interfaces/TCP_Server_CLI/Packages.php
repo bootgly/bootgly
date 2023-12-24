@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\WPI\Interfaces\TCP\Server;
+namespace Bootgly\WPI\Interfaces\TCP_Server_CLI;
 
 
 use Bootgly\ACI\Logs\Logger;
@@ -18,9 +18,9 @@ use Bootgly\API\Server as SAPI;
 
 use Bootgly\WPI; // @interface
 
-use Bootgly\WPI\Interfaces\TCP\Server;
-use Bootgly\WPI\Interfaces\TCP\Server\Connections;
-use Bootgly\WPI\Interfaces\TCP\Server\Connections\Connection;
+use Bootgly\WPI\Interfaces\TCP_Server_CLI as Server;
+use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections;
+use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections\Connection;
 
 
 abstract class Packages implements WPI\Packages

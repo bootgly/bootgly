@@ -8,16 +8,19 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\WPI\Interfaces\TCP\Client\_;
+namespace Bootgly\WPI\Interfaces\TCP_Server_CLI\_;
 
 
-// use
-use Bootgly\ACI\Logs\Logger;
 use Bootgly\ACI\Events\Timer;
-// ?
-use Bootgly\WPI\Interfaces\TCP\Client;
-// extend
+
+use Bootgly\ACI\Logs\Logger;
 use Bootgly\ACI\Logs\LoggableEscaped;
+
+use Bootgly\API\Server as SAPI;
+
+use Bootgly\WPI\Events\Select;
+// ?
+use Bootgly\WPI\Interfaces\TCP_Server_CLI as Server;
 
 
 class Process
@@ -25,8 +28,7 @@ class Process
    use LoggableEscaped;
 
 
-   public Client $Client;
-
+   public Server $Server;
 
    // * Config
    // ...
@@ -40,14 +42,14 @@ class Process
    public static int $master;
    public static array $children = [];
    // File
-   public static $commandFile = BOOTGLY_WORKING_DIR . '/workdata/client.command';
-   public static $pidFile = BOOTGLY_WORKING_DIR . '/workdata/client.pid';
-   public static $pidLockFile = BOOTGLY_WORKING_DIR . '/workdata/client.pid.lock';
+   public static $commandFile = BOOTGLY_WORKING_DIR . '/workdata/server.command';
+   public static $pidFile = BOOTGLY_WORKING_DIR . '/workdata/server.pid';
+   public static $pidLockFile = BOOTGLY_WORKING_DIR . '/workdata/server.pid.lock';
 
 
-   public function __construct (Client &$Client)
+   public function __construct (Server &$Server)
    {
-      $this->Client = $Client;
+      $this->Server = $Server;
 
 
       // * Config
@@ -82,6 +84,8 @@ class Process
 
          case 'children':
             return count(self::$children);
+         case 'pids':
+            return self::$children;
       }
    }
 
@@ -118,18 +122,24 @@ class Process
       // * Custom command
       pcntl_signal(SIGUSR1, $signalHandler, false); // 10
 
-      // ! Client
+      // ! Server
       // @ stop()
       pcntl_signal(SIGHUP, $signalHandler, false);  // 1
       pcntl_signal(SIGINT, $signalHandler, false);  // 2 (CTRL + C)
       pcntl_signal(SIGQUIT, $signalHandler, false); // 3
       pcntl_signal(SIGTERM, $signalHandler, false); // 15
-
+      // @ pause()
       pcntl_signal(SIGTSTP, $signalHandler, false); // 20 (CTRL + Z)
+      // @ resume()
       pcntl_signal(SIGCONT, $signalHandler, false); // 18
+      // @ reload()
       pcntl_signal(SIGUSR2, $signalHandler, false); // 12
 
+      // ! \Connection
+      // ? @info
+      // @ $stats
       pcntl_signal(SIGIOT, $signalHandler, false);  // 6
+      // @ $peers
       pcntl_signal(SIGIO, $signalHandler, false);   // 29
 
       // ignore
@@ -147,27 +157,61 @@ class Process
 
          // * Custom command
          case SIGUSR1:  // 10
+            // TODO review security concious (+1)
+            $lines = @file(static::$commandFile);
+
+            if ($lines) {
+               $line = $lines[count($lines) - 1];
+
+               [$command, $context] = explode(':', rtrim($line));
+   
+               // @ Prepend command
+               $command = '@' . $command;
+   
+               // @ Match context
+               match ($context) {
+                  'Connections' => $this->Server->Connections->{$command},
+                  default => $this->Server->{$command}
+               };
+            }
+
             break;
 
-         // ! Client
+         // ! Server
          // @ stop()
          case SIGHUP:  // 1
          case SIGINT:  // 2 (CTRL + C)
          case SIGQUIT: // 3
          case SIGTERM: // 15
-            $this->Client->stop();
+            $this->Server->stop();
             break;
-
+         // @ pause()
          case SIGTSTP: // 20 (CTRL + Z)
+            match ($this->Server->mode) {
+               Server::MODE_MONITOR => $this->Server->mode = Server::MODE_INTERACTIVE,
+               Server::MODE_INTERACTIVE => $this->Server->pause()
+            };
             break;
+         // @ resume()
          case SIGCONT: // 18
+            $this->Server->resume();
             break;
+         // @ reload()
          case SIGUSR2: // 12
+            SAPI::boot(reset: true);
             break;
 
+         // ! \Connection
+         // ? @info
+         // @ $peers
+         // Show info of active remote accepted connections (remote ip + remote port, ...)
          case SIGIOT:  // 6
+            $this->Server->Connections->{'@peers'};
             break;
+         // @ $stats
+         // Show stats of server socket connections (reads, writes, errors...)
          case SIGIO:   // 29
+            $this->Server->Connections->{'@stats'};
             break;
       }
    }
@@ -176,6 +220,10 @@ class Process
       if ($master) {
          // Send signal to master process
          posix_kill(static::$master, $signal);
+
+         if ($children === false) {
+            pcntl_signal_dispatch();
+         }
       }
 
       if ($children) {
@@ -191,7 +239,7 @@ class Process
 
    public function fork (int $workers)
    {
-      $this->log("forking $workers workers... ", self::LOG_INFO_LEVEL);
+      $this->log("forking $workers workers... ", self::LOG_NOTICE_LEVEL);
 
       for ($i = 0; $i < $workers; $i++) {
          $pid = pcntl_fork();
@@ -202,20 +250,22 @@ class Process
             // @ Set child index
             self::$index = $i + 1;
 
-            cli_set_process_title('Bootgly_WPI_Client: child process (Worker #' . self::$index . ')');
+            cli_set_process_title('Bootgly_WPI_Server: child process (Worker #' . self::$index . ')');
 
             // @ Set Logging display
             Logger::$display = Logger::DISPLAY_MESSAGE_WHEN_ID;
 
-            // @ Call On Worker instance
-            if (Client::$onInstance) {
-               (Client::$onInstance)($this->Client);
-            }
+            // @ Create stream socket server
+            $this->Server->instance();
 
-            $this->Client->stop();
+            // Event Loop
+            $this->Server::$Event->add($this->Server->Socket, Select::EVENT_CONNECT, true);
+            $this->Server::$Event->loop();
+
+            $this->Server->stop();
             #exit(1);
          } else if ($pid > 0) { // Master process
-            cli_set_process_title("Bootgly_WPI_Client: master process");
+            cli_set_process_title("Bootgly_WPI_Server: master process");
          } else if ($pid === -1) {
             die('Could not fork process!');
          }

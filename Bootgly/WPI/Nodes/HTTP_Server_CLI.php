@@ -23,7 +23,8 @@ use Bootgly\API\Projects;
 
 use Bootgly\API\Server as SAPI;
 
-use Bootgly\WPI\Interfaces\TCP;
+use Bootgly\WPI\Interfaces\TCP_Client_CLI;
+use Bootgly\WPI\Interfaces\TCP_Server_CLI;
 
 use Bootgly\WPI\Modules\HTTP;
 use Bootgly\WPI\Modules\HTTP\Server;
@@ -35,16 +36,16 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 
 
-class HTTP_Server_CLI extends TCP\Server implements HTTP, Server
+class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
 {
    // * Config
-   // ...inherited from TCP\Server
+   // ...inherited from TCP_Server_CLI
 
    // * Data
-   // ...inherited from TCP\Server
+   // ...inherited from TCP_Server_CLI
 
    // * Metadata
-   // ...inherited from TCP\Server
+   // ...inherited from TCP_Server_CLI
 
    public static Request $Request;
    public static Response $Response;
@@ -54,13 +55,13 @@ class HTTP_Server_CLI extends TCP\Server implements HTTP, Server
    public function __construct (int $mode = self::MODE_MONITOR)
    {
       // * Config
-      // ...inherited from TCP\Server
+      // ...inherited from TCP_Server_CLI
 
       // * Data
-      // ...inherited from TCP\Server
+      // ...inherited from TCP_Server_CLI
 
       // * Metadata
-      // ...inherited from TCP\Server
+      // ...inherited from TCP_Server_CLI
 
       // \
       parent::__construct();
@@ -109,7 +110,8 @@ class HTTP_Server_CLI extends TCP\Server implements HTTP, Server
             ? 'https://'
             : 'http://'
          );
-      } catch (\Throwable $Throwable) {
+      }
+      catch (\Throwable $Throwable) {
          Exceptions::report($Throwable);
       }
    }
@@ -200,20 +202,20 @@ class HTTP_Server_CLI extends TCP\Server implements HTTP, Server
       }
    }
 
-   protected static function test (TCP\Server $TCPServer)
+   protected static function test (TCP_Server_CLI $TCP_Server_CLI)
    {
       Logger::$display = Logger::DISPLAY_NONE;
 
       self::boot(Environments::Test);
 
-      $TCPClient = new TCP\Client;
-      $TCPClient->configure(
-         host: $TCPServer->host === '0.0.0.0' ? '127.0.0.1' : $TCPServer->host,
-         port: $TCPServer->port
+      $TCP_Client_CLI = new TCP_Client_CLI;
+      $TCP_Client_CLI->configure(
+         host: $TCP_Server_CLI->host === '0.0.0.0' ? '127.0.0.1' : $TCP_Server_CLI->host,
+         port: $TCP_Server_CLI->port
       );
-      $TCPClient->on(
+      $TCP_Client_CLI->on(
          // on Connection connect
-         connect: static function ($Socket, $Connection) use ($TCPClient) {
+         connect: static function ($Socket, $Connection) use ($TCP_Client_CLI) {
             Logger::$display = Logger::DISPLAY_MESSAGE;
 
             // @ Get test files
@@ -241,7 +243,7 @@ class HTTP_Server_CLI extends TCP\Server implements HTTP, Server
                $responseLength = @$spec['response.length'] ?? null;
                // ! Client
                // ? Request
-               $requestData = $spec['request']($TCPClient->host . ':' . $TCPClient->port);
+               $requestData = $spec['request']($TCP_Client_CLI->host . ':' . $TCP_Client_CLI->port);
                $requestLength = strlen($requestData);
                // @ Send Request to Server
                $Connection::$output = $requestData;
@@ -276,10 +278,10 @@ class HTTP_Server_CLI extends TCP\Server implements HTTP, Server
             Logger::$display = Logger::DISPLAY_MESSAGE;
 
             // @ Destroy Client Event Loop
-            $TCPClient::$Event->destroy();
+            $TCP_Client_CLI::$Event->destroy();
          }
       );
-      $TCPClient->start();
+      $TCP_Client_CLI->start();
 
       return true;
    }

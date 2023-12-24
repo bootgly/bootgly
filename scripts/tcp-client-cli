@@ -16,11 +16,12 @@ require __DIR__ . '/../autoload.php';
 
 
 use Bootgly\ACI\Events\Timer;
-use Bootgly\WPI\Interfaces\TCP;
+
+use Bootgly\WPI\Interfaces\TCP_Client_CLI;
 
 
-$TCP_Client = new TCP\Client(
-   TCP\Client::MODE_MONITOR
+$TCP_Client = new TCP_Client_CLI(
+   TCP_Client_CLI::MODE_MONITOR
 );
 $TCP_Client->configure(
    host: '127.0.0.1',
@@ -61,9 +62,9 @@ $TCP_Client->on(
       $Connection::$output = "GET / HTTP/1.1\r\nHost: localhost:8080\r\n\r\n";
 
       // @ Add Package write to Event loop
-      TCP\Client::$Event->add($Socket, TCP\Client::$Event::EVENT_WRITE, $Connection);
+      TCP_Client_CLI::$Event->add($Socket, TCP_Client_CLI::$Event::EVENT_WRITE, $Connection);
    },
-   disconnect: function ($Connection) use($TCP_Client) {
+   disconnect: function ($Connection) use ($TCP_Client) {
       $TCP_Client->log(
          'Connection #' . $Connection->id . ' (' . $Connection->ip . ':' . $Connection->port . ')'
          . ' from Worker with PID @_:' . $TCP_Client->Process->id . '_@ was closed! @\;'
@@ -72,7 +73,7 @@ $TCP_Client->on(
    // on Package write / read
    write: function ($Socket, $Connection, $Package) {
       // @ Add Package read to Event loop
-      TCP\Client::$Event->add($Socket, TCP\Client::$Event::EVENT_READ, $Connection);
+      TCP_Client_CLI::$Event->add($Socket, TCP_Client_CLI::$Event::EVENT_READ, $Connection);
    },
    read: null,
 );

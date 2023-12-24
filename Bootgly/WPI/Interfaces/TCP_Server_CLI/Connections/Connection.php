@@ -8,13 +8,14 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\WPI\Interfaces\TCP\Server\Connections;
+namespace Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections;
 
 
 use Bootgly\ACI\Events\Timer;
-use Bootgly\WPI\Interfaces\TCP\Server;
-use Bootgly\WPI\Interfaces\TCP\Server\Connections;
-use Bootgly\WPI\Interfaces\TCP\Server\Packages;
+
+use Bootgly\WPI\Interfaces\TCP_Server_CLI as Server;
+use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections;
+use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages;
 
 
 class Connection extends Packages

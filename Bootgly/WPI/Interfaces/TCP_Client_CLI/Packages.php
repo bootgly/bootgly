@@ -8,16 +8,16 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\WPI\Interfaces\TCP\Client;
+namespace Bootgly\WPI\Interfaces\TCP_Client_CLI;
 
 
 use Bootgly\ACI\Logs\LoggableEscaped;
 
 use Bootgly\WPI; // @interface
 
-use Bootgly\WPI\Interfaces\TCP\Client;
-use Bootgly\WPI\Interfaces\TCP\Client\Connections;
-use Bootgly\WPI\Interfaces\TCP\Client\Connections\Connection;
+use Bootgly\WPI\Interfaces\TCP_Client_CLI as Client;
+use Bootgly\WPI\Interfaces\TCP_Client_CLI\Connections;
+use Bootgly\WPI\Interfaces\TCP_Client_CLI\Connections\Connection;
 
 
 class Packages implements WPI\Packages
@@ -135,7 +135,8 @@ class Packages implements WPI\Packages
 
             break;
          }
-      } catch (\Throwable) {
+      }
+      catch (\Throwable) {
          $sent = false;
       }
 
@@ -200,7 +201,8 @@ class Packages implements WPI\Packages
             }
 
             break;
-         } while ($received < $total || $total === 0);
+         }
+         while ($received < $total || $total === 0);
       } catch (\Throwable) {
          $buffer = false;
       }

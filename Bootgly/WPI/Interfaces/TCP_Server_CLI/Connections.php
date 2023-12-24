@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\WPI\Interfaces\TCP\Client;
+namespace Bootgly\WPI\Interfaces\TCP_Server_CLI;
 
 
 use Bootgly\WPI;
@@ -16,8 +16,8 @@ use Bootgly\WPI\Packages; // @interface
 
 use Bootgly\ACI\Logs\LoggableEscaped;
 
-use Bootgly\WPI\Interfaces\TCP\Client;
-use Bootgly\WPI\Interfaces\TCP\Client\Connections\Connection;
+use Bootgly\WPI\Interfaces\TCP_Server_CLI as Server;
+use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections\Connection;
 
 
 class Connections implements WPI\Connections
@@ -25,21 +25,19 @@ class Connections implements WPI\Connections
    use LoggableEscaped;
 
 
-   public ? Client $Client;
+   public ? Server $Server;
 
    // * Config
    public ? float $timeout;
-   public bool $async;
-   public bool $blocking;
 
    // * Data
-   public $Socket;
+   // ...
 
    // * Metadata
-   // @ Error
-   public array $error = [];
-   // @ Local
+   // @ Remote
    public static array $Connections;
+   // @ Limiter
+   public static array $blacklist;
    // @ Stats
    public static bool $stats;
    // Connections
@@ -47,84 +45,93 @@ class Connections implements WPI\Connections
    // Errors
    public static array $errors;
    // Packages
-   public static int $writes;
    public static int $reads;
-   public static int $written;
+   public static int $writes;
    public static int $read;
+   public static int $written;
+   // @ Status
+   public const STATUS_INITIAL = 0;
+   public const STATUS_CONNECTING = 1;
+   public const STATUS_ESTABLISHED = 2;
+   public const STATUS_CLOSING = 4;
+   public const STATUS_CLOSED = 8;
 
    public Packages $Packages;
 
 
-   public function __construct (? Client &$Client = null)
+   public function __construct (? Server &$Server = null)
    {
-      $this->Client = $Client;
+      $this->Server = $Server;
 
       // * Config
       $this->timeout = 5;
-      $this->async = true;
-      $this->blocking = false;
 
       // * Data
-      // ... dynamicaly
+      // ..
 
       // * Metadata
-      // @ Error
-      $this->error = [];
       // @ Remote
       self::$Connections = []; // Connections peers
+      // @ Limiter
+      self::$blacklist = [];   // Connections blacklist defined by limit methods
       // @ Stats
-      self::$stats = false;
+      self::$stats = true;
       // Connections
       $this->connections = 0;  // Connections count
       // Errors
       self::$errors = [
-         'connection' => 0,    // Socket Connection errors
-         'write' => 0,         // Socket Writing errors
-         'read' => 0           // Socket Reading errors
+         'connection' => 0,  // Socket Connection errors
+         'read' => 0,        // Socket Reading errors
+         'write' => 0        // Socket Writing errors
          // 'except' => 0
       ];
       // Packages
-      self::$writes = 0;       // Socket Write count
       self::$reads = 0;        // Socket Read count
-      self::$written = 0;      // Socket Writes in bytes
+      self::$writes = 0;       // Socket Write count
       self::$read = 0;         // Socket Reads in bytes
+      self::$written = 0;      // Socket Writes in bytes
    }
    public function __get ($name)
    {
-      // TODO ?
+      $info = __DIR__ . '/Connections/_/info.php';
+
+      // @ Clear cache of file info
+      if ( \function_exists('opcache_invalidate') ) {
+         \opcache_invalidate($info, true);
+      }
+
+      \clearstatcache(false, $info);
+
+      // @ Load file info
+      try {
+         require $info;
+      }
+      catch (\Throwable) {
+         // ...
+      }
    }
 
-   // Open connection with server / Connect with server
+   // Accept connection from client / Open connection with client / Connect with client
    public function connect () : bool
    {
-      $Socket = &$this->Client->Socket;
-
-      Client::$Event->del($Socket, Client::$Event::EVENT_CONNECT);
-
       try {
-         // @ Set blocking
-         stream_set_blocking($Socket, $this->blocking);
+         $Socket = @\stream_socket_accept($this->Server->Socket, null);
 
-         // @ Set Buffer sizes
-         #stream_set_read_buffer($Socket, 65535);
-         #stream_set_write_buffer($Socket, 65535);
+         \stream_set_timeout($Socket, 0);
 
-         // @ Set Chunk size
+         \stream_set_blocking($Socket, false); // +15% performance
+
          #stream_set_chunk_size($Socket, 65535);
 
-         // @ Import stream
-         #if (function_exists('socket_import_stream') === true) {
-         #   $Socket = socket_import_stream($Socket);
-
-         #   socket_set_option($Socket, SOL_SOCKET, SO_KEEPALIVE, 1);
-         #   socket_set_option($Socket, SOL_TCP, TCP_NODELAY, 1);
-         #}
-      } catch (\Throwable) {
+         #stream_set_read_buffer($Socket, 65535);
+         #stream_set_write_buffer($Socket, 65535);
+      }
+      catch (\Throwable) {
          $Socket = false;
       }
 
-      if ($Socket === false || is_resource($Socket) === false) {
-         $this->log('Socket connection is false or invalid!' . PHP_EOL, self::LOG_ERROR_LEVEL);
+      if ($Socket === false) {
+         #$this->log('Socket connection is false!' . PHP_EOL);
          self::$errors['connection']++;
          return false;
       }
@@ -132,11 +139,20 @@ class Connections implements WPI\Connections
       // @ Instance new connection
       $Connection = new Connection($Socket);
 
+      // @ Check connection
+      if ( $Connection->check() === false ) {
+         return false;
+      }
+
       // @ Set stats
       $this->connections++;
 
       // @ Set Connection
       self::$Connections[(int) $Socket] = $Connection;
+
+      // @ Add Connection Data read to Event loop
+      Server::$Event->add($Socket, Server::$Event::EVENT_READ, $Connection);
+      #Server::$Event->add($Socket, Server::$Event::EVENT_WRITE, $Connection);
 
       return true;
    }
@@ -157,7 +173,8 @@ class Connections implements WPI\Connections
       // @ Close specific Connection
       if ( isSet(self::$Connections[$connection]) ) {
          $closed = self::$Connections[$connection]->close();
-      } else {
+      }
+      else {
          $closed = false;
       }
 

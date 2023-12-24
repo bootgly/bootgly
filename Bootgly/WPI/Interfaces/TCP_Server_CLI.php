@@ -8,11 +8,13 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\WPI\Interfaces\TCP;
+namespace Bootgly\WPI\Interfaces;
 
 
 use Bootgly\ABI\Debugging\Data\Vars;
 use Bootgly\ABI\Debugging\Shutdown;
+use Bootgly\ABI\IO\FS\File;
+
 use Bootgly\ACI\Events\Loops;
 use Bootgly\ACI\Events\Timer;
 use Bootgly\ACI\Logs\Logging;
@@ -29,12 +31,12 @@ use Bootgly\CLI;
 use Bootgly\WPI\Events;
 use Bootgly\WPI\Events\Select;
 use Bootgly\WPI\Servers;
-use Bootgly\WPI\Interfaces\TCP\Server\_\Process;
-use Bootgly\WPI\Interfaces\TCP\Server\_\CLI\Terminal;
-use Bootgly\WPI\Interfaces\TCP\Server\Connections;
+use Bootgly\WPI\Interfaces\TCP_Server_CLI\_\Process;
+use Bootgly\WPI\Interfaces\TCP_Server_CLI\_\CLI\Terminal;
+use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections;
 
 
-class Server implements Servers, Logging
+class TCP_Server_CLI implements Servers, Logging
 {
    use LoggableEscaped;
 
@@ -57,7 +59,7 @@ class Server implements Servers, Logging
    public const MODE_INTERACTIVE = 2;
    public const MODE_MONITOR = 3;
    public const MODE_TEST = 4;
-   protected int $mode;
+   public int $mode;
    // @ Verbosity
 
    // * Data
@@ -146,7 +148,8 @@ class Server implements Servers, Logging
       // @ Boot Server API
       if (self::$Application) {
          self::$Application::boot(Environments::Production);
-      } else {
+      } 
+      else {
          SAPI::$production = Projects::CONSUMER_DIR . 'Bootgly/WPI/TCP_Server_CLI.SAPI.php';
          SAPI::boot(reset: true, key: 'on.Package.Receive');
       }
@@ -164,9 +167,6 @@ class Server implements Servers, Logging
 
          case 'Connections':
             return $this->Connections;
-
-         case 'mode':
-            return $this->mode;
 
          case '@test init':
             SAPI::$Environment = Environments::Test;
@@ -200,32 +200,28 @@ class Server implements Servers, Logging
       $display = Logger::$display;
       Logger::$display = Logger::DISPLAY_MESSAGE;
 
-      $info = __DIR__ . '/Server/_/info.php';
+      // @ Output info server
+      $Info = new File(
+         BOOTGLY_ROOT_DIR . __CLASS__ . '/_/info.php'
+      );
+      if ($Info->exists) {
+         // @ Clear cache of file info
+         if (\function_exists('opcache_invalidate')) {
+            \opcache_invalidate($Info->file, true);
+         }
+         \clearstatcache(false, $Info->file);
 
-      // @ Clear cache of file info
-      if ( \function_exists('opcache_invalidate') ) {
-         \opcache_invalidate($info, true);
-      }
-      \clearstatcache(false, $info);
-
-      // @ Load file info
-      try {
-         require $info;
-      }
-      catch (\Throwable) {
-         // ...
+         // @ Load file info
+         try {
+            require $Info->file;
+         }
+         catch (\Throwable) {
+            // ...
+         }
       }
 
       // @ Restore log display
       Logger::$display = $display;
-   }
-   public function __set (string $name, $value)
-   {
-      switch ($name) {
-         case 'mode':
-            $this->mode = $value;
-            break;
-      }
    }
    public function __call (string $name, array $arguments)
    {
@@ -234,8 +230,7 @@ class Server implements Servers, Logging
             return $this->instance(...$arguments);
 
          case 'stop':
-            $this->stop(...$arguments);
-            break;
+            return $this->stop(...$arguments);
          case 'pause':
             return $this->pause(...$arguments);
          case 'resume':
@@ -263,6 +258,15 @@ class Server implements Servers, Logging
       $this->ssl = $ssl;
 
       return $this;
+   }
+   public function on (string $name, \Closure $handler) : bool
+   {
+      switch ($name) {
+         case 'encode':
+            break;
+      }
+
+      return true;
    }
    public function start ()
    {
@@ -293,15 +297,6 @@ class Server implements Servers, Logging
          case self::MODE_MONITOR:
             new CLI; // TODO remove (temp: use Script exec)
             $this->monitor();
-            break;
-      }
-
-      return true;
-   }
-   public function on (string $name, \Closure $handler) : bool
-   {
-      switch ($name) {
-         case 'encode':
             break;
       }
 

@@ -8,14 +8,14 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\WPI\Interfaces\TCP\Server\_\CLI;
+namespace Bootgly\WPI\Interfaces\TCP_Server_CLI\_\CLI;
 
 
 use Bootgly\ACI\Logs\LoggableEscaped;
 
 use Bootgly\CLI;
 
-use Bootgly\WPI\Interfaces\TCP\Server;
+use Bootgly\WPI\Interfaces\TCP_Server_CLI;
 
 
 class Terminal extends CLI\Terminal // TODO rename to Commands
@@ -23,7 +23,7 @@ class Terminal extends CLI\Terminal // TODO rename to Commands
    use LoggableEscaped;
 
 
-   public Server $Server;
+   public TCP_Server_CLI $Server;
 
    // ! Command
    // * Data
@@ -70,7 +70,7 @@ class Terminal extends CLI\Terminal // TODO rename to Commands
    // ***
 
 
-   public function __construct (Server &$Server)
+   public function __construct (TCP_Server_CLI &$Server)
    {
       parent::__construct();
       $this->Server = $Server;
@@ -105,7 +105,7 @@ class Terminal extends CLI\Terminal // TODO rename to Commands
          // TODO restart command
          // @ mode
          'monitor' =>
-            $this->Server->mode = Server::MODE_MONITOR,
+            $this->Server->mode = TCP_Server_CLI::MODE_MONITOR,
          // @ operations
          // TODO 'benchmark'
          'check jit' =>

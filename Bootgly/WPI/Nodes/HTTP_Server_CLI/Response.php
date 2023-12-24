@@ -15,7 +15,7 @@ use Bootgly\ABI\Data\__String\Path;
 use Bootgly\ABI\Debugging\Data\Throwables;
 use Bootgly\ABI\IO\FS\File;
 
-use Bootgly\WPI\Interfaces\TCP\Server\Packages;
+use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI as Server;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Content;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Meta;

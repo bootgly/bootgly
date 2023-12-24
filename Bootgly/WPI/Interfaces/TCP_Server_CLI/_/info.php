@@ -1,11 +1,15 @@
 <?php
 
 use Bootgly\ABI\Data\__String\Path;
+
 use Bootgly\API\Server as SAPI;
+
 use Bootgly\CLI;
 use Bootgly\CLI\UI\Fieldset\Fieldset;
 use Bootgly\CLI\UI\Progress\Progress;
-use Bootgly\WPI\Interfaces\TCP\Server;
+
+use Bootgly\WPI\Interfaces\TCP_Server_CLI as Server;
+
 
 switch ($name) {
    case '@status':
@@ -172,7 +176,8 @@ switch ($name) {
 
             // new Progress
             $Progress[$i + 1] = clone $Progress[0];
-         } else {
+         }
+         else {
             $Fieldset2->content .= <<<OUTPUT
              Worker #{$id} with PID $pid not found. \n
             OUTPUT;

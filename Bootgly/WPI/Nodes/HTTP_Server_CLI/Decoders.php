@@ -11,7 +11,7 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI;
 
 
-use Bootgly\WPI\Interfaces\TCP\Server\Packages;
+use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages;
 
 
 abstract class Decoders
