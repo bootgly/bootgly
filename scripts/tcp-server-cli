@@ -15,14 +15,14 @@ namespace Bootgly;
 require __DIR__ . '/../autoload.php';
 
 
-use Bootgly\WPI\Interfaces\TCP;
+use Bootgly\WPI\Interfaces\TCP_Server_CLI;
 
 
-$TCP_Server = new TCP\Server;
-$TCP_Server->configure(
+$TCP_Server_CLI = new TCP_Server_CLI;
+$TCP_Server_CLI->configure(
    host: '0.0.0.0',
    port: getenv('PORT') ? getenv('PORT') : 8080,
    workers: 12
 );
 // on Data -> projects/Bootgly/WPI/TCP_Server_CLI.SAPI.php
-$TCP_Server->start();
+$TCP_Server_CLI->start();
