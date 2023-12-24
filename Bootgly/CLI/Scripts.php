@@ -12,6 +12,7 @@ namespace Bootgly\CLI;
 
 
 use Bootgly\ABI\Data\__String\Path;
+use Bootgly\ABI\IO\FS\File;
 
 
 class Scripts
@@ -23,10 +24,12 @@ class Scripts
    public const WORKING_DIR = BOOTGLY_WORKING_BASE . '/scripts/';
 
    // * Config
+   // ...
 
    // * Data
    protected array $includes;
    protected array $scripts;
+
    // * Metadata
    // @ Validating
    private ? string $path;
@@ -50,10 +53,11 @@ class Scripts
             self::WORKING_BASE,
             self::WORKING_DIR,
          ],
-         'filenames' => [
+         'bootstraps' => [
             'bootgly',
-            '/usr/local/bin/bootgly',
-         ]
+            '/usr/local/bin/bootgly'
+         ],
+         'filenames' => []
       ];
       // * Metadata
       $this->path = null;
@@ -103,28 +107,34 @@ class Scripts
 
       // @
       $this->validations = [];
-      $this->validations[] = array_search($this->path, $this->includes['paths']);
-      $this->validations[] = array_search($this->filename, $this->includes['filenames']);
+      $this->validations[] = \array_search($this->path, $this->includes['paths']);
+      $this->validations[] = \array_search($this->filename, $this->includes['bootstraps']);
+      $this->validations[] = \array_search($this->filename, $this->includes['filenames']);
 
-      if ($this->validations[1] !== false) {
+      if ($this->validations[1] === false) {
          return false;
       }
-      if ($this->validations[0] === false && $this->validations[1] === false) {
+      if ($this->validations[2] !== false) {
+         return false;
+      }
+      if ($this->validations[0] === false && $this->validations[2] === false) {
          return false;
       }
 
       return true;
    }
 
-   public static function execute (string $path)
+   public static function execute (string $script)
    {
-      $path = Path::normalize($path);
-      $location = self::ROOT_DIR . $path;
+      $Script = new File(
+         self::ROOT_DIR . Path::normalize($script)
+      );
 
-      if ( file_exists($location) ) {
-         include $location;
+      if ($Script->exists) {
+         require $Script->file;
          // TODO register commands, etc.
-      } else {
+      }
+      else {
          throw new \Exception("Script not found: $path");
       }
    }
