@@ -25,7 +25,7 @@ return [
 
       $HTTP_Server_CLI->start();
 
-      $HTTP_Server_CLI->Terminal->command('test'); // TODO up command method to parent class as trait|interface|parent
+      $HTTP_Server_CLI->Commands->command('test'); // TODO up command method to parent class as trait|interface|parent
 
       return [];
    },

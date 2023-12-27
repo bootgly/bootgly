@@ -8,11 +8,11 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\WPI;
+namespace Bootgly\WPI\Connections;
 
 
-interface Servers
+interface Packages
 {
-   public function configure (string $host, int $port, int $workers);
-   public function start ();
+   public function read (&$Socket);
+   public function write (&$Socket);
 }

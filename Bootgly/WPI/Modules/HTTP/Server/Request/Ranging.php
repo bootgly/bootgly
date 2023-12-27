@@ -11,7 +11,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\WPI\Modules\HTTP\Request;
+namespace Bootgly\WPI\Modules\HTTP\Server\Request;
 
 
 trait Ranging

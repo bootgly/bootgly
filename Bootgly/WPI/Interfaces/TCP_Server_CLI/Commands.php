@@ -8,22 +8,22 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\WPI\Interfaces\TCP_Server_CLI\_\CLI;
+namespace Bootgly\WPI\Interfaces\TCP_Server_CLI;
 
 
 use Bootgly\ACI\Logs\LoggableEscaped;
 
 use Bootgly\CLI;
 
-use Bootgly\WPI\Interfaces\TCP_Server_CLI;
+use Bootgly\WPI\Interfaces\TCP_Server_CLI as Server;
 
 
-class Terminal extends CLI\Terminal // TODO rename to Commands
+class Commands extends CLI\Terminal // TODO rename to Commands
 {
    use LoggableEscaped;
 
 
-   public TCP_Server_CLI $Server;
+   public Server $Server;
 
    // ! Command
    // * Data
@@ -70,7 +70,7 @@ class Terminal extends CLI\Terminal // TODO rename to Commands
    // ***
 
 
-   public function __construct (TCP_Server_CLI &$Server)
+   public function __construct (Server &$Server)
    {
       parent::__construct();
       $this->Server = $Server;
@@ -105,18 +105,18 @@ class Terminal extends CLI\Terminal // TODO rename to Commands
          // TODO restart command
          // @ mode
          'monitor' =>
-            $this->Server->mode = TCP_Server_CLI::MODE_MONITOR,
+            $this->Server->mode = Server::MODE_MONITOR,
          // @ operations
          // TODO 'benchmark'
          'check jit' =>
             $this->log(
-               (function_exists('opcache_get_status') && @opcache_get_status()['jit']['enabled'])
+               (\function_exists('opcache_get_status') && @\opcache_get_status()['jit']['enabled'])
                ? 'JIT enabled' : 'JIT disabled'
             ) && true,
          'error on' =>
-            error_reporting(E_ALL) && ini_set('display_errors', 'On') && true,
+            \error_reporting(E_ALL) && \ini_set('display_errors', 'On') && true,
          'error off' =>
-            error_reporting(0) && ini_set('display_errors', 'Off') && true,
+            \error_reporting(0) && \ini_set('display_errors', 'Off') && true,
          // TODO 'log'
          'test' => // TODO use CLI wizard to choose the tests
             $this->saveCommand('test init')
@@ -152,7 +152,7 @@ class Terminal extends CLI\Terminal // TODO rename to Commands
 
       $line = $command . ':' . $context . PHP_EOL;
 
-      if (file_put_contents($file, $line, FILE_APPEND) === false) {
+      if (\file_put_contents($file, $line, FILE_APPEND) === false) {
          return false;
       }
 

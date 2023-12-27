@@ -23,7 +23,7 @@ use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections\Connection;
 
 
-abstract class Packages implements WPI\Packages
+abstract class Packages implements WPI\Connections\Packages
 {
    use LoggableEscaped;
 

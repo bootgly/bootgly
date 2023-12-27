@@ -8,15 +8,17 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\WPI\Interfaces\TCP_Client_CLI\_\CLI;
+namespace Bootgly\WPI\Interfaces\TCP_Client_CLI;
 
+
+use Bootgly\ACI\Logs\LoggableEscaped;
 
 use Bootgly\CLI;
-use Bootgly\ACI\Logs\LoggableEscaped;
+
 use Bootgly\WPI\Interfaces\TCP_Client_CLI as Client;
 
 
-class Terminal extends CLI\Terminal // TODO rename to Commands
+class Commands extends CLI\Terminal
 {
    use LoggableEscaped;
 

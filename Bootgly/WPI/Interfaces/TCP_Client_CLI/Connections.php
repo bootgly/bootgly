@@ -14,7 +14,7 @@ namespace Bootgly\WPI\Interfaces\TCP_Client_CLI;
 use Bootgly\ACI\Logs\LoggableEscaped;
 
 use Bootgly\WPI;
-use Bootgly\WPI\Packages; // @interface
+use Bootgly\WPI\Connections\Packages; // @interface
 use Bootgly\WPI\Interfaces\TCP_Client_CLI as Client;
 use Bootgly\WPI\Interfaces\TCP_Client_CLI\Connections\Connection;
 

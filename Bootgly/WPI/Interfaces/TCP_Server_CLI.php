@@ -28,12 +28,12 @@ use Bootgly\API\Server as SAPI;
 
 use Bootgly\CLI;
 
+use Bootgly\WPI\Endpoints\Servers;
 use Bootgly\WPI\Events;
 use Bootgly\WPI\Events\Select;
-use Bootgly\WPI\Servers;
-use Bootgly\WPI\Interfaces\TCP_Server_CLI\_\Process;
-use Bootgly\WPI\Interfaces\TCP_Server_CLI\_\CLI\Terminal;
+use Bootgly\WPI\Interfaces\TCP_Server_CLI\Commands;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections;
+use Bootgly\WPI\Interfaces\TCP_Server_CLI\Process;
 
 
 class TCP_Server_CLI implements Servers, Logging
@@ -44,9 +44,10 @@ class TCP_Server_CLI implements Servers, Logging
    // !
    protected $Socket;
 
-   public static Events&Loops $Event;
+   public static Events & Loops $Event;
+
+   protected Commands $Commands;
    protected Process $Process;
-   protected Terminal $Terminal;
 
    // * Config
    protected ? string $domain;
@@ -63,6 +64,7 @@ class TCP_Server_CLI implements Servers, Logging
    // @ Verbosity
 
    // * Data
+   // @ SAPI
    public static $Application = null; 
    public static $Decoder = null;
    public static $Encoder = null;
@@ -131,13 +133,13 @@ class TCP_Server_CLI implements Servers, Logging
       // ! Connection(s)
       $this->Connections = new Connections($this);
 
-      // ! Web\@\Events
+      // ! WPI\Events
       static::$Event = new Select($this->Connections);
 
       // ! @\Process
       $Process = $this->Process = new Process($this);
-      // ! @\CLI\Terminal
-      $this->Terminal = new Terminal($this);
+      // ! @\Commands
+      $this->Commands = new Commands($this);
 
       // @ Register shutdown function to avoid orphaned children
       \register_shutdown_function(function () use ($Process) {
@@ -160,13 +162,12 @@ class TCP_Server_CLI implements Servers, Logging
          case 'Socket':
             return $this->Socket;
 
-         case 'Process':
-            return $this->Process;
-         case 'Terminal':
-            return $this->Terminal;
-
+         case 'Commands':
+            return $this->Commands;
          case 'Connections':
             return $this->Connections;
+         case 'Process':
+            return $this->Process;
 
          case '@test init':
             SAPI::$Environment = Environments::Test;
@@ -202,7 +203,7 @@ class TCP_Server_CLI implements Servers, Logging
 
       // @ Output info server
       $Info = new File(
-         BOOTGLY_ROOT_DIR . __CLASS__ . '/_/info.php'
+         BOOTGLY_ROOT_DIR . __CLASS__ . '/info.php'
       );
       if ($Info->exists) {
          // @ Clear cache of file info
@@ -340,7 +341,7 @@ class TCP_Server_CLI implements Servers, Logging
          );
       }
       catch (\Throwable) {
-         $this->Socket = false;
+         $this->Socket ??= false;
       }
 
       if ($this->Socket === false) {
@@ -393,7 +394,7 @@ class TCP_Server_CLI implements Servers, Logging
 
          // If child is running?
          if ($pid === 0) {
-            $interact = $this->Terminal->interact();
+            $interact = $this->Commands->interact();
 
             $this->log('@\;');
 

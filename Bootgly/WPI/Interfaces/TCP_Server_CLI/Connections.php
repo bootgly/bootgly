@@ -11,11 +11,12 @@
 namespace Bootgly\WPI\Interfaces\TCP_Server_CLI;
 
 
-use Bootgly\WPI;
-use Bootgly\WPI\Packages; // @interface
+use Bootgly\ABI\IO\FS\File;
 
 use Bootgly\ACI\Logs\LoggableEscaped;
 
+use Bootgly\WPI;
+use Bootgly\WPI\Connections\Packages; // @interface
 use Bootgly\WPI\Interfaces\TCP_Server_CLI as Server;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections\Connection;
 
@@ -91,23 +92,26 @@ class Connections implements WPI\Connections
       self::$read = 0;         // Socket Reads in bytes
       self::$written = 0;      // Socket Writes in bytes
    }
-   public function __get ($name)
+   public function __get (string $name)
    {
-      $info = __DIR__ . '/Connections/_/info.php';
+      // @ Output info server
+      $Info = new File(
+         BOOTGLY_ROOT_DIR . __CLASS__ . '/info.php'
+      );
+      if ($Info->exists) {
+         // @ Clear cache of file info
+         if (\function_exists('opcache_invalidate')) {
+            \opcache_invalidate($Info->file, true);
+         }
+         \clearstatcache(false, $Info->file);
 
-      // @ Clear cache of file info
-      if ( \function_exists('opcache_invalidate') ) {
-         \opcache_invalidate($info, true);
-      }
-
-      \clearstatcache(false, $info);
-
-      // @ Load file info
-      try {
-         require $info;
-      }
-      catch (\Throwable) {
-         // ...
+         // @ Load file info
+         try {
+            require $Info->file;
+         }
+         catch (\Throwable) {
+            // ...
+         }
       }
    }
 

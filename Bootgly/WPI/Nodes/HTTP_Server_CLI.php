@@ -210,7 +210,9 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
 
       $TCP_Client_CLI = new TCP_Client_CLI;
       $TCP_Client_CLI->configure(
-         host: $TCP_Server_CLI->host === '0.0.0.0' ? '127.0.0.1' : $TCP_Server_CLI->host,
+         host: ($TCP_Server_CLI->host === '0.0.0.0')
+            ? '127.0.0.1'
+            : $TCP_Server_CLI->host,
          port: $TCP_Server_CLI->port
       );
       $TCP_Client_CLI->on(
@@ -266,7 +268,8 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
                // @ Output Test result
                if (! $Connection->expired && $Test->passed) {
                   $Test->pass();
-               } else {
+               }
+               else {
                   $Test->fail();
                   break;
                }

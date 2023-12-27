@@ -17,10 +17,9 @@ use Bootgly\ACI\Logs\Logger;
 use Bootgly\ACI\Logs\LoggableEscaped;
 
 use Bootgly\WPI\Events\Select;
-use Bootgly\WPI\Interfaces\TCP_Client_CLI\_\Process;
-use Bootgly\WPI\Interfaces\TCP_Client_CLI\_\CLI\Terminal;
-
+use Bootgly\WPI\Interfaces\TCP_Client_CLI\Commands;
 use Bootgly\WPI\Interfaces\TCP_Client_CLI\Connections;
+use Bootgly\WPI\Interfaces\TCP_Client_CLI\Process;
 
 
 class TCP_Client_CLI
@@ -36,7 +35,7 @@ class TCP_Client_CLI
    // ! Process
    protected Process $Process;
    // ! Console
-   protected Terminal $Terminal;
+   protected Commands $Commands;
 
 
    // * Config
@@ -115,8 +114,8 @@ class TCP_Client_CLI
 
       // ! @\Process
       $Process = $this->Process = new Process($this);
-      // ! @\CLI\Terminal
-      $this->Terminal = new Terminal($this);
+      // ! @\Commands
+      $this->Commands = new Commands($this);
 
       // @ Register shutdown function to avoid orphaned children
       register_shutdown_function(function () use ($Process) {
@@ -238,11 +237,13 @@ class TCP_Client_CLI
          // If child is running?
          if ($pid === 0) {
             // ...
-         } else if ($pid > 0) { // If a child has already exited?
+         }
+         else if ($pid > 0) { // If a child has already exited?
             $this->log('@\;Process child exited!@\;', self::LOG_ERROR_LEVEL);
             $this->Process->sendSignal(SIGINT);
             break;
-         } else if ($pid === -1) { // If error ignore
+         }
+         else if ($pid === -1) { // If error ignore
             // ...
          }
       }
@@ -287,9 +288,11 @@ class TCP_Client_CLI
             flags: STREAM_CLIENT_ASYNC_CONNECT | STREAM_CLIENT_CONNECT,
             context: $context
          );
-      } catch (\Throwable) {
+      }
+      catch (\Throwable) {
          $Socket = false;
-      } finally {
+      }
+      finally {
          restore_error_handler();
       }
 
