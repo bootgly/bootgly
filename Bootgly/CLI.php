@@ -67,7 +67,6 @@ class CLI extends Projects // Command Line Interface
       $status = $Scripts->validate();
       switch ($status) {
          case -2:
-            throw new \Exception("Failed to get the file name and working directory path from the script!");
             break;
          case -1:
             throw new \Exception("Invalid script: script not registered in bootstrap file!");
