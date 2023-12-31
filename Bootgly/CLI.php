@@ -64,20 +64,25 @@ class CLI extends Projects // Command Line Interface
       $Terminal = self::$Terminal = new Terminal;
 
       // @ Validate scripts
-      if ($Scripts->validate() === false) {
-         return;
-      }
-
-      // ---
-
-      // @ Boot CLI
-      // Consumer
-      if (BOOTGLY_ROOT_DIR !== BOOTGLY_WORKING_DIR) {
-         self::$booted = (@include Projects::CONSUMER_DIR . 'Bootgly/' . self::BOOT_FILE);
-      }
-      // Author
-      if (self::$booted === false) {
-         require(Projects::AUTHOR_DIR . 'Bootgly/' . self::BOOT_FILE);
+      $status = $Scripts->validate();
+      switch ($status) {
+         case -2:
+            throw new \Exception("Failed to get the file name and working directory path from the script!");
+            break;
+         case -1:
+            throw new \Exception("Invalid script: script not registered in bootstrap file!");
+            break;
+         case 0:
+            break;
+         default: // @ Boot CLI
+            // Consumer
+            if (BOOTGLY_ROOT_DIR !== BOOTGLY_WORKING_DIR) {
+               self::$booted = (@include Projects::CONSUMER_DIR . 'Bootgly/' . self::BOOT_FILE);
+            }
+            // Author
+            if (self::$booted === false) {
+               require(Projects::AUTHOR_DIR . 'Bootgly/' . self::BOOT_FILE);
+            }
       }
    }
 }

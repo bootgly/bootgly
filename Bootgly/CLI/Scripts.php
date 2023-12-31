@@ -92,13 +92,13 @@ class Scripts
       };
    }
 
-   public function validate () : bool
+   public function validate () : int
    {
       $this->path ??= @$_SERVER['PWD'];
       $this->filename ??= @$_SERVER['SCRIPT_FILENAME'];
       // ?
       if ($this->path === null || $this->filename === null) {
-         return false;
+         return -2;
       }
 
       // !
@@ -107,21 +107,21 @@ class Scripts
 
       // @
       $this->validations = [];
-      $this->validations[] = \array_search($this->path, $this->includes['paths']);
-      $this->validations[] = \array_search($this->filename, $this->includes['bootstraps']);
-      $this->validations[] = \array_search($this->filename, $this->includes['filenames']);
+      $this->validations['paths'] = \array_search($this->path, $this->includes['paths']);
+      $this->validations['bootstraps'] = \array_search($this->filename, $this->includes['bootstraps']);
+      $this->validations['filenames'] = \array_search($this->filename, $this->includes['filenames']);
 
-      if ($this->validations[1] === false) {
-         return false;
+      if ($this->validations['filenames'] !== false) {
+         return 0;
       }
-      if ($this->validations[2] !== false) {
-         return false;
+      if ($this->validations['paths'] === false && $this->validations['bootstraps'] === false) {
+         return 0;
       }
-      if ($this->validations[0] === false && $this->validations[2] === false) {
-         return false;
+      if ($this->validations['paths'] !== false && $this->validations['bootstraps'] === false && $this->validations['filenames'] === false) {
+         return -1;
       }
 
-      return true;
+      return 1;
    }
 
    public static function execute (string $script)
