@@ -16,13 +16,14 @@ use Bootgly\ABI\Debugging\Data\Throwables;
 use Bootgly\ABI\IO\FS\File;
 
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages;
+use Bootgly\WPI\Modules\HTTP\Server\Response as Responsing;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI as Server;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Content;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Meta;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Header;
 
 
-class Response
+class Response implements Responsing
 {
    // ! HTTP
    public Meta $Meta;
@@ -146,6 +147,7 @@ class Response
             if (\is_int($value) && $value > 99 && $value < 600) {
                $this->Meta->status = $value;
             }
+            break;
       }
    }
    public function __invoke (int $code = 200, array $headers = [], string $body = '') : self
@@ -214,12 +216,14 @@ class Response
     *
     * @param mixed $body The data that should be appended to the response body.
     *
-    * @return void
+    * @return Response The Response instance, for chaining
     */
-   public function append ($body) : void
+   public function append ($body) : self
    {
       $this->initied = true;
       $this->body .= $body . "\n";
+
+      return $this;
    }
 
    // TODO move to resource files
@@ -564,14 +568,17 @@ class Response
 
          switch ($ranges) {
             case -2: // Malformed Range header string
-               return $this->end(400);
+               $this->end(400);
+               return $this;
             case -1:
-               return $this->end(416, $size);
+               $this->end(416, $size);
+               return $this;
             default:
                $type = \array_pop($ranges);
                // @ Check Range type
                if ($type !== 'bytes') {
-                  return $this->end(416, $size);
+                  $this->end(416, $size);
+                  return $this;
                }
 
                foreach ($ranges as $range) {
@@ -752,7 +759,7 @@ class Response
     * Redirects to a new URI. Default return is 307 for GET (Temporary Redirect) and 303 (See Other) for POST.
     *
     * @param string $URI The new URI to redirect to.
-    * @param int $code The HTTP status code to use for the redirection.
+    * @param ? int $code The HTTP status code to use for the redirection.
     *
     * @return Response Returns Response.
     */
@@ -783,7 +790,9 @@ class Response
 
       $this->Header->set('Location', $URI);
 
-      return $this->end();
+      $this->end();
+
+      return $this;
    }
 
    /**
@@ -792,10 +801,15 @@ class Response
     * @param int|string|null $status The status of the response.
     * @param string|null $context The context for additional information.
     *
-    * @return Response Returns Response
+    * @return void
     */
-   public function end (int|string|null $status = null, ? string $context = null) : self
+   public function end (int|string|null $status = null, ? string $context = null) : void
    {
+      if ($this->sent) {
+         return;
+      }
+
+      // @
       if ($status) {
          // @ Preset
          switch ($status) {
@@ -821,7 +835,5 @@ class Response
       }
 
       $this->sent = true;
-
-      return $this;
    }
 }

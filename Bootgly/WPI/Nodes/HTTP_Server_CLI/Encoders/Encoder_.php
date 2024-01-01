@@ -30,7 +30,6 @@ class Encoder_ extends Encoders
       $Response = Server::$Response;
       $Router   = Server::$Router;
 
-      // ! Response
       // @ Try to Invoke SAPI Closure
       try {
          $Routes = (SAPI::$Handler)($Request, $Response, $Router);

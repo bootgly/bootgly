@@ -13,15 +13,17 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_;
 
 use Bootgly;
 
+use Bootgly\ABI\Data\__String\Path;
 use Bootgly\ABI\IO\FS\File;
 
+use Bootgly\WPI\Modules\HTTP\Server\Response as Responsing;
 use Bootgly\WPI\Nodes\HTTP_Server_ as Server;
 use Bootgly\WPI\Nodes\HTTP_Server_\Response\Content;
 use Bootgly\WPI\Nodes\HTTP_Server_\Response\Meta;
 use Bootgly\WPI\Nodes\HTTP_Server_\Response\Header;
 
 
-class Response
+class Response implements Responsing
 {
    // ! HTTP
    public Meta $Meta;
@@ -29,19 +31,20 @@ class Response
    public Content $Content;
 
    // * Config
-   public bool $debugger;
+   // ...
 
    // * Data
    public string $raw;
-
    public $body;
+
    public array $files;
 
-   public ? string $source; //! move to Content->source? join with type?
-   public ? string $type;   //! move to Content->type or Header->Content->type?
-
    public ? array $resources;
+   public ? string $source;
+   public ? string $type;
+
    protected array $uses;
+
    // * Metadata
    private ? string $resource;
    // @ Status
@@ -49,17 +52,16 @@ class Response
    public bool $prepared;
    public bool $processed;
    public bool $sent;
-   // @ Type
-   #public bool $cacheable;
-   #public bool $static;
-   #public bool $dynamic;
-
+   // @ State (sets)
    public bool $chunked;
    public bool $encoded;
+   // @ Type
+   #public bool $dynamic;
+   #public bool $static;
    public bool $stream;
 
 
-   public function __construct (? array $resources = null)
+   public function __construct (int $code = 200, ? array $headers = null, string $body = '')
    {
       // ! HTTP
       $this->Meta = new Meta;
@@ -68,19 +70,18 @@ class Response
 
 
       // * Config
-      $this->debugger = true;
+      // ...
 
       // * Data
       $this->raw = '';
-
       $this->body = null;
+
       $this->files = [];
 
-      $this->source = null; // TODO rename to resource?
+      $this->resources = ['JSON', 'JSONP', 'View', 'HTML/pre'];
+      $this->source = null;
       $this->type = null;
 
-      // TODO rename to sources?
-      $this->resources = $resources !== null ? $resources : ['JSON', 'JSONP', 'View', 'HTML/pre'];
       $this->uses = [];
 
       // * Metadata
@@ -90,17 +91,27 @@ class Response
       $this->prepared = true;
       $this->processed = true;
       $this->sent = false;
-      // @ Type
-      #$this->cacheable = true;
-      #$this->static = true;
-      #$this->dynamic = false;
-
-
-      $this->stream = false;
+      // @ State
       $this->chunked = false;
       $this->encoded = false;
+      // @ Type
+      #$this->dynamic = false;
+      #$this->static = true;
+      $this->stream = false;
+
+
+      // @
+      if ($code !== 200) {
+         $this->code = $code;
+      }
+      if ($headers !== null) {
+         $this->Header->prepare($headers);
+      }
+      if ($body !== '') {
+         $this->Content->raw = $body;
+      }
    }
-   public function __get ($name)
+   public function __get (string $name)
    {
       switch ($name) {
          // ? Response Meta
@@ -130,77 +141,25 @@ class Response
             return $this;
       }
    }
-   public function __set ($name, $value)
+   public function __set (string $name, $value)
    {
       switch ($name) {
          case 'status':
          case 'code':
             http_response_code($value);
-
-            return $this;
-         default: // @ Set custom resource
-            // $this->resources[$name] = $value; // TODO
+            break;
       }
    }
-   public function __call (string $name, array $arguments)
+   public function __invoke (int $code = 200, array $headers = [], string $body = '') : self
    {
-      switch ($name) {
-         case 'render':
-            $view = null;
-            $data = null;
-            $callback = null;
+      $this->code = $code;
+      $this->Header->prepare($headers);
+      $this->Content->raw = $body;
 
-            foreach ($arguments as $argument) {
-               switch (gettype($argument)) {
-                  case 'string':
-                     $view = $argument;
-                     break;
-                  case 'array':
-                     $data = $argument;
-                     break;
-                  case 'object':
-                     $callback = $argument;
-                     break;
-               }
-            }
-
-            if ($view !== null) {
-               $this->prepare('view');
-               $this->process($view, 'view');
-            }
-
-            return $this->render($data, $callback);
-         default:
-            return $this->$name(...$arguments);
-      }
-   }
-   public function __invoke (
-      $x = null,
-      int $code = 200,
-      array $headers = [],
-      string $body = ''
-   ) : self
-   {
-      if ($x === null) {
-         if ($code !== 200) {
-            $this->code = $code;
-         }
-         if (count($headers) > 0) {
-            $this->Header->prepare($headers);
-         }
-         if ($body !== '') {
-            $this->Content->raw = $body;
-         }
-
-         return $this;
-      }
-
-      $this->prepare();
-
-      return $this->process($x);
+      return $this;
    }
 
-   public function prepare (? string $resource = null)
+   protected function prepare (? string $resource = null) : self
    {
       if ($this->initied === false) {
          $this->body   = null;
@@ -212,7 +171,8 @@ class Response
 
       if ($resource === null) {
          $resource = $this->resource;
-      } else {
+      }
+      else {
          $resource = strtolower($resource);
       }
 
@@ -251,6 +211,13 @@ class Response
 
       return $this;
    }
+   /**
+    * Appends the provided data to the body of the response.
+    *
+    * @param mixed $body The data that should be appended to the response body.
+    *
+    * @return Response The Response instance, for chaining
+    */
    public function append ($body)
    {
       $this->initied = true;
@@ -261,11 +228,12 @@ class Response
       $this->uses[$name] = $var;
    }
 
-   public function process ($data, ? string $resource = null)
+   protected function process ($data, ? string $resource = null)
    {
       if ($resource === null) {
          $resource = $this->resource;
-      } else {
+      }
+      else {
          $resource = strtolower($resource);
       }
 
@@ -306,7 +274,8 @@ class Response
          default:
             if ($resource) {
                // TODO Inject resource with custom process() created by user
-            } else {
+            }
+            else {
                switch ( getType($data) ) {
                   case 'string':
                      // TODO check if string is a valid path
@@ -343,12 +312,17 @@ class Response
       return $this;
    }
 
-   private function render (? array $data = null, ? \Closure $callback = null)
+   public function render (string $view, ? array $data = null, ? \Closure $callback = null) : self
    {
-      $File = $this->body;
+      // !
+      $this->prepare('view');
+      $this->process($view . '.template.php', 'view');
 
-      if ($File === null) {
-         return;
+      // ?
+      $File = $this->body;
+      if ($File === null || $File->exists === false) {
+         throw new \Exception(message: 'Template file not found!');
+         return $this;
       }
 
       // @ Set variables
@@ -376,20 +350,30 @@ class Response
 
             require $__file__;
          })($File, $uses, $data);
-      } catch (\Exception $Exception) {}
+      }
+      catch (\Throwable $Throwable) {}
 
       // @ Set $Response properties
       $this->source = 'content';
       $this->type = '';
-      $this->body = ob_get_clean(); // Output/Buffer clean()->get()
+      // @ Output/Buffer clean()->get()
+      $this->body = ob_get_clean();
 
       // @ Call callback
       if ($callback !== null && $callback instanceof \Closure) {
-         $callback($this->body, $Exception);
+         $callback($this->body, $Throwable);
       }
 
       return $this;
    }
+   /**
+    * Send the response
+    *
+    * @param mixed|null $body The body of the response.
+    * @param mixed ...$options Additional options for the response
+    *
+    * @return Response The Response instance, for chaining
+    */
    public function send ($body = null, ...$options) : self
    {
       if ($this->processed === false) {
@@ -493,18 +477,20 @@ class Response
       return $this;
    }
 
-   public function upload ($content = null, int $offset = 0, ? int $length = null, bool $close = true) : self
+   /**
+    * Start a file upload from the Server to the Client
+    *
+    * @param string|File $file The file to be uploaded
+    * 
+    * @return Response The Response instance, for chaining
+    */
+   public function upload (string|File $file, int $offset = 0, ? int $length = null, bool $close = true) : self
    {
-      // TODO support to upload multiple files
-
-      if ($content === null) {
-         $content = $this->body;
+      if ($file instanceof File) {
+         $File = $file;
       }
-
-      if ($content instanceof File) {
-         $File = $content;
-      } else {
-         $File = new File(BOOTGLY_PROJECT?->path . $content);
+      else {
+         $File = new File(BOOTGLY_PROJECT?->path . Path::normalize($file));
       }
 
       if ($File->readable === false) {
@@ -536,27 +522,58 @@ class Response
       return $this;
    }
 
-   public function redirect (string $URI, $code = 302) // Code 302 = temporary; 301 = permanent;
-   {
-      // $this->code = $code;
-      header('Location: '. $URI, true, $code);
-      $this->end();
-   }
-
-   public function authenticate (string $realm = 'Protected area')
+   /**
+    * Sets the authentication headers for basic authentication with 401 (Unauthorized) HTTP status code.
+    *
+    * @param string $realm The realm string to set in the WWW-Authenticate header. Default is "Protected area".
+    *
+    * @return Response Returns Response.
+    */
+   public function authenticate (string $realm = 'Protected area') : self
    {
       if (Server::$Request->headers['x-requested-with'] !== 'XMLHttpRequest') {
-         header('WWW-Authenticate: Basic realm="'.$realm.'"');
+         header('WWW-Authenticate: Basic realm="' . $realm . '"');
       }
 
       $this->code = 401;
       // header('HTTP/1.0 401 Unauthorized');
+
+      return $this;
+   }
+   /**
+    * Redirects to a new URI. Default return is 307 for GET (Temporary Redirect) and 303 (See Other) for POST.
+    *
+    * @param string $URI The new URI to redirect to.
+    * @param ? int $code The HTTP status code to use for the redirection.
+    *
+    * @return Response Returns Response.
+    */
+   public function redirect (string $URI, ? int $code = null) : self // Code 302 = temporary; 301 = permanent;
+   {
+      // $this->code = $code;
+      header('Location: '. $URI, true, $code ?? 302);
+
+      $this->end();
+
+      return $this;
    }
 
-   public function end ($status = null)
+   /**
+    * Definitively terminates the HTTP Response.
+    *
+    * @param int|string|null $status The status of the response.
+    *
+    * @return void
+    */
+   public function end (int|string|null $status = null) : void
    {
+      if ($this->sent) {
+         return;
+      }
+
       $this->sent = true;
 
+      // @
       exit($status);
    }
 }
