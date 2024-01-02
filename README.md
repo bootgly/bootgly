@@ -64,7 +64,7 @@ For the base CLI development, Bootgly already has the following UI components:
 - Interface: [WPI][WPI_INTERFACE]
 - Platform: [Web][WEB_PLATFORM] (IN DEVELOPMENT)
 
-For the base Web development, Bootgly has a [HTTP Server CLI][WEB_HTTP_SERVER_CLI], a [TCP Client][WEB_TCP_CLIENT_INTERFACE] and a [TCP Server][WEB_TCP_SERVER_INTERFACE].
+For the base Web development, Bootgly has a [HTTP Server CLI][WEB_HTTP_SERVER_CLI], a [TCP Client CLI][WEB_TCP_CLIENT_INTERFACE] and a [TCP Server CLI][WEB_TCP_SERVER_INTERFACE].
 
 More news may come until the release of v1.0. Stay tuned.
 
@@ -286,8 +286,8 @@ Bootgly uses [Semantic Versioning 2.0][SEMANTIC_VERSIONING].
 
 [WPI_INTERFACE]: https://github.com/bootgly/bootgly/tree/main/Bootgly/WPI/
 [HTTP_SERVER_ROUTER_CLASS]: https://github.com/bootgly/bootgly/blob/main/Bootgly/WPI/Modules/HTTP/Server/Router.php
-[WEB_TCP_CLIENT_INTERFACE]: https://github.com/bootgly/bootgly/blob/main/Bootgly/WPI/Interfaces/TCP/Client.php
-[WEB_TCP_SERVER_INTERFACE]: https://github.com/bootgly/bootgly/blob/main/Bootgly/WPI/Interfaces/TCP/Server.php
+[WEB_TCP_CLIENT_INTERFACE]: https://github.com/bootgly/bootgly/blob/main/Bootgly/WPI/Interfaces/TCP_Client_CLI.php
+[WEB_TCP_SERVER_INTERFACE]: https://github.com/bootgly/bootgly/blob/main/Bootgly/WPI/Interfaces/TCP_Server_CLI.php
 [WEB_HTTP_SERVER_CLI]: https://github.com/bootgly/bootgly/blob/main/Bootgly/WPI/Nodes/HTTP_Server_CLI.php
 [WEB_PLATFORM]: https://github.com/bootgly/bootgly-web
 
