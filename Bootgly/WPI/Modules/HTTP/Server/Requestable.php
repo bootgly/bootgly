@@ -199,10 +199,9 @@ trait Requestable
             return $this->Header->Cookie;
          case 'cookies':
             return $this->Cookie->cookies;
-         // ? Content
-         case 'contents':
+         // ? Body
          case 'input':
-            return $this->Content->input;
+            return $this->Body->input;
          case 'inputs':
             return \json_decode($this->input, true);
 

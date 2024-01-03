@@ -12,7 +12,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 return [
    // @ configure
    'describe' => 'It should process request body when HTTP verb is POST',
-   'separator.line' => 'Request Content',
+   'separator.line' => 'Request Body',
    // @ simulate
    // Client API
    'request' => function () {
@@ -28,9 +28,9 @@ return [
       HTTP;
    },
    // Server API
-   'response' => function (Request $Request, Response $Response): Response {
+   'response' => function (Request $Request, Response $Response) : Response {
       $Request->receive();
-      return $Response(body: $Request->contents);
+      return $Response(body: $Request->input);
    },
 
    // @ test
