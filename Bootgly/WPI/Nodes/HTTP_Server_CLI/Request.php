@@ -17,7 +17,7 @@ use Bootgly\WPI\Modules\HTTP\Server\Request\Ranging;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI as Server;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Decoder_Waiting;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Meta;
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Content;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Body;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Header;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Downloader;
 
@@ -57,8 +57,8 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Downloader;
  * ? Header / Cookie
  * @property object $Cookie
  * @property array $cookies
- * ? Content
- * @property object Content
+ * ? Body
+ * @property object Body
  * 
  * @property string $input
  * @property array $inputs
@@ -88,7 +88,7 @@ class Request
 
    public Meta $Meta;
    public Header $Header;
-   public Content $Content;
+   public Body $Body;
 
    // * Config
    private string $base;
@@ -110,7 +110,7 @@ class Request
    {
       $this->Meta = new Meta;
       $this->Header = new Header;
-      $this->Content = new Content;
+      $this->Body = new Body;
 
       // * Config
       $this->base = '';
@@ -194,8 +194,8 @@ class Request
       // @ Prepare Request Header length
       $header_length = \strlen($header_raw);
 
-      // ? Request Content
-      // @ Set Request Content length if possible
+      // ? Request Body
+      // @ Set Request Body length if possible
       if ( $_ = \strpos($header_raw, "\r\nContent-Length: ") ) {
          $content_length = (int) \substr($header_raw, $_ + 18, 10);
       }
@@ -207,9 +207,9 @@ class Request
          return 0;
       }
 
-      // @ Set Request Content raw if possible
+      // @ Set Request Body raw if possible
       if ( isSet($content_length) ) {
-         $length += $content_length; // @ Add Request Content length
+         $length += $content_length; // @ Add Request Body length
 
          if ($length > 10485760) { // @ 10 megabytes
             $Package->reject("HTTP/1.1 413 Request Entity Too Large\r\n\r\n");
@@ -219,17 +219,17 @@ class Request
          if ($content_length > 0) {
             // @ Check if HTTP content is not empty
             if ($size >= $separator_position + 4) {
-               $this->Content->raw = \substr($buffer, $separator_position + 4, $content_length);
-               $this->Content->downloaded = \strlen($this->Content->raw);
+               $this->Body->raw = \substr($buffer, $separator_position + 4, $content_length);
+               $this->Body->downloaded = \strlen($this->Body->raw);
             }
 
-            if ($content_length > $this->Content->downloaded) {
-               $this->Content->waiting = true;
+            if ($content_length > $this->Body->downloaded) {
+               $this->Body->waiting = true;
                Server::$Decoder = new Decoder_Waiting;
             }
          }
 
-         $this->Content->length = $content_length;
+         $this->Body->length = $content_length;
       }
 
       // @ Set Request
@@ -261,8 +261,8 @@ class Request
       // length
       $this->Header->length = $header_length;
 
-      // ! Request Content
-      $this->Content->position = $separator_position + 4;
+      // ! Request Body
+      $this->Body->position = $separator_position + 4;
 
       // @ return Request length
       return $length;
@@ -277,7 +277,7 @@ class Request
    public function download (? string $key = null) : array|null
    {
       // ?
-      $boundary = $this->Content->parse(
+      $boundary = $this->Body->parse(
          content: 'Form-data',
          type: $this->Header->get('Content-Type')
       );
@@ -298,7 +298,7 @@ class Request
    public function receive (? string $key = null) : array|null
    {
       if ( empty($this->post) ) {
-         $parsed = $this->Content->parse(
+         $parsed = $this->Body->parse(
             content: 'raw',
             type: $this->Header->get('Content-Type')
          );

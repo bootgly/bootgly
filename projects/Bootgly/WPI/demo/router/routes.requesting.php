@@ -53,7 +53,7 @@ $Router->route('/requesting', function ($Response, $Request) {
   // ? Header/Cookie
   #return $Response->Json->send($Request->cookies); // @ {...}
   #return $Response->send($Request->Cookie->test);  // @ {...}
-  // ? Content
+  // ? Body
   #return $Response->send($Request->inputs);        // @ {...}
   #return $Response->send($Request->post);          // @ {...}
   #return $Response->Json->send($Request->files);   // @ [...]

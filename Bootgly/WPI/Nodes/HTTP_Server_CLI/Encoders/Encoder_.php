@@ -48,8 +48,8 @@ class Encoder_ extends Encoders
          Throwables::debug($Throwable);
       }
       finally {
-         // @ Check if Request Content is waiting data
-         if ($Request->Content->waiting) {
+         // @ Check if Request Body is waiting data
+         if ($Request->Body->waiting) {
             return '';
          }
 

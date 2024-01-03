@@ -11,7 +11,7 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 
 
-class Content
+class Body
 {
    // * Config
    // ...
@@ -58,7 +58,7 @@ class Content
 
             return false;
          case 'raw':
-            // @ Check if Content downloaded length is minor than Content length
+            // @ Check if Body downloaded length is minor than Body length
             if ($this->downloaded < $this->length) {
                $this->waiting = true;
                return 0;

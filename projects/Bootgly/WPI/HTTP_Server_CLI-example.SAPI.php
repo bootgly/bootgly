@@ -18,7 +18,7 @@ return static function
    #$Request->protocol;  // HTTP/1.1
    // ? Request Header
    #$host = $Request->Header->get('Host');
-   // ? Request Content
+   // ? Request Body
    // @ download
    // Form-data ($_POST, $_FILES)
    #$files = $Request->download('file1'); // $_FILES and $Request->files available too
@@ -40,7 +40,7 @@ return static function
    #$Response->Header->Cookie->append('Test', 'value1');
    #$Response->Header->Cookie->append('Test2', 'value2');
 
-   // ? Response Content
+   // ? Response Body
    #return $Response(body: 'Hello World!');
 
    // @ send

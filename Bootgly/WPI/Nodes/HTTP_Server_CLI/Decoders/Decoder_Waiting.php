@@ -20,7 +20,7 @@ class Decoder_Waiting extends Decoders
 {
    // * Metadata
    private static int $decoded;
-   // @ Request Content
+   // @ Request Body
    private static int $read;
 
 
@@ -28,44 +28,44 @@ class Decoder_Waiting extends Decoders
    {
       // @ Get callbacks
       $Request = Server::$Request;
-      $Content = &$Request->Content;
+      $Body = &$Request->Body;
 
-      // @ Check if Request Content is waiting data
-      if ($Content->waiting) {
+      // @ Check if Request Body is waiting data
+      if ($Body->waiting) {
          // * Metadata
          self::$decoded ??= time();
          self::$read ??= 0;
          // <<
-         $Content = &$Request->Content;
+         $Body = &$Request->Body;
 
          // ? Valid HTTP Client Body Timeout
          /**
          * Validate if the client is sending the rest of the Content data 
          * within a 60-second interval.
          */
-         if ((time() - self::$decoded) >= 60 && self::$read === $Content->downloaded) {
+         if ((time() - self::$decoded) >= 60 && self::$read === $Body->downloaded) {
             Server::$Decoder = new Decoder_;
             return Server::$Decoder::decode($Package, $buffer, $size);
          }
 
          // @
-         if ($Content->downloaded === null) {
-            $Content->raw = \substr($buffer, $Content->position, $Content->length);
+         if ($Body->downloaded === null) {
+            $Body->raw = \substr($buffer, $Body->position, $Body->length);
          }
          else {
-            $Content->raw .= $buffer;
+            $Body->raw .= $buffer;
          }
 
-         $Content->downloaded += $size;
-         self::$read = $Content->downloaded;
+         $Body->downloaded += $size;
+         self::$read = $Body->downloaded;
 
-         if ($Content->length > $Content->downloaded) {
+         if ($Body->length > $Body->downloaded) {
             return 0;
          }
 
-         $Content->waiting = false;
+         $Body->waiting = false;
 
-         return $Content->length;
+         return $Body->length;
       }
 
       Server::$Decoder = new Decoder_;

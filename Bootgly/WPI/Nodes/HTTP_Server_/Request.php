@@ -15,7 +15,7 @@ use Bootgly\WPI\Modules\HTTP\Server\Requestable;
 use Bootgly\WPI\Modules\HTTP\Server\Request\Ranging;
 use Bootgly\WPI\Nodes\HTTP_Server_ as Server;
 use Bootgly\WPI\Nodes\HTTP_Server_\Request\Meta;
-use Bootgly\WPI\Nodes\HTTP_Server_\Request\Content;
+use Bootgly\WPI\Nodes\HTTP_Server_\Request\Body;
 use Bootgly\WPI\Nodes\HTTP_Server_\Request\Header;
 use Bootgly\WPI\Nodes\HTTP_Server_\Request\Session;
 
@@ -55,8 +55,8 @@ use Bootgly\WPI\Nodes\HTTP_Server_\Request\Session;
  * ? Header / Cookie
  * @property object $Cookie
  * @property array $cookies
- * ? Content
- * @property object Content
+ * ? Body
+ * @property object Body
  * 
  * @property string $input
  * @property array $inputs
@@ -86,7 +86,7 @@ class Request
 
    public Meta $Meta;
    public Header $Header;
-   public Content $Content;
+   public Body $Body;
 
    // * Config
    private string $base;
@@ -108,7 +108,7 @@ class Request
    {
       $this->Meta = new Meta;
       $this->Header = new Header;
-      $this->Content = new Content;
+      $this->Body = new Body;
 
       // * Config
       $this->base = '';

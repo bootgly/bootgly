@@ -11,7 +11,7 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 
 
-class Content
+class Body
 {
    // * Config
    // ...

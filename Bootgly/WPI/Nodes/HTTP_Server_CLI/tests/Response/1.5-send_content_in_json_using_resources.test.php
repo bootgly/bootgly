@@ -10,7 +10,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 
 return [
    // @ configure
-   'separator.line' => 'Response Content',
+   'separator.line' => 'Response Body',
    'separator.header' => '@send',
 
    // @ simulate

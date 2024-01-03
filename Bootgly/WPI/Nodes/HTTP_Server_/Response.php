@@ -18,7 +18,7 @@ use Bootgly\ABI\IO\FS\File;
 
 use Bootgly\WPI\Modules\HTTP\Server\Response as Responsing;
 use Bootgly\WPI\Nodes\HTTP_Server_ as Server;
-use Bootgly\WPI\Nodes\HTTP_Server_\Response\Content;
+use Bootgly\WPI\Nodes\HTTP_Server_\Response\Body;
 use Bootgly\WPI\Nodes\HTTP_Server_\Response\Meta;
 use Bootgly\WPI\Nodes\HTTP_Server_\Response\Header;
 
@@ -28,7 +28,7 @@ class Response implements Responsing
    // ! HTTP
    public Meta $Meta;
    public Header $Header;
-   public Content $Content;
+   public Body $Body;
 
    // * Config
    // ...
@@ -65,7 +65,7 @@ class Response implements Responsing
    {
       // ! HTTP
       $this->Meta = new Meta;
-      $this->Content = new Content;
+      $this->Body = new Body;
       $this->Header = new Header;
 
 
@@ -108,7 +108,7 @@ class Response implements Responsing
          $this->Header->prepare($headers);
       }
       if ($body !== '') {
-         $this->Content->raw = $body;
+         $this->Body->raw = $body;
       }
    }
    public function __get (string $name)
@@ -121,14 +121,14 @@ class Response implements Responsing
          // ? Response Headers
          case 'headers':
             return $this->Header->fields;
-         // ? Response Content
+         // ? Response Body
          case 'chunked':
             if (! $this->chunked) {
                $this->chunked = true;
                $this->Header->append('Transfer-Encoding', 'chunked');
             }
 
-            return $this->Content->chunked;
+            return $this->Body->chunked;
 
          default: // @ Construct resource
             $this->resource = $name;
@@ -154,7 +154,7 @@ class Response implements Responsing
    {
       $this->code = $code;
       $this->Header->prepare($headers);
-      $this->Content->raw = $body;
+      $this->Body->raw = $body;
 
       return $this;
    }

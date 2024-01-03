@@ -12,19 +12,19 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 
 
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Content;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Body;
 
 
 class Downloader
 {
-   public Content $Content;
+   public Body $Body;
 
    // ***
 
 
    public function __construct (Request $Request)
    {
-      $this->Content = &$Request->Content;
+      $this->Body = &$Request->Body;
 
       // ***
    }
@@ -56,40 +56,40 @@ class Downloader
    }
    public function download ($boundary, $sectionStart, &$postEncoded, &$filesEncoded, &$files)
    {
-      $Content = $this->Content; // @ Instance Request Content
+      $Body = $this->Body; // @ Instance Request Body
 
-      // @ Check if Content downloaded length is minor than Section start position
-      if ($Content->downloaded < $sectionStart) {
-         $Content->waiting = true;
+      // @ Check if Body downloaded length is minor than Section start position
+      if ($Body->downloaded < $sectionStart) {
+         $Body->waiting = true;
          return 0;
       }
-      // @ Check if Content downloaded length is minor than Content length
-      if ($Content->downloaded < $Content->length) {
-         $Content->waiting = true;
+      // @ Check if Body downloaded length is minor than Body length
+      if ($Body->downloaded < $Body->length) {
+         $Body->waiting = true;
          return 0;
       }
 
       // @ Set Section end position
       // @ Check if boundary exists in the end of Section
-      $sectionEnd = strpos($Content->raw, "\r\n$boundary", $sectionStart);
+      $sectionEnd = strpos($Body->raw, "\r\n$boundary", $sectionStart);
       if (! $sectionEnd) {
-         $Content->waiting = false;
+         $Body->waiting = false;
          return 0;
       }
       // @ Set content lines end position
       // @ Check if content lines end position exists
-      $contentLinesEnd = strpos($Content->raw, "\r\n\r\n", $sectionStart);
+      $contentLinesEnd = strpos($Body->raw, "\r\n\r\n", $sectionStart);
       if (! $contentLinesEnd || $contentLinesEnd + 4 > $sectionEnd) {
-         $Content->waiting = false;
+         $Body->waiting = false;
          return 0;
       }
 
-      $Content->waiting = false;
+      $Body->waiting = false;
 
-      $contentLinesRaw = substr($Content->raw, $sectionStart, $contentLinesEnd - $sectionStart);
+      $contentLinesRaw = substr($Body->raw, $sectionStart, $contentLinesEnd - $sectionStart);
       $contentLines = explode("\r\n", trim($contentLinesRaw . "\r\n"));
 
-      $boundaryValue = substr($Content->raw, $contentLinesEnd + 4, $sectionEnd - $contentLinesEnd - 4);
+      $boundaryValue = substr($Body->raw, $contentLinesEnd + 4, $sectionEnd - $contentLinesEnd - 4);
 
       $uploadKey = false;
       $file = [];

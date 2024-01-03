@@ -18,7 +18,7 @@ use Bootgly\ABI\IO\FS\File;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages;
 use Bootgly\WPI\Modules\HTTP\Server\Response as Responsing;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI as Server;
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Content;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Body;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Meta;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Header;
 
@@ -28,7 +28,7 @@ class Response implements Responsing
    // ! HTTP
    public Meta $Meta;
    public Header $Header;
-   public Content $Body;
+   public Body $Body;
 
    // * Config
    // ...
@@ -63,7 +63,7 @@ class Response implements Responsing
    {
       // ! HTTP
       $this->Meta = new Meta;
-      $this->Body = new Content;
+      $this->Body = new Body;
       $this->Header = new Header;
 
       // * Config
