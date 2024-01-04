@@ -21,7 +21,7 @@ trait Requestable
             return $this->base;
 
          // * Data
-         case 'ip': // TODO IP->...
+         // TODO IP->...
          case 'address':
             return (string) ($this->Header->fields['cf-connecting-ip'] ?? $_SERVER['REMOTE_ADDR']);
          case 'port':

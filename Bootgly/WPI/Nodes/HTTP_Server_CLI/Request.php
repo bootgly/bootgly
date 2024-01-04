@@ -39,26 +39,26 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Downloader;
  * @property string $URL          /test/foo
  * @property string $URN          foo
  * @ Query
- * @property object $Query
  * @property string $query         query=abc&query2=xyz
  * @property array $queries        ['query' => 'abc', 'query2' => 'xyz']
  * ? Header
- * @property Header $Header         
+ * @property Header $Header
+ * @property array $headers
  * @ Host
  * @property string $host          v1.docs.bootgly.com
  * @property string $domain        bootgly.com
  * @property string $subdomain     v1.docs
  * @property array $subdomains     ['docs', 'v1']
  * @ Authorization (Basic)
- * @property string $username      boot
- * @property string $password      gly
+ * @property string $username      bootgly
+ * @property string $password      example123
  * @ Accept-Language
  * @property string $language      pt-BR
  * ? Header / Cookie
- * @property object $Cookie
+ * @property Header\Cookie $Cookie
  * @property array $cookies
  * ? Body
- * @property object Body
+ * @property Body $Body
  * 
  * @property string $input
  * @property array $inputs
