@@ -27,7 +27,9 @@ class Fieldset extends Component
    // @ Dimension
    public ? int $width;
    // @ Style
+   // Color
    public string $color;
+   // Border
    public const DEFAULT_BORDERS = [
       'top'          => '─',
       'top-left'     => '┌',

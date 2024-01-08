@@ -18,12 +18,13 @@ class Server
    public static Environments $Environment = Environments::Production;
 
    // * Data
-   private static string $key;
    public static \Closure $Handler;
    public static array $tests;
 
    // * Metadata
    public static array $Tests;
+   // @ API
+   private static string $key;
 
 
    public static function boot (
@@ -62,7 +63,11 @@ class Server
          // @ Load Bootstrap File SAPI
          $SAPI = require $bootstrap;
 
-         self::$Handler = $SAPI[$key];
+         $Handler = $SAPI[$key] ?? null;
+         if ($Handler !== null && $Handler instanceof \Closure) {
+            $Handler->bindTo(null, 'static');
+            self::$Handler = $Handler;
+         }
       }
 
       return true;

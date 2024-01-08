@@ -319,21 +319,6 @@ class Request
       return null;
    }
 
-   // > Middlewares
-   // TODO implement https://www.php.net/manual/pt_BR/ref.filter.php
-   public function filter (int $type, string $var_name, int $filter, array|int $options)
-   {
-      return \filter_input($type, $var_name, $filter, $options);
-   }
-   public function sanitize ()
-   {
-      // TODO
-   }
-   public function validate ()
-   {
-      // TODO
-   }
-
    public function __destruct ()
    {
       // @ Delete files downloaded by server in temp folder
