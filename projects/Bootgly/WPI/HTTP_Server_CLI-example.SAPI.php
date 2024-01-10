@@ -17,7 +17,7 @@ return static function
    #$Request->URI;       // /path/to?query1=value2...
    #$Request->protocol;  // HTTP/1.1
    // ? Request Header
-   #$host = $Request->Header->get('Host');
+   #$host = $Request->Raw->Header->get('Host');
    // ? Request Body
    // @ download
    // Form-data ($_POST, $_FILES)

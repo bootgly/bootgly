@@ -14,9 +14,9 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_;
 use Bootgly\WPI\Modules\HTTP\Server\Requestable;
 use Bootgly\WPI\Modules\HTTP\Server\Request\Ranging;
 use Bootgly\WPI\Nodes\HTTP_Server_ as Server;
-use Bootgly\WPI\Nodes\HTTP_Server_\Request\Meta;
-use Bootgly\WPI\Nodes\HTTP_Server_\Request\Body;
-use Bootgly\WPI\Nodes\HTTP_Server_\Request\Header;
+use Bootgly\WPI\Nodes\HTTP_Server_\Request\Raw;
+use Bootgly\WPI\Nodes\HTTP_Server_\Request\Raw\Body;
+use Bootgly\WPI\Nodes\HTTP_Server_\Request\Raw\Header;
 use Bootgly\WPI\Nodes\HTTP_Server_\Request\Session;
 
 
@@ -84,9 +84,7 @@ class Request
    use Requestable;
 
 
-   public Meta $Meta;
-   public Header $Header;
-   public Body $Body;
+   public Raw $Raw;
 
    // * Config
    private string $base;
@@ -106,9 +104,7 @@ class Request
 
    public function __construct ()
    {
-      $this->Meta = new Meta;
-      $this->Header = new Header;
-      $this->Body = new Body;
+      $this->Raw = new Raw;
 
       // * Config
       $this->base = '';

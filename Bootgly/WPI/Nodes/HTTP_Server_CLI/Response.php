@@ -553,7 +553,7 @@ class Response implements Responsing
       ]);
 
       // @ Return null Response if client Purpose === prefetch
-      if (Server::$Request->Header->get('Purpose') === 'prefetch') {
+      if (Server::$Request->Raw->Header->get('Purpose') === 'prefetch') {
          $this->Meta->status = 204;
          $this->Header->set('Cache-Control', 'no-store');
          $this->Header->set('Expires', '0');
@@ -562,7 +562,7 @@ class Response implements Responsing
 
       $ranges = [];
       $parts = [];
-      if ( $Range = Server::$Request->Header->get('Range') ) {
+      if ( $Range = Server::$Request->Raw->Header->get('Range') ) {
          // @ Parse Client range requests
          $ranges = Server::$Request->range($size, $Range);
 

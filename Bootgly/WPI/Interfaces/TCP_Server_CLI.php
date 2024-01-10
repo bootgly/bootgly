@@ -224,6 +224,7 @@ class TCP_Server_CLI implements Servers, Logging
       // @ Restore log display
       Logger::$display = $display;
    }
+   
    public function __call (string $name, array $arguments)
    {
       switch ($name) {

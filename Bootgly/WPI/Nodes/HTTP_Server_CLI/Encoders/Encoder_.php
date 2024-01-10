@@ -49,7 +49,7 @@ class Encoder_ extends Encoders
       }
       finally {
          // @ Check if Request Body is waiting data
-         if ($Request->Body->waiting) {
+         if ($Request->Raw->Body->waiting) {
             return '';
          }
 

@@ -8,44 +8,36 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\WPI\Nodes\HTTP_Server_\Request;
+namespace Bootgly\WPI\Nodes\HTTP_Server_\Request\Raw;
 
 
-class Meta
+class Body
 {
    // * Config
    // ...
 
    // * Data
    public string $raw;
-
-   public string $method;
-   public string $URI; // @ Resource
-   public string $protocol;
+   public string $input;
 
    // * Metadata
    public ? int $length;
-   // ? Resource
-   // @ URI
-   // @ URL
-   // @ URN
-   // @ Path
-   // @ Query
+   public null|int|false $position;
+   public ? int $downloaded;
 
 
    public function __construct ()
    {
       // * Config
-      // ...
+      // ..
 
       // * Data
       $this->raw = '';
-
-      $this->method = $_SERVER['REQUEST_METHOD'];
-      $this->URI = @$_SERVER['REDIRECT_URI'] ?? $_SERVER['REQUEST_URI'];
-      $this->protocol = $_SERVER['SERVER_PROTOCOL'];
+      $this->input = file_get_contents('php://input');
 
       // * Metadata
       $this->length = null;
+      $this->position = null;
+      $this->downloaded = null;
    }
 }

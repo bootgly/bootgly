@@ -43,7 +43,7 @@ class Decoder_ extends Decoders
       }
 
       // @ Input HTTP Request
-      $length = $Request->input($Package, $buffer, $size);
+      $length = $Request->Raw->input($Package, $buffer, $size);
 
       // @ Write to local cache
       if ($length > 0 && $length <= 512) {

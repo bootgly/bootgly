@@ -28,15 +28,13 @@ class Decoder_Waiting extends Decoders
    {
       // @ Get callbacks
       $Request = Server::$Request;
-      $Body = &$Request->Body;
+      $Body = &$Request->Raw->Body;
 
       // @ Check if Request Body is waiting data
       if ($Body->waiting) {
          // * Metadata
          self::$decoded ??= time();
          self::$read ??= 0;
-         // <<
-         $Body = &$Request->Body;
 
          // ? Valid HTTP Client Body Timeout
          /**

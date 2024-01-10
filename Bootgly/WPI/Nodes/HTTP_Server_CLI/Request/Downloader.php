@@ -12,7 +12,7 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 
 
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Body;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Raw\Body;
 
 
 class Downloader
@@ -24,7 +24,7 @@ class Downloader
 
    public function __construct (Request $Request)
    {
-      $this->Body = &$Request->Body;
+      $this->Body = &$Request->Raw->Body;
 
       // ***
    }

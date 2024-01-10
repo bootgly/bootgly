@@ -23,7 +23,7 @@ trait Requestable
          // * Data
          // TODO IP->...
          case 'address':
-            return (string) ($this->Header->fields['cf-connecting-ip'] ?? $_SERVER['REMOTE_ADDR']);
+            return (string) ($this->Raw->Header->fields['cf-connecting-ip'] ?? $_SERVER['REMOTE_ADDR']);
          case 'port':
             return (int) ($_SERVER['REMOTE_PORT']);
 
@@ -42,9 +42,9 @@ trait Requestable
 
             // ! HTTP
          case 'raw':
-            $raw = $this->Meta->raw;
+            $raw = $this->Raw->Meta->raw;
             $raw .= "\r\n";
-            $raw .= $this->Header->raw;
+            $raw .= $this->Raw->Header->raw;
             $raw .= "\r\n";
             $raw .= $this->input;
 
@@ -104,10 +104,10 @@ trait Requestable
             return $this->queries = $queries;
          // ? Header
          case 'headers':
-            return $this->Header->fields;
+            return $this->Raw->Header->fields;
          // @ Host
          case 'host':
-            $host = $_SERVER['HTTP_HOST'] ?? $this->Header->get('Host');
+            $host = $_SERVER['HTTP_HOST'] ?? $this->Raw->Header->get('Host');
 
             return $this->host = $host;
          case 'hostname': // alias
@@ -132,7 +132,7 @@ trait Requestable
 
          // @ Authorization (Basic)
          case 'username':
-            $authorization = $this->Header->get('Authorization');
+            $authorization = $this->Raw->Header->get('Authorization');
 
             if (\strpos($authorization, 'Basic') === 0) {
                $encodedCredentials = \substr($authorization, 6);
@@ -148,7 +148,7 @@ trait Requestable
             return $this->user = null;
 
          case 'password':
-            $authorization = $this->Header->get('Authorization');
+            $authorization = $this->Raw->Header->get('Authorization');
 
             if (\strpos($authorization, 'Basic') === 0) {
                $encodedCredentials = \substr($authorization, 6);
@@ -166,7 +166,7 @@ trait Requestable
          // @ Accept-Language
          case 'language':
             // TODO move to method?
-            $httpAcceptLanguage = @$_SERVER['HTTP_ACCEPT_LANGUAGE'] ?? $this->Header->get('Accept-Language');
+            $httpAcceptLanguage = @$_SERVER['HTTP_ACCEPT_LANGUAGE'] ?? $this->Raw->Header->get('Accept-Language');
 
             if ($httpAcceptLanguage === null) {
                return null;
@@ -196,12 +196,12 @@ trait Requestable
             // case 'ips': // TODO ips based in Header X-Forwarded-For
             // ? Header / Cookie
          case 'Cookie':
-            return $this->Header->Cookie;
+            return $this->Raw->Header->Cookie;
          case 'cookies':
             return $this->Cookie->cookies;
          // ? Body
          case 'input':
-            return $this->Body->input;
+            return $this->Raw->Body->input;
          case 'inputs':
             return \json_decode($this->input, true);
 
@@ -246,14 +246,14 @@ trait Requestable
          return false;
       }
 
-      $ifModifiedSince = $this->Header->get('If-Modified-Since');
-      $ifNoneMatch = $this->Header->get('If-None-Match');
+      $ifModifiedSince = $this->Raw->Header->get('If-Modified-Since');
+      $ifNoneMatch = $this->Raw->Header->get('If-None-Match');
       if (!$ifModifiedSince && !$ifNoneMatch) {
          return false;
       }
 
       // @ cache-control
-      $cacheControl = $this->Header->get('Cache-Control');
+      $cacheControl = $this->Raw->Header->get('Cache-Control');
       if ($cacheControl && \preg_match('/(?:^|,)\s*?no-cache\s*?(?:,|$)/', $cacheControl)) {
          return false;
       }

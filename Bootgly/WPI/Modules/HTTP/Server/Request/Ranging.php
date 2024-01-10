@@ -53,7 +53,8 @@ trait Ranging
          if ($range[0] === '') {
             $start = $size - $end;
             $end = $size - 1;
-         } else if ($range[1] === '') {
+         }
+         else if ($range[1] === '') {
             $end = $size - 1;
          }
 

@@ -48,8 +48,8 @@ $Router->route('/requesting', function ($Response, $Request) {
   #return $Response->pre->send($Request->raw);      // @ "..."
   // ? Header
   #return $Response->Json->send($Request->headers, JSON_PRETTY_PRINT);
-  #return $Response->send($Request->Header->get('accept'));
-  #return $Response->send->pre->send($Request->Header->raw);
+  #return $Response->send($Request->Raw->Header->get('accept'));
+  #return $Response->send->pre->send($Request->Raw->Header->raw);
   // ? Header/Cookie
   #return $Response->Json->send($Request->cookies); // @ {...}
   #return $Response->send($Request->Cookie->test);  // @ {...}
