@@ -260,7 +260,7 @@ trait Requestable
 
       // @ if-none-match
       if ($ifNoneMatch && $ifNoneMatch !== '*') {
-         $eTag = $this->Server::$Response->Header->get('ETag');
+         $eTag = $this->Server::$Response->Raw->Header->get('ETag');
 
          if (!$eTag) {
             return false;
@@ -307,7 +307,7 @@ trait Requestable
 
       // @ if-modified-since
       if ($ifModifiedSince) {
-         $lastModified = $this->Server::$Response->Header->get('Last-Modified');
+         $lastModified = $this->Server::$Response->Raw->Header->get('Last-Modified');
          if ($lastModified === '') {
             return false;
          }

@@ -31,7 +31,7 @@ class Encoder_Testing extends Encoders
       Server::$Router = new Router(Server::class);
 
       // @ Remove dynamic Headers
-      Server::$Response->Header->preset('Date', null);
+      Server::$Response->Raw->Header->preset('Date', null);
 
       // @ Reset SAPI
       SAPI::boot(reset: true, base: Server::class, key: 'response');

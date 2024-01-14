@@ -34,11 +34,11 @@ return static function
    #return $Response(code: 302); // 302 Not Found
 
    // ? Response Header
-   #$Response->Header->set('Content-Type', 'text/plain');
+   #$Response->Raw->Header->set('Content-Type', 'text/plain');
 
    // Cookies
-   #$Response->Header->Cookie->append('Test', 'value1');
-   #$Response->Header->Cookie->append('Test2', 'value2');
+   #$Response->Raw->Header->Cookie->append('Test', 'value1');
+   #$Response->Raw->Header->Cookie->append('Test2', 'value2');
 
    // ? Response Body
    #return $Response(body: 'Hello World!');

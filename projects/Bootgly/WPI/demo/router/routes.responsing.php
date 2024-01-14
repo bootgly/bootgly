@@ -2,12 +2,12 @@
 $Router->route('/http-cache-time-based-1', function ($Response, $Request) {
    // * Data
    // ! HTTP
-   $Response->Header->set('Last-Modified', 'Sun, 23 Oct 2022 14:50:00 GMT');
-   #return $Response->Json->send($Response->Header->headers);
+   $Response->Raw->Header->set('Last-Modified', 'Sun, 23 Oct 2022 14:50:00 GMT');
 
    if ($Request->fresh) {
       return $Response(code: 304);
-   } else {
+   }
+   else {
       return $Response->Json->send([
          'requested_at' => $Request->at
       ]);

@@ -18,6 +18,7 @@ use Bootgly\ABI\IO\FS\File;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages;
 use Bootgly\WPI\Modules\HTTP\Server\Response as Responsing;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI as Server;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Raw;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Body;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Meta;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Header;
@@ -26,9 +27,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Header;
 class Response implements Responsing
 {
    // ! HTTP
-   public Meta $Meta;
-   public Header $Header;
-   public Body $Body;
+   public Raw $Raw;
 
    // * Config
    // ...
@@ -62,9 +61,7 @@ class Response implements Responsing
    public function __construct (int $code = 200, ? array $headers = null, string $body = '')
    {
       // ! HTTP
-      $this->Meta = new Meta;
-      $this->Body = new Body;
-      $this->Header = new Header;
+      $this->Raw = new Raw;
 
       // * Config
       // ...
@@ -97,15 +94,15 @@ class Response implements Responsing
 
       // @
       if ($code !== 200) {
-         $this->Meta->code = $code;
+         $this->Raw->Meta->code = $code;
       }
 
       if ($headers !== null) {
-         $this->Header->prepare($headers);
+         $this->Raw->Header->prepare($headers);
       }
 
       if ($body !== '') {
-         $this->Body->raw = $body;
+         $this->Raw->Body->raw = $body;
       }
    }
    public function __get (string $name)
@@ -114,18 +111,18 @@ class Response implements Responsing
          // ? Response Meta
          case 'status':
          case 'code':
-            return $this->Meta->code;
+            return $this->Raw->Meta->code;
          // ? Response Headers
          case 'headers':
-            return $this->Header->fields;
+            return $this->Raw->Header->fields;
          // ? Response Body
          case 'chunked':
             if ($this->chunked === false) {
                $this->chunked = true;
-               $this->Header->append('Transfer-Encoding', 'chunked');
+               $this->Raw->Header->append('Transfer-Encoding', 'chunked');
             }
 
-            return $this->Body->chunked;
+            return $this->Raw->Body->chunked;
 
          default: // @ Contruct Non-Raw Response
             $this->resource = $name;
@@ -145,16 +142,16 @@ class Response implements Responsing
          case 'status':
          case 'code':
             if (\is_int($value) && $value > 99 && $value < 600) {
-               $this->Meta->status = $value;
+               $this->Raw->Meta->status = $value;
             }
             break;
       }
    }
    public function __invoke (int $code = 200, array $headers = [], string $body = '') : self
    {
-      $this->Meta->code = $code;
-      $this->Header->prepare($headers);
-      $this->Body->raw = $body;
+      $this->Raw->Meta->code = $code;
+      $this->Raw->Header->prepare($headers);
+      $this->Raw->Body->raw = $body;
 
       return $this;
    }
@@ -406,17 +403,17 @@ class Response implements Responsing
 
       if ($encoded) {
          $this->encoded = true;
-         $this->Header->set('Content-Encoding', 'gzip');
+         $this->Raw->Header->set('Content-Encoding', 'gzip');
          return $encoded;
       }
       else if ($deflated) {
          $this->encoded = true;
-         $this->Header->set('Content-Encoding', 'deflate');
+         $this->Raw->Header->set('Content-Encoding', 'deflate');
          return $deflated;
       }
       else if ($compressed) {
          $this->encoded = true;
-         $this->Header->set('Content-Encoding', 'gzip');
+         $this->Raw->Header->set('Content-Encoding', 'gzip');
          return $compressed;
       }
 
@@ -449,14 +446,14 @@ class Response implements Responsing
                case 'application/json':
                case 'json':
                   // TODO move to prepare or process
-                  $this->Header->set('Content-Type', 'application/json');
+                  $this->Raw->Header->set('Content-Type', 'application/json');
 
                   $body = \json_encode($body, $options[0] ?? 0);
 
                   break;
                case 'jsonp':
                   // TODO move to prepare or process
-                  $this->Header->set('Content-Type', 'application/json');
+                  $this->Raw->Header->set('Content-Type', 'application/json');
 
                   $body = Server::$Request->queries['callback'].'('.\json_encode($body).')';
 
@@ -481,7 +478,7 @@ class Response implements Responsing
             switch ($this->type) {
                case 'image/x-icon':
                case 'ico':
-                  $this->Header->set('Content-Type', 'image/x-icon');
+                  $this->Raw->Header->set('Content-Type', 'image/x-icon');
 
                   $body = $File->contents;
 
@@ -512,7 +509,7 @@ class Response implements Responsing
       }
 
       // @ Output
-      $this->Body->raw = $body ?? $this->body;
+      $this->Raw->Body->raw = $body ?? $this->body;
 
       $this->sent = true;
 
@@ -545,7 +542,7 @@ class Response implements Responsing
       $size = $File->size;
 
       // @ Prepare HTTP headers
-      $this->Header->prepare([
+      $this->Raw->Header->prepare([
          'Last-Modified' => \gmdate('D, d M Y H:i:s \G\M\T', $File->modified),
          // Cache
          'Cache-Control' => 'no-cache, must-revalidate',
@@ -554,9 +551,9 @@ class Response implements Responsing
 
       // @ Return null Response if client Purpose === prefetch
       if (Server::$Request->Raw->Header->get('Purpose') === 'prefetch') {
-         $this->Meta->status = 204;
-         $this->Header->set('Cache-Control', 'no-store');
-         $this->Header->set('Expires', '0');
+         $this->Raw->Meta->status = 204;
+         $this->Raw->Header->set('Cache-Control', 'no-store');
+         $this->Raw->Header->set('Expires', '0');
          return $this;
       }
 
@@ -615,18 +612,18 @@ class Response implements Responsing
       $rangesCount = \count($ranges);
       // @ Set Content Length Header
       if ($rangesCount === 1) {
-         $this->Header->set('Content-Length', $parts[0]['length']);
+         $this->Raw->Header->set('Content-Length', $parts[0]['length']);
       }
       // @ Set HTTP range requests Headers
       $pads = [];
       if ($ranges[0]['end'] !== null || $ranges[0]['start']) {
          // @ Set Response status
-         $this->Meta->status = 206; // 206 Partial Content
+         $this->Raw->Meta->status = 206; // 206 Partial Content
 
          if ($rangesCount > 1) { // @ HTTP Multipart ranges
             $boundary = \str_pad(++Server::$Request::$multiparts, 20, '0', \STR_PAD_LEFT);
 
-            $this->Header->set('Content-Type', 'multipart/byteranges; boundary=' . $boundary);
+            $this->Raw->Header->set('Content-Type', 'multipart/byteranges; boundary=' . $boundary);
 
             $length = 0;
             foreach ($ranges as $index => $range) {
@@ -658,7 +655,7 @@ class Response implements Responsing
                ];
             }
 
-            $this->Header->set('Content-Length', $length);
+            $this->Raw->Header->set('Content-Length', $length);
          }
          else { // @ HTTP Single part ranges
             $start = $ranges[0]['start'];
@@ -666,19 +663,19 @@ class Response implements Responsing
 
             if ($end > $size - 1) $end += 1;
 
-            $this->Header->set('Content-Range', "bytes {$start}-{$end}/{$size}");
+            $this->Raw->Header->set('Content-Range', "bytes {$start}-{$end}/{$size}");
          }
       }
       else {
-         $this->Header->set('Accept-Ranges', 'bytes');
+         $this->Raw->Header->set('Accept-Ranges', 'bytes');
       }
       // @ Set Content-Disposition Header
       if ($rangesCount === 1) {
-         $this->Header->set('Content-Type', 'application/octet-stream');
-         $this->Header->set('Content-Disposition', 'attachment; filename="'.$File->basename.'"');
+         $this->Raw->Header->set('Content-Type', 'application/octet-stream');
+         $this->Raw->Header->set('Content-Disposition', 'attachment; filename="'.$File->basename.'"');
       }
       // @ Build Response Header
-      #$this->Header->build();
+      #$this->Raw->Header->build();
 
       // @ Prepare upstream
       $this->stream = true;
@@ -706,9 +703,9 @@ class Response implements Responsing
     */
    public function output (Packages $Package, ? string &$length) : string
    {
-      $Meta    = &$this->Meta;
-      $Body    = &$this->Body;
-      $Header  = &$this->Header;
+      $Meta    = &$this->Raw->Meta;
+      $Body    = &$this->Raw->Body;
+      $Header  = &$this->Raw->Header;
 
       if (! $this->stream && ! $this->chunked && ! $this->encoded) {
          // ? Response Body
@@ -750,7 +747,7 @@ class Response implements Responsing
    public function authenticate (string $realm = 'Protected area') : self
    {
       $this->code = 401;
-      $this->Header->set('WWW-Authenticate', 'Basic realm="'.$realm.'"');
+      $this->Raw->Header->set('WWW-Authenticate', 'Basic realm="'.$realm.'"');
       $this->sent = true;
 
       return $this;
@@ -788,7 +785,7 @@ class Response implements Responsing
             return $this;
       }
 
-      $this->Header->set('Location', $URI);
+      $this->Raw->Header->set('Location', $URI);
 
       $this->end();
 
@@ -815,10 +812,10 @@ class Response implements Responsing
          switch ($status) {
             case 400: // Bad Request
             case 416: // Range Not Satisfiable
-               $this->Meta->status = 416;
+               $this->Raw->Meta->status = 416;
                // Clean prepared headers / header fields already set
-               $this->Header->clean();
-               $this->Body->raw = ' '; // Needs body non-empty
+               $this->Raw->Header->clean();
+               $this->Raw->Body->raw = ' '; // Needs body non-empty
                break;
             default:
                $this->status = $status;
@@ -828,7 +825,7 @@ class Response implements Responsing
          switch ($status) {
             case 416: // Range Not Satisfiable
                if ($context) {
-                  $this->Header->set('Content-Range', 'bytes */' . $context);
+                  $this->Raw->Header->set('Content-Range', 'bytes */' . $context);
                }
                break;
          }

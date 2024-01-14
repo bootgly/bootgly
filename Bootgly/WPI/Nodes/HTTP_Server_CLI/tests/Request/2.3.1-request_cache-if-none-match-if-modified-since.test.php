@@ -29,8 +29,8 @@ return [
    },
    // Server API
    'response' => function (Request $Request, Response $Response) : Response {
-      $Response->Header->set('Last-Modified', 'Fri, 14 Jul 2023 10:00:00 GMT');
-      $Response->Header->set('ETag', '"foo"');
+      $Response->Raw->Header->set('Last-Modified', 'Fri, 14 Jul 2023 10:00:00 GMT');
+      $Response->Raw->Header->set('ETag', '"foo"');
 
       if ($Request->fresh) {
          return $Response(code: 304);

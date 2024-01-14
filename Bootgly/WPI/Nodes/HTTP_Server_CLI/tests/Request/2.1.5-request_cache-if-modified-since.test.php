@@ -28,7 +28,7 @@ return [
    },
    // Server API
    'response' => function (Request $Request, Response $Response) : Response {
-      $Response->Header->set('Last-Modified', 'foo');
+      $Response->Raw->Header->set('Last-Modified', 'foo');
 
       if ($Request->fresh) {
          return $Response(code: 304);

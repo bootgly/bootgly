@@ -8,14 +8,10 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
+namespace Bootgly\WPI\Nodes\HTTP_Server_\Response;
 
 
-use Bootgly\WPI\Connections\Packages;
-use Bootgly\WPI\Nodes\HTTP_Server_CLI as Server;
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Raw\Meta;
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Raw\Header;
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Raw\Body;
+use Bootgly\WPI\Nodes\HTTP_Server_ as Server;
 
 
 class Raw
@@ -33,13 +29,5 @@ class Raw
       $this->Meta = new Meta;
       $this->Header = new Header;
       $this->Body = new Body;
-
-      // * Data
-      #$this->data = '';
-   }
-
-   public function __toString () : string
-   {
-      return $this->data ?? '';
    }
 }

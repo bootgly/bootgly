@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
+namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Raw;
 
 
 class Body
