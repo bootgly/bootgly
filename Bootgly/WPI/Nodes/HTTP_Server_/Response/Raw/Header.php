@@ -8,10 +8,10 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\WPI\Nodes\HTTP_Server_\Response;
+namespace Bootgly\WPI\Nodes\HTTP_Server_\Response\Raw;
 
 
-use Bootgly\WPI\Nodes\HTTP_Server_\Response\Header\Cookie;
+use Bootgly\WPI\Nodes\HTTP_Server_\Response\Raw\Header\Cookie;
 
 
 class Header

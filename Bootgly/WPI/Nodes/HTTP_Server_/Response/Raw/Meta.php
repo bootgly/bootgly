@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\WPI\Nodes\HTTP_Server_\Response;
+namespace Bootgly\WPI\Nodes\HTTP_Server_\Response\Raw;
 
 
 use Bootgly\WPI\Modules\HTTP;
