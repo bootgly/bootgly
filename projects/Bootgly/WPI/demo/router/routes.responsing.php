@@ -1,8 +1,13 @@
 <?php
-$Router->route('/http-cache-time-based-1', function ($Response, $Request) {
+use Bootgly\WPI\Nodes\HTTP_Server_\Request;
+use Bootgly\WPI\Nodes\HTTP_Server_\Response;
+
+
+$Router->route('/http-cache-time-based-1', function (Request $Request, Response $Response) {
    // * Data
    // ! HTTP
-   $Response->Raw->Header->set('Last-Modified', 'Sun, 23 Oct 2022 14:50:00 GMT');
+   // on HTTP Client set If-Modified-Since
+   $Response->Raw->Header->set('Last-Modified', 'Sun, 20 Oct 2024 14:50:00 GMT');
 
    if ($Request->fresh) {
       return $Response(code: 304);
@@ -15,26 +20,27 @@ $Router->route('/http-cache-time-based-1', function ($Response, $Request) {
    // * Metadata
 }, [GET, POST]);
 
-$Router->route('/send-headers-as-json-1', function ($Response) {
+$Router->route('/send-headers-as-json-1', function (Request $Request, Response $Response) {
    // * Data
    // ! HTTP
    return $Response->JSON->send($Response->headers);
    // * Metadata
 }, GET);
 
-$Router->get('/simple-file-render-1', function ($Response) {
-   return $Response('pages/test.php')
+$Router->route('/simple-file-render-1', function (Request $Request, Response $Response) {
+   return $Response
       ->render(
-         ['meta' => ['title' => 'Bootgly']],
-         function ($HTML, $Exception) {
+         view: 'pages/test.php',
+         data: ['meta' => ['title' => 'Bootgly']],
+         callback: function ($HTML, $Exception) {
             if ($Exception === null) {
                echo strlen($HTML);
             }
          }
       )->send();
-})->name = '';
+}, GET);
 
-$Router->route('/simple-view-render-1', function ($Response) {
+$Router->route('/simple-view-render-1', function (Request $Request, Response $Response) {
    return $Response->View->render('test', [
       'meta' => ['title' => 'Testing Response->View->render(...) in Bootgly!']
    ])->send();

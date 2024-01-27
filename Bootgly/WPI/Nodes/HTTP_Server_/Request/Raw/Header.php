@@ -32,10 +32,10 @@ class Header
 
    public function __construct ()
    {
-      $fields = apache_request_headers();
+      $fields = \apache_request_headers();
 
       if ($fields !== false) {
-         $fields = array_change_key_case($fields, CASE_LOWER);
+         $fields = \array_change_key_case($fields, CASE_LOWER);
 
          $this->built = true;
       } else {
@@ -95,16 +95,16 @@ class Header
          $this->build();
       }
 
-      return (string) @$this->fields[$name] ?? (string) @$this->fields[strtolower($name)] ?? '';
+      return (string) (@$this->fields[$name] ?? @$this->fields[\strtolower($name)] ?? '');
    }
 
    public function build () : bool
    {
       $fields = [];
 
-      foreach (explode("\r\n", $this->raw) as $field) {
-         if ( strpos($field, ': ') ) {
-            @[$key, $value] = explode(': ', $field, 2);
+      foreach (\explode("\r\n", $this->raw) as $field) {
+         if ( \strpos($field, ': ') ) {
+            @[$key, $value] = \explode(': ', $field, 2);
 
             #if ( strpos($key, ' ') ) {
             #   return false; // @ 400 Bad Request

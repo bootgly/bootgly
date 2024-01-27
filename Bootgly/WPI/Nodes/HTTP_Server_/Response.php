@@ -140,7 +140,7 @@ class Response implements Responsing
       switch ($name) {
          case 'status':
          case 'code':
-            http_response_code($value);
+            \http_response_code($value);
             break;
       }
    }
@@ -167,7 +167,7 @@ class Response implements Responsing
          $resource = $this->resource;
       }
       else {
-         $resource = strtolower($resource);
+         $resource = \strtolower($resource);
       }
 
       switch ($resource) {
@@ -228,7 +228,7 @@ class Response implements Responsing
          $resource = $this->resource;
       }
       else {
-         $resource = strtolower($resource);
+         $resource = \strtolower($resource);
       }
 
       switch ($resource) {
@@ -244,12 +244,12 @@ class Response implements Responsing
          // @ Content
          case 'json':
          case 'jsonp':
-            if ( is_array($data) ) {
+            if ( \is_array($data) ) {
                $this->body = $data;
                break;
             }
 
-            $this->body = json_decode($data, true);
+            $this->body = \json_decode($data, true);
 
             break;
          case 'pre':
@@ -270,7 +270,7 @@ class Response implements Responsing
                // TODO Inject resource with custom process() created by user
             }
             else {
-               switch ( getType($data) ) {
+               switch ( \getType($data) ) {
                   case 'string':
                      // TODO check if string is a valid path
                      $File = match ($data[0]) {
@@ -330,16 +330,16 @@ class Response implements Responsing
       $uses = $this->uses;
 
       // @ Output/Buffer start()
-      ob_start();
+      \ob_start();
 
       try {
          // @ Isolate context with anonymous static function
          (static function (string $__file__, array $__vars__, ? array $__data__)
          use ($Request, $Response, $Route) {
-            extract($__vars__);
+            \extract($__vars__);
 
             if ($__data__ !== null) {
-               extract($__data__);
+               \extract($__data__);
             }
 
             require $__file__;
@@ -351,7 +351,7 @@ class Response implements Responsing
       $this->source = 'content';
       $this->type = '';
       // @ Output/Buffer clean()->get()
-      $this->body = ob_get_clean();
+      $this->body = \ob_get_clean();
 
       // @ Call callback
       if ($callback !== null && $callback instanceof \Closure) {
@@ -389,14 +389,14 @@ class Response implements Responsing
                   // TODO move to prepare or process
                   $this->Raw->Header->set('Content-Type', 'application/json');
 
-                  $body = json_encode($body, $options[0] ?? 0);
+                  $body = \json_encode($body, $options[0] ?? 0);
 
                   break;
                case 'jsonp':
                   // TODO move to prepare or process
                   $this->Raw->Header->set('Content-Type', 'application/json');
 
-                  $body = Server::$Request->queries['callback'].'('.json_encode($body).')';
+                  $body = Server::$Request->queries['callback'].'('.\json_encode($body).')';
 
                   break;
             }
@@ -428,7 +428,7 @@ class Response implements Responsing
 
                default: // Dynamic (PHP)
                   // @ Output/Buffer start()
-                  ob_start();
+                  \ob_start();
 
                   $Request = &Server::$Request;
                   $Response = &Server::$Response;
@@ -439,11 +439,11 @@ class Response implements Responsing
                   // @ Isolate context with anonymous static function
                   (static function (string $__file__, array $__vars__)
                   use ($Request, $Response, $Route) {
-                     extract($__vars__);
+                     \extract($__vars__);
                      require $__file__;
                   })($File, $uses);
 
-                  $body = ob_get_clean(); // @ Output/Buffer clean()->get()
+                  $body = \ob_get_clean(); // @ Output/Buffer clean()->get()
             }
 
             break;
@@ -453,7 +453,7 @@ class Response implements Responsing
                return $this;
             }
 
-            if (is_int($body) && $body > 99 && $body < 600) {
+            if (\is_int($body) && $body > 99 && $body < 600) {
                $code = $body;
 
                $body = '';
@@ -507,7 +507,7 @@ class Response implements Responsing
       $this->Raw->Header->set('Content-Length', $File->size);
       $this->Raw->Header->build();
 
-      flush();
+      \flush();
 
       $File->read(); // FIX MEMORY RAM USAGE OR LIMIT FILE SIZE TO UPLOAD
 
@@ -526,7 +526,7 @@ class Response implements Responsing
    public function authenticate (string $realm = 'Protected area') : self
    {
       if (Server::$Request->headers['x-requested-with'] !== 'XMLHttpRequest') {
-         header('WWW-Authenticate: Basic realm="' . $realm . '"');
+         \header('WWW-Authenticate: Basic realm="' . $realm . '"');
       }
 
       $this->code = 401;
@@ -545,7 +545,7 @@ class Response implements Responsing
    public function redirect (string $URI, ? int $code = null) : self // Code 302 = temporary; 301 = permanent;
    {
       // $this->code = $code;
-      header('Location: '. $URI, true, $code ?? 302);
+      \header('Location: '. $URI, true, $code ?? 302);
 
       $this->end();
 
