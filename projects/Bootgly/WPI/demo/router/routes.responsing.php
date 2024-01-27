@@ -23,7 +23,7 @@ $Router->route('/http-cache-time-based-1', function (Request $Request, Response 
 $Router->route('/send-headers-as-json-1', function (Request $Request, Response $Response) {
    // * Data
    // ! HTTP
-   return $Response->JSON->send($Response->headers);
+   return $Response->JSON->send($Request->headers);
    // * Metadata
 }, GET);
 
