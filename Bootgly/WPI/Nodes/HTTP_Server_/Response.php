@@ -18,17 +18,13 @@ use Bootgly\ABI\IO\FS\File;
 
 use Bootgly\WPI\Modules\HTTP\Server\Response as Responsing;
 use Bootgly\WPI\Nodes\HTTP_Server_ as Server;
-use Bootgly\WPI\Nodes\HTTP_Server_\Response\Body;
-use Bootgly\WPI\Nodes\HTTP_Server_\Response\Meta;
-use Bootgly\WPI\Nodes\HTTP_Server_\Response\Header;
+use Bootgly\WPI\Nodes\HTTP_Server_\Response\Raw;
 
 
 class Response implements Responsing
 {
    // ! HTTP
-   public Meta $Meta;
-   public Header $Header;
-   public Body $Body;
+   public Raw $Raw;
 
    // * Config
    // ...
@@ -64,9 +60,7 @@ class Response implements Responsing
    public function __construct (int $code = 200, ? array $headers = null, string $body = '')
    {
       // ! HTTP
-      $this->Meta = new Meta;
-      $this->Body = new Body;
-      $this->Header = new Header;
+      $this->Raw = new Raw;
 
 
       // * Config
@@ -105,10 +99,10 @@ class Response implements Responsing
          $this->code = $code;
       }
       if ($headers !== null) {
-         $this->Header->prepare($headers);
+         $this->Raw->Header->prepare($headers);
       }
       if ($body !== '') {
-         $this->Body->raw = $body;
+         $this->Raw->Body->raw = $body;
       }
    }
    public function __get (string $name)
@@ -120,15 +114,15 @@ class Response implements Responsing
             return http_response_code();
          // ? Response Headers
          case 'headers':
-            return $this->Header->fields;
+            return $this->Raw->Header->fields;
          // ? Response Body
          case 'chunked':
             if (! $this->chunked) {
                $this->chunked = true;
-               $this->Header->append('Transfer-Encoding', 'chunked');
+               $this->Raw->Header->append('Transfer-Encoding', 'chunked');
             }
 
-            return $this->Body->chunked;
+            return $this->Raw->Body->chunked;
 
          default: // @ Construct resource
             $this->resource = $name;
@@ -153,8 +147,8 @@ class Response implements Responsing
    public function __invoke (int $code = 200, array $headers = [], string $body = '') : self
    {
       $this->code = $code;
-      $this->Header->prepare($headers);
-      $this->Body->raw = $body;
+      $this->Raw->Header->prepare($headers);
+      $this->Raw->Body->raw = $body;
 
       return $this;
    }
@@ -393,14 +387,14 @@ class Response implements Responsing
                case 'application/json':
                case 'json':
                   // TODO move to prepare or process
-                  $this->Header->set('Content-Type', 'application/json');
+                  $this->Raw->Header->set('Content-Type', 'application/json');
 
                   $body = json_encode($body, $options[0] ?? 0);
 
                   break;
                case 'jsonp':
                   // TODO move to prepare or process
-                  $this->Header->set('Content-Type', 'application/json');
+                  $this->Raw->Header->set('Content-Type', 'application/json');
 
                   $body = Server::$Request->queries['callback'].'('.json_encode($body).')';
 
@@ -425,8 +419,8 @@ class Response implements Responsing
             switch ($this->type) {
                case 'image/x-icon':
                case 'ico':
-                  $this->Header->set('Content-Type', 'image/x-icon');
-                  $this->Header->set('Content-Length', $File->size);
+                  $this->Raw->Header->set('Content-Type', 'image/x-icon');
+                  $this->Raw->Header->set('Content-Length', $File->size);
 
                   $body = $File->contents;
 
@@ -499,7 +493,7 @@ class Response implements Responsing
       }
 
       // @ Set HTTP headers
-      $this->Header->prepare([
+      $this->Raw->Header->prepare([
          'Content-Type' => 'application/octet-stream',
          'Content-Disposition' => 'attachment; filename="'.$File->basename.'"',
 
@@ -510,8 +504,8 @@ class Response implements Responsing
       ]);
 
       // @ Send File Content
-      $this->Header->set('Content-Length', $File->size);
-      $this->Header->build();
+      $this->Raw->Header->set('Content-Length', $File->size);
+      $this->Raw->Header->build();
 
       flush();
 

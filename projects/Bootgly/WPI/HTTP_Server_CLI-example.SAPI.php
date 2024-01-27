@@ -44,7 +44,7 @@ return static function
    #return $Response(body: 'Hello World!');
 
    // @ send
-   #return $Response->Json->send(['Hello' => 'World!']); // JSON
+   #return $Response->JSON->send(['Hello' => 'World!']); // JSON
 
    // @ upload
    // Small files

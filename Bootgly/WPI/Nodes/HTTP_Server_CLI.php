@@ -27,7 +27,7 @@ use Bootgly\WPI\Interfaces\TCP_Client_CLI;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI;
 
 use Bootgly\WPI\Modules\HTTP;
-use Bootgly\WPI\Modules\HTTP\Server;
+use Bootgly\WPI\Modules\HTTP\Server as HTTP_Server;
 use Bootgly\WPI\Modules\HTTP\Server\Router;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Decoder_;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders\Encoder_;
@@ -36,7 +36,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 
 
-class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
+class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, HTTP_Server
 {
    // * Config
    // ...inherited from TCP_Server_CLI

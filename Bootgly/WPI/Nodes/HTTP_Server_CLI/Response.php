@@ -19,9 +19,6 @@ use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages;
 use Bootgly\WPI\Modules\HTTP\Server\Response as Responsing;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI as Server;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Raw;
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Body;
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Meta;
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Header;
 
 
 class Response implements Responsing

@@ -52,7 +52,7 @@ class Meta
                return $this->code;
             }
 
-            $code = array_search($this->status, HTTP::RESPONSE_STATUS);
+            $code = \array_search($this->status, HTTP::RESPONSE_STATUS);
 
             $this->code = $code;
 
@@ -71,7 +71,7 @@ class Meta
          case 'status':
             $status = match ($value) {
                (int) $value => $value . ' ' . HTTP::RESPONSE_STATUS[$value],
-               (string) $value => array_search($value, HTTP::RESPONSE_STATUS) . ' ' . $value
+               (string) $value => \array_search($value, HTTP::RESPONSE_STATUS) . ' ' . $value
             };
 
             @[$code, $message] = explode(' ', $status);

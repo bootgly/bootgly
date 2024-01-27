@@ -8,7 +8,7 @@ $Router->route('/http-cache-time-based-1', function ($Response, $Request) {
       return $Response(code: 304);
    }
    else {
-      return $Response->Json->send([
+      return $Response->JSON->send([
          'requested_at' => $Request->at
       ]);
    }
@@ -18,7 +18,7 @@ $Router->route('/http-cache-time-based-1', function ($Response, $Request) {
 $Router->route('/send-headers-as-json-1', function ($Response) {
    // * Data
    // ! HTTP
-   return $Response->Json->send($Response->headers);
+   return $Response->JSON->send($Response->headers);
    // * Metadata
 }, GET);
 

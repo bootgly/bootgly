@@ -59,7 +59,7 @@ class Header
          // * Data
          case 'fields':
          case 'headers':
-            $this->fields = apache_response_headers();
+            $this->fields = \apache_response_headers();
 
             return $this->fields;
          // * Metadata
@@ -75,7 +75,7 @@ class Header
             return $this->raw;
 
          case 'sent':
-            return headers_sent();
+            return \headers_sent();
 
          default:
             return $this->get($name);
@@ -127,7 +127,7 @@ class Header
       if ( empty($this->fields) && ! empty($this->prepared) ) {
          $this->fields = $this->prepared;
       } else {
-         $this->fields = array_merge($this->fields, $this->prepared);
+         $this->fields = \array_merge($this->fields, $this->prepared);
       }
 
       // @ Set default headers
@@ -151,14 +151,14 @@ class Header
 
    public function get (string $name) : string
    {
-      return (string) $this->fields[$name] ?? (string) $this->fields[strtolower($name)] ?? '';
+      return (string) $this->fields[$name] ?? (string) $this->fields[\strtolower($name)] ?? '';
    }
 
    public function set (string $field, string $value = '') // TODO refactor
    {
       $this->fields[$field] = $value;
 
-      header($field . ': ' . $value, true);
+      \header($field . ': ' . $value, true);
    }
    public function append (string $field, string $value = '', ? string $separator = ', ') // TODO refactor
    {
@@ -170,7 +170,7 @@ class Header
          $this->fields[$field] = $value;
       }
 
-      header($field . ': ' . $value, false);
+      \header($field . ': ' . $value, false);
    }
    public function queue (string $field, string $value = '')
    {
