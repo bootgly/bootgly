@@ -50,7 +50,7 @@ class CLI extends Projects // Command Line Interface
       // ...
 
       // * Metadata
-      self::$booted = false;
+      // ...
 
 
       // @

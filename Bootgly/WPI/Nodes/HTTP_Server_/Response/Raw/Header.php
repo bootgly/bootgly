@@ -151,7 +151,7 @@ class Header
 
    public function get (string $name) : string
    {
-      return (string) $this->fields[$name] ?? (string) $this->fields[\strtolower($name)] ?? '';
+      return (string) (@$this->fields[$name] ?? @$this->fields[\strtolower($name)] ?? '');
    }
 
    public function set (string $field, string $value = '') // TODO refactor

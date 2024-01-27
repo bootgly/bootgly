@@ -34,13 +34,13 @@ class Decoder_ extends Decoders
          return $size;
       }
 
-      // @ Get callbacks
-      $Request = Server::$Request;
-
       // @ Handle Package cache
       if ($Package->changed) {
-         $Request = Server::$Request = new Request;
+         Server::$Request = new Request;
       }
+
+      // @ Get callbacks
+      $Request = Server::$Request;
 
       // @ Input HTTP Request
       $length = $Request->Raw->input($Package, $buffer, $size);

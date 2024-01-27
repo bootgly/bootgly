@@ -41,7 +41,7 @@ class Body
    {
       switch ($name) {
          case 'chunked':
-            return dechex($this->length) . "\r\n$this->raw\r\n";
+            return \dechex($this->length) . "\r\n$this->raw\r\n";
          default:
             return '';
       }

@@ -108,6 +108,14 @@ class TCP_Server_CLI implements Servers, Logging
       $this->mode = self::MODE_MONITOR;
 
       // * Data
+      // @ SAPI
+      // Application
+      if (__CLASS__ !== static::class) {
+         self::$Application = static::class;
+      }
+      // Decoder
+
+      // Encoder
       // ...
 
       // * Metadata
@@ -116,11 +124,6 @@ class TCP_Server_CLI implements Servers, Logging
       // @ Status
       $this->status = self::STATUS_BOOTING;
 
-
-      // @
-      if (__CLASS__ !== static::class) {
-         self::$Application = static::class;
-      }
 
       // @ Configure Logger
       $this->Logger = new Logger(channel: 'TCP.Server.CLI');

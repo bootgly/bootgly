@@ -111,7 +111,7 @@ class Response implements Responsing
          // ? Response Meta
          case 'status':
          case 'code':
-            return http_response_code();
+            return \http_response_code();
          // ? Response Headers
          case 'headers':
             return $this->Raw->Header->fields;
