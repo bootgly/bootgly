@@ -113,17 +113,22 @@ trait Requestable
             $host = $_SERVER['HTTP_HOST'] ?? $this->Raw->Header->get('Host');
 
             return $this->host = $host;
-         case 'hostname': // alias
-            return $this->host;
          case 'domain':
-            // TODO validate all cases
+            // TODO pattern to validate all cases of domains
+            $host = $this->host;
             $pattern = "/(?P<domain>[a-z0-9][a-z0-9\-]{1,63}\.[a-z\.]{2,6})(:[\d]+)?$/i";
 
-            if (\preg_match($pattern, $this->host, $matches)) {
+            if (\preg_match($pattern, $host, $matches)) {
                return $this->domain = @$matches['domain'];
             }
 
-            break;
+            $colon = \strpos($host, ":");
+            if ($colon === false) {
+               return $this->domain = $host;
+            }
+            else {
+               return $this->domain = \substr($host, 0, $colon);
+            }
 
          case 'subdomain':
             // TODO validate all cases

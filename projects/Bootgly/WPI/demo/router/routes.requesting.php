@@ -43,6 +43,18 @@ $Router->route('/Request/test.g', function (Request $Request, Response $Response
   return $Response->JSON->send($Request->headers);
 }, GET);
 
+$Router->route('/Request/test.h', function (Request $Request, Response $Response) {
+  return $Response->send($Request->host);
+}, GET);
+
+$Router->route('/Request/test.i', function (Request $Request, Response $Response) {
+  return $Response->JSON->send([
+    $Request->domain,
+    $Request->subdomain,
+    $Request->subdomains
+  ]);
+}, GET);
+
 $Router->route('/requesting', function (Request $Request, Response $Response) {
   // * Data
   /*
