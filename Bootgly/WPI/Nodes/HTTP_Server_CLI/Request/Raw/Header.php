@@ -11,21 +11,25 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Raw;
 
 
+use Bootgly\WPI\Modules\HTTP\Server\Request\Heading;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Raw\Header\Cookie;
 
 
 class Header
 {
+   use Heading;
+
+
    // * Config
    // ...
 
    // * Data
    public readonly string $raw;
-   public null|int|false $length;
+   protected array $fields;
 
    // * Metadata
-   private array $fields;
    private bool $built;
+   public readonly null|int|false $length;
 
    public Cookie $Cookie;
 
@@ -37,11 +41,11 @@ class Header
 
       // * Data
       // public $raw (readonly)
-      $this->length = null;
+      $this->fields = [];
 
       // * Metadata
-      $this->fields = [];
       $this->built = false;
+      // $this->length = null;
 
 
       $this->Cookie = new Cookie($this);
@@ -54,9 +58,6 @@ class Header
 
          // * Data
          // public $raw (readonly)
-         // public $length
-
-         // * Metadata
          case 'fields':
             if ($this->built === false) {
                $this->build();
@@ -64,54 +65,15 @@ class Header
 
             return $this->fields;
 
-         default:
-            return $this->get($name);
+         // * Metadata
+         // public length (readonly)
       }
    }
 
-   public function get (string $name) : string|array
-   {
-      if ($this->built === false) {
-         $this->build();
-      }
-
-      return @$this->fields[$name] ?? @$this->fields[strtolower($name)] ?? '';
-   }
    public function set (string $raw) : void
    {
       $this->raw ??= $raw;
-   }
 
-   public function build () : bool
-   {
-      $fields = [];
-
-      foreach (explode("\r\n", $this->raw ?? '') as $field) {
-         if ( strpos($field, ': ') ) {
-            @[$key, $value] = explode(': ', $field, 2);
-
-            #if ( strpos($key, ' ') ) {
-            #   return false; // @ 400 Bad Request
-            #}
-            if ( isSet($fields[$key]) ) {
-               if ( is_string($fields[$key]) ) {
-                  $fields[$key] = [
-                     $fields[$key]
-                  ];
-               }
-
-               $fields[$key][] = $value;
-            }
-            else {
-               $fields[$key] = $value;
-            }
-         }
-      }
-
-      $this->fields = $fields;
-
-      $this->built = true;
-
-      return true;
+      $this->length = \strlen($raw);
    }
 }

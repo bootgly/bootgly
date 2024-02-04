@@ -56,16 +56,14 @@ trait Requestable
             $this->raw = $raw;
 
             return $raw;
-         // ? Meta
+
          case 'method':
             return $_SERVER['REQUEST_METHOD'] ?? '';
-         // case 'URI': ...
+         case 'URI': // (Uniform Resource Identifier)
+            return @$_SERVER['REDIRECT_URI'] ?? $_SERVER['REQUEST_URI'] ?? '';
          case 'protocol':
             return $_SERVER['SERVER_PROTOCOL'] ?? '';
          // @ Uniform Resources
-         case 'URI': // (Uniform Resource Identifier)
-            return @$_SERVER['REDIRECT_URI'] ?? $_SERVER['REQUEST_URI'] ?? '';
-
          case 'URL': // (Uniform Resource Locator)
             $locator = \strtok($this->URI, '?');
 
@@ -203,7 +201,7 @@ trait Requestable
          case 'Cookie':
             return $this->Raw->Header->Cookie;
          case 'cookies':
-            return $this->Cookie->cookies;
+            return $this->Raw->Header->Cookie->cookies;
          // ? Body
          case 'input':
             return $this->Raw->Body->input;

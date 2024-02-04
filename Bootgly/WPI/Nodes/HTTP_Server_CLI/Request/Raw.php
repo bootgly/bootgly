@@ -91,9 +91,6 @@ class Raw
       // @ Get Request Header raw
       $header_raw = \substr($buffer, $meta_length + 2, $separator_position - $meta_length);
 
-      // @ Prepare Request Header length
-      $header_length = \strlen($header_raw);
-
       // ? Request Body
       // @ Set Request Body length if possible
       if ( $_ = \strpos($header_raw, "\r\nContent-Length: ") ) {
@@ -153,8 +150,6 @@ class Raw
       $this->Header->set(raw: $header_raw);
       // host
       #$_SERVER['HTTP_HOST'] = $this->Header->get('HOST');
-      // length
-      $this->Header->length = $header_length;
 
       // ! Request Body
       $this->Body->position = $separator_position + 4;

@@ -47,10 +47,18 @@ final class Cookie
    public function __get (string $name)
    {
       switch ($name) {
+         // * Config
+         // ...
+
+         // * Data
          case 'cookies':
             $this->build();
 
             return $this->cookies;
+
+         // * Metadata
+         // ...
+
          default:
             $this->build();
 
@@ -64,12 +72,12 @@ final class Cookie
          return false;
       }
 
-      $replaced = preg_replace('/; ?/', '&', $this->Header->get('Cookie'));
+      $replaced = \preg_replace('/; ?/', '&', $this->Header->get('Cookie'));
 
       $cookies = &$this->cookies;
 
       foreach ($replaced as $cookie) {
-         parse_str($cookie, $value);
+         \parse_str($cookie, $value);
 
          $cookies[] = $value;
       }

@@ -3,40 +3,56 @@ use Bootgly\WPI\Nodes\HTTP_Server_\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_\Response;
 
 
-$Router->route('/request_metadata', function (Request $Request, Response $Response) {
-  $Request_Data = [
+$Router->route('/Request/test.a', function (Request $Request, Response $Response) {
+  return $Response->JSON->send([
     'address' => $Request->address,
     'port' => $Request->port,
     'scheme' => $Request->scheme
-  ];
-
-  return $Response->JSON->send($Request_Data);
+  ]);
 }, GET);
 
-$Router->route('/request_raw', function (Request $Request, Response $Response) {
+$Router->route('/Request/test.b', function (Request $Request, Response $Response) {
   return $Response->send($Request->raw);
 }, GET);
 
-$Router->route('/request_meta', function (Request $Request, Response $Response) {
-    $Request_Meta = [
+$Router->route('/Request/test.c', function (Request $Request, Response $Response) {
+  return $Response->JSON->send([
     'method' => $Request->method,
     'protocol' => $Request->protocol,
     'URI' => $Request->URI
-  ];
+  ]);
+}, GET);
 
-  return $Response->JSON->send($Request_Meta);
+$Router->route('/Request/test.d', function (Request $Request, Response $Response) {
+  return $Response->JSON->send([
+    'URI' => $Request->URI,
+    'URL' => $Request->URL,
+    'URN' => $Request->URN
+  ]);
+}, GET);
+
+$Router->route('/Request/test.e', function (Request $Request, Response $Response) {
+  return $Response->send($Request->query);
+}, GET);
+
+$Router->route('/Request/test.f', function (Request $Request, Response $Response) {
+  return $Response->JSON->send($Request->queries);
+}, GET);
+
+$Router->route('/Request/test.g', function (Request $Request, Response $Response) {
+  return $Response->JSON->send($Request->headers);
 }, GET);
 
 $Router->route('/requesting', function (Request $Request, Response $Response) {
   // * Data
   /*
-  $Response->append($Request->ip);                  // @ 123.10.20.30
+  $Response->append($Request->address);             // @ 123.10.20.30
   $Response->append($Request->port);                // @ 57123
 
   $Response->append($Request->scheme);              // @ https
-  $Response->append($Request->host);                // @ bootgly.slayer.tech
-  $Response->append($Request->domain);              // @ slayer.tech
-  $Response->append($Request->subdomain);           // @ bootgly
+  $Response->append($Request->host);                // @ docs.bootgly.com
+  $Response->append($Request->domain);              // @ bootgly.com
+  $Response->append($Request->subdomain);           // @ docs
   return $Response->Pre->send();
   */
 
@@ -46,7 +62,7 @@ $Router->route('/requesting', function (Request $Request, Response $Response) {
   #return $Response->send($Request->URL);           // @ /test/foo
   // ? URI/Query
   #return $Response->send($Request->query);         // @ query1=abc&query2=xyz
-  #return $Response->Json->send($Request->queries); // @ {"query1":"abc", "query2":"xyz"}
+  #return $Response->JSON->send($Request->queries); // @ {"query1":"abc", "query2":"xyz"}
 
 
   // ! HTTP
@@ -55,22 +71,24 @@ $Router->route('/requesting', function (Request $Request, Response $Response) {
   #return $Response->send($Request->language);        // @ pt-BR
   #return $Response->send($Request->user);          // @ boot
   #return $Response->send($Request->password);      // @ singly
-  #return $Response->pre->send($Request->raw);      // @ "..."
+  #return $Response->Pre->send($Request->raw);      // @ "..."
   // ? Header
-  #return $Response->Json->send($Request->headers, JSON_PRETTY_PRINT);
+  #return $Response->JSON->send($Request->headers, JSON_PRETTY_PRINT);
   #return $Response->send($Request->Raw->Header->get('accept'));
-  #return $Response->send->pre->send($Request->Raw->Header->raw);
+  #return $Response->send->Pre->send($Request->Raw->Header->raw);
   // ? Header/Cookie
-  #return $Response->Json->send($Request->cookies); // @ {...}
+  #return $Response->JSON->send($Request->cookies); // @ {...}
   #return $Response->send($Request->Cookie->test);  // @ {...}
   // ? Body
   #return $Response->send($Request->inputs);        // @ {...}
   #return $Response->send($Request->post);          // @ {...}
-  #return $Response->Json->send($Request->files);   // @ [...]
+  #return $Response->JSON->send($Request->files);   // @ [...]
 
   // * Metadata
   #return $Response->send($Request->on);            // @ 2022-10-17
   #return $Response->send($Request->at);            // @ 12:00:00
   #return $Response->send($Request->time);           // @ 1666011216
-  return $Response->Json->send($Request->range(1000, 'items=0-5'));
+  #return $Response->JSON->send($Request->range(1000, 'items=0-5'));
+
+  return $Response;
 }, [GET, POST]);

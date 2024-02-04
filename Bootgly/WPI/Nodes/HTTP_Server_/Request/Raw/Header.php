@@ -11,42 +11,47 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_\Request\Raw;
 
 
+use Bootgly\WPI\Modules\HTTP\Server\Request\Heading;
 use Bootgly\WPI\Nodes\HTTP_Server_\Request\Raw\Header\Cookie;
 
 
 class Header
 {
+   use Heading;
+
+
    // * Config
    // ...
 
    // * Data
    protected string $raw;
-   private array $fields;
+   protected array $fields;
 
    // * Metadata
    private bool $built;
-   public null|int|false $length;
+   private null|int|false $length;
 
    public Cookie $Cookie;
 
 
    public function __construct ()
    {
-      $fields = \apache_request_headers();
-
-      if ($fields !== false) {
-         $fields = \array_change_key_case($fields, CASE_LOWER);
-
-         $this->built = true;
-      } else {
-         $fields = [];
-
-         $this->built = false;
-      }
+      // * Config
+      // ...
 
       // * Data
+      // field
+      $fields = \apache_request_headers();
+      if ($fields !== false) {
+         $fields = \array_change_key_case($fields, \CASE_LOWER);
+      }
+      else {
+         $fields = [];
+      }
       $this->fields = $fields;
+
       // * Metadata
+      $this->built = ! empty($fields);
       $this->length = null;
 
 
@@ -55,6 +60,9 @@ class Header
    public function __get (string $name)
    {
       switch ($name) {
+         // * Config
+         // ..
+
          // * Data
          case 'raw':
             if ( isSet($this->raw) && $this->raw !== '' ) {
@@ -70,8 +78,9 @@ class Header
          case 'fields':
             return $this->fields;
 
-         default:
-            return $this->get($name);
+         // * Metadata
+         case 'length':
+            return $this->length = \strlen($this->raw ?? $this->__get('raw'));
       }
    }
    public function __set (string $name, string $value)
@@ -83,40 +92,16 @@ class Header
             break;
          case 'fields':
             break;
-
-         default:
-            $this->fields[$name] = $value;
       }
    }
 
-   public function get (string $name) : string
+   public function set (string $name, string $value) : bool
    {
-      if ($this->built === false) {
-         $this->build();
+      if ( isSet($this->fields[$name]) ) {
+         return false;
       }
 
-      return (string) (@$this->fields[$name] ?? @$this->fields[\strtolower($name)] ?? '');
-   }
-
-   public function build () : bool
-   {
-      $fields = [];
-
-      foreach (\explode("\r\n", $this->raw) as $field) {
-         if ( \strpos($field, ': ') ) {
-            @[$key, $value] = \explode(': ', $field, 2);
-
-            #if ( strpos($key, ' ') ) {
-            #   return false; // @ 400 Bad Request
-            #}
-
-            $fields[$key] = $value;
-         }
-      }
-
-      $this->fields = $fields;
-
-      $this->built = true;
+      $this->fields[$name] = $value;
 
       return true;
    }
