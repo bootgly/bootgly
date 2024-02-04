@@ -1,23 +1,23 @@
 <?php
-$Router->route('/send-file', function ($Response) {
-  return $Response->send(<<<HTML
-  <!DOCTYPE html>
-  <html lang="pt-BR">
-    <head>
-      <meta charset="UTF-8">
-      <title>Bootgly File Upload</title>
-    </head>
-    <body>
-      <form action="/upload/" method="post" enctype="multipart/form-data">
-        <input type="file" name="test">
-        <button type="submit">Enviar</button>
-      </form>
-    </body>
-  </html>
-  HTML);
+use Bootgly\WPI\Nodes\HTTP_Server_\Request;
+use Bootgly\WPI\Nodes\HTTP_Server_\Response;
+
+
+$Router->route('/request_metadata', function (Request $Request, Response $Response) {
+  $Request_Data = [
+    'address' => $Request->address,
+    'port' => $Request->port,
+    'scheme' => $Request->scheme
+  ];
+
+  return $Response->JSON->send($Request_Data);
 }, GET);
 
-$Router->route('/requesting', function ($Response, $Request) {
+$Router->route('/request_raw', function (Request $Request, Response $Response) {
+  return $Response->send($Request->raw);
+}, GET);
+
+$Router->route('/requesting', function (Request $Request, Response $Response) {
   // * Data
   /*
   $Response->append($Request->ip);                  // @ 123.10.20.30

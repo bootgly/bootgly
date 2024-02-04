@@ -15,6 +15,9 @@ trait Requestable
 {
    public function __get (string $name)
    {
+      /* Waiting for the RFC "Property Accessors" from Nikita Popov (https://wiki.php.net/rfc/property_accessors)
+         to organize this mess.
+      */
       switch ($name) {
          // * Config
          case 'base':
@@ -25,7 +28,7 @@ trait Requestable
          case 'address':
             return (string) ($this->Raw->Header->fields['cf-connecting-ip'] ?? $_SERVER['REMOTE_ADDR']);
          case 'port':
-            return (int) ($_SERVER['REMOTE_PORT']);
+            return (int) ($_SERVER['REMOTE_PORT'] ?? 0);
 
          case 'scheme':
             if (isSet($_SERVER['HTTP_X_FORWARDED_PROTO']) === true) {

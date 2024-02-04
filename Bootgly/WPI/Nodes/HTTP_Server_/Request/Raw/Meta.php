@@ -17,13 +17,14 @@ class Meta
    // ...
 
    // * Data
-   public string $raw;
-
+   // @ Raw
    public string $method;
    public string $URI; // @ Resource
    public string $protocol;
+   public string $raw;
 
    // * Metadata
+   // @ Raw
    public ? int $length;
    // ? Resource
    // @ URI
@@ -39,13 +40,15 @@ class Meta
       // ...
 
       // * Data
-      $this->raw = '';
+      $this->method = $_SERVER['REQUEST_METHOD'] ?? '';
+      $this->URI = @$_SERVER['REDIRECT_URI'] ?? $_SERVER['REQUEST_URI'] ?? '';
+      $this->protocol = $_SERVER['SERVER_PROTOCOL'] ?? '';
 
-      $this->method = $_SERVER['REQUEST_METHOD'];
-      $this->URI = @$_SERVER['REDIRECT_URI'] ?? $_SERVER['REQUEST_URI'];
-      $this->protocol = $_SERVER['SERVER_PROTOCOL'];
+      $this->raw = <<<RAW
+      {$this->method} {$this->URI} {$this->protocol}
+      RAW;
 
       // * Metadata
-      $this->length = null;
+      $this->length = \strlen($this->raw);
    }
 }
