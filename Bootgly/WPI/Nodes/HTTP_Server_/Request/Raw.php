@@ -11,14 +11,12 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_\Request;
 
 
-use Bootgly\WPI\Nodes\HTTP_Server_\Request\Raw\Meta;
 use Bootgly\WPI\Nodes\HTTP_Server_\Request\Raw\Header;
 use Bootgly\WPI\Nodes\HTTP_Server_\Request\Raw\Body;
 
 
 class Raw
 {
-   public Meta $Meta;
    public Header $Header;
    public Body $Body;
 
@@ -28,7 +26,6 @@ class Raw
 
    public function __construct ()
    {
-      $this->Meta = new Meta;
       $this->Header = new Header;
       $this->Body = new Body;
    }

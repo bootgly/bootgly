@@ -14,14 +14,12 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI as Server;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Decoder_Waiting;
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Raw\Meta;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Raw\Header;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Raw\Body;
 
 
 class Raw
 {
-   public Meta $Meta;
    public Header $Header;
    public Body $Body;
 
@@ -31,7 +29,6 @@ class Raw
 
    public function __construct ()
    {
-      $this->Meta = new Meta;
       $this->Header = new Header;
       $this->Body = new Body;
    }
@@ -143,18 +140,13 @@ class Raw
       $_SERVER['REMOTE_PORT'] = $Package->Connection->port;
       // scheme
       $_SERVER['HTTPS'] = $Package->Connection->encrypted;
-
-      // ! Request Meta
-      // raw
-      $this->Meta->raw = $meta_raw;
+      // @@
       // method
       $_SERVER['REQUEST_METHOD'] = $method;
       // URI
       $_SERVER['REQUEST_URI'] = $URI;
       // protocol
       $_SERVER['SERVER_PROTOCOL'] = $protocol;
-      // length
-      $this->Meta->length = $meta_length;
 
       // ! Request Header
       // raw

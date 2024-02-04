@@ -45,7 +45,9 @@ trait Requestable
 
             // ! HTTP
          case 'raw':
-            $raw = $this->Raw->Meta->raw;
+            $raw = <<<RAW
+            {$this->method} {$this->URI} {$this->protocol}
+            RAW;
             $raw .= "\r\n";
             $raw .= $this->Raw->Header->raw;
             $raw .= "\r\n";
@@ -56,13 +58,13 @@ trait Requestable
             return $raw;
          // ? Meta
          case 'method':
-            return $_SERVER['REQUEST_METHOD'];
+            return $_SERVER['REQUEST_METHOD'] ?? '';
          // case 'URI': ...
          case 'protocol':
-            return $_SERVER['SERVER_PROTOCOL'];
+            return $_SERVER['SERVER_PROTOCOL'] ?? '';
          // @ Uniform Resources
          case 'URI': // (Uniform Resource Identifier)
-            return $_SERVER['REDIRECT_URI'] ?? @$_SERVER['REQUEST_URI'];
+            return @$_SERVER['REDIRECT_URI'] ?? $_SERVER['REQUEST_URI'] ?? '';
 
          case 'URL': // (Uniform Resource Locator)
             $locator = \strtok($this->URI, '?');

@@ -17,6 +17,16 @@ $Router->route('/request_raw', function (Request $Request, Response $Response) {
   return $Response->send($Request->raw);
 }, GET);
 
+$Router->route('/request_meta', function (Request $Request, Response $Response) {
+    $Request_Meta = [
+    'method' => $Request->method,
+    'protocol' => $Request->protocol,
+    'URI' => $Request->URI
+  ];
+
+  return $Response->JSON->send($Request_Meta);
+}, GET);
+
 $Router->route('/requesting', function (Request $Request, Response $Response) {
   // * Data
   /*
