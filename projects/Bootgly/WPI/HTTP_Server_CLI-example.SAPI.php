@@ -48,10 +48,10 @@ return static function
 
    // @ upload
    // Small files
-   #return $Response('statics/image1.jpg')->upload();
-   #return $Response('statics/alphanumeric.txt')->upload(offset: 0, length: 2);
+   #return $Response->upload('statics/image1.jpg');
+   #return $Response->upload(file: 'statics/alphanumeric.txt', offset: 0, length: 2);
    // Medium files
-   #return $Response('statics/screenshot.gif')->upload();
+   #return $Response->upload('statics/screenshot.gif');
 
    // @ authenticate
    #return $Response->authenticate(realm: 'Protected area');

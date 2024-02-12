@@ -12,22 +12,22 @@ return static function
 (Request $Request, Response $Response, Router $Router)
 {
    // ? Router
-   yield $Router->route('/', function ($Request, $Response) {
+   yield $Router->route('/', function (Request $Request, Response $Response) {
       return $Response(body: 'Hello World!');
    }, GET);
    yield $Router->route('/new', function () {
       return new Response(body: 'Testing Bootgly HTTP Router!');
    }, GET);
    yield $Router->route('/user/:*', function () use ($Router) {
-      yield $Router->route('', function ($Request, $Response) {
+      yield $Router->route('', function (Request $Request, Response $Response) {
          return $Response(body: 'Your profile!');
       });
 
-      yield $Router->route('maria', function ($Request, $Response) {
+      yield $Router->route('maria', function (Request $Request, Response $Response) {
          return $Response(body: 'Maria\'s user profile!');
       });
 
-      yield $Router->route('bob', function ($Request, $Response) {
+      yield $Router->route('bob', function (Request $Request, Response $Response) {
          return $Response(body: 'Bob\'s user profile!');
       });
    }, GET);
