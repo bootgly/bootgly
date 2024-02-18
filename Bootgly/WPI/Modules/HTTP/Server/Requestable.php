@@ -195,17 +195,17 @@ trait Requestable
 
          // HTTP Content Negotiation (RFC 7231 section-5.3)
          case 'type':
-            $type = $this->negotiate(with: self::ACCEPTS_TYPES);
-            return $type[0] ?? '';
+            $types = $this->negotiate(with: self::ACCEPTS_TYPES);
+            return $this->type = $types[0] ?? '';
          case 'language':
-            $type = $this->negotiate(with: self::ACCEPTS_LANGUAGES);
-            return $type[0] ?? '';
+            $languages = $this->negotiate(with: self::ACCEPTS_LANGUAGES);
+            return $this->language = $languages[0] ?? '';
          case 'charset':
-            $type = $this->negotiate(with: self::ACCEPTS_CHARSETS);
-            return $type[0] ?? '';
+            $charsets = $this->negotiate(with: self::ACCEPTS_CHARSETS);
+            return $this->charset = $charsets[0] ?? '';
          case 'encoding':
-            $type = $this->negotiate(with: self::ACCEPTS_ENCODINGS);
-            return $type[0] ?? '';
+            $encodings = $this->negotiate(with: self::ACCEPTS_ENCODINGS);
+            return $this->encodings = $encodings[0] ?? '';
          // HTTP Caching Specification (RFC 7234)
          case 'fresh':
             return $this->freshen();
