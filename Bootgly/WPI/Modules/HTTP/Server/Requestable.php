@@ -193,6 +193,19 @@ trait Requestable
          case 'secure':
             return $this->scheme === 'https';
 
+         // HTTP Content Negotiation (RFC 7231 section-5.3)
+         case 'type':
+            $type = $this->negotiate(with: self::ACCEPTS_TYPES);
+            return $type[0] ?? '';
+         case 'language':
+            $type = $this->negotiate(with: self::ACCEPTS_LANGUAGES);
+            return $type[0] ?? '';
+         case 'charset':
+            $type = $this->negotiate(with: self::ACCEPTS_CHARSETS);
+            return $type[0] ?? '';
+         case 'encoding':
+            $type = $this->negotiate(with: self::ACCEPTS_ENCODINGS);
+            return $type[0] ?? '';
          // HTTP Caching Specification (RFC 7234)
          case 'fresh':
             return $this->freshen();
