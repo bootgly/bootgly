@@ -53,14 +53,14 @@ $Router->route('/Request/test.h', function (Request $Request, Response $Response
   ]);
 }, GET);
 
-$Router->route('/Request/test.i', function (Request $Request, Response $Response) {
+$Router->route('/Request/test.x', function (Request $Request, Response $Response) {
   return $Response->JSON->send([
     $Request->username,
     $Request->password,
   ]);
 }, GET);
 
-$Router->route('/Request/test.j', function (Request $Request, Response $Response) {
+$Router->route('/Request/test.y', function (Request $Request, Response $Response) {
   return $Response->JSON->send(
     [
       'types' => $Request->negotiate(with: $Request::ACCEPTS_TYPES),

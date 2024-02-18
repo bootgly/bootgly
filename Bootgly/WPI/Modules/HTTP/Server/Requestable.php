@@ -134,10 +134,10 @@ trait Requestable
          case 'subdomains':
             return $this->subdomains = \explode('.', $this->subdomain);
 
-         // case 'ips': // TODO ips based in Header X-Forwarded-For
-         // ? Header / Cookie
-         case 'Cookie':
-            return $this->Raw->Header->Cookie;
+         // case 'IPs': // TODO ips based in Header X-Forwarded-For
+         // ? Header / Cookies
+         case 'Cookies':
+            return $this->Cookies = &$this->Raw->Header->Cookie;
          case 'cookies':
             return $this->Raw->Header->Cookie->cookies;
          // ? Body
@@ -160,7 +160,7 @@ trait Requestable
          case 'secure':
             return $this->scheme === 'https';
 
-         // HTTP Basic Authentication / Authorization
+         // HTTP Authentication (Basic only)
          case 'username':
             $username = $this->authenticate()->username;
 
@@ -174,15 +174,27 @@ trait Requestable
          case 'type':
             $types = $this->negotiate(with: self::ACCEPTS_TYPES);
             return $this->type = $types[0] ?? '';
+         case 'types':
+            $types = $this->negotiate(with: self::ACCEPTS_TYPES);
+            return $this->types = $types;
          case 'language':
             $languages = $this->negotiate(with: self::ACCEPTS_LANGUAGES);
             return $this->language = $languages[0] ?? '';
+         case 'languages':
+            $languages = $this->negotiate(with: self::ACCEPTS_LANGUAGES);
+            return $this->languages = $languages;
          case 'charset':
             $charsets = $this->negotiate(with: self::ACCEPTS_CHARSETS);
             return $this->charset = $charsets[0] ?? '';
+         case 'charsets':
+            $charsets = $this->negotiate(with: self::ACCEPTS_CHARSETS);
+            return $this->charset = $charsets;
          case 'encoding':
             $encodings = $this->negotiate(with: self::ACCEPTS_ENCODINGS);
             return $this->encoding = $encodings[0] ?? '';
+         case 'encodings':
+            $encodings = $this->negotiate(with: self::ACCEPTS_ENCODINGS);
+            return $this->encodings = $encodings;
          // HTTP Caching Specification (RFC 7234)
          case 'fresh':
             return $this->freshen();
