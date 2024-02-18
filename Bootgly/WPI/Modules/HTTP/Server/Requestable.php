@@ -24,7 +24,6 @@ trait Requestable
             return $this->base;
 
          // * Data
-         // TODO IP->...
          case 'address':
             return (string) ($this->Raw->Header->fields['cf-connecting-ip'] ?? $_SERVER['REMOTE_ADDR']);
          case 'port':
@@ -83,7 +82,7 @@ trait Requestable
             $URL = $this->URL;
 
             // @ Extract the URN after the last slash
-            $URN = substr($URL, strrpos($URL, '/') + 1);
+            $URN = \substr($URL, \strrpos($URL, '/') + 1);
 
             $this->URN = $URN;
 
@@ -114,8 +113,8 @@ trait Requestable
 
             return $this->host = $host;
          case 'domain':
-            // TODO pattern to validate all cases of domains
             $host = $this->host;
+  
             $pattern = "/(?P<domain>[a-z0-9][a-z0-9\-]{1,63}\.[a-z\.]{2,6})(:[\d]+)?$/i";
 
             if (\preg_match($pattern, $host, $matches)) {
@@ -131,22 +130,19 @@ trait Requestable
             }
 
          case 'subdomain':
-            // TODO validate all cases
             return $this->subdomain = \rtrim(\strstr($this->host, $this->domain, true), '.');
          case 'subdomains':
             return $this->subdomains = \explode('.', $this->subdomain);
-            // TODO Domain with __String/Domain
-            // TODO Domain->sub, Domain->second (second-level), Domain->top (top-level), Domain->root, tld, ...
 
          // @ Authorization (Basic)
          case 'username':
             $authorization = $this->Raw->Header->get('Authorization');
 
             if (\strpos($authorization, 'Basic') === 0) {
-               $encodedCredentials = \substr($authorization, 6);
-               $decodedCredentials = \base64_decode($encodedCredentials);
+               $encoded_credentials = \substr($authorization, 6);
+               $decoded_credentials = \base64_decode($encoded_credentials);
 
-               [$username, $password] = \explode(':', $decodedCredentials, 2);
+               [$username, $password] = \explode(':', $decoded_credentials, 2);
 
                $this->password = $password;
 
@@ -159,10 +155,10 @@ trait Requestable
             $authorization = $this->Raw->Header->get('Authorization');
 
             if (\strpos($authorization, 'Basic') === 0) {
-               $encodedCredentials = \substr($authorization, 6);
-               $decodedCredentials = \base64_decode($encodedCredentials);
+               $encoded_credentials = \substr($authorization, 6);
+               $decoded_credentials = \base64_decode($encoded_credentials);
 
-               [$username, $password] = \explode(':', $decodedCredentials, 2);
+               [$username, $password] = \explode(':', $decoded_credentials, 2);
 
                $this->user = $username;
 
@@ -171,38 +167,8 @@ trait Requestable
 
             return $this->password = null;
 
-         // @ Accept-Language
-         case 'language':
-            // TODO move to method?
-            $httpAcceptLanguage = @$_SERVER['HTTP_ACCEPT_LANGUAGE'] ?? $this->Raw->Header->get('Accept-Language');
-
-            if ($httpAcceptLanguage === null) {
-               return null;
-            }
-
-            \preg_match_all(
-               '/([a-z]{1,8}(-[a-z]{1,8})?)\s*(;\s*q\s*=\s*(1|0\.[0-9]+))?/i',
-               $httpAcceptLanguage,
-               $matches
-            );
-
-            $language = '';
-            if (\count($matches[1])) {
-               $languages = \array_combine($matches[1], $matches[4]);
-               foreach ($languages as $language => $weight) {
-                  if ($weight === '') {
-                     $languages[$language] = 1;
-                  }
-               }
-               \arsort($languages, SORT_NUMERIC);
-               $language = \array_keys($languages);
-               $language = \array_merge($language, $languages);
-               $language = $language[0];
-            }
-
-            return $this->language = $language;
-            // case 'ips': // TODO ips based in Header X-Forwarded-For
-            // ? Header / Cookie
+         // case 'ips': // TODO ips based in Header X-Forwarded-For
+         // ? Header / Cookie
          case 'Cookie':
             return $this->Raw->Header->Cookie;
          case 'cookies':
@@ -248,48 +214,123 @@ trait Requestable
       }
    }
 
+   public const ACCEPTS_TYPES = 1;
+   public const ACCEPTS_LANGUAGES = 2;
+   public const ACCEPTS_CHARSETS = 4;
+   public const ACCEPTS_ENCODINGS = 8;
+   public function negotiate (int $with = self::ACCEPTS_TYPES) : array
+   {
+      switch ($with) {
+         case self::ACCEPTS_TYPES:
+            // @ Accept
+            $header = (
+               @$_SERVER['HTTP_ACCEPT']
+               ?? $this->Raw->Header->get('Accept')
+            );
+            $pattern = '/([\w\/\+\*.-]+)(?:;\s*q\s*=\s*(\d*(?:\.\d+)?))?/i';
+
+            break;
+         case self::ACCEPTS_CHARSETS:
+            // @ Accept-Charset
+            $header = (
+               @$_SERVER['HTTP_ACCEPT_CHARSET']
+               ?? $this->Raw->Header->get('Accept-Charset')
+            );
+            $pattern = '/([a-z0-9]{1,8}(?:[-_][a-z0-9]{1,8}){0,3})\s*(?:;\s*q\s*=\s*(\d*(?:\.\d+)?))?/i';
+
+            break;
+         case self::ACCEPTS_LANGUAGES:
+            // @ Accept-Language
+            $header = (
+               @$_SERVER['HTTP_ACCEPT_LANGUAGE']
+               ?? $this->Raw->Header->get('Accept-Language')
+            );
+            $pattern = '/([a-z]{1,8}(-[a-z]{1,8})?)\s*(;\s*q\s*=\s*(\d*(?:\.\d+)?))?/i';
+
+            break;
+         case self::ACCEPTS_ENCODINGS:
+            // @ Accept-Encoding
+            $header = (
+               @$_SERVER['HTTP_ACCEPT_ENCODING']
+               ?? $this->Raw->Header->get('Accept-Encoding')
+            );
+            $pattern = '/([a-z0-9]{1,8}(?:[-_][a-z0-9]{1,8}){0,3})\s*(?:;\s*q\s*=\s*(\d*(?:\.\d+)?))?/i';
+
+            break;
+      }
+
+      // @ Validate header
+      if ( empty($header) ) {
+         return [];
+      }
+
+      // @ Validate RegEx
+      \preg_match_all(
+         $pattern,
+         $header,
+         $matches,
+         PREG_SET_ORDER
+      );
+
+      $results = [];
+      foreach ($matches as $match) {
+         $item = $match[1];
+         $quality = (float) ($match[2] ?? 1.0);
+
+         $results[$item] = $quality;
+      }
+
+      \uasort($results, function ($a, $b) {
+         return $b <=> $a;
+      });
+
+      $results = \array_merge(\array_keys($results), $results);
+
+      return $results;
+   }
+
    public function freshen () : bool
    {
       if ($this->method !== 'GET' && $this->method !== 'HEAD') {
          return false;
       }
 
-      $ifModifiedSince = $this->Raw->Header->get('If-Modified-Since');
-      $ifNoneMatch = $this->Raw->Header->get('If-None-Match');
-      if (!$ifModifiedSince && !$ifNoneMatch) {
+      $if_modified_since = $this->Raw->Header->get('If-Modified-Since');
+      $if_none_match = $this->Raw->Header->get('If-None-Match');
+      if ( ! $if_modified_since && ! $if_none_match ) {
          return false;
       }
 
       // @ cache-control
-      $cacheControl = $this->Raw->Header->get('Cache-Control');
-      if ($cacheControl && \preg_match('/(?:^|,)\s*?no-cache\s*?(?:,|$)/', $cacheControl)) {
+      $cache_control = $this->Raw->Header->get('Cache-Control');
+      if ($cache_control && \preg_match('/(?:^|,)\s*?no-cache\s*?(?:,|$)/', $cache_control)) {
          return false;
       }
 
       // @ if-none-match
-      if ($ifNoneMatch && $ifNoneMatch !== '*') {
-         $eTag = $this->Server::$Response->Raw->Header->get('ETag');
+      if ($if_none_match && $if_none_match !== '*') {
+         $entity_tag = $this->Server::$Response->Raw->Header->get('ETag');
 
-         if (!$eTag) {
+         if ( ! $entity_tag ) {
             return false;
          }
 
-         $eTagStale = true;
+         $entity_tag_stale = true;
 
          // ? HTTP Parse Token List
          $matches = [];
          $start = 0;
          $end = 0;
          // @ Gather tokens
-         for ($i = 0; $i < \strlen($ifNoneMatch); $i++) {
-            switch ($ifNoneMatch[$i]) {
+         for ($i = 0; $i < \strlen($if_none_match); $i++) {
+            switch ($if_none_match[$i]) {
                case ' ':
                   if ($start === $end) {
                      $start = $end = $i + 1;
                   }
                   break;
                case ',':
-                  $matches[] = \substr($ifNoneMatch, $start, $end);
+                  $matches[] = \substr($if_none_match, $start, $end);
                   $start = $end = $i + 1;
                   break;
                default:
@@ -298,36 +339,36 @@ trait Requestable
             }
          }
          // final token
-         $matches[] = \substr($ifNoneMatch, $start, $end);
+         $matches[] = \substr($if_none_match, $start, $end);
 
          for ($i = 0; $i < \count($matches); $i++) {
             $match = $matches[$i];
-            if ($match === $eTag || $match === 'W/' . $eTag || 'W/' . $match === $eTag) {
-               $eTagStale = false;
+            if ($match === $entity_tag || $match === 'W/' . $entity_tag || 'W/' . $match === $entity_tag) {
+               $entity_tag_stale = false;
                break;
             }
          }
 
-         if ($eTagStale) {
+         if ($entity_tag_stale) {
             return false;
          }
       }
 
       // @ if-modified-since
-      if ($ifModifiedSince) {
-         $lastModified = $this->Server::$Response->Raw->Header->get('Last-Modified');
-         if ($lastModified === '') {
+      if ($if_modified_since) {
+         $last_modified = $this->Server::$Response->Raw->Header->get('Last-Modified');
+         if ($last_modified === '') {
             return false;
          }
 
-         $lastModifiedTime = \strtotime($lastModified);
-         $ifModifiedSinceTime = \strtotime($ifModifiedSince);
-         if ($lastModifiedTime === false || $ifModifiedSinceTime === false) {
+         $last_modified_time = \strtotime($last_modified);
+         $if_modified_since_time = \strtotime($if_modified_since);
+         if ($last_modified_time === false || $if_modified_since_time === false) {
             return false;
          }
 
-         $modifiedStale = $lastModifiedTime > $ifModifiedSinceTime;
-         if ($modifiedStale) {
+         $modified_stale = $last_modified_time > $if_modified_since_time;
+         if ($modified_stale) {
             return false;
          }
       }

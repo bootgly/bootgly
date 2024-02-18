@@ -18,8 +18,8 @@ $Router->route('/Request/test.b', function (Request $Request, Response $Response
 $Router->route('/Request/test.c', function (Request $Request, Response $Response) {
   return $Response->JSON->send([
     'method' => $Request->method,
-    'protocol' => $Request->protocol,
-    'URI' => $Request->URI
+    'URI' => $Request->URI,
+    'protocol' => $Request->protocol
   ]);
 }, GET);
 
@@ -44,15 +44,31 @@ $Router->route('/Request/test.g', function (Request $Request, Response $Response
 }, GET);
 
 $Router->route('/Request/test.h', function (Request $Request, Response $Response) {
-  return $Response->send($Request->host);
-}, GET);
-
-$Router->route('/Request/test.i', function (Request $Request, Response $Response) {
   return $Response->JSON->send([
+    $Request->host,
+
     $Request->domain,
     $Request->subdomain,
     $Request->subdomains
   ]);
+}, GET);
+
+$Router->route('/Request/test.i', function (Request $Request, Response $Response) {
+  return $Response->JSON->send([
+    $Request->username,
+    $Request->password,
+  ]);
+}, GET);
+
+$Router->route('/Request/test.j', function (Request $Request, Response $Response) {
+  return $Response->JSON->send(
+    [
+      'types' => $Request->negotiate(with: $Request::ACCEPTS_TYPES),
+      'languages' => $Request->negotiate(with: $Request::ACCEPTS_LANGUAGES),
+      'charsets' => $Request->negotiate(with: $Request::ACCEPTS_CHARSETS),
+      'encodings' => $Request->negotiate(with: $Request::ACCEPTS_ENCODINGS)
+    ]
+  );
 }, GET);
 
 $Router->route('/requesting', function (Request $Request, Response $Response) {

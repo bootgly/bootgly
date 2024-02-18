@@ -6,7 +6,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_\Response;
 
 //! 1 - Route Callback - OK
 //? 1.1 - Closure in Callback - OK
-$Router->route('/', function ($Request, Response $Response) {
+$Router->route('/', function (Request $Request, Response $Response) {
    return $Response->send(<<<HTML
    Bootgly WPI demo:<br>
    Hello, world!
