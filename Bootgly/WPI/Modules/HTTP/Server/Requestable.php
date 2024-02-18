@@ -205,7 +205,7 @@ trait Requestable
             return $this->charset = $charsets[0] ?? '';
          case 'encoding':
             $encodings = $this->negotiate(with: self::ACCEPTS_ENCODINGS);
-            return $this->encodings = $encodings[0] ?? '';
+            return $this->encoding = $encodings[0] ?? '';
          // HTTP Caching Specification (RFC 7234)
          case 'fresh':
             return $this->freshen();
