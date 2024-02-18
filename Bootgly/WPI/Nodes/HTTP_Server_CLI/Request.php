@@ -84,6 +84,8 @@ class Request
 
 
    public Raw $Raw;
+   public Body $Body;
+   public Header $Header;
 
    // * Config
    private string $base;
@@ -104,6 +106,8 @@ class Request
    public function __construct ()
    {
       $this->Raw = new Raw;
+      $this->Body = &$this->Raw->Body;
+      $this->Header = &$this->Raw->Header;
 
       // * Config
       $this->base = '';
