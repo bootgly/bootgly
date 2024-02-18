@@ -134,39 +134,6 @@ trait Requestable
          case 'subdomains':
             return $this->subdomains = \explode('.', $this->subdomain);
 
-         // @ Authorization (Basic)
-         case 'username':
-            $authorization = $this->Raw->Header->get('Authorization');
-
-            if (\strpos($authorization, 'Basic') === 0) {
-               $encoded_credentials = \substr($authorization, 6);
-               $decoded_credentials = \base64_decode($encoded_credentials);
-
-               [$username, $password] = \explode(':', $decoded_credentials, 2);
-
-               $this->password = $password;
-
-               return $this->user = $username;
-            }
-
-            return $this->user = null;
-
-         case 'password':
-            $authorization = $this->Raw->Header->get('Authorization');
-
-            if (\strpos($authorization, 'Basic') === 0) {
-               $encoded_credentials = \substr($authorization, 6);
-               $decoded_credentials = \base64_decode($encoded_credentials);
-
-               [$username, $password] = \explode(':', $decoded_credentials, 2);
-
-               $this->user = $username;
-
-               return $this->password = $password;
-            }
-
-            return $this->password = null;
-
          // case 'ips': // TODO ips based in Header X-Forwarded-For
          // ? Header / Cookie
          case 'Cookie':
@@ -193,6 +160,16 @@ trait Requestable
          case 'secure':
             return $this->scheme === 'https';
 
+         // HTTP Basic Authentication / Authorization
+         case 'username':
+            $username = $this->authenticate()->username;
+
+            return $this->username = $username;
+
+         case 'password':
+            $password = $this->authenticate()->password;
+
+            return $this->password = $password;
          // HTTP Content Negotiation (RFC 7231 section-5.3)
          case 'type':
             $types = $this->negotiate(with: self::ACCEPTS_TYPES);
@@ -225,6 +202,28 @@ trait Requestable
          default:
             return $this->$name = $value;
       }
+   }
+
+   public function authenticate () : object|null
+   {
+      $authorization = $this->Raw->Header->get('Authorization');
+
+      $username = '';
+      $password = '';
+      if (\strpos($authorization, 'Basic') === 0) {
+         $encoded_credentials = \substr($authorization, 6);
+         $decoded_credentials = \base64_decode($encoded_credentials);
+
+         [$username, $password] = \explode(':', $decoded_credentials, 2);
+      }
+
+      return new class ($username, $password) {
+         public function __construct 
+         (
+            public string $username,
+            public string $password
+         ){}
+      };
    }
 
    public const ACCEPTS_TYPES = 1;
