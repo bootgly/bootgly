@@ -215,6 +215,9 @@ trait Requestable
          $decoded_credentials = \base64_decode($encoded_credentials);
 
          [$username, $password] = \explode(':', $decoded_credentials, 2);
+
+         $this->username = $username;
+         $this->password = $password;
       }
 
       return new class ($username, $password) {
