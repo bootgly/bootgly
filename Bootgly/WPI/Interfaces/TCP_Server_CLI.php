@@ -394,10 +394,10 @@ class TCP_Server_CLI implements Servers, Logging
          \pcntl_signal_dispatch();
 
          // @ Suspends execution of the current process until a child has exited, or until a signal is delivered
-         $pid = \pcntl_wait($status, WNOHANG | WUNTRACED);
+         \pcntl_wait($status, WNOHANG | WUNTRACED);
 
          // If child is running?
-         if ($pid === 0) {
+         if ($status === 0) {
             $interact = $this->Commands->interact();
 
             $this->log('@\;');
@@ -407,12 +407,12 @@ class TCP_Server_CLI implements Servers, Logging
                \usleep(100000 * $this->workers); // @ wait 0.1 s * qt workers
             }
          }
-         else if ($pid > 0) { // If a child has already exited?
+         else if ($status > 0) { // If a child has already exited?
             $this->log('@\;Process child exited!@\;', self::LOG_ERROR_LEVEL);
             $this->Process->sendSignal(SIGINT);
             break;
          }
-         else if ($pid === -1) { // If error
+         else if ($status === -1) { // If error
             break;
          }
       }
@@ -440,6 +440,7 @@ class TCP_Server_CLI implements Servers, Logging
       Logger::$display = Logger::DISPLAY_MESSAGE_WHEN_ID;
 
       $Output = CLI::$Terminal->Output;
+      $Output->Cursor->hide();
       $Output->clear();
       $this->{'@status'};
 
@@ -449,27 +450,28 @@ class TCP_Server_CLI implements Servers, Logging
          \pcntl_signal_dispatch();
 
          // @ Suspends execution of the current process until a child has exited, or until a signal is delivered
-         $pid = \pcntl_wait($status, WUNTRACED);
+         \pcntl_wait($status, WUNTRACED);
 
          // @ Calls signal handlers for pending signals again
          \pcntl_signal_dispatch();
 
          // If child is running?
-         if ($pid === 0) {
+         if ($status === 0) {
             // ...
          }
-         else if ($pid > 0) { // If a child has already exited?
+         else if ($status > 0) { // If a child has already exited?
             $this->log('@\;Process child exited!@\;', self::LOG_ERROR_LEVEL);
             $this->Process->sendSignal(SIGINT);
             break;
          }
-         else if ($pid === -1) { // If error ignore
+         else if ($status === -1) { // If error ignore
             // ...
          }
 
-         $Output->clear();
          $this->{'@status'};
       }
+
+      $Output->Cursor->show();
 
       // @ Enter in CLI mode
       if ($this->mode === self::MODE_INTERACTIVE) {

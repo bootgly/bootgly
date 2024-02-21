@@ -14,7 +14,7 @@ use Bootgly\WPI\Interfaces\TCP_Server_CLI as Server;
 switch ($name) {
    case '@status':
       $Output = CLI::$Terminal->Output;
-
+      $Output->clear();
       $Output->render('>_ Type `@#Green:CTRL + Z@;` to enter in Interactive mode or `@#Green:CTRL + C@;` to stop the Server.@..;');
 
       // ! Server

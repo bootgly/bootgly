@@ -37,8 +37,8 @@ return static function
    #$Response->Raw->Header->set('Content-Type', 'text/plain');
 
    // Cookies
-   #$Response->Raw->Header->Cookie->append('Test', 'value1');
-   #$Response->Raw->Header->Cookie->append('Test2', 'value2');
+   #$Response->Raw->Header->Cookies->append('Test', 'value1');
+   #$Response->Raw->Header->Cookies->append('Test2', 'value2');
 
    // ? Response Body
    #return $Response(body: 'Hello World!');

@@ -39,28 +39,28 @@ class Cursor
       switch ($name) {
          // TODO test/add more methods to retrieve the current cursor position
          case 'position':
-            if (! function_exists('shell_exec') ) {
+            if (! \function_exists('shell_exec') ) {
                return [];
             }
 
             // Run stty command to get cursor position
-            $output = shell_exec('stty -g');
+            $output = \shell_exec('stty -g');
             // Disable canonical mode and echo
-            shell_exec('stty -echo -icanon -icrnl');
+            \shell_exec('stty -echo -icanon -icrnl');
 
             // Send ANSI code to retrieve cursor position
             $this->Output->escape(self::_CURSOR_REPORT_POSITION);
 
             // Read response from terminal
-            $input = fread(STDIN, 15);
+            $input = \fread(STDIN, 15);
             // Parse cursor position from response
-            preg_match('/\x1b\[(\d+);(\d+)R/', $input, $matches);
+            \preg_match('/\x1b\[(\d+);(\d+)R/', $input, $matches);
 
             // Restore terminal settings
-            shell_exec(sprintf('stty %s', $output));
+            \shell_exec(sprintf('stty %s', $output));
 
-            $row = intval(@$matches[1]);
-            $column = intval(@$matches[2]);
+            $row = \intval(@$matches[1]);
+            $column = \intval(@$matches[2]);
 
             return [
                $row,

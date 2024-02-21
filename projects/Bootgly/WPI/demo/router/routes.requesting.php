@@ -106,7 +106,7 @@ $Router->route('/requesting', function (Request $Request, Response $Response) {
   #return $Response->send->Pre->send($Request->Raw->Header->raw);
   // ? Header/Cookie
   #return $Response->JSON->send($Request->cookies); // @ {...}
-  #return $Response->send($Request->Cookie->test);  // @ {...}
+  #return $Response->send($Request->Cookies->test);  // @ {...}
   // ? Body
   #return $Response->send($Request->inputs);        // @ {...}
   #return $Response->send($Request->post);          // @ {...}

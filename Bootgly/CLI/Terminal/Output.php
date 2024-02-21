@@ -70,7 +70,7 @@ class Output
 
       // @
       if ($stream !== \STDOUT) {
-         $this->stream = @fopen($stream, 'r+');
+         $this->stream = @\fopen($stream, 'r+');
       }
    }
 
@@ -122,13 +122,13 @@ class Output
 
       do {
          try {
-            $this->written = @fwrite($stream, $data);
+            $this->written = @\fwrite($stream, $data);
          } catch (\Throwable) {
             $this->written = false;
          }
 
          if ($wait > 0) {
-            usleep($wait);
+            \usleep($wait);
          }
 
          $times--;
@@ -150,16 +150,16 @@ class Output
       $written = 0;
 
 
-      $parts = str_split($data);
+      $parts = \str_split($data);
       foreach ($parts as $part) {
          try {
-            $written += @fwrite($stream, $part);
+            $written += @\fwrite($stream, $part);
          } catch (\Throwable) {
             $written += false;
          }
 
          if ($waiting > 0) {
-            usleep($waiting);
+            \usleep($waiting);
          }
       }
 
@@ -171,7 +171,7 @@ class Output
    public function append (string $data) : self
    {
       try {
-         $this->written = @fwrite($this->stream, $data . PHP_EOL);
+         $this->written = @\fwrite($this->stream, $data . PHP_EOL);
       } catch (\Throwable) {
          $this->written = false;
       }
@@ -182,7 +182,7 @@ class Output
    public function pad (string $data, int $length, string $pad = ' ', int $type = \STR_PAD_RIGHT) : self
    {
       try {
-         $this->written = @fwrite(
+         $this->written = @\fwrite(
             $this->stream,
             __String::pad($data, $length, $pad, $type)
          );
@@ -196,7 +196,7 @@ class Output
    public function render (string $data) : self
    {
       try {
-         $this->written = @fwrite(
+         $this->written = @\fwrite(
             $this->stream,
             TemplateEscaped::render($data)
          );
@@ -211,7 +211,7 @@ class Output
    public function escape (string $data) : self
    {
       try {
-         $this->written = @fwrite($this->stream, self::_START_ESCAPE . $data);
+         $this->written = @\fwrite($this->stream, self::_START_ESCAPE . $data);
       } catch (\Throwable) {
          $this->written = false;
       }
@@ -221,7 +221,7 @@ class Output
    public function metaescape (string $data) : self
    {
       try {
-         $this->written = @fwrite($this->stream, escapeshellcmd($data));
+         $this->written = @\fwrite($this->stream, \escapeshellcmd($data));
       } catch (\Throwable) {
          $this->written = false;
       }
@@ -231,7 +231,7 @@ class Output
    public function metaencode (string $data) : self
    {
       try {
-         $this->written = @fwrite($this->stream, json_encode($data));
+         $this->written = @\fwrite($this->stream, \json_encode($data));
       } catch (\Throwable) {
          $this->written = false;
       }
