@@ -14,7 +14,7 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Raw\Header;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Raw\Header;
 
 
-final class Cookie
+final class Cookies
 {
    public Header $Header;
 

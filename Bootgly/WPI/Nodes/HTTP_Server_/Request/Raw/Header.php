@@ -12,7 +12,7 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_\Request\Raw;
 
 
 use Bootgly\WPI\Modules\HTTP\Server\Request\Heading;
-use Bootgly\WPI\Nodes\HTTP_Server_\Request\Raw\Header\Cookie;
+use Bootgly\WPI\Nodes\HTTP_Server_\Request\Raw\Header\Cookies;
 
 
 class Header
@@ -31,7 +31,7 @@ class Header
    private bool $built;
    private null|int|false $length;
 
-   public Cookie $Cookie;
+   public Cookies $Cookies;
 
 
    public function __construct ()
@@ -55,7 +55,7 @@ class Header
       $this->length = null;
 
 
-      $this->Cookie = new Cookie($this);
+      $this->Cookies = new Cookies($this);
    }
    public function __get (string $name)
    {

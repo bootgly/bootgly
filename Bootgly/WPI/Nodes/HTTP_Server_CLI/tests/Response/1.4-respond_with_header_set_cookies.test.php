@@ -14,8 +14,8 @@ return [
    // @ simulate
    // Server API
    'response' => function (Request $Request, Response $Response) : Response {
-      $Response->Raw->Header->Cookie->append('Test1', 'value1');
-      $Response->Raw->Header->Cookie->append('Test2', 'value2');
+      $Response->Raw->Header->Cookies->append('Test1', 'value1');
+      $Response->Raw->Header->Cookies->append('Test2', 'value2');
 
       return $Response(body: 'Hello World!');
    },

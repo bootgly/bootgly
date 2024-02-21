@@ -11,7 +11,7 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_\Response\Raw;
 
 
-use Bootgly\WPI\Nodes\HTTP_Server_\Response\Raw\Header\Cookie;
+use Bootgly\WPI\Nodes\HTTP_Server_\Response\Raw\Header\Cookies;
 
 
 class Header
@@ -28,7 +28,7 @@ class Header
    private string $raw;
    private bool $sent;
 
-   public Cookie $Cookie;
+   public Cookies $Cookies;
 
 
    public function __construct ()
@@ -47,7 +47,7 @@ class Header
       $this->raw = '';
       $this->sent = false;
 
-      $this->Cookie = new Cookie($this);
+      $this->Cookies = new Cookies($this);
    }
    public function __get (string $name)
    {
