@@ -24,6 +24,7 @@ trait Requestable
             return $this->base;
 
          // * Data
+         // ..Connection
          case 'address':
             return (string) ($this->Raw->Header->fields['cf-connecting-ip'] ?? $_SERVER['REMOTE_ADDR']);
          case 'port':
@@ -42,20 +43,11 @@ trait Requestable
 
             return $this->scheme = $scheme;
 
-            // ! HTTP
-         case 'raw':
-            $raw = <<<RAW
-            {$this->method} {$this->URI} {$this->protocol}
-            RAW;
-            $raw .= "\r\n";
-            $raw .= $this->Raw->Header->raw;
-            $raw .= "\r\n";
-            $raw .= $this->input;
-
-            $this->raw = $raw;
-
-            return $raw;
-
+         // ! HTTP
+         // ? Header
+         case 'headers':
+            return $this->Raw->Header->fields;
+         // @
          case 'method':
             return $_SERVER['REQUEST_METHOD'] ?? '';
          case 'URI': // (Uniform Resource Identifier)
@@ -104,9 +96,6 @@ trait Requestable
             \parse_str($this->query, $queries);
 
             return $this->queries = $queries;
-         // ? Header
-         case 'headers':
-            return $this->Raw->Header->fields;
          // @ Host
          case 'host':
             $host = $_SERVER['HTTP_HOST'] ?? $this->Raw->Header->get('Host');
@@ -134,12 +123,12 @@ trait Requestable
          case 'subdomains':
             return $this->subdomains = \explode('.', $this->subdomain);
 
-         // case 'IPs': // TODO ips based in Header X-Forwarded-For
+         // case 'IPs': // TODO IPs based in Header X-Forwarded-For
          // ? Header / Cookies
          case 'Cookies':
-            return $this->Cookies = &$this->Raw->Header->Cookie;
+            return $this->Cookies = &$this->Raw->Header->Cookies;
          case 'cookies':
-            return $this->Raw->Header->Cookie->cookies;
+            return $this->Raw->Header->Cookies->cookies;
          // ? Body
          case 'input':
             return $this->Raw->Body->input;
@@ -157,6 +146,20 @@ trait Requestable
          case 'files':
             return $_FILES;
          // * Metadata
+         // @
+         case 'raw':
+            $raw = <<<RAW
+            {$this->method} {$this->URI} {$this->protocol}
+            RAW;
+            $raw .= "\r\n";
+            $raw .= $this->Raw->Header->raw;
+            $raw .= "\r\n";
+            $raw .= $this->input;
+
+            $this->raw = $raw;
+
+            return $raw;
+         // .. Connection
          case 'secure':
             return $this->scheme === 'https';
 
