@@ -32,7 +32,7 @@ return [
    // Server API
    'response' => function (Request $Request, Response $Response): Response {
       $Request->receive();
-      return $Response->Json->send($Request->posts);
+      return $Response->Json->send($Request->post);
    },
 
    // @ test
