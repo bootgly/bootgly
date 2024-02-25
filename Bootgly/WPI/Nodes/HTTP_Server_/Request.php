@@ -64,8 +64,9 @@ use Bootgly\WPI\Nodes\HTTP_Server_\Request\Session;
  * @property array $files
  *
  *
- * * Meta
+ * * Metadata
  * @property string $raw
+ * 
  * @property string $on            2020-03-10 (Y-m-d)
  * @property string $at            17:16:18 (H:i:s)
  * @property int $time             1586496524

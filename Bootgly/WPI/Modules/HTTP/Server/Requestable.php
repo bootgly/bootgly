@@ -133,7 +133,18 @@ trait Requestable
          case 'input':
             return $this->Raw->Body->input;
          case 'inputs':
-            return \json_decode($this->input, true);
+            $inputs = [];
+
+            try {
+               // raw (JSON)
+               return \json_decode($this->input, true, 512, \JSON_THROW_ON_ERROR);
+            }
+            catch (\JsonException) {
+               // x-www-form-urlencoded
+               \parse_str($this->input, $inputs);
+            }
+
+            return (array) $inputs;
 
          case 'post':
             if ($this->method === 'POST' && empty($_POST)) {
@@ -141,8 +152,7 @@ trait Requestable
             }
 
             return $_POST;
-         case 'posts':
-            return \json_encode($this->post);
+
          case 'files':
             return $_FILES;
          // * Metadata
@@ -159,6 +169,7 @@ trait Requestable
             $this->raw = $raw;
 
             return $raw;
+
          // .. Connection
          case 'secure':
             return $this->scheme === 'https';

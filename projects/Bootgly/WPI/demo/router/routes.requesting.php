@@ -53,6 +53,35 @@ $Router->route('/Request/test.h', function (Request $Request, Response $Response
   ]);
 }, GET);
 
+$Router->route('/Request/test.i', function (Request $Request, Response $Response) {
+  return $Response->JSON->send(
+   $Request->cookies
+  );
+}, GET);
+
+$Router->route('/Request/test.j', function (Request $Request, Response $Response) {
+  return $Response->send(
+   $Request->input
+  );
+});
+$Router->route('/Request/test.k', function (Request $Request, Response $Response) {
+  return $Response->JSON->send(
+   $Request->inputs
+  );
+});
+
+$Router->route('/Request/test.l', function (Request $Request, Response $Response) {
+  return $Response->JSON->send(
+   $Request->post
+  );
+});
+
+$Router->route('/Request/test.m', function (Request $Request, Response $Response) {
+  return $Response->JSON->send(
+   $Request->files
+  );
+});
+
 $Router->route('/Request/test.x', function (Request $Request, Response $Response) {
   return $Response->JSON->send([
     $Request->username,
@@ -69,6 +98,10 @@ $Router->route('/Request/test.y', function (Request $Request, Response $Response
       'encodings' => $Request->negotiate(with: $Request::ACCEPTS_ENCODINGS)
     ]
   );
+}, GET);
+
+$Router->route('/Request/test.z', function (Request $Request, Response $Response) {
+  $Response->send($Request->fresh ? 'fresh' : 'stale');
 }, GET);
 
 $Router->route('/requesting', function (Request $Request, Response $Response) {
