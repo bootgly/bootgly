@@ -27,30 +27,28 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Downloader;
  * @property string $scheme        http, https
  *
  * ! HTTP
- * @property string $raw
- * ? Meta
+ * ? Header
+ * @property Header $Header
+ * 
+ * @property array $headers
+ * 
  * @property string $method        GET, POST, ...
- * @property string $protocol      HTTP/1.1
- * @ Resource
  * @property string $URI          /test/foo?query=abc&query2=xyz
+ * @property string $protocol      HTTP/1.1
+ * 
+ * @ Resource
  * @property string $URL          /test/foo
  * @property string $URN          foo
+ * 
  * @ Query
  * @property string $query         query=abc&query2=xyz
  * @property array $queries        ['query' => 'abc', 'query2' => 'xyz']
- * ? Header
- * @property Header $Header
- * @property array $headers
+ * 
  * @ Host
  * @property string $host          v1.docs.bootgly.com
  * @property string $domain        bootgly.com
  * @property string $subdomain     v1.docs
  * @property array $subdomains     ['docs', 'v1']
- * @ Authorization (Basic)
- * @property string $username      bootgly
- * @property string $password      example123
- * @ Accept-Language
- * @property string $language      pt-BR
  * ? Header / Cookie
  * @property Header\Cookie $Cookie
  * @property array $cookies
@@ -66,12 +64,28 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Downloader;
  *
  *
  * * Meta
+ * @property string $raw
  * @property string $on            2020-03-10 (Y-m-d)
  * @property string $at            17:16:18 (H:i:s)
  * @property int $time             1586496524
  *
  * @property bool $secure          true
  * 
+ * @ HTTP Basic Authentication
+ * @property string $username      bootgly
+ * @property string $password      example123
+ * 
+ * @ HTTP Content Negotiation
+ * @property array $types
+ * @property string $type          text/html
+ * @property array $languages
+ * @property string $language      en-US
+ * @property array $charsets
+ * @property string $charset       UTF-8
+ * @property array $encodings
+ * @property string $econding      gzip
+ * 
+ * @ HTTP Caching Specification
  * @property bool $fresh           true
  * @property bool $stale           false
  */

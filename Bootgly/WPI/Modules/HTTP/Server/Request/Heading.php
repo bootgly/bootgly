@@ -5,9 +5,6 @@
  * Developed by Rodrigo Vieira (@rodrigoslayertech)
  * Copyright 2023-present
  * Licensed under MIT
- *
- * PHP version adapted from NPM range/parser:
- * (https://github.com/jshttp/range-parser/blob/master/index.js)
  * --------------------------------------------------------------------------
  */
 

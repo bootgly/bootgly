@@ -24,7 +24,7 @@ trait Requestable
             return $this->base;
 
          // * Data
-         // ..Connection
+         // .. Connection
          case 'address':
             return (string) ($this->Raw->Header->fields['cf-connecting-ip'] ?? $_SERVER['REMOTE_ADDR']);
          case 'port':
@@ -54,7 +54,7 @@ trait Requestable
             return @$_SERVER['REDIRECT_URI'] ?? $_SERVER['REQUEST_URI'] ?? '';
          case 'protocol':
             return $_SERVER['SERVER_PROTOCOL'] ?? '';
-         // @ Uniform Resources
+         // @ Resource
          case 'URL': // (Uniform Resource Locator)
             $locator = \strtok($this->URI, '?');
 
@@ -163,7 +163,7 @@ trait Requestable
          case 'secure':
             return $this->scheme === 'https';
 
-         // HTTP Authentication (Basic only)
+         // HTTP Basic Authentication
          case 'username':
             $username = $this->authenticate()->username;
 
@@ -174,30 +174,26 @@ trait Requestable
 
             return $this->password = $password;
          // HTTP Content Negotiation (RFC 7231 section-5.3)
-         case 'type':
-            $types = $this->negotiate(with: self::ACCEPTS_TYPES);
-            return $this->type = $types[0] ?? '';
          case 'types':
             $types = $this->negotiate(with: self::ACCEPTS_TYPES);
             return $this->types = $types;
-         case 'language':
-            $languages = $this->negotiate(with: self::ACCEPTS_LANGUAGES);
-            return $this->language = $languages[0] ?? '';
+         case 'type':
+            return $this->type = $this->types[0] ?? '';
          case 'languages':
             $languages = $this->negotiate(with: self::ACCEPTS_LANGUAGES);
             return $this->languages = $languages;
-         case 'charset':
-            $charsets = $this->negotiate(with: self::ACCEPTS_CHARSETS);
-            return $this->charset = $charsets[0] ?? '';
+         case 'language':
+            return $this->language = $this->languages[0] ?? '';
          case 'charsets':
             $charsets = $this->negotiate(with: self::ACCEPTS_CHARSETS);
             return $this->charset = $charsets;
-         case 'encoding':
-            $encodings = $this->negotiate(with: self::ACCEPTS_ENCODINGS);
-            return $this->encoding = $encodings[0] ?? '';
+         case 'charset':
+            return $this->charset = $this->charsets[0] ?? '';
          case 'encodings':
             $encodings = $this->negotiate(with: self::ACCEPTS_ENCODINGS);
             return $this->encodings = $encodings;
+         case 'encoding':
+            return $this->encoding = $this->encodings[0] ?? '';
          // HTTP Caching Specification (RFC 7234)
          case 'fresh':
             return $this->freshen();
