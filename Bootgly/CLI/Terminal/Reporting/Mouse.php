@@ -15,6 +15,7 @@ use Bootgly\ABI\Data\__String\Escapeable\Mouse\Reportable;
 
 use Bootgly\CLI\Terminal\Reporting;
 use Bootgly\CLI\Terminal\Input;
+use Bootgly\CLI\Terminal\Input\Mousestrokes;
 use Bootgly\CLI\Terminal\Output;
 
 
@@ -32,18 +33,17 @@ class Mouse implements Reporting
    private Output $Output;
 
 
-   public function __construct (Input $Input, Output $Output)
+   public function __construct (Input &$Input, Output &$Output)
    {
+      $this->Input = $Input;
+      $this->Output = $Output;
+
       // * Config
       $this->SGT = true;
       $this->URXVT = true;
-
-
-      $this->Input = $Input;
-      $this->Output = $Output;
    }
 
-   public function reporting (bool $enabled)
+   public function report (bool $enabled)
    {
       if ($this->SGT) {
          $this->Output->escape(self::_MOUSE_SET_SGR_EXT_MODE);
@@ -62,5 +62,55 @@ class Mouse implements Reporting
          $this->Output->escape(self::_MOUSE_UNSET_SGR_EXT_MODE);
          $this->Output->escape(self::_MOUSE_UNSET_URXVT_EXT_MODE);
       }
+   }
+
+   public function reporting (\Closure $callback) : void
+   {
+      $this->report(true);
+
+      $Input = &$this->Input;
+
+      while ($continue = true) {
+         \pcntl_signal_dispatch();
+
+         $input = $Input->read(1);
+
+         // @ Check if the input have an SGR mouse trace ANSI escape code
+         if ($input === "\033") {
+            $input .= $Input->read(2);
+
+            // @ Check if the code matches a mouse movement position
+            if ($input === "\033[<") {
+               $input = $Input->read(10);
+
+               $characters = \strlen($input);
+               $last = $input[$characters - 1];
+               $input = \substr($input, 0, $characters - 1);
+
+               $reports = \explode(';', $input);
+               $reports[] = $last;
+
+               // @ Extracts mouse movement data from the code
+               $col = \intval($reports[1]);
+               $row = \intval($reports[2]);
+
+               $action = Mousestrokes::from($reports[0]);
+               $clicking = match ($reports[3]) {
+                  'M' => true,
+                  'm' => false,
+                  default => false
+               };
+
+               // @ Callback
+               $continue = $callback($action, [$col, $row], $clicking);
+            }
+         }
+
+         if ($continue === false) {
+            break;
+         }
+      }
+
+      $this->report(false);
    }
 }
