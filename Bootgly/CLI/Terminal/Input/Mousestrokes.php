@@ -93,6 +93,12 @@ enum Mousestrokes : string
    // ? Scroll
    case SCROLL_UP = "64";
    case SCROLL_DOWN = "65";
+   // TODO 66-71 ?
+   case SCROLL_UP_WITH_ALT = "72";
+   case SCROLL_DOWN_WITH_ALT = "73";
+   // TODO 74-79 ?
+   case SCROLL_UP_WITH_CTRL = "80";
+   case SCROLL_DOWN_WITH_CTRL = "81";
 
    // ! States \e[<35;1;1m
    //                    ↑
