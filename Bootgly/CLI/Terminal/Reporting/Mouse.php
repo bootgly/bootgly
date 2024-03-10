@@ -69,6 +69,7 @@ class Mouse implements Reporting
       $this->report(true);
 
       $Input = &$this->Input;
+      $Input->configure(blocking: false, canonical: false, echo: false);
 
       while ($continue = true) {
          \pcntl_signal_dispatch();
@@ -112,5 +113,6 @@ class Mouse implements Reporting
       }
 
       $this->report(false);
+      $Input->configure();
    }
 }
