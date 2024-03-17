@@ -126,16 +126,23 @@ class Scripts
 
    public static function execute (string $script)
    {
-      $Script = new File(
-         self::ROOT_DIR . Path::normalize($script)
-      );
+      $basedirs = [
+         self::WORKING_DIR,
+         self::ROOT_DIR
+      ];
 
-      if ($Script->exists) {
-         require $Script->file;
-         // TODO register commands, etc.
+      foreach ($basedirs as $basedir) {
+         $Script = new File(
+            $basedir . Path::normalize($script)
+         );
+
+         if ($Script->exists) {
+            require $Script->file;
+            // TODO register commands, etc.
+            break;
+         }
       }
-      else {
-         throw new \Exception("Script not found: $path");
-      }
+
+      throw new \Exception("Script not found: `$script`");
    }
 }
