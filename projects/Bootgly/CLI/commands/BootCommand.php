@@ -29,8 +29,9 @@ class BootCommand extends Command
 
    public function run (array $arguments, array $options) : bool
    {
+      $Output = CLI::$Terminal->Output;
+
       if ($options['resources']) {
-         $Output = CLI::$Terminal->Output;
          $Alert = new Alert($Output);
 
          if (BOOTGLY_ROOT_DIR === BOOTGLY_WORKING_DIR) {

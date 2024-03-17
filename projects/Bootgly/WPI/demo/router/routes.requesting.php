@@ -101,7 +101,14 @@ $Router->route('/Request/test.y', function (Request $Request, Response $Response
 }, GET);
 
 $Router->route('/Request/test.z', function (Request $Request, Response $Response) {
-  $Response->send($Request->fresh ? 'fresh' : 'stale');
+   $Response->Raw->Header->set('Last-Modified', 'Fri, 14 Jul 2023 08:00:00 GMT');
+
+   if ($Request->fresh) {
+      return $Response(code: 304); // First onward is here
+   }
+   else {
+      return $Response->send('test'); // First Response here
+   }
 }, GET);
 
 $Router->route('/requesting', function (Request $Request, Response $Response) {
