@@ -73,6 +73,8 @@ class CLI extends Projects // Command Line Interface
                "Invalid script: script not registered in bootstrap file!"
             );
             break;
+         case 0: // @ Running external script
+            break;
          default: // @ Boot CLI
             // Consumer
             if (BOOTGLY_ROOT_DIR !== BOOTGLY_WORKING_DIR) {

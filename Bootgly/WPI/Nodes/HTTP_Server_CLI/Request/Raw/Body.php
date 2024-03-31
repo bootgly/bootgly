@@ -18,7 +18,7 @@ class Body
 
    // * Data
    public string $raw;
-   public string $input;
+   public ? string $input;
 
    // * Metadata
    public ? int $length;
@@ -34,7 +34,7 @@ class Body
 
       // * Data
       $this->raw = '';
-      $this->input = '';
+      $this->input = null;
 
       // * Metadata
       $this->length = null;
@@ -61,28 +61,26 @@ class Body
             // @ Check if Body downloaded length is minor than Body length
             if ($this->downloaded < $this->length) {
                $this->waiting = true;
-               return 0;
+               return false;
             }
 
             $this->waiting = false;
+
+            $this->input = $this->raw;
 
             switch ($type) {
                // @ Parse raw - JSON
                case 'application/json':
                   // TODO implement json_validate (PHP 8.3)
 
-                  $_POST = (array) json_decode($this->raw, true);
+                  $_POST = $this->raw;
 
                   return true;
                // @ Parse raw - URL Encoded
                case 'application/x-www-form-urlencoded':
-                  $this->input = $this->raw;
-
                   parse_str($this->raw, $_POST);
 
                   return true;
-               default: // @ Set input raw: text, binary, etc.
-                  $this->input = $this->raw;
             }
       }
 

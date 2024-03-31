@@ -68,7 +68,7 @@ class Meta
          // * Data
          case 'protocol':
             break;
-         case 'status':
+         case 'status': // (int) & (string)
             $status = match ($value) {
                (int) $value => $value . ' ' . HTTP::RESPONSE_STATUS[$value],
                (string) $value => \array_search($value, HTTP::RESPONSE_STATUS) . ' ' . $value,

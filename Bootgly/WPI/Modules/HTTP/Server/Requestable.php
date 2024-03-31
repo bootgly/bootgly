@@ -45,6 +45,8 @@ trait Requestable
 
          // ! HTTP
          // ? Header
+         case 'Header':
+            return $this->Header ??= $this->Raw->Header;
          case 'headers':
             return $this->Raw->Header->fields;
          // @
@@ -58,7 +60,7 @@ trait Requestable
          case 'URL': // (Uniform Resource Locator)
             $locator = \strtok($this->URI, '?');
 
-            $locator = \rtrim($locator ?? '/', '/');
+            $locator = \rtrim($locator, '/');
 
             $base = &$this->base;
             if ($base && \substr($locator, 0, \strlen($base)) === $base) {
@@ -130,25 +132,14 @@ trait Requestable
          case 'cookies':
             return $this->Raw->Header->Cookies->cookies;
          // ? Body
+         case 'Body':
+            return $this->Body ??= $this->Raw->Body;
          case 'input':
-            return $this->Raw->Body->input;
-         case 'inputs':
-            $inputs = [];
-
-            try {
-               // raw (JSON)
-               return \json_decode($this->input, true, 512, \JSON_THROW_ON_ERROR);
-            }
-            catch (\JsonException) {
-               // x-www-form-urlencoded
-               \parse_str($this->input, $inputs);
-            }
-
-            return (array) $inputs;
+            return $this->Raw->Body->input ?? $this->receive();
 
          case 'post':
-            if ($this->method === 'POST' && empty($_POST)) {
-               return $this->inputs;
+            if ($this->method === 'POST' && $_POST === []) {
+               return $this->input();
             }
 
             return $_POST;
@@ -164,7 +155,7 @@ trait Requestable
             $raw .= "\r\n";
             $raw .= $this->Raw->Header->raw;
             $raw .= "\r\n";
-            $raw .= $this->input;
+            $raw .= $this->Raw->Body->input;
 
             $this->raw = $raw;
 
@@ -226,6 +217,34 @@ trait Requestable
       }
    }
 
+   public function input () : array|null
+   {
+      $inputs = [];
+
+      // @ Try to convert input automatically
+      try {
+         $input = $this->input;
+
+         // raw (JSON)
+         return \json_decode(
+            json: $input,
+            associative: true,
+            depth: 512,
+            flags: \JSON_THROW_ON_ERROR
+         );
+      }
+      catch (\JsonException) {
+         // x-www-form-urlencoded
+         \parse_str(
+            string: $input,
+            result: $inputs
+         );
+      }
+
+      return $inputs;
+   }
+
+   // HTTP Basic Authentication
    public function authenticate () : object|null
    {
       $authorization = $this->Raw->Header->get('Authorization');
@@ -251,6 +270,7 @@ trait Requestable
       };
    }
 
+   // HTTP Content Negotiation
    public const ACCEPTS_TYPES = 1;
    public const ACCEPTS_LANGUAGES = 2;
    public const ACCEPTS_CHARSETS = 4;
@@ -303,7 +323,7 @@ trait Requestable
 
       // @ Validate RegEx
       \preg_match_all(
-         $pattern,
+         $pattern ?? self::ACCEPTS_TYPES,
          $header,
          $matches,
          PREG_SET_ORDER
@@ -326,6 +346,7 @@ trait Requestable
       return $results;
    }
 
+   // HTTP Caching Specification
    public function freshen () : bool
    {
       if ($this->method !== 'GET' && $this->method !== 'HEAD') {

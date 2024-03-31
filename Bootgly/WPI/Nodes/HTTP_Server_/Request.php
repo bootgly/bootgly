@@ -57,7 +57,6 @@ use Bootgly\WPI\Nodes\HTTP_Server_\Request\Session;
  * @property Body $Body
  * 
  * @property string $input
- * @property array $inputs
  * 
  * @property array $post
  * 
