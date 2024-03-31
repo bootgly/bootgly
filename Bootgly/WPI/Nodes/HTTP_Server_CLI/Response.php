@@ -11,6 +11,7 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI;
 
 
+use AllowDynamicProperties;
 use Bootgly\ABI\Data\__String\Path;
 use Bootgly\ABI\Debugging\Data\Throwables;
 use Bootgly\ABI\IO\FS\File;
@@ -21,6 +22,12 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI as Server;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Raw;
 
 
+/**
+ * * Config
+ * @property int $code
+ * @property string|int $status
+ */
+#[AllowDynamicProperties]
 class Response implements Responsing
 {
    // ! HTTP
@@ -333,17 +340,19 @@ class Response implements Responsing
       // @ Set variables
       $Request = &Server::$Request;
       $Response = &Server::$Response;
+      if ($data === null) {
+         $data = [];
+      }
+      $data['Request'] = $Request;
+      $data['Response'] = $Response;
 
       // @ Output/Buffer start()
       \ob_start();
 
       try {
          // @ Isolate context with anonymous static function
-         (static function (string $__file__, ? array $__data__)
-         use ($Request, $Response) {
-            if ($__data__ !== null) {
-               \extract($__data__);
-            }
+         (static function (string $__file__, array $__data__) {
+            \extract($__data__);
 
             require $__file__;
          })($File, $data);
@@ -360,7 +369,7 @@ class Response implements Responsing
 
       // @ Call callback
       if ($callback !== null && $callback instanceof \Closure) {
-         $callback($this->body, $Throwable);
+         $callback($this->body, $Throwable ?? null);
       }
 
       return $this;
@@ -459,13 +468,11 @@ class Response implements Responsing
 
             break;
          case 'file':
-            if ($body === false || $body === null) {
+            if ($body === false || $body === null || $body instanceof File === false) {
                return $this;
             }
 
-            if ($body instanceof File) {
-               $File = $body;
-            }
+            $File = $body;
 
             if ($File->readable === false) {
                return $this;
@@ -487,12 +494,16 @@ class Response implements Responsing
 
                   $Request = &Server::$Request;
                   $Response = &Server::$Response;
+                  $__data__ = [
+                     'Request' => $Request,
+                     'Response' => $Response
+                  ];
 
                   // @ Isolate context with anonymous static function
-                  (static function (string $__file__)
-                     use ($Request, $Response) {
+                  (static function (string $__file__, array $__data__) {
+                     \extract($__data__);
                      require $__file__;
-                  })($File);
+                  })($File, $__data__);
 
                   $body = \ob_get_clean(); // @ Output/Buffer clean()->get()
             }
@@ -532,7 +543,7 @@ class Response implements Responsing
       }
 
       if ($File->readable === false) {
-         $this->status = 403; // Forbidden
+         $this->code = 403; // Forbidden
          return $this;
       }
 
