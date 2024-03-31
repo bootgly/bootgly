@@ -35,6 +35,7 @@ _*.test.php
 # ...
 
 #-- /resources --#
+/vendor/
 
 #- /public
 /public/*
