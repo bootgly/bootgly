@@ -53,14 +53,19 @@ class Scripts
             self::WORKING_BASE,
             self::WORKING_DIR,
          ],
-         'filenames' => []
+         'filenames' => [
+            'bootstrap' => [
+               'bootgly',
+               '/usr/local/bin/bootgly'
+            ]
+         ]
       ];
       // * Metadata
       $this->path = null;
       $this->filename = null;
 
 
-      // @
+      // @ Bootstrap scripts
       $resource_dirs = [
          self::ROOT_DIR
       ];
@@ -72,8 +77,20 @@ class Scripts
          if ($bootstrap !== false) {
             $this->scripts = $bootstrap['scripts'];
 
-            foreach ($this->scripts as $filenames) {
+            foreach ($this->scripts as $group => $filenames) {
                foreach ($filenames as $filename) {
+                  switch ($group) {
+                     case 'user':
+                        $filename = self::WORKING_DIR . $filename;
+                        break;
+                     case 'imported':
+                        $filename = BOOTGLY_WORKING_DIR . $filename;
+                        break;
+                     case 'built-in':
+                        $filename = self::ROOT_DIR . $filename;
+                        break;
+                  }
+
                   $this->includes['filenames'][] = $filename;
                }
             }
@@ -105,10 +122,6 @@ class Scripts
 
       // @
       $this->validations = [];
-      $this->validations['paths'] = \array_search(
-         $this->path,
-         $this->includes['paths']
-      );
       $this->validations['filenames'] = \array_search(
          $this->filename,
          $this->includes['filenames']

@@ -1,10 +1,6 @@
 <?php
 return [
    'scripts' => [
-      'bootstrap' => [
-         'bootgly',
-         '/usr/local/bin/bootgly'
-      ],
       'built-in' => [
          'http-server-cli',
          'tcp-server-cli',
@@ -13,5 +9,8 @@ return [
       'imported' => [
          'vendor/bin/phpstan'
       ],
+      'user' => [
+         // Define your scripts filenames here
+      ]
    ]
 ];
