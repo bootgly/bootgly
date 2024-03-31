@@ -20,8 +20,8 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Raw\Body;
 
 class Raw
 {
-   public Header $Header;
-   public Body $Body;
+   public readonly Header $Header;
+   public readonly Body $Body;
 
    // * Data
    public string $data;

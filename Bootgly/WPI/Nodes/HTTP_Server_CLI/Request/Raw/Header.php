@@ -20,6 +20,8 @@ class Header
    use Heading;
 
 
+   private Cookies $Cookies;
+
    // * Config
    // ...
 
@@ -31,8 +33,6 @@ class Header
    private bool $built;
    public readonly null|int|false $length;
 
-   public Cookies $Cookies;
-
 
    public function __construct ()
    {
@@ -40,19 +40,19 @@ class Header
       // ...
 
       // * Data
-      // public $raw (readonly)
+      #$this->raw = $raw;
       $this->fields = [];
 
       // * Metadata
       $this->built = false;
-      // $this->length = null;
-
-
-      $this->Cookies = new Cookies($this);
+      #$this->length = \strlen($raw);
    }
    public function __get (string $name)
    {
       switch ($name) {
+         case 'Cookies':
+            return $this->Cookies ??= new Cookies($this);
+
          // * Config
          // ..
 
@@ -72,8 +72,9 @@ class Header
 
    public function set (string $raw) : void
    {
+      // * Data
       $this->raw ??= $raw;
-
+      // * Metadata
       $this->length = \strlen($raw);
    }
 }
