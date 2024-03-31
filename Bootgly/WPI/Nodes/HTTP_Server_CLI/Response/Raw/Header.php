@@ -28,6 +28,7 @@ class Header
    // * Metadata
    private array $queued;
    private int $built;
+   private bool $sent;
 
    public Cookies $Cookies;
 
@@ -49,6 +50,7 @@ class Header
       // * Metadata
       $this->queued = [];
       $this->built = 0;
+      $this->sent = false;
 
       // @
       $this->Cookies = new Cookies($this);
@@ -61,15 +63,17 @@ class Header
 
          // * Data
          case 'preset':
+            return $this->preset;
          case 'prepared':
-            return $this->$name;
+            return $this->prepared;
          case 'fields':
-         case 'headers':
             return $this->fields;
 
          // * Metadata
          case 'queued':
             return $this->queued;
+         case 'built':
+            return $this->built;
          case 'sent':
             return $this->sent;
 
@@ -92,7 +96,11 @@ class Header
          // case 'fields':
 
          // * Metadata
+         case 'sent':
+            $this->sent = (bool) $value;
+            break;
          case 'queued':
+         case 'built':
             break;
 
          // *
