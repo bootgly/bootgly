@@ -75,23 +75,28 @@ class Scripts
       foreach ($resource_dirs as $dir) {
          $bootstrap = (include $dir . '@.php');
          if ($bootstrap !== false) {
-            $this->scripts = $bootstrap['scripts'];
+            $this->includes['filenames'] += $bootstrap['scripts'];
 
-            foreach ($this->scripts as $group => $filenames) {
+            foreach ($this->includes['filenames'] as $group => $filenames) {
                foreach ($filenames as $filename) {
                   switch ($group) {
-                     case 'user':
-                        $filename = self::WORKING_DIR . $filename;
-                        break;
-                     case 'imported':
-                        $filename = BOOTGLY_WORKING_DIR . $filename;
+                     case 'bootstrap':
                         break;
                      case 'built-in':
                         $filename = self::ROOT_DIR . $filename;
                         break;
+                     case 'imported':
+                        $filename = BOOTGLY_WORKING_DIR . $filename;
+                        break;
+                     case 'user':
+                        $filename = self::WORKING_DIR . $filename;
+                        break;
+                     default:
+                        $filename = null;
+                        break;
                   }
 
-                  $this->includes['filenames'][] = $filename;
+                  $this->scripts[] = $filename;
                }
             }
          }
@@ -121,19 +126,16 @@ class Scripts
       $this->filename = Path::relativize($this->filename, 'scripts/');
 
       // @
-      $this->validations = [];
-      $this->validations['filenames'] = \array_search(
-         $this->filename,
-         $this->includes['filenames']
-      );
-
-      // :
-      // Invalid filename
-      if ($this->validations['filenames'] === false) {
-         return -1;
+      // Global scripts
+      if (\in_array($this->filename, $this->scripts) !== false) {
+         return 1;
+      }
+      // Local scripts
+      if (\in_array($this->path . '/' . $this->filename, $this->scripts) !== false) {
+         return 0;
       }
 
-      return 1;
+      return -1;
    }
 
    public static function execute (string $script)
