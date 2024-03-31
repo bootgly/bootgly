@@ -1,3 +1,5 @@
+<a name="readme-top"></a>
+
 <p align="center">
   <img src="https://github.com/bootgly/.github/raw/main/favicon-temp1-128.png" alt="bootgly-logo" width="120px" height="120px"/>
 </p>
@@ -19,7 +21,7 @@
 > [!WARNING]
 > 🚧 DO NOT USE IT IN PRODUCTION ENVIRONMENTS. 🚧
 > 
-> Bootgly is in beta testing. A stable release is planned for December 2023.
+> Bootgly is in beta testing. A major version (1.0) is soon to release.
 > 
 > [Documentation is under construction][PROJECT_DOCS].
 
@@ -69,6 +71,12 @@ For the base Web development, Bootgly has a [HTTP Server CLI][WEB_HTTP_SERVER_CL
 More news may come until the release of v1.0. Stay tuned.
 
 ---
+
+<div align="right">
+
+[![][BACK_TO_TOP]](#readme-top)
+
+</div>
 
 ## 🟢 Boot Requirements
 
@@ -120,6 +128,12 @@ Above is the native compatibility, of course it is possible to run on Windows an
 
 ---
 
+<div align="right">
+
+[![][BACK_TO_TOP]](#readme-top)
+
+</div>
+
 ## 🌱 Community
 
 Join us and help the community.
@@ -148,12 +162,18 @@ Your sponsorship will keep this project always **up to date** with **new feature
 
 ---
 
+<div align="right">
+
+[![][BACK_TO_TOP]](#readme-top)
+
+</div>
+
 ## 🚀 Getting started
 
 ### 📟 Bootgly CLI:
 
 <details>
-   <summary><b>Run Bootgly CLI demo</b></summary><br>
+   <summary><kbd>Run Bootgly CLI demo</kbd></summary><br>
 
    1) See the examples in `projects/Bootgly/CLI/examples/`;
    2) Check the file `projects/Bootgly/CLI.php`;
@@ -165,7 +185,7 @@ Your sponsorship will keep this project always **up to date** with **new feature
 </details>
 
 <details>
-   <summary><b>Setup Bootgly CLI globally (on /usr/local/bin)</b></summary><br>
+   <summary><kbd>Setup Bootgly CLI globally (on /usr/local/bin)</kbd></summary><br>
 
    1) Run the Bootgly CLI setup command in terminal (with sudo):
 
@@ -175,7 +195,7 @@ Your sponsorship will keep this project always **up to date** with **new feature
 </details>
 
 <details>
-   <summary><b>Perform Bootgly tests</b></summary><br>
+   <summary><kbd>Perform Bootgly tests</kbd></summary><br>
 
    1) Check the bootstrap tests file `tests/@.php`;
    2) Run the Bootgly CLI test command in terminal:
@@ -188,7 +208,7 @@ Your sponsorship will keep this project always **up to date** with **new feature
 ### 🌐 Bootgly WPI:
 
 <details>
-   <summary><b>Running a HTTP Server</b></summary>
+   <summary><kbd>Running a HTTP Server</kbd></summary>
 
    ##### **Option 1: Non-CLI SAPI (Apache, LiteSpeed, Nginx, etc)**
 
@@ -233,6 +253,12 @@ Your sponsorship will keep this project always **up to date** with **new feature
 
 ---
 
+<div align="right">
+
+[![][BACK_TO_TOP]](#readme-top)
+
+</div>
+
 ## 🖼 Highlights
 
 ### \- Bootgly CLI 📟
@@ -260,6 +286,12 @@ More **Screenshots**, videos and details can be found in the home page of [Bootg
 
 ---
 
+<div align="right">
+
+[![][BACK_TO_TOP]](#readme-top)
+
+</div>
+
 ## 📃 License
 
 The Bootgly is open-sourced software licensed under the [MIT license][MIT_LICENSE].
@@ -269,6 +301,7 @@ The Bootgly is open-sourced software licensed under the [MIT license][MIT_LICENS
 ## 📑 Versioning System
 
 Bootgly uses [Semantic Versioning 2.0][SEMANTIC_VERSIONING].
+
 
 <!-- Links -->
 [I2P_ARQUITECTURE]: https://docs.bootgly.com/manual/Bootgly/basic/architecture/overview
@@ -310,3 +343,5 @@ Bootgly uses [Semantic Versioning 2.0][SEMANTIC_VERSIONING].
 
 
 [MIT_LICENSE]: https://opensource.org/license/mit/
+
+[BACK_TO_TOP]: https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square
