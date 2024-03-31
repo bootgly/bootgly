@@ -69,9 +69,9 @@ class CLI extends Projects // Command Line Interface
          case -2:
             break;
          case -1:
-            throw new \Exception("Invalid script: script not registered in bootstrap file!");
-            break;
-         case 0:
+            throw new \Exception(
+               "Invalid script: script not registered in bootstrap file!"
+            );
             break;
          default: // @ Boot CLI
             // Consumer

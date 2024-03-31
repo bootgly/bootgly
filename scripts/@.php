@@ -1,8 +1,17 @@
 <?php
 return [
    'scripts' => [
-      'http-server-cli',
-      'tcp-server-cli',
-      'tcp-client-cli',
+      'bootstrap' => [
+         'bootgly',
+         '/usr/local/bin/bootgly'
+      ],
+      'built-in' => [
+         'http-server-cli',
+         'tcp-server-cli',
+         'tcp-client-cli',
+      ],
+      'imported' => [
+         '@imports/bin/phpstan'
+      ],
    ]
 ];

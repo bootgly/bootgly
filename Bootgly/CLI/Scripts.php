@@ -53,10 +53,6 @@ class Scripts
             self::WORKING_BASE,
             self::WORKING_DIR,
          ],
-         'bootstraps' => [
-            'bootgly',
-            '/usr/local/bin/bootgly'
-         ],
          'filenames' => []
       ];
       // * Metadata
@@ -76,8 +72,10 @@ class Scripts
          if ($bootstrap !== false) {
             $this->scripts = $bootstrap['scripts'];
 
-            foreach ($this->scripts as $filename) {
-               $this->includes['filenames'][] = $filename;
+            foreach ($this->scripts as $filenames) {
+               foreach ($filenames as $filename) {
+                  $this->includes['filenames'][] = $filename;
+               }
             }
          }
       }
@@ -96,7 +94,7 @@ class Scripts
    {
       $this->path ??= @$_SERVER['PWD'];
       $this->filename ??= @$_SERVER['SCRIPT_FILENAME'];
-      // ?
+      // ?:
       if ($this->path === null || $this->filename === null) {
          return -2;
       }
@@ -107,17 +105,18 @@ class Scripts
 
       // @
       $this->validations = [];
-      $this->validations['paths'] = \array_search($this->path, $this->includes['paths']);
-      $this->validations['bootstraps'] = \array_search($this->filename, $this->includes['bootstraps']);
-      $this->validations['filenames'] = \array_search($this->filename, $this->includes['filenames']);
+      $this->validations['paths'] = \array_search(
+         $this->path,
+         $this->includes['paths']
+      );
+      $this->validations['filenames'] = \array_search(
+         $this->filename,
+         $this->includes['filenames']
+      );
 
-      if ($this->validations['filenames'] !== false) {
-         return 0;
-      }
-      if ($this->validations['paths'] === false && $this->validations['bootstraps'] === false) {
-         return 0;
-      }
-      if ($this->validations['paths'] !== false && $this->validations['bootstraps'] === false && $this->validations['filenames'] === false) {
+      // :
+      // Invalid filename
+      if ($this->validations['filenames'] === false) {
          return -1;
       }
 
