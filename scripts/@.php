@@ -11,7 +11,7 @@ return [
          'tcp-client-cli',
       ],
       'imported' => [
-         '@imports/bin/phpstan'
+         'vendor/bin/phpstan'
       ],
    ]
 ];

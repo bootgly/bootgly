@@ -1,0 +1,13 @@
+parameters:
+   excludePaths:
+      analyse:
+         - */&/*
+         - */vs/*
+         - */tests/*
+         - */examples/*
+   level: 1
+   paths:
+      - ../Bootgly
+   ignoreErrors:
+      -
+         identifier: property.uninitializedReadonly

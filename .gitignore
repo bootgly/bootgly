@@ -17,10 +17,11 @@ composer.lock
 **/vs
 # Metafolder (@)
 @/*
+# Additional folders
 !@/__php__/
 !@/__docker__/
-
-@imports/
+# Adittional files
+!@/phpstan.neon
 
 ## Private files
 # Benchmarks

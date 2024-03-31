@@ -20,7 +20,7 @@ if (defined('BOOTGLY_WORKING_BASE') === false) {
    define('BOOTGLY_WORKING_DIR', BOOTGLY_ROOT_DIR);
 }
 
-@include(__DIR__ . '/@imports/autoload.php'); // composer
+@include(__DIR__ . '/vendor/autoload.php'); // composer
 
 // ? Bootgly
 // ! Bootables ([0-9]) || (-[a-z]) || ([0-9]-[a-z])

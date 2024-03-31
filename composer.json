@@ -16,10 +16,6 @@
       }
    ],
 
-   "config": {
-      "vendor-dir": "./@imports/"
-   },
-
    "autoload": {
       "files": [
          "./autoload.php"
@@ -34,5 +30,8 @@
 
    "require": {
       "php": "^8.2"
+   },
+   "require-dev": {
+      "phpstan/phpstan": "1.11.x-dev"
    }
 }
