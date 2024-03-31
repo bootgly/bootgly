@@ -56,7 +56,6 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Downloader;
  * @property Body $Body
  * 
  * @property string $input
- * @property array $inputs
  * 
  * @property array $post
  * 
@@ -98,9 +97,9 @@ class Request
    use Requestable;
 
 
-   public Raw $Raw;
-   public Body $Body;
-   public Header $Header;
+   public readonly Raw $Raw;
+   public readonly Header $Header;
+   public readonly Body $Body;
 
    // * Config
    private string $base;
@@ -121,8 +120,6 @@ class Request
    public function __construct ()
    {
       $this->Raw = new Raw;
-      $this->Body = &$this->Raw->Body;
-      $this->Header = &$this->Raw->Header;
 
       // * Config
       $this->base = '';
@@ -165,6 +162,7 @@ class Request
          type: $this->Raw->Header->get('Content-Type')
       );
 
+      // @ Set FILES data
       if ($boundary) {
          $this->Downloader->downloading($boundary);
       }
@@ -173,30 +171,32 @@ class Request
       if ($key === null) {
          return $_FILES;
       }
+
       if ( isSet($_FILES[$key]) ) {
          return $_FILES[$key];
       }
+
       return null;
    }
-   public function receive (? string $key = null) : array|null
+   public function receive (? string $key = null) : array|string|null
    {
-      if ( empty($this->post) ) {
-         $parsed = $this->Raw->Body->parse(
-            content: 'raw',
-            type: $this->Raw->Header->get('Content-Type')
-         );
+      $parsed = $this->Raw->Body->parse(
+         content: 'raw',
+         type: $this->Raw->Header->get('Content-Type')
+      );
 
-         if ($parsed) {
-            $this->Downloader->downloading($parsed);
-         }
+      // @ Set POST data
+      if ($parsed) {
+         $this->Downloader->downloading($parsed);
       }
 
+      // : parsed $_POST || null
       if ($key === null) {
-         return $this->post;
+         return $_POST;
       }
 
-      if ( isSet($this->post[$key]) ) {
-         return $this->post[$key];
+      if ( isSet($_POST[$key]) ) {
+         return $_POST[$key];
       }
 
       return null;
