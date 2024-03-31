@@ -263,7 +263,7 @@ class Path // support to FileSystem Paths only (Linux only)
       // /etc/php/8.0 or /etc/php/8.1 or /etc/php/8.2...
    }
 
-   private static function normalize ($path) : string
+   public static function normalize ($path) : string
    {
       // $path = '../../etc/passwd';
       $parts = explode(DIRECTORY_SEPARATOR, $path); // TODO use self::split?
