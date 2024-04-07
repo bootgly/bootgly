@@ -13,22 +13,34 @@ namespace Bootgly\ABI\Data\__String;
 
 class Tokens
 {
+   // * Config
+   public const AS_TOKEN_GROUP = 0; // 
+   public const AS_TOKEN_ID = 1;
+   public const AS_TOKEN_NAME = 2;
+
+   // * Metadata
+   // @ Groups
    public const TOKEN_DEFAULT = 'token_default';
+
    public const TOKEN_VARIABLE = 'token_variable';
    public const TOKEN_NUMBER = 'token_number';
 
+   public const TOKEN_NEW = 'token_new';
+   public const TOKEN_ACCESS = 'token_access';
    public const TOKEN_OPERATOR = 'token_operator';
    public const TOKEN_PONTUATION = 'token_pontuation';
    public const TOKEN_DELIMITER = 'token_delimiter';
 
    public const TOKEN_FUNCTION = 'token_function';
+   public const TOKEN_SPREAD = 'token_spread';
    public const TOKEN_COMMENT = 'token_comment';
    public const TOKEN_STRING = 'token_string';
    public const TOKEN_HTML = 'token_html';
+
    public const TOKEN_KEYWORD = 'token_keyword';
 
 
-   public function tokenize (string $source) : array
+   public function tokenize (string $source, int $fallback = self::AS_TOKEN_GROUP) : array
    {
       // * Data
       $tokens = \token_get_all($source);
@@ -41,7 +53,7 @@ class Tokens
 
       // @
       foreach ($tokens as $token) {
-         if (\is_array($token)) {
+         if (\is_array($token) === true) {
             $token_type_new = match ($token[0]) {
                \T_WHITESPACE => null, # 392
 
@@ -88,15 +100,25 @@ class Tokens
                \T_INLINE_HTML, # 267
                   => self::TOKEN_HTML,
 
+               \T_OBJECT_OPERATOR, # 384
+                  => self::TOKEN_ACCESS,
+
                \T_OPEN_TAG, # 389
                \T_OPEN_TAG_WITH_ECHO, # 390
                \T_CLOSE_TAG, # 391
                   => null,
 
                #\T_FUNCTION, # 310
-               default
-                  => self::TOKEN_KEYWORD,
+               default => false
             };
+
+            if ($token_type_new === false) {
+               $token_type_new = match ($fallback) {
+                  self::AS_TOKEN_ID => $token[0],
+                  self::AS_TOKEN_NAME => token_name($token[0]),
+                  default => self::TOKEN_KEYWORD
+               };
+            }
          } else {
             $token_type_new = match ($token) {
                ',', ';' => self::TOKEN_PONTUATION,
