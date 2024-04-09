@@ -17,12 +17,16 @@ use Bootgly\ABI\Data\__String\Path;
 use Bootgly\ABI\IO\FS\File;
 
 use Bootgly\WPI\Modules\HTTP\Server\Response as Responsing;
+use Bootgly\WPI\Modules\HTTP\Server\Response\Extendable;
 use Bootgly\WPI\Nodes\HTTP_Server_ as Server;
 use Bootgly\WPI\Nodes\HTTP_Server_\Response\Raw;
 
 
 class Response implements Responsing
 {
+   use Extendable;
+
+
    // ! HTTP
    public Raw $Raw;
 
@@ -42,6 +46,7 @@ class Response implements Responsing
    protected array $uses;
 
    // * Metadata
+   private null|int|bool $code;
    private ? string $resource;
    // @ Status
    public bool $initied = false;
@@ -96,7 +101,7 @@ class Response implements Responsing
 
       // @
       if ($code !== 200) {
-         $this->code = $code;
+         $this->__set('code', $code);
       }
       if ($headers !== null) {
          $this->Raw->Header->prepare($headers);
@@ -109,9 +114,8 @@ class Response implements Responsing
    {
       switch ($name) {
          // ? Response Meta
-         case 'status':
          case 'code':
-            return \http_response_code();
+            return $this->code = \http_response_code();
          // ? Response Headers
          case 'headers':
             return $this->Raw->Header->fields;
@@ -138,15 +142,14 @@ class Response implements Responsing
    public function __set (string $name, $value)
    {
       switch ($name) {
-         case 'status':
          case 'code':
-            \http_response_code($value);
+            $this->code = \http_response_code($value);
             break;
       }
    }
    public function __invoke (int $code = 200, array $headers = [], string $body = '') : self
    {
-      $this->code = $code;
+      $this->code = $this->__set('code', $code);
       $this->Raw->Header->prepare($headers);
       $this->Raw->Body->raw = $body;
 
@@ -156,12 +159,13 @@ class Response implements Responsing
    protected function prepare (? string $resource = null) : self
    {
       if ($this->initied === false) {
-         $this->body   = null;
          $this->source = null;
          $this->type   = null;
-      }
 
-      $this->initied = true;
+         $this->body   = null;
+
+         $this->initied = true;
+      }
 
       if ($resource === null) {
          $resource = $this->resource;
@@ -205,24 +209,8 @@ class Response implements Responsing
 
       return $this;
    }
-   /**
-    * Appends the provided data to the body of the response.
-    *
-    * @param mixed $body The data that should be appended to the response body.
-    *
-    * @return Response The Response instance, for chaining
-    */
-   public function append ($body)
-   {
-      $this->initied = true;
-      $this->body .= $body . "\n";
-   }
-   public function use (string $name, $var)
-   {
-      $this->uses[$name] = $var;
-   }
 
-   protected function process ($data, ? string $resource = null)
+   protected function process ($data, ? string $resource = null) : self
    {
       if ($resource === null) {
          $resource = $this->resource;
@@ -236,9 +224,11 @@ class Response implements Responsing
          case 'view':
             $File = new File(BOOTGLY_PROJECT?->path . 'views/' . $data);
 
-            $this->body   = $File;
             $this->source = 'file';
             $this->type   = $File->extension;
+
+            $this->body   = $File;
+
             break;
 
          // @ Content
@@ -280,18 +270,20 @@ class Response implements Responsing
                         default => new File(BOOTGLY_PROJECT?->path . $data)
                      };
 
-                     $this->body   = &$File;
                      $this->source = 'file';
                      $this->type   = $File->extension;
+
+                     $this->body   = &$File;
 
                      break;
                   case 'object':
                      if ($data instanceof File) {
                         $File = $data;
 
-                        $this->body   = $File;
                         $this->source = 'file';
                         $this->type   = $File->extension;
+
+                        $this->body   = $File;
                      }
 
                      break;
@@ -313,7 +305,7 @@ class Response implements Responsing
       $this->process($view . '.template.php', 'view');
 
       // ?
-      $File = $this->body;
+      $File = $this->body ?? null;
       if ($File === null || $File->exists === false) {
          throw new \Exception(message: 'Template file not found!');
          return $this;
@@ -355,7 +347,7 @@ class Response implements Responsing
 
       // @ Call callback
       if ($callback !== null && $callback instanceof \Closure) {
-         $callback($this->body, $Throwable);
+         $callback($this->body, $Throwable ?? null);
       }
 
       return $this;
@@ -403,13 +395,11 @@ class Response implements Responsing
 
             break;
          case 'file':
-            if ($body === false || $body === null) {
+            if ($body === false || $body === null || $body instanceof File === false) {
                return $this;
             }
 
-            if ($body instanceof File) {
-               $File = $body;
-            }
+            $File = $body;
 
             if ($File->readable === false) {
                return $this;
@@ -459,7 +449,7 @@ class Response implements Responsing
                $body = '';
                $this->body = '';
 
-               $this->code = $code;
+               $this->code = $this->__set('code', $code);
             }
       }
 
@@ -488,7 +478,7 @@ class Response implements Responsing
       }
 
       if ($File->readable === false) {
-         $this->status = 403; // Forbidden
+         $this->code = 403; // Forbidden
          return $this;
       }
 

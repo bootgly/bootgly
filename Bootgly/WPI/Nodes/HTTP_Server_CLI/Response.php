@@ -18,6 +18,7 @@ use Bootgly\ABI\IO\FS\File;
 
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages;
 use Bootgly\WPI\Modules\HTTP\Server\Response as Responsing;
+use Bootgly\WPI\Modules\HTTP\Server\Response\Extendable;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI as Server;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Raw;
 
@@ -30,6 +31,9 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Raw;
 #[AllowDynamicProperties]
 class Response implements Responsing
 {
+   use Extendable;
+
+
    // ! HTTP
    public Raw $Raw;
 
