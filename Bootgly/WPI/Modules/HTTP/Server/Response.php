@@ -57,10 +57,12 @@ abstract class Response
     * Start a file upload from the Server to the Client
     *
     * @param string|File $file The file to be uploaded
+    * @param int $offset The data offset.
+    * @param int|null $length The length of the data to upload.
     * 
     * @return Response The Response instance, for chaining
     */
-   abstract public function upload (string|File $file) : self;
+   abstract public function upload (string|File $file, int $offset = 0, ? int $length = null) : self;
 
    /**
     * Authenticate the user with the provided authentication method.
