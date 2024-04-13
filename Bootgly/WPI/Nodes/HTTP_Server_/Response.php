@@ -483,6 +483,8 @@ class Response extends Responsing
     * Start a file upload from the Server to the Client
     *
     * @param string|File $file The file to be uploaded
+    * @param int $offset The data offset.
+    * @param int|null $length The length of the data to upload.
     * 
     * @return Response The Response instance, for chaining
     */
