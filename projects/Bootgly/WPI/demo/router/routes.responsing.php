@@ -28,6 +28,10 @@ $Router->route('/Response/test.c', function (Request $Request, Response $Respons
       ->render(view: 'test', data: ['title' => 'Bootgly'])
       ->send();
 }, GET);
+$Router->route('/Response/test.v1', function (Request $Request, Response $Response) {
+   return $Response
+      ->upload('statics/alphanumeric.txt');
+}, GET);
 $Router->route('/Response/test.x', function (Request $Request, Response $Response) {
    if ($Request->username && $Request->password === 'bingo'){
       return $Response->send('Welcome back, ' . $Request->username . '!');

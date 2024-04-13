@@ -486,8 +486,9 @@ class Response extends Responsing
     * 
     * @return Response The Response instance, for chaining
     */
-   public function upload (string|File $file, int $offset = 0, ? int $length = null, bool $close = true) : self
+   public function upload (string|File $file, int $offset = 0, ? int $length = null) : self
    {
+      // ?!
       if ($file instanceof File) {
          $File = $file;
       }
@@ -513,11 +514,21 @@ class Response extends Responsing
 
       // @ Send File Content
       $this->Raw->Header->set('Content-Length', $File->size);
-      $this->Raw->Header->build();
+      $this->Raw->Header->build(send: true);
 
+      // @ Flush HTTP Headers
       \flush();
 
-      $File->read(); // FIX MEMORY RAM USAGE OR LIMIT FILE SIZE TO UPLOAD
+      // @ Send File Content
+      $File->open();
+      while ($File->EOF === false) {
+         echo $File->read(
+            method: $File::DEFAULT_READ_METHOD,
+            offset: $offset,
+            length: $length ?? 1024
+         );
+         \flush();
+      }
 
       $this->end();
 
