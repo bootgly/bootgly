@@ -18,6 +18,7 @@ use Bootgly\ABI\IO\FS\File;
 
 use Bootgly\WPI\Modules\HTTP\Server\Response as Responsing;
 use Bootgly\WPI\Modules\HTTP\Server\Response\Authenticable;
+use Bootgly\WPI\Modules\HTTP\Server\Response\Bootable;
 use Bootgly\WPI\Modules\HTTP\Server\Response\Extendable;
 use Bootgly\WPI\Modules\HTTP\Server\Response\Redirectable;
 use Bootgly\WPI\Nodes\HTTP_Server_ as Server;
@@ -29,9 +30,10 @@ use Bootgly\WPI\Nodes\HTTP_Server_\Response\Raw\Meta;
 
 class Response extends Responsing
 {
+   use Authenticable;
+   use Bootable;
    use Extendable;
    use Redirectable;
-   use Authenticable;
 
 
    // \
@@ -170,148 +172,6 @@ class Response extends Responsing
       $this->__set('code', $code);
       $this->Raw->Header->prepare($headers);
       $this->Raw->Body->raw = $body;
-
-      return $this;
-   }
-
-   protected function prepare (? string $resource = null) : self
-   {
-      if ($this->initied === false) {
-         $this->source = null;
-         $this->type   = null;
-
-         $this->body   = null;
-
-         $this->initied = true;
-      }
-
-      if ($resource === null) {
-         $resource = $this->resource;
-      }
-      else {
-         $resource = \strtolower($resource);
-      }
-
-      switch ($resource) {
-         // @ Content
-         case 'json':
-            $this->source   = 'content';
-            $this->type     = 'json';
-            break;
-         case 'jsonp':
-            $this->source   = 'content';
-            $this->type     = 'jsonp';
-            break;
-         case 'pre':
-         case 'raw':
-            $this->source   = 'content';
-            $this->type     = '';
-            break;
-
-         // @ File
-         case 'view':
-            $this->source = 'file';
-            $this->type = 'php';
-            break;
-
-         default:
-            if ($resource) {
-               // TODO inject Resource with custom prepare()
-               // $prepared = $this->resources[$resource]->prepare();
-               // $this->source = $prepared['source'];
-               // $this->type = $prepared['type'];
-            }
-      }
-
-      $this->prepared = true;
-
-      return $this;
-   }
-
-   protected function process ($data, ? string $resource = null) : self
-   {
-      if ($resource === null) {
-         $resource = $this->resource;
-      }
-      else {
-         $resource = \strtolower($resource);
-      }
-
-      switch ($resource) {
-         // @ File
-         case 'view':
-            $File = new File(BOOTGLY_PROJECT?->path . 'views/' . $data);
-
-            $this->source = 'file';
-            $this->type   = $File->extension;
-
-            $this->body   = $File;
-
-            break;
-
-         // @ Content
-         case 'json':
-         case 'jsonp':
-            if ( \is_array($data) ) {
-               $this->body = $data;
-               break;
-            }
-
-            $this->body = \json_decode($data, true);
-
-            break;
-         case 'pre':
-            if ($data === null) {
-               $data = $this->body;
-            }
-
-            $this->body = '<pre>'.$data.'</pre>';
-
-            break;
-         case 'raw':
-            $this->body = $data;
-
-            break;
-
-         default:
-            if ($resource) {
-               // TODO Inject resource with custom process() created by user
-            }
-            else {
-               switch ( \getType($data) ) {
-                  case 'string':
-                     // TODO check if string is a valid path
-                     $File = match ($data[0]) {
-                        #!
-                        '/' => new File(BOOTGLY_WORKING_DIR . 'projects' . $data),
-                        '@' => new File(BOOTGLY_WORKING_DIR . 'projects/' . $data),
-                        default => new File(BOOTGLY_PROJECT?->path . $data)
-                     };
-
-                     $this->source = 'file';
-                     $this->type   = $File->extension;
-
-                     $this->body   = &$File;
-
-                     break;
-                  case 'object':
-                     if ($data instanceof File) {
-                        $File = $data;
-
-                        $this->source = 'file';
-                        $this->type   = $File->extension;
-
-                        $this->body   = $File;
-                     }
-
-                     break;
-               }
-            }
-      }
-
-      $this->processed = true;
-
-      $this->resource = null;
 
       return $this;
    }
@@ -472,7 +332,7 @@ class Response extends Responsing
       }
 
       // @ Output
-      print $body ?? $this->body;
+      echo $body ?? $this->body;
 
       $this->end();
 
