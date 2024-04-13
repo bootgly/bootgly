@@ -50,7 +50,7 @@ class Theme
       $options = $this->options;
       $values = $this->values;
 
-      $input = (array) $values[$key];
+      $input = (array) ($values[$key] ?? []);
 
       $output = '';
       // @ prepending
