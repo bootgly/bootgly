@@ -338,7 +338,7 @@ Bootgly uses [Semantic Versioning 2.0][SEMANTIC_VERSIONING].
 [LINKEDIN]: https://www.linkedin.com/company/bootgly/
 
 
-[CODE_OF_CONDUCT]: CODE_OF_CONDUCT.md
+[CODE_OF_CONDUCT]: https://github.com/bootgly/bootgly/blob/main/.github/CODE_OF_CONDUCT.md
 [SEMANTIC_VERSIONING]: https://semver.org/
 
 
