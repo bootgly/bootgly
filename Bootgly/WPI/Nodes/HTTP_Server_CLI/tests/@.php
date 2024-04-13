@@ -97,7 +97,8 @@ return [
          // @ authenticate
          '1.6-authenticate_with_http_basic_authentication',
          // @ redirect
-         '1.7-redirect_with_302_to_bootgly_docs',
+         '1.7-redirect_to_bootgly_docs',
+         '1.7.2-redirect_with_302_to_bootgly_docs',
          // @ upload
          // .1 - Small Files
          '1.z.1-upload_a_small_file',

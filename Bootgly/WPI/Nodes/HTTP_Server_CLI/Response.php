@@ -18,29 +18,36 @@ use Bootgly\ABI\IO\FS\File;
 
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages;
 use Bootgly\WPI\Modules\HTTP\Server\Response as Responsing;
+use Bootgly\WPI\Modules\HTTP\Server\Response\Authenticable;
 use Bootgly\WPI\Modules\HTTP\Server\Response\Extendable;
+use Bootgly\WPI\Modules\HTTP\Server\Response\Redirectable;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI as Server;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Raw;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Raw\Body;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Raw\Meta;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Raw\Header;
 
 
 /**
  * * Config
  * @property int $code
- * @property string|int $status
  */
 #[AllowDynamicProperties]
-class Response implements Responsing
+class Response extends Responsing
 {
    use Extendable;
+   use Redirectable;
+   use Authenticable;
 
 
-   // ! HTTP
-   public Raw $Raw;
+   // \
+   private static $Server;
 
    // * Config
    // ...
 
    // * Data
+   protected null|int $code;
    public string $raw;
    public $body;
 
@@ -66,10 +73,17 @@ class Response implements Responsing
    public bool $stream;
 
 
+   // / HTTP
+   public Raw $Raw;
+      public readonly Meta $Meta;
+      public readonly Header $Header;
+      public readonly Body $Body;
+
+
    public function __construct (int $code = 200, ? array $headers = null, string $body = '')
    {
-      // ! HTTP
-      $this->Raw = new Raw;
+      // \
+      self::$Server = Server::class;
 
       // * Config
       // ...
@@ -99,6 +113,11 @@ class Response implements Responsing
       #$this->static = false;
       $this->stream = false;
 
+      // / HTTP
+      $this->Raw = new Raw;
+         $this->Meta = $this->Raw->Meta;
+         $this->Header = $this->Raw->Header;
+         $this->Body = $this->Raw->Body;
 
       // @
       if ($code !== 200) {
@@ -116,8 +135,7 @@ class Response implements Responsing
    public function __get (string $name)
    {
       switch ($name) {
-         // ? Response Meta
-         case 'status':
+         // ? Response Metadata
          case 'code':
             return $this->Raw->Meta->code;
          // ? Response Headers
@@ -146,8 +164,7 @@ class Response implements Responsing
    public function __set (string $name, $value)
    {
       switch ($name) {
-         // ? Response Meta
-         case 'status':
+         // ? Response Metadata
          case 'code':
             if (\is_int($value) && $value > 99 && $value < 600) {
                $this->Raw->Meta->status = $value;
@@ -167,12 +184,13 @@ class Response implements Responsing
    protected function prepare (? string $resource = null) : self
    {
       if ($this->initied === false) {
-         $this->body   = null;
          $this->source = null;
          $this->type   = null;
-      }
 
-      $this->initied = true;
+         $this->body   = null;
+
+         $this->initied = true;
+      }
 
       if ($resource === null) {
          $resource = $this->resource;
@@ -182,12 +200,6 @@ class Response implements Responsing
       }
 
       switch ($resource) {
-         // @ Resource File
-         case 'view':
-            $this->source = 'file';
-            $this->type = 'php';
-            break;
-
          // @ Resource Content
          case 'json':
             $this->source   = 'content';
@@ -203,6 +215,12 @@ class Response implements Responsing
             $this->type     = '';
             break;
 
+         // @ Resource File
+         case 'view':
+            $this->source = 'file';
+            $this->type = 'php';
+            break;
+
          default:
             if ($resource) {
                // TODO inject Resource with custom prepare()
@@ -213,20 +231,6 @@ class Response implements Responsing
       }
 
       $this->prepared = true;
-
-      return $this;
-   }
-   /**
-    * Appends the provided data to the body of the response.
-    *
-    * @param mixed $body The data that should be appended to the response body.
-    *
-    * @return Response The Response instance, for chaining
-    */
-   public function append ($body) : self
-   {
-      $this->initied = true;
-      $this->body .= $body . "\n";
 
       return $this;
    }
@@ -547,7 +551,7 @@ class Response implements Responsing
       }
 
       if ($File->readable === false) {
-         $this->code = 403; // Forbidden
+         $this->__set('code', 403);
          return $this;
       }
 
@@ -750,78 +754,24 @@ class Response implements Responsing
    }
 
    /**
-    * Sets the authentication headers for basic authentication with 401 (Unauthorized) HTTP status code.
-    *
-    * @param string $realm The realm string to set in the WWW-Authenticate header. Default is "Protected area".
-    *
-    * @return Response Returns Response.
-    */
-   public function authenticate (string $realm = 'Protected area') : self
-   {
-      $this->code = 401;
-      $this->Raw->Header->set('WWW-Authenticate', 'Basic realm="'.$realm.'"');
-      $this->sent = true;
-
-      return $this;
-   }
-   /**
-    * Redirects to a new URI. Default return is 307 for GET (Temporary Redirect) and 303 (See Other) for POST.
-    *
-    * @param string $URI The new URI to redirect to.
-    * @param ? int $code The HTTP status code to use for the redirection.
-    *
-    * @return Response Returns Response.
-    */
-   public function redirect (string $URI, ? int $code = null) : self
-   {
-      // @ Set default code
-      if ($code === null) {
-         $code = match (Server::$Request->method) {
-            'POST' => 303, // See Other
-            'GET'  => 307, // Temporary Redirect
-            default => null
-         };
-      }
-
-      switch ($code) {
-         case 300: // Multiple Choices
-         case 301: // Moved Permanently
-         case 302: // Found (or Moved Temporarily)
-         case 303: // See Other
-         case 307: // Temporary Redirect
-         case 308: // Permanent Redirect
-            $this->code = $code;
-            break;
-         default:
-            // TODO throw invalid code;
-            return $this;
-      }
-
-      $this->Raw->Header->set('Location', $URI);
-
-      $this->end();
-
-      return $this;
-   }
-
-   /**
     * Definitively terminates the HTTP Response.
     *
-    * @param int|string|null $status The status of the response.
+    * @param int|null $code The status code of the response.
     * @param string|null $context The context for additional information.
     *
-    * @return void
+    * @return Response Returns Response.
     */
-   public function end (int|string|null $status = null, ? string $context = null) : void
+   public function end (? int $code = null, ? string $context = null) : self
    {
-      if ($this->sent) {
-         return;
+      // ?
+      if ($this->sent === true) {
+         return $this;
       }
 
       // @
-      if ($status) {
+      if ($code) {
          // @ Preset
-         switch ($status) {
+         switch ($code) {
             case 400: // Bad Request
             case 416: // Range Not Satisfiable
                $this->Raw->Meta->status = 416;
@@ -830,11 +780,11 @@ class Response implements Responsing
                $this->Raw->Body->raw = ' '; // Needs body non-empty
                break;
             default:
-               $this->status = $status;
+               $this->__set('code', $code);
          }
 
          // @ Contextualize
-         switch ($status) {
+         switch ($code) {
             case 416: // Range Not Satisfiable
                if ($context) {
                   $this->Raw->Header->set('Content-Range', 'bytes */' . $context);
@@ -844,5 +794,7 @@ class Response implements Responsing
       }
 
       $this->sent = true;
+
+      return $this;
    }
 }

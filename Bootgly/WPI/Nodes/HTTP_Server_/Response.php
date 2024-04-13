@@ -17,18 +17,25 @@ use Bootgly\ABI\Data\__String\Path;
 use Bootgly\ABI\IO\FS\File;
 
 use Bootgly\WPI\Modules\HTTP\Server\Response as Responsing;
+use Bootgly\WPI\Modules\HTTP\Server\Response\Authenticable;
 use Bootgly\WPI\Modules\HTTP\Server\Response\Extendable;
+use Bootgly\WPI\Modules\HTTP\Server\Response\Redirectable;
 use Bootgly\WPI\Nodes\HTTP_Server_ as Server;
 use Bootgly\WPI\Nodes\HTTP_Server_\Response\Raw;
+use Bootgly\WPI\Nodes\HTTP_Server_\Response\Raw\Body;
+use Bootgly\WPI\Nodes\HTTP_Server_\Response\Raw\Header;
+use Bootgly\WPI\Nodes\HTTP_Server_\Response\Raw\Meta;
 
 
-class Response implements Responsing
+class Response extends Responsing
 {
    use Extendable;
+   use Redirectable;
+   use Authenticable;
 
 
-   // ! HTTP
-   public Raw $Raw;
+   // \
+   private static $Server;
 
    // * Config
    // ...
@@ -61,12 +68,17 @@ class Response implements Responsing
    #public bool $static;
    public bool $stream;
 
+   // / HTTP
+   public readonly Raw $Raw;
+      public readonly Meta $Meta;
+      public readonly Header $Header;
+      public readonly Body $Body;
+
 
    public function __construct (int $code = 200, ? array $headers = null, string $body = '')
    {
-      // ! HTTP
-      $this->Raw = new Raw;
-
+      // \
+      self::$Server = Server::class;
 
       // * Config
       // ...
@@ -98,6 +110,11 @@ class Response implements Responsing
       #$this->static = true;
       $this->stream = false;
 
+      // / HTTP
+      $this->Raw = new Raw;
+         $this->Meta = $this->Raw->Meta;
+         $this->Header = $this->Raw->Header;
+         $this->Body = $this->Raw->Body;
 
       // @
       if ($code !== 200) {
@@ -113,7 +130,7 @@ class Response implements Responsing
    public function __get (string $name)
    {
       switch ($name) {
-         // ? Response Meta
+         // ? Response Metadata
          case 'code':
             return $this->code = \http_response_code();
          // ? Response Headers
@@ -142,6 +159,7 @@ class Response implements Responsing
    public function __set (string $name, $value)
    {
       switch ($name) {
+         // ? Response Metadata
          case 'code':
             $this->code = \http_response_code($value);
             break;
@@ -149,7 +167,7 @@ class Response implements Responsing
    }
    public function __invoke (int $code = 200, array $headers = [], string $body = '') : self
    {
-      $this->code = $this->__set('code', $code);
+      $this->__set('code', $code);
       $this->Raw->Header->prepare($headers);
       $this->Raw->Body->raw = $body;
 
@@ -175,12 +193,6 @@ class Response implements Responsing
       }
 
       switch ($resource) {
-         // @ File
-         case 'view':
-            $this->source = 'file';
-            $this->type = 'php';
-            break;
-
          // @ Content
          case 'json':
             $this->source   = 'content';
@@ -194,6 +206,12 @@ class Response implements Responsing
          case 'raw':
             $this->source   = 'content';
             $this->type     = '';
+            break;
+
+         // @ File
+         case 'view':
+            $this->source = 'file';
+            $this->type = 'php';
             break;
 
          default:
@@ -449,7 +467,7 @@ class Response implements Responsing
                $body = '';
                $this->body = '';
 
-               $this->code = $this->__set('code', $code);
+               $this->__set('code', $code);
             }
       }
 
@@ -478,7 +496,7 @@ class Response implements Responsing
       }
 
       if ($File->readable === false) {
-         $this->code = 403; // Forbidden
+         $this->__set('code', 403); // Forbidden
          return $this;
       }
 
@@ -507,57 +525,24 @@ class Response implements Responsing
    }
 
    /**
-    * Sets the authentication headers for basic authentication with 401 (Unauthorized) HTTP status code.
-    *
-    * @param string $realm The realm string to set in the WWW-Authenticate header. Default is "Protected area".
-    *
-    * @return Response Returns Response.
-    */
-   public function authenticate (string $realm = 'Protected area') : self
-   {
-      if (Server::$Request->headers['x-requested-with'] !== 'XMLHttpRequest') {
-         \header('WWW-Authenticate: Basic realm="' . $realm . '"');
-      }
-
-      $this->code = 401;
-      // header('HTTP/1.0 401 Unauthorized');
-
-      return $this;
-   }
-   /**
-    * Redirects to a new URI. Default return is 307 for GET (Temporary Redirect) and 303 (See Other) for POST.
-    *
-    * @param string $URI The new URI to redirect to.
-    * @param ? int $code The HTTP status code to use for the redirection.
-    *
-    * @return Response Returns Response.
-    */
-   public function redirect (string $URI, ? int $code = null) : self // Code 302 = temporary; 301 = permanent;
-   {
-      // $this->code = $code;
-      \header('Location: '. $URI, true, $code ?? 302);
-
-      $this->end();
-
-      return $this;
-   }
-
-   /**
     * Definitively terminates the HTTP Response.
     *
-    * @param int|string|null $status The status of the response.
+    * @param int|null $code The status code of the response.
     *
     * @return void
     */
-   public function end (int|string|null $status = null) : void
+   public function end (? int $code = null) : void
    {
-      if ($this->sent) {
+      // ?
+      if ($this->sent === true) {
          return;
       }
 
+      // @
+      $this->__set('code', $code);
+
       $this->sent = true;
 
-      // @
-      exit($status);
+      exit($code);
    }
 }

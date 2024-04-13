@@ -31,8 +31,7 @@ trait Extendable
    /**
     * Extends variables to the File Response.
     *
-    * @param string $name Variable name to be used.
-    * @param mixed $var Variable value passed to the File.
+    * @param array $variables Variables to be passed to the File Response.
     *
     * @return Response The Response instance, for chaining
     */
