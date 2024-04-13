@@ -34,9 +34,7 @@ class Header
    public function __construct ()
    {
       // * Config
-      $this->preset = [
-         'Server' => 'Bootgly'
-      ];
+      $this->preset = [];
       $this->prepared = [];
 
       // * Data
@@ -116,9 +114,9 @@ class Header
    }
 
    // TODO increase performance
-   public function build () // @ raw
+   public function build (bool $send = false) // @ raw
    {
-      // @ Return if empty
+      // ?
       if ( empty($this->fields) && empty($this->prepared) ) {
          return false;
       }
@@ -145,6 +143,12 @@ class Header
       }
 
       $this->raw = implode("\r\n", $queued);
+
+      if ($send === true) {
+         foreach ($queued as $header) {
+            \header($header, false);
+         }
+      }
 
       return true;
    }
