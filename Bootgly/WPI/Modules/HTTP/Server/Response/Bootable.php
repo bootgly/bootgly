@@ -11,6 +11,9 @@
 namespace Bootgly\WPI\Modules\HTTP\Server\Response;
 
 
+use Bootgly\ABI\IO\FS\File;
+
+
 trait Bootable
 {
    protected function prepare (? string $resource = null) : self
