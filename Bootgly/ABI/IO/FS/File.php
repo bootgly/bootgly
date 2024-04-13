@@ -146,6 +146,7 @@ class File implements FS
 
    protected bool $exists;           // bool true|false
 
+   protected bool $EOF;              // bool true|false
    protected int|false $size;        // int 51162 (bytes)
    protected int|false $lines;       // int 15
    // @ Path
@@ -247,6 +248,8 @@ class File implements FS
          case 'exists':
             return is_file($file);
 
+         case 'EOF':
+            return \feof($this->handler);
          case 'size':
             return $this->size = (new \SplFileInfo($file))->getSize();
          case 'lines':
