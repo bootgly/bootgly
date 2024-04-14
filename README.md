@@ -185,7 +185,7 @@ Your sponsorship will keep this project always **up to date** with **new feature
 </details>
 
 <details>
-   <summary><kbd>Setup Bootgly CLI globally (on /usr/local/bin)</kbd></summary><br>
+   <summary><kbd>Setup Bootgly CLI globally</kbd></summary><br>
 
    1) Run the Bootgly CLI setup command in terminal (with sudo):
 
