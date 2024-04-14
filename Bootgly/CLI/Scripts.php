@@ -123,7 +123,6 @@ class Scripts
 
       // !
       $this->filename = Path::normalize($this->filename);
-      $this->filename = Path::relativize($this->filename, 'scripts/');
 
       // @
       // Global scripts (absolute paths)
