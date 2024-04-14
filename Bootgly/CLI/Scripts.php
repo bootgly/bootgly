@@ -126,11 +126,11 @@ class Scripts
       $this->filename = Path::relativize($this->filename, 'scripts/');
 
       // @
-      // Global scripts
+      // Global scripts (absolute paths)
       if (\in_array($this->filename, $this->scripts) !== false) {
          return 1;
       }
-      // Local scripts
+      // Local scripts (relative to scripts/ working directory)
       if (\in_array($this->path . '/' . $this->filename, $this->scripts) !== false) {
          return 0;
       }

@@ -69,8 +69,9 @@ class CLI extends Projects // Command Line Interface
          case -2:
             break;
          case -1:
+            // TODO custom bootgly exception
             throw new \Exception(
-               "Invalid script: script not registered in bootstrap file!"
+               "Invalid script: script `{$Scripts->filename}` not registered in bootstrap file! Please, register it in `scripts/@.php`."
             );
             break;
          case 0: // @ Running external script
