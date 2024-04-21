@@ -19,10 +19,10 @@ trait Bootable
    protected function prepare (? string $resource = null) : self
    {
       if ($this->initied === false) {
-         $this->source = null;
-         $this->type   = null;
+         $this->source  = null;
+         $this->type    = null;
 
-         $this->body   = null;
+         $this->body    = null;
 
          $this->initied = true;
       }

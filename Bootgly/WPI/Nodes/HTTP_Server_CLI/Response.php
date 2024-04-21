@@ -22,6 +22,7 @@ use Bootgly\WPI\Modules\HTTP\Server\Response\Authenticable;
 use Bootgly\WPI\Modules\HTTP\Server\Response\Bootable;
 use Bootgly\WPI\Modules\HTTP\Server\Response\Extendable;
 use Bootgly\WPI\Modules\HTTP\Server\Response\Redirectable;
+use Bootgly\WPI\Modules\HTTP\Server\Response\Renderable;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI as Server;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Raw;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Raw\Body;
@@ -40,6 +41,7 @@ class Response extends Responsing
    use Bootable;
    use Extendable;
    use Redirectable;
+   use Renderable;
 
 
    // \
@@ -183,66 +185,6 @@ class Response extends Responsing
       return $this;
    }
 
-   /**
-    * Renders the specified view with the provided data.
-    *
-    * @param string $view The view to render.
-    * @param array|null $data The data to provide to the view.
-    * @param Closure|null $callback Optional callback.
-    *
-    * @return Response Returns Response
-    */
-   public function render (string $view, ? array $data = null, ? \Closure $callback = null) : self
-   {
-      // !
-      $this->prepare('view');
-      $this->process($view . '.template.php', 'view');
-
-      // ?
-      $File = $this->body;
-      if ($File === null || $File->exists === false) {
-         throw new \Exception(message: 'Template file not found!');
-         return $this;
-      }
-
-      // @
-      // @ Set variables
-      $Request = &Server::$Request;
-      $Response = &Server::$Response;
-      if ($data === null) {
-         $data = [];
-      }
-      $data['Request'] = $Request;
-      $data['Response'] = $Response;
-
-      // @ Output/Buffer start()
-      \ob_start();
-
-      try {
-         // @ Isolate context with anonymous static function
-         (static function (string $__file__, array $__data__) {
-            \extract($__data__);
-
-            require $__file__;
-         })($File, $data);
-      }
-      catch (\Throwable $Throwable) {
-         Throwables::report($Throwable);
-      }
-
-      // @ Set $Response properties
-      $this->source = 'content';
-      $this->type = '';
-      // @ Output/Buffer clean()->get()
-      $this->body = \ob_get_clean();
-
-      // @ Call callback
-      if ($callback !== null && $callback instanceof \Closure) {
-         $callback($this->body, $Throwable ?? null);
-      }
-
-      return $this;
-   }
    /**
     * Compresses the response body using the specified method.
     *

@@ -21,6 +21,7 @@ use Bootgly\WPI\Modules\HTTP\Server\Response\Authenticable;
 use Bootgly\WPI\Modules\HTTP\Server\Response\Bootable;
 use Bootgly\WPI\Modules\HTTP\Server\Response\Extendable;
 use Bootgly\WPI\Modules\HTTP\Server\Response\Redirectable;
+use Bootgly\WPI\Modules\HTTP\Server\Response\Renderable;
 use Bootgly\WPI\Nodes\HTTP_Server_ as Server;
 use Bootgly\WPI\Nodes\HTTP_Server_\Response\Raw;
 use Bootgly\WPI\Nodes\HTTP_Server_\Response\Raw\Body;
@@ -34,6 +35,7 @@ class Response extends Responsing
    use Bootable;
    use Extendable;
    use Redirectable;
+   use Renderable;
 
 
    // \
@@ -176,60 +178,6 @@ class Response extends Responsing
       return $this;
    }
 
-   public function render (string $view, ? array $data = null, ? \Closure $callback = null) : self
-   {
-      // !
-      $this->prepare('view');
-      $this->process($view . '.template.php', 'view');
-
-      // ?
-      $File = $this->body ?? null;
-      if ($File === null || $File->exists === false) {
-         throw new \Exception(message: 'Template file not found!');
-         return $this;
-      }
-
-      // @ Set variables
-      /**
-       * @var \Bootgly\WPI $WPI
-       */
-      $Request = &Server::$Request;
-      $Response = &Server::$Response;
-      $Route = &Server::$Router->Route;
-
-      $uses = $this->uses;
-
-      // @ Output/Buffer start()
-      \ob_start();
-
-      try {
-         // @ Isolate context with anonymous static function
-         (static function (string $__file__, array $__vars__, ? array $__data__)
-         use ($Request, $Response, $Route) {
-            \extract($__vars__);
-
-            if ($__data__ !== null) {
-               \extract($__data__);
-            }
-
-            require $__file__;
-         })($File, $uses, $data);
-      }
-      catch (\Throwable $Throwable) {}
-
-      // @ Set $Response properties
-      $this->source = 'content';
-      $this->type = '';
-      // @ Output/Buffer clean()->get()
-      $this->body = \ob_get_clean();
-
-      // @ Call callback
-      if ($callback !== null && $callback instanceof \Closure) {
-         $callback($this->body, $Throwable ?? null);
-      }
-
-      return $this;
-   }
    /**
     * Send the response
     *
