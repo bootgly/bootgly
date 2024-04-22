@@ -75,6 +75,6 @@ class Header
       // * Data
       $this->raw ??= $raw;
       // * Metadata
-      $this->length = \strlen($raw);
+      $this->length ??= \strlen($raw);
    }
 }
