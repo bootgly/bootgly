@@ -21,6 +21,9 @@ trait Renderable
    // \
    private static $Server;
 
+   // * Metadata
+   protected array $uses = [];
+
    /**
     * Renders the specified view with the provided data.
     *
