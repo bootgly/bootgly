@@ -53,7 +53,7 @@ trait Requestable
          case 'method':
             return $_SERVER['REQUEST_METHOD'] ?? '';
          case 'URI': // (Uniform Resource Identifier)
-            return @$_SERVER['REDIRECT_URI'] ?? $_SERVER['REQUEST_URI'] ?? '';
+            return $_SERVER['REDIRECT_URI'] ?? $_SERVER['REQUEST_URI'] ?? '';
          case 'protocol':
             return $_SERVER['SERVER_PROTOCOL'] ?? '';
          // @ Resource
@@ -109,7 +109,7 @@ trait Requestable
             $pattern = "/(?P<domain>[a-z0-9][a-z0-9\-]{1,63}\.[a-z\.]{2,6})(:[\d]+)?$/i";
 
             if (\preg_match($pattern, $host, $matches)) {
-               return $this->domain = @$matches['domain'];
+               return $this->domain = $matches['domain'];
             }
 
             $colon = \strpos($host, ":");
@@ -210,10 +210,12 @@ trait Requestable
          case 'base':
             unSet($this->URL);
 
-            return $this->base = $value;
+            $this->base = $value;
+            break;
 
          default:
-            return $this->$name = $value;
+            $this->$name = $value;
+            break;
       }
    }
 
@@ -281,7 +283,7 @@ trait Requestable
          case self::ACCEPTS_TYPES:
             // @ Accept
             $header = (
-               @$_SERVER['HTTP_ACCEPT']
+               $_SERVER['HTTP_ACCEPT']
                ?? $this->Raw->Header->get('Accept')
             );
             $pattern = '/([\w\/\+\*.-]+)(?:;\s*q\s*=\s*(\d*(?:\.\d+)?))?/i';
@@ -290,7 +292,7 @@ trait Requestable
          case self::ACCEPTS_CHARSETS:
             // @ Accept-Charset
             $header = (
-               @$_SERVER['HTTP_ACCEPT_CHARSET']
+               $_SERVER['HTTP_ACCEPT_CHARSET']
                ?? $this->Raw->Header->get('Accept-Charset')
             );
             $pattern = '/([a-z0-9]{1,8}(?:[-_][a-z0-9]{1,8}){0,3})\s*(?:;\s*q\s*=\s*(\d*(?:\.\d+)?))?/i';
@@ -299,7 +301,7 @@ trait Requestable
          case self::ACCEPTS_LANGUAGES:
             // @ Accept-Language
             $header = (
-               @$_SERVER['HTTP_ACCEPT_LANGUAGE']
+               $_SERVER['HTTP_ACCEPT_LANGUAGE']
                ?? $this->Raw->Header->get('Accept-Language')
             );
             $pattern = '/([a-z]{1,8}(-[a-z]{1,8})?)\s*(;\s*q\s*=\s*(\d*(?:\.\d+)?))?/i';
@@ -308,7 +310,7 @@ trait Requestable
          case self::ACCEPTS_ENCODINGS:
             // @ Accept-Encoding
             $header = (
-               @$_SERVER['HTTP_ACCEPT_ENCODING']
+               $_SERVER['HTTP_ACCEPT_ENCODING']
                ?? $this->Raw->Header->get('Accept-Encoding')
             );
             $pattern = '/([a-z0-9]{1,8}(?:[-_][a-z0-9]{1,8}){0,3})\s*(?:;\s*q\s*=\s*(\d*(?:\.\d+)?))?/i';
