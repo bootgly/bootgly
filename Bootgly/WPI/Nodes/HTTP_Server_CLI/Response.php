@@ -527,7 +527,7 @@ class Response extends Responsing
     *
     * @return string The Response Raw to be sent
     */
-   public function output (Packages $Package, ? string &$length) : string
+   public function output (Packages $Package, ? int &$length) : string
    {
       $Meta    = &$this->Raw->Meta;
       $Body    = &$this->Raw->Body;

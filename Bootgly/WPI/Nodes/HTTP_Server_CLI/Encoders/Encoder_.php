@@ -23,7 +23,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 
 class Encoder_ extends Encoders
 {
-   public static function encode (Packages $Packages, ? string &$size) : string
+   public static function encode (Packages $Packages, ? int &$length) : string
    {
       // @ Get callbacks
       $Request  = Server::$Request;
@@ -32,14 +32,17 @@ class Encoder_ extends Encoders
 
       // @ Try to Invoke SAPI Closure
       try {
-         $Routes = (SAPI::$Handler)($Request, $Response, $Router);
+         $Result = (SAPI::$Handler)($Request, $Response, $Router);
 
-         if ($Routes instanceof \Generator) {
-            foreach ($Router->routing($Routes) as $Responses) {
+         if ($Result instanceof \Generator) {
+            foreach ($Router->routing($Result) as $Responses) {
                if ($Responses instanceof Response) {
                   $Response = $Responses;
                }
             }
+         }
+         else if ($Result instanceof Response) {
+            $Response = $Result;
          }
       }
       catch (\Throwable $Throwable) {
@@ -54,7 +57,7 @@ class Encoder_ extends Encoders
          }
 
          // @ Output/Stream HTTP Response
-         return $Response->output($Packages, $size);
+         return $Response->output($Packages, $length);
       }
    }
 }

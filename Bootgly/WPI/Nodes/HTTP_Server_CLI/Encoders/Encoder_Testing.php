@@ -24,7 +24,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 
 class Encoder_Testing extends Encoders
 {
-   public static function encode (Packages $Packages, ? string &$size) : string
+   public static function encode (Packages $Packages, ? int &$length) : string
    {
       // @ Instance callbacks
       Server::$Response = new Response;
@@ -66,7 +66,7 @@ class Encoder_Testing extends Encoders
          }
 
          // @ Output/Stream HTTP Response
-         return $Response->output($Packages, $size);
+         return $Response->output($Packages, $length);
       }
    }
 }
