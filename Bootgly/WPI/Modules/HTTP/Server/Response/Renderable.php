@@ -50,16 +50,12 @@ trait Renderable
       /**
        * @var \Bootgly\WPI $WPI
        */
-      $Request = &self::$Server::$Request;
-      $Response = &self::$Server::$Response;
       $Route = &self::$Server::$Router->Route;
 
       if ($data === null) {
          $data = [];
       }
 
-      $data['Request'] = $Request;
-      $data['Response'] = $Response;
       $data['Route'] = $Route;
 
       // @ Extend variables
