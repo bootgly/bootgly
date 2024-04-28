@@ -246,6 +246,10 @@ class Response extends Responsing
     */
    public function send ($body = null, ...$options) : self
    {
+      // ?
+      if ($this->sent === true) {
+         return $this;
+      }
       if ($this->processed === false) {
          $this->process($body, $this->resource);
          $body = $this->body;
@@ -255,7 +259,7 @@ class Response extends Responsing
          $body = $this->body;
       }
 
-      // TODO refactor. Use Content.
+      // TODO refactor.
       switch ($this->source) {
          case 'content':
             // @ Set body/content
@@ -323,6 +327,7 @@ class Response extends Responsing
          default:
             if ($body === null) {
                $this->sent = true;
+
                return $this;
             }
       }

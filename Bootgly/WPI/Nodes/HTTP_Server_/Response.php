@@ -54,8 +54,6 @@ class Response extends Responsing
    public ? string $source;
    public ? string $type;
 
-   protected array $uses;
-
    // * Metadata
    private null|int|bool $code;
    private ? string $resource;
@@ -96,8 +94,6 @@ class Response extends Responsing
       $this->resources = ['JSON', 'JSONP', 'View', 'HTML/pre'];
       $this->source = null;
       $this->type = null;
-
-      $this->uses = [];
 
       // * Metadata
       $this->resource = null;
@@ -188,6 +184,10 @@ class Response extends Responsing
     */
    public function send ($body = null, ...$options) : self
    {
+      // ?
+      if ($this->sent === true) {
+         return $this;
+      }
       if ($this->processed === false) {
          $this->process($body, $this->resource);
          $body = $this->body;
@@ -197,7 +197,7 @@ class Response extends Responsing
          $body = $this->body;
       }
 
-      // TODO refactor. Use file resources.
+      // TODO refactor.
       switch ($this->source) {
          case 'content':
             // @ Set body/content
@@ -243,46 +243,43 @@ class Response extends Responsing
                   break;
 
                default: // Dynamic (PHP)
-                  // @ Output/Buffer start()
-                  \ob_start();
-
+                  // @ Set variables
                   $Request = &Server::$Request;
                   $Response = &Server::$Response;
                   $Route = &Server::$Router->Route;
+                  $data = [
+                     'Request' => $Request,
+                     'Response' => $Response,
+                     'Route' => $Route,
+                  ];
 
-                  $uses = $this->uses;
+                  // @ Extend variables
+                  $data = $data + $this->uses;
 
+                  // @ Output/Buffer start()
+                  \ob_start();
                   // @ Isolate context with anonymous static function
-                  (static function (string $__file__, array $__vars__)
-                  use ($Request, $Response, $Route) {
-                     \extract($__vars__);
+                  (static function (string $__file__, array $__data__) {
+                     \extract($__data__);
                      require $__file__;
-                  })($File, $uses);
-
-                  $body = \ob_get_clean(); // @ Output/Buffer clean()->get()
+                  })($File, $data);
+                  // @ Output/Buffer clean()->get()
+                  $body = \ob_get_clean();
             }
 
             break;
-         default: // * HTTP Status Code || (string) $body
+         default:
             if ($body === null) {
-               $this->end();
+               $this->sent = true;
+
                return $this;
-            }
-
-            if (\is_int($body) && $body > 99 && $body < 600) {
-               $code = $body;
-
-               $body = '';
-               $this->body = '';
-
-               $this->__set('code', $code);
             }
       }
 
       // @ Output
       echo $body ?? $this->body;
 
-      $this->end();
+      $this->sent = true;
 
       return $this;
    }

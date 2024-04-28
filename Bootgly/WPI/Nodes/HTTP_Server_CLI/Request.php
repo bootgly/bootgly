@@ -33,7 +33,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Downloader;
  * @property array $headers
  * 
  * @property string $method        GET, POST, ...
- * @property string $URI          /test/foo?query=abc&query2=xyz
+ * @property string $URI           /test/foo?query=abc&query2=xyz
  * @property string $protocol      HTTP/1.1
  * 
  * @ Resource
