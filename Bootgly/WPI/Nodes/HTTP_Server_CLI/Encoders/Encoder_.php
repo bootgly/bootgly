@@ -27,7 +27,7 @@ class Encoder_ extends Encoders
    {
       // @ Get callbacks
       $Request  = Server::$Request;
-      $Response = Server::$Response;
+      $Response = &Server::$Response;
       $Router   = Server::$Router;
 
       // @ Try to Invoke SAPI Closure
@@ -41,7 +41,7 @@ class Encoder_ extends Encoders
                }
             }
          }
-         else if ($Result instanceof Response) {
+         else if ($Result instanceof Response && $Result !== $Response) {
             $Response = $Result;
          }
       }

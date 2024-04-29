@@ -11,8 +11,6 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 
 
-use Bootgly\WPI\Connections\Packages;
-use Bootgly\WPI\Nodes\HTTP_Server_CLI as Server;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Raw\Meta;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Raw\Header;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Raw\Body;

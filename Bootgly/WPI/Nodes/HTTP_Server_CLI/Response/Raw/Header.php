@@ -123,7 +123,8 @@ class Header
    {
       if ($value) {
          $this->preset[$name] = $value;
-      } else {
+      }
+      else {
          unset($this->preset[$name]);
       }
    }

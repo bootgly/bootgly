@@ -52,12 +52,10 @@ class Response extends Responsing
 
    // * Data
    protected null|int $code;
-   public string $raw;
    public $body;
 
    public array $files;
 
-   public ? array $resources;
    public ? string $source;
    public ? string $type;
 
@@ -79,9 +77,9 @@ class Response extends Responsing
 
    // / HTTP
    public Raw $Raw;
-      public readonly Meta $Meta;
-      public readonly Header $Header;
-      public readonly Body $Body;
+      public Meta $Meta;
+      public Header $Header;
+      public Body $Body;
 
 
    public function __construct (int $code = 200, ? array $headers = null, string $body = '')
@@ -93,12 +91,10 @@ class Response extends Responsing
       // ...
 
       // * Data
-      $this->raw = '';
       $this->body = null;
 
       $this->files = [];
 
-      $this->resources = ['JSON', 'JSONP', 'View', 'HTML/pre'];
       $this->source = null;
       $this->type = null;
 
@@ -534,17 +530,12 @@ class Response extends Responsing
       $Header  = &$this->Raw->Header;
 
       if (! $this->stream && ! $this->chunked && ! $this->encoded) {
-         // ? Response Body
-         $Body->length = \strlen($Body->raw);
-         // ? Response Header
          $Header->set('Content-Length', $Body->length);
-         // ? Response Meta
-         // ...
       }
 
       $Header->build();
 
-      $this->raw = <<<HTTP_RAW
+      $this->Raw->data = <<<HTTP_RAW
       {$Meta->raw}\r
       {$Header->raw}\r
       \r
@@ -560,7 +551,7 @@ class Response extends Responsing
          $this->stream = false;
       }
 
-      return $this->raw;
+      return $this->Raw->data;
    }
 
    /**

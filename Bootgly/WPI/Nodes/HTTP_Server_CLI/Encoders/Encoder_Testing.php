@@ -38,7 +38,7 @@ class Encoder_Testing extends Encoders
 
       // @ Get callbacks
       $Request  = Server::$Request;
-      $Response = Server::$Response;
+      $Response = &Server::$Response;
       $Router   = Server::$Router;
 
       // ! Response
