@@ -17,18 +17,19 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Raw\Header\Cookies;
 class Header
 {
    // * Config
-   // ...
+   public string $raw;
 
    // * Data
+   // Fields
    protected array $preset;
    protected array $prepared;
    protected array $fields;
-   public string $raw;
 
    // * Metadata
+   private bool $sent;
+   // Fields
    private array $queued;
    private int $built;
-   private bool $sent;
 
    public Cookies $Cookies;
 
@@ -36,23 +37,24 @@ class Header
    public function __construct ()
    {
       // * Config
-      // ...
+      $this->raw = '';
 
       // * Data
+      // Fields
       $this->preset = [
          'Server' => 'Bootgly',
          'Date' => true
       ];
       $this->prepared = [];
       $this->fields = [];
-      $this->raw = '';
 
       // * Metadata
+      $this->sent = false;
+      // Fields
       $this->queued = [];
       $this->built = 0;
-      $this->sent = false;
 
-      // @
+      // /
       $this->Cookies = new Cookies($this);
    }
    public function __get (string $name)
@@ -62,6 +64,7 @@ class Header
          // ...
 
          // * Data
+         // Fields
          case 'preset':
             return $this->preset;
          case 'prepared':
@@ -70,12 +73,13 @@ class Header
             return $this->fields;
 
          // * Metadata
+         case 'sent':
+            return $this->sent;
+         // Fields
          case 'queued':
             return $this->queued;
          case 'built':
             return $this->built;
-         case 'sent':
-            return $this->sent;
 
          default:
             return $this->get($name);
@@ -88,6 +92,7 @@ class Header
          // ...
 
          // * Data
+         // Fields
          case 'preset':
             $this->preset = (array) $value;
             break;
@@ -99,13 +104,10 @@ class Header
          case 'sent':
             $this->sent = (bool) $value;
             break;
+         // Fields
          case 'queued':
          case 'built':
             break;
-
-         // *
-         default:
-            $this->$name = $value;
       }
    }
    public function __isSet ($name)
@@ -115,8 +117,14 @@ class Header
 
    public function clean ()
    {
-      $this->fields = [];
+      // * Data
+      // Fields
       $this->prepared = [];
+      $this->fields = [];
+      // * Metadata
+      // Fields
+      $this->queued = [];
+      $this->built = 0;
    }
 
    public function preset (string $name, ? string $value = null)
@@ -191,10 +199,12 @@ class Header
    // TODO increase performance
    public function build () : true // @ raw
    {
+      // ?
       if (\time() === $this->built) {
          return true;
       }
 
+      // @
       // @ Merge fields
       $fields = $this->preset + $this->fields + $this->prepared;
 
