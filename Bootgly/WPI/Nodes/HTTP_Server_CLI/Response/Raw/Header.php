@@ -115,6 +115,12 @@ class Header
       return isSet($this->fields[$name]);
    }
 
+   public function reset ()
+   {
+      // * Metadata
+      // Fields
+      $this->built = 0;
+   }
    public function clean ()
    {
       // * Data

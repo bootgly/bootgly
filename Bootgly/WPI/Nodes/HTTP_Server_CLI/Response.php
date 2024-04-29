@@ -174,7 +174,7 @@ class Response extends Responsing
    }
    public function __invoke (int $code = 200, array $headers = [], string $body = '') : self
    {
-      $this->Raw->Header->clean();
+      $this->Raw->Header->reset();
 
       $this->Raw->Meta->code = $code;
       $this->Raw->Header->prepare($headers);
