@@ -144,18 +144,21 @@ class Scripts
          self::ROOT_DIR
       ];
 
+      $found = false;
       foreach ($basedirs as $basedir) {
-         $Script = new File(
-            $basedir . Path::normalize($script)
-         );
+         $path = $basedir . Path::normalize($script);
+         $Script = new File($path);
 
          if ($Script->exists) {
             require $Script->file;
             // TODO register commands, etc.
+            $found = true;
             break;
          }
       }
 
-      throw new \Exception("Script not found: `$script`");
+      if ($found === false) {
+         throw new \Exception("Script not found: `$script`");
+      }
    }
 }
