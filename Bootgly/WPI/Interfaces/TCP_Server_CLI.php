@@ -27,8 +27,8 @@ use Bootgly\API\Projects;
 use Bootgly\API\Server as SAPI;
 
 use Bootgly\CLI;
-
 use Bootgly\WPI\Endpoints\Servers;
+use Bootgly\WPI\Endpoints\Servers\Modes;
 use Bootgly\WPI\Events;
 use Bootgly\WPI\Events\Select;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Commands;
@@ -56,11 +56,7 @@ class TCP_Server_CLI implements Servers, Logging
    protected int $workers;
    protected ? array $ssl; // SSL Stream Context
    // @ Mode
-   public const MODE_DAEMON = 1;
-   public const MODE_INTERACTIVE = 2;
-   public const MODE_MONITOR = 3;
-   public const MODE_TEST = 4;
-   public int $mode;
+   public Modes $Mode;
    // @ Verbosity
 
    // * Data
@@ -105,7 +101,7 @@ class TCP_Server_CLI implements Servers, Logging
       // $this->workers
       $this->ssl = null;
       // @ Mode
-      $this->mode = self::MODE_MONITOR;
+      $this->Mode = Modes::Monitor;
 
       // * Data
       // @ SAPI
@@ -292,14 +288,14 @@ class TCP_Server_CLI implements Servers, Logging
       $this->Process->fork($this->workers);
 
       // ... Continue to master process:
-      switch ($this->mode) {
-         case self::MODE_DAEMON:
+      switch ($this->Mode) {
+         case Modes::Daemon:
             $this->daemonize();
             break;
-         case self::MODE_INTERACTIVE:
+         case Modes::Interactive:
             $this->interact();
             break;
-         case self::MODE_MONITOR:
+         case Modes::Monitor:
             new CLI; // TODO remove (temp: use Script exec)
             $this->monitor();
             break;
@@ -389,7 +385,7 @@ class TCP_Server_CLI implements Servers, Logging
       $this->log('>_ Type `@#Green:monitor@;` to enter in Monitor mode.@\;');
       $this->log('>_ Autocompletation and history enabled.@\\\;', self::LOG_NOTICE_LEVEL);
 
-      while ($this->mode === self::MODE_INTERACTIVE) {
+      while ($this->Mode === Modes::Interactive) {
          // @ Calls signal handlers for pending signals
          \pcntl_signal_dispatch();
 
@@ -417,7 +413,7 @@ class TCP_Server_CLI implements Servers, Logging
          }
       }
 
-      if ($this->mode === self::MODE_MONITOR) {
+      if ($this->Mode === Modes::Monitor) {
          $this->monitor();
       }
    }
@@ -445,7 +441,7 @@ class TCP_Server_CLI implements Servers, Logging
       $this->{'@status'};
 
       // @ Loop
-      while ($this->mode === self::MODE_MONITOR) {
+      while ($this->Mode === Modes::Monitor) {
          // @ Calls signal handlers for pending signals
          \pcntl_signal_dispatch();
 
@@ -474,7 +470,7 @@ class TCP_Server_CLI implements Servers, Logging
       $Output->Cursor->show();
 
       // @ Enter in CLI mode
-      if ($this->mode === self::MODE_INTERACTIVE) {
+      if ($this->Mode === Modes::Interactive) {
          Timer::del(0); // @ Delete all timers
          $Output->clear();
          $this->interact();
@@ -558,7 +554,7 @@ class TCP_Server_CLI implements Servers, Logging
          || Environment::get('CIRCLECI')
          || Environment::get('GITLAB_CI')
       );
-      if ($this->mode >= self::MODE_TEST && $CI_CD) {
+      if ($this->Mode >= Modes::Test && $CI_CD) {
          return;
       }
 

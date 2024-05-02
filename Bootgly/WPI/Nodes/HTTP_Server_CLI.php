@@ -22,7 +22,7 @@ use Bootgly\API\Environments;
 use Bootgly\API\Projects;
 
 use Bootgly\API\Server as SAPI;
-
+use Bootgly\WPI\Endpoints\Servers\Modes;
 use Bootgly\WPI\Interfaces\TCP_Client_CLI;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI;
 
@@ -52,7 +52,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, HTTP_Server
    public static Router $Router;
 
 
-   public function __construct (int $mode = self::MODE_MONITOR)
+   public function __construct (Modes $Mode = Modes::Monitor)
    {
       // * Config
       // ...inherited from TCP_Server_CLI
@@ -84,9 +84,9 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, HTTP_Server
       // @
       self::$Decoder = new Decoder_;
 
-      $this->mode = $mode;
-      switch ($mode) {
-         case self::MODE_TEST:
+      $this->Mode = $Mode;
+      switch ($Mode) {
+         case Modes::Test:
             self::$Encoder = new Encoder_Testing;
             break;
          default:

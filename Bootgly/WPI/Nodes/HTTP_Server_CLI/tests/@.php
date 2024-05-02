@@ -5,6 +5,7 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\tests;
 
 use Bootgly\ACI\Logs\Logger;
 
+use Bootgly\WPI\Endpoints\Servers\Modes;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI;
 
 
@@ -15,7 +16,7 @@ return [
       // TODO like $HTTP_Server_CLI->verbosity = 0;
       Logger::$display = Logger::DISPLAY_NONE;
 
-      $HTTP_Server_CLI = new HTTP_Server_CLI(mode: HTTP_Server_CLI::MODE_TEST);
+      $HTTP_Server_CLI = new HTTP_Server_CLI(Mode: Modes::Test);
       // * Config
       $HTTP_Server_CLI->configure(
          host: '0.0.0.0',

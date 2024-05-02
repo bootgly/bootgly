@@ -15,10 +15,11 @@ use Bootgly\ACI\Logs\LoggableEscaped;
 
 use Bootgly\CLI;
 
+use Bootgly\WPI\Endpoints\Servers\Modes;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI as Server;
 
 
-class Commands extends CLI\Terminal // TODO rename to Commands
+class Commands extends CLI\Terminal
 {
    use LoggableEscaped;
 
@@ -105,7 +106,7 @@ class Commands extends CLI\Terminal // TODO rename to Commands
          // TODO restart command
          // @ mode
          'monitor' =>
-            $this->Server->mode = Server::MODE_MONITOR,
+            $this->Server->Mode = Modes::Monitor,
          // @ operations
          // TODO 'benchmark'
          'check jit' =>

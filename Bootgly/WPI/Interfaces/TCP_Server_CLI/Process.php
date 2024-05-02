@@ -18,8 +18,8 @@ use Bootgly\ACI\Logs\LoggableEscaped;
 
 use Bootgly\API\Server as SAPI;
 
+use Bootgly\WPI\Endpoints\Servers\Modes;
 use Bootgly\WPI\Events\Select;
-// ?
 use Bootgly\WPI\Interfaces\TCP_Server_CLI as Server;
 
 
@@ -187,9 +187,9 @@ class Process
             break;
          // @ pause()
          case SIGTSTP: // 20 (CTRL + Z)
-            match ($this->Server->mode) {
-               Server::MODE_MONITOR => $this->Server->mode = Server::MODE_INTERACTIVE,
-               Server::MODE_INTERACTIVE => $this->Server->pause()
+            match ($this->Server->Mode) {
+               Modes::Monitor => $this->Server->Mode = Modes::Interactive,
+               Modes::Interactive => $this->Server->pause()
             };
             break;
          // @ resume()
