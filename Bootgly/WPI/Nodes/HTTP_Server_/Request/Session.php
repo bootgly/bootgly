@@ -13,45 +13,57 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_\Request;
 
 class Session
 {
-   public string $name = '';
+   // * Config
+   public string $name;
+
+   // * Data
+   // ...
+
+   // * Metadata
+   // ...
 
 
-   public function __construct ()
+   public function __construct (string $name = '')
    {
-      // TODO
+      // * Config
+      $this->name = $name;
+
+      // * Data
+      // ...
+
+      // * Metadata
+      // ...
    }
-   public function __get ($index)
+   public function __get ($name)
    {
-      switch ($index) {
+      switch ($name) {
+         // * Metadata
          case 'started':
-            if ( isset($_SESSION['started']) ) {
-               return $_SESSION['started'];
-            }
-
-            return false;
+            return $_SESSION['started'] ?? false;
          case 'id':
             return @session_id();
-         default:
-            if ( isset($_SESSION['started']) ) {
-               if ( isset($_SESSION[$index]) ) {
-                  return $_SESSION[$index];
-               }
 
-               return NULL;
+         default:
+            if ($_SESSION['started'] ?? false) {
+               return null;
             }
+
+            return $_SESSION[$name] ?? null;
       }
    }
 
-   public function __set ($index, $value)
+   public function __set (string $name, $value)
    {
-      switch ($index) {
+      switch ($name) {
+         // * Metadata
          case 'started':
             $_SESSION['started'] = $value;
 
             break;
+
          default:
-            if ( isset($_SESSION['started']) ) {
-               $_SESSION[$index] = $value;
+            if ($_SESSION['started'] ?? false) {
+               $_SESSION[$name] = $value;
             }
       }
    }
@@ -69,7 +81,7 @@ class Session
          @session_id($id);
       }
 
-      if (empty($options)) {
+      if ($options === []) {
          $options = [
             'cookie_path' => '/',
             'cookie_lifetime' => 43200,
@@ -87,13 +99,14 @@ class Session
       return $started;
    }
 
-   public function destroy (string $id = '')
+   public function destroy (string $id = '') : bool
    {
-      if (!$this->started) {
-         $this->start($id);
+      $started = $this->__get('started');
+      if ($started === false) {
+         $started = $this->start($id);
       }
 
-      if ($this->started) {
+      if ($started === true) {
          $_SESSION = [];
 
          if ( ini_get("session.use_cookies") ) {

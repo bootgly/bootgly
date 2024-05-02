@@ -33,7 +33,7 @@ class Body
 
       // * Data
       $this->raw = '';
-      $this->input = \file_get_contents('php://input');
+      $this->input = (string) \file_get_contents('php://input');
 
       // * Metadata
       $this->length = null;

@@ -13,11 +13,14 @@ namespace Bootgly\WPI\Modules\HTTP\Server;
 
 trait Requestable
 {
+   // * Metadata
+   protected string $encoding;
+
+   protected $Cookies;
+
+
    public function __get (string $name)
    {
-      /* Waiting for the RFC "Property Accessors" from Nikita Popov (https://wiki.php.net/rfc/property_accessors)
-         to organize this mess.
-      */
       switch ($name) {
          // * Config
          case 'base':
@@ -135,6 +138,7 @@ trait Requestable
          case 'Body':
             return $this->Body ??= $this->Raw->Body;
          case 'input':
+            /** @phpstan-ignore-next-line */
             return $this->Raw->Body->input ?? $this->receive();
 
          case 'post':

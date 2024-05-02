@@ -94,10 +94,12 @@ $Commands->help(function ($scripting = true) {
    $Fieldset->content = $output;
    $Fieldset->render();
 });
+
 // @ Register commands
 $commands = require('CLI/commands/@.php');
 foreach ($commands as $Command) {
    $Commands->register($Command);
 }
+
 // @ Route commands
 $Commands->route();

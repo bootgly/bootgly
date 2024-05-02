@@ -69,6 +69,7 @@ trait Renderable
          $rendered = $Template->render($data);
       }
       catch (\Throwable $Throwable) {
+         $rendered = '';
          Throwables::report($Throwable);
       }
       // @ Output/Buffer clean()->get()

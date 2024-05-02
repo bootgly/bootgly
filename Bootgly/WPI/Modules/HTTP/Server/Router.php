@@ -57,29 +57,39 @@ class Router
 
    public function boot (string $path, string|array $instances = ['routes'])
    {
+      // @ Prepare import
       $Request = self::$Server::$Request;
 
       $Route = &$this->Route;
       $Router = &$this;
+      // @ Set import data
+      $data = [];
+      $data['Request'] = $Request;
+      $data['Route'] = $Route;
+      $data['Router'] = $Router;
 
+      // @ Instance file
+      // ? File path
       $boot = $path . '/router/';
-
       $Index = new File($boot . 'index.php');
+
+      // @ Boot (include router index file)
       if ($Index->exists) {
-         (static function (string $__default__)
-            use ($Request, $Router, $Route) {
-            include_once $__default__;
-         })($Index->file);
+         (static function (string $__file__, array $__data__) {
+            \extract($__data__);
+            include_once $__file__;
+         })($Index->file, $data);
       }
 
+      // @ Boot (include routes files)
       $instances = (array) $instances;
       foreach ($instances as $instance) {
          $Instance = new File($boot . $instance . '.php');
 
          if ($Instance->exists) {
-            (static function (string $__routes__)
-               use ($Request, $Router, $Route) {
-               @include_once $__routes__;
+            (static function (string $__file__, array $__data__) {
+               \extract($__data__);
+               @include_once $__file__;
             })($Instance->file);
          }
       }
