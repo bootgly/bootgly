@@ -28,10 +28,16 @@ class Cursor
 
    private Output $Output;
 
+   // * Metadata
+   public bool $hidden;
+
 
    public function __construct (Output &$Output)
    {
       $this->Output = $Output;
+
+      // * Metadata
+      $this->hidden = false;
    }
 
    public function __get (string $name)
@@ -170,10 +176,12 @@ class Cursor
 
    public function show () : Output
    {
+      $this->hidden = false;
       return $this->Output->escape(self::_CURSOR_VISIBLE);
    }
    public function hide () : Output
    {
+      $this->hidden = true;
       return $this->Output->escape(self::_CURSOR_HIDDEN);
    }
 
