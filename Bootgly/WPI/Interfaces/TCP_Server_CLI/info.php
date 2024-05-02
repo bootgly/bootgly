@@ -168,7 +168,6 @@ switch ($name) {
             // @ Output
             $Progress[$i]->start();
             $Progress[$i]->advance($workerLoad);
-            $Progress[$i]->finish();
 
             $CPU_usage = $Progress[$i]->output;
 
