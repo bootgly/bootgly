@@ -29,6 +29,7 @@ use Bootgly\API\Server as SAPI;
 use Bootgly\CLI;
 use Bootgly\WPI\Endpoints\Servers;
 use Bootgly\WPI\Endpoints\Servers\Modes;
+use Bootgly\WPI\Endpoints\Servers\Status;
 use Bootgly\WPI\Events;
 use Bootgly\WPI\Events\Select;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Commands;
@@ -73,13 +74,7 @@ class TCP_Server_CLI implements Servers, Logging
    protected ? string $socket;
    public static array $context;
    // @ Status
-   protected int $status = 0;
-   protected const STATUS_BOOTING = 1;
-   protected const STATUS_CONFIGURING = 2;
-   protected const STATUS_STARTING = 4;
-   protected const STATUS_RUNNING = 8;
-   protected const STATUS_PAUSED = 16;
-   protected const STATUS_STOPING = 32;
+   protected Status $Status = Status::Booting;
    // @ Stats
    protected static int $stat = -1;
    protected static array $stats = [];
@@ -118,7 +113,7 @@ class TCP_Server_CLI implements Servers, Logging
       // @ State
       $this->started = \time();
       // @ Status
-      $this->status = self::STATUS_BOOTING;
+      $this->Status = Status::Booting;
 
 
       // @ Configure Logger
@@ -246,7 +241,7 @@ class TCP_Server_CLI implements Servers, Logging
       ? array $ssl = null
    )
    {
-      $this->status = self::STATUS_CONFIGURING;
+      $this->Status = Status::Configuring;
 
       // TODO validate configuration user data inputs
 
@@ -271,7 +266,7 @@ class TCP_Server_CLI implements Servers, Logging
    }
    public function start ()
    {
-      $this->status = self::STATUS_STARTING;
+      $this->Status = Status::Starting;
 
       Logger::$display = Logger::$display === 0 ? 0 : Logger::DISPLAY_MESSAGE;
 
@@ -361,14 +356,14 @@ class TCP_Server_CLI implements Servers, Logging
          \socket_set_option($Socket, SOL_SOCKET, SO_KEEPALIVE, 1);
       }
 
-      $this->status = self::STATUS_RUNNING;
+      $this->Status = Status::Running;
 
       return $this->Socket;
    }
 
    private function daemonize ()
    {
-      $this->status = self::STATUS_RUNNING;
+      $this->Status = Status::Running;
 
       // TODO
 
@@ -376,7 +371,7 @@ class TCP_Server_CLI implements Servers, Logging
    }
    private function interact ()
    {
-      $this->status = self::STATUS_RUNNING;
+      $this->Status = Status::Running;
 
       Logger::$display = Logger::DISPLAY_MESSAGE;
 
@@ -419,7 +414,7 @@ class TCP_Server_CLI implements Servers, Logging
    }
    private function monitor ()
    {
-      $this->status = self::STATUS_RUNNING;
+      $this->Status = Status::Running;
 
       $this->log('@\;Entering in Monitor mode...@\;', self::LOG_INFO_LEVEL);
 
@@ -451,6 +446,7 @@ class TCP_Server_CLI implements Servers, Logging
          // @ Calls signal handlers for pending signals again
          \pcntl_signal_dispatch();
 
+         echo ' '; // This fix content blinking on Windows Terminal (LoL)
          // If child is running?
          if ($status === 0) {
             // ...
@@ -502,9 +498,9 @@ class TCP_Server_CLI implements Servers, Logging
       $this->Socket = null;
    }
 
-   private function resume ()
+   private function resume () : bool
    {
-      if ($this->status !== self::STATUS_PAUSED) {
+      if ($this->Status !== Status::Paused) {
          match ($this->Process->level) {
             'master' => $this->log("Server needs to be paused to resume!@\\;", 4),
             'child' => null
@@ -513,18 +509,18 @@ class TCP_Server_CLI implements Servers, Logging
          return false;
       }
 
-      $this->status = self::STATUS_RUNNING;
-
       match ($this->Process->level) {
          'master' => $this->log("Resuming {$this->Process->children} worker(s)... @\\;", 3),
          'child' => self::$Event->add($this->Socket, self::$Event::EVENT_CONNECT, true)
       };
 
+      $this->Status = Status::Running;
+
       return true;
    }
-   private function pause ()
+   private function pause () : bool
    {
-      if ($this->status !== self::STATUS_RUNNING) {
+      if ($this->Status !== Status::Running) {
          match ($this->Process->level) {
             'master' => $this->log("Server needs to be running to pause!@\\;", 4),
             'child' => null
@@ -533,18 +529,18 @@ class TCP_Server_CLI implements Servers, Logging
          return false;
       }
 
-      $this->status = self::STATUS_PAUSED;
-
       match ($this->Process->level) {
          'master' => $this->log("Pausing {$this->Process->children} worker(s)... @\\;", 3),
          'child' => self::$Event->del($this->Socket, self::$Event::EVENT_CONNECT)
       };
 
+      $this->Status = Status::Paused;
+
       return true;
    }
-   private function stop ()
+   private function stop () : void
    {
-      $this->status = self::STATUS_STOPING;
+      $this->Status = Status::Stopping;
 
       Logger::$display = Logger::DISPLAY_MESSAGE;
 

@@ -264,9 +264,11 @@ class Process
 
             $this->Server->stop();
             #exit(1);
-         } else if ($pid > 0) { // Master process
+         }
+         else if ($pid > 0) { // Master process
             cli_set_process_title("Bootgly_WPI_Server: master process");
-         } else if ($pid === -1) {
+         }
+         else if ($pid === -1) {
             die('Could not fork process!');
          }
       }

@@ -81,8 +81,8 @@ class Output
    public function clear () : true
    {
       $this->write(
+         self::_START_ESCAPE . self::_CURSOR_POSITION .
          self::_START_ESCAPE . self::_TEXT_ERASE_IN_DISPLAY
-         . self::_START_ESCAPE . self::_CURSOR_POSITION
       );
 
       return true;
