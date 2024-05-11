@@ -90,7 +90,7 @@ class Router
             (static function (string $__file__, array $__data__) {
                \extract($__data__);
                @include_once $__file__;
-            })($Instance->file);
+            })($Instance->file, $data);
          }
       }
    }
