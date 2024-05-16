@@ -15,10 +15,10 @@ use Bootgly\ABI\Debugging\Data\Vars;
 
 use Bootgly\API\Projects;
 
+use Bootgly\WPI\Modules\HTTP\Server\Router;
 use Bootgly\WPI\Nodes\HTTP_Server_ as Server;
 use Bootgly\WPI\Nodes\HTTP_Server_\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_\Response;
-use Bootgly\WPI\Modules\HTTP\Server\Router;
 
 
 class WPI extends Projects // Web Programming Interface
@@ -43,8 +43,23 @@ class WPI extends Projects // Web Programming Interface
    public static Router $Router;
 
 
-   public function __construct ()
+   public function __get (string $name)
    {
+      switch ($name) {
+         case 'Request':
+            return self::$Request;
+         case 'Response':
+            return self::$Response;
+         case 'Router':
+            return self::$Router;
+         default:
+            return null;
+      }
+   }
+
+   public function autoboot ()
+   {
+      // ?
       // TODO remove or modify
       if (@$_SERVER['REDIRECT_URL'] === NULL) {
          if (\PHP_SAPI !== 'cli') {
@@ -53,15 +68,6 @@ class WPI extends Projects // Web Programming Interface
 
          return;
       }
-
-      // * Config
-      // ...
-
-      // * Data
-      // ...
-
-      // * Metadata
-      // ...
 
       // @
       // Debugging Vars

@@ -31,6 +31,7 @@ abstract class Projects implements Resources
    // * Metadata
    private static Project $Default;
    // @ index
+   private static int $index = 0;
    private static array $indexes = [];
    // @autoboot
    private static bool $booted;
@@ -44,7 +45,12 @@ abstract class Projects implements Resources
 
       return $index;
    }
-   public static function autoboot () : null|Project
+   /**
+    * Autoboot projects from the consumer directory. If no projects are found, it will return null.
+    *
+    * @return null|Project 
+    */
+   public static function autobooting () : null|Project
    {
       if ( isSet(self::$booted) )
          throw new \Exception("Project autoboot can only be called once.");
@@ -79,8 +85,15 @@ abstract class Projects implements Resources
       return self::$Default ?? null;
    }
 
+   /**
+    * Index a project by name. If the project is already indexed, it will return false.
+    *
+    * @param string $project 
+    * @return bool 
+    */
    public static function index (string $project) : bool
    {
+      // ?
       if ($project === '') {
          return false;
       }
@@ -88,21 +101,40 @@ abstract class Projects implements Resources
          return false;
       }
 
-      self::$indexes[$project] = count(self::$projects) - 1;
+      // @
+      $index = count(self::$projects) - 1;
+      self::$index = $index;
+      self::$indexes[$project] = $index;
 
       return true;
    }
 
+   /**
+    * Count the number of projects.
+    *
+    * @return int 
+    */
    public static function count () : int
    {
       return count(self::$projects);
    }
+   /**
+    * Select a project by index or name. If no project is selected, the default project is selected.
+    *
+    * @param null|string|int $project 
+    * @return false|Project 
+    */
    public static function select (null|string|int $project) : false|Project
    {
-      if (is_string($project)) {
+      // ?!
+      if (is_string($project) === true) {
          $project = self::$indexes[$project] ?? null;
       }
+      else if ($project === null) {
+         $project = self::$index;
+      }
 
+      // @ Select by project index
       $Project = self::$projects[$project] ?? false;
 
       return $Project;

@@ -8,13 +8,8 @@
  * --------------------------------------------------------------------------
  */
 
-use Bootgly\API\Projects;
-
-
 class Bootgly
 {
-   public const BOOT_FILE = 'Bootgly.boot.php';
-
    // * Config
    // ...
 
@@ -25,22 +20,23 @@ class Bootgly
    private static bool $booted = false;
 
 
-   public function __construct ()
+   public function autoboot ()
    {
+      // ?
       if (self::$booted)
-         throw new \Exception("Bootgly class can only be instantiated once.");
+         throw new \Exception("Bootgly has already been booted.");
 
-      // @ Boot
-      // Consumer
-      if (BOOTGLY_ROOT_DIR !== BOOTGLY_WORKING_DIR) {
-         // Multi projects
-         self::$booted = (@include Projects::CONSUMER_DIR . self::BOOT_FILE);
-      }
-      // Author
-      if (self::$booted === false) {
-         require(Projects::AUTHOR_DIR . self::BOOT_FILE);
-      }
-
+      // * Metadata
       self::$booted = true;
+
+      // !
+      [
+         $CLI,
+         $WPI
+      ] = require(__DIR__ . '/Bootgly/autoload.php');
+
+      // @
+      $CLI->autoboot();
+      $WPI->autoboot();
    }
 }

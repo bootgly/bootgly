@@ -38,20 +38,25 @@ class CLI extends Projects // Command Line Interface
    public static Terminal $Terminal;
 
 
-   public function __construct ()
+   public function __get (string $name)
    {
+      switch ($name) {
+         case 'Commands':
+            return self::$Commands;
+         case 'Scripts':
+            return self::$Scripts;
+         case 'Terminal':
+            return self::$Terminal;
+         default:
+            return null;
+      }
+   }
+
+   public function autoboot ()
+   {
+      // ?
       if (PHP_SAPI !== 'cli')
-         throw new \Exception("CLI class can only be instantiated using SAPI CLI.");
-
-      // * Config
-      // ...
-
-      // * Data
-      // ...
-
-      // * Metadata
-      // ...
-
+         return;
 
       // @
       // Debugging Vars
@@ -65,13 +70,19 @@ class CLI extends Projects // Command Line Interface
 
       // @ Validate scripts
       $status = $Scripts->validate();
+
+      // ---
+
+      // @ Boot CLI
       switch ($status) {
          case -2:
             break;
          case -1:
             // TODO custom bootgly exception
-            throw new \Exception(
-               "Invalid script: script `{$Scripts->filename}` not registered in bootstrap file! Please, register it in `scripts/@.php`."
+            throw new \Exception(<<<MESSAGE
+               Invalid script: script `{$Scripts->filename}` not registered in bootstrap file!
+               Please, register it in `scripts/@.php`.
+               MESSAGE
             );
             break;
          case 0: // @ Running external script

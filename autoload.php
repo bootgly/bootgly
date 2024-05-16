@@ -8,10 +8,12 @@
  * --------------------------------------------------------------------------
  */
 
+// ?
 if (defined('BOOTGLY_ROOT_BASE') === true) {
    return;
 }
 
+// !
 define('BOOTGLY_ROOT_BASE', __DIR__);
 define('BOOTGLY_ROOT_DIR', __DIR__ . DIRECTORY_SEPARATOR);
 
@@ -22,7 +24,6 @@ if (defined('BOOTGLY_WORKING_BASE') === false) {
 
 @include(__DIR__ . '/vendor/autoload.php'); // composer
 
-// ? Bootgly
 // ! Bootables ([0-9]) || (-[a-z]) || ([0-9]-[a-z])
 // -- nothing --
 
@@ -47,12 +48,11 @@ spl_autoload_register (function (string $class) {
 });
 
 // ! Resources ([a-z])
-require(BOOTGLY_ROOT_DIR . 'Bootgly/ABI/autoload.php');
-require(BOOTGLY_ROOT_DIR . 'Bootgly/ACI/autoload.php');
-require(BOOTGLY_ROOT_DIR . 'Bootgly/ADI/autoload.php');
-require(BOOTGLY_ROOT_DIR . 'Bootgly/API/autoload.php');
-require(BOOTGLY_ROOT_DIR . 'Bootgly/CLI/autoload.php');
-require(BOOTGLY_ROOT_DIR . 'Bootgly/WPI/autoload.php');
+// ...
 
 // @
-new Bootgly;
+/**
+ * @var Bootgly Bootgly
+ */
+const Bootgly = new Bootgly;
+Bootgly->autoboot();

@@ -24,30 +24,3 @@ trait Set // @ Use with enums
       };
    }
 }
-
-/* Example:
-// * Config
-namespace Bootgly\CLI\Terminal\Output\Text;
-
-
-enum Colors : int
-{
-   use \Bootgly\ABI\Configs\Set;
-
-
-   case Default = 1;
-   case Bright = 2;
-}
-
-// ...
-
-
-$Output = CLI::$Terminal->Output;
-
-// @ Set
-$Output->Text->Colors::Bright->set(); // @ Set bright color
-
-// @ Get
-// $Output->Text->Colors->value;
-$Output->Text->Colors->get(); // @ Get configured color
-*/

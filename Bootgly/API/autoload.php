@@ -11,6 +11,6 @@
 namespace Bootgly\API;
 
 
-$Project = Projects::autoboot();
+$Project = Projects::autobooting();
 
 define('BOOTGLY_PROJECT', $Project);
