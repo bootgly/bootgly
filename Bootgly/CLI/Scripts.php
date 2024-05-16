@@ -17,11 +17,11 @@ use Bootgly\ABI\IO\FS\File;
 
 class Scripts
 {
-   public const ROOT_BASE = BOOTGLY_ROOT_BASE . '/scripts';
-   public const WORKING_BASE = BOOTGLY_WORKING_BASE . '/scripts';
+   public const ROOT_BASE = \BOOTGLY_ROOT_BASE . '/scripts';
+   public const WORKING_BASE = \BOOTGLY_WORKING_BASE . '/scripts';
 
-   public const ROOT_DIR = BOOTGLY_ROOT_BASE . '/scripts/';
-   public const WORKING_DIR = BOOTGLY_WORKING_BASE . '/scripts/';
+   public const ROOT_DIR = \BOOTGLY_ROOT_BASE . '/scripts/';
+   public const WORKING_DIR = \BOOTGLY_WORKING_BASE . '/scripts/';
 
    // * Config
    // ...
@@ -44,19 +44,20 @@ class Scripts
       // * Data
       $this->includes = [
          'paths' => [
-            BOOTGLY_ROOT_BASE,
-            BOOTGLY_WORKING_BASE,
+            \BOOTGLY_ROOT_BASE,
+            \BOOTGLY_WORKING_BASE,
 
-            BOOTGLY_ROOT_DIR,
-            BOOTGLY_WORKING_DIR,
+            \BOOTGLY_ROOT_DIR,
+            \BOOTGLY_WORKING_DIR,
 
             self::WORKING_BASE,
             self::WORKING_DIR,
          ],
          'filenames' => [
             'bootstrap' => [
-               'bootgly',
-               '/usr/local/bin/bootgly'
+               \BOOTGLY_ROOT_DIR . 'bootgly', // absolute
+               '/usr/local/bin/bootgly',      // global
+               'bootgly'                      // relative
             ]
          ]
       ];
