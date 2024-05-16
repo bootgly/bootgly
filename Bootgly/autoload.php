@@ -14,8 +14,8 @@ namespace Bootgly;
 use Bootgly;
 
 
-// ?
-if ($this instanceof Bootgly === false)
+// ?!
+if ( ($this ?? null) && $this instanceof Bootgly === false )
    return;
 
 // ! Resources ([a-z])

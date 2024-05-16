@@ -291,7 +291,7 @@ class TCP_Server_CLI implements Servers, Logging
             $this->interact();
             break;
          case Modes::Monitor:
-            new CLI; // TODO remove (temp: use Script exec)
+            // new CLI; // TODO remove (temp: use Script exec)
             $this->monitor();
             break;
       }
@@ -376,7 +376,7 @@ class TCP_Server_CLI implements Servers, Logging
       Logger::$display = Logger::DISPLAY_MESSAGE;
 
       $this->log('@\;Entering in Interactive mode...@\;', self::LOG_INFO_LEVEL);
-      $this->log('>_ Type `@#Green:quit@;` to stop the Server or `@#Green:help@;` to list commands.@\;');
+      $this->log('>_ Type `@#Green:stop@;` to stop the Server or `@#Green:help@;` to list commands.@\;');
       $this->log('>_ Type `@#Green:monitor@;` to enter in Monitor mode.@\;');
       $this->log('>_ Autocompletation and history enabled.@\\\;', self::LOG_NOTICE_LEVEL);
 

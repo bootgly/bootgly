@@ -33,7 +33,7 @@ class Commands extends CLI\Terminal
       // @
       'status',
       // @ control
-      'quit',
+      'stop',
       'pause',
       'resume',
       'reload',
@@ -89,7 +89,7 @@ class Commands extends CLI\Terminal
          'status' =>
             $this->Server->{'@status'} && true,
          // @ control
-         'quit' =>
+         'stop' =>
             $this->log(
                '@\;Stopping ' . $this->Server->Process->children . ' worker(s)... ',
                self::LOG_WARNING_LEVEL
@@ -106,7 +106,7 @@ class Commands extends CLI\Terminal
          // TODO restart command
          // @ mode
          'monitor' =>
-            $this->Server->Mode = Modes::Monitor,
+            ($this->Server->Mode = Modes::Monitor) && true,
          // @ operations
          // TODO 'benchmark'
          'check jit' =>

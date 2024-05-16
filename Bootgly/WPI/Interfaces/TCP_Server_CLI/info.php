@@ -4,18 +4,20 @@ use Bootgly\ABI\Data\__String\Path;
 
 use Bootgly\API\Server as SAPI;
 
-use Bootgly\CLI;
+use const Bootgly\CLI;
 use Bootgly\CLI\UI\Fieldset\Fieldset;
 use Bootgly\CLI\UI\Progress\Progress;
-
+use Bootgly\WPI\Endpoints\Servers\Modes;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI as Server;
 
 
 switch ($name) {
    case '@status':
-      $Output = CLI::$Terminal->Output;
-      $Output->clear();
-      $Output->render('>_ Type `@#Green:CTRL + Z@;` to enter in Interactive mode or `@#Green:CTRL + C@;` to stop the Server.@..;');
+      $Output = CLI->Terminal->Output;
+      if ($this->Mode === Modes::Monitor) {
+         $Output->clear();
+         $Output->render('>_ Type `@#Green:CTRL + Z@;` to enter in Interactive mode or `@#Green:CTRL + C@;` to stop the Server.@..;');
+      }
 
       // ! Server
       // @
