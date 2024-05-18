@@ -33,24 +33,10 @@ class CLI extends Projects // Command Line Interface
    // * Metadata
    private static bool $booted = false;
 
-   public static Commands $Commands;
-   public static Scripts $Scripts;
-   public static Terminal $Terminal;
+   public readonly Commands $Commands;
+   public readonly Scripts $Scripts;
+   public readonly Terminal $Terminal;
 
-
-   public function __get (string $name)
-   {
-      switch ($name) {
-         case 'Commands':
-            return self::$Commands;
-         case 'Scripts':
-            return self::$Scripts;
-         case 'Terminal':
-            return self::$Terminal;
-         default:
-            return null;
-      }
-   }
 
    public function autoboot ()
    {
@@ -64,9 +50,9 @@ class CLI extends Projects // Command Line Interface
       Vars::$exit = false;
 
       // @ Instance variables
-      $Commands = self::$Commands = new Commands;
-      $Scripts  = self::$Scripts  = new Scripts;
-      $Terminal = self::$Terminal = new Terminal;
+      $this->Commands = new Commands;
+      $Scripts = $this->Scripts  = new Scripts;
+      $this->Terminal = new Terminal;
 
       // @ Validate scripts
       $status = $Scripts->validate();

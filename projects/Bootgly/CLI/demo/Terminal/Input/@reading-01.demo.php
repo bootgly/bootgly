@@ -2,11 +2,11 @@
 namespace Bootgly\CLI;
 
 
-use Bootgly\CLI;
+use const Bootgly\CLI;
 
 
-$Input = CLI::$Terminal->Input;
-$Output = CLI::$Terminal->Output;
+$Input = CLI->Terminal->Input;
+$Output = CLI->Terminal->Output;
 
 
 $Output->render(<<<OUTPUT

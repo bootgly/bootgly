@@ -13,7 +13,7 @@ namespace projects\Bootgly\CLI\commands;
 
 use function Bootgly\ABI\copy_recursively;
 
-use Bootgly\CLI;
+use const Bootgly\CLI;
 use Bootgly\CLI\Command;
 use Bootgly\CLI\UI\Alert\Alert;
 
@@ -29,7 +29,7 @@ class BootCommand extends Command
 
    public function run (array $arguments, array $options) : bool
    {
-      $Output = CLI::$Terminal->Output;
+      $Output = CLI->Terminal->Output;
 
       if ($options['resources'] || $options === []) {
          $Output->render('@#green:Booting resource directories...@;');

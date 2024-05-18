@@ -19,7 +19,7 @@ use Bootgly\ACI\Tests;
 use Bootgly\ACI\Tests\Suites;
 use Bootgly\ACI\Tests\Tester;
 
-use Bootgly\CLI;
+use const Bootgly\CLI;
 use Bootgly\CLI\Command;
 use Bootgly\CLI\UI\Alert\Alert;
 
@@ -118,7 +118,7 @@ class TestCommand extends Command
       } else if ($autoBoot) {
          new Tester($suiteSpecs);
       } else {
-         $Alert = new Alert(CLI::$Terminal->Output);
+         $Alert = new Alert(CLI->Terminal->Output);
          $Alert->Type::Failure->set();
          $Alert->message = 'AutoBoot test not configured!';
          $Alert->render();

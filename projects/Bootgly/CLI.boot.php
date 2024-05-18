@@ -13,16 +13,17 @@ namespace projects\Bootgly;
 
 use Bootgly\ABI\Data\__String\Path;
 
-use Bootgly\CLI;
+use const Bootgly\CLI;
 use Bootgly\CLI\UI\Fieldset\Fieldset;
 use Bootgly\CLI\UI\Header;
 
 
 // $Commands, $Scripts, $Terminal availables...
+$Commands = CLI->Commands;
 
 // @ Set Commands Helper
 $Commands->help(function ($scripting = true) {
-   $Output = CLI::$Terminal->Output;
+   $Output = CLI->Terminal->Output;
 
    $script = $this->args[0];
    $script = match ($script[0]) {

@@ -1,10 +1,10 @@
 <?php
 namespace Bootgly\CLI;
 
-use Bootgly\CLI;
+use const Bootgly\CLI;
 use Bootgly\CLI\UI\Alert\Alert;
 
-$Output = CLI::$Terminal->Output;
+$Output = CLI->Terminal->Output;
 $Output->reset();
 
 $Output->render(<<<OUTPUT

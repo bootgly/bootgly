@@ -12,7 +12,7 @@ namespace Bootgly\CLI\UI\Table;
 
 
 use Bootgly\ABI\Data\__String;
-use Bootgly\CLI;
+use const Bootgly\CLI;
 use Bootgly\CLI\UI\Table\Table;
 
 
@@ -86,6 +86,7 @@ class Row
       $output .= "\n";
 
       // TODO use Output as trait?
-      CLI::$Terminal->Output->write($output);
+      $Terminal = CLI->Terminal;
+      $Terminal->Output->write($output);
    }
 }

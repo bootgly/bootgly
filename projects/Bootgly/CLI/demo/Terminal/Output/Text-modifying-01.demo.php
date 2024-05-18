@@ -1,9 +1,9 @@
 <?php
 namespace Bootgly\CLI;
 
-use Bootgly\CLI;
+use const Bootgly\CLI;
 
-$Output = CLI::$Terminal->Output;
+$Output = CLI->Terminal->Output;
 $Output->reset();
 $Output->waiting = 30000;
 

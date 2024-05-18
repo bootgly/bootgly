@@ -11,7 +11,7 @@
 namespace projects\Bootgly\CLI\commands;
 
 
-use Bootgly\CLI;
+use const Bootgly\CLI;
 use Bootgly\CLI\Command;
 use Bootgly\CLI\UI\Table\Table;
 use Bootgly\ABI\Templates\Template\Escaped as TemplateEscaped;
@@ -53,7 +53,7 @@ class ProjectCommand extends Command
    // TODO support to attributes too
    public function list (array $options) : bool
    {
-      $Output = CLI::$Terminal->Output;
+      $Output = CLI->Terminal->Output;
 
       if (@$options[0] === 'bootgly') {
          ${'@'} = @include(BOOTGLY_ROOT_DIR . 'projects/@.php');
@@ -92,7 +92,7 @@ class ProjectCommand extends Command
    // ...
    public function help (array $arguments) : bool
    {
-      $Output = CLI::$Terminal->Output;
+      $Output = CLI->Terminal->Output;
 
       // @
       $output = '';

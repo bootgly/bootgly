@@ -11,7 +11,7 @@
 namespace projects\Bootgly\CLI\commands;
 
 
-use Bootgly\CLI;
+use const Bootgly\CLI;
 use Bootgly\CLI\Command;
 
 
@@ -35,8 +35,8 @@ class DemoCommand extends Command
       }
 
       // @
-      $Output = CLI::$Terminal->Output;
-      $Output->expand(lines: CLI::$Terminal::$lines);
+      $Output = CLI->Terminal->Output;
+      $Output->expand(lines: CLI->Terminal::$lines);
 
       // @ Reset Output
       if ($id === 0) {
@@ -113,7 +113,7 @@ class DemoCommand extends Command
 
          sleep($wait);
 
-         CLI::$Terminal->clear();
+         CLI->Terminal->clear();
       }
 
       return true;

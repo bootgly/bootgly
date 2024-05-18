@@ -11,7 +11,7 @@
 namespace projects\Bootgly\CLI\commands;
 
 
-use Bootgly\CLI;
+use const Bootgly\CLI;
 use Bootgly\CLI\Command;
 
 

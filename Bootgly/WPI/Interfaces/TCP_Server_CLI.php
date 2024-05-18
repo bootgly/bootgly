@@ -26,7 +26,7 @@ use Bootgly\API\Environments;
 use Bootgly\API\Projects;
 use Bootgly\API\Server as SAPI;
 
-use Bootgly\CLI;
+use const Bootgly\CLI;
 use Bootgly\WPI\Endpoints\Servers;
 use Bootgly\WPI\Endpoints\Servers\Modes;
 use Bootgly\WPI\Endpoints\Servers\Status;
@@ -430,7 +430,7 @@ class TCP_Server_CLI implements Servers, Logging
       // @ Set Logger to display messages, datetime and level
       Logger::$display = Logger::DISPLAY_MESSAGE_WHEN_ID;
 
-      $Output = CLI::$Terminal->Output;
+      $Output = CLI->Terminal->Output;
       $Output->Cursor->hide();
       $Output->clear();
       $this->{'@status'};
