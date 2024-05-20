@@ -11,6 +11,9 @@
 namespace Bootgly\CLI;
 
 
+use Bootgly\ABI\Data\__String\Path;
+
+
 class Commands
 {
    // * Config
@@ -40,7 +43,7 @@ class Commands
             public string $description = 'Show this help message';
 
 
-            public function run (array $arguments, array $options) : bool
+            public function run (array $arguments = [], array $options = []) : bool
             {
                return true;
             }
@@ -52,28 +55,56 @@ class Commands
       // ...
    }
 
-   public function register (Commanding|Command|\Closure $Command, string $name = '', string $description = '') : bool
+   public function autoload (string $location, ? object $context = null) : bool
    {
-      if ($Command instanceof Command || $Command instanceof Commanding) {
+      $commands = require Path::normalize(\BOOTGLY_ROOT_DIR . $location . '/commands/@.php');
+
+      if ($commands === false || !is_array($commands) || count($commands) === 0) {
+         return false;
+      }
+
+      foreach ($commands as $command) {
+         $command = require $command;
+
+         if (\is_array($command) === true) {
+            $Command = $command['handle'];
+
+            unset($command['handle']);
+            $specification = $command;
+            $specification['context'] = $context;
+
+            $this->register($Command, $specification);
+         }
+         else if ($command instanceof Command) {
+            $command($context);
+
+            $this->register($command, ['context' => $context]);
+         }
+      }
+
+      return true;
+   }
+   public function register (Command|\Closure $Command, array $specification = []) : bool
+   {
+      if ($Command instanceof Command) {
          $this->commands[] = $Command;
-     } elseif ($Command instanceof \Closure) {
-         // TODO use Closure bind
-         $Command = new class ($Command, $name, $description) extends Command
+      }
+      elseif ($Command instanceof \Closure) {
+         [
+            'name' => $name,
+            'description' => $description,
+            'arguments' => $arguments,
+            'context' => $context
+         ] = $specification;
+
+         $Command = new class (
+            // * Config
+            $name, $description, $arguments, $context,
+            // * Data
+            $Command
+         ) extends Command
          {
-            public \Closure $Command;
-
-            public string $name;
-            public string $description;
-
-
-            public function __construct (\Closure $Command, string $name, string $description)
-            {
-               $this->Command = $Command;
-
-               $this->name = $name;
-               $this->description = $description;
-            }
-            public function run (array $arguments, array $options) : bool
+            public function run (array $arguments = [], array $options = []) : bool
             {
                return ($this->Command)($arguments, $options);
             }
@@ -127,14 +158,16 @@ class Commands
             $option_value = isSet($option_parts[1]) ? $option_parts[1] : true;
 
             $options[$option_name] = $option_value;
-         } elseif (strpos($arg, '-') === 0) {
+         }
+         elseif (strpos($arg, '-') === 0) {
             // Short Option (-opt1)
             $option_names = str_split(substr($arg, 1));
 
             foreach ($option_names as $option_name) {
                $options[$option_name] = true;
             }
-         } else {
+         }
+         else {
             // Argument
             $arguments[] = $arg;
          }
@@ -146,7 +179,7 @@ class Commands
       return true;
    }
 
-   public function find (string $name) : Commanding|Command|null
+   public function find (string $name) : Command|null
    {
       foreach ($this->commands as $Command) {
          if ($Command->name === $name) {
