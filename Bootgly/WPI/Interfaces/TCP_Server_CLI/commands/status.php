@@ -31,10 +31,11 @@ return new class extends Command
       // ** @var \Closure $context
       $context = $this->context;
 
-      // @
+      // * Metadata
       $stat = self::$stat;
       $stats = self::$stats;
 
+      // @
       $context(function ()
       use ($stat, $stats) {
          /** @var Server $Server */
@@ -162,32 +163,32 @@ return new class extends Command
             $procPath = "/proc/$pid";
    
             if ( is_dir($procPath) ) {
-               $stat = file_get_contents("$procPath/stat");
-               $stats = explode(' ', $stat);
+               $process_stat = file_get_contents("$procPath/stat");
+               $process_stats = explode(' ', $process_stat);
    
-               self::$stats[$i] ??= [];
+               $stats[$i] ??= [];
    
-               switch (self::$stat) {
+               switch ($stat) {
                   case 0:
-                     self::$stats[$i][0] = $stats;
+                     $stats[$i][0] = $process_stats;
                      break;
                   case 1:
-                     self::$stats[$i][1] = $stats;
+                     $stats[$i][1] = $process_stats;
                      break;
                   default:
-                     self::$stats[$i][0] = $stats;
-                     self::$stats[$i][1] = $stats;
+                     $stats[$i][0] = $process_stats;
+                     $stats[$i][1] = $process_stats;
                }
    
                // CPU time spent in user code
-               $utime1 = self::$stats[$i][0][13];
+               $utime1 = $stats[$i][0][13];
                // CPU time spent in kernel code
-               $stime1 = self::$stats[$i][0][14];
+               $stime1 = $stats[$i][0][14];
    
                // CPU time spent in user code
-               $utime2 = self::$stats[$i][1][13];
+               $utime2 = $stats[$i][1][13];
                // CPU time spent in kernel code
-               $stime2 = self::$stats[$i][1][14];
+               $stime2 = $stats[$i][1][14];
    
                $userDiff = $utime2 - $utime1;
                $sysDiff = $stime2 - $stime1;
@@ -213,7 +214,7 @@ return new class extends Command
          }
          $Fieldset2->render();
    
-         self::$stat = match (self::$stat) {
+         $stat = match ($stat) {
             0 => 1,
             1 => 0,
             default => 0
