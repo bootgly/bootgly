@@ -22,8 +22,8 @@ class Path // support to FileSystem Paths only (Linux only)
    public bool $lowercase = false;
    // @ fix
    public bool $fix = true;
-   public bool $dir_ = true;
-   public bool $normalize = false;
+   public bool $dir_ = true; // DEPRECATED
+   public bool $normalize = true;
    // @ validate
    public bool $real = false;
 
@@ -206,15 +206,6 @@ class Path // support to FileSystem Paths only (Linux only)
 
       // @ 2 - fix
       if ($this->fix) {
-         // Overwrites all directory separators with the standard separator
-         if ($this->dir_) {
-            $path = match (DIRECTORY_SEPARATOR) {
-               '/' => str_replace('\\', '/', $path),
-               '\\' => str_replace('/', '\\', $path),
-               default => $path
-            };
-         }
-
          // Remove '/./', '/../', '//' in path
          if ($this->normalize) {
             $path = self::normalize($path);
@@ -263,9 +254,21 @@ class Path // support to FileSystem Paths only (Linux only)
       // /etc/php/8.0 or /etc/php/8.1 or /etc/php/8.2...
    }
 
-   public static function normalize ($path) : string
+   public static function normalize (string $path) : string
    {
-      // $path = '../../etc/passwd';
+      // $path = '../..\etc/passwd';
+
+      // * Metadata
+      $is_dir = $path[-1] === '\\' || $path[-1] === '/';
+
+      // @
+      // Overwrites all directory separators with the standard separator
+      $path = match (DIRECTORY_SEPARATOR) {
+         '/' => str_replace('\\', '/', $path),
+         '\\' => str_replace('/', '\\', $path),
+         default => $path
+      };
+      // Split the path into parts
       $parts = explode(DIRECTORY_SEPARATOR, $path); // TODO use self::split?
       $normalizeds = [];
 
@@ -283,6 +286,9 @@ class Path // support to FileSystem Paths only (Linux only)
       }
 
       $normalized = implode(DIRECTORY_SEPARATOR, $normalizeds);
+      if ($is_dir) {
+         $normalized .= DIRECTORY_SEPARATOR;
+      }
 
       return $normalized;
       // return 'etc/passwd';
@@ -348,7 +354,7 @@ class Path // support to FileSystem Paths only (Linux only)
       return $path;
       // return 'html/';
    }
-   private static function relativize (string $path, string $from) : string
+   public static function relativize (string $path, string $from) : string
    {
       // $path = '/foo/bar/tests/test2.php'
       // $from = '/foo/bar/'
