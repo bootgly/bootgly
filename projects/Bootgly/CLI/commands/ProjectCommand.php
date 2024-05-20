@@ -37,7 +37,7 @@ class ProjectCommand extends Command
    ];
 
 
-   public function run (array $arguments, array $options) : bool
+   public function run (array $arguments = [], array $options = []) : bool
    {
       return match ($arguments[0] ?? null) {
          #'create'   => $this->create($options),

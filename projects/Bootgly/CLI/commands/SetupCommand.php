@@ -26,7 +26,7 @@ class SetupCommand extends Command
    public string $description = 'Setup Bootgly CLI globally (on /usr/local/bin)';
 
 
-   public function run (array $arguments, array $options) : bool
+   public function run (array $arguments = [], array $options = []) : bool
    {
       // @ Set the name of the script to be installed
       $scriptName = 'bootgly';

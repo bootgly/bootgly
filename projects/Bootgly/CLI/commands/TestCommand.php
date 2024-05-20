@@ -35,7 +35,7 @@ class TestCommand extends Command
    public string $description = 'Perform Bootgly tests';
 
 
-   public function run (array $arguments, array $options) : bool
+   public function run (array $arguments = [], array $options = []) : bool
    {
       // ! Tester
       // * Config

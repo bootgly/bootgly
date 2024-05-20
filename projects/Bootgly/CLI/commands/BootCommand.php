@@ -27,7 +27,7 @@ class BootCommand extends Command
    public string $description = 'Boot Bootgly resources, projects, etc.';
 
 
-   public function run (array $arguments, array $options) : bool
+   public function run (array $arguments = [], array $options = []) : bool
    {
       $Output = CLI->Terminal->Output;
 
