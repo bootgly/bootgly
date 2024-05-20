@@ -10,10 +10,8 @@
 
 namespace Bootgly\WPI\Interfaces;
 
-
 use Bootgly\ABI\Debugging\Data\Vars;
 use Bootgly\ABI\Debugging\Shutdown;
-use Bootgly\ABI\IO\FS\File;
 
 use Bootgly\ACI\Events\Loops;
 use Bootgly\ACI\Events\Timer;
@@ -135,10 +133,12 @@ class TCP_Server_CLI implements Servers, Logging
       // ! @\Commands
       $this->Commands = new Commands($this);
 
+      CLI->Commands->autoload(__CLASS__, $this);
+
       // @ Register shutdown function to avoid orphaned children
       \register_shutdown_function(function () use ($Process) {
          Shutdown::debug();
-         $Process->sendSignal(SIGINT);
+         $Process->sendSignal(SIGINT, master: true, children:true);
       });
 
       // @ Boot Server API
@@ -188,35 +188,17 @@ class TCP_Server_CLI implements Servers, Logging
             SAPI::boot(reset: true);
 
             break;
+         case '@status':
+            // @ Set log display none
+            $display = Logger::$display;
+            Logger::$display = Logger::DISPLAY_MESSAGE;
+
+            CLI->Commands->find('status')?->run();
+
+            // @ Restore log display
+            Logger::$display = $display;
+            break;
       }
-
-      // ! @info
-      // @ Set log display none
-      $display = Logger::$display;
-      Logger::$display = Logger::DISPLAY_MESSAGE;
-
-      // @ Output info server
-      $Info = new File(
-         BOOTGLY_ROOT_DIR . __CLASS__ . '/info.php'
-      );
-      if ($Info->exists) {
-         // @ Clear cache of file info
-         if (\function_exists('opcache_invalidate')) {
-            \opcache_invalidate($Info->file, true);
-         }
-         \clearstatcache(false, $Info->file);
-
-         // @ Load file info
-         try {
-            require $Info->file;
-         }
-         catch (\Throwable) {
-            // ...
-         }
-      }
-
-      // @ Restore log display
-      Logger::$display = $display;
    }
    
    public function __call (string $name, array $arguments)
@@ -291,7 +273,6 @@ class TCP_Server_CLI implements Servers, Logging
             $this->interact();
             break;
          case Modes::Monitor:
-            // new CLI; // TODO remove (temp: use Script exec)
             $this->monitor();
             break;
       }
