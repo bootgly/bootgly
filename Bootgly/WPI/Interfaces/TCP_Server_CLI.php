@@ -73,9 +73,6 @@ class TCP_Server_CLI implements Servers, Logging
    public static array $context;
    // @ Status
    protected Status $Status = Status::Booting;
-   // @ Stats
-   protected static int $stat = -1;
-   protected static array $stats = [];
 
    // .
    protected Connections $Connections;
