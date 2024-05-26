@@ -11,9 +11,9 @@
 namespace Bootgly\WPI\Interfaces\TCP_Server_CLI;
 
 
-use Bootgly\ABI\IO\FS\File;
-
 use Bootgly\ACI\Logs\LoggableEscaped;
+
+use const Bootgly\CLI;
 
 use Bootgly\WPI;
 use Bootgly\WPI\Connections\Packages; // @interface
@@ -94,25 +94,17 @@ class Connections implements WPI\Connections
    }
    public function __get (string $name)
    {
-      // @ Output info server
-      $Info = new File(
-         BOOTGLY_ROOT_DIR . __CLASS__ . '/info.php'
-      );
-      if ($Info->exists) {
-         // @ Clear cache of file info
-         if (\function_exists('opcache_invalidate')) {
-            \opcache_invalidate($Info->file, true);
-         }
-         \clearstatcache(false, $Info->file);
-
-         // @ Load file info
-         try {
-            require $Info->file;
-         }
-         catch (\Throwable) {
-            // ...
-         }
+      // Remove @ in name if exists (eg.: @connections -> connections)
+      if (\str_starts_with($name, '@')) {
+         $name = \substr($name, 1);
       }
+
+      $Commands = CLI->Commands;
+      $Commands->args = [
+         __CLASS__,
+         ...explode(" ", $name)
+      ];
+      $Commands->route();
    }
 
    // Accept connection from client / Open connection with client / Connect with client

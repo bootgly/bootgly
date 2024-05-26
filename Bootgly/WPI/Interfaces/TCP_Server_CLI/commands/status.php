@@ -1,6 +1,6 @@
 <?php
 
-namespace Bootgly\WPI\Interfaces\TCP_Server_CLI\Commands;
+namespace Bootgly\WPI\Interfaces\TCP_Server_CLI\commands;
 
 
 use Bootgly\ABI\Data\__String\Path;
@@ -21,6 +21,7 @@ return new class extends Command
    public string $name = 'status';
    public string $description = 'Show server status';
    // * Metadata
+   // Process
    private static int $stat = -1;
    private static array $stats = [];
 
@@ -39,14 +40,14 @@ return new class extends Command
       $context(function ()
       use ($stat, $stats) {
          /** @var Server $Server */
-         $Server = $this; /** @phpstan-ignore-line */
+         $Server = $this;
 
          $Output = CLI->Terminal->Output;
          if ($Server->Mode === Modes::Monitor) {
             $Output->clear();
             $Output->render('>_ Type `@#Green:CTRL + Z@;` to enter in Interactive mode or `@#Green:CTRL + C@;` to stop the Server.@..;');
          }
-   
+
          // ! Server
          // @
          $server = (new \ReflectionClass($Server))->getName();
@@ -68,7 +69,7 @@ return new class extends Command
          $uptime %= 60;
          $runtime['s'] = (int) ($uptime) . 's ';
          $uptimes = $runtime['d'] . $runtime['h'] . $runtime['m'] . $runtime['s'];
-   
+
          // @ System
          // Load Average
          $load = ['-', '-', '-'];
@@ -76,21 +77,21 @@ return new class extends Command
             $load = array_map('round', sys_getloadavg(), [2, 2, 2]);
          }
          $load = "{$load[0]}, {$load[1]}, {$load[2]}";
-   
+
          // @ Workers
          // count
          $workers = $Server->workers;
-   
+
          // @ Socket
          // address
          $address = $Server->socket . ($Server->domain ?? $Server->host) . ':' . $Server->port;
-   
+
          // Event-loop
          $event = (new \ReflectionClass($Server::$Event))->getName();
-   
+
          // Script
          // TODO
-   
+
          // SAPI
          $SAPI = Path::relativize(SAPI::$production, BOOTGLY_ROOT_DIR);
          $Decoder = (Server::$Decoder
@@ -101,7 +102,7 @@ return new class extends Command
             ? Server::$Encoder::class
             : 'N/A'
          );
-   
+
          // @ Server Status
          $Fieldset = new Fieldset($Output);
          // * Config
@@ -109,23 +110,23 @@ return new class extends Command
          // * Data
          $Fieldset->title = '@#Black: Server Status @;';
          $Fieldset->content = <<<OUTPUT
-   
+         
          @#Cyan:  Bootgly Server: @; {$server}
          @#Cyan:  PHP version: @; {$php}\t\t\t@:i: Server version: @; {$version}
-   
+         
          @#Cyan:  Started time: @; {$runtime['started']}\t@:i: Uptime: @; {$uptimes}
          @#Cyan:  Workers count: @; {$workers}\t\t\t@:i: Load average: @; {$load}
          @#Cyan:  Socket address: @; {$address}
-   
+         
          @#cyan:  Event-loop: @; {$event}
-   
+         
          @#yellow:  Server API: @; {$SAPI}
          @#yellow:  Server Decoder: @; {$Decoder}
          @#yellow:  Server Encoder: @; {$Encoder}
-   
+         
          OUTPUT;
          $Fieldset->render();
-   
+
          // @ Workers Load
          $Fieldset2 = new Fieldset($Output);
          // * Config
@@ -154,20 +155,20 @@ return new class extends Command
          $Bar->Symbols->incomplete = '▁';
          $Bar->Symbols->current = '';
          $Bar->Symbols->complete = '▉';
-   
+
          $pids = $Server->Process->pids;
          foreach ($pids as $i => $pid) {
             // @ Worker
             $id = sprintf('%02d', $i + 1);
             // @ System
             $procPath = "/proc/$pid";
-   
+
             if ( is_dir($procPath) ) {
                $process_stat = file_get_contents("$procPath/stat");
                $process_stats = explode(' ', $process_stat);
-   
+
                $stats[$i] ??= [];
-   
+
                switch ($stat) {
                   case 0:
                      $stats[$i][0] = $process_stats;
@@ -179,7 +180,7 @@ return new class extends Command
                      $stats[$i][0] = $process_stats;
                      $stats[$i][1] = $process_stats;
                }
-   
+
                // CPU time spent in user code
                $utime1 = $stats[$i][0][13];
                // CPU time spent in kernel code
@@ -192,9 +193,9 @@ return new class extends Command
    
                $userDiff = $utime2 - $utime1;
                $sysDiff = $stime2 - $stime1;
-   
+
                $workerLoad = (int) abs($userDiff + $sysDiff);
-   
+
                // @ Output
                $Progress[$i]->start();
                $Progress[$i]->advance($workerLoad);
@@ -213,7 +214,7 @@ return new class extends Command
             }
          }
          $Fieldset2->render();
-   
+
          $stat = match ($stat) {
             0 => 1,
             1 => 0,

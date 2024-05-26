@@ -23,32 +23,35 @@ $Commands = CLI->Commands;
 
 // @ Set Commands Helper
 $Commands->help(function ($scripting = true) {
+   // !
    $Output = CLI->Terminal->Output;
 
-   $script = $this->args[0];
-   $script = match ($script[0]) {
-      '/'     => (new Path($script))->current,
-      '.'     => $script,
-      default => 'php ' . $script
-   };
-
    $output = '@.;';
-   if ($scripting) {
-      // @ Banner
-      $Header = new Header($Output);
-      $output .= $Header
-         ->generate(word: 'Bootgly', inline: true)
-         ->render($Header::RETURN_OUTPUT);
 
-      // @ Usage
+   // @
+   // # Banner
+   $Header = new Header($Output);
+   $output .= $Header
+      ->generate(word: 'Bootgly', inline: true)
+      ->render($Header::RETURN_OUTPUT);
+
+   // # Script usage
+   if ($scripting) {
+      $script = $this->args[0];
+      $script = match ($script[0]) {
+         '/'     => (new Path($script))->current,
+         '.'     => $script,
+         default => 'php ' . $script
+      };
+
+      // @ Script usage
       $output .= '@.;@#Cyan:Usage:@; ' . $script . '@#Black:  [command] @;@..;';
    }
    $Output->render($output);
 
-   // @ Command list
+   // # Command list
    $Fieldset = new Fieldset($Output);
    $Fieldset->title = '@#Cyan: Available commands: @;';
-
    // * Data
    $commands = [];
    // * Metadata
@@ -94,6 +97,9 @@ $Commands->help(function ($scripting = true) {
    $output = rtrim($output);
    $Fieldset->content = $output;
    $Fieldset->render();
+
+   // # Options list
+   // TODO
 });
 
 // @ Register commands

@@ -14,10 +14,14 @@ namespace Bootgly\CLI;
 abstract class Command
 {
    // * Config
+   // Signature
    public string $name;
-   public string $description;
    public array $arguments = [];
-
+   // Display
+   public string $description;
+   public bool $separate;
+   public int $group;
+   // Runtime
    public ? object $context;
 
    // * Data

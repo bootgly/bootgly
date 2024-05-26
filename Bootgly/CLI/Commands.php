@@ -12,16 +12,16 @@ namespace Bootgly\CLI;
 
 
 use Bootgly\ABI\Data\__String\Path;
+use Bootgly\CLI\Commands\Arguments;
 
 
 class Commands
 {
    // * Config
-   // ...
+   public array $args;
 
    // * Data
-   public array $args;
-   public array $commands;
+   protected array $commands;
    protected ? \Closure $Helper;
    // ...
 
@@ -29,13 +29,14 @@ class Commands
    // ...
 
 
-   public function __construct ()
+   public function __construct (
+      public Arguments $Arguments = new Arguments
+   )
    {
       // * Config
-      // ...
+      $this->args = $_SERVER['argv'] ?? [];
 
       // * Data
-      $this->args = $_SERVER['argv'] ?? [];
       $this->commands = [
          'help' => new class extends Command
          {
@@ -57,13 +58,18 @@ class Commands
 
    public function autoload (string $location, ? object $context = null) : bool
    {
+      // !?
       $commands = require Path::normalize(\BOOTGLY_ROOT_DIR . $location . '/commands/@.php');
-
-      if ($commands === false || !is_array($commands) || count($commands) === 0) {
+      if ($commands === false || !\is_array($commands) || \count($commands) === 0) {
          return false;
       }
 
-      foreach ($commands as $command) {
+      // @
+      foreach ($commands as $namespace => $command) {
+         // # Pre command load
+         // TODO
+
+         // # Post command load
          $command = require $command;
 
          if (\is_array($command) === true) {
@@ -117,61 +123,39 @@ class Commands
 
    public function route () : bool
    {
-      // Argments
+      // !
+      // * Config
       $args = $this->args;
 
-      // @ Verify if a command was provided
-      if (count($args) < 2) {
+      // @
+      // # Command
+      // ? Verify if a command was provided
+      if (\count($args) < 2) {
          $this->help();
          return false;
       }
 
-      // Command
-      // @ Get the name of the command to run
-      $name = $args[1];
+      // ! Get the name of the command to run
+      $command = $args[1];
 
       // @ Search for the corresponding command
-      $Command = $this->find($name);
+      $Command = $this->find($command);
       if ($Command === null) {
-         echo "Unknown command: $name" . PHP_EOL;
+         echo "Unknown command: $command" . PHP_EOL;
          $this->help();
          return false;
       }
-      if ($name === 'help') {
+      if ($command === 'help') {
          $this->help();
          return false;
       }
 
-      // @ Remove the command name from the arguments
-      $args = array_slice($args, 2);
-
-      // TODO move to Commands\Arguments?
-      // @ Process options and argments
-      $options = [];
-      $arguments = [];
-
-      foreach ($args as $arg) {
-         if (strpos($arg, '--') === 0) {
-            // Option (--op1[=val1])
-            $option_parts = explode('=', substr($arg, 2), 2);
-            $option_name = $option_parts[0];
-            $option_value = isSet($option_parts[1]) ? $option_parts[1] : true;
-
-            $options[$option_name] = $option_value;
-         }
-         elseif (strpos($arg, '-') === 0) {
-            // Short Option (-opt1)
-            $option_names = str_split(substr($arg, 1));
-
-            foreach ($option_names as $option_name) {
-               $options[$option_name] = true;
-            }
-         }
-         else {
-            // Argument
-            $arguments[] = $arg;
-         }
-      }
+      // ## Arguments
+      // !
+      // @ Remove the command from the arguments
+      $args = \array_slice($args, 2);
+      // @ Parse arguments and options
+      [$arguments, $options] = $this->Arguments->parse($args);
 
       // @ Run the command
       $Command->run($arguments, $options);

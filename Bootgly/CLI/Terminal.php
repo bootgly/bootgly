@@ -65,15 +65,15 @@ class Terminal
       // * Metadata
       // columns
       // @ Get the terminal columns (width)
-      $columns = exec("tput cols 2>/dev/null");
-      if ( ! is_numeric($columns) ) {
+      $columns = \exec("tput cols 2>/dev/null");
+      if ( ! \is_numeric($columns) ) {
          $columns = 80;
       }
       self::$columns = $columns;
       // lines
       // @ Get the terminal lines (height)
       $lines = exec("tput lines 2>/dev/null");
-      if ( ! is_numeric($lines) ) {
+      if ( ! \is_numeric($lines) ) {
          $lines = 30;
       }
       self::$lines = $lines;
@@ -98,13 +98,13 @@ class Terminal
    {
       // @ Register CLI autocomplete function
       // Use TAB key as trigger
-      readline_completion_function([$this, 'autocomplete']);
+      \readline_completion_function([$this, 'autocomplete']);
 
       // @ Get user input (read line)
-      $input = readline('>_: ');
+      $input = \readline('>_: ');
 
       // @ Sanitize user input
-      $command = trim($input);
+      $command = \trim($input);
 
       if ($command === '') {
          return true;
@@ -115,7 +115,7 @@ class Terminal
 
       // @ Enable command history and add the last command to history
       // Use UP/DOWN key to access the history
-      readline_add_history($command);
+      \readline_add_history($command);
 
       // @ Execute command
       return $this->command($command);
@@ -132,20 +132,20 @@ class Terminal
       $found = [];
 
       // TODO refactor
-      if ($search || count(self::$command) === 0) {
-         $found = array_filter(static::$commands, function ($command) use ($search) {
-            $command = preg_quote($command, '/');
-            return preg_match("/$search/i", $command);
+      if ($search || \count(self::$command) === 0) {
+         $found = \array_filter(static::$commands, function ($command) use ($search) {
+            $command = \preg_quote($command, '/');
+            return \preg_match("/$search/i", $command);
          });
-      } else if (count(self::$command) === 1) {
-         $found = array_filter(static::$subcommands[self::$command[0]], function ($command) use ($search) {
-            $command = preg_quote($command, '/');
-            return preg_match("/$search/i", $command);
+      } else if (\count(self::$command) === 1) {
+         $found = \array_filter(static::$subcommands[self::$command[0]], function ($command) use ($search) {
+            $command = \preg_quote($command, '/');
+            return \preg_match("/$search/i", $command);
          });
       }
 
-      if (count($found) === 1) {
-         array_push(self::$command, ...$found);
+      if (\count($found) === 1) {
+         \array_push(self::$command, ...$found);
       }
 
       return $found;

@@ -206,7 +206,7 @@ class Process
          // @ $peers
          // Show info of active remote accepted connections (remote ip + remote port, ...)
          case SIGIOT:  // 6
-            $this->Server->Connections->{'@peers'};
+            $this->Server->Connections->{"@connections"};
             break;
          // @ $stats
          // Show stats of server socket connections (reads, writes, errors...)
