@@ -165,6 +165,7 @@ class Fieldset extends Component
                $line_length = $content_line_length;
             }
          }
+         $this->width = $line_length;
       }
 
       $this->border('top', ($line_length - $title_length) + 2);
