@@ -103,15 +103,18 @@ abstract class Packages implements WPI\Connections\Packages
 
    public function reading (&$Socket, ? int $length = null, ? int $timeout = null) : bool
    {
+      // !
+      $input = '';
+      $received = 0; // Bytes received from client
+      $total = $length ?? 0; // Total length of packet = the expected length of packet or 0
+      // * Metadata
+      $started = 0;
+      if ($length > 0 || $timeout > 0) {
+         $started = \microtime(true);
+      }
+
+      // @
       try {
-         $input = '';
-         $received = 0; // @ Bytes received from client
-         $total = $length ?? 0; // @ Total length of packet = the expected length of packet or 0
-
-         if ($length > 0 || $timeout > 0) {
-            $started = \microtime(true);
-         }
-
          do {
             $buffer = @\fread($Socket, $length ?? 65535);
 
@@ -187,6 +190,7 @@ abstract class Packages implements WPI\Connections\Packages
    // ---
    public function writing (&$Socket, ? int $length = null) : bool
    {
+      // ?!
       if (Server::$Encoder) { // @ Encode Application Data if exists
          $buffer = Server::$Encoder::encode($this, $length);
       }
@@ -194,9 +198,12 @@ abstract class Packages implements WPI\Connections\Packages
          $buffer = (SAPI::$Handler)(...$this->callbacks);
       }
 
-      try {
-         $written = null;
+      // !
+      $written = null;
+      $sent = 0; // Bytes sent to client per write loop iteration
 
+      // @
+      try {
          while ($buffer) {
             $sent = @\fwrite($Socket, $buffer, $length);
 

@@ -113,11 +113,14 @@ class Packages implements WPI\Connections\Packages
    {}
    public function writing (&$Socket, ? int $length = null)
    {
-      try {
-         $buffer = self::$output;
-         $written = 0;
-         #$length ??= strlen($buffer);
+      // !
+      $buffer = self::$output;
+      $written = 0;
+      #$length ??= strlen($buffer);
+      $sent = 0; // Bytes sent to server per write loop iteration
 
+      // @
+      try {
          while ($buffer) {
             $sent = @fwrite($Socket, $buffer, $length);
             #$sent = @stream_socket_sendto($Socket, $buffer, $length???);
@@ -167,15 +170,18 @@ class Packages implements WPI\Connections\Packages
    {}
    public function reading (&$Socket, ? int $length = null, ? int $timeout = null)
    {
+      // !
+      $input = '';
+      $received = 0; // Bytes received from server
+      $total = $length ?? 0; // Total length of packet = the expected length of packet or 0
+
+      $started = 0;
+      if ($length > 0 || $timeout > 0) {
+         $started = microtime(true);
+      }
+
+      // @
       try {
-         $input = '';
-         $received = 0; // @ Bytes received from server
-         $total = $length ?? 0; // @ Total length of packet = the expected length of packet or 0
-
-         if ($length > 0 || $timeout > 0) {
-            $started = microtime(true);
-         }
-
          do {
             $buffer = @fread($Socket, $length ?? 65535);
             #$buffer = @stream_socket_recvfrom($Socket, $length ?? 65535);
