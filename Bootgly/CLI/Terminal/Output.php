@@ -184,7 +184,12 @@ class Output
       try {
          $this->written = @\fwrite(
             $this->stream,
-            __String::pad($data, $length, $pad, $type)
+            __String::pad(
+               TemplateEscaped::render($data),
+               $length,
+               $pad,
+               $type
+            )
          );
       } catch (\Throwable) {
          $this->written = false;
