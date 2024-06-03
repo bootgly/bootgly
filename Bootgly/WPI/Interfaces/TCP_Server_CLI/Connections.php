@@ -99,12 +99,10 @@ class Connections implements WPI\Connections
          $name = \substr($name, 1);
       }
 
-      $Commands = CLI->Commands;
-      $Commands->args = [
+      CLI->Commands->route(command: [
          __CLASS__,
          ...explode(" ", $name)
-      ];
-      $Commands->route();
+      ]);
    }
 
    // Accept connection from client / Open connection with client / Connect with client

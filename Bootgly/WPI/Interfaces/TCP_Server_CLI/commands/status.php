@@ -28,9 +28,7 @@ return new class extends Command
 
    public function run (array $arguments = [], array $options = []) : bool
    {
-      echo ' '; // This fix content blinking on Windows Terminal (LoL)
-
-      // !
+       // !
       // ** @var \Closure $context
       $context = $this->context;
 

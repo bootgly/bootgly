@@ -19,6 +19,9 @@ class Arguments
       $options = [];
       $arguments = [];
 
+      // @ Remove the command from the arguments
+      $args = \array_slice($args, 2);
+
       // @
       foreach ($args as $arg) {
          if (\strpos($arg, '--') === 0) {

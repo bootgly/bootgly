@@ -18,14 +18,17 @@ use Bootgly\CLI\Commands\Arguments;
 class Commands
 {
    // * Config
-   public array $args;
+   // ...
 
    // * Data
+   protected ? string $banner;
    protected array $commands;
    protected ? \Closure $Helper;
    // ...
 
    // * Metadata
+   // # Command
+   private string $script;
    // ...
 
 
@@ -34,9 +37,10 @@ class Commands
    )
    {
       // * Config
-      $this->args = $_SERVER['argv'] ?? [];
+      // ...
 
       // * Data
+      $this->banner = null;
       $this->commands = [
          'help' => new class extends Command
          {
@@ -54,6 +58,21 @@ class Commands
 
       // * Metadata
       // ...
+   }
+   public function __set ($name, $value)
+   {
+      switch ($name) {
+         case 'Helper':
+            if ($value instanceof \Closure) {
+               $Helper = $value;
+
+               $Helper = $Helper->bindTo($this, $this);
+
+               $this->Helper = $Helper;
+            }
+
+            break;
+      }
    }
 
    public function autoload (string $location, ? object $context = null) : bool
@@ -121,52 +140,65 @@ class Commands
       return true;
    }
 
-   public function route () : bool
+   /**
+    * Route a command by its signature to the corresponding command.
+    * 
+    * The command signature is an array containing the script name, the command name
+    * and the command arguments (used to programmaticaly command route).
+    * 
+    * If no command is provided, the command signature is taken from native PHP CLI arguments.
+    * If no command is found, the help message is shown.
+    */
+   public function route (? array $command = null) : bool
    {
+      // # Command
+      // ?!
+      $signature = $command ?? $_SERVER['argv'] ?? [];
       // !
-      // * Config
-      $args = $this->args;
+      $this->script = $signature[0];
+      $name = $signature[1];
 
       // @
-      // # Command
-      // ? Verify if a command was provided
-      if (\count($args) < 2) {
-         $this->help();
+      try {
+         // ? Verify if a command was provided
+         if (\count($signature) < 2) {
+            throw new \Exception;
+         }
+
+         // @ Search for the corresponding command
+         $Command = $this->find($name);
+         if ($Command === null) {
+            throw new \Exception("Unknown command: @#Yellow:$name@;");
+         }
+         if ($command === "help") {
+            throw new \Exception;
+         }
+
+         // ## Arguments
+         // !
+         // @ Parse arguments and options
+         [$arguments, $options] = $this->Arguments->parse($signature);
+
+         // @ Run the command
+         $Command->run($arguments, $options);
+
+         return true;
+      }
+      catch (\Throwable $Throwable) { // TODO specific exception
+         $message = $Throwable->getMessage();
+
+         $this->help($message);
          return false;
       }
-
-      // ! Get the name of the command to run
-      $command = $args[1];
-
-      // @ Search for the corresponding command
-      $Command = $this->find($command);
-      if ($Command === null) {
-         echo "Unknown command: $command" . PHP_EOL;
-         $this->help();
-         return false;
-      }
-      if ($command === 'help') {
-         $this->help();
-         return false;
-      }
-
-      // ## Arguments
-      // !
-      // @ Remove the command from the arguments
-      $args = \array_slice($args, 2);
-      // @ Parse arguments and options
-      [$arguments, $options] = $this->Arguments->parse($args);
-
-      // @ Run the command
-      $Command->run($arguments, $options);
-
-      return true;
    }
 
-   public function find (string $name) : Command|null
+   /**
+    * Find a command by its name
+    */
+   public function find (string $command) : Command|null
    {
       foreach ($this->commands as $Command) {
-         if ($Command->name === $name) {
+         if ($Command->name === $command) {
             return $Command;
          }
       }
@@ -174,18 +206,25 @@ class Commands
       return null;
    }
 
-   public function help (? \Closure $Helper = null) : bool
+   public function help (? string $message = null) : bool
    {
-      if ($Helper !== null) {
-         $Helper = $Helper->bindTo($this, $this);
-         $this->Helper = $Helper;
-         return true;
-      }
-
+      // !
+      // * Data
+      $banner = $this->banner;
       $Helper = $this->Helper;
+      // * Metadata
+      // # Command
+      $script = $this->script;
 
+      $script = match ($script[0]) {
+         '/'     => (new Path($script))->current,
+         '.'     => $script,
+         default => 'php ' . $script
+      };
+
+      // @
       if ($Helper) {
-         $Helper();
+         $Helper($banner, $message, $script);
       }
 
       return true;

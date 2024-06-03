@@ -14,7 +14,7 @@ namespace Bootgly;
 use Bootgly;
 
 
-// ?!
+// ?
 if ( ($this ?? null) && $this instanceof Bootgly === false )
    return;
 

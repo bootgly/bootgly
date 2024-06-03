@@ -427,7 +427,6 @@ class TCP_Server_CLI implements Servers, Logging
          // @ Calls signal handlers for pending signals again
          \pcntl_signal_dispatch();
 
-         echo ' '; // This fix content blinking on Windows Terminal (LoL)
          // If child is running?
          if ($status === 0) {
             // ...
