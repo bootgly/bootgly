@@ -20,7 +20,9 @@ use Bootgly\CLI\UI\Header;
 $Commands = CLI->Commands;
 
 // @ Set Commands Helper
-$Commands->Helper = (function (? string $banner = null, ? string $message = null, string $script) {
+$Commands->Helper = function (
+   ? string $banner = null, ? string $message = null, string $script, ? object $From = null
+) {
    // !
    $Output = CLI->Terminal->Output;
 
@@ -47,7 +49,8 @@ $Commands->Helper = (function (? string $banner = null, ? string $message = null
    $group = 0;
    $largest_command_name = 0;
    // !
-   foreach ($this->commands as $Command) {
+   $Commands = $this->list($From);
+   foreach ($Commands as $Command) {
       $command_name_length = \strlen($Command->name);
       if ($largest_command_name < $command_name_length) {
          $largest_command_name = $command_name_length;
@@ -67,7 +70,7 @@ $Commands->Helper = (function (? string $banner = null, ? string $message = null
    // @
    foreach ($commands as $command) {
       // @ Config
-      if ($command['separate']) {
+      if ($command['separate'] === true) {
          $output .= '@---;';
       }
       if ($command['group'] > $group) {
@@ -75,12 +78,12 @@ $Commands->Helper = (function (? string $banner = null, ? string $message = null
          $output .= PHP_EOL;
       }
 
-      $output .= '@#Yellow:' . str_pad($command['name'], $largest_command_name + 2) . ' @; ';
+      $output .= '@#Yellow:' . \str_pad($command['name'], $largest_command_name + 2) . ' @; ';
       $output .= $command['description'] . PHP_EOL;
    }
 
    // :
-   $output .= \rtrim($output);
+   $output = \rtrim($output);
    $Fieldset1->content = $output;
    $Fieldset1->render();
 
@@ -116,13 +119,13 @@ $Commands->Helper = (function (? string $banner = null, ? string $message = null
       " ",
       \STR_PAD_LEFT
    );
-});
+};
 
 // @ Register commands
 $commands = require('CLI/commands/@.php');
 foreach ($commands as $Command) {
-   $Commands->register($Command);
+   $Commands->register($Command, [], $this);
 }
 
 // @ Route commands
-$Commands->route();
+$Commands->route(From: $this);
