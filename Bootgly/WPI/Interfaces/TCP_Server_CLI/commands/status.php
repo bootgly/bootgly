@@ -28,17 +28,19 @@ return new class extends Command
 
    public function run (array $arguments = [], array $options = []) : bool
    {
+      echo ' '; // This fix content blinking on Windows Terminal (LoL)
+
       // !
       // ** @var \Closure $context
       $context = $this->context;
 
       // * Metadata
-      $stat = self::$stat;
-      $stats = self::$stats;
+      $stat = &self::$stat;
+      $stats = &self::$stats;
 
       // @
       $context(function ()
-      use ($stat, $stats) {
+      use (&$stat, &$stats) {
          /** @var Server $Server */
          $Server = $this;
 
@@ -159,13 +161,13 @@ return new class extends Command
          $pids = $Server->Process->pids;
          foreach ($pids as $i => $pid) {
             // @ Worker
-            $id = sprintf('%02d', $i + 1);
+            $id = \sprintf('%02d', $i + 1);
             // @ System
             $procPath = "/proc/$pid";
 
-            if ( is_dir($procPath) ) {
-               $process_stat = file_get_contents("$procPath/stat");
-               $process_stats = explode(' ', $process_stat);
+            if ( \is_dir($procPath) ) {
+               $process_stat = \file_get_contents("$procPath/stat");
+               $process_stats = \explode(' ', $process_stat);
 
                $stats[$i] ??= [];
 
@@ -194,7 +196,7 @@ return new class extends Command
                $userDiff = $utime2 - $utime1;
                $sysDiff = $stime2 - $stime1;
 
-               $workerLoad = (int) abs($userDiff + $sysDiff);
+               $workerLoad = (int) \abs($userDiff + $sysDiff);
 
                // @ Output
                $Progress[$i]->start();
