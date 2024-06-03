@@ -75,7 +75,7 @@ class Commands
       }
    }
 
-   public function autoload (string $location, ? object $context = null) : bool
+   public function autoload (string $location, ? object $Context = null, ? object $Script = null) : bool
    {
       // !?
       $commands = require Path::normalize(\BOOTGLY_ROOT_DIR . $location . '/commands/@.php');
@@ -96,25 +96,22 @@ class Commands
 
             unset($command['handle']);
             $specification = $command;
-            $specification['context'] = $context;
+            $specification['context'] = $Context;
 
-            $this->register($Command, $specification);
+            $this->register($Command, $specification, $Script);
          }
          else if ($command instanceof Command) {
-            $command($context);
+            $command($Context);
 
-            $this->register($command, ['context' => $context]);
+            $this->register($command, ['context' => $Context], $Script);
          }
       }
 
       return true;
    }
-   public function register (Command|\Closure $Command, array $specification = []) : bool
+   public function register (Command|\Closure $Command, array $specification = [], ? object $Script = null) : bool
    {
-      if ($Command instanceof Command) {
-         $this->commands[] = $Command;
-      }
-      elseif ($Command instanceof \Closure) {
+      if ($Command instanceof \Closure) {
          [
             'name' => $name,
             'description' => $description,
@@ -134,8 +131,74 @@ class Commands
                return ($this->Command)($arguments, $options);
             }
          };
-         $this->commands[] = $Command;
-     }
+      }
+
+      if ($Script === null) {
+         $Script = $this;
+      }
+
+      $this->commands[$Script::class] ??= [
+         $this->commands['help']
+      ];
+      $this->commands[$Script::class][] = $Command;
+
+      return true;
+   }
+
+   public function list (? object $From = null) : array
+   {
+      // ?!
+      if ($From === null) {
+         return $this->commands;
+      }
+
+      $commands = [];
+
+      foreach ($this->commands as $Script => $Commands) {
+         if ($Script !== $From::class) {
+            continue;  
+         }
+
+         foreach ($Commands as $Command) {
+            $commands[] = $Command;
+         }
+      }
+
+      return $commands;
+   }
+   /**
+    * Find a command by its name
+    */
+   public function find (string $command, ? object $From = null) : Command|null
+   {
+      foreach ($this->list($From) as $Command) {
+         if ($Command->name === $command) {
+            return $Command;
+         }
+      }
+
+      return null;
+   }
+   public function help (? string $message = null, ? object $From = null) : bool
+   {
+      // !
+      // * Data
+      $banner = $this->banner;
+      $Helper = $this->Helper;
+      // * Metadata
+      // # Command
+      $script = $this->script;
+
+      $script = match ($script[0]) {
+         '/'     => (new Path($script))->current,
+         '.'     => $script,
+         default => 'php ' . $script
+      };
+
+      // @
+      if ($Helper) {
+         $Helper($banner, $message, $script, $From);
+      }
 
       return true;
    }
@@ -149,7 +212,7 @@ class Commands
     * If no command is provided, the command signature is taken from native PHP CLI arguments.
     * If no command is found, the help message is shown.
     */
-   public function route (? array $command = null) : bool
+   public function route (? array $command = null, ? object $From = null) : bool
    {
       // # Command
       // ?!
@@ -166,7 +229,7 @@ class Commands
          }
 
          // @ Search for the corresponding command
-         $Command = $this->find($name);
+         $Command = $this->find($name, $From);
          if ($Command === null) {
             throw new \Exception("Unknown command: @#Yellow:$name@;");
          }
@@ -187,46 +250,9 @@ class Commands
       catch (\Throwable $Throwable) { // TODO specific exception
          $message = $Throwable->getMessage();
 
-         $this->help($message);
+         $this->help($message, $From);
+
          return false;
       }
-   }
-
-   /**
-    * Find a command by its name
-    */
-   public function find (string $command) : Command|null
-   {
-      foreach ($this->commands as $Command) {
-         if ($Command->name === $command) {
-            return $Command;
-         }
-      }
-
-      return null;
-   }
-
-   public function help (? string $message = null) : bool
-   {
-      // !
-      // * Data
-      $banner = $this->banner;
-      $Helper = $this->Helper;
-      // * Metadata
-      // # Command
-      $script = $this->script;
-
-      $script = match ($script[0]) {
-         '/'     => (new Path($script))->current,
-         '.'     => $script,
-         default => 'php ' . $script
-      };
-
-      // @
-      if ($Helper) {
-         $Helper($banner, $message, $script);
-      }
-
-      return true;
    }
 }
