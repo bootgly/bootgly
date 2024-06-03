@@ -11,8 +11,6 @@
 namespace projects\Bootgly;
 
 
-use Bootgly\ABI\Data\__String\Path;
-
 use const Bootgly\CLI;
 use Bootgly\CLI\UI\Fieldset\Fieldset;
 use Bootgly\CLI\UI\Header;
@@ -22,43 +20,35 @@ use Bootgly\CLI\UI\Header;
 $Commands = CLI->Commands;
 
 // @ Set Commands Helper
-$Commands->help(function ($scripting = true) {
+$Commands->Helper = (function (? string $banner = null, ? string $message = null, string $script) {
    // !
    $Output = CLI->Terminal->Output;
 
-   $output = '@.;';
+   $output = "@.;";
 
    // @
    // # Banner
-   $Header = new Header($Output);
-   $output .= $Header
-      ->generate(word: 'Bootgly', inline: true)
-      ->render($Header::RETURN_OUTPUT);
-
-   // # Script usage
-   if ($scripting) {
-      $script = $this->args[0];
-      $script = match ($script[0]) {
-         '/'     => (new Path($script))->current,
-         '.'     => $script,
-         default => 'php ' . $script
-      };
-
-      // @ Script usage
-      $output .= '@.;@#Cyan:Usage:@; ' . $script . '@#Black:  [command] @;@..;';
+   if ($banner === null) {
+      $Header = new Header($Output);
+      $output .= $Header
+         ->generate(word: 'Bootgly', inline: true)
+         ->render($Header::RETURN_OUTPUT);
+      $output .= "@.;";
    }
    $Output->render($output);
 
+   $output = '';
    // # Command list
-   $Fieldset = new Fieldset($Output);
-   $Fieldset->title = '@#Cyan: Available commands: @;';
+   $Fieldset1 = new Fieldset($Output);
+   $Fieldset1->title = '@#Cyan: commands @;';
    // * Data
    $commands = [];
    // * Metadata
+   $group = 0;
    $largest_command_name = 0;
-   // @
+   // !
    foreach ($this->commands as $Command) {
-      $command_name_length = strlen($Command->name);
+      $command_name_length = \strlen($Command->name);
       if ($largest_command_name < $command_name_length) {
          $largest_command_name = $command_name_length;
       }
@@ -74,11 +64,7 @@ $Commands->help(function ($scripting = true) {
 
       $commands[] = $command;
    }
-
-   // * Data
-   $output = '';
-   // * Metadata
-   $group = 0;
+   // @
    foreach ($commands as $command) {
       // @ Config
       if ($command['separate']) {
@@ -94,12 +80,42 @@ $Commands->help(function ($scripting = true) {
    }
 
    // :
-   $output = rtrim($output);
-   $Fieldset->content = $output;
-   $Fieldset->render();
+   $output .= \rtrim($output);
+   $Fieldset1->content = $output;
+   $Fieldset1->render();
 
-   // # Options list
+   // # Command Options list
    // TODO
+
+   // # Message
+   if ($message) {
+      $Fieldset2 = new Fieldset($Output);
+      $Fieldset2->title = '@#Red:helper message@;';
+      $Fieldset2->content = $message;
+      $Fieldset2->width = $Fieldset1->width;
+      $Fieldset2->render();
+   }
+
+   // # Script usage
+   if ($script) {
+      $Fieldset3 = new Fieldset($Output);
+      $Fieldset3->title = '@#Cyan:usage@;';
+      $Fieldset3->content = $script . ' @#Black: [command] @;';
+      $Fieldset3->width = $Fieldset1->width;
+      $Fieldset3->render();
+   }
+
+   // # Versions (Bootgly, PHP)
+   $PHP = \PHP_VERSION;
+   $Bootgly = \BOOTGLY_VERSION;
+
+   $Output->pad(<<<OUTPUT
+      @#Black:Bootgly @_:v{$PHP} @; | @#Black:PHP @_:v{$Bootgly} @;@..;
+      OUTPUT,
+      $Fieldset1->width + 5,
+      " ",
+      \STR_PAD_LEFT
+   );
 });
 
 // @ Register commands
