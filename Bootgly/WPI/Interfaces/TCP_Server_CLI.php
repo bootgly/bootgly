@@ -133,7 +133,7 @@ class TCP_Server_CLI implements Servers, Logging
       // ! @\Commands
       $this->Commands = new Commands($this);
 
-      CLI->Commands->autoload(__CLASS__, $this);
+      CLI->Commands->autoload(__CLASS__, Context: $this, Script: $this);
 
       // @ Register shutdown function to avoid orphaned children
       \register_shutdown_function(function () use ($Process) {
@@ -193,7 +193,7 @@ class TCP_Server_CLI implements Servers, Logging
             $display = Logger::$display;
             Logger::$display = Logger::DISPLAY_MESSAGE;
 
-            CLI->Commands->find('status')?->run();
+            CLI->Commands->find('status', From: $this)?->run();
 
             // @ Restore log display
             Logger::$display = $display;

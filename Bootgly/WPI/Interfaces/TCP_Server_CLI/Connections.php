@@ -102,7 +102,7 @@ class Connections implements WPI\Connections
       CLI->Commands->route(command: [
          __CLASS__,
          ...explode(" ", $name)
-      ]);
+      ], From: $this->Server);
    }
 
    // Accept connection from client / Open connection with client / Connect with client
