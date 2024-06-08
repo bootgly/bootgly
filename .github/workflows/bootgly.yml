@@ -26,4 +26,7 @@ jobs:
           extensions: mbstring, pcntl
       -
         name: Run Bootgly Test command
-        run: php bootgly test --bootgly
+        run: |
+          php -i
+          php bootgly
+          php bootgly test --bootgly
