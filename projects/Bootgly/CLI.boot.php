@@ -113,7 +113,7 @@ $Commands->Helper = function (
    $Bootgly = \BOOTGLY_VERSION;
 
    $Output->pad(<<<OUTPUT
-      @#Black:Bootgly @_:v{$PHP} @; | @#Black:PHP @_:v{$Bootgly} @;@..;
+      @#Black:Bootgly @_:v{$Bootgly} @; | @#Black:PHP @_:v{$PHP} @;@..;
       OUTPUT,
       $Fieldset1->width + 5,
       " ",
