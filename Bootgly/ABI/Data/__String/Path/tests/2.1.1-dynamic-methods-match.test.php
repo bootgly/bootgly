@@ -17,11 +17,7 @@ return [
       Assertion::$description = 'Valid absolute path';
       $Path->match(path: '/etc/php/%', pattern: '8.*');
       yield assert(
-         assertion: (string) $Path === '/etc/php/8.0'
-         || (string) $Path === '/etc/php/8.1'
-         || (string) $Path === '/etc/php/8.2'
-         || (string) $Path === '/etc/php/8.3'
-         || (string) $Path === '/etc/php/8.4',
+         assertion: (string) $Path === '/etc/php/' . PHP_VERSION,
          description: 'PHP path #1 (absolute) not matched!'
       );
 
@@ -29,11 +25,7 @@ return [
       $Path = new Path('/etc/php/');
       $Path->match(path: '%', pattern: '8.*');
       yield assert(
-         assertion: (string) $Path === '/etc/php/8.0'
-         || (string) $Path === '/etc/php/8.1'
-         || (string) $Path === '/etc/php/8.2'
-         || (string) $Path === '/etc/php/8.3'
-         || (string) $Path === '/etc/php/8.4',
+         assertion: (string) $Path === '/etc/php/' . PHP_VERSION,
          description: 'PHP path #2 (relative) not matched!'
       );
    }
