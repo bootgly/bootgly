@@ -131,9 +131,9 @@ class Path // support to FileSystem Paths only (Linux only)
             return self::split($path);
          // ->parts
          case 'indexes':
-            return count($this->parts);
+            return count($this->__get("parts"));
          case 'Index':
-            $__Array = new __Array($this->parts);
+            $__Array = new __Array($this->__get("parts"));
 
             return (object) [
                'Last' => $__Array->Last
@@ -157,9 +157,9 @@ class Path // support to FileSystem Paths only (Linux only)
             return self::relativize($this->path, ...$arguments);
          // ->parts
          case 'join':
-            return self::join($this->parts, ...$arguments);
+            return self::join($this->__get("parts"), ...$arguments);
          case 'concatenate':
-            return self::concatenate($this->parts, ...$arguments);
+            return self::concatenate($this->__get("parts"), ...$arguments);
          default:
             return null;
       }

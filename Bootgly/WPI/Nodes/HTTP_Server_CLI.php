@@ -116,17 +116,6 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, HTTP_Server
       }
    }
 
-   public function on (string $name, \Closure $handler) : bool
-   {
-      switch ($name) {
-         case 'encode':
-            
-            break;
-      }
-
-      return true;
-   }
-
    public static function boot (Environments $Environment)
    {
       switch ($Environment) {
@@ -232,6 +221,9 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, HTTP_Server
 
                // @ Init Test
                $Test = $Tests->test($spec);
+               if ($Test === false) {
+                  continue;
+               }
 
                if ($spec === null || count($spec) < 3) {
                   if ($Test) {

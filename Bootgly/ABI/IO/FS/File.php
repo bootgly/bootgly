@@ -474,8 +474,8 @@ class File implements FS
       $data = false;
       // * Metadata
       // @
-      $size ??= ($offset === 0 && $length) ? $length : null;
-      $filterable ??= $method !== self::CONTENTS_READ_METHOD && ($offset > 0 || $length > 0);
+      $size = ($offset === 0 && $length) ? $length : null;
+      $filterable = ($method !== self::CONTENTS_READ_METHOD) && ($offset > 0 || $length > 0);
 
       // @
       // Methods with valid handler

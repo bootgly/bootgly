@@ -32,6 +32,7 @@ class Test extends Assertions
    // ...inherited
 
    // * Metadata
+   private bool $passed; 
    private mixed $filename;
    // @ Output
    private false|string $debugged;

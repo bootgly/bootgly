@@ -71,12 +71,12 @@ class Process
             return posix_getpid();
 
          case 'master':
-            return $this->id === self::$master;
+            return $this->__get("id") === self::$master;
          case 'child':
-            return $this->id !== self::$master;
+            return $this->__get("id") !== self::$master;
 
          case 'level':
-            return $this->master ? 'master' : 'child';
+            return $this->__get("master") ? 'master' : 'child';
 
          case 'children':
             return count(self::$children);
@@ -237,7 +237,7 @@ class Process
 
    public function __destruct ()
    {
-      if ($this->level === 'master') {
+      if ($this->__get("level") === 'master') {
          @unlink(static::$commandFile);
          @unlink(static::$pidFile);
          @unlink(static::$pidLockFile);

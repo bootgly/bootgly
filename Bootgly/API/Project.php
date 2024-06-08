@@ -29,6 +29,7 @@ class Project
 
    // * Metadata
    private ? int $index;
+   private string $path;
 
 
    public function __construct ()
@@ -55,14 +56,23 @@ class Project
    {
       switch ($name) {
          case 'path':
+            // * Data
             $paths = $this->paths ?? [];
-            foreach ($paths as $path) {
-               if ( is_dir($path) ) {
-                  return $path;
+            // * Metadata
+            $path = null;
+
+            foreach ($paths as $_path) {
+               if ( is_dir($_path) ) {
+                  $path = $_path;
+                  break;
                }
             }
 
-            return '';
+            $path ??= '';
+
+            $this->path = $path;
+
+            return $this->path;
          default:
             return $this->$name;
       }
@@ -70,7 +80,7 @@ class Project
 
    public function __toString () : string
    {
-      return $this->path;
+      return $this->__get("path");
    }
 
    // ! Path

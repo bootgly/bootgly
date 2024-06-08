@@ -45,11 +45,13 @@ class Directives implements Resources
          }
 
          // @ Set directive value
+         $directive = [];
          if (is_string($value) === true) {
             $filename = Path::normalize($value);
 
             $directive = require($resource . $filename . '.directive.php');
-         } else if (is_array($value) === true) {
+         }
+         else if (is_array($value) === true) {
             $directive = $value;
          }
 
@@ -79,7 +81,7 @@ class Directives implements Resources
       }
    }
 
-   public function extend (? string $name = null, string $pattern, Closure $Callback)
+   public function extend (string $pattern, Closure $Callback, ? string $name = null)
    {
       if ($name) {
          $this->names[] = $name;

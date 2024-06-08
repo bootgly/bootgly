@@ -354,7 +354,14 @@ class Response extends Responsing
          $File = $file;
       }
       else {
-         $File = new File(BOOTGLY_PROJECT?->path . Path::normalize($file));
+         $Project = \BOOTGLY_PROJECT;
+
+         if ($Project === null) {
+            $this->__set('code', 500);
+            return $this;
+         }
+
+         $File = new File($Project . Path::normalize($file));
       }
 
       if ($File->readable === false) {
@@ -521,7 +528,7 @@ class Response extends Responsing
     * Construct the final output to send (used by the HTTP Server Encoder)
     *
     * @param Packages $Package TCP Package associated with the response
-    * @param string &$length Reference to the variable receiving the length of the response
+    * @param int &$length Reference to the variable receiving the length of the response
     *
     * @return string The Response Raw to be sent
     */

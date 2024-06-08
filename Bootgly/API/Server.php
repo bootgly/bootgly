@@ -36,6 +36,7 @@ class Server
       self::$key = $key;
 
       // @
+      $bootstrap = '';
       switch (self::$Environment) {
          case Environments::Production:
             $bootstrap = self::$production;

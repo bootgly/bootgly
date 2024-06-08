@@ -25,7 +25,7 @@ class Iterator
    protected int $remaining;
 
 
-   public function __construct (array|object &$iteratee, ? Iterator $Parent = null, int $depth)
+   public function __construct (array|object &$iteratee, int $depth, ? Iterator $Parent = null)
    {
       // * Data
       $this->iteratee = &$iteratee;

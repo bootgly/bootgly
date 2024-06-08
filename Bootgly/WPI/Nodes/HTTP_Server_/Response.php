@@ -11,8 +11,6 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_;
 
 
-use Bootgly;
-
 use Bootgly\ABI\Data\__String\Path;
 use Bootgly\ABI\IO\FS\File;
 
@@ -300,7 +298,12 @@ class Response extends Responsing
          $File = $file;
       }
       else {
-         $File = new File(BOOTGLY_PROJECT?->path . Path::normalize($file));
+         $Project = \BOOTGLY_PROJECT;
+         if ($Project === null) {
+            $this->__set('code', 500); // Internal Server Error
+            return $this;
+         }
+         $File = new File($Project->path . Path::normalize($file));
       }
 
       if ($File->readable === false) {

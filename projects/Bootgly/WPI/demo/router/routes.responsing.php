@@ -25,7 +25,10 @@ $Router->route('/Response/test.c', function (Request $Request, Response $Respons
          ['test1' => $test1],
          ['test2' => '123']
       )
-      ->render(view: 'test', data: ['title' => 'Bootgly'])
+      ->render(view: 'test', data: [
+         'title' => 'Bootgly',
+         'list' => ['a', 'b', 'c']
+      ])
       ->send();
 }, GET);
 $Router->route('/Response/test.v1', function (Request $Request, Response $Response) {

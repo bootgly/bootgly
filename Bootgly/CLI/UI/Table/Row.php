@@ -70,7 +70,7 @@ class Row
             $output .= ' ' . $borders['middle'];
          }
 
-         $output .= __String::pad(
+         $output .= __String::pad( // @phpstan-ignore-line
             string: $row[$column_index] ?? '',
             length: $widths[$column_index],
             padding: ' ',

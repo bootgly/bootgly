@@ -239,6 +239,7 @@ final class Options extends Items
 
       // @ Styling
       // Divisor
+      $divisor = '';
       switch ($Orientation) {
          case $Orientation::Vertical:
             $divisor = "\n";

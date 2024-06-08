@@ -25,8 +25,8 @@ class Iterators
 
       $Iterator = new Iterator(
          $iteratee,
+         self::$depth,
          self::$Iterators[count(self::$Iterators) - 1] ?? null,
-         self::$depth
       );
 
       self::$Iterators[] = &$Iterator;

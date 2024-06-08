@@ -222,37 +222,31 @@ class Commands
       $name = $signature[1];
 
       // @
-      try {
-         // ? Verify if a command was provided
-         if (\count($signature) < 2) {
-            throw new \Exception;
-         }
-
-         // @ Search for the corresponding command
-         $Command = $this->find($name, $From);
-         if ($Command === null) {
-            throw new \Exception("Unknown command: @#Yellow:$name@;");
-         }
-         if ($command === "help") {
-            throw new \Exception;
-         }
-
-         // ## Arguments
-         // !
-         // @ Parse arguments and options
-         [$arguments, $options] = $this->Arguments->parse($signature);
-
-         // @ Run the command
-         $Command->run($arguments, $options);
-
-         return true;
-      }
-      catch (\Throwable $Throwable) { // TODO specific exception
-         $message = $Throwable->getMessage();
-
-         $this->help($message, $From);
-
+      // ? Verify if a command was provided
+      if (\count($signature) < 2) {
+         $this->help(null, $From);
          return false;
       }
+
+      // @ Search for the corresponding command
+      $Command = $this->find($name, $From);
+      if ($Command === null) {
+         $this->help("Unknown command: @#Yellow:$name@;", $From);
+         return false;
+      }
+      if ($command === "help") {
+         $this->help(null, $From);
+         return false;
+      }
+
+      // ## Arguments
+      // !
+      // @ Parse arguments and options
+      [$arguments, $options] = $this->Arguments->parse($signature);
+
+      // @ Run the command
+      $Command->run($arguments, $options);
+
+      return true;
    }
 }

@@ -13,9 +13,11 @@ namespace Bootgly\WPI\Interfaces;
 
 use Bootgly\ABI\Debugging\Data\Vars;
 
+use Bootgly\ACI\Events\Loops;
 use Bootgly\ACI\Logs\Logger;
 use Bootgly\ACI\Logs\LoggableEscaped;
 
+use Bootgly\WPI\Events;
 use Bootgly\WPI\Events\Select;
 use Bootgly\WPI\Interfaces\TCP_Client_CLI\Commands;
 use Bootgly\WPI\Interfaces\TCP_Client_CLI\Connections;
@@ -30,7 +32,7 @@ class TCP_Client_CLI
    public $Socket;
 
    // ! Event
-   public static string|object $Event = '\Bootgly\WPI\Events\Select';
+   public static Events & Loops $Event;
 
    // ! Process
    protected Process $Process;
@@ -136,14 +138,6 @@ class TCP_Client_CLI
 
          case 'Connections':
             return $this->Connections;
-      }
-   }
-   public function __call (string $name, array $arguments)
-   {
-      switch ($name) {
-         case 'log':
-         case 'stop':
-            return $this->$name(...$arguments);
       }
    }
 
@@ -318,7 +312,7 @@ class TCP_Client_CLI
       return $Socket;
    }
 
-   private function stop ()
+   public function stop ()
    {
       self::$status = self::STATUS_STOPING;
 

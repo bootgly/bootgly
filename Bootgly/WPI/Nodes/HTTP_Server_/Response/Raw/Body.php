@@ -22,6 +22,7 @@ class Body
    // * Metadata
    public int $length;
    public static array $mimes; // @ 'html' => 'text/html'
+   private string $chunked;
 
 
    public function __construct ()
@@ -40,8 +41,9 @@ class Body
    public function __get (string $name) : string
    {
       switch ($name) {
-         case 'chunked':
-            return \dechex($this->length) . "\r\n$this->raw\r\n";
+         case 'chunked': // TODO move to property hook
+            $this->chunked = \dechex($this->length) . "\r\n$this->raw\r\n";
+            return $this->chunked;
          default:
             return '';
       }

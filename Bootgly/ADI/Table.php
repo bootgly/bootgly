@@ -63,15 +63,15 @@ class Table
    public function set (? array $header = null, ? array $body = null, ? array $footer = null)
    {
       if ($header) {
-         $this->header = $header;
+         $this->__set("header", $header);
       }
 
       if ($body) {
-         $this->body = $body;
+         $this->__set("body", $body);
       }
 
       if ($footer) {
-         $this->footer = $footer;
+         $this->__set("footer", $footer);
       }
    }
 

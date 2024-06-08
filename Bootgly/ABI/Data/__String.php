@@ -126,11 +126,14 @@ class __String implements Data // Simple class (advanced methods coming soon)
       return $this->string;
    }
 
-   private static function search (string $string, $search, int $offset = null) : object
+   protected static function search (string $string, $search, int $offset = null) : object
    {
+      // !
       $terms = (array) $search;
+      $position = false;
       $found = null;
 
+      // @
       foreach ($terms as $term) {
          $position = strpos($string, $term, $offset);
 
@@ -146,7 +149,7 @@ class __String implements Data // Simple class (advanced methods coming soon)
       ];
    }
 
-   private static function pad (
+   protected static function pad (
       string $string,
       int $length,
       string $padding = ' ',
@@ -164,6 +167,8 @@ class __String implements Data // Simple class (advanced methods coming soon)
 
       $num_pad_chars = $length - $input_length;
 
+      $left_pad = 0;
+      $right_pad = 0;
       switch ($type) {
          case STR_PAD_RIGHT:
             $left_pad = 0;

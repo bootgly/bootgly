@@ -5,9 +5,15 @@ parameters:
          - */vs/*
          - */tests/*
          - */examples/*
+   reportUnmatchedIgnoredErrors: false
    level: 1
+
    paths:
       - ../Bootgly
    ignoreErrors:
       -
          identifier: property.uninitializedReadonly
+      -
+         identifier: property.private
+      -
+         identifier: property.protected

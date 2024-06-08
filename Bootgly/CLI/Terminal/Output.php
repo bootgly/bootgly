@@ -184,7 +184,7 @@ class Output
       try {
          $this->written = @\fwrite(
             $this->stream,
-            __String::pad(
+            __String::pad( // @phpstan-ignore-line
                TemplateEscaped::render($data),
                $length,
                $pad,

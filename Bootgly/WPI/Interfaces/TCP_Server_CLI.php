@@ -200,21 +200,6 @@ class TCP_Server_CLI implements Servers, Logging
             break;
       }
    }
-   
-   public function __call (string $name, array $arguments)
-   {
-      switch ($name) {
-         case 'instance':
-            return $this->instance(...$arguments);
-
-         case 'stop':
-            return $this->stop(...$arguments);
-         case 'pause':
-            return $this->pause(...$arguments);
-         case 'resume':
-            return $this->resume(...$arguments);
-      }
-   }
 
    public function configure (
       string $host,
@@ -236,15 +221,6 @@ class TCP_Server_CLI implements Servers, Logging
       $this->ssl = $ssl;
 
       return $this;
-   }
-   public function on (string $name, \Closure $handler) : bool
-   {
-      switch ($name) {
-         case 'encode':
-            break;
-      }
-
-      return true;
    }
    public function start ()
    {
@@ -280,7 +256,7 @@ class TCP_Server_CLI implements Servers, Logging
       return true;
    }
 
-   private function instance ()
+   public function instance ()
    {
       $error_code = 0;
       $error_message = '';
@@ -414,7 +390,7 @@ class TCP_Server_CLI implements Servers, Logging
       $Output = CLI->Terminal->Output;
       $Output->Cursor->hide();
       $Output->clear();
-      $this->{'@status'};
+      $this->__get('@status');
 
       // @ Loop
       while ($this->Mode === Modes::Monitor) {
@@ -440,7 +416,7 @@ class TCP_Server_CLI implements Servers, Logging
             // ...
          }
 
-         $this->{'@status'};
+         $this->__get('@status');
       }
 
       $Output->Cursor->show();
@@ -478,7 +454,7 @@ class TCP_Server_CLI implements Servers, Logging
       $this->Socket = null;
    }
 
-   private function resume () : bool
+   public function resume () : bool
    {
       if ($this->Status !== Status::Paused) {
          match ($this->Process->level) {
@@ -498,7 +474,7 @@ class TCP_Server_CLI implements Servers, Logging
 
       return true;
    }
-   private function pause () : bool
+   public function pause () : bool
    {
       if ($this->Status !== Status::Running) {
          match ($this->Process->level) {
@@ -518,7 +494,7 @@ class TCP_Server_CLI implements Servers, Logging
 
       return true;
    }
-   private function stop () : void
+   public function stop () : void
    {
       $this->Status = Status::Stopping;
 
