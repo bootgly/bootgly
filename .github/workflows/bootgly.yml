@@ -23,10 +23,10 @@ jobs:
         with:
           php-version: '8.3'
           ini-file: 'development'
+          ini-values: disable_functions=""
           extensions: mbstring, pcntl
       -
         name: Run Bootgly Test command
         run: |
-          php -i
           php bootgly
           php bootgly test --bootgly
