@@ -15,7 +15,7 @@ return [
       // Valid
       $Path = new Path;
       $Path->real = true;
-      $Path->construct('/etc/php/' . PHP_VERSION . '/');
+      $Path->construct('/etc/php/8.3/');
 
       yield assert(
          assertion: $Path->type === 'dir',
