@@ -10,19 +10,18 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-24.04
 
     steps:
       -
         name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       -
         name: Set up PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.2'
-          ini-file: 'development'
+          php-version: '8.3'
           extensions: mbstring, pcntl
       -
         name: Run Bootgly Test command
