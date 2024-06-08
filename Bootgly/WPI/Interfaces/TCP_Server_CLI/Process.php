@@ -18,8 +18,8 @@ use Bootgly\ACI\Logs\LoggableEscaped;
 
 use Bootgly\API\Server as SAPI;
 
-use Bootgly\WPI\Endpoints\Servers\Modes;
 use Bootgly\WPI\Events\Select;
+// ?
 use Bootgly\WPI\Interfaces\TCP_Server_CLI as Server;
 
 
@@ -68,19 +68,19 @@ class Process
       // @ Init Process Timer
       Timer::init([$this, 'handleSignal']);
    }
-   public function __get (string $name)
+   public function __get ($name)
    {
       switch ($name) {
          case 'id':
             return posix_getpid();
 
          case 'master':
-            return $this->__get("id") === self::$master;
+            return $this->id === self::$master;
          case 'child':
-            return $this->__get("id") !== self::$master;
+            return $this->id !== self::$master;
 
          case 'level':
-            return $this->__get("master") ? 'master' : 'child';
+            return $this->master ? 'master' : 'child';
 
          case 'children':
             return count(self::$children);
@@ -120,30 +120,30 @@ class Process
       $signalHandler = [$this, 'handleSignal'];
 
       // * Custom command
-      pcntl_signal(SIGUSR1, $signalHandler, false); // 10
+      \pcntl_signal(SIGUSR1, $signalHandler, false); // 10
 
       // ! Server
       // @ stop()
-      pcntl_signal(SIGHUP, $signalHandler, false);  // 1
-      pcntl_signal(SIGINT, $signalHandler, false);  // 2 (CTRL + C)
-      pcntl_signal(SIGQUIT, $signalHandler, false); // 3
-      pcntl_signal(SIGTERM, $signalHandler, false); // 15
+      \pcntl_signal(SIGHUP, $signalHandler, false);  // 1
+      \pcntl_signal(SIGINT, $signalHandler, false);  // 2 (CTRL + C)
+      \pcntl_signal(SIGQUIT, $signalHandler, false); // 3
+      \pcntl_signal(SIGTERM, $signalHandler, false); // 15
       // @ pause()
-      pcntl_signal(SIGTSTP, $signalHandler, false); // 20 (CTRL + Z)
+      \pcntl_signal(SIGTSTP, $signalHandler, false); // 20 (CTRL + Z)
       // @ resume()
-      pcntl_signal(SIGCONT, $signalHandler, false); // 18
+      \pcntl_signal(SIGCONT, $signalHandler, false); // 18
       // @ reload()
-      pcntl_signal(SIGUSR2, $signalHandler, false); // 12
+      \pcntl_signal(SIGUSR2, $signalHandler, false); // 12
 
       // ! \Connection
       // ? @info
       // @ $stats
-      pcntl_signal(SIGIOT, $signalHandler, false);  // 6
+      \pcntl_signal(SIGIOT, $signalHandler, false);  // 6
       // @ $peers
-      pcntl_signal(SIGIO, $signalHandler, false);   // 29
+      \pcntl_signal(SIGIO, $signalHandler, false);   // 29
 
       // ignore
-      pcntl_signal(SIGPIPE, SIG_IGN, false);
+      \pcntl_signal(SIGPIPE, SIG_IGN, false);
    }
    public function handleSignal ($signal)
    {
@@ -187,9 +187,9 @@ class Process
             break;
          // @ pause()
          case SIGTSTP: // 20 (CTRL + Z)
-            match ($this->Server->Mode) {
-               Modes::Monitor => $this->Server->Mode = Modes::Interactive,
-               Modes::Interactive => $this->Server->pause()
+            match ($this->Server->mode) {
+               Server::MODE_MONITOR => $this->Server->mode = Server::MODE_INTERACTIVE,
+               Server::MODE_INTERACTIVE => $this->Server->pause()
             };
             break;
          // @ resume()
@@ -206,7 +206,7 @@ class Process
          // @ $peers
          // Show info of active remote accepted connections (remote ip + remote port, ...)
          case SIGIOT:  // 6
-            $this->Server->Connections->{"@connections"};
+            $this->Server->Connections->{'@peers'};
             break;
          // @ $stats
          // Show stats of server socket connections (reads, writes, errors...)
@@ -219,18 +219,18 @@ class Process
    {
       if ($master) {
          // Send signal to master process
-         posix_kill(static::$master, $signal);
+         \posix_kill(static::$master, $signal);
 
          if ($children === false) {
-            pcntl_signal_dispatch();
+            \pcntl_signal_dispatch();
          }
       }
 
       if ($children) {
          // Send signal to children process
          foreach (self::$children as $id) {
-            posix_kill($id, $signal);
-            usleep(100000); // Wait 0,1 s
+            \posix_kill($id, $signal);
+            \usleep(100000); // Wait 0,1 s
          }
       }
 
@@ -242,7 +242,7 @@ class Process
       $this->log("forking $workers workers... ", self::LOG_NOTICE_LEVEL);
 
       for ($i = 0; $i < $workers; $i++) {
-         $pid = pcntl_fork();
+         $pid = \pcntl_fork();
 
          self::$children[$i] = $pid;
 
@@ -250,7 +250,7 @@ class Process
             // @ Set child index
             self::$index = $i + 1;
 
-            cli_set_process_title('Bootgly_WPI_Server: child process (Worker #' . self::$index . ')');
+            \cli_set_process_title('Bootgly_WPI_Server: child process (Worker #' . self::$index . ')');
 
             // @ Set Logging display
             Logger::$display = Logger::DISPLAY_MESSAGE_WHEN_ID;
@@ -266,7 +266,7 @@ class Process
             #exit(1);
          }
          else if ($pid > 0) { // Master process
-            cli_set_process_title("Bootgly_WPI_Server: master process");
+            \cli_set_process_title("Bootgly_WPI_Server: master process");
          }
          else if ($pid === -1) {
             die('Could not fork process!');
@@ -277,24 +277,24 @@ class Process
    // @ User
    protected static function getCurrentUser ()
    {
-      $user_info = posix_getpwuid(posix_getuid());
+      $user_info = \posix_getpwuid(\posix_getuid());
 
       return $user_info['name'];
    }
 
    protected static function saveMasterPid () // Save process master id to file
    {
-      if (file_put_contents(static::$pidFile, static::$master) === false) {
+      if (\file_put_contents(static::$pidFile, static::$master) === false) {
          throw new \Exception('Can not save master pid to ' . static::$pidFile);
       }
    }
 
    public function __destruct ()
    {
-      if ($this->__get("level") === 'master') {
-         @unlink(static::$commandFile);
-         @unlink(static::$pidFile);
-         @unlink(static::$pidLockFile);
+      if ($this->level === 'master') {
+         @\unlink(static::$commandFile);
+         @\unlink(static::$pidFile);
+         @\unlink(static::$pidLockFile);
       }
    }
 }
