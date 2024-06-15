@@ -34,7 +34,7 @@ class Environment
     * Load environment variables from a file.
     *
     * @param string $file
-    * @return void
+    * @return bool
     */
    public static function load ($file) : bool
    {
@@ -74,11 +74,11 @@ class Environment
    /**
     * Get the value of an environment variable.
     *
-    * @param string $key
+    * @param string|null $key
     * @param mixed $default
-    * @return mixed
+    * @return array|string|false|null
     */
-   public static function get (? string $key = null, $default = null) : array|string|false|null
+   public static function get (? string $key = null, mixed $default = null) : array|string|false|null
    {
       $key = self::$prefix . $key . self::$suffix;
 
@@ -107,10 +107,10 @@ class Environment
     * Set the value of an environment variable.
     *
     * @param string $key
-    * @param mixed $value
+    * @param string|int $value
     * @return bool
     */
-   public static function put (string $key, string $value) : bool
+   public static function put (string $key, string|int $value) : bool
    {
       $key = self::$prefix . $key . self::$suffix;
 

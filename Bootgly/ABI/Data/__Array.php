@@ -18,6 +18,21 @@ class __Array implements Data // Simple class (advanced methods coming soon)
 {
    // * Data
    public array $array;
+   // * Metadata
+   private array $keys;
+   private array $values;
+   private mixed $current;
+   private object $Current;
+   private mixed $next;
+   private object $Next;
+   private mixed $previous;
+   private object $Previous;
+   private mixed $first;
+   private object $First;
+   private mixed $last;
+   private object $Last;
+   private bool $list;
+   private bool $multidimensional;
 
 
    public function __construct (array $array)

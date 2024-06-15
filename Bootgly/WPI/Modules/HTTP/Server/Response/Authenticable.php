@@ -21,7 +21,7 @@ trait Authenticable
     *
     * @param Authentication $Method The authentication method to use.
     *
-    * @return Response The Response instance, for chaining
+    * @return self The Response instance, for chaining
     */
    public function authenticate (Authentication $Method) : self
    {

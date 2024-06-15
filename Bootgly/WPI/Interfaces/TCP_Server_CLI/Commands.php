@@ -13,6 +13,7 @@ namespace Bootgly\WPI\Interfaces\TCP_Server_CLI;
 
 use Bootgly\ACI\Logs\LoggableEscaped;
 
+use const Bootgly\CLI;
 use Bootgly\CLI;
 
 use Bootgly\WPI\Endpoints\Servers\Modes;
@@ -87,11 +88,11 @@ class Commands extends CLI\Terminal
          // ! Server
          // @
          'status' =>
-            $this->Server->{'@status'} && true,
+            CLI->Commands->find('status', From: $this->Server)?->run() && true,
          // @ control
          'stop' =>
             $this->log(
-               '@\;Stopping ' . $this->Server->Process->children . ' worker(s)... ',
+               '@\;Stopping ' . (string) count($this->Server->Process::$children) . ' worker(s)... ',
                self::LOG_WARNING_LEVEL
             )
             && $this->Server->Process->sendSignal(SIGINT)

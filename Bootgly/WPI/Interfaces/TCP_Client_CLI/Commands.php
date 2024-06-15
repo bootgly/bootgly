@@ -48,11 +48,12 @@ class Commands extends CLI\Terminal
    {
       // TODO split command in subcommands by space
 
+      $children = (string) count($this->Client->Process::$children);
       return match ($command) {
          // ! Client
          'quit' =>
             $this->log(
-               '@\;Stopping ' . $this->Client->Process->children . ' worker(s)... ',
+               '@\;Stopping ' . $children . ' worker(s)... ',
                self::LOG_WARNING_LEVEL
             )
             && $this->Client->Process->sendSignal(SIGINT)

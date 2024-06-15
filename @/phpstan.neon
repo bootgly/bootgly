@@ -1,3 +1,6 @@
+includes:
+   - ../vendor/marc-mabe/php-enum-phpstan/extension.neon
+
 parameters:
    excludePaths:
       analyse:
@@ -6,7 +9,7 @@ parameters:
          - */tests/*
          - */examples/*
    reportUnmatchedIgnoredErrors: false
-   level: 1
+   level: 2
 
    paths:
       - ../Bootgly

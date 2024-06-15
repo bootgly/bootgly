@@ -36,6 +36,7 @@ class Process
    // @ Id
    public static int $index;
    public static int $master;
+   private string $level;
    public static array $children = [];
    // File
    public static $commandFile = BOOTGLY_WORKING_DIR . '/workdata/client.command';

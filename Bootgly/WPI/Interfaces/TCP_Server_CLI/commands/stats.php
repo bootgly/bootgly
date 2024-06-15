@@ -12,6 +12,7 @@ use Bootgly\ABI\Data\__String\Bytes;
 use Bootgly\ACI\Logs\Logger;
 
 use Bootgly\CLI\Command;
+use Bootgly\WPI\Interfaces\TCP_Server_CLI as Server;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections;
 
 

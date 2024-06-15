@@ -25,7 +25,7 @@ $TCP_Client = new TCP_Client_CLI(
 );
 $TCP_Client->configure(
    host: '127.0.0.1',
-   port: getenv('PORT') ? getenv('PORT') : 8080,
+   port: getenv('PORT') ? getenv('PORT') : 8082,
    workers: 1
 );
 // TODO move to /projects

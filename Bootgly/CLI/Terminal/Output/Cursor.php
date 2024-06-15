@@ -29,7 +29,8 @@ class Cursor
    private Output $Output;
 
    // * Metadata
-   public bool $hidden;
+   private bool $hidden;
+   private array $position;
 
 
    public function __construct (Output &$Output)
@@ -44,6 +45,9 @@ class Cursor
    {
       switch ($name) {
          // TODO test/add more methods to retrieve the current cursor position
+         // * Metadata
+         case 'hidden':
+            return $this->hidden;
          case 'position':
             if (! \function_exists('shell_exec') ) {
                return [];

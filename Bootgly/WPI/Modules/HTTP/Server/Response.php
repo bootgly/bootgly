@@ -30,7 +30,7 @@ abstract class Response
     *
     * @param mixed $body The data that should be appended to the response body.
     *
-    * @return Response The Response instance, for chaining
+    * @return self The Response instance, for chaining
     */
    abstract public function append ($body) : self;
 
@@ -39,9 +39,9 @@ abstract class Response
     *
     * @param string $view The view to render.
     * @param array|null $data The data to provide to the view.
-    * @param Closure|null $callback Optional callback.
+    * @param \Closure|null $callback Optional callback.
     *
-    * @return Response Returns Response
+    * @return self Returns Response
     */
    abstract public function render (string $view, ? array $data = null, ? \Closure $callback = null) : self;
    /**
@@ -50,7 +50,7 @@ abstract class Response
     * @param mixed|null $body The body of the response.
     * @param mixed ...$options Additional options for the response
     *
-    * @return Response The Response instance, for chaining
+    * @return self The Response instance, for chaining
     */
    abstract public function send ($body = null, ...$options) : self;
    /**
@@ -60,7 +60,7 @@ abstract class Response
     * @param int $offset The data offset.
     * @param int|null $length The length of the data to upload.
     * 
-    * @return Response The Response instance, for chaining
+    * @return self The Response instance, for chaining
     */
    abstract public function upload (string|File $file, int $offset = 0, ? int $length = null) : self;
 
@@ -69,7 +69,7 @@ abstract class Response
     *
     * @param Authentication $Method The authentication method to use.
     *
-    * @return Response The Response instance, for chaining
+    * @return self The Response instance, for chaining
     */
    abstract public function authenticate (Authentication $Method) : self;
 
@@ -79,7 +79,7 @@ abstract class Response
     * @param string $URI The new URI to redirect to.
     * @param ? int $code The HTTP status code to use for the redirection.
     *
-    * @return Response Returns Response.
+    * @return self Returns Response.
     */
    abstract public function redirect (string $URI, ? int $code = null) : self;
 }

@@ -29,9 +29,9 @@ trait Renderable
     *
     * @param string $view The view to render.
     * @param array|null $data The data to provide to the view.
-    * @param Closure|null $callback Optional callback.
+    * @param \Closure|null $callback Optional callback.
     *
-    * @return Response The Response instance, for chaining
+    * @return self The Response instance, for chaining
     */
    public function render (string $view, ? array $data = null, ? \Closure $callback = null) : self
    {
@@ -47,9 +47,6 @@ trait Renderable
       }
 
       // @ Set variables
-      /**
-       * @var \Bootgly\WPI $WPI
-       */
       $Route = &self::$Server::$Router->Route;
 
       if ($data === null) {

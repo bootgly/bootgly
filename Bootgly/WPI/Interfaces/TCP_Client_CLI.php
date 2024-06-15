@@ -307,7 +307,7 @@ class TCP_Client_CLI
          return $Socket;
       }
 
-      $this->Connections->connect($Socket);
+      $this->Connections->connect();
 
       return $Socket;
    }
@@ -318,8 +318,9 @@ class TCP_Client_CLI
 
       Logger::$display = Logger::DISPLAY_MESSAGE;
 
+      $children = (string) count($this->Process::$children);
       match ($this->Process->level) {
-         'master' => $this->log("{$this->Process->children} worker(s) stopped!@\\;", 3),
+         'master' => $this->log("{$children} worker(s) stopped!@\\;", 3),
          'child' => null
       };
 

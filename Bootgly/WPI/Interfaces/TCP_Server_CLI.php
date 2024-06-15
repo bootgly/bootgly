@@ -465,8 +465,9 @@ class TCP_Server_CLI implements Servers, Logging
          return false;
       }
 
+      $children = (string) count($this->Process::$children);
       match ($this->Process->level) {
-         'master' => $this->log("Resuming {$this->Process->children} worker(s)... @\\;", 3),
+         'master' => $this->log("Resuming {$children} worker(s)... @\\;", 3),
          'child' => self::$Event->add($this->Socket, self::$Event::EVENT_CONNECT, true)
       };
 
@@ -485,8 +486,9 @@ class TCP_Server_CLI implements Servers, Logging
          return false;
       }
 
+      $children = (string) count($this->Process::$children);
       match ($this->Process->level) {
-         'master' => $this->log("Pausing {$this->Process->children} worker(s)... @\\;", 3),
+         'master' => $this->log("Pausing {$children} worker(s)... @\\;", 3),
          'child' => self::$Event->del($this->Socket, self::$Event::EVENT_CONNECT)
       };
 
@@ -510,9 +512,10 @@ class TCP_Server_CLI implements Servers, Logging
          return;
       }
 
+      $children = (string) count($this->Process::$children);
       switch ($this->Process->level) {
          case 'master':
-            $this->log("{$this->Process->children} worker(s) stopped!@\\;", 3);
+            $this->log("{$children} worker(s) stopped!@\\;", 3);
             \pcntl_wait($status);
             exit(0);
          case 'child':

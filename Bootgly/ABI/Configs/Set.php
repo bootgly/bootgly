@@ -10,7 +10,10 @@
 
 namespace Bootgly\ABI\Configs;
 
-
+/**
+ * @method self get()
+ * @method self set()
+ */
 trait Set // @ Use with enums
 {
    public function __call (string $name, array $arguments)

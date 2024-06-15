@@ -18,7 +18,7 @@ trait Extendable
     *
     * @param mixed $body The data that should be appended to the response body.
     *
-    * @return Response The Response instance, for chaining
+    * @return self The Response instance, for chaining
     */
    public function append ($body) : self
    {
@@ -33,7 +33,7 @@ trait Extendable
     *
     * @param array $variables Variables to be passed to the File Response.
     *
-    * @return Response The Response instance, for chaining
+    * @return self The Response instance, for chaining
     */
    public function use (array ...$variables) : self
    {

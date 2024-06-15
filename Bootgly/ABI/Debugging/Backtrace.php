@@ -24,6 +24,10 @@ class Backtrace
    // * Metadata
    // @ Last
    private array $trace;
+   // @ Trace
+   private string $dir;
+   private string $file;
+   private int $line;
 
 
    public function __construct (int $limit = 0)
@@ -45,7 +49,8 @@ class Backtrace
       // * Metadata
       // @ Last
       foreach ($calls as $call) {
-         $this->trace = $call; break;
+         $this->trace = $call;
+         break;
       }
    }
    public function __get (string $name)
@@ -55,6 +60,10 @@ class Backtrace
       switch ($name) {
          case 'dir':
             return \dirname($this->trace['file']);
+         case 'file':
+            return $this->trace['file'];
+         case 'line':
+            return $this->trace['line'];
          default:
             return $this->trace[$name];
       }

@@ -13,7 +13,7 @@ namespace Bootgly\CLI\UI\Menu\Items;
 
 use Bootgly\CLI\UI\Menu\Items;
 use Bootgly\CLI\UI\Menu\Menu;
-
+use Bootgly\CLI\UI\Menu\Orientation;
 
 final class Options extends Items
 {
@@ -233,7 +233,8 @@ final class Options extends Items
 
       // @ Displaying
       // Aligment
-      if ($Orientation === $Orientation::Vertical) {
+      if ($Orientation === Orientation::Vertical) {
+         // @phpstan-ignore-next-line
          $compiled = str_pad($compiled, Menu::$width, ' ', $Aligment->value);
       }
 
@@ -241,7 +242,7 @@ final class Options extends Items
       // Divisor
       $divisor = '';
       switch ($Orientation) {
-         case $Orientation::Vertical:
+         case Orientation::Vertical:
             $divisor = "\n";
 
             if ($index < self::$indexes - 1) {
@@ -254,7 +255,7 @@ final class Options extends Items
             }
 
             break;
-         case $Orientation::Horizontal:
+         case Orientation::Horizontal:
             $divisor = ' ';
 
             if ($index < self::$indexes - 1) {

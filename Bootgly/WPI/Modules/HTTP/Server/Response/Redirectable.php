@@ -23,7 +23,7 @@ trait Redirectable
     * @param string $URI The new URI to redirect to.
     * @param ? int $code The HTTP status code to use for the redirection.
     *
-    * @return Response Returns Response.
+    * @return self Returns Response.
     */
    public function redirect (string $URI, ? int $code = null) : self
    {

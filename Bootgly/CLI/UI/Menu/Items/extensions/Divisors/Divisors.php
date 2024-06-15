@@ -13,7 +13,7 @@ namespace Bootgly\CLI\UI\Menu\Items\extensions\Divisors;
 
 use Bootgly\CLI\UI\Menu\Items;
 use Bootgly\CLI\UI\Menu\Menu;
-
+use Bootgly\CLI\UI\Menu\Orientation;
 
 final class Divisors extends Items
 {
@@ -68,13 +68,13 @@ final class Divisors extends Items
       }
 
       switch ($Orientation) {
-         case $Orientation::Vertical:
+         case Orientation::Vertical:
             $divisor = str_repeat($characters, Menu::$width / $length);
 
             $compiled .= "{$divisor}\n";
 
             break;
-         case $Orientation::Horizontal:
+         case Orientation::Horizontal:
             $compiled = "{$characters}";
       }
 

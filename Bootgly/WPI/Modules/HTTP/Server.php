@@ -11,12 +11,6 @@
 namespace Bootgly\WPI\Modules\HTTP;
 
 
-use Bootgly\WPI\Modules\HTTP\Server\Router;
-
-
-/**
- * @property static Router $Router
- */
 interface Server
 {
    // RFC "Interface properties"!

@@ -112,7 +112,6 @@ class Text
     *
     * @param int|string $foreground The foreground color code or name. Defaults to 'default'.
     * @param int|string $background The background color code or name. Defaults to 'default'.
-    * @param int $type The type of colors to use. One of the constants defined in the class. Defaults to DEFAULT_COLORS.
     *
     * @return Output
     */

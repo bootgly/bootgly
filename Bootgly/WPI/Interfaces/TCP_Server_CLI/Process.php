@@ -16,8 +16,9 @@ use Bootgly\ACI\Events\Timer;
 use Bootgly\ACI\Logs\Logger;
 use Bootgly\ACI\Logs\LoggableEscaped;
 
+use const Bootgly\CLI;
 use Bootgly\API\Server as SAPI;
-
+use Bootgly\WPI\Endpoints\Servers\Modes;
 use Bootgly\WPI\Events\Select;
 // ?
 use Bootgly\WPI\Interfaces\TCP_Server_CLI as Server;
@@ -37,6 +38,7 @@ class Process
    // ...
 
    // * Metadata
+   private string $level;
    // @ Id
    public static int $index;
    public static int $master;
@@ -59,7 +61,7 @@ class Process
       // ...
 
       // * Metadata
-      self::$master = posix_getpid();
+      self::$master = \posix_getpid();
 
 
       static::lock();
@@ -71,13 +73,14 @@ class Process
    public function __get ($name)
    {
       switch ($name) {
+         // * Metadata
          case 'id':
-            return posix_getpid();
+            return \posix_getpid();
 
          case 'master':
-            return $this->id === self::$master;
+            return $this->__get("id") === self::$master;
          case 'child':
-            return $this->id !== self::$master;
+            return $this->__get("id") !== self::$master;
 
          case 'level':
             return $this->master ? 'master' : 'child';
@@ -187,9 +190,9 @@ class Process
             break;
          // @ pause()
          case SIGTSTP: // 20 (CTRL + Z)
-            match ($this->Server->mode) {
-               Server::MODE_MONITOR => $this->Server->mode = Server::MODE_INTERACTIVE,
-               Server::MODE_INTERACTIVE => $this->Server->pause()
+            match ($this->Server->Mode) {
+               Modes::Monitor => $this->Server->Mode = Modes::Interactive,
+               Modes::Interactive => $this->Server->pause()
             };
             break;
          // @ resume()
@@ -203,15 +206,15 @@ class Process
 
          // ! \Connection
          // ? @info
-         // @ $peers
+         // @ $connections
          // Show info of active remote accepted connections (remote ip + remote port, ...)
          case SIGIOT:  // 6
-            $this->Server->Connections->{'@peers'};
+            CLI->Commands->find('connections', From: $this->Server)?->run();
             break;
          // @ $stats
          // Show stats of server socket connections (reads, writes, errors...)
          case SIGIO:   // 29
-            $this->Server->Connections->{'@stats'};
+            CLI->Commands->find('stats', From: $this->Server)?->run();
             break;
       }
    }
@@ -291,7 +294,7 @@ class Process
 
    public function __destruct ()
    {
-      if ($this->level === 'master') {
+      if ($this->__get("level") === 'master') {
          @\unlink(static::$commandFile);
          @\unlink(static::$pidFile);
          @\unlink(static::$pidLockFile);

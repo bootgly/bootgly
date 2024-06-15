@@ -156,12 +156,12 @@ return new class extends Command
          $Bar->Symbols->current = '';
          $Bar->Symbols->complete = '▉';
 
-         $pids = $Server->Process->pids;
-         foreach ($pids as $i => $pid) {
+         $PIDs = $Server->Process::$children;
+         foreach ($PIDs as $i => $PID) {
             // @ Worker
             $id = \sprintf('%02d', $i + 1);
             // @ System
-            $procPath = "/proc/$pid";
+            $procPath = "/proc/$PID";
 
             if ( \is_dir($procPath) ) {
                $process_stat = \file_get_contents("$procPath/stat");
@@ -209,7 +209,7 @@ return new class extends Command
             }
             else {
                $Fieldset2->content .= <<<OUTPUT
-                Worker #{$id} with PID $pid not found. \n
+                Worker #{$id} with PID $PID not found. \n
                OUTPUT;
             }
          }

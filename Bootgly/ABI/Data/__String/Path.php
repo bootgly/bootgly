@@ -44,7 +44,7 @@ class Path // support to FileSystem Paths only (Linux only)
    protected string $root;
    protected string $parent;
    protected string $current;
-   #protected array $parts;
+   protected array $parts;
    // ->parts
    #protected int $indexes;
    #protected object $Index;
