@@ -1,0 +1,30 @@
+name: PHPStan (analyze)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'main'
+    paths-ignore:
+      - '**/README.md'
+
+jobs:
+  phpstan:
+    runs-on: ubuntu-24.04
+
+    steps:
+      -
+        name: Checkout code
+        uses: actions/checkout@v4
+      -
+        name: Setup PHP 8.2
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring
+      -
+        name: Install dependencies with Composer
+        run: composer install --prefer-dist --no-progress --no-suggest
+      -
+        name: Run PHPStan
+        run: vendor/bin/phpstan analyze -c @/phpstan.neon
