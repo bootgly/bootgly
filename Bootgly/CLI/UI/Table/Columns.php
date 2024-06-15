@@ -39,6 +39,7 @@ class Columns
       // * Config
       $this->section = null;
       // @ Width
+      // @phpstan-ignore-next-line
       $this->Autowiden = Autowiden::Based_On_Entiry_Column->set();
 
       // * Data

@@ -192,7 +192,7 @@ trait Requestable
             return $this->language = $this->languages[0] ?? '';
          case 'charsets':
             $charsets = $this->negotiate(with: self::ACCEPTS_CHARSETS);
-            return $this->charset = $charsets;
+            return $this->charsets = $charsets;
          case 'charset':
             return $this->charset = $this->charsets[0] ?? '';
          case 'encodings':

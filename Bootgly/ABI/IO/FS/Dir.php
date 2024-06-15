@@ -93,7 +93,7 @@ class Dir implements FS
       // Only if $this->dir was successfully constructed
       $dir = $this->dir ?? false;
       if ($dir === '' || $dir === false) {
-         return false;
+         return;
       }
 
       switch ($name) {

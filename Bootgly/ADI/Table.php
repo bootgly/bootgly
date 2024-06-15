@@ -97,7 +97,8 @@ class Table
                }
             }
          }
-      } catch (\Throwable) {
+      }
+      catch (\Throwable) {
          return false;
       }
 
@@ -124,7 +125,8 @@ class Table
                }
             }
          }
-      } catch (\Throwable) {
+      }
+      catch (\Throwable) {
          return false;
       }
 
@@ -151,8 +153,9 @@ class Table
                }
             }
          }
-      } catch (\Throwable) {
-         return false;
+      }
+      catch (\Throwable) {
+         return 0;
       }
 
       return $result;
@@ -182,7 +185,8 @@ class Table
                }
             }
          }
-      } catch (\Throwable) {
+      }
+      catch (\Throwable) {
          return false;
       }
 

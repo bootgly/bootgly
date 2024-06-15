@@ -28,7 +28,7 @@ class Decoder_Waiting extends Decoders
    {
       // @ Get callbacks
       $Request = Server::$Request;
-      $Body = &$Request->Raw->Body;
+      $Body = $Request->Raw->Body;
 
       // @ Check if Request Body is waiting data
       if ($Body->waiting) {

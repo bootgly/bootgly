@@ -167,7 +167,7 @@ class Response extends Responsing
          // ? Response Metadata
          case 'code':
             if (\is_int($value) && $value > 99 && $value < 600) {
-               $this->Raw->Meta->status = $value;
+               $this->Raw->Meta->code = $value;
             }
             break;
       }
@@ -382,7 +382,7 @@ class Response extends Responsing
 
       // @ Return null Response if client Purpose === prefetch
       if (Server::$Request->Raw->Header->get('Purpose') === 'prefetch') {
-         $this->Raw->Meta->status = 204;
+         $this->Raw->Meta->code = 204;
          $this->Raw->Header->set('Cache-Control', 'no-store');
          $this->Raw->Header->set('Expires', '0');
          return $this;
@@ -449,7 +449,7 @@ class Response extends Responsing
       $pads = [];
       if ($ranges[0]['end'] !== null || $ranges[0]['start']) {
          // @ Set Response status
-         $this->Raw->Meta->status = 206; // 206 Partial Content
+         $this->Raw->Meta->code = 206; // 206 Partial Content
 
          if ($rangesCount > 1) { // @ HTTP Multipart ranges
             $boundary = \str_pad(++Server::$Request::$multiparts, 20, '0', \STR_PAD_LEFT);
@@ -584,7 +584,7 @@ class Response extends Responsing
          switch ($code) {
             case 400: // Bad Request
             case 416: // Range Not Satisfiable
-               $this->Raw->Meta->status = 416;
+               $this->Raw->Meta->code = 416;
                // Clean prepared headers / header fields already set
                $this->Raw->Header->clean();
                $this->Raw->Body->raw = ' '; // Needs body non-empty

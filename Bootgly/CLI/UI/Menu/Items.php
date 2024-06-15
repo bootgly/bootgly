@@ -47,7 +47,9 @@ class Items
 
       // * Config
       // @ Displaying
+      // @phpstan-ignore-next-line
       $this->Orientation = Orientation::Vertical->set();
+      // @phpstan-ignore-next-line
       $this->Aligment = Aligment::Left->set();
       // @ Boxing
       $this->Margin = Margin::All;

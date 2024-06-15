@@ -45,6 +45,7 @@ final class Options extends Items
       // --- Child --- \\
       // * Config
       // @ Selecting
+      // @phpstan-ignore-next-line
       $this->Selection = Selection::Multiple->set();
       // @ Styling
       $this->divisors = '';

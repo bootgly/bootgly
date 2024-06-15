@@ -76,11 +76,15 @@ class Connection extends Packages
       // IP:port
       $peer = stream_socket_get_name($Socket, false);
       if ($peer === false) {
-         return $this->close();
+         $this->close();
+         return;
       }
       // * Data
       // @ Remote
-      @[$this->ip, $this->port] = explode(':', $peer, 2); // TODO IPv6
+      @[$IP, $port] = explode(':', $peer, 2); // TODO IPv6
+      $this->ip = $IP;
+      $this->port = (int) $port;
+
 
       parent::__construct($this);
 

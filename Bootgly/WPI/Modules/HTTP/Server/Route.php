@@ -61,7 +61,7 @@ class Route
       $this->parameterized = false;
       // ! Parse
       $this->parsed = '';
-      $this->catched = false;
+      $this->catched = '';
       // $this->node = '';
       $this->nodes = 0;
       // ! Group

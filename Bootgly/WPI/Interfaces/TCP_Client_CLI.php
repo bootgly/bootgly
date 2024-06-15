@@ -84,7 +84,7 @@ class TCP_Client_CLI
    public function __construct (int $mode = self::MODE_DEFAULT)
    {
       if (\PHP_SAPI !== 'cli') {
-         return false;
+         return;
       }
 
       // * Config

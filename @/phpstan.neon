@@ -9,14 +9,12 @@ parameters:
          - */tests/*
          - */examples/*
    reportUnmatchedIgnoredErrors: false
-   level: 2
+   level: 3
 
    paths:
       - ../Bootgly
    ignoreErrors:
-      -
-         identifier: property.uninitializedReadonly
-      -
-         identifier: property.private
-      -
-         identifier: property.protected
+      - identifier: property.uninitializedReadonly
+      - identifier: property.private
+      - identifier: property.protected
+      - identifier: property.readOnlyAssignNotInConstructor

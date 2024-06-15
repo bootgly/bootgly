@@ -83,7 +83,7 @@ class Meta
                // * Metadata
                $this->raw = $this->protocol . ' ' . $status;
                // @ Status
-               $this->code = $code;
+               $this->code = (int) $code;
                $this->message = $message;
             }
 

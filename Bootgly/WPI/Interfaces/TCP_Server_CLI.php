@@ -84,7 +84,7 @@ class TCP_Server_CLI implements Servers, Logging
    public function __construct ()
    {
       if (\PHP_SAPI !== 'cli') {
-         return false;
+         return;
       }
 
       // * Config

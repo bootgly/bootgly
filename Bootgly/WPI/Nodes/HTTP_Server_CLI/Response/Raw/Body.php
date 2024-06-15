@@ -25,7 +25,7 @@ class Body
    private string $chunked;
 
 
-   public function __get (string $name) : string
+   public function __get (string $name)
    {
       switch ($name) {
          // * Metadata

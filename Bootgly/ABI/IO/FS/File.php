@@ -322,7 +322,7 @@ class File implements FS
       // Only if $this->file was successfully constructed
       $file = $this->file ?? false;
       if ($file === '' || $file === false) {
-         return false;
+         return;
       }
 
       switch ($name) {
@@ -343,7 +343,7 @@ class File implements FS
                $this->written = false;
             }
 
-            return $this->contents = $contents;
+            $this->contents = $contents;
       }
    }
    public function __toString () : string
