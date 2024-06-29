@@ -109,7 +109,7 @@ abstract class Errors extends Throwables
          $output .=  $Theme->apply('file', $file);
          // file line
          $output .= ':';
-         $output .= $Theme->apply('file_line', $line);
+         $output .= $Theme->apply('file_line', (string) $line);
          $output .= "\n";
          // file content
          // TODO file content filters

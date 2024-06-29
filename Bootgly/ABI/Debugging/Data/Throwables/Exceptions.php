@@ -27,12 +27,12 @@ abstract class Exceptions extends Throwables
    protected static array $exceptions = [];
 
 
-   public static function collect (\Error|\Exception $E)
+   public static function collect (\Throwable $E): void
    {
       self::$exceptions[] = $E;
    }
 
-   public static function debug (...$Throwables)
+   public static function debug (...$Throwables): void
    {
       $exceptions = $Throwables ?: self::$exceptions;
 

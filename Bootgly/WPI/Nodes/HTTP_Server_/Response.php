@@ -230,7 +230,7 @@ class Response extends Responsing
                case 'image/x-icon':
                case 'ico':
                   $this->Header->set('Content-Type', 'image/x-icon');
-                  $this->Header->set('Content-Length', $File->size);
+                  $this->Header->set('Content-Length', (string) $File->size);
 
                   $body = $File->contents;
 
@@ -322,7 +322,7 @@ class Response extends Responsing
       ]);
 
       // @ Send File Content
-      $this->Header->set('Content-Length', $File->size);
+      $this->Header->set('Content-Length', (string) $File->size);
       $this->Header->build();
       $this->Header->send();
 

@@ -392,13 +392,13 @@ class Response extends Responsing
                $this->end(400);
                return $this;
             case -1:
-               $this->end(416, $size);
+               $this->end(416, (string) $size);
                return $this;
             default:
                $type = \array_pop($ranges);
                // @ Check Range type
                if ($type !== 'bytes') {
-                  $this->end(416, $size);
+                  $this->end(416, (string) $size);
                   return $this;
                }
 
@@ -436,7 +436,7 @@ class Response extends Responsing
       $rangesCount = \count($ranges);
       // @ Set Content Length Header
       if ($rangesCount === 1) {
-         $this->Header->set('Content-Length', $parts[0]['length']);
+         $this->Header->set('Content-Length', (string) $parts[0]['length']);
       }
       // @ Set HTTP range requests Headers
       $pads = [];
@@ -445,7 +445,12 @@ class Response extends Responsing
          $this->code(206); // 206 Partial Content
 
          if ($rangesCount > 1) { // @ HTTP Multipart ranges
-            $boundary = \str_pad(++Server::$Request::$multiparts, 20, '0', \STR_PAD_LEFT);
+            $boundary = \str_pad(
+               string: (string) ++Server::$Request::$multiparts,
+               length: 20,
+               pad_string: '0',
+               pad_type: \STR_PAD_LEFT
+            );
 
             $this->Header->set('Content-Type', 'multipart/byteranges; boundary=' . $boundary);
 
@@ -479,7 +484,7 @@ class Response extends Responsing
                ];
             }
 
-            $this->Header->set('Content-Length', $length);
+            $this->Header->set('Content-Length', (string) $length);
          }
          else { // @ HTTP Single part ranges
             $start = $ranges[0]['start'];
