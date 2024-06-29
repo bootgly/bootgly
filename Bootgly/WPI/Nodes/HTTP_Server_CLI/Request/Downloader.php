@@ -112,10 +112,7 @@ class Downloader
                   $size = \strlen($boundaryValue);
                   $tempUploadedDir = BOOTGLY_WORKING_BASE . '/workdata/temp/files/downloaded/';
 
-                  if (! $tempUploadedDir) {
-                     $error = UPLOAD_ERR_NO_TMP_DIR;
-                  }
-                  else if ($boundaryValue === '') {
+                  if ($boundaryValue === '') {
                      $error = UPLOAD_ERR_NO_FILE;
                   }
                   else {
@@ -148,8 +145,6 @@ class Downloader
 
                   return $sectionEnd + strlen($boundary) + 2;
                }
-
-               break;
             case "content-type":
                $file['type'] = trim($value);
 

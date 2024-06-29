@@ -22,7 +22,7 @@ trait Bootable
          $this->source  = null;
          $this->type    = null;
 
-         $this->body    = null;
+         $this->content = "";
 
          $this->initied = true;
       }
@@ -50,7 +50,7 @@ trait Bootable
             $this->type     = '';
             break;
 
-         // @ File
+         // @ Content File
          case 'view':
             $this->source = 'file';
             $this->type = 'php';
@@ -84,36 +84,36 @@ trait Bootable
          case 'json':
          case 'jsonp':
             if ( \is_array($data) ) {
-               $this->body = $data;
+               $this->content = $data;
                break;
             }
 
-            $this->body = \json_decode($data, true);
+            $this->content = \json_decode($data, true);
 
             break;
          case 'pre':
             if ($data === null) {
-               $data = $this->body;
+               $data = $this->content;
             }
 
-            $this->body = '<pre>'.$data.'</pre>';
+            $this->content = '<pre>'.$data.'</pre>';
 
             break;
 
-         // @ Response File
+         // @ Response Content File
          case 'view':
-            $File = new File(BOOTGLY_PROJECT?->path . 'views/' . $data);
+            $File = new File(BOOTGLY_PROJECT->path . 'views/' . $data);
 
             $this->source = 'file';
             $this->type   = $File->extension;
 
-            $this->body   = $File;
+            $this->File   = $File;
 
             break;
 
          // @ Response Raw
          case 'raw':
-            $this->body = $data;
+            $this->content = $data;
 
             break;
 
@@ -129,13 +129,13 @@ trait Bootable
                         #!
                         '/' => new File(BOOTGLY_WORKING_DIR . 'projects' . $data),
                         '@' => new File(BOOTGLY_WORKING_DIR . 'projects/' . $data),
-                        default => new File(BOOTGLY_PROJECT?->path . $data)
+                        default => new File(BOOTGLY_PROJECT->path . $data)
                      };
 
                      $this->source = 'file';
                      $this->type   = $File->extension;
 
-                     $this->body   = &$File;
+                     $this->File   = &$File;
 
                      break;
                   case 'object':
@@ -145,7 +145,7 @@ trait Bootable
                         $this->source = 'file';
                         $this->type   = $File->extension;
 
-                        $this->body   = $File;
+                        $this->File   = $File;
                      }
 
                      break;

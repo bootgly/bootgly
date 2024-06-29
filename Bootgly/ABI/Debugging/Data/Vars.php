@@ -83,7 +83,8 @@ class Vars implements Debugging
             // dump
             $dump = match ($value) {
                false => 'FALSE',
-               true  => 'TRUE'
+               true  => 'TRUE',
+               default => null
             };
             if (self::$CLI) {
                $dump = "\033[31m" . $dump . "\033[0m";

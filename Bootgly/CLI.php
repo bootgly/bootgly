@@ -70,7 +70,6 @@ class CLI extends Projects // Command Line Interface
                Please, register it in `scripts/@.php`.
                MESSAGE
             );
-            break;
          case 0: // @ Running external script
             break;
          default: // @ Boot CLI

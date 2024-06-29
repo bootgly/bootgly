@@ -1,5 +1,6 @@
 <?php
 use Bootgly\ABI\Debugging\Data\Vars;
+use Bootgly\WPI\Modules\HTTP\Server\Response\Raw\Header\Cookie;
 // SAPI
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
@@ -14,8 +15,10 @@ return [
    // @ simulate
    // Server API
    'response' => function (Request $Request, Response $Response) : Response {
-      $Response->Raw->Header->Cookies->append('Test1', 'value1');
-      $Response->Raw->Header->Cookies->append('Test2', 'value2');
+      $Cookies = $Response->Header->Cookies;
+
+      $Cookies->append(new Cookie('Test1', 'value1'));
+      $Cookies->append(new Cookie('Test2', 'value2'));
 
       return $Response(body: 'Hello World!');
    },

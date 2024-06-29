@@ -60,7 +60,7 @@ class Commands extends CLI\Terminal
             && false,
 
          'clear' =>
-            $this->clear() && true,
+            $this->clear() && true, // @phpstan-ignore-line
          'help' =>
             $this->help() && true,
 

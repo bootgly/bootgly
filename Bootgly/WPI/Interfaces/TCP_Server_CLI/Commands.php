@@ -107,7 +107,7 @@ class Commands extends CLI\Terminal
          // TODO restart command
          // @ mode
          'monitor' =>
-            ($this->Server->Mode = Modes::Monitor) && true,
+            ($this->Server->Mode = Modes::Monitor) && true, // @phpstan-ignore-line
          // @ operations
          // TODO 'benchmark'
          'check jit' =>
@@ -128,7 +128,7 @@ class Commands extends CLI\Terminal
             && $this->Server->Process->sendSignal(SIGUSR1, master: true, children: false)
 
             && $this->saveCommand('test end')
-            && $this->Server->Process->sendSignal(SIGUSR1, master: false, children: true) && true,
+            && $this->Server->Process->sendSignal(SIGUSR1, master: false, children: true) && true, // @phpstan-ignore-line
 
          // ! \ Connection
          'stats' =>
@@ -141,7 +141,7 @@ class Commands extends CLI\Terminal
             $this->Server->Process->sendSignal(SIGIOT, master: false) && false,
          // *
          'clear' =>
-            $this->clear() && true,
+            $this->clear() && true, // @phpstan-ignore-line
          'help' =>
             $this->help() && true,
 

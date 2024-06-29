@@ -23,13 +23,13 @@ trait Authenticable
     *
     * @return self The Response instance, for chaining
     */
-   public function authenticate (Authentication $Method) : self
+   public function authenticate (Authentication $Method): self
    {
       $this->__set('code', 401);
 
       switch ($Method) {
          case $Method instanceof Authentication\Basic:
-            $this->Raw->Header->set(
+            $this->Header->set(
                'WWW-Authenticate',
                'Basic realm="' . $Method->realm . '"'
             );

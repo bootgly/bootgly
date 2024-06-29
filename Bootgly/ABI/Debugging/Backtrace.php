@@ -59,11 +59,14 @@ class Backtrace
       // @ Last
       switch ($name) {
          case 'dir':
-            return \dirname($this->trace['file']);
+            $this->dir = \dirname($this->trace['file']);
+            return $this->dir;
          case 'file':
-            return $this->trace['file'];
+            $this->file = $this->trace['file'];
+            return $this->file;
          case 'line':
-            return $this->trace['line'];
+            $this->line = $this->trace['line'];
+            return $this->line;
          default:
             return $this->trace[$name];
       }

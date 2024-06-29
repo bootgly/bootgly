@@ -266,7 +266,7 @@ class Path // support to FileSystem Paths only (Linux only)
       $path = match (DIRECTORY_SEPARATOR) {
          '/' => str_replace('\\', '/', $path),
          '\\' => str_replace('/', '\\', $path),
-         default => $path
+         default => $path // @phpstan-ignore-line
       };
       // Split the path into parts
       $parts = explode(DIRECTORY_SEPARATOR, $path); // TODO use self::split?

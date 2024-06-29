@@ -30,9 +30,6 @@ class Encoder_Testing extends Encoders
       Server::$Response = new Response;
       Server::$Router = new Router(Server::class);
 
-      // @ Remove dynamic Headers
-      Server::$Response->Raw->Header->preset('Date', null);
-
       // @ Reset SAPI
       SAPI::boot(reset: true, base: Server::class, key: 'response');
 
@@ -64,6 +61,9 @@ class Encoder_Testing extends Encoders
          if ($Request->Raw->Body->waiting) {
             return '';
          }
+
+         // @ Remove dynamic Headers
+         $Response->Header->preset('Date', null);
 
          // @ Output/Stream HTTP Response
          return $Response->output($Packages, $length);

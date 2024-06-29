@@ -41,13 +41,8 @@ class Header
 
       // * Data
       // field
-      $fields = \apache_request_headers();
-      if ($fields !== false) {
-         $fields = \array_change_key_case($fields, \CASE_LOWER);
-      }
-      else {
-         $fields = [];
-      }
+      $headers = \apache_request_headers();
+      $fields = \array_change_key_case($headers, \CASE_LOWER);
       $this->fields = $fields;
 
       // * Metadata
@@ -80,7 +75,8 @@ class Header
 
          // * Metadata
          case 'length':
-            return $this->length = \strlen($this->raw ?? $this->__get('raw'));
+            $this->length = \strlen($this->raw ?? $this->__get('raw'));
+            return $this->length;
       }
    }
    public function __set (string $name, string $value)

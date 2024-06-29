@@ -321,7 +321,8 @@ class TCP_Client_CLI
       $children = (string) count($this->Process::$children);
       match ($this->Process->level) {
          'master' => $this->log("{$children} worker(s) stopped!@\\;", 3),
-         'child' => null
+         'child' => null,
+         default => null
       };
 
       exit(0);

@@ -11,23 +11,12 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_\Response\Raw;
 
 
+use Bootgly\WPI\Modules\HTTP\Server\Response\Raw;
 use Bootgly\WPI\Nodes\HTTP_Server_\Response\Raw\Header\Cookies;
 
 
-class Header
+class Header extends Raw\Header
 {
-   // * Config
-   private array $preset;
-   private array $prepared;
-
-   // * Data
-   private array $fields;
-
-   // * Metadata
-   private array $queued;
-   private string $raw;
-   private bool $sent;
-
    public Cookies $Cookies;
 
 
@@ -113,8 +102,38 @@ class Header
       $this->prepared = $fields;
    }
 
+   public function get (string $name) : string
+   {
+      return (string) (@$this->fields[$name] ?? @$this->fields[\strtolower($name)] ?? '');
+   }
+
+   public function set (string $field, string $value): bool // TODO refactor
+   {
+      $this->fields[$field] = $value;
+
+      \header($field . ': ' . $value, true);
+
+      return true;
+   }
+   public function append (string $field, string $value = '', ? string $separator = ', ') // TODO refactor
+   {
+      // TODO map separator (with const?) Header that can have only value to append, only entire header, etc.
+
+      if ( isSet($this->fields[$field]) ) {
+         $this->fields[$field] .= $separator . $value;
+      } else {
+         $this->fields[$field] = $value;
+      }
+
+      \header($field . ': ' . $value, false);
+   }
+   public function queue (string $field, string $value = '')
+   {
+      $this->queued[] = "$field: $value";
+   }
+
    // TODO increase performance
-   public function build (bool $send = false) // @ raw
+   public function build (bool $send = false): bool // @ raw
    {
       // ?
       if ( empty($this->fields) && empty($this->prepared) ) {
@@ -124,7 +143,8 @@ class Header
       // @ Set / merge headers with prepared fields
       if ( empty($this->fields) && ! empty($this->prepared) ) {
          $this->fields = $this->prepared;
-      } else {
+      }
+      else {
          $this->fields = \array_merge($this->fields, $this->prepared);
       }
 
@@ -132,7 +152,7 @@ class Header
       $this->fields['Content-Type'] ??= 'text/html; charset=UTF-8';
 
       // @ Build
-      $queued = $this->queued;
+      $queued = &$this->queued;
       // Preset Fields
       foreach ($this->preset as $name => $value) {
          $queued[] = "$name: $value";
@@ -153,31 +173,12 @@ class Header
       return true;
    }
 
-   public function get (string $name) : string
+   public function send ()
    {
-      return (string) (@$this->fields[$name] ?? @$this->fields[\strtolower($name)] ?? '');
-   }
+      $queued = $this->queued;
 
-   public function set (string $field, string $value = '') // TODO refactor
-   {
-      $this->fields[$field] = $value;
-
-      \header($field . ': ' . $value, true);
-   }
-   public function append (string $field, string $value = '', ? string $separator = ', ') // TODO refactor
-   {
-      // TODO map separator (with const?) Header that can have only value to append, only entire header, etc.
-
-      if ( isSet($this->fields[$field]) ) {
-         $this->fields[$field] .= $separator . $value;
-      } else {
-         $this->fields[$field] = $value;
+      foreach ($queued as $header) {
+         \header($header, false);
       }
-
-      \header($field . ': ' . $value, false);
-   }
-   public function queue (string $field, string $value = '')
-   {
-      $this->queued[] = "$field: $value";
    }
 }

@@ -25,7 +25,7 @@ use Bootgly\ABI\Templates;
 
 class Template implements Templates
 {
-   private Iterators $Iterators;
+   private Iterators $Iterators; // @phpstan-ignore-line
 
    // * Config
    // ...
@@ -52,7 +52,8 @@ class Template implements Templates
 
    public function __construct (string|File $raw)
    {
-      $this->Iterators = new Iterators; // @ Used to preload Iterators
+      // Used to preload Iterators
+      $this->Iterators = new Iterators;
 
       // * Config
       // ...

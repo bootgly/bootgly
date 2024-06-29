@@ -22,9 +22,9 @@ class MIME
 
    public function __construct (string $filename)
    {
-      $mime_content_type = mime_content_type($filename) ?? '';
+      $mime_content_type = mime_content_type($filename) ?: "";
 
-      [$format, $subtype] = explode('/', $mime_content_type);
+      [$format, $subtype] = explode("/", $mime_content_type);
 
       // * Data
       $this->type = $mime_content_type;

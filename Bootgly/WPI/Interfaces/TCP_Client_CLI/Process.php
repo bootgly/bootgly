@@ -77,7 +77,8 @@ class Process
             return $this->__get("id") !== self::$master;
 
          case 'level':
-            return $this->__get("master") ? 'master' : 'child';
+            $this->level = $this->__get("master") ? 'master' : 'child';
+            return $this->level;
 
          case 'children':
             return count(self::$children);

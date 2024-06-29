@@ -72,13 +72,15 @@ class Cursor
             $row = \intval(@$matches[1]);
             $column = \intval(@$matches[2]);
 
-            return [
+            $this->position = [
                $row,
                $column,
 
                'row' => $row,
                'column' => $column
             ];
+
+            return $this->position;
       }
    }
 

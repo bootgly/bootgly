@@ -21,10 +21,8 @@ use Bootgly\WPI\Modules\HTTP\Server\Response\Extendable;
 use Bootgly\WPI\Modules\HTTP\Server\Response\Redirectable;
 use Bootgly\WPI\Modules\HTTP\Server\Response\Renderable;
 use Bootgly\WPI\Nodes\HTTP_Server_ as Server;
-use Bootgly\WPI\Nodes\HTTP_Server_\Response\Raw;
-use Bootgly\WPI\Nodes\HTTP_Server_\Response\Raw\Body;
 use Bootgly\WPI\Nodes\HTTP_Server_\Response\Raw\Header;
-use Bootgly\WPI\Nodes\HTTP_Server_\Response\Raw\Meta;
+use Bootgly\WPI\Nodes\HTTP_Server_\Response\Raw\Payload;
 
 
 class Response extends Responsing
@@ -43,17 +41,12 @@ class Response extends Responsing
    // ...
 
    // * Data
-   public string $raw;
-   public $body;
-
-   public array $files;
-
-   public ? array $resources;
+   // @ Content
    public ? string $source;
    public ? string $type;
 
    // * Metadata
-   private null|int|bool $code;
+   // @ Content
    private ? string $resource;
    // @ Status
    public bool $initied = false;
@@ -69,10 +62,9 @@ class Response extends Responsing
    public bool $stream;
 
    // / HTTP
-   public readonly Raw $Raw;
-      public readonly Meta $Meta;
-      public readonly Header $Header;
-      public readonly Body $Body;
+   // public readonly Raw $Raw;
+   public readonly Header $Header;
+   public readonly Payload $Payload;
 
 
    public function __construct (int $code = 200, ? array $headers = null, string $body = '')
@@ -84,12 +76,8 @@ class Response extends Responsing
       // ...
 
       // * Data
-      $this->raw = '';
-      $this->body = null;
-
       $this->files = [];
 
-      $this->resources = ['JSON', 'JSONP', 'View', 'HTML/pre'];
       $this->source = null;
       $this->type = null;
 
@@ -109,20 +97,19 @@ class Response extends Responsing
       $this->stream = false;
 
       // / HTTP
-      $this->Raw = new Raw;
-         $this->Meta = $this->Raw->Meta;
-         $this->Header = $this->Raw->Header;
-         $this->Body = $this->Raw->Body;
+      // $this->Raw = new Raw;
+      $this->Header = new Header;
+      $this->Payload = new Payload;
 
       // @
       if ($code !== 200) {
-         $this->__set('code', $code);
+         $this->code($code);
       }
       if ($headers !== null) {
-         $this->Raw->Header->prepare($headers);
+         $this->Header->prepare($headers);
       }
       if ($body !== '') {
-         $this->Raw->Body->raw = $body;
+         $this->Payload->raw = $body;
       }
    }
    public function __get (string $name)
@@ -133,15 +120,15 @@ class Response extends Responsing
             return $this->code = \http_response_code();
          // ? Response Headers
          case 'headers':
-            return $this->Raw->Header->fields;
+            return $this->Header->fields;
          // ? Response Body
          case 'chunked':
             if (! $this->chunked) {
                $this->chunked = true;
-               $this->Raw->Header->append('Transfer-Encoding', 'chunked');
+               $this->Header->append('Transfer-Encoding', 'chunked');
             }
 
-            return $this->Raw->Body->chunked;
+            return $this->Payload->chunked;
 
          default: // @ Construct resource
             $this->resource = $name;
@@ -165,9 +152,23 @@ class Response extends Responsing
    }
    public function __invoke (int $code = 200, array $headers = [], string $body = '') : self
    {
-      $this->__set('code', $code);
-      $this->Raw->Header->prepare($headers);
-      $this->Raw->Body->raw = $body;
+      $this->code($code);
+      $this->Header->prepare($headers);
+      $this->Payload->raw = $body;
+
+      return $this;
+   }
+   /**
+    * Set the HTTP Server Response code.
+    *
+    * @param int $code 
+    *
+    * @return self The Response instance, for chaining 
+    */
+   #[\Override]
+   public function code (int $code): self
+   {
+      $this->code = \http_response_code($code);
 
       return $this;
    }
@@ -188,14 +189,9 @@ class Response extends Responsing
       }
       if ($this->processed === false) {
          $this->process($body, $this->resource);
-         $body = $this->body;
       }
 
-      if ($body === null) {
-         $body = $this->body;
-      }
-
-      // TODO refactor.
+      // TODO move to Resource
       switch ($this->source) {
          case 'content':
             // @ Set body/content
@@ -203,14 +199,14 @@ class Response extends Responsing
                case 'application/json':
                case 'json':
                   // TODO move to prepare or process
-                  $this->Raw->Header->set('Content-Type', 'application/json');
+                  $this->Header->set('Content-Type', 'application/json');
 
                   $body = \json_encode($body, $options[0] ?? 0);
 
                   break;
                case 'jsonp':
                   // TODO move to prepare or process
-                  $this->Raw->Header->set('Content-Type', 'application/json');
+                  $this->Header->set('Content-Type', 'application/json');
 
                   $body = Server::$Request->queries['callback'].'('.\json_encode($body).')';
 
@@ -233,8 +229,8 @@ class Response extends Responsing
             switch ($this->type) {
                case 'image/x-icon':
                case 'ico':
-                  $this->Raw->Header->set('Content-Type', 'image/x-icon');
-                  $this->Raw->Header->set('Content-Length', $File->size);
+                  $this->Header->set('Content-Type', 'image/x-icon');
+                  $this->Header->set('Content-Length', $File->size);
 
                   $body = $File->contents;
 
@@ -275,7 +271,7 @@ class Response extends Responsing
       }
 
       // @ Output
-      echo $body ?? $this->body;
+      echo $body;
 
       $this->sent = true;
 
@@ -298,21 +294,24 @@ class Response extends Responsing
          $File = $file;
       }
       else {
+         /**
+          * @var ?\Bootgly\API\Project $Project
+         */
          $Project = \BOOTGLY_PROJECT;
          if ($Project === null) {
-            $this->__set('code', 500); // Internal Server Error
+            $this->code(500); // Internal Server Error
             return $this;
          }
          $File = new File($Project->path . Path::normalize($file));
       }
 
       if ($File->readable === false) {
-         $this->__set('code', 403); // Forbidden
+         $this->code(403); // Forbidden
          return $this;
       }
 
       // @ Set HTTP headers
-      $this->Raw->Header->prepare([
+      $this->Header->prepare([
          'Content-Type' => 'application/octet-stream',
          'Content-Disposition' => 'attachment; filename="'.$File->basename.'"',
 
@@ -323,8 +322,9 @@ class Response extends Responsing
       ]);
 
       // @ Send File Content
-      $this->Raw->Header->set('Content-Length', $File->size);
-      $this->Raw->Header->build(send: true);
+      $this->Header->set('Content-Length', $File->size);
+      $this->Header->build();
+      $this->Header->send();
 
       // @ Flush HTTP Headers
       \flush();
@@ -360,7 +360,7 @@ class Response extends Responsing
       }
 
       // @
-      $this->__set('code', $code);
+      $this->code($code);
 
       $this->sent = true;
 

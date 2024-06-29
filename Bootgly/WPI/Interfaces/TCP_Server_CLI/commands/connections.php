@@ -10,18 +10,9 @@
 
 namespace Bootgly\WPI\Interfaces\TCP_Server_CLI\commands;
 
-use Bootgly\ABI\Data\__String\Path;
-
 use Bootgly\ACI\Logs\Logger;
 
-use Bootgly\API\Server as SAPI;
-
-use const Bootgly\CLI;
 use Bootgly\CLI\Command;
-use Bootgly\CLI\UI\Fieldset\Fieldset;
-use Bootgly\CLI\UI\Progress\Progress;
-
-use Bootgly\WPI\Endpoints\Servers\Modes;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI as Server;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections;
 
@@ -45,10 +36,6 @@ return new class extends Command
          $Server = $this;
 
          Logger::$display = Logger::DISPLAY_MESSAGE;
-
-         if ($Server === null) {
-            return false;
-         }
    
          $worker = $Server->Process::$index;
    
@@ -69,12 +56,15 @@ return new class extends Command
    
                switch ($key) {
                   case 'status':
-                     $status = match ($value) {
+                     $status = (int) $value;
+
+                     $status = match ($status) {
                         Connections::STATUS_INITIAL     => 'INITIAL',
                         Connections::STATUS_CONNECTING  => 'CONNECTING',
                         Connections::STATUS_ESTABLISHED => 'ESTABLISHED',
                         Connections::STATUS_CLOSING     => 'CLOSING',
-                        Connections::STATUS_CLOSED      => 'CLOSED'
+                        Connections::STATUS_CLOSED      => 'CLOSED',
+                        default                         => 'UNKNOWN'
                      };
    
                      $Server->log($status . PHP_EOL);

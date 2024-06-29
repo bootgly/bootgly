@@ -33,7 +33,8 @@ return [
 
       if ($Request->fresh) {
          return $Response(code: 304);
-      } else {
+      }
+      else {
          return $Response(body: 'test')->send();
       }
    },

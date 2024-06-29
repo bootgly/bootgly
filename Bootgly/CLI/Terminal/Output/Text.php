@@ -325,6 +325,10 @@ namespace Bootgly\CLI\Terminal\Output\Text;
 
 
 // * Configs
+/**
+ * @method self get()
+ * @method self set()
+ */
 enum Colors : int
 {
    use \Bootgly\ABI\Configs\Set;

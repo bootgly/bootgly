@@ -8,10 +8,10 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Raw;
+namespace Bootgly\WPI\Modules\HTTP\Server\Response\Raw;
 
 
-class Body
+abstract class Payload
 {
    // * Config
    // ...
@@ -20,9 +20,9 @@ class Body
    public string $raw = '';
 
    // * Metadata
-   private int $length;
+   protected int $length;
    // Encoded
-   private string $chunked;
+   protected string $chunked;
 
 
    public function __get (string $name)
@@ -30,10 +30,10 @@ class Body
       switch ($name) {
          // * Metadata
          case 'length':
-            return \strlen($this->raw);
+            return $this->length ??= \strlen($this->raw);
          // Encoded
          case 'chunked':
-            return \dechex(\strlen($this->raw)) . "\r\n$this->raw\r\n";
+            return $this->chunked ??= \dechex(\strlen($this->raw)) . "\r\n$this->raw\r\n";
 
          default:
             return '';

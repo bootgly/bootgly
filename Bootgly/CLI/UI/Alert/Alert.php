@@ -133,6 +133,10 @@ class Alert extends Component
 
 
 // * Configs
+/**
+ * @method self get()
+ * @method self set()
+ */
 enum Type
 {
    use \Bootgly\ABI\Configs\Set;
@@ -144,6 +148,10 @@ enum Type
    case Failure;
 }
 
+/**
+ * @method self get()
+ * @method self set()
+ */
 enum Style
 {
    use \Bootgly\ABI\Configs\Set;

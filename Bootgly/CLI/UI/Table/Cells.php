@@ -11,13 +11,8 @@
 namespace Bootgly\CLI\UI\Table;
 
 
-use Bootgly\CLI\UI\Table\Table;
-
-
 class Cells
 {
-   private Table $Table;
-
    // * Config
    public int $alignment;
 
@@ -28,10 +23,8 @@ class Cells
    // ...
 
 
-   public function __construct ($Table)
+   public function __construct ()
    {
-      $this->Table = $Table;
-
       // * Config
       $this->alignment = 1;
 
@@ -45,9 +38,9 @@ class Cells
    public function align (string $aligment) : int
    {
       return $this->alignment = match ($aligment) {
-         1, 'left' => 1,
-         0, 'right' => 0,
-         2, 'center' => 2,
+         'left' => 1,
+         'right' => 0,
+         'center' => 2,
 
          default => 1
       };

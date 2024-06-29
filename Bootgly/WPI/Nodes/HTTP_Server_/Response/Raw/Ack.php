@@ -12,33 +12,13 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_\Response\Raw;
 
 
 use Bootgly\WPI\Modules\HTTP;
+use Bootgly\WPI\Modules\HTTP\Server\Response\Raw;
 
 
-class Meta
+class Ack extends Raw\Ack
 {
-   // * Config
-   // ...
-
-   // * Data
-   protected string $protocol;
-   protected int|string $status;
-
-   // * Metadata
-   private string $raw;
-   // @ status
-   private int $code;
-   private string $message;
-
-
    public function __construct ()
    {
-      // * Config
-      // ...
-
-      // * Data
-      $this->protocol = 'HTTP/1.1';
-      $this->status = '200 OK';
-
       // * Metadata
       $this->reset();
    }
@@ -69,6 +49,7 @@ class Meta
          case 'protocol':
             break;
          case 'status':
+            // @phpstan-ignore-next-line
             $status = match ($value) {
                (int) $value => $value . ' ' . HTTP::RESPONSE_STATUS[$value],
                (string) $value => \array_search($value, HTTP::RESPONSE_STATUS) . ' ' . $value

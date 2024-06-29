@@ -11,35 +11,23 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Raw;
 
 
+use Bootgly\WPI\Modules\HTTP\Server\Response\Raw;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Raw\Header\Cookies;
 
 
-class Header
+class Header extends Raw\Header
 {
-   // * Config
+   // * Data
    public string $raw;
 
-   // * Data
-   // Fields
-   protected array $preset;
-   protected array $prepared;
-   protected array $fields;
-
-   // * Metadata
-   private bool $sent;
-   // Fields
-   private array $queued;
-   private int $built;
 
    public Cookies $Cookies;
 
 
    public function __construct ()
    {
-      // * Config
-      $this->raw = '';
-
       // * Data
+      $this->raw = '';
       // Fields
       $this->preset = [
          'Server' => 'Bootgly',
@@ -146,28 +134,6 @@ class Header
    {
       $this->prepared = $fields;
    }
-   public function append (string $field, string $value = '', ? string $separator = ', ')
-   {
-      // TODO map separator (with const?)
-      // Header that can have only value to append, only entire header, etc.
-
-      if ( isSet($this->fields[$field]) ) {
-         $this->fields[$field] .= $separator . $value;
-      } else {
-         $this->fields[$field] = $value;
-      }
-   }
-   public function queue (string $field, string $value = '')
-   {
-      if ($field) {
-         $this->queued[] = "$field: $value";
-
-         return true;
-      }
-
-      return false;
-   }
-
    public function translate (string $field, ...$values) : string
    {
       switch ($field) {
@@ -191,6 +157,7 @@ class Header
    {
       return (string) (@$this->fields[$name] ?? @$this->fields[\strtolower($name)] ?? '');
    }
+
    public function set (string $field, string $value) : bool
    {
       if ($field) {
@@ -201,9 +168,30 @@ class Header
 
       return false;
    }
+   public function append (string $field, string $value = '', ? string $separator = ', ')
+   {
+      // TODO map separator (with const?)
+      // Header that can have only value to append, only entire header, etc.
+
+      if ( isSet($this->fields[$field]) ) {
+         $this->fields[$field] .= $separator . $value;
+      } else {
+         $this->fields[$field] = $value;
+      }
+   }
+   public function queue (string $field, string $value = '')
+   {
+      if ($field) {
+         $this->queued[] = "$field: $value";
+
+         return true;
+      }
+
+      return false;
+   }
 
    // TODO increase performance
-   public function build () : true // @ raw
+   public function build (): true // @ raw
    {
       // ?
       if (\time() === $this->built) {

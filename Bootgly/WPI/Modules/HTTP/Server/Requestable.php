@@ -145,7 +145,6 @@ trait Requestable
             if ($this->method === 'POST' && $_POST === []) {
                return $this->input();
             }
-
             return $_POST;
 
          case 'files':
@@ -232,7 +231,7 @@ trait Requestable
          $input = $this->input;
 
          // raw (JSON)
-         return \json_decode(
+         $inputs = \json_decode(
             json: $input,
             associative: true,
             depth: 512,

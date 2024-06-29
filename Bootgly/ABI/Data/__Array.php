@@ -45,72 +45,88 @@ class __Array implements Data // Simple class (advanced methods coming soon)
          // * Metadata
          // @ Key
          case 'keys':
-            return array_keys($this->array);
+            $this->keys = array_keys($this->array);
+            return $this->keys;
          // @ Value
          case 'values':
-            return array_values($this->array);
+            $this->values = array_values($this->array);
+            return $this->values;
          // @ Pointer
          // current
          case 'current':
-            return current($this->array);
+            $this->current = current($this->array);
+            return $this->current;
          case 'Current':
-            return (object) [
+            $this->Current = (object) [
                'key' => key($this->array),
                'value' => current($this->array)
             ];
+            return $this->Current;
          // next
          case 'next':
-            return next($this->array);
+            $this->next = next($this->array);
+            return $this->next;
          case 'Next':
             $nextValue = next($this->array);
             $nextKey = key($this->array);
 
-            return (object) [
+            $this->Next = (object) [
                'key' => $nextKey,
                'value' => $nextValue
             ];
+            return $this->Next;
          // previous
          case 'previous':
-            return prev($this->array);
+            $this->previous = prev($this->array);
+            return $this->previous;
          case 'Previous':
             $previousValue = prev($this->array);
             $previousKey = key($this->array);
 
-            return (object) [
+            $this->Previous = (object) [
                'key' => $previousKey,
                'value' => $previousValue
             ];
+            return $this->Previous;
          // first
          case 'first':
-            return reset($this->array);
+            $this->first = reset($this->array);
+            return $this->first;
          case 'First':
             $firstValue = reset($this->array);
 
-            return (object) [
+            $this->First = (object) [
                'key' => key($this->array),
                'value' => $firstValue
             ];
+            return $this->First;
          // last
          case 'last':
             end($this->array);
-            return current($this->array);
+            $this->last = current($this->array);
+            return $this->last;
          case 'Last':
             $lastValue = end($this->array);
 
-            return (object) [
+            $this->Last = (object) [
                'key' => key($this->array),
                'value' => $lastValue
             ];
+            return $this->Last;
          // @ Type
          case 'list':
-            return array_is_list($this->array);
+            $this->list = array_is_list($this->array);
+            return $this->list;
          case 'multidimensional':
+            $multidimensional = false;
             foreach ($this->array as $value) {
                if ( is_array($value) ) {
-                  return true;
+                  $multidimensional = true;
+                  break;
                }
             }
-            return false;
+            $this->multidimensional = $multidimensional;
+            return $this->multidimensional;
       }
    }
    public function __call (string $name, array $arguments)

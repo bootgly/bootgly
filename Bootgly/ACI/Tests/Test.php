@@ -32,7 +32,7 @@ class Test extends Assertions
    // ...inherited
 
    // * Metadata
-   private bool $passed; 
+   private bool $passed;
    private mixed $filename;
    // @ Output
    private false|string $debugged;
@@ -70,16 +70,20 @@ class Test extends Assertions
    }
    public function __get (string $name)
    {
-      return match ($name) {
-         'passed' => array_reduce(
-            array: $this->results,
-            callback: function ($accumulator, $assertion) {
-               return $accumulator && $assertion;
-            },
-            initial: true
-         ),
-         default => null
+      switch ($name) {
+         case "passed":
+            $this->passed = array_reduce(
+               array: $this->results,
+               callback: function ($accumulator, $assertion) {
+                  return $accumulator && $assertion;
+               },
+               initial: true
+            );
+
+            return $this->passed;
       };
+
+      return null;
    }
 
    private function describe (? string $description, bool $status, string $indicator = '╟')

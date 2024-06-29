@@ -12,14 +12,31 @@ namespace Bootgly\WPI\Modules\HTTP\Server;
 
 
 use Bootgly\ABI\IO\FS\File;
+use Bootgly\WPI\Modules\HTTP;
 use Bootgly\WPI\Modules\HTTP\Server\Response\Authentication;
+use Bootgly\WPI\Modules\HTTP\Server\Response\Raw;
 
 
-abstract class Response
+abstract class Response extends Raw
 {
+   const PROTOCOL = 'HTTP/1.1';
+
    // * Config
+   // ...
+
    // * Data
+   // @ Content
+   protected null|string|array $content = '';
+   protected File $File;
+   protected array $files = [];
+   // @ status
+   protected int $code = 200;
+
    // * Metadata
+   // @ status
+   protected string $message = 'OK';
+   protected string $status = '200 OK';
+   protected string $response = self::PROTOCOL . ' 200 OK';
 
 
    abstract public function __construct (int $code = 200, ? array $headers = null, string $body = '');
@@ -33,7 +50,33 @@ abstract class Response
     * @return self The Response instance, for chaining
     */
    abstract public function append ($body) : self;
+   /**
+    * Set the HTTP Server Response code.
+    *
+    * @param int $code 
+    *
+    * @return self The Response instance, for chaining 
+    */
+   public function code (int $code): self
+   {
+      // * Data
+      // @ status
+      $this->code = $code;
 
+      $status = $code . ' ' . HTTP::RESPONSE_STATUS[$code];
+
+      @[$code, $message] = explode(' ', $status);
+
+      if ($code && $message) {
+         // * Metadata
+         // @ status
+         $this->message = $message;
+         $this->status = $status;
+         $this->response = self::PROTOCOL . ' ' . $status;
+      }
+
+      return $this;
+   }
    /**
     * Renders the specified view with the provided data.
     *

@@ -28,7 +28,7 @@ return [
    },
    // Server API
    'response' => function (Request $Request, Response $Response) : Response {
-      $Response->Raw->Header->set('ETag', '"foo"');
+      $Response->Header->set('ETag', '"foo"');
 
       if ($Request->fresh) {
          return $Response(code: 304);

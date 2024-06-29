@@ -50,48 +50,60 @@ class __String implements Data // Simple class (advanced methods coming soon)
          // * Metadata
          case 'length':
             if ($this->encoding === 'ASCII') {
-               return $this->length = strlen($this->string);
+               $this->length = strlen($this->string);
+               return $this->length;
             }
 
             if ( function_exists('mb_strlen') ) {
-               return $this->length = mb_strlen($this->string, $this->encoding);
+               $this->length = mb_strlen($this->string, $this->encoding);
+               return $this->length;
             }
 
-            return $this->length = iconv_strlen($this->string, $this->encoding);
+            $this->length = iconv_strlen($this->string, $this->encoding);
+            return $this->length;
          // ! Case
          case 'lowercase':
             if ($this->encoding === 'ASCII') {
-               return $this->lowercase = strtolower($this->string);
+               $this->lowercase = strtolower($this->string);
+               return $this->lowercase;
             }
 
             if ( function_exists('mb_strtolower') ) {
-               return $this->lowercase = mb_strtolower($this->string, $this->encoding);
+               $this->lowercase = mb_strtolower($this->string, $this->encoding);
+               return $this->lowercase;
             }
 
             // TODO polyfill?
-            return $this->lowercase = false;
+            $this->lowercase = false;
+            return $this->lowercase;
          case 'uppercase':
             if ($this->encoding === 'ASCII') {
-               return $this->uppercase = strtoupper($this->string);
+               $this->uppercase = strtoupper($this->string);
+               return $this->uppercase;
             }
 
             if ( function_exists('mb_strtoupper') ) {
-               return $this->uppercase = mb_strtoupper($this->string, $this->encoding);
+               $this->uppercase = mb_strtoupper($this->string, $this->encoding);
+               return $this->uppercase;
             }
 
             // TODO polyfill?
-            return $this->uppercase = false;
+            $this->uppercase = false;
+            return $this->uppercase;
          case 'pascalcase':
             if ($this->encoding === 'ASCII') {
-               return $this->pascalcase = ucwords($this->string);
+               $this->pascalcase = ucwords($this->string);
+               return $this->pascalcase;
             }
 
             if ( function_exists('mb_convert_case') ) {
-               return $this->pascalcase = mb_convert_case($this->string, \MB_CASE_TITLE, $this->encoding);
+               $this->pascalcase = mb_convert_case($this->string, \MB_CASE_TITLE, $this->encoding);
+               return $this->pascalcase;
             }
 
             // TODO polyfill?
-            return $this->pascalcase = false;
+            $this->pascalcase = false;
+            return $this->pascalcase;
          default:
             return null;
       }

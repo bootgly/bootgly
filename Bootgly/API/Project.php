@@ -98,7 +98,8 @@ class Project
                2 => $this->package   = $__path__ . '/',
                3 => $this->type      = $__path__ . '/',
                4 => $this->public    = $__path__ . '/',
-               5 => $this->version   = $__path__ . '/'
+               5 => $this->version   = $__path__ . '/',
+               default => null
             };
          }
       } else {

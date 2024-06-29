@@ -459,7 +459,8 @@ class TCP_Server_CLI implements Servers, Logging
       if ($this->Status !== Status::Paused) {
          match ($this->Process->level) {
             'master' => $this->log("Server needs to be paused to resume!@\\;", 4),
-            'child' => null
+            'child' => null,
+            default => null
          };
 
          return false;
@@ -468,7 +469,8 @@ class TCP_Server_CLI implements Servers, Logging
       $children = (string) count($this->Process::$children);
       match ($this->Process->level) {
          'master' => $this->log("Resuming {$children} worker(s)... @\\;", 3),
-         'child' => self::$Event->add($this->Socket, self::$Event::EVENT_CONNECT, true)
+         'child' => self::$Event->add($this->Socket, self::$Event::EVENT_CONNECT, true),
+         default => null
       };
 
       $this->Status = Status::Running;
@@ -480,7 +482,8 @@ class TCP_Server_CLI implements Servers, Logging
       if ($this->Status !== Status::Running) {
          match ($this->Process->level) {
             'master' => $this->log("Server needs to be running to pause!@\\;", 4),
-            'child' => null
+            'child' => null,
+            default => null
          };
 
          return false;
@@ -489,7 +492,8 @@ class TCP_Server_CLI implements Servers, Logging
       $children = (string) count($this->Process::$children);
       match ($this->Process->level) {
          'master' => $this->log("Pausing {$children} worker(s)... @\\;", 3),
-         'child' => self::$Event->del($this->Socket, self::$Event::EVENT_CONNECT)
+         'child' => self::$Event->del($this->Socket, self::$Event::EVENT_CONNECT),
+         default => null
       };
 
       $this->Status = Status::Paused;
@@ -508,7 +512,7 @@ class TCP_Server_CLI implements Servers, Logging
          || Environment::get('CIRCLECI')
          || Environment::get('GITLAB_CI')
       );
-      if ($this->Mode >= Modes::Test && $CI_CD) {
+      if ($this->Mode->value >= Modes::Test->value && $CI_CD) {
          return;
       }
 

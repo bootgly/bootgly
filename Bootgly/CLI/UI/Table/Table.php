@@ -98,7 +98,7 @@ class Table extends Component
       // ...
 
       // @compose
-      $this->Cells = new Cells($this);
+      $this->Cells = new Cells;
       $this->Columns = new Columns($this);
       $this->Row = new Row($this);
       $this->Rows = new Rows($this);
@@ -132,7 +132,8 @@ class Table extends Component
       $line = match ($position) {
          'top' => $borders['top-left'],
          'mid' => $borders['mid-left'],
-         'bottom' => $borders['bottom-left']
+         'bottom' => $borders['bottom-left'],
+         default => ""
       };
 
       foreach ($Columns->widths as $column_index => $column_width) {
@@ -140,14 +141,16 @@ class Table extends Component
             $line .= match($position) {
                'top' => $borders['top-mid'],
                'mid' => $borders['mid-mid'],
-               'bottom' => $borders['bottom-mid']
+               'bottom' => $borders['bottom-mid'],
+               default => ""
             };
          }
 
          $border = match ($position) {
             'top' => $borders['top'],
             'mid' => $borders['mid'],
-            'bottom' => $borders['bottom']
+            'bottom' => $borders['bottom'],
+            default => ""
          };
 
          $line .= str_repeat($border, $column_width + 2);
@@ -156,7 +159,8 @@ class Table extends Component
       $line .= match ($position) {
          'top' => $borders['top-right'],
          'mid' => $borders['mid-right'],
-         'bottom' => $borders['bottom-right']
+         'bottom' => $borders['bottom-right'],
+         default => ""
       };
 
       if ($line !== '') {

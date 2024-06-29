@@ -29,8 +29,6 @@ class Database
    public ? PDO $PDO;
    public PDOStatement|bool $Query; // TODO rename to Statement?
    public ? PDOException $Exception;
-   // TODO
-   private $rows;
 
 
    public function __construct (array $configs)
@@ -46,8 +44,6 @@ class Database
       $this->PDO = null;
       $this->Query = false;
       $this->Exception = null;
-      // TODO
-      $this->rows = [];
    }
 
    public function __get (string $index)

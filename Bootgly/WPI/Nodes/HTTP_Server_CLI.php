@@ -100,20 +100,15 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, HTTP_Server
    {
       parent::configure($host, $port, $workers, $ssl);
 
-      try {
-         if ($host === '0.0.0.0') {
-            $this->domain ??= 'localhost';
-         }
+      if ($host === '0.0.0.0') {
+         $this->domain ??= 'localhost';
+      }
 
-         // * Config
-         $this->socket = ($this->ssl !== null
-            ? 'https://'
-            : 'http://'
-         );
-      }
-      catch (\Throwable $Throwable) {
-         Exceptions::report($Throwable);
-      }
+      // * Config
+      $this->socket = ($this->ssl !== null
+         ? 'https://'
+         : 'http://'
+      );
    }
 
    public static function boot (Environments $Environment)
@@ -179,13 +174,8 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, HTTP_Server
 
             break;
          default:
-            try {
-               SAPI::$production = Projects::CONSUMER_DIR . 'Bootgly/WPI/HTTP_Server_CLI-1.SAPI.php';
-               self::$Encoder = new Encoder_;
-            }
-            catch (\Throwable $Throwable) {
-               Exceptions::report($Throwable);
-            }
+            SAPI::$production = Projects::CONSUMER_DIR . 'Bootgly/WPI/HTTP_Server_CLI-1.SAPI.php';
+            self::$Encoder = new Encoder_;
 
             SAPI::boot(reset: true, key: 'on.Request');
       }
@@ -226,9 +216,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, HTTP_Server
                }
 
                if ($spec === null || count($spec) < 3) {
-                  if ($Test) {
-                     $Tests->skip();
-                  }
+                  $Tests->skip();
 
                   continue;
                }

@@ -28,7 +28,7 @@ return [
    },
    // Server API
    'response' => function (Request $Request, Response $Response) : Response {
-      $Response->Raw->Header->set('Last-Modified', 'Fri, 14 Jul 2023 10:00:00 GMT');
+      $Response->Header->set('Last-Modified', 'Fri, 14 Jul 2023 10:00:00 GMT');
 
       if ($Request->fresh) {
          return $Response(code: 304);

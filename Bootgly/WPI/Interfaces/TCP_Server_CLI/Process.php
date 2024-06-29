@@ -192,7 +192,8 @@ class Process
          case SIGTSTP: // 20 (CTRL + Z)
             match ($this->Server->Mode) {
                Modes::Monitor => $this->Server->Mode = Modes::Interactive,
-               Modes::Interactive => $this->Server->pause()
+               Modes::Interactive => $this->Server->pause(),
+               default => null
             };
             break;
          // @ resume()

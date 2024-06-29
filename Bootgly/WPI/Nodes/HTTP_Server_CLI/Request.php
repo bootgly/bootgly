@@ -10,7 +10,7 @@
 
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI;
 
-
+use Bootgly\ABI\Debugging\Data\Vars;
 use Bootgly\WPI\Modules\HTTP\Server\Requestable;
 use Bootgly\WPI\Modules\HTTP\Server\Request\Ranging;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI as Server;

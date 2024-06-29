@@ -40,9 +40,9 @@ trait Renderable
       $this->process($view . '.template.php', 'view');
 
       // ?
-      $File = $this->body ?? null; // TODO change to $this->Body->File?
+      $File = $this->File ?? null;
       if ($File === null || !$File instanceof File || $File->exists === false) {
-         throw new \Exception(message: 'Template file not found!');
+         // throw new \Exception(message: 'Template file not found!');
          return $this;
       }
 
@@ -70,7 +70,7 @@ trait Renderable
          Throwables::report($Throwable);
       }
       // @ Output/Buffer clean()->get()
-      $this->body = $rendered;
+      $this->content = $rendered;
 
       // @ Set $Response properties
       $this->source = 'content';
@@ -78,7 +78,7 @@ trait Renderable
 
       // @ Call callback
       if ($callback !== null && $callback instanceof \Closure) {
-         $callback($this->body, $Throwable ?? null);
+         $callback($this->content, $Throwable ?? null);
       }
 
       return $this;

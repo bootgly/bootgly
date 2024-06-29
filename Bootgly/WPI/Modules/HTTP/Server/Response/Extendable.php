@@ -23,7 +23,7 @@ trait Extendable
    public function append ($body) : self
    {
       $this->initied = true;
-      $this->body .= $body . "\n";
+      $this->content .= $body . "\n";
 
       return $this;
    }

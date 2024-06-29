@@ -102,6 +102,7 @@ class Menu extends Component
          // @ Post compile Item
          // TODO refactor:
          if ($Item->type === Header::class) {
+            // @phpstan-ignore-next-line
             $compiled .= $Options->Orientation->get() === Orientation::Horizontal ? ' ' : "\n";
          }
 
@@ -112,6 +113,7 @@ class Menu extends Component
 
       // @ Post compile Items
       // @ Align items horizontally
+      // @phpstan-ignore-next-line
       if ($Orientation === Orientation::Horizontal) {
          // @phpstan-ignore-next-line
          $rendered = str_pad($rendered, $this->width, ' ', $Aligment->value);

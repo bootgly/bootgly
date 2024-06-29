@@ -51,7 +51,7 @@ trait Redirectable
 
       // @
       $this->__set('code', $code);
-      $this->Raw->Header->set('Location', $URI);
+      $this->Header->set('Location', $URI);
       $this->end();
 
       return $this;

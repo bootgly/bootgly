@@ -11,38 +11,23 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_\Response\Raw\Header;
 
 
+use Bootgly\WPI\Modules\HTTP\Server\Response\Raw\Header as Heading;
 use Bootgly\WPI\Nodes\HTTP_Server_\Response\Raw\Header;
 
 
-final class Cookies
+final class Cookies extends Heading\Cookies
 {
-   public Header $Header;
-
-   // * Data
-   private array $cookies;
-
-
    public function __construct (Header $Header)
    {
       $this->Header = $Header;
 
+      // * Config
+      // ...
+
       // * Data
       $this->cookies = [];
-   }
 
-   public function append
-   ($name, $value = '', $expiration = null, $path = '', $domain = '', $secure = false, $httpOnly = false, $sameSite  = false)
-   {
-      $cookie = $name . '=' . \rawurlencode($value)
-      . (empty($domain) ? '' : '; Domain=' . $domain)
-      . ($expiration === null ? '' : '; Max-Age=' . $expiration)
-      . (empty($path) ? '' : '; Path=' . $path)
-      . (! $secure ? '' : '; Secure')
-      . (! $httpOnly ? '' : '; HttpOnly')
-      . (empty($sameSite) ? '' : '; SameSite=' . $sameSite);
-
-      $this->Header->queue('Set-Cookie', $cookie);
-
-      return $this;
+      // * Metadata
+      // ...
    }
 }

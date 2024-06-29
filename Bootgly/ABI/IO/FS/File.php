@@ -503,11 +503,6 @@ class File implements FS
                $data = readfile($this->file);
                break;
             default:
-               if ( ! $this->handler) {
-                  $data = false;
-                  break;
-               }
-
                try {
                   $data = @fread(
                      $this->handler,

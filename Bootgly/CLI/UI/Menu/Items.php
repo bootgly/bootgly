@@ -47,9 +47,7 @@ class Items
 
       // * Config
       // @ Displaying
-      // @phpstan-ignore-next-line
       $this->Orientation = Orientation::Vertical->set();
-      // @phpstan-ignore-next-line
       $this->Aligment = Aligment::Left->set();
       // @ Boxing
       $this->Margin = Margin::All;
@@ -96,6 +94,10 @@ class Items
 
 // * Configs
 // @ Displaying
+/**
+ * @method self get()
+ * @method self set()
+ */
 enum Orientation
 {
    use \Bootgly\ABI\Configs\Set;
@@ -104,6 +106,10 @@ enum Orientation
    case Vertical;
    case Horizontal;
 }
+/**
+ * @method self get()
+ * @method self set()
+ */
 enum Aligment : int
 {
    use \Bootgly\ABI\Configs\Set;
@@ -122,6 +128,11 @@ enum Border
 enum Padding
 {}
 */
+/**
+ * @method self list()
+ * @method self get()
+ * @method self set()
+ */
 enum Margin
 {
    use \Bootgly\ABI\Configs\Sets;

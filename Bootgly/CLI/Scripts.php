@@ -34,7 +34,7 @@ class Scripts
    // @ Validating
    private ? string $path;
    private ? string $filename;
-   private array $validations;
+   private int $validation;
 
 
    public function __construct ()
@@ -108,7 +108,7 @@ class Scripts
       return match ($name) {
          'path' => $this->path,
          'filename' => $this->filename,
-         'validations' => $this->validations,
+         'validation' => $this->validation,
          default => null
       };
    }
@@ -119,7 +119,7 @@ class Scripts
       $this->filename ??= @$_SERVER['SCRIPT_FILENAME'];
       // ?:
       if ($this->path === null || $this->filename === null) {
-         return -2;
+         return $this->validation = -2;
       }
 
       // !
@@ -128,14 +128,14 @@ class Scripts
       // @
       // Global scripts (absolute paths)
       if (\in_array($this->filename, $this->scripts) !== false) {
-         return 1;
+         return $this->validation = 1;
       }
       // Local scripts (relative to scripts/ working directory)
       if (\in_array($this->path . '/' . $this->filename, $this->scripts) !== false) {
-         return 0;
+         return $this->validation = 0;
       }
 
-      return -1;
+      return $this->validation = -1;
    }
 
    public static function execute (string $script)

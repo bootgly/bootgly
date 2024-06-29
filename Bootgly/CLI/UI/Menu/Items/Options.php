@@ -143,7 +143,9 @@ final class Options extends Items
       foreach (Items::$data[Menu::$level] as $index => $Item) {
          if ($this->aimed === $index) {
             $this->toggle($index);
-         } else if ($this->Selection->get() === $this->Selection::Unique) {
+         }
+         // @phpstan-ignore-next-line
+         else if ($this->Selection->get() === $this->Selection::Unique) {
             $this->deselect($index);
          }
 
@@ -173,7 +175,6 @@ final class Options extends Items
 
          case PHP_EOL: // Enter Key
             return false;
-            break;
 
          default:
             break;
@@ -234,6 +235,7 @@ final class Options extends Items
 
       // @ Displaying
       // Aligment
+      // @phpstan-ignore-next-line
       if ($Orientation === Orientation::Vertical) {
          // @phpstan-ignore-next-line
          $compiled = str_pad($compiled, Menu::$width, ' ', $Aligment->value);

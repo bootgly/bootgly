@@ -27,7 +27,7 @@ class Columns
    // ...
 
    // * Metadata
-   private int $count;
+   // private int $count;
    // @ Width
    private array $widths; // [... ? section => ...column_index]
 
@@ -46,7 +46,7 @@ class Columns
       // ...
 
       // * Metadata
-      $this->count = 0;
+      // $this->count = 0;
       // @ Width
       $this->widths = [];
    }
@@ -54,6 +54,7 @@ class Columns
    {
       switch ($name) {
          case 'widths':
+            // @phpstan-ignore-next-line
             $widths = ($this->Autowiden->get() === Autowiden::Based_On_Section && $this->section
                ? ($this->widths[$this->section] ?? [])
                : $this->widths
@@ -118,6 +119,7 @@ class Columns
 
    public function count (? string $section = null) : int
    {
+      // @phpstan-ignore-next-line
       $widths = ($this->Autowiden->get() === Autowiden::Based_On_Section && $section
          ? $this->widths[$section]
          : $this->widths

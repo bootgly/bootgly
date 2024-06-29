@@ -234,10 +234,6 @@ class Commands
          $this->help("Unknown command: @#Yellow:$name@;", $From);
          return false;
       }
-      if ($command === "help") {
-         $this->help(null, $From);
-         return false;
-      }
 
       // ## Arguments
       // !

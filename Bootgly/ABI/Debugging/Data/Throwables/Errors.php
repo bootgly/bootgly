@@ -47,8 +47,6 @@ abstract class Errors extends Throwables
       }
 
       throw new \ErrorException($message, 0, $level, $filename, $line);
-
-      return true;
    }
 
    public static function report (\Throwable $Throwable)

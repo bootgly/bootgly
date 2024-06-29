@@ -66,7 +66,7 @@ class Server
 
          $Handler = $SAPI[$key] ?? null;
          if ($Handler !== null && $Handler instanceof \Closure) {
-            $Handler->bindTo(null, 'static');
+            $Handler->bindTo(null, "static"); // @phpstan-ignore-line
             self::$Handler = $Handler;
          }
       }
