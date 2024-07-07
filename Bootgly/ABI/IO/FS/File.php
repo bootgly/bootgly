@@ -142,6 +142,7 @@ class File implements FS
    protected readonly string|false $file;
 
    // * Metadata
+   /** @var resource|false|null */
    private $handler;
 
    protected bool $exists;           // bool true|false
@@ -185,7 +186,7 @@ class File implements FS
       $this->Path = new Path($path);
       $this->Basedir = new Dir($this->Path->parent);
    }
-   public function __get (string $name)
+   public function __get (string $name): mixed
    {
       if ($name === 'file') {
          return $this->file ?? $this->pathify();
@@ -257,7 +258,7 @@ class File implements FS
 
             if ($size < 100000) { // if file < 100kb use + perf method
                $linesArray = @file($file);
-               $linesCount = ($linesArray !== false) ? count($linesArray) : false;
+               $linesCount = ($linesArray !== false) ? count($linesArray): false;
             } else { // else use more memory-efficient method
                $handler = @fopen($file, 'r');
 
@@ -313,7 +314,7 @@ class File implements FS
 
       return null;
    }
-   public function __set (string $name, $value)
+   public function __set (string $name, mixed $value): void
    {
       if (isSet($this->file) === false) {
          $this->pathify();
@@ -346,7 +347,7 @@ class File implements FS
             $this->contents = $contents;
       }
    }
-   public function __toString () : string
+   public function __toString (): string
    {
       // Path
       if (isSet($this->file) === false) {
@@ -356,7 +357,7 @@ class File implements FS
       return $this->file ?? '';
    }
 
-   private function pathify () : string|false
+   private function pathify (): string|false
    {
       // ?
       $path = $this->Path->path;
@@ -398,7 +399,7 @@ class File implements FS
     * @param bool $recursively Whether to create base directories if they don't exist.
     * @return bool Returns true if the file was successfully created, false otherwise.
     */
-   public function create (bool $recursively = true) : bool
+   public function create (bool $recursively = true): bool
    {
       $Path = $this->Path;
 
@@ -415,7 +416,7 @@ class File implements FS
       }
 
       try {
-         is_file($filename) ? ($this->file = $filename) : ($file = touch($filename));
+         is_file($filename) ? ($this->file = $filename): ($file = touch($filename));
       } catch (Throwable) {
          $file = false;
       }
@@ -464,7 +465,7 @@ class File implements FS
     *
     * @return string|int|false The read data as a string, number of bytes read as an integer, or false on failure.
     */
-   public function read (string $method = self::DEFAULT_READ_METHOD, int $offset = 0, ? int $length = null) : string|int|false
+   public function read (string $method = self::DEFAULT_READ_METHOD, int $offset = 0, ? int $length = null): string|int|false
    {
       if ( ! $this->file ) {
          return false;
@@ -530,7 +531,7 @@ class File implements FS
     *                 whichever comes first.
     * @return int|false The number of bytes written, or false on failure.
     */
-   public function write (string $data, ? int $length = null) : int|false
+   public function write (string $data, ? int $length = null): int|false
    {
       try {
          $bytes = @fwrite($this->handler, $data, $length);
@@ -553,7 +554,7 @@ class File implements FS
     * @return bool Returns `true` if the file handler was successfully closed or if it was already closed,
     *              returns `false` if an error occurred while trying to close the file handler.
     */
-   public function close () : bool
+   public function close (): bool
    {
       // @
       try {
@@ -573,7 +574,7 @@ class File implements FS
     *
     * @return bool Returns true on successful deletion, false otherwise.
     */
-   public function delete () : bool
+   public function delete (): bool
    {
       if ($this->handler !== null) {
          $this->close();

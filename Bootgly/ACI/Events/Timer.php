@@ -18,14 +18,16 @@ class Timer
    // ...
 
    // * Data
+   /** @var array<int,array<int,mixed>> */
    protected static array $tasks = [];
+   /** @var array<int,bool> */
    protected static array $status = [];
 
    // * Metadata
    protected static int $id = 0;
 
 
-   public static function init (callable $handler) : bool
+   public static function init (callable $handler): bool
    {
       if (function_exists('pcntl_signal')) {
          return pcntl_signal(SIGALRM, $handler, false);
@@ -34,7 +36,18 @@ class Timer
       return false;
    }
 
-   public static function add (int $interval, callable $handler, array $args = [], bool $persistent = true)
+   /**
+    * Add a timer.
+    *
+    * @param int $interval
+    * @param callable $handler
+    * @param array<mixed> $args
+    * @param bool $persistent
+    * @return int|false
+    */
+   public static function add (
+      int $interval, callable $handler, array $args = [], bool $persistent = true
+   ): int|false
    {
       if ($interval <= 0) {
          return false;
@@ -60,7 +73,7 @@ class Timer
       return self::$id;
    }
 
-   public static function tick ()
+   public static function tick (): void
    {
       if ( empty(self::$tasks) ) {
          pcntl_alarm(0);
@@ -101,7 +114,7 @@ class Timer
       }
    }
 
-   public static function del (int $id = 0)
+   public static function del (int $id = 0): bool
    {
       // @ Delete all tasks
       if ($id === 0) {

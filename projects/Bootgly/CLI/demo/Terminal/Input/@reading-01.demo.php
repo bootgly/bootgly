@@ -105,7 +105,7 @@ $Input->reading(
 
             $decoding = false;
 
-            $decoded ? $Output->write($decoded) : $Output->metaencode($char);
+            $decoded ? $Output->write($decoded): $Output->metaencode($char);
 
             continue;
          }

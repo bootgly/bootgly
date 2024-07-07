@@ -19,8 +19,16 @@ trait Ranging
    // * Metadata
    public static int $multiparts = 0;
 
-
-   public function range (int $size, string $header, bool $combine = false)
+   /**
+    * Parse range header field
+    *
+    * @param int $size
+    * @param string $header
+    * @param bool $combine
+    *
+    * @return int|array<array<string>|string>
+    */
+   public function range (int $size, string $header, bool $combine = false): int|array
    {
       // @ Validate
       $equalIndex = strpos($header, '=');
@@ -86,23 +94,31 @@ trait Ranging
       return $ranges;
    }
 
-   private function combineRanges (array $ranges)
+   /**
+    * Combine overlapping & adjacent ranges
+    *
+    * @param array<int, array<string, int>> $ranges
+    *
+    * @return array<int, array<string>>
+    */
+   private function combineRanges (array $ranges): array
    {
       // @ Map with index
       $ordered = array_map([$this, 'mapWithIndex'], $ranges, array_keys($ranges));
       // @ Sort by range start
       usort($ordered, function ($a, $b) {
-         return $a['start'] - $b['start'];
+         return (int) $a['start'] - (int) $b['start'];
       });
   
       for ($j = 0, $i = 1; $i < count($ordered); $i++) {
          $next = &$ordered[$i];
          $current = &$ordered[$j];
 
-         if ($next['start'] > $current['end'] + 1) {
+         if ((int) $next['start'] > (int) $current['end'] + 1) {
             // @ Next range
             $ordered[++$j] = $next;
-         } else if ($next['end'] > $current['end']) {
+         }
+         else if ($next['end'] > $current['end']) {
             // @ Extend range
             $current['end'] = $next['end'];
             $current['index'] = min($current['index'], $next['index']);
@@ -115,7 +131,7 @@ trait Ranging
       // @ Generate combined range
       // @ Sort by range index
       usort($ordered2, function ($a, $b) {
-         return $a['index'] - $b['index'];
+         return (int) $a['index'] - (int) $b['index'];
       });
       // @ Map without index
       $combined = array_map([$this, 'mapWithoutIndex'], $ordered2);
@@ -123,7 +139,16 @@ trait Ranging
       return $combined;
    }
 
-   private function mapWithIndex ($range, $index) {
+   /**
+    * Map range with index
+    *
+    * @param array<string> $range
+    * @param int $index
+    *
+    * @return array<string>
+    */
+   private function mapWithIndex (array $range, int $index): array
+   {
       return [
          'start' => $range['start'],
          'end' => $range['end'],
@@ -131,7 +156,15 @@ trait Ranging
       ];
    }
 
-   private function mapWithoutIndex ($range) {
+   /**
+    * Map range without index
+    *
+    * @param array<string> $range
+    *
+    * @return array<string>
+    */
+   private function mapWithoutIndex (array $range): array
+   {
       return [
          'start' => $range['start'],
          'end' => $range['end']

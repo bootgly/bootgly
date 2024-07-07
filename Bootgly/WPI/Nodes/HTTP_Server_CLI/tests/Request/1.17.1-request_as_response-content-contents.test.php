@@ -28,7 +28,7 @@ return [
       HTTP;
    },
    // Server API
-   'response' => function (Request $Request, Response $Response) : Response {
+   'response' => function (Request $Request, Response $Response): Response {
       $Request->receive();
       return $Response(body: $Request->input);
    },

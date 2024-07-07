@@ -19,10 +19,12 @@ use Bootgly\WPI\Interfaces\TCP_Client_CLI\Packages;
 
 class Connection extends Packages
 {
+   /** @var resource */
    public $Socket;
 
 
    // * Config
+   /** @var array<false|int> */
    public array $timers;
    public int $expiration;
 
@@ -48,6 +50,9 @@ class Connection extends Packages
    public int $writes;
 
 
+   /**
+    * @param resource $Socket
+    */
    public function __construct (&$Socket)
    {
       $this->Socket = $Socket;
@@ -94,7 +99,7 @@ class Connection extends Packages
       }
    }
 
-   public function close () : true
+   public function close (): true
    {
       if ($this->status > self::STATUS_ESTABLISHED) {
          return true;

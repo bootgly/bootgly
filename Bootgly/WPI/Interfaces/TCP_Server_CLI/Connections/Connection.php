@@ -20,9 +20,11 @@ use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages;
 
 class Connection extends Packages
 {
+   /** @var resource */
    public $Socket;
 
    // * Config
+   /** @var array<false|int> */
    public array $timers;
    public int $expiration;
 
@@ -43,6 +45,9 @@ class Connection extends Packages
    public int $writes;
 
 
+   /**
+    * @param resource $Socket
+    */
    public function __construct (&$Socket)
    {
       $this->Socket = $Socket;
@@ -105,7 +110,7 @@ class Connection extends Packages
       }
    }
 
-   public function handshake ()
+   public function handshake (): bool|int
    {
       static $tries = 1;
 
@@ -147,7 +152,7 @@ class Connection extends Packages
       return true;
    }
 
-   public function check () : bool
+   public function check (): bool
    {
       // @ Check blacklist
       // Blocked IP
@@ -158,7 +163,7 @@ class Connection extends Packages
 
       return true;
    }
-   public function expire (int $timeout)
+   public function expire (int $timeout): bool
    {
       if ($this->status > Connections::STATUS_ESTABLISHED) {
          return true;
@@ -182,7 +187,7 @@ class Connection extends Packages
 
       return false;
    }
-   public function limit (int $packages)
+   public function limit (int $packages): bool
    {
       if ($this->status > Connections::STATUS_ESTABLISHED) {
          return true;
@@ -200,7 +205,7 @@ class Connection extends Packages
       return false;
    }
 
-   public function close () : true
+   public function close (): true
    {
       if ($this->status > Connections::STATUS_ESTABLISHED) {
          return true;

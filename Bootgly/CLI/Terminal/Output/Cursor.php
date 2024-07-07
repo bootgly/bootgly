@@ -30,6 +30,7 @@ class Cursor
 
    // * Metadata
    private bool $hidden;
+   /** @var array<int|string> */
    private array $position;
 
 
@@ -41,7 +42,7 @@ class Cursor
       $this->hidden = false;
    }
 
-   public function __get (string $name)
+   public function __get (string $name): mixed
    {
       switch ($name) {
          // TODO test/add more methods to retrieve the current cursor position
@@ -82,11 +83,13 @@ class Cursor
 
             return $this->position;
       }
+
+      return null;
    }
 
    // @ Positionable
    // Moving
-   public function up (int $lines, ? int $column = null) : Output
+   public function up (int $lines, ? int $column = null): Output
    {
       if ($column > 1 || $column < 0) {
          $this->moveTo(null, $column);
@@ -97,11 +100,11 @@ class Cursor
          default => $this->Output->escape($lines . self::_CURSOR_UP)
       };
    }
-   public function right (int $columns) : Output
+   public function right (int $columns): Output
    {
       return $this->Output->escape($columns . self::_CURSOR_RIGHT);
    }
-   public function down (int $lines, ? int $column = null) : Output
+   public function down (int $lines, ? int $column = null): Output
    {
       if ($column > 1 || $column < 0) {
          $this->moveTo(null, $column);
@@ -112,12 +115,12 @@ class Cursor
          default => $this->Output->escape($lines . self::_CURSOR_DOWN)
       };
    }
-   public function left (int $columns) : Output
+   public function left (int $columns): Output
    {
       return $this->Output->escape($columns . self::_CURSOR_LEFT);
    }
 
-   public function moveTo (? int $line = null, ? int $column = null) : Output
+   public function moveTo (? int $line = null, ? int $column = null): Output
    {
       if ($line === null && $column >= 0) {
          return $this->Output->escape($column . self::_CURSOR_LEFT_ABSOLUTE);
@@ -139,11 +142,11 @@ class Cursor
    }
 
    // Memorizing
-   public function save ()
+   public function save (): Output
    {
       return $this->Output->escape(self::_CURSOR_SAVED);
    }
-   public function restore ()
+   public function restore (): Output
    {
       return $this->Output->escape(self::_CURSOR_RESTORED);
    }
@@ -152,13 +155,13 @@ class Cursor
    /**
     * Emit the cursor position as: ESC [ <r> ; <c> R Where <r> = cursor row and <c> = cursor column
     */
-   public function report ()
+   public function report (): Output
    {
       return $this->Output->escape(self::_CURSOR_REPORT_POSITION);
    }
 
    // @ Shapeable
-   public function shape (? string $style = '@user')
+   public function shape (? string $style = '@user'): Output
    {
       return match ($style) {
          'block' => $this->Output->escape(self::_CURSOR_BLINKING_BLOCK_SHAPE),
@@ -172,7 +175,7 @@ class Cursor
    }
 
    // @ Visualizable
-   public function blink (bool $status) : Output
+   public function blink (bool $status): Output
    {
       return match ($status) {
          false => $this->Output->escape(self::_CURSOR_BLINKING_DISABLED),
@@ -180,12 +183,12 @@ class Cursor
       };
    }
 
-   public function show () : Output
+   public function show (): Output
    {
       $this->hidden = false;
       return $this->Output->escape(self::_CURSOR_VISIBLE);
    }
-   public function hide () : Output
+   public function hide (): Output
    {
       $this->hidden = true;
       return $this->Output->escape(self::_CURSOR_HIDDEN);

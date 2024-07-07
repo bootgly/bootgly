@@ -20,6 +20,7 @@ class Suites
    use LoggableEscaped;
 
    // * Data
+   /** @var array<mixed> */
    public array $suites;
    // * Metadata
    // @ Status
@@ -44,7 +45,12 @@ class Suites
       $this->started = microtime(true);
    }
 
-   public function summarize ()
+   /**
+    * Summarize test suites.
+    *
+    * @return void
+    */
+   public function summarize (): void
    {
       // @ Result
       $failed = '@:error:' . $this->failed . ' failed @;';

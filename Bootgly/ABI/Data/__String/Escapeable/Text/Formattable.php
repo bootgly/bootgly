@@ -94,7 +94,7 @@ trait Formattable
    public const _BLACK_WHITE = '47;30';
 
 
-   protected static function wrap (string ...$codes)
+   protected static function wrap (string ...$codes): string
    {
       return self::_START_ESCAPE . implode(';', $codes) . self::_END_FORMAT;
    }

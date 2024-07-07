@@ -45,7 +45,7 @@ class Header extends Raw\Header
       // /
       $this->Cookies = new Cookies($this);
    }
-   public function __get (string $name)
+   public function __get (string $name): mixed
    {
       switch ($name) {
          // * Config
@@ -73,7 +73,7 @@ class Header extends Raw\Header
             return $this->get($name);
       }
    }
-   public function __set ($name, $value)
+   public function __set (string $name, mixed $value): void
    {
       switch ($name) {
          // * Config
@@ -98,18 +98,18 @@ class Header extends Raw\Header
             break;
       }
    }
-   public function __isSet ($name)
+   public function __isSet (string $name): bool
    {
       return isSet($this->fields[$name]);
    }
 
-   public function reset ()
+   public function reset (): void
    {
       // * Metadata
       // Fields
       $this->built = 0;
    }
-   public function clean ()
+   public function clean (): void
    {
       // * Data
       // Fields
@@ -121,7 +121,7 @@ class Header extends Raw\Header
       $this->built = 0;
    }
 
-   public function preset (string $name, ? string $value = null)
+   public function preset (string $name, ? string $value = null): void
    {
       if ($value) {
          $this->preset[$name] = $value;
@@ -130,11 +130,14 @@ class Header extends Raw\Header
          unset($this->preset[$name]);
       }
    }
-   public function prepare (array $fields) // @ Prepare to build
+   /**
+    * @param array<string> $fields
+    */
+   public function prepare (array $fields): void // @ Prepare to build
    {
       $this->prepared = $fields;
    }
-   public function translate (string $field, ...$values) : string
+   public function translate (string $field, int|float|string ...$values): string
    {
       switch ($field) {
          case 'Content-Range':
@@ -153,12 +156,12 @@ class Header extends Raw\Header
       }
    }
 
-   public function get (string $name) : string
+   public function get (string $name): string
    {
       return (string) (@$this->fields[$name] ?? @$this->fields[\strtolower($name)] ?? '');
    }
 
-   public function set (string $field, string $value) : bool
+   public function set (string $field, string $value): bool
    {
       if ($field) {
          $this->fields[$field] = $value;
@@ -168,7 +171,7 @@ class Header extends Raw\Header
 
       return false;
    }
-   public function append (string $field, string $value = '', ? string $separator = ', ')
+   public function append (string $field, string $value = '', ? string $separator = ', '): void
    {
       // TODO map separator (with const?)
       // Header that can have only value to append, only entire header, etc.
@@ -179,7 +182,7 @@ class Header extends Raw\Header
          $this->fields[$field] = $value;
       }
    }
-   public function queue (string $field, string $value = '')
+   public function queue (string $field, string $value = ''): bool
    {
       if ($field) {
          $this->queued[] = "$field: $value";

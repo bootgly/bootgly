@@ -12,7 +12,6 @@ namespace Bootgly\CLI\UI;
 
 
 use Bootgly\API\Component;
-
 use Bootgly\CLI\Terminal\Output;
 
 
@@ -24,6 +23,7 @@ class Header extends Component
    // ...
 
    // * Data
+   /** @var array<string> */
    public array $font;
 
    // * Metadata
@@ -251,7 +251,7 @@ class Header extends Component
       $this->output = '';
    }
 
-   public function generate (string $word, bool $inline = true) : self
+   public function generate (string $word, bool $inline = true): self
    {
       $font = $this->font;
 
@@ -300,7 +300,7 @@ class Header extends Component
       return $this;
    }
 
-   public function render (int $mode = self::WRITE_OUTPUT)
+   public function render (int $mode = self::WRITE_OUTPUT): Output|string|null
    {
       return match ($mode) {
          self::WRITE_OUTPUT => $this->Output->write($this->output),

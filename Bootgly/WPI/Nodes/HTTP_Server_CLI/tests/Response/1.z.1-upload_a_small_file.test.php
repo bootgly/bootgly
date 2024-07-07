@@ -17,7 +17,7 @@ return [
 
    // @ simulate
    // Server API
-   'response' => function (Request $Request, Response $Response) : Response {
+   'response' => function (Request $Request, Response $Response): Response {
       return $Response->upload('statics/image1.jpg', close: false);
    },
    // Client API

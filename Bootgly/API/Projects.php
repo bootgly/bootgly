@@ -26,18 +26,20 @@ abstract class Projects implements Resources
    // ...
 
    // * Data
+   /** @var Project[] */
    protected static array $projects = [];
 
    // * Metadata
    private static Project $Default;
    // @ index
    private static int $index = 0;
+   /** @var int[] */
    private static array $indexes = [];
    // @autoboot
    private static bool $booted;
 
 
-   public static function add (Project $Project) : int
+   public static function add (Project $Project): int
    {
       $index = count(self::$projects);
 
@@ -50,7 +52,7 @@ abstract class Projects implements Resources
     *
     * @return null|Project 
     */
-   public static function autobooting () : null|Project
+   public static function autobooting (): null|Project
    {
       if ( isSet(self::$booted) )
          throw new \Exception("Project autoboot can only be called once.");
@@ -91,7 +93,7 @@ abstract class Projects implements Resources
     * @param string $project 
     * @return bool 
     */
-   public static function index (string $project) : bool
+   public static function index (string $project): bool
    {
       // ?
       if ($project === '') {
@@ -114,7 +116,7 @@ abstract class Projects implements Resources
     *
     * @return int 
     */
-   public static function count () : int
+   public static function count (): int
    {
       return count(self::$projects);
    }
@@ -124,7 +126,7 @@ abstract class Projects implements Resources
     * @param null|string|int $project 
     * @return false|Project 
     */
-   public static function select (null|string|int $project) : false|Project
+   public static function select (null|string|int $project): false|Project
    {
       // ?!
       if (is_string($project) === true) {

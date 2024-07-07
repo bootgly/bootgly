@@ -29,10 +29,11 @@ final class Options extends Items
    // * Metadata
    public static int $indexes;
    // @ Selecting
+   /** @var array<array<int>|int> */
    public static array $selected;
 
 
-   public function __construct ($Menu)
+   public function __construct (Menu $Menu)
    {
       // --- Parent --- \\
       parent::__construct($Menu);
@@ -59,6 +60,18 @@ final class Options extends Items
       self::$selected[0] = [];
    }
 
+   /**
+    * Add a new option to the list.
+    *
+    * @param array<int> $aimed
+    * @param array<int> $unaimed
+    * @param array<int> $marked
+    * @param array<int> $unmarked
+    * @param string $label
+    * @param string $prepend
+    * @param string $append
+    * @return Option
+    */
    public function add (
       array $aimed = [],
       array $unaimed = [],
@@ -67,7 +80,7 @@ final class Options extends Items
       string $label = '',
       string $prepend = '',
       string $append = '',
-   ) : Option
+   ): Option
    {
       $Option = new Option;
       // * Config
@@ -90,7 +103,7 @@ final class Options extends Items
    }
 
    // @ Aiming
-   public function regress () : self
+   public function regress (): self
    {
       if ($this->aimed > 0) {
          $this->aimed--;
@@ -100,7 +113,7 @@ final class Options extends Items
 
       return $this;
    }
-   public function advance () : self
+   public function advance (): self
    {
       if ($this->aimed < self::$indexes - 1) {
          $this->aimed++;
@@ -112,13 +125,13 @@ final class Options extends Items
    }
 
    // @ Selecting
-   private function select ($index)
+   private function select (int $index): void
    {
       if ($this->selectable) {
          self::$selected[Menu::$level][] = $index;
       }
    }
-   private function deselect ($index)
+   private function deselect (int $index): void
    {
       if ($this->deselectable) {
          self::$selected[Menu::$level] = array_diff(
@@ -127,7 +140,7 @@ final class Options extends Items
          );
       }
    }
-   private function toggle ($index)
+   private function toggle (int $index): void
    {
       if ( in_array($index, self::$selected[Menu::$level]) ) {
          $this->deselect($index);
@@ -135,7 +148,7 @@ final class Options extends Items
          $this->select($index);
       }
    }
-   private function iterate ()
+   private function iterate (): void
    {
       // @ Select / Unselect option(s)
       $index = 0;
@@ -153,7 +166,7 @@ final class Options extends Items
       }
    }
 
-   public function control (string $char) : bool
+   public function control (string $char): bool
    {
       switch ($char) {
          // \x1b \e \033
@@ -183,7 +196,7 @@ final class Options extends Items
       return true;
    }
 
-   public function compile (Option $Option)
+   public function compile (Option $Option): string
    {
       // ? Options
       // * Config
@@ -215,7 +228,8 @@ final class Options extends Items
       if ($aimed === $index) {
          $aim[0] = $Option->aimed[0] ?? '=>';
          $aim[1] = $Option->aimed[1] ?? '';
-      } else {
+      }
+      else {
          $aim[0] = $Option->unaimed[0] ?? '  ';
          $aim[1] = $Option->unaimed[1] ?? '';
       }
@@ -224,7 +238,8 @@ final class Options extends Items
       if ( in_array($index, $selected) ) {
          $marker[0] = $Option->marked[0] ?? '[X]';
          $marker[1] = $Option->marked[1] ?? '';
-      } else {
+      }
+      else {
          $marker[0] = $Option->unmarked[0] ?? '[ ]';
          $marker[1] = $Option->unmarked[1] ?? '';
       }

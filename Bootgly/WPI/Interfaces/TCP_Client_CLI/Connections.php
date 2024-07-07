@@ -19,6 +19,7 @@ use Bootgly\WPI\Interfaces\TCP_Client_CLI as Client;
 use Bootgly\WPI\Interfaces\TCP_Client_CLI\Connections\Connection;
 
 
+// FIXME: extends Connections
 class Connections implements WPI\Connections
 {
    use LoggableEscaped;
@@ -32,18 +33,22 @@ class Connections implements WPI\Connections
    public bool $blocking;
 
    // * Data
+   /** @var resource */
    public $Socket;
 
    // * Metadata
    // @ Error
+   /** @var array<string> */
    public array $error = [];
    // @ Local
+   /** @var array<int,Connection> */
    public static array $Connections;
    // @ Stats
    public static bool $stats;
    // Connections
    public int $connections;
    // Errors
+   /** @var array<string,int> */
    public static array $errors;
    // Packages
    public static int $writes;
@@ -88,13 +93,9 @@ class Connections implements WPI\Connections
       self::$written = 0;      // Socket Writes in bytes
       self::$read = 0;         // Socket Reads in bytes
    }
-   public function __get ($name)
-   {
-      // TODO ?
-   }
 
    // Open connection with server / Connect with server
-   public function connect () : bool
+   public function connect (): bool
    {
       $Socket = &$this->Client->Socket;
 
@@ -141,7 +142,14 @@ class Connections implements WPI\Connections
       return true;
    }
 
-   public function close ($Connection) : bool
+   /**
+    * Close connection with server / Disconnect from server
+    * 
+    * @param resource $Connection
+    * 
+    * @return bool
+    */
+   public function close ($Connection): bool
    {
       // @ Close all Connections
       #if ($Connection === null) {

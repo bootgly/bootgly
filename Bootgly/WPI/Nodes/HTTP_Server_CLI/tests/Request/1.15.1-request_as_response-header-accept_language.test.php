@@ -23,7 +23,7 @@ return [
       HTTP;
    },
    // Server API
-   'response' => function (Request $Request, Response $Response) : Response {
+   'response' => function (Request $Request, Response $Response): Response {
       $language = $Request->language;
 
       return $Response(body: $language);

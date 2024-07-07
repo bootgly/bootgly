@@ -29,6 +29,7 @@ class TCP_Client_CLI
    use LoggableEscaped;
 
 
+   /** @var resource */
    public $Socket;
 
    // ! Event
@@ -64,6 +65,7 @@ class TCP_Client_CLI
    // * Metadata
    public const VERSION = '0.0.1';
    // @ Error
+   /** @var array<string> */
    public array $error = [];
    // @ State
    protected static int $started = 0;
@@ -124,7 +126,7 @@ class TCP_Client_CLI
          $Process->sendSignal(SIGINT);
       });
    }
-   public function __get (string $name)
+   public function __get (string $name): mixed
    {
       switch ($name) {
          case 'Process':
@@ -139,9 +141,11 @@ class TCP_Client_CLI
          case 'Connections':
             return $this->Connections;
       }
+
+      return null;
    }
 
-   public function configure (string $host, int $port, int $workers = 0)
+   public function configure (string $host, int $port, int $workers = 0): self
    {
       self::$status = self::STATUS_CONFIGURING;
 
@@ -158,7 +162,7 @@ class TCP_Client_CLI
       ? \Closure $instance = null,
       ? \Closure $connect = null, ? \Closure $disconnect = null,
       ? \Closure $read = null, ? \Closure $write = null
-   )
+   ): void
    {
       // @ Worker
       self::$onInstance = $instance;
@@ -169,7 +173,7 @@ class TCP_Client_CLI
       self::$onRead = $read;
       self::$onWrite = $write;
    }
-   public function start ()
+   public function start (): bool
    {
       self::$status = self::STATUS_STARTING;
 
@@ -206,7 +210,7 @@ class TCP_Client_CLI
       return true;
    }
 
-   private function monitor ()
+   private function monitor (): void
    {
       self::$status = self::STATUS_RUNNING;
 
@@ -243,6 +247,11 @@ class TCP_Client_CLI
       }
    }
 
+   /**
+    * Open connection with server / Connect with server
+    *
+    * @return resource|false
+    */
    public function connect ()
    {
       $error = false;
@@ -312,7 +321,7 @@ class TCP_Client_CLI
       return $Socket;
    }
 
-   public function stop ()
+   public function stop (): void
    {
       self::$status = self::STATUS_STOPING;
 

@@ -17,7 +17,7 @@ use Throwable;
 
 class TemplateRenderException extends Exception
 {
-   public function __construct ($filename, Throwable $T)
+   public function __construct (string $filename, Throwable $T)
    {
       // $this->message
       $this->file = $filename;

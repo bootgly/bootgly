@@ -14,7 +14,7 @@ namespace Bootgly\WPI\Modules\HTTP\Server\Response;
 trait Redirectable
 {
    // \
-   private static $Server;
+   private static string $Server;
 
 
    /**
@@ -25,7 +25,7 @@ trait Redirectable
     *
     * @return self Returns Response.
     */
-   public function redirect (string $URI, ? int $code = null) : self
+   public function redirect (string $URI, ? int $code = null): self
    {
       // !?
       switch ($code) {

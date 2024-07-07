@@ -26,8 +26,10 @@ abstract class Response extends Raw
 
    // * Data
    // @ Content
+   /** @var null|string|array<mixed> */
    protected null|string|array $content = '';
    protected File $File;
+   /** @var array<mixed> */
    protected array $files = [];
    // @ status
    protected int $code = 200;
@@ -38,9 +40,24 @@ abstract class Response extends Raw
    protected string $status = '200 OK';
    protected string $response = self::PROTOCOL . ' 200 OK';
 
-
+   /**
+    * Construct a new Response instance.
+    *
+    * @param int $code The status code of the response.
+    * @param array<string>|null $headers The headers of the response.
+    * @param string $body The body of the response.
+    */
    abstract public function __construct (int $code = 200, ? array $headers = null, string $body = '');
-   abstract public function __invoke (int $code = 200, array $headers = [], string $body = '') : self;
+   /**
+    * Prepare the response for sending.
+    *
+    * @param int $code The status code of the response.
+    * @param array<string> $headers The headers of the response.
+    * @param string $body The body of the response.
+    *
+    * @return self The Response instance, for chaining 
+    */
+   abstract public function __invoke (int $code = 200, array $headers = [], string $body = ''): self;
 
    /**
     * Appends the provided data to the body of the response.
@@ -49,7 +66,7 @@ abstract class Response extends Raw
     *
     * @return self The Response instance, for chaining
     */
-   abstract public function append ($body) : self;
+   abstract public function append ($body): self;
    /**
     * Set the HTTP Server Response code.
     *
@@ -81,12 +98,12 @@ abstract class Response extends Raw
     * Renders the specified view with the provided data.
     *
     * @param string $view The view to render.
-    * @param array|null $data The data to provide to the view.
+    * @param array<string>|null $data The data to provide to the view.
     * @param \Closure|null $callback Optional callback.
     *
-    * @return self Returns Response
+    * @return self The Response instance, for chaining
     */
-   abstract public function render (string $view, ? array $data = null, ? \Closure $callback = null) : self;
+   abstract public function render (string $view, ? array $data = null, ? \Closure $callback = null): self;
    /**
     * Send the response
     *
@@ -95,7 +112,7 @@ abstract class Response extends Raw
     *
     * @return self The Response instance, for chaining
     */
-   abstract public function send ($body = null, ...$options) : self;
+   abstract public function send ($body = null, ...$options): self;
    /**
     * Start a file upload from the Server to the Client
     *
@@ -105,7 +122,7 @@ abstract class Response extends Raw
     * 
     * @return self The Response instance, for chaining
     */
-   abstract public function upload (string|File $file, int $offset = 0, ? int $length = null) : self;
+   abstract public function upload (string|File $file, int $offset = 0, ? int $length = null): self;
 
    /**
     * Authenticate the user with the provided authentication method.
@@ -114,7 +131,7 @@ abstract class Response extends Raw
     *
     * @return self The Response instance, for chaining
     */
-   abstract public function authenticate (Authentication $Method) : self;
+   abstract public function authenticate (Authentication $Method): self;
 
    /**
     * Redirects to a new URI. Default return is 307 for GET (Temporary Redirect) and 303 (See Other) for POST.
@@ -122,7 +139,7 @@ abstract class Response extends Raw
     * @param string $URI The new URI to redirect to.
     * @param ? int $code The HTTP status code to use for the redirection.
     *
-    * @return self Returns Response.
+    * @return self The Response instance, for chaining.
     */
-   abstract public function redirect (string $URI, ? int $code = null) : self;
+   abstract public function redirect (string $URI, ? int $code = null): self;
 }

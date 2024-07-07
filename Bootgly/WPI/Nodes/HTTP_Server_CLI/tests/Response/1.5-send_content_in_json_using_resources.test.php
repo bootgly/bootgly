@@ -15,7 +15,7 @@ return [
 
    // @ simulate
    // Server API
-   'response' => function (Request $Request, Response $Response) : Response {
+   'response' => function (Request $Request, Response $Response): Response {
       return $Response->Json->send(['Hello' => 'World!']); // JSON
    },
    // Client API

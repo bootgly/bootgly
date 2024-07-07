@@ -13,6 +13,20 @@ namespace Bootgly\WPI\Connections;
 
 interface Packages
 {
-   public function read (&$Socket);
-   public function write (&$Socket);
+   /**
+    * Read data from the socket
+    *
+    * @param resource $Socket 
+    *
+    * @return void 
+    */
+   public function read (&$Socket): void;
+   /**
+    * Write data to the socket
+    *
+    * @param resource $Socket 
+    *
+    * @return void 
+    */
+   public function write (&$Socket): void;
 }

@@ -24,7 +24,7 @@ use Bootgly\WPI\Events\Select;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI as Server;
 
 
-class Process
+class Process // FIXME: extends Process
 {
    use LoggableEscaped;
 
@@ -42,11 +42,12 @@ class Process
    // @ Id
    public static int $index;
    public static int $master;
+   /** @var array<int> */
    public static array $children = [];
    // File
-   public static $commandFile = BOOTGLY_WORKING_DIR . '/workdata/server.command';
-   public static $pidFile = BOOTGLY_WORKING_DIR . '/workdata/server.pid';
-   public static $pidLockFile = BOOTGLY_WORKING_DIR . '/workdata/server.pid.lock';
+   public static string $commandFile = BOOTGLY_WORKING_DIR . '/workdata/server.command';
+   public static string $pidFile = BOOTGLY_WORKING_DIR . '/workdata/server.pid';
+   public static string $pidLockFile = BOOTGLY_WORKING_DIR . '/workdata/server.pid.lock';
 
 
    public function __construct (Server &$Server)
@@ -70,7 +71,7 @@ class Process
       // @ Init Process Timer
       Timer::init([$this, 'handleSignal']);
    }
-   public function __get ($name)
+   public function __get (string $name): mixed
    {
       switch ($name) {
          // * Metadata
@@ -90,9 +91,11 @@ class Process
          case 'pids':
             return self::$children;
       }
+
+      return null;
    }
 
-   protected static function lock ($flag = \LOCK_EX)
+   protected static function lock (int $flag = \LOCK_EX): void
    {
       static $file;
 
@@ -118,7 +121,7 @@ class Process
    }
 
    // @ Signal
-   public function installSignal ()
+   public function installSignal (): void
    {
       $signalHandler = [$this, 'handleSignal'];
 
@@ -148,7 +151,7 @@ class Process
       // ignore
       \pcntl_signal(SIGPIPE, SIG_IGN, false);
    }
-   public function handleSignal ($signal)
+   public function handleSignal (int $signal): void
    {
       #$this->log($signal . PHP_EOL);
 
@@ -219,7 +222,9 @@ class Process
             break;
       }
    }
-   public function sendSignal (int $signal, bool $master = true, bool $children = true)
+   public function sendSignal (
+      int $signal, bool $master = true, bool $children = true
+   ): bool
    {
       if ($master) {
          // Send signal to master process
@@ -241,7 +246,7 @@ class Process
       return true;
    }
 
-   public function fork (int $workers)
+   public function fork (int $workers): void
    {
       $this->log("forking $workers workers... ", self::LOG_NOTICE_LEVEL);
 
@@ -279,14 +284,19 @@ class Process
    }
 
    // @ User
-   protected static function getCurrentUser ()
+   protected static function getCurrentUser (): string
    {
       $user_info = \posix_getpwuid(\posix_getuid());
 
       return $user_info['name'];
    }
 
-   protected static function saveMasterPid () // Save process master id to file
+   /**
+    * Save the master pid to a file.
+    *
+    * @return void
+    */
+   protected static function saveMasterPid (): void
    {
       if (\file_put_contents(static::$pidFile, static::$master) === false) {
          throw new \Exception('Can not save master pid to ' . static::$pidFile);

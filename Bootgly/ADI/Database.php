@@ -22,6 +22,7 @@ class Database
    public bool $debug;
 
    // * Data
+   /** @var array<string,string> */
    protected array $configs;
 
    // * Metadata
@@ -31,6 +32,11 @@ class Database
    public ? PDOException $Exception;
 
 
+   /**
+    * Database constructor.
+    * 
+    * @param array<string,string> $configs
+    */
    public function __construct (array $configs)
    {
       // * Config
@@ -46,7 +52,7 @@ class Database
       $this->Exception = null;
    }
 
-   public function __get (string $index)
+   public function __get (string $index): mixed
    {
       switch ($index) {
          case 'connected':
@@ -72,7 +78,7 @@ class Database
    }
 
    // ! Database
-   public function connect () : bool
+   public function connect (): bool
    {
       try {
          if ($this->PDO === null) {
@@ -101,13 +107,13 @@ class Database
 
       return false;
    }
-   public function disconnect () : bool
+   public function disconnect (): bool
    {
       $this->PDO = null;
 
       return true;
    }
-   public function use (string $database = '') : bool
+   public function use (string $database = ''): bool
    {
       try {
          if ($database === '') {
@@ -129,7 +135,7 @@ class Database
    }
 
    // ! Query
-   public function prepare (string $query) : PDOStatement|bool
+   public function prepare (string $query): PDOStatement|bool
    {
       try {
          if ($this->configs['driver'] === 'pgsql') {
@@ -147,7 +153,7 @@ class Database
    }
 
    // ! Transaction
-   public function transact () : bool|null
+   public function transact (): bool|null
    {
       try {
          return $this->PDO->beginTransaction();
@@ -157,7 +163,7 @@ class Database
 
       return null;
    }
-   public function commit () : bool|null
+   public function commit (): bool|null
    {
       try {
          return $this->PDO->commit();
@@ -167,7 +173,7 @@ class Database
 
       return null;
    }
-   public function rollback () : bool|null
+   public function rollback (): bool|null
    {
       try {
          return $this->PDO->rollBack();

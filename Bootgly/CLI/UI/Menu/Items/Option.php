@@ -19,10 +19,14 @@ final class Option extends Item
    // * Config
    // @ Aiming
    // Aim
+   /** @var array<int> */
    public array $aimed;
+   /** @var array<int> */
    public array $unaimed;
    // Marker
+   /** @var array<int> */
    public array $marked;
+   /** @var array<int> */
    public array $unmarked;
 
    // * Data
@@ -34,6 +38,17 @@ final class Option extends Item
    public int $index;
 
 
+   /**
+    * 
+    * @param array<int> $aimed 
+    * @param array<int> $unaimed 
+    * @param array<int> $marked 
+    * @param array<int> $unmarked 
+    * @param string $label 
+    * @param string $prepend 
+    * @param string $append 
+    * @return void 
+    */
    public function __construct (
       array $aimed = [],
       array $unaimed = [],

@@ -21,6 +21,7 @@ use Bootgly\WPI\Interfaces\TCP_Server_CLI as Server;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections\Connection;
 
 
+// FIXME: extends Connections
 class Connections implements WPI\Connections
 {
    use LoggableEscaped;
@@ -36,14 +37,17 @@ class Connections implements WPI\Connections
 
    // * Metadata
    // @ Remote
+   /** @var array<int,Connection> */
    public static array $Connections;
    // @ Limiter
+   /** @var array<string> */
    public static array $blacklist;
    // @ Stats
    public static bool $stats;
    // Connections
    public int $connections;
    // Errors
+   /** @var array<string,int> */
    public static array $errors;
    // Packages
    public static int $reads;
@@ -92,7 +96,7 @@ class Connections implements WPI\Connections
       self::$read = 0;         // Socket Reads in bytes
       self::$written = 0;      // Socket Writes in bytes
    }
-   public function __get (string $name)
+   public function __get (string $name): mixed
    {
       // Remove @ in name if exists (eg.: @connections -> connections)
       if (\str_starts_with($name, '@')) {
@@ -103,10 +107,12 @@ class Connections implements WPI\Connections
          __CLASS__,
          ...explode(" ", $name)
       ], From: $this->Server);
+
+      return null;
    }
 
    // Accept connection from client / Open connection with client / Connect with client
-   public function connect () : bool
+   public function connect (): bool
    {
       try {
          $Socket = @\stream_socket_accept($this->Server->Socket, null);
@@ -151,7 +157,14 @@ class Connections implements WPI\Connections
       return true;
    }
 
-   public function close ($Connection) : bool
+   /**
+    * Close connection with client
+    *
+    * @param resource $Connection
+    *
+    * @return bool
+    */
+   public function close ($Connection): bool
    {
       // @ Close all Connections
       #if ($Connection === null) {

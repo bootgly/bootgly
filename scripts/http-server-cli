@@ -21,7 +21,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI;
 $HTTP_Server_CLI = new HTTP_Server_CLI;
 $HTTP_Server_CLI->configure(
    host: '0.0.0.0',
-   port: getenv('PORT') ? getenv('PORT') : 8082,
+   port: getenv('PORT') ? getenv('PORT'): 8082,
    workers: round(((int) shell_exec('nproc')) * 0.6),
    /*
    ssl: [

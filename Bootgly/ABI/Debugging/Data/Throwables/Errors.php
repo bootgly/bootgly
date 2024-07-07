@@ -11,6 +11,8 @@
 namespace Bootgly\ABI\Debugging\Data\Throwables;
 
 
+use Throwable;
+
 use Bootgly\ABI\Data\__String\Path;
 use Bootgly\ABI\Data\__String\Theme;
 use Bootgly\ABI\Data\__String\Tokens\Highlighter;
@@ -27,11 +29,12 @@ abstract class Errors extends Throwables
    public static int $verbosity = 3;
 
    // * Data
+   /** @var array<Throwable> */
    protected static array $errors = [];
 
 
    // @ Error
-   public static function collect (int $level, string $message, string $filename, int $line) : bool
+   public static function collect (int $level, string $message, string $filename, int $line): bool
    {
       self::$errors[] = [
          'message'  => $message,
@@ -49,7 +52,7 @@ abstract class Errors extends Throwables
       throw new \ErrorException($message, 0, $level, $filename, $line);
    }
 
-   public static function report (\Throwable $Throwable)
+   public static function report (Throwable $Throwable): void
    {
       $Highligher = new Highlighter;
 
@@ -158,12 +161,12 @@ abstract class Errors extends Throwables
       echo $output;
    }
 
-   public static function debug (...$Throwables)
+   public static function debug (mixed ...$Throwables): void
    {
       $errors = $Throwables ?: self::$errors;
 
       foreach ($errors as $Error) {
-         if ($Error instanceof \Throwable) {
+         if ($Error instanceof Throwable) {
             self::report($Error);
          }
       }

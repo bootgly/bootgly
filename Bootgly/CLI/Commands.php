@@ -22,7 +22,10 @@ class Commands
 
    // * Data
    protected ? string $banner;
+   // # Command
+   /** @var array<string,array<Command>|Command> */
    protected array $commands;
+   // # Arguments
    protected ? \Closure $Helper;
    // ...
 
@@ -48,7 +51,7 @@ class Commands
             public string $description = 'Show this help message';
 
 
-            public function run (array $arguments = [], array $options = []) : bool
+            public function run (array $arguments = [], array $options = []): bool
             {
                return true;
             }
@@ -59,7 +62,7 @@ class Commands
       // * Metadata
       // ...
    }
-   public function __set ($name, $value)
+   public function __set (string $name, mixed $value)
    {
       switch ($name) {
          case 'Helper':
@@ -75,7 +78,16 @@ class Commands
       }
    }
 
-   public function autoload (string $location, ? object $Context = null, ? object $Script = null) : bool
+   /**
+    * Load commands from a location
+    *
+    * @param string $location
+    * @param object|null $Context
+    * @param object|null $Script
+    *
+    * @return bool
+    */
+   public function autoload (string $location, ? object $Context = null, ? object $Script = null): bool
    {
       // !?
       $commands = require Path::normalize(\BOOTGLY_ROOT_DIR . $location . '/commands/@.php');
@@ -109,9 +121,24 @@ class Commands
 
       return true;
    }
-   public function register (Command|\Closure $Command, array $specification = [], ? object $Script = null) : bool
+   /**
+    * Register a command
+    * 
+    * @param Command|\Closure $Command
+    * @param array<string, object|null> $specification
+    * @param object|null $Script
+    *
+    * @return bool
+    */
+   public function register (Command|\Closure $Command, array $specification = [], ?object $Script = null): bool
    {
       if ($Command instanceof \Closure) {
+         /** 
+          * @var string|null $name
+          * @var string|null $description
+          * @var array<string> $arguments
+          * @var object|null $context
+          */
          [
             'name' => $name,
             'description' => $description,
@@ -126,7 +153,7 @@ class Commands
             $Command
          ) extends Command
          {
-            public function run (array $arguments = [], array $options = []) : bool
+            public function run (array $arguments = [], array $options = []): bool
             {
                return ($this->Command)($arguments, $options);
             }
@@ -145,7 +172,14 @@ class Commands
       return true;
    }
 
-   public function list (? object $From = null) : array
+   /**
+    * List all commands
+    *
+    * @param object|null $From
+    *
+    * @return array<Command>
+    */
+   public function list (? object $From = null): array
    {
       // ?!
       if ($From === null) {
@@ -168,8 +202,13 @@ class Commands
    }
    /**
     * Find a command by its name
+    *
+    * @param string $command
+    * @param object|null $From
+    *
+    * @return Command|null
     */
-   public function find (string $command, ? object $From = null) : Command|null
+   public function find (string $command, ? object $From = null): Command|null
    {
       foreach ($this->list($From) as $Command) {
          if ($Command->name === $command) {
@@ -179,7 +218,15 @@ class Commands
 
       return null;
    }
-   public function help (? string $message = null, ? object $From = null) : bool
+   /**
+    * Show the help message
+    *
+    * @param string|null $message
+    * @param object|null $From
+    *
+    * @return bool
+    */
+   public function help (? string $message = null, ? object $From = null): bool
    {
       // !
       // * Data
@@ -211,8 +258,13 @@ class Commands
     * 
     * If no command is provided, the command signature is taken from native PHP CLI arguments.
     * If no command is found, the help message is shown.
+    *
+    * @param array<string>|null $command
+    * @param object|null $From
+    *
+    * @return bool
     */
-   public function route (? array $command = null, ? object $From = null) : bool
+   public function route (? array $command = null, ? object $From = null): bool
    {
       // # Command
       // ?!

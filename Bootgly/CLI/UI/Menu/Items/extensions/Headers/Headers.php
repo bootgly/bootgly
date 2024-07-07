@@ -26,7 +26,7 @@ final class Headers extends Items
    // ...
 
 
-   public function add (string $header) : Header
+   public function add (string $header): Header
    {
       $Header = new Header;
       // * Data
@@ -37,7 +37,7 @@ final class Headers extends Items
       return $Header;
    }
 
-   public function compile (Header $Header)
+   public function compile (Header $Header): string
    {
       #$Menu = $this->Menu;
 

@@ -43,7 +43,7 @@ class Mouse implements Reporting
       $this->URXVT = true;
    }
 
-   public function report (bool $enabled)
+   public function report (bool $enabled): void
    {
       if ($this->SGT) {
          $this->Output->escape(self::_MOUSE_SET_SGR_EXT_MODE);
@@ -64,7 +64,7 @@ class Mouse implements Reporting
       }
    }
 
-   public function reporting (\Closure $callback) : void
+   public function reporting (\Closure $callback): void
    {
       $this->report(true);
 

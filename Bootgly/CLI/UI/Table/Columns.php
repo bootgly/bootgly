@@ -29,10 +29,11 @@ class Columns
    // * Metadata
    // private int $count;
    // @ Width
+   /** @var array<array<int>|int>*/
    private array $widths; // [... ? section => ...column_index]
 
 
-   public function __construct ($Table)
+   public function __construct (Table $Table)
    {
       $this->Table = $Table;
 
@@ -50,7 +51,7 @@ class Columns
       // @ Width
       $this->widths = [];
    }
-   public function __get ($name)
+   public function __get (string $name): mixed
    {
       switch ($name) {
          case 'widths':
@@ -66,7 +67,7 @@ class Columns
       }
    }
 
-   public function autowiden () : bool
+   public function autowiden (): bool
    {
       $data = $this->Table->Data->get();
 
@@ -117,7 +118,7 @@ class Columns
       return true;
    }
 
-   public function count (? string $section = null) : int
+   public function count (? string $section = null): int
    {
       // @phpstan-ignore-next-line
       $widths = ($this->Autowiden->get() === Autowiden::Based_On_Section && $section

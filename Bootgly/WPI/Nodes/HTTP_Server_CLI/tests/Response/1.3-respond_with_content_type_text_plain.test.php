@@ -14,7 +14,7 @@ return [
 
    // @ simulate
    // Server API
-   'response' => function (Request $Request, Response $Response) : Response {
+   'response' => function (Request $Request, Response $Response): Response {
       $Response->Header->set('Content-Type', 'text/plain');
       return $Response(body: 'Hello World!');
    },

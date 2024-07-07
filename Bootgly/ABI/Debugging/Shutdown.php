@@ -24,10 +24,11 @@ abstract class Shutdown implements Debugging
    #public static bool $return = false;
    #public static bool $exit = true;
    // * Data
+   /** @var array<string>|null */
    protected static ? array $error = [];
 
 
-   public static function collect ($args = 0) : bool
+   public static function collect (): bool
    {
       $error = error_get_last();
       if ($error === NULL) {
@@ -42,7 +43,7 @@ abstract class Shutdown implements Debugging
       return true;
    }
 
-   public static function debug (...$Throwables)
+   public static function debug (mixed ...$Throwables): void
    {
       if (self::$debug === true) {
          // TODO with self::$error

@@ -20,12 +20,16 @@ class Input
    // ...
 
    // * Data
+   /** @var resource|string */
    public $stream;
 
    // * Metadata
    // ...
 
 
+   /**
+    * @param resource|string $stream
+    */
    public function __construct ($stream = STDIN)
    {
       // * Config
@@ -38,24 +42,25 @@ class Input
       // ...
    }
 
-   public function configure (bool $blocking = true, bool $canonical = true, bool $echo = true)
+   public function configure (bool $blocking = true, bool $canonical = true, bool $echo = true): self
    {
       stream_set_blocking($this->stream, $blocking);
 
-      $canonical ? system('stty icanon') : system('stty -icanon');
+      $canonical ? system('stty icanon'): system('stty -icanon');
 
-      $echo ? system('stty echo') : system('stty -echo');
+      $echo ? system('stty echo'): system('stty -echo');
 
       return $this;
    }
 
-   public function read (int $length) : string|false
+   public function read (int $length): string|false
    {
       pcntl_signal_dispatch();
 
       try {
          $read = @fread($this->stream, $length);
-      } catch (\Throwable) {
+      }
+      catch (\Throwable) {
          $read = false;
       }
 
@@ -66,7 +71,7 @@ class Input
       return $read;
    }
 
-   public function reading (\Closure $CAPI, \Closure $SAPI)
+   public function reading (\Closure $CAPI, \Closure $SAPI): void
    {
       $Pipe = new Pipe(blocking: false);
 
@@ -99,19 +104,22 @@ class Input
          try {
             // @ Call Terminal Client API passing the Pipe write method
             $CAPI([$this, 'read'], [$Pipe, 'write']);
-         } catch (\Throwable) {
+         }
+         catch (\Throwable) {
             // ...
          }
 
          // Close Client API
          exit(0);
-      } else if ($pid > 0) { // @ Parent (Server)
+      }
+      else if ($pid > 0) { // @ Parent (Server)
          cli_set_process_title("BootglyCLI: Server");
 
          try {
             // @ Call Terminal Server API passing the Pipe reading method
             $SAPI([$Pipe, 'reading']);
-         } catch (\Throwable) {
+         }
+         catch (\Throwable) {
             // ...
          }
 
@@ -120,7 +128,8 @@ class Input
 
          // Wait for child process to exit
          pcntl_waitpid($pid, $status);
-      } else if ($pid === -1) {
+      }
+      else if ($pid === -1) {
          die('Could not fork process!');
       }
    }

@@ -13,5 +13,5 @@ namespace Bootgly\ACI;
 
 abstract class Logs
 {
-   abstract public function log ($message);
+   abstract public function log (string $message): bool;
 }

@@ -56,8 +56,10 @@ class Progress extends Component
    private float|string $eta;
    private float|string $rate;
    // ! Templating
+   /** @var array<string> */
    private array $tokens;
    // @ render
+   /** @var array<int> */
    private array $cursor;
    // time
    private float $started;
@@ -134,11 +136,11 @@ class Progress extends Component
       $this->Bar->units = $units;
       $this->Bar->Symbols = $Symbols;
    }
-   public function __get ($name)
+   public function __get (string $name): mixed
    {
       return $this->$name;
    }
-   public function __set ($name, $value)
+   public function __set (string $name, mixed $value)
    {
       switch ($name) {
          case 'percent':
@@ -147,7 +149,7 @@ class Progress extends Component
       }
    }
 
-   protected function render (int $mode = self::WRITE_OUTPUT)
+   protected function render (int $mode = self::WRITE_OUTPUT): void
    {
       $this->rendered = microtime(true);
 
@@ -205,7 +207,7 @@ class Progress extends Component
       }
    }
 
-   public function start ()
+   public function start (): void
    {
       if ($this->started) {
          return;
@@ -242,7 +244,7 @@ class Progress extends Component
       $this->render();
    }
 
-   public function advance (int $amount = 1)
+   public function advance (int $amount = 1): void
    {
       $current = $this->current += $amount;
 
@@ -286,7 +288,7 @@ class Progress extends Component
       $this->render();
    }
 
-   public function describe (string $description)
+   public function describe (string $description): void
    {
       if ($this->description === $description) {
          return;
@@ -301,7 +303,7 @@ class Progress extends Component
       $this->description = TemplateEscaped::render($description);
    }
 
-   public function finish ()
+   public function finish (): void
    {
       if ($this->finished) {
          return;

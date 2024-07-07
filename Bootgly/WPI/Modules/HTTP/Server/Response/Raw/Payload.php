@@ -25,7 +25,7 @@ abstract class Payload
    protected string $chunked;
 
 
-   public function __get (string $name)
+   public function __get (string $name): mixed
    {
       switch ($name) {
          // * Metadata

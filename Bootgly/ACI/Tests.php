@@ -30,10 +30,13 @@ abstract class Tests implements Resources
    // exit
    public static bool $exitOnFailure = false;
    // pretesting
+   /** @var array<object> */
    public array $testables;
 
    // * Data
+   /** @var array<string> */
    public array $tests;
+   /** @var array<string,mixed> */
    public array $specifications;
 
    // * Metadata
@@ -54,9 +57,22 @@ abstract class Tests implements Resources
    public static int $width = 0;
 
 
+   /**
+    * Tests constructor.
+    * 
+    * @param array<string,mixed> $specifications
+    */
    abstract public function __construct (array &$specifications); // Suite Specifications
 
-   public static function list (array $tests, $prefix = '') : array
+   /**
+    * List test cases.
+    * 
+    * @param array<mixed> $tests
+    * @param string $prefix
+    * 
+    * @return array<string>
+    */
+   public static function list (array $tests, $prefix = ''): array
    {
       $result = [];
 
@@ -75,7 +91,17 @@ abstract class Tests implements Resources
       return $result;
    }
 
-   abstract public function test (? array &$specifications) : object|false; // Test Specifications
-
+   /**
+    * Run test cases.
+    * 
+    * @param ?array<mixed> $specifications
+    * @return object|false
+    */
+   abstract public function test (?array &$specifications): object|false;
+   /**
+    * Summarize test cases.
+    * 
+    * @return void
+    */
    abstract public function summarize ();
 }

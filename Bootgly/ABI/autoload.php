@@ -38,7 +38,7 @@ namespace Bootgly\ABI {
    // @ IO\FS
    // functions
    if (\function_exists('\Bootgly\ABI\copy_recursively') === false) {
-      function copy_recursively (string $source, string $destination)
+      function copy_recursively (string $source, string $destination): void
       {
          if (\is_dir($source) === true) {
             \mkdir($destination);
@@ -67,7 +67,7 @@ namespace {
    // @ Debugging\Data\Vars
    // functions
    if (\function_exists('dump') === false) {
-      function dump (...$vars)
+      function dump (mixed ...$vars): void
       {
          // * Data
          // + Backtrace
@@ -77,7 +77,7 @@ namespace {
       }
    }
    if (\function_exists('dd') === false) { // dd = dump and die
-      function dd (...$vars)
+      function dd (mixed ...$vars): void
       {
          // * Config
          Vars::$exit = true;

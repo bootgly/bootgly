@@ -49,12 +49,12 @@ class Bar
       $this->completing = true;
       $this->emptying = false;
    }
-   public function __get ($name)
+   public function __get (string $name): mixed
    {
       return $this->Progress->$name;
    }
 
-   public function render () : string
+   public function render (): string
    {
       $units = $this->units;
 
@@ -124,7 +124,7 @@ class Bar
       return $bar;
    }
 
-   private function redirect (float $value = 0.0)
+   private function redirect (float $value = 0.0): void
    {
       $this->Progress->percent = $value;
 

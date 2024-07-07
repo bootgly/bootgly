@@ -13,9 +13,37 @@ namespace Bootgly\ACI\Events;
 
 interface Loops
 {
-   public function add ($data, int $flag, $payload);
-   public function del ($data, int $flag);
+   /**
+    * Add a socket to the event loop.
+    * 
+    * @param resource $Socket
+    * @param int $flag
+    * @param mixed $payload
+    *
+    * @return bool
+    */
+   public function add ($Socket, int $flag, $payload): bool;
+   /**
+    * Remove a socket from the event loop.
+    * 
+    * @param resource $Socket
+    * @param int $flag
+    *
+    * @return bool
+    */
+   public function del ($Socket, int $flag): bool;
 
-   public function loop ();
-   public function destroy ();
+   /**
+    * Start the event loop.
+    *
+    * @return void
+    */
+   public function loop (): void;
+
+   /**
+    * Stop the event loop.
+    *
+    * @return void
+    */
+   public function destroy (): void;
 }

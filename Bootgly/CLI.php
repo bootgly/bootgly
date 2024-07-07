@@ -38,7 +38,7 @@ class CLI extends Projects // Command Line Interface
    public readonly Terminal $Terminal;
 
 
-   public function autoboot ()
+   public function autoboot (): void
    {
       // ?
       if (PHP_SAPI !== 'cli')

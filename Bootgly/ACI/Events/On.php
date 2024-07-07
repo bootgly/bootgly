@@ -14,12 +14,12 @@ namespace Bootgly\ACI\Events;
 #[\AllowDynamicProperties]
 class On
 {
-   public function __get ($name) : \Closure
+   public function __get (string $name): \Closure
    {
       return ($this->$name);
    }
 
-   public function __set ($name, \Closure $value)
+   public function __set (string $name, \Closure $value): void
    {
       $this->$name = $value;
    }

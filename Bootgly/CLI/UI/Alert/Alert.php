@@ -49,7 +49,7 @@ class Alert extends Component
    }
 
 
-   public function render (int $mode = self::WRITE_OUTPUT)
+   public function render (int $mode = self::WRITE_OUTPUT): mixed
    {
       // * Config
       $type = $this->Type->get();
@@ -128,6 +128,8 @@ class Alert extends Component
          $output = stream_get_contents($Output->stream);
          return $output;
       }
+
+      return null;
    }
 }
 

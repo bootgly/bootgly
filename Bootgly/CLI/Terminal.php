@@ -32,7 +32,9 @@ class Terminal
 
    // * Data
    // ! Command
+   /** @var array<string> */
    public static array $commands = [];
+   /** @var array<string,array<string>> */
    public static array $subcommands = [];
 
    // * Metadata
@@ -42,6 +44,7 @@ class Terminal
    public static int $columns;
    public static int $lines;
    // ! Command
+   /** @var array<string> */
    public static array $command = []; // @ Last command used (returned by autocomplete)
 
 
@@ -94,7 +97,7 @@ class Terminal
 
    // ! Command
    // If return true -> interact imediatily in the next loop otherwise wait for output...
-   public function interact () : bool
+   public function interact (): bool
    {
       // @ Register CLI autocomplete function
       // Use TAB key as trigger
@@ -120,18 +123,25 @@ class Terminal
       // @ Execute command
       return $this->command($command);
    }
-   protected function command (string $command) : bool
+   protected function command (string $command): bool
    {
-      // TODO default
+      // TODO: default
       return true;
    }
 
-   // TODO support to multiple subcommands (command1 subcommand1 subcommand2...)
-   protected function autocomplete (string $search) : array // return commands found
+   /**
+    * Autocomplete to Terminal commands
+    * 
+    * @param string $search
+    *
+    * @return array<string>
+    */
+   protected function autocomplete (string $search): array
    {
+      // TODO: support to multiple subcommands (command1 subcommand1 subcommand2...)
       $found = [];
 
-      // TODO refactor
+      // TODO: refactor
       if ($search || \count(self::$command) === 0) {
          $found = \array_filter(static::$commands, function ($command) use ($search) {
             $command = \preg_quote($command, '/');
@@ -151,7 +161,7 @@ class Terminal
       return $found;
    }
 
-   public function clear () : true
+   public function clear (): true
    {
       $this->Output->write(
          self::_START_ESCAPE . self::_CURSOR_POSITION .

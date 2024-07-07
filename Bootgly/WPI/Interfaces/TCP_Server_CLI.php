@@ -41,6 +41,7 @@ class TCP_Server_CLI implements Servers, Logging
 
 
    // !
+   /** @var resource|false|null */
    protected $Socket;
 
    public static Events & Loops $Event;
@@ -49,20 +50,21 @@ class TCP_Server_CLI implements Servers, Logging
    protected Process $Process;
 
    // * Config
-   protected ? string $domain;
-   protected ? string $host;
-   protected ? int $port;
+   protected ?string $domain;
+   protected ?string $host;
+   protected ?int $port;
    protected int $workers;
-   protected ? array $ssl; // SSL Stream Context
+   /** @var array<string> */
+   protected ?array $ssl; // SSL Stream Context
    // @ Mode
    public Modes $Mode;
    // @ Verbosity
 
    // * Data
    // @ SAPI
-   public static $Application = null; 
-   public static $Decoder = null;
-   public static $Encoder = null;
+   public static ?string $Application = null; 
+   public static ?object $Decoder = null;
+   public static ?object $Encoder = null;
 
    // * Metadata
    public const VERSION = '0.0.1-alpha';
@@ -70,12 +72,10 @@ class TCP_Server_CLI implements Servers, Logging
    protected int $started = 0;
    // @ Socket
    protected ? string $socket;
+   /** @var array<string> */
    public static array $context;
    // @ Status
    protected Status $Status = Status::Booting;
-   // @ Stats
-   protected static int $stat = -1;
-   protected static array $stats = [];
 
    // .
    protected Connections $Connections;
@@ -150,7 +150,7 @@ class TCP_Server_CLI implements Servers, Logging
          SAPI::boot(reset: true, key: 'on.Package.Receive');
       }
    }
-   public function __get (string $name)
+   public function __get (string $name): mixed
    {
       switch ($name) {
          case 'Socket':
@@ -170,24 +170,24 @@ class TCP_Server_CLI implements Servers, Logging
                self::$Application::boot(Environments::Test);
             }
 
-            break;
+            return true;
          case '@test':
             if ($this->Process->level === 'master' && self::$Application && \method_exists(self::$Application, 'test')) {
                self::$Application::test($this);
             }
 
-            break;
+            return true;
          case '@test end':
             SAPI::$Environment = Environments::Production;
 
             if (self::$Application) {
                self::$Application::boot(Environments::Production);
-               break;
+               return true;
             }
 
             SAPI::boot(reset: true);
 
-            break;
+            return true;
          case '@status':
             // @ Set log display none
             $display = Logger::$display;
@@ -197,16 +197,27 @@ class TCP_Server_CLI implements Servers, Logging
 
             // @ Restore log display
             Logger::$display = $display;
-            break;
+            return true;
       }
-   }
 
+      return null;
+   }
+   /**
+    * Configure the TCP Server.
+    * 
+    * @param string $host Domain name or IP address
+    * @param int $port Port number
+    * @param int $workers Number of workers
+    * @param array<string>|null $ssl SSL Stream Context
+    * 
+    * @return self
+    */
    public function configure (
       string $host,
       int $port,
       int $workers,
       ? array $ssl = null
-   )
+   ): self
    {
       $this->Status = Status::Configuring;
 
@@ -222,7 +233,7 @@ class TCP_Server_CLI implements Servers, Logging
 
       return $this;
    }
-   public function start ()
+   public function start (): bool
    {
       $this->Status = Status::Starting;
 
@@ -256,6 +267,11 @@ class TCP_Server_CLI implements Servers, Logging
       return true;
    }
 
+   /**
+    * Create a new instance of the server.
+    * 
+    * @return resource|false
+    */
    public function instance ()
    {
       $error_code = 0;
@@ -292,9 +308,7 @@ class TCP_Server_CLI implements Servers, Logging
             $Context
          );
       }
-      catch (\Throwable) {
-         $this->Socket ??= false;
-      }
+      catch (\Throwable) {}
 
       if ($this->Socket === false) {
          $this->log('@\;Could not create socket: ' . $error_message, self::LOG_ERROR_LEVEL);
@@ -318,7 +332,7 @@ class TCP_Server_CLI implements Servers, Logging
       return $this->Socket;
    }
 
-   private function daemonize ()
+   private function daemonize (): void
    {
       $this->Status = Status::Running;
 
@@ -326,7 +340,7 @@ class TCP_Server_CLI implements Servers, Logging
 
       exit(0);
    }
-   private function interact ()
+   private function interact (): void
    {
       $this->Status = Status::Running;
 
@@ -369,7 +383,7 @@ class TCP_Server_CLI implements Servers, Logging
          $this->monitor();
       }
    }
-   private function monitor ()
+   private function monitor (): void
    {
       $this->Status = Status::Running;
 
@@ -429,7 +443,7 @@ class TCP_Server_CLI implements Servers, Logging
       }
    }
 
-   private function close ()
+   private function close (): void
    {
       if ($this->Socket === null || $this->Socket === false) {
          #$this->log('@\;$this->Socket is already closed?@\;');
@@ -454,7 +468,7 @@ class TCP_Server_CLI implements Servers, Logging
       $this->Socket = null;
    }
 
-   public function resume () : bool
+   public function resume (): bool
    {
       if ($this->Status !== Status::Paused) {
          match ($this->Process->level) {
@@ -477,7 +491,7 @@ class TCP_Server_CLI implements Servers, Logging
 
       return true;
    }
-   public function pause () : bool
+   public function pause (): bool
    {
       if ($this->Status !== Status::Running) {
          match ($this->Process->level) {
@@ -500,7 +514,7 @@ class TCP_Server_CLI implements Servers, Logging
 
       return true;
    }
-   public function stop () : void
+   public function stop (): void
    {
       $this->Status = Status::Stopping;
 

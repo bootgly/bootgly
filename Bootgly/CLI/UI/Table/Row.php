@@ -30,7 +30,7 @@ class Row
    // ...
 
 
-   public function __construct ($Table)
+   public function __construct (Table $Table)
    {
       $this->Table = $Table;
 
@@ -44,7 +44,13 @@ class Row
       // ...
    }
 
-   public function render (array $row, string $section)
+   /**
+    * Render a row
+    *
+    * @param array<string> $row
+    * @param string $section
+    */
+   public function render (array $row, string $section): void
    {
       if ( count($row) === 1 && @$row[0] === '@---;' ) {
          $this->Table->border(position: 'mid', section: $section);
@@ -72,7 +78,7 @@ class Row
 
          $output .= __String::pad( // @phpstan-ignore-line
             string: $row[$column_index] ?? '',
-            length: $widths[$column_index],
+            length: $widths[$column_index], // @phpstan-ignore-line
             padding: ' ',
             type: $aligment
          );

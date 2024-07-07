@@ -15,7 +15,7 @@ return [
 
    // @ simulate
    // Server API
-   'response' => function (Request $Request, Response $Response) : Response {
+   'response' => function (Request $Request, Response $Response): Response {
       return $Response->redirect('https://docs.bootgly.com/', 302);
    },
    // Client API

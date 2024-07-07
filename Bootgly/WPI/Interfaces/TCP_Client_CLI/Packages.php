@@ -20,6 +20,7 @@ use Bootgly\WPI\Interfaces\TCP_Client_CLI\Connections;
 use Bootgly\WPI\Interfaces\TCP_Client_CLI\Connections\Connection;
 
 
+// FIXME: extends Packages
 class Packages implements WPI\Connections\Packages
 {
    use LoggableEscaped;
@@ -41,6 +42,7 @@ class Packages implements WPI\Connections\Packages
    // @ Stats
    public int $writes;
    public int $reads;
+   /** @var array<string,int> */
    public array $errors;
    // @ Expiration
    public bool $expired;
@@ -70,7 +72,16 @@ class Packages implements WPI\Connections\Packages
       $this->expired = false;
    }
 
-   public function fail ($Socket, string $operation, $result)
+   /**
+    * Handle failed package operation.
+    * 
+    * @param resource $Socket
+    * @param string $operation
+    * @param mixed $result
+    *
+    * @return bool
+    */
+   public function fail ($Socket, string $operation, mixed $result): bool
    {
       try {
          $eof = @feof($Socket);
@@ -108,10 +119,15 @@ class Packages implements WPI\Connections\Packages
 
       return false;
    }
-
-   public function write (&$Socket)
-   {}
-   public function writing (&$Socket, ? int $length = null)
+   /**
+    * Write data to server.
+    * 
+    * @param resource $Socket
+    * @param int|null $length
+    *
+    * @return bool
+    */
+   public function writing (&$Socket, ? int $length = null): bool
    {
       // !
       $buffer = self::$output;
@@ -165,10 +181,18 @@ class Packages implements WPI\Connections\Packages
 
       return true;
    }
-
-   public function read (&$Socket)
-   {}
-   public function reading (&$Socket, ? int $length = null, ? int $timeout = null)
+   /**
+    * Read data from server.
+    * 
+    * @param resource $Socket
+    * @param int|null $length
+    * @param int|null $timeout
+    *
+    * @return bool
+    */
+   public function reading (
+      &$Socket, ? int $length = null, ? int $timeout = null
+   ): bool
    {
       // !
       $input = '';
@@ -243,4 +267,9 @@ class Packages implements WPI\Connections\Packages
 
       return true;
    }
+
+   public function write (&$Socket): void
+   {}
+   public function read (&$Socket): void
+   {}
 }

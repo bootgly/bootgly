@@ -81,7 +81,7 @@ class Template implements Templates
       $this->precompile(minify: false, unindent: true);
    }
 
-   private function precompile (bool $minify = true, bool $unindent = false) : bool
+   private function precompile (bool $minify = true, bool $unindent = false): bool
    {
       $precompiled = $this->raw;
 
@@ -114,7 +114,7 @@ class Template implements Templates
 
       return true;
    }
-   private function compile () : bool
+   private function compile (): bool
    {
       $Directives  = &self::$Directives;
       $precompiled = &$this->precompiled;
@@ -136,7 +136,7 @@ class Template implements Templates
 
       return true;
    }
-   private function postcompile () : bool
+   private function postcompile (): bool
    {
       $compiled = &$this->compiled;
 
@@ -155,7 +155,7 @@ class Template implements Templates
       return true;
    }
 
-   private function cache () : bool
+   private function cache (): bool
    {
       // * Data
       $raw = $this->raw;
@@ -191,7 +191,14 @@ class Template implements Templates
       return true;
    }
 
-   public function render (array $parameters = []) : string|false
+   /**
+    * Render the template.
+    *
+    * @param array<string,mixed> $parameters
+    *
+    * @return string|false
+    */
+   public function render (array $parameters = []): string|false
    {
       // @
       try {

@@ -36,7 +36,7 @@ class Header extends Raw\Header
 
       $this->Cookies = new Cookies($this);
    }
-   public function __get (string $name)
+   public function __get (string $name): mixed
    {
       switch ($name) {
          // * Config
@@ -68,7 +68,7 @@ class Header extends Raw\Header
             return $this->get($name);
       }
    }
-   public function __set ($name, $value)
+   public function __set (string $name, mixed $value)
    {
       switch ($name) {
          // * Config
@@ -87,22 +87,27 @@ class Header extends Raw\Header
             $this->$name = $value;
       }
    }
-   public function __isSet ($name)
+   public function __isSet (string $name): bool
    {
       return isSet($this->fields[$name]);
    }
 
-   public function clean ()
+   public function clean (): void
    {
       $this->fields = [];
    }
 
-   public function prepare (array $fields) // @ Prepare to build
+   /**
+    * Prepare headers
+    *
+    * @param array<string> $fields
+    */
+   public function prepare (array $fields): void
    {
       $this->prepared = $fields;
    }
 
-   public function get (string $name) : string
+   public function get (string $name): string
    {
       return (string) (@$this->fields[$name] ?? @$this->fields[\strtolower($name)] ?? '');
    }
@@ -115,25 +120,30 @@ class Header extends Raw\Header
 
       return true;
    }
-   public function append (string $field, string $value = '', ? string $separator = ', ') // TODO refactor
+   public function append (
+      string $field, string $value = '', ? string $separator = ', '
+   ): void  // TODO refactor
    {
       // TODO map separator (with const?) Header that can have only value to append, only entire header, etc.
 
       if ( isSet($this->fields[$field]) ) {
          $this->fields[$field] .= $separator . $value;
-      } else {
+      }
+      else {
          $this->fields[$field] = $value;
       }
 
       \header($field . ': ' . $value, false);
    }
-   public function queue (string $field, string $value = '')
+   public function queue (string $field, string $value = ''): bool
    {
       $this->queued[] = "$field: $value";
+
+      return true;
    }
 
    // TODO increase performance
-   public function build (bool $send = false): bool // @ raw
+   public function build (bool $send = false): bool
    {
       // ?
       if ( empty($this->fields) && empty($this->prepared) ) {
@@ -173,7 +183,7 @@ class Header extends Raw\Header
       return true;
    }
 
-   public function send ()
+   public function send (): void
    {
       $queued = $this->queued;
 

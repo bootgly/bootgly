@@ -26,17 +26,24 @@ class Select implements Events, Loops
 
    // * Data
    // @ Sockets
+   /** @var array<int,resource> */
    protected array $reads = [];
+   /** @var array<int,resource> */
    protected array $writes = [];
+   /** @var array<int,resource> */
    protected array $excepts = [];
 
    // * Metadata
    // @ Events
    // Client/Server
+   /** @var array<int,mixed> */
    private array $connecting = [];
    // Package
+   /** @var array<int,mixed> */
    private array $reading = [];
+   /** @var array<int,mixed> */
    private array $writing = [];
+   /** @var array<int,mixed> */
    private array $excepting = [];
    // @ Loop
    public readonly float $started;
@@ -48,7 +55,16 @@ class Select implements Events, Loops
       $this->Connections = $Connections;
    }
 
-   public function add ($Socket, int $flag, $payload)
+   /**
+    * Add a socket to the event loop.
+    * 
+    * @param resource $Socket
+    * @param int $flag
+    * @param mixed $payload
+    *
+    * @return bool
+    */
+   public function add ($Socket, int $flag, mixed $payload): bool
    {
       switch ($flag) {
          // Client/Server
@@ -109,7 +125,15 @@ class Select implements Events, Loops
 
       return false;
    }
-   public function del ($Socket, int $flag)
+   /**
+    * Remove a socket from the event loop.
+    * 
+    * @param resource $Socket
+    * @param int $flag
+    *
+    * @return bool
+    */
+   public function del ($Socket, int $flag): bool
    {
       switch ($flag) {
          // Client/Server
@@ -147,7 +171,12 @@ class Select implements Events, Loops
       return false;
    }
 
-   public function loop ()
+   /**
+    * Start the event loop.
+    *
+    * @return void
+    */
+   public function loop (): void
    {
       $this->started = \microtime(true);
 
@@ -217,7 +246,13 @@ class Select implements Events, Loops
 
       $this->finished = \microtime(true);
    }
-   public function destroy ()
+
+   /**
+    * Stop the event loop.
+    *
+    * @return void
+    */
+   public function destroy (): void
    {
       $this->loop = false;
    }

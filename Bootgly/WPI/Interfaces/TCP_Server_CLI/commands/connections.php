@@ -24,7 +24,7 @@ return new class extends Command
    public string $description = 'Show server connections';
 
 
-   public function run (array $arguments = [], array $options = []) : bool
+   public function run (array $arguments = [], array $options = []): bool
    {
       // !
       // ** @var \Closure $context
@@ -41,13 +41,16 @@ return new class extends Command
    
          $Server->log(PHP_EOL . "Worker #{$worker}:" . PHP_EOL);
    
-         foreach (Connections::$Connections as $Connection => $info) {
-            $Server->log('Connection ID #' . $Connection . ':' . PHP_EOL, $Server::LOG_INFO_LEVEL);
-   
-            foreach ($info as $key => $value) {
+         /** @var Connections $Connection */
+         foreach (Connections::$Connections as $connection => $Connection) {
+            $Server->log('Connection ID #' . $connection . ':' . PHP_EOL, $Server::LOG_INFO_LEVEL);
+
+            $Connection = (array) $Connection;
+            foreach ($Connection as $key => $value) {
                // @ Exclude
                switch ($key) {
                   case 'Connection':
+                  case 'Logger':
                   case 'Socket':
                      continue 2;
                }
@@ -80,6 +83,7 @@ return new class extends Command
                      break;
    
                   default:
+                     // @phpstan-ignore-next-line
                      if ( \is_array($value) ) {
                         $value = \count($value);
                      }

@@ -36,6 +36,7 @@ class Menu extends Component
    public Items $Items;
 
    // * Metadata
+   /** @var array<int> */
    public array $selected;
 
 
@@ -59,7 +60,7 @@ class Menu extends Component
    }
 
    // @ Templating
-   protected function render (int $mode = self::WRITE_OUTPUT)
+   protected function render (int $mode = self::WRITE_OUTPUT): mixed
    {
       $Items = &$this->Items;
       // * Config
@@ -94,7 +95,7 @@ class Menu extends Component
                break;
             case Option::class:
                // @ Compile Option
-               $compiled = $Options->compile($Item);
+               $compiled = $Options->compile($Item); // @phpstan-ignore-line
 
                break;
          }
@@ -127,7 +128,7 @@ class Menu extends Component
       };
    }
 
-   public function rendering () : \Generator
+   public function rendering (): \Generator
    {
       // Save Cursor position
       $this->Output->Cursor->save();

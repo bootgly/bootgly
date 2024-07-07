@@ -17,9 +17,12 @@ use Bootgly\ABI\Data;
 class __Array implements Data // Simple class (advanced methods coming soon)
 {
    // * Data
+   /** @var array<mixed> */
    public array $array;
    // * Metadata
+   /** @var array<int|string> */
    private array $keys;
+   /** @var array<mixed> */
    private array $values;
    private mixed $current;
    private object $Current;
@@ -35,11 +38,14 @@ class __Array implements Data // Simple class (advanced methods coming soon)
    private bool $multidimensional;
 
 
+   /**
+    * @param array<mixed> $array
+    */
    public function __construct (array $array)
    {
       $this->array = &$array;
    }
-   public function __get (string $property)
+   public function __get (string $property): mixed
    {
       switch ($property) {
          // * Metadata
@@ -127,17 +133,29 @@ class __Array implements Data // Simple class (advanced methods coming soon)
             }
             $this->multidimensional = $multidimensional;
             return $this->multidimensional;
+         default:
+            return null;
       }
    }
-   public function __call (string $name, array $arguments)
+   /**
+    * @param string $name
+    * @param array<mixed> $arguments
+    */
+   public function __call (string $name, array $arguments): mixed
    {
       switch ($name) {
          // ->array
          case 'search':
             return self::search($this->array, ...$arguments);
+         default:
+            return null;
       }
    }
-   public static function __callStatic (string $name, array $arguments)
+   /**
+    * @param string $name
+    * @param array<mixed> $arguments
+    */
+   public static function __callStatic (string $name, array $arguments): mixed
    {
       if ( method_exists(__CLASS__, $name) ) {
          return self::$name(...$arguments);
@@ -146,7 +164,16 @@ class __Array implements Data // Simple class (advanced methods coming soon)
       return null;
    }
 
-   private static function search ($haystack, $needle, bool $strict = false) : object
+   /**
+    * Search for a value in an array.
+    * 
+    * @param array<mixed> $haystack
+    * @param mixed $needle
+    * @param bool $strict
+    * 
+    * @return object
+    */
+   private static function search ($haystack, $needle, bool $strict = false): object
    {
       $haystack = (array) $haystack;
       $needles = (array) $needle;

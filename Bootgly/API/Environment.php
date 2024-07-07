@@ -36,7 +36,7 @@ class Environment
     * @param string $file
     * @return bool
     */
-   public static function load ($file) : bool
+   public static function load ($file): bool
    {
       if (file_exists($file) === false) {
          return false;
@@ -60,7 +60,7 @@ class Environment
     * @param string $file
     * @return bool
     */
-   public static function save (string $file) : bool
+   public static function save (string $file): bool
    {
       $envContent = '';
       foreach (self::get() as $key => $value) {
@@ -76,9 +76,9 @@ class Environment
     *
     * @param string|null $key
     * @param mixed $default
-    * @return array|string|false|null
+    * @return array<string>|string|false|null
     */
-   public static function get (? string $key = null, mixed $default = null) : array|string|false|null
+   public static function get (? string $key = null, mixed $default = null): array|string|false|null
    {
       $key = self::$prefix . $key . self::$suffix;
 
@@ -90,7 +90,7 @@ class Environment
 
       return $value;
    }
-   public static function match (int $type) : bool
+   public static function match (int $type): bool
    {
       return match ($type) {
          Environment::CI_CD => (
@@ -110,7 +110,7 @@ class Environment
     * @param string|int $value
     * @return bool
     */
-   public static function put (string $key, string|int $value) : bool
+   public static function put (string $key, string|int $value): bool
    {
       $key = self::$prefix . $key . self::$suffix;
 
@@ -123,7 +123,7 @@ class Environment
     * @param string $key
     * @return bool
     */
-   public static function del (string $key) : bool
+   public static function del (string $key): bool
    {
       return putenv($key);
    }

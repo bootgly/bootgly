@@ -11,15 +11,24 @@
 namespace Bootgly\ABI\Templates;
 
 
+use function array_pop;
+
+
 class Iterators
 {
    // * Data
+   /** @var Iterator[] */
    private static array $Iterators = [];
    // * Metadata
    public static int $depth = 0;
 
 
-   public static function queue (array|object &$iteratee) : Iterator
+   /**
+    * @param array<mixed>|object $iteratee
+    *
+    * @return Iterator
+    */
+   public static function queue (array|object &$iteratee): Iterator
    {
       self::$depth++;
 
@@ -33,7 +42,7 @@ class Iterators
 
       return $Iterator;
    }
-   public static function dequeue () : Iterator|string
+   public static function dequeue (): Iterator|string
    {
       self::$depth--;
 

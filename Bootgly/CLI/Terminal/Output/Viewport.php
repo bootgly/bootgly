@@ -29,11 +29,11 @@ class Viewport
       $this->Output = $Output;
    }
 
-   public function panDown (? int $lines = null) : Output
+   public function panDown (? int $lines = null): Output
    {
       return $this->Output->escape($lines . self::_VIEWPORT_SCROLL_UP);
    }
-   public function panUp (? int $lines = null) : Output
+   public function panUp (? int $lines = null): Output
    {
       return $this->Output->escape($lines . self::_VIEWPORT_SCROLL_DOWN);
    }

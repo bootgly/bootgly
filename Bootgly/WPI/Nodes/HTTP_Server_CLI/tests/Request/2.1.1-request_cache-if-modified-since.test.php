@@ -28,7 +28,7 @@ return [
       HTTP;
    },
    // Server API
-   'response' => function (Request $Request, Response $Response) : Response {
+   'response' => function (Request $Request, Response $Response): Response {
       $Response->Header->set('Last-Modified', 'Fri, 14 Jul 2023 10:00:00 GMT');
 
       if ($Request->fresh) {

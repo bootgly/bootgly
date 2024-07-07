@@ -20,7 +20,7 @@ use Bootgly\ABI\Debugging\Data\Vars;
 
 abstract class Data implements Debugging
 {
-   public static function debug (...$x)
+   public static function debug (mixed ...$x): void
    {
       if (empty($x) === true) {
          return;

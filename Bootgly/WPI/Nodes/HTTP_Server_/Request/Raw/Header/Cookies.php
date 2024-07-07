@@ -10,38 +10,51 @@
 
 namespace Bootgly\WPI\Nodes\HTTP_Server_\Request\Raw\Header;
 
-
+use Bootgly\WPI\Modules\HTTP\Server\Request\Raw;
 use Bootgly\WPI\Nodes\HTTP_Server_\Request\Raw\Header;
 
 
-final class Cookies
+final class Cookies extends Raw\Header\Cookies
 {
-   public Header $Header;
+   // * Config
+   // ...
 
    // * Data
-   private array $cookies;
+   // ... inherited
+
+   // * Metadata
+   // ...
 
 
    public function __construct (Header $Header)
    {
       $this->Header = $Header;
 
+
+      // * Config
+      // ...
+
       // * Data
       $this->cookies = $_COOKIE;
+
+      // * Metadata
+      // ...
    }
 
-   public function __get (string $name)
+   public function __get (string $name): mixed
    {
       switch ($name) {
+         // * Config
+         // ...
+
+         // * Data
          case 'cookies':
             return $this->cookies;
-         default:
-            return $this->cookies[$name] ?? '';
-      }
-   }
 
-   public function get (string $name) : string
-   {
-      return $this->cookies[$name] ?? '';
+         // * Metadata
+         // ...
+      }
+
+      return null;
    }
 }

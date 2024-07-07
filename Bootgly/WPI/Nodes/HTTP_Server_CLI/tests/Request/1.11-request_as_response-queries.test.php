@@ -18,7 +18,7 @@ return [
       return "GET /test/foo?query=abc&query2=xyz HTTP/1.1\r\n\r\n";
    },
    // Server API
-   'response' => function (Request $Request, Response $Response) : Response {
+   'response' => function (Request $Request, Response $Response): Response {
       $queries = $Request->queries;
       return $Response->JSON->send($queries);
    },

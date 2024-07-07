@@ -47,11 +47,11 @@ class Route
       // TODO validate Param name
       $this->Params = new class // TODO move to class
       {
-         public function __get ($name)
+         public function __get (string $name): mixed
          {
             return $this->$name ?? null;
          }
-         public function __set ($param, $regex)
+         public function __set (string $param, string $regex): void
          {
             @$this->$param = $regex;
          }
@@ -69,7 +69,7 @@ class Route
       // ! Log
       self::$level = 0;
    }
-   public function __get ($name)
+   public function __get (string $name): mixed
    {
       // * Metadata
       switch ($name) {
@@ -91,7 +91,7 @@ class Route
             return $this->$name;
       }
    }
-   public function __set (string $name, $value)
+   public function __set (string $name, mixed $value): void
    {
       switch ($name) {
          // * Data

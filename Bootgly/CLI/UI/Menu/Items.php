@@ -13,6 +13,7 @@ namespace Bootgly\CLI\UI\Menu;
 
 use AllowDynamicProperties;
 use Bootgly\CLI\UI\Menu\Menu;
+use Bootgly\CLI\UI\Menu\Items\Option;
 use Bootgly\CLI\UI\Menu\Items\Options;
 
 
@@ -34,6 +35,7 @@ class Items
 
    // * Data
    public Options $Options;
+   /** @var array<array<Item|Option>|int> */
    public static array $data;
 
    // * Metadata
@@ -62,7 +64,7 @@ class Items
 
    // @ Extending
    // TODO rename args to (Extension ...$Extensions)
-   public function extend (Items ...$Extensions)
+   public function extend (Items ...$Extensions): void
    {
       foreach ($Extensions as $Extension) {
          $extension = basename(
@@ -76,7 +78,7 @@ class Items
    }
 
    // @ Setting
-   public static function push (Item ...$Items)
+   public static function push (Item ...$Items): void
    {
       foreach ($Items as $Item) {
          self::$data[Menu::$level][] = $Item;

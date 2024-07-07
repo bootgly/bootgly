@@ -23,7 +23,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 
 class Encoder_ extends Encoders
 {
-   public static function encode (Packages $Packages, ? int &$length) : string
+   public static function encode (Packages $Packages, ? int &$length): string
    {
       // @ Get callbacks
       $Request  = Server::$Request;

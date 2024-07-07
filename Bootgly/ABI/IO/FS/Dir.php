@@ -12,7 +12,6 @@ namespace Bootgly\ABI\IO\FS;
 
 
 use Throwable;
-
 use RecursiveIteratorIterator;
 use RecursiveDirectoryIterator;
 
@@ -47,7 +46,7 @@ class Dir implements FS
       // * Data
       $this->Path = new Path($path);
    }
-   public function __get (string $name)
+   public function __get (string $name): mixed
    {
       if ($name === 'dir') {
          return $this->dir ?? false;
@@ -82,8 +81,10 @@ class Dir implements FS
          case 'writable':
             return $this->writable = is_writable($dir);
       }
+
+      return null;
    }
-   public function __set (string $name, $value)
+   public function __set (string $name, mixed $value): void
    {
       // @ Construct $this->dir
       if (isSet($this->dir) === false) {
@@ -111,7 +112,13 @@ class Dir implements FS
             break;
       }
    }
-   public function __call (string $name, array $arguments)
+   /**
+    * @param string $name
+    * @param array<mixed> $arguments
+    *
+    * @return mixed
+    */
+   public function __call (string $name, array $arguments): mixed
    {
       // Path
       if (isSet($this->dir) === false) {
@@ -131,7 +138,13 @@ class Dir implements FS
             return null;
       }
    }
-   public static function __callStatic (string $name, $arguments)
+   /**
+    * @param string $name
+    * @param array<mixed> $arguments
+    *
+    * @return mixed
+    */
+   public static function __callStatic (string $name, array $arguments): mixed
    {
       if ( method_exists(__CLASS__, $name) ) {
          return self::$name(...$arguments);
@@ -140,7 +153,7 @@ class Dir implements FS
       return null;
    }
 
-   public function __toString () : string
+   public function __toString (): string
    {
       // Path
       if (isSet($this->dir) === false) {
@@ -150,7 +163,7 @@ class Dir implements FS
       return $this->dir ?? '';
    }
 
-   private function pathify () : string
+   private function pathify (): string
    {
       // ?
       $Path = $this->Path;
@@ -186,7 +199,7 @@ class Dir implements FS
       return $this->dir = $path;
    }
 
-   public function create (int $permissions = 0775, bool $recursively = true) : bool
+   public function create (int $permissions = 0775, bool $recursively = true): bool
    {
       // * Data
       $basedir = $this->Path->path;
@@ -200,7 +213,13 @@ class Dir implements FS
 
       return $created;
    }
-   private static function scan (string $dir, bool $recursive = false) : array
+   /**
+    * @param string $dir
+    * @param bool $recursive
+    *
+    * @return array<string>
+    */
+   private static function scan (string $dir, bool $recursive = false): array
    {
       if ($dir === '') {
          return [];

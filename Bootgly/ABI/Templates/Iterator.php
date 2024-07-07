@@ -14,6 +14,7 @@ namespace Bootgly\ABI\Templates;
 class Iterator
 {
    // * Data
+   /** @var array<mixed>|object */
    private array|object $iteratee;
    public ? Iterator $Parent;
    public int $depth;
@@ -25,6 +26,11 @@ class Iterator
    protected int $remaining;
 
 
+   /**
+    * @param array<mixed>|object $iteratee
+    * @param int $depth
+    * @param Iterator|null $Parent
+    */
    public function __construct (array|object &$iteratee, int $depth, ? Iterator $Parent = null)
    {
       // * Data
@@ -46,7 +52,7 @@ class Iterator
       #isOdd
       #isEven
    }
-   public function __get ($name)
+   public function __get (string $name): mixed
    {
       switch ($name) {
          case 'key': return key($this->iteratee);
@@ -74,7 +80,7 @@ class Iterator
       }
    }
 
-   public function next () : void
+   public function next (): void
    {
       next($this->iteratee);
       $this->index++;

@@ -16,7 +16,7 @@ return [
 
    // @ simulate
    // Server API
-   'response' => function (Request $Request, Response $Response) : Response {
+   'response' => function (Request $Request, Response $Response): Response {
       return $Response->upload('statics/alphanumeric.txt', close: false);
    },
    // Client API

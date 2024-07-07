@@ -14,9 +14,11 @@ namespace Bootgly\ACI\Tests;
 class Assertions
 {
    // * Config
+   /** @var array<string|null> */
    public array $descriptions = [];
 
    // * Data
+   /** @var array<bool> */
    public array $results = [];
 
    // * Metadata

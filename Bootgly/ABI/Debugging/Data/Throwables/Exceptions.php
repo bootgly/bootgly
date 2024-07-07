@@ -11,6 +11,8 @@
 namespace Bootgly\ABI\Debugging\Data\Throwables;
 
 
+use Throwable;
+
 use Bootgly\ABI\Debugging\Data\Throwables;
 
 
@@ -24,20 +26,21 @@ abstract class Exceptions extends Throwables
    public static int $verbosity = 3;
 
    // * Data
+   /** @var array<Throwable> */
    protected static array $exceptions = [];
 
 
-   public static function collect (\Throwable $E): void
+   public static function collect (Throwable $E): void
    {
       self::$exceptions[] = $E;
    }
 
-   public static function debug (...$Throwables): void
+   public static function debug (mixed ...$Throwables): void
    {
       $exceptions = $Throwables ?: self::$exceptions;
 
       foreach ($exceptions as $Exception) {
-         if ($Exception instanceof \Throwable) {
+         if ($Exception instanceof Throwable) {
             self::report($Exception);
          }
       }

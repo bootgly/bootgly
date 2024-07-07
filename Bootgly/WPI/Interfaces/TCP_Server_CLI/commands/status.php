@@ -23,10 +23,11 @@ return new class extends Command
    // * Metadata
    // Process
    private static int $stat = -1;
+   /** @var array<int,int> */
    private static array $stats = [];
 
 
-   public function run (array $arguments = [], array $options = []) : bool
+   public function run (array $arguments = [], array $options = []): bool
    {
        // !
       // ** @var \Closure $context
@@ -182,14 +183,14 @@ return new class extends Command
                }
 
                // CPU time spent in user code
-               $utime1 = $stats[$i][0][13];
+               $utime1 = (float) $stats[$i][0][13];
                // CPU time spent in kernel code
-               $stime1 = $stats[$i][0][14];
+               $stime1 = (float) $stats[$i][0][14];
    
                // CPU time spent in user code
-               $utime2 = $stats[$i][1][13];
+               $utime2 = (float) $stats[$i][1][13];
                // CPU time spent in kernel code
-               $stime2 = $stats[$i][1][14];
+               $stime2 = (float) $stats[$i][1][14];
    
                $userDiff = $utime2 - $utime1;
                $sysDiff = $stime2 - $stime1;

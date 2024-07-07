@@ -15,5 +15,5 @@ interface Reporting
 {
    public function __construct (Input &$Input, Output &$Output);
 
-   public function report (bool $enabled);
+   public function report (bool $enabled): void;
 }

@@ -27,7 +27,9 @@ class Scripts
    // ...
 
    // * Data
+   /** @var array<string,array<string|array<string>>> */
    protected array $includes;
+   /** @var array<string> */
    protected array $scripts;
 
    // * Metadata
@@ -103,7 +105,7 @@ class Scripts
          }
       }
    }
-   public function __get ($name)
+   public function __get (string $name): mixed
    {
       return match ($name) {
          'path' => $this->path,
@@ -113,7 +115,7 @@ class Scripts
       };
    }
 
-   public function validate () : int
+   public function validate (): int
    {
       $this->path ??= @$_SERVER['PWD'];
       $this->filename ??= @$_SERVER['SCRIPT_FILENAME'];
@@ -138,7 +140,7 @@ class Scripts
       return $this->validation = -1;
    }
 
-   public static function execute (string $script)
+   public static function execute (string $script): void
    {
       $basedirs = [
          self::WORKING_DIR,

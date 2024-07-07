@@ -43,7 +43,7 @@ class WPI extends Projects // Web Programming Interface
    public static Router $Router;
 
 
-   public function __get (string $name)
+   public function __get (string $name): mixed
    {
       switch ($name) {
          case 'Request':
@@ -57,7 +57,7 @@ class WPI extends Projects // Web Programming Interface
       }
    }
 
-   public function autoboot ()
+   public function autoboot (): void
    {
       // ?
       // TODO remove or modify

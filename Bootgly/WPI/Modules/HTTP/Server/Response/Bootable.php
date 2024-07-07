@@ -16,7 +16,7 @@ use Bootgly\ABI\IO\FS\File;
 
 trait Bootable
 {
-   protected function prepare (? string $resource = null) : self
+   protected function prepare (? string $resource = null): self
    {
       if ($this->initied === false) {
          $this->source  = null;
@@ -70,7 +70,7 @@ trait Bootable
       return $this;
    }
 
-   protected function process ($data, ? string $resource = null) : self
+   protected function process (mixed $data, ? string $resource = null): self
    {
       if ($resource === null) {
          $resource = $this->resource;

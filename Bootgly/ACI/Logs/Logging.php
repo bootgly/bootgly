@@ -13,5 +13,5 @@ namespace Bootgly\ACI\Logs;
 
 interface Logging
 {
-   public function log ($message);
+   public function log (string $message): bool;
 }

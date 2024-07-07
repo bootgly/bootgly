@@ -26,7 +26,7 @@ class ServeCommand extends Command
    public string $description = 'Serve the project on the Bootgly HTTP Server CLI';
 
 
-   public function run (array $arguments = [], array $options = []) : bool
+   public function run (array $arguments = [], array $options = []): bool
    {
       Scripts::execute('http-server-cli');
 

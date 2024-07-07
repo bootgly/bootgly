@@ -28,6 +28,7 @@ class Test extends Assertions
    // ...inherited
 
    // * Data
+   /** @var array<string,mixed> */
    public array $specifications;
    // ...inherited
 
@@ -44,6 +45,12 @@ class Test extends Assertions
    private ? \AssertionError $AssertionError;
 
 
+   /**
+    * Test constructor.
+    * 
+    * @param Tests&Tester $Tests Test cases
+    * @param array<string,mixed> $specifications Test cases specifications
+    */
    public function __construct (Tests&Tester $Tests, array $specifications)
    {
       $this->Tests = $Tests;
@@ -68,7 +75,7 @@ class Test extends Assertions
       // @ Reporting
       $this->AssertionError = null;
    }
-   public function __get (string $name)
+   public function __get (string $name): mixed
    {
       switch ($name) {
          case "passed":
@@ -86,7 +93,7 @@ class Test extends Assertions
       return null;
    }
 
-   private function describe (? string $description, bool $status, string $indicator = '╟')
+   private function describe (? string $description, bool $status, string $indicator = '╟'): void
    {
       if ($description === null) {
          return;
@@ -109,7 +116,7 @@ class Test extends Assertions
 
       $this->log($description);
    }
-   private function describing (bool $status)
+   private function describing (bool $status): void
    {
       $descriptions_count = count($this->descriptions);
 
@@ -139,7 +146,7 @@ class Test extends Assertions
          $this->log(PHP_EOL);
       }
    }
-   public function separate ()
+   public function separate (): void
    {
       static $separatorLength;
 
@@ -177,7 +184,7 @@ class Test extends Assertions
    }
 
    // @
-   private function pretest () : bool
+   private function pretest (): bool
    {
       Tests::$case++;
 
@@ -190,7 +197,14 @@ class Test extends Assertions
 
       return true;
    }
-   public function test (...$arguments)
+   /**
+    * Run the test case.
+    * 
+    * @param mixed ...$arguments
+    *
+    * @return void
+    */
+   public function test (mixed ...$arguments): void
    {
       $prepass = $this->pretest();
       if ($prepass === false) {
@@ -255,7 +269,7 @@ class Test extends Assertions
 
       $this->postest();
    }
-   private function postest ()
+   private function postest (): void
    {
       #$this->debugged ??= ob_get_clean();
 
@@ -264,7 +278,7 @@ class Test extends Assertions
       $this->elapsed ??= Benchmark::format($this->started, $this->finished);
    }
 
-   public function fail (? string $message = null)
+   public function fail (? string $message = null): void
    {
       $this->postest();
 
@@ -298,7 +312,7 @@ class Test extends Assertions
          exit(1);
       }
    }
-   public function pass ()
+   public function pass (): void
    {
       $this->postest();
 

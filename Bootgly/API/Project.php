@@ -25,6 +25,7 @@ class Project
 
    // * Data
    protected string $name;
+   /** @var string[] */
    protected array $paths;
 
    // * Metadata
@@ -52,7 +53,7 @@ class Project
       $this->index = null;
    }
 
-   public function __get (string $name)
+   public function __get (string $name): mixed
    {
       switch ($name) {
          case 'path':
@@ -78,13 +79,13 @@ class Project
       }
    }
 
-   public function __toString () : string
+   public function __toString (): string
    {
       return $this->__get("path");
    }
 
    // ! Path
-   public function construct (? string $path = null) : string
+   public function construct (? string $path = null): string
    {
       if ($path) {
          $path = trim($path, '/');
@@ -124,12 +125,12 @@ class Project
 
       return $path;
    }
-   public function get (int $path = 0) : string
+   public function get (int $path = 0): string
    {
       return $this->paths[$path] ?? '';
    }
    // ! ID
-   public function name (string $name) : bool
+   public function name (string $name): bool
    {
       if ($this->index === null) {
          return false;

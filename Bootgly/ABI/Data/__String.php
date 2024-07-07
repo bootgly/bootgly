@@ -44,7 +44,7 @@ class __String implements Data // Simple class (advanced methods coming soon)
       // * Metadata
       // ...
    }
-   public function __get (string $index)
+   public function __get (string $index): mixed
    {
       switch ($index) {
          // * Metadata
@@ -108,7 +108,11 @@ class __String implements Data // Simple class (advanced methods coming soon)
             return null;
       }
    }
-   public function __call (string $name, $arguments)
+   /**
+    * @param string $name
+    * @param array<mixed> $arguments
+    */
+   public function __call (string $name, array $arguments): mixed
    {
       switch ($name) {
          case 'search':
@@ -125,7 +129,11 @@ class __String implements Data // Simple class (advanced methods coming soon)
             return null;
       }
    }
-   public static function __callStatic (string $name, $arguments)
+   /**
+    * @param string $name
+    * @param array<mixed> $arguments
+    */
+   public static function __callStatic (string $name, array $arguments): mixed
    {
       if ( method_exists(__CLASS__, $name) ) {
          return self::$name(...$arguments);
@@ -133,12 +141,21 @@ class __String implements Data // Simple class (advanced methods coming soon)
 
       return null;
    }
-   public function __toString () : string
+   public function __toString (): string
    {
       return $this->string;
    }
 
-   protected static function search (string $string, $search, int $offset = null) : object
+   /**
+    * Search for a string in another string.
+    * 
+    * @param string $string
+    * @param string|array<string> $search
+    * @param int|null $offset
+    * 
+    * @return object
+    */
+   protected static function search (string $string, $search, int $offset = null): object
    {
       // !
       $terms = (array) $search;
@@ -161,13 +178,25 @@ class __String implements Data // Simple class (advanced methods coming soon)
       ];
    }
 
+   /**
+    * Pad a string to a certain length with another string.
+    * 
+    * @param string $string
+    * @param int $length
+    * @param string $padding
+    * @param int $type
+    * @param string $encoding
+    * 
+    * @return string
+    */
    protected static function pad (
       string $string,
       int $length,
       string $padding = ' ',
       int $type = STR_PAD_RIGHT,
       string $encoding = 'UTF-8'
-   ) {
+   ): string
+   {
       // Remove ANSI escape characters from the string when calculating length.
       $string_without_ansi = preg_replace(self::ANSI_ESCAPE_SEQUENCE_REGEX, '', $string);
       $input_length = mb_strlen($string_without_ansi, $encoding);

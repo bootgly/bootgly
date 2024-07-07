@@ -13,8 +13,6 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_CLI;
 
 use AllowDynamicProperties;
 use Bootgly\ABI\Data\__String\Path;
-use Bootgly\ABI\Debugging;
-use Bootgly\ABI\Debugging\Data\Vars;
 use Bootgly\ABI\IO\FS\File;
 
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages;
@@ -44,7 +42,8 @@ class Response extends Responsing
 
 
    // \
-   private static $Server;
+   // TODO remove (use WPI global const)
+   private static string $Server;
 
    // * Config
    // ...
@@ -76,6 +75,13 @@ class Response extends Responsing
    public Payload $Payload;
 
 
+   /**
+    * Construct a new Response instance.
+    *
+    * @param int $code The status code of the response.
+    * @param array<string>|null $headers The headers of the response.
+    * @param string $body The body of the response.
+    */
    public function __construct (int $code = 200, ? array $headers = null, string $body = '')
    {
       // \
@@ -122,7 +128,7 @@ class Response extends Responsing
          $this->Payload->raw = $body;
       }
    }
-   public function __get (string $name)
+   public function __get (string $name): mixed
    {
       switch ($name) {
          // @ Response Metadata
@@ -151,7 +157,7 @@ class Response extends Responsing
             return $this;
       }
    }
-   public function __set (string $name, $value)
+   public function __set (string $name, mixed $value): void
    {
       switch ($name) {
          // @ Response Metadata
@@ -162,7 +168,17 @@ class Response extends Responsing
             break;
       }
    }
-   public function __invoke (int $code = 200, array $headers = [], string $body = '') : self
+
+   /**
+    * Prepare the response for sending.
+    *
+    * @param int $code The status code of the response.
+    * @param array<string> $headers The headers of the response.
+    * @param string $body The body of the response.
+    *
+    * @return self The Response instance, for chaining 
+    */
+   public function __invoke (int $code = 200, array $headers = [], string $body = ''): self
    {
       $this->Header->reset();
 
@@ -233,7 +249,7 @@ class Response extends Responsing
     *
     * @return Response The Response instance, for chaining
     */
-   public function send ($body = null, ...$options) : self
+   public function send ($body = null, ...$options): self
    {
       // ?
       if ($this->sent === true) {
@@ -339,7 +355,7 @@ class Response extends Responsing
     * 
     * @return Response The Response instance, for chaining
     */
-   public function upload (string|File $file, int $offset = 0, ? int $length = null, bool $close = true) : self
+   public function upload (string|File $file, int $offset = 0, ? int $length = null, bool $close = true): self
    {
       // ?!
       if ($file instanceof File) {
@@ -530,7 +546,7 @@ class Response extends Responsing
     *
     * @return string The Response Raw to be sent
     */
-   public function output (Packages $Package, ? int &$length) : string
+   public function output (Packages $Package, ? int &$length): string
    {
       $Header  = &$this->Header;
       $Payload = &$this->Payload;
@@ -568,7 +584,7 @@ class Response extends Responsing
     *
     * @return Response Returns Response.
     */
-   public function end (? int $code = null, ? string $context = null) : self
+   public function end (? int $code = null, ? string $context = null): self
    {
       // ?
       if ($this->sent === true) {

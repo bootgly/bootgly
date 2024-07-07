@@ -33,12 +33,12 @@ class Raw
       $this->Body = new Body;
    }
 
-   public function __toString () : string
+   public function __toString (): string
    {
       return $this->data ?? '';
    }
 
-   public function input (Packages $Package, string &$buffer, int $size) : int // @ return Request length
+   public function input (Packages $Package, string &$buffer, int $size): int // @ return Request length
    {
       // @ Check Request raw separator
       $separator_position = \strpos($buffer, "\r\n\r\n");

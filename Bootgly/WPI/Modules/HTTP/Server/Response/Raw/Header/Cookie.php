@@ -43,7 +43,7 @@ class Cookie
       $this->same_site = '';
    }
 
-   public function build ()
+   public function build (): string
    {
       $cookie = $this->name . '=' . \rawurlencode($this->value)
       . (empty($this->domain) ? '' : '; Domain=' . $this->domain)

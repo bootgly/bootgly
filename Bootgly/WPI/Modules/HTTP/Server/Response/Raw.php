@@ -11,11 +11,6 @@
 namespace Bootgly\WPI\Modules\HTTP\Server\Response;
 
 
-use Bootgly\WPI\Modules\HTTP\Server\Response\Raw\Ack;
-use Bootgly\WPI\Modules\HTTP\Server\Response\Raw\Header;
-use Bootgly\WPI\Modules\HTTP\Server\Response\Raw\Payload;
-
-
 abstract class Raw
 {
    // * Data

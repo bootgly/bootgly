@@ -24,7 +24,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 
 class Encoder_Testing extends Encoders
 {
-   public static function encode (Packages $Packages, ? int &$length) : string
+   public static function encode (Packages $Packages, ? int &$length): string
    {
       // @ Instance callbacks
       Server::$Response = new Response;

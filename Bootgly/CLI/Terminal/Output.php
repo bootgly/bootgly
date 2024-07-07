@@ -31,6 +31,7 @@ class Output
 
 
    // * Config
+   /** @var resource|string */
    public $stream;
    // @ Delay
    public int $wait;
@@ -48,6 +49,9 @@ class Output
    public Viewport $Viewport;
 
 
+   /**
+    * @param resource|string $stream
+    */
    public function __construct ($stream = \STDOUT)
    {
       // * Config
@@ -74,11 +78,11 @@ class Output
       }
    }
 
-   public function reset ()
+   public function reset (): void
    {
       $this->__construct();
    }
-   public function clear () : true
+   public function clear (): true
    {
       $this->write(
          self::_START_ESCAPE . self::_CURSOR_POSITION .
@@ -87,7 +91,7 @@ class Output
 
       return true;
    }
-   public function expand (int $lines) : self
+   public function expand (int $lines): self
    {
       if ($lines <= 0) {
          return $this;
@@ -109,7 +113,7 @@ class Output
    }
 
    // @ Raw
-   public function write (string $data, int $times = 1) : self
+   public function write (string $data, int $times = 1): self
    {
       // * Config
       $stream = &$this->stream;
@@ -136,7 +140,7 @@ class Output
 
       return $this;
    }
-   public function writing (string $data) : self
+   public function writing (string $data): self
    {
       // * Config
       $stream = $this->stream;
@@ -168,7 +172,7 @@ class Output
       return $this;
    }
 
-   public function append (string $data) : self
+   public function append (string $data): self
    {
       try {
          $this->written = @\fwrite($this->stream, $data . PHP_EOL);
@@ -179,7 +183,7 @@ class Output
       return $this;
    }
 
-   public function pad (string $data, int $length, string $pad = ' ', int $type = \STR_PAD_RIGHT) : self
+   public function pad (string $data, int $length, string $pad = ' ', int $type = \STR_PAD_RIGHT): self
    {
       try {
          $this->written = @\fwrite(
@@ -198,7 +202,7 @@ class Output
       return $this;
    }
 
-   public function render (string $data) : self
+   public function render (string $data): self
    {
       try {
          $this->written = @\fwrite(
@@ -213,7 +217,7 @@ class Output
    }
 
    // @ ANSI Code
-   public function escape (string $data) : self
+   public function escape (string $data): self
    {
       try {
          $this->written = @\fwrite($this->stream, self::_START_ESCAPE . $data);
@@ -223,7 +227,7 @@ class Output
 
       return $this;
    }
-   public function metaescape (string $data) : self
+   public function metaescape (string $data): self
    {
       try {
          $this->written = @\fwrite($this->stream, \escapeshellcmd($data));
@@ -233,7 +237,7 @@ class Output
 
       return $this;
    }
-   public function metaencode (string $data) : self
+   public function metaencode (string $data): self
    {
       try {
          $this->written = @\fwrite($this->stream, \json_encode($data));

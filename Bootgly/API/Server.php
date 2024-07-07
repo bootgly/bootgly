@@ -19,9 +19,11 @@ class Server
 
    // * Data
    public static \Closure $Handler;
+   /** @var array<string,array<string,\Closure>> */
    public static array $tests;
 
    // * Metadata
+   /** @var array<string|array<string,\Closure>> */
    public static array $Tests;
    // @ API
    private static string $key;
@@ -29,7 +31,7 @@ class Server
 
    public static function boot (
       bool $reset = false, string $base = '', ? string $key = null
-   )
+   ): bool
    {
       // * Data
       $key ??= self::$key;
@@ -75,7 +77,7 @@ class Server
    }
 
    // @ Hot reload
-   public static function check () : bool
+   public static function check (): bool
    {
       static $modified = 0;
 

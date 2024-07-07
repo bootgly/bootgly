@@ -30,7 +30,7 @@ final class Divisors extends Items
    /**
     * Characters to repeat (in Vertical Orientation) or to add (in Horizontal Orientation)
     */
-   public function add (string $characters) : Divisor
+   public function add (string $characters): Divisor
    {
       $Divisor = new Divisor;
       // * Data
@@ -41,7 +41,7 @@ final class Divisors extends Items
       return $Divisor;
    }
 
-   public function compile (Divisor $Divisor)
+   public function compile (Divisor $Divisor): string
    {
       // @ Divisors
       // * Config

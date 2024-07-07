@@ -13,7 +13,14 @@ namespace Bootgly\CLI\Commands;
 
 class Arguments
 {
-   public function parse (array $args) : array
+   /**
+    * Parse the command arguments to extract options and arguments
+    * 
+    * @param array<string> $args 
+    *
+    * @return array<array<string>|array<string,bool|string>>
+    */
+   public function parse (array $args): array
    {
       // !
       $options = [];

@@ -35,7 +35,7 @@ class Response extends Responsing
 
 
    // \
-   private static $Server;
+   private static string $Server;
 
    // * Config
    // ...
@@ -66,7 +66,13 @@ class Response extends Responsing
    public readonly Header $Header;
    public readonly Payload $Payload;
 
-
+   /**
+    * Construct a new Response instance.
+    *
+    * @param int $code The status code of the response.
+    * @param array<string>|null $headers The headers of the response.
+    * @param string $body The body of the response.
+    */
    public function __construct (int $code = 200, ? array $headers = null, string $body = '')
    {
       // \
@@ -112,7 +118,7 @@ class Response extends Responsing
          $this->Payload->raw = $body;
       }
    }
-   public function __get (string $name)
+   public function __get (string $name): mixed
    {
       switch ($name) {
          // ? Response Metadata
@@ -141,7 +147,7 @@ class Response extends Responsing
             return $this;
       }
    }
-   public function __set (string $name, $value)
+   public function __set (string $name, mixed $value): void
    {
       switch ($name) {
          // ? Response Metadata
@@ -150,7 +156,16 @@ class Response extends Responsing
             break;
       }
    }
-   public function __invoke (int $code = 200, array $headers = [], string $body = '') : self
+   /**
+    * Prepare the response for sending.
+    *
+    * @param int $code The status code of the response.
+    * @param array<string> $headers The headers of the response.
+    * @param string $body The body of the response.
+    *
+    * @return self The Response instance, for chaining 
+    */
+   public function __invoke (int $code = 200, array $headers = [], string $body = ''): self
    {
       $this->code($code);
       $this->Header->prepare($headers);
@@ -181,7 +196,7 @@ class Response extends Responsing
     *
     * @return Response The Response instance, for chaining
     */
-   public function send ($body = null, ...$options) : self
+   public function send ($body = null, ...$options): self
    {
       // ?
       if ($this->sent === true) {
@@ -287,7 +302,7 @@ class Response extends Responsing
     * 
     * @return Response The Response instance, for chaining
     */
-   public function upload (string|File $file, int $offset = 0, ? int $length = null) : self
+   public function upload (string|File $file, int $offset = 0, ? int $length = null): self
    {
       // ?!
       if ($file instanceof File) {
@@ -352,7 +367,7 @@ class Response extends Responsing
     *
     * @return void
     */
-   public function end (? int $code = null) : void
+   public function end (? int $code = null): void
    {
       // ?
       if ($this->sent === true) {

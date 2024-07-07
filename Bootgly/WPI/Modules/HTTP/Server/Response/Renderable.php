@@ -19,21 +19,22 @@ use Bootgly\ABI\Templates\Template;
 trait Renderable
 {
    // \
-   private static $Server;
+   private static string $Server;
 
    // * Metadata
+   /** @var array<string, mixed> */
    protected array $uses = [];
 
    /**
     * Renders the specified view with the provided data.
     *
     * @param string $view The view to render.
-    * @param array|null $data The data to provide to the view.
+    * @param array<string, mixed>|null $data The data to provide to the view.
     * @param \Closure|null $callback Optional callback.
     *
     * @return self The Response instance, for chaining
     */
-   public function render (string $view, ? array $data = null, ? \Closure $callback = null) : self
+   public function render (string $view, ? array $data = null, ? \Closure $callback = null): self
    {
       // !
       $this->prepare('view');

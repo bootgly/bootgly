@@ -11,27 +11,24 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_\Request\Raw;
 
 
-use Bootgly\WPI\Modules\HTTP\Server\Request\Heading;
+use Bootgly\WPI\Modules\HTTP\Server\Request\Raw;
 use Bootgly\WPI\Nodes\HTTP_Server_\Request\Raw\Header\Cookies;
 
 
-class Header
+class Header extends Raw\Header
 {
-   use Heading;
-
+   public Cookies $Cookies;
 
    // * Config
    // ...
 
    // * Data
+   // ... inherited
    protected string $raw;
-   protected array $fields;
 
    // * Metadata
-   private bool $built;
+   // ... inherited
    private null|int|false $length;
-
-   public Cookies $Cookies;
 
 
    public function __construct ()
@@ -40,19 +37,20 @@ class Header
       // ...
 
       // * Data
-      // field
+      // fields
       $headers = \apache_request_headers();
       $fields = \array_change_key_case($headers, \CASE_LOWER);
       $this->fields = $fields;
 
       // * Metadata
+      // built
       $this->built = ! empty($fields);
       $this->length = null;
 
 
       $this->Cookies = new Cookies($this);
    }
-   public function __get (string $name)
+   public function __get (string $name): mixed
    {
       switch ($name) {
          // * Config
@@ -78,26 +76,17 @@ class Header
             $this->length = \strlen($this->raw ?? $this->__get('raw'));
             return $this->length;
       }
-   }
-   public function __set (string $name, string $value)
-   {
-      switch ($name) {
-         // * Data
-         case 'raw':
-            $this->raw = $value;
-            break;
-         case 'fields':
-            break;
-      }
+
+      return null;
    }
 
-   public function set (string $name, string $value) : bool
+   public function build (): bool
    {
-      if ( isSet($this->fields[$name]) ) {
+      if ( $this->built === true ) {
          return false;
       }
 
-      $this->fields[$name] = $value;
+      $this->built = true;
 
       return true;
    }

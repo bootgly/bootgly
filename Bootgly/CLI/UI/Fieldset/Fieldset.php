@@ -43,6 +43,7 @@ class Fieldset extends Component
       'bottom-left'  => '└',
       'bottom-right' => '┘',
    ];
+   /** @var array<string> */
    public array $borders;
    // * Data
    protected ? string $title;
@@ -63,7 +64,7 @@ class Fieldset extends Component
       $this->title = null;
       $this->content = null;
    }
-   public function __set ($name, $value)
+   public function __set (string $name, mixed $value)
    {
       // TODO emit event
       match ($name) {
@@ -75,7 +76,7 @@ class Fieldset extends Component
       };
    }
 
-   public function border (string $position, ? int $length = null)
+   public function border (string $position, ? int $length = null): void
    {
       $Output = $this->Output;
 
@@ -129,14 +130,14 @@ class Fieldset extends Component
             break;
       }
    }
-   public function separate (int $length)
+   public function separate (int $length): void
    {
       $Output = $this->Output;
 
       $Output->write($this->borders['mid'], $length);
    }
 
-   public function render (int $mode = self::WRITE_OUTPUT)
+   public function render (int $mode = self::WRITE_OUTPUT): Output|string|null
    {
       $Output = $this->Output;
       $Text = $Output->Text;
@@ -187,5 +188,14 @@ class Fieldset extends Component
 
       // @ Reset Text
       $Text->stylize();
+
+      /*
+      return match ($mode) {
+         self::WRITE_OUTPUT => $Output,
+         self::RETURN_OUTPUT => $Output->get(),
+         default => null
+      };
+      */
+      return null;
    }
 }

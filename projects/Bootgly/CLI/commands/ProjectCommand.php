@@ -37,7 +37,7 @@ class ProjectCommand extends Command
    ];
 
 
-   public function run (array $arguments = [], array $options = []) : bool
+   public function run (array $arguments = [], array $options = []): bool
    {
       return match ($arguments[0] ?? null) {
          #'create'   => $this->create($options),
@@ -51,7 +51,7 @@ class ProjectCommand extends Command
 
    // @ Subcommands
    // TODO support to attributes too
-   public function list (array $options) : bool
+   public function list (array $options): bool
    {
       $Output = CLI->Terminal->Output;
 
@@ -90,7 +90,7 @@ class ProjectCommand extends Command
    }
 
    // ...
-   public function help (array $arguments) : bool
+   public function help (array $arguments): bool
    {
       $Output = CLI->Terminal->Output;
 

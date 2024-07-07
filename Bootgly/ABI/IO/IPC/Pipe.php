@@ -11,6 +11,13 @@
 namespace Bootgly\ABI\IO\IPC;
 
 
+use function stream_socket_pair;
+use function stream_set_blocking;
+use function stream_select;
+use function fread;
+use function fwrite;
+use function fclose;
+use function pcntl_signal_dispatch;
 use Throwable;
 use Generator;
 
@@ -23,6 +30,7 @@ class Pipe implements IPC
    // ...
 
    // * Data
+   /** @var array<resource> */
    private array $pair;
 
    // * Metadata
@@ -51,7 +59,7 @@ class Pipe implements IPC
       }
    }
 
-   public function reading (int $length = 1024, ? int $timeout = null) : Generator
+   public function reading (int $length = 1024, ? int $timeout = null): Generator
    {
       // * Config
       // ...
@@ -84,7 +92,7 @@ class Pipe implements IPC
          yield $this->read(length: $length);
       }
    }
-   public function read (int $length = 1024) : string|false
+   public function read (int $length = 1024): string|false
    {
       try {
          $read = @fread($this->pair[0], $length);
@@ -95,7 +103,7 @@ class Pipe implements IPC
       return $read;
    }
 
-   public function write (string $data, ? int $length = null) : int|false
+   public function write (string $data, ? int $length = null): int|false
    {
       try {
          $written = @fwrite($this->pair[1], $data, $length);
@@ -106,7 +114,7 @@ class Pipe implements IPC
       return $written;
    }
 
-   public function close (bool $read = true, bool $write = true) : bool
+   public function close (bool $read = true, bool $write = true): bool
    {
       $closed0 = false;
       $closed1 = false;

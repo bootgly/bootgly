@@ -13,5 +13,5 @@ namespace Bootgly\WPI;
 
 interface Connections
 {
-   public function connect ();
+   public function connect (): bool;
 }

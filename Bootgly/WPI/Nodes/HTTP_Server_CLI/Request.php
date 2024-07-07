@@ -105,6 +105,7 @@ class Request
    private string $base;
 
    // * Data
+   /** @var array<string> */
    protected array $_SERVER;
 
    // * Metadata
@@ -147,14 +148,18 @@ class Request
       $this->_SERVER = $_SERVER;
    }
 
-   public function reboot ()
+   public function reboot (): void
    {
       if ( isSet($this->_SERVER) ) {
          $_SERVER = $this->_SERVER;
       }
    }
-
-   public function download (? string $key = null) : array|null
+   /**
+    * Download the request body data (files and fields).
+    *
+    * @return array<array<string>>|null The request method.
+    */
+   public function download (? string $key = null): array|null
    {
       // ?
       $boundary = $this->Raw->Body->parse(
@@ -178,7 +183,12 @@ class Request
 
       return null;
    }
-   public function receive (? string $key = null) : array|string|null
+   /**
+    * Receive the request body data.
+    *
+    * @return array<array<string>>|string|null The request method.
+    */
+   public function receive (? string $key = null): array|string|null
    {
       $parsed = $this->Raw->Body->parse(
          content: 'raw',

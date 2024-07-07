@@ -16,7 +16,7 @@ return [
 
    // @ simulate
    // Server API
-   'response' => function (Request $Request, Response $Response) : Response {
+   'response' => function (Request $Request, Response $Response): Response {
       $Response(body: 'Unauthorized page!');
       return $Response->authenticate(new Basic());
    },

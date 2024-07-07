@@ -29,7 +29,7 @@ class Downloader
       // ***
    }
 
-   public function downloading (string $boundary)
+   public function downloading (string $boundary): void
    {
       $postEncoded = '';
       $filesEncoded = '';
@@ -54,7 +54,24 @@ class Downloader
          });
       }
    }
-   public function download ($boundary, $sectionStart, &$postEncoded, &$filesEncoded, &$files)
+   /**
+    * Download a section of the request body.
+    *
+    * @param string $boundary The boundary string to use for the download.
+    * @param int $sectionStart The start position of the section to download.
+    * @param string $postEncoded The POST data encoded string.
+    * @param string $filesEncoded The FILES data encoded string.
+    * @param array<array<string>> $files The FILES data array.
+    *
+    * @return int The end position of the section downloaded.
+    */
+   public function download (
+      string $boundary,
+      int $sectionStart,
+      string &$postEncoded,
+      string &$filesEncoded,
+      array &$files
+   ): int
    {
       $Body = $this->Body; // @ Instance Request Body
 

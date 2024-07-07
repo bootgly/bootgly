@@ -13,7 +13,7 @@ return [
       // @ Valid
       $Template11 = new Template(
          <<<'TEMPLATE'
-         @if ($cool) :
+         @if ($cool):
          Bootgly Template is cool!
          @if;
          TEMPLATE

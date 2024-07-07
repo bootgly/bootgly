@@ -34,7 +34,7 @@ class Session
       // * Metadata
       // ...
    }
-   public function __get ($name)
+   public function __get (string $name): mixed
    {
       switch ($name) {
          // * Metadata
@@ -52,7 +52,7 @@ class Session
       }
    }
 
-   public function __set (string $name, $value)
+   public function __set (string $name, mixed $value): void
    {
       switch ($name) {
          // * Metadata
@@ -68,8 +68,15 @@ class Session
       }
    }
 
-
-   public function start (string $id = '', array $options = []) : bool
+   /**
+    * Start the session.
+    *
+    * @param string $id The session ID.
+    * @param array<string> $options The session options.
+    *
+    * @return bool
+    */
+   public function start (string $id = '', array $options = []): bool
    {
       if ($this->name) {
          session_name($this->name);
@@ -99,7 +106,14 @@ class Session
       return $started;
    }
 
-   public function destroy (string $id = '') : bool
+   /**
+    * Destroy the session.
+    *
+    * @param string $id The session ID.
+    *
+    * @return bool
+    */
+   public function destroy (string $id = ''): bool
    {
       $started = $this->__get('started');
       if ($started === false) {

@@ -16,13 +16,13 @@ use function log, floor, max, min, count, pow, round;
 
 class Bytes
 {
-   public static function format (float|int $bytes, int $precision = 2) : string
+   public static function format (float|int $bytes, int $precision = 2): string
    {
       $units = ['B', 'KB', 'MB', 'GB', 'TB'];
 
       $bytes = (float) max($bytes, 0);
       $pow = min(
-         floor(($bytes ? log($bytes) : 0) / log(1024)),
+         floor(($bytes ? log($bytes): 0) / log(1024)),
          count($units) - 1
       );
 

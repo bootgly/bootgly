@@ -23,13 +23,14 @@ abstract class Cookies
    // ...
 
    // * Data
+   /** @var array<string> */
    protected array $cookies;
 
    // * Metadata
    // ...
 
 
-   public function __get ($name)
+   public function __get (string $name): mixed
    {
       switch ($name) {
          // * Data

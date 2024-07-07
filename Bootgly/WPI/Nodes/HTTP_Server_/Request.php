@@ -34,12 +34,12 @@ use Bootgly\WPI\Nodes\HTTP_Server_\Request\Session;
  * @property array $headers
  * 
  * @property string $method        GET, POST, ...
- * @property string $URI          /test/foo?query=abc&query2=xyz
+ * @property string $URI           /test/foo?query=abc&query2=xyz
  * @property string $protocol      HTTP/1.1
  * 
  * @ Resource
- * @property string $URL          /test/foo
- * @property string $URN          foo
+ * @property string $URL           /test/foo
+ * @property string $URN           foo
  * 
  * @ Query
  * @property string $query         query=abc&query2=xyz

@@ -17,12 +17,16 @@ class Theme
    // ...
 
    // * Data
+   /** @var array<string,array<string,array<string,mixed>>> */
    protected static array $themes = [];
    protected ? string $active;
 
    // * Metadata
+   /** @var array<string,array<string,mixed>> */
    private array $theme;
+   /** @var array<string,array<string,mixed>> */
    private array $options;
+   /** @var array<string,array<string,mixed>> */
    private array $values;
 
 
@@ -45,7 +49,7 @@ class Theme
       }
    }
 
-   public function apply (string $key, string $content = '') : string
+   public function apply (string $key, string $content = ''): string
    {
       $options = $this->options;
       $values = $this->values;
@@ -76,8 +80,14 @@ class Theme
 
       return $output;
    }
-
-   public function add (array $theme)
+   /**
+    * Add a new theme.
+    * 
+    * @param array<mixed> $theme
+    *
+    * @throws \Exception
+    */
+   public function add (array $theme): self
    {
       if (\count($theme) > 1) {
          throw new \Exception('Invalid theme structure.');
@@ -123,7 +133,7 @@ class Theme
 
       return $this;
    }
-   public function select (? string $name = null) : bool
+   public function select (? string $name = null): bool
    {
       $name ??= $this->active;
 

@@ -17,7 +17,13 @@ namespace Bootgly\ABI\Configs;
  */
 trait Sets // @ Use with enums
 {
-   public function __call (string $name, array $arguments)
+   /**
+    * @param string $name
+    * @param array<mixed> $arguments
+    *
+    * @return mixed
+    */
+   public function __call (string $name, array $arguments): mixed
    {
       static $values = [];
 

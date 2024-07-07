@@ -24,7 +24,7 @@ class Decoder_Waiting extends Decoders
    private static int $read;
 
 
-   public static function decode (Packages $Package, string $buffer, int $size) : int
+   public static function decode (Packages $Package, string $buffer, int $size): int
    {
       // @ Get callbacks
       $Request = Server::$Request;

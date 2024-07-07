@@ -32,7 +32,7 @@ trait Loggable
    // * Metadata
    // ...
 
-   public function log ($message) : bool
+   public function log (string $message): bool
    {
       return error_log(
          message: $message,

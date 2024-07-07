@@ -19,10 +19,12 @@ class Backtrace
    public static int $traces = 4;
 
    // * Data
+   /** @var array<mixed> */
    public array $calls;
 
    // * Metadata
    // @ Last
+   /** @var array<mixed> */
    private array $trace;
    // @ Trace
    private string $dir;
@@ -53,7 +55,7 @@ class Backtrace
          break;
       }
    }
-   public function __get (string $name)
+   public function __get (string $name): mixed
    {
       // * Metadata
       // @ Last
@@ -72,7 +74,7 @@ class Backtrace
       }
    }
 
-   public function dump () : string
+   public function dump (): string
    {
       // * Metadata
       $output = '';

@@ -19,7 +19,7 @@ return [
       return "GET / HTTP/1.0\r\n\r\n";
    },
    // Server API
-   'response' => function (Request $Request, Response $Response) : Response {
+   'response' => function (Request $Request, Response $Response): Response {
       $address = $Request->address;
       return $Response(body: $address);
    },

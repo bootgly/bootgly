@@ -26,7 +26,7 @@ class DemoCommand extends Command
    public string $description = 'Run the Bootgly CLI demo';
 
 
-   public function run (array $arguments = [], array $options = []) : bool
+   public function run (array $arguments = [], array $options = []): bool
    {
       // * Config
       $id = $arguments[0] ?? null;

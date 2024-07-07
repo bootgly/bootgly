@@ -24,13 +24,14 @@ class Rows
    // ...
 
    // * Data
+   /** @var array<array<array<string>>>> */
    public ? array $rows;
 
    // * Metadata
    // ...
 
 
-   public function __construct ($Table)
+   public function __construct (Table $Table)
    {
       $this->Table = $Table;
 
@@ -46,12 +47,12 @@ class Rows
       // ...
    }
 
-   public function render ()
+   public function render (): void
    {
       $data = $this->rows;
 
       if (count($data) === 0) {
-         return false;
+         return;
       }
 
       foreach ($data as $section => $rows) {

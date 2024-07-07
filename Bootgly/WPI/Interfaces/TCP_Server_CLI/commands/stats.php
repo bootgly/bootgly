@@ -23,7 +23,7 @@ return new class extends Command
    public string $description = 'Show server statistics';
 
 
-   public function run (array $arguments = [], array $options = []) : bool
+   public function run (array $arguments = [], array $options = []): bool
    {
       // !
       // ** @var \Closure $context

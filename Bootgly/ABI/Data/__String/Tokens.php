@@ -40,7 +40,15 @@ class Tokens
    public const TOKEN_KEYWORD = 'token_keyword';
 
 
-   public function tokenize (string $source, int $fallback = self::AS_TOKEN_GROUP) : array
+   /**
+    * Tokenize a source code
+    * 
+    * @param string $source
+    * @param int $fallback
+    *
+    * @return array<int,array<int,array<int,int|string|null>>>
+    */
+   public function tokenize (string $source, int $fallback = self::AS_TOKEN_GROUP): array
    {
       // * Data
       $tokens = \token_get_all($source);
@@ -119,7 +127,8 @@ class Tokens
                   default => self::TOKEN_KEYWORD
                };
             }
-         } else {
+         }
+         else {
             $token_type_new = match ($token) {
                ',', ';' => self::TOKEN_PONTUATION,
                '(', ')', '[', ']' => self::TOKEN_DELIMITER,

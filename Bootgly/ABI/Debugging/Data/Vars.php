@@ -24,12 +24,14 @@ class Vars implements Debugging
    public static bool $exit = true;
    public const DEFAULT_IDENTATIONS = 3;
    // _ Validators
-   public static array $ips = [];
+   /** @var array<string> */
+   public static array $IPs = [];
    // _ Stack
    public static int $traces = 4;
    // _ Identifiers
    public static int $call = 1;
    public static string $title = '';
+   /** @var array<string> */
    public static array $labels = [];
    // _ Delimiters
    // Call
@@ -49,7 +51,7 @@ class Vars implements Debugging
    protected static string $Output = '';
 
 
-   public static function reset ()
+   public static function reset (): void
    {
       // * Config
       // _ Stack
@@ -66,7 +68,7 @@ class Vars implements Debugging
       self::$search = null;
    }
 
-   private static function dump ($value, int $indentations = self::DEFAULT_IDENTATIONS) : string
+   private static function dump (mixed $value, int $indentations = self::DEFAULT_IDENTATIONS): string
    {
       $type = gettype($value);
       switch ($type) {
@@ -302,7 +304,7 @@ class Vars implements Debugging
       return $output;
    }
 
-   public static function debug (...$vars)
+   public static function debug (mixed ...$vars): void
    {
       // ?
       // @ $debug
@@ -310,10 +312,10 @@ class Vars implements Debugging
          return;
       }
       // @ IPs
-      if ( ! empty(self::$ips) ) {
-         foreach (self::$ips as $ip) {
+      if ( ! empty(self::$IPs) ) {
+         foreach (self::$IPs as $IP) {
             $founded = false;
-            if ($_SERVER['REMOTE_ADDR'] == $ip || $ip === '*') {
+            if ($_SERVER['REMOTE_ADDR'] == $IP || $IP === '*') {
                $founded = true;
                break;
             }
@@ -336,13 +338,15 @@ class Vars implements Debugging
       // ---
       if (self::$to === null) {
          $to = $call;
-      } else {
+      }
+      else {
          $to = self::$to;
       }
       // Title
       if (self::$search === null) {
          $search = self::$title;
-      } else {
+      }
+      else {
          $search = self::$search;
       }
 
@@ -424,10 +428,6 @@ class Vars implements Debugging
          if (self::$print) {
             print self::$Output;
          }
-         // Return
-         if (self::$return) {
-            return self::$Output;
-         }
          // Exit
          if (self::$exit) {
             if (self::$from == null) {
@@ -442,7 +442,8 @@ class Vars implements Debugging
          if ($search == self::$title) {
             self::$call++;
          }
-      } else {
+      }
+      else {
          self::$call++;
       }
    }

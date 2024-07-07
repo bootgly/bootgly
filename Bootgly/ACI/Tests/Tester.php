@@ -26,12 +26,18 @@ class Tester extends Tests
 
    // * Data
    // ...inherited from Tests
+   /** @var array<string> */
    public array $artfacts;
 
    // * Metadata
    // ...inherited from Tests
 
 
+   /**
+    * Tester constructor.
+    * 
+    * @param array<string,mixed> $specifications
+    */
    public function __construct (array &$specifications)
    {
       // ✓
@@ -88,18 +94,24 @@ class Tester extends Tests
       // @ Pretest
       $testables = $this->testables;
       foreach ($testables as $testable) {
-         method_exists($testable, 'pretest') ? $testable::pretest() : false;
+         method_exists($testable, 'pretest') ? $testable::pretest(): false;
       }
    }
 
-   public function autoboot (string $boot, array $specifications)
+   /**
+    * Autoboot test suite.
+    * 
+    * @param string $boot
+    * @param array<string,array<string,mixed>> $specifications
+    */
+   public function autoboot (string $boot, array $specifications): void
    {
       $this->separate(header: $specifications['suiteName'] ?? ''); // Test Suite Specs
 
       $dir = $boot . DIRECTORY_SEPARATOR;
 
       // * Config (Test Suite)
-      $testCaseTarget = ($specifications['index'] ?? 0);
+      $testCaseTarget = (int) ($specifications['index'] ?? 0);
       // @
       foreach ($this->tests as $index => $test) {
          $specifications = @include($dir . $test . '.test.php'); // Test Case Specs
@@ -119,7 +131,12 @@ class Tester extends Tests
          $this->specifications[] = $specifications;
       }
    }
-   public function autoinstance (bool|callable $instance)
+   /**
+    * Autoinstance test suite.
+    * 
+    * @param bool|callable $instance
+    */
+   public function autoinstance (bool|callable $instance): void
    {
       if ($instance === true) {
          foreach ($this->specifications as $specifications) {
@@ -146,8 +163,14 @@ class Tester extends Tests
          $instance(...$this->artfacts);
       }
    }
-
-   public function test (? array &$specifications) : Test|false
+   /**
+    * Get the next test case.
+    * 
+    * @param array<string,mixed> $specifications
+    *
+    * @return Test|false
+    */
+   public function test (? array &$specifications): Test|false
    {
       if ( empty($specifications) ) {
          $this->skipped++;
@@ -163,8 +186,14 @@ class Tester extends Tests
 
       return $Test;
    }
-
-   public function separate (string $header)
+   /**
+    * Add a separator to the test suite.
+    * 
+    * @param string $header
+    *
+    * @return void
+    */
+   public function separate (string $header): void
    {
       if ($header) {
          // @ Add blue color to header text
@@ -184,8 +213,13 @@ class Tester extends Tests
          $this->log('@#white:' . $header . ' @;@\;');
       }
    }
-
-   public function skip (? string $info = null)
+   /**
+    * Skip a test case.
+    * 
+    * @param null|string $info 
+    * @return void 
+    */
+   public function skip (? string $info = null): void
    {
       $file = current($this->tests);
 
@@ -208,7 +242,12 @@ class Tester extends Tests
       );
    }
 
-   public function summarize ()
+   /**
+    * Summarize the test cases.
+    *
+    * @return void
+    */
+   public function summarize (): void
    {
       // @ Result
       $failed = '@:error:' . $this->failed . ' failed @;';

@@ -27,7 +27,7 @@ return [
       HTTP;
    },
    // Server API
-   'response' => function (Request $Request, Response $Response) : Response {
+   'response' => function (Request $Request, Response $Response): Response {
       #$Response->Header->set('ETag', '"bar"');
 
       if ($Request->fresh) {

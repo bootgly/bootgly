@@ -14,7 +14,7 @@ return [
 
    // @ simulate
    // Server API
-   'response' => function (Request $Request, Response $Response) : Response {
+   'response' => function (Request $Request, Response $Response): Response {
       $Cookies = $Response->Header->Cookies;
 
       $Cookies->append(new Cookie('Test1', 'value1'));

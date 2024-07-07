@@ -17,12 +17,14 @@ class Table
    // ...
 
    // * Data
-   public ? array $columns; // set table data by columns...
-   public ? array $rows; // set table data by rows...
+   /** @var array<int>|null */
+   public ?array $columns; // set table data by columns...
+   /** @var array<string,array<int,array<int,mixed>>>|null */
+   public ?array $rows; // set table data by rows... // TODO: rename to sections?
    // ---
-   #private ? array $header;
-   #private ? array $body;
-   #private ? array $footer;
+   #private ?array $header;
+   #private ?array $body;
+   #private ?array $footer;
 
    // * Metadata
    // ...
@@ -35,7 +37,13 @@ class Table
       $this->rows = null;
    }
 
-   public function __set (string $name, ? array $value)
+   /**
+    * Set the value of a specific section of the table.
+    * 
+    * @param string $name
+    * @param array<int,array<int,mixed>> $value
+    */
+   public function __set (string $name, ? array $value): void
    {
       switch ($name) {
          case 'header':
@@ -51,7 +59,14 @@ class Table
       }
    }
 
-   public function get (string $section = '')
+   /**
+    * Get the value of a specific section of the table.
+    * 
+    * @param string $section
+    *
+    * @return array<int,array<int,mixed>>
+    */
+   public function get (string $section = ''): array
    {
       return match ($section) {
          'header' => $this->rows['header'],
@@ -60,7 +75,14 @@ class Table
          default  => $this->rows
       };
    }
-   public function set (? array $header = null, ? array $body = null, ? array $footer = null)
+   /**
+    * Set the value of a specific section of the table.
+    * 
+    * @param null|array<int,array<int,mixed>> $header
+    * @param null|array<int,array<int,mixed>> $body
+    * @param null|array<int,array<int,mixed>> $footer
+    */
+   public function set (? array $header = null, ? array $body = null, ? array $footer = null): void
    {
       if ($header) {
          $this->__set("header", $header);
@@ -75,14 +97,15 @@ class Table
       }
    }
 
-   // @ Operations
+   // # Operations
    /**
     * Sums the values in a specified column of the body.
     *
     * @param int $column The column index to sum.
+    *
     * @return int The sum of the values in the specified column or false on error.
     */
-   public function sum (int $column) : false|int|float
+   public function sum (int $column): false|int|float
    {
       if ($column < 0) return 0;
 
@@ -98,7 +121,7 @@ class Table
             }
          }
       }
-      catch (\Throwable) {
+      catch (\Throwable) { // @phpstan-ignore-line
          return false;
       }
 
@@ -108,9 +131,10 @@ class Table
     * Subtracts the values in a specified column of the body.
     *
     * @param int $column The column index to subtract.
+    *
     * @return int The result of subtracting the values in the specified column or false on error.
     */
-   public function subtract (int $column) : false|int|float
+   public function subtract (int $column): false|int|float
    {
       if ($column < 0) return 0;
 
@@ -126,7 +150,7 @@ class Table
             }
          }
       }
-      catch (\Throwable) {
+      catch (\Throwable) { // @phpstan-ignore-line
          return false;
       }
 
@@ -136,9 +160,10 @@ class Table
     * Multiplies the values in a specified column of the body.
     *
     * @param int $column The column index to multiply.
+    *
     * @return int The result of multiplying the values in the specified column or false on error.
     */
-   public function multiply (int $column) : int|float
+   public function multiply (int $column): int|float
    {
       if ($column < 0) return 0;
 
@@ -154,7 +179,7 @@ class Table
             }
          }
       }
-      catch (\Throwable) {
+      catch (\Throwable) { // @phpstan-ignore-line
          return 0;
       }
 
@@ -164,9 +189,10 @@ class Table
     * Divides the values in a specified column of the body.
     *
     * @param int $column The column index to divide.
+    *
     * @return float The result of dividing the values in the specified column or false on error.
     */
-   public function divide (int $column) : false|null|float
+   public function divide (int $column): false|null|float
    {
       if ($column < 0) return 0;
 
@@ -193,15 +219,16 @@ class Table
       return $result;
    }
 
-   // @ Searchs
+   // # Searchs
    /**
     * Searches for a specific value in a specified column of the body.
     *
     * @param int $column The column index to search.
     * @param mixed $value The value to search for.
+    *
     * @return bool True if the value is found, false otherwise.
     */
-   public function find (int $column, $value) : bool
+   public function find (int $column, $value): bool
    {
       $data = $this->rows['body'];
 

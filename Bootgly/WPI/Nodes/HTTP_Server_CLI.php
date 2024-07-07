@@ -94,9 +94,19 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, HTTP_Server
       }
    }
 
+   /**
+    * Configure the HTTP Server.
+    *
+    * @param string $host The host to bind the server to.
+    * @param int $port Port to bind the server to.
+    * @param int $workers Number of workers to spawn.
+    * @param null|array<string> $ssl SSL configuration.
+    *
+    * @return self The HTTP Server instance, for chaining 
+    */
    public function configure (
       string $host, int $port, int $workers, ? array $ssl = null
-   )
+   ): self
    {
       parent::configure($host, $port, $workers, $ssl);
 
@@ -109,9 +119,11 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, HTTP_Server
          ? 'https://'
          : 'http://'
       );
+
+      return $this;
    }
 
-   public static function boot (Environments $Environment)
+   public static function boot (Environments $Environment): void
    {
       switch ($Environment) {
          case Environments::Test:
@@ -181,7 +193,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, HTTP_Server
       }
    }
 
-   protected static function test (TCP_Server_CLI $TCP_Server_CLI)
+   protected static function test (TCP_Server_CLI $TCP_Server_CLI): bool
    {
       Logger::$display = Logger::DISPLAY_NONE;
 

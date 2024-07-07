@@ -32,6 +32,7 @@ class Router
    // @ Stats
    private int $routes;
    // @ History
+   /** @var array<string> */
    private array $routeds;
 
 
@@ -55,7 +56,15 @@ class Router
       $this->routeds = [];
    }
 
-   public function boot (string $path, string|array $instances = ['routes'])
+   /**
+    * Boot the router with the given instances routes.
+    *
+    * @param string $path The path to the router directory.
+    * @param string|array<string> $instances The instances to boot.
+    *
+    * @return void
+    */
+   public function boot (string $path, string|array $instances = ['routes']): void
    {
       // @ Prepare import
       $Request = self::$Server::$Request;
@@ -94,21 +103,30 @@ class Router
          }
       }
    }
-   public function pause ()
+   public function pause (): void
    {
       $this->active = false;
    }
-   public function continue ()
+   public function continue (): void
    {
       $this->active = true;
    }
 
    // @ default
+   /**
+    * Route a path to a handler.
+    *
+    * @param string $route The route path.
+    * @param callable $handler The handler to call.
+    * @param null|string|array<string> $methods The methods to match.
+    *
+    * @return false|object
+    */
    public function route (
       string $route,
       callable $handler,
       null|string|array $methods = null
-   ) : false|object
+   ): false|object
    {
       $Route = &$this->Route;
 
@@ -215,7 +233,7 @@ class Router
 
       return false;
    }
-   public function routing (\Generator $Routes)
+   public function routing (\Generator $Routes): \Generator
    {
       foreach ($Routes as $Response) {
          if ($Response instanceof \Generator) {
@@ -235,7 +253,7 @@ class Router
       }
    }
 
-   private function match (string $route) : int
+   private function match (string $route): int
    {
       $Route = &$this->Route;
 
@@ -279,7 +297,7 @@ class Router
 
       return 0;
    }
-   private function parse (string $route) // @ Parse Route Path (Parameterized)
+   private function parse (string $route): string
    {
       if ($this->active === false) return '';
 

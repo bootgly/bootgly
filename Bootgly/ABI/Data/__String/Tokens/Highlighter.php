@@ -89,6 +89,7 @@ class Highlighter extends Tokens
    // ...
 
 
+   /** @param array<mixed> $theme */
    public function __construct (array $theme = self::DEFAULT_THEME)
    {
       // !
@@ -128,7 +129,9 @@ class Highlighter extends Tokens
       // ...
    }
 
-   public function highlight (string $source, ? int $marked_line = null, int $lines_before = 4, int $lines_after = 4) : string
+   public function highlight (
+      string $source, ? int $marked_line = null, int $lines_before = 4, int $lines_after = 4
+   ): string
    {
       // <<
       $source = \str_replace(["\r\n", "\r"], "\n", $source);
@@ -150,7 +153,14 @@ class Highlighter extends Tokens
    }
 
    // @ Lines
-   private function color (array $token_lines) : array
+   /**
+    * Colorize tokens in lines
+    * 
+    * @param array<array<array<string>>> $token_lines
+    *
+    * @return array<int,string>
+    */
+   private function color (array $token_lines): array
    {
       $lines = [];
       foreach ($token_lines as $index => $token_line) {
@@ -165,7 +175,15 @@ class Highlighter extends Tokens
       }
       return $lines;
    }
-   private function number (array $lines, ? int $marked_line = null) : string
+   /**
+    * Number lines
+    * 
+    * @param array<int,string> $lines
+    * @param int|null $marked_line
+    *
+    * @return string
+    */
+   private function number (array $lines, ? int $marked_line = null): string
    {
       // * Config
       $mark = ' ' . self::ARROW_SYMBOL . ' ';

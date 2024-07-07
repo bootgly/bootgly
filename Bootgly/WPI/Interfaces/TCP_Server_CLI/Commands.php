@@ -29,6 +29,7 @@ class Commands extends CLI\Terminal
 
    // ! Command
    // * Data
+   /** @var array<string> */
    public static array $commands = [
       // ! Server
       // @
@@ -53,6 +54,7 @@ class Commands extends CLI\Terminal
       'clear',
       'help'
    ];
+   /** @var array<string,array<string>>> */
    public static array $subcommands = [
       // ! Server
       // @ operations
@@ -80,7 +82,7 @@ class Commands extends CLI\Terminal
 
    // ! Command<T>
    // @ Interact
-   public function command (string $command) : bool
+   public function command (string $command): bool
    {
       // TODO split command in subcommands by space
 
@@ -143,12 +145,12 @@ class Commands extends CLI\Terminal
          'clear' =>
             $this->clear() && true, // @phpstan-ignore-line
          'help' =>
-            $this->help() && true,
+            $this->help() && true, // @phpstan-ignore-line
 
          default => true
       };
    }
-   public function saveCommand (string $command, string $context = '') : bool
+   public function saveCommand (string $command, string $context = ''): bool
    {
       $file = BOOTGLY_WORKING_DIR . '/workdata/server.command';
 
@@ -160,7 +162,7 @@ class Commands extends CLI\Terminal
 
       return true;
    }
-   public function help ()
+   public function help (): true
    {
       $this->log(<<<'OUTPUT'
       @\;======================================================================

@@ -11,15 +11,18 @@
 namespace Bootgly\WPI\Modules\HTTP\Server;
 
 
+use Bootgly\WPI\Modules\HTTP\Server\Request\Raw\Header\Cookies;
+
+
 trait Requestable
 {
    // * Metadata
    protected string $encoding;
 
-   protected $Cookies;
+   protected Cookies $Cookies;
 
 
-   public function __get (string $name)
+   public function __get (string $name): mixed
    {
       switch ($name) {
          // * Config
@@ -205,8 +208,10 @@ trait Requestable
          case 'stale':
             return ! $this->fresh;
       }
+
+      return null;
    }
-   public function __set (string $name, $value)
+   public function __set (string $name, mixed $value): void
    {
       switch ($name) {
          // * Config
@@ -222,7 +227,12 @@ trait Requestable
       }
    }
 
-   public function input () : array|null
+   /**
+    * Receive the input data from the request.
+    *
+    * @return array<string>|null 
+    */
+   public function input (): array|null
    {
       $inputs = [];
 
@@ -250,7 +260,7 @@ trait Requestable
    }
 
    // HTTP Basic Authentication
-   public function authenticate () : object|null
+   public function authenticate (): object|null
    {
       $authorization = $this->Raw->Header->get('Authorization');
 
@@ -280,7 +290,14 @@ trait Requestable
    public const ACCEPTS_LANGUAGES = 2;
    public const ACCEPTS_CHARSETS = 4;
    public const ACCEPTS_ENCODINGS = 8;
-   public function negotiate (int $with = self::ACCEPTS_TYPES) : array
+   /**
+    * Negotiate the request content.
+    *
+    * @param int $with The content to negotiate.
+    *
+    * @return array<string> The negotiated content.
+    */
+   public function negotiate (int $with = self::ACCEPTS_TYPES): array
    {
       switch ($with) {
          case self::ACCEPTS_TYPES:
@@ -352,7 +369,7 @@ trait Requestable
    }
 
    // HTTP Caching Specification
-   public function freshen () : bool
+   public function freshen (): bool
    {
       if ($this->method !== 'GET' && $this->method !== 'HEAD') {
          return false;

@@ -25,7 +25,7 @@ return [
       HTTP;
    },
    // Server API
-   'response' => function (Request $Request, Response $Response) : Response {
+   'response' => function (Request $Request, Response $Response): Response {
       $username = $Request->username;
       $password = $Request->password;
 

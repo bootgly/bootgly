@@ -18,7 +18,6 @@ use Bootgly\ABI\Data\__String\Escapeable\Cursor\Visualizable;
 use Bootgly\ABI\Data\__String\Escapeable\Text\Formattable;
 use Bootgly\ABI\Data\__String\Escapeable\Text\Modifiable;
 use Bootgly\ABI\Data\__String\Escapeable\Viewport\Scrollable;
-use Bootgly\ABI\Data\__String\Path;
 use Bootgly\ABI\Resources;
 
 
@@ -36,13 +35,15 @@ class Escaped implements Resources
    // ...
 
    // * Data
+   /** @var array<string, callable> */
    protected static array $directives = [];
 
    // * Metadata
+   /** @var array<string> */
    protected static array $names = [];
 
 
-   public static function boot ()
+   public static function boot (): void
    {
       self::$directives = [
          '/@(#[a-zA-Z]+):(\s?)/m' => function ($matches) {
@@ -118,7 +119,7 @@ class Escaped implements Resources
       ];
    }
 
-   public static function render (string $message) : string
+   public static function render (string $message): string
    {
       $message = preg_replace_callback_array(self::$directives, $message);
 

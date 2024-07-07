@@ -44,6 +44,7 @@ class Path // support to FileSystem Paths only (Linux only)
    protected string $root;
    protected string $parent;
    protected string $current;
+   /** @var array<string> */
    protected array $parts;
    // ->parts
    #protected int $indexes;
@@ -56,7 +57,7 @@ class Path // support to FileSystem Paths only (Linux only)
          $this->construct($path);
       }
    }
-   public function __get (string $key)
+   public function __get (string $key): mixed
    {
       switch ($key) {
          case 'path':
@@ -142,7 +143,11 @@ class Path // support to FileSystem Paths only (Linux only)
             return null;
       }
    }
-   public function __call (string $name, array $arguments)
+   /**
+    * @param string $name
+    * @param array<mixed> $arguments
+    */
+   public function __call (string $name, array $arguments): mixed
    {
       switch ($name) {
          // ->path
@@ -164,7 +169,11 @@ class Path // support to FileSystem Paths only (Linux only)
             return null;
       }
    }
-   public static function __callStatic (string $name, $arguments)
+   /**
+    * @param string $name
+    * @param array<mixed> $arguments
+    */
+   public static function __callStatic (string $name, $arguments): mixed
    {
       if ( method_exists(__CLASS__, $name) ) {
          return self::$name(...$arguments);
@@ -172,12 +181,18 @@ class Path // support to FileSystem Paths only (Linux only)
 
       return null;
    }
-   public function __toString () : string
+   public function __toString (): string
    {
       return $this->path ?? '';
    }
-
-   public function construct (string $path) : string
+   /**
+    * Construct a path
+    * 
+    * @param string $path
+    *
+    * @return string
+    */
+   public function construct (string $path): string
    {
       if ($this->constructed) {
          return '';
@@ -222,7 +237,15 @@ class Path // support to FileSystem Paths only (Linux only)
 
       return $this->path = $path;
    }
-   public function match (string $path, string $pattern) : bool
+   /**
+    * Match a path with a pattern
+    * 
+    * @param string $path
+    * @param string $pattern
+    *
+    * @return bool
+    */
+   public function match (string $path, string $pattern): bool
    {
       // path: /etc/php/%
       // pattern: '8.*'
@@ -253,8 +276,14 @@ class Path // support to FileSystem Paths only (Linux only)
 
       // /etc/php/8.0 or /etc/php/8.1 or /etc/php/8.2...
    }
-
-   public static function normalize (string $path) : string
+   /**
+    * Normalize a path
+    * 
+    * @param string $path
+    *
+    * @return string
+    */
+   public static function normalize (string $path): string
    {
       // $path = '../..\etc/passwd';
 
@@ -293,7 +322,14 @@ class Path // support to FileSystem Paths only (Linux only)
       return $normalized;
       // return 'etc/passwd';
    }
-   private static function split (string $path) : array
+   /**
+    * Split a path into parts
+    * 
+    * @param string $path
+    *
+    * @return array<string>
+    */
+   private static function split (string $path): array
    {
       // $path = '/var/www/sys/';
       $parts = [];
@@ -309,7 +345,15 @@ class Path // support to FileSystem Paths only (Linux only)
       return $parts;
       // return [0 => 'var', 1 => 'www', 2 => 'sys'];
    }
-   private static function cut (string $path, int ...$cutting) : string
+   /**
+    * Cut parts from a path
+    * 
+    * @param string $path
+    * @param int ...$cutting
+    *
+    * @return string
+    */
+   private static function cut (string $path, int ...$cutting): string
    {
       // $path = var/www/html/test/;
       // $cutting = [-2, 1];
@@ -354,7 +398,15 @@ class Path // support to FileSystem Paths only (Linux only)
       return $path;
       // return 'html/';
    }
-   public static function relativize (string $path, string $from) : string
+   /**
+    * Get the relative path from a path to another
+    * 
+    * @param string $path
+    * @param string $from
+    *
+    * @return string
+    */
+   public static function relativize (string $path, string $from): string
    {
       // $path = '/foo/bar/tests/test2.php'
       // $from = '/foo/bar/'
@@ -376,8 +428,16 @@ class Path // support to FileSystem Paths only (Linux only)
       return $relative_path;
       // return 'tests/test2.php';
    }
-
-   private static function join (array $parts, bool $absolute = false, bool $dir = false) : string
+   /**
+    * Join parts to form a path
+    * 
+    * @param array<string> $parts
+    * @param bool $absolute
+    * @param bool $dir
+    *
+    * @return string
+    */
+   private static function join (array $parts, bool $absolute = false, bool $dir = false): string
    {
       // $path = [0 => 'var', 1 => 'www', 2 => 'sys'];
       $path = '';
@@ -395,7 +455,15 @@ class Path // support to FileSystem Paths only (Linux only)
       return $path;
       // return '/var/www/sys/';
    }
-   private static function concatenate (array $parts, int $offset = 0) : string
+   /**
+    * Concatenate parts to form a path
+    * 
+    * @param array<string> $parts
+    * @param int $offset
+    *
+    * @return string
+    */
+   private static function concatenate (array $parts, int $offset = 0): string
    {
       // $parts = ['home', 'bootgly', 'bootgly', 'index.php'];
       // $offset = 2;

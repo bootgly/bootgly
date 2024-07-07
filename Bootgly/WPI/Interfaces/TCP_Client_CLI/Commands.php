@@ -27,12 +27,14 @@ class Commands extends CLI\Terminal
 
    // * Data
    // ! Command
+   /** @var array<string> */
    public static array $commands = [
       'quit',
 
       'clear',
       'help'
    ];
+   /** @var array<string,array<string>> */
    public static array $subcommands = [];
 
 
@@ -44,7 +46,7 @@ class Commands extends CLI\Terminal
 
    // ! Command<T>
    // @ Interact
-   public function command (string $command) : bool
+   public function command (string $command): bool
    {
       // TODO split command in subcommands by space
 
@@ -56,18 +58,18 @@ class Commands extends CLI\Terminal
                '@\;Stopping ' . $children . ' worker(s)... ',
                self::LOG_WARNING_LEVEL
             )
-            && $this->Client->Process->sendSignal(SIGINT)
+            && $this->Client->Process->sendSignal(SIGINT) // @phpstan-ignore-line
             && false,
 
          'clear' =>
             $this->clear() && true, // @phpstan-ignore-line
          'help' =>
-            $this->help() && true,
+            $this->help() && true, // @phpstan-ignore-line
 
          default => true
       };
    }
-   public function help ()
+   public function help (): true
    {
       $this->log(<<<'OUTPUT'
       @\;======================================================================

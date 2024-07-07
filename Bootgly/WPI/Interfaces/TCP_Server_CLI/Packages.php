@@ -23,6 +23,7 @@ use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections\Connection;
 
 
+// FIXME: extends Packages
 abstract class Packages implements WPI\Connections\Packages
 {
    use LoggableEscaped;
@@ -41,9 +42,12 @@ abstract class Packages implements WPI\Connections\Packages
 
    // * Metadata
    // @ Handler
+   /** @var array<string> */
    public array $callbacks;
    // @ Stream
+   /** @var array<array<string>> */
    public array $downloading;
+   /** @var array<array<string>> */
    public array $uploading;
    // @ Expiration
    public bool $expired;
@@ -74,7 +78,15 @@ abstract class Packages implements WPI\Connections\Packages
       $this->expired = false;
    }
 
-   public function fail ($Socket, string $operation)
+   /**
+    * Fail to read/write data
+    *
+    * @param resource $Socket 
+    * @param string $operation 
+    *
+    * @return bool 
+    */
+   public function fail ($Socket, string $operation): bool
    {
       try {
          $EOF = @\feof($Socket);
@@ -101,7 +113,18 @@ abstract class Packages implements WPI\Connections\Packages
       return false;
    }
 
-   public function reading (&$Socket, ? int $length = null, ? int $timeout = null) : bool
+   /**
+    * Read data from the client
+    *
+    * @param resource $Socket 
+    * @param null|int $length 
+    * @param null|int $timeout 
+    *
+    * @return bool 
+    */
+   public function reading (
+      &$Socket, ? int $length = null, ? int $timeout = null
+   ): bool
    {
       // !
       $input = '';
@@ -188,7 +211,15 @@ abstract class Packages implements WPI\Connections\Packages
       return true;
    }
    // ---
-   public function writing (&$Socket, ? int $length = null) : bool
+   /**
+    * Write data to the client
+    *
+    * @param resource $Socket 
+    * @param null|int $length 
+    *
+    * @return bool 
+    */
+   public function writing (&$Socket, ? int $length = null): bool
    {
       // ?!
       if (Server::$Encoder) { // @ Encode Application Data if exists
@@ -253,22 +284,30 @@ abstract class Packages implements WPI\Connections\Packages
 
       return true;
    }
-   public function read (&$Socket)
+   public function read (&$Socket): void
    {
       // N/A
    }
-   public function write (&$Socket, ? int $length = null)
+   public function write (&$Socket, ? int $length = null): void
    {
       // N/A
    }
 
    // ! Stream
-   public function downloading ($Socket) : int|false
+   /**
+    * Download file from the client
+    *
+    * @param resource $Socket 
+    *
+    * @return int|false 
+    */
+   public function downloading ($Socket): int|false
    {
       // TODO test!!!
       $file = $this->downloading[0]['file'];
       $Handler = @\fopen($file, 'w+');
 
+      /** @var int $length */
       $length = $this->downloading[0]['length'];
       $close = $this->downloading[0]['close'];
 
@@ -322,9 +361,17 @@ abstract class Packages implements WPI\Connections\Packages
    
       return $read;
    }
-   public function uploading ($Socket) : int
+   /**
+    * Upload file to the client
+    *
+    * @param resource $Socket 
+    *
+    * @return int 
+    */
+   public function uploading ($Socket): int
    { // TODO support to upload multiple files
       $Handler = @\fopen($this->uploading[0]['file'], 'r');
+      /** @var array<array<string>> $parts */
       $parts = $this->uploading[0]['parts'];
       $pads = $this->uploading[0]['pads'];
       $close = $this->uploading[0]['close'];
@@ -332,9 +379,12 @@ abstract class Packages implements WPI\Connections\Packages
       $written = 0;
 
       foreach ($parts as $index => $part) {
+         /** @var int $offset */
          $offset = $part['offset'];
+         /** @var int $length */
          $length = $part['length'];
 
+         /** @var array<string>|null $pad */
          $pad = $pads[$index] ?? null;
 
          // @ Move pointer of file to offset
@@ -415,7 +465,17 @@ abstract class Packages implements WPI\Connections\Packages
       return $written;
    }
    // ---
-   public function download (&$Socket, &$Handler, int $rate, int $length) : int
+   /**
+    * Download data from the client
+    *
+    * @param resource $Socket 
+    * @param resource $Handler 
+    * @param int $rate 
+    * @param int $length 
+    *
+    * @return int 
+    */
+   public function download (&$Socket, &$Handler, int $rate, int $length): int
    {
       // TODO test!!!
       $read = 0;
@@ -472,7 +532,17 @@ abstract class Packages implements WPI\Connections\Packages
 
       return $stored;
    }
-   public function upload (&$Socket, &$Handler, int $rate, int $length) : int
+   /**
+    * Upload data to the client
+    *
+    * @param resource $Socket 
+    * @param resource $Handler 
+    * @param int $rate 
+    * @param int $length 
+    *
+    * @return int 
+    */
+   public function upload (&$Socket, &$Handler, int $rate, int $length): int
    {
       $written = 0;
 
@@ -528,7 +598,7 @@ abstract class Packages implements WPI\Connections\Packages
       return $written;
    }
 
-   public function reject (string $raw)
+   public function reject (string $raw): void
    {
       try {
          @\fwrite($this->Connection->Socket, $raw);

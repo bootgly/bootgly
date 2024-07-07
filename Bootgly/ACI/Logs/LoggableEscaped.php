@@ -33,7 +33,7 @@ trait LoggableEscaped // TODO move to CLI?
    // ...
 
 
-   public function log ($message, int $level = self::LOG_DEBUG_LEVEL) : bool
+   public function log (string $message, int $level = self::LOG_DEBUG_LEVEL): bool
    {
       if (Logger::$display === Logger::DISPLAY_NONE) {
          return true;
@@ -51,10 +51,17 @@ trait LoggableEscaped // TODO move to CLI?
       return true;
    }
 
-   // @ Translating
-   // int level => string level
-   // int level => ANSI color code
-   private function translate (int $level) : array
+   // # Translating
+   /**
+    * Translate log level to string and color.
+    * int level => string level
+    *
+    * int level => ANSI color code
+    *
+    * @param int $level
+    * @return array<string>
+    */
+   private function translate (int $level): array
    {
       switch ($level) {
          case self::LOG_EMERGENCY_LEVEL:
@@ -100,7 +107,7 @@ trait LoggableEscaped // TODO move to CLI?
    }
 
    // @ Formatting
-   private function format (string $message, string $severity, string $color) : string
+   private function format (string $message, string $severity, string $color): string
    {
       // @ Display when
       $when = '';

@@ -11,6 +11,8 @@
 namespace Bootgly\ABI\Debugging\Data;
 
 
+use Throwable;
+
 use Bootgly\ABI\Data\__String\Escapeable\Text\Formattable;
 use Bootgly\ABI\Data\__String\Path;
 use Bootgly\ABI\Data\__String\Theme;
@@ -74,7 +76,7 @@ abstract class Throwables implements Debugging
    ];
 
 
-   public static function report (\Throwable $Throwable)
+   public static function report (Throwable $Throwable): void
    {
       switch (\PHP_SAPI) {
          case 'cli':
@@ -194,7 +196,11 @@ abstract class Throwables implements Debugging
       echo $output;
    }
 
-   public static function trace (\Throwable $Throwable) : array
+   /**
+    * @param Throwable $Throwable
+    * @return array<array<string>>
+    */
+   public static function trace (Throwable $Throwable): array
    {
       $traces = explode("\n", $Throwable->getTraceAsString());
       // @ Reverse array to make steps line up chronologically
@@ -229,7 +235,7 @@ abstract class Throwables implements Debugging
       return $result;
    }
 
-   public static function debug (...$Throwables)
+   public static function debug (mixed ...$Throwables): void
    {
       foreach ($Throwables as $Throwable) {
          self::report($Throwable);

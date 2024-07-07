@@ -115,7 +115,7 @@ class Text
     *
     * @return Output
     */
-   public function colorize (int|string $foreground = 'default', int|string $background = 'default') : Output
+   public function colorize (int|string $foreground = 'default', int|string $background = 'default'): Output
    {
       $codes = [];
 
@@ -166,7 +166,7 @@ class Text
     *
     * @return Output
     */
-   public function stylize (string ...$styles) : Output
+   public function stylize (string ...$styles): Output
    {
       $Output = &$this->Output;
 
@@ -210,7 +210,7 @@ class Text
     *
     * @return Output
     */
-   public function space (int $n = 1) : Output
+   public function space (int $n = 1): Output
    {
       return $this->Output->escape($n . self::_TEXT_INSERT_CHARACTER);
    }
@@ -225,7 +225,7 @@ class Text
     *
     * @return Output
     */
-   public function delete (? int $characters = null, ? int $lines = null) : Output
+   public function delete (? int $characters = null, ? int $lines = null): Output
    {
       $Output = &$this->Output;
 
@@ -246,7 +246,7 @@ class Text
     *
     * @return Output
     */
-   public function erase (int $characters = 1) : Output
+   public function erase (int $characters = 1): Output
    {
       return $this->Output->escape($characters . self::_TEXT_ERASE_CHARACTER);
    }
@@ -261,7 +261,7 @@ class Text
     *
     * @return Output
     */
-   public function insert (? int $lines = null, ? int $spaces = null) : Output
+   public function insert (? int $lines = null, ? int $spaces = null): Output
    {
       $Output = &$this->Output;
 
@@ -283,7 +283,7 @@ class Text
     *
     * @return Output
     */
-   public function clear (bool $up = false, bool $down = false) : Output
+   public function clear (bool $up = false, bool $down = false): Output
    {
       $Output = &$this->Output;
 
@@ -303,7 +303,7 @@ class Text
     *
     * @return Output
     */
-   public function trim (bool $left = false, bool $right = false) : Output
+   public function trim (bool $left = false, bool $right = false): Output
    {
       $Output = &$this->Output;
 

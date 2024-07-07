@@ -67,6 +67,7 @@ class Table extends Component
       'left'         => '║',
       'right'        => '║',
    ];
+   /** @var array<string> $borders */
    public array $borders;
 
    // * Data
@@ -103,21 +104,23 @@ class Table extends Component
       $this->Row = new Row($this);
       $this->Rows = new Rows($this);
    }
-   public function __get ($name)
+   public function __get (string $name): mixed
    {
       return $this->$name;
    }
-   public function __set ($name, $value)
-   {
-      // TODO
-   }
-   public function __call ($name, $arguments)
+   /**
+    * @param string $name
+    * @param array<string> $arguments
+    *
+    * @return mixed
+    */
+   public function __call (string $name, array $arguments): mixed
    {
       return $this->$name(...$arguments);
    }
 
    // @ Border
-   public function border (string $position, string $section)
+   public function border (string $position, string $section): void
    {
       // ! Columns
       $Columns = $this->Columns;
@@ -170,7 +173,7 @@ class Table extends Component
       $this->Output->write($line);
    }
 
-   public function render (int $mode = self::WRITE_OUTPUT)
+   public function render (int $mode = self::WRITE_OUTPUT): void
    {
       // TODO on render RETURN OUTPUT
 

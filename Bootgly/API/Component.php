@@ -20,5 +20,5 @@ abstract class Component
    public int $render = self::WRITE_OUTPUT;
 
 
-   abstract protected function render (int $mode = self::WRITE_OUTPUT);
+   abstract protected function render (int $mode = self::WRITE_OUTPUT); // @phpstan-ignore-line
 }

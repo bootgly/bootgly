@@ -12,7 +12,6 @@ namespace Bootgly\ABI\Templates;
 
 
 use Closure;
-#use Throwable;
 
 use Bootgly\ABI\Data\__String\Path;
 use Bootgly\ABI\Resources;
@@ -24,9 +23,11 @@ class Directives implements Resources
    // ...
 
    // * Data
+   /** @var array<string,Closure> */
    protected array $directives;
 
    // * Metadata
+   /** @var array<string> */
    protected array $names;
    // @ Regex
    protected string $tokens;
@@ -62,7 +63,7 @@ class Directives implements Resources
 
       $this->tokens = implode('|', $this->names);
    }
-   public function __get ($name)
+   public function __get (string $name): mixed
    {
       switch ($name) {
          // * Data
@@ -81,7 +82,7 @@ class Directives implements Resources
       }
    }
 
-   public function extend (string $pattern, Closure $Callback, ? string $name = null)
+   public function extend (string $pattern, Closure $Callback, ? string $name = null): void
    {
       if ($name) {
          $this->names[] = $name;

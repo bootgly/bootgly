@@ -18,7 +18,7 @@ return [
       return "GET / HTTP/1.0\r\n\r\n";
    },
    // Server API
-   'response' => function (Request $Request, Response $Response) : Response {
+   'response' => function (Request $Request, Response $Response): Response {
       $method = $Request->method;
       return $Response(body: $method);
    },

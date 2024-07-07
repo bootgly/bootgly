@@ -22,15 +22,18 @@ abstract class Benchmark
    public static bool $memory = false;
 
    // * Data
+   /** @var array<mixed> */
    private static array $initial = [];
+   /** @var array<mixed> */
    private static array $final = [];
+   /** @var array<mixed> */
    public static array $results = [];
 
    // * Metadata
    private static string $tag = '';
 
 
-   public static function start (string $tag) : void
+   public static function start (string $tag): void
    {
       if (self::$time) {
          self::$initial[$tag]['time'] = microtime(true);
@@ -40,7 +43,7 @@ abstract class Benchmark
          self::$initial[$tag]['memory'] = memory_get_usage();
       }
    }
-   public static function stop (string $tag)
+   public static function stop (string $tag): string
    {
       if (self::$time) {
          self::$final[$tag]['time'] = microtime(true);
@@ -67,7 +70,7 @@ abstract class Benchmark
       return Benchmark::class;
    }
 
-   public static function format (float $initial, float $final, int $precision = 6)
+   public static function format (float $initial, float $final, int $precision = 6): string
    {
       $result = round($final - $initial, $precision);
 
@@ -75,7 +78,7 @@ abstract class Benchmark
 
       return $elapsed;
    }
-   public static function show (? string $tag = null)
+   public static function show (? string $tag = null): string
    {
       // ?!
       if (!$tag && !self::$tag) {
@@ -98,7 +101,7 @@ abstract class Benchmark
 
       return Benchmark::class;
    }
-   public static function save (? string $tag = null)
+   public static function save (? string $tag = null): string
    {
       // ?!
       if (!$tag && !self::$tag) {

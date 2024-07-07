@@ -13,6 +13,6 @@ namespace Bootgly\WPI\Endpoints;
 
 interface Servers
 {
-   public function configure (string $host, int $port, int $workers);
-   public function start ();
+   public function configure (string $host, int $port, int $workers): self;
+   public function start (): bool;
 }
