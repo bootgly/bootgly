@@ -51,7 +51,7 @@ class Server
 
             if (\count(self::$Tests[$base]) > 0) {
                $test = \array_shift(self::$Tests[$base]);
-               self::$Handler = $test[$key];
+               self::$Handler = $test[$key]; // @phpstan-ignore-line
             }
 
             return true;
