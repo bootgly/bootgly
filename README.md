@@ -9,20 +9,24 @@
 </p>
 <p align="center">
   <a href="https://packagist.org/packages/bootgly/bootgly">
+    <img alt="Github Actions - Bootgly Workflow" src="https://img.shields.io/github/actions/workflow/status/bootgly/bootgly/bootgly.yml?label=Bootgly"/>
+    <img alt="Github Actions - Docker Workflow" src="https://img.shields.io/github/actions/workflow/status/bootgly/bootgly/docker.yml?label=Docker"/>
+    <img alt="Github Actions - PHPStan Workflow" src="https://img.shields.io/github/actions/workflow/status/bootgly/bootgly/phpstan.yml?label=PHPStan"/>
+    <br>
     <img alt="Bootgly License" src="https://img.shields.io/github/license/bootgly/bootgly"/>
-    </br>
-    <img alt="Github Actions - Bootgly Workflow" src="https://img.shields.io/github/actions/workflow/status/bootgly/bootgly/bootgly.yml?label=bootgly"/>
-    <img alt="Github Actions - Docker Workflow" src="https://img.shields.io/github/actions/workflow/status/bootgly/bootgly/docker.yml?label=docker"/>
   </a>
 </p>
 
 > Bootgly is the first PHP framework to use the [I2P (Interface-to-Platform) architecture][I2P_ARQUITECTURE].
 
+> [!NOTE]
+> Bootgly will be completely refactored to use "Property Hooks" and v1.0 will be released only after PHP 8.4 is released.
+
 > [!WARNING]
 > 🚧 DO NOT USE IT IN PRODUCTION ENVIRONMENTS. 🚧
-> 
+>
 > Bootgly is in beta testing. A major version (1.0) is soon to release.
-> 
+>
 > [Documentation is under construction][PROJECT_DOCS].
 
 ## Table of Contents
@@ -56,7 +60,7 @@ Bootgly is a base framework for developing APIs and Apps for both CLI (Console) 
 - Interface: [CLI][CLI_INTERFACE]
 - Platform: [Console][CONSOLE_PLATFORM] (TODO)
 
-For the base CLI development, Bootgly already has the following UI components:
+For the base CLI development, Bootgly already has the following UI Components:
 [Alert][CLI_TERMINAL_ALERT], [Fieldset][CLI_TERMINAL_FIELDSET], [Header][CLI_HEADER], [Menu][CLI_TERMINAL_MENU], [Progress][CLI_TERMINAL_PROGRESS], [Table][CLI_TERMINAL_TABLE].
 
 ### Bootgly WPI 🌐
