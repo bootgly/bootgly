@@ -10,6 +10,7 @@
 
 namespace Bootgly\WPI\Modules\HTTP\Server;
 
+
 use Bootgly\ABI\Data\__String\Path;
 use Bootgly\ABI\IO\FS\File;
 
@@ -28,10 +29,10 @@ class Router
    protected bool $active;
 
    // * Metadata
-   public ? Route $Route;
-   // @ Stats
+   public Route $Route;
+   // _ Stats
    private int $routes;
-   // @ History
+   // _ History
    /** @var array<string> */
    private array $routeds;
 
@@ -44,15 +45,15 @@ class Router
       // ...
 
       // * Data
-      // @ Status
+      // _ Status
       $this->active = true;
 
       // * Metadata
       $this->Route = new Route;
-      // @ Stats
+      // _ Stats
       $this->routes = 0;
       #$this->matched = 0;
-      // @ History
+      // _ History
       $this->routeds = [];
    }
 
@@ -68,7 +69,6 @@ class Router
    {
       // @ Prepare import
       $Request = self::$Server::$Request;
-
       $Route = &$this->Route;
       $Router = &$this;
       // @ Set import data
@@ -81,9 +81,8 @@ class Router
       // ? File path
       $boot = $path . '/router/';
       $Index = new File($boot . 'index.php');
-
       // @ Boot (include router index file)
-      if ($Index->exists) {
+      if ($Index->file !== false) {
          (static function (string $__file__, array $__data__) {
             \extract($__data__);
             include_once $__file__;
@@ -94,8 +93,7 @@ class Router
       $instances = (array) $instances;
       foreach ($instances as $instance) {
          $Instance = new File($boot . $instance . '.php');
-
-         if ($Instance->exists) {
+         if ($Instance->file !== false) {
             (static function (string $__file__, array $__data__) {
                \extract($__data__);
                @include_once $__file__;
@@ -128,11 +126,11 @@ class Router
       null|string|array $methods = null
    ): false|object
    {
+      // !
       $Route = &$this->Route;
-
       $routed = 0;
 
-      // @ Check
+      // ?
       if ($this->active === false) {
          return false;
       }
@@ -140,13 +138,13 @@ class Router
          throw new \Exception('Nested route path must be relative!');
       }
 
-      // ! Route Methods
+      // # Route Methods
       // @ Match
       if (empty($methods) || \in_array(self::$Server::$Request->method, (array) $methods)) {
          $routed = 1;
       }
 
-      // ! Route Route
+      // # Route Route
       // @ Boot
       if ($routed === 1) {
          $route = ($route === '/'
@@ -167,7 +165,7 @@ class Router
          };
       }
 
-      // ! Route Callback
+      // # Route Callback
       if ($routed === 2) {
          // @ Prepare
          // Route Params values
@@ -240,12 +238,14 @@ class Router
             $this->Route->nested = true;
             yield from $this->routing($Response);
             break;
-         } else if ($Response !== false) {
+         }
+         else if ($Response !== false) {
             #$this->Route->nested = false;
             $this->Route = new Route;
             yield $Response;
             break;
-         } else {
+         }
+         else {
             #$this->Route->nested = false;
             #$this->Route = new Route;
             yield $Response;
@@ -362,7 +362,8 @@ class Router
 
                   // @ Replace param by $index + nodes parsed
                   $Route->Params->$param = $index + $Route->nodes;
-               } else {
+               }
+               else {
                   $node = \str_replace(':' . $param, $regex_replaced[$param], $node);
                   $Route->Params->$param = (array) $Route->Params->$param;
                   $Route->Params->$param[] = $index + $Route->nodes;
