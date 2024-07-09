@@ -370,7 +370,7 @@ class Router
                }
             }
             else if (@$locations[$index] !== $node) {
-               $Route->parsed = false;
+               $Route->parsed = '';
                break;
             }
 
