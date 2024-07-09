@@ -8,10 +8,10 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\CLI\UI\Menu\Items\extensions\Headers;
+namespace Bootgly\CLI\UI\Components\Menu\Items\extensions\Headers;
 
 
-use Bootgly\CLI\UI\Menu\Item;
+use Bootgly\CLI\UI\Components\Menu\Item;
 
 
 final class Header extends Item

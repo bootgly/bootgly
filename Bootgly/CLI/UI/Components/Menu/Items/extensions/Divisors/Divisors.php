@@ -8,12 +8,13 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\CLI\UI\Menu\Items\extensions\Divisors;
+namespace Bootgly\CLI\UI\Components\Menu\Items\extensions\Divisors;
 
 
-use Bootgly\CLI\UI\Menu\Items;
-use Bootgly\CLI\UI\Menu\Menu;
-use Bootgly\CLI\UI\Menu\Orientation;
+use Bootgly\CLI\UI\Components\Menu;
+use Bootgly\CLI\UI\Components\Menu\Items;
+use Bootgly\CLI\UI\Components\Menu\Orientation;
+
 
 final class Divisors extends Items
 {

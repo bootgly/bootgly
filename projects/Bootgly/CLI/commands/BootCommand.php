@@ -15,7 +15,7 @@ use function Bootgly\ABI\copy_recursively;
 
 use const Bootgly\CLI;
 use Bootgly\CLI\Command;
-use Bootgly\CLI\UI\Alert\Alert;
+use Bootgly\CLI\UI\Components\Alert;
 
 
 class BootCommand extends Command

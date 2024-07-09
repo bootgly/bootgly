@@ -8,10 +8,10 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\CLI\UI\Table;
+namespace Bootgly\CLI\UI\Components\Table;
 
 
-use Bootgly\CLI\UI\Table\Table;
+use Bootgly\CLI\UI\Components\Table;
 
 
 class Rows

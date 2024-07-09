@@ -8,10 +8,11 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\CLI\UI;
+namespace Bootgly\CLI\UI\Components;
 
 
 use Bootgly\API\Component;
+
 use Bootgly\CLI\Terminal\Output;
 
 

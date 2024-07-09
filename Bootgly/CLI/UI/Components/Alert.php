@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\CLI\UI\Alert;
+namespace Bootgly\CLI\UI\Components;
 
 
 use Bootgly\API\Component;

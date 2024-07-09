@@ -11,11 +11,13 @@
 namespace projects\Bootgly\CLI\commands;
 
 
+use Bootgly\ABI\Templates\Template\Escaped as TemplateEscaped;
+
 use const Bootgly\CLI;
 use Bootgly\CLI\Command;
-use Bootgly\CLI\UI\Table\Table;
-use Bootgly\ABI\Templates\Template\Escaped as TemplateEscaped;
-use Bootgly\CLI\UI\Alert\Alert;
+use Bootgly\CLI\UI\Components\Table;
+use Bootgly\CLI\UI\Components\Alert;
+
 
 class ProjectCommand extends Command
 {
@@ -57,14 +59,16 @@ class ProjectCommand extends Command
 
       if (@$options[0] === 'bootgly') {
          ${'@'} = @include(BOOTGLY_ROOT_DIR . 'projects/@.php');
-      } else {
+      }
+      else {
          ${'@'} = @include(BOOTGLY_WORKING_DIR . 'projects/@.php');  
       }
 
       $projects = @${'@'};
       if ( ! empty($projects['projects']) ) {
          $Output->render('@.;@#cyan: Project list: @; @.;');
-      } else {
+      }
+      else {
          $Output->render('@.;@#red: Project list is empty: @; @.;');
       }
 
@@ -122,12 +126,14 @@ class ProjectCommand extends Command
          $Table->Data->set(body: $body);
 
          $Table->render();
-      } else if ( count($arguments) > 1 ) {
+      }
+      else if ( count($arguments) > 1 ) {
          $Alert = new Alert($Output);
          $Alert->Type::Failure->set();
          $Alert->message = 'Too many arguments!';
          $Alert->render();
-      } else {
+      }
+      else {
          $Alert = new Alert($Output);
          $Alert->Type::Failure->set();
          $Alert->message = "Invalid argument: @#cyan:{$arguments[0]}@;.";

@@ -8,30 +8,41 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\CLI\UI\Menu;
+namespace Bootgly\CLI\UI\Components\Table;
 
 
-class Item
+class Cells
 {
    // * Config
-   // ...
+   public int $alignment;
 
    // * Data
    // ...
 
    // * Metadata
-   public readonly string $type;
+   // ...
 
 
    public function __construct ()
    {
       // * Config
-      // ...
+      $this->alignment = 1;
 
       // * Data
       // ...
 
       // * Metadata
-      $this->type = static::class;
+      // ...
+   }
+
+   public function align (string $aligment): int
+   {
+      return $this->alignment = match ($aligment) {
+         'left' => 1,
+         'right' => 0,
+         'center' => 2,
+
+         default => 1
+      };
    }
 }

@@ -12,8 +12,8 @@ namespace projects\Bootgly;
 
 
 use const Bootgly\CLI;
-use Bootgly\CLI\UI\Fieldset\Fieldset;
-use Bootgly\CLI\UI\Header;
+use Bootgly\CLI\UI\Components\Fieldset;
+use Bootgly\CLI\UI\Components\Header;
 
 
 // $Commands, $Scripts, $Terminal availables...

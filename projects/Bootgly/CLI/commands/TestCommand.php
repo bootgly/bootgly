@@ -21,7 +21,7 @@ use Bootgly\ACI\Tests\Tester;
 
 use const Bootgly\CLI;
 use Bootgly\CLI\Command;
-use Bootgly\CLI\UI\Alert\Alert;
+use Bootgly\CLI\UI\Components\Alert;
 
 
 class TestCommand extends Command

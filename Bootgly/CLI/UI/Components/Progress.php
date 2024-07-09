@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\CLI\UI\Progress;
+namespace Bootgly\CLI\UI\Components;
 
 
 use Bootgly\ABI\Data\__String\Escapeable;
@@ -20,7 +20,7 @@ use Bootgly\ABI\Templates\Template\Escaped as TemplateEscaped;
 use Bootgly\API\Component;
 
 use Bootgly\CLI\Terminal\Output;
-use Bootgly\CLI\UI\Progress\Bar\Bar;
+use Bootgly\CLI\UI\Components\Progress\Bar;
 
 
 class Progress extends Component

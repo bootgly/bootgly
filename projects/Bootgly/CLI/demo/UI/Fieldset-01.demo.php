@@ -4,8 +4,8 @@ namespace Bootgly\CLI;
 
 
 use const Bootgly\CLI;
-use Bootgly\CLI\UI\Fieldset\Fieldset;
-use Bootgly\CLI\UI\Menu\Menu;
+use Bootgly\CLI\UI\Components\Fieldset;
+use Bootgly\CLI\UI\Components\Menu;
 
 $Input = CLI->Terminal->Input;
 $Output = CLI->Terminal->Output;

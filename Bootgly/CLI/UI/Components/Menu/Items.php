@@ -8,13 +8,14 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\CLI\UI\Menu;
+namespace Bootgly\CLI\UI\Components\Menu;
 
 
 use AllowDynamicProperties;
-use Bootgly\CLI\UI\Menu\Menu;
-use Bootgly\CLI\UI\Menu\Items\Option;
-use Bootgly\CLI\UI\Menu\Items\Options;
+
+use Bootgly\CLI\UI\Components\Menu;
+use Bootgly\CLI\UI\Components\Menu\Items\Option;
+use Bootgly\CLI\UI\Components\Menu\Items\Options;
 
 
 #[AllowDynamicProperties]

@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\CLI\UI\Fieldset;
+namespace Bootgly\CLI\UI\Components;
 
 
 use Bootgly\ABI\Data\__String;
