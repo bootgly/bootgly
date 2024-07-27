@@ -31,19 +31,19 @@
 
 ## Table of Contents
 
-- [About](#-about)
-- [Boot Requirements](#-boot-requirements)
-  - [Compatibility](#-compatibility)
-  - [Dependencies](#️-dependencies)
-- [Community](#-community)
-  - [Contributing](#-contributing)
-  - [Code of Conduct](#-code-of-conduct)
-  - [Social Networks](#-social-networks)
-  - [Sponsorship](#-sponsorship)
-- [Getting started](#-getting-started)
-- [Highlights](#-highlights)
-- [License](#-license)
-- [Versioning System](#-versioning-system)
+- [🤔 About](#-about)
+- [🟢 Boot Requirements](#-boot-requirements)
+  - [🤝 Compatibility](#-compatibility)
+  - [⚙️ Dependencies](#️-dependencies)
+- [🌱 Community](#-community)
+  - [💻 Contributing](#-contributing)
+  - [🛂 Code of Conduct](#-code-of-conduct)
+  - [🔗 Social Networks](#-social-networks)
+  - [💖 Sponsorship](#-sponsorship)
+- [🚀 Getting started](#-getting-started)
+- [🖼 Highlights](#-highlights)
+- [📃 License](#-license)
+- [📑 Versioning System](#-versioning-system)
 
 ---
 
@@ -105,19 +105,16 @@ Above is the native compatibility, of course it is possible to run on Windows an
 ### ⚙️ Dependencies
 
 - PHP 8.2+ ⚠️
-- Opcache with JIT enabled (+50% performance) 👍
+- Opcache + JIT enabled (+50% performance) 👍
 
 #### \- Bootgly CLI 📟
+
 - `php-cli` ⚠️
 - `php-mbstring` ⚠️
 - `php-readline` ⚠️
 
 #### \- Bootgly WPI 🌐
 
-##### WPI in CLI *API¹ (eg. Bootgly HTTP Server CLI):
-- \* See Bootgly CLI dependencies \*
-
-##### WPI in Non-CLI (apache2handler, litespeed and nginx) SAPI²:
 - `rewrite` module enabled ⚠️
 
 --
@@ -125,10 +122,6 @@ Above is the native compatibility, of course it is possible to run on Windows an
 ⚠️ = Required
 
 👍 = Recommended
-
-¹ *API = Can be Server API (SAPI), Client API (CAPI), etc.
-
-² SAPI = Server API
 
 ---
 
@@ -153,6 +146,7 @@ Wait for the "contributing guidelines" to start your contribution.
 Help us keep Bootgly open and inclusive. Please read and follow our [Code of Conduct][CODE_OF_CONDUCT].
 
 ### 🔗 Social networks
+
 - Bootgly on **LinkedIn**: [[Company Page][LINKEDIN]]
 - Bootgly on **Telegram**: [[Telegram Group][TELEGRAM]]
 - Bootgly on **Reddit**: [[Reddit Community][REDDIT]]
@@ -174,7 +168,7 @@ Your sponsorship will keep this project always **up to date** with **new feature
 
 ## 🚀 Getting started
 
-### 📟 Bootgly CLI:
+### 📟 Bootgly CLI
 
 <details>
    <summary><kbd>Run Bootgly CLI demo</kbd></summary><br>
@@ -209,7 +203,7 @@ Your sponsorship will keep this project always **up to date** with **new feature
    ```
 </details>
 
-### 🌐 Bootgly WPI:
+### 🌐 Bootgly WPI
 
 <details>
    <summary><kbd>Running a HTTP Server</kbd></summary>
