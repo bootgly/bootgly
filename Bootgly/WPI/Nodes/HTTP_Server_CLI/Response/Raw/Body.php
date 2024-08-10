@@ -8,8 +8,11 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\WPI\Modules\HTTP\Server\Request\Raw;
+namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Raw;
 
 
-abstract class Payload
+use Bootgly\WPI\Modules\HTTP\Server\Response\Raw;
+
+
+class Body extends Raw\Body
 {}

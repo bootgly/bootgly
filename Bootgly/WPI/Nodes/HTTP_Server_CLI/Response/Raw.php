@@ -11,20 +11,51 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 
 
-use Bootgly\WPI\Modules\HTTP\Server\Response;
+use function strlen;
+
+use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Raw\Header;
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Raw\Payload;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Raw\Body;
 
 
-class Raw extends Response\Raw
+trait Raw
 {
    public Header $Header;
-   public Payload $Payload;
+   public Body $Body;
 
-
-   public function __construct ()
+   /**
+    * Encode the Response raw for sending.
+    *
+    * @param Packages $Package TCP Package associated with the response
+    * @param int &$length Reference to the variable receiving the length of the response
+    *
+    * @return string The Response Raw to be sent
+    */
+   public function encode (Packages $Package, ?int &$length): string
    {
-      $this->Header = new Header;
-      $this->Payload = new Payload;
+      $Header  = &$this->Header;
+      $Body = &$this->Body;
+
+      if (! $this->stream && ! $this->chunked && ! $this->encoded) {
+         $Header->set('Content-Length', (string) $Body->length);
+      }
+
+      $Header->build();
+
+      if ($this->stream) {
+         $length = strlen($this->response) + 1 + strlen($Header->raw) + 5;
+
+         $Package->uploading = $this->files;
+
+         $this->files = [];
+         $this->stream = false;
+      }
+
+      return <<<HTTP_RAW
+      {$this->response}\r
+      {$Header->raw}\r
+      \r
+      {$Body->raw}
+      HTTP_RAW;
    }
 }

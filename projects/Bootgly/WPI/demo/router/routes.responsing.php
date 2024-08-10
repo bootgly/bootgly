@@ -21,7 +21,7 @@ $Router->route('/Response/test.c', function (Request $Request, Response $Respons
    $test1 = 'abc';
 
    return $Response
-      ->use(
+      ->export(
          ['test1' => $test1],
          ['test2' => '123']
       )
@@ -53,14 +53,15 @@ $Router->route('/Response/test.y2', function (Request $Request, Response $Respon
       ->redirect('https://docs.bootgly.com/?param=1#test', 302);
 }, GET);
 $Router->route('/Response/test.z', function (Request $Request, Response $Response) {
-   return $Response->end(200);
+   $Response->end(200);
+   return $Response;
 }, GET);
 
 $Router->route('/http-cache-time-based-1', function (Request $Request, Response $Response) {
    // * Data
    // ! HTTP
    // on HTTP Client set If-Modified-Since
-   $Response->Raw->Header->set('Last-Modified', 'Sun, 20 Oct 2024 14:50:00 GMT');
+   $Response->Header->set('Last-Modified', 'Sun, 20 Oct 2024 14:50:00 GMT');
 
    if ($Request->fresh) {
       return $Response(code: 304);
@@ -94,7 +95,7 @@ $Router->route('/simple-file-render-1', function (Request $Request, Response $Re
 }, GET);
 
 $Router->route('/simple-view-render-1', function (Request $Request, Response $Response) {
-   return $Response->View->render('test', [
+   return $Response->render('test', [
       'meta' => ['title' => 'Testing Response->View->render(...) in Bootgly!']
    ])->send();
 }, GET);

@@ -8,6 +8,13 @@
  * --------------------------------------------------------------------------
  */
 
+
+use Exception;
+
+use Bootgly\CLI;
+use Bootgly\WPI;
+
+
 class Bootgly
 {
    // * Config
@@ -20,16 +27,21 @@ class Bootgly
    private static bool $booted = false;
 
 
-   public function autoboot ()
+   /**
+    * @throws Exception
+    */
+   public function autoboot (): void
    {
       // ?
       if (self::$booted)
-         throw new \Exception("Bootgly has already been booted.");
+         throw new Exception("Bootgly has already been booted.");
 
       // * Metadata
       self::$booted = true;
 
       // !
+      /** @var CLI $CLI */
+      /** @var WPI $WPI */
       [
          $CLI,
          $WPI

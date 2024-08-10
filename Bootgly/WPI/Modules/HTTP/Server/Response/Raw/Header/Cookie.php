@@ -11,6 +11,9 @@
 namespace Bootgly\WPI\Modules\HTTP\Server\Response\Raw\Header;
 
 
+use function rawurlencode;
+
+
 class Cookie
 {
    // * Config
@@ -18,7 +21,7 @@ class Cookie
    private string $value;
 
    // * Data
-   private ? int $expiration;
+   private ?int $expiration;
    private string $path;
    private string $domain;
    private bool $secure;
@@ -45,7 +48,7 @@ class Cookie
 
    public function build (): string
    {
-      $cookie = $this->name . '=' . \rawurlencode($this->value)
+      $cookie = $this->name . '=' . rawurlencode($this->value)
       . (empty($this->domain) ? '' : '; Domain=' . $this->domain)
       . ($this->expiration === null ? '' : '; Max-Age=' . (string) $this->expiration)
       . (empty($this->path) ? '' : '; Path=' . $this->path)

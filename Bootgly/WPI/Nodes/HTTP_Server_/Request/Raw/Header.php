@@ -11,6 +11,11 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_\Request\Raw;
 
 
+use function apache_request_headers;
+use function array_change_key_case;
+use function strlen;
+use const CASE_LOWER;
+
 use Bootgly\WPI\Modules\HTTP\Server\Request\Raw;
 use Bootgly\WPI\Nodes\HTTP_Server_\Request\Raw\Header\Cookies;
 
@@ -20,10 +25,13 @@ class Header extends Raw\Header
    public Cookies $Cookies;
 
    // * Config
-   // ...
+   // ... inherited
 
    // * Data
-   // ... inherited
+   /** @var array<string|array<string>> */
+   public array $fields {
+      get => $this->fields;  
+   }
    protected string $raw;
 
    // * Metadata
@@ -34,12 +42,12 @@ class Header extends Raw\Header
    public function __construct ()
    {
       // * Config
-      // ...
+      // ... inherited
 
       // * Data
       // fields
-      $headers = \apache_request_headers();
-      $fields = \array_change_key_case($headers, \CASE_LOWER);
+      $headers = apache_request_headers();
+      $fields = array_change_key_case($headers, CASE_LOWER);
       $this->fields = $fields;
 
       // * Metadata
@@ -68,18 +76,21 @@ class Header extends Raw\Header
             }
 
             return $raw;
-         case 'fields':
-            return $this->fields;
 
          // * Metadata
          case 'length':
-            $this->length = \strlen($this->raw ?? $this->__get('raw'));
+            $this->length = strlen($this->raw ?? $this->__get('raw'));
             return $this->length;
       }
 
       return null;
    }
 
+   /**
+    * Build fields from the Request Header
+    *
+    * @return bool 
+    */
    public function build (): bool
    {
       if ( $this->built === true ) {

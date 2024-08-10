@@ -14,5 +14,5 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_\Response\Raw;
 use Bootgly\WPI\Modules\HTTP\Server\Response\Raw;
 
 
-class Payload extends Raw\Payload
+class Body extends Raw\Body
 {}

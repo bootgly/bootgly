@@ -2,11 +2,6 @@ name: PHPStan (analyze)
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - 'main'
-    paths-ignore:
-      - '**/README.md'
 
 jobs:
   phpstan:

@@ -142,12 +142,18 @@ class Header extends Raw\Header
       switch ($field) {
          case 'Content-Range':
             // @ bytes Context
+            // !
             $start = $values[0];
             $end = $values[1];
             $size = $values[2];
 
-            if ($end > $size - 1) {
-               $end += 1;
+            if ($end !== '*') {
+               $end = (int) $end;
+               $size = (int) $size;
+   
+               if ($end > $size - 1) {
+                  $end += 1;
+               }
             }
 
             return "bytes {$start}-{$end}/{$size}";

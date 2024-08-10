@@ -41,7 +41,7 @@ class Vars implements Debugging
    public static ? string $search = null;
 
    // * Data
-   // + Backtrace
+   // .. Backtrace
    public static ? Backtrace $Backtrace = null;
 
    // * Metadata

@@ -12,18 +12,16 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_CLI;
 
 
 use AllowDynamicProperties;
+use function strval;
+
 use Bootgly\ABI\Data\__String\Path;
 use Bootgly\ABI\IO\FS\File;
 
-use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages;
-use Bootgly\WPI\Modules\HTTP\Server\Response as Responsing;
-use Bootgly\WPI\Modules\HTTP\Server\Response\Authenticable;
-use Bootgly\WPI\Modules\HTTP\Server\Response\Bootable;
-use Bootgly\WPI\Modules\HTTP\Server\Response\Extendable;
-use Bootgly\WPI\Modules\HTTP\Server\Response\Redirectable;
-use Bootgly\WPI\Modules\HTTP\Server\Response\Renderable;
-use Bootgly\WPI\Nodes\HTTP_Server_CLI as Server;
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Raw\Payload;
+use const Bootgly\WPI;
+use Bootgly\WPI\Modules\HTTP;
+use Bootgly\WPI\Modules\HTTP\Server;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Raw;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Raw\Body;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Raw\Header;
 
 
@@ -32,35 +30,21 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Raw\Header;
  * @property int $code
  */
 #[AllowDynamicProperties]
-class Response extends Responsing
+class Response extends Server\Response
 {
-   use Authenticable;
-   use Bootable;
-   use Extendable;
-   use Redirectable;
-   use Renderable;
+   use Raw;
 
-
-   // \
-   // TODO remove (use WPI global const)
-   private static string $Server;
 
    // * Config
    // ...
 
    // * Data
+   // # Resource
    // @ Content
-   public ? string $source;
-   public ? string $type;
+   public ?string $source;
+   public ?string $type;
 
    // * Metadata
-   // @ Content
-   private ? string $resource;
-   // @ Status (sets ...)
-   public bool $initied = false;
-   public bool $prepared;
-   public bool $processed;
-   public bool $sent;
    // @ State (sets)
    public bool $chunked;
    public bool $encoded;
@@ -68,12 +52,18 @@ class Response extends Responsing
    #public bool $dynamic;
    #public bool $static;
    public bool $stream;
-
+   // # Resource
+   // @ Content
+   private ?string $resource;
+   // @ Status (sets ...)
+   public bool $initied = false;
+   public bool $prepared;
+   public bool $processed;
+   public bool $sent;
 
    // / HTTP
    public Header $Header;
-   public Payload $Payload;
-
+   public Body $Body;
 
    /**
     * Construct a new Response instance.
@@ -84,9 +74,6 @@ class Response extends Responsing
     */
    public function __construct (int $code = 200, ? array $headers = null, string $body = '')
    {
-      // \
-      self::$Server = Server::class;
-
       // * Config
       // ...
 
@@ -113,7 +100,7 @@ class Response extends Responsing
 
       // / HTTP
       $this->Header = new Header;
-      $this->Payload = new Payload;
+      $this->Body = new Body;
 
       // @
       if ($code !== 200) {
@@ -125,26 +112,34 @@ class Response extends Responsing
       }
 
       if ($body !== '') {
-         $this->Payload->raw = $body;
+         $this->Body->raw = $body;
       }
    }
-   public function __get (string $name): mixed
+   /**
+    * Get the specified property from the Response or Response Resource.
+    *
+    * @param string $name The name of the property or Response Resource to get.
+    *
+    * @return bool|string|int|array<mixed>|self The value of the property or the Response instance, for chaining.
+    */
+   public function __get (string $name): bool|string|int|array|self
    {
       switch ($name) {
-         // @ Response Metadata
+         // TODO: move to property hooks
+         // # Response Metadata
          case 'code':
             return $this->code;
-         // @ Response Headers
+         // # Response Headers
          case 'headers':
             return $this->Header->fields;
-         // @ Response Body
+         // # Response Body
          case 'chunked':
             if ($this->chunked === false) {
                $this->chunked = true;
                $this->Header->append('Transfer-Encoding', 'chunked');
             }
 
-            return $this->Payload->chunked;
+            return $this->Body->chunked;
 
          default: // @ Contruct Non-Raw Response
             $this->resource = $name;
@@ -184,7 +179,7 @@ class Response extends Responsing
 
       $this->code($code);
       $this->Header->prepare($headers);
-      $this->Payload->raw = $body;
+      $this->Body->raw = $body;
 
       return $this;
    }
@@ -197,9 +192,9 @@ class Response extends Responsing
     * @param int $level The level of compression.
     * @param int|null $encoding The optional encoding type.
     *
-    * @return mixed The compressed content or false on failure.
+    * @return string|false The compressed content or false on failure.
     */
-   public function compress (string $raw, string $method = 'gzip', int $level = 9, ? int $encoding = null)
+   public function compress (string $raw, string $method = 'gzip', int $level = 9, ? int $encoding = null): string|false
    {
       $encoded = false;
       $deflated = false;
@@ -208,12 +203,15 @@ class Response extends Responsing
       try {
          switch ($method) {
             case 'gzip':
+               $encoding ??= \ZLIB_ENCODING_GZIP;
                $encoded = @\gzencode($raw, $level, $encoding);
                break;
             case 'deflate':
+               $encoding ??= \ZLIB_ENCODING_RAW;
                $deflated = @\gzdeflate($raw, $level, $encoding);
                break;
             case 'compress':
+               $encoding ??= \ZLIB_ENCODING_DEFLATE;
                $compressed = @\gzcompress($raw, $level, $encoding);
                break;
          }
@@ -241,6 +239,33 @@ class Response extends Responsing
       return false;
    }
 
+   /**
+    * Set the HTTP Server Response code.
+    *
+    * @param int $code 
+    *
+    * @return self The Response instance, for chaining 
+    */
+   public function code (int $code): self
+   {
+      // * Data
+      // @ status
+      $this->code = $code;
+
+      $status = $code . ' ' . HTTP::RESPONSE_STATUS[$code];
+
+      @[$code, $message] = explode(' ', $status);
+
+      if ($code && $message) {
+         // * Metadata
+         // @ status
+         $this->message = $message;
+         $this->status = $status;
+         $this->response = parent::PROTOCOL . ' ' . $status;
+      }
+
+      return $this;
+   }
    /**
     * Send the response
     *
@@ -273,14 +298,15 @@ class Response extends Responsing
                      break;
                   }
 
-                  $body = \json_encode($body, $options[0] ?? 0);
+                  $flags = (int) $options[0] ?? 0;
+                  $body = \json_encode($body, $flags);
 
                   break;
                case 'jsonp':
                   // TODO move to prepare or process
                   $this->Header->set('Content-Type', 'application/json');
 
-                  $body = Server::$Request->queries['callback'].'('.\json_encode($body).')';
+                  $body = WPI->Request->queries['callback'].'('.\json_encode($body).')';
 
                   break;
             }
@@ -311,11 +337,9 @@ class Response extends Responsing
                   // @ Output/Buffer start()
                   \ob_start();
 
-                  $Request = &Server::$Request;
-                  $Response = &Server::$Response;
                   $__data__ = [
-                     'Request' => $Request,
-                     'Response' => $Response
+                     'Request' => WPI->Request,
+                     'Response' => WPI->Response
                   ];
 
                   // @ Isolate context with anonymous static function
@@ -338,7 +362,7 @@ class Response extends Responsing
 
       // @ Output
       if ($body !== null) {
-         $this->Payload->raw = $body;
+         $this->Body->raw = strval($body); // @phpstan-ignore-line
       }
 
       $this->sent = true;
@@ -390,7 +414,7 @@ class Response extends Responsing
       ]);
 
       // @ Return null Response if client Purpose === prefetch
-      if (Server::$Request->Raw->Header->get('Purpose') === 'prefetch') {
+      if (WPI->Request->Header->get('Purpose') === 'prefetch') {
          $this->code(204);
          $this->Header->set('Cache-Control', 'no-store');
          $this->Header->set('Expires', '0');
@@ -399,9 +423,9 @@ class Response extends Responsing
 
       $ranges = [];
       $parts = [];
-      if ( $Range = Server::$Request->Raw->Header->get('Range') ) {
+      if ( $Range = WPI->Request->Header->get('Range') ) {
          // @ Parse Client range requests
-         $ranges = Server::$Request->range($size, $Range);
+         $ranges = WPI->Request->range($size, $Range);
 
          switch ($ranges) {
             case -2: // Malformed Range header string
@@ -462,7 +486,7 @@ class Response extends Responsing
 
          if ($rangesCount > 1) { // @ HTTP Multipart ranges
             $boundary = \str_pad(
-               string: (string) ++Server::$Request::$multiparts,
+               string: (string) ++WPI->Request::$multiparts,
                length: 20,
                pad_string: '0',
                pad_type: \STR_PAD_LEFT
@@ -538,43 +562,6 @@ class Response extends Responsing
 
       return $this;
    }
-   /**
-    * Construct the final output to send (used by the HTTP Server Encoder)
-    *
-    * @param Packages $Package TCP Package associated with the response
-    * @param int &$length Reference to the variable receiving the length of the response
-    *
-    * @return string The Response Raw to be sent
-    */
-   public function output (Packages $Package, ? int &$length): string
-   {
-      $Header  = &$this->Header;
-      $Payload = &$this->Payload;
-
-      if (! $this->stream && ! $this->chunked && ! $this->encoded) {
-         $Header->set('Content-Length', (string) $Payload->length);
-      }
-
-      $Header->build();
-
-      $this->data = <<<HTTP_RAW
-      {$this->response}\r
-      {$Header->raw}\r
-      \r
-      {$Payload->raw}
-      HTTP_RAW;
-
-      if ($this->stream) {
-         $length = \strlen($this->response) + 1 + \strlen($Header->raw) + 5;
-
-         $Package->uploading = $this->files;
-
-         $this->files = [];
-         $this->stream = false;
-      }
-
-      return $this->data;
-   }
 
    /**
     * Definitively terminates the HTTP Response.
@@ -600,7 +587,7 @@ class Response extends Responsing
                $this->code(416);
                // Clean prepared headers / header fields already set
                $this->Header->clean();
-               $this->Payload->raw = ' '; // Needs body non-empty
+               $this->Body->raw = ' '; // Needs body non-empty
                break;
             default:
                $this->__set('code', $code);

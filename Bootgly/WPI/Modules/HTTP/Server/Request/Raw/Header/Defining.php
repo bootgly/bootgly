@@ -8,8 +8,9 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\WPI\Modules\HTTP\Server\Request;
+namespace Bootgly\WPI\Modules\HTTP\Server\Request\Raw\Header;
 
-
-abstract class Raw
-{}
+interface Defining
+{
+   public function define (string $raw): void;
+}

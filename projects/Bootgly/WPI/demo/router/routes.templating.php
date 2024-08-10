@@ -1,5 +1,13 @@
 <?php
-$Router->route('/templating-raw', function () use ($Bootgly) {
+use Bootgly\WPI\Modules\HTTP\Server\Router;
+
+use Bootgly\WPI\Nodes\HTTP_Server_\Request;
+use Bootgly\WPI\Nodes\HTTP_Server_\Response;
+
+/** @var Router $Router */
+
+$Router->route('/templating-raw', function (Request $Request, Response $Response)
+{
    $raw = <<<'HTML'
    <h1>Testing raw templating!</h1>
 
@@ -7,13 +15,14 @@ $Router->route('/templating-raw', function () use ($Bootgly) {
    <p>1+ in line -> [title]: @>> $title1; @>> $title2;</p>
    HTML;
 
-   $Bootgly->Template->render($raw, [
+   $Response->render($raw, [
       'title1' => 'Bootgly Testing templating',
       'title2' => '| Using Bootgly templating'
    ]);
 });
-$Router->route('/templating-file', function () use ($Bootgly) {
-   $Bootgly->Template->render('index', [
+$Router->route('/templating-file', function (Request $Request, Response $Response)
+{
+   $Response->render('index', [
       'title' => 'Bootgly Testing templating',
       'description' => 'Using Bootgly Template engine!',
 

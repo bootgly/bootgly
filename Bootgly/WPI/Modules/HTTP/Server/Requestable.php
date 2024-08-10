@@ -11,7 +11,24 @@
 namespace Bootgly\WPI\Modules\HTTP\Server;
 
 
-use Bootgly\WPI\Modules\HTTP\Server\Request\Raw\Header\Cookies;
+use const JSON_THROW_ON_ERROR;
+use function explode;
+use function count;
+use function json_decode;
+use function parse_str;
+use function strpos;
+use function strlen;
+use function strtotime;
+use function substr;
+use function base64_decode;
+use function preg_match_all;
+use function preg_match;
+use function uasort;
+use function array_merge;
+use function array_keys;
+use JsonException;
+
+use const Bootgly\WPI;
 
 
 trait Requestable
@@ -19,220 +36,13 @@ trait Requestable
    // * Metadata
    protected string $encoding;
 
-   protected Cookies $Cookies;
-
-
-   public function __get (string $name): mixed
-   {
-      switch ($name) {
-         // * Config
-         case 'base':
-            return $this->base;
-
-         // * Data
-         // .. Connection
-         case 'address':
-            return (string) ($this->Raw->Header->fields['cf-connecting-ip'] ?? $_SERVER['REMOTE_ADDR']);
-         case 'port':
-            return (int) ($_SERVER['REMOTE_PORT'] ?? 0);
-
-         case 'scheme':
-            if (isSet($_SERVER['HTTP_X_FORWARDED_PROTO']) === true) {
-               $scheme = $_SERVER['HTTP_X_FORWARDED_PROTO'];
-            }
-            else if (empty($_SERVER['HTTPS']) === false) {
-               $scheme = 'https';
-            }
-            else {
-               $scheme = 'http';
-            }
-
-            return $this->scheme = $scheme;
-
-         // ! HTTP
-         // ? Header
-         case 'Header':
-            return $this->Header ??= $this->Raw->Header;
-         case 'headers':
-            return $this->Raw->Header->fields;
-         // @
-         case 'method':
-            return $_SERVER['REQUEST_METHOD'] ?? '';
-         case 'URI': // (Uniform Resource Identifier)
-            return $_SERVER['REDIRECT_URI'] ?? $_SERVER['REQUEST_URI'] ?? '';
-         case 'protocol':
-            return $_SERVER['SERVER_PROTOCOL'] ?? '';
-         // @ Resource
-         case 'URL': // (Uniform Resource Locator)
-            $locator = \strtok($this->URI, '?');
-
-            $locator = \rtrim($locator, '/');
-
-            $base = &$this->base;
-            if ($base && \substr($locator, 0, \strlen($base)) === $base) {
-               // @ Return relative location
-               $locator = \substr($locator, \strlen($base));
-            }
-
-            $this->URL = $locator;
-
-            return $locator;
-
-         case 'URN': // (Uniform Resource Name)
-            $URL = $this->URL;
-
-            // @ Extract the URN after the last slash
-            $URN = \substr($URL, \strrpos($URL, '/') + 1);
-
-            $this->URN = $URN;
-
-            return $URN;
-
-         // @ Query
-         case 'query':
-            $URI = $this->URI;
-
-            $mark = \strpos($URI, '?');
-            $query = '';
-
-            if ($mark !== false) {
-               $query = \substr($URI, $mark + 1);
-            }
-
-            return $this->query = $query;
-         case 'queries':
-            \parse_str($this->query, $queries);
-
-            return $this->queries = $queries;
-         // @ Host
-         case 'host':
-            $host = $_SERVER['HTTP_HOST'] ?? $this->Raw->Header->get('Host');
-
-            return $this->host = $host;
-         case 'domain':
-            $host = $this->host;
-  
-            $pattern = "/(?P<domain>[a-z0-9][a-z0-9\-]{1,63}\.[a-z\.]{2,6})(:[\d]+)?$/i";
-
-            if (\preg_match($pattern, $host, $matches)) {
-               return $this->domain = $matches['domain'];
-            }
-
-            $colon = \strpos($host, ":");
-            if ($colon === false) {
-               return $this->domain = $host;
-            }
-            else {
-               return $this->domain = \substr($host, 0, $colon);
-            }
-
-         case 'subdomain':
-            return $this->subdomain = \rtrim(\strstr($this->host, $this->domain, true), '.');
-         case 'subdomains':
-            return $this->subdomains = \explode('.', $this->subdomain);
-
-         // case 'IPs': // TODO IPs based in Header X-Forwarded-For
-         // ? Header / Cookies
-         case 'Cookies':
-            return $this->Cookies = &$this->Raw->Header->Cookies;
-         case 'cookies':
-            return $this->Raw->Header->Cookies->cookies;
-         // ? Body
-         case 'Body':
-            return $this->Body ??= $this->Raw->Body;
-         case 'input':
-            /** @phpstan-ignore-next-line */
-            return $this->Raw->Body->input ?? $this->receive();
-
-         case 'post':
-            if ($this->method === 'POST' && $_POST === []) {
-               return $this->input();
-            }
-            return $_POST;
-
-         case 'files':
-            return $_FILES;
-         // * Metadata
-         // @
-         case 'raw':
-            $raw = <<<RAW
-            {$this->method} {$this->URI} {$this->protocol}
-            RAW;
-            $raw .= "\r\n";
-            $raw .= $this->Raw->Header->raw;
-            $raw .= "\r\n";
-            $raw .= $this->Raw->Body->input;
-
-            $this->raw = $raw;
-
-            return $raw;
-
-         // .. Connection
-         case 'secure':
-            return $this->scheme === 'https';
-
-         // HTTP Basic Authentication
-         case 'username':
-            $username = $this->authenticate()->username;
-
-            return $this->username = $username;
-
-         case 'password':
-            $password = $this->authenticate()->password;
-
-            return $this->password = $password;
-         // HTTP Content Negotiation (RFC 7231 section-5.3)
-         case 'types':
-            $types = $this->negotiate(with: self::ACCEPTS_TYPES);
-            return $this->types = $types;
-         case 'type':
-            return $this->type = $this->types[0] ?? '';
-         case 'languages':
-            $languages = $this->negotiate(with: self::ACCEPTS_LANGUAGES);
-            return $this->languages = $languages;
-         case 'language':
-            return $this->language = $this->languages[0] ?? '';
-         case 'charsets':
-            $charsets = $this->negotiate(with: self::ACCEPTS_CHARSETS);
-            return $this->charsets = $charsets;
-         case 'charset':
-            return $this->charset = $this->charsets[0] ?? '';
-         case 'encodings':
-            $encodings = $this->negotiate(with: self::ACCEPTS_ENCODINGS);
-            return $this->encodings = $encodings;
-         case 'encoding':
-            return $this->encoding = $this->encodings[0] ?? '';
-         // HTTP Caching Specification (RFC 7234)
-         case 'fresh':
-            return $this->freshen();
-         case 'stale':
-            return ! $this->fresh;
-      }
-
-      return null;
-   }
-   public function __set (string $name, mixed $value): void
-   {
-      switch ($name) {
-         // * Config
-         case 'base':
-            unSet($this->URL);
-
-            $this->base = $value;
-            break;
-
-         default:
-            $this->$name = $value;
-            break;
-      }
-   }
 
    /**
     * Receive the input data from the request.
     *
-    * @return array<string>|null 
+    * @return ?array<string>
     */
-   public function input (): array|null
+   public function input (): ?array
    {
       $inputs = [];
 
@@ -241,16 +51,16 @@ trait Requestable
          $input = $this->input;
 
          // raw (JSON)
-         $inputs = \json_decode(
+         $inputs = json_decode(
             json: $input,
             associative: true,
             depth: 512,
-            flags: \JSON_THROW_ON_ERROR
+            flags: JSON_THROW_ON_ERROR
          );
       }
-      catch (\JsonException) {
+      catch (JsonException) {
          // x-www-form-urlencoded
-         \parse_str(
+         parse_str(
             string: $input,
             result: $inputs
          );
@@ -262,15 +72,15 @@ trait Requestable
    // HTTP Basic Authentication
    public function authenticate (): object|null
    {
-      $authorization = $this->Raw->Header->get('Authorization');
+      $authorization = $this->Header->get('Authorization');
 
       $username = '';
       $password = '';
-      if (\strpos($authorization, 'Basic') === 0) {
-         $encoded_credentials = \substr($authorization, 6);
-         $decoded_credentials = \base64_decode($encoded_credentials);
+      if (strpos($authorization, 'Basic') === 0) {
+         $encoded_credentials = substr($authorization, 6);
+         $decoded_credentials = base64_decode($encoded_credentials);
 
-         [$username, $password] = \explode(':', $decoded_credentials, 2);
+         [$username, $password] = explode(':', $decoded_credentials, 2);
 
          $this->username = $username;
          $this->password = $password;
@@ -286,10 +96,10 @@ trait Requestable
    }
 
    // HTTP Content Negotiation
-   public const ACCEPTS_TYPES = 1;
-   public const ACCEPTS_LANGUAGES = 2;
-   public const ACCEPTS_CHARSETS = 4;
-   public const ACCEPTS_ENCODINGS = 8;
+   public const int ACCEPTS_TYPES = 1;
+   public const int ACCEPTS_LANGUAGES = 2;
+   public const int ACCEPTS_CHARSETS = 4;
+   public const int ACCEPTS_ENCODINGS = 8;
    /**
     * Negotiate the request content.
     *
@@ -304,7 +114,7 @@ trait Requestable
             // @ Accept
             $header = (
                $_SERVER['HTTP_ACCEPT']
-               ?? $this->Raw->Header->get('Accept')
+               ?? $this->Header->get('Accept')
             );
             $pattern = '/([\w\/\+\*.-]+)(?:;\s*q\s*=\s*(\d*(?:\.\d+)?))?/i';
 
@@ -313,7 +123,7 @@ trait Requestable
             // @ Accept-Charset
             $header = (
                $_SERVER['HTTP_ACCEPT_CHARSET']
-               ?? $this->Raw->Header->get('Accept-Charset')
+               ?? $this->Header->get('Accept-Charset')
             );
             $pattern = '/([a-z0-9]{1,8}(?:[-_][a-z0-9]{1,8}){0,3})\s*(?:;\s*q\s*=\s*(\d*(?:\.\d+)?))?/i';
 
@@ -322,7 +132,7 @@ trait Requestable
             // @ Accept-Language
             $header = (
                $_SERVER['HTTP_ACCEPT_LANGUAGE']
-               ?? $this->Raw->Header->get('Accept-Language')
+               ?? $this->Header->get('Accept-Language')
             );
             $pattern = '/([a-z]{1,8}(-[a-z]{1,8})?)\s*(;\s*q\s*=\s*(\d*(?:\.\d+)?))?/i';
 
@@ -331,7 +141,7 @@ trait Requestable
             // @ Accept-Encoding
             $header = (
                $_SERVER['HTTP_ACCEPT_ENCODING']
-               ?? $this->Raw->Header->get('Accept-Encoding')
+               ?? $this->Header->get('Accept-Encoding')
             );
             $pattern = '/([a-z0-9]{1,8}(?:[-_][a-z0-9]{1,8}){0,3})\s*(?:;\s*q\s*=\s*(\d*(?:\.\d+)?))?/i';
 
@@ -344,7 +154,7 @@ trait Requestable
       }
 
       // @ Validate RegEx
-      \preg_match_all(
+      preg_match_all(
          $pattern ?? self::ACCEPTS_TYPES,
          $header,
          $matches,
@@ -359,11 +169,11 @@ trait Requestable
          $results[$item] = $quality;
       }
 
-      \uasort($results, function ($a, $b) {
+      uasort($results, function ($a, $b) {
          return $b <=> $a;
       });
 
-      $results = \array_merge(\array_keys($results), $results);
+      $results = array_merge(array_keys($results), $results);
 
       return $results;
    }
@@ -375,21 +185,21 @@ trait Requestable
          return false;
       }
 
-      $if_modified_since = $this->Raw->Header->get('If-Modified-Since');
-      $if_none_match = $this->Raw->Header->get('If-None-Match');
+      $if_modified_since = $this->Header->get('If-Modified-Since');
+      $if_none_match = $this->Header->get('If-None-Match');
       if ( ! $if_modified_since && ! $if_none_match ) {
          return false;
       }
 
       // @ cache-control
-      $cache_control = $this->Raw->Header->get('Cache-Control');
-      if ($cache_control && \preg_match('/(?:^|,)\s*?no-cache\s*?(?:,|$)/', $cache_control)) {
+      $cache_control = $this->Header->get('Cache-Control');
+      if ($cache_control && preg_match('/(?:^|,)\s*?no-cache\s*?(?:,|$)/', $cache_control)) {
          return false;
       }
 
       // @ if-none-match
       if ($if_none_match && $if_none_match !== '*') {
-         $entity_tag = $this->Server::$Response->Raw->Header->get('ETag');
+         $entity_tag = WPI->Response->Header->get('ETag');
 
          if ( ! $entity_tag ) {
             return false;
@@ -402,7 +212,7 @@ trait Requestable
          $start = 0;
          $end = 0;
          // @ Gather tokens
-         for ($i = 0; $i < \strlen($if_none_match); $i++) {
+         for ($i = 0; $i < strlen($if_none_match); $i++) {
             switch ($if_none_match[$i]) {
                case ' ':
                   if ($start === $end) {
@@ -410,7 +220,7 @@ trait Requestable
                   }
                   break;
                case ',':
-                  $matches[] = \substr($if_none_match, $start, $end);
+                  $matches[] = substr($if_none_match, $start, $end);
                   $start = $end = $i + 1;
                   break;
                default:
@@ -419,9 +229,9 @@ trait Requestable
             }
          }
          // final token
-         $matches[] = \substr($if_none_match, $start, $end);
+         $matches[] = substr($if_none_match, $start, $end);
 
-         for ($i = 0; $i < \count($matches); $i++) {
+         for ($i = 0; $i < count($matches); $i++) {
             $match = $matches[$i];
             if ($match === $entity_tag || $match === 'W/' . $entity_tag || 'W/' . $match === $entity_tag) {
                $entity_tag_stale = false;
@@ -436,13 +246,13 @@ trait Requestable
 
       // @ if-modified-since
       if ($if_modified_since) {
-         $last_modified = $this->Server::$Response->Raw->Header->get('Last-Modified');
+         $last_modified = WPI->Response->Header->get('Last-Modified');
          if ($last_modified === '') {
             return false;
          }
 
-         $last_modified_time = \strtotime($last_modified);
-         $if_modified_since_time = \strtotime($if_modified_since);
+         $last_modified_time = strtotime($last_modified);
+         $if_modified_since_time = strtotime($if_modified_since);
          if ($last_modified_time === false || $if_modified_since_time === false) {
             return false;
          }

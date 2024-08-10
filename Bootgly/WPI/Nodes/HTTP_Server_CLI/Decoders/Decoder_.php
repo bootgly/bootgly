@@ -11,6 +11,10 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders;
 
 
+use function count;
+use function key;
+
+use const Bootgly\WPI;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI as Server;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders;
@@ -23,8 +27,8 @@ class Decoder_ extends Decoders
    {
       static $inputs = []; // @ Instance local cache
 
-      // @ Check local cache and return
-      if ($size <= 512 && isset($inputs[$buffer])) {
+      // ? Check local cache and return
+      if ($size <= 512 && isSet($inputs[$buffer])) {
          Server::$Request = $inputs[$buffer];
 
          if ($Package->changed) {
@@ -34,23 +38,25 @@ class Decoder_ extends Decoders
          return $size;
       }
 
-      // @ Handle Package cache
+      // !
+      $WPI = WPI;
+      // ?! Handle Package cache
       if ($Package->changed) {
-         Server::$Request = new Request;
+         $WPI->Request = new Request;
       }
+      // !
+      /** @var Request $Request */
+      $Request = $WPI->Request;
 
-      // @ Get callbacks
-      $Request = Server::$Request;
-
-      // @ Input HTTP Request
-      $length = $Request->Raw->input($Package, $buffer, $size);
+      // @
+      $length = $Request->decode($Package, $buffer, $size);
 
       // @ Write to local cache
       if ($length > 0 && $length <= 512) {
          $inputs[$buffer] = clone $Request;
 
-         if (\count($inputs) > 512) {
-            unset($inputs[\key($inputs)]);
+         if (count($inputs) > 512) {
+            unset($inputs[key($inputs)]);
          }
       }
 

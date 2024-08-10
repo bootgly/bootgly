@@ -11,21 +11,20 @@
 namespace Bootgly\WPI\Modules\HTTP\Server\Response;
 
 
+use const Bootgly\WPI;
+
+
 trait Redirectable
 {
-   // \
-   private static string $Server;
-
-
    /**
     * Redirects to a new URI. Default return is 307 for GET (Temporary Redirect) and 303 (See Other) for POST.
     *
     * @param string $URI The new URI to redirect to.
-    * @param ? int $code The HTTP status code to use for the redirection.
+    * @param ?int $code The HTTP status code to use for the redirection.
     *
-    * @return self Returns Response.
+    * @return self The Response instance, for chaining.
     */
-   public function redirect (string $URI, ? int $code = null): self
+   public function redirect (string $URI, ?int $code = null): self
    {
       // !?
       switch ($code) {
@@ -43,7 +42,7 @@ trait Redirectable
 
       // ? Set default code
       if ($code === null) {
-         $code = match (self::$Server::$Request->method) {
+         $code = match (WPI->Request->method) {
             'POST' => 303, // See Other
             default => 307 // Temporary Redirect
          };

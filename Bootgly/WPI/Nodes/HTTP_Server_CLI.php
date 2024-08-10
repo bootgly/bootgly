@@ -18,16 +18,17 @@ use Bootgly\ACI\Logs\Logger;
 
 use Bootgly\ACI\Tests;
 use Bootgly\ACI\Tests\Tester;
+
 use Bootgly\API\Environments;
 use Bootgly\API\Projects;
-
 use Bootgly\API\Server as SAPI;
+
+use const Bootgly\WPI;
 use Bootgly\WPI\Endpoints\Servers\Modes;
 use Bootgly\WPI\Interfaces\TCP_Client_CLI;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI;
-
 use Bootgly\WPI\Modules\HTTP;
-use Bootgly\WPI\Modules\HTTP\Server as HTTP_Server;
+use Bootgly\WPI\Modules\HTTP\Server;
 use Bootgly\WPI\Modules\HTTP\Server\Router;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Decoder_;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders\Encoder_;
@@ -36,7 +37,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 
 
-class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, HTTP_Server
+class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
 {
    // * Config
    // ...inherited from TCP_Server_CLI
@@ -63,6 +64,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, HTTP_Server
       // * Metadata
       // ...inherited from TCP_Server_CLI
 
+
       // \
       parent::__construct();
       // * Config
@@ -73,17 +75,13 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, HTTP_Server
       // @ Configure Logger
       $this->Logger = new Logger(channel: 'HTTP.Server.CLI');
 
-      // .
-      // @ Configure Request
+      // . Request,Response,Router
       self::$Request = new Request;
-      // @ Configure Response
       self::$Response ??= new Response;
-      // @ Configure Router
       self::$Router = new Router(static::class);
 
-      // @
+      // . Decoders,Encoders
       self::$Decoder = new Decoder_;
-
       $this->Mode = $Mode;
       switch ($Mode) {
          case Modes::Test:
@@ -92,6 +90,13 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, HTTP_Server
          default:
             self::$Encoder = new Encoder_;
       }
+
+      $WPI = WPI;
+      // # HTTP
+      $WPI->Server = $this;
+      $WPI->Response = &self::$Response;
+      $WPI->Request = &self::$Request;
+      $WPI->Router = &self::$Router;
    }
 
    /**
@@ -105,7 +110,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, HTTP_Server
     * @return self The HTTP Server instance, for chaining 
     */
    public function configure (
-      string $host, int $port, int $workers, ? array $ssl = null
+      string $host, int $port, int $workers, ?array $ssl = null
    ): self
    {
       parent::configure($host, $port, $workers, $ssl);
@@ -219,6 +224,9 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, HTTP_Server
 
             // @ Run test cases
             foreach ($testFiles as $index => $value) {
+               /**
+                * @var array<string>|null $spec
+                */
                $spec = SAPI::$Tests[self::class][$index] ?? null;
 
                // @ Init Test

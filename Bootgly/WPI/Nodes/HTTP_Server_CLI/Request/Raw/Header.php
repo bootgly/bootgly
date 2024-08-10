@@ -11,19 +11,34 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Raw;
 
 
+use function explode;
+use function strlen;
+use function strpos;
+use function is_string;
+
+use Bootgly\WPI\Modules\HTTP\Server\Request\Raw\Header\Defining;
 use Bootgly\WPI\Modules\HTTP\Server\Request\Raw;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Raw\Header\Cookies;
 
 
-class Header extends Raw\Header
+class Header extends Raw\Header implements Defining
 {
-   private Cookies $Cookies;
+   public Cookies $Cookies;
 
    // * Config
-   // ...
+   // ... inherited
 
    // * Data
-   // ... inherited
+   /** @var array<string|array<string>> */
+   public array $fields {
+      get {
+         if ($this->built === false) {
+            $this->build();
+         }
+
+         return $this->fields;
+      }
+   }
    public readonly string $raw;
 
    // * Metadata
@@ -34,7 +49,7 @@ class Header extends Raw\Header
    public function __construct ()
    {
       // * Config
-      // ...
+      // ... inherited
 
       // * Data
       // fields
@@ -43,7 +58,7 @@ class Header extends Raw\Header
       // * Metadata
       // built
       $this->built = false;
-      #$this->length = \strlen($raw);
+      #$this->length = strlen($raw);
    }
    public function __get (string $name): mixed
    {
@@ -70,12 +85,12 @@ class Header extends Raw\Header
       return null;
    }
 
-   public function set (string $raw): void
+   public function define (string $raw): void
    {
       // * Data
       $this->raw ??= $raw;
       // * Metadata
-      $this->length ??= \strlen($raw);
+      $this->length ??= strlen($raw);
    }
 
    /**
@@ -87,16 +102,16 @@ class Header extends Raw\Header
    {
       $fields = [];
 
-      foreach (\explode("\r\n", $this->raw ?? '') as $field) {
-         if ( \strpos($field, ': ') ) {
-            @[$key, $value] = \explode(': ', $field, 2);
+      foreach (explode("\r\n", $this->raw ?? '') as $field) {
+         if ( strpos($field, ': ') ) {
+            @[$key, $value] = explode(': ', $field, 2);
 
             #if ( strpos($key, ' ') ) {
             #   return false; // @ 400 Bad Request
             #}
 
             if ( isSet($fields[$key]) ) {
-               if ( \is_string($fields[$key]) ) {
+               if ( is_string($fields[$key]) ) {
                   $fields[$key] = [
                      $fields[$key]
                   ];
@@ -110,8 +125,9 @@ class Header extends Raw\Header
          }
       }
 
+      // * Data
       $this->fields = $fields;
-
+      // * Metadata
       $this->built = true;
 
       return true;

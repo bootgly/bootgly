@@ -24,7 +24,7 @@ class Downloader
 
    public function __construct (Request $Request)
    {
-      $this->Body = $Request->Raw->Body;
+      $this->Body = $Request->Body;
 
       // ***
    }

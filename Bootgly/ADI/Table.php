@@ -103,7 +103,7 @@ class Table
     *
     * @param int $column The column index to sum.
     *
-    * @return int The sum of the values in the specified column or false on error.
+    * @return false|int|float The sum of the values in the specified column or false on error.
     */
    public function sum (int $column): false|int|float
    {
@@ -132,7 +132,7 @@ class Table
     *
     * @param int $column The column index to subtract.
     *
-    * @return int The result of subtracting the values in the specified column or false on error.
+    * @return false|int|float The result of subtracting the values in the specified column or false on error.
     */
    public function subtract (int $column): false|int|float
    {
@@ -161,7 +161,7 @@ class Table
     *
     * @param int $column The column index to multiply.
     *
-    * @return int The result of multiplying the values in the specified column or false on error.
+    * @return int|float The result of multiplying the values in the specified column or false on error.
     */
    public function multiply (int $column): int|float
    {
@@ -190,7 +190,7 @@ class Table
     *
     * @param int $column The column index to divide.
     *
-    * @return float The result of dividing the values in the specified column or false on error.
+    * @return false|null|float The result of dividing the values in the specified column or false on error.
     */
    public function divide (int $column): false|null|float
    {
@@ -219,7 +219,7 @@ class Table
       return $result;
    }
 
-   // # Searchs
+   // # Search
    /**
     * Searches for a specific value in a specified column of the body.
     *
@@ -228,7 +228,7 @@ class Table
     *
     * @return bool True if the value is found, false otherwise.
     */
-   public function find (int $column, $value): bool
+   public function find (int $column, mixed $value): bool
    {
       $data = $this->rows['body'];
 

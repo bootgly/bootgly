@@ -58,15 +58,15 @@ class Encoder_Testing extends Encoders
       }
       finally {
          // @ Check if Request Body is waiting data
-         if ($Request->Raw->Body->waiting) {
+         if ($Request->Body->waiting) {
             return '';
          }
 
          // @ Remove dynamic Headers
          $Response->Header->preset('Date', null);
 
-         // @ Output/Stream HTTP Response
-         return $Response->output($Packages, $length);
+         // @ Encode HTTP Response
+         return $Response->encode($Packages, $length);
       }
    }
 }

@@ -11,30 +11,34 @@
 namespace Bootgly\WPI\Modules\HTTP\Server\Response;
 
 
+use function ob_start;
+
+use Closure;
+use Throwable;
+
 use Bootgly\ABI\Debugging\Data\Throwables;
 use Bootgly\ABI\IO\FS\File;
 use Bootgly\ABI\Templates\Template;
 
+use const Bootgly\WPI;
+
 
 trait Renderable
 {
-   // \
-   private static string $Server;
-
    // * Metadata
-   /** @var array<string, mixed> */
+   /** @var array<string,mixed> */
    protected array $uses = [];
 
    /**
     * Renders the specified view with the provided data.
     *
     * @param string $view The view to render.
-    * @param array<string, mixed>|null $data The data to provide to the view.
-    * @param \Closure|null $callback Optional callback.
+    * @param array<string,mixed>|null $data The data to provide to the view.
+    * @param Closure|null $callback Optional callback.
     *
     * @return self The Response instance, for chaining
     */
-   public function render (string $view, ? array $data = null, ? \Closure $callback = null): self
+   public function render (string $view, ?array $data = null, ?Closure $callback = null): self
    {
       // !
       $this->prepare('view');
@@ -48,25 +52,22 @@ trait Renderable
       }
 
       // @ Set variables
-      $Route = &self::$Server::$Router->Route;
-
       if ($data === null) {
          $data = [];
       }
-
-      $data['Route'] = $Route;
+      $data['Route'] = WPI->Router->Route;
 
       // @ Extend variables
       $data = $data + $this->uses;
 
       // @ Output/Buffer start()
-      \ob_start();
+      ob_start();
       // @ Render Template
       $Template = new Template($File);
       try {
          $rendered = $Template->render($data);
       }
-      catch (\Throwable $Throwable) {
+      catch (Throwable $Throwable) {
          $rendered = '';
          Throwables::report($Throwable);
       }
@@ -78,7 +79,7 @@ trait Renderable
       $this->type = '';
 
       // @ Call callback
-      if ($callback !== null && $callback instanceof \Closure) {
+      if ($callback !== null && $callback instanceof Closure) {
          $callback($this->content, $Throwable ?? null);
       }
 

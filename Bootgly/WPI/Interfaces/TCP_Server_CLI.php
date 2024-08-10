@@ -10,6 +10,7 @@
 
 namespace Bootgly\WPI\Interfaces;
 
+
 use Bootgly\ABI\Debugging\Data\Vars;
 use Bootgly\ABI\Debugging\Shutdown;
 
@@ -56,28 +57,28 @@ class TCP_Server_CLI implements Servers, Logging
    protected int $workers;
    /** @var array<string> */
    protected ?array $ssl; // SSL Stream Context
-   // @ Mode
+   // . Mode
    public Modes $Mode;
-   // @ Verbosity
+   // . Verbosity
 
    // * Data
-   // @ SAPI
+   // .. SAPI
    public static ?string $Application = null; 
    public static ?object $Decoder = null;
    public static ?object $Encoder = null;
 
    // * Metadata
    public const VERSION = '0.0.1-alpha';
-   // @ State
+   // . State
    protected int $started = 0;
-   // @ Socket
+   // . Socket
    protected ? string $socket;
    /** @var array<string> */
    public static array $context;
-   // @ Status
+   // . Status
    protected Status $Status = Status::Booting;
 
-   // .
+   // /
    protected Connections $Connections;
 
 
@@ -257,10 +258,10 @@ class TCP_Server_CLI implements Servers, Logging
             $this->daemonize();
             break;
          case Modes::Interactive:
-            $this->interact();
+            $this->interacting();
             break;
          case Modes::Monitor:
-            $this->monitor();
+            $this->monitoring();
             break;
       }
 
@@ -340,7 +341,7 @@ class TCP_Server_CLI implements Servers, Logging
 
       exit(0);
    }
-   private function interact (): void
+   private function interacting (): void
    {
       $this->Status = Status::Running;
 
@@ -380,10 +381,10 @@ class TCP_Server_CLI implements Servers, Logging
       }
 
       if ($this->Mode === Modes::Monitor) {
-         $this->monitor();
+         $this->monitoring();
       }
    }
-   private function monitor (): void
+   private function monitoring (): void
    {
       $this->Status = Status::Running;
 
@@ -439,7 +440,7 @@ class TCP_Server_CLI implements Servers, Logging
       if ($this->Mode === Modes::Interactive) {
          Timer::del(0); // @ Delete all timers
          $Output->clear();
-         $this->interact();
+         $this->interacting();
       }
    }
 

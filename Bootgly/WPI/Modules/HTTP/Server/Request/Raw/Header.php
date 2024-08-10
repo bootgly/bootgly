@@ -11,6 +11,9 @@
 namespace Bootgly\WPI\Modules\HTTP\Server\Request\Raw;
 
 
+use function strtolower;
+
+
 abstract class Header
 {
    // * Config
@@ -18,12 +21,20 @@ abstract class Header
 
    // * Data
    /** @var array<string|array<string>> */
-   protected array $fields;
+   abstract protected array $fields {
+      get;
+   }
+   public readonly string $raw;
 
    // * Metadata
+   public readonly null|int|false $length;
    protected bool $built;
 
 
+   /**
+    * Constructor
+    */
+   abstract public function __construct ();
    /**
     * Get a field from the Request Header
     *
@@ -37,7 +48,7 @@ abstract class Header
          $this->build();
       }
 
-      return ($this->fields[$name] ?? $this->fields[\strtolower($name)] ?? '');
+      return ($this->fields[$name] ?? $this->fields[strtolower($name)] ?? '');
    }
 
    /**

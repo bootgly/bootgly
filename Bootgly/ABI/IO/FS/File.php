@@ -169,9 +169,9 @@ class File implements FS
    protected string|false $format;   // > 'image'
    protected string|false $subtype;  // > 'jpeg'
    // _ Stat
-   protected int|false $accessed;    // accessed file (timestamp)
-   protected int|false $created;     // only Windows / in Unix is changed inode
-   protected int|false $modified;    // modified content (timestamp)
+   protected int|null $accessed;    // accessed file (timestamp)
+   protected int|null $created;     // only Windows / in Unix is changed inode
+   protected int|null $modified;     // modified content (timestamp)
    // _ System
    protected int|false $inode;       // 
    protected string|false $link;     // 
@@ -300,11 +300,11 @@ class File implements FS
             return $MIME->subtype;
          // _ Stat
          case 'accessed':
-            return $this->accessed = (new \SplFileInfo($file))->getATime();
+            return $this->accessed = (new \SplFileInfo($file))->getATime() | null;
          case 'created':
-            return $this->created = (new \SplFileInfo($file))->getCTime();
+            return $this->created = (new \SplFileInfo($file))->getCTime() | null;
          case 'modified':
-            return $this->modified = (new \SplFileInfo($file))->getMTime();
+            return $this->modified = (new \SplFileInfo($file))->getMTime() | null;
          // _ System
          case 'inode':
             return $this->inode = (new \SplFileInfo($file))->getInode();

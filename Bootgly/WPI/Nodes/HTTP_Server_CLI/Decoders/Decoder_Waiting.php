@@ -11,6 +11,10 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders;
 
 
+use function time;
+use function substr;
+
+use const Bootgly\WPI;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI as Server;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders;
@@ -26,9 +30,11 @@ class Decoder_Waiting extends Decoders
 
    public static function decode (Packages $Package, string $buffer, int $size): int
    {
-      // @ Get callbacks
-      $Request = Server::$Request;
-      $Body = $Request->Raw->Body;
+      // !
+      $WPI = WPI;
+      /** @var Server\Request $Request */
+      $Request = $WPI->Request;
+      $Body = $Request->Body;
 
       // @ Check if Request Body is waiting data
       if ($Body->waiting) {
@@ -39,16 +45,17 @@ class Decoder_Waiting extends Decoders
          // ? Valid HTTP Client Body Timeout
          /**
          * Validate if the client is sending the rest of the Content data 
-         * within a 60-second interval.
+         * within a 60-second interval and if the total data has been received.
          */
-         if ((time() - self::$decoded) >= 60 && self::$read === $Body->downloaded) {
-            Server::$Decoder = new Decoder_;
-            return Server::$Decoder::decode($Package, $buffer, $size);
+         $elapsed = time() - self::$decoded;
+         if ($elapsed >= 60 && self::$read === $Body->downloaded) {
+            $WPI->Server::$Decoder = new Decoder_;
+            return Decoder_::decode($Package, $buffer, $size);
          }
 
-         // @
+         // ... Continue reading the Request Body
          if ($Body->downloaded === null) {
-            $Body->raw = \substr($buffer, $Body->position, $Body->length);
+            $Body->raw = substr($buffer, $Body->position, $Body->length);
          }
          else {
             $Body->raw .= $buffer;
@@ -66,7 +73,7 @@ class Decoder_Waiting extends Decoders
          return $Body->length;
       }
 
-      Server::$Decoder = new Decoder_;
-      return Server::$Decoder::decode($Package, $buffer, $size);
+      $WPI->Server::$Decoder = new Decoder_;
+      return Decoder_::decode($Package, $buffer, $size);
    }
 }

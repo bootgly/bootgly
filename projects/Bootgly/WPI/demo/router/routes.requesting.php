@@ -1,8 +1,10 @@
 <?php
+use Bootgly\WPI\Modules\HTTP\Server\Router;
 
 use Bootgly\WPI\Nodes\HTTP_Server_\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_\Response;
 
+/** @var Router $Router */
 
 $Router->route('/Request/test.a', function (Request $Request, Response $Response) {
    return $Response->JSON->send([
@@ -102,7 +104,7 @@ $Router->route('/Request/test.y', function (Request $Request, Response $Response
 }, GET);
 
 $Router->route('/Request/test.z', function (Request $Request, Response $Response) {
-   $Response->Raw->Header->set('Last-Modified', 'Fri, 14 Jul 2023 08:00:00 GMT');
+   $Response->Header->set('Last-Modified', 'Fri, 14 Jul 2023 08:00:00 GMT');
 
    if ($Request->fresh) {
       return $Response(code: 304); // First onward is here
@@ -149,8 +151,8 @@ $Router->route('/requesting', function (Request $Request, Response $Response) {
    #return $Response->Pre->send($Request->raw);      // @ "..."
    // ? Header
    #return $Response->JSON->send($Request->headers, JSON_PRETTY_PRINT);
-   #return $Response->send($Request->Raw->Header->get('accept'));
-   #return $Response->send->Pre->send($Request->Raw->Header->raw);
+   #return $Response->send($Request->Header->get('accept'));
+   #return $Response->send->Pre->send($Request->Header->raw);
    // ? Header/Cookie
    #return $Response->JSON->send($Request->cookies); // @ {...}
    #return $Response->send($Request->Cookies->test);  // @ {...}
@@ -165,5 +167,5 @@ $Router->route('/requesting', function (Request $Request, Response $Response) {
    #return $Response->send($Request->time);           // @ 1666011216
    #return $Response->JSON->send($Request->range(1000, 'items=0-5'));
 
-   return $Response;
+   // return $Response;
 }, [GET, POST]);

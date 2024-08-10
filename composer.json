@@ -29,10 +29,11 @@
    },
 
    "require": {
-      "php": "^8.2"
+      "php": "^8.4",
+      "ext-pdo": "*"
    },
    "require-dev": {
-      "phpstan/phpstan": "1.11.x-dev",
+      "phpstan/phpstan": "1.11.8",
       "marc-mabe/php-enum-phpstan": "^2.0"
    }
 }

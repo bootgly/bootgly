@@ -11,26 +11,31 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Raw;
 
 
-class Body
+use function trim;
+use function preg_match;
+use function parse_str;
+use function json_validate;
+
+use Bootgly\WPI\Modules\HTTP\Server\Request\Raw;
+
+
+class Body extends Raw\Body
 {
    // * Config
-   // ...
+   // ... inherited
 
    // * Data
-   public string $raw;
-   public ? string $input;
+   // ... inherited
 
    // * Metadata
-   public ? int $length;
-   public null|int|false $position;
-   public ? int $downloaded;
+   // ... inherited
    public bool $waiting;
 
 
    public function __construct ()
    {
       // * Config
-      // ...
+      // ... inherited
 
       // * Data
       $this->raw = '';
@@ -40,6 +45,7 @@ class Body
       $this->length = null;
       $this->position = null;
       $this->downloaded = null;
+      // ---
       $this->waiting = false;
    }
 
@@ -71,7 +77,9 @@ class Body
             switch ($type) {
                // @ Parse raw - JSON
                case 'application/json':
-                  // TODO implement json_validate (PHP 8.3)
+                  if (json_validate($this->raw) === false) {
+                     return false;
+                  }
 
                   $_POST = $this->raw;
 

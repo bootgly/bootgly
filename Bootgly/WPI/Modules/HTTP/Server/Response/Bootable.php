@@ -11,12 +11,34 @@
 namespace Bootgly\WPI\Modules\HTTP\Server\Response;
 
 
+use function strtolower;
+use function json_decode;
+use function is_array;
+use function getType;
+
 use Bootgly\ABI\IO\FS\File;
 
 
 trait Bootable
 {
-   protected function prepare (? string $resource = null): self
+   // * Data
+   // # Resource
+   // @ Content
+   public ?string $source;
+   public ?string $type;
+
+   // * Metadata
+   // # Resource
+   // @ Content
+   private ?string $resource;
+   // @ Status
+   public bool $initied = false;
+   public bool $prepared;
+   public bool $processed;
+   public bool $sent;
+
+
+   protected function prepare (?string $resource = null): self
    {
       if ($this->initied === false) {
          $this->source  = null;
@@ -31,11 +53,11 @@ trait Bootable
          $resource = $this->resource;
       }
       else {
-         $resource = \strtolower($resource);
+         $resource = strtolower($resource);
       }
 
       switch ($resource) {
-         // @ Content
+         // Content
          case 'json':
             $this->source   = 'content';
             $this->type     = 'json';
@@ -50,7 +72,7 @@ trait Bootable
             $this->type     = '';
             break;
 
-         // @ Content File
+         // File
          case 'view':
             $this->source = 'file';
             $this->type = 'php';
@@ -70,25 +92,25 @@ trait Bootable
       return $this;
    }
 
-   protected function process (mixed $data, ? string $resource = null): self
+   protected function process (mixed $data, ?string $resource = null): self
    {
       if ($resource === null) {
          $resource = $this->resource;
       }
       else {
-         $resource = \strtolower($resource);
+         $resource = strtolower($resource);
       }
 
       switch ($resource) {
-         // @ Response Content
+         // Content
          case 'json':
          case 'jsonp':
-            if ( \is_array($data) ) {
+            if ( is_array($data) ) {
                $this->content = $data;
                break;
             }
 
-            $this->content = \json_decode($data, true);
+            $this->content = json_decode($data, true);
 
             break;
          case 'pre':
@@ -100,7 +122,7 @@ trait Bootable
 
             break;
 
-         // @ Response Content File
+         // File
          case 'view':
             $File = new File(BOOTGLY_PROJECT->path . 'views/' . $data);
 
@@ -111,7 +133,7 @@ trait Bootable
 
             break;
 
-         // @ Response Raw
+         // Raw
          case 'raw':
             $this->content = $data;
 
@@ -122,7 +144,7 @@ trait Bootable
                // TODO Inject resource with custom process() created by user
             }
             else {
-               switch ( \getType($data) ) {
+               switch ( getType($data) ) {
                   case 'string':
                      // TODO check if string is a valid path
                      $File = match ($data[0]) {

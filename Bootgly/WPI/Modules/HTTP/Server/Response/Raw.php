@@ -11,14 +11,5 @@
 namespace Bootgly\WPI\Modules\HTTP\Server\Response;
 
 
-abstract class Raw
-{
-   // * Data
-   public string $data;
-
-
-   public function __toString (): string
-   {
-      return $this->data ?? '';
-   }
-}
+trait Raw
+{}

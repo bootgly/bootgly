@@ -9,7 +9,7 @@ parameters:
          - */tests/*
          - */examples/*
    reportUnmatchedIgnoredErrors: false
-   level: 6
+   level: 9
 
    paths:
       - ../Bootgly

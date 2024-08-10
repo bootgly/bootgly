@@ -8,11 +8,20 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Raw;
+namespace Bootgly\WPI\Modules\HTTP\Server\Request\Raw;
 
 
-use Bootgly\WPI\Modules\HTTP\Server\Response\Raw;
+abstract class Body
+{
+   // * Config
+   // ...
 
+   // * Data
+   public string $raw;
+   public ?string $input;
 
-class Payload extends Raw\Payload
-{}
+   // * Metadata
+   public ?int $length;
+   public null|int|false $position;
+   public ?int $downloaded;
+}

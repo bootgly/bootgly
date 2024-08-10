@@ -1,0 +1,3 @@
+[*.php]
+php_diagnostic_php2406 = off
+php_diagnostic_php2016 = off

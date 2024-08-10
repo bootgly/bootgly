@@ -11,48 +11,36 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_;
 
 
+use function extract;
+use function flush;
+use function ob_start;
+use function ob_get_clean;
+use function http_response_code;
+
+use const BOOTGLY_PROJECT;
 use Bootgly\ABI\Data\__String\Path;
 use Bootgly\ABI\IO\FS\File;
 
-use Bootgly\WPI\Modules\HTTP\Server\Response as Responsing;
-use Bootgly\WPI\Modules\HTTP\Server\Response\Authenticable;
-use Bootgly\WPI\Modules\HTTP\Server\Response\Bootable;
-use Bootgly\WPI\Modules\HTTP\Server\Response\Extendable;
-use Bootgly\WPI\Modules\HTTP\Server\Response\Redirectable;
-use Bootgly\WPI\Modules\HTTP\Server\Response\Renderable;
-use Bootgly\WPI\Nodes\HTTP_Server_ as Server;
+use const Bootgly\WPI;
+use Bootgly\WPI\Modules\HTTP\Server;
 use Bootgly\WPI\Nodes\HTTP_Server_\Response\Raw\Header;
-use Bootgly\WPI\Nodes\HTTP_Server_\Response\Raw\Payload;
+use Bootgly\WPI\Nodes\HTTP_Server_\Response\Raw\Body;
 
 
-class Response extends Responsing
+class Response extends Server\Response
 {
-   use Authenticable;
-   use Bootable;
-   use Extendable;
-   use Redirectable;
-   use Renderable;
-
-
-   // \
-   private static string $Server;
-
    // * Config
    // ...
 
    // * Data
+   // ..
+   // # Resource
    // @ Content
-   public ? string $source;
-   public ? string $type;
+   public ?string $source;
+   public ?string $type;
 
    // * Metadata
-   // @ Content
-   private ? string $resource;
-   // @ Status
-   public bool $initied = false;
-   public bool $prepared;
-   public bool $processed;
-   public bool $sent;
+   // ..
    // @ State (sets)
    public bool $chunked;
    public bool $encoded;
@@ -60,11 +48,18 @@ class Response extends Responsing
    #public bool $dynamic;
    #public bool $static;
    public bool $stream;
+   // # Resource
+   // @ Content
+   private ?string $resource;
+   // @ Status
+   public bool $initied = false;
+   public bool $prepared;
+   public bool $processed;
+   public bool $sent;
 
    // / HTTP
-   // public readonly Raw $Raw;
    public readonly Header $Header;
-   public readonly Payload $Payload;
+   public readonly Body $Body;
 
    /**
     * Construct a new Response instance.
@@ -75,25 +70,16 @@ class Response extends Responsing
     */
    public function __construct (int $code = 200, ? array $headers = null, string $body = '')
    {
-      // \
-      self::$Server = Server::class;
-
       // * Config
       // ...
 
       // * Data
       $this->files = [];
-
+      // # Resource
       $this->source = null;
       $this->type = null;
 
       // * Metadata
-      $this->resource = null;
-      // @ Status
-      $this->initied = false;
-      $this->prepared = true;
-      $this->processed = true;
-      $this->sent = false;
       // @ State
       $this->chunked = false;
       $this->encoded = false;
@@ -101,11 +87,17 @@ class Response extends Responsing
       #$this->dynamic = false;
       #$this->static = true;
       $this->stream = false;
+      // # Resource
+      $this->resource = null;
+      // @ Status
+      $this->initied = false;
+      $this->prepared = true;
+      $this->processed = true;
+      $this->sent = false;
 
       // / HTTP
-      // $this->Raw = new Raw;
       $this->Header = new Header;
-      $this->Payload = new Payload;
+      $this->Body = new Body;
 
       // @
       if ($code !== 200) {
@@ -115,26 +107,34 @@ class Response extends Responsing
          $this->Header->prepare($headers);
       }
       if ($body !== '') {
-         $this->Payload->raw = $body;
+         $this->Body->raw = $body;
       }
    }
-   public function __get (string $name): mixed
+   /**
+    * Get the specified property from the Response or Response Resource.
+    *
+    * @param string $name The name of the property or Response Resource to get.
+    *
+    * @return bool|string|int|array<mixed>|self The value of the property or the Response instance, for chaining.
+    */
+   public function __get (string $name): bool|string|int|array|self
    {
       switch ($name) {
-         // ? Response Metadata
+         // TODO: move to property hooks
+         // # Response Metadata
          case 'code':
-            return $this->code = \http_response_code();
-         // ? Response Headers
+            return $this->code = http_response_code();
+         // # Response Headers
          case 'headers':
             return $this->Header->fields;
-         // ? Response Body
+         // # Response Body
          case 'chunked':
             if (! $this->chunked) {
                $this->chunked = true;
                $this->Header->append('Transfer-Encoding', 'chunked');
             }
 
-            return $this->Payload->chunked;
+            return $this->Body->chunked;
 
          default: // @ Construct resource
             $this->resource = $name;
@@ -152,7 +152,7 @@ class Response extends Responsing
       switch ($name) {
          // ? Response Metadata
          case 'code':
-            $this->code = \http_response_code($value);
+            $this->code = http_response_code($value);
             break;
       }
    }
@@ -169,10 +169,11 @@ class Response extends Responsing
    {
       $this->code($code);
       $this->Header->prepare($headers);
-      $this->Payload->raw = $body;
+      $this->Body->raw = $body;
 
       return $this;
    }
+
    /**
     * Set the HTTP Server Response code.
     *
@@ -180,14 +181,12 @@ class Response extends Responsing
     *
     * @return self The Response instance, for chaining 
     */
-   #[\Override]
    public function code (int $code): self
    {
-      $this->code = \http_response_code($code);
+      $this->code = http_response_code($code);
 
       return $this;
    }
-
    /**
     * Send the response
     *
@@ -223,7 +222,7 @@ class Response extends Responsing
                   // TODO move to prepare or process
                   $this->Header->set('Content-Type', 'application/json');
 
-                  $body = Server::$Request->queries['callback'].'('.\json_encode($body).')';
+                  $body = WPI->Request->queries['callback'].'('.\json_encode($body).')';
 
                   break;
             }
@@ -253,27 +252,24 @@ class Response extends Responsing
 
                default: // Dynamic (PHP)
                   // @ Set variables
-                  $Request = &Server::$Request;
-                  $Response = &Server::$Response;
-                  $Route = &Server::$Router->Route;
                   $data = [
-                     'Request' => $Request,
-                     'Response' => $Response,
-                     'Route' => $Route,
+                     'Request' => WPI->Request,
+                     'Response' => WPI->Response,
+                     'Route' => WPI->Router->Route,
                   ];
 
                   // @ Extend variables
                   $data = $data + $this->uses;
 
                   // @ Output/Buffer start()
-                  \ob_start();
+                  ob_start();
                   // @ Isolate context with anonymous static function
                   (static function (string $__file__, array $__data__) {
-                     \extract($__data__);
+                     extract($__data__);
                      require $__file__;
                   })($File, $data);
                   // @ Output/Buffer clean()->get()
-                  $body = \ob_get_clean();
+                  $body = ob_get_clean();
             }
 
             break;
@@ -312,7 +308,7 @@ class Response extends Responsing
          /**
           * @var ?\Bootgly\API\Project $Project
          */
-         $Project = \BOOTGLY_PROJECT;
+         $Project = BOOTGLY_PROJECT;
          if ($Project === null) {
             $this->code(500); // Internal Server Error
             return $this;
@@ -342,7 +338,7 @@ class Response extends Responsing
       $this->Header->send();
 
       // @ Flush HTTP Headers
-      \flush();
+      flush();
 
       // @ Send File Content
       $File->open();
@@ -352,7 +348,7 @@ class Response extends Responsing
             offset: $offset,
             length: $length ?? 1024
          );
-         \flush();
+         flush();
       }
 
       $this->end();

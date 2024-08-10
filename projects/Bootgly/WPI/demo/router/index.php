@@ -3,8 +3,7 @@
 
 // * Commons
 $Router->route('*', function ($Response) {
-   $Response->code = 404;
-   return '';
+   return $Response->code(404);
 }, OPTIONS);
 
 $Router->route('/favicon.ico', function ($Response) {

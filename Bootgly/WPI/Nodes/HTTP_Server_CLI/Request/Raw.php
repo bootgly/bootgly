@@ -11,6 +11,14 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 
 
+use function strpos;
+use function stripos;
+use function strstr;
+use function strlen;
+use function substr;
+use function explode;
+use function preg_match;
+
 use Bootgly\WPI\Nodes\HTTP_Server_CLI as Server;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Decoder_Waiting;
@@ -18,30 +26,26 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Raw\Header;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Raw\Body;
 
 
-class Raw
+trait Raw
 {
-   public readonly Header $Header;
-   public readonly Body $Body;
+   public Header $Header;
+   public Body $Body;
 
-   // * Data
-   public string $data;
+   // ***
 
-
-   public function __construct ()
-   {
-      $this->Header = new Header;
-      $this->Body = new Body;
-   }
-
-   public function __toString (): string
-   {
-      return $this->data ?? '';
-   }
-
-   public function input (Packages $Package, string &$buffer, int $size): int // @ return Request length
+   /**
+    * Decode the Request raw received
+    *
+    * @param Packages $Package
+    * @param string $buffer
+    * @param int $size
+    *
+    * @return int
+    */
+   public function decode (Packages $Package, string &$buffer, int $size): int
    {
       // @ Check Request raw separator
-      $separator_position = \strpos($buffer, "\r\n\r\n");
+      $separator_position = strpos($buffer, "\r\n\r\n");
       // @ Check if the Request raw has a separator
       if ($separator_position === false) {
          // @ Check Request raw length
@@ -58,9 +62,9 @@ class Raw
       // ? Request Meta (first line of HTTP Header)
       // @ Get Request Meta raw
       // Sample: GET /path HTTP/1.1
-      $meta_raw = \strstr($buffer, "\r\n", true);
+      $meta_raw = strstr($buffer, "\r\n", true);
 
-      @[$method, $URI, $protocol] = \explode(' ', $meta_raw, 3);
+      @[$method, $URI, $protocol] = explode(' ', $meta_raw, 3);
 
       // @ Check Request Meta
       if (! $method || ! $URI || ! $protocol) {
@@ -85,21 +89,21 @@ class Raw
       // protocol
 
       // @ Set Request Meta length
-      $meta_length = \strlen($meta_raw);
+      $meta_length = strlen($meta_raw);
 
       // ? Request Header
       // @ Get Request Header raw
-      $header_raw = \substr($buffer, $meta_length + 2, $separator_position - $meta_length);
+      $header_raw = substr($buffer, $meta_length + 2, $separator_position - $meta_length);
 
       // ? Request Body
       // @ Set Request Body length if possible
-      if ( $_ = \strpos($header_raw, "\r\nContent-Length: ") ) {
-         $content_length = (int) \substr($header_raw, $_ + 18, 10);
+      if ( $_ = strpos($header_raw, "\r\nContent-Length: ") ) {
+         $content_length = (int) substr($header_raw, $_ + 18, 10);
       }
-      else if (\preg_match("/\r\ncontent-length: ?(\d+)/i", $header_raw, $match) === 1) {
+      else if (preg_match("/\r\ncontent-length: ?(\d+)/i", $header_raw, $match) === 1) {
          $content_length = $match[1];
       }
-      else if (\stripos($header_raw, "\r\nTransfer-Encoding:") !== false) {
+      else if (stripos($header_raw, "\r\nTransfer-Encoding:") !== false) {
          $Package->reject("HTTP/1.1 400 Bad Request\r\n\r\n");
          return 0;
       }
@@ -116,8 +120,8 @@ class Raw
          if ($content_length > 0) {
             // @ Check if HTTP content is not empty
             if ($size >= $separator_position + 4) {
-               $this->Body->raw = \substr($buffer, $separator_position + 4, $content_length);
-               $this->Body->downloaded = \strlen($this->Body->raw);
+               $this->Body->raw = substr($buffer, $separator_position + 4, $content_length);
+               $this->Body->downloaded = strlen($this->Body->raw);
             }
 
             if ($content_length > $this->Body->downloaded) {
@@ -147,7 +151,7 @@ class Raw
 
       // ! Request Header
       // raw
-      $this->Header->set(raw: $header_raw);
+      $this->Header->define(raw: $header_raw);
       // host
       #$_SERVER['HTTP_HOST'] = $this->Header->get('HOST');
 

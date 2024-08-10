@@ -10,117 +10,47 @@
 
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI;
 
-use Bootgly\ABI\Debugging\Data\Vars;
-use Bootgly\WPI\Modules\HTTP\Server\Requestable;
-use Bootgly\WPI\Modules\HTTP\Server\Request\Ranging;
-use Bootgly\WPI\Nodes\HTTP_Server_CLI as Server;
+
+use function date;
+use function time;
+use function array_walk_recursive;
+use function clearstatcache;
+use function is_file;
+use function unlink;
+use AllowDynamicProperties;
+
+use Bootgly\WPI\Modules\HTTP\Server;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Raw;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Raw\Body;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Raw\Header;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Downloader;
 
-/**
- * * Data
- * @property string $address       127.0.0.1
- * @property string $port          52252
- *
- * @property string $scheme        http, https
- *
- * ! HTTP
- * ? Header
- * @property Header $Header
- * 
- * @property array $headers
- * 
- * @property string $method        GET, POST, ...
- * @property string $URI           /test/foo?query=abc&query2=xyz
- * @property string $protocol      HTTP/1.1
- * 
- * @ Resource
- * @property string $URL          /test/foo
- * @property string $URN          foo
- * 
- * @ Query
- * @property string $query         query=abc&query2=xyz
- * @property array $queries        ['query' => 'abc', 'query2' => 'xyz']
- * 
- * @ Host
- * @property string $host          v1.docs.bootgly.com
- * @property string $domain        bootgly.com
- * @property string $subdomain     v1.docs
- * @property array $subdomains     ['docs', 'v1']
- * ? Header / Cookie
- * @property Header\Cookie $Cookie
- * @property array $cookies
- * ? Body
- * @property Body $Body
- * 
- * @property string $input
- * 
- * @property array $post
- * 
- * @property array $files
- *
- *
- * * Metadata
- * @property string $raw
- * 
- * @property string $on            2020-03-10 (Y-m-d)
- * @property string $at            17:16:18 (H:i:s)
- * @property int $time             1586496524
- *
- * @property bool $secure          true
- * 
- * @ HTTP Basic Authentication
- * @property string $username      bootgly
- * @property string $password      example123
- * 
- * @ HTTP Content Negotiation
- * @property array $types
- * @property string $type          text/html
- * @property array $languages
- * @property string $language      en-US
- * @property array $charsets
- * @property string $charset       UTF-8
- * @property array $encodings
- * @property string $econding      gzip
- * 
- * @ HTTP Caching Specification
- * @property bool $fresh           true
- * @property bool $stale           false
- */
 
-#[\AllowDynamicProperties]
-class Request
+#[AllowDynamicProperties]
+class Request extends Server\Request
 {
-   use Ranging;
-   use Requestable;
+   use Raw;
 
-
-   public readonly Raw $Raw;
-   public readonly Header $Header;
-   public readonly Body $Body;
 
    // * Config
-   private string $base;
+   // ..
 
    // * Data
    /** @var array<string> */
    protected array $_SERVER;
 
    // * Metadata
-   private string $Server;
    public readonly string $on;
    public readonly string $at;
    public readonly int $time;
-   // ...
 
    private Downloader $Downloader;
 
 
    public function __construct ()
    {
-      $this->Raw = new Raw;
+      $this->Header = new Header;
+      $this->Body = new Body;
 
       // * Config
       $this->base = '';
@@ -134,10 +64,9 @@ class Request
       $_SERVER = [];
 
       // * Metadata
-      $this->Server = Server::class;
-      $this->on = \date("Y-m-d");
-      $this->at = \date("H:i:s");
-      $this->time = \time();
+      $this->on = date("Y-m-d");
+      $this->at = date("H:i:s");
+      $this->time = time();
 
 
       $this->Downloader = new Downloader($this);
@@ -147,7 +76,6 @@ class Request
    {
       $this->_SERVER = $_SERVER;
    }
-
    public function reboot (): void
    {
       if ( isSet($this->_SERVER) ) {
@@ -162,9 +90,9 @@ class Request
    public function download (? string $key = null): array|null
    {
       // ?
-      $boundary = $this->Raw->Body->parse(
+      $boundary = $this->Body->parse(
          content: 'Form-data',
-         type: $this->Raw->Header->get('Content-Type')
+         type: $this->Header->get('Content-Type')
       );
 
       // @ Set FILES data
@@ -190,9 +118,9 @@ class Request
     */
    public function receive (? string $key = null): array|string|null
    {
-      $parsed = $this->Raw->Body->parse(
+      $parsed = $this->Body->parse(
          content: 'raw',
-         type: $this->Raw->Header->get('Content-Type')
+         type: $this->Header->get('Content-Type')
       );
 
       // @ Set POST data
@@ -217,12 +145,12 @@ class Request
       // @ Delete files downloaded by server in temp folder
       if (empty($_FILES) === false) {
          // @ Clear cache
-         \clearstatcache();
+         clearstatcache();
 
          // @ Delete temp files
-         \array_walk_recursive($_FILES, function ($value, $key) {
-            if ($key === 'tmp_name' && \is_file($value) === true) {
-               \unlink($value);
+         array_walk_recursive($_FILES, function ($value, $key) {
+            if ($key === 'tmp_name' && is_file($value) === true) {
+               unlink($value);
             }
          });
 

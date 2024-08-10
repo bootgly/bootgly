@@ -29,13 +29,13 @@ trait Extendable
    }
 
    /**
-    * Extends variables to the File Response.
+    * Export variables to the File Response.
     *
     * @param array<string> $variables Variables to be passed to the File Response.
     *
     * @return self The Response instance, for chaining
     */
-   public function use (array ...$variables): self
+   public function export (array ...$variables): self
    {
       foreach ($variables as $var) {
          foreach ($var as $key => $value) {

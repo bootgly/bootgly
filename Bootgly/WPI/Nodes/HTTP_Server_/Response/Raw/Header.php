@@ -11,6 +11,13 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_\Response\Raw;
 
 
+use function implode;
+use function array_merge;
+use function strtolower;
+use function header;
+use function apache_response_headers;
+use function headers_sent;
+
 use Bootgly\WPI\Modules\HTTP\Server\Response\Raw;
 use Bootgly\WPI\Nodes\HTTP_Server_\Response\Raw\Header\Cookies;
 
@@ -46,7 +53,7 @@ class Header extends Raw\Header
          // * Data
          case 'fields':
          case 'headers':
-            $this->fields = \apache_response_headers();
+            $this->fields = apache_response_headers();
 
             return $this->fields;
          // * Metadata
@@ -62,7 +69,7 @@ class Header extends Raw\Header
             return $this->raw;
 
          case 'sent':
-            return \headers_sent();
+            return headers_sent();
 
          default:
             return $this->get($name);
@@ -109,14 +116,18 @@ class Header extends Raw\Header
 
    public function get (string $name): string
    {
-      return (string) (@$this->fields[$name] ?? @$this->fields[\strtolower($name)] ?? '');
+      return (string) (@$this->fields[$name] ?? @$this->fields[strtolower($name)] ?? '');
    }
 
-   public function set (string $field, string $value): bool // TODO refactor
+   public function set (string $field, string $value): bool
    {
       $this->fields[$field] = $value;
 
-      \header($field . ': ' . $value, true);
+      $header = <<<HEADER
+      $field: $value
+      HEADER;
+
+      header($header, true);
 
       return true;
    }
@@ -133,7 +144,11 @@ class Header extends Raw\Header
          $this->fields[$field] = $value;
       }
 
-      \header($field . ': ' . $value, false);
+      $header = <<<HEADER
+      $field: $value
+      HEADER;
+
+      header($header, false);
    }
    public function queue (string $field, string $value = ''): bool
    {
@@ -155,7 +170,7 @@ class Header extends Raw\Header
          $this->fields = $this->prepared;
       }
       else {
-         $this->fields = \array_merge($this->fields, $this->prepared);
+         $this->fields = array_merge($this->fields, $this->prepared);
       }
 
       // @ Set default headers
@@ -176,7 +191,7 @@ class Header extends Raw\Header
 
       if ($send === true) {
          foreach ($queued as $header) {
-            \header($header, false);
+            header($header, false);
          }
       }
 
@@ -188,7 +203,7 @@ class Header extends Raw\Header
       $queued = $this->queued;
 
       foreach ($queued as $header) {
-         \header($header, false);
+         header($header, false);
       }
    }
 }

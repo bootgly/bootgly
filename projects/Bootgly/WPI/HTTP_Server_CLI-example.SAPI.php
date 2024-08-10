@@ -17,7 +17,7 @@ return static function
    #$Request->URI;       // /path/to?query1=value2...
    #$Request->protocol;  // HTTP/1.1
    // ? Request Header
-   #$host = $Request->Raw->Header->get('Host');
+   #$host = $Request->Header->get('Host');
    // ? Request Body
    // @ download
    // Form-data ($_POST, $_FILES)
@@ -34,11 +34,11 @@ return static function
    #return $Response(code: 302); // 302 Not Found
 
    // ? Response Header
-   #$Response->Raw->Header->set('Content-Type', 'text/plain');
+   #$Response->Header->set('Content-Type', 'text/plain');
 
    // Cookies
-   #$Response->Raw->Header->Cookies->append('Test', 'value1');
-   #$Response->Raw->Header->Cookies->append('Test2', 'value2');
+   #$Response->Header->Cookies->append('Test', 'value1');
+   #$Response->Header->Cookies->append('Test2', 'value2');
 
    // ? Response Body
    #return $Response(body: 'Hello World!');

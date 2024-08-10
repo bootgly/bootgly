@@ -11,7 +11,11 @@
 namespace Bootgly\WPI\Modules\HTTP\Server\Response\Raw;
 
 
-abstract class Payload
+use function strlen;
+use function dechex;
+
+
+abstract class Body
 {
    // * Config
    // ...
@@ -30,10 +34,10 @@ abstract class Payload
       switch ($name) {
          // * Metadata
          case 'length':
-            return $this->length ??= \strlen($this->raw);
+            return $this->length ??= strlen($this->raw);
          // Encoded
          case 'chunked':
-            return $this->chunked ??= \dechex(\strlen($this->raw)) . "\r\n$this->raw\r\n";
+            return $this->chunked ??= dechex(strlen($this->raw)) . "\r\n$this->raw\r\n";
 
          default:
             return '';

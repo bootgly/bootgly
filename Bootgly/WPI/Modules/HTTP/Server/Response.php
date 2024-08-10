@@ -12,13 +12,23 @@ namespace Bootgly\WPI\Modules\HTTP\Server;
 
 
 use Bootgly\ABI\IO\FS\File;
-use Bootgly\WPI\Modules\HTTP;
-use Bootgly\WPI\Modules\HTTP\Server\Response\Authentication;
-use Bootgly\WPI\Modules\HTTP\Server\Response\Raw;
+
+use Bootgly\WPI\Modules\HTTP\Server\Response\Authenticable;
+use Bootgly\WPI\Modules\HTTP\Server\Response\Bootable;
+use Bootgly\WPI\Modules\HTTP\Server\Response\Extendable;
+use Bootgly\WPI\Modules\HTTP\Server\Response\Redirectable;
+use Bootgly\WPI\Modules\HTTP\Server\Response\Renderable;
 
 
-abstract class Response extends Raw
+abstract class Response
 {
+   use Authenticable;
+   use Bootable;
+   use Extendable;
+   use Redirectable;
+   use Renderable;
+
+
    const PROTOCOL = 'HTTP/1.1';
 
    // * Config
@@ -60,13 +70,13 @@ abstract class Response extends Raw
    abstract public function __invoke (int $code = 200, array $headers = [], string $body = ''): self;
 
    /**
-    * Appends the provided data to the body of the response.
+    * Get the specified property from the Response or Response Resource.
     *
-    * @param mixed $body The data that should be appended to the response body.
+    * @param string $name The name of the property or Response Resource to get.
     *
-    * @return self The Response instance, for chaining
+    * @return bool|string|int|array<mixed>|self The value of the property or the Response instance, for chaining.
     */
-   abstract public function append ($body): self;
+   abstract public function __get (string $name): bool|string|int|array|self;
    /**
     * Set the HTTP Server Response code.
     *
@@ -74,36 +84,7 @@ abstract class Response extends Raw
     *
     * @return self The Response instance, for chaining 
     */
-   public function code (int $code): self
-   {
-      // * Data
-      // @ status
-      $this->code = $code;
-
-      $status = $code . ' ' . HTTP::RESPONSE_STATUS[$code];
-
-      @[$code, $message] = explode(' ', $status);
-
-      if ($code && $message) {
-         // * Metadata
-         // @ status
-         $this->message = $message;
-         $this->status = $status;
-         $this->response = self::PROTOCOL . ' ' . $status;
-      }
-
-      return $this;
-   }
-   /**
-    * Renders the specified view with the provided data.
-    *
-    * @param string $view The view to render.
-    * @param array<string>|null $data The data to provide to the view.
-    * @param \Closure|null $callback Optional callback.
-    *
-    * @return self The Response instance, for chaining
-    */
-   abstract public function render (string $view, ? array $data = null, ? \Closure $callback = null): self;
+   abstract public function code (int $code): self;
    /**
     * Send the response
     *
@@ -123,23 +104,4 @@ abstract class Response extends Raw
     * @return self The Response instance, for chaining
     */
    abstract public function upload (string|File $file, int $offset = 0, ? int $length = null): self;
-
-   /**
-    * Authenticate the user with the provided authentication method.
-    *
-    * @param Authentication $Method The authentication method to use.
-    *
-    * @return self The Response instance, for chaining
-    */
-   abstract public function authenticate (Authentication $Method): self;
-
-   /**
-    * Redirects to a new URI. Default return is 307 for GET (Temporary Redirect) and 303 (See Other) for POST.
-    *
-    * @param string $URI The new URI to redirect to.
-    * @param ? int $code The HTTP status code to use for the redirection.
-    *
-    * @return self The Response instance, for chaining.
-    */
-   abstract public function redirect (string $URI, ? int $code = null): self;
 }

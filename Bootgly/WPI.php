@@ -15,10 +15,10 @@ use Bootgly\ABI\Debugging\Data\Vars;
 
 use Bootgly\API\Projects;
 
+use Bootgly\WPI\Modules\HTTP\Server;
+use Bootgly\WPI\Modules\HTTP\Server\Request;
+use Bootgly\WPI\Modules\HTTP\Server\Response;
 use Bootgly\WPI\Modules\HTTP\Server\Router;
-use Bootgly\WPI\Nodes\HTTP_Server_ as Server;
-use Bootgly\WPI\Nodes\HTTP_Server_\Request;
-use Bootgly\WPI\Nodes\HTTP_Server_\Response;
 
 
 class WPI extends Projects // Web Programming Interface
@@ -34,53 +34,29 @@ class WPI extends Projects // Web Programming Interface
    // * Metadata
    // ...
 
-   // @ HTTP
-   // @ Nodes
+   // # HTTP
    public Server $Server;
+   // # HTTP Server
+   public Request $Request;
+   public Response $Response;
+   public Router $Router;
 
-   public static Request $Request;
-   public static Response $Response;
-   public static Router $Router;
-
-
-   public function __get (string $name): mixed
-   {
-      switch ($name) {
-         case 'Request':
-            return self::$Request;
-         case 'Response':
-            return self::$Response;
-         case 'Router':
-            return self::$Router;
-         default:
-            return null;
-      }
-   }
 
    public function autoboot (): void
    {
       // ?
-      // TODO remove or modify
-      if (@$_SERVER['REDIRECT_URL'] === NULL) {
-         if (\PHP_SAPI !== 'cli') {
-            throw new \Exception('Missing Rewrite!');
-         }
+      switch (\PHP_SAPI) {
+         case 'cli':
+            break;
+         default:
+            // Debugging Vars
+            Vars::$debug = false;
+            Vars::$exit = true;
 
-         return;
+            if (@$_SERVER['REDIRECT_URL'] === NULL) {
+               throw new \Exception('Missing Rewrite!');
+            }
       }
-
-      // @
-      // Debugging Vars
-      Vars::$debug = false;
-      Vars::$exit = true;
-
-      // @ Instance variables
-      // HTTP
-      $Server = $this->Server = new Server($this);
-
-      $Request = self::$Request = &$Server::$Request;
-      $Response = self::$Response = &$Server::$Response;
-      $Router = self::$Router = &$Server::$Router;
 
       // ---
 

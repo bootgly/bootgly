@@ -52,12 +52,12 @@ class Encoder_ extends Encoders
       }
       finally {
          // @ Check if Request Body is waiting data
-         if ($Request->Raw->Body->waiting) {
+         if ($Request->Body->waiting) {
             return '';
          }
 
-         // @ Output/Stream HTTP Response
-         return $Response->output($Packages, $length);
+         // @ Encode HTTP Response
+         return $Response->encode($Packages, $length);
       }
    }
 }
