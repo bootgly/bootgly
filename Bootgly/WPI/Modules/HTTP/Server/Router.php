@@ -13,14 +13,12 @@ namespace Bootgly\WPI\Modules\HTTP\Server;
 
 use Bootgly\ABI\Data\__String\Path;
 use Bootgly\ABI\IO\FS\File;
-
+use const Bootgly\WPI;
 use Bootgly\WPI\Modules\HTTP\Server\Route;
 
 
 class Router
 {
-   public static string $Server;
-
    // * Config
    // ...
 
@@ -37,10 +35,8 @@ class Router
    private array $routeds;
 
 
-   public function __construct (string $Server)
+   public function __construct ()
    {
-      self::$Server = $Server;
-
       // * Config
       // ...
 
@@ -68,7 +64,7 @@ class Router
    public function boot (string $path, string|array $instances = ['routes']): void
    {
       // @ Prepare import
-      $Request = self::$Server::$Request;
+      $Request = WPI->Request;
       $Route = &$this->Route;
       $Router = &$this;
       // @ Set import data
@@ -140,7 +136,7 @@ class Router
 
       // # Route Methods
       // @ Match
-      if (empty($methods) || \in_array(self::$Server::$Request->method, (array) $methods)) {
+      if (empty($methods) || \in_array(WPI->Request->method, (array) $methods)) {
          $routed = 1;
       }
 
@@ -155,7 +151,7 @@ class Router
 
          // @ Match
          $routed = match (true) {
-            $route === self::$Server::$Request->URL,
+            $route === WPI->Request->URL,
             // Not Matched Route (nested level)
             $Route->nested && $route === '*',
             // Not Matched Route (root level)
@@ -171,7 +167,7 @@ class Router
          // Route Params values
          if ($Route->parameterized) {
             // @ HTTP Server Request
-            $Path = new Path(self::$Server::$Request->URL);
+            $Path = new Path(WPI->Request->URL);
             $parts = $Path->parts;
             // @ Router Route
             $Params = &$Route->Params;
@@ -195,16 +191,16 @@ class Router
             $handler = $handler->bindTo($Route, $Route);
 
             $Response = $handler(
-               self::$Server::$Request,
-               self::$Server::$Response
+               WPI->Request,
+               WPI->Response
             );
          }
          else {
             $Response = \call_user_func_array(
                callback: $handler,
                args: [
-                  self::$Server::$Request,
-                  self::$Server::$Response,
+                  WPI->Request,
+                  WPI->Response,
                   $Route
                ]
             );
@@ -221,8 +217,9 @@ class Router
          if ($Response instanceof \Generator) {
             // Route nested
          }
-         else if ($Response && $Response !== self::$Server::$Response) {
-            self::$Server::$Response = $Response;
+         else if ($Response && $Response !== WPI->Response) {
+            $WPI = WPI;
+            $WPI->Response = $Response;
          }
          $Route->nested = false;
 
@@ -269,7 +266,7 @@ class Router
                $Route->catched = '';
             }
             else {
-               $subject = self::$Server::$Request->URL;
+               $subject = WPI->Request->URL;
             }
             // @
             \preg_match($pattern, $subject, $matches);
@@ -312,7 +309,7 @@ class Router
          $locations = \explode('/', \str_replace("/", "\/", $Route->catched));
       }
       else {
-         $locations = \explode('/', \str_replace("/", "\/", self::$Server::$Request->URL));
+         $locations = \explode('/', \str_replace("/", "\/", WPI->Request->URL));
       }
       // ? Route Path Node replaced by Regex
       $regex_replaced = [];

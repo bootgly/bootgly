@@ -11,6 +11,9 @@
 namespace Bootgly\WPI\Modules\HTTP\Server;
 
 
+use const Bootgly\WPI;
+
+
 class Route
 {
    public const START_PARAM = ':';
@@ -102,7 +105,8 @@ class Route
          // * Metadata
          case 'base':
          case 'prefix': // TODO refactor
-            Router::$Server::$Request->base = $value;
+            $WPI = WPI;
+            $WPI->Request->base = $value;
             break;
 
          default:
