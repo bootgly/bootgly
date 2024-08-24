@@ -23,7 +23,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Raw\Header\Cookies;
 
 class Header extends Raw\Header implements Defining
 {
-   public Cookies $Cookies;
+   protected Cookies $Cookies;
 
    // * Config
    // ... inherited
