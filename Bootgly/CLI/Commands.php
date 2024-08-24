@@ -154,7 +154,7 @@ class Commands
    }
 
    /**
-    * List all commands
+    * List commands from a namespace or all commands
     *
     * @param object|null $From
     *
@@ -169,8 +169,8 @@ class Commands
 
       $commands = [];
 
-      foreach ($this->commands as $Script => $Commands) {
-         if ($Script !== $From::class) {
+      foreach ($this->commands as $namespace => $Commands) {
+         if ($namespace !== $From::class) {
             continue;  
          }
 
@@ -182,7 +182,7 @@ class Commands
       return $commands;
    }
    /**
-    * Find a command by its name
+    * Find a command by its name (with namespace if provided) and return it if found
     *
     * @param ?string $command
     * @param object|null $From
@@ -209,37 +209,6 @@ class Commands
       }
 
       return null;
-   }
-   /**
-    * Show the help message
-    *
-    * @param string|null $message
-    * @param object|null $From
-    *
-    * @return bool
-    */
-   public function help (?string $message = null, ?object $From = null): bool
-   {
-      // !
-      // * Data
-      $banner = $this->banner;
-      $Helper = $this->Helper;
-      // * Metadata
-      // # Command
-      $script = $this->script;
-
-      $script = match ($script[0]) {
-         '/'     => new Path($script)->current,
-         '.'     => $script,
-         default => 'php ' . $script
-      };
-
-      // @
-      if ($Helper) {
-         $Helper($banner, $message, $script, $From);
-      }
-
-      return true;
    }
 
    /**
