@@ -11,10 +11,10 @@
 namespace Bootgly;
 
 
+use Exception;
+
 use Bootgly\ABI\Debugging\Data\Vars;
-
 use Bootgly\API\Projects;
-
 use Bootgly\WPI\Modules\HTTP\Server;
 use Bootgly\WPI\Modules\HTTP\Server\Request;
 use Bootgly\WPI\Modules\HTTP\Server\Response;
@@ -54,7 +54,7 @@ class WPI extends Projects // Web Programming Interface
             Vars::$exit = true;
 
             if (@$_SERVER['REDIRECT_URL'] === NULL) {
-               throw new \Exception('Missing Rewrite!');
+               throw new Exception('Missing Rewrite!');
             }
       }
 

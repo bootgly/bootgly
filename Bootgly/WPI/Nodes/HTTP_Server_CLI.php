@@ -11,18 +11,21 @@
 namespace Bootgly\WPI\Nodes;
 
 
+use function count;
+use function function_exists;
+use function opcache_invalidate;
+use function clearstatcache;
+use Exception;
+use Throwable;
+
 use Bootgly\ABI\Debugging\Data\Throwables\Exceptions;
 use Bootgly\ABI\IO\FS\File;
-
 use Bootgly\ACI\Logs\Logger;
-
 use Bootgly\ACI\Tests;
 use Bootgly\ACI\Tests\Tester;
-
 use Bootgly\API\Environments;
 use Bootgly\API\Projects;
 use Bootgly\API\Server as SAPI;
-
 use const Bootgly\WPI;
 use Bootgly\WPI\Endpoints\Servers\Modes;
 use Bootgly\WPI\Interfaces\TCP_Client_CLI;
@@ -68,17 +71,16 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       // \
       parent::__construct();
       // * Config
-      $this->socket = ($this->ssl !== null
+      $this->socket = $this->ssl !== null
          ? 'https'
-         : 'http'
-      );
+         : 'http';
       // @ Configure Logger
       $this->Logger = new Logger(channel: 'HTTP.Server.CLI');
 
       // . Request,Response,Router
       self::$Request = new Request;
       self::$Response ??= new Response;
-      self::$Router = new Router(static::class);
+      self::$Router = new Router;
 
       // . Decoders,Encoders
       self::$Decoder = new Decoder_;
@@ -120,10 +122,9 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       }
 
       // * Config
-      $this->socket = ($this->ssl !== null
+      $this->socket = $this->ssl !== null
          ? 'https://'
-         : 'http://'
-      );
+         : 'http://';
 
       return $this;
    }
@@ -142,14 +143,14 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
 
                // ? Validate the existence of the bootstrap file
                if ($Suite_Bootstrap_File->exists === false) {
-                  throw new \Exception('Validate the existence of the bootstrap file!');
+                  throw new Exception('Validate the existence of the bootstrap file!');
                }
 
                // @ Reset Cache of Test boot file
-               if (\function_exists('opcache_invalidate')) {
-                  \opcache_invalidate($Suite_Bootstrap_File, true);
+               if (function_exists('opcache_invalidate')) {
+                  opcache_invalidate($Suite_Bootstrap_File, true);
                }
-               \clearstatcache(false, $Suite_Bootstrap_File);
+               clearstatcache(false, $Suite_Bootstrap_File);
 
                $files = (@require $Suite_Bootstrap_File)['tests'];
 
@@ -168,16 +169,16 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
                   }
 
                   // @ Reset Cache of Test case file
-                  if (\function_exists('opcache_invalidate')) {
-                     \opcache_invalidate($Test_Case_File, true);
+                  if (function_exists('opcache_invalidate')) {
+                     opcache_invalidate($Test_Case_File, true);
                   }
-                  \clearstatcache(false, $Test_Case_File);
+                  clearstatcache(false, $Test_Case_File);
 
                   // @ Load Test case from file
                   try {
                      $spec = require $Test_Case_File;
                   }
-                  catch (\Throwable) {
+                  catch (Throwable) {
                      $spec = null;
                   }
 
@@ -185,7 +186,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
                   SAPI::$Tests[self::class][] = $spec;
                }
             }
-            catch (\Throwable $Throwable) {
+            catch (Throwable $Throwable) {
                Exceptions::report($Throwable);
             }
 

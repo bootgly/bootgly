@@ -34,7 +34,7 @@ class HTTP_Server_ implements HTTP, Server
 
       self::$Request = new Request;
       self::$Response = new Response;
-      self::$Router = new Router(static::class);
+      self::$Router = new Router;
 
       $WPI = WPI;
       // # HTTP

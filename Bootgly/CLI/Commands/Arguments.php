@@ -11,6 +11,12 @@
 namespace Bootgly\CLI\Commands;
 
 
+use function explode;
+use function strpos;
+use function str_split;
+use function substr;
+
+
 class Arguments
 {
    /**
@@ -18,33 +24,37 @@ class Arguments
     * 
     * @param array<string> $args 
     *
-    * @return array<array<string>|array<string,bool|string>>
+    * @return array<array<string>|array<string,bool|int|string>|string>
     */
    public function parse (array $args): array
    {
       // !
-      $options = [];
+      $script = '';
       $arguments = [];
-
-      // @ Remove the command from the arguments
-      $args = \array_slice($args, 2);
+      $options = [];
 
       // @
-      foreach ($args as $arg) {
-         if (\strpos($arg, '--') === 0) {
+      foreach ($args as $index => $arg) {
+         if ($index === 0) { // script like `/usr/local/bin/bootgly`
+            $script = $arg;
+            continue;
+         }
+
+         if (strpos($arg, '--') === 0) {
             // Option (--op1[=val1])
-            $option_parts = \explode('=', \substr($arg, 2), 2);
+            $option_parts = explode('=', substr($arg, 2), 2);
             $option_name = $option_parts[0];
             $option_value = isSet($option_parts[1]) ? $option_parts[1] : true;
 
             $options[$option_name] = $option_value;
          }
-         elseif (\strpos($arg, '-') === 0) {
+         elseif (strpos($arg, '-') === 0) {
             // Short Option (-opt1)
-            $option_names = \str_split(\substr($arg, 1));
+            $option_names = str_split(substr($arg, 1));
 
             foreach ($option_names as $option_name) {
-               $options[$option_name] = true;
+               $options[$option_name] ??= 0;
+               $options[$option_name] += 1;
             }
          }
          else {
@@ -53,6 +63,6 @@ class Arguments
          }
       }
 
-      return [$arguments, $options];
+      return [$script, $arguments, $options];
    }
 }

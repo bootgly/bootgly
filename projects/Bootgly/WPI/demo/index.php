@@ -2,7 +2,13 @@
 
 namespace projects\Bootgly\WPI\examples\app;
 
-# $this->Template = new Template($this->Web);
+use const Bootgly\WPI;
+
+if ( (WPI->Server ?? false) === false) {
+   return;
+}
+
+$Router = WPI->Router;
 
 $Router->boot(__DIR__, [
    'routes',
