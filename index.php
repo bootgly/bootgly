@@ -15,4 +15,4 @@
 define('BOOTGLY_WORKING_BASE', __DIR__);
 define('BOOTGLY_WORKING_DIR', BOOTGLY_WORKING_BASE . DIRECTORY_SEPARATOR);
 
-(@include __DIR__ . '/autoload.php') || exit(1);
+(@include __DIR__ . '/autoboot.php') || exit(1);
