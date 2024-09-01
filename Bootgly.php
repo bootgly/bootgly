@@ -28,6 +28,10 @@ class Bootgly
 
 
    /**
+    * Autoboot Bootgly interfaces.
+    * 
+    * @return void
+    *
     * @throws Exception
     */
    public function autoboot (): void
