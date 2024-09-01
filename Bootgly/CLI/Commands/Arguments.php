@@ -44,7 +44,7 @@ class Arguments
             // Option (--op1[=val1])
             $option_parts = explode('=', substr($arg, 2), 2);
             $option_name = $option_parts[0];
-            $option_value = isSet($option_parts[1]) ? $option_parts[1] : true;
+            $option_value = $option_parts[1] ?? true;
 
             $options[$option_name] = $option_value;
          }

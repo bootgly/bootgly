@@ -29,7 +29,7 @@ class Project
    protected array $paths;
 
    // * Metadata
-   private ? int $index;
+   private ?int $index;
    private string $path;
 
 

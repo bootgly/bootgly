@@ -153,7 +153,7 @@ $Commands->register(function (array $arguments = [], array $options = [])
             default => 'php ' . $script
          };
          $usage = $script . ' @#Black: [...arguments] [...options] @;';
-         if ($verbosity === 1) {
+         if ($verbosity >= 1) {
             $usage .= <<<OUTPUT
                @..;Example:
             @#Black:{$script} serve
