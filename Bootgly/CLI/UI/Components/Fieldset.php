@@ -11,11 +11,14 @@
 namespace Bootgly\CLI\UI\Components;
 
 
+use function explode;
+use function str_repeat;
+use function mb_strlen;
+use function preg_replace;
+
 use Bootgly\ABI\Data\__String;
 use Bootgly\ABI\Templates\Template\Escaped as TemplateEscaped;
-
 use Bootgly\API\Component;
-
 use Bootgly\CLI\Terminal\Output;
 
 
@@ -90,7 +93,7 @@ class Fieldset extends Component
             $border_top_left = $borders['top-left'];
             $border_top_right = $borders['top-right'];
 
-            $line = \str_repeat('─', $length);
+            $line = str_repeat('─', $length);
 
             $Output->render(<<<OUTPUT
             {$color}{$border_top_left}@;{$title}{$color}{$line}{$border_top_right}@;\n
@@ -122,7 +125,7 @@ class Fieldset extends Component
             $border_bottom = $borders['bottom'];
             $border_bottom_right = $borders['bottom-right'];
 
-            $line = \str_repeat($border_bottom, $length);
+            $line = str_repeat($border_bottom, $length);
 
             $Output->render(<<<OUTPUT
             {$color}{$border_bottom_left}{$line}{$border_bottom_right}\n
@@ -149,19 +152,19 @@ class Fieldset extends Component
       $title = $this->title ?? '';
       $content = $this->content ?? '';
       // * Metadata
-      $title_length = \mb_strlen(
-         \preg_replace(__String::ANSI_ESCAPE_SEQUENCE_REGEX, '', $title)
+      $title_length = mb_strlen(
+         preg_replace(__String::ANSI_ESCAPE_SEQUENCE_REGEX, '', $title)
       );
       // ---
       $content = TemplateEscaped::render($content);
-      $content_lines = \explode("\n", $content);
+      $content_lines = explode("\n", $content);
 
       $line_length = $width;
       if ($line_length === null) {
          // @ Determine max line length (based on content line and title)
          $line_length = $title_length;
          foreach ($content_lines as $content_line) {
-            $content_line_length = \mb_strlen($content_line);
+            $content_line_length = mb_strlen($content_line);
             if ($content_line_length > $line_length) {
                $line_length = $content_line_length;
             }

@@ -11,8 +11,12 @@
 namespace Bootgly\CLI\UI\Components\Table;
 
 
-use Bootgly\ABI\Data\__String;
+use function mb_strlen;
+use function preg_replace;
+use function count;
+use function max;
 
+use Bootgly\ABI\Data\__String;
 use Bootgly\CLI\UI\Components\Table;
 
 

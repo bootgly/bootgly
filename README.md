@@ -110,7 +110,7 @@ Above is the native compatibility, of course it is possible to run on Windows an
 #### \- Bootgly CLI 📟
 
 - `php-cli` ⚠️
-- `php-mbstring` ⚠️
+- `php-mbstring` 👍
 - `php-readline` ⚠️
 
 #### \- Bootgly WPI 🌐

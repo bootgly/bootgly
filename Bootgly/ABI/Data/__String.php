@@ -19,7 +19,7 @@ class __String implements Data // Simple class (advanced methods coming soon)
    public const ANSI_ESCAPE_SEQUENCE_REGEX = '/\x1B\[[0-9;]*[mK]/';
 
    // * Config
-   public ? string $encoding;
+   public ?string $encoding;
 
    // * Data
    public string $string;
@@ -33,7 +33,7 @@ class __String implements Data // Simple class (advanced methods coming soon)
    private string|false $pascalcase;
 
 
-   public function __construct (string $string, ? string $encoding = null)
+   public function __construct (string $string, ?string $encoding = null)
    {
       // * Config
       $this->encoding = $encoding;
@@ -144,6 +144,50 @@ class __String implements Data // Simple class (advanced methods coming soon)
    public function __toString (): string
    {
       return $this->string;
+   }
+
+   /**
+    * Parse a string encoding to a certain encoding.
+    * 
+    * @param string|null $encoding
+    * 
+    * @return string
+    *
+    * @license MIT
+    * @author Fabien Potencier and Symfony contributors
+    * @link https://github.com/symfony/polyfill-mbstring
+    */
+   public static function encoding (string|null $encoding = null): string
+   {
+      if ($encoding === null) {
+         $encoding = 'UTF-8';
+      }
+
+      $encoding = strtoupper($encoding);
+
+      if ('8BIT' === $encoding || 'BINARY' === $encoding) {
+         return 'CP850';
+      }
+      if ('UTF8' === $encoding) {
+         return 'UTF-8';
+      }
+
+      return $encoding;
+   }
+   /**
+    * Get data map from the unidata directory (used to polyfills, conversions, etc.).
+    * 
+    * @param string $case The case to get data from. (e.g. caseFolding, lowerCase, upperCase, titleCaseRegexp)
+    * 
+    * @return array<string, string>|false
+    */
+   public static function mapping (string $case): array|false
+   {
+      if (file_exists($file = __DIR__.'/resources/unidata/'.$case.'.php')) {
+         return require $file;
+      }
+
+      return false;
    }
 
    /**
