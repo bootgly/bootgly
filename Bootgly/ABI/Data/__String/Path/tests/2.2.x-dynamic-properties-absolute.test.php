@@ -1,7 +1,7 @@
 <?php
 
 use Bootgly\ABI\Data\__String\Path;
-use Bootgly\ACI\Tests\Assertions\Assertion;
+use Bootgly\ACI\Tests\Cases\Assertion;
 
 return [
    // @ configure
@@ -12,18 +12,19 @@ return [
    'test' => function () {
       // @
       $Path = new Path('/etc/php/');
-
       yield new Assertion(
-         assertion: $Path->absolute === true,
+         actual: $Path->absolute,
+         expected: true,
          description: 'Valid absolute path',
          fallback: 'Path is absolute!'
-      );
+      )->assert();
 
       $Path = new Path('www/bootgly/index.php');
       yield new Assertion(
-         assertion: $Path->absolute === false,
+         actual: $Path->absolute,
+         expected: false,
          description: 'Invalid relative path',
          fallback: 'Path is relative!'
-      );
+      )->assert();
    }
 ];

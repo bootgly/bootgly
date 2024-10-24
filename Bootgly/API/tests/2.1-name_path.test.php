@@ -1,7 +1,7 @@
 <?php
 namespace Bootgly;
 
-use Bootgly\ACI\Tests\Assertions\Assertion;
+use Bootgly\ACI\Tests\Cases\Assertion;
 
 use Bootgly\API\Project;
 use Bootgly\API\Projects;
@@ -28,8 +28,9 @@ return [
       $Project = Projects::select(project: 'BootglyCLI');
 
       yield new Assertion(
-         assertion: $Project->path === Projects::CONSUMER_DIR . 'Bootgly/CLI/',
+         actual: $Project->path,
+         expected: Projects::CONSUMER_DIR . 'Bootgly/CLI/',
          fallback: 'Failed to select Project path by name'
-      );
+      )->assert();
    }
 ];

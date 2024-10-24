@@ -14,7 +14,7 @@ namespace Bootgly\ACI\Tests;
 use Bootgly\ACI\Logs\LoggableEscaped;
 use Bootgly\ACI\Tests;
 use Bootgly\ACI\Tests\Assertions;
-use Bootgly\ACI\Tests\Assertions\Assertion;
+use Bootgly\ACI\Tests\Cases\Assertion;
 
 
 class Test extends Assertions

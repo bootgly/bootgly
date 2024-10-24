@@ -117,6 +117,9 @@ class Path // support to FileSystem Paths only (Linux only)
             $path = $this->path ?? '';
             if ($path) {
                $lastNode = strrchr(haystack: $path, needle: DIRECTORY_SEPARATOR);
+               if ($lastNode === false) {
+                  return $this->current = $path;
+               }
 
                $current = substr($lastNode, 1);
 

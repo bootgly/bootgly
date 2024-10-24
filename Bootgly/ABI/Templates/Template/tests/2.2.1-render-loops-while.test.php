@@ -1,7 +1,7 @@
 <?php
 
 use Bootgly\ABI\Templates\Template;
-use Bootgly\ACI\Tests\Assertions\Assertion;
+use Bootgly\ACI\Tests\Cases\Assertion;
 
 return [
    // @ configure

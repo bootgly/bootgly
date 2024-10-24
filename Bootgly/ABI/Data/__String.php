@@ -116,9 +116,13 @@ class __String implements Data // Simple class (advanced methods coming soon)
    {
       switch ($name) {
          case 'search':
-            return self::search($this->string, ...$arguments);
+            return self::$name(
+               string: $this->string,
+               search: $arguments[0],
+               offset: $arguments[1] ?? 0
+            );
          case 'pad':
-            return self::pad(
+            return self::$name(
                string: $this->string,
                length: $arguments[0],
                padding: $arguments[1] ?? ' ',
@@ -164,7 +168,7 @@ class __String implements Data // Simple class (advanced methods coming soon)
 
       // @
       foreach ($terms as $term) {
-         $position = strpos($string, $term, $offset);
+         $position = strpos($string, $term, (int) $offset);
 
          if ($position !== false) {
             $found = $term;
@@ -199,7 +203,7 @@ class __String implements Data // Simple class (advanced methods coming soon)
    {
       // Remove ANSI escape characters from the string when calculating length.
       $string_without_ansi = preg_replace(self::ANSI_ESCAPE_SEQUENCE_REGEX, '', $string);
-      $input_length = mb_strlen($string_without_ansi, $encoding);
+      $input_length = mb_strlen((string) $string_without_ansi, $encoding);
       $pad_string_length = mb_strlen($padding, $encoding);
 
       if ($length <= 0 || ($length - $input_length) <= 0) {

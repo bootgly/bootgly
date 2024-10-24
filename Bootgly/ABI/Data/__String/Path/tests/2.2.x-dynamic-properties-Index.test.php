@@ -2,7 +2,7 @@
 
 
 use Bootgly\ABI\Data\__String\Path;
-use Bootgly\ACI\Tests\Assertions\Assertion;
+use Bootgly\ACI\Tests\Cases\Assertion;
 
 return [
    // @ configure
