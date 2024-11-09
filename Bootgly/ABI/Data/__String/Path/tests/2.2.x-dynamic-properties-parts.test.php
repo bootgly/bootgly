@@ -1,7 +1,10 @@
 <?php
 
+use Generator;
 
 use Bootgly\ABI\Data\__String\Path;
+use Bootgly\ACI\Tests\Cases\Assertion;
+use Bootgly\ACI\Tests\Cases\Assertions;
 
 
 return [
@@ -10,13 +13,17 @@ return [
    // @ simulate
    // ...
    // @ test
-   'test' => function () {
-      // @
+   'test' => new Assertions(Case: function (): Generator
+   {
       // Valid
       $Path = new Path('/var/www/bootgly/index.php');
-      yield assert(
-         assertion: $Path->parts === ['var', 'www', 'bootgly', 'index.php'],
-         description: 'Returned path parts: ' . json_encode($Path->parts)
-      );
-   }
+      yield new Assertion(
+         description: 'Returned path parts',
+         fallback: "Returned path parts: " . json_encode($Path->parts)
+      )
+         ->assert(
+            actual: $Path->parts,
+            expected: ['var', 'www', 'bootgly', 'index.php'],
+         );
+   })
 ];

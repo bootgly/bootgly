@@ -45,7 +45,7 @@ class Tester extends Tests
       // auto
       $this->autoBoot = $specifications['autoBoot'] ?? '';
       $this->autoInstance = $specifications['autoInstance'] ?? false;
-      $this->autoResult = $specifications['autoResult'] ?? false;
+      $this->autoReport = $specifications['autoReport'] ?? false;
       $this->autoSummarize = $specifications['autoSummarize'] ?? false;
       // exit
       self::$exitOnFailure = $specifications['exitOnFailure'] ?? self::$exitOnFailure;
@@ -125,7 +125,7 @@ class Tester extends Tests
             $specifications['last'] = true;
          }
          if ($testCaseTarget > 0 && ($index + 1) !== $testCaseTarget) {
-            $specifications['skip'] = true;
+            $specifications['ignore'] = true;
          }
 
          $this->specifications[] = $specifications;
@@ -140,12 +140,20 @@ class Tester extends Tests
    {
       if ($instance === true) {
          foreach ($this->specifications as $specifications) {
-            $file = current($this->tests);
-
             // @ Skip test
-            // if private (_(.*).test.php) && script is running in a CI/CD enviroment
+            // Private files
+            $file = current($this->tests);
             if ($file[0] === '_' && Environment::match(Environment::CI_CD) === true) {
                $this->skip('(@private)');
+
+               continue;
+            }
+            // Configured skips
+            $skip = $specifications['skip'] ?? false;
+            $ignore = $specifications['ignore'] ?? false;
+            if ($skip === true && $ignore === false) {
+               $this->skip();
+
                continue;
             }
 
@@ -170,11 +178,13 @@ class Tester extends Tests
     *
     * @return Test|false
     */
-   public function test (? array &$specifications): Test|false
+   public function test (?array &$specifications): Test|false
    {
       if ( empty($specifications) ) {
          $this->skipped++;
+
          next($this->tests);
+
          return false;
       }
 
@@ -200,7 +210,7 @@ class Tester extends Tests
          $header = ' @#Cyan:(' . self::$suite . ') @;' . ' @#Blue: ' . $header . '  @;';
 
          // @ Pad string with `=`
-         $length = Tests::$width + 43;
+         $length = Tests::$width + 44;
 
          $header = str_pad(
             string: $header,
@@ -219,7 +229,7 @@ class Tester extends Tests
     * @param null|string $info 
     * @return void 
     */
-   public function skip (? string $info = null): void
+   public function skip (?string $info = null): void
    {
       $file = current($this->tests);
 

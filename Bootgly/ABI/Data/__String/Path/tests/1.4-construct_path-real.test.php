@@ -1,8 +1,10 @@
 <?php
 
+use Generator;
 
 use Bootgly\ABI\Data\__String\Path;
 use Bootgly\ACI\Tests\Cases\Assertion;
+use Bootgly\ACI\Tests\Cases\Assertions;
 
 return [
    // @ configure
@@ -10,28 +12,35 @@ return [
    // @ simulate
    // ...
    // @ test
-   'test' => function () {
+   'test' => new Assertions(Case: function (): Generator
+   {
       // @
       // Valid
-      Assertion::$description = 'Valid path';
       $Path = new Path;
       // * Config
       $Path->real = true;
       $Path->construct('/usr/bin');
-      yield assert(
-         assertion: (string) $Path === '/usr/bin',
-         description: 'Real path not exists!'
-      );
+      yield new Assertion(
+         description: 'Valid real path',
+         fallback: 'Real path not exists!'
+      )
+         ->assert(
+            actual: (string) $Path,
+            expected: '/usr/bin',
+         );
 
       // Invalid
-      Assertion::$description = 'Invalid path';
       $Path = new Path;
       // * Config
       $Path->real = true;
       $Path->construct('/usr/bin/fakebootgly');
-      yield assert(
-         assertion: (string) $Path === '',
-         description: 'Fake path valid?!'
-      );
-   }
+      yield new Assertion(
+         description: 'Invalid real path',
+         fallback: 'Fake path valid?!'
+      )
+         ->assert(
+            actual: (string) $Path,
+            expected: '',
+         );
+   })
 ];

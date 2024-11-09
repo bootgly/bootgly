@@ -7,7 +7,7 @@ return [
    // * Config
    'autoBoot' => __DIR__,
    'autoInstance' => true,
-   'autoResult' => true,
+   'autoReport' => true,
    'autoSummarize' => true,
    'exitOnFailure' => true,
    // * Data

@@ -28,9 +28,11 @@ return [
       $Project = Projects::select(project: 'BootglyCLI');
 
       yield new Assertion(
-         actual: $Project->path,
-         expected: Projects::CONSUMER_DIR . 'Bootgly/CLI/',
          fallback: 'Failed to select Project path by name'
-      )->assert();
+      )
+         ->assert(
+            actual: $Project->path,
+            expected: Projects::CONSUMER_DIR . 'Bootgly/CLI/',
+         );
    }
 ];

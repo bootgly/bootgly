@@ -1,8 +1,11 @@
 <?php
 
 
+use Generator;
+
 use Bootgly\ABI\Data\__String\Path;
 use Bootgly\ACI\Tests\Cases\Assertion;
+use Bootgly\ACI\Tests\Cases\Assertions;
 
 return [
    // @ configure
@@ -10,23 +13,29 @@ return [
    // @ simulate
    // ...
    // @ test
-   'test' => function () {
+   'test' => new Assertions(Case: function (): Generator
+   {
       // @
-
       $Path = new Path('/var/www/bootgly/index.php');
 
       $lastKey = $Path->Index->Last->key;
-      Assertion::$description = 'Return Index last key';
-      yield assert(
-         assertion: $lastKey === 3,
-         description: 'Last index key returned: ' . $lastKey
+      yield new Assertion(
+         description: 'Return Index last key',
+         fallback: 'Last index key returned: ' . $lastKey
+      )->assert(
+         actual: $lastKey,
+         expected: 3,
       );
 
-      Assertion::$description = 'Return Index last value';
       $lastValue = $Path->Index->Last->value;
-      yield assert(
-         assertion: $lastValue === 'index.php',
-         description: 'Last index value returned: ' . $lastValue
+      yield new Assertion(
+         description: 'Return Index last value',
+         fallback: 'Last index value returned: ' . $lastValue
+      )->assert(
+         actual: $lastValue,
+         expected: 'index.php',
       );
-   }
+   })
 ];
+
+#HIGHLIGHT

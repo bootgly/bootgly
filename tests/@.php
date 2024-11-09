@@ -26,7 +26,7 @@ return [
       'Bootgly/ABI/Templates/Template/Escaped/',
 
       // Abstract Common Interface (ACI)
-      # ...
+      'Bootgly/ACI/Tests/',
 
       // Abstract Data Interface (ADI)
       'Bootgly/ADI/Table/',

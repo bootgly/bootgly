@@ -11,16 +11,7 @@
 namespace Bootgly\ACI\Tests;
 
 
-class Assertions
+interface Assertion // Implementation/Repository
 {
-   // * Config
-   /** @var array<string|null> */
-   public array $descriptions = [];
-
-   // * Data
-   /** @var array<bool> */
-   protected array $results = [];
-
-   // * Metadata
-   // ...
+   public function fail (mixed $actual, mixed $expected): array;
 }

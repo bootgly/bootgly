@@ -2,6 +2,7 @@
 
 use Bootgly\ABI\Templates\Template;
 use Bootgly\ACI\Tests\Cases\Assertion;
+use Bootgly\ACI\Tests\Cases\Assertions;
 
 return [
    // @ configure
@@ -9,7 +10,7 @@ return [
    // @ simulate
    // ...
    // @ test
-   'test' => function () {
+   'test' => new Assertions(function () {
       // @ Valid
       $Template11 = new Template(
          <<<'TEMPLATE'
@@ -21,13 +22,16 @@ return [
       $Template11->render([
          'tenth' => 10
       ]);
-      Assertion::$description = 'Normal while';
-      yield assert(
-         assertion: $Template11->output === <<<'OUTPUT'
-         10987654321
-         OUTPUT,
-         description: "Template #1.1: output does not match: \n`" . $Template11->output . '`'
-      );
+      yield new Assertion(
+         description: 'Normal while',
+         fallback: "Template #1.1: output does not match: \n`" . $Template11->output . '`'
+      )
+         ->assert(
+            actual: $Template11->output,
+            expected: <<<'OUTPUT'
+            10987654321
+            OUTPUT
+         );
 
       // @ Neutral
       // Escaped
@@ -41,17 +45,20 @@ return [
       $Template21->render([
          'tenth' => 10
       ]);
-      Assertion::$description = 'While escaped';
-      yield assert(
-         assertion: $Template21->output === <<<'OUTPUT'
-         @while $tenth:
-            @> $tenth--;
-         @while;
-         OUTPUT,
-         description: "Template #2.1: output does not match: \n`" . $Template21->output . '`'
-      );
+      yield new Assertion(
+         description: 'While escaped',
+         fallback: "Template #2.1: output does not match: \n`" . $Template21->output . '`'
+      )
+         ->assert(
+            actual: $Template21->output,
+            expected: <<<'OUTPUT'
+            @while $tenth:
+               @> $tenth--;
+            @while;
+            OUTPUT
+         );
 
       // @ Invalid
       // ...
-   }
+   })
 ];

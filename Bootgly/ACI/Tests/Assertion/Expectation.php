@@ -8,16 +8,10 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\ACI\Tests\Assertions\Comparator;
+namespace Bootgly\ACI\Tests\Assertion;
 
 
-use Bootgly\ACI\Tests\Assertions\Comparator;
-
-
-class Equal implements Comparator
+interface Expectation extends Comparator
 {
-   public function compare ($actual, $expected): bool
-   {
-      return $actual === $expected;
-   }
+   public function __construct (mixed ...$values);
 }

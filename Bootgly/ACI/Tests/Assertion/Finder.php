@@ -8,19 +8,14 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\ACI\Tests;
+namespace Bootgly\ACI\Tests\Assertion;
 
 
-class Assertions
+interface Finder extends Comparator
 {
-   // * Config
-   /** @var array<string|null> */
-   public array $descriptions = [];
-
-   // * Data
-   /** @var array<bool> */
-   protected array $results = [];
-
    // * Metadata
-   // ...
+   public mixed $found {
+      get;
+      set;
+   }
 }

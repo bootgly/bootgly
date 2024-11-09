@@ -12,7 +12,7 @@ parameters:
    level: 9
 
    paths:
-      - ../Bootgly
+      - ../Bootgly/ABI
    ignoreErrors:
       - identifier: property.uninitializedReadonly
       - identifier: property.private

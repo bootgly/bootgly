@@ -22,7 +22,7 @@ class Vars implements Debugging
    public static bool $print = true;
    public static bool $return = false;
    public static bool $exit = true;
-   public const DEFAULT_IDENTATIONS = 3;
+   public const int DEFAULT_IDENTATIONS = 3;
    // _ Validators
    /** @var array<string> */
    public static array $IPs = [];
@@ -35,20 +35,22 @@ class Vars implements Debugging
    public static array $labels = [];
    // _ Delimiters
    // Call
-   public static ? int $from = null;
-   public static ? int $to = null;
+   public static ?int $from = null;
+   public static ?int $to = null;
    // Title
-   public static ? string $search = null;
+   public static ?string $search = null;
 
    // * Data
    // .. Backtrace
-   public static ? Backtrace $Backtrace = null;
+   public static ?Backtrace $Backtrace = null;
 
    // * Metadata
    // ! Templating
    protected static bool $CLI = false;
    // >> Output
    protected static string $Output = '';
+   protected static array $backtraces = [];
+   protected static string $vars = '';
 
 
    public static function reset (): void
@@ -68,7 +70,10 @@ class Vars implements Debugging
       self::$search = null;
    }
 
-   private static function dump (mixed $value, int $indentations = self::DEFAULT_IDENTATIONS): string
+   private static function dump (
+      mixed $value,
+      int $indentations = self::DEFAULT_IDENTATIONS
+   ): string
    {
       $type = gettype($value);
       switch ($type) {
@@ -352,7 +357,8 @@ class Vars implements Debugging
 
       // * Data
       // @ Backtrace
-      $Backtrace = self::$Backtrace ??= new Backtrace();
+      $Backtrace = self::$Backtrace ??= new Backtrace;
+      $Backtrace::$traces = self::$traces - 1;
       self::$Backtrace = null;
 
       // * Metadata
@@ -397,32 +403,35 @@ class Vars implements Debugging
             self::$Output .= "\n";
          }
          // ---
-         // @ Backtrace
+         // @ Backtraces
          self::$Output .= $Backtrace->dump();
+         self::$backtraces = $Backtrace->backtraces;
          // ---
-         // @ Dump
+         // @ Vars
+         self::$vars = '';
          foreach ($vars as $key => $value) {
             // labels
             if ( ! empty(self::$labels) && @self::$labels[$key]) {
-               self::$Output .= match (self::$CLI) {
+               self::$vars .= match (self::$CLI) {
                   false => '<b style="color:#7d7d7d">',
                   true  => "\033[93m"
                };
-               self::$Output .= self::$labels[$key] . "\n";
-               self::$Output .= match (self::$CLI) {
+               self::$vars .= self::$labels[$key] . "\n";
+               self::$vars .= match (self::$CLI) {
                   false => '</b>',
                   true  => "\033[0m"
                };
             }
             // dump
-            self::$Output .= self::dump($value) . "\n";
+            self::$vars .= self::dump($value) . "\n";
          }
          // ...
-         self::$Output .= "\n";
-         self::$Output .= match (self::$CLI) {
+         self::$vars .= "\n";
+         self::$vars .= match (self::$CLI) {
             false => '</pre><style>pre{-moz-tab-size: 1; tab-size: 1;}</style>',
             true  => ''
          };
+         self::$Output .= self::$vars;
 
          // Print
          if (self::$print) {
@@ -432,19 +441,50 @@ class Vars implements Debugging
          if (self::$exit) {
             if (self::$from == null) {
                exit;
-            } else if (self::$to == self::$call) {
+            }
+            else if (self::$to == self::$call) {
                exit;
             }
          }
       }
 
       if (self::$to && self::$search) {
-         if ($search == self::$title) {
+         if ($search === self::$title) {
             self::$call++;
          }
       }
       else {
          self::$call++;
       }
+   }
+
+   /**
+    * Outputs specific parts or all of it.
+    * Use arguments to output specific parts.
+    * 
+    * @param array<number>|null $backtraces The backtrace stack indexes to output
+    * @param string|null $vars The vars to output
+    * 
+    * @return string
+    */
+   public static function output (
+      ?array $backtraces = null,
+      ?string $vars = null
+   ): string
+   {
+      $output = null;
+
+      // backtraces
+      if ($backtraces !== null) {
+         foreach ($backtraces as $backtrace) {
+            $output .= self::$backtraces[$backtrace];
+         }
+      }
+      // vars
+      if ($vars !== null) {
+         $output .= self::$vars;
+      }
+
+      return $output ?? self::$Output;
    }
 }

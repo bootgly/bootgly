@@ -1,7 +1,11 @@
 <?php
 
 
+use Generator;
+
 use Bootgly\ABI\Data\__String\Path;
+use Bootgly\ACI\Tests\Cases\Assertion;
+use Bootgly\ACI\Tests\Cases\Assertions;
 
 
 return [
@@ -10,13 +14,14 @@ return [
    // @ simulate
    // ...
    // @ test
-   'test' => function () {
-      // @
+   'test' => new Assertions(Case: function (): Generator
+   {
       // Valid
       $Path = new Path('/var/www/bootgly/index.php');
-      yield assert(
-         assertion: $Path->indexes === 4,
-         description: 'Returned path parts count: ' . $Path->indexes
-      );
-   }
+      yield new Assertion()
+         ->assert(
+            actual: $Path->indexes,
+            expected: 4
+         );
+   })
 ];

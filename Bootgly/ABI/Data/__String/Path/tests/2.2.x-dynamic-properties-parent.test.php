@@ -1,8 +1,11 @@
 <?php
 
+use Generator;
 
 use Bootgly\ABI\Data\__String\Path;
 use Bootgly\ACI\Tests\Cases\Assertion;
+use Bootgly\ACI\Tests\Cases\Assertions;
+
 
 return [
    // @ configure
@@ -10,75 +13,112 @@ return [
    // @ simulate
    // ...
    // @ test
-   'test' => function () {
+   'test' => new Assertions(Case: function (): Generator
+   {
       // @
       // ! Dir
       // ? Absolute
-      Assertion::$description = 'Valid - absolute dir (2 parts)';
       $Path = new Path('/etc/php/');
-      yield assert(
-         assertion: $Path->parent === '/etc/',
-         description: 'Path #11 - parent: ' . $Path->parent
-      );
-      Assertion::$description = 'Valid - absolute dir (1 part)';
+      yield new Assertion(
+         description: 'Valid - absolute dir (2 parts)',
+         fallback: "Path #11 - parent: {$Path->parent}"
+      )
+         ->assert(
+            actual: $Path->parent,
+            expected: '/etc/',
+         );
+
       $Path = new Path('/etc/');
-      yield assert(
-         assertion: $Path->parent === '/',
-         description: 'Path #12 - parent: ' . $Path->parent
-      );
-      Assertion::$description = 'Valid - absolute dir (0 part)';
+      yield new Assertion(
+         description: 'Valid - absolute dir (1 part)',
+         fallback: "Path #12 - parent: {$Path->parent}"
+      )
+         ->assert(
+            actual: $Path->parent,
+            expected: '/',
+         );
+
       $Path = new Path('/');
-      yield assert(
-         assertion: $Path->parent === '/',
-         description: 'Path #13 - parent: ' . $Path->parent
-      );
+      yield new Assertion(
+         description: 'Valid - absolute dir (0 part)',
+         fallback: "Path #13 - parent: {$Path->parent}"
+      )
+         ->assert(
+            actual: $Path->parent,
+            expected: '/',
+         );
 
       // ? Relative
-      Assertion::$description = 'Valid - relative dir (2 parts)';
       $Path = new Path('etc/php/');
-      yield assert(
-         assertion: $Path->parent === 'etc/',
-         description: 'Path #21 - parent: ' . $Path->parent
-      );
-      Assertion::$description = 'Valid - relative dir (1 part)';
-      $Path = new Path('etc/');
-      yield assert(
-         assertion: $Path->parent === './', // Valid?
-         description: 'Path #22 - parent: ' . $Path->parent
-      );
-      Assertion::$description = 'Invalid - relative dir (0 part)';
-      $Path = new Path('');
-      yield assert(
-         assertion: $Path->parent === '',
-         description: 'Path #23 - parent: ' . $Path->parent
-      );
+      yield new Assertion(
+         description: 'Valid - relative dir (2 parts)',
+         fallback: "Path #21 - parent: {$Path->parent}"
+      )
+         ->assert(
+            actual: $Path->parent,
+            expected: 'etc/',
+         );
 
+      $Path = new Path('etc/');
+      yield new Assertion(
+         description: 'Valid - relative dir (1 part)',
+         fallback: "Path #22 - parent: {$Path->parent}"
+      )
+         ->assert(
+            actual: $Path->parent,
+            expected: './',
+         );
+
+      $Path = new Path('');
+      yield new Assertion(
+         description: 'Invalid - relative dir (0 part)',
+         fallback: "Path #23 - parent: {$Path->parent}"
+      )
+         ->assert(
+            actual: $Path->parent,
+            expected: '',
+         );
 
       // ! File
       // ? Absolute
-      Assertion::$description = 'Valid - absolute file (2 parts)';
       $Path = new Path('/var/test.php');
-      yield assert(
-         assertion: $Path->parent === '/var/',
-         description: 'Path #31 - parent: ' . $Path->parent
-      );
-      Assertion::$description = 'Valid - absolute file (1 part)';
+      yield new Assertion(
+         description: 'Valid - absolute file (2 parts)',
+         fallback: "Path #31 - parent: {$Path->parent}"
+      )
+         ->assert(
+            actual: $Path->parent,
+            expected: '/var/',
+         );
+
       $Path = new Path('/test.php');
-      yield assert(
-         assertion: $Path->parent === '/',
-         description: 'Path #32 - parent: ' . $Path->parent
-      );
-      Assertion::$description = 'Valid - absolute file without extension (2 parts)';
+      yield new Assertion(
+         description: 'Valid - absolute file (1 part)',
+         fallback: "Path #32 - parent: {$Path->parent}"
+      )
+         ->assert(
+            actual: $Path->parent,
+            expected: '/',
+         );
+
       $Path = new Path('/var/test');
-      yield assert(
-         assertion: $Path->parent === '/var/',
-         description: 'Path #33 - parent: ' . $Path->parent
-      );
-      Assertion::$description = 'Valid - absolute file without extension (1 part)';
+      yield new Assertion(
+         description: 'Valid - absolute file without extension (2 parts)',
+         fallback: "Path #33 - parent: {$Path->parent}"
+      )
+         ->assert(
+            actual: $Path->parent,
+            expected: '/var/',
+         );
+
       $Path = new Path('/test');
-      yield assert(
-         assertion: $Path->parent === '/',
-         description: 'Path #34 - parent: ' . $Path->parent
-      );
-   }
+      yield new Assertion(
+         description: 'Valid - absolute file without extension (1 part)',
+         fallback: "Path #34 - parent: {$Path->parent}"
+      )
+         ->assert(
+            actual: $Path->parent,
+            expected: '/',
+         );
+   })
 ];

@@ -54,3 +54,5 @@ _*.test.php
 /workdata/cache/*
 /workdata/logs/*
 /workdata/temp/*
+/workdata/tests/*
+/workdata/tests/snapshots/*

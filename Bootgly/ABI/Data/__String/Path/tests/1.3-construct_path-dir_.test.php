@@ -1,7 +1,11 @@
 <?php
 
 
+use Generator;
+
 use Bootgly\ABI\Data\__String\Path;
+use Bootgly\ACI\Tests\Cases\Assertion;
+use Bootgly\ACI\Tests\Cases\Assertions;
 
 
 return [
@@ -10,7 +14,8 @@ return [
    // @ simulate
    // ...
    // @ test
-   'test' => function () {
+   'test' => new Assertions(Case: function (): Generator
+   {
       $Path = new Path;
       // * Config
       // @ fix
@@ -19,9 +24,12 @@ return [
 
       // @
       $Path->construct('\home/bootgly\\');
-      yield assert(
-         assertion: (string) $Path === '/home/bootgly/',
+      yield new Assertion(
          description: 'Path directory separators not fixed!'
-      );
-   }
+      )
+         ->assert(
+            actual: (string) $Path,
+            expected: '/home/bootgly/',
+         );
+   })
 ];

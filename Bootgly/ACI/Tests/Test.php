@@ -11,6 +11,20 @@
 namespace Bootgly\ACI\Tests;
 
 
+use function array_reduce;
+use function count;
+use function current;
+use function microtime;
+use function ob_get_clean;
+use function ob_start;
+use function sprintf;
+use function str_pad;
+use function str_repeat;
+use function strlen;
+use AssertionError;
+use Exception;
+use Generator;
+
 use Bootgly\ACI\Logs\LoggableEscaped;
 use Bootgly\ACI\Tests;
 use Bootgly\ACI\Tests\Assertions;
@@ -25,12 +39,12 @@ class Test extends Assertions
    public Tests $Tests;
 
    // * Config
-   // ...inherited
-
-   // * Data
    /** @var array<string,mixed> */
    public array $specifications;
-   // ...inherited
+   // ...inherited: descriptions
+
+   // * Data
+   // ...inherited: results
 
    // * Metadata
    private bool $passed;
@@ -42,7 +56,7 @@ class Test extends Assertions
    private float $finished;
    private string $elapsed;
    // @ Reporting
-   private ? \AssertionError $AssertionError;
+   private ?AssertionError $AssertionError;
 
 
    /**
@@ -56,13 +70,13 @@ class Test extends Assertions
       $this->Tests = $Tests;
 
       // * Config
+      $this->specifications = $specifications;
       // ...inherited:
       $this->descriptions = [
          $specifications['describe'] ?? null
       ];
 
       // * Data
-      $this->specifications = $specifications;
       // ...inherited:
       $this->results = [];
 
@@ -93,7 +107,7 @@ class Test extends Assertions
       return null;
    }
 
-   private function describe (? string $description, bool $status, string $indicator = '╟'): void
+   private function describe (?string $description, bool $status, string $indicator = '╟'): void
    {
       if ($description === null) {
          return;
@@ -184,11 +198,17 @@ class Test extends Assertions
    }
 
    // @
+   /**
+    * Pretest the test case.
+    *
+    * @return bool
+    */
    private function pretest (): bool
    {
       Tests::$case++;
 
-      if ($this->specifications['skip'] ?? false) {
+      // @ Skip without output (used to skip with command arguments)
+      if ($this->specifications['ignore'] ?? false) {
          $this->Tests->skipped++;
          return false;
       }
@@ -206,69 +226,110 @@ class Test extends Assertions
     */
    public function test (mixed ...$arguments): void
    {
-      $prepass = $this->pretest();
-      if ($prepass === false) {
-         $this->postest();
-         return;
-      }
+      // !
+      $test = $this->specifications['test'];
+      $retest = $this->specifications['retest'] ?? null;
 
       try {
-         $test = $this->specifications['test'];
-         unset($this->specifications['test']);
-         $test = $test->bindTo($this, self::class);
-
-         ob_start();
-
-         $Results = $test(...$arguments);
-
-         $this->debugged = \ob_get_clean();
-
-         if ($Results instanceof \Generator !== true) {
-            $message = 'The test function must return boolean, string, Assertion or a Generator!';
-
-            $Results = match (gettype($Results)) {
-               'boolean', 'string' => [$Results],
-               'object' => $Results instanceof Assertion ?: throw new \AssertionError($message),
-               default => throw new \AssertionError($message)
-            };
+         if ($this->pretest() === false) {
+            $this->postest();
+            return;
          }
 
-         foreach ($Results as $Result) {
-            if ($Result instanceof Assertion) {
-               Assertion::$fallback === null ?:
-                  throw new \AssertionError(message: Assertion::$fallback);
+         // ---
+         ob_start();
 
-               $this->descriptions[] = $Result::$description;
+         $test instanceof Cases\Assertions
+            ? $Assertions = $test->run(...$arguments)
+            : $Assertions = $test(...$arguments);
+
+         $this->debugged = ob_get_clean();
+
+         if ($Assertions instanceof Generator !== true) {
+            $message = 'The assertion must return boolean, string, NULL, Assertion or a Generator!';
+
+            $Assertions = match (gettype($Assertions)) {
+               'boolean', 'string' => [$Assertions],
+               'object' => 
+                  $Assertions instanceof Assertion
+                  || $Assertions instanceof Cases\Assertions
+                  ?: throw new AssertionError($message),
+               'NULL' => [null],
+               default => throw new AssertionError($message)
+            };
+         }
+         
+         foreach ($Assertions as $Assertion) {
+            if ($Assertion === null) { // ignore
+               throw new Exception;
             }
-            else if ($Result === false || $Result !== true) {
-               throw new \AssertionError(message: Assertion::$fallback ?? $Result);
+
+            // Assertion instance
+            if ($Assertion instanceof Assertion) {
+               $Assertion->asserted ?:
+                  throw new AssertionError(
+                     message: 'Using the `->assert(...)` method is mandatory before returning `new Assertion`!'
+                  );
+   
+               $this->descriptions[] = $Assertion::$description;
             }
-            else { // $Result is TRUE
+            // $Assertion is FALSE or a string (Test failed!)
+            else if ($Assertion === false || $Assertion !== true) {
+               throw new AssertionError(
+                  message: Assertion::$fallback ?? $Assertion
+               );
+            }
+            // $Assertion is TRUE (Test passed!)
+            else {
                $this->descriptions[] = Assertion::$description;
                Assertion::$description = null;
             }
-
+   
             $this->results[] = true;
             $this->Tests->assertions++;
          }
 
-         if ($this->Tests->autoResult) {
+         $this->postest();
+
+         // ---
+         if ($this->Tests->autoReport) {
             $this->pass();
          }
       }
-      catch (\AssertionError $AssertionError) {
-         $this->descriptions[] = Assertion::$description;
-         $this->results[] = false;
+      catch (AssertionError $AssertionError) {
+         $this->postest();
 
+         // ---
          $this->AssertionError = $AssertionError;
 
-         if ($this->Tests->autoResult) {
+         $this->results[] = false;
+
+         if ($this->Tests->autoReport) {
             $this->fail($AssertionError->getMessage());
          }
       }
+      catch (Exception $Exception) {
+         // @ ignore
+      }
+      finally {
+         if ($retest) {
+            Tests::$case--;
 
-      $this->postest();
+            $this->specifications['test'] = $retest;
+            $this->specifications['retest'] = null;
+
+            $passed = $this->__get('passed');
+            $arguments = [$test, $passed, ...$arguments];
+
+            $this->test(...$arguments);
+         }
+      }
    }
+   /**
+    * Postest the test case.
+    * 
+    * @return void
+    */
    private function postest (): void
    {
       #$this->debugged ??= ob_get_clean();
@@ -278,10 +339,9 @@ class Test extends Assertions
       $this->elapsed ??= Benchmark::format($this->started, $this->finished);
    }
 
-   public function fail (? string $message = null): void
+   // # Reporting
+   public function fail (?string $message = null): void
    {
-      $this->postest();
-
       $this->Tests->failed++;
 
       $case = sprintf('%03d', Tests::$case);
@@ -298,28 +358,33 @@ class Test extends Assertions
       );
       $this->describing(status: false);
 
-      $this->log(
-         " ↪️ \033[91m" . $help . "\033[0m" .
-         PHP_EOL
-      );
+      if ($help) {
+         $this->log(
+            " ↪️\033[91m" . $help . "\033[0m" .
+            PHP_EOL
+         );
+      }
 
       // @ Debugging
       $this->log($this->debugged);
 
       // @ exit
-      if (Tests::$exitOnFailure) {
+      if (Tests::$exitOnFailure && $this->specifications['retest'] === null) {
          $this->Tests->summarize();
          exit(1);
       }
    }
    public function pass (): void
    {
-      $this->postest();
-
       $this->Tests->passed++;
 
       $case = sprintf('%03d', Tests::$case);
-      $test = str_pad($this->filename, Tests::$width, '.', STR_PAD_RIGHT);
+      $test = str_pad(
+         string: $this->filename,
+         length: Tests::$width,
+         pad_string: '.',
+         pad_type: STR_PAD_RIGHT
+      );
       $elapsed = $this->elapsed;
 
       // @ output

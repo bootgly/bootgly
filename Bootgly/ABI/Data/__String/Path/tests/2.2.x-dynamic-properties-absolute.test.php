@@ -1,7 +1,10 @@
 <?php
 
+use Generator;
+
 use Bootgly\ABI\Data\__String\Path;
 use Bootgly\ACI\Tests\Cases\Assertion;
+use Bootgly\ACI\Tests\Cases\Assertions;
 
 return [
    // @ configure
@@ -9,22 +12,27 @@ return [
    // @ simulate
    // ...
    // @ test
-   'test' => function () {
+   'test' => new Assertions(Case: function (): Generator
+   {
       // @
       $Path = new Path('/etc/php/');
       yield new Assertion(
-         actual: $Path->absolute,
-         expected: true,
          description: 'Valid absolute path',
          fallback: 'Path is absolute!'
-      )->assert();
+      )
+         ->assert(
+            actual: $Path->absolute,
+            expected: true,
+         );
 
       $Path = new Path('www/bootgly/index.php');
       yield new Assertion(
-         actual: $Path->absolute,
-         expected: false,
          description: 'Invalid relative path',
          fallback: 'Path is relative!'
-      )->assert();
-   }
+      )
+         ->assert(
+            actual: $Path->absolute,
+            expected: false,
+         );
+   })
 ];

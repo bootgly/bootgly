@@ -1,7 +1,10 @@
 <?php
 
+use Generator;
 
 use Bootgly\ABI\Data\__String\Path;
+use Bootgly\ACI\Tests\Cases\Assertion;
+use Bootgly\ACI\Tests\Cases\Assertions;
 
 
 return [
@@ -10,12 +13,16 @@ return [
    // @ simulate
    // ...
    // @ test
-   'test' => function () {
+   'test' => new Assertions(Case: function (): Generator
+   {
       $Path = new Path(BOOTGLY_ROOT_DIR);
 
-      yield assert(
-         assertion: $Path->path === BOOTGLY_ROOT_DIR,
+      yield new Assertion(
          description: 'Path not matched!'
-      );
-   }
+      )
+         ->assert(
+            actual: $Path->path,
+            expected: BOOTGLY_ROOT_DIR
+         );
+   })
 ];

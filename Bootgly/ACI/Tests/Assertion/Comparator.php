@@ -8,10 +8,13 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\ACI\Tests\Assertions;
+namespace Bootgly\ACI\Tests\Assertion;
 
 
-interface Comparator
+use Bootgly\ACI\Tests\Assertion;
+
+
+interface Comparator extends Assertion
 {
-   public function compare ($actual, $expected): bool;
+   public function compare (mixed &$actual, mixed &$expected): bool;
 }

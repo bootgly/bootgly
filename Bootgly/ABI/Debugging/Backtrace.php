@@ -17,6 +17,7 @@ class Backtrace
    // * Config
    public static int $options = \DEBUG_BACKTRACE_IGNORE_ARGS;
    public static int $traces = 4;
+   public static bool $counter = true;
 
    // * Data
    /** @var array<mixed> */
@@ -30,6 +31,7 @@ class Backtrace
    private string $dir;
    private string $file;
    private int $line;
+   private array $backtraces;
 
 
    public function __construct (int $limit = 0)
@@ -54,6 +56,8 @@ class Backtrace
          $this->trace = $call;
          break;
       }
+      // @ Trace
+      $this->backtraces = [];
    }
    public function __get (string $name): mixed
    {
@@ -69,6 +73,8 @@ class Backtrace
          case 'line':
             $this->line = $this->trace['line'];
             return $this->line;
+         case 'backtraces':
+            return $this->backtraces;
          default:
             return $this->trace[$name];
       }
@@ -87,37 +93,49 @@ class Backtrace
             'cli'  => '',
             default => '<small>',
          };
+
          $n = 1;
-         foreach ($calls as $trace) {
-            $line = $trace['line'] ?? null;
-            $file = $trace['file'] ?? null;
+         foreach ($calls as $call) {
+            $line = $call['line'] ?? null;
+            $file = $call['file'] ?? null;
 
             if ($file && $line) {
                $file = Path::relativize($file, BOOTGLY_WORKING_DIR);
 
-               // Trace count
-               $output .= match (\PHP_SAPI) {
-                  'cli' => "\033[93m ",
-                  default => ' '
-               };
-               $output .= $n;
-               $output .= match (\PHP_SAPI) {
-                  'cli' => "\033[0m ",
-                  default => ''
-               };
+               $trace = '';
+
+               // Trace counter
+               if (self::$counter) {
+                  $trace .= match (\PHP_SAPI) {
+                     'cli' => "\033[93m ",
+                     default => ' '
+                  };
+                  $trace .= $n;
+                  $trace .= match (\PHP_SAPI) {
+                     'cli' => "\033[0m ",
+                     default => ''
+                  };
+               }
                // Trace file
-               $output .= $file;
-               // Trace line
-               $output .= ':';
-               $output .= match (\PHP_SAPI) {
-                  'cli' => "\033[96m",
-                  default => ''
-               };
-               $output .= $line;
-               $output .= match (\PHP_SAPI) {
+               $trace .= match (\PHP_SAPI) {
                   'cli' => "\033[0m",
                   default => ''
                };
+               $trace .= $file;
+               // Trace line
+               $trace .= ':';
+               $trace .= match (\PHP_SAPI) {
+                  'cli' => "\033[96m",
+                  default => ''
+               };
+               $trace .= $line;
+               $trace .= match (\PHP_SAPI) {
+                  'cli' => "\033[0m",
+                  default => ''
+               };
+
+               $this->backtraces[] = $trace;
+               $output .= $trace;
             }
 
             if ($n > self::$traces) break;
@@ -125,6 +143,7 @@ class Backtrace
             $output .= "\n";
             $n++;
          }
+
          $output .= match (\PHP_SAPI) {
             'cli'  => '',
             default => '</small>',
