@@ -90,13 +90,6 @@ class Assertion
       }
    }
 
-   public function __destruct ()
-   {
-      // * Config
-      self::$description = null;
-      self::$fallback = null;
-   }
-
    // # Snapshot
    /**
     * Capture a snapshot of the current actual value.
