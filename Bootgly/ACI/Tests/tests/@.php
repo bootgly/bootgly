@@ -17,10 +17,11 @@ return [
       '_0.1.2-Simple_API-return-string',
       '_0.2.1-Simple_API-yield.boolean',
 
-      '1.1-comparing-identical',
+      '1.1.1-comparing-greater_than',
+      '1.1.2-comparing-identical',
       '1.2-comparing-between',
 
       // Snapshot
-      '2.0-snapshots',
+      '3.0-snapshots',
    ]
 ];

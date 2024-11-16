@@ -6,6 +6,8 @@ use stdClass;
 use Bootgly\ACI\Tests\Assertion\Comparators;
 use Bootgly\ACI\Tests\Cases\Assertion;
 use Bootgly\ACI\Tests\Cases\Assertions;
+use Bootgly\ACI\Tests\Assertions\Hook;
+
 
 return [
    // @ configure
@@ -77,5 +79,10 @@ return [
             expected: $object1,
          );
    })
-      ->assertAll(new Comparators\Identical),
+      ->input('test')
+      ->on(Hook::BeforeEach, function ($Assertion, $arguments): void
+      {
+         // do anything before each assertion
+      })
+      ->assertAll(With: new Comparators\Identical),
 ];
