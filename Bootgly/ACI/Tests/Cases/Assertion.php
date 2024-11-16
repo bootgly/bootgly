@@ -48,6 +48,7 @@ class Assertion
    // * Data
    protected mixed $actual;
    protected mixed $expected;
+   protected readonly Comparator $With;
 
    // * Metadata
    private bool $asserted;
@@ -139,6 +140,18 @@ class Assertion
       return $this;
    }
 
+   /**
+    * Skip the Assertion.
+    *
+    * @return self Returns the current instance for method chaining.
+    */
+   public function skip (): self
+   {
+      $this->skipped = true;
+
+      return $this;
+   }
+
    // .
    /**
     * Assert the Assertion.
@@ -155,6 +168,12 @@ class Assertion
       ?Comparator $With = null,
    ): self
    {
+      // ?
+      if ($actual instanceof Comparator) {
+         throw new AssertionError('The `actual` value cannot be an instance of Comparator!');
+      }
+
+      // @ Preset
       // ?! Snapshot: set $actual value if restored
       if (
          ($this->Snapshot ?? false)
@@ -164,49 +183,40 @@ class Assertion
          $actual = $this->actual;
       }
 
-      // * Data
-      $this->actual = $actual;
-      $this->expected = $expected;
-      // * Metadata
-      $this->asserted = true;
-
-      // @ Handle
-      // # $actual
-      // ?
-      if ($actual instanceof Comparator) {
-         throw new AssertionError('The `actual` value cannot be an instance of Comparator!');
-      }
+      // @
       // # $With
       // !
       $With ??= self::$Comparator ?? new Comparators\Identical;
       // # $expected
       // ?!
       if (
-         $this->expected instanceof Expectation
+         $expected instanceof Expectation
          && $With instanceof Snapshot
       ) {
-         $this->expected->compare($actual, $expected);
+         $expected->compare($actual, $expected);
       }
-      else if ($this->expected instanceof Expectation) {
-         $With = $this->expected;
+      else if ($expected instanceof Expectation) {
+         $With = $expected;
       }
 
-      // @:
-      $assertion = $With->compare(
-         $actual,
-         $expected
-      );
+      $assertion = $With->compare($actual, $expected);
+
+      // !
+      // * Data
+      $this->actual = $actual;
+      $this->expected = $expected;
+      $this->With = $With;
+      // * Metadata
+      $this->asserted = true;
 
       if ($assertion === false) {
          $this->fail();
-
-         throw new AssertionError(self::$fallback);
       }
 
       return $this;
    }
 
-   private function fail (): void
+   public function fail (): void
    {
       $counter = Backtrace::$counter;
       Backtrace::$counter = false;
@@ -214,39 +224,37 @@ class Assertion
       Vars::$debug = true;
       Vars::$print = false;
       Vars::$traces = 3;
-
       Vars::$labels = [
-         'Actual:',
-         'Expected:'
+         'actual:',
+         'expected:',
+         'With:'
       ];
       Vars::debug(...[
-         &$this->actual,
-         &$this->expected
+         $this->actual,
+         $this->expected,
+         $this->With
       ]);
       Backtrace::$counter = $counter;
-
+      // ---
       $backtrace = Vars::output(backtraces: [2]);
-      $vars = Vars::output(vars: true);
-
-      // Default fallback message
-      $fallback_default = <<<MESSAGE
-      Assertion failed in:
-      $backtrace
-      
-      $vars
-      MESSAGE;
-
+      $assertion = Vars::output(vars: true);
+      $message = "\n";
       // + Custom fallback message
       if (self::$fallback) {
-         $fallback_custom = self::$fallback;
+         $fallback = self::$fallback;
+         $message = <<<MESSAGE
 
-         $fallback_default .= <<<MESSAGE
-         \033[0;30;46m Fallback message: \033[0m $fallback_custom
-
+         \033[0;30;46m Fallback message: \033[0m $fallback
 
          MESSAGE;
-
-         self::$fallback = $fallback_default;
       }
+      self::$fallback = <<<MESSAGE
+      Assertion failed in:
+      $backtrace
+      $message
+      $assertion
+      MESSAGE;
+      // ---
+      throw new AssertionError(self::$fallback);
    }
 }
