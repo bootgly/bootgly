@@ -18,6 +18,7 @@ use function ob_start;
 use function preg_replace;
 use function preg_replace_callback_array;
 use function sha1;
+use Throwable;
 
 use Bootgly\ABI\IO\FS\File;
 use Bootgly\ABI\Templates;
@@ -106,7 +107,7 @@ class Template implements Templates
             $precompiled = (string) $unindented;
          }
       }
-      catch (\Throwable) {
+      catch (Throwable) {
          $precompiled = '';
       }
 
@@ -128,7 +129,8 @@ class Template implements Templates
             pattern: $Directives->directives,
             subject: $precompiled,
          );
-      } catch (\Throwable) {
+      }
+      catch (Throwable) {
          return false;
       }
 
@@ -146,7 +148,8 @@ class Template implements Templates
             "\n",
             $compiled
          );
-      } catch (\Throwable) {
+      }
+      catch (Throwable) {
          return false;
       }
 
@@ -207,7 +210,7 @@ class Template implements Templates
             return false;
          }
 
-         $started = ob_start();
+         $started = @ob_start();
          if ($started === false) {
             @ob_end_clean();
             return false;
@@ -223,8 +226,8 @@ class Template implements Templates
  
          $output = @ob_get_clean();
       }
-      catch (\Throwable) {
-         ob_end_clean();
+      catch (Throwable) {
+         @ob_end_clean();
 
          $output = '';
       }

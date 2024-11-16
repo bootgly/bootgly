@@ -316,6 +316,8 @@ class Test extends Assertions
          }
       }
       catch (AssertionError $AssertionError) {
+         @ob_end_clean();
+
          $this->postest();
 
          // ---

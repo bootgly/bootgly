@@ -79,6 +79,10 @@ class Assertion
       $this->asserted = false;
       $this->skipped = false;
    }
+   public function __destruct ()
+   {
+      self::$fallback = null;
+   }
    public function __get (string $name): mixed
    {
       switch ($name) {
