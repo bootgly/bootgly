@@ -214,7 +214,9 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       );
       $TCP_Client_CLI->on(
          // on Connection connect
-         connect: static function ($Socket, $Connection) use ($TCP_Client_CLI) {
+         connect: static function ($Socket, $Connection)
+         use ($TCP_Client_CLI) 
+         {
             Logger::$display = Logger::DISPLAY_MESSAGE;
 
             // @ Get test files

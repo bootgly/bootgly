@@ -219,13 +219,17 @@ class Test extends Assertions
     */
    private function pretest (): bool
    {
+      $retested = $this->specifications['retested'] ?? null;
+
       // @ Skip without output (used to skip with command arguments)
       if ($this->specifications['ignore'] ?? false) {
          $this->Tests->skipped++;
          return false;
       }
 
-      $this->separate();
+      if ($retested !== true) {
+         $this->separate();
+      }
 
       return true;
    }
@@ -339,6 +343,7 @@ class Test extends Assertions
          if ($retest) {
             $this->specifications['test'] = $retest;
             $this->specifications['retest'] = null;
+            $this->specifications['retested'] = true;
 
             $passed = $this->__get('passed');
             $arguments = [$test, $passed, ...$arguments];
