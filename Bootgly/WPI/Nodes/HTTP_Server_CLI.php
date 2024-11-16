@@ -229,16 +229,14 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
                 * @var array<string>|null $spec
                 */
                $spec = SAPI::$Tests[self::class][$index] ?? null;
-
+               $spec['case'] = $index + 1;
                // @ Init Test
                $Test = $Tests->test($spec);
                if ($Test === false) {
                   continue;
                }
-
                if ($spec === null || count($spec) < 3) {
                   $Tests->skip();
-
                   continue;
                }
 
@@ -246,7 +244,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
                $responseLength = @$spec['response.length'] ?? null;
                // ! Client
                // ? Request
-               $requestData = $spec['request']($TCP_Client_CLI->host . ':' . $TCP_Client_CLI->port);
+               $requestData = $spec['request']("{$TCP_Client_CLI->host}:{$TCP_Client_CLI->port}");
                $requestLength = strlen($requestData);
                // @ Send Request to Server
                $Connection::$output = $requestData;
