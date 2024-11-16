@@ -126,11 +126,11 @@ class Test extends Assertions
          default => ' @#yellow:─ @; ',
       };
       // Description
-      $description = '@#white:' . $description . '@;';
+      $description = "@#white:{$description}@;";
       // Breakline
       $breakline = '@.;';
 
-      $description = $indicator . $icon . $description . $breakline;
+      $description = "{$indicator}{$icon}{$description}{$breakline}";
 
       $this->log($description);
    }
@@ -187,7 +187,7 @@ class Test extends Assertions
       if ($line) {
          if ($line !== true) {
             $separatorLength = strlen($line);
-            $line = '@:i: ' . $line . '  @;';
+            $line = "@:i: {$line}  @;";
 
             // Text + `-`
             $line = str_pad($line, $width, '-', STR_PAD_BOTH);
@@ -196,18 +196,18 @@ class Test extends Assertions
             $line = str_repeat('-', $width - 7);
          }
 
-         $this->log($line . ' @.;');
+         $this->log("{$line} @.;");
       }
 
       if ($left) {
-         $this->log("@.;            \033[3;90m" . $left . ":\033[0m @.;");
+         $this->log("@.;            \033[3;90m{$left}:\033[0m @.;");
       }
 
       if ($header) {
          $header = '\\' .str_pad($header, $separatorLength ?? 0, ' ', STR_PAD_BOTH) . '/';
          $header = str_pad($header, $width - 7, ' ', STR_PAD_BOTH);
 
-         $this->log('@#white:' . $header . ' @;@.;');
+         $this->log("@#white:{$header} @;@.;");
       }
    }
 

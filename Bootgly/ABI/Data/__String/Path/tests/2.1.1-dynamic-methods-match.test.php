@@ -15,8 +15,6 @@ return [
    // @ test
    'test' => new Assertions(Case: function (): Generator
    {
-      $this->Comparator = new VariadicDirPath;
-
       // @
       /*
          assertion: (string) $Path === '/etc/php/8.0'
@@ -46,5 +44,5 @@ return [
             actual: (string) $Path,
             expected: '/etc/php/8.*',
          );
-   })
+   })->assertAll(new VariadicDirPath)
 ];

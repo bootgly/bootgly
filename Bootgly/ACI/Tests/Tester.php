@@ -120,6 +120,7 @@ class Tester extends Tests
          $case = $index + 1;
          // ?
          if ($testCaseTarget > 0 && $case !== $testCaseTarget) {
+            $this->specifications[] = [];
             continue;
          }
 
