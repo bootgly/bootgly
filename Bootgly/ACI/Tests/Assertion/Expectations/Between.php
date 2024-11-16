@@ -19,14 +19,14 @@ use Bootgly\ACI\Tests\Assertion\Expectation;
 
 class Between implements Expectation
 {
-   // * Metadata
+   // * Data
    protected int|float|DateTime $min;
    protected int|float|DateTime $max;
 
 
    public function __construct (mixed ...$values)
    {
-      // * Metadata
+      // * Data
       $this->min = $values[0];
       $this->max = $values[1];
 
@@ -49,12 +49,16 @@ class Between implements Expectation
 
    public function fail (mixed $actual, mixed $expected): array
    {
+      // !
+      $min = $this->min;
+      $max = $this->max;
+
       return [
          'format' => 'Failed asserting that %s is between %s and %s.',
          'values' => [
             'actual' => $actual,
-            'min' => $this->min,
-            'max' => $this->max
+            'min' => $min,
+            'max' => $max
          ]
       ];
    }

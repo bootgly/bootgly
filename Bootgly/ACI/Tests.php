@@ -47,11 +47,6 @@ abstract class Tests implements Resources
    public int $assertions;
    public int $total;
    public static int $suite = 0;
-   /**
-    * Counter for the current test case executed.
-    * @var int
-    */
-   public static int $case = 0;
    public static int $cases = 0;
    // @ Time
    public float $started;

@@ -116,17 +116,24 @@ class Tester extends Tests
       $testCaseTarget = (int) ($specifications['index'] ?? 0);
       // @
       foreach ($this->tests as $index => $test) {
-         $specifications = @include($dir . $test . '.test.php');
+         // !
+         $case = $index + 1;
+         // ?
+         if ($testCaseTarget > 0 && $case !== $testCaseTarget) {
+            continue;
+         }
+
+         $specifications = @include "{$dir}{$test}.test.php";
          if ($specifications === false) {
             throw new Exception("Test case not found: \n {$dir}{$test}");
          }
 
          // * Metadata (Test Case)
-         if ($this->total === $index + 1) {
+         // case
+         $specifications['case'] = $case;
+         // last
+         if ($this->total === $case) {
             $specifications['last'] = true;
-         }
-         if ($testCaseTarget > 0 && ($index + 1) !== $testCaseTarget) {
-            $specifications['ignore'] = true;
          }
 
          $this->specifications[] = $specifications;
@@ -234,12 +241,11 @@ class Tester extends Tests
    {
       $file = current($this->tests);
 
-      Tests::$case++;
       $this->skipped++;
 
       next($this->tests);
 
-      $case = sprintf('%03d', Tests::$case);
+      $case = sprintf('%03d', $this->specifications['case']);
       // @ Set additional info
       if ($info) {
          $info = "\033[1;35m $info \033[0m";

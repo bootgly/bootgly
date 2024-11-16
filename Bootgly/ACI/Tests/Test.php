@@ -205,8 +205,6 @@ class Test extends Assertions
     */
    private function pretest (): bool
    {
-      Tests::$case++;
-
       // @ Skip without output (used to skip with command arguments)
       if ($this->specifications['ignore'] ?? false) {
          $this->Tests->skipped++;
@@ -226,17 +224,18 @@ class Test extends Assertions
     */
    public function test (mixed ...$arguments): void
    {
+      if ($this->pretest() === false) {
+         $this->postest();
+         return;
+      }
+
+      // ---
+
       // !
       $test = $this->specifications['test'];
       $retest = $this->specifications['retest'] ?? null;
 
       try {
-         if ($this->pretest() === false) {
-            $this->postest();
-            return;
-         }
-
-         // ---
          ob_start();
 
          $test instanceof Cases\Assertions
@@ -316,8 +315,6 @@ class Test extends Assertions
       }
       finally {
          if ($retest) {
-            Tests::$case--;
-
             $this->specifications['test'] = $retest;
             $this->specifications['retest'] = null;
 
@@ -347,7 +344,7 @@ class Test extends Assertions
    {
       $this->Tests->failed++;
 
-      $case = sprintf('%03d', Tests::$case);
+      $case = sprintf('%03d', $this->specifications['case']);
       $test = str_pad($this->filename . ':', Tests::$width, ' ', STR_PAD_RIGHT);
       $elapsed = $this->elapsed;
       $help = $message ?? $this->AssertionError?->getMessage();
@@ -381,7 +378,7 @@ class Test extends Assertions
    {
       $this->Tests->passed++;
 
-      $case = sprintf('%03d', Tests::$case);
+      $case = sprintf('%03d', $this->specifications['case']);
       $test = str_pad(
          string: $this->filename,
          length: Tests::$width,
