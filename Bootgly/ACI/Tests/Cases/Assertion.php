@@ -214,13 +214,17 @@ class Assertion
       $this->asserted = true;
 
       if ($assertion === false) {
-         $this->fail();
+         // $With fallback template (Assertion interface)
+         $fallback = $With->fail($actual, $expected);
+
+         // @ Call fail in the Assertion
+         $this->fail($fallback);
       }
 
       return $this;
    }
 
-   public function fail (): void
+   public function fail (array $fallback): void
    {
       $counter = Backtrace::$counter;
       Backtrace::$counter = false;
@@ -242,13 +246,26 @@ class Assertion
       // ---
       $backtrace = Vars::output(backtraces: [2]);
       $assertion = Vars::output(vars: true);
-      $message = "\n";
+      // message
+      $message = <<<MESSAGE
+
+      \033[0;37;41m Fallback message: \033[0m
+       
+      MESSAGE;
+      $message .= vsprintf(
+         $fallback['format'],
+         array_values($fallback['values'])
+      );
+      $message .= "\033[0m";
+      // custom
+      $custom = "\n";
       // + Custom fallback message
       if (self::$fallback) {
          $fallback = self::$fallback;
-         $message = <<<MESSAGE
+         $custom = <<<MESSAGE
 
-         \033[0;30;46m Fallback message: \033[0m $fallback
+         \033[0;30;46m Custom fallback message: \033[0m
+          $fallback
 
          MESSAGE;
       }
@@ -256,6 +273,7 @@ class Assertion
       Assertion failed in:
       $backtrace
       $message
+      $custom
       $assertion
       MESSAGE;
       // ---

@@ -8,7 +8,6 @@ use Bootgly\ACI\Tests\Cases\Assertion;
 use Bootgly\ACI\Tests\Cases\Assertions;
 use Bootgly\ACI\Tests\Assertions\Hook;
 
-
 return [
    // @ configure
    'describe' => 'It should compare equal values',
