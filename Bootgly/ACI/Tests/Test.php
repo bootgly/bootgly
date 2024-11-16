@@ -107,7 +107,7 @@ class Test extends Assertions
       return null;
    }
 
-   private function describe (?string $description, bool $status, string $indicator = '╟'): void
+   private function describe (?string $description, ?bool $status, string $indicator = '╟'): void
    {
       if ($description === null) {
          return;
@@ -118,8 +118,12 @@ class Test extends Assertions
       // Icon
       # ⮡ ↳➡️↪↪️ ✓✘ ✅❌
       $icon = match ($status) {
+         // PASS
          true  => ' @#green:✓ @; ',
-         false => ' @#red:✘ @; '
+         // FAIL
+         false => ' @#red:✘ @; ',
+         // SKIP (null)
+         default => ' @#yellow:─ @; ',
       };
       // Description
       $description = '@#white:' . $description . '@;';
@@ -141,6 +145,16 @@ class Test extends Assertions
          if ($descriptions_count === 2 && $description === null && $index === 2)
             break;
 
+         // description
+         $description ??= 'Assertion @:info:#' . ($index - 1) . '@;';
+         // status
+         $status = (
+            !$status && ($index === $descriptions_count || $index === 1)
+         )
+            ? false
+            : true;
+         $status = $index === 1 ? $status : $this->results[$index - 2];
+         // indicator
          $indicator = match ($index) {
             1                   => '╟',
             $descriptions_count => '╚══',
@@ -148,8 +162,8 @@ class Test extends Assertions
          };
 
          $this->describe(
-            $description ?? 'Assertion @:info:#' . ($index - 1) . '@;',
-            (!$status && ($index === $descriptions_count || $index === 1)) ? false : true,
+            $description,
+            $status,
             $indicator
          );
 
@@ -265,6 +279,12 @@ class Test extends Assertions
 
             // Assertion instance
             if ($Assertion instanceof Assertion) {
+               if ($Assertion->skipped) { // skip
+                  $this->descriptions[] = $Assertion::$description;
+                  $this->results[] = null;
+                  continue;
+               }
+
                $Assertion->asserted ?:
                   throw new AssertionError(
                      message: 'Using the `->assert(...)` method is mandatory before returning `new Assertion`!'
@@ -347,17 +367,19 @@ class Test extends Assertions
       $case = sprintf('%03d', $this->specifications['case']);
       $test = str_pad($this->filename . ':', Tests::$width, ' ', STR_PAD_RIGHT);
       $elapsed = $this->elapsed;
-      $help = $message ?? $this->AssertionError?->getMessage();
 
       // @ output
+      // header
       $this->log(
          "\033[30m\033[47m " . $case . " \033[0m" .
          "\033[0;30;41m FAIL \033[0m " .
          "@@:" . $test . " @;" .
          "\033[1;35m +" . $elapsed . "s\033[0m" . PHP_EOL
       );
+      // assertions
       $this->describing(status: false);
-
+      // fallback
+      $help = $message ?? $this->AssertionError?->getMessage();
       if ($help) {
          $this->log(
             " ↪️\033[91m" . $help . "\033[0m" .
@@ -388,12 +410,14 @@ class Test extends Assertions
       $elapsed = $this->elapsed;
 
       // @ output
+      // header
       $this->log(
          "\033[47;30m " . $case . " \033[0m" .
          "\033[0;30;42m PASS \033[0m " .
          "\033[90m" . $test . "\033[0m" .
          "\033[1;35m +" . $elapsed . "s\033[0m" . PHP_EOL
       );
+      // assertions
       $this->describing(status: true);
    }
 }
