@@ -90,7 +90,7 @@ class TestCommand extends Command
    }
 
    // @
-   public function test (string $suiteDir, ? int $index)
+   public function test (string $suiteDir, ?int $index): void
    {
       $bootstrapFile = Path::normalize($suiteDir . '/tests/@.php');
       if (BOOTGLY_ROOT_DIR !== BOOTGLY_WORKING_DIR) {
@@ -100,7 +100,7 @@ class TestCommand extends Command
       }
 
       if ($suiteSpecs === false) {
-         return false;
+         return;
       }
 
       $suiteSpecs = (array) $suiteSpecs;
@@ -115,9 +115,11 @@ class TestCommand extends Command
       if ($autoBoot instanceof Closure) {
          unset($suiteSpecs['autoBoot']);
          $autoBoot($suiteSpecs);
-      } else if ($autoBoot) {
+      }
+      else if ($autoBoot) {
          new Tester($suiteSpecs);
-      } else {
+      }
+      else {
          $Alert = new Alert(CLI->Terminal->Output);
          $Alert->Type::Failure->set();
          $Alert->message = 'AutoBoot test not configured!';

@@ -462,14 +462,14 @@ class Vars implements Debugging
     * Outputs specific parts or all of it.
     * Use arguments to output specific parts.
     * 
-    * @param array<number>|null $backtraces The backtrace stack indexes to output
-    * @param string|null $vars The vars to output
+    * @param array<number>|null $backtraces The backtrace stack indexes selected for output
+    * @param bool $vars The vars to output
     * 
     * @return string
     */
    public static function output (
       ?array $backtraces = null,
-      ?string $vars = null
+      bool $vars = false
    ): string
    {
       $output = null;
@@ -481,7 +481,7 @@ class Vars implements Debugging
          }
       }
       // vars
-      if ($vars !== null) {
+      if ($vars) {
          $output .= self::$vars;
       }
 

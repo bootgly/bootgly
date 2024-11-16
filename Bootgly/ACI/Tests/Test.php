@@ -302,6 +302,9 @@ class Test extends Assertions
          // ---
          $this->AssertionError = $AssertionError;
 
+         if ($retest === null) {
+            $this->descriptions[] = Assertion::$description;
+         }
          $this->results[] = false;
 
          if ($this->Tests->autoReport) {

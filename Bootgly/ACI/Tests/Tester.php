@@ -11,6 +11,8 @@
 namespace Bootgly\ACI\Tests;
 
 
+use Exception;
+
 use Bootgly\ACI\Logs\LoggableEscaped;
 use Bootgly\ACI\Tests;
 use Bootgly\API\Environment;
@@ -114,10 +116,9 @@ class Tester extends Tests
       $testCaseTarget = (int) ($specifications['index'] ?? 0);
       // @
       foreach ($this->tests as $index => $test) {
-         $specifications = @include($dir . $test . '.test.php'); // Test Case Specs
-
+         $specifications = @include($dir . $test . '.test.php');
          if ($specifications === false) {
-            $specifications = null;
+            throw new Exception("Test case not found: \n {$dir}{$test}");
          }
 
          // * Metadata (Test Case)
