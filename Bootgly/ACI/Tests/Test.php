@@ -327,9 +327,7 @@ class Test extends Assertions
          // ---
          $this->AssertionError = $AssertionError;
 
-         if ($retest === null) {
-            $this->descriptions[] = Assertion::$description;
-         }
+         $this->descriptions[] = Assertion::$description;
          $this->results[] = false;
 
          if ($this->Tests->autoReport) {
@@ -390,7 +388,7 @@ class Test extends Assertions
       if ($help) {
          $this->log(
             " ↪️\033[91m" . $help . "\033[0m" .
-            PHP_EOL
+            PHP_EOL . PHP_EOL
          );
       }
 

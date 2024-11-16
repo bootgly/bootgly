@@ -13,16 +13,17 @@ return [
    // * Data
    'suiteName' => __NAMESPACE__,
    'tests' => [
-      // Comparing
-      '_0.1.1-Simple_API-return-true',
-      '_0.1.2-Simple_API-return-string',
-      '_0.2.1-Simple_API-yield.boolean',
+      // Basic API
+      '_0.1.1-Basic_API-return_true',
+      '_0.1.2-Basic_API-return_boolean.retestable',
+      '_0.1.3-Basic_API-return_fallback_as_string',
+      '_0.3.1-Basic_API-yield.boolean',
 
+      // Advanced API
       '1.1.1-comparing-greater_than',
       '1.1.2-comparing-identical',
       '1.2-comparing-between',
-
-      // Snapshot
+      // Advanced API - Snapshot
       '3.0-snapshots',
    ]
 ];
