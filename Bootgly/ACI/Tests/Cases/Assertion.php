@@ -260,7 +260,7 @@ class Assertion
       MESSAGE;
       $message .= vsprintf(
          format: $fallback['format'],
-         values: array_values($fallback['values'])
+         values: array_values($fallback['values'] ?? [])
       );
       $message .= "\033[0m\n";
       // additional

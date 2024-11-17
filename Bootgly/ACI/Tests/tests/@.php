@@ -22,13 +22,17 @@ return [
       // Advanced API
       #'1.0.0-Advanced_API-asserted',
       // Advanced API - Comparators
-      '1.1.1-Advanced_API-comparing-greater_than',
-      '1.1.2-Advanced_API-comparing-identical',
-      '1.1.3-Advanced_API-comparing-less_than',
-      '1.1.4-Advanced_API-comparing-not_equal',
+      '1.1.1-Advanced_API-comparators-greater_than',
+      '1.1.2-Advanced_API-comparators-identical',
+      '1.1.3-Advanced_API-comparators-less_than',
+      '1.1.4-Advanced_API-comparators-not_equal',
       // Advanced API - Expectations
-      '1.2.0-Advanced_API-comparing-between',
-      // Advanced API - Snapshot
-      '1.3.0-Advanced_API-snapshots',
+      '1.2.1-Advanced_API-expectations-between',
+      // Advanced API - Finders
+      '1.3.1-Advanced_API-finders-contains',
+      '1.3.2-Advanced_API-finders-ends_with',
+      '1.3.3-Advanced_API-finders-starts_with',
+      // Advanced API - Snapshots
+      '1.5.0-Advanced_API-snapshots',
    ]
 ];

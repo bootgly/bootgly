@@ -11,10 +11,9 @@
 namespace Bootgly\ACI\Tests\Assertion;
 
 
-interface Finder extends Comparator
+interface Finder extends Expectation, Comparator
 {
-   // * Metadata
-   public mixed $found {
+   public mixed $needle {
       get;
       set;
    }

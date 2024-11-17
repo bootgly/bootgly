@@ -24,6 +24,14 @@ class Between implements Expectation
    protected int|float|DateTime $max;
 
 
+   /**
+    * Create a new Between instance.
+    * First value must be less than the second value.
+    * 
+    * @param mixed ...$values
+    *
+    * @throws Exception
+    */
    public function __construct (mixed ...$values)
    {
       // * Data

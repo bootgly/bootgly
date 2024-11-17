@@ -8,7 +8,7 @@ use Bootgly\ACI\Tests\Cases\Assertions;
 
 return [
    // @ configure
-   'describe' => 'It should compare between values (using Expectation)',
+   'describe' => 'It should compare between values (using Expectations)',
    // @ simulate
    // ...
    // @ test
