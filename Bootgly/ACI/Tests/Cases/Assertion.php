@@ -15,6 +15,7 @@ use AssertionError;
 
 use Bootgly\ABI\Debugging\Backtrace;
 use Bootgly\ABI\Debugging\Data\Vars;
+use Bootgly\ABI\Templates\Template;
 use Bootgly\ACI\Tests\Assertion\Comparator;
 use Bootgly\ACI\Tests\Assertion\Comparators;
 use Bootgly\ACI\Tests\Assertion\Expectation;
@@ -32,7 +33,7 @@ class Assertion
    /**
     * A custom `fallback` message displayed if the Assertion fails.
     */
-   public static ?string $fallback = null;
+   public static string|array|null $fallback = null;
    // ---
    /**
     * The Comparator instance to be used in the Assertion.
@@ -59,11 +60,11 @@ class Assertion
     * Create a new Assertion instance.
     * 
     * @param string|null $description An optional `description` of the Assertion.
-    * @param string|null $fallback A custom `fallback` message displayed if the Assertion fails.
+    * @param string|array|null $fallback A `fallback` message displayed if the Assertion fails.
     */
    public function __construct (
       string|null $description = null,
-      string|null $fallback = null
+      string|array|null $fallback = null
    )
    {
       // * Config
@@ -219,6 +220,7 @@ class Assertion
 
       if ($assertion === false) {
          // $With fallback template (Assertion interface)
+         // TODO: implement verbosity
          $fallback = $With->fail($actual, $expected);
 
          // @ Call fail in the Assertion
@@ -254,32 +256,41 @@ class Assertion
       $message = <<<MESSAGE
 
       \033[0;37;41m Fallback message: \033[0m
-       
+      
       MESSAGE;
       $message .= vsprintf(
-         $fallback['format'],
-         array_values($fallback['values'])
+         format: $fallback['format'],
+         values: array_values($fallback['values'])
       );
-      $message .= "\033[0m";
-      // custom
-      $custom = "\n";
-      // + Custom fallback message
+      $message .= "\033[0m\n";
+      // additional
+      $additional = <<<MESSAGE
+      \033[0;30;46m Fallback additional message: \033[0m
+
+      MESSAGE;
+      // + Fallback additional message
       if (self::$fallback) {
-         $fallback = self::$fallback;
-         $custom = <<<MESSAGE
+         if (is_array(self::$fallback)) {
+            foreach (self::$fallback as $key => $value) {
+               $additional = $key;
+            }
+         }
 
-         \033[0;30;46m Custom fallback message: \033[0m
-          $fallback
-
-         MESSAGE;
+         $additional .= new Template(<<<'MESSAGE'
+         @> $fallback;
+         MESSAGE)->render(
+            ['fallback' => self::$fallback]
+         ) ?? '';
       }
+
       self::$fallback = <<<MESSAGE
       Assertion failed in:
       $backtrace
       $message
-      $custom
       $assertion
+      $additional
       MESSAGE;
+
       // ---
       throw new AssertionError(self::$fallback);
    }

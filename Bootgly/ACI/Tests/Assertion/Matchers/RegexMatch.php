@@ -21,7 +21,7 @@ class RegexMatch implements Matcher
       return preg_match((string) $expected, (string) $actual) === 1;
    }
 
-   public function fail (mixed $actual, mixed $expected): array
+   public function fail (mixed $actual, mixed $expected, int $verbosity = 0): array
    {
       return [
          'format' => 'Failed asserting that %s matches the regex %s.',

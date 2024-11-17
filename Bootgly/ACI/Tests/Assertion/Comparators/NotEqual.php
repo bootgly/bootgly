@@ -21,14 +21,35 @@ class NotEqual implements Comparator
       return $actual !== $expected;
    }
 
-   public function fail (mixed $actual, mixed $expected): array
+   public function fail (mixed $actual, mixed $expected, int $verbosity = 0): array
    {
-      return [
+      // verbosity 1
+      switch ($verbosity) {
+         case 1:
+            if (is_array($actual))
+               $actual = json_encode($actual);
+            if (is_array($expected))
+               $expected = json_encode($expected);
+            break;
+         case 2:
+            if (is_object($actual))
+               $actual = serialize($actual);
+            if (is_object($expected))
+               $expected = serialize($expected);
+            break;
+      }
+
+      $template = [
          'format' => 'Failed asserting that %s is not equal to %s.',
-         'values' => [
-            'actual' => $actual,
-            'expected' => $expected
-         ]
       ];
+      $template['values'] = match ($verbosity) {
+         0 => self::FALLBACK_TEMPLATE_VALUES_0,
+         default => [
+               'actual' => $actual,
+               'expected' => $expected
+            ],
+      };
+
+      return $template;
    }
 }

@@ -47,7 +47,7 @@ class Between implements Expectation
       return $assertion;
    }
 
-   public function fail (mixed $actual, mixed $expected): array
+   public function fail (mixed $actual, mixed $expected, int $verbosity = 0): array
    {
       // !
       $min = $this->min;

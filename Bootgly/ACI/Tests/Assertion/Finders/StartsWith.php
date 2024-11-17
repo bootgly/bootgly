@@ -21,7 +21,7 @@ class StartsWith implements Finder
       return strpos((string) $actual, (string) $expected) === 0;
    }
 
-   public function fail (mixed $actual, mixed $expected): array
+   public function fail (mixed $actual, mixed $expected, int $verbosity = 0): array
    {
       return [
          'format' => 'Failed asserting that the string "%s" starts with "%s".',

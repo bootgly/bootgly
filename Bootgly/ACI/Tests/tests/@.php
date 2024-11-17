@@ -25,6 +25,7 @@ return [
       '1.1.1-Advanced_API-comparing-greater_than',
       '1.1.2-Advanced_API-comparing-identical',
       '1.1.3-Advanced_API-comparing-less_than',
+      '1.1.4-Advanced_API-comparing-not_equal',
       // Advanced API - Expectations
       '1.2.0-Advanced_API-comparing-between',
       // Advanced API - Snapshot

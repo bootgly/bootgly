@@ -121,7 +121,7 @@ class InFileStorage implements Snapshot
 
       return $assertion;
    }
-   public function fail (mixed $actual, mixed $expected): array
+   public function fail (mixed $actual, mixed $expected, int $verbosity = 0): array
    {
       return [
          'format' => 'Failed asserting that the snapshot value is equal to the expected value.',

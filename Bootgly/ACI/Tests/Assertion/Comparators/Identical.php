@@ -21,7 +21,7 @@ class Identical implements Comparator
       return $actual === $expected;
    }
 
-   public function fail (mixed $actual, mixed $expected): array
+   public function fail (mixed $actual, mixed $expected, int $verbosity = 0): array
    {
       return [
          'format' => 'Failed asserting that %s is equal to %s.',
