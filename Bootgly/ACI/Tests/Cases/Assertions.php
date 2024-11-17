@@ -157,9 +157,7 @@ class Assertions extends Tests\Assertions
       $this->ran = true;
 
       // @
-      if ($With) {
-         Assertion::$Comparator = $With;
-      }
+      Assertion::$Comparator = $With;
 
       $Assertions = ($this->Closure)(...$arguments);
 

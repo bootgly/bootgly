@@ -93,11 +93,9 @@ class TestCommand extends Command
    public function test (string $suiteDir, ?int $index): void
    {
       $bootstrapFile = Path::normalize($suiteDir . '/tests/@.php');
-      if (BOOTGLY_ROOT_DIR !== BOOTGLY_WORKING_DIR) {
-         $suiteSpecs = (include BOOTGLY_WORKING_DIR . $bootstrapFile);
-      } else {
-         $suiteSpecs = (include BOOTGLY_ROOT_DIR . $bootstrapFile);
-      }
+      BOOTGLY_ROOT_DIR !== BOOTGLY_WORKING_DIR
+         ? $suiteSpecs = (include BOOTGLY_WORKING_DIR . $bootstrapFile)
+         : $suiteSpecs = (include BOOTGLY_ROOT_DIR . $bootstrapFile);
 
       if ($suiteSpecs === false) {
          return;

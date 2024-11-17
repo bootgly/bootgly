@@ -37,7 +37,7 @@ class Assertion
    /**
     * The Comparator instance to be used in the Assertion.
     */
-   public static Comparator $Comparator;
+   public static ?Comparator $Comparator;
    /**
     * The Snapshot instance to be used in the Assertion.
     */
@@ -70,10 +70,13 @@ class Assertion
       self::$description = $description;
       self::$fallback = $fallback;
       // ---
-      // ...
+      // self::$Comparator
+      // $this->Snapshot
 
       // * Data
-      // ...
+      // $actual
+      // $expected
+      // $With
 
       // * Metadata
       $this->asserted = false;
@@ -81,18 +84,19 @@ class Assertion
    }
    public function __destruct ()
    {
+      #self::$description = null;
       self::$fallback = null;
+      // self::$Comparator
+      // $this->Snapshot
    }
    public function __get (string $name): mixed
    {
-      switch ($name) {
-         case 'asserted':
-            return $this->asserted;
-         case 'skipped':
-            return $this->skipped;
-         default:
-            return null;
-      }
+      return match ($name) {
+         // * Metadata
+         'asserted' => $this->asserted,
+         'skipped' => $this->skipped,
+         default => null
+      };
    }
 
    // # Snapshot

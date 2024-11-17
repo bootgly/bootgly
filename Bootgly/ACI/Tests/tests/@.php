@@ -14,16 +14,20 @@ return [
    'suiteName' => __NAMESPACE__,
    'tests' => [
       // Basic API
-      '_0.1.1-Basic_API-return_true',
-      '_0.1.2-Basic_API-return_boolean.retestable',
-      '_0.1.3-Basic_API-return_fallback_as_string',
-      '_0.3.1-Basic_API-yield.boolean',
+      '0.1.1-Basic_API-return_true',
+      '0.1.2-Basic_API-return_boolean.retestable',
+      '0.1.3-Basic_API-return_fallback_as_string',
+      '0.3.1-Basic_API-yield.boolean',
 
       // Advanced API
-      '1.1.1-comparing-greater_than',
-      '1.1.2-comparing-identical',
-      '1.2-comparing-between',
+      #'1.0.0-Advanced_API-asserted',
+      // Advanced API - Comparators
+      '1.1.1-Advanced_API-comparing-greater_than',
+      '1.1.2-Advanced_API-comparing-identical',
+      '1.1.3-Advanced_API-comparing-less_than',
+      // Advanced API - Expectations
+      '1.2.0-Advanced_API-comparing-between',
       // Advanced API - Snapshot
-      '3.0-snapshots',
+      '1.3.0-Advanced_API-snapshots',
    ]
 ];

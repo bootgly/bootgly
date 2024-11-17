@@ -426,7 +426,6 @@ class Vars implements Debugging
             self::$vars .= self::dump($value) . "\n";
          }
          // ...
-         self::$vars .= "\n";
          self::$vars .= match (self::$CLI) {
             false => '</pre><style>pre{-moz-tab-size: 1; tab-size: 1;}</style>',
             true  => ''
