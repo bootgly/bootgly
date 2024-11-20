@@ -17,7 +17,7 @@ use Bootgly\ACI\Tests\Assertion\Expectation\Matcher;
 class VariadicDirPath implements Matcher
 {
    // * Data
-   protected string $pattern;
+   protected ?string $pattern;
 
    // * Metadata
    public array $matches {
@@ -26,9 +26,9 @@ class VariadicDirPath implements Matcher
    }
 
 
-   public function __construct (string $pattern)
+   public function __construct (string ...$pattern)
    {
-      $this->pattern = $pattern;
+      $this->pattern = $pattern[0];
    }
 
    public function compare (mixed &$actual, mixed &$expected): bool
