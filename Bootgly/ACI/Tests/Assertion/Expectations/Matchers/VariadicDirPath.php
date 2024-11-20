@@ -33,8 +33,10 @@ class VariadicDirPath implements Matcher
 
    public function compare (mixed &$actual, mixed &$expected): bool
    {
+      $pattern = $this->pattern ?? (string) $expected;
+
       $pattern = preg_quote(
-         str: (string) $expected,
+         str: $pattern,
          delimiter: '/'
       );
       $pattern = str_replace(
@@ -55,6 +57,8 @@ class VariadicDirPath implements Matcher
  
    public function fail (mixed $actual, mixed $expected, int $verbosity = 0): array
    {
+      $expected = $this->pattern ?? $expected;
+
       return [
          'format' => 'Failed asserting that %s matches the directory path %s.',
          'values' => [

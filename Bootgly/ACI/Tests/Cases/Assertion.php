@@ -264,12 +264,14 @@ class Assertion
       );
       $message .= "\033[0m\n";
       // additional
-      $additional = <<<MESSAGE
-      \033[0;30;46m Fallback additional message: \033[0m
-
-      MESSAGE;
+      $additional = "";
       // + Fallback additional message
       if (self::$fallback) {
+         $additional = <<<MESSAGE
+         \033[0;30;46m Fallback additional message: \033[0m
+
+         MESSAGE;
+
          if (is_array(self::$fallback)) {
             foreach (self::$fallback as $key => $value) {
                $additional = $key;

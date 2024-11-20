@@ -35,6 +35,7 @@ return [
       '1.3.3-Advanced_API-expectations-finders-starts_with',
       // Advanced API - Expectations/Matchers
       '1.4.1-Advanced_API-expectations-matchers-regex_match',
+      '1.4.2-Advanced_API-expectations-matchers-variadic_dir_path',
       // Advanced API - Snapshots
       '1.5.0-Advanced_API-snapshots',
    ]
