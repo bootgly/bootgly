@@ -33,3 +33,12 @@ if (\PHP_SAPI === 'cli') {
    // @ Restore Throwables Verbosity
    Throwables::$verbosity = $verbosity;
 }
+
+namespace Bootgly\ACI\Tests\Assertion\Comparators;
+
+
+use Bootgly\ACI\Tests\Assertion\Comparators\Identical;
+
+
+// constants
+const Identical = new Identical();

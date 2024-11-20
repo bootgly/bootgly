@@ -8,18 +8,27 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\ACI\Tests\Assertion\Matchers;
+namespace Bootgly\ACI\Tests\Assertion\Expectations\Matchers;
 
 
-use Bootgly\ACI\Tests\Assertion\Matcher;
+use Bootgly\ACI\Tests\Assertion\Expectation\Matcher;
 
 
 class VariadicDirPath implements Matcher
 {
+   // * Data
+   protected string $pattern;
+
    // * Metadata
    public array $matches {
-      get => $this->matches;
+      get => $this->matches ??= [];
       set => $this->matches = $value;
+   }
+
+
+   public function __construct (string $pattern)
+   {
+      $this->pattern = $pattern;
    }
 
    public function compare (mixed &$actual, mixed &$expected): bool

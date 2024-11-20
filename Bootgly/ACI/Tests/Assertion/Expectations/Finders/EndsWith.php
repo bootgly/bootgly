@@ -8,39 +8,44 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\ACI\Tests\Assertion\Finders;
+namespace Bootgly\ACI\Tests\Assertion\Expectations\Finders;
 
 
-use Bootgly\ACI\Tests\Assertion\Finder;
+use Bootgly\ACI\Tests\Assertion\Expectation\Finder;
 
 
-class StartsWith implements Finder
+class EndsWith implements Finder
 {
-   public mixed $needle {
+   public string $needle {
       get => $this->needle ??= null;
       set => $this->needle = $value;
    }
 
 
-   public function __construct (mixed ...$values)
+   public function __construct (string ...$needle)
    {
-      $this->needle = $values[0];
+      $this->needle = $needle[0];
    }
+
    public function compare (mixed &$actual, mixed &$expected): bool
    {
-      return strpos(
-         haystack: (string) $actual,
-         needle: (string) $this->needle
-      ) === 0;
+      $needle = $this->needle ?? $expected;
+
+      return substr(
+         string: (string) $actual,
+         offset: -strlen($needle)
+      ) === $needle;
    }
 
    public function fail (mixed $actual, mixed $expected, int $verbosity = 0): array
    {
+      $needle = $this->needle ?? $expected;
+
       return [
-         'format' => 'Failed asserting that the string "%s" starts with "%s".',
+         'format' => 'Failed asserting that the string "%s" ends with "%s".',
          'values' => [
             'actual' => $actual,
-            'expected' => $this->needle
+            'expected' => $needle
          ]
       ];
    }

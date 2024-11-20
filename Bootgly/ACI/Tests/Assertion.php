@@ -11,7 +11,7 @@
 namespace Bootgly\ACI\Tests;
 
 
-interface Assertion // Implementation/Repository
+interface Assertion
 {
    // # Fallback
    public const array FALLBACK_TEMPLATE_VALUES_0 = [

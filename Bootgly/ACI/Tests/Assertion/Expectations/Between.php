@@ -28,11 +28,12 @@ class Between implements Expectation
     * Create a new Between instance.
     * First value must be less than the second value.
     * 
-    * @param mixed ...$values
+    * @param int|float|DateTime $min
+    * @param int|float|DateTime $max
     *
     * @throws Exception
     */
-   public function __construct (mixed ...$values)
+   public function __construct (int|float|DateTime ...$values)
    {
       // * Data
       $this->min = $values[0];

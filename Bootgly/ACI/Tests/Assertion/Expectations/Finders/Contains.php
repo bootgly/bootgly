@@ -8,40 +8,42 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\ACI\Tests\Assertion\Finders;
+namespace Bootgly\ACI\Tests\Assertion\Expectations\Finders;
 
 
-use Bootgly\ACI\Tests\Assertion\Finder;
+use Bootgly\ACI\Tests\Assertion\Expectation\Finder;
 
 
 class Contains implements Finder
 {
-   public mixed $needle {
+   public string $needle {
       get => $this->needle ??= null;
       set => $this->needle = $value;
    }
 
 
-   public function __construct (mixed ...$values)
+   public function __construct (string ...$needle)
    {
-      $this->needle = $values[0];
+      $this->needle = $needle[0];
    }
+
    public function compare (mixed &$actual, mixed &$expected): bool
    {
       $type = gettype($actual);
+      $needle = $this->needle ?? $expected;
 
       return match ($type) {
          'array' => in_array(
-            needle: $this->needle,
+            needle: $needle,
             haystack: (array) $actual
          ),
          'string' => str_contains(
             haystack: (string) $actual,
-            needle: (string) $this->needle
+            needle: (string) $needle
          ),
          'object' => property_exists(
             object_or_class: $actual,
-            property: $this->needle
+            property: $needle
          ),
          default => false
       };
@@ -50,24 +52,25 @@ class Contains implements Finder
    public function fail (mixed $actual, mixed $expected, int $verbosity = 0): array
    {
       $type = gettype($actual);
+      $needle = $this->needle ?? $expected;
 
       return match ($type) {
          'array' => [
             'format' => "Failed asserting that the array contains \"%s\".",
             'values' => [
-               'expected' => $this->needle
+               'expected' => $needle
             ]
          ],
          'string' => [
             'format' => "Failed asserting that the string contains \"%s\".",
             'values' => [
-               'expected' => $this->needle
+               'expected' => $needle
             ]
          ],
          'object' => [
             'format' => "Failed asserting that the object contains the property \"%s\".",
             'values' => [
-               'expected' => $this->needle
+               'expected' => $needle
             ]
          ],
          default => [

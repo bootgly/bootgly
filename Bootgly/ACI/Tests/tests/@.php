@@ -21,6 +21,7 @@ return [
 
       // Advanced API
       #'1.0.0-Advanced_API-asserted',
+      '1.0.1-Advanced_API-assert',
       // Advanced API - Comparators
       '1.1.1-Advanced_API-comparators-greater_than',
       '1.1.2-Advanced_API-comparators-identical',
@@ -28,10 +29,12 @@ return [
       '1.1.4-Advanced_API-comparators-not_equal',
       // Advanced API - Expectations
       '1.2.1-Advanced_API-expectations-between',
-      // Advanced API - Finders
-      '1.3.1-Advanced_API-finders-contains',
-      '1.3.2-Advanced_API-finders-ends_with',
-      '1.3.3-Advanced_API-finders-starts_with',
+      // Advanced API - Expectations/Finders
+      '1.3.1-Advanced_API-expectations-finders-contains',
+      '1.3.2-Advanced_API-expectations-finders-ends_with',
+      '1.3.3-Advanced_API-expectations-finders-starts_with',
+      // Advanced API - Expectations/Matchers
+      '1.4.1-Advanced_API-expectations-matchers-regex_match',
       // Advanced API - Snapshots
       '1.5.0-Advanced_API-snapshots',
    ]

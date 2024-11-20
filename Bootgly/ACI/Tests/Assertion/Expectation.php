@@ -11,7 +11,11 @@
 namespace Bootgly\ACI\Tests\Assertion;
 
 
+/**
+ * Implementation / Repository
+ * Expectation    / Expectations
+ */
 interface Expectation extends Comparator
 {
-   public function __construct (mixed ...$values);
+   public function __construct ();
 }

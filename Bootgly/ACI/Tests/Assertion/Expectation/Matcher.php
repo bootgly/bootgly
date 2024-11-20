@@ -8,12 +8,21 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\ACI\Tests\Assertion;
+namespace Bootgly\ACI\Tests\Assertion\Expectation;
 
 
-interface Finder extends Expectation, Comparator
+use Bootgly\ACI\Tests\Assertion\Comparator;
+use Bootgly\ACI\Tests\Assertion\Expectation;
+
+
+/**
+ * Implementation      / Repository
+ * Expectation/Matcher / Expectations/Matchers
+ */
+interface Matcher extends Expectation, Comparator
 {
-   public mixed $needle {
+   // * Metadata
+   public array $matches {
       get;
       set;
    }

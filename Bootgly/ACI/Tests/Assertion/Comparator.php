@@ -14,6 +14,10 @@ namespace Bootgly\ACI\Tests\Assertion;
 use Bootgly\ACI\Tests\Assertion;
 
 
+/**
+ * Implementation / Repository
+ * Comparator     / Comparators
+ */
 interface Comparator extends Assertion
 {
    public function compare (mixed &$actual, mixed &$expected): bool;

@@ -32,3 +32,5 @@ class Identical implements Comparator
       ];
    }   
 }
+
+const Identical = new Identical();

@@ -2,7 +2,7 @@
 
 use Generator;
 
-use Bootgly\ACI\Tests\Assertion\Expectations;
+use Bootgly\ACI\Tests\Assertion\Expectations\Between;
 use Bootgly\ACI\Tests\Cases\Assertion;
 use Bootgly\ACI\Tests\Cases\Assertions;
 
@@ -21,7 +21,7 @@ return [
       )
          ->assert(
             actual: 1,
-            expected: new Expectations\Between(1, 2),
+            expected: new Between(1, 2),
          );
 
       // float
@@ -31,7 +31,7 @@ return [
       )
          ->assert(
             actual: 1.1,
-            expected: new Expectations\Between(1.1, 2.1),
+            expected: new Between(1.1, 2.1),
          );
 
       // DateTime
@@ -42,7 +42,7 @@ return [
       )
          ->assert(
             actual: $date,
-            expected: new Expectations\Between(
+            expected: new Between(
                new DateTime('2023-01-01'),
                new DateTime('2023-01-02')
             ),

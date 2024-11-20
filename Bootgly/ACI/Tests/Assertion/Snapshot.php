@@ -11,6 +11,10 @@
 namespace Bootgly\ACI\Tests\Assertion;
 
 
+/**
+ * Implementation / Repository
+ * Snapshot       / Snapshots
+ */
 interface Snapshot extends Comparator
 {
    // * Metadata

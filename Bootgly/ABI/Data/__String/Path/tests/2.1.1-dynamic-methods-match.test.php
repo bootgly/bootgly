@@ -3,7 +3,7 @@
 use Generator;
 
 use Bootgly\ABI\Data\__String\Path;
-use Bootgly\ACI\Tests\Assertion\Matchers\VariadicDirPath;
+use Bootgly\ACI\Tests\Assertion\Expectations\Matchers\VariadicDirPath;
 use Bootgly\ACI\Tests\Cases\Assertion;
 use Bootgly\ACI\Tests\Cases\Assertions;
 
