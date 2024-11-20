@@ -22,7 +22,8 @@ return [
       )
          ->assert(
             actual: false,
-            expected: true
+            expected: true,
+            With: new Comparators\LessThan
          );
 
       // integer
@@ -32,7 +33,8 @@ return [
       )
          ->assert(
             actual: 1,
-            expected: 2
+            expected: 2,
+            With: new Comparators\LessThan
          );
 
       // float
@@ -42,7 +44,8 @@ return [
       )
          ->assert(
             actual: 1.1,
-            expected: 2.1
+            expected: 2.1,
+            With: new Comparators\LessThan
          );
 
       // string
@@ -53,6 +56,7 @@ return [
          ->assert(
             actual: 'Bootgly',
             expected: 'Bootgly!',
+            With: new Comparators\LessThan
          );
 
       // array
@@ -63,6 +67,7 @@ return [
          ->assert(
             actual: [1, 2, 3],
             expected: [1, 2, 3, 4],
+            With: new Comparators\LessThan
          );
 
       // object
@@ -76,7 +81,7 @@ return [
          ->assert(
             actual: $object1,
             expected: $object2,
+            With: new Comparators\LessThan
          );
    })
-      ->assertAll(With: new Comparators\LessThan),
 ];

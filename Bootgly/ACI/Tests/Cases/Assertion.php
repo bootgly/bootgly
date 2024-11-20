@@ -163,7 +163,7 @@ class Assertion
 
    // .
    /**
-    * Assert the Assertion.
+    * Compare the `actual` value with the `expected` value using the `With` Comparator (or the default Comparator).
     * 
     * @param mixed $actual The `actual` value provided as input for the Assertion.
     * @param mixed $expected The `expected` value to be compared with the `actual` value in the assertion.
@@ -264,7 +264,7 @@ class Assertion
       );
       $message .= "\033[0m\n";
       // additional
-      $additional = "";
+      $additional = "\033[F\033[F"; // move the cursor up 2 lines
       // + Fallback additional message
       if (self::$fallback) {
          $additional = <<<MESSAGE

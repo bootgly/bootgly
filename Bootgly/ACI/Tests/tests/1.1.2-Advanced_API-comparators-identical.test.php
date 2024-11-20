@@ -83,5 +83,4 @@ return [
       {
          // do anything before each assertion
       })
-      ->assertAll(With: new Comparators\Identical),
 ];

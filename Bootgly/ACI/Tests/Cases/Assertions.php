@@ -18,14 +18,13 @@ use Generator;
 use InvalidArgumentException;
 
 use Bootgly\ACI\Tests;
-use Bootgly\ACI\Tests\Assertion\Comparator;
 use Bootgly\ACI\Tests\Assertions\Hook;
 
 
 class Assertions extends Tests\Assertions
 {
    // * Config
-   public ?Comparator $Comparator;
+   // -
 
    // * Data
    protected Closure $Closure;
@@ -48,36 +47,26 @@ class Assertions extends Tests\Assertions
    public function __construct (Closure $Case)
    {
       // * Config
-      $this->Comparator = null;
+      // -
 
       // * Data
       $this->Closure = $Case->bindTo(
          newThis: $this,
          newScope: 'static'
       );
-      // ...
+      // # Dataset
+      // $this->arguments = undefined;
+      // # Hooks
+      // $this->onBeforeAll = undefined;
+      // $this->onAfterAll = undefined;
+      // $this->onBeforeEach = undefined;
+      // $this->onAfterEach = undefined;
 
       // * Metadata
       $this->ran = false;
    }
 
    // @ Configuring
-   /**
-    * Configure the Comparator to be used as default in the assertions.
-    *
-    * @param Comparator $With The Comparator to use in the assertions.
-    *
-    * @return $this 
-    */
-   public function assertAll (Comparator $With): self
-   {
-      // * Config
-      $this->Comparator = $With;
-
-      // :
-      return $this;
-   }
-
    // # Hooks
    /**
     * Set a hook to assertions.
@@ -143,7 +132,7 @@ class Assertions extends Tests\Assertions
       }
 
       // * Config
-      $With = $this->Comparator;
+      // -
       // * Data
       // # Dataset
       $arguments = $this->arguments ?? $arguments;
@@ -157,8 +146,6 @@ class Assertions extends Tests\Assertions
       $this->ran = true;
 
       // @
-      Assertion::$Comparator = $With;
-
       $Assertions = ($this->Closure)(...$arguments);
 
       // ?!
