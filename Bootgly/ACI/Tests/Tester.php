@@ -125,7 +125,7 @@ class Tester extends Tests
          }
 
          $specifications = @include "{$dir}{$test}.test.php";
-         if ($specifications === false) {
+         if ($file[0] !== '_' && $specifications === false) {
             throw new Exception("Test case not found: \n {$dir}{$test}");
          }
 
