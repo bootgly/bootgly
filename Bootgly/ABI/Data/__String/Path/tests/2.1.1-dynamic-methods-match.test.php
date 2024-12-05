@@ -32,7 +32,7 @@ return [
          ->assert(
             actual: (string) $Path,
             expected: '/etc/php/8.*',
-            With: new VariadicDirPath
+            using: new VariadicDirPath
          );
 
       $Path = new Path('/etc/php/');
@@ -44,7 +44,7 @@ return [
          ->assert(
             actual: (string) $Path,
             expected: '/etc/php/8.*',
-            With: new VariadicDirPath
+            using: new VariadicDirPath
          );
    })
 ];

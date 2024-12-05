@@ -11,19 +11,26 @@
 namespace Bootgly\ACI\Tests\Assertion\Expectation;
 
 
-use Bootgly\ACI\Tests\Assertion\Comparator;
-use Bootgly\ACI\Tests\Assertion\Expectation;
+use Bootgly\ACI\Tests\Asserting;
 
 
 /**
- * Implementation     / Repository
- * Expectation/Finder / Expectations/Finders
+ * Finder are for assertions that find a needle ($expected) in a haystack ($actual).
+ * 
+ * Use both $actual and $expected in the assertion.
+ * The $expected is a needle to find in $actual.
  */
-interface Finder extends Expectation, Comparator
+abstract class Finder implements Asserting
 {
-   // * Data
-   public string $needle {
-      get;
-      set;
+   // * Config
+   public mixed $needle {
+      get => $this->needle ??= null;
+      set => $this->needle = $value;
+   }
+
+
+   public function __construct (mixed $needle)
+   {
+      $this->needle = $needle;
    }
 }

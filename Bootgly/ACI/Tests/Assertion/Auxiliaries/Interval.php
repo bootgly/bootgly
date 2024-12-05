@@ -8,10 +8,17 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\ACI\Tests;
+namespace Bootgly\ACI\Tests\Assertion\Auxiliaries;
 
-
-interface Assertion
+/*
+ * Enum to be used in boundaries of the Assertion.
+ * e.g. $Assertion->expect($actual)->bound($from, $to, Interval::Closed);
+ */
+enum Interval
 {
-   // ...
+   case Closed;
+   case Open;
+
+   case LeftOpen;
+   case RightOpen;
 }

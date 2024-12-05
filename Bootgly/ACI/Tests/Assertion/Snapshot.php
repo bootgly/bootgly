@@ -11,11 +11,13 @@
 namespace Bootgly\ACI\Tests\Assertion;
 
 
+use Bootgly\ACI\Tests\Asserting;
+
 /**
  * Implementation / Repository
  * Snapshot       / Snapshots
  */
-interface Snapshot extends Comparator
+interface Snapshot extends Asserting
 {
    // * Metadata
    public bool $captured {

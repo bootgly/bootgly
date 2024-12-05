@@ -3,7 +3,7 @@
 use Generator;
 use stdClass;
 
-use Bootgly\ACI\Tests\Assertion\Expectations;
+use Bootgly\ACI\Tests\Assertion\Expectations\Delimiters\ClosedInterval;
 use Bootgly\ACI\Tests\Assertion\Snapshots;
 use Bootgly\ACI\Tests\Cases\Assertion;
 use Bootgly\ACI\Tests\Cases\Assertions;
@@ -66,7 +66,7 @@ return [
          );
 
 
-      // @ Using With as Snapshot [array]
+      // @ Using using as Snapshot [array]
       $array1 = [1, 2, 3];
       yield new Assertion(
          description: 'Capturing and restoring arrays',
@@ -75,10 +75,10 @@ return [
          ->assert(
             actual: $array1,
             expected: $array1,
-            With: new Snapshots\InMemoryDefault
+            using: new Snapshots\InMemoryDefault
          );
 
-      // @ Using With as Snapshot [object]
+      // @ Using using as Snapshot [object]
       $object1 = new stdClass();
       $object1->property = 'value';
       yield new Assertion(
@@ -88,21 +88,21 @@ return [
          ->assert(
             actual: $object1,
             expected: $object1,
-            With: new Snapshots\InMemoryDefault
+            using: new Snapshots\InMemoryDefault
          );
 
-      // @ Using With as Snapshot and Expectation [int]
+      // @ Using using as Snapshot and Expectation [int]
       yield new Assertion(
          description: 'Between integers',
          fallback: 'Integers not matched!'
       )
          ->assert(
             actual: 2,
-            expected: new Expectations\Between(1, 3),
-            With: new Snapshots\InFileStorage
+            expected: new ClosedInterval(1, 3),
+            using: new Snapshots\InFileStorage
          );
 
-      // @ Using With as Snapshot and Expectation [DateTime]
+      // @ Using using as Snapshot and Expectation [DateTime]
       // DateTime
       $DateTime = new DateTime('2023-01-02');
       yield new Assertion(
@@ -111,11 +111,11 @@ return [
       )
          ->assert(
             actual: $DateTime,
-            expected: new Expectations\Between(
+            expected: new ClosedInterval(
                new DateTime('2023-01-02'),
                new DateTime('2023-01-04')
             ),
-            With: new Snapshots\InFileStorage
+            using: new Snapshots\InFileStorage
          );
    })
 ];

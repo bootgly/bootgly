@@ -8,7 +8,7 @@ use Bootgly\ACI\Tests\Cases\Assertions;
 
 return [
    // @ configure
-   'describe' => 'It should compare using the finder "Contains"',
+   'describe' => 'It should compare using the finder "Contain"',
    // @ simulate
    // ...
    // @ test

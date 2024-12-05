@@ -8,10 +8,15 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\ACI\Tests;
+namespace Bootgly\ACI\Tests\Assertion\Auxiliaries;
 
-
-interface Assertion
+/*
+ * Enum to be used if the $actual can be converted to a certain type.
+ * e.g. $Assertion->expect($actual)->be(Typehiting::Truthy);
+ */
+enum Typehiting
 {
+   case Falsy; // null, false, 0, '', '0', []
+   case Truthy;
    // ...
 }

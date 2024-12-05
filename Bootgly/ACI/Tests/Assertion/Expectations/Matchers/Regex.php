@@ -15,38 +15,31 @@ use Bootgly\ACI\Tests\Asserting\Fallback;
 use Bootgly\ACI\Tests\Assertion\Expectation\Matcher;
 
 
-class VariadicDirPath extends Matcher
+class Regex extends Matcher
 {
    public function assert (mixed &$actual, mixed &$expected): bool
    {
+      // * Config
       $pattern = $this->pattern ?? (string) $expected;
-
-      $pattern = preg_quote(
-         str: $pattern,
-         delimiter: '/'
-      );
-      $pattern = str_replace(
-         search: '\*',
-         replace: '.*',
-         subject: $pattern
-      );
+      $matches = fn (): array => $this->matches;
 
       $result = preg_match(
-         pattern: "/^$pattern$/",
+         pattern: (string) $pattern,
          subject: (string) $actual,
          matches: $matches
-      );
+      ) === 1;
+
       $this->matches = $matches;
 
-      return $result === 1;
+      return $result;
    }
- 
+
    public function fail (mixed $actual, mixed $expected, int $verbosity = 0): Fallback
    {
       $expected = $this->pattern ?? $expected;
 
       return new Fallback(
-         'Failed asserting that %s matches the directory path %s.',
+         'Failed asserting that %s matches the regex %s.',
          [
             'actual' => $actual,
             'expected' => $expected

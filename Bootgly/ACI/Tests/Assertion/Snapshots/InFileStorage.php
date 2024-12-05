@@ -13,6 +13,7 @@ namespace Bootgly\ACI\Tests\Assertion\Snapshots;
 
 use Bootgly\ABI\Debugging\Backtrace;
 use Bootgly\ABI\IO\FS\File;
+use Bootgly\ACI\Tests\Asserting\Fallback;
 use Bootgly\ACI\Tests\Assertion\Snapshot;
 
 
@@ -103,7 +104,7 @@ class InFileStorage implements Snapshot
       return false;
    }
 
-   public function compare (mixed &$actual, mixed &$expected): bool
+   public function assert (mixed &$actual, mixed &$expected): bool
    {
       $index = (string) self::$indexes[$this->name];
       $snapshot = "{$this->name}.{$index}";
@@ -121,14 +122,15 @@ class InFileStorage implements Snapshot
 
       return $assertion;
    }
-   public function fail (mixed $actual, mixed $expected, int $verbosity = 0): array
+   public function fail (mixed $actual, mixed $expected, int $verbosity = 0): Fallback
    {
-      return [
-         'format' => 'Failed asserting that the snapshot value is equal to the expected value.',
-         'values' => [
+      return new Fallback(
+         'Failed asserting that the snapshot value is equal to the expected value.',
+         [
             'actual' => $actual,
             'expected' => $expected
-         ]
-      ];
+         ],
+         $verbosity
+      );
    }
 }

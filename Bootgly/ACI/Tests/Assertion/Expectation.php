@@ -11,11 +11,13 @@
 namespace Bootgly\ACI\Tests\Assertion;
 
 
+use Bootgly\ACI\Tests\Asserting;
+
 /**
  * Implementation / Repository
  * Expectation    / Expectations
  */
-interface Expectation extends Comparator
+interface Expectation extends Asserting
 {
-   public function __construct ();
+   // TODO: Implement the Expectation
 }

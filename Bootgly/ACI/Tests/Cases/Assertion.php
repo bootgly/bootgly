@@ -13,18 +13,24 @@ namespace Bootgly\ACI\Tests\Cases;
 
 use AssertionError;
 
+use Bootgly\ABI\Argument;
 use Bootgly\ABI\Debugging\Backtrace;
 use Bootgly\ABI\Debugging\Data\Vars;
 use Bootgly\ABI\Templates\Template;
-use Bootgly\ACI\Tests\Assertion\Comparator;
-use Bootgly\ACI\Tests\Assertion\Comparators;
+use Bootgly\ACI\Tests\Asserting;
+use Bootgly\ACI\Tests\Asserting\Fallback;
 use Bootgly\ACI\Tests\Assertion\Expectation;
+use Bootgly\ACI\Tests\Assertion\Expectations;
+use Bootgly\ACI\Tests\Assertion\Expectations\Comparators\Identical;
 use Bootgly\ACI\Tests\Assertion\Snapshot;
 use Bootgly\ACI\Tests\Assertion\Snapshots;
 
 
-class Assertion
+class Assertion extends Expectations
 {
+   use Snapshots;
+
+
    // * Config
    /**
     * The `description` of the Assertion.
@@ -35,24 +41,16 @@ class Assertion
     */
    public static string|array|null $fallback = null;
    // ---
-   /**
-    * The Comparator instance to be used in the Assertion.
-    */
-   public static ?Comparator $Comparator;
-   /**
-    * The Snapshot instance to be used in the Assertion.
-    */
-   public Snapshot $Snapshot {
-      get => $this->Snapshot ??= new Snapshots\InMemoryDefault;
-   }
+   // ..Expectations
+   // ..Snapshots
 
    // * Data
-   protected mixed $actual;
-   protected mixed $expected;
-   protected readonly Comparator $With;
+   protected readonly Asserting $using;
+   // ---
+   // ..Expectations
 
    // * Metadata
-   private bool $asserted;
+   public private(set) bool $asserted;
    private bool $skipped;
 
 
@@ -71,13 +69,12 @@ class Assertion
       self::$description = $description;
       self::$fallback = $fallback;
       // ---
-      // self::$Comparator
       // $this->Snapshot
 
       // * Data
-      // $actual
-      // $expected
-      // $With
+      // $this->actual
+      // $this->expected
+      // $this->using
 
       // * Metadata
       $this->asserted = false;
@@ -85,9 +82,10 @@ class Assertion
    }
    public function __destruct ()
    {
+      // * Config
       #self::$description = null;
       self::$fallback = null;
-      // self::$Comparator
+      // ---
       // $this->Snapshot
    }
    public function __get (string $name): mixed
@@ -98,55 +96,6 @@ class Assertion
          'skipped' => $this->skipped,
          default => null
       };
-   }
-
-   // # Snapshot
-   /**
-    * Capture a snapshot of the current actual value.
-    * 
-    * @param string $snapshot The snapshot name.
-    * 
-    * @return self Returns the current instance for method chaining.
-    */
-   public function capture (string $snapshot): self
-   {
-      $this->Snapshot ??= new Snapshots\InMemoryDefault;
-
-      $this->Snapshot->capture($snapshot, $this->actual);
-
-      return $this;
-   }
- 
-   /**
-    * Restore a snapshot value into the current actual value.
-    * 
-    * @param string $snapshot The snapshot name.
-    * 
-    * @return self Returns the current instance for method chaining.
-    */
-   public function restore (string $snapshot): self
-   {
-      $this->Snapshot ??= new Snapshots\InMemoryDefault;
-
-      $this->Snapshot->restore($snapshot, $this->actual);
-
-      return $this;
-   }
-
-   /**
-    * Capture and restore a snapshot value into the current actual value.
-    *
-    * @param string $name The snapshot name.
-    *
-    * @return self Returns the current instance for method chaining.
-    */
-   public function snapshot (string $name): self
-   {
-      $this->Snapshot->capture($name, $this->actual);
-
-      $this->Snapshot->restore($name, $this->actual);
-
-      return $this;
    }
 
    /**
@@ -161,29 +110,51 @@ class Assertion
       return $this;
    }
 
-   // .
+   // # ExA (expect, *, assert) API
+   // ## Expectation API
+   // ..Expectations
+   // ## Assert API
    /**
-    * Compare the `actual` value with the `expected` value using the `With` Comparator (or the default Comparator).
+    * Compare the `actual` value with the `expected` value using the `using` Comparator (or the default Comparator).
     * 
     * @param mixed $actual The `actual` value provided as input for the Assertion.
     * @param mixed $expected The `expected` value to be compared with the `actual` value in the assertion.
-    * @param ?Comparator $With The Comparator instance to be used in the Assertion.
+    * @param Asserting $using The Assertion interface to be used in the Assertion.
     * 
     * @return self Returns the current instance for method chaining.
     */
    public function assert (
-      mixed $actual,
-      mixed $expected,
-      ?Comparator $With = null,
+      mixed $actual = Argument::Undefined,
+      mixed $expected = Argument::Undefined,
+      Asserting $using = new Identical,
    ): self
    {
-      // ?
-      if ($actual instanceof Comparator) {
+      // @ 1️⃣ Define
+      // # Metadata
+      $this->asserted = true;
+      // # Data
+      // actual
+      $actual = $this->actual ??= $actual;
+      // ? Check if the `actual` value is an instance of Comparator
+      if ($actual instanceof Asserting) {
          throw new AssertionError('The `actual` value cannot be an instance of Comparator!');
       }
+      // expected
+      // ? Check if the `expected` value is defined when using Expectations
+      if ($expected !== Argument::Undefined && $this->expectations) {
+         throw new AssertionError('The `expected` value cannot be defined when using Expectations!');
+      }
+      $expected = $this->expected ??= $expected;
+      // using
+      if (
+         $expected instanceof Asserting
+         && !$using instanceof Snapshot
+      ) {
+         $using = $expected;
+      }
 
-      // @ Preset
-      // ?! Snapshot: set $actual value if restored
+      // @ 2️⃣ Reset
+      // ?! Snapshot: reset $actual value if Snapshot was restored
       if (
          ($this->Snapshot ?? false)
          && ($this->Snapshot->restored ?? false)
@@ -192,45 +163,55 @@ class Assertion
          $actual = $this->actual;
       }
 
-      // @
-      // # $With
-      // !
-      $With ??= self::$Comparator ?? new Comparators\Identical;
-      // # $expected
-      // ?!
-      if (
-         $expected instanceof Expectation
-         && $With instanceof Snapshot
-      ) {
-         $expected->compare($actual, $expected);
-      }
-      else if ($expected instanceof Expectation) {
-         $With = $expected;
-      }
-
-      $assertion = $With->compare($actual, $expected);
-
+      // @ 3️⃣ Assert
       // !
       // * Data
       $this->actual = $actual;
       $this->expected = $expected;
-      $this->With = $With;
+      $this->using = $using;
       // * Metadata
-      $this->asserted = true;
+      // expectations
+      // ?! Expectations
+      if ($this->expectations === null) {
+         $this->to->be(
+            $using instanceof Asserting
+            && !$using instanceof Snapshot
+               ? $using
+               : $expected
+         );
+      }
+      $expectations = $this->expectations;
+      // results
+      $results = [];
+      // @
+      foreach ($expectations as $index => $Expectation) {
+         if ($using instanceof Snapshot) {
+            $using->assert($actual, $expected);
+         }
 
-      if ($assertion === false) {
-         // $With fallback template (Assertion interface)
-         // TODO: implement verbosity
-         $fallback = $With->fail($actual, $expected);
+         /**
+          * @var Asserting $Expectation
+          */
+         $results[$index] = $Expectation->assert($actual, $expected);
+         $failed = $results[$index] !== true;
 
-         // @ Call fail in the Assertion
-         $this->fail($fallback);
+         if ($failed) {
+            // $using fallback template (Assertion interface)
+            // TODO: implement verbosity
+            /**
+             * @var Asserting $using
+             */
+            $Fallback = $using->fail($actual, $expected);
+   
+            // @ Call fail in the Assertion
+            $this->fail($Fallback);
+         }
       }
 
       return $this;
    }
 
-   public function fail (array $fallback): void
+   public function fail (Fallback $Fallback): void
    {
       $counter = Backtrace::$counter;
       Backtrace::$counter = false;
@@ -241,12 +222,12 @@ class Assertion
       Vars::$labels = [
          'actual:',
          'expected:',
-         'With:'
+         'using:'
       ];
       Vars::debug(...[
          $this->actual,
          $this->expected,
-         $this->With
+         $this->using
       ]);
       Backtrace::$counter = $counter;
       // ---
@@ -258,10 +239,7 @@ class Assertion
       \033[0;37;41m Fallback message: \033[0m
       
       MESSAGE;
-      $message .= vsprintf(
-         format: $fallback['format'],
-         values: array_values($fallback['values'] ?? [])
-      );
+      $message .= (string) $Fallback;
       $message .= "\033[0m\n";
       // additional
       $additional = "\033[F\033[F"; // move the cursor up 2 lines

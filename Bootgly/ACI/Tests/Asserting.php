@@ -8,17 +8,13 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\ACI\Tests\Assertion;
+namespace Bootgly\ACI\Tests;
 
 
-use Bootgly\ACI\Tests\Assertion;
+use Bootgly\ACI\Tests\Asserting\Fallbacking;
 
 
-/**
- * Implementation / Repository
- * Comparator     / Comparators
- */
-interface Comparator extends Assertion
+interface Asserting extends Fallbacking
 {
-   public function compare (mixed &$actual, mixed &$expected): bool;
+   public function assert (mixed &$actual, mixed &$expected): bool;
 }

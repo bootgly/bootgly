@@ -8,21 +8,26 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\ACI\Tests\Assertion\Comparators;
+namespace Bootgly\ACI\Tests\Assertion\Expectations\Comparators;
 
 
-use Bootgly\ACI\Tests\Assertion\Comparator;
+use Bootgly\ACI\Tests\Asserting\Fallback;
+use Bootgly\ACI\Tests\Assertion\Expectation\Comparator;
 
 
-class NotEqual implements Comparator
+class NotEqual extends Comparator
 {
-   public function compare (mixed &$actual, mixed &$expected): bool
+   public function assert (mixed &$actual, mixed &$expected): bool
    {
-      return $actual !== $expected;
+      $expected = $this->expected ?? $expected;
+
+      return $actual != $expected;
    }
 
-   public function fail (mixed $actual, mixed $expected, int $verbosity = 0): array
+   public function fail (mixed $actual, mixed $expected, int $verbosity = 0): Fallback
    {
+      $expected = $this->expected ?? $expected;
+
       // verbosity 1
       switch ($verbosity) {
          case 1:
@@ -50,6 +55,10 @@ class NotEqual implements Comparator
             ],
       };
 
-      return $template;
+      return new Fallback(
+         'Failed asserting that %s is not equal to %s.',
+         $template['values'],
+         $verbosity
+      );
    }
 }

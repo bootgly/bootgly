@@ -3,13 +3,13 @@
 use Generator;
 use stdClass;
 
-use Bootgly\ACI\Tests\Assertion\Comparators;
+use Bootgly\ACI\Tests\Assertion\Expectations\Comparators\LessThan;
 use Bootgly\ACI\Tests\Cases\Assertion;
 use Bootgly\ACI\Tests\Cases\Assertions;
 
 return [
    // @ configure
-   'describe' => 'It should compare not equal',
+   'describe' => 'It should compare less than',
    // @ simulate
    // ...
    // @ test
@@ -17,70 +17,71 @@ return [
    {
       // boolean
       yield new Assertion(
-         description: 'Not equal booleans',
-         fallback: 'Booleans matched!'
+         description: 'Less than [boolean]',
+         fallback: 'Booleans not matched!'
       )
          ->assert(
-            actual: true,
-            expected: false,
-            With: new Comparators\NotEqual
+            actual: false,
+            expected: true,
+            using: new LessThan
          );
 
       // integer
       yield new Assertion(
-         description: 'Not equal integers',
-         fallback: 'Integers matched!'
+         description: 'Less than [int]',
+         fallback: 'Integers not matched!'
       )
          ->assert(
             actual: 1,
             expected: 2,
-            With: new Comparators\NotEqual
+            using: new LessThan
          );
 
       // float
       yield new Assertion(
-         description: 'Not equal floats',
-         fallback: 'Floats matched!'
+         description: 'Less than [float]',
+         fallback: 'Floats not matched!'
       )
          ->assert(
             actual: 1.1,
             expected: 2.1,
-            With: new Comparators\NotEqual
+            using: new LessThan
          );
 
       // string
       yield new Assertion(
-         description: 'Not equal strings',
-         fallback: 'Strings matched!'
+         description: 'Less than [strings]',
+         fallback: 'Strings not matched!'
       )
          ->assert(
             actual: 'Bootgly',
             expected: 'Bootgly!',
-            With: new Comparators\NotEqual
+            using: new LessThan
          );
 
       // array
       yield new Assertion(
-         description: 'Not equal arrays',
-         fallback: 'Arrays matched!'
+         description: 'Less than [arrays]',
+         fallback: 'Arrays not matched!'
       )
          ->assert(
             actual: [1, 2, 3],
             expected: [1, 2, 3, 4],
-            With: new Comparators\NotEqual
+            using: new LessThan
          );
 
       // object
       $object1 = new stdClass();
       $object2 = new stdClass();
+      $object2->property = 'value';
       yield new Assertion(
-         description: 'Not equal objects',
-         fallback: 'Objects matched!'
+         description: 'Less than [objects]',
+         fallback: 'Objects not matched!'
       )
          ->assert(
             actual: $object1,
             expected: $object2,
-            With: new Comparators\NotEqual
+            using: new LessThan
          );
    })
 ];

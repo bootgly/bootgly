@@ -2,7 +2,6 @@
 
 use Generator;
 
-use Bootgly\ACI\Tests\Assertion\Expectations\Between;
 use Bootgly\ACI\Tests\Cases\Assertion;
 use Bootgly\ACI\Tests\Cases\Assertions;
 
@@ -19,20 +18,18 @@ return [
          description: 'Between integers',
          fallback: 'Integers not matched!'
       )
-         ->assert(
-            actual: 1,
-            expected: new Between(1, 2),
-         );
+         ->expect(1)
+         ->to->delimit(1, 2)
+         ->assert();
 
       // float
       yield new Assertion(
          description: 'Between floats',
          fallback: 'Floats not matched!'
       )
-         ->assert(
-            actual: 1.1,
-            expected: new Between(1.1, 2.1),
-         );
+         ->expect(1.5)
+         ->to->delimit(1.5, 2.5)
+         ->assert();
 
       // DateTime
       $date = new DateTime('2023-01-01');
@@ -40,12 +37,8 @@ return [
          description: 'Between DateTime objects',
          fallback: 'DateTime objects not matched!'
       )
-         ->assert(
-            actual: $date,
-            expected: new Between(
-               new DateTime('2023-01-01'),
-               new DateTime('2023-01-02')
-            ),
-         );
+         ->expect($date)
+         ->to->delimit($date, new DateTime('2023-01-02'))
+         ->assert();
    }),
 ];

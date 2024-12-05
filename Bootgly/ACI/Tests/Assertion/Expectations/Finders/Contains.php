@@ -11,23 +11,13 @@
 namespace Bootgly\ACI\Tests\Assertion\Expectations\Finders;
 
 
+use Bootgly\ACI\Tests\Asserting\Fallback;
 use Bootgly\ACI\Tests\Assertion\Expectation\Finder;
 
 
-class Contains implements Finder
+class Contains extends Finder
 {
-   public string $needle {
-      get => $this->needle ??= null;
-      set => $this->needle = $value;
-   }
-
-
-   public function __construct (string ...$needle)
-   {
-      $this->needle = $needle[0];
-   }
-
-   public function compare (mixed &$actual, mixed &$expected): bool
+   public function assert (mixed &$actual, mixed &$expected): bool
    {
       $type = gettype($actual);
       $needle = $this->needle ?? $expected;
@@ -49,12 +39,12 @@ class Contains implements Finder
       };
    }
 
-   public function fail (mixed $actual, mixed $expected, int $verbosity = 0): array
+   public function fail (mixed $actual, mixed $expected, int $verbosity = 0): Fallback
    {
       $type = gettype($actual);
       $needle = $this->needle ?? $expected;
 
-      return match ($type) {
+      $template = match ($type) {
          'array' => [
             'format' => "Failed asserting that the array contains \"%s\".",
             'values' => [
@@ -77,5 +67,11 @@ class Contains implements Finder
             'format' => "Cannot assert that the `actual` contains `expected`.",
          ]
       };
+
+      return new Fallback(
+         $template['format'],
+         $template['values'],
+         $verbosity
+      );
    }
 }

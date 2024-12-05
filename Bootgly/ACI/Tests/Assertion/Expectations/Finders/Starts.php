@@ -11,24 +11,13 @@
 namespace Bootgly\ACI\Tests\Assertion\Expectations\Finders;
 
 
+use Bootgly\ACI\Tests\Asserting\Fallback;
 use Bootgly\ACI\Tests\Assertion\Expectation\Finder;
 
 
-class StartsWith implements Finder
+class Starts extends Finder
 {
-   // * Data
-   public string $needle {
-      get => $this->needle ??= null;
-      set => $this->needle = $value;
-   }
-
-
-   public function __construct (string ...$needle)
-   {
-      $this->needle = $needle[0];
-   }
-
-   public function compare (mixed &$actual, mixed &$expected): bool
+   public function assert (mixed &$actual, mixed &$expected): bool
    {
       $needle = $this->needle ?? $expected;
 
@@ -38,16 +27,17 @@ class StartsWith implements Finder
       ) === 0;
    }
 
-   public function fail (mixed $actual, mixed $expected, int $verbosity = 0): array
+   public function fail (mixed $actual, mixed $expected, int $verbosity = 0): Fallback
    {
       $needle = $this->needle ?? $expected;
 
-      return [
-         'format' => 'Failed asserting that the string "%s" starts with "%s".',
-         'values' => [
+      return new Fallback(
+         'Failed asserting that the string "%s" starts with "%s".',
+         [
             'actual' => $actual,
             'expected' => $needle
-         ]
-      ];
+         ],
+         $verbosity
+      );
    }
 }

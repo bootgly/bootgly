@@ -2,13 +2,13 @@
 
 use Generator;
 
-use Bootgly\ACI\Tests\Assertion\Expectations\Finders\StartsWith;
+use Bootgly\ACI\Tests\Assertion\Expectations\Finders\Starts;
 use Bootgly\ACI\Tests\Cases\Assertion;
 use Bootgly\ACI\Tests\Cases\Assertions;
 
 return [
    // @ configure
-   'describe' => 'It should compare using the finder "StartWith"',
+   'describe' => 'It should compare using the finder "Start"',
    // @ simulate
    // ...
    // @ test
@@ -21,7 +21,7 @@ return [
       )
          ->assert(
             actual: 'Hello, World!',
-            expected: new StartsWith('Hello'),
+            expected: new Starts('Hello'),
          );
    }),
 ];

@@ -3,76 +3,83 @@
 use Generator;
 use stdClass;
 
-use Bootgly\ACI\Tests\Assertion\Comparators;
 use Bootgly\ACI\Tests\Cases\Assertion;
 use Bootgly\ACI\Tests\Cases\Assertions;
+use Bootgly\ACI\Tests\Assertions\Hook;
 
 return [
    // @ configure
-   'separator.line' => 'Advanced API',
-   'describe' => 'It should compare greater than',
+   'describe' => 'It should compare equal values',
    // @ simulate
    // ...
    // @ test
    'test' => new Assertions(Case: function (): Generator
    {
+      // boolean
+      yield new Assertion(
+         description: 'Equal booleans',
+         fallback: 'Booleans not matched!'
+      )
+         ->assert(
+            actual: true,
+            expected: true,
+         );
+
       // integer
       yield new Assertion(
-         description: 'Greater than [int]',
+         description: 'Equal integers',
          fallback: 'Integers not matched!'
       )
          ->assert(
-            actual: 2,
+            actual: 1,
             expected: 1,
-            With: new Comparators\GreaterThan
          );
 
       // float
       yield new Assertion(
-         description: 'Greater than [float]',
+         description: 'Equal floats',
          fallback: 'Floats not matched!'
       )
          ->assert(
-            actual: 3.00,
+            actual: 1.1,
             expected: 1.1,
-            With: new Comparators\GreaterThan
          );
 
       // string
       yield new Assertion(
-         description: 'Greater than [strings]',
+         description: 'Equal strings',
          fallback: 'Strings not matched!'
       )
          ->assert(
-            actual: 'Bootgly!',
+            actual: 'Bootgly',
             expected: 'Bootgly',
-            With: new Comparators\GreaterThan
          );
 
       // array
       yield new Assertion(
-         description: 'Greater than [arrays]',
+         description: 'Equal arrays',
          fallback: 'Arrays not matched!'
       )
          ->assert(
-            actual: [1, 2, 3, 4],
+            actual: [1, 2, 3],
             expected: [1, 2, 3],
-            With: new Comparators\GreaterThan
          );
 
       // object
       $object1 = new stdClass();
-      $object1->property = 'value';
-      $object2 = new stdClass();
 
       yield new Assertion(
-         description: 'Greater than [objects]',
+         description: 'Equal objects',
          fallback: 'Objects not matched!'
       )
          ->assert(
             actual: $object1,
-            expected: $object2,
-            With: new Comparators\GreaterThan
+            expected: $object1,
          );
    })
+      ->input('test')
+      ->on(Hook::BeforeEach, function ($Assertion, $arguments): void
+      {
+         // do anything before each assertion
+      })
 ];

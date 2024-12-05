@@ -15,19 +15,12 @@ use Bootgly\ACI\Tests\Asserting;
 
 
 /**
- * Matchers are for assertions that match $actual with pattern ($expected).
+ * Validator are for assertions that validate caracteristics.
  * 
- * Use both $actual and $expected in the assertion.
- * The $expected is a pattern to match with $actual.
+ * Use only $actual in the assertion.
+ * The $actual is the value to validate.
  */
-abstract class Matcher implements Asserting
+abstract class Validator implements Asserting
 {
-   // * Config
-   public ?string $pattern;
-   public array $matches;
-
-   public function __construct (?string $pattern = null)
-   {
-      $this->pattern = $pattern;
-   }
+   // Nothing here
 }

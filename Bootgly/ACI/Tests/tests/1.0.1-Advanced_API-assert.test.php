@@ -2,7 +2,7 @@
 
 use Generator;
 
-use const Bootgly\ACI\Tests\Assertion\Comparators\Identical;
+use Bootgly\ACI\Tests\Assertion\Expectations\Comparators\Identical;
 use Bootgly\ACI\Tests\Cases\Assertion;
 use Bootgly\ACI\Tests\Cases\Assertions;
 
@@ -15,13 +15,17 @@ return [
    'test' => new Assertions(Case: function (): Generator
    {
       yield new Assertion(
-         description: 'Asserts true',
-         fallback: 'True not asserted!'
+         description: 'Asserts true (implicit)',
       )
-         ->assert(
-            actual: true, 
-            expected: true,
-            With: Identical
-         );
+         ->expect(true)
+         ->to->be(true)
+         ->assert();
+
+      yield new Assertion(
+         description: 'Asserts true (explicit)',
+      )
+         ->expect(actual: true)
+         ->to->be(expected: new Identical(true))
+         ->assert();
    })
 ];

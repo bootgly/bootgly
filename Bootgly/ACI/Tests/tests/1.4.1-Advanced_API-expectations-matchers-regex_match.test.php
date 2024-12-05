@@ -2,7 +2,7 @@
 
 use Generator;
 
-use Bootgly\ACI\Tests\Assertion\Expectations\Matchers\RegexMatch;
+use Bootgly\ACI\Tests\Assertion\Expectations\Matchers\Regex;
 use Bootgly\ACI\Tests\Cases\Assertion;
 use Bootgly\ACI\Tests\Cases\Assertions;
 
@@ -21,7 +21,7 @@ return [
       )
          ->assert(
             actual: 'Hello, World!',
-            expected: new RegexMatch('/World/'),
+            expected: new Regex('/World/'),
          );
    }),
 ];
