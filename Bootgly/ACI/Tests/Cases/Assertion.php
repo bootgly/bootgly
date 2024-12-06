@@ -72,8 +72,8 @@ class Assertion extends Expectations
       // $this->Snapshot
 
       // * Data
-      // $this->actual
-      // $this->expected
+      $this->actual = Argument::Undefined;
+      $this->expected = Argument::Undefined;
       // $this->using
 
       // * Metadata
@@ -133,19 +133,27 @@ class Assertion extends Expectations
       // # Metadata
       $this->asserted = true;
       // # Data
-      // actual
-      $actual = $this->actual ??= $actual;
+      // $actual
+      $actual = $this->actual === Argument::Undefined
+         ? $actual
+         : $this->actual;
+      // ? Check if the `actual` value is undefined
+      if ($actual === Argument::Undefined) {
+         throw new AssertionError('The `actual` value must be defined!');
+      }
       // ? Check if the `actual` value is an instance of Comparator
       if ($actual instanceof Asserting) {
          throw new AssertionError('The `actual` value cannot be an instance of Comparator!');
       }
-      // expected
+      // $expected
       // ? Check if the `expected` value is defined when using Expectations
       if ($expected !== Argument::Undefined && $this->expectations) {
          throw new AssertionError('The `expected` value cannot be defined when using Expectations!');
       }
-      $expected = $this->expected ??= $expected;
-      // using
+      $expected = $this->expected === Argument::Undefined
+         ? $expected
+         : $this->expected;
+      // $using
       $using ??= new Identical;
       if (
          $expected instanceof Asserting
