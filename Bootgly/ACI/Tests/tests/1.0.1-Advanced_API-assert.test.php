@@ -1,5 +1,6 @@
 <?php
 
+use Bootgly\ACI\Tests\Assertion\Auxiliaries\Type;
 use Generator;
 
 use Bootgly\ACI\Tests\Assertion\Expectations\Comparators\Identical;

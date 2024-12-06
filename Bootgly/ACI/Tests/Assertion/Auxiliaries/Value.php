@@ -12,7 +12,7 @@ namespace Bootgly\ACI\Tests\Assertion\Auxiliaries;
 
 /*
  * Enum to be used to check the value of the variable.
- * e.g. $Assertion->expect($actual)->have(Value::Empty);
+ * e.g. $Assertion->expect($actual)->to->validate(Value::Empty);
  */
 enum Value
 {
@@ -20,10 +20,10 @@ enum Value
    case NaN;
 
    // # Number
-   case Negative;
-   case Positive;
-   case Even;
-   case Odd;
+   case Negative;     // OK
+   case Positive;     // OK
+   case Even;         // OK
+   case Odd;          // OK
    case Infinite;
 
    // # String

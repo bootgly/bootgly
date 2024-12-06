@@ -19,9 +19,12 @@ use Throwable;
 use Bootgly\ABI\Argument;
 use Bootgly\ACI\Tests\Asserting;
 use Bootgly\ACI\Tests\Assertion\Auxiliaries\Interval;
+use Bootgly\ACI\Tests\Assertion\Auxiliaries\Type;
+use Bootgly\ACI\Tests\Assertion\Auxiliaries\Value;
 use Bootgly\ACI\Tests\Assertion\Expectations\Comparators;
 use Bootgly\ACI\Tests\Assertion\Expectations\Delimiters;
 use Bootgly\ACI\Tests\Assertion\Expectations\Matchers;
+use Bootgly\ACI\Tests\Assertion\Expectations\Validators;
 
 
 abstract class Expectations
@@ -115,6 +118,21 @@ abstract class Expectations
 
       return $this;
    }
+   public function validate (Type|Value $validator): self
+   {
+      $namespace = Validators::class;
+      $class = $validator->name;
+
+      $this->expectation = match (true) {
+         $validator instanceof Type
+            => new ("{$namespace}\Type{$class}"),
+         $validator instanceof Value
+            => new ("{$namespace}\Value{$class}"),
+         default => throw new AssertionError('Invalid validator.')
+      };
+
+      return $this;
+   }
 
    // # Dataset
    /**
@@ -165,6 +183,6 @@ abstract class Expectations
    abstract public function assert (
       mixed $actual = Argument::Undefined,
       mixed $expected = Argument::Undefined,
-      Asserting $using = new Comparators\Identical
+      ?Asserting $using = null
    ): self;
 }

@@ -15,19 +15,19 @@ use Bootgly\ACI\Tests\Asserting\Fallback;
 use Bootgly\ACI\Tests\Assertion\Expectation\Validator;
 
 /**
- * Validate if $actual is a float.
+ * Validate if $actual is numeric.
  */
-class TypeFloat extends Validator
+class TypeNumeric extends Validator
 {
    public function assert (mixed &$actual, mixed &$expected): bool
    {
-      return is_float($actual);
+      return is_numeric($actual);
    }
 
    public function fail (mixed $actual, mixed $expected, int $verbosity = 0): Fallback
    {
       return new Fallback(
-         'Failed asserting that %s is a float.',
+         'Failed asserting that %s is numeric.',
          [
             'actual' => $actual
          ],

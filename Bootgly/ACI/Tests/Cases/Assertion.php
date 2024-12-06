@@ -45,7 +45,7 @@ class Assertion extends Expectations
    // ..Snapshots
 
    // * Data
-   protected readonly Asserting $using;
+   protected Asserting $using;
    // ---
    // ..Expectations
 
@@ -119,14 +119,14 @@ class Assertion extends Expectations
     * 
     * @param mixed $actual The `actual` value provided as input for the Assertion.
     * @param mixed $expected The `expected` value to be compared with the `actual` value in the assertion.
-    * @param Asserting $using The Assertion interface to be used in the Assertion.
+    * @param ?Asserting $using The Assertion interface to be used in the Assertion.
     * 
     * @return self Returns the current instance for method chaining.
     */
    public function assert (
       mixed $actual = Argument::Undefined,
       mixed $expected = Argument::Undefined,
-      Asserting $using = new Identical,
+      ?Asserting $using = null,
    ): self
    {
       // @ 1️⃣ Define
@@ -146,6 +146,7 @@ class Assertion extends Expectations
       }
       $expected = $this->expected ??= $expected;
       // using
+      $using ??= new Identical;
       if (
          $expected instanceof Asserting
          && !$using instanceof Snapshot
@@ -196,7 +197,12 @@ class Assertion extends Expectations
          $failed = $results[$index] !== true;
 
          if ($failed) {
-            // $using fallback template (Assertion interface)
+            // * Data
+            $using = $Expectation;
+            // ---
+            $this->expected = $Expectation;
+            $this->using = $using;
+
             // TODO: implement verbosity
             /**
              * @var Asserting $using
