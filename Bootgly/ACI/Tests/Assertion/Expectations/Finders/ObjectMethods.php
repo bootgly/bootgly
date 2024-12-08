@@ -15,24 +15,19 @@ use Bootgly\ACI\Tests\Asserting\Fallback;
 use Bootgly\ACI\Tests\Assertion\Expectation\Finder;
 
 
-class Ends extends Finder
+class ObjectMethods extends Finder
 {
    public function assert (mixed &$actual, mixed &$expected): bool
    {
-      $needle = $this->needle ?? $expected;
-
-      return str_ends_with((string) $actual, (string) $needle);
+      return method_exists($actual, $expected);
    }
 
    public function fail (mixed $actual, mixed $expected, int $verbosity = 0): Fallback
    {
-      $needle = $this->needle ?? $expected;
-
       return new Fallback(
-         'Failed asserting that the string "%s" ends with "%s".',
+         'Failed asserting that the object has the method "%s".',
          [
-            'actual' => $actual,
-            'expected' => $needle
+            'expected' => $expected
          ],
          $verbosity
       );

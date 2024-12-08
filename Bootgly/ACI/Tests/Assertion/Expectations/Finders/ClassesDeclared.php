@@ -15,24 +15,19 @@ use Bootgly\ACI\Tests\Asserting\Fallback;
 use Bootgly\ACI\Tests\Assertion\Expectation\Finder;
 
 
-class Ends extends Finder
+class ClassesDeclared extends Finder
 {
    public function assert (mixed &$actual, mixed &$expected): bool
    {
-      $needle = $this->needle ?? $expected;
-
-      return str_ends_with((string) $actual, (string) $needle);
+      return class_exists($expected);
    }
 
    public function fail (mixed $actual, mixed $expected, int $verbosity = 0): Fallback
    {
-      $needle = $this->needle ?? $expected;
-
       return new Fallback(
-         'Failed asserting that the string "%s" ends with "%s".',
+         'Failed asserting that the class "%s" is declared.',
          [
-            'actual' => $actual,
-            'expected' => $needle
+            'expected' => $expected
          ],
          $verbosity
       );
