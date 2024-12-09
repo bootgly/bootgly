@@ -22,6 +22,16 @@ use Bootgly\ACI\Tests\Assertion\Auxiliaries\Interval;
  */
 trait Delimiters
 {
+   /**
+    * Delimit a range of values.
+    * "expect that $actual delimit $from and $to".
+    *
+    * @param int|float|DateTime $from The start of the range.
+    * @param int|float|DateTime $to The end of the range.
+    * @param Interval $interval The interval type.
+    *
+    * @return self Returns the current instance for method chaining.
+    */
    public function delimit (
       int|float|DateTime $from,
       int|float|DateTime $to,

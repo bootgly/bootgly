@@ -19,6 +19,16 @@ use Bootgly\ACI\Tests\Assertion\Auxiliaries\Comparator;
  */
 trait Comparators
 {
+   /**
+    * Compare the $actual value.
+    * "expect that $actual compare $comparator $expected".
+    * The $actual, $comparator and $expected are used in the assertion.
+    *
+    * @param Comparator|null $comparator The comparator to use.
+    * @param mixed $expected The expected value to compare against.
+    *
+    * @return self Returns the current instance for method chaining.
+    */
    public function compare (?Comparator $comparator = null, mixed $expected): self
    {
       $this->expectation = match ($comparator) {

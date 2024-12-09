@@ -21,6 +21,18 @@ use Bootgly\ACI\Tests\Assertion\Auxiliaries\In;
  */
 trait Finders
 {
+   /**
+    * Find the $needle in the $haystack.
+    * "expect that $needle find $haystack".
+    * The $haystack must be an array, object, or string.
+    *
+    * @param \Bootgly\ACI\Tests\Assertion\Auxiliaries\In $haystack
+    * @param mixed $needle
+    *
+    * @throws \AssertionError
+    *
+    * @return self Returns the current instance for method chaining.
+    */
    public function find (In $haystack, mixed $needle): self
    {
       $this->expectation = match ($haystack) {
