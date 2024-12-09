@@ -15,19 +15,27 @@ use Bootgly\ACI\Tests\Asserting\Fallback;
 use Bootgly\ACI\Tests\Assertion\Expectation\Finder;
 
 
-class ArrayKeys extends Finder
+class StartsWith extends Finder
 {
    public function assert (mixed &$actual, mixed &$expected): bool
    {
-      return array_key_exists($expected, $actual);
+      $needle = $this->needle ?? $expected;
+
+      return strpos(
+         haystack: (string) $actual,
+         needle: (string) $needle
+      ) === 0;
    }
 
    public function fail (mixed $actual, mixed $expected, int $verbosity = 0): Fallback
    {
+      $needle = $this->needle ?? $expected;
+
       return new Fallback(
-         'Failed asserting that the array has the key "%s".',
+         'Failed asserting that the string "%s" starts with "%s".',
          [
-            'expected' => $expected
+            'actual' => $actual,
+            'expected' => $needle
          ],
          $verbosity
       );

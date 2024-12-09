@@ -15,19 +15,24 @@ use Bootgly\ACI\Tests\Asserting\Fallback;
 use Bootgly\ACI\Tests\Assertion\Expectation\Finder;
 
 
-class ArrayValues extends Finder
+class EndsWith extends Finder
 {
    public function assert (mixed &$actual, mixed &$expected): bool
    {
-      return in_array($expected, $actual);
+      $needle = $this->needle ?? $expected;
+
+      return str_ends_with((string) $actual, (string) $needle);
    }
 
    public function fail (mixed $actual, mixed $expected, int $verbosity = 0): Fallback
    {
+      $needle = $this->needle ?? $expected;
+
       return new Fallback(
-         'Failed asserting that the array contains the value "%s".',
+         'Failed asserting that the string "%s" ends with "%s".',
          [
-            'expected' => $expected
+            'actual' => $actual,
+            'expected' => $needle
          ],
          $verbosity
       );

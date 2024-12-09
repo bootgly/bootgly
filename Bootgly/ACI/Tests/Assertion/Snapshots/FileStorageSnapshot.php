@@ -11,41 +11,23 @@
 namespace Bootgly\ACI\Tests\Assertion\Snapshots;
 
 
-use Bootgly\ABI\Debugging\Backtrace;
 use Bootgly\ABI\IO\FS\File;
-use Bootgly\ACI\Tests\Asserting\Fallback;
 use Bootgly\ACI\Tests\Assertion\Snapshot;
 
 
-class InFileStorage implements Snapshot
+class FileStorageSnapshot extends Snapshot
 {
    private const SNAPSHOT_DIR = BOOTGLY_WORKING_DIR . 'workdata/tests/snapshots/';
 
    // * Config
-   /**
-    * @var string|null $name The snapshot name.
-    */
-   public ?string $name = null;
+   // ..Snapshot
+
+   // * Data
+   // ..Snapshot
 
    // * Metadata
-   public readonly bool $captured;
-   public readonly bool $restored;
+   // ..Snapshot
 
-   /**
-    * @var array<string, int>
-    */
-   private static array $indexes = [];
-
-
-   public function __construct (?string $name = null)
-   {
-      // * Config
-      $this->name = $name ?? new Backtrace()->file;
-
-      // * Metadata
-      self::$indexes[$this->name] ??= 0;
-      self::$indexes[$this->name]++;
-   }
 
    /**
     * Capture the snapshot
@@ -102,35 +84,5 @@ class InFileStorage implements Snapshot
       $this->restored = false;
 
       return false;
-   }
-
-   public function assert (mixed &$actual, mixed &$expected): bool
-   {
-      $index = (string) self::$indexes[$this->name];
-      $snapshot = "{$this->name}.{$index}";
-
-      // @ restore
-      $this->restore($snapshot, $actual);
-
-      // @ assert
-      $assertion = $actual == $expected;
-
-      // @ capture
-      if ($assertion === true) {
-         $this->capture($snapshot, $actual);
-      }
-
-      return $assertion;
-   }
-   public function fail (mixed $actual, mixed $expected, int $verbosity = 0): Fallback
-   {
-      return new Fallback(
-         'Failed asserting that the snapshot value is equal to the expected value.',
-         [
-            'actual' => $actual,
-            'expected' => $expected
-         ],
-         $verbosity
-      );
    }
 }

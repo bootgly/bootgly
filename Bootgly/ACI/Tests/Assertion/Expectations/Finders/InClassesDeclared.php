@@ -15,17 +15,17 @@ use Bootgly\ACI\Tests\Asserting\Fallback;
 use Bootgly\ACI\Tests\Assertion\Expectation\Finder;
 
 
-class InterfacesDeclared extends Finder
+class InClassesDeclared extends Finder
 {
    public function assert (mixed &$actual, mixed &$expected): bool
    {
-      return interface_exists($expected);
+      return class_exists($expected);
    }
 
    public function fail (mixed $actual, mixed $expected, int $verbosity = 0): Fallback
    {
       return new Fallback(
-         'Failed asserting that the interface "%s" is declared.',
+         'Failed asserting that the class "%s" is declared.',
          [
             'expected' => $expected
          ],

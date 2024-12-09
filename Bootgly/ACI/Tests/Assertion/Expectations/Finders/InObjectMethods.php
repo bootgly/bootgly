@@ -15,27 +15,19 @@ use Bootgly\ACI\Tests\Asserting\Fallback;
 use Bootgly\ACI\Tests\Assertion\Expectation\Finder;
 
 
-class Starts extends Finder
+class InObjectMethods extends Finder
 {
    public function assert (mixed &$actual, mixed &$expected): bool
    {
-      $needle = $this->needle ?? $expected;
-
-      return strpos(
-         haystack: (string) $actual,
-         needle: (string) $needle
-      ) === 0;
+      return method_exists($actual, $expected);
    }
 
    public function fail (mixed $actual, mixed $expected, int $verbosity = 0): Fallback
    {
-      $needle = $this->needle ?? $expected;
-
       return new Fallback(
-         'Failed asserting that the string "%s" starts with "%s".',
+         'Failed asserting that the object has the method "%s".',
          [
-            'actual' => $actual,
-            'expected' => $needle
+            'expected' => $expected
          ],
          $verbosity
       );

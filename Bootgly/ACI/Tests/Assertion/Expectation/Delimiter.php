@@ -38,11 +38,11 @@ abstract class Delimiter implements Asserting
     *
     * @throws Exception
     */
-   public function __construct (int|float|DateTime ...$values)
+   public function __construct (int|float|DateTime $min, int|float|DateTime $max)
    {
       // * Data
-      $this->min = $values[0];
-      $this->max = $values[1];
+      $this->min = $min;
+      $this->max = $max;
 
       // @
       if ($this->min > $this->max) {

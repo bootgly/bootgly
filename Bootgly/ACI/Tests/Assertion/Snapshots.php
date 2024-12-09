@@ -10,7 +10,9 @@
 
 namespace Bootgly\ACI\Tests\Assertion;
 
-use Bootgly\ACI\Tests\Assertion\Snapshots\InMemoryDefault;
+
+use Bootgly\ACI\Tests\Assertion\Snapshots\MemoryDefaultSnapshot;
+
 
 trait Snapshots
 {
@@ -19,7 +21,7 @@ trait Snapshots
     * The Snapshot instance to be used in the Assertion.
     */
    public Snapshot $Snapshot {
-      get => $this->Snapshot ??= new InMemoryDefault;
+      get => $this->Snapshot ??= new MemoryDefaultSnapshot;
    }
 
    /**
@@ -31,7 +33,7 @@ trait Snapshots
     */
    public function capture (string $snapshot): self
    {
-      $this->Snapshot ??= new InMemoryDefault;
+      $this->Snapshot ??= new MemoryDefaultSnapshot;
 
       $this->Snapshot->capture($snapshot, $this->actual);
 
@@ -47,7 +49,7 @@ trait Snapshots
     */
    public function restore (string $snapshot): self
    {
-      $this->Snapshot ??= new InMemoryDefault;
+      $this->Snapshot ??= new MemoryDefaultSnapshot;
 
       $this->Snapshot->restore($snapshot, $this->actual);
 

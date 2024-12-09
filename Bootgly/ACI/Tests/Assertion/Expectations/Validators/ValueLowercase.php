@@ -8,31 +8,28 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\ACI\Tests\Assertion\Expectations\Finders;
+namespace Bootgly\ACI\Tests\Assertion\Expectations\Validators;
 
 
 use Bootgly\ACI\Tests\Asserting\Fallback;
-use Bootgly\ACI\Tests\Assertion\Expectation\Finder;
+use Bootgly\ACI\Tests\Assertion\Expectation\Validator;
 
-
-class Ends extends Finder
+/**
+ * Validate if $actual is a lowercase string.
+ */
+class ValueLowercase extends Validator
 {
    public function assert (mixed &$actual, mixed &$expected): bool
    {
-      $needle = $this->needle ?? $expected;
-
-      return str_ends_with((string) $actual, (string) $needle);
+      return is_string($actual) && strtolower($actual) === $actual;
    }
 
    public function fail (mixed $actual, mixed $expected, int $verbosity = 0): Fallback
    {
-      $needle = $this->needle ?? $expected;
-
       return new Fallback(
-         'Failed asserting that the string "%s" ends with "%s".',
+         'Failed asserting that %s is a lowercase string.',
          [
-            'actual' => $actual,
-            'expected' => $needle
+            'actual' => $actual
          ],
          $verbosity
       );

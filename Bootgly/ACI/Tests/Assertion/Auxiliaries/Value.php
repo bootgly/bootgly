@@ -20,11 +20,11 @@ enum Value
    case NaN;
 
    // # Number
-   case Negative;     // OK
-   case Positive;     // OK
    case Even;         // OK
-   case Odd;          // OK
    case Infinite;
+   case Negative;     // OK
+   case Odd;          // OK
+   case Positive;     // OK
 
    // # String
    case Lowercase;

@@ -8,28 +8,26 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\ACI\Tests\Assertion\Expectations\Validators;
+namespace Bootgly\ACI\Tests\Assertion\Expectations\Finders;
 
 
 use Bootgly\ACI\Tests\Asserting\Fallback;
-use Bootgly\ACI\Tests\Assertion\Expectation\Validator;
+use Bootgly\ACI\Tests\Assertion\Expectation\Finder;
 
-/**
- * Validate if $actual is a negative value.
- */
-class ValueNegative extends Validator
+
+class InTraitsDeclared extends Finder
 {
    public function assert (mixed &$actual, mixed &$expected): bool
    {
-      return $actual < 0;
+      return trait_exists($expected);
    }
 
    public function fail (mixed $actual, mixed $expected, int $verbosity = 0): Fallback
    {
       return new Fallback(
-         'Failed asserting that %s is a negative value.',
+         'Failed asserting that the trait "%s" is declared.',
          [
-            'actual' => $actual
+            'expected' => $expected
          ],
          $verbosity
       );

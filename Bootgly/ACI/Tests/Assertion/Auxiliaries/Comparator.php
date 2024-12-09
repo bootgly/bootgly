@@ -11,19 +11,20 @@
 namespace Bootgly\ACI\Tests\Assertion\Auxiliaries;
 
 /*
- * Enum to be used in finding values in a set.
- * e.g. $Assertion->expect($actual)->find(In::ArrayKeys, $needle);
+ * Enum to be used in comparison of values.
+ * e.g. $Assertion->expect($actual)->compare(Comparators::Equal, $expected);
  */
-enum In
+enum Comparator
 {
-   case ArrayKeys;
-   case ArrayValues;
+   case Equal;
+   case NotEqual;
 
-   case ClassesDeclared;
-   case InterfacesDeclared;
+   case Identical;
+   case NotIdentical;
 
-   case ObjectProperties;
-   case ObjectMethods;
+   case GreaterThan;
+   case LessThan;
 
-   case TraitsDeclared;
+   case GreaterThanOrEqual;
+   case LessThanOrEqual;
 }

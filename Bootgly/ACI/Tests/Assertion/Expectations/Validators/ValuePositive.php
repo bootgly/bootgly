@@ -15,19 +15,19 @@ use Bootgly\ACI\Tests\Asserting\Fallback;
 use Bootgly\ACI\Tests\Assertion\Expectation\Validator;
 
 /**
- * Validate if $actual is a negative value.
+ * Validate if $actual is a positive value.
  */
-class ValueNegative extends Validator
+class ValuePositive extends Validator
 {
    public function assert (mixed &$actual, mixed &$expected): bool
    {
-      return $actual < 0;
+      return $actual > 0;
    }
 
    public function fail (mixed $actual, mixed $expected, int $verbosity = 0): Fallback
    {
       return new Fallback(
-         'Failed asserting that %s is a negative value.',
+         'Failed asserting that %s is a positive value.',
          [
             'actual' => $actual
          ],

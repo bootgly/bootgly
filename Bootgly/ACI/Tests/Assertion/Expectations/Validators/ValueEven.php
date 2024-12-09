@@ -8,26 +8,28 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\ACI\Tests\Assertion\Expectations\Finders;
+namespace Bootgly\ACI\Tests\Assertion\Expectations\Validators;
 
 
 use Bootgly\ACI\Tests\Asserting\Fallback;
-use Bootgly\ACI\Tests\Assertion\Expectation\Finder;
+use Bootgly\ACI\Tests\Assertion\Expectation\Validator;
 
-
-class TraitsDeclared extends Finder
+/**
+ * Validate if $actual is an even value.
+ */
+class ValueEven extends Validator
 {
    public function assert (mixed &$actual, mixed &$expected): bool
    {
-      return trait_exists($expected);
+      return $actual % 2 === 0;
    }
 
    public function fail (mixed $actual, mixed $expected, int $verbosity = 0): Fallback
    {
       return new Fallback(
-         'Failed asserting that the trait "%s" is declared.',
+         'Failed asserting that %s is an even value.',
          [
-            'expected' => $expected
+            'actual' => $actual
          ],
          $verbosity
       );

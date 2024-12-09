@@ -36,8 +36,10 @@ return [
       // Advanced API - Expectations/Matchers
       '1.4.1-Advanced_API-expectations-matchers-regex_match',
       '1.4.2-Advanced_API-expectations-matchers-variadic_dir_path',
+      // Advanced API - Expectations/Throwers
+      '1.5.1-Advanced_API-expectations-throwers-exception',
       // Advanced API - Expectations/Validators
-      '1.5.1-Advanced_API-expectations-validators-type',
+      '1.6.1-Advanced_API-expectations-validators-type',
       // Advanced API - Snapshots
       '2.0.1-Advanced_API-snapshots',
    ]

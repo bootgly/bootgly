@@ -13,22 +13,30 @@ namespace Bootgly\ACI\Tests\Assertion;
 
 use AssertionError;
 use Closure;
-use DateTime;
-use Throwable;
 
 use Bootgly\ABI\Argument;
 use Bootgly\ACI\Tests\Asserting;
-use Bootgly\ACI\Tests\Assertion\Auxiliaries\Interval;
-use Bootgly\ACI\Tests\Assertion\Auxiliaries\Type;
-use Bootgly\ACI\Tests\Assertion\Auxiliaries\Value;
+use Bootgly\ACI\Tests\Assertion\Expectation;
 use Bootgly\ACI\Tests\Assertion\Expectations\Comparators;
 use Bootgly\ACI\Tests\Assertion\Expectations\Delimiters;
+use Bootgly\ACI\Tests\Assertion\Expectations\Finders;
 use Bootgly\ACI\Tests\Assertion\Expectations\Matchers;
+use Bootgly\ACI\Tests\Assertion\Expectations\Throwers;
 use Bootgly\ACI\Tests\Assertion\Expectations\Validators;
 
 
 abstract class Expectations
 {
+   use Expectation;
+
+   use Comparators;
+   use Delimiters;
+   use Finders;
+   use Throwers;
+   use Matchers;
+   use Validators;
+
+
    // * Config
    public self $to {
       get {
@@ -44,26 +52,7 @@ abstract class Expectations
    protected mixed $expected;
 
    // * Metadata
-   protected bool $expecting = false;
-   protected mixed $expectation {
-      get { // last expectation in the stack
-         return $this->expectations[count($this->expectations) - 1];
-      }
-      set (mixed $expectation) {
-         // ?
-         $notExpecting = $this->expecting === false;
-         $isAsserting = $expectation instanceof Asserting;
-         if ($notExpecting && $isAsserting) {
-            throw new AssertionError('You need to use `->to` before set any expectation.');
-         }
-
-         $this->expectations ??= [];
-         $this->expectations[] = $expectation;
-
-         $this->expecting = false;
-      }
-   }
-   protected ?array $expectations = null;
+   // ..Expectation
 
 
    public function expect (mixed $actual): self
@@ -74,7 +63,7 @@ abstract class Expectations
    }
 
    // # Data
-   // be, contain, delimit, find, have, match, throw, validate, ...
+   // be (generic), compare, delimit, find, match, throw, validate, ...
    public function be (mixed $expected): self
    {
       $this->expected = $expected;
@@ -85,54 +74,12 @@ abstract class Expectations
 
       return $this;
    }
-   public function delimit (
-      int|float|DateTime $from,
-      int|float|DateTime $to,
-      Interval $interval = Interval::Closed
-   ): self
-   {
-      $this->expectation = match ($interval) {
-         Interval::Open =>
-            new Delimiters\OpenInterval($from, $to),
-         Interval::Closed =>
-            new Delimiters\ClosedInterval($from, $to),
-         Interval::LeftOpen =>
-            new Delimiters\LeftOpenInterval($from, $to),
-         Interval::RightOpen =>
-            new Delimiters\RightOpenInterval($from, $to),
-         default =>
-            throw new AssertionError('Invalid interval delimiter.')
-      };
-
-      return $this;
-   }
-   public function have (mixed $resource, mixed $value = Argument::Undefined): self
-   {
-      $this->expectation = $resource;
-
-      return $this;
-   }
-   public function match (string $pattern): self
-   {
-      $this->expectation = new Matchers\Regex($pattern);
-
-      return $this;
-   }
-   public function validate (Type|Value $validator): self
-   {
-      $namespace = Validators::class;
-      $class = $validator->name;
-
-      $this->expectation = match (true) {
-         $validator instanceof Type
-            => new ("{$namespace}\Type{$class}"),
-         $validator instanceof Value
-            => new ("{$namespace}\Value{$class}"),
-         default => throw new AssertionError('Invalid validator.')
-      };
-
-      return $this;
-   }
+   // ..Comparators
+   // ..Delimiters
+   // ..Finders
+   // ..Matchers
+   // ..Throwers
+   // ..Validators
 
    // # Dataset
    /**
@@ -155,27 +102,6 @@ abstract class Expectations
       foreach ($this->actual as $key => $value) {
          $this->expectation = $Iterator($value, $key);
       }
-
-      return $this;
-   }
-
-   // # Callables
-   /**
-    * Throw an exception.
-    * "expect that $actual throw $expected".
-    * The $actual must be a callable.
-    *
-    * @param string|Throwable $expected The expected exception message or Throwable.
-    *
-    * @return self Returns the current instance for method chaining.
-    */
-   public function throw (string|Throwable $expected): self
-   {
-      if (!is_callable($this->actual)) {
-         throw new AssertionError('The actual value must be a callable.');
-      }
-
-      $this->expectation = $expected;
 
       return $this;
    }

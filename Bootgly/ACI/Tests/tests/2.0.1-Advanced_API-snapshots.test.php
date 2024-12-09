@@ -75,7 +75,7 @@ return [
          ->assert(
             actual: $array1,
             expected: $array1,
-            using: new Snapshots\InMemoryDefault
+            using: new Snapshots\MemoryDefaultSnapshot
          );
 
       // @ Using using as Snapshot [object]
@@ -88,7 +88,7 @@ return [
          ->assert(
             actual: $object1,
             expected: $object1,
-            using: new Snapshots\InMemoryDefault
+            using: new Snapshots\MemoryDefaultSnapshot
          );
 
       // @ Using using as Snapshot and Expectation [int]
@@ -99,7 +99,7 @@ return [
          ->assert(
             actual: 2,
             expected: new ClosedInterval(1, 3),
-            using: new Snapshots\InFileStorage
+            using: new Snapshots\FileStorageSnapshot
          );
 
       // @ Using using as Snapshot and Expectation [DateTime]
@@ -115,7 +115,7 @@ return [
                new DateTime('2023-01-02'),
                new DateTime('2023-01-04')
             ),
-            using: new Snapshots\InFileStorage
+            using: new Snapshots\FileStorageSnapshot
          );
    })
 ];

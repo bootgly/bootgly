@@ -11,20 +11,50 @@
 namespace Bootgly\ACI\Tests\Assertion;
 
 
+use Bootgly\ABI\Debugging\Backtrace;
+use Bootgly\ACI\Tests\Asserting\Fallback;
 use Bootgly\ACI\Tests\Asserting;
+
 
 /**
  * Implementation / Repository
  * Snapshot       / Snapshots
  */
-interface Snapshot extends Asserting
+abstract class Snapshot implements Asserting
 {
+   // * Config
+   /**
+    * @var string|null $name The snapshot name.
+    */
+    public ?string $name = null;
+
+   // * Data
+   protected static array $snapshots = [];
+
    // * Metadata
-   public bool $captured {
-      get;
-   }
-   public bool $restored {
-      get;
+   protected bool $named;
+   /**
+    * @var array<string, int>
+    */
+   protected static array $indexes = [];
+   // ---
+   public readonly bool $captured;
+   public readonly bool $restored;
+
+
+   public function __construct (?string $name = null)
+   {
+      // * Config
+      $this->name = $name ?? new Backtrace()->file;
+
+      // * Metadata
+      // named
+      $this->named = $name !== null;
+      // indexes
+      if ($this->named === false) {
+         self::$indexes[$this->name] ??= 0;
+         self::$indexes[$this->name]++;
+      }
    }
 
    /**
@@ -35,8 +65,7 @@ interface Snapshot extends Asserting
     *
     * @return bool Returns true if the snapshot was captured successfully.
     */
-   public function capture (string $snapshot, mixed $data): bool;
-
+   abstract public function capture (string $snapshot, mixed $data): bool;
    /**
     * Restore the value captured by the snapshot
     *
@@ -45,5 +74,33 @@ interface Snapshot extends Asserting
     *
     * @return bool Returns true if the snapshot was restored successfully.
     */
-   public function restore (string $snapshot, mixed &$data): bool;
+   abstract public function restore (string $snapshot, mixed &$data): bool;
+
+   public function assert (mixed &$actual, mixed &$expected): bool
+   {
+      if ($this->named) {
+         $snapshot = $this->name;
+      }
+      else {
+         $index = (string) self::$indexes[$this->name];
+         $snapshot = "{$this->name}.{$index}";
+      }
+
+      $this->restore($snapshot, $actual);
+
+      $assertion = $actual === $expected;
+
+      return $assertion && $this->capture($snapshot, $actual);
+   }
+   public function fail (mixed $actual, mixed $expected, int $verbosity = 0): Fallback
+   {
+      return new Fallback(
+         'Failed asserting that the snapshot value is equal to the expected value.',
+         [
+            'actual' => $actual,
+            'expected' => $expected
+         ],
+         $verbosity
+      );
+   }
 }
