@@ -22,24 +22,27 @@ return [
       // Advanced API
       #'1.0.0-Advanced_API-asserted',
       '1.0.1-Advanced_API-assert',
-      // Advanced API - Expectations/Comparators
-      '1.1.1-Advanced_API-expectations-comparators-greater_than',
-      '1.1.2-Advanced_API-expectations-comparators-identical',
-      '1.1.3-Advanced_API-expectations-comparators-less_than',
-      '1.1.4-Advanced_API-expectations-comparators-not_equal',
+      // Advanced API - Expectations
+      '1.1.1-Advanced_API-expectations-greater_than',
+      '1.1.2-Advanced_API-expectations-identical',
+      '1.1.3-Advanced_API-expectations-less_than',
+      '1.1.4-Advanced_API-expectations-not_equal',
+      // Advanced API - Expectations/Behaviors
+      '1.2.1-Advanced_API-expectations-behaviors-types',
+      #'1.2.2-Advanced_API-expectations-behaviors-values',
       // Advanced API - Expectations/Delimiters
-      '1.2.1-Advanced_API-expectations-delimiters-closed_interval',
+      '1.3.1-Advanced_API-expectations-delimiters-closed_interval',
       // Advanced API - Expectations/Finders
-      '1.3.1-Advanced_API-expectations-finders-contains',
-      '1.3.2-Advanced_API-expectations-finders-ends_with',
-      '1.3.3-Advanced_API-expectations-finders-starts_with',
+      '1.4.1-Advanced_API-expectations-finders-contains',
+      '1.4.2-Advanced_API-expectations-finders-ends_with',
+      '1.4.3-Advanced_API-expectations-finders-starts_with',
       // Advanced API - Expectations/Matchers
-      '1.4.1-Advanced_API-expectations-matchers-regex_match',
-      '1.4.2-Advanced_API-expectations-matchers-variadic_dir_path',
+      '1.5.1-Advanced_API-expectations-matchers-regex_match',
+      '1.5.2-Advanced_API-expectations-matchers-variadic_dir_path',
       // Advanced API - Expectations/Throwers
-      '1.5.1-Advanced_API-expectations-throwers-exception',
-      // Advanced API - Expectations/Validators
-      '1.6.1-Advanced_API-expectations-validators-type',
+      '1.6.1-Advanced_API-expectations-throwers-exception',
+      // Advanced API - Expectations/Waiters
+      '1.7.1-Advanced_API-expectations-waiters-timeout',
       // Advanced API - Snapshots
       '2.0.1-Advanced_API-snapshots',
    ]

@@ -14,13 +14,14 @@ namespace Bootgly\ACI\Tests\Assertion\Expectations;
 use AssertionError;
 
 use Bootgly\ACI\Tests\Assertion\Auxiliaries\In;
+use Bootgly\ACI\Tests\Assertion\Expectation;
 
 
-/**
- * @property mixed $expectation
- */
 trait Finders
 {
+   use Expectation;
+
+
    /**
     * Find the $needle in the $haystack.
     * "expect that $needle find $haystack".
@@ -35,7 +36,7 @@ trait Finders
     */
    public function find (In $haystack, mixed $needle): self
    {
-      $this->expectation = match ($haystack) {
+      $this->set(match ($haystack) {
          In::ArrayKeys =>
             new Finders\InArrayKeys($needle),
          In::ArrayValues =>
@@ -56,7 +57,7 @@ trait Finders
 
          default =>
             throw new AssertionError('Invalid finder.')
-      };
+      });
 
       return $this;
    }

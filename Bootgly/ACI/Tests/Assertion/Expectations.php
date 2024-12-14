@@ -16,25 +16,30 @@ use Closure;
 
 use Bootgly\ABI\Argument;
 use Bootgly\ACI\Tests\Asserting;
+use Bootgly\ACI\Tests\Assertion\Auxiliaries\Op;
+#use Bootgly\ACI\Tests\Assertion\Comparator;
+use Bootgly\ACI\Tests\Assertion\Comparators;
 use Bootgly\ACI\Tests\Assertion\Expectation;
-use Bootgly\ACI\Tests\Assertion\Expectations\Comparators;
+use Bootgly\ACI\Tests\Assertion\Expectations\Behaviors;
+use Bootgly\ACI\Tests\Assertion\Expectations\Callers;
 use Bootgly\ACI\Tests\Assertion\Expectations\Delimiters;
 use Bootgly\ACI\Tests\Assertion\Expectations\Finders;
 use Bootgly\ACI\Tests\Assertion\Expectations\Matchers;
 use Bootgly\ACI\Tests\Assertion\Expectations\Throwers;
-use Bootgly\ACI\Tests\Assertion\Expectations\Validators;
+use Bootgly\ACI\Tests\Assertion\Expectations\Waiters;
 
 
 abstract class Expectations
 {
    use Expectation;
 
-   use Comparators;
+   use Behaviors;
+   use Callers;
    use Delimiters;
    use Finders;
    use Throwers;
    use Matchers;
-   use Validators;
+   use Waiters;
 
 
    // * Config
@@ -55,31 +60,57 @@ abstract class Expectations
    // ..Expectation
 
 
-   public function expect (mixed $actual): self
+   /**
+    * Create a new Expectations instance.
+    * The $comparator is required when using an $expected value.
+    * The $expected value is required when using a $comparator.
+    * 
+    * @param mixed $actual The actual value to assert.
+    * @param ?Op $comparator The comparator to use with $expected if provided.
+    * @param mixed $expected The expected value to assert against if provided.
+    */
+   public function expect (
+      mixed $actual,
+      ?Op $comparator = null,
+      mixed $expected = Argument::Undefined
+   ): self
    {
       $this->actual = $actual;
+
+      if ($comparator !== null && $expected !== Argument::Undefined) {
+         $this->set(match ($comparator) {
+            // Op
+            Op::Equal => new Comparators\Equal($expected),
+            Op::NotEqual => new Comparators\NotEqual($expected),
+            Op::Identical => new Comparators\Identical($expected),
+            Op::NotIdentical => new Comparators\NotIdentical($expected),
+            Op::GreaterThan => new Comparators\GreaterThan($expected),
+            Op::LessThan => new Comparators\LessThan($expected),
+            Op::GreaterThanOrEqual => new Comparators\GreaterThanOrEqual($expected),
+            Op::LessThanOrEqual => new Comparators\LessThanOrEqual($expected),
+            // Comparator
+            default => throw new AssertionError('Invalid comparator.')
+         });
+      }
+      else if ($comparator !== null && $expected === Argument::Undefined) {
+         throw new AssertionError('The expected value must be defined when using a comparator.');
+      }
+      else if ($comparator === null && $expected !== Argument::Undefined) {
+         throw new AssertionError('The comparator must be defined when using an expected value.');
+      }
 
       return $this;
    }
 
    // # Data
-   // be (generic), compare, delimit, find, match, throw, validate, ...
-   public function be (mixed $expected): self
-   {
-      $this->expected = $expected;
-
-      $this->expectation = $expected instanceof Asserting
-         ? $expected
-         : new Comparators\Identical($expected);
-
-      return $this;
-   }
-   // ..Comparators
-   // ..Delimiters
-   // ..Finders
-   // ..Matchers
-   // ..Throwers
-   // ..Validators
+   // be, call, delimit, find, match, throw, wait, ...
+   // ..Behaviors (be)
+   // ..Callers (call)
+   // ..Delimiters (delimit)
+   // ..Finders (find)
+   // ..Matchers (match)
+   // ..Throwers (throw)
+   // ..Waiters (wait)
 
    // # Dataset
    /**
@@ -95,12 +126,12 @@ abstract class Expectations
     */   
    public function iterate (Closure $Iterator): self
    {
-      if (!is_iterable($this->actual)) {
+      if (is_iterable($this->actual) === false) {
          throw new AssertionError('The actual value must be an iterable.');
       }
 
       foreach ($this->actual as $key => $value) {
-         $this->expectation = $Iterator($value, $key);
+         $this->set($Iterator($value, $key));
       }
 
       return $this;

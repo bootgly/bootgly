@@ -14,11 +14,11 @@ namespace Bootgly\ACI\Tests\Assertion\Expectations;
 use Bootgly\ACI\Tests\Assertion\Expectation;
 
 
-/**
- * @property mixed $expectation
- */
 trait Matchers
 {
+   use Expectation;
+
+
    /**
     * Match a string against a pattern.
     *
@@ -30,12 +30,17 @@ trait Matchers
    {
       // @ Check if pattern is a valid path (dir or file without checking if it exists)
       if (preg_match('/^(\/[^\/ ]*)+\/?$/', $pattern)) {
-         $this->expectation = new Matchers\VariadicDirPath($pattern);
+         $this->set(
+            new Matchers\VariadicDirPath($pattern)
+         );
 
          return $this;
       }
 
-      $this->expectation = new Matchers\Regex($pattern);
+      // Default
+      $this->set(
+         new Matchers\Regex($pattern)
+      );
 
       return $this;
    }

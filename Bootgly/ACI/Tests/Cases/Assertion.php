@@ -19,9 +19,9 @@ use Bootgly\ABI\Debugging\Data\Vars;
 use Bootgly\ABI\Templates\Template;
 use Bootgly\ACI\Tests\Asserting;
 use Bootgly\ACI\Tests\Asserting\Fallback;
+use Bootgly\ACI\Tests\Assertion\Comparators\Identical;
 use Bootgly\ACI\Tests\Assertion\Expectation;
 use Bootgly\ACI\Tests\Assertion\Expectations;
-use Bootgly\ACI\Tests\Assertion\Expectations\Comparators\Identical;
 use Bootgly\ACI\Tests\Assertion\Snapshot;
 use Bootgly\ACI\Tests\Assertion\Snapshots;
 
@@ -250,7 +250,7 @@ class Assertion extends Expectations
       // message
       $message = <<<MESSAGE
 
-      \033[0;37;41m Fallback message: \033[0m
+      \033[0;30;41m Fallback message: \033[0m
       
       MESSAGE;
       $message .= (string) $Fallback;

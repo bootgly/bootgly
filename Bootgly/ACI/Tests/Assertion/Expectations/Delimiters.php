@@ -12,16 +12,18 @@ namespace Bootgly\ACI\Tests\Assertion\Expectations;
 
 
 use AssertionError;
+
 use DateTime;
 
 use Bootgly\ACI\Tests\Assertion\Auxiliaries\Interval;
+use Bootgly\ACI\Tests\Assertion\Expectation;
 
 
-/**
- * @property mixed $expectation
- */
 trait Delimiters
 {
+   use Expectation;
+
+
    /**
     * Delimit a range of values.
     * "expect that $actual delimit $from and $to".
@@ -38,7 +40,7 @@ trait Delimiters
       Interval $interval = Interval::Closed
    ): self
    {
-      $this->expectation = match ($interval) {
+      $this->set(match ($interval) {
          Interval::Open =>
             new Delimiters\OpenInterval($from, $to),
          Interval::Closed =>
@@ -49,7 +51,7 @@ trait Delimiters
             new Delimiters\RightOpenInterval($from, $to),
          default =>
             throw new AssertionError('Invalid interval delimiter.')
-      };
+      });
 
       return $this;
    }

@@ -14,12 +14,17 @@ namespace Bootgly\ACI\Tests\Assertion\Expectations;
 use AssertionError;
 use Throwable;
 
+use Bootgly\ACI\Tests\Assertion\Expectation;
+
 
 /**
  * @property mixed $expectation
  */
 trait Throwers
 {
+   use Expectation;
+
+
    /**
     * Throw an exception.
     * "expect that $actual throw $expected".
@@ -31,11 +36,13 @@ trait Throwers
     */
    public function throw (string|Throwable $expected): self
    {
-      if (!is_callable($this->actual)) {
+      if (is_callable($this->actual) === false) {
          throw new AssertionError('The actual value must be a callable.');
       }
 
-      $this->expectation = new Throwers\ThrowException($expected);
+      $this->set(
+         new Throwers\ThrowException($expected)
+      );
 
       return $this;
    }

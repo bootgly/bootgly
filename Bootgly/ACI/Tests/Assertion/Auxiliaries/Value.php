@@ -11,8 +11,8 @@
 namespace Bootgly\ACI\Tests\Assertion\Auxiliaries;
 
 /*
- * Enum to be used to check the value of the variable.
- * e.g. $Assertion->expect($actual)->to->validate(Value::Empty);
+ * Enum to be used with be() method in the Assertion.
+ * e.g. $Assertion->expect($actual)->to->be(Value::Positive);
  */
 enum Value
 {
