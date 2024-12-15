@@ -16,8 +16,8 @@ use function strlen;
 use function strpos;
 use function is_string;
 
-use Bootgly\WPI\Modules\HTTP\Server\Request\Raw\Header\Defining;
 use Bootgly\WPI\Modules\HTTP\Server\Request\Raw;
+use Bootgly\WPI\Modules\HTTP\Server\Request\Raw\Header\Defining;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Raw\Header\Cookies;
 
 
@@ -39,11 +39,11 @@ class Header extends Raw\Header implements Defining
          return $this->fields;
       }
    }
-   public readonly string $raw;
+   // .. $raw
 
    // * Metadata
-   // ... inherited
-   public readonly null|int|false $length;
+   // .. $length;
+   // .. $built;
 
 
    public function __construct ()

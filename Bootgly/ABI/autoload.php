@@ -44,6 +44,9 @@ namespace Bootgly\ABI {
             \mkdir($destination);
 
             $paths = \scandir($source);
+            if ($paths === false) {
+               return;
+            }
 
             foreach ($paths as $path) {
                if ($path !== '.' && $path !== '..') {
@@ -99,7 +102,7 @@ namespace {
     */
    // mb_strlen
    if (!\function_exists('mb_strlen')) {
-      function mb_strlen(string $string, string|null $encoding = 'UTF-8'): int
+      function mb_strlen(string $string, string|null $encoding = 'UTF-8'): int|false
       {
          $encoding = __String::encoding($encoding);
 
@@ -138,9 +141,12 @@ namespace {
                $titleRegexp = __String::mapping('titleCaseRegexp');
             }
 
-            $string = \preg_replace_callback($titleRegexp, function (array $string) {
-               return mb_convert_case($string[1], \MB_CASE_UPPER, 'UTF-8').mb_convert_case($string[2], \MB_CASE_LOWER, 'UTF-8');
-            }, $string);
+            $string = \preg_replace_callback($titleRegexp, function (array $string): string {
+               $uppercase = \mb_convert_case($string[1], \MB_CASE_UPPER, 'UTF-8');
+               $lowercase = \mb_convert_case($string[2], \MB_CASE_LOWER, 'UTF-8');
+
+               return "{$uppercase}{$lowercase}";
+            }, (string) $string);
          }
          else {
             if ($mode === \MB_CASE_UPPER) {

@@ -143,7 +143,7 @@ class Assertion extends Expectations
       }
       // ? Check if the `actual` value is an instance of Comparator
       if ($actual instanceof Asserting) {
-         throw new AssertionError('The `actual` value cannot be an instance of Comparator!');
+         throw new AssertionError('The `actual` value cannot be an instance of Asserting!');
       }
       // $expected
       // ? Check if the `expected` value is defined when using Expectations

@@ -32,11 +32,11 @@ class Header extends Raw\Header
    public array $fields {
       get => $this->fields;  
    }
-   protected string $raw;
+   // .. $raw
 
    // * Metadata
-   // ... inherited
-   private null|int|false $length;
+   // .. $length;
+   // .. $built;
 
 
    public function __construct ()
