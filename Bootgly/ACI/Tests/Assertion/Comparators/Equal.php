@@ -19,11 +19,15 @@ class Equal extends Comparator
 {
    public function assert (mixed &$actual, mixed &$expected): bool
    {
+      $expected = $this->expected ?? $expected;
+
       return $actual == $expected;
    }
 
    public function fail (mixed $actual, mixed $expected, int $verbosity = 0): Fallback
    {
+      $expected = $this->expected ?? $expected;
+
       return new Fallback(
          'Failed asserting that %s is equal to %s.',
          [

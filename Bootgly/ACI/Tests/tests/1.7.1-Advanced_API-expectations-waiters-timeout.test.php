@@ -14,15 +14,14 @@ return [
    'test' => new Assertions(Case: function (): Generator
    {
       // Callable
-      $callable = function (bool $test, string $test2) {
-         var_dump($test, $test2);
+      $callable = function () {
          usleep(100); // Simulates a blocking task
       };
       yield new Assertion(
          description: 'Validating wait time',
       )
          ->expect($callable)
-         ->to->call(true, 'Bootgly')
+         ->to->call()
          ->to->wait(1) // Expecting the callable to execute within 1 seconds
          ->assert();
    })

@@ -23,10 +23,14 @@ return [
       #'1.0.0-Advanced_API-asserted',
       '1.0.1-Advanced_API-assert',
       // Advanced API - Expectations
-      '1.1.1-Advanced_API-expectations-greater_than',
-      '1.1.2-Advanced_API-expectations-identical',
-      '1.1.3-Advanced_API-expectations-less_than',
-      '1.1.4-Advanced_API-expectations-not_equal',
+      '1.1.1-Advanced_API-expectations-equal',
+      '1.1.2-Advanced_API-expectations-greater_than',
+      '1.1.3-Advanced_API-expectations-greater_than_or_equal',
+      '1.1.4-Advanced_API-expectations-identical',
+      '1.1.5-Advanced_API-expectations-less_than',
+      '1.1.6-Advanced_API-expectations-less_than_or_equal',
+      '1.1.7-Advanced_API-expectations-not_equal',
+      '1.1.8-Advanced_API-expectations-not_identical',
       // Advanced API - Expectations/Behaviors
       '1.2.1-Advanced_API-expectations-behaviors-types',
       #'1.2.2-Advanced_API-expectations-behaviors-values',

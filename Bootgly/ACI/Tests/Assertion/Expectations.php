@@ -88,7 +88,6 @@ abstract class Expectations
             Op::LessThan => new Comparators\LessThan($expected),
             Op::GreaterThanOrEqual => new Comparators\GreaterThanOrEqual($expected),
             Op::LessThanOrEqual => new Comparators\LessThanOrEqual($expected),
-            // Comparator
             default => throw new AssertionError('Invalid comparator.')
          });
       }
