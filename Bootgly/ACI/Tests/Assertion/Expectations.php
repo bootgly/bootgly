@@ -78,6 +78,7 @@ abstract class Expectations
       $this->actual = $actual;
 
       if ($comparator !== null && $expected !== Argument::Undefined) {
+         $this->expecting = true;
          $this->set(match ($comparator) {
             // Op
             Op::Equal => new Comparators\Equal($expected),
