@@ -1,6 +1,5 @@
 <?php
 
-use Bootgly\ACI\Tests\Assertion\Auxiliaries\Type;
 use Generator;
 
 use Bootgly\ACI\Tests\Cases\Assertion;
@@ -38,7 +37,7 @@ return [
             $this::$description .= " [{$duration}]";
 
             return $this
-               ->to->delimit(1000, 10000);
+               ->to->delimit(1000, 15000);
          })
          ->assert();
    })

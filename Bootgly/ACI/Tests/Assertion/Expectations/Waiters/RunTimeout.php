@@ -12,7 +12,6 @@ use function pcntl_waitpid;
 use function posix_kill;
 use const WNOHANG;
 
-use Bootgly\ACI\Tests\Asserting;
 use Bootgly\ACI\Tests\Asserting\Fallback;
 use Bootgly\ACI\Tests\Assertion\Expectation\Waiter;
 
