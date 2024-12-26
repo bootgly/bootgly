@@ -25,7 +25,7 @@ trait Setupables // @ Use with enums
    public function __call (string $name, array $arguments): ?object
    {
       static $values = [];
-      /** @var object $class */
+      /** @var ?object $class */
       static $class = null;
 
       switch ($name) {

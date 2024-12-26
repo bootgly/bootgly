@@ -10,11 +10,13 @@
 
 namespace Bootgly\ACI\Tests\Assertion\Expectations\Throwers;
 
-use Exception;
+use Error;
+
 use Bootgly\ACI\Tests\Asserting\Fallback;
 use Bootgly\ACI\Tests\Assertion\Expectation\Thrower;
 
-class ThrowException extends Thrower
+
+class ThrowError extends Thrower
 {
    // * Config
    // ..$expected
@@ -30,8 +32,8 @@ class ThrowException extends Thrower
       try {
          $actual(...$arguments);
       }
-      catch (Exception $Exception) {
-         return $Exception instanceof $expected;
+      catch (Error $Error) {
+         return $Error instanceof $expected;
       }
 
       return false;
@@ -44,7 +46,7 @@ class ThrowException extends Thrower
 
       // :
       return new Fallback(
-         'Failed asserting that the exception %s was thrown.',
+         'Failed asserting that the error %s was thrown.',
          [
             'expected' => $expected::class
          ],

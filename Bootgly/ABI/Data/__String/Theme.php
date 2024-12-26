@@ -11,6 +11,13 @@
 namespace Bootgly\ABI\Data\__String;
 
 
+use function count;
+use function is_callable;
+use function is_string;
+use function is_array;
+use Exception;
+
+
 class Theme
 {
    // * Config
@@ -61,7 +68,10 @@ class Theme
       $prepending = $options['prepending'];
       if ($prepending) {
          $output .= match ($prepending['type']) {
-            'callback' => $prepending['value'](...$input),
+            'callback' => match (true) {
+               is_callable($prepending['value']) => $prepending['value'](...$input),
+               default => ''
+            },
             'string' => $prepending['value'],
             default => ''
          };
@@ -72,7 +82,10 @@ class Theme
       $appending = $options['appending'];
       if ($appending) {
          $output .= match ($appending['type']) {
-            'callback' => $appending['value'](...$input),
+            'callback' => match (true) {
+               is_callable($prepending['value']) => $prepending['value'](...$input),
+               default => ''
+            },
             'string' => $appending['value'],
             default => ''
          };
@@ -85,44 +98,50 @@ class Theme
     * 
     * @param array<mixed> $theme
     *
-    * @throws \Exception
+    * @throws Exception
     */
    public function add (array $theme): self
    {
       if (\count($theme) > 1) {
-         throw new \Exception('Invalid theme structure.');
+         throw new Exception('Invalid theme structure.');
       }
 
       foreach ($theme as $name => $specifications) {
-         if (\is_string($name) === false) {
-            throw new \Exception('Invalid theme structure.');
+         // ? Validate theme structure
+         if (
+            is_string($name) === false
+            || is_array($specifications) === false
+         ) {
+            throw new Exception('Invalid theme structure.');
          }
-
-         // @ Validate
-         $specifications['options']
-            ?? throw new \Exception('Invalid theme structure: options not defined');
-         $specifications['values']
-            ?? throw new \Exception('Invalid theme structure: values not defined');
+         // ? Validate theme options/values structure
          // options
-         $options = [
-            'prepending',
-            'appending'
-         ];
-         foreach ($options as $option) {
-            $specifications['options'][$option]
-               ?? throw new \Exception("Invalid theme structure: $option options not defined");
-            $specifications['options'][$option]['type']
-               ?? throw new \Exception("Invalid theme structure: $option options type not defined");
-            $specifications['options'][$option]['value']
-               ?? throw new \Exception("Invalid theme structure: $option options value not defined");
+         if (is_array($specifications['options']) === false) {
+            throw new Exception('Invalid theme structure: options not defined');
+         }
+         // values
+         $specifications['values']
+            ?? throw new Exception('Invalid theme structure: values not defined');
 
-            $specifications['options'][$option]['type'] === 'callback' && (
-               is_callable($specifications['options'][$option]['value']) === true ?
-               : throw new \Exception("Invalid theme structure: $option options value should be callable!")
+         // !
+         /** @var array<string,array<string,mixed>> */
+         $options = $specifications['options'];
+
+         foreach (['prepending', 'appending'] as $option) {
+            $options[$option]
+               ?? throw new Exception("Invalid theme structure: $option options not defined");
+            $options[$option]['type']
+               ?? throw new Exception("Invalid theme structure: $option options type not defined");
+            $options[$option]['value']
+               ?? throw new Exception("Invalid theme structure: $option options value not defined");
+
+            $options[$option]['type'] === 'callback' && (
+               is_callable($options[$option]['value']) === true ?
+               : throw new Exception("Invalid theme structure: $option options value should be callable!")
             );
-            $specifications['options'][$option]['type'] === 'string' && (
-               is_string($specifications['options'][$option]['value']) === true ?
-               : throw new \Exception("Invalid theme structure: $option options value should be string!")
+            $options[$option]['type'] === 'string' && (
+               is_string($options[$option]['value']) === true ?
+               : throw new Exception("Invalid theme structure: $option options value should be string!")
             );
          }
 
@@ -133,7 +152,7 @@ class Theme
 
       return $this;
    }
-   public function select (? string $name = null): bool
+   public function select (?string $name = null): bool
    {
       $name ??= $this->active;
 
@@ -142,8 +161,15 @@ class Theme
          $this->active = $name;
          // * Metadata
          $this->theme = self::$themes[$name];
-         $this->options = $this->theme['options'];
-         $this->values = $this->theme['values'];
+
+         /** @var array<string,array<string,mixed>> */
+         $options = $this->theme['options'];
+         /** @var array<string,array<string,mixed>> */
+         $values = $this->theme['values'];
+
+         $this->options = $options;
+         $this->values = $values;
+
          return true;
       }
 

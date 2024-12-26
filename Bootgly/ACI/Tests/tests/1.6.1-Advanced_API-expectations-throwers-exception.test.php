@@ -21,6 +21,7 @@ return [
          description: 'Validating exception',
       )
          ->expect($callable)
+         ->to->call()
          ->to->throw(new Exception('Exception'))
          ->assert();
    })

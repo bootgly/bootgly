@@ -36,7 +36,7 @@ trait Finders
     */
    public function find (In $haystack, mixed $needle): self
    {
-      $this->set(match ($haystack) {
+      $this->push(match ($haystack) {
          In::ArrayKeys =>
             new Finders\InArrayKeys($needle),
          In::ArrayValues =>

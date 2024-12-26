@@ -8,10 +8,10 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\ABI;
+namespace Bootgly\ACI\Tests\Asserting;
 
 
-interface Configs
+interface Output
 {
-   // ...Used to define and indentify subclasses (instance of).
+   public function output (): void;
 }

@@ -40,7 +40,7 @@ trait Delimiters
       Interval $interval = Interval::Closed
    ): self
    {
-      $this->set(match ($interval) {
+      $this->push(match ($interval) {
          Interval::Open =>
             new Delimiters\OpenInterval($from, $to),
          Interval::Closed =>

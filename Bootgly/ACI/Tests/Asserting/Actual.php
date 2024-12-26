@@ -8,10 +8,16 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\ABI;
+namespace Bootgly\ACI\Tests\Asserting;
 
 
-interface Configs
+trait Actual
 {
-   // ...Used to define and indentify subclasses (instance of).
+   // * Data
+   /**
+    * The actual value.
+    * 
+    * @var mixed $actual
+    */
+   public protected(set) mixed $actual;
 }

@@ -19,6 +19,7 @@ use Bootgly\ABI\Debugging\Data\Vars;
 use Bootgly\ABI\Templates\Template;
 use Bootgly\ACI\Tests\Asserting;
 use Bootgly\ACI\Tests\Asserting\Fallback;
+use Bootgly\ACI\Tests\Asserting\Subassertion;
 use Bootgly\ACI\Tests\Assertion\Comparators\Identical;
 use Bootgly\ACI\Tests\Assertion\Expectation;
 use Bootgly\ACI\Tests\Assertion\Expectations;
@@ -41,13 +42,20 @@ class Assertion extends Expectations
     */
    public static string|array|null $fallback = null;
    // ---
-   // ..Expectations
-   // ..Snapshots
+   // # Expectations
+   // ..$to
+   // # Snapshots
+   // ..$Snapshot
 
    // * Data
    protected Asserting $using;
    // ---
-   // ..Expectations
+   // # Expectations
+   // ..$actual
+   // ..$expected
+   // ..$expectations
+   // ..$expecting
+   // ..$reset
 
    // * Metadata
    public private(set) bool $asserted;
@@ -79,6 +87,17 @@ class Assertion extends Expectations
       // * Metadata
       $this->asserted = false;
       $this->skipped = false;
+   }
+   public function __clone(): void
+   {
+      // * Data
+      $this->actual = Argument::Undefined;
+      $this->expected = Argument::Undefined;
+      // * Metadata
+      $this->asserted = false;
+      $this->skipped = false;
+
+      $this->reset();
    }
    public function __destruct ()
    {
@@ -129,6 +148,11 @@ class Assertion extends Expectations
       ?Asserting $using = null,
    ): self
    {
+      // ?
+      if ($this->asserted) {
+         throw new AssertionError('The `assert` method has already been called!');
+      }
+
       // @ 1️⃣ Define
       // # Metadata
       $this->asserted = true;
@@ -189,11 +213,10 @@ class Assertion extends Expectations
                : $expected
          );
       }
-      $expectations = $this->expectations;
       // results
       $results = [];
       // @
-      foreach ($expectations as $index => $Expectation) {
+      foreach ($this->expectations as $index => $Expectation) {
          if ($using instanceof Snapshot) {
             $using->assert($actual, $expected);
          }
@@ -202,6 +225,22 @@ class Assertion extends Expectations
           * @var Asserting $Expectation
           */
          $results[$index] = $Expectation->assert($actual, $expected);
+
+         if (
+            $Expectation instanceof Subassertion
+            && $Expectation->subassertion !== null
+         ) {
+            $Subassertion = clone $this;
+            $Subassertion->expect($Expectation->actual);
+
+            $Expectation->subassertion = $Expectation->subassertion->bindTo(
+               $Subassertion
+            );
+            $Expectation->output();
+ 
+            $Subassertion->assert();
+         }
+
          $failed = $results[$index] !== true;
 
          if ($failed) {

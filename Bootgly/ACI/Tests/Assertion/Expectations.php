@@ -52,12 +52,12 @@ abstract class Expectations
    }
 
    // * Data
-   // # Assertion
-   protected mixed $actual;
-   protected mixed $expected;
+   // ..$actual
+   // ..$expected
+   // ..$expectations
 
    // * Metadata
-   // ..Expectation
+   // ..$expecting
 
 
    /**
@@ -75,11 +75,17 @@ abstract class Expectations
       mixed $expected = Argument::Undefined
    ): self
    {
+      // ?
+      if ($this->actual !== Argument::Undefined) {
+         throw new AssertionError("The actual value is already set.");
+      }
+
+      // !
       $this->actual = $actual;
 
       if ($comparator !== null && $expected !== Argument::Undefined) {
          $this->expecting = true;
-         $this->set(match ($comparator) {
+         $this->push(match ($comparator) {
             // Op
             Op::Equal => new Comparators\Equal($expected),
             Op::NotEqual => new Comparators\NotEqual($expected),
@@ -131,7 +137,7 @@ abstract class Expectations
       }
 
       foreach ($this->actual as $key => $value) {
-         $this->set($Iterator($value, $key));
+         $this->push($Iterator($value, $key));
       }
 
       return $this;

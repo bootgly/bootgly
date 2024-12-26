@@ -24,6 +24,7 @@ trait Snapshots
       get => $this->Snapshot ??= new MemoryDefaultSnapshot;
    }
 
+
    /**
     * Capture a snapshot of the current actual value.
     * 

@@ -10,17 +10,17 @@ return [
    // @ configure
    'separator.line' => 'Advanced API',
    'describe' => 'It should handle API',
-   'skip' => true,
    // @ simulate
    // ...
    // @ test
    'test' => new Assertions(Case: function (): Generator
    {
+      $Assertion = new Assertion(
+         description: 'Cannot access private `asserted` property',
+         fallback: 'Private property `asserted` accessed!'
+      );
+
       try {
-         $Assertion = new Assertion(
-            description: 'Cannot access private `asserted` property',
-            fallback: 'Private property `asserted` accessed!'
-         );
          $Assertion->asserted = false;
 
          yield $Assertion->assert(

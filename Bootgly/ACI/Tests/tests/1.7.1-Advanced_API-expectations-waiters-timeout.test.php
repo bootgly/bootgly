@@ -1,5 +1,6 @@
 <?php
 
+use Bootgly\ACI\Tests\Assertion\Auxiliaries\Type;
 use Generator;
 
 use Bootgly\ACI\Tests\Cases\Assertion;
@@ -13,16 +14,32 @@ return [
    // @ test
    'test' => new Assertions(Case: function (): Generator
    {
-      // Callable
+      // Normal use
+      yield new Assertion(
+         description: 'Validating wait time (normal use)',
+      )
+         ->expect(function () {
+            usleep(10000);
+         })
+         ->to->call()
+         ->to->wait(10000)
+         ->assert();
+
+      // Closure with Subassertion
       $callable = function () {
-         usleep(100); // Simulates a blocking task
+         usleep(1000); // Simulates a blocking task
       };
       yield new Assertion(
-         description: 'Validating wait time',
+         description: 'Validating wait time (Closure with Subassertion)',
       )
          ->expect($callable)
          ->to->call()
-         ->to->wait(1) // Expecting the callable to execute within 1 seconds
+         ->to->wait(function (float $duration): Assertion {
+            $this::$description .= " [{$duration}]";
+
+            return $this
+               ->to->delimit(1000, 10000);
+         })
          ->assert();
    })
 ];

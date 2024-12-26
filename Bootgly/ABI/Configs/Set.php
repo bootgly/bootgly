@@ -14,7 +14,7 @@ namespace Bootgly\ABI\Configs;
  * @method self get()
  * @method self set()
  */
-trait Set // @ Use with enums
+trait Set
 {
    /**
     * @param string $name

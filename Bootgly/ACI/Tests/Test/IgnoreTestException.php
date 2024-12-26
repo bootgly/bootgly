@@ -8,10 +8,21 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\ABI;
+namespace Bootgly\ACI\Tests\Test;
 
 
-interface Configs
+use Exception;
+use Throwable;
+
+
+class IgnoreTestException extends Exception
 {
-   // ...Used to define and indentify subclasses (instance of).
+   public function __construct (
+      string $message = "",
+      int $code = 0,
+      Throwable $previous = null
+      )
+   {
+      parent::__construct($message, $code, $previous);
+   }
 }

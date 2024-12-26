@@ -36,7 +36,7 @@ trait Behaviors
       $namespace = Behaviors::class;
       $class = $expected->name;
 
-      $this->set(match (true) {
+      $this->push(match (true) {
          $expected instanceof Type
             => new ("{$namespace}\Type{$class}"),
          $expected instanceof Value

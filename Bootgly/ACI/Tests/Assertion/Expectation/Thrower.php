@@ -17,21 +17,22 @@ use Bootgly\ACI\Tests\Asserting;
 
 
 /**
- * Thrower are for assertions that throw an exception.
+ * Thrower are for assertions that throw an Throwable.
  * 
  * Use only $actual in the assertion.
- * The $actual is the value to throw an exception.
+ * The $actual is the value to throw an Throwable.
  */
 abstract class Thrower implements Asserting
 {
    // * Config
-   public string|Throwable $exception;
-   public mixed $arguments;
+   public Throwable $expected;
+   /** @var array<mixed> $arguments */
+   public array $arguments;
 
 
-   public function __construct (string|Throwable $exception, mixed ...$arguments)
+   public function __construct (Throwable $expected, array $arguments)
    {
-      $this->exception = $exception;
+      $this->expected = $expected;
       $this->arguments = $arguments;
    }
 }

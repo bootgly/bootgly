@@ -104,7 +104,8 @@ class Highlighter extends Tokens
                'value' => self::_RESET_FORMAT
             ]
          ];
-      } else if ($theme === self::HTML_THEME) {
+      }
+      else if ($theme === self::HTML_THEME) {
          $theme['HTML']['options'] = [
             'prepending' => [
                'type'  => 'string',
@@ -156,7 +157,7 @@ class Highlighter extends Tokens
    /**
     * Colorize tokens in lines
     * 
-    * @param array<array<array<string>>> $token_lines
+    * @param array<int,array<int,array<int,int|string|null>>> $token_lines
     *
     * @return array<int,string>
     */
@@ -169,7 +170,7 @@ class Highlighter extends Tokens
          $line = '';
          foreach ($token_line as $token) {
             [$token_type, $token_value] = $token;
-            $line .= $this->Theme->apply($token_type, $token_value);
+            $line .= $this->Theme->apply((string) $token_type, (string) $token_value);
          }
          $lines[$line_number] = $line;
       }

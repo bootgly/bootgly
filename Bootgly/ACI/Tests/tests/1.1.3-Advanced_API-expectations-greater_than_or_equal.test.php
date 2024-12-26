@@ -10,7 +10,6 @@ use Bootgly\ACI\Tests\Cases\Assertions;
 
 return [
    // @ configure
-   'separator.line' => 'Advanced API',
    'describe' => 'It should compare greater than or equal',
    // @ simulate
    // ...

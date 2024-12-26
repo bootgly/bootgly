@@ -203,7 +203,7 @@ class __String implements Data // Simple class (advanced methods coming soon)
     * 
     * @return object
     */
-   protected static function search (string $string, $search, int $offset = null): object
+   protected static function search (string $string, $search, ?int $offset = null): object
    {
       // !
       $terms = (array) $search;

@@ -8,10 +8,16 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\ABI;
+namespace Bootgly\ACI\Tests\Asserting;
 
 
-interface Configs
+trait Expected
 {
-   // ...Used to define and indentify subclasses (instance of).
+   // * Data
+   /**
+    * The expected value.
+    * 
+    * @var mixed $expected
+    */
+    public protected(set) mixed $expected;
 }

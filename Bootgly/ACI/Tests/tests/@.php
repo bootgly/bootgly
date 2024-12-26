@@ -20,7 +20,7 @@ return [
       '0.3.1-Basic_API-yield.boolean',
 
       // Advanced API
-      #'1.0.0-Advanced_API-asserted',
+      '1.0.0-Advanced_API-asserted',
       '1.0.1-Advanced_API-assert',
       // Advanced API - Expectations
       '1.1.1-Advanced_API-expectations-equal',

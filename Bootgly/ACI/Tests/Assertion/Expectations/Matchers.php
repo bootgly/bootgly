@@ -30,7 +30,7 @@ trait Matchers
    {
       // @ Check if pattern is a valid path (dir or file without checking if it exists)
       if (preg_match('/^(\/[^\/ ]*)+\/?$/', $pattern)) {
-         $this->set(
+         $this->push(
             new Matchers\VariadicDirPath($pattern)
          );
 
@@ -38,7 +38,7 @@ trait Matchers
       }
 
       // Default
-      $this->set(
+      $this->push(
          new Matchers\Regex($pattern)
       );
 

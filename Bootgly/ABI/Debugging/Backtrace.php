@@ -10,7 +10,14 @@
 
 namespace Bootgly\ABI\Debugging;
 
+
+use function array_values;
+use function debug_backtrace;
+use function dirname;
+
 use Bootgly\ABI\Data\__String\Path;
+use Bootgly\ABI\Debugging\Backtrace\Call;
+
 
 class Backtrace
 {
@@ -20,18 +27,31 @@ class Backtrace
    public static bool $counter = true;
 
    // * Data
-   /** @var array<mixed> */
+   /** @var array<int,Call> */
    public array $calls;
 
    // * Metadata
    // @ Last
-   /** @var array<mixed> */
-   private array $trace;
+   /** @var Call */
+   private Call $trace;
    // @ Trace
-   private string $dir;
-   private string $file;
-   private int $line;
-   private array $backtraces;
+   public string $dir {
+      get {
+         return dirname($this->trace->file);
+      }
+   }
+   public string $file {
+      get {
+         return $this->trace->file;
+      }
+   }
+   public int $line {
+      get {
+         return $this->trace->line;
+      }
+   }
+   /** @var array<string> */
+   public private(set) array $backtraces;
 
 
    public function __construct (int $limit = 0)
@@ -41,43 +61,26 @@ class Backtrace
          return;
       }
       // <
-      $calls = \debug_backtrace(self::$options, $limit);
+      $calls = debug_backtrace(self::$options, $limit);
       unSet($calls[0]);
-      $calls = \array_values($calls);
+      $calls = array_values($calls);
       // * Config
       // ...
 
       // * Data
-      $this->calls = $calls;
+      $this->calls = array_map(
+         fn($call) => new Call($call),
+         $calls
+      );
 
       // * Metadata
       // @ Last
-      foreach ($calls as $call) {
+      foreach ($this->calls as $call) {
          $this->trace = $call;
          break;
       }
       // @ Trace
       $this->backtraces = [];
-   }
-   public function __get (string $name): mixed
-   {
-      // * Metadata
-      // @ Last
-      switch ($name) {
-         case 'dir':
-            $this->dir = \dirname($this->trace['file']);
-            return $this->dir;
-         case 'file':
-            $this->file = $this->trace['file'];
-            return $this->file;
-         case 'line':
-            $this->line = $this->trace['line'];
-            return $this->line;
-         case 'backtraces':
-            return $this->backtraces;
-         default:
-            return $this->trace[$name];
-      }
    }
 
    public function dump (): string
@@ -88,7 +91,7 @@ class Backtrace
       // @
       // TODO use Theme
       $calls = $this->calls;
-      if ($calls && $calls[0]['file'] && $calls[0]['line']) {
+      if ($calls && $calls[0]->file && $calls[0]->line) {
          $output .= match (\PHP_SAPI) {
             'cli'  => '',
             default => '<small>',
@@ -96,8 +99,8 @@ class Backtrace
 
          $n = 1;
          foreach ($calls as $call) {
-            $line = $call['line'] ?? null;
-            $file = $call['file'] ?? null;
+            $line = $call->line;
+            $file = $call->file;
 
             if ($file && $line) {
                $file = Path::relativize($file, BOOTGLY_WORKING_DIR);

@@ -32,23 +32,90 @@ class Path // support to FileSystem Paths only (Linux only)
 
    // * Metadata
    protected bool $constructed = false;
-   // _ Type
+   // # Type
    protected string|false $type;
-   // _ Position
+   // # Position
    protected bool $absolute;
    protected bool $relative;
-   // _ Status
+   // # Status
    protected bool $normalized;
-   // _ Parts
+   // # Parts
    // ->path
-   protected string $root;
-   protected string $parent;
-   protected string $current;
+   public string $root {
+      get {
+         $path = $this->path ?? '';
+
+         if ($path === '') {
+            return '';
+         }
+         if ($path[0] !== '/') {
+            return '';
+         }
+
+         $root = strstr($path, DIRECTORY_SEPARATOR, true);
+         $root .= DIRECTORY_SEPARATOR;
+
+         return $this->root = $root;
+      }
+   }
+   public string $parent {
+      get {
+         $parent = '';
+
+         $path = $this->path ?? '';
+         if ($path) {
+            $parent = dirname($path);
+
+            if ($parent[-1] !== DIRECTORY_SEPARATOR) {
+               $parent .= DIRECTORY_SEPARATOR;
+            }
+         }
+
+         return $this->parent = $parent;
+      }
+   }
+   public string $current {
+      get {
+         $current = '';
+
+         $path = $this->path ?? '';
+         if ($path) {
+            $lastNode = strrchr(haystack: $path, needle: DIRECTORY_SEPARATOR);
+            if ($lastNode === false) {
+               return $this->current = $path;
+            }
+
+            $current = substr($lastNode, 1);
+
+            if ($current === '') {
+               $current = basename($path);
+            }
+         }
+
+         return $this->current = $current;
+      }
+   }
    /** @var array<string> */
-   protected array $parts;
+   public array $parts {
+      get {
+         $path = $this->path ?? '';
+
+         return self::split($path);
+      }
+   }
    // ->parts
-   #protected int $indexes;
-   #protected object $Index;
+   public int $indexes {
+      get => count($this->parts);
+   }
+   public object $Index {
+      get {
+         $__Array = new __Array($this->parts);
+
+         return (object) [
+            'Last' => $__Array->Last
+         ];
+      }
+   }
 
 
    public function __construct (string $path = '')
@@ -65,83 +132,23 @@ class Path // support to FileSystem Paths only (Linux only)
          // * Metadata
          case 'constructed':
             return $this->constructed;
-         // _ Type
+         // # Type
          case 'type':
             if ($this->real === false) {
                return false;
             }
             $path = $this->path ?? '';
             return $this->type = (new \SplFileInfo($path))->getType();
-         // _ Position
+         // # Position
          case 'absolute':
             $path = $this->path ?? '';
             return $this->absolute = $path[0] === '/';
          case 'relative':
             $path = $this->path ?? '';
             return $this->relative = $path[0] !== '/';
-         // _ Status
+         // # Status
          case 'normalized':
             return $this->normalized;
-         // _ Parts
-         // ->path
-         case 'root':
-            $path = $this->path ?? '';
-
-            if ($path === '') {
-               return '';
-            }
-            if ($path[0] !== '/') {
-               return '';
-            }
-
-            $root = strstr($path, DIRECTORY_SEPARATOR, true);
-            $root .= DIRECTORY_SEPARATOR;
-
-            return $this->root = $root;
-         case 'parent':
-            $parent = '';
-
-            $path = $this->path ?? '';
-            if ($path) {
-               $parent = dirname($path);
-
-               if ($parent[-1] !== DIRECTORY_SEPARATOR) {
-                  $parent .= DIRECTORY_SEPARATOR;
-               }
-            }
-
-            return $this->parent = $parent;
-         case 'current':
-            $current = '';
-
-            $path = $this->path ?? '';
-            if ($path) {
-               $lastNode = strrchr(haystack: $path, needle: DIRECTORY_SEPARATOR);
-               if ($lastNode === false) {
-                  return $this->current = $path;
-               }
-
-               $current = substr($lastNode, 1);
-
-               if ($current === '') {
-                  $current = basename($path);
-               }
-            }
-
-            return $this->current = $current;
-
-         case 'parts':
-            $path = $this->path ?? '';
-            return self::split($path);
-         // ->parts
-         case 'indexes':
-            return count($this->__get("parts"));
-         case 'Index':
-            $__Array = new __Array($this->__get("parts"));
-
-            return (object) [
-               'Last' => $__Array->Last
-            ];
          default:
             return null;
       }
@@ -160,14 +167,18 @@ class Path // support to FileSystem Paths only (Linux only)
          case 'split':
             return self::split($this->path);
          case 'cut':
+            // @phpstan-ignore-next-line
             return self::cut($this->path, ...$arguments);
          case 'relativize':
+            // @phpstan-ignore-next-line
             return self::relativize($this->path, ...$arguments);
          // ->parts
          case 'join':
-            return self::join($this->__get("parts"), ...$arguments);
+            // @phpstan-ignore-next-line
+            return self::join($this->parts, ...$arguments);
          case 'concatenate':
-            return self::concatenate($this->__get("parts"), ...$arguments);
+            // @phpstan-ignore-next-line
+            return self::concatenate($this->parts, ...$arguments);
          default:
             return null;
       }
@@ -297,8 +308,7 @@ class Path // support to FileSystem Paths only (Linux only)
       // Overwrites all directory separators with the standard separator
       $path = match (DIRECTORY_SEPARATOR) {
          '/' => str_replace('\\', '/', $path),
-         '\\' => str_replace('/', '\\', $path),
-         default => $path // @phpstan-ignore-line
+         '\\' => str_replace('/', '\\', $path)
       };
       // Split the path into parts
       $parts = explode(DIRECTORY_SEPARATOR, $path); // TODO use self::split?

@@ -56,7 +56,7 @@ trait Comparators
             new Comparators\Identical($expected)
       };
 
-      $this->set($expectation);
+      $this->push($expectation);
 
       return $this;
    }

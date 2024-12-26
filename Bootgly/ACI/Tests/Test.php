@@ -30,6 +30,7 @@ use Bootgly\ACI\Tests;
 #use Bootgly\ACI\Tests\Assertion;
 use Bootgly\ACI\Tests\Assertions;
 use Bootgly\ACI\Tests\Cases\Assertion;
+use Bootgly\ACI\Tests\Test\IgnoreTestException;
 
 
 class Test extends Assertions
@@ -279,7 +280,7 @@ class Test extends Assertions
          
          foreach ($Assertions as $Assertion) {
             if ($Assertion === null) { // ignore
-               throw new Exception;
+               throw new IgnoreTestException;
             }
 
             // Assertion instance
@@ -335,7 +336,7 @@ class Test extends Assertions
             $this->fail($AssertionError->getMessage());
          }
       }
-      catch (Exception $Exception) {
+      catch (IgnoreTestException $Exception) {
          // @ ignore
       }
       finally {
