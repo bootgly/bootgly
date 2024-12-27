@@ -56,7 +56,8 @@ return [
       )
          ->expect(true)
          ->to->be(true)
-         ->and->to->be(true)
+         ->and
+         ->to->be(true)
          ->assert();
 
       // # OR
@@ -66,7 +67,8 @@ return [
       )
          ->expect(true)
          ->to->be(false)
-         ->or->to->be(true)
+         ->or
+         ->to->be(true)
          ->assert();
 
       // to be [true] OR [false]
@@ -75,7 +77,8 @@ return [
       )
          ->expect(true)
          ->to->be(true)
-         ->or->to->be(false)
+         ->or
+         ->to->be(false)
          ->assert();
 
       // to be [true] OR [true]
@@ -84,7 +87,8 @@ return [
       )
          ->expect(true)
          ->to->be(true)
-         ->or->to->be(true)
+         ->or
+         ->to->be(true)
          ->assert();
    })
 ];

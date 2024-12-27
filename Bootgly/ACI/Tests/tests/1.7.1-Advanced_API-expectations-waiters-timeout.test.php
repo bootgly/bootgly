@@ -34,7 +34,7 @@ return [
          ->expect($callable)
          ->to->call()
          ->to->wait(function (float $duration): Assertion {
-            $this::$description .= " [{$duration}] ms";
+            $this::$description .= " [{$duration} ms]";
 
             // implicit ->expect($duration)
             return $this

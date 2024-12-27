@@ -235,15 +235,15 @@ class Assertion extends Expectations
          }
          // And
          if ($next === Modifier::And) {
-            $and = $and === null
+            $and = ($and === null && $or === null)
                ? true
-               : throw new AssertionError('The `and` modifier cannot be used more than once!');
+               : throw new AssertionError('The `and` modifier can only be used in isolation (without the `or`) and cannot be used more than once.');
          }
          // Or
          else if ($next === Modifier::Or) {
-            $or = $or === null
+            $or = ($or === null && $and === null)
                ? true
-               : throw new AssertionError('The `or` modifier cannot be used more than once!');
+               : throw new AssertionError('The `or` modifier can only be used in isolation (without the `and`) and cannot be used more than once.');
          }
 
          if ($Expectation instanceof Modifier) {

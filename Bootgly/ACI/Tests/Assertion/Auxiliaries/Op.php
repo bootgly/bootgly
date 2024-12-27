@@ -14,17 +14,17 @@ namespace Bootgly\ACI\Tests\Assertion\Auxiliaries;
  * Enum to be used in comparison of values.
  * e.g. $Assertion->expect($actual, Op::GreaterOrEqual, $expected);
  */
-enum Op
+enum Op: string
 {
-   case Equal;
-   case NotEqual;
+   case Equal = '==';
+   case NotEqual = '!=';
 
-   case Identical;
-   case NotIdentical;
+   case Identical = '===';
+   case NotIdentical = '!==';
 
-   case GreaterThan;
-   case LessThan;
+   case GreaterThan = '>';
+   case LessThan = '<';
 
-   case GreaterThanOrEqual;
-   case LessThanOrEqual;
+   case GreaterThanOrEqual = '>=';
+   case LessThanOrEqual = '<=';
 }
