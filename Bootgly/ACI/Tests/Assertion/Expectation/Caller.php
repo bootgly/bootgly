@@ -18,6 +18,8 @@ use Bootgly\ACI\Tests\Asserting;
  * Callers are for assertions that require a call on $actual.
  * 
  * Use $callable to specify the argument to call on $actual.
+ * 
+ * No output.
  */
 abstract class Caller implements Asserting
 {

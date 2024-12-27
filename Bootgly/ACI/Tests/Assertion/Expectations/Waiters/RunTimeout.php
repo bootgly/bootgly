@@ -33,8 +33,6 @@ class RunTimeout extends Waiter
          throw new AssertionError('The posix extension is required to use the RunTimeout.');
       }
 
-      // It's a shame that PHP doesn't have a native and dedicated Code API for processes.
-
       $PID = pcntl_fork();
       if ($PID == -1) { // Error
          throw new Exception('Could not fork process');

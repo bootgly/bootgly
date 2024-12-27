@@ -20,8 +20,10 @@ use Bootgly\ACI\Tests\Asserting;
 /**
  * Delimiter are for assertions that $actual must be between $expected ($from, $to).
  * 
- * Use both $actual and $expected ($min, $max) in the assertion.
+ * Use both $actual and $expected ($min, $max) as input in the assertion.
  * The $expected is the range ($min, $max) to validate with $actual.
+ * 
+ * No output.
  */
 abstract class Delimiter implements Asserting
 {

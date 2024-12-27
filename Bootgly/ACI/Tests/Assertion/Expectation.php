@@ -11,11 +11,12 @@
 namespace Bootgly\ACI\Tests\Assertion;
 
 
-use Bootgly\ACI\Tests\Asserting\Actual;
-use Bootgly\ACI\Tests\Asserting\Expected;
 use function count;
 use AssertionError;
 
+use Bootgly\ACI\Tests\Asserting\Actual;
+use Bootgly\ACI\Tests\Asserting\Expected;
+use Bootgly\ACI\Tests\Asserting\Modifier;
 use Bootgly\ACI\Tests\Asserting;
 
 
@@ -58,7 +59,7 @@ trait Expectation
          count($this->expectations) - 1
       ];
    }
-   protected function push (Asserting $Expectation): void
+   protected function push (Asserting|Modifier $Expectation): void
    {
       // !
       $not_expecting = $this->expecting === false;

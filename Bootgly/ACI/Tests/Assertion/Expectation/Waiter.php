@@ -20,8 +20,10 @@ use Bootgly\ACI\Tests\Asserting\Subassertion;
 /**
  * Waiter are for assertions that wait for a condition.
  * 
- * Use both $actual and $expected in the assertion.
+ * Use both $actual and $expected as input in the assertion.
  * The $expected is the value to wait for.
+ * 
+ * It has a duration output.
  */
 abstract class Waiter extends Subassertion implements Asserting
 {

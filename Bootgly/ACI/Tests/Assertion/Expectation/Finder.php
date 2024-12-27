@@ -17,8 +17,10 @@ use Bootgly\ACI\Tests\Asserting;
 /**
  * Finder are for assertions that find a needle ($expected) in a haystack ($actual).
  * 
- * Use both $actual and $expected in the assertion.
+ * Use both $actual and $expected as input in the assertion.
  * The $expected is a needle to find in $actual.
+ * 
+ * No output.
  */
 abstract class Finder implements Asserting
 {

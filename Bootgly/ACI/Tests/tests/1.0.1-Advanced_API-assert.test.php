@@ -22,7 +22,7 @@ return [
          ->expect(2, Op::Identical, 2)
          ->assert();
 
-      // be [true] (implicit)
+      // to be [true] (implicit)
       yield new Assertion(
          description: 'to be [true] (implicit)',
       )
@@ -30,7 +30,15 @@ return [
          ->to->be(true)
          ->assert();
 
-      // be [true] (explicit)
+      // not to be [true] (implicit)
+      yield new Assertion(
+         description: 'not to be [true] (implicit)',
+      )
+         ->expect(true)
+         ->not->to->be(false)
+         ->assert();
+
+      // to be [true] (explicit)
       yield new Assertion(
          description: 'to be [true] (explicit)',
       )

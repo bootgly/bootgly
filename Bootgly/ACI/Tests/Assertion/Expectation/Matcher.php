@@ -17,8 +17,10 @@ use Bootgly\ACI\Tests\Asserting;
 /**
  * Matchers are for assertions that match $actual with pattern ($expected).
  * 
- * Use both $actual and $expected in the assertion.
+ * Use both $actual and $expected as input in the assertion.
  * The $expected is a pattern to match with $actual.
+ * 
+ * No output.
  */
 abstract class Matcher implements Asserting
 {

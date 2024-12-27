@@ -19,8 +19,10 @@ use Bootgly\ACI\Tests\Asserting;
 /**
  * Thrower are for assertions that throw an Throwable.
  * 
- * Use only $actual in the assertion.
+ * Use only $actual as input in the assertion.
  * The $actual is the value to throw an Throwable.
+ * 
+ * It has a throwable output.
  */
 abstract class Thrower implements Asserting
 {

@@ -19,6 +19,7 @@ use Bootgly\ABI\Debugging\Data\Vars;
 use Bootgly\ABI\Templates\Template;
 use Bootgly\ACI\Tests\Asserting;
 use Bootgly\ACI\Tests\Asserting\Fallback;
+use Bootgly\ACI\Tests\Asserting\Modifier;
 use Bootgly\ACI\Tests\Asserting\Subassertion;
 use Bootgly\ACI\Tests\Assertion\Comparators\Identical;
 use Bootgly\ACI\Tests\Assertion\Expectation;
@@ -154,6 +155,7 @@ class Assertion extends Expectations
       }
 
       // @ 1️⃣ Define
+      $expectations = $this->expectations;
       // # Metadata
       $this->asserted = true;
       // # Data
@@ -171,7 +173,7 @@ class Assertion extends Expectations
       }
       // $expected
       // ? Check if the `expected` value is defined when using Expectations
-      if ($expected !== Argument::Undefined && $this->expectations) {
+      if ($expected !== Argument::Undefined && $expectations !== null) {
          throw new AssertionError('The `expected` value cannot be defined when using Expectations!');
       }
       $expected = $this->expected === Argument::Undefined
@@ -205,7 +207,7 @@ class Assertion extends Expectations
       // * Metadata
       // expectations
       // ?! Expectations
-      if ($this->expectations === null) {
+      if ($expectations === null) {
          $this->to->be(
             $using instanceof Asserting
             && !$using instanceof Snapshot
@@ -213,10 +215,19 @@ class Assertion extends Expectations
                : $expected
          );
       }
-      // results
+
       $results = [];
+      // ---
+      $false = false;
       // @
-      foreach ($this->expectations as $index => $Expectation) {
+      foreach ($expectations as $index => $Expectation) {
+         if ($Expectation === Modifier::Not) {
+            $false = true;
+            continue;
+         }
+
+         // ---
+
          if ($using instanceof Snapshot) {
             $using->assert($actual, $expected);
          }
@@ -226,6 +237,7 @@ class Assertion extends Expectations
           */
          $results[$index] = $Expectation->assert($actual, $expected);
 
+         // # Subassertion
          if (
             $Expectation instanceof Subassertion
             && $Expectation->subassertion !== null
@@ -241,8 +253,9 @@ class Assertion extends Expectations
             $Subassertion->assert();
          }
 
-         $failed = $results[$index] !== true;
+         $failed = $results[$index] === $false;
 
+         // @ Fail
          if ($failed) {
             // * Data
             $using = $Expectation;

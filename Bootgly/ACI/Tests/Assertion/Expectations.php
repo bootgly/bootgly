@@ -15,6 +15,7 @@ use AssertionError;
 use Closure;
 
 use Bootgly\ABI\Argument;
+use Bootgly\ACI\Tests\Asserting\Modifier;
 use Bootgly\ACI\Tests\Asserting;
 use Bootgly\ACI\Tests\Assertion\Auxiliaries\Op;
 #use Bootgly\ACI\Tests\Assertion\Comparator;
@@ -46,6 +47,20 @@ abstract class Expectations
    public self $to {
       get {
          $this->expecting = true;
+
+         return $this;
+      }
+   }
+   /**
+    * Modifier that negates the expectation.
+    * 
+    * @example expect($value)->not->to->be(true)
+    */ 
+   public self $not {
+      get {
+         $this->expecting = true;
+
+         $this->push(Modifier::Not);
 
          return $this;
       }
