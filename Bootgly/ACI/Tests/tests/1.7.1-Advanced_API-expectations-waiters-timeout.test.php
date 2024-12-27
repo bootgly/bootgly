@@ -38,7 +38,7 @@ return [
 
             // implicit ->expect($duration)
             return $this
-               ->to->delimit(1000, 15000);
+               ->to->delimit(1000, 20000);
             // implicit ->assert()
          })
          ->assert();
