@@ -216,13 +216,37 @@ class Assertion extends Expectations
          );
       }
 
+      // # Assertion
       $results = [];
       // ---
-      $false = false;
+      // # Modifier
+      // value
+      $false = false; // Not modifier
+      // logical
+      $and = null;
+      $or = null;
       // @
       foreach ($expectations as $index => $Expectation) {
+         // # Modifier
+         $next = $expectations[$index + 1] ?? null;
+         // Not
          if ($Expectation === Modifier::Not) {
             $false = true;
+         }
+         // And
+         if ($next === Modifier::And) {
+            $and = $and === null
+               ? true
+               : throw new AssertionError('The `and` modifier cannot be used more than once!');
+         }
+         // Or
+         else if ($next === Modifier::Or) {
+            $or = $or === null
+               ? true
+               : throw new AssertionError('The `or` modifier cannot be used more than once!');
+         }
+
+         if ($Expectation instanceof Modifier) {
             continue;
          }
 
@@ -232,6 +256,7 @@ class Assertion extends Expectations
             $using->assert($actual, $expected);
          }
 
+         // # Assertion
          /**
           * @var Asserting $Expectation
           */
@@ -253,7 +278,17 @@ class Assertion extends Expectations
             $Subassertion->assert();
          }
 
+         // # Result
          $failed = $results[$index] === $false;
+
+         if ($failed && $or === true) {
+            $or = false;
+
+            continue;
+         }
+         else if ($failed && $and === true) {
+            $and = false;
+         }
 
          // @ Fail
          if ($failed) {

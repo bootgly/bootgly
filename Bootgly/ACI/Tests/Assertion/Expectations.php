@@ -66,6 +66,36 @@ abstract class Expectations
       }
    }
 
+   /**
+    * Modifier that combines the expectation with the previous one.
+    * 
+    * @example expect($value)->to->be(true)->and->to->be(true)
+    */
+   public self $and {
+      get {
+         $this->expecting = true;
+
+         $this->push(Modifier::And);
+
+         return $this;
+      }
+   }
+
+   /**
+    * Modifier that combines the expectation with the previous one.
+    * 
+    * @example expect($value)->to->be(false)->or->to->be(true)
+    */
+   public self $or {
+      get {
+         $this->expecting = true;
+
+         $this->push(Modifier::Or);
+
+         return $this;
+      }
+   }
+
    // * Data
    // ..$actual
    // ..$expected
