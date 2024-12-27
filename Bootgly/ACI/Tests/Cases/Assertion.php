@@ -173,7 +173,7 @@ class Assertion extends Expectations
       }
       // $expected
       // ? Check if the `expected` value is defined when using Expectations
-      if ($expected !== Argument::Undefined && $expectations !== null) {
+      if ($expected !== Argument::Undefined && $expectations) {
          throw new AssertionError('The `expected` value cannot be defined when using Expectations!');
       }
       $expected = $this->expected === Argument::Undefined
