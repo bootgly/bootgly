@@ -30,7 +30,7 @@ trait Expectation
    /**
     * The expectations stack.
     * 
-    * @var array<Asserting>
+    * @var array<Asserting|Modifier>
     */
    protected array $expectations = [];
 
@@ -49,9 +49,9 @@ trait Expectation
    protected bool $reset = false;
 
 
-   protected function get (): Asserting|null
+   protected function get (): Asserting|Modifier|null
    {
-      if ($this->expectations === null) {
+      if ($this->expectations === []) {
          return null;
       }
 
@@ -69,13 +69,18 @@ trait Expectation
          throw new AssertionError('You need to use `->to` before set any expectation.');
       }
 
+      // @
+      // * Data
       $this->expectations[] = $Expectation;
-
+      // * Metadata
       $this->expecting = false;
    }
    protected function reset (): void
    {
+      // @
+      // * Data
       $this->expectations = [];
+      // * Metadata
       $this->reset = false;
    }
 }

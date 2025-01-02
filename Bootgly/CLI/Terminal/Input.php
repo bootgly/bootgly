@@ -11,6 +11,19 @@
 namespace Bootgly\CLI\Terminal;
 
 
+use function cli_set_process_title;
+use function fread;
+use function pcntl_fork;
+use function pcntl_signal;
+use function pcntl_signal_dispatch;
+use function pcntl_waitpid;
+use function posix_kill;
+use function register_shutdown_function;
+use function stream_set_blocking;
+use function system;
+use Closure;
+use Throwable;
+
 use Bootgly\ABI\IO\IPC\Pipe;
 
 
@@ -46,9 +59,13 @@ class Input
    {
       stream_set_blocking($this->stream, $blocking);
 
-      $canonical ? system('stty icanon'): system('stty -icanon');
+      $canonical
+         ? system('stty icanon')
+         : system('stty -icanon');
 
-      $echo ? system('stty echo'): system('stty -echo');
+      $echo
+         ? system('stty echo')
+         : system('stty -echo');
 
       return $this;
    }
@@ -60,7 +77,7 @@ class Input
       try {
          $read = @fread($this->stream, $length);
       }
-      catch (\Throwable) {
+      catch (Throwable) {
          $read = false;
       }
 
@@ -71,14 +88,17 @@ class Input
       return $read;
    }
 
-   public function reading (\Closure $CAPI, \Closure $SAPI): void
+   public function reading (Closure $CAPI, Closure $SAPI): void
    {
-      $Pipe = new Pipe(blocking: false);
+      $Pipe = new Pipe;
+      $Pipe->blocking = false;
+      $Pipe->open();
 
       $stream = $this->stream;
 
       // @ Register shutdown function
-      register_shutdown_function(function () use ($stream) {
+      register_shutdown_function(function ()
+      use ($stream) {
          // Set blocking for data stream
          stream_set_blocking($stream, true);
          // Restore terminal settings
@@ -105,7 +125,7 @@ class Input
             // @ Call Terminal Client API passing the Pipe write method
             $CAPI([$this, 'read'], [$Pipe, 'write']);
          }
-         catch (\Throwable) {
+         catch (Throwable) {
             // ...
          }
 
@@ -119,7 +139,7 @@ class Input
             // @ Call Terminal Server API passing the Pipe reading method
             $SAPI([$Pipe, 'reading']);
          }
-         catch (\Throwable) {
+         catch (Throwable) {
             // ...
          }
 

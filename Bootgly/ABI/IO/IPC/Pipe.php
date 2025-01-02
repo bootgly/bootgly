@@ -27,7 +27,7 @@ use Bootgly\ABI\IO\IPC;
 class Pipe implements IPC
 {
    // * Config
-   // ...
+   public bool $blocking;
 
    // * Data
    /** @var array<resource> */
@@ -37,14 +37,35 @@ class Pipe implements IPC
    public bool $paired;
 
 
-   public function __construct (bool $blocking)
+   public function __construct ()
    {
       // * Config
-      // ...
+      $this->blocking = false;
 
       // * Data
-      $this->pair = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+      // $this->pair;
 
+      // * Metadata
+      $this->paired = false;
+   }
+
+   public function open (): bool
+   {
+      // !
+      $pair = stream_socket_pair(
+         STREAM_PF_UNIX,
+         STREAM_SOCK_STREAM,
+         STREAM_IPPROTO_IP
+      );
+      // ?
+      if ($pair === false) {
+         return false;
+      }
+
+      // * Config
+      $blocking = $this->blocking;
+      // * Data
+      $this->pair = $pair;
       // * Metadata
       $this->paired = true;
 
@@ -54,12 +75,15 @@ class Pipe implements IPC
          stream_set_blocking($this->pair[0], $blocking);
          // Write pipe
          stream_set_blocking($this->pair[1], $blocking);
-      } catch (Throwable) {
+      }
+      catch (Throwable) {
          $this->paired = false;
       }
+
+      return $this->paired;
    }
 
-   public function reading (int $length = 1024, ? int $timeout = null): Generator
+   public function reading (int $length = 1024, null|int $timeout = null): Generator
    {
       // * Config
       // ...
@@ -74,7 +98,8 @@ class Pipe implements IPC
 
          try {
             $streams = stream_select($read, $write, $except, 0, $timeout);
-         } catch (Throwable $Throwable) {
+         }
+         catch (Throwable $Throwable) {
             $streams = false;
          }
 
@@ -83,7 +108,8 @@ class Pipe implements IPC
             yield false;
 
             break;
-         } else if ($streams === 0) {
+         }
+         else if ($streams === 0) {
             yield null;
 
             continue;
@@ -94,20 +120,38 @@ class Pipe implements IPC
    }
    public function read (int $length = 1024): string|false
    {
+      if ($length < 1) {
+         return false;
+      }
+
       try {
          $read = @fread($this->pair[0], $length);
-      } catch (Throwable) {
+      }
+      catch (Throwable) {
          $read = false;
       }
 
       return $read;
    }
 
-   public function write (string $data, ? int $length = null): int|false
+   /**
+    * Write data to the write pipe
+    * 
+    * @param string $data
+    * @param null|int $length
+    *
+    * @return int|false
+    */
+   public function write (string $data, null|int $length = null): int|false
    {
+      if ($length !== null && $length < 1) {
+         return false;
+      }
+
       try {
          $written = @fwrite($this->pair[1], $data, $length);
-      } catch (Throwable) {
+      }
+      catch (Throwable) {
          $written = false;
       }
 
@@ -128,7 +172,8 @@ class Pipe implements IPC
          if ($write) {
             $closed1 = fclose($this->pair[1]);
          }
-      } catch (Throwable) {
+      }
+      catch (Throwable) {
          $closed0 = false;
          $closed1 = false;
       }

@@ -32,8 +32,7 @@ class Backtrace
 
    // * Metadata
    // @ Last
-   /** @var Call */
-   private Call $trace;
+   private Call $trace; // @phpstan-ignore-line
    // @ Trace
    public string $dir {
       get {

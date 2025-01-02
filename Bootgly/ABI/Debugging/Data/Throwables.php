@@ -11,7 +11,11 @@
 namespace Bootgly\ABI\Debugging\Data;
 
 
+use const PHP_SAPI;
+use function file_get_contents;
+use function get_class;
 use Throwable;
+use RuntimeException;
 
 use Bootgly\ABI\Data\__String\Escapeable\Text\Formattable;
 use Bootgly\ABI\Data\__String\Path;
@@ -78,7 +82,7 @@ abstract class Throwables implements Debugging
 
    public static function report (Throwable $Throwable): void
    {
-      switch (\PHP_SAPI) {
+      switch (PHP_SAPI) {
          case 'cli':
             $theme = Highlighter::DEFAULT_THEME;
             break;
@@ -88,15 +92,18 @@ abstract class Throwables implements Debugging
       $Highligher = new Highlighter($theme);
 
       // * Data
-      $class = \get_class($Throwable);
+      $class = get_class($Throwable);
       $message = $Throwable->getMessage();
       // @ file
       $file = $Throwable->getFile();
       $line = $Throwable->getLine();
-      $contents = \file_get_contents($file);
+      $contents = file_get_contents($file);
+      if ($contents === false) {
+         throw new RuntimeException("Throwables: could not read file: $file");
+      }
       $file = Path::relativize($file, BOOTGLY_WORKING_DIR);
 
-      switch (\PHP_SAPI) {
+      switch (PHP_SAPI) {
          case 'cli':
             $theme = self::DEFAULT_THEME;
             // @ Init options
@@ -219,10 +226,15 @@ abstract class Throwables implements Debugging
          [$file, $call] = explode(": ", $trace);
 
          $parentesis_position = strrpos($file, '(');
-
-         $line = substr($file, $parentesis_position + 1, -1);
-         $file = substr($file, 0, $parentesis_position);
-         $file = Path::relativize($file, BOOTGLY_WORKING_DIR);
+         if ($parentesis_position === false) {
+            $line = '';
+            $file = '';
+         }
+         else {
+            $line = substr($file, $parentesis_position + 1, -1);
+            $file = substr($file, 0, $parentesis_position);
+            $file = Path::relativize($file, BOOTGLY_WORKING_DIR);
+         }
 
          $result[] = [
             'index' => $index,
@@ -238,6 +250,10 @@ abstract class Throwables implements Debugging
    public static function debug (mixed ...$Throwables): void
    {
       foreach ($Throwables as $Throwable) {
+         if ($Throwable instanceof Throwable === false) {
+            continue;
+         }
+
          self::report($Throwable);
       }
    }

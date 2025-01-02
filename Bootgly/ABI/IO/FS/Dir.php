@@ -11,9 +11,15 @@
 namespace Bootgly\ABI\IO\FS;
 
 
+use function chmod;
+use function fileperms;
+use function intval;
+use function sprintf;
+use function substr;
 use Throwable;
 use RecursiveIteratorIterator;
 use RecursiveDirectoryIterator;
+use SplFileInfo;
 
 use Bootgly\ABI\Data\__String\Path;
 use Bootgly\ABI\IO\FS;
@@ -30,87 +36,65 @@ class Dir implements FS
     * Validate if is directory.
     */
    public bool $validate = true;
+   // # Access
+   /**
+    * The permissions of the directory in octal (0644) format or false if not available.
+    * Note that permissions is not automatically assumed to be an octal value, so to ensure the expected operation, you need to prefix permissions with a zero (0).
+    */
+   public null|int|false $permissions {
+      get {
+         // ?:
+         if (isSet($this->permissions) === true) {
+            return $this->permissions;
+         }
+
+         if (isSet($this->dir) === false) {
+            $this->pathify();
+         }
+
+         $permissions = fileperms($this->dir);
+
+         $permissions = substr(sprintf('%o', $permissions), -4);
+
+         // @ Convert to octal and return
+         return $this->permissions = intval($permissions, 8);
+      }
+      set {
+         if (isSet($this->dir) === false) {
+            $this->pathify();
+         }
+
+         $changed = chmod($this->dir, (int) $value);
+
+         $this->permissions = $changed ? $value : false;
+      }
+   }
 
    // * Data
    public Path $Path;
-   protected readonly string|false $dir;
+   public protected(set) string $dir {
+      get {
+         if (isSet($this->dir) === false) {
+            $this->pathify();
+         }
+
+         return $this->dir;
+      }
+   }
 
    // * Metadata
-   // _ Access
-   protected int|false $permissions; // 0644
-   protected bool $writable;
+   // # Access
+   public bool $writable {
+      get {
+         return is_writable($this->dir);
+      }
+   }
 
 
    public function __construct (string $path)
    {
       // * Data
       $this->Path = new Path($path);
-   }
-   public function __get (string $name): mixed
-   {
-      if ($name === 'dir') {
-         return $this->dir ?? false;
-      }
-      if ( isSet($this->$name) ) {
-         return $this->$name;
-      }
-
-      // @ Construct $this->dir
-      if (isSet($this->dir) === false) {
-         $this->pathify();
-      }
-
-      // Only if $this->dir was successfully constructed
-      $dir = $this->dir ?? false;
-      if ($dir === '' || $dir === false) {
-         return false;
-      }
-
-      switch ($name) {
-         // * Data
-         // ...
-         // * Metadata
-         // _ Access
-         case 'permissions':
-            $permissions = fileperms($dir);
-
-            $permissions = substr(sprintf('%o', $permissions), -4);
-
-            // @ Convert to octal and return
-            return $this->permissions = intval($permissions, 8);
-         case 'writable':
-            return $this->writable = is_writable($dir);
-      }
-
-      return null;
-   }
-   public function __set (string $name, mixed $value): void
-   {
-      // @ Construct $this->dir
-      if (isSet($this->dir) === false) {
-         $this->pathify();
-      }
-
-      // Only if $this->dir was successfully constructed
-      $dir = $this->dir ?? false;
-      if ($dir === '' || $dir === false) {
-         return;
-      }
-
-      switch ($name) {
-         // * Data
-         // ...
-         // * Metadata
-         // _ Access
-         case 'permissions':
-            $changed = chmod($dir, $value);
-
-            if ($changed) {
-               $this->permissions = $value;
-            }
-
-            break;
-      }
    }
    /**
     * @param string $name
@@ -120,20 +104,14 @@ class Dir implements FS
     */
    public function __call (string $name, array $arguments): mixed
    {
-      // Path
-      if (isSet($this->dir) === false) {
-         $this->pathify();
-      }
-
-      // Only if $this->dir was successfully constructed
-      $dir = $this->dir ?? false;
-      if ($dir === '' || $dir === false) {
-         return false;
-      }
-
       switch ($name) {
          case 'scan':
-            return self::scan($dir, ...$arguments);
+            /**
+             * @var bool $recursive
+             */
+            $recursive = $arguments[0] ?? $arguments['recursive'];
+
+            return self::scan($this->dir, $recursive);
          default:
             return null;
       }
@@ -155,12 +133,7 @@ class Dir implements FS
 
    public function __toString (): string
    {
-      // Path
-      if (isSet($this->dir) === false) {
-         $this->pathify();
-      }
-
-      return $this->dir ?? '';
+      return $this->dir;
    }
 
    private function pathify (): string
@@ -237,6 +210,10 @@ class Dir implements FS
          $paths[] = $dir;
 
          foreach ($iterator as $SplFileInfo) {
+            if ($SplFileInfo instanceof SplFileInfo === false) {
+               continue;
+            }
+
             $path = $SplFileInfo->getPathname();
 
             if ( $SplFileInfo->isDir() ) {
@@ -245,8 +222,13 @@ class Dir implements FS
 
             $paths[] = $path;
          }
-      } else {
+      }
+      else {
          $results = scandir($dir);
+
+         if ($results === false) {
+            return [];
+         }
 
          foreach ($results as $relative) {
             if ($relative === '.' || $relative === '..') {

@@ -11,12 +11,17 @@
 namespace Bootgly\ABI\Templates;
 
 
+use Countable;
+
+
 class Iterator
 {
    // * Data
-   /** @var array<mixed>|object */
-   private array|object $iteratee;
-   public ? Iterator $Parent;
+   /** @var array<mixed>|Countable */
+   private array|Countable $iteratee;
+
+   public null|Iterator $Parent;
+
    public int $depth;
    // * Metadata
    public int $index;
@@ -27,11 +32,11 @@ class Iterator
 
 
    /**
-    * @param array<mixed>|object $iteratee
+    * @param array<mixed>|Countable $iteratee
     * @param int $depth
-    * @param Iterator|null $Parent
+    * @param null|Iterator $Parent
     */
-   public function __construct (array|object &$iteratee, int $depth, ? Iterator $Parent = null)
+   public function __construct (array|Countable &$iteratee, int $depth, null|Iterator $Parent = null)
    {
       // * Data
       $this->iteratee = &$iteratee;
@@ -83,6 +88,7 @@ class Iterator
    public function next (): void
    {
       next($this->iteratee);
+
       $this->index++;
    }
 }

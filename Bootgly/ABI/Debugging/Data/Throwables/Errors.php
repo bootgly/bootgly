@@ -11,6 +11,11 @@
 namespace Bootgly\ABI\Debugging\Data\Throwables;
 
 
+use function error_reporting;
+use function file_get_contents;
+use function get_class;
+use ErrorException;
+use RuntimeException;
 use Throwable;
 
 use Bootgly\ABI\Data\__String\Path;
@@ -29,7 +34,7 @@ abstract class Errors extends Throwables
    public static int $verbosity = 3;
 
    // * Data
-   /** @var array<Throwable> */
+   /** @var array<int|string,array<string,int|string>|int|string> */
    protected static array $errors = [];
 
 
@@ -49,7 +54,7 @@ abstract class Errors extends Throwables
          return false;
       }
 
-      throw new \ErrorException($message, 0, $level, $filename, $line);
+      throw new ErrorException($message, 0, $level, $filename, $line);
    }
 
    public static function report (Throwable $Throwable): void
@@ -57,13 +62,17 @@ abstract class Errors extends Throwables
       $Highligher = new Highlighter;
 
       // * Data
-      $class = \get_class($Throwable);
+      $class = get_class($Throwable);
       $code = $Throwable->getCode();
       $message = $Throwable->getMessage();
       // @ file
       $file = $Throwable->getFile();
       $line = $Throwable->getLine();
-      $contents = \file_get_contents($file);
+      $contents = file_get_contents($file);
+      if ($contents === false) {
+         throw new RuntimeException("Errors: could not read file: $file");
+      }
+         
       $file = Path::relativize($file, BOOTGLY_WORKING_DIR);
 
       switch (\PHP_SAPI) {

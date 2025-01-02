@@ -36,9 +36,9 @@ class Template implements Templates
    public readonly string|File $raw;
 
    // * Metadata
-   private ? string $file = null;
+   private null|string $file = null;
    // Cache
-   private ? File $Cache;
+   private File $Cache;
    // Pipeline
    // 1
    // 1.1
@@ -74,6 +74,10 @@ class Template implements Templates
       // $raw
       if ($raw instanceof File) {
          $contents = $raw->contents;
+
+         if ($contents === false) {
+            $contents = null;
+         }
 
          $this->file = $raw->file;
       }
@@ -134,6 +138,10 @@ class Template implements Templates
          return false;
       }
 
+      if (!is_string($compiled)) {
+         return false;
+      }
+
       $this->compiled = $compiled;
 
       return true;
@@ -150,6 +158,10 @@ class Template implements Templates
          );
       }
       catch (Throwable) {
+         return false;
+      }
+
+      if (!is_string($postcompiled)) {
          return false;
       }
 
@@ -229,7 +241,11 @@ class Template implements Templates
       catch (Throwable) {
          @ob_end_clean();
 
-         $output = '';
+         $output = false;
+      }
+
+      if ($output === false) {
+         return false;
       }
 
       return $this->output = $output;

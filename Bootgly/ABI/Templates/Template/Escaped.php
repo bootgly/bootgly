@@ -123,6 +123,10 @@ class Escaped implements Resources
    {
       $message = preg_replace_callback_array(self::$directives, $message);
 
+      if (!is_string($message)) {
+         return '';
+      }
+
       return $message;
    }
 }

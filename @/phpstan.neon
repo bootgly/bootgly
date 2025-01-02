@@ -18,3 +18,4 @@ parameters:
       - identifier: property.private
       - identifier: property.protected
       - identifier: property.readOnlyAssignNotInConstructor
+      - identifier: assign.propertyReadOnly

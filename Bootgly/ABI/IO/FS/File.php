@@ -11,12 +11,16 @@
 namespace Bootgly\ABI\IO\FS;
 
 
+use function feof;
+use function file_get_contents;
+use function is_file;
 use AllowDynamicProperties;
+use SplFileInfo;
 use Throwable;
 
 use Bootgly\ABI\Data\__String\Path;
-use Bootgly\ABI\IO\FS;
 use Bootgly\ABI\IO\FS\File\MIME;
+use Bootgly\ABI\IO\FS;
 
 
 #[AllowDynamicProperties]
@@ -31,7 +35,7 @@ class File implements FS
     * 
     * If the file does not exist, return false.
     */
-   public const READONLY_MODE = 'r';
+   public const string READONLY_MODE = 'r';
    /**
     * Open for reading and writing.
     * 
@@ -39,7 +43,7 @@ class File implements FS
     * 
     * If the file does not exist, return false.
     */
-   public const READ_WRITE_MODE = 'r+';
+   public const string READ_WRITE_MODE = 'r+';
 
    // @ (c)reate
    /**
@@ -50,7 +54,7 @@ class File implements FS
     * If the file does not exist and basedir exists, attempt to create the file.
     * If it exists, it is neither truncated (as opposed to 'w'), nor the call to this function fails (as is the case with 'x').
     */
-   public const CREATE_WRITEONLY_MODE = 'c';
+   public const string CREATE_WRITEONLY_MODE = 'c';
    /**
     * Open for reading and writing.
     * 
@@ -59,7 +63,7 @@ class File implements FS
     * If the file does not exist and basedir exists, attempt to create the file.
     * If it exists, it is neither truncated (as opposed to 'w'), nor the call to this function fails (as is the case with 'x').
     */
-   public const CREATE_READ_WRITE_MODE = 'c+';
+   public const string CREATE_READ_WRITE_MODE = 'c+';
 
    // @ (w)rite
    /**
@@ -70,7 +74,7 @@ class File implements FS
     * 
     * If the file does not exist and basedir exists, attempt to create the file.
     */
-   public const CREATE_TRUNCATE_WRITEONLY_MODE = 'w';
+   public const string CREATE_TRUNCATE_WRITEONLY_MODE = 'w';
    /**
     * Open for writing and reading.
     * ⚠️ Truncate the file to zero length (wipe all file data)!
@@ -79,7 +83,7 @@ class File implements FS
     * 
     * If the file does not exist and basedir exists, attempt to create the file.
     */
-   public const CREATE_TRUNCATE_READ_WRITE_MODE = 'w+';
+   public const string CREATE_TRUNCATE_READ_WRITE_MODE = 'w+';
 
    // @ (a)ppend
    /**
@@ -89,7 +93,7 @@ class File implements FS
     * 
     * If the file does not exist and basedir exists, attempt to create the file.
     */
-   public const CREATE_APPEND_WRITEONLY_MODE = 'a';
+   public const string CREATE_APPEND_WRITEONLY_MODE = 'a';
    /**
     * Open for reading and writing.
     * 
@@ -97,7 +101,7 @@ class File implements FS
     * 
     * If the file does not exist and basedir exists, attempt to create the file.
     */
-   public const CREATE_APPEND_READ_WRITE_MODE = 'a+';
+   public const string CREATE_APPEND_READ_WRITE_MODE = 'a+';
 
    // @ e(x)clusive
    /**
@@ -108,7 +112,7 @@ class File implements FS
     * If the file exists, the opening will fail. 
     * If the file does not exist and basedir exists, attempt to create the file.
     */
-   public const CREATE_EXCLUSIVE_WRITEONLY_MODE = 'x';
+   public const string CREATE_EXCLUSIVE_WRITEONLY_MODE = 'x';
    /**
     * Open for reading and writing.
     * 
@@ -117,13 +121,13 @@ class File implements FS
     * If the file exists, the opening will fail. 
     * If the file does not exist and basedir exists, attempt to create the file.
     */
-   public const CREATE_EXCLUSIVE_READ_WRITE_MODE = 'x+';
+   public const string CREATE_EXCLUSIVE_READ_WRITE_MODE = 'x+';
 
    // @ read methods
-   public const DEFAULT_READ_METHOD = 'fread';
-   public const INCLUDE_READ_METHOD = 'include';
-   public const CONTENTS_READ_METHOD = 'file_get_contents';
-   public const READFILE_READ_METHOD = 'readfile';
+   public const string DEFAULT_READ_METHOD = 'fread';
+   public const string INCLUDE_READ_METHOD = 'include';
+   public const string CONTENTS_READ_METHOD = 'file_get_contents';
+   public const string READFILE_READ_METHOD = 'readfile';
 
 
    // * Config
@@ -139,45 +143,257 @@ class File implements FS
    // * Data
    public readonly Path $Path;
    public readonly Dir $Basedir;
-   protected readonly string|false $file;
+   public protected(set) string $file {
+      get {
+         if (isSet($this->file) === false) {
+            $this->pathify();
+         }
+
+         return $this->file;
+      }
+   }
 
    // * Metadata
-   /** @var resource|false|null */
-   private $handler;
+   /** @var resource|null */
+   private $handler = null;
 
-   protected bool $exists;           // bool true|false
+   public protected(set) bool $exists {
+      get {
+         if (isSet($this->exists) === false) {
+            $this->exists = is_file($this->file);
+         }
 
-   protected bool $EOF;              // bool true|false
-   protected int|false $size;        // int 51162 (bytes)
-   protected int|false $lines;       // int 15
+         return $this->exists;
+      }
+   }
+
+   public protected(set) null|bool $EOF {
+      get {
+         if ($this->handler === null) {
+            return null;
+         }
+
+         if (isSet($this->EOF) === false) {
+            $this->EOF = feof($this->handler);
+         }
+
+         return $this->EOF;
+      }
+   }
+   /**
+    * The size of the file in bytes or null if not available.
+    * @var null|int<0,max>
+    */
+   public protected(set) null|int $size {
+      get {
+         if (isSet($this->size) === false) {
+            /** @var false|int<0,max> $size */
+            $size = new SplFileInfo($this->file)->getSize();
+
+            $this->size = ($size !== false) ? $size : null;
+         }
+
+         return $this->size;
+      }
+      set {
+         $this->size = $value;
+      }
+   }
+   public null|int $lines {
+      get {
+         // !
+         $file = $this->file;
+         $size = $this->size;
+
+         // @
+         if ($size < 100000) { // if file < 100kb use + perf method
+            $lines_array = @file($file);
+            $lines_count = ($lines_array !== false)
+               ? count($lines_array)
+               : null;
+         }
+         else { // else use more memory-efficient method
+            $handler = $this->handler;
+
+            if ($handler) {
+               $lines_count = 0;
+
+               while (@fgets($handler) !== false) {
+                  $lines_count++;
+               }
+            }
+            else {
+               $lines_count = null;
+            }
+         }
+
+         return $lines_count;
+      }
+   }
    // @ Path
    protected string $basename;       // /path/to/foo.html -> foo.html
    protected string $name;           // foo.html -> 'foo'
    protected string $extension;      // foo.html -> 'html'
    protected string $parent;         // /path/to/foo.html -> /path/to/
-   // _ Access
-   protected int|false $permissions; // 0644
-   protected bool $readable;         // true | false
-   protected bool $executable;       // true | false
-   protected bool $writable;         // true | false
-   protected int|false $owner;       // 0
-   protected int|false $group;       // 0
-   // _ Content
-   protected string|false $contents;
-   # < foo.jpg
-   protected object|false $MIME;     // > object (real MIME based content)
-   protected string|false $format;   // > 'image'
-   protected string|false $subtype;  // > 'jpeg'
-   // _ Stat
-   protected int|null $accessed;    // accessed file (timestamp)
-   protected int|null $created;     // only Windows / in Unix is changed inode
-   protected int|null $modified;     // modified content (timestamp)
-   // _ System
-   protected int|false $inode;       // 
-   protected string|false $link;     // 
-   // _ Event
+   // # Access
+   public protected(set) null|int $permissions {
+      get {
+         if (isSet($this->permissions) === false) {
+            $this->permissions = new SplFileInfo($this->file)->getPerms() | null;
+         }
+
+         return $this->permissions;
+      }
+   }
+   public protected(set) bool $readable {
+      get {
+         if (isSet($this->readable) === false) {
+            $this->readable = new SplFileInfo($this->file)->isReadable();
+         }
+
+         return $this->readable;
+      }
+   }
+   public protected(set) bool $executable {
+      get {
+         if (isSet($this->executable) === false) {
+            $this->executable = new SplFileInfo($this->file)->isExecutable();
+         }
+
+         return $this->executable;
+      }
+   }
+   public protected(set) bool $writable {
+      get {
+         if (isSet($this->writable) === false) {
+            $this->writable = new SplFileInfo($this->file)->isWritable();
+         }
+
+         return $this->writable;
+      }
+   }
+   public protected(set) null|int $owner {
+      get {
+         if (isSet($this->owner) === false) {
+            $this->owner = new SplFileInfo($this->file)->getOwner() | null;
+         }
+
+         return $this->owner;
+      }
+   }
+   public protected(set) null|int $group {
+      get {
+         if (isSet($this->group) === false) {
+            $this->group = new SplFileInfo($this->file)->getGroup() | null;
+         }
+
+         return $this->group;
+      }
+   }
+   // # Content
+   public string|false $contents {
+      get {
+         if (isSet($this->contents) === false) {
+            $this->contents = $this->file
+               ? file_get_contents($this->file, false)
+               : false;
+         }
+
+         return $this->contents;
+      }
+      set {
+         $contents = $this->file
+            ? file_put_contents($this->file, $value)
+            : false;
+
+         if ($contents !== false) {
+            $this->written = true;
+
+            $this->size = null;
+
+            $this->accessed = null;
+            $this->created = null;
+            $this->modified = null;
+         }
+         else {
+            $this->written = false;
+         }
+
+         $this->contents = $value;
+      }
+   }
+   public protected(set) null|MIME $MIME {
+      get {
+         if (isSet($this->MIME) === false) {
+            $this->MIME = $this->file
+               ? new MIME($this->file)
+               : null;
+         }
+
+         return $this->MIME;
+      }
+   }
+   public null|string $format {
+      get {
+         return $this->MIME?->format;
+      }
+   }
+   public null|string $subtype {
+      get {
+         return $this->MIME?->subtype;
+      }
+   }
+   // # Stat
+   public protected(set) null|int $accessed {
+      get {
+         if (isSet($this->accessed) === false) {
+            $this->accessed = new SplFileInfo($this->file)->getATime() | null;
+         }
+
+         return $this->accessed;
+      }
+   }
+   public protected(set) null|int $created {
+      get {
+         if (isSet($this->created) === false) {
+            $this->created = new SplFileInfo($this->file)->getCTime() | null;
+         }
+
+         return $this->created;
+      }
+   }
+   public protected(set) null|int $modified {
+      get {
+         if (isSet($this->modified) === false) {
+            $this->modified = new SplFileInfo($this->file)->getMTime() | null;
+         }
+
+         return $this->modified;
+      }
+   }
+   // # System
+   public protected(set) null|int $inode {
+      get {
+         if (isSet($this->inode) === false) {
+            $this->inode = new SplFileInfo($this->file)->getInode() | null;
+         }
+
+         return $this->inode;
+      }
+   }
+   public protected(set) null|string $link {
+      get {
+         if (isSet($this->link) === false) {
+            // @phpstan-ignore-next-line
+            $this->link = new SplFileInfo($this->file)->getLinkTarget() | null;
+         }
+
+         return $this->link;
+      }
+   }
+   // # Event
    // @ write
-   protected ? bool $written = null;
+   protected null|bool $written = null;
 
 
    public function __construct (string $path)
@@ -188,9 +404,6 @@ class File implements FS
    }
    public function __get (string $name): mixed
    {
-      if ($name === 'file') {
-         return $this->file ?? $this->pathify();
-      }
       if ( isSet($this->$name) ) {
          return $this->$name;
       }
@@ -202,15 +415,19 @@ class File implements FS
 
                return $this->basename = $current;
             case 'name':      # > foo
+               /** @var string $basename */
                $basename = $this->basename ?? $this->__get('basename');
+               $length = strrpos($basename, '.');
+
                $name = substr(
                   string: $basename,
                   offset: 0,
-                  length: strrpos($basename, '.')
+                  length: ($length !== false) ? $length : null
                );
 
                return $this->name = $name;
             case 'extension': # > php
+               /** @var string $basename */
                $basename = $this->basename ?? $this->__get('basename');
                $extension = '';
 
@@ -227,137 +444,20 @@ class File implements FS
          }
       }
 
-      // @ Construct $this->file
-      if (isSet($this->file) === false) {
-         $this->pathify();
-      }
-
       // Only if $this->file was successfully constructed
       $file = $this->file ?? false;
       if ($file === '' || $file === false) {
          return false;
       }
 
-      switch ($name) {
-         // * Data
-         case 'handler':
-            return $this->handler;
-         case 'contents':
-            return $this->contents = file_get_contents($file, false);
-
-         // * Metadata
-         case 'exists':
-            return is_file($file);
-
-         case 'EOF':
-            return \feof($this->handler);
-         case 'size':
-            return $this->size = (new \SplFileInfo($file))->getSize();
-         case 'lines':
-            $size = $this->size ?? $this->__get('size');
-
-            if ($size < 100000) { // if file < 100kb use + perf method
-               $linesArray = @file($file);
-               $linesCount = ($linesArray !== false) ? count($linesArray): false;
-            } else { // else use more memory-efficient method
-               $handler = @fopen($file, 'r');
-
-               if ($handler) {
-                  $linesCount = 0;
-
-                  while (@fgets($handler) !== false) {
-                     $linesCount++;
-                  }
-
-                  @fclose($handler);
-               } else {
-                  $linesCount = false;
-               }
-            }
-
-            return $this->lines = $linesCount;
-         // _ Access
-         case 'permissions':
-            return $this->permissions = (new \SplFileInfo($file))->getPerms();
-         case 'readable':
-            return $this->readable = (new \SplFileInfo($file))->isReadable();
-         case 'executable':
-            return $this->executable = (new \SplFileInfo($file))->isExecutable();
-         case 'writable':
-            return $this->writable = (new \SplFileInfo($file))->isWritable();
-         case 'owner':
-            return $this->owner = (new \SplFileInfo($file))->getOwner();
-         case 'group':
-            return $this->group = (new \SplFileInfo($file))->getGroup();
-         // _ Content
-         case 'MIME':
-            return $this->MIME = new MIME($file);
-         case 'format':
-            $MIME = $this->MIME ?? $this->__get('MIME');
-            return $MIME->format;
-         case 'subtype':
-            $MIME = $this->MIME ?? $this->__get('MIME');
-            return $MIME->subtype;
-         // _ Stat
-         case 'accessed':
-            return $this->accessed = (new \SplFileInfo($file))->getATime() | null;
-         case 'created':
-            return $this->created = (new \SplFileInfo($file))->getCTime() | null;
-         case 'modified':
-            return $this->modified = (new \SplFileInfo($file))->getMTime() | null;
-         // _ System
-         case 'inode':
-            return $this->inode = (new \SplFileInfo($file))->getInode();
-         case 'link':
-            return $this->link = (new \SplFileInfo($file))->getLinkTarget();
-      }
-
       return null;
-   }
-   public function __set (string $name, mixed $value): void
-   {
-      if (isSet($this->file) === false) {
-         $this->pathify();
-      }
-
-      // Only if $this->file was successfully constructed
-      $file = $this->file ?? false;
-      if ($file === '' || $file === false) {
-         return;
-      }
-
-      switch ($name) {
-         // * Data
-         case 'contents':
-            $contents = file_put_contents($file, $value);
-
-            if ($contents !== false) {
-               $this->written = true;
-
-               unset($this->size);
-               unset($this->lines);
-
-               unset($this->accessed);
-               unset($this->created);
-               unset($this->modified);
-            } else {
-               $this->written = false;
-            }
-
-            $this->contents = $contents;
-      }
    }
    public function __toString (): string
    {
-      // Path
-      if (isSet($this->file) === false) {
-         $this->pathify();
-      }
-
-      return $this->file ?? '';
+      return $this->file;
    }
 
-   private function pathify (): string|false
+   private function pathify (): string
    {
       // ?
       $path = $this->Path->path;
@@ -390,22 +490,24 @@ class File implements FS
          }
       }
 
-      return $this->file = false;
+      return $this->file = '';
    }
 
    /**
     * Creates a file (touch).
     *
     * @param bool $recursively Whether to create base directories if they don't exist.
+    *
     * @return bool Returns true if the file was successfully created, false otherwise.
     */
    public function create (bool $recursively = true): bool
    {
-      $Path = $this->Path;
-
+      // !
       // * Data
       // Path
-      $filename = $this->file ?? $Path->path;
+      $filename = ($this->file !== '')
+         ? $this->file
+         : $this->Path->path;
       // * Metadata
       $dir  = null;
       $file = null;
@@ -416,8 +518,13 @@ class File implements FS
       }
 
       try {
-         is_file($filename) ? ($this->file = $filename): ($file = touch($filename));
-      } catch (Throwable) {
+         if (is_file($filename) === false) {
+            $file = touch($filename); // Create file
+
+            $this->file = $filename;
+         }
+      }
+      catch (Throwable) {
          $file = false;
       }
 
@@ -427,6 +534,7 @@ class File implements FS
     * Opens a file in the specified mode or read-only mode by default.
     *
     * @param string $mode The mode in which to open the file (optional, default: read-only mode).
+    *
     * @return false|resource Returns the file handler on success, or false on failure.
     */
    public function open (string $mode = self::READONLY_MODE)
@@ -438,7 +546,8 @@ class File implements FS
       if ($this->handler === null && $filename) {
          try {
             $handler = @fopen($filename, $mode);
-         } catch (Throwable) {
+         }
+         catch (Throwable) {
             $handler = false;
          }
       }
@@ -447,9 +556,7 @@ class File implements FS
       if ($handler !== false) {
          $this->handler = $handler;
 
-         if (isSet($this->file) === false) {
-            $this->pathify();
-         }
+         $this->file; // @phpstan-ignore-line
       }
 
       return $handler;
@@ -461,22 +568,33 @@ class File implements FS
     *
     * @param string $method The method to use for reading (default: DEFAULT_READ_METHOD).
     * @param int $offset The offset to start reading from (default: 0).
-    * @param int|null $length The number of bytes to read (default: null, reads until the end).
+    * @param int<0,max>|null $length The number of bytes to read (default: null, reads until the end).
     *
     * @return string|int|false The read data as a string, number of bytes read as an integer, or false on failure.
     */
-   public function read (string $method = self::DEFAULT_READ_METHOD, int $offset = 0, ? int $length = null): string|int|false
+   public function read (
+      string $method = self::DEFAULT_READ_METHOD,
+      int $offset = 0,
+      null|int $length = null
+   ): string|int|false
    {
+      // ?
       if ( ! $this->file ) {
+         return false;
+      }
+      // ? Check offset and length
+      if ($offset < 0) {
+         return false;
+      }
+      if ($length !== null && !$length) {
          return false;
       }
 
       // * Data
+      /** @var string|false $data */
       $data = false;
       // * Metadata
-      // @
-      $size = ($offset === 0 && $length) ? $length : null;
-      $filterable = ($method !== self::CONTENTS_READ_METHOD) && ($offset > 0 || $length > 0);
+      $filterable = ($method !== self::CONTENTS_READ_METHOD) && ($offset > 0 || $length);
 
       // @
       // Methods with valid handler
@@ -492,50 +610,86 @@ class File implements FS
                   })($this->file);
 
                   $data = ob_get_clean();
-               } catch (Throwable) {
+               }
+               catch (Throwable) {
                   $data = false;
                }
 
                break;
             case self::CONTENTS_READ_METHOD:
-               $data = file_get_contents($this->file, false, null, $offset, $length);
+               $data = file_get_contents(
+                  $this->file,
+                  false,
+                  null,
+                  $offset,
+                  $length
+               );
+
                break;
             case self::READFILE_READ_METHOD:
-               $data = readfile($this->file);
+               readfile($this->file);
+
+               $filterable = false;
+
                break;
             default:
                try {
+                  $size = null;
+                  if ($offset === 0 && $length) {
+                     $size = $length;
+                  }
+                  if ($size === null) {
+                     $size = $this->size;
+                  }
+
+                  if ($size === null || $size < 1) {
+                     return false;
+                  }
+
                   $data = @fread(
                      $this->handler,
-                     $size ?? $this->size ?? $this->__get('size')
+                     $size
                   );
-               } catch (Throwable) {
+
+                  $length ??= $this->size;
+               }
+               catch (Throwable) {
                   $data = false;
                }
          }
       }
 
-      // :
+      if ($data === false) {
+         return false;
+      }
+
+      // ?:
       if ($filterable) {
          return substr($data, $offset, $length);
       }
-
+      // :
       return $this->contents = $data;
    }
    /**
     * Write data to the file handler.
     *
     * @param string $data The data to be written to the file.
-    * @param int|null $length [optional] If the length argument is given,
+    * @param null|int<0,max> $length [optional] If the length argument is given,
     *                 writing will stop after length bytes have been written or the end of string is reached,
     *                 whichever comes first.
+    *
     * @return int|false The number of bytes written, or false on failure.
     */
-   public function write (string $data, ? int $length = null): int|false
+   public function write (string $data, null|int $length = null): int|false
    {
       try {
+         if ($this->handler === null) {
+            return false;
+         }
+
          $bytes = @fwrite($this->handler, $data, $length);
-      } catch (Throwable) {
+      }
+      catch (Throwable) {
          $bytes = false;
       }
 
@@ -558,8 +712,13 @@ class File implements FS
    {
       // @
       try {
+         if ($this->handler === null) {
+            return true;
+         }
+
          @fclose($this->handler);
-      } catch (Throwable) {
+      }
+      catch (Throwable) {
          return false;
       }
 
@@ -590,7 +749,8 @@ class File implements FS
       // @
       try {
          @unlink($filename);
-      } catch (Throwable) {
+      }
+      catch (Throwable) {
          return false;
       }
 

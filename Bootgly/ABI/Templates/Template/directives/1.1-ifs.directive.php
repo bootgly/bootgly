@@ -12,6 +12,10 @@ return [
       // @ Replace Short Syntax to !empty(...)
       $conditional = preg_replace('/\$(.*?)\?/sx', '!empty(\$${1})', $conditional);
 
+      if (!is_string($conditional)) {
+         return ''; // TODO: use custom exception
+      }
+
       return <<<PHP
       <?php if ({$conditional}): ?>
       PHP;

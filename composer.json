@@ -36,7 +36,7 @@
       "ext-pdo": "*"
    },
    "require-dev": {
-      "phpstan/phpstan": "^2.0",
+      "phpstan/phpstan": "^2.1",
       "marc-mabe/php-enum-phpstan": "^3.0"
    }
 }

@@ -9,6 +9,13 @@ return [
       $iterable = trim($matches[2], '()');
 
       preg_match('/\$(.*) +as *(.*)$/is', $iterable, $_matches);
+
+      // ?
+      if (!isset($_matches[1], $_matches[2])) {
+         return ''; // TODO: use custom exception
+      }
+
+      // @
       $iteratee = $_matches[1];
       $iteration = $_matches[2];
 

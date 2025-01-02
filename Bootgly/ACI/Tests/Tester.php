@@ -11,6 +11,7 @@
 namespace Bootgly\ACI\Tests;
 
 
+use function is_array;
 use Exception;
 
 use Bootgly\ACI\Logs\LoggableEscaped;
@@ -125,8 +126,12 @@ class Tester extends Tests
          }
 
          $specifications = @include "{$dir}{$test}.test.php";
+         // ?
          if ($test[0] !== '_' && $specifications === false) {
             throw new Exception("Test case not found: \n {$dir}{$test}");
+         }
+         if (is_array($specifications) === false) {
+            throw new Exception("Test case must return an array: \n {$dir}{$test}");
          }
 
          // * Metadata (Test Case)

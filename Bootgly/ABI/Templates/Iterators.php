@@ -12,6 +12,7 @@ namespace Bootgly\ABI\Templates;
 
 
 use function array_pop;
+use Countable;
 
 
 class Iterators
@@ -24,11 +25,11 @@ class Iterators
 
 
    /**
-    * @param array<mixed>|object $iteratee
+    * @param array<mixed>|Countable $iteratee
     *
     * @return Iterator
     */
-   public static function queue (array|object &$iteratee): Iterator
+   public static function queue (array|Countable &$iteratee): Iterator
    {
       self::$depth++;
 

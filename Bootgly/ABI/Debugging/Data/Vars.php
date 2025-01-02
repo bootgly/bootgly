@@ -49,6 +49,7 @@ class Vars implements Debugging
    protected static bool $CLI = false;
    // >> Output
    protected static string $Output = '';
+   /** @var array<string> */
    protected static array $backtraces = [];
    protected static string $vars = '';
 
@@ -111,6 +112,7 @@ class Vars implements Debugging
             // color
             $color = '#4e9a06';
             // dump
+            /** @var int */
             $dump = $value;
             if (self::$CLI) {
                $dump = "\033[33m" . $dump . "\033[0m";
@@ -129,6 +131,7 @@ class Vars implements Debugging
             // color
             $color = "#f57900";
             // dump
+            /** @var float */
             $dump = $value;
             if (self::$CLI) {
                $dump = "\033[33m" . $dump . "\033[0m";
@@ -142,6 +145,7 @@ class Vars implements Debugging
             $type = 'string';
             $prefix = "<small>$type</small> ";
             // info
+            /** @var string $value */
             $length = (string) strlen($value);
             $length = match (self::$CLI) {
                false => $length,
@@ -166,6 +170,7 @@ class Vars implements Debugging
             $type = 'array';
             $prefix = "<b>$type</b>";
             // info
+            /** @var array<mixed> $value */
             $size = (string) count($value);
             $size = match (self::$CLI) {
                false => $size,
@@ -220,6 +225,7 @@ class Vars implements Debugging
             $type = 'resource';
             $prefix = "<b>$type</b>";
             // info
+            /** @var resource $value */
             $info = ' (' . get_resource_type($value) . ')';
 
             // @ value

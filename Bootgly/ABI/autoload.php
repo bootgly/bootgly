@@ -116,7 +116,7 @@ namespace {
 
    // mb_convert_case
    if (!\function_exists('mb_convert_case')) {
-      function mb_convert_case(string $string, int $mode, string|null $encoding = 'UTF-8'): string
+      function mb_convert_case(string $string, int $mode, string|null $encoding = 'UTF-8'): string|false
       {
          if ($string === '') {
             return '';
@@ -132,6 +132,10 @@ namespace {
          }
          else {
             $string = \iconv($encoding, 'UTF-8//IGNORE', $string);
+         }
+
+         if ($string === false) {
+            return false;
          }
 
          if ($mode === \MB_CASE_TITLE) {

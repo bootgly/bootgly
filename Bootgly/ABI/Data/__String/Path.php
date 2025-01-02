@@ -11,6 +11,8 @@
 namespace Bootgly\ABI\Data\__String;
 
 
+use SplFileInfo;
+
 use Bootgly\ABI\Data\__Array;
 
 
@@ -28,7 +30,7 @@ class Path // support to FileSystem Paths only (Linux only)
    public bool $real = false;
 
    // * Data
-   protected string $path;
+   public protected(set) string $path = '';
 
    // * Metadata
    protected bool $constructed = false;
@@ -43,7 +45,11 @@ class Path // support to FileSystem Paths only (Linux only)
    // ->path
    public string $root {
       get {
-         $path = $this->path ?? '';
+         if (isSet($this->root) === true) {
+            return $this->root;
+         }
+
+         $path = $this->path;
 
          if ($path === '') {
             return '';
@@ -60,9 +66,13 @@ class Path // support to FileSystem Paths only (Linux only)
    }
    public string $parent {
       get {
+         if (isSet($this->parent) === true) {
+            return $this->parent;
+         }
+
          $parent = '';
 
-         $path = $this->path ?? '';
+         $path = $this->path;
          if ($path) {
             $parent = dirname($path);
 
@@ -76,9 +86,13 @@ class Path // support to FileSystem Paths only (Linux only)
    }
    public string $current {
       get {
+         if (isSet($this->current) === true) {
+            return $this->current;
+         }
+
          $current = '';
 
-         $path = $this->path ?? '';
+         $path = $this->path;
          if ($path) {
             $lastNode = strrchr(haystack: $path, needle: DIRECTORY_SEPARATOR);
             if ($lastNode === false) {
@@ -98,7 +112,7 @@ class Path // support to FileSystem Paths only (Linux only)
    /** @var array<string> */
    public array $parts {
       get {
-         $path = $this->path ?? '';
+         $path = $this->path;
 
          return self::split($path);
       }
@@ -127,8 +141,6 @@ class Path // support to FileSystem Paths only (Linux only)
    public function __get (string $key): mixed
    {
       switch ($key) {
-         case 'path':
-            return $this->path ?? '';
          // * Metadata
          case 'constructed':
             return $this->constructed;
@@ -137,14 +149,14 @@ class Path // support to FileSystem Paths only (Linux only)
             if ($this->real === false) {
                return false;
             }
-            $path = $this->path ?? '';
-            return $this->type = (new \SplFileInfo($path))->getType();
+            $path = $this->path;
+            return $this->type = (new SplFileInfo($path))->getType();
          // # Position
          case 'absolute':
-            $path = $this->path ?? '';
+            $path = $this->path;
             return $this->absolute = $path[0] === '/';
          case 'relative':
-            $path = $this->path ?? '';
+            $path = $this->path;
             return $this->relative = $path[0] !== '/';
          // # Status
          case 'normalized':
@@ -197,7 +209,7 @@ class Path // support to FileSystem Paths only (Linux only)
    }
    public function __toString (): string
    {
-      return $this->path ?? '';
+      return $this->path;
    }
    /**
     * Construct a path
@@ -275,7 +287,7 @@ class Path // support to FileSystem Paths only (Linux only)
       $pattern = str_replace(
          search: '%',
          replace: $pattern,
-         subject: ($this->path ?? '') . $path
+         subject: "{$this->path}{$path}"
       );
 
       $paths = glob($pattern);

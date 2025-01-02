@@ -24,8 +24,8 @@ abstract class Shutdown implements Debugging
    #public static bool $return = false;
    #public static bool $exit = true;
    // * Data
-   /** @var array<string>|null */
-   protected static ? array $error = [];
+   /** @var array<string,int|string>|null */
+   protected static ?array $error = [];
 
 
    public static function collect (): bool
