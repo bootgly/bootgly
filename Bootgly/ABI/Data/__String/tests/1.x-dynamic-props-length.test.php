@@ -39,11 +39,11 @@ return [
          description: 'String with special characters length: ' . $stringSpecialChars->length
       );
 
-      // UTF-16 encoded string
-      $stringUTF16 = new __String('Bootgly é eficiente!', 'UTF-16');
+      // UTF-8 encoded string
+      $stringUTF8 = new __String('Bootgly é eficiente!', 'UTF-8');
       yield assert(
-         assertion: $stringUTF16->length === 11,
-         description: 'UTF-16 encoded string length: ' . $stringUTF16->length
+         assertion: $stringUTF8->length === 20,
+         description: 'UTF-8 encoded string length: ' . $stringUTF8->length
       );
 
       // Multibyte characters string

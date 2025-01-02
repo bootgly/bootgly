@@ -20,15 +20,15 @@ return [
       // @ Neutral
       $File2 = new File('');
       yield assert(
-         assertion: $File2->size === false,
-         description: 'File #2 should have size === false!'
+         assertion: $File2->size === null,
+         description: 'File #2 should have size === null!'
       );
 
       // @ Invalid
       $File3 = new File(__DIR__ . '/1.1.3-fake.test.php');
       yield assert(
-         assertion: $File3->size === false,
-         description: 'File #3 should have size === false!'
+         assertion: $File3->size === null,
+         description: 'File #3 should have size === null!'
       );
    }
 ];

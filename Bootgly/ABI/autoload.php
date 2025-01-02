@@ -116,7 +116,7 @@ namespace {
 
    // mb_convert_case
    if (!\function_exists('mb_convert_case')) {
-      function mb_convert_case(string $string, int $mode, string|null $encoding = 'UTF-8'): string|false
+      function mb_convert_case(string $string, int $mode, string|null $encoding = 'UTF-8'): string
       {
          if ($string === '') {
             return '';
@@ -135,10 +135,10 @@ namespace {
          }
 
          if ($string === false) {
-            return false;
+            return '';
          }
 
-         if ($mode === \MB_CASE_TITLE) {
+         if ($mode === 2) {
             static $titleRegexp = null;
 
             if ($titleRegexp === null) {
@@ -146,14 +146,14 @@ namespace {
             }
 
             $string = \preg_replace_callback($titleRegexp, function (array $string): string {
-               $uppercase = \mb_convert_case($string[1], \MB_CASE_UPPER, 'UTF-8');
-               $lowercase = \mb_convert_case($string[2], \MB_CASE_LOWER, 'UTF-8');
+               $uppercase = \mb_convert_case($string[1], 0, 'UTF-8');
+               $lowercase = \mb_convert_case($string[2], 1, 'UTF-8');
 
                return "{$uppercase}{$lowercase}";
             }, (string) $string);
          }
          else {
-            if ($mode === \MB_CASE_UPPER) {
+            if ($mode === 0) {
                static $upper = null;
                if ($upper === null) {
                   $upper = __String::mapping('upperCase');
@@ -161,7 +161,7 @@ namespace {
                $map = $upper;
             }
             else {
-               if (\MB_CASE_FOLD === $mode) {
+               if ($mode === 3) {
                   static $caseFolding = null;
                   if ($caseFolding === null) {
                      $caseFolding = __String::mapping('caseFolding');
@@ -207,11 +207,20 @@ namespace {
             }
          }
 
+         if (!is_string($string)) {
+            return '';
+         }
+
          if ($encoding === null) {
             return $string;
          }
 
-         return \iconv('UTF-8', $encoding . '//IGNORE', $string);
+         // @ Encode
+         return \iconv(
+            'UTF-8',
+            "{$encoding}//IGNORE",
+            $string
+         ) ?: '';
       }
    }
 
@@ -219,7 +228,7 @@ namespace {
    if (!function_exists('mb_strtoupper')) {
       function mb_strtoupper(string $string, string|null $encoding = 'UTF-8'): string
       {
-         return mb_convert_case($string, \MB_CASE_UPPER, $encoding);
+         return mb_convert_case($string, 0, $encoding);
       }
    }
 
@@ -227,7 +236,7 @@ namespace {
    if (!function_exists('mb_strtolower')) {
       function mb_strtolower(string $string, string|null $encoding = 'UTF-8'): string
       {
-         return mb_convert_case($string, \MB_CASE_LOWER, $encoding);
+         return mb_convert_case($string, 1, $encoding);
       }
    }
 

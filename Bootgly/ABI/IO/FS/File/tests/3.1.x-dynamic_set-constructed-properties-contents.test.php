@@ -36,8 +36,8 @@ return [
       // @ set new file contents
       $File2->contents = PHP_EOL . '--TEST--';
       yield assert(
-         assertion: $File2->lines === false,
-         description: 'File #2 lines to invalid file should be false!'
+         assertion: $File2->lines === null,
+         description: 'File #2 lines to invalid file should be null!'
       );
 
       // ---
@@ -48,8 +48,8 @@ return [
       // @ set new file contents
       $File3->contents = PHP_EOL . '--TEST--';
       yield assert(
-         assertion: $File3->lines === false,
-         description: 'File #3 lines to invalid file should be false!'
+         assertion: $File3->lines === null,
+         description: 'File #3 lines to invalid file should be null!'
       );
    }
 ];

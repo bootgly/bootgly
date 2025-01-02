@@ -20,15 +20,15 @@ return [
       // @ Neutral
       $File2 = new File('');
       yield assert(
-         assertion: $File2->group === false,
-         description: 'File #2 - empty path - group should be false'
+         assertion: $File2->group === null,
+         description: 'File #2 - empty path - group should be null'
       );
 
       // @ Invalid
       $File3 = new File(__DIR__ . '/1.1.3-fake.test.php');
       yield assert(
-         assertion: $File3->group === false,
-         description: 'File #3 - fake file - group should be false'
+         assertion: $File3->group === null,
+         description: 'File #3 - fake file - group should be null'
       );
    }
 ];

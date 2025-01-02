@@ -23,8 +23,10 @@ return [
       $Dir2 = new Dir('/usr/sbin');
       $Dir2->permissions = 0750;
       yield assert(
-         assertion: $Dir2->permissions === 0755,
-         description: 'The /usr/sbin directory cannot have modified permissions: ' . $Dir2->permissions
-      );      
+         assertion: $Dir2->permissions === false,
+         description: <<<EOT
+         The /usr/sbin directory cannot have modified permissions!
+         EOT
+      );
    }
 ];

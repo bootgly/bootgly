@@ -66,6 +66,8 @@ class Dir implements FS
 
          $changed = chmod($this->dir, (int) $value);
 
+         $value = intval($value, 8);
+
          $this->permissions = $changed ? $value : false;
       }
    }

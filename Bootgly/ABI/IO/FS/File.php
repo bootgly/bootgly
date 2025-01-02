@@ -201,9 +201,17 @@ class File implements FS
    }
    public null|int $lines {
       get {
+         if (isSet($this->file) === false) {
+            $this->pathify();
+         }
+
          // !
          $file = $this->file;
          $size = $this->size;
+
+         if ($file === '' || $size === null) {
+            return null;
+         }
 
          // @
          if ($size < 100000) { // if file < 100kb use + perf method
@@ -239,7 +247,7 @@ class File implements FS
    public protected(set) null|int $permissions {
       get {
          if (isSet($this->permissions) === false) {
-            $this->permissions = new SplFileInfo($this->file)->getPerms() | null;
+            $this->permissions = new SplFileInfo($this->file)->getPerms() ?: null;
          }
 
          return $this->permissions;
@@ -275,7 +283,7 @@ class File implements FS
    public protected(set) null|int $owner {
       get {
          if (isSet($this->owner) === false) {
-            $this->owner = new SplFileInfo($this->file)->getOwner() | null;
+            $this->owner = new SplFileInfo($this->file)->getOwner() ?: null;
          }
 
          return $this->owner;
@@ -284,7 +292,7 @@ class File implements FS
    public protected(set) null|int $group {
       get {
          if (isSet($this->group) === false) {
-            $this->group = new SplFileInfo($this->file)->getGroup() | null;
+            $this->group = new SplFileInfo($this->file)->getGroup() ?: null;
          }
 
          return $this->group;
@@ -325,9 +333,11 @@ class File implements FS
    public protected(set) null|MIME $MIME {
       get {
          if (isSet($this->MIME) === false) {
-            $this->MIME = $this->file
+            $MIME = $this->file
                ? new MIME($this->file)
                : null;
+
+            $this->MIME = $MIME;
          }
 
          return $this->MIME;
@@ -347,7 +357,7 @@ class File implements FS
    public protected(set) null|int $accessed {
       get {
          if (isSet($this->accessed) === false) {
-            $this->accessed = new SplFileInfo($this->file)->getATime() | null;
+            $this->accessed = new SplFileInfo($this->file)->getATime() ?: null;
          }
 
          return $this->accessed;
@@ -356,7 +366,7 @@ class File implements FS
    public protected(set) null|int $created {
       get {
          if (isSet($this->created) === false) {
-            $this->created = new SplFileInfo($this->file)->getCTime() | null;
+            $this->created = new SplFileInfo($this->file)->getCTime() ?: null;
          }
 
          return $this->created;
@@ -365,7 +375,7 @@ class File implements FS
    public protected(set) null|int $modified {
       get {
          if (isSet($this->modified) === false) {
-            $this->modified = new SplFileInfo($this->file)->getMTime() | null;
+            $this->modified = new SplFileInfo($this->file)->getMTime() ?: null;
          }
 
          return $this->modified;
@@ -375,7 +385,7 @@ class File implements FS
    public protected(set) null|int $inode {
       get {
          if (isSet($this->inode) === false) {
-            $this->inode = new SplFileInfo($this->file)->getInode() | null;
+            $this->inode = new SplFileInfo($this->file)->getInode() ?: null;
          }
 
          return $this->inode;
@@ -385,7 +395,7 @@ class File implements FS
       get {
          if (isSet($this->link) === false) {
             // @phpstan-ignore-next-line
-            $this->link = new SplFileInfo($this->file)->getLinkTarget() | null;
+            $this->link = new SplFileInfo($this->file)->getLinkTarget() ?: null;
          }
 
          return $this->link;
@@ -445,8 +455,8 @@ class File implements FS
       }
 
       // Only if $this->file was successfully constructed
-      $file = $this->file ?? false;
-      if ($file === '' || $file === false) {
+      $file = $this->file ?: false;
+      if (!$file) {
          return false;
       }
 
@@ -539,7 +549,7 @@ class File implements FS
     */
    public function open (string $mode = self::READONLY_MODE)
    {
-      $filename = $this->file ?? $this->Path->path;
+      $filename = $this->file ?: $this->Path->path;
 
       // @
       $handler = false;
@@ -740,7 +750,7 @@ class File implements FS
       }
 
       // * Data
-      $filename = $this->file ?? $this->Path->path;
+      $filename = $this->file ?: $this->Path->path;
 
       if ( ! $filename ) {
          return false;
