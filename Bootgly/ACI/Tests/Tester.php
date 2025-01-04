@@ -127,10 +127,14 @@ class Tester extends Tests
 
          $specifications = @include "{$dir}{$test}.test.php";
          // ?
-         if ($test[0] !== '_' && $specifications === false) {
+         if ($test[0] === '_' && $specifications === false) {
+            $this->specifications[] = [];
+            continue;
+         }
+         else if ($test[0] !== '_' && $specifications === false) {
             throw new Exception("Test case not found: \n {$dir}{$test}");
          }
-         if (is_array($specifications) === false) {
+         else if (is_array($specifications) === false) {
             throw new Exception("Test case must return an array: \n {$dir}{$test}");
          }
 
