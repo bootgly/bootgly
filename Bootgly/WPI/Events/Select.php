@@ -254,6 +254,10 @@ class Select implements Events, Loops
     */
    public function destroy (): void
    {
+      $this->reads = [];
+      $this->writes = [];
+      $this->excepts = [];
+
       $this->loop = false;
    }
 }

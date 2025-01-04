@@ -450,7 +450,7 @@ class TCP_Server_CLI implements Servers, Logging
    {
       if ($this->Socket === null || $this->Socket === false) {
          #$this->log('@\;$this->Socket is already closed?@\;');
-         exit(1);
+         return;
       }
 
       try {
@@ -483,7 +483,7 @@ class TCP_Server_CLI implements Servers, Logging
          return false;
       }
 
-      $children = (string) count($this->Process::$children);
+      $children = (string) count($this->Process->Children->PIDs);
       match ($this->Process->level) {
          'master' => $this->log("Resuming {$children} worker(s)... @\\;", 3),
          'child' => self::$Event->add($this->Socket, self::$Event::EVENT_CONNECT, true),
@@ -506,7 +506,7 @@ class TCP_Server_CLI implements Servers, Logging
          return false;
       }
 
-      $children = (string) count($this->Process::$children);
+      $children = (string) count($this->Process->Children->PIDs);
       match ($this->Process->level) {
          'master' => $this->log("Pausing {$children} worker(s)... @\\;", 3),
          'child' => self::$Event->del($this->Socket, self::$Event::EVENT_CONNECT),
@@ -523,28 +523,29 @@ class TCP_Server_CLI implements Servers, Logging
 
       Logger::$display = Logger::DISPLAY_MESSAGE;
 
-      $CI_CD = (
-         Environment::get('GITHUB_ACTIONS')
-         || Environment::get('TRAVIS')
-         || Environment::get('CIRCLECI')
-         || Environment::get('GITLAB_CI')
-         || Environment::get('GIT_EXEC_PATH') // Git Hooks?
-      );
-      if ($this->Mode->value >= Modes::Test->value && $CI_CD) {
-         return;
-      }
-
       switch ($this->Process->level) {
          case 'master':
-            $children = (string) count($this->Process::$children);
+            $children = (string) count($this->Process->Children->PIDs);
             $this->log("{$children} worker(s) stopped!@\\;", 3);
             \pcntl_wait($status);
 
-            exit(0);
-         case 'child':
-            $this->close();
+            $CI_CD = Environment::get('GITHUB_ACTIONS')
+               || Environment::get('TRAVIS')
+               || Environment::get('CIRCLECI')
+               || Environment::get('GITLAB_CI')
+               || Environment::get('GIT_EXEC_PATH'); // Git Hooks?
+            $closable = true;
+            if ($this->Mode->value >= Modes::Test->value && $CI_CD) {
+               $closable = false;
+            }
 
-            exit(0);
+            $this->Process->Children->kill();
+
+            if ($closable) {
+               exit(0);
+            }
+         case 'child':
+            $this->Process->Children->kill();
       }
    }
 

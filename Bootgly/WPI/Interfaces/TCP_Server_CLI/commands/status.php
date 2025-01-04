@@ -157,7 +157,7 @@ return new class extends Command
          $Bar->Symbols->current = '';
          $Bar->Symbols->complete = '▉';
 
-         $PIDs = $Server->Process::$children;
+         $PIDs = $Server->Process->Children->PIDs;
          foreach ($PIDs as $i => $PID) {
             // @ Worker
             $id = \sprintf('%02d', $i + 1);

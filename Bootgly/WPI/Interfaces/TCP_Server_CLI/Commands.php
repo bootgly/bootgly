@@ -94,7 +94,7 @@ class Commands extends CLI\Terminal
          // @ control
          'stop' =>
             $this->log(
-               '@\;Stopping ' . (string) count($this->Server->Process::$children) . ' worker(s)... ',
+               '@\;Stopping ' . (string) count($this->Server->Process->Children->PIDs) . ' worker(s)... ',
                self::LOG_WARNING_LEVEL
             )
             && $this->Server->Process->sendSignal(SIGINT)

@@ -11,39 +11,86 @@
 namespace Bootgly\WPI\Interfaces\TCP_Server_CLI;
 
 
-use Bootgly\ACI\Events\Timer;
+use const LOCK_EX;
+use const LOCK_UN;
+use const SIGALRM;
+use const SIGCONT;
+use const SIGHUP;
+use const SIGINT;
+use const SIGIO;
+use const SIGIOT;
+use const SIGPIPE;
+use const SIGQUIT;
+use const SIGTERM;
+use const SIGTSTP;
+use const SIGUSR1;
+use const SIGUSR2;
+use function clearstatcache;
+use function cli_get_process_title;
+use function cli_set_process_title;
+use function count;
+use function explode;
+use function fclose;
+use function file;
+use function file_put_contents;
+use function flock;
+use function fopen;
+use function is_file;
+use function pcntl_fork;
+use function pcntl_signal;
+use function pcntl_signal_dispatch;
+use function posix_getpid;
+use function posix_getpwuid;
+use function posix_getuid;
+use function posix_kill;
+use function rtrim;
+use function unlink;
+use function usleep;
+use Exception;
 
+use Bootgly\ACI\Events\Timer;
 use Bootgly\ACI\Logs\Logger;
 use Bootgly\ACI\Logs\LoggableEscaped;
-
 use const Bootgly\CLI;
 use Bootgly\API\Server as SAPI;
 use Bootgly\WPI\Endpoints\Servers\Modes;
 use Bootgly\WPI\Events\Select;
-// ?
+use Bootgly\WPI\Interfaces\TCP_Server_CLI\Process\Children;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI as Server;
 
 
-class Process // FIXME: extends Process
+// FIXME: Definition: move to ABI (as Trait or Abstract class?)
+// FIXME: Implementation: use or extends (on TCP_Server_CLI)
+class Process
 {
    use LoggableEscaped;
 
 
    public Server $Server;
 
+   public protected(set) Children $Children;
+
    // * Config
    // ...
 
    // * Data
-   // ...
+   public string $title {
+      get => cli_get_process_title();
+      set => cli_set_process_title($value);
+   }
 
    // * Metadata
-   private string $level;
-   // @ Id
+   public int $id {
+      get => posix_getpid();
+   }
+   public string $level {
+      get => $this->id === self::$master
+         ? 'master'
+         : 'child';
+   }
+   // # Id
    public static int $index;
    public static int $master;
-   /** @var array<int> */
-   public static array $children = [];
    // File
    public static string $commandFile = BOOTGLY_WORKING_DIR . '/workdata/server.command';
    public static string $pidFile = BOOTGLY_WORKING_DIR . '/workdata/server.pid';
@@ -54,6 +101,7 @@ class Process // FIXME: extends Process
    {
       $this->Server = $Server;
 
+      $this->Children = new Children;
 
       // * Config
       // ...
@@ -62,7 +110,7 @@ class Process // FIXME: extends Process
       // ...
 
       // * Metadata
-      self::$master = \posix_getpid();
+      self::$master = posix_getpid();
 
 
       static::lock();
@@ -71,42 +119,19 @@ class Process // FIXME: extends Process
       // @ Init Process Timer
       Timer::init([$this, 'handleSignal']);
    }
-   public function __get (string $name): mixed
-   {
-      switch ($name) {
-         // * Metadata
-         case 'id':
-            return \posix_getpid();
 
-         case 'master':
-            return $this->__get("id") === self::$master;
-         case 'child':
-            return $this->__get("id") !== self::$master;
-
-         case 'level':
-            return $this->master ? 'master' : 'child';
-
-         case 'children':
-            return count(self::$children);
-         case 'pids':
-            return self::$children;
-      }
-
-      return null;
-   }
-
-   protected static function lock (int $flag = \LOCK_EX): void
+   protected static function lock (int $flag = LOCK_EX): void
    {
       static $file;
 
       $lock_file = static::$pidLockFile;
 
-      $file = $file ? : \fopen($lock_file, 'a+');
+      $file = $file ?: fopen($lock_file, 'a+');
 
       if ($file) {
          flock($file, $flag);
 
-         if ($flag === \LOCK_UN) {
+         if ($flag === LOCK_UN) {
             fclose($file);
 
             $file = null;
@@ -126,30 +151,30 @@ class Process // FIXME: extends Process
       $signalHandler = [$this, 'handleSignal'];
 
       // * Custom command
-      \pcntl_signal(SIGUSR1, $signalHandler, false); // 10
+      pcntl_signal(SIGUSR1, $signalHandler, false); // 10
 
       // ! Server
       // @ stop()
-      \pcntl_signal(SIGHUP, $signalHandler, false);  // 1
-      \pcntl_signal(SIGINT, $signalHandler, false);  // 2 (CTRL + C)
-      \pcntl_signal(SIGQUIT, $signalHandler, false); // 3
-      \pcntl_signal(SIGTERM, $signalHandler, false); // 15
+      pcntl_signal(SIGHUP, $signalHandler, false);  // 1
+      pcntl_signal(SIGINT, $signalHandler, false);  // 2 (CTRL + C)
+      pcntl_signal(SIGQUIT, $signalHandler, false); // 3
+      pcntl_signal(SIGTERM, $signalHandler, false); // 15
       // @ pause()
-      \pcntl_signal(SIGTSTP, $signalHandler, false); // 20 (CTRL + Z)
+      pcntl_signal(SIGTSTP, $signalHandler, false); // 20 (CTRL + Z)
       // @ resume()
-      \pcntl_signal(SIGCONT, $signalHandler, false); // 18
+      pcntl_signal(SIGCONT, $signalHandler, false); // 18
       // @ reload()
-      \pcntl_signal(SIGUSR2, $signalHandler, false); // 12
+      pcntl_signal(SIGUSR2, $signalHandler, false); // 12
 
       // ! \Connection
       // ? @info
       // @ $stats
-      \pcntl_signal(SIGIOT, $signalHandler, false);  // 6
+      pcntl_signal(SIGIOT, $signalHandler, false);  // 6
       // @ $peers
-      \pcntl_signal(SIGIO, $signalHandler, false);   // 29
+      pcntl_signal(SIGIO, $signalHandler, false);   // 29
 
       // ignore
-      \pcntl_signal(SIGPIPE, SIG_IGN, false);
+      pcntl_signal(SIGPIPE, SIG_IGN, false);
    }
    public function handleSignal (int $signal): void
    {
@@ -227,19 +252,19 @@ class Process // FIXME: extends Process
    ): bool
    {
       if ($master) {
-         // Send signal to master process
-         \posix_kill(static::$master, $signal);
+         // @ Send signal to master process
+         posix_kill(static::$master, $signal);
 
          if ($children === false) {
-            \pcntl_signal_dispatch();
+            pcntl_signal_dispatch();
          }
       }
 
       if ($children) {
-         // Send signal to children process
-         foreach (self::$children as $id) {
-            \posix_kill($id, $signal);
-            \usleep(100000); // Wait 0,1 s
+         // @ Send signal to children process
+         foreach ($this->Children->PIDs as $id) {
+            posix_kill($id, $signal);
+            usleep(100000); // Wait 0,1 s
          }
       }
 
@@ -250,34 +275,48 @@ class Process // FIXME: extends Process
    {
       $this->log("forking $workers workers... ", self::LOG_NOTICE_LEVEL);
 
-      for ($i = 0; $i < $workers; $i++) {
-         $pid = \pcntl_fork();
+      for ($index = 0; $index < $workers; $index++) {
+         $PID = pcntl_fork();
 
-         self::$children[$i] = $pid;
+         // # Child process
+         if ($PID === 0) {
+            // ! Set Child PID (in context of Child Process)
+            $this->Children->push($index, PID: $this->id);
+            // ! Set child index
+            self::$index = $index + 1;
 
-         if ($pid === 0) { // Child process
-            // @ Set child index
-            self::$index = $i + 1;
+            // ! Set child process title
+            $this->title = 'Bootgly_WPI_Server: child process (Worker #' . self::$index . ')';
 
-            \cli_set_process_title('Bootgly_WPI_Server: child process (Worker #' . self::$index . ')');
-
-            // @ Set Logging display
+            // ! Set Logging display
             Logger::$display = Logger::DISPLAY_MESSAGE_WHEN_ID;
 
             // @ Create stream socket server
             $this->Server->instance();
 
             // Event Loop
-            $this->Server::$Event->add($this->Server->Socket, Select::EVENT_CONNECT, true);
+            $this->Server::$Event->add(
+               $this->Server->Socket,
+               Select::EVENT_CONNECT,
+               true
+            );
             $this->Server::$Event->loop();
 
+            // @ Close stream socket server
             $this->Server->stop();
-            #exit(1);
+
+            // @ Exit child process
+            exit(0);
          }
-         else if ($pid > 0) { // Master process
-            \cli_set_process_title("Bootgly_WPI_Server: master process");
+         // # Master process
+         else if ($PID > 0) {
+            // ! Set Child PID (in context of Master Process)
+            $this->Children->push($index, $PID);
+
+            $this->title = 'Bootgly_WPI_Server: master process';
          }
-         else if ($pid === -1) {
+         // Error
+         else if ($PID === -1) {
             die('Could not fork process!');
          }
       }
@@ -286,7 +325,7 @@ class Process // FIXME: extends Process
    // @ User
    protected static function getCurrentUser (): string
    {
-      $user_info = \posix_getpwuid(\posix_getuid());
+      $user_info = posix_getpwuid(posix_getuid());
 
       return $user_info['name'];
    }
@@ -298,17 +337,17 @@ class Process // FIXME: extends Process
     */
    protected static function saveMasterPid (): void
    {
-      if (\file_put_contents(static::$pidFile, static::$master) === false) {
-         throw new \Exception('Can not save master pid to ' . static::$pidFile);
+      if (file_put_contents(static::$pidFile, static::$master) === false) {
+         throw new Exception('Can not save master pid to ' . static::$pidFile);
       }
    }
 
    public function __destruct ()
    {
-      if ($this->__get("level") === 'master') {
-         @\unlink(static::$commandFile);
-         @\unlink(static::$pidFile);
-         @\unlink(static::$pidLockFile);
+      if ($this->level === 'master') {
+         @unlink(static::$commandFile);
+         @unlink(static::$pidFile);
+         @unlink(static::$pidLockFile);
       }
    }
 }
