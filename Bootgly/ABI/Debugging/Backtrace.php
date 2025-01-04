@@ -36,17 +36,17 @@ class Backtrace
    // @ Trace
    public string $dir {
       get {
-         return dirname($this->trace->file);
+         return dirname($this->trace->file ?? '');
       }
    }
    public string $file {
       get {
-         return $this->trace->file;
+         return $this->trace->file ?? '';
       }
    }
    public int $line {
       get {
-         return $this->trace->line;
+         return $this->trace->line ?? 0;
       }
    }
    /** @var array<string> */

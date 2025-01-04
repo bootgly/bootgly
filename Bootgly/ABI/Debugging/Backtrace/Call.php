@@ -13,8 +13,8 @@ namespace Bootgly\ABI\Debugging\Backtrace;
 
 class Call
 {
-   public string $file;
-   public int $line;
+   public ?string $file;
+   public ?int $line;
    public string $function;
    public ?string $class;
    public ?string $type;
@@ -27,14 +27,14 @@ class Call
    /**
     * Create a new Call instance.
     * 
-    * @param array<string,array<mixed>|int|object|string> $call The `debug_backtrace` call.
+    * @param array<string,null|string|int|array<mixed>|object> $call The `debug_backtrace` call.
     */
    public function __construct (array $call)
    {
       /** @var string */
-      $file = $call['file'];
+      $file = $call['file'] ?? null;
       /** @var int */
-      $line = $call['line'];
+      $line = $call['line'] ?? null;
       /** @var string */
       $function = $call['function'];
       /** @var string|null */
