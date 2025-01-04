@@ -69,7 +69,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
 
 
       // \
-      parent::__construct();
+      parent::__construct($Mode);
       // * Config
       $this->socket = $this->ssl !== null
          ? 'https'
@@ -77,14 +77,14 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       // @ Configure Logger
       $this->Logger = new Logger(channel: 'HTTP.Server.CLI');
 
-      // . Request,Response,Router
+      // . Request, Response, Router
       self::$Request = new Request;
       self::$Response ??= new Response;
       self::$Router = new Router;
 
-      // . Decoders,Encoders
+      // . Decoders, Encoders
       self::$Decoder = new Decoder_;
-      $this->Mode = $Mode;
+
       switch ($Mode) {
          case Modes::Test:
             self::$Encoder = new Encoder_Testing;

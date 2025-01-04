@@ -10,5 +10,5 @@ return [
    'test' => function (): bool
    {
       return true === true;
-   }
+   } 
 ];

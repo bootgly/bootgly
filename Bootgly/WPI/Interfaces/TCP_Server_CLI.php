@@ -26,6 +26,7 @@ use Bootgly\API\Projects;
 use Bootgly\API\Server as SAPI;
 
 use const Bootgly\CLI;
+
 use Bootgly\WPI\Endpoints\Servers;
 use Bootgly\WPI\Endpoints\Servers\Modes;
 use Bootgly\WPI\Endpoints\Servers\Status;
@@ -57,64 +58,65 @@ class TCP_Server_CLI implements Servers, Logging
    protected int $workers;
    /** @var array<string> */
    protected ?array $ssl; // SSL Stream Context
-   // . Mode
+   // # Mode
    public Modes $Mode;
-   // . Verbosity
+   // # Verbosity
 
    // * Data
-   // .. SAPI
+   // # SAPI
    public static ?string $Application = null; 
    public static ?object $Decoder = null;
    public static ?object $Encoder = null;
 
    // * Metadata
-   public const VERSION = '0.0.1-alpha';
-   // . State
+   public const string VERSION = '0.0.1-alpha';
+   // # State
    protected int $started = 0;
-   // . Socket
-   protected ? string $socket;
+   // # Socket
+   protected ?string $socket;
    /** @var array<string> */
    public static array $context;
-   // . Status
+   // # Status
    protected Status $Status = Status::Booting;
 
    // /
    protected Connections $Connections;
 
 
-   public function __construct ()
+   public function __construct (Modes $Mode = Modes::Monitor)
    {
       if (\PHP_SAPI !== 'cli') {
          return;
       }
 
+
       // * Config
+      // $domain
       $this->socket = 'tcp://';
       $this->host = null;
       $this->port = null;
-      // $this->workers
+      // $workers
       $this->ssl = null;
-      // @ Mode
-      $this->Mode = Modes::Monitor;
+      // # Mode
+      $this->Mode = $Mode;
 
       // * Data
-      // @ SAPI
-      // Application
+      // # SAPI
+      // $Application
       if (__CLASS__ !== static::class) {
          self::$Application = static::class;
       }
-      // Decoder
-
-      // Encoder
-      // ...
+      // $Decoder
+      // $Encoder
 
       // * Metadata
-      // @ State
+      // # State
       $this->started = \time();
-      // @ Status
+      // # Status
       $this->Status = Status::Booting;
 
 
+      // @
       // @ Configure Logger
       $this->Logger = new Logger(channel: 'TCP.Server.CLI');
       // @ Configure Debugging Vars
@@ -526,19 +528,22 @@ class TCP_Server_CLI implements Servers, Logging
          || Environment::get('TRAVIS')
          || Environment::get('CIRCLECI')
          || Environment::get('GITLAB_CI')
+         || Environment::get('GIT_EXEC_PATH') // Git Hooks?
       );
       if ($this->Mode->value >= Modes::Test->value && $CI_CD) {
          return;
       }
 
-      $children = (string) count($this->Process::$children);
       switch ($this->Process->level) {
          case 'master':
+            $children = (string) count($this->Process::$children);
             $this->log("{$children} worker(s) stopped!@\\;", 3);
             \pcntl_wait($status);
+
             exit(0);
          case 'child':
             $this->close();
+
             exit(0);
       }
    }
