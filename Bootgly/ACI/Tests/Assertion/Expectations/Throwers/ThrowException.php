@@ -10,9 +10,12 @@
 
 namespace Bootgly\ACI\Tests\Assertion\Expectations\Throwers;
 
+
 use Exception;
+
 use Bootgly\ACI\Tests\Asserting\Fallback;
 use Bootgly\ACI\Tests\Assertion\Expectation\Thrower;
+
 
 class ThrowException extends Thrower
 {
@@ -22,6 +25,11 @@ class ThrowException extends Thrower
 
    public function assert (mixed &$actual, mixed &$expected): bool
    {
+      // ?
+      if (is_callable($actual) === false) {
+         return false;
+      }
+
       // !
       $expected = $this->expected;
       $arguments = $this->arguments;
@@ -44,7 +52,7 @@ class ThrowException extends Thrower
 
       // :
       return new Fallback(
-         'Failed asserting that the exception %s was thrown.',
+         'Failed asserting that the exception `%s` was thrown.',
          [
             'expected' => $expected::class
          ],
