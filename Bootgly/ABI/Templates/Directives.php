@@ -17,8 +17,11 @@ use Bootgly\ABI\Data\__String\Path;
 use Bootgly\ABI\Resources;
 
 
-class Directives implements Resources
+class Directives
 {
+   use Resources;
+
+
    // * Config
    // ...
 

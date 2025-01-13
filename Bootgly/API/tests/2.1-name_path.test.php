@@ -1,7 +1,7 @@
 <?php
 namespace Bootgly;
 
-use Bootgly\ACI\Tests\Cases\Assertion;
+use Bootgly\ACI\Tests\Assertion;
 
 use Bootgly\API\Project;
 use Bootgly\API\Projects;

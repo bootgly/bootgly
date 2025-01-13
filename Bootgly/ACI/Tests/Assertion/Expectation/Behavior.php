@@ -18,7 +18,7 @@ use Bootgly\ACI\Tests\Asserting;
  * Behavior are for assertions that assert type or value.
  * 
  * Use only $actual as input in the assertion.
- * The $actual is the value to validate.
+ * The $actual is the value to assert.
  * 
  * No output.
  */

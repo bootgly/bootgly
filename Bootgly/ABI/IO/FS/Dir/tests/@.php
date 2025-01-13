@@ -2,16 +2,18 @@
 
 namespace Bootgly\ABI\IO\FS\Dir;
 
-return [
+use Bootgly\ACI\Tests\Suite;
+
+return new Suite(
    // * Config
-   'autoBoot' => __DIR__,
-   'autoInstance' => true,
-   'autoReport' => true,
-   'autoSummarize' => true,
-   'exitOnFailure' => true,
+   autoBoot: __DIR__,
+   autoInstance: true,
+   autoReport: true,
+   autoSummarize: true,
+   exitOnFailure: true,
    // * Data
-   'suiteName' => __NAMESPACE__,
-   'tests' => [
+   suiteName: __NAMESPACE__,
+   tests: [
       '1.1-construct-real_dir',
 
       '2.x-dynamic_get-properties-writable',
@@ -21,4 +23,4 @@ return [
 
       '4.x-dynamic_call-methods-scan',
    ]
-];
+);

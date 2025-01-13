@@ -2,16 +2,18 @@
 
 namespace Bootgly\ABI\Data\__String\Path;
 
-return [
+use Bootgly\ACI\Tests\Suite;
+
+return new Suite(
    // * Config
-   'autoBoot' => __DIR__,
-   'autoInstance' => true,
-   'autoReport' => true,
-   'autoSummarize' => true,
-   'exitOnFailure' => true,
+   autoBoot: __DIR__,
+   autoInstance: true,
+   autoReport: true,
+   autoSummarize: true,
+   exitOnFailure: true,
    // * Data
-   'suiteName' => __NAMESPACE__,
-   'tests' => [
+   suiteName: __NAMESPACE__,
+   tests: [
       // construct
       '1.1-construct_path',
       '1.2-construct_path-lowercase',
@@ -39,4 +41,4 @@ return [
       '4.5-callstatic-join',
       '4.6-callstatic-concatenate',
    ]
-];
+);

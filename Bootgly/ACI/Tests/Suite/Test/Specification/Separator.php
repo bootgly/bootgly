@@ -8,21 +8,13 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\ACI\Tests\Test;
+namespace Bootgly\ACI\Tests\Suite\Test\Specification;
 
 
-use Exception;
-use Throwable;
-
-
-class IgnoreTestException extends Exception
+class Separator
 {
-   public function __construct (
-      string $message = "",
-      int $code = 0,
-      Throwable $previous = null
-      )
-   {
-      parent::__construct($message, $code, $previous);
-   }
+   // * Config
+   public null|bool|string $line = null;
+   public null|string $left = null;
+   public null|string $header = null;
 }

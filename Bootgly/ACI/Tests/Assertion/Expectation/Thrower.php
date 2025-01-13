@@ -19,10 +19,10 @@ use Bootgly\ACI\Tests\Asserting;
 /**
  * Thrower are for assertions that throw an Throwable.
  * 
- * Use only $actual as input in the assertion.
- * The $actual is the value to throw an Throwable.
+ * Use only $actual (callable) and $expected (Throwable) as input in the assertion.
+ * The $expected is the value to be thrown by $actual.
  * 
- * It has a throwable output.
+ * It has a throwable as output.
  */
 abstract class Thrower implements Asserting
 {
@@ -32,6 +32,12 @@ abstract class Thrower implements Asserting
    public array $arguments;
 
 
+   /**
+    * Thrower constructor.
+    * 
+    * @param Throwable $expected
+    * @param array<mixed> $arguments
+    */
    public function __construct (Throwable $expected, array $arguments)
    {
       $this->expected = $expected;

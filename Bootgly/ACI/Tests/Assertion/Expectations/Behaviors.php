@@ -34,13 +34,17 @@ trait Behaviors
    public function be (mixed $expected): self
    {
       $namespace = Behaviors::class;
-      $class = $expected->name;
+
+      if ($expected instanceof Type || $expected instanceof Value) {
+         $class = $expected->name;
+         /** @var Asserting $Behavior */
+         $Behavior = new ("{$namespace}\Type{$class}");
+      }
 
       $this->push(match (true) {
-         $expected instanceof Type
-            => new ("{$namespace}\Type{$class}"),
+         $expected instanceof Type,
          $expected instanceof Value
-            => new ("{$namespace}\Value{$class}"),
+            => $Behavior,
 
          $expected instanceof Asserting
             => $expected,

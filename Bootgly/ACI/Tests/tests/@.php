@@ -2,17 +2,18 @@
 
 namespace Bootgly\ACI\Tests;
 
-return [
-   // * Config
-   'autoBoot' => __DIR__,
-   'autoInstance' => true,
-   'autoReport' => true,
-   'autoSummarize' => true,
+use Bootgly\ACI\Tests\Suite;
 
-   'exitOnFailure' => true,
+return new Suite(
+   // * Config
+   autoBoot: __DIR__,
+   autoInstance: true,
+   autoReport: true,
+   autoSummarize: true,
+   exitOnFailure: true,
    // * Data
-   'suiteName' => __NAMESPACE__,
-   'tests' => [
+   suiteName: __NAMESPACE__,
+   tests: [
       // Basic API
       '0.1.1-Basic_API-return_true',
       '0.1.2-Basic_API-return_boolean.retestable',
@@ -50,4 +51,4 @@ return [
       // Advanced API - Snapshots
       '2.0.1-Advanced_API-snapshots',
    ]
-];
+);

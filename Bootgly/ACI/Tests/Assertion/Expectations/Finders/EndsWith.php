@@ -21,7 +21,14 @@ class EndsWith extends Finder
    {
       $needle = $this->needle ?? $expected;
 
-      return str_ends_with((string) $actual, (string) $needle);
+      if (
+         is_string($actual) === false
+         || is_string($needle) === false
+      ) {
+         return false;
+      }
+
+      return str_ends_with($actual, $needle);
    }
 
    public function fail (mixed $actual, mixed $expected, int $verbosity = 0): Fallback

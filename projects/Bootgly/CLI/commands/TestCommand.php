@@ -14,11 +14,9 @@ namespace projects\Bootgly\CLI\commands;
 use Closure;
 
 use Bootgly\ABI\Data\__String\Path;
-
-use Bootgly\ACI\Tests;
+use Bootgly\ACI\Tests\Suite;
 use Bootgly\ACI\Tests\Suites;
-use Bootgly\ACI\Tests\Tester;
-
+use Bootgly\ACI\Tests;
 use const Bootgly\CLI;
 use Bootgly\CLI\Command;
 use Bootgly\CLI\UI\Components\Alert;
@@ -39,89 +37,77 @@ class TestCommand extends Command
    {
       // ! Tester
       // * Config
-      Tests::$exitOnFailure = true;
+      Suite::$exitOnFailure = true;
 
-      // @
+      // !
       // arguments
-      $indexOfTestableSuite = (int) ($arguments[0] ?? 0);
-      $indexOfTestableCase = (int) ($arguments[1] ?? 0);
-      if ($indexOfTestableSuite < 1) {
-         $indexOfTestableCase = 0;
+      $suite_index = (int) ($arguments[0] ?? 0);
+      $case_index = (int) ($arguments[1] ?? 0);
+      if ($case_index < 1) {
+         $case_index = 0;
+      }
+      if ($suite_index < 1) {
+         $suite_index = 0;
       }
       // options
-      $bootglyTests = $options['bootgly'] ?? $options['all'] ?? null;
+      // ...
 
-      $suites = [];
-
-      // @ Load Author tests
-      if (BOOTGLY_ROOT_DIR === BOOTGLY_WORKING_DIR || $bootglyTests) {
-         $bootstrap0 = include(BOOTGLY_ROOT_DIR . '/tests/@.php');
-
-         $suites = $bootstrap0['suites'] ?? [];
-      }
-
-      // @ Load Consumer tests
-      if (BOOTGLY_ROOT_DIR !== BOOTGLY_WORKING_DIR) {
-         $bootstrap1 = include(BOOTGLY_WORKING_DIR . '/tests/@.php');
-
-         $suites = array_merge($suites, $bootstrap1['suites'] ?? []);
-      }
 
       // @
-      $Suites = new Suites;
-      $Suites->total = count($suites);
-
-      foreach ($suites as $index => $dir) {
-         Tester::$suite++;
-
-         if ($indexOfTestableSuite > 0 && ($index + 1) !== $indexOfTestableSuite) {
-            $Suites->skipped++;
-            continue;
-         }
-
-         $this->test($dir, $indexOfTestableCase);
-
-         $Suites->passed++;
-      }
-
-      $Suites->summarize();
+      $Tests = new Tests;
+      // $Tester = new Tester;
+      $Tests->Suites->iterate(
+         $suite_index,
+         $case_index,
+         fn (string $suiteDir, int $index) => $this->test($suiteDir, $index)
+      );
+      $Tests->Suites->summarize();
 
       return true;
    }
 
-   // @
-   public function test (string $suiteDir, ?int $index): void
+   // # Test Suite
+   public function test (string $suiteDir, null|int $index): null|true|Suite
    {
+      // !
       $bootstrapFile = Path::normalize($suiteDir . '/tests/@.php');
       BOOTGLY_ROOT_DIR !== BOOTGLY_WORKING_DIR
-         ? $suiteSpecs = (include BOOTGLY_WORKING_DIR . $bootstrapFile)
-         : $suiteSpecs = (include BOOTGLY_ROOT_DIR . $bootstrapFile);
-
-      if ($suiteSpecs === false) {
-         return;
+         ? $Suite = (include BOOTGLY_WORKING_DIR . $bootstrapFile)
+         : $Suite = (include BOOTGLY_ROOT_DIR . $bootstrapFile);
+      // ?
+      if ($Suite instanceof Suite === false) {
+         return null;
       }
 
-      $suiteSpecs = (array) $suiteSpecs;
-
+      // ?!
       // * Config
       if ($index) {
-         $suiteSpecs['index'] = $index;
+         $Suite->target = $index;
       }
 
       // @
-      $autoBoot = $suiteSpecs['autoBoot'] ?? false;
+      $autoBoot = $Suite->autoBoot ?? false;
       if ($autoBoot instanceof Closure) {
-         unset($suiteSpecs['autoBoot']);
-         $autoBoot($suiteSpecs);
+         return $autoBoot($Suite);
       }
       else if ($autoBoot) {
-         new Tester($suiteSpecs);
+         $Suite->autoboot($autoBoot);
+
+         if ($Suite->autoInstance) {
+            $Suite->autoinstance($Suite->autoInstance);
+         }
+         if ($Suite->autoSummarize) {
+            $Suite->summarize();
+         }
+
+         return $Suite;
       }
-      else {
-         $Alert = new Alert(CLI->Terminal->Output);
-         $Alert->Type::Failure->set();
-         $Alert->message = 'AutoBoot test not configured!';
-         $Alert->render();
-      }
+
+      $Alert = new Alert(CLI->Terminal->Output);
+      $Alert->Type::Failure->set();
+      $Alert->message = 'AutoBoot test not configured!';
+      $Alert->render();
+
+      return null;
    }
 }

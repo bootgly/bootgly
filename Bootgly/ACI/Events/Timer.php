@@ -18,7 +18,9 @@ class Timer
    // ...
 
    // * Data
-   /** @var array<int,array<int,mixed>> */
+   /**
+    * @var array<int,array<int,array{0:int,1:callable,2:array<mixed>,3:bool}>>
+    */
    protected static array $tasks = [];
    /** @var array<int,bool> */
    protected static array $status = [];
@@ -77,6 +79,7 @@ class Timer
    {
       if ( empty(self::$tasks) ) {
          pcntl_alarm(0);
+
          return;
       }
 
@@ -92,7 +95,8 @@ class Timer
 
                try {
                   call_user_func_array($handler, $args);
-               } catch (\Throwable) {
+               }
+               catch (\Throwable) {
                   // ...
                }
 

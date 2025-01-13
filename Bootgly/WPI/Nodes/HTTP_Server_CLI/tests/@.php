@@ -2,18 +2,14 @@
 
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\tests;
 
-
+use Bootgly\ACI\Tests\Suite;
 use Bootgly\ACI\Logs\Logger;
-
 use Bootgly\WPI\Endpoints\Servers\Modes;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI;
 
-
-return [
+return new Suite(
    // * Config
-   'autoBoot' => function () { // function ($suiteSpecs)
-      // TODO configure verbosity of server output/echo
-      // TODO like $HTTP_Server_CLI->verbosity = 0;
+   autoBoot: function () {
       Logger::$display = Logger::DISPLAY_NONE;
 
       $HTTP_Server_CLI = new HTTP_Server_CLI(Mode: Modes::Test);
@@ -26,12 +22,12 @@ return [
 
       $HTTP_Server_CLI->start();
 
-      $HTTP_Server_CLI->Commands->command('test'); // TODO up command method to parent class as trait|interface|parent
+      $HTTP_Server_CLI->Commands->command('test');
 
-      return [];
+      return true;
    },
    // * Data
-   'tests' => [
+   tests: [
       'Request/' => [
          '1.01-request_as_response-address',
          '1.02-request_as_response-port',
@@ -149,4 +145,4 @@ return [
          '5.1-route_catch_all-generic',
       ]
    ]
-];
+);

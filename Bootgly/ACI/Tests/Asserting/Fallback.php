@@ -25,6 +25,13 @@ class Fallback
    public int $verbosity;
 
 
+   /**
+    * Fallback constructor.
+    *
+    * @param string $format
+    * @param array<string,mixed> $values
+    * @param int $verbosity
+    */
    public function __construct (
       string $format,
       array $values = [],
@@ -36,12 +43,41 @@ class Fallback
       $this->verbosity = $verbosity;
    }
 
+   /**
+    * Translate values to output.
+    *
+    * @param array<string,mixed> $values
+    *
+    * @return array<string,float|int|string>
+    */
+   private function translate (array $values): array
+   {
+      $translated = [];
+
+      foreach ($values as $key => $value) {
+         $translated[$key] = match (gettype($value)) {
+            'array' => 'array',
+            'boolean' => $value ? 'true' : 'false',
+            'NULL' => 'null',
+            'object' => get_class($value),
+            'resource' => 'resource',
+            'resource (closed)' => 'resource (closed)',
+            'unknown type' => 'unknown',
+            default => $value // string, integer, double
+         };
+      }
+
+      return $translated; // @phpstan-ignore-line
+   }
+
    public function __toString (): string
    {
+      $values = $this->translate($this->values);
+
       try {
          $message = vsprintf(
             format: $this->format,
-            values: $this->values
+            values: $values
          );
    
          return $message;

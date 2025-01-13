@@ -19,6 +19,10 @@ class InInterfacesDeclared extends Finder
 {
    public function assert (mixed &$actual, mixed &$expected): bool
    {
+      if (is_string($expected) === false) {
+         return false;
+      }
+
       return interface_exists($expected);
    }
 

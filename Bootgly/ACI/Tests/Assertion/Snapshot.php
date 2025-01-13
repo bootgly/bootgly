@@ -26,13 +26,15 @@ abstract class Snapshot implements Asserting
    /**
     * @var string|null $name The snapshot name.
     */
-    public ?string $name = null;
+   public null|string $name = null;
 
    // * Data
+   /**
+    * @var array<string, mixed> $snapshots The snapshots data.
+    */
    protected static array $snapshots = [];
 
    // * Metadata
-   protected bool $named;
    /**
     * @var array<string, int>
     */
@@ -42,16 +44,14 @@ abstract class Snapshot implements Asserting
    public readonly bool $restored;
 
 
-   public function __construct (?string $name = null)
+   public function __construct (null|string $name = null)
    {
       // * Config
       $this->name = $name ?? new Backtrace()->file;
 
       // * Metadata
-      // named
-      $this->named = $name !== null;
       // indexes
-      if ($this->named === false) {
+      if ($name !== null) {
          self::$indexes[$this->name] ??= 0;
          self::$indexes[$this->name]++;
       }
@@ -78,7 +78,7 @@ abstract class Snapshot implements Asserting
 
    public function assert (mixed &$actual, mixed &$expected): bool
    {
-      if ($this->named) {
+      if ($this->name !== null) {
          $snapshot = $this->name;
       }
       else {

@@ -5,8 +5,8 @@ use stdClass;
 
 use Bootgly\ACI\Tests\Assertion\Expectations\Delimiters\ClosedInterval;
 use Bootgly\ACI\Tests\Assertion\Snapshots;
-use Bootgly\ACI\Tests\Cases\Assertion;
-use Bootgly\ACI\Tests\Cases\Assertions;
+use Bootgly\ACI\Tests\Assertion;
+use Bootgly\ACI\Tests\Assertions;
 
 return [
    // @ configure

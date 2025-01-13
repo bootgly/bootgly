@@ -21,8 +21,7 @@ use Throwable;
 use Bootgly\ABI\Debugging\Data\Throwables\Exceptions;
 use Bootgly\ABI\IO\FS\File;
 use Bootgly\ACI\Logs\Logger;
-use Bootgly\ACI\Tests;
-use Bootgly\ACI\Tests\Tester;
+use Bootgly\ACI\Tests\Suite;
 use Bootgly\API\Environments;
 use Bootgly\API\Projects;
 use Bootgly\API\Server as SAPI;
@@ -136,54 +135,52 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
             try {
                self::$Encoder = new Encoder_Testing;
 
-               // * Config
-               $Suite_Bootstrap_File = new File(
-                  BOOTGLY_ROOT_DIR . __CLASS__ . '/tests/@.php'
-               );
-
-               // ? Validate the existence of the bootstrap file
-               if ($Suite_Bootstrap_File->exists === false) {
-                  throw new Exception('Validate the existence of the bootstrap file!');
+               // * Data
+               // !
+               $bootstrap = BOOTGLY_ROOT_DIR . __CLASS__ . '/tests/@.php';
+               $Bootstrap = new File($bootstrap);
+               // ?
+               if ($Bootstrap->exists === false) {
+                  throw new Exception("Test Suite file not found: \n {$bootstrap}");
                }
-
-               // @ Reset Cache of Test boot file
+               // @ Reset Cache of Test case file
                if (function_exists('opcache_invalidate')) {
-                  opcache_invalidate($Suite_Bootstrap_File, true);
+                  opcache_invalidate($bootstrap, true);
                }
-               clearstatcache(false, $Suite_Bootstrap_File);
+               clearstatcache(false, $bootstrap);
 
-               $files = (@require $Suite_Bootstrap_File)['tests'];
+               $Suite = include $Bootstrap->file;
+               // ?
+               if ($Suite instanceof Suite === false) {
+                  throw new Exception("Test Suite instance not found: \n {$bootstrap}");
+               }
 
-               SAPI::$tests[self::class] = Tests::list($files);
+               SAPI::$Suite = $Suite;
+               SAPI::$tests[self::class] = $Suite->tests;
 
                // * Metadata
                SAPI::$Tests[self::class] = [];
                foreach (SAPI::$tests[self::class] as $index => $case) {
+                  // !
                   $Test_Case_File = new File(
                      BOOTGLY_ROOT_DIR . __CLASS__ . '/tests/' . $case . '.test.php'
                   );
-
                   // ?
                   if ($Test_Case_File->exists === false) {
                      continue;
                   }
 
-                  // @ Reset Cache of Test case file
-                  if (function_exists('opcache_invalidate')) {
-                     opcache_invalidate($Test_Case_File, true);
-                  }
-                  clearstatcache(false, $Test_Case_File);
-
                   // @ Load Test case from file
+                  /** @var array<string,mixed>|null $test */
                   try {
-                     $spec = require $Test_Case_File;
+                     $test = require $Test_Case_File;
                   }
                   catch (Throwable) {
-                     $spec = null;
+                     $test = null;
                   }
 
                   // @ Set Closure to SAPI Tests
-                  SAPI::$Tests[self::class][] = $spec;
+                  SAPI::$Tests[self::class][] = $test;
                }
             }
             catch (Throwable $Throwable) {
@@ -219,34 +216,29 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
          {
             Logger::$display = Logger::DISPLAY_MESSAGE;
 
-            // @ Get test files
+            // ! Suite
+            $Suite = SAPI::$Suite;
+            $Suite->separate('HTTP Server');
+
+            // @@ Iterate Test Cases
+            // !
             $testFiles = SAPI::$tests[self::class] ?? [];
-
-            $Tests = new Tester($testFiles);
-            $Tests->separate('HTTP Server');
-
-            // @ Run test cases
             foreach ($testFiles as $index => $value) {
-               /**
-                * @var array<string>|null $spec
-                */
-               $spec = SAPI::$Tests[self::class][$index] ?? null;
-               $spec['case'] = $index + 1;
+               /** @var array<string,mixed>|null $test */
+               $test = SAPI::$Tests[self::class][$index] ?? null;
+               $test['case'] = $index + 1;
                // @ Init Test
-               $Test = $Tests->test($spec);
-               if ($Test === false) {
-                  continue;
-               }
-               if ($spec === null || count($spec) < 3) {
-                  $Tests->skip();
+               $Test = $Suite->test($test);
+               if ($Test === null || count($test) < 3) {
+                  $Suite->skip();
                   continue;
                }
 
                // ! Server
-               $responseLength = @$spec['response.length'] ?? null;
+               $responseLength = @$test['response.length'] ?? null;
                // ! Client
                // ? Request
-               $requestData = $spec['request']("{$TCP_Client_CLI->host}:{$TCP_Client_CLI->port}");
+               $requestData = $test['request']("{$TCP_Client_CLI->host}:{$TCP_Client_CLI->port}");
                $requestLength = strlen($requestData);
                // @ Send Request to Server
                $Connection::$output = $requestData;
@@ -276,7 +268,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
                }
             }
 
-            $Tests->summarize();
+            $Suite->summarize();
 
             // @ Reset CLI Logger
             Logger::$display = Logger::DISPLAY_MESSAGE;

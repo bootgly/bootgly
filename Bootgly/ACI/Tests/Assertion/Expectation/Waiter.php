@@ -20,16 +20,25 @@ use Bootgly\ACI\Tests\Asserting\Subassertion;
 /**
  * Waiter are for assertions that wait for a condition.
  * 
- * Use both $actual and $expected as input in the assertion.
+ * Use both $actual (callable) and $expected (timeout in microseconds) as input in the assertion.
  * The $expected is the value to wait for.
  * 
- * It has a duration output.
+ * It has a duration (in microseconds) as output.
  */
 abstract class Waiter extends Subassertion implements Asserting
 {
    // * Config
    // # Input
+   /**
+    * The timeout to wait for the callable in microseconds or the output handler (subassertion).
+    * @var int|float
+    */
    public int|float $expected;
+
+   /**
+    * The arguments to pass to the callable.
+    * @var array<mixed>
+    */
    public array $arguments;
    // # Subassertion
    // ..$subassertion
@@ -56,7 +65,9 @@ abstract class Waiter extends Subassertion implements Asserting
    {
       // * Config
       // # Input
-      $this->timeout = $expected instanceof Closure ? 0 : $expected;
+      $this->expected = $expected instanceof Closure 
+         ? 0
+         : $expected;
       $this->arguments = $arguments;
       // # Output
       if ($expected instanceof Closure) {
@@ -71,7 +82,7 @@ abstract class Waiter extends Subassertion implements Asserting
    /**
     * Output the duration of the wait.
     * 
-    * @return Asserting
+    * @return void
     */
    public function output (): void
    {
@@ -79,6 +90,9 @@ abstract class Waiter extends Subassertion implements Asserting
       $duration = $this->duration;
 
       $Subassertion = $this->subassertion;
+      if ($Subassertion === null) {
+         return;
+      }
 
       // @ Call the output callable with $this->duration as argument
       $Subassertion($duration);

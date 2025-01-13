@@ -580,13 +580,13 @@ class File implements FS
     * @param int $offset The offset to start reading from (default: 0).
     * @param int<0,max>|null $length The number of bytes to read (default: null, reads until the end).
     *
-    * @return string|int|false The read data as a string, number of bytes read as an integer, or false on failure.
+    * @return string|false The read data as a string or false on failure.
     */
    public function read (
       string $method = self::DEFAULT_READ_METHOD,
       int $offset = 0,
       null|int $length = null
-   ): string|int|false
+   ): string|false
    {
       // ?
       if ( ! $this->file ) {
@@ -678,7 +678,7 @@ class File implements FS
          return substr($data, $offset, $length);
       }
       // :
-      return $this->contents = $data;
+      return $data;
    }
    /**
     * Write data to the file handler.

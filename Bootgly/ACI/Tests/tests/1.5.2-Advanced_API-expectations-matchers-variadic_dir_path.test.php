@@ -4,8 +4,8 @@ use Bootgly\ABI\Data\__String\Path;
 use Generator;
 
 use Bootgly\ACI\Tests\Assertion\Expectations\Matchers\VariadicDirPath;
-use Bootgly\ACI\Tests\Cases\Assertion;
-use Bootgly\ACI\Tests\Cases\Assertions;
+use Bootgly\ACI\Tests\Assertion;
+use Bootgly\ACI\Tests\Assertions;
 
 return [
    // @ configure

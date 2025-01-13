@@ -50,6 +50,11 @@ trait Callers
          is_array($callable) === true
          && isSet($callable[0]) === true
          && isSet($callable[1]) === true
+         && (
+            is_object($callable[0]) === true
+            || is_string($callable[0]) === true
+         )
+         && is_string($callable[1]) === true
          && method_exists($callable[0], $callable[1]) === true
       ) {
          throw new AssertionError('You need to use First class callable syntax: `$Object->$method(...)`.');

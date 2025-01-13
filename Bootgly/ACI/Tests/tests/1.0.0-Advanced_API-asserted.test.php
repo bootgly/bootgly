@@ -3,8 +3,8 @@
 use Generator;
 use StdClass;
 
-use Bootgly\ACI\Tests\Cases\Assertion;
-use Bootgly\ACI\Tests\Cases\Assertions;
+use Bootgly\ACI\Tests\Assertion;
+use Bootgly\ACI\Tests\Assertions;
 
 return [
    // @ configure
@@ -31,7 +31,7 @@ return [
       catch (Throwable $Throwable) {
          yield $Assertion->assert(
             actual: $Throwable->getMessage(),
-            expected: 'Cannot modify private(set) property Bootgly\ACI\Tests\Cases\Assertion::$asserted from scope Bootgly\ACI\Tests\Cases\Assertions'
+            expected: 'Cannot modify private(set) property Bootgly\ACI\Tests\Assertion::$asserted from scope Bootgly\ACI\Tests\Assertions'
          );
       }
    })

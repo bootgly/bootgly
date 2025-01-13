@@ -8,8 +8,21 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\ACI\Tests;
+namespace Bootgly\ACI;
 
+
+use function array_search;
+use function array_splice;
+use function file;
+use function file_put_contents;
+use function implode;
+use function memory_get_usage;
+use function microtime;
+use function number_format;
+use function round;
+use function touch;
+use ErrorException;
+use Throwable;
 
 use Bootgly\ABI\Data\__String\Path;
 use Bootgly\ABI\Debugging\Backtrace;
@@ -22,11 +35,11 @@ abstract class Benchmark
    public static bool $memory = false;
 
    // * Data
-   /** @var array<mixed> */
+   /** @var array<string,array{time:float,memory:int}> */
    private static array $initial = [];
-   /** @var array<mixed> */
+   /** @var array<string,array{time:float,memory:int}> */
    private static array $final = [];
-   /** @var array<mixed> */
+   /** @var array<string,array{time:string,memory:int}> */
    public static array $results = [];
 
    // * Metadata
@@ -116,34 +129,39 @@ abstract class Benchmark
          // @ Prepare file
          $relativePath = Path::relativize(path: $Backtrace->file, from: BOOTGLY_WORKING_DIR);
          if ($relativePath === '') {
-            throw new \ErrorException('Relative path is empty!');
+            throw new ErrorException('Relative path is empty!');
          }
          $file = BOOTGLY_WORKING_DIR . 'workdata/logs/benchmarks.log';
-         \touch($file);
+         touch($file);
 
          // @ Build data
          $header = "[$tag@$relativePath:$Backtrace->line]:";
          $body = self::$results[$tag]['time'];
 
          // @ Read file if exists
-         $lines = \file($file, FILE_IGNORE_NEW_LINES);
+         $lines = file($file, FILE_IGNORE_NEW_LINES);
+         if ($lines === false) {
+            throw new ErrorException('Failed to read file!');
+         }
 
          // @ Search line to write
-         $line = \array_search($header, $lines);
+         $line = array_search($header, $lines);
 
          // @ Insert new line
          if ($line) {
-            \array_splice($lines, $line + 1, 0, $body);
-         } else {
+            array_splice($lines, $line + 1, 0, $body);
+         }
+         else {
             $lines[] =  "\n" . $header . "\n" . $body . "\n";
          }
 
          // @ Build new file data
-         $data = \implode("\n", $lines);
+         $data = implode("\n", $lines);
 
          // @ Write to file
-         \file_put_contents($file, $data);
-      } catch (\Throwable $T) {
+         file_put_contents($file, $data);
+      }
+      catch (Throwable $T) {
          // Debugging\Exceptions::debug($T);
       }
 

@@ -16,8 +16,8 @@ return [
       // Subtests
       #yield assert(...);
 
-      return assert(
-         assertion: true,
+      return assert( // @phpstan-ignore-line
+         assertion: false,
          description: null
       );
    }

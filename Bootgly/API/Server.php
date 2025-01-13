@@ -11,6 +11,11 @@
 namespace Bootgly\API;
 
 
+use Closure;
+
+use Bootgly\ACI\Tests\Suite;
+
+
 class Server
 {
    // * Config
@@ -18,12 +23,19 @@ class Server
    public static Environments $Environment = Environments::Production;
 
    // * Data
-   public static \Closure $Handler;
-   /** @var array<string,array<string,\Closure>> */
+   public static Closure $Handler;
+   public static Suite $Suite;
+   /**
+    * Test Cases files
+    * @var array<string,array<string,Closure>>
+    */
    public static array $tests;
 
    // * Metadata
-   /** @var array<string|array<string,\Closure>> */
+   /**
+    * Test Cases instances
+    * @var array<string|array<string,Closure>>
+    */
    public static array $Tests;
    // @ API
    private static string $key;
@@ -67,7 +79,7 @@ class Server
          $SAPI = require $bootstrap;
 
          $Handler = $SAPI[$key] ?? null;
-         if ($Handler !== null && $Handler instanceof \Closure) {
+         if ($Handler !== null && $Handler instanceof Closure) {
             $Handler->bindTo(null, "static"); // @phpstan-ignore-line
             self::$Handler = $Handler;
          }

@@ -17,7 +17,7 @@ use Bootgly\ACI\Tests\Assertion\Auxiliaries\Op;
 /**
  * @property mixed $expectation
  */
-trait Comparators
+trait Comparators // @phpstan-ignore-line
 {
    /**
     * Compare the $actual value.

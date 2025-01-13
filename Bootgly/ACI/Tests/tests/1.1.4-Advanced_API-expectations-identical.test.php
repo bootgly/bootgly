@@ -3,8 +3,8 @@
 use Generator;
 use stdClass;
 
-use Bootgly\ACI\Tests\Cases\Assertion;
-use Bootgly\ACI\Tests\Cases\Assertions;
+use Bootgly\ACI\Tests\Assertion;
+use Bootgly\ACI\Tests\Assertions;
 use Bootgly\ACI\Tests\Assertions\Hook;
 
 return [

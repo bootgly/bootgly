@@ -19,7 +19,22 @@ class InArrayKeys extends Finder
 {
    public function assert (mixed &$actual, mixed &$expected): bool
    {
-      return array_key_exists($expected, $actual);
+      if (
+         is_int($expected) === false
+         && is_float($expected) === false
+         && is_string($expected) === false
+         && is_bool($expected) === false
+         && is_resource($expected) === false
+         && $expected !== null
+      ) {
+         return false;
+      }
+
+      if (is_array($actual) === false) {
+         return false;
+      }
+
+      return array_key_exists($expected, $actual); // @phpstan-ignore-line
    }
 
    public function fail (mixed $actual, mixed $expected, int $verbosity = 0): Fallback

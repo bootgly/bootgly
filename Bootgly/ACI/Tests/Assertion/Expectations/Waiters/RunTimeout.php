@@ -20,9 +20,14 @@ class RunTimeout extends Waiter
 {
    public function assert (mixed &$actual, mixed &$expected): bool
    {
+      // ?
+      if (is_callable($actual) === false) {
+         return false;
+      }
+
       // !
       $arguments = $this->arguments;
-      $timeout = $this->timeout ?? $expected;
+      $timeout = $this->expected ?? $expected;
 
       // ! Check if have pcntl_* extension
       if (function_exists('pcntl_fork') === false) {
@@ -94,7 +99,7 @@ class RunTimeout extends Waiter
 
    public function fail (mixed $actual, mixed $expected, int $verbosity = 0): Fallback
    {
-      $timeout = $this->timeout ?? $expected;
+      $timeout = $this->expected ?? $expected;
 
       return new Fallback(
          'Failed asserting that the callable executed within %s microseconds.',

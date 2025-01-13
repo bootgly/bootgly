@@ -22,7 +22,7 @@ use Bootgly\CLI\Terminal;
 
 class CLI extends Projects // Command Line Interface
 {
-   public const BOOT_FILE = 'CLI.boot.php';
+   public const string BOOT_FILE = 'CLI.boot.php';
 
    // * Config
    public static bool $interactive = false;

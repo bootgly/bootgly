@@ -1,7 +1,7 @@
 <?php
 
 use Generator;
-use Bootgly\ACI\Tests\Cases\Assertion;
+use Bootgly\ACI\Tests\Assertion;
 
 return [
    // @ configure

@@ -19,7 +19,16 @@ class VariadicDirPath extends Matcher
 {
    public function assert (mixed &$actual, mixed &$expected): bool
    {
-      $pattern = $this->pattern ?? (string) $expected;
+      // ?
+      if (is_string($actual) === false) {
+         return false;
+      }
+      if (is_string($expected) === false) {
+         return false;
+      }
+
+      // @
+      $pattern = $this->pattern ?? $expected;
 
       $pattern = preg_quote(
          str: $pattern,
@@ -33,7 +42,7 @@ class VariadicDirPath extends Matcher
 
       $result = preg_match(
          pattern: "/^$pattern$/",
-         subject: (string) $actual,
+         subject: $actual,
          matches: $matches
       );
       $this->matches = $matches;

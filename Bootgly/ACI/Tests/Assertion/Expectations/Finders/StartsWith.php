@@ -21,9 +21,16 @@ class StartsWith extends Finder
    {
       $needle = $this->needle ?? $expected;
 
+      if (
+         is_string($actual) === false
+         || is_string($needle) === false
+      ) {
+         return false;
+      }
+
       return strpos(
-         haystack: (string) $actual,
-         needle: (string) $needle
+         haystack: $actual,
+         needle: $needle
       ) === 0;
    }
 

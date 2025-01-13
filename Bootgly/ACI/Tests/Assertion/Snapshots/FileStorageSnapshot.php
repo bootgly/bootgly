@@ -73,12 +73,16 @@ class FileStorageSnapshot extends Snapshot
       );
 
       if ($File->open(File::READONLY_MODE)) {
-         $data = unserialize($File->read());
+         $file_data = $File->read();
          $File->close();
 
-         $this->restored = true;
+         if ($file_data !== false) {
+            $data = unserialize($file_data);
 
-         return true;
+            $this->restored = true;
+
+            return true;
+         }
       }
 
       $this->restored = false;

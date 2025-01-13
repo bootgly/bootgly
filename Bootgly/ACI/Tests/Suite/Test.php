@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\ACI\Tests;
+namespace Bootgly\ACI\Tests\Suite;
 
 
 use function array_reduce;
@@ -22,60 +22,70 @@ use function str_pad;
 use function str_repeat;
 use function strlen;
 use AssertionError;
-use Exception;
 use Generator;
+use UnderflowException;
 
+use Bootgly\ACI\Benchmark;
 use Bootgly\ACI\Logs\LoggableEscaped;
-use Bootgly\ACI\Tests;
-#use Bootgly\ACI\Tests\Assertion;
+use Bootgly\ACI\Tests\Suite;
 use Bootgly\ACI\Tests\Assertions;
-use Bootgly\ACI\Tests\Cases\Assertion;
-use Bootgly\ACI\Tests\Test\IgnoreTestException;
+use Bootgly\ACI\Tests\Assertion;
+use Bootgly\ACI\Tests\Suite\Test\Specification;
 
 
-class Test extends Assertions
+class Test
 {
    use LoggableEscaped;
 
 
-   public Tests $Tests;
+   public Suite $Suite;
 
    // * Config
-   /** @var array<string,mixed> */
-   public array $specifications;
-   // ...inherited: descriptions
+   public Specification $Specification;
+   // # Assertions
+   /**
+    * The descriptions of the Assertions.
+    * @var array<string|null>
+    */
+   public array $descriptions = [];
 
    // * Data
-   // ...inherited: results
+   // # Assertions
+   /**
+    * The results of the Assertions.
+    * @var array<bool|null>
+    */
+   protected array $results = [];
 
    // * Metadata
+   private string $filename;
+   // # Result
    private bool $passed;
-   private mixed $filename;
-   // @ Output
+   // # Output
    private false|string $debugged;
    // @ Profiling
    private float $started;
    private float $finished;
    private string $elapsed;
    // @ Reporting
-   private ?AssertionError $AssertionError;
+   private null|AssertionError $AssertionError;
 
 
    /**
-    * Test constructor.
+    * Test Case constructor.
     * 
-    * @param Tests&Tester $Tests Test cases
+    * @param Suite $Suite Test Suite instance
     * @param array<string,mixed> $specifications Test cases specifications
     */
-   public function __construct (Tests&Tester $Tests, array $specifications)
+   public function __construct (Suite $Suite, array $specifications)
    {
-      $this->Tests = $Tests;
+      $this->Suite = $Suite;
 
       // * Config
-      $this->specifications = $specifications;
+      $this->Specification = new Specification($specifications);
       // ...inherited:
       $this->descriptions = [
-         $specifications['describe'] ?? null
+         $this->Specification->description ?? null
       ];
 
       // * Data
@@ -83,12 +93,12 @@ class Test extends Assertions
       $this->results = [];
 
       // * Metadata
-      $this->filename = current($this->Tests->tests); // @ file
-      // @ Output
+      $this->filename = current($this->Suite->tests) ?: '';
+      // # Output
       $this->debugged = false;
-      // @ Profiling
+      // # Profiling
       $this->started = microtime(true);
-      // @ Reporting
+      // # Reporting
       $this->AssertionError = null;
    }
    public function __get (string $name): mixed
@@ -109,7 +119,7 @@ class Test extends Assertions
       return null;
    }
 
-   private function describe (?string $description, ?bool $status, string $indicator = '╟'): void
+   private function describe (null|string $description, ?bool $status, string $indicator = '╟'): void
    {
       if ($description === null) {
          return;
@@ -172,7 +182,7 @@ class Test extends Assertions
          $index++;
       }
 
-      if (isSet($this->specifications['last']) === false) {
+      if (isSet($this->Specification->last) === false) {
          $this->log(PHP_EOL);
       }
    }
@@ -180,11 +190,11 @@ class Test extends Assertions
    {
       static $separatorLength;
 
-      $line   = $this->specifications['separator.line']   ?? null;
-      $left   = $this->specifications['separator.left']   ?? null;
-      $header = $this->specifications['separator.header'] ?? null;
+      $line   = $this->Specification->Separator->line   ?? null;
+      $left   = $this->Specification->Separator->left   ?? null;
+      $header = $this->Specification->Separator->header ?? null;
 
-      $width = Tests::$width + 30;
+      $width = Suite::$width + 30;
 
       if ($line) {
          if ($line !== true) {
@@ -213,19 +223,19 @@ class Test extends Assertions
       }
    }
 
-   // @
+   // # Test Case
    /**
-    * Pretest the test case.
+    * Pretest the Test Case.
     *
     * @return bool
     */
    private function pretest (): bool
    {
-      $retested = $this->specifications['retested'] ?? null;
+      $retested = $this->Specification->retested ?? null;
 
       // @ Skip without output (used to skip with command arguments)
-      if ($this->specifications['ignore'] ?? false) {
-         $this->Tests->skipped++;
+      if ($this->Specification->ignore ?? false) {
+         $this->Suite->skipped++;
          return false;
       }
 
@@ -236,7 +246,7 @@ class Test extends Assertions
       return true;
    }
    /**
-    * Run the test case.
+    * Run the Test Case.
     * 
     * @param mixed ...$arguments
     *
@@ -252,13 +262,13 @@ class Test extends Assertions
       // ---
 
       // !
-      $test = $this->specifications['test'];
-      $retest = $this->specifications['retest'] ?? null;
+      $test = $this->Specification->test;
+      $retest = $this->Specification->retest ?? null;
 
       try {
          ob_start();
 
-         $test instanceof Cases\Assertions
+         $test instanceof Assertions
             ? $Assertions = $test->run(...$arguments)
             : $Assertions = $test(...$arguments);
 
@@ -271,16 +281,17 @@ class Test extends Assertions
                'boolean', 'string' => [$Assertions],
                'object' => 
                   $Assertions instanceof Assertion
-                  || $Assertions instanceof Cases\Assertions
+                  || $Assertions instanceof Assertions
                   ?: throw new AssertionError($message),
                'NULL' => [null],
                default => throw new AssertionError($message)
             };
          }
-         
-         foreach ($Assertions as $Assertion) {
+
+         /** @var Assertion|bool|string|null $Assertion */
+         foreach ($Assertions as $Assertion) { // @phpstan-ignore-line
             if ($Assertion === null) { // ignore
-               throw new IgnoreTestException;
+               throw new UnderflowException;
             }
 
             // Assertion instance
@@ -301,7 +312,7 @@ class Test extends Assertions
             // $Assertion is FALSE or a string (Test failed!)
             else if ($Assertion === false || $Assertion !== true) {
                throw new AssertionError(
-                  message: Assertion::$fallback ?? $Assertion
+                  message: Assertion::$fallback ?? ($Assertion ?: 'Test failed!')
                );
             }
             // $Assertion is TRUE (Test passed!)
@@ -311,13 +322,12 @@ class Test extends Assertions
             }
    
             $this->results[] = true;
-            $this->Tests->assertions++;
          }
 
          $this->postest();
 
          // ---
-         if ($this->Tests->autoReport) {
+         if ($this->Suite->autoReport) {
             $this->pass();
          }
       }
@@ -332,18 +342,18 @@ class Test extends Assertions
          $this->descriptions[] = Assertion::$description;
          $this->results[] = false;
 
-         if ($this->Tests->autoReport) {
+         if ($this->Suite->autoReport) {
             $this->fail($AssertionError->getMessage());
          }
       }
-      catch (IgnoreTestException $Exception) {
+      catch (UnderflowException $Exception) {
          // @ ignore
       }
       finally {
          if ($retest) {
-            $this->specifications['test'] = $retest;
-            $this->specifications['retest'] = null;
-            $this->specifications['retested'] = true;
+            $this->Specification->test = $retest;
+            $this->Specification->retest = null;
+            $this->Specification->retested = true;
 
             $passed = $this->__get('passed');
             $arguments = [$test, $passed, ...$arguments];
@@ -353,7 +363,7 @@ class Test extends Assertions
       }
    }
    /**
-    * Postest the test case.
+    * Postest the Test Case.
     * 
     * @return void
     */
@@ -366,13 +376,18 @@ class Test extends Assertions
       $this->elapsed ??= Benchmark::format($this->started, $this->finished);
    }
 
-   // # Reporting
-   public function fail (?string $message = null): void
+   // @ Reporting
+   public function fail (null|string $message = null): void
    {
-      $this->Tests->failed++;
+      $this->Suite->failed++;
 
-      $case = sprintf('%03d', $this->specifications['case']);
-      $test = str_pad($this->filename . ':', Tests::$width, ' ', STR_PAD_RIGHT);
+      $case = sprintf('%03d', $this->Specification->case);
+      $test = str_pad(
+         "{$this->filename}:",
+         Suite::$width,
+         ' ',
+         STR_PAD_RIGHT
+      );
       $elapsed = $this->elapsed;
 
       // @ output
@@ -394,23 +409,23 @@ class Test extends Assertions
          );
       }
 
-      // @ Debugging
-      $this->log($this->debugged);
+      // # Debugging
+      $this->log($this->debugged ?: '');
 
       // @ exit
-      if (Tests::$exitOnFailure && $this->specifications['retest'] === null) {
-         $this->Tests->summarize();
+      if (Suite::$exitOnFailure && $this->Specification->retest === null) {
+         $this->Suite->summarize();
          exit(1);
       }
    }
    public function pass (): void
    {
-      $this->Tests->passed++;
+      $this->Suite->passed++;
 
-      $case = sprintf('%03d', $this->specifications['case']);
+      $case = sprintf('%03d', $this->Specification->case);
       $test = str_pad(
          string: $this->filename,
-         length: Tests::$width,
+         length: Suite::$width,
          pad_string: '.',
          pad_type: STR_PAD_RIGHT
       );

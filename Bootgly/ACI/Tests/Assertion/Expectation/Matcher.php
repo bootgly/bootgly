@@ -17,7 +17,7 @@ use Bootgly\ACI\Tests\Asserting;
 /**
  * Matchers are for assertions that match $actual with pattern ($expected).
  * 
- * Use both $actual and $expected as input in the assertion.
+ * Use both $actual and $expected (pattern) as input in the assertion.
  * The $expected is a pattern to match with $actual.
  * 
  * No output.
@@ -25,10 +25,12 @@ use Bootgly\ACI\Tests\Asserting;
 abstract class Matcher implements Asserting
 {
    // * Config
-   public ?string $pattern;
+   public null|string $pattern;
+   /** @var array<string> */
    public array $matches;
 
-   public function __construct (?string $pattern = null)
+
+   public function __construct (null|string $pattern = null)
    {
       $this->pattern = $pattern;
    }

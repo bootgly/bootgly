@@ -49,8 +49,6 @@ trait Delimiters
             new Delimiters\LeftOpenInterval($from, $to),
          Interval::RightOpen =>
             new Delimiters\RightOpenInterval($from, $to),
-         default =>
-            throw new AssertionError('Invalid interval delimiter.')
       });
 
       return $this;

@@ -11,6 +11,8 @@
 namespace Bootgly\ACI\Tests\Assertions;
 
 
+use Closure;
+
 use Bootgly\ABI\Configs\Setupables;
 
 

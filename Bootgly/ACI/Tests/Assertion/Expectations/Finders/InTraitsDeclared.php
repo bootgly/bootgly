@@ -19,6 +19,10 @@ class InTraitsDeclared extends Finder
 {
    public function assert (mixed &$actual, mixed &$expected): bool
    {
+      if (is_string($expected) === false) {
+         return false;
+      }
+
       return trait_exists($expected);
    }
 

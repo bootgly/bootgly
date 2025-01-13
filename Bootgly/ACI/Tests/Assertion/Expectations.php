@@ -122,7 +122,9 @@ abstract class Expectations
    {
       // ?
       if ($this->actual !== Argument::Undefined) {
-         throw new AssertionError("The actual value is already set.");
+         throw new AssertionError(
+            'You can`t reset the actual value in `expect(...)` method. The actual value is already set.'
+         );
       }
 
       // !
@@ -139,15 +141,18 @@ abstract class Expectations
             Op::GreaterThan => new Comparators\GreaterThan($expected),
             Op::LessThan => new Comparators\LessThan($expected),
             Op::GreaterThanOrEqual => new Comparators\GreaterThanOrEqual($expected),
-            Op::LessThanOrEqual => new Comparators\LessThanOrEqual($expected),
-            default => throw new AssertionError('Invalid comparator.')
+            Op::LessThanOrEqual => new Comparators\LessThanOrEqual($expected)
          });
       }
-      else if ($comparator !== null && $expected === Argument::Undefined) {
-         throw new AssertionError('The expected value must be defined when using a comparator.');
+      else if ($comparator !== null && $expected === Argument::Undefined) { // @phpstan-ignore-line
+         throw new AssertionError(
+            'The expected value must be defined when using a comparator in `expect(...)` method.'
+         );
       }
       else if ($comparator === null && $expected !== Argument::Undefined) {
-         throw new AssertionError('The comparator must be defined when using an expected value.');
+         throw new AssertionError(
+            'The comparator must be defined when using an expected value in `expect(...)` method.'
+         );
       }
 
       return $this;

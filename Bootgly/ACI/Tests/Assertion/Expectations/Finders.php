@@ -54,9 +54,6 @@ trait Finders
 
          In::TraitsDeclared =>
             new Finders\InTraitsDeclared($needle),
-
-         default =>
-            throw new AssertionError('Invalid finder.')
       });
 
       return $this;

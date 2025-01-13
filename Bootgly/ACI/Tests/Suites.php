@@ -11,55 +11,97 @@
 namespace Bootgly\ACI\Tests;
 
 
+use function count;
+
+use Bootgly\ACI\Benchmark;
 use Bootgly\ACI\Logs\LoggableEscaped;
-use Bootgly\ACI\Tests;
+use Bootgly\ACI\Tests\Assertions;
 
 
 class Suites
 {
    use LoggableEscaped;
 
-   // * Data
-   /** @var array<mixed> */
-   public array $suites;
+   // * Config
+   /**
+    * The Test Suite directories.
+    *
+    * @var array<string>
+    */
+   public array $directories;
+
    // * Metadata
-   // @ Status
+   // # Status
    public int $failed;
    public int $passed;
    public int $skipped;
-   // @ Stats
+   // # Stats
+   public static int $count = 0;
    public int $total;
-   // @ Time
+   // # Time
    public float $started;
    public float $finished;
 
 
-   public function __construct ()
+   /**
+    * Suites constructor.
+    *
+    * @param array<string> $directories The Test Suite directories.
+    */
+   public function __construct (array $directories)
    {
+      // * Config
+      $this->directories = $directories;
+
       // * Metadata
-      // @ Status
+      // # Status
       $this->failed = 0;
       $this->passed = 0;
       $this->skipped = 0;
-      // @ Time
+      // # Stats
+      // self::$count
+      $this->total = count($this->directories);
+      // # Time
       $this->started = microtime(true);
+      // $finished
+   }
+
+   public function iterate (
+      int $suite,
+      int $case,
+      callable $iterator
+   ): void
+   {
+      foreach ($this->directories as $index => $dir) {
+         self::$count++;
+
+         if ($suite > 0 && $suite !== $index + 1) {
+            $this->skipped++;
+            continue;
+         }
+
+         /** @var null|true|Suite $Suite */
+         $Suite = $iterator($dir, $case);
+
+         $this->passed++;
+      }
    }
 
    /**
-    * Summarize test suites.
+    * Summarize Test Suites.
     *
     * @return void
     */
    public function summarize (): void
    {
-      // @ Result
+      // # Result
       $failed = '@:error:' . $this->failed . ' failed @;';
       $skipped = '@:notice:' . $this->skipped . ' skipped @;';
       $passed = '@:success:' . $this->passed . ' passed @;';
-      // @ Stats
-      $cases = '@:info:' . Tests::$cases . ' @;';
-      $total = '@#white:' . $this->total . ' total @;';
-      // @ Time
+      // # Stats
+      $cases = '@:info:' . Assertions::$count . ' @;';
+      $total = '@:info:' . $this->total . ' @;';
+      // # Time
       $started = $this->started;
       $finished = $this->finished = microtime(true);
       // duration
@@ -72,7 +114,8 @@ class Suites
       $this->log(<<<TESTS
 
       @#white:============================================================ @;
-      @#white:Test Suites: @; {$failed}, {$skipped}, {$passed}, {$total}
+      @#white:Test Suites: @; {$failed}, {$skipped}, {$passed}
+      @#white:# of Test Suites: @; {$total}
       @#white:# of Test Cases: @; {$cases}
       @#white:Total Duration: @; {$duration}
       {$ran}

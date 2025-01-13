@@ -14,8 +14,11 @@ namespace Bootgly\API;
 use Bootgly\ABI\Resources;
 
 
-abstract class Projects implements Resources
+abstract class Projects
 {
+   use Resources;
+
+
    // _Dir
    // Author
    public const AUTHOR_DIR   = BOOTGLY_ROOT_BASE . '/projects/';

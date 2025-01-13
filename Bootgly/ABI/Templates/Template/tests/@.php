@@ -2,19 +2,20 @@
 
 namespace Bootgly\ABI\Templates\Template;
 
+use Bootgly\ACI\Tests\Suite;
 use Bootgly\ABI\Templates\Template;
 
-return [
+return new Suite(
    // * Config
-   'autoBoot' => __DIR__,
-   'autoInstance' => true,
-   'autoReport' => true,
-   'autoSummarize' => true,
-   'exitOnFailure' => true,
-   'testables' => [new Template('')],
+   autoBoot: __DIR__,
+   autoInstance: true,
+   autoReport: true,
+   autoSummarize: true,
+   exitOnFailure: true,
+   testables: [new Template('')],
    // * Data
-   'suiteName' => __NAMESPACE__,
-   'tests' => [
+   suiteName: __NAMESPACE__,
+   tests: [
       '0.0.1-render-template_file',
       '1.0.0-render-php_code',
       '1.1.1-render-outputs-1',
@@ -30,4 +31,4 @@ return [
       '3.1.2.2-render-conditionals-short_conditional_ifs',
       '3.2.1-render-conditionals-switch',
    ]
-];
+);

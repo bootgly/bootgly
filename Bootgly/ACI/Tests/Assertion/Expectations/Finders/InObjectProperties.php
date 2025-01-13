@@ -19,6 +19,16 @@ class InObjectProperties extends Finder
 {
    public function assert (mixed &$actual, mixed &$expected): bool
    {
+      if (
+         is_object($actual) === false
+         && is_string($actual) === false
+      ) {
+         return false;
+      }
+      if (is_string($expected) === false) {
+         return false;
+      }
+
       return property_exists($actual, $expected);
    }
 

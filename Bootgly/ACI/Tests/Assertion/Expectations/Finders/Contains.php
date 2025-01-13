@@ -19,24 +19,36 @@ class Contains extends Finder
 {
    public function assert (mixed &$actual, mixed &$expected): bool
    {
-      $type = gettype($actual);
       $needle = $this->needle ?? $expected;
 
-      return match ($type) {
-         'array' => in_array(
+      if (is_array($actual) === true) {
+         return in_array(
             needle: $needle,
             haystack: (array) $actual
-         ),
-         'string' => str_contains(
-            haystack: (string) $actual,
-            needle: (string) $needle
-         ),
-         'object' => property_exists(
+         );
+      }
+
+      if (
+         is_string($actual) === true
+         && is_string($needle) === true
+      ) {
+         return str_contains(
+            haystack: $actual,
+            needle: $needle
+         );
+      }
+
+      if (
+         (is_object($actual) === true || is_string($actual) === true)
+         && is_string($needle) === true
+      ) {
+         return property_exists(
             object_or_class: $actual,
             property: $needle
-         ),
-         default => false
-      };
+         );
+      }
+
+      return false;
    }
 
    public function fail (mixed $actual, mixed $expected, int $verbosity = 0): Fallback
@@ -65,6 +77,7 @@ class Contains extends Finder
          ],
          default => [
             'format' => "Cannot assert that the `actual` contains `expected`.",
+            'values' => []
          ]
       };
 

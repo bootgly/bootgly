@@ -2,16 +2,18 @@
 
 namespace Bootgly\ABI\IO\FS\File;
 
-return [
+use Bootgly\ACI\Tests\Suite;
+
+return new Suite(
    // * Config
-   'autoBoot' => __DIR__,
-   'autoInstance' => true,
-   'autoReport' => true,
-   'autoSummarize' => true,
-   'exitOnFailure' => true,
+   autoBoot: __DIR__,
+   autoInstance: true,
+   autoReport: true,
+   autoSummarize: true,
+   exitOnFailure: true,
    // * Data
-   'suiteName' => __NAMESPACE__,
-   'tests' => [
+   suiteName: __NAMESPACE__,
+   tests: [
       '1.1-construct-real_file',
 
       '2.1.x-dynamic_get-not_constructed-properties-basename',
@@ -49,4 +51,4 @@ return [
       '4.1.4-dynamic_call-open_file-continuous_modes',
       '4.1.5-dynamic_call-open_file-exclusive_modes',
    ]
-];
+);

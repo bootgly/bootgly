@@ -21,6 +21,10 @@ class ValueEven extends Behavior
 {
    public function assert (mixed &$actual, mixed &$expected): bool
    {
+      if (is_numeric($actual) === false) {
+         return false;
+      }
+
       return $actual % 2 === 0;
    }
 

@@ -37,7 +37,7 @@ trait Throwers
     *
     * @return self Returns the current instance for method chaining.
     */
-   public function throw (Throwable $expected): self
+   public function throw (Error|Exception|Throwable $expected): self
    {
       // ?
       if (isSet($this->arguments) === false) {
@@ -50,7 +50,7 @@ trait Throwers
       $Expectation = match (true) {
          $expected instanceof Error =>
             new Throwers\ThrowError($expected, $arguments),
-         $expected instanceof Exception => 
+         $expected instanceof Exception => // @phpstan-ignore-line
             new Throwers\ThrowException($expected, $arguments),
          default => new Throwers\ThrowThrowable($expected, $arguments)
       };

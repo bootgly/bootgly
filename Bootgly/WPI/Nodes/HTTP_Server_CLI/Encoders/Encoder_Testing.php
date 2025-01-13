@@ -28,7 +28,7 @@ class Encoder_Testing extends Encoders
    {
       // @ Instance callbacks
       Server::$Response = new Response;
-      Server::$Router = new Router(Server::class);
+      Server::$Router = new Router;
 
       // @ Reset SAPI
       SAPI::boot(reset: true, base: Server::class, key: 'response');

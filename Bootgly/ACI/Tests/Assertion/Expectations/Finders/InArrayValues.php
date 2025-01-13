@@ -19,6 +19,10 @@ class InArrayValues extends Finder
 {
    public function assert (mixed &$actual, mixed &$expected): bool
    {
+      if (is_array($actual) === false) {
+         return false;
+      }
+
       return in_array($expected, $actual);
    }
 

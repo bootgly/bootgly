@@ -1,6 +1,9 @@
 <?php
-return [
-   'suites' => [
+
+use Bootgly\ACI\Tests\Suites;
+
+return new Suites(
+   directories: [
       // Abstract Bootable Interface (ABI)
       // ? 1
       #'Bootgly/ABI/Configs/*', // ! Not testable (for now)
@@ -40,4 +43,4 @@ return [
       // Web Programming Interface (WPI)
       'Bootgly/WPI/Nodes/HTTP_Server_CLI/',
    ]
-];
+);

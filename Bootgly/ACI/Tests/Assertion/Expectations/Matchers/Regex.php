@@ -19,13 +19,22 @@ class Regex extends Matcher
 {
    public function assert (mixed &$actual, mixed &$expected): bool
    {
+      // ?
+      if (is_string($expected) === false) {
+         return false;
+      }
+      if (is_string($actual) === false) {
+         return false;
+      }
+
+      // @
       // * Config
-      $pattern = $this->pattern ?? (string) $expected;
+      $pattern = $this->pattern ?? $expected;
       $matches = fn (): array => $this->matches;
 
       $result = preg_match(
-         pattern: (string) $pattern,
-         subject: (string) $actual,
+         pattern: $pattern,
+         subject: $actual,
          matches: $matches
       ) === 1;
 

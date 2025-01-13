@@ -21,7 +21,7 @@ use Bootgly\ABI\Data\__String\Escapeable\Viewport\Scrollable;
 use Bootgly\ABI\Resources;
 
 
-class Escaped implements Resources
+class Escaped
 {
    use Escapeable;
    use Positionable;
@@ -30,6 +30,7 @@ class Escaped implements Resources
    use Formattable;
    use Modifiable;
    use Scrollable;
+   use Resources;
 
    // * Config
    // ...

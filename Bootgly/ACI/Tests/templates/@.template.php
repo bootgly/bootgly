@@ -1,6 +1,6 @@
 <?php
 
-# namespace  
+namespace Bootgly\ACI\Tests;
 
 return [
    // * Config
