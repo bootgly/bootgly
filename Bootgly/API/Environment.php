@@ -13,7 +13,7 @@ namespace Bootgly\API;
 
 class Environment
 {
-   public const CI_CD = 1;
+   public const int CI_CD = 1;
 
    // * Config
    /**
@@ -34,6 +34,7 @@ class Environment
     * Load environment variables from a file.
     *
     * @param string $file
+    *
     * @return bool
     */
    public static function load ($file): bool
@@ -58,33 +59,53 @@ class Environment
     * Save the environment variables to a file.
     *
     * @param string $file
+    *
     * @return bool
     */
    public static function save (string $file): bool
    {
-      $envContent = '';
-      foreach (self::get() as $key => $value) {
-         $envContent .= "$key=$value\n";
+      // !
+      $env_list = self::list();
+
+      // @
+      $env_content = '';
+      foreach ($env_list as $key => $value) {
+         $env_content .= "$key=$value\n";
       }
 
-      return file_put_contents($file, $envContent) !== false;
+      $file_bytes_written = file_put_contents($file, $env_content);
+
+      return $file_bytes_written !== false;
    }
 
    // ! Variable
    /**
+    * Get the list of environment variables.
+    *
+    * @return array<string,string>
+    */
+   public static function list (): array
+   {
+      /** @var array<string,string> $list */
+      $list = getenv();
+
+      return $list;
+   }
+   /**
     * Get the value of an environment variable.
     *
-    * @param string|null $key
-    * @param mixed $default
-    * @return array<string>|string|false|null
+    * @param string $key
+    * @param null|string|false $default
+    *
+    * @return false|string
     */
-   public static function get (? string $key = null, mixed $default = null): array|string|false|null
+   public static function get (string $key, null|string|false $default = null): false|string
    {
       $key = self::$prefix . $key . self::$suffix;
 
       $value = getenv($key);
 
-      if ($value === false) {
+      if ($value === false && $default !== null) {
          return $default;
       }
 
@@ -108,6 +129,7 @@ class Environment
     *
     * @param string $key
     * @param string|int $value
+    *
     * @return bool
     */
    public static function put (string $key, string|int $value): bool
@@ -121,6 +143,7 @@ class Environment
     * Clear the value of an environment variable.
     *
     * @param string $key
+    *
     * @return bool
     */
    public static function del (string $key): bool

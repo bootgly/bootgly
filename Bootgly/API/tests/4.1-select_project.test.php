@@ -2,6 +2,8 @@
 
 namespace Bootgly;
 
+use Bootgly\ACI\Tests\Assertion;
+use Bootgly\ACI\Tests\Assertions;
 use Bootgly\API\Project;
 use Bootgly\API\Projects;
 
@@ -11,7 +13,7 @@ return [
    // @ Simulate
    // ...
    // @ Test
-   'test' => function () {
+   'test' => new Assertions(function () {
       // ! Project 1 instance
       $Project1 = new Project;
 
@@ -27,13 +29,15 @@ return [
       // ---------
 
       // ! Project 2 instance
-      $Project2 = new Project;
+      new Project;
 
       // @ Select Project
       $Project = Projects::select(project: 'Bootgly');
-      yield assert(
-         assertion: $Project->path === Projects::CONSUMER_DIR . 'Bootgly/',
-         description: 'Failed to select Project by name'
-      );
-   }
+      yield new Assertion(
+         fallback: 'Failed to select Project by name'
+      )
+         ->expect($Project->path)
+         ->to->be(Projects::CONSUMER_DIR . 'Bootgly/')
+         ->assert();
+   })
 ];

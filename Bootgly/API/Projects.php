@@ -21,9 +21,9 @@ abstract class Projects
 
    // _Dir
    // Author
-   public const AUTHOR_DIR   = BOOTGLY_ROOT_BASE . '/projects/';
+   public const string AUTHOR_DIR = BOOTGLY_ROOT_BASE . '/projects/';
    // Consumer
-   public const CONSUMER_DIR = BOOTGLY_WORKING_BASE . '/projects/';
+   public const string CONSUMER_DIR = BOOTGLY_WORKING_BASE . '/projects/';
 
    // * Config
    // ...
@@ -93,7 +93,8 @@ abstract class Projects
    /**
     * Index a project by name. If the project is already indexed, it will return false.
     *
-    * @param string $project 
+    * @param string $project
+    *
     * @return bool 
     */
    public static function index (string $project): bool
@@ -107,7 +108,7 @@ abstract class Projects
       }
 
       // @
-      $index = count(self::$projects) - 1;
+      $index = count(self::$projects);
       self::$index = $index;
       self::$indexes[$project] = $index;
 
@@ -127,9 +128,10 @@ abstract class Projects
     * Select a project by index or name. If no project is selected, the default project is selected.
     *
     * @param null|string|int $project 
-    * @return false|Project 
+    *
+    * @return Project|false
     */
-   public static function select (null|string|int $project): false|Project
+   public static function select (null|string|int $project = null): Project|false
    {
       // ?!
       if (is_string($project) === true) {

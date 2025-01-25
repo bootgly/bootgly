@@ -11,6 +11,13 @@
 namespace Bootgly\API; // namespace Bootgly\API\Projects
 
 
+use function explode;
+use function is_dir;
+use function trim;
+
+use Bootgly\API\Projects;
+
+
 class Project
 {
    // * Config
@@ -25,12 +32,29 @@ class Project
 
    // * Data
    protected string $name;
-   /** @var string[] */
+   /** @var array<string> */
    protected array $paths;
 
    // * Metadata
-   private ?int $index;
-   private string $path;
+   public string $path {
+      get {
+         // * Data
+         $paths = $this->paths;
+         // * Metadata
+         $path = null;
+
+         foreach ($paths as $_path) {
+            if ( is_dir($_path) ) {
+               $path = $_path;
+               break;
+            }
+         }
+
+         $path ??= '';
+
+         return $path;
+      }
+   }
 
 
    public function __construct ()
@@ -48,44 +72,19 @@ class Project
 
       // * Data
       $this->name = '';
+      $this->paths = [];
 
       // * Metadata
-      $this->index = null;
-   }
-
-   public function __get (string $name): mixed
-   {
-      switch ($name) {
-         case 'path':
-            // * Data
-            $paths = $this->paths ?? [];
-            // * Metadata
-            $path = null;
-
-            foreach ($paths as $_path) {
-               if ( is_dir($_path) ) {
-                  $path = $_path;
-                  break;
-               }
-            }
-
-            $path ??= '';
-
-            $this->path = $path;
-
-            return $this->path;
-         default:
-            return $this->$name;
-      }
+      // $this->path
    }
 
    public function __toString (): string
    {
-      return $this->__get("path");
+      return $this->path;
    }
 
    // ! Path
-   public function construct (? string $path = null): string
+   public function construct (null|string $path = null): string
    {
       if ($path) {
          $path = trim($path, '/');
@@ -103,7 +102,8 @@ class Project
                default => null
             };
          }
-      } else {
+      }
+      else {
          $path .= $this->vendor;
          $path .= $this->container;
          $path .= $this->package;
@@ -118,9 +118,6 @@ class Project
          $path = Projects::CONSUMER_DIR . $path . '/';
 
          $this->paths[] = $path;
-
-         // @ Add Project to Projects
-         #$this->index = Projects::add($this);
       }
 
       return $path;
@@ -132,10 +129,6 @@ class Project
    // ! ID
    public function name (string $name): bool
    {
-      if ($this->index === null) {
-         return false;
-      }
-
       $indexed = Projects::index($name);
       if ($indexed === false) {
          return false;

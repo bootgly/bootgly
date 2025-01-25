@@ -171,8 +171,8 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
                   }
 
                   // @ Load Test case from file
-                  /** @var array<string,mixed>|null $test */
                   try {
+                     /** @var array<string,mixed>|null $test */
                      $test = require $Test_Case_File;
                   }
                   catch (Throwable) {
