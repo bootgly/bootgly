@@ -12,6 +12,7 @@ namespace Bootgly\CLI\UI\Components\Table;
 
 
 use Bootgly\CLI\UI\Components\Table;
+use Bootgly\ADI\Table\Section;
 
 
 class Rows
@@ -24,8 +25,7 @@ class Rows
    // ...
 
    // * Data
-   /** @var array<array<array<string>>>> */
-   public ? array $rows;
+   // ...
 
    // * Metadata
    // ...
@@ -41,7 +41,7 @@ class Rows
       // ...
 
       // * Data
-      $this->rows = &$Table->Data->rows;
+      // ...
 
       // * Metadata
       // ...
@@ -49,7 +49,8 @@ class Rows
 
    public function render (): void
    {
-      $data = $this->rows;
+      /** @var array<string,array<int,array<int,mixed>>> */
+      $data = $this->Table->Data->rows;
 
       if (count($data) === 0) {
          return;
@@ -58,9 +59,12 @@ class Rows
       foreach ($data as $section => $rows) {
          // @ Pre
          match ($section) {
-            'header' => $this->Table->border(position: 'top', section: $section),
-            'body' => $this->Table->border(position: 'top', section: $section),
-            'footer' => $this->Table->border(position: 'bottom', section: $section),
+            Section::Header->name =>
+               $this->Table->border(position: 'top', section: $section),
+            Section::Body->name =>
+               $this->Table->border(position: 'top', section: $section),
+            Section::Footer->name =>
+               $this->Table->border(position: 'bottom', section: $section),
             default => null
          };
 
@@ -73,7 +77,8 @@ class Rows
          match ($section) {
             #'header' => $this->Table->border(position: 'top', section: $section),
             #'body' => $this->Table->border(position: 'bottom', section: $section),
-            'footer' => $this->Table->border(position: 'bottom', section: $section),
+            Section::Footer->name =>
+               $this->Table->border(position: 'bottom', section: $section),
             default => null
          };
       }

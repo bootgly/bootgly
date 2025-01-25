@@ -11,20 +11,39 @@
 namespace Bootgly\ADI;
 
 
+use Throwable;
+use Bootgly\ADI\Table\Section\Body;
+use Bootgly\ADI\Table\Section\Footer;
+use Bootgly\ADI\Table\Section\Header;
+use Bootgly\ADI\Table\Section;
+
+
 class Table
 {
    // * Config
    // ...
 
    // * Data
-   /** @var array<int>|null */
-   public ?array $columns; // set table data by columns...
-   /** @var array<string,array<int,array<int,mixed>>>|null */
-   public ?array $rows; // set table data by rows... // TODO: rename to sections?
+   /** @var Header<array-key,mixed> */
+   public Header $Header;
+   /** @var Body<array-key,mixed> */
+   public Body $Body;
+   /** @var Footer<array-key,mixed> */
+   public Footer $Footer;
    // ---
-   #private ?array $header;
-   #private ?array $body;
-   #private ?array $footer;
+   /** @var array<int>|null */
+   public null|array $columns; // set table data by columns...
+   /** @var array<string,array<mixed>>|null */
+   public null|array $rows {
+      get {
+         return [
+            Section::Header->name => $this->Header->rows,
+            Section::Body->name => $this->Body->rows,
+            Section::Footer->name => $this->Footer->rows,
+         ];
+      }
+   }
+   // ---
 
    // * Metadata
    // ...
@@ -34,67 +53,10 @@ class Table
    {
       // * Data
       $this->columns = null;
-      $this->rows = null;
-   }
-
-   /**
-    * Set the value of a specific section of the table.
-    * 
-    * @param string $name
-    * @param array<int,array<int,mixed>> $value
-    */
-   public function __set (string $name, ? array $value): void
-   {
-      switch ($name) {
-         case 'header':
-         case 'body':
-         case 'footer':
-            if ($value && (count($value) !== count($value, COUNT_RECURSIVE)) === false) {
-               $value = [$value];
-            }
-
-            $this->rows[$name] = $value;
-
-            break;
-      }
-   }
-
-   /**
-    * Get the value of a specific section of the table.
-    * 
-    * @param string $section
-    *
-    * @return array<int,array<int,mixed>>
-    */
-   public function get (string $section = ''): array
-   {
-      return match ($section) {
-         'header' => $this->rows['header'],
-         'body'   => $this->rows['body'],
-         'footer' => $this->rows['footer'],
-         default  => $this->rows
-      };
-   }
-   /**
-    * Set the value of a specific section of the table.
-    * 
-    * @param null|array<int,array<int,mixed>> $header
-    * @param null|array<int,array<int,mixed>> $body
-    * @param null|array<int,array<int,mixed>> $footer
-    */
-   public function set (? array $header = null, ? array $body = null, ? array $footer = null): void
-   {
-      if ($header) {
-         $this->__set("header", $header);
-      }
-
-      if ($body) {
-         $this->__set("body", $body);
-      }
-
-      if ($footer) {
-         $this->__set("footer", $footer);
-      }
+      // ---
+      $this->Header = new Header;
+      $this->Body = new Body;
+      $this->Footer = new Footer;
    }
 
    // # Operations
@@ -109,19 +71,26 @@ class Table
    {
       if ($column < 0) return 0;
 
-      $body = $this->rows['body'];
-
+      // @
       $sum = 0;
       try {
-         foreach ($body as $rowIndex => $rows) {
-            foreach ($rows as $columnIndex => $data) {
-               if ($column === $columnIndex) {
-                  $sum += $data;
+         foreach ($this->Body as $rowValue) {
+            /** @var array<int,mixed> $rowValue */
+            foreach ($rowValue as $columnIndex => $columnValue) {
+               if (
+                  is_numeric($columnValue) === false
+                  && $sum > 0
+               ) {
+                  continue;
+               }
+
+               if ($columnIndex === $column) {
+                  $sum += $columnValue; // @phpstan-ignore-line
                }
             }
          }
       }
-      catch (\Throwable) { // @phpstan-ignore-line
+      catch (Throwable) { // @phpstan-ignore-line
          return false;
       }
 
@@ -138,19 +107,23 @@ class Table
    {
       if ($column < 0) return 0;
 
-      $data = $this->rows['body'];
-
+      // @
       $result = 0;
       try {
-         foreach ($data as $rowIndex => $rows) {
-            foreach ($rows as $columnIndex => $data) {
-               if ($column === $columnIndex) {
-                  $result -= $data;
+         foreach ($this->Body as $rowValue) {
+            /** @var array<int,mixed> $rowValue */
+            foreach ($rowValue as $columnIndex => $columnValue) {
+               if (is_numeric($columnValue) === false) {
+                  continue;
+               }
+
+               if ($columnIndex === $column) {
+                  $result -= $columnValue;
                }
             }
          }
       }
-      catch (\Throwable) { // @phpstan-ignore-line
+      catch (Throwable) { // @phpstan-ignore-line
          return false;
       }
 
@@ -167,19 +140,22 @@ class Table
    {
       if ($column < 0) return 0;
 
-      $data = $this->rows['body'];
-
       $result = 1;
       try {
-         foreach ($data as $rowIndex => $rows) {
-            foreach ($rows as $columnIndex => $data) {
-               if ($column === $columnIndex) {
-                  $result *= $data;
+         foreach ($this->Body as $rowValue) {
+            /** @var array<int,mixed> $rowValue */
+            foreach ($rowValue as $columnIndex => $columnValue) {
+               if (is_numeric($columnValue) === false) {
+                  continue;
+               }
+
+               if ($columnIndex === $column) {
+                  $result *= $columnValue;
                }
             }
          }
       }
-      catch (\Throwable) { // @phpstan-ignore-line
+      catch (Throwable) { // @phpstan-ignore-line
          return 0;
       }
 
@@ -196,23 +172,22 @@ class Table
    {
       if ($column < 0) return 0;
 
-      $data = $this->rows['body'];
-
       $result = null;
       try {
-         foreach ($data as $rowIndex => $rows) {
-            foreach ($rows as $columnIndex => $data) {
-               if ($column === $columnIndex) {
-                  if ($result === null) {
-                     $result = $data;
-                  } else {
-                     $result /= $data;
-                  }
+         foreach ($this->Body as $rowValue) {
+            /** @var array<int,mixed> $rowValue */
+            foreach ($rowValue as $columnIndex => $columnValue) {
+               if (is_numeric($columnValue) === false) {
+                  continue;
+               }
+
+               if ($columnIndex === $column) {
+                  $result /= $columnValue;
                }
             }
          }
       }
-      catch (\Throwable) {
+      catch (Throwable) {
          return false;
       }
 
@@ -230,11 +205,10 @@ class Table
     */
    public function find (int $column, mixed $value): bool
    {
-      $data = $this->rows['body'];
-
-      foreach ($data as $rowIndex => $rows) {
-         foreach ($rows as $columnIndex => $data) {
-            if ($column === $columnIndex && $value === $data) {
+      foreach ($this->Body as $rowValue) {
+         /** @var array<int,mixed> $rowValue */
+         foreach ($rowValue as $columnIndex => $columnValue) {
+            if ($columnIndex === $column && $columnValue === $value) {
                return true;
             }
          }

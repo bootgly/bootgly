@@ -24,6 +24,7 @@ class Server
 
    // * Data
    public static Closure $Handler;
+   // # Tests
    public static Suite $Suite;
    /**
     * Test Cases files
@@ -32,13 +33,13 @@ class Server
    public static array $tests;
 
    // * Metadata
+   private static string $key;
+   // # Tests
    /**
     * Test Cases instances
     * @var array<string|array<string,Closure>>
     */
    public static array $Tests;
-   // @ API
-   private static string $key;
 
 
    public static function boot (

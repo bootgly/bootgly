@@ -10,18 +10,18 @@ return [
       $Table = new Table;
 
       // Test setting header, body, and footer
-      $Table->header = ['Name', 'Age'];
-      $Table->body = [
+      $Table->Header->set([['Name', 'Age']]);
+      $Table->Body->set([
          ['Alice', 25],
          ['Bob', 30],
          ['John', 21],
          ['Maria', 22],
-      ];
-      $Table->footer = ['Total', 0];
+      ]);
+      $Table->Footer->set([['Total', 0]]);
 
       // @ Valid
       // Test header
-      $header0 = $Table->rows['header'][0];
+      $header0 = $Table->Header[0];
       yield assert(
          assertion: $header0[0] === 'Name',
          description: 'Header 0 - Column 0:' . $header0[0]
@@ -31,7 +31,7 @@ return [
          description: 'Header 0 - Column 1: ' . $header0[1]
       );
       // Test body
-      $body0 = $Table->rows['body'][0];
+      $body0 = $Table->Body[0];
       yield assert(
          assertion: $body0[0] === 'Alice',
          description: 'Body 0 - Column 0:' . $body0[0]
@@ -41,7 +41,7 @@ return [
          description: 'Body 0 - Column 1: ' . $body0[1]
       );
       // Test footer
-      $footer0 = $Table->rows['footer'][0];
+      $footer0 = $Table->Footer[0];
       yield assert(
          assertion: $footer0[0] === 'Total',
          description: 'Footer 0 - Column 0:' . $footer0[0]

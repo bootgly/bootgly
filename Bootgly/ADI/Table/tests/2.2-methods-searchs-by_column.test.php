@@ -10,14 +10,14 @@ return [
       $Table = new Table;
 
       // Test setting header, body, and footer
-      $Table->header = ['Name', 'Age'];
-      $Table->body = [
+      $Table->Header->set([['Name', 'Age']]);
+      $Table->Body->set([
          ['Alice', 25],
          ['Bob', 30],
          ['John', 21],
          ['Maria', 22],
-      ];
-      $Table->footer = ['Total', 0];
+      ]);
+      $Table->Footer->set([['Total', 0]]);
 
       // @ Valid
       // Test find operation

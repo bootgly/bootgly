@@ -27,9 +27,9 @@ class Database
 
    // * Metadata
    // PDO
-   public ? PDO $PDO;
-   public PDOStatement|bool $Query; // TODO rename to Statement?
-   public ? PDOException $Exception;
+   public null|PDO $PDO;
+   public PDOStatement|bool $Query;
+   public null|PDOException $Exception;
 
 
    /**
@@ -101,7 +101,8 @@ class Database
          }
 
          return true;
-      } catch (PDOException $PDOException) {
+      }
+      catch (PDOException $PDOException) {
          $this->Exception = $PDOException;
       }
 
@@ -127,7 +128,8 @@ class Database
 
             return true;
          }
-      } catch (PDOException $PDOException) {
+      }
+      catch (PDOException $PDOException) {
          $this->Exception = $PDOException;
       }
 
@@ -142,10 +144,19 @@ class Database
             $query = str_replace('`', '"', $query);
          }
 
-         $this->Query = $this->PDO->prepare($query);
+         // ! PDO
+         $PDO = $this->PDO;
+         // ?
+         if ($PDO === null) {
+            return false;
+         }
+
+         // @
+         $this->Query = $PDO->prepare($query);
 
          return $this->Query;
-      } catch (PDOException $PDOException) {
+      }
+      catch (PDOException $PDOException) {
          $this->Exception = $PDOException;
       }
 
@@ -156,8 +167,16 @@ class Database
    public function transact (): bool|null
    {
       try {
-         return $this->PDO->beginTransaction();
-      } catch (PDOException $PDOException) {
+         // ! PDO
+         $PDO = $this->PDO;
+         // ?
+         if ($PDO === null) {
+            return null;
+         }
+
+         return $PDO->beginTransaction();
+      }
+      catch (PDOException $PDOException) {
          $this->Exception = $PDOException;
       }
 
@@ -166,8 +185,16 @@ class Database
    public function commit (): bool|null
    {
       try {
-         return $this->PDO->commit();
-      } catch (PDOException $PDOException) {
+         // ! PDO
+         $PDO = $this->PDO;
+         // ?
+         if ($PDO === null) {
+            return null;
+         }
+
+         return $PDO->commit();
+      }
+      catch (PDOException $PDOException) {
          $this->Exception = $PDOException;
       }
 
@@ -176,8 +203,16 @@ class Database
    public function rollback (): bool|null
    {
       try {
-         return $this->PDO->rollBack();
-      } catch (PDOException $PDOException) {
+         // ! PDO
+         $PDO = $this->PDO;
+         // ?
+         if ($PDO === null) {
+            return null;
+         }
+
+         return $PDO->rollBack();
+      }
+      catch (PDOException $PDOException) {
          $this->Exception = $PDOException;
       }
 

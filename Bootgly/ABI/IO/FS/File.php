@@ -241,7 +241,7 @@ class File implements FS
    // @ Path
    protected string $basename;       // /path/to/foo.html -> foo.html
    protected string $name;           // foo.html -> 'foo'
-   protected string $extension;      // foo.html -> 'html'
+   protected null|string|false $extension;      // foo.html -> 'html'
    protected string $parent;         // /path/to/foo.html -> /path/to/
    // # Access
    public protected(set) null|int $permissions {

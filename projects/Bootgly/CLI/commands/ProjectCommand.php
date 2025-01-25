@@ -111,7 +111,7 @@ class ProjectCommand extends Command
          // * Config
          $Table->Columns->Autowiden::Based_On_Section->set();
 
-         $Table->Data->set(header: [
+         $Table->Data->Header->set([
             TemplateEscaped::render('@#Yellow: Arguments: @;'),
             ''
          ]);
@@ -123,7 +123,7 @@ class ProjectCommand extends Command
                TemplateEscaped::render($value['description'])
             ];
          }
-         $Table->Data->set(body: $body);
+         $Table->Data->Body->set($body);
 
          $Table->render();
       }

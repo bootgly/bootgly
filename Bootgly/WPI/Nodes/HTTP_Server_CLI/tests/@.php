@@ -9,7 +9,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI;
 
 return new Suite(
    // * Config
-   autoBoot: function () {
+   autoBoot: function (): true {
       Logger::$display = Logger::DISPLAY_NONE;
 
       $HTTP_Server_CLI = new HTTP_Server_CLI(Mode: Modes::Test);

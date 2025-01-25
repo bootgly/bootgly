@@ -25,7 +25,7 @@ class Columns
    private Table $Table;
 
    // * Config
-   public ? string $section;
+   public null|string $section;
    // @ Width
    public Autowiden $Autowiden;
 
@@ -75,7 +75,7 @@ class Columns
 
    public function autowiden (): bool
    {
-      $data = $this->Table->Data->get();
+      $data = $this->Table->Data->rows;
 
       // @
       // * Metadata
@@ -124,7 +124,7 @@ class Columns
       return true;
    }
 
-   public function count (? string $section = null): int
+   public function count (null|string $section = null): int
    {
       // @phpstan-ignore-next-line
       $widths = ($this->Autowiden->get() === Autowiden::Based_On_Section && $section

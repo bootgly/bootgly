@@ -17,8 +17,8 @@ OUTPUT);
 
 $Table = new Table($Output);
 
-$Table->Data->set(header: ['Alura Courses', 'Quantity']);
-$Table->Data->set(body: [
+$Table->Data->Header->set([['Alura Courses', 'Quantity']]);
+$Table->Data->Body->set([
    ['Programação',       280], // using multibyte text
    ['Front-end',         112],
    ['Data Science',      209],
@@ -28,25 +28,19 @@ $Table->Data->set(body: [
    ['Mobile',            93],
    ['Inovação & Gestão', 297], // using multibyte text
 ]);
-$Table->Data->set(footer: [
+$Table->Data->Footer->set([[
    'Total:',  $Table->Data->sum(column: 1)
-]);
+]]);
 
 $Output->write("\n");
 
 $loops = 3;
 for ($i = 1; $i <= $loops; $i++) {
-   switch ($i) {
-      case 1:
-         $alignment = 'left';
-         break;
-      case 2:
-         $alignment = 'center';
-         break;
-      case 3:
-         $alignment = 'right';
-         break;
-   }
+   $alignment = match ($i) {
+      1 => 'left',
+      2 => 'center',
+      3 => 'right'
+   };
 
    // ! Cells
    $Table->Cells->align($alignment);
