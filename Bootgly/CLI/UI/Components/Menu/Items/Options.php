@@ -11,6 +11,12 @@
 namespace Bootgly\CLI\UI\Components\Menu\Items;
 
 
+use function array_diff;
+use function in_array;
+use function str_pad;
+use function str_repeat;
+use function strlen;
+
 use Bootgly\CLI\UI\Components\Menu;
 use Bootgly\CLI\UI\Components\Menu\Items;
 use Bootgly\CLI\UI\Components\Menu\Orientation;
@@ -30,7 +36,7 @@ final class Options extends Items
    // * Metadata
    public static int $indexes;
    // @ Selecting
-   /** @var array<array<int>|int> */
+   /** @var array<int,array<int>> */
    public static array $selected;
 
 
@@ -108,7 +114,8 @@ final class Options extends Items
    {
       if ($this->aimed > 0) {
          $this->aimed--;
-      } else {
+      }
+      else {
          $this->aimed = self::$indexes - 1;
       }
 
@@ -118,7 +125,8 @@ final class Options extends Items
    {
       if ($this->aimed < self::$indexes - 1) {
          $this->aimed++;
-      } else {
+      }
+      else {
          $this->aimed = 0;
       }
 
@@ -145,7 +153,8 @@ final class Options extends Items
    {
       if ( in_array($index, self::$selected[Menu::$level]) ) {
          $this->deselect($index);
-      } else {
+      }
+      else {
          $this->select($index);
       }
    }

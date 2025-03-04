@@ -34,8 +34,8 @@ class Scripts
 
    // * Metadata
    // @ Validating
-   private ? string $path;
-   private ? string $filename;
+   private null|string $path;
+   private null|string $filename;
    private int $validation;
 
 
@@ -117,8 +117,14 @@ class Scripts
 
    public function validate (): int
    {
-      $this->path ??= @$_SERVER['PWD'];
-      $this->filename ??= @$_SERVER['SCRIPT_FILENAME'];
+      // !
+      /** @var string $PWD **/
+      $PWD = $_SERVER['PWD'];
+      /** @var string $SCRIPT_FILENAME **/
+      $SCRIPT_FILENAME = $_SERVER['SCRIPT_FILENAME'];
+      // ---
+      $this->path ??= $PWD ?: null;
+      $this->filename ??= $SCRIPT_FILENAME ?: null;
       // ?:
       if ($this->path === null || $this->filename === null) {
          return $this->validation = -2;

@@ -11,16 +11,27 @@
 namespace Bootgly\CLI;
 
 
+use function array_filter;
+use function array_push;
+use function count;
+use function exec;
+use function is_numeric;
+use function preg_match;
+use function preg_quote;
+use function readline;
+use function readline_add_history;
+use function readline_completion_function;
+use function trim;
+
 use Bootgly\ABI\Data\__String\Escapeable;
 use Bootgly\ABI\Data\__String\Escapeable\Cursor\Positionable;
 use Bootgly\ABI\Data\__String\Escapeable\Text\Modifiable;
-
 use Bootgly\CLI\Terminal\Input;
 use Bootgly\CLI\Terminal\Output;
 use Bootgly\CLI\Terminal\Reporting\Mouse;
 
 
-class Terminal
+class Terminal // extends API/Project or API/Node
 {
    use Escapeable;
    use Positionable;
@@ -68,18 +79,18 @@ class Terminal
       // * Metadata
       // columns
       // @ Get the terminal columns (width)
-      $columns = \exec("tput cols 2>/dev/null");
-      if ( ! \is_numeric($columns) ) {
+      $columns = exec("tput cols 2>/dev/null");
+      if (is_numeric($columns) === false) {
          $columns = 80;
       }
-      self::$columns = $columns;
+      self::$columns = (int) $columns;
       // lines
       // @ Get the terminal lines (height)
       $lines = exec("tput lines 2>/dev/null");
-      if ( ! \is_numeric($lines) ) {
+      if (is_numeric($lines) === false) {
          $lines = 30;
       }
-      self::$lines = $lines;
+      self::$lines = (int) $lines;
       // width
       self::$width = self::$columns;
       // height
@@ -101,14 +112,16 @@ class Terminal
    {
       // @ Register CLI autocomplete function
       // Use TAB key as trigger
-      \readline_completion_function([$this, 'autocomplete']);
+      readline_completion_function([$this, 'autocomplete']);
 
       // @ Get user input (read line)
-      $input = \readline('>_: ');
+      $input = readline('>_: ');
+      if ($input === false) {
+         return false;
+      }
 
       // @ Sanitize user input
-      $command = \trim($input);
-
+      $command = trim($input);
       if ($command === '') {
          return true;
       }
@@ -118,7 +131,7 @@ class Terminal
 
       // @ Enable command history and add the last command to history
       // Use UP/DOWN key to access the history
-      \readline_add_history($command);
+      readline_add_history($command);
 
       // @ Execute command
       return $this->command($command);
@@ -141,21 +154,27 @@ class Terminal
       // TODO: support to multiple subcommands (command1 subcommand1 subcommand2...)
       $found = [];
 
-      // TODO: refactor
-      if ($search || \count(self::$command) === 0) {
-         $found = \array_filter(static::$commands, function ($command) use ($search) {
-            $command = \preg_quote($command, '/');
-            return \preg_match("/$search/i", $command);
-         });
-      } else if (\count(self::$command) === 1) {
-         $found = \array_filter(static::$subcommands[self::$command[0]], function ($command) use ($search) {
-            $command = \preg_quote($command, '/');
-            return \preg_match("/$search/i", $command);
-         });
+      $filterCommands = function ($commands)
+      use ($search): array {
+         return array_filter(
+            $commands,
+            function ($command) use ($search) {
+               $command = preg_quote($command, '/');
+               $found = preg_match("/$search/i", $command);
+               return $found === 1;
+            }
+         );
+      };
+
+      if ($search || count(self::$command) === 0) {
+         $found = $filterCommands(static::$commands);
+      }
+      else if (count(self::$command) === 1) {
+         $found = $filterCommands(static::$subcommands[self::$command[0]]);
       }
 
-      if (\count($found) === 1) {
-         \array_push(self::$command, ...$found);
+      if (count($found) === 1) {
+         array_push(self::$command, ...$found);
       }
 
       return $found;

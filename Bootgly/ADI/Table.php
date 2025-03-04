@@ -24,17 +24,17 @@ class Table
    // ...
 
    // * Data
-   /** @var Header<array-key,mixed> */
+   /** @var Header<array-key,array<int,string>> */
    public Header $Header;
-   /** @var Body<array-key,mixed> */
+   /** @var Body<array-key,array<int,string>> */
    public Body $Body;
-   /** @var Footer<array-key,mixed> */
+   /** @var Footer<array-key,array<int,string>> */
    public Footer $Footer;
    // ---
    /** @var array<int>|null */
    public null|array $columns; // set table data by columns...
-   /** @var array<string,array<mixed>>|null */
-   public null|array $rows {
+   /** @var array<string,array<array<int,string>>> */
+   public array $rows {
       get {
          return [
             Section::Header->name => $this->Header->rows,

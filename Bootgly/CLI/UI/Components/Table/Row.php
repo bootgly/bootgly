@@ -11,8 +11,9 @@
 namespace Bootgly\CLI\UI\Components\Table;
 
 
-use Bootgly\ABI\Data\__String;
+use function count;
 
+use Bootgly\ABI\Data\__String;
 use const Bootgly\CLI;
 use Bootgly\CLI\UI\Components\Table;
 
@@ -65,7 +66,7 @@ class Row
       // > Columns
       $Columns = $this->Table->Columns;
       $Columns->section = $section;
-      $widths = $Columns->widths;
+      $widths = $Columns->Width->get();
 
       $output = $borders['left'];
       if ($borders['left']) {

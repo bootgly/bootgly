@@ -11,9 +11,11 @@
 namespace Bootgly\CLI;
 
 
+use function array_slice;
 use function count;
 use function is_array;
 use Closure;
+use Error;
 
 use const BOOTGLY_ROOT_DIR;
 use Bootgly\ABI\Data\__String\Path;
@@ -26,17 +28,17 @@ class Commands
    // ...
 
    // * Data
-   protected ?string $banner;
+   protected null|string $banner;
    // # Command
-   /** @var array<string,array<Command>|Command> */
+   /** @var array<string,array<Command>> */
    protected array $commands;
    // # Commands/Arguments
-   protected ?Closure $Helper;
+   protected null|Closure $Helper;
    // ...
 
    // * Metadata
    // # Command
-   private string $script;
+   protected string $script;
    // ...
 
 
@@ -65,11 +67,19 @@ class Commands
     *
     * @return bool
     */
-   public function autoload (string $location, ?object $Context = null, ?object $Script = null): bool
+   public function autoload (
+      string $location,
+      null|object $Context = null,
+      null|object $Script = null
+   ): bool
    {
       // !?
       $commands = require Path::normalize(BOOTGLY_ROOT_DIR . $location . '/commands/@.php');
-      if ($commands === false || !is_array($commands) || count($commands) === 0) {
+      if (
+         $commands === false
+         || !is_array($commands)
+         || count($commands) === 0
+      ) {
          return false;
       }
 
@@ -79,22 +89,16 @@ class Commands
          // TODO
 
          // # Post command load
-         $command = require $command;
-
-         if (is_array($command) === true) {
-            $Command = $command['handle'];
-
-            unset($command['handle']);
-            $specification = $command;
-            $specification['context'] = $Context;
-
-            $this->register($Command, $specification, $Script);
+         // !
+         $Command = require $command;
+         // ?
+         if ($Command instanceof Command === false) {
+            throw new Error("Command must be an instance of Command.");
          }
-         else if ($command instanceof Command) {
-            $command($Context);
 
-            $this->register($command, ['context' => $Context], $Script);
-         }
+         $Command($Context);
+
+         $this->register($Command, $Script);
       }
 
       return true;
@@ -102,48 +106,16 @@ class Commands
    /**
     * Register a command
     * 
-    * @param Command|Closure $Command
-    * @param array<string, object|null> $specification
-    * @param object|null $Script
+    * @param Command $Command
+    * @param null|object $Script
     *
     * @return bool
     */
    public function register (
-      Command|Closure $Command,
-      array $specification = [],
-      ?object $Script = null
+      Command $Command,
+      null|object $Script = null
    ): bool
    {
-      if ($Command instanceof Closure) {
-         /** 
-          * @var string|null $name
-          * @var string|null $description
-          * @var array<string> $arguments
-          * @var array<string> $options
-          * @var object|null $context
-          */
-         [
-            'name' => $name,
-            'description' => $description,
-            'arguments' => $arguments,
-            'options' => $options,
-            'context' => $context
-         ] = $specification;
-
-         $Command = new class (
-            // * Config
-            $name, $description, $arguments, $options, $context,
-            // * Data
-            $Command
-         ) extends Command
-         {
-            public function run (array $arguments = [], array $options = []): bool
-            {
-               return ($this->Command)($arguments, $options);
-            }
-         };
-      }
-
       if ($Script === null) {
          $Script = $this;
       }
@@ -156,11 +128,11 @@ class Commands
    /**
     * List commands from a namespace or all commands
     *
-    * @param object|null $From
+    * @param null|object $From
     *
-    * @return array<Command>
+    * @return array<Command>|array<string,array<Command>>
     */
-   public function list (?object $From = null): array
+   public function list (null|object $From = null): array
    {
       // ?!
       if ($From === null) {
@@ -184,15 +156,15 @@ class Commands
    /**
     * Find a command by its name (with namespace if provided) and return it if found
     *
-    * @param ?string $command
+    * @param null|string $command
     * @param object|null $From
     *
     * @return Command|null
     */
    public function find (
-      ?string $command,
-      ?object $From = null,
-      ?string $input = null
+      null|string $command,
+      null|object $From = null,
+      null|string $input = null
    ): Command|null
    {
       if ($command === null || $command === '') {
@@ -220,42 +192,47 @@ class Commands
     * If no command is provided, the command signature is taken from native PHP CLI arguments.
     * If no command is found, the help message is shown.
     *
-    * @param array<string>|null $command
+    * @param array<string>|null $route
     * @param object|null $From
     *
     * @return bool
     */
-   public function route (?array $command = null, ?object $From = null): bool
+   public function route (null|array $route = null, null|object $From = null): bool
    {
-      // @ Parse arguments and options
-      [$script, $arguments, $options] = $this->Arguments->parse(
-         $command ?? $_SERVER['argv'] ?? []
+      // !
+      // # Signature
+      /** @var array<string> $argv */
+      $argv = (array) $_SERVER['argv'];
+      [
+         $this->script,
+         $command,
+         $arguments,
+         $options
+      ] = $this->Arguments->parse(
+         $route ?? $argv
       );
 
-      $this->script = $script;
-      $command = $arguments[0] ?? null;
-
-      // @ Get the command or get the help command
+      // @ Get the command | help command
       /** @var Command $Command */
       $Command = $this->find(
          $command,
-         $command === 'help' ? $this : $From
-      )
-         ?? $this->find(
-            command: 'help',
-            From: $this,
-            input: $command !== null
-               ? "Unknown command: @#Yellow:$command@;"
-               : null
-         );
+         $command === 'help'
+            ? $this
+            : $From
+      ) ?? $this->find(
+         command: 'help',
+         From: $this,
+         input: $command !== ''
+            ? "Unknown command: @#Yellow:$command@;"
+            : null
+      );
+
+      $Command->script ??= $this->script;
 
       // @ Prerun the command
-      // Parse arguments
-      $arguments = array_slice($arguments, 1);
-
       // Parse verbosity options
       if ($options['v'] ?? false) {
-         $verbosity = $options['v'];
+         $verbosity = (int) $options['v'];
          if ($verbosity > 3) {
             $verbosity = 3;
          }

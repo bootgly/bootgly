@@ -11,16 +11,25 @@
 namespace Bootgly\CLI\UI\Components;
 
 
+use const STR_PAD_RIGHT;
+use function microtime;
+use function number_format;
+use function str_pad;
+use function str_replace;
+use function strlen;
+use function strpos;
+use function strtr;
+use function substr_count;
+
 use Bootgly\ABI\Data\__String\Escapeable;
 use Bootgly\ABI\Data\__String\Escapeable\Cursor\Positionable;
 use Bootgly\ABI\Data\__String\Escapeable\Cursor\Visualizable;
 use Bootgly\ABI\Data\__String\Escapeable\Text\Modifiable;
 use Bootgly\ABI\Templates\Template\Escaped as TemplateEscaped;
-
 use Bootgly\API\Component;
-
 use Bootgly\CLI\Terminal\Output;
 use Bootgly\CLI\UI\Components\Progress\Bar;
+use Bootgly\CLI\UI\Components\Progress\Precision;
 
 
 class Progress extends Component
@@ -36,35 +45,35 @@ class Progress extends Component
    // * Config
    public float $throttle;
    // ---
-   public object $Precision;
+   public Precision $Precision;
 
    // * Data
    public float $current;
    public float $total;
-   // ! Templating
+   public float $percent;
+   // # Templating
    public string $template;
 
    // * Metadata
-   public string $output;
-   // @ State
-   private bool $indetermined;
-   private bool $determined;
-   // @ Display
-   private string $description;
-   private float|string $percent;
-   private float|string $elapsed;
-   private float|string $eta;
-   private float|string $rate;
-   // ! Templating
+   public private(set) string $output;
+   // # State
+   public private(set) bool $indetermined;
+   public private(set) bool $determined;
+   // # Display
+   public private(set) string $description;
+   public private(set) float $elapsed;
+   public private(set) float $eta;
+   public private(set) float $rate;
+   // # Templating
    /** @var array<string> */
-   private array $tokens;
+   public private(set) array $tokens;
    // @ render
    /** @var array<int> */
-   private array $cursor;
+   public private(set) array $cursor;
    // time
-   private float $started;
-   private float $rendered;
-   private bool $finished;
+   public private(set) float $started;
+   public private(set) float $rendered;
+   public private(set) bool $finished;
 
    public Bar $Bar;
 
@@ -77,11 +86,7 @@ class Progress extends Component
       // * Config
       $this->throttle = 0.1;
       // ---
-      $this->Precision = new class {
-         public int $seconds = 2;
-         public int $percent = 1;
-         public int $rate = 0;
-      };
+      $this->Precision = new Precision;
 
       // * Data
       $this->current = 0.0;
@@ -135,18 +140,6 @@ class Progress extends Component
       $this->Bar = new Bar($this);
       $this->Bar->units = $units;
       $this->Bar->Symbols = $Symbols;
-   }
-   public function __get (string $name): mixed
-   {
-      return $this->$name;
-   }
-   public function __set (string $name, mixed $value)
-   {
-      switch ($name) {
-         case 'percent':
-            $this->percent = $value;
-            break;
-      }
    }
 
    protected function render (int $mode = self::WRITE_OUTPUT): void
@@ -264,19 +257,22 @@ class Progress extends Component
       // percent
       if ($total > 0) {
          $this->percent = ($current / $total) * 100;
-      } else {
+      }
+      else {
          $this->percent++;
       }
       // eta
       if ($current > 0) {
          $eta = (($elapsed / $current) * $total) - $elapsed;
-      } else {
+      }
+      else {
          $eta = 0.0;
       }
       // rate
       if ($current > 0) {
          $rate = $current / $elapsed;
-      } else {
+      }
+      else {
          $rate = 0.0;
       }
 

@@ -11,8 +11,14 @@
 namespace Bootgly\CLI\Terminal\Reporting;
 
 
-use Bootgly\ABI\Data\__String\Escapeable\Mouse\Reportable;
+use function explode;
+use function intval;
+use function pcntl_signal_dispatch;
+use function strlen;
+use function substr;
+use Closure;
 
+use Bootgly\ABI\Data\__String\Escapeable\Mouse\Reportable;
 use Bootgly\CLI\Terminal\Reporting;
 use Bootgly\CLI\Terminal\Input;
 use Bootgly\CLI\Terminal\Input\Mousestrokes;
@@ -64,7 +70,7 @@ class Mouse implements Reporting
       }
    }
 
-   public function reporting (\Closure $callback): void
+   public function reporting (Closure $callback): void
    {
       $this->report(true);
 
@@ -72,7 +78,7 @@ class Mouse implements Reporting
       $Input->configure(blocking: false, canonical: false, echo: false);
 
       while ($continue = true) {
-         \pcntl_signal_dispatch();
+         pcntl_signal_dispatch();
 
          $input = $Input->read(1);
 
@@ -83,17 +89,20 @@ class Mouse implements Reporting
             // @ Check if the code matches a mouse movement position
             if ($input === "\033[<") {
                $input = $Input->read(10);
+               if ($input === false) {
+                  continue;
+               }
 
-               $characters = \strlen($input);
+               $characters = strlen($input);
                $last = $input[$characters - 1];
-               $input = \substr($input, 0, $characters - 1);
+               $input = substr($input, 0, $characters - 1);
 
-               $reports = \explode(';', $input);
+               $reports = explode(';', $input);
                $reports[] = $last;
 
                // @ Extracts mouse movement data from the code
-               $col = \intval($reports[1]);
-               $row = \intval($reports[2]);
+               $col = intval($reports[1]);
+               $row = intval($reports[2]);
 
                $action = Mousestrokes::from($reports[0]);
                $clicking = match ($reports[3]) {

@@ -38,7 +38,7 @@ return new Suites(
       'Bootgly/API/',
 
       // Command Line Interface (CLI)
-      'Bootgly/CLI/',
+      'Bootgly/CLI/Commands/',
 
       // Web Programming Interface (WPI)
       'Bootgly/WPI/Nodes/HTTP_Server_CLI/',

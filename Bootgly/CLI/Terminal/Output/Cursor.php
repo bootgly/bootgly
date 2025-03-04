@@ -11,10 +11,17 @@
 namespace Bootgly\CLI\Terminal\Output;
 
 
-use Bootgly\ABI\Data\__String\Escapeable\Cursor\Positionable;
-use Bootgly\ABI\Data\__String\Escapeable\Cursor\Visualizable;
-use Bootgly\ABI\Data\__String\Escapeable\Cursor\Shapeable;
+use const STDIN;
+use function fread;
+use function function_exists;
+use function intval;
+use function preg_match;
+use function shell_exec;
+use function sprintf;
 
+use Bootgly\ABI\Data\__String\Escapeable\Cursor\Positionable;
+use Bootgly\ABI\Data\__String\Escapeable\Cursor\Shapeable;
+use Bootgly\ABI\Data\__String\Escapeable\Cursor\Visualizable;
 use Bootgly\CLI\Terminal;
 use Bootgly\CLI\Terminal\Output;
 
@@ -29,9 +36,52 @@ class Cursor
    private Output $Output;
 
    // * Metadata
-   private bool $hidden;
-   /** @var array<int|string> */
-   private array $position;
+   public private(set) bool $hidden {
+      get {
+         return $this->hidden;
+      }
+   }
+   /** @var array<int|string,int> */
+   public private(set) array $position {
+      get {
+         if (function_exists('shell_exec') === false) {
+            return [];
+         }
+
+         // @ Run stty command to get cursor position
+         $output = shell_exec('stty -g');
+         // @ Disable canonical mode and echo
+         shell_exec('stty -echo -icanon -icrnl');
+
+         // @ Send ANSI code to retrieve cursor position
+         $this->Output->escape(self::_CURSOR_REPORT_POSITION);
+
+         // @ Read response from terminal
+         $input = fread(STDIN, 15);
+         // @ Parse cursor position from response
+         preg_match(
+            '/\x1b\[(\d+);(\d+)R/',
+            $input ?: '',
+            $matches
+         );
+
+         // @ Restore terminal settings
+         shell_exec(sprintf('stty %s', $output));
+
+         $row = intval($matches[1] ?? 0);
+         $column = intval($matches[2] ?? 0);
+
+         $this->position = [
+            $row,
+            $column,
+
+            'row' => $row,
+            'column' => $column
+         ];
+
+         return $this->position;
+      }
+   }
 
 
    public function __construct (Output &$Output)
@@ -42,54 +92,9 @@ class Cursor
       $this->hidden = false;
    }
 
-   public function __get (string $name): mixed
-   {
-      switch ($name) {
-         // TODO test/add more methods to retrieve the current cursor position
-         // * Metadata
-         case 'hidden':
-            return $this->hidden;
-         case 'position':
-            if (! \function_exists('shell_exec') ) {
-               return [];
-            }
-
-            // Run stty command to get cursor position
-            $output = \shell_exec('stty -g');
-            // Disable canonical mode and echo
-            \shell_exec('stty -echo -icanon -icrnl');
-
-            // Send ANSI code to retrieve cursor position
-            $this->Output->escape(self::_CURSOR_REPORT_POSITION);
-
-            // Read response from terminal
-            $input = \fread(STDIN, 15);
-            // Parse cursor position from response
-            \preg_match('/\x1b\[(\d+);(\d+)R/', $input, $matches);
-
-            // Restore terminal settings
-            \shell_exec(sprintf('stty %s', $output));
-
-            $row = \intval(@$matches[1]);
-            $column = \intval(@$matches[2]);
-
-            $this->position = [
-               $row,
-               $column,
-
-               'row' => $row,
-               'column' => $column
-            ];
-
-            return $this->position;
-      }
-
-      return null;
-   }
-
-   // @ Positionable
+   // # Positionable
    // Moving
-   public function up (int $lines, ? int $column = null): Output
+   public function up (int $lines, null|int $column = null): Output
    {
       if ($column > 1 || $column < 0) {
          $this->moveTo(null, $column);
@@ -104,7 +109,7 @@ class Cursor
    {
       return $this->Output->escape($columns . self::_CURSOR_RIGHT);
    }
-   public function down (int $lines, ? int $column = null): Output
+   public function down (int $lines, null|int $column = null): Output
    {
       if ($column > 1 || $column < 0) {
          $this->moveTo(null, $column);
@@ -120,7 +125,7 @@ class Cursor
       return $this->Output->escape($columns . self::_CURSOR_LEFT);
    }
 
-   public function moveTo (? int $line = null, ? int $column = null): Output
+   public function moveTo (null|int $line = null, null|int $column = null): Output
    {
       if ($line === null && $column >= 0) {
          return $this->Output->escape($column . self::_CURSOR_LEFT_ABSOLUTE);
@@ -160,21 +165,18 @@ class Cursor
       return $this->Output->escape(self::_CURSOR_REPORT_POSITION);
    }
 
-   // @ Shapeable
-   public function shape (? string $style = '@user'): Output
+   // # Shapeable
+   public function shape (null|string $style = '@user'): Output
    {
       return match ($style) {
          'block' => $this->Output->escape(self::_CURSOR_BLINKING_BLOCK_SHAPE),
-
          'underline' => $this->Output->escape(self::_CURSOR_BLINKING_UNDERLINE_SHAPE),
-
          'bar' => $this->Output->escape(self::_CURSOR_BLINKING_BAR_SHAPE),
-
          default => $this->Output->escape(self::_CURSOR_USER_SHAPE)
       };
    }
 
-   // @ Visualizable
+   // # Visualizable
    public function blink (bool $status): Output
    {
       return match ($status) {
@@ -194,8 +196,7 @@ class Cursor
       return $this->Output->escape(self::_CURSOR_HIDDEN);
    }
 
-
-   function __destruct()
+   public function __destruct()
    {
       $this->shape();
       $this->show();

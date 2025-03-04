@@ -12,9 +12,9 @@ namespace Bootgly\CLI\UI\Components;
 
 
 use function explode;
-use function str_repeat;
 use function mb_strlen;
 use function preg_replace;
+use function str_repeat;
 
 use Bootgly\ABI\Data\__String;
 use Bootgly\ABI\Templates\Template\Escaped as TemplateEscaped;
@@ -28,7 +28,7 @@ class Fieldset extends Component
 
    // * Config
    // @ Dimension
-   public ? int $width;
+   public null|int $width;
    // @ Style
    // Color
    public string $color;
@@ -49,8 +49,18 @@ class Fieldset extends Component
    /** @var array<string> */
    public array $borders;
    // * Data
-   protected ? string $title;
-   public ? string $content;
+   public null|string $title = null {
+      get {
+         return $this->title;
+      }
+      set {
+         $this->title = ($value
+            ? TemplateEscaped::render(" $value ")
+            : ''
+         );
+      }
+   }
+   public null|string $content;
 
 
    public function __construct (Output $Output)
@@ -67,19 +77,8 @@ class Fieldset extends Component
       $this->title = null;
       $this->content = null;
    }
-   public function __set (string $name, mixed $value)
-   {
-      // TODO emit event
-      match ($name) {
-         'title'   => $this->title = ($value
-            ? TemplateEscaped::render(" $value ")
-            : ''
-         ),
-         default   => null
-      };
-   }
 
-   public function border (string $position, ? int $length = null): void
+   public function border (string $position, null|int $length = null): void
    {
       $Output = $this->Output;
 
@@ -93,7 +92,7 @@ class Fieldset extends Component
             $border_top_left = $borders['top-left'];
             $border_top_right = $borders['top-right'];
 
-            $line = str_repeat('─', $length);
+            $line = str_repeat('─', $length ?? 0);
 
             $Output->render(<<<OUTPUT
             {$color}{$border_top_left}@;{$title}{$color}{$line}{$border_top_right}@;\n
@@ -125,7 +124,7 @@ class Fieldset extends Component
             $border_bottom = $borders['bottom'];
             $border_bottom_right = $borders['bottom-right'];
 
-            $line = str_repeat($border_bottom, $length);
+            $line = str_repeat($border_bottom, $length ?? 0);
 
             $Output->render(<<<OUTPUT
             {$color}{$border_bottom_left}{$line}{$border_bottom_right}\n
@@ -152,8 +151,9 @@ class Fieldset extends Component
       $title = $this->title ?? '';
       $content = $this->content ?? '';
       // * Metadata
+      $title_escaped = preg_replace(__String::ANSI_ESCAPE_SEQUENCE_REGEX, '', $title);
       $title_length = mb_strlen(
-         preg_replace(__String::ANSI_ESCAPE_SEQUENCE_REGEX, '', $title)
+         $title_escaped ?? ''
       );
       // ---
       $content = TemplateEscaped::render($content);

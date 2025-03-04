@@ -11,10 +11,10 @@
 namespace Bootgly\CLI\UI\Components;
 
 
+use function str_repeat;
+
 use Bootgly\ADI\Table as DataTable;
-
 use Bootgly\API\Component;
-
 use Bootgly\CLI\UI\Components\Table\ { Cells, Columns, Row, Rows };
 use Bootgly\CLI\Terminal\Output;
 
@@ -139,7 +139,7 @@ class Table extends Component
          default => ""
       };
 
-      foreach ($Columns->widths as $column_index => $column_width) {
+      foreach ($Columns->Width->get() as $column_index => $column_width) {
          if ($column_index > 0) {
             $line .= match($position) {
                'top' => $borders['top-mid'],
@@ -156,6 +156,7 @@ class Table extends Component
             default => ""
          };
 
+         // @phpstan-ignore-next-line
          $line .= str_repeat($border, $column_width + 2);
       }
 

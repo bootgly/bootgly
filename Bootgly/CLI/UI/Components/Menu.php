@@ -11,15 +11,18 @@
 namespace Bootgly\CLI\UI\Components;
 
 
-use Bootgly\API\Component;
+use function str_pad;
+use function usleep;
+use Generator;
 
+use Bootgly\API\Component;
 use Bootgly\CLI\Terminal\Input;
 use Bootgly\CLI\Terminal\Output;
 use Bootgly\CLI\UI\Components\Menu\Items;
 use Bootgly\CLI\UI\Components\Menu\Orientation;
 use Bootgly\CLI\UI\Components\Menu\Items\Option;
 use Bootgly\CLI\UI\Components\Menu\Items\Options;
-// TODO remove:
+// TODO: remove
 use Bootgly\CLI\UI\Components\Menu\Items\extensions\Divisors\Divisor;
 use Bootgly\CLI\UI\Components\Menu\Items\extensions\Headers\Header;
 
@@ -130,7 +133,7 @@ class Menu extends Component
       };
    }
 
-   public function rendering (): \Generator
+   public function rendering (): Generator
    {
       // Save Cursor position
       $this->Output->Cursor->save();
@@ -154,14 +157,15 @@ class Menu extends Component
 
          // @ Read 3 characters from Input
          $char = $this->Input->read(3);
+         if ($char === false) {
+            continue;
+         }
 
          // @ Control Menu Items
          $continue = $Items->Options->control($char);
 
          if ($continue) {
             usleep(100000);
-            #usleep(250000);
-            #usleep(500000);
 
             // @ Return selected in real time
             yield $Items->Options::$selected[self::$level];
@@ -172,7 +176,7 @@ class Menu extends Component
          break;
       }
 
-      $this->selected = $Items->Options::$selected[self::$level];
+      $this->selected = (array) $Items->Options::$selected[self::$level];
 
       // Restore Input settings
       $this->Input->configure(

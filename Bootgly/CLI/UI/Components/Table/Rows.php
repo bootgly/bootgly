@@ -49,7 +49,6 @@ class Rows
 
    public function render (): void
    {
-      /** @var array<string,array<int,array<int,mixed>>> */
       $data = $this->Table->Data->rows;
 
       if (count($data) === 0) {

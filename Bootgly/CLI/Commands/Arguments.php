@@ -24,12 +24,13 @@ class Arguments
     * 
     * @param array<string> $args 
     *
-    * @return array<array<string>|array<string,bool|int|string>|string>
+    * @return array{0:string,1:string,2:array<string>,3:array<string,bool|int|string>}
     */
    public function parse (array $args): array
    {
       // !
       $script = '';
+      $command = '';
       $arguments = [];
       $options = [];
 
@@ -63,6 +64,9 @@ class Arguments
          }
       }
 
-      return [$script, $arguments, $options];
+      $command = $arguments[0] ?? '';
+      $arguments = array_slice($arguments, 1);
+
+      return [$script, $command, $arguments, $options];
    }
 }

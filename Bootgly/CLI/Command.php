@@ -17,57 +17,62 @@ use Closure;
 abstract class Command
 {
    // * Config
-   // Signature
-   public string $name;
-
+   // # Signature
    /** @var array<string> */
    public array $arguments = [];
 
-   /** @var array<string> */
+   /** @var array<string,array<string>> */
    public array $options = [
       // Global options
       'Increase the verbosity of the command' => ['-v', '-vv', '-vvv'],
       // Local options
       // ...
    ];
-   // Display
-   public string $description;
+   // # Display
    public bool $separate;
    public int $group;
    public int $verbosity = 0;
-   // Runtime
-   public ?object $context;
-   public ?string $input = null;
+   // # Runtime
+   public null|object $context;
+   public null|string $input = null;
 
    // * Data
-   protected ?Closure $Command = null;
+   // # Display
+   public string $description;
+   // # Signature
+   public string $name;
+   // # Runtime
+   protected null|Closure $Command = null;
 
    // * Metadata
-   // ...
+   public string $script {
+      get => $this->script ?? '';
+      set => $this->script ??= $value;
+   }
 
 
    /**
     * Define a new command instance.
     *
-    * @param string|null $name The name of the command.
-    * @param string|null $description The description of the command.
-    * @param array<string>|null $arguments The arguments of the command.
-    * @param array<string>|null $options The options of the command.
-    * @param object|null $context The context of the command.
-    * @param Closure|null $Command The command to run.
+    * @param null|string $name The name of the command.
+    * @param null|string $description The description of the command.
+    * @param null|array<string> $arguments The arguments of the command.
+    * @param null|array<string,array<string>> $options The options of the command.
+    * @param null|object $context The context of the command.
+    * @param null|Closure $Command The command to run.
     */
    public function __construct
    (
       // * Config
-      ?string $name = null,
-      ?string $description = null,
-      ?array $arguments = null,
-      ?array $options = null,
+      null|string $name = null,
+      null|string $description = null,
+      null|array $arguments = null,
+      null|array $options = null,
 
-      ?object $context = null,
+      null|object $context = null,
 
       // * Data
-      ?Closure $Command = null,
+      null|Closure $Command = null,
    )
    {
       // * Config
@@ -92,17 +97,18 @@ abstract class Command
    /**
     * Set the context of the command.
     *
-    * @param object|null $context The context of the command.
+    * @param null|object $context The context of the command.
     *
     * @return void
     */
-   public function __invoke (?object $context = null): void
+   public function __invoke (null|object $context = null): void
    {
       if ($context !== null) {
+         $input = $this->input; // pipe the input to the context
          $Closure = function (Closure $Callback)
-         use ($context) {
+         use ($context, $input) {
             $Callback = $Callback->bindTo($context, $context);
-            $Callback();
+            $Callback($input);
          };
 
          $this->context = $Closure;
@@ -113,7 +119,7 @@ abstract class Command
     * Run the command with the given arguments and options.
     *
     * @param array<string> $arguments The arguments passed to the command.
-    * @param array<string> $options The options passed to the command.
+    * @param array<string,bool|int|string> $options The options passed to the command.
     *
     * @return bool True if the command was successful, false otherwise.
     */

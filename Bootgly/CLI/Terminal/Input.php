@@ -33,7 +33,7 @@ class Input
    // ...
 
    // * Data
-   /** @var resource|string */
+   /** @var resource */
    public $stream;
 
    // * Metadata
@@ -41,7 +41,7 @@ class Input
 
 
    /**
-    * @param resource|string $stream
+    * @param resource $stream
     */
    public function __construct ($stream = STDIN)
    {
@@ -55,6 +55,15 @@ class Input
       // ...
    }
 
+   /**
+    * Configures the input stream settings.
+    *
+    * @param bool $blocking Whether to set the stream to blocking or non-blocking mode. Default is true (blocking).
+    * @param bool $canonical Whether to enable or disable canonical input processing mode. Default is true (enabled).
+    * @param bool $echo Whether to enable or disable echoing of input characters. Default is true (enabled).
+    *
+    * @return self Returns the current instance for method chaining.
+    */
    public function configure (bool $blocking = true, bool $canonical = true, bool $echo = true): self
    {
       stream_set_blocking($this->stream, $blocking);
@@ -70,8 +79,21 @@ class Input
       return $this;
    }
 
+   /**
+    * Reads a specified number of bytes from the input stream.
+    *
+    * @param int $length The number of bytes to read.
+    *
+    * @return string|false Returns the read data as a string, or false if an error occurred.
+    */
    public function read (int $length): string|false
    {
+      // ?
+      if ($length < 1) {
+         return false;
+      }
+
+      // @
       pcntl_signal_dispatch();
 
       try {
@@ -88,6 +110,17 @@ class Input
       return $read;
    }
 
+   /**
+    * Initiates a bidirectional communication between a Terminal Client API and a Terminal Server API.
+    * The function forks a child process to handle the Terminal Client API and communicates with the parent process using a Pipe.
+    *
+    * @param Closure $CAPI The Terminal Client API function. It should accept two parameters: a callable to read from the input stream and a callable to write to the Pipe.
+    * @param Closure $SAPI The Terminal Server API function. It should accept one parameter: a callable to read from the Pipe.
+    *
+    * @return void
+    *
+    * @throws Throwable If an error occurs during the communication or process management.
+    */
    public function reading (Closure $CAPI, Closure $SAPI): void
    {
       $Pipe = new Pipe;

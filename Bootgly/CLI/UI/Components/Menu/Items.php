@@ -36,7 +36,7 @@ class Items
 
    // * Data
    public Options $Options;
-   /** @var array<array<Item|Option>|int> */
+   /** @var array<int,array<Item|Option>> */
    public static array $data;
 
    // * Metadata

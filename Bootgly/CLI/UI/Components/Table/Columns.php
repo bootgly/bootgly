@@ -13,11 +13,10 @@ namespace Bootgly\CLI\UI\Components\Table;
 
 use function mb_strlen;
 use function preg_replace;
-use function count;
-use function max;
 
 use Bootgly\ABI\Data\__String;
 use Bootgly\CLI\UI\Components\Table;
+use Bootgly\CLI\UI\Components\Table\Columns\Width;
 
 
 class Columns
@@ -35,8 +34,7 @@ class Columns
    // * Metadata
    // private int $count;
    // @ Width
-   /** @var array<array<int>|int>*/
-   private array $widths; // [... ? section => ...column_index]
+   public readonly Width $Width;
 
 
    public function __construct (Table $Table)
@@ -55,22 +53,7 @@ class Columns
       // * Metadata
       // $this->count = 0;
       // @ Width
-      $this->widths = [];
-   }
-   public function __get (string $name): mixed
-   {
-      switch ($name) {
-         case 'widths':
-            // @phpstan-ignore-next-line
-            $widths = ($this->Autowiden->get() === Autowiden::Based_On_Section && $this->section
-               ? ($this->widths[$this->section] ?? [])
-               : $this->widths
-            );
-
-            return $widths;
-         default:
-            return null;
-      }
+      $this->Width = new Width;
    }
 
    public function autowiden (): bool
@@ -87,30 +70,27 @@ class Columns
 
          $Autowiden = $this->Autowiden->get();
 
-         foreach ($rows as $row_index => $row_data) {
+         foreach ($rows as $row_data) {
             foreach ($row_data as $column_index => $column_data) {
                // @ Remove ANSI code characters from the string
                $column_data = preg_replace(__String::ANSI_ESCAPE_SEQUENCE_REGEX, '', $column_data);
 
                // @ Get column data length
-               $column_data_length = mb_strlen($column_data);
+               $column_data_length = mb_strlen($column_data ?? '');
 
                // @ Set maximum column width
                switch ($Autowiden) {
                   case Autowiden::Based_On_Section:
                      if ($last_section !== null && $section !== $last_section) {
-                        $this->widths[$section][$column_index] = $column_data_length;
+                        $this->Width->set($column_index, $column_data_length, $section);
                         break;
                      }
 
-                     $this->widths[$section][$column_index] = max(
-                        $column_data_length,
-                        $this->widths[$section][$column_index] ?? 0
-                     );
-
+                     $this->Width->max($column_index, $column_data_length, $section);
                      break;
+
                   case Autowiden::Based_On_Entiry_Column:
-                     $this->widths[$column_index] = max($column_data_length, $this->widths[$column_index] ?? 0);
+                     $this->Width->max($column_index, $column_data_length);
                }
             }
          }
@@ -127,14 +107,11 @@ class Columns
    public function count (null|string $section = null): int
    {
       // @phpstan-ignore-next-line
-      $widths = ($this->Autowiden->get() === Autowiden::Based_On_Section && $section
-         ? $this->widths[$section]
-         : $this->widths
-      );
+      if ($this->Autowiden->get() === Autowiden::Based_On_Section && $section) {
+         return $this->Width->count($section);
+      }
 
-      $columns = count($widths);
-
-      return $columns;
+      return $this->Width->count();
    }
 }
 
