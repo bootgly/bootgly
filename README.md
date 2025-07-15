@@ -19,9 +19,6 @@
 
 > Bootgly is the first PHP framework to use the [I2P (Interface-to-Platform) architecture][I2P_ARQUITECTURE].
 
-> [!NOTE]
-> Bootgly will be completely refactored to use "Property Hooks" and v1.0 will be released only after PHP 8.4 is released.
-
 > [!WARNING]
 > 🚧 DO NOT USE IT IN PRODUCTION ENVIRONMENTS. 🚧
 >
