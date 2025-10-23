@@ -135,6 +135,14 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
             try {
                self::$Encoder = new Encoder_Testing;
 
+               if (
+                  isset(SAPI::$Suite)
+                  && SAPI::$Suite instanceof Suite
+                  && isset(SAPI::$Tests[self::class])
+               ) {
+                  break;
+               }
+
                // * Data
                // !
                $bootstrap = BOOTGLY_ROOT_DIR . __CLASS__ . '/tests/@.php';
@@ -154,34 +162,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
                if ($Suite instanceof Suite === false) {
                   throw new Exception("Test Suite instance not found: \n {$bootstrap}");
                }
-
-               SAPI::$Suite = $Suite;
-               SAPI::$tests[self::class] = $Suite->tests;
-
-               // * Metadata
-               SAPI::$Tests[self::class] = [];
-               foreach (SAPI::$tests[self::class] as $index => $case) {
-                  // !
-                  $Test_Case_File = new File(
-                     BOOTGLY_ROOT_DIR . __CLASS__ . '/tests/' . $case . '.test.php'
-                  );
-                  // ?
-                  if ($Test_Case_File->exists === false) {
-                     continue;
-                  }
-
-                  // @ Load Test case from file
-                  try {
-                     /** @var array<string,mixed>|null $test */
-                     $test = require $Test_Case_File;
-                  }
-                  catch (Throwable) {
-                     $test = null;
-                  }
-
-                  // @ Set Closure to SAPI Tests
-                  SAPI::$Tests[self::class][] = $test;
-               }
+               self::pretest($Suite);
             }
             catch (Throwable $Throwable) {
                Exceptions::report($Throwable);
@@ -196,6 +177,55 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       }
    }
 
+   public static function pretest (Suite|null $Suite): void
+   {
+      if ($Suite === null) {
+         return;
+      }
+
+      $originalTests = $Suite->tests;
+      $target = $Suite->target ?? 0;
+
+      $selected = [];
+      if ($target > 0) {
+         $index = $target - 1;
+         if (isset($originalTests[$index])) {
+            $selected[$index] = $originalTests[$index];
+         }
+      }
+      else {
+         foreach ($originalTests as $index => $case) {
+            $selected[$index] = $case;
+         }
+      }
+
+      SAPI::$Suite = $Suite;
+      SAPI::$Tests[self::class] = [];
+      SAPI::$tests[self::class] = [];
+
+      foreach ($selected as $index => $case) {
+         $Test_Case_File = new File(
+            BOOTGLY_ROOT_DIR . __CLASS__ . '/tests/' . $case . '.test.php'
+         );
+         if ($Test_Case_File->exists === false) {
+            continue;
+         }
+
+         try {
+            /** @var array<string,mixed>|null $test */
+            $test = require $Test_Case_File;
+         }
+         catch (Throwable) {
+            $test = null;
+         }
+
+         $test['case.number'] = $index + 1;
+         SAPI::$Tests[self::class][] = $test;
+         SAPI::$tests[self::class][] = $case;
+      }
+
+      $Suite->tests = SAPI::$tests[self::class];
+   }
    protected static function test (TCP_Server_CLI $TCP_Server_CLI): bool
    {
       Logger::$display = Logger::DISPLAY_NONE;
@@ -226,7 +256,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
             foreach ($testFiles as $index => $value) {
                /** @var array<string,mixed>|null $test */
                $test = SAPI::$Tests[self::class][$index] ?? null;
-               $test['case'] = $index + 1;
+               $test['case'] = $test['case.number'] ?? ($index + 1);
                // @ Init Test
                $Test = $Suite->test($test);
                if ($Test === null || count($test) < 3) {

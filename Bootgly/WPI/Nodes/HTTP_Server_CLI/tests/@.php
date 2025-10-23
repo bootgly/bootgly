@@ -9,11 +9,12 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI;
 
 return new Suite(
    // * Config
-   autoBoot: function (): true {
+   autoBoot: function (Suite|null $Suite = null): true {
       Logger::$display = Logger::DISPLAY_NONE;
 
+      HTTP_Server_CLI::pretest($Suite);
+
       $HTTP_Server_CLI = new HTTP_Server_CLI(Mode: Modes::Test);
-      // * Config
       $HTTP_Server_CLI->configure(
          host: '0.0.0.0',
          port: 8080,
