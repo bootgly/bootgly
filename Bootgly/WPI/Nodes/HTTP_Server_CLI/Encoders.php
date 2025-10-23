@@ -10,11 +10,11 @@
 
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI;
 
+use Bootgly\WPI\Endpoints\Encoder;
+use Bootgly\WPI\Connections\Packages;
 
-use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages;
 
-
-abstract class Encoders
+abstract class Encoders implements Encoder
 {
-   abstract public static function encode (Packages $Package, ? int &$length): string;
+   abstract public static function encode (Packages $Package, null|int &$length): string;
 }

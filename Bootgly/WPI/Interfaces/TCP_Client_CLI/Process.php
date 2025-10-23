@@ -11,10 +11,41 @@
 namespace Bootgly\WPI\Interfaces\TCP_Client_CLI;
 
 
+use const LOCK_EX;
+use const LOCK_UN;
+use const SIGALRM;
+use const SIGCONT;
+use const SIGHUP;
+use const SIGINT;
+use const SIGIO;
+use const SIGIOT;
+use const SIGPIPE;
+use const SIGQUIT;
+use const SIGTERM;
+use const SIGTSTP;
+use const SIGUSR1;
+use const SIGUSR2;
+use function clearstatcache;
+use function cli_set_process_title;
+use function count;
+use function fclose;
+use function file_put_contents;
+use function flock;
+use function fopen;
+use function is_file;
+use function pcntl_fork;
+use function pcntl_signal;
+use function posix_getpid;
+use function posix_getpwuid;
+use function posix_getuid;
+use function posix_kill;
+use function unlink;
+use function usleep;
+use Exception;
+
 use Bootgly\ACI\Events\Timer;
 use Bootgly\ACI\Logs\LoggableEscaped;
 use Bootgly\ACI\Logs\Logger;
-
 use Bootgly\WPI\Interfaces\TCP_Client_CLI as Client;
 
 
@@ -88,18 +119,25 @@ class Process // FIXME: extends Process
       return null;
    }
 
-   protected static function lock (int $flag = \LOCK_EX): void
+   /**
+    * Lock the process to prevent multiple instances.
+    *
+    * @param int<0,7> $flag
+    *
+    * @return void
+    */
+   protected static function lock (int $flag = LOCK_EX): void
    {
       static $file;
 
       $lock_file = static::$pidLockFile;
 
-      $file = $file ? : \fopen($lock_file, 'a+');
+      $file = $file ? : fopen($lock_file, 'a+');
 
       if ($file) {
          flock($file, $flag);
 
-         if ($flag === \LOCK_UN) {
+         if ($flag === LOCK_UN) {
             fclose($file);
 
             $file = null;
@@ -219,9 +257,11 @@ class Process // FIXME: extends Process
 
             $this->Client->stop();
             #exit(1);
-         } else if ($pid > 0) { // Master process
+         }
+         else if ($pid > 0) { // Master process
             cli_set_process_title("Bootgly_WPI_Client: master process");
-         } else if ($pid === -1) {
+         }
+         else if ($pid === -1) {
             die('Could not fork process!');
          }
       }
@@ -232,13 +272,17 @@ class Process // FIXME: extends Process
    {
       $user_info = posix_getpwuid(posix_getuid());
 
+      if ($user_info === false) {
+         throw new Exception('Can not get current user information');
+      }
+
       return $user_info['name'];
    }
 
    protected static function saveMasterPid (): void
    {
       if (file_put_contents(static::$pidFile, static::$master) === false) {
-         throw new \Exception('Can not save master pid to ' . static::$pidFile);
+         throw new Exception('Can not save master pid to ' . static::$pidFile);
       }
    }
 

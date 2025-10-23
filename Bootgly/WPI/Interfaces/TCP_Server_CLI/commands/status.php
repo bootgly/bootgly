@@ -3,10 +3,19 @@
 namespace Bootgly\WPI\Interfaces\TCP_Server_CLI\commands;
 
 
+use function abs;
+use function array_map;
+use function date;
+use function explode;
+use function file_get_contents;
+use function is_dir;
+use function sprintf;
+use function sys_getloadavg;
+use Closure;
+use ReflectionClass;
+
 use Bootgly\ABI\Data\__String\Path;
-
 use Bootgly\API\Server as SAPI;
-
 use const Bootgly\CLI;
 use Bootgly\CLI\Command;
 use Bootgly\CLI\UI\Components\Fieldset;
@@ -30,8 +39,11 @@ return new class extends Command
    public function run (array $arguments = [], array $options = []): bool
    {
        // !
-      // ** @var \Closure $context
+      /** @var null|Closure $context */
       $context = $this->context;
+      if ($context === null) {
+         return false;
+      }
 
       // * Metadata
       $stat = &self::$stat;
@@ -41,7 +53,7 @@ return new class extends Command
       $context(function ()
       use (&$stat, &$stats) {
          /** @var Server $Server */
-         $Server = $this;
+         $Server = $this; // @phpstan-ignore-line
 
          $Output = CLI->Terminal->Output;
          if ($Server->Mode === Modes::Monitor) {
@@ -51,7 +63,7 @@ return new class extends Command
 
          // ! Server
          // @
-         $server = (new \ReflectionClass($Server))->getName();
+         $server = (new ReflectionClass($Server))->getName();
          $version = $Server::VERSION;
          $php = PHP_VERSION;
          // Runtime
@@ -75,7 +87,9 @@ return new class extends Command
          // Load Average
          $load = ['-', '-', '-'];
          if ( function_exists('sys_getloadavg') ) {
-            $load = array_map('round', sys_getloadavg(), [2, 2, 2]);
+            $system_load_average = sys_getloadavg() ?: [0, 0, 0];
+
+            $load = array_map('round', $system_load_average, [2, 2, 2]);
          }
          $load = "{$load[0]}, {$load[1]}, {$load[2]}";
 
@@ -88,7 +102,7 @@ return new class extends Command
          $address = $Server->socket . ($Server->domain ?? $Server->host) . ':' . $Server->port;
 
          // Event-loop
-         $event = (new \ReflectionClass($Server::$Event))->getName();
+         $event = (new ReflectionClass($Server::$Event))->getName();
 
          // Script
          // TODO
@@ -160,26 +174,26 @@ return new class extends Command
          $PIDs = $Server->Process->Children->PIDs;
          foreach ($PIDs as $i => $PID) {
             // @ Worker
-            $id = \sprintf('%02d', $i + 1);
+            $id = sprintf('%02d', $i + 1);
             // @ System
             $procPath = "/proc/$PID";
 
-            if ( \is_dir($procPath) ) {
-               $process_stat = \file_get_contents("$procPath/stat");
-               $process_stats = \explode(' ', $process_stat);
+            if ( is_dir($procPath) ) {
+               $process_stat = file_get_contents("$procPath/stat") ?: '';
+               $process_stats = explode(' ', $process_stat);
 
                $stats[$i] ??= [];
 
                switch ($stat) {
                   case 0:
-                     $stats[$i][0] = $process_stats;
+                     $stats[$i][0] = $process_stats; // @phpstan-ignore-line
                      break;
                   case 1:
-                     $stats[$i][1] = $process_stats;
+                     $stats[$i][1] = $process_stats; // @phpstan-ignore-line
                      break;
                   default:
-                     $stats[$i][0] = $process_stats;
-                     $stats[$i][1] = $process_stats;
+                     $stats[$i][0] = $process_stats; // @phpstan-ignore-line
+                     $stats[$i][1] = $process_stats; // @phpstan-ignore-line
                }
 
                // CPU time spent in user code
@@ -195,7 +209,7 @@ return new class extends Command
                $userDiff = $utime2 - $utime1;
                $sysDiff = $stime2 - $stime1;
 
-               $workerLoad = (int) \abs($userDiff + $sysDiff);
+               $workerLoad = (int) abs($userDiff + $sysDiff);
 
                // @ Output
                $Progress[$i]->start();

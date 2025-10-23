@@ -8,9 +8,13 @@
  * --------------------------------------------------------------------------
  */
 
+namespace Bootgly\WPI\Interfaces\TCP_Server_CLI\commands;
+
+
+use Closure;
+
 use Bootgly\ABI\Data\__String\Bytes;
 use Bootgly\ACI\Logs\Logger;
-
 use Bootgly\CLI\Command;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI as Server;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections;
@@ -26,14 +30,17 @@ return new class extends Command
    public function run (array $arguments = [], array $options = []): bool
    {
       // !
-      // ** @var \Closure $context
+      /** @var null|Closure $context */
       $context = $this->context;
+      if ($context === null) {
+         return false;
+      }
 
       // @
       $context(function ()
       use ($arguments) {
          /** @var Server $Server */
-         $Server = $this;
+         $Server = $this; // @phpstan-ignore-line
 
          if ($arguments !== [] && $arguments[0] === 'reset') {
             $Server->Connections->connections = 0;

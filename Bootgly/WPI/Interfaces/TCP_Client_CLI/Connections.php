@@ -12,23 +12,21 @@ namespace Bootgly\WPI\Interfaces\TCP_Client_CLI;
 
 
 use Bootgly\ACI\Logs\LoggableEscaped;
-
 use Bootgly\WPI;
 use Bootgly\WPI\Connections\Packages; // @interface
 use Bootgly\WPI\Interfaces\TCP_Client_CLI as Client;
 use Bootgly\WPI\Interfaces\TCP_Client_CLI\Connections\Connection;
 
 
-// FIXME: extends Connections
 class Connections implements WPI\Connections
 {
    use LoggableEscaped;
 
 
-   public ? Client $Client;
+   public null|Client $Client;
 
    // * Config
-   public ? float $timeout;
+   public null|float $timeout;
    public bool $async;
    public bool $blocking;
 
@@ -59,7 +57,7 @@ class Connections implements WPI\Connections
    public Packages $Packages;
 
 
-   public function __construct (? Client &$Client = null)
+   public function __construct (null|Client &$Client = null)
    {
       $this->Client = $Client;
 

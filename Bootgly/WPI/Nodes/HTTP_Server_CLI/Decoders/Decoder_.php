@@ -15,7 +15,7 @@ use function count;
 use function key;
 
 use const Bootgly\WPI;
-use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages;
+use Bootgly\WPI\Connections\Packages;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI as Server;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;

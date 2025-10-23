@@ -12,10 +12,8 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders;
 
 
 use Bootgly\ABI\Debugging\Data\Throwables;
-
 use Bootgly\API\Server as SAPI;
-
-use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages;
+use Bootgly\WPI\Connections\Packages;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI as Server;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
@@ -23,7 +21,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 
 class Encoder_ extends Encoders
 {
-   public static function encode (Packages $Packages, ? int &$length): string
+   public static function encode (Packages $Packages, null|int &$length): string
    {
       // @ Get callbacks
       $Request  = Server::$Request;

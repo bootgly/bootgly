@@ -65,7 +65,7 @@ abstract class Request extends Raw
     * The port of the HTTP Client.
     */
    public int $port {
-      get => $_SERVER['REMOTE_PORT'] ?? 0;
+      get => (int) $_SERVER['REMOTE_PORT'] ?? 0; // @phpstan-ignore-line
    }
    /**
     * The scheme of the Request.
@@ -73,7 +73,7 @@ abstract class Request extends Raw
    public string $scheme {
       get {
          if (isSet($_SERVER['HTTP_X_FORWARDED_PROTO']) === true) {
-            $scheme = $_SERVER['HTTP_X_FORWARDED_PROTO'];
+            $scheme = (string) $_SERVER['HTTP_X_FORWARDED_PROTO'];
          }
          else if (empty($_SERVER['HTTPS']) === false) {
             $scheme = 'https';

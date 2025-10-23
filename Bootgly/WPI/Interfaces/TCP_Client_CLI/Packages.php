@@ -11,16 +11,23 @@
 namespace Bootgly\WPI\Interfaces\TCP_Client_CLI;
 
 
+use function feof;
+use function fread;
+use function fwrite;
+use function get_resource_type;
+use function is_resource;
+use function microtime;
+use function strlen;
+use function substr;
+use Throwable;
+
 use Bootgly\ACI\Logs\LoggableEscaped;
-
 use Bootgly\WPI; // @interface
-
 use Bootgly\WPI\Interfaces\TCP_Client_CLI as Client;
 use Bootgly\WPI\Interfaces\TCP_Client_CLI\Connections;
 use Bootgly\WPI\Interfaces\TCP_Client_CLI\Connections\Connection;
 
 
-// FIXME: extends Packages
 class Packages implements WPI\Connections\Packages
 {
    use LoggableEscaped;
@@ -85,7 +92,8 @@ class Packages implements WPI\Connections\Packages
    {
       try {
          $eof = @feof($Socket);
-      } catch (\Throwable) {
+      }
+      catch (Throwable) {
          $eof = false;
       }
 
@@ -123,21 +131,21 @@ class Packages implements WPI\Connections\Packages
     * Write data to server.
     * 
     * @param resource $Socket
-    * @param int|null $length
+    * @param null|int<0, max> $length
     *
     * @return bool
     */
-   public function writing (&$Socket, ? int $length = null): bool
+   public function writing (&$Socket, null|int $length = null): bool
    {
       // !
       $buffer = self::$output;
       $written = 0;
-      #$length ??= strlen($buffer);
       $sent = 0; // Bytes sent to server per write loop iteration
 
       // @
       try {
          while ($buffer) {
+            // @phpstan-ignore-next-line
             $sent = @fwrite($Socket, $buffer, $length);
             #$sent = @stream_socket_sendto($Socket, $buffer, $length???);
 
@@ -155,7 +163,7 @@ class Packages implements WPI\Connections\Packages
             break;
          }
       }
-      catch (\Throwable) {
+      catch (Throwable) {
          $sent = false;
       }
 
@@ -185,13 +193,13 @@ class Packages implements WPI\Connections\Packages
     * Read data from server.
     * 
     * @param resource $Socket
-    * @param int|null $length
-    * @param int|null $timeout
+    * @param null|int<1,max> $length
+    * @param null|int<0,max> $timeout
     *
     * @return bool
     */
    public function reading (
-      &$Socket, ? int $length = null, ? int $timeout = null
+      &$Socket, null|int $length = null, null|int $timeout = null
    ): bool
    {
       // !
@@ -207,7 +215,7 @@ class Packages implements WPI\Connections\Packages
       // @
       try {
          do {
-            $buffer = @fread($Socket, $length ?? 65535);
+            $buffer = @fread($Socket, $length ?? 65535); // @phpstan-ignore-line
             #$buffer = @stream_socket_recvfrom($Socket, $length ?? 65535);
 
             if ($buffer === false) break;
@@ -233,7 +241,8 @@ class Packages implements WPI\Connections\Packages
             break;
          }
          while ($received < $total || $total === 0);
-      } catch (\Throwable) {
+      }
+      catch (Throwable) {
          $buffer = false;
       }
 
@@ -268,7 +277,7 @@ class Packages implements WPI\Connections\Packages
       return true;
    }
 
-   public function write (&$Socket): void
+   public function write (&$Socket, null|int $length = null): void
    {}
    public function read (&$Socket): void
    {}

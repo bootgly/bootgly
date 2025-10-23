@@ -10,9 +10,15 @@
 
 namespace Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections;
 
+use function explode;
+use function fclose;
+use function stream_set_blocking;
+use function stream_socket_enable_crypto;
+use function stream_socket_get_name;
+use function time;
+use Throwable;
 
 use Bootgly\ACI\Events\Timer;
-
 use Bootgly\WPI\Interfaces\TCP_Server_CLI as Server;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages;
@@ -24,7 +30,7 @@ class Connection extends Packages
    public $Socket;
 
    // * Config
-   /** @var array<false|int> */
+   /** @var array<int> */
    public array $timers;
    public int $expiration;
 
@@ -64,8 +70,8 @@ class Connection extends Packages
       $this->encrypted = false;
       $this->status = Connections::STATUS_ESTABLISHED;
       // @ State
-      $this->started = \time();
-      $this->used = \time();
+      $this->started = time();
+      $this->used = time();
       // @ Stats
       #$this->reads = 0;
       $this->writes = 0;
@@ -73,14 +79,14 @@ class Connection extends Packages
 
       // @ Set Remote Data if possible
       // IP:port
-      $peer = \stream_socket_get_name($Socket, true);
+      $peer = stream_socket_get_name($Socket, true);
       if ($peer === false) {
          $this->close();
          return;
       }
       // * Data
       // @ Remote
-      @[$IP, $port] = \explode(':', $peer, 2); // TODO IPv6
+      @[$IP, $port] = explode(':', $peer, 2); // TODO IPv6
       $this->ip = $IP;
       $this->port = (int) $port;
 
@@ -92,12 +98,16 @@ class Connection extends Packages
       }
 
       if (Connections::$stats) {
-         // @ Set Connection timeout expiration
-         $this->timers[] = Timer::add(
+         $timer = Timer::add(
             interval: $this->expiration,
             handler: [$this, 'expire'],
             args: [$this->expiration]
          );
+
+         // @ Set Connection timeout expiration
+         if ($timer) {
+            $this->timers[] = $timer;
+         }
 
          /*
          // @ Set Connection limit
@@ -115,17 +125,17 @@ class Connection extends Packages
       static $tries = 1;
 
       try {
-         \stream_set_blocking($this->Socket, true);
+         stream_set_blocking($this->Socket, true);
 
-         $negotiation = @\stream_socket_enable_crypto(
+         $negotiation = @stream_socket_enable_crypto(
             $this->Socket,
             true,
             STREAM_CRYPTO_METHOD_TLSv1_2_SERVER | STREAM_CRYPTO_METHOD_TLSv1_3_SERVER
          );
 
-         \stream_set_blocking($this->Socket, false);
+         stream_set_blocking($this->Socket, false);
       }
-      catch (\Throwable) {
+      catch (Throwable) {
          $negotiation = false;
       }
 
@@ -179,7 +189,7 @@ class Connection extends Packages
          $this->used = \time();
       }
 
-      if ((\time() - $this->used) >= $timeout) {
+      if ((time() - $this->used) >= $timeout) {
          return $this->close();
       }
 
@@ -230,9 +240,9 @@ class Connection extends Packages
       Server::$Event->del($Socket, Server::$Event::EVENT_WRITE);
 
       try {
-         @\fclose($Socket);
+         @fclose($Socket);
       }
-      catch (\Throwable) {
+      catch (Throwable) {
          // ...
       }
 

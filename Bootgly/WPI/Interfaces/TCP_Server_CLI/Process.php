@@ -75,8 +75,18 @@ class Process
 
    // * Data
    public string $title {
-      get => cli_get_process_title();
-      set => cli_set_process_title($value);
+      get {
+         $title = cli_get_process_title();
+
+         if (!$title) {
+            $title = 'Bootgly_WPI_Server: unknown process';
+         }
+
+         return $title;
+      }
+      set (string $value) {
+         cli_set_process_title($value);
+      }
    }
 
    // * Metadata
@@ -120,6 +130,13 @@ class Process
       Timer::init([$this, 'handleSignal']);
    }
 
+   /**
+    * Lock the process to prevent multiple instances.
+    *
+    * @param int<0,7> $flag The lock flag (default: LOCK_EX).
+    *
+    * @return void
+    */
    protected static function lock (int $flag = LOCK_EX): void
    {
       static $file;
@@ -200,7 +217,7 @@ class Process
                $command = '@' . $command;
    
                // @ Match context
-               match ($context) {
+               match ($context) { // @phpstan-ignore-line
                   'Connections' => $this->Server->Connections->{$command},
                   default => $this->Server->{$command}
                };
@@ -281,7 +298,7 @@ class Process
          // # Child process
          if ($PID === 0) {
             // ! Set Child PID (in context of Child Process)
-            $this->Children->push($index, PID: $this->id);
+            $this->Children->push($this->id, $index);
             // ! Set child index
             self::$index = $index + 1;
 
@@ -311,7 +328,7 @@ class Process
          // # Master process
          else if ($PID > 0) {
             // ! Set Child PID (in context of Master Process)
-            $this->Children->push($index, $PID);
+            $this->Children->push($PID, $index);
 
             $this->title = 'Bootgly_WPI_Server: master process';
          }
@@ -326,6 +343,10 @@ class Process
    protected static function getCurrentUser (): string
    {
       $user_info = posix_getpwuid(posix_getuid());
+
+      if ($user_info === false) {
+         throw new Exception('Can not get current user');
+      }
 
       return $user_info['name'];
    }

@@ -132,6 +132,10 @@ class Connection extends Packages
    public function __destruct ()
    {
       foreach ($this->timers as $id) {
+         if ($id === false) {
+            continue;
+         }
+
          Timer::del($id);
       }
    }

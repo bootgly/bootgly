@@ -12,7 +12,6 @@ namespace Bootgly\WPI\Events;
 
 
 use Bootgly\ACI\Events\Loops;
-
 use Bootgly\WPI\Connections;
 use Bootgly\WPI\Events;
 
@@ -223,6 +222,7 @@ class Select implements Events, Loops
                   $Connections->connect();
                }
                else if ( isSet($this->reading[$id]) ) {
+                  /** @var Connections\Packages $Package */
                   $Package = &$this->reading[$id];
                   $Package->reading($Socket);
                }
@@ -234,6 +234,7 @@ class Select implements Events, Loops
                $id = (int) $Socket;
 
                if ( isSet($this->writing[$id]) ) {
+                  /** @var Connections\Packages $Package */
                   $Package = &$this->writing[$id];
                   $Package->writing($Socket);
                }

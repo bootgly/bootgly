@@ -19,7 +19,7 @@ class __String implements Data // Simple class (advanced methods coming soon)
    public const ANSI_ESCAPE_SEQUENCE_REGEX = '/\x1B\[[0-9;]*[mK]/';
 
    // * Config
-   public ?string $encoding;
+   public null|string $encoding;
 
    // * Data
    public string $string;
@@ -127,18 +127,36 @@ class __String implements Data // Simple class (advanced methods coming soon)
    {
       switch ($name) {
          case 'search':
+            // !
+            /** @var array<string>|string $search */
+            $search = $arguments[0];
+            /** @var int|null $offset */
+            $offset = $arguments[1] ?? null;
+
+            // :
             return self::$name(
                string: $this->string,
-               search: $arguments[0],
-               offset: $arguments[1] ?? 0
+               search: $search,
+               offset: $offset
             );
          case 'pad':
+            // !
+            /** @var int $length */
+            $length = $arguments[0];
+            /** @var string $padding */
+            $padding = $arguments[1] ?? ' ';
+            /** @var int $type */
+            $type = $arguments[2] ?? STR_PAD_RIGHT;
+            /** @var string $encoding */
+            $encoding = $arguments[3] ?? $this->encoding ?? 'UTF-8';
+
+            // :
             return self::$name(
                string: $this->string,
-               length: $arguments[0],
-               padding: $arguments[1] ?? ' ',
-               type: $arguments[2] ?? 1,
-               encoding: $arguments[3] ?? $this->encoding ?? 'UTF-8'
+               length: $length,
+               padding: $padding,
+               type: $type,
+               encoding: $encoding
             );
          default:
             return null;

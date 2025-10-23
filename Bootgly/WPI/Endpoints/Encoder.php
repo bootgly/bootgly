@@ -8,14 +8,21 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\WPI\Nodes\HTTP_Server_CLI;
+namespace Bootgly\WPI\Endpoints;
 
 
-use Bootgly\WPI\Endpoints\Decoder;
 use Bootgly\WPI\Connections\Packages;
 
 
-abstract class Decoders implements Decoder
+interface Encoder
 {
-   abstract public static function decode (Packages $Package, string $buffer, int $size): int;
+   /**
+    * Encodes the given package into a string.
+    *
+    * @param Packages $Package
+    * @param int<0,max>|null $length 
+    *
+    * @return string 
+    */
+   public static function encode (Packages $Package, null|int &$length): string;
 }

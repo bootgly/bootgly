@@ -15,7 +15,7 @@ use function time;
 use function substr;
 
 use const Bootgly\WPI;
-use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages;
+use Bootgly\WPI\Connections\Packages;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI as Server;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders;
 
@@ -32,6 +32,8 @@ class Decoder_Waiting extends Decoders
    {
       // !
       $WPI = WPI;
+      /** @var Server $Server */
+      $Server = $WPI->Server;
       /** @var Server\Request $Request */
       $Request = $WPI->Request;
       $Body = $Request->Body;
@@ -49,7 +51,7 @@ class Decoder_Waiting extends Decoders
          */
          $elapsed = time() - self::$decoded;
          if ($elapsed >= 60 && self::$read === $Body->downloaded) {
-            $WPI->Server::$Decoder = new Decoder_;
+            $Server::$Decoder = new Decoder_;
             return Decoder_::decode($Package, $buffer, $size);
          }
 
@@ -73,7 +75,7 @@ class Decoder_Waiting extends Decoders
          return $Body->length;
       }
 
-      $WPI->Server::$Decoder = new Decoder_;
+      $Server::$Decoder = new Decoder_;
       return Decoder_::decode($Package, $buffer, $size);
    }
 }

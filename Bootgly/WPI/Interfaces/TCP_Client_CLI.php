@@ -10,13 +10,29 @@
 
 namespace Bootgly\WPI\Interfaces;
 
+use const E_WARNING;
+use const PHP_SAPI;
+use const SIGINT;
+use const STREAM_CLIENT_ASYNC_CONNECT;
+use const STREAM_CLIENT_CONNECT;
+use const WUNTRACED;
+use function count;
+use function pcntl_signal_dispatch;
+use function pcntl_wait;
+use function register_shutdown_function;
+use function restore_error_handler;
+use function set_error_handler;
+use function stream_context_create;
+use function stream_socket_client;
+use function strpos;
+use function time;
+use Closure;
+use Throwable;
 
 use Bootgly\ABI\Debugging\Data\Vars;
-
 use Bootgly\ACI\Events\Loops;
 use Bootgly\ACI\Logs\Logger;
 use Bootgly\ACI\Logs\LoggableEscaped;
-
 use Bootgly\WPI\Events;
 use Bootgly\WPI\Events\Select;
 use Bootgly\WPI\Interfaces\TCP_Client_CLI\Commands;
@@ -43,8 +59,8 @@ class TCP_Client_CLI
 
    // * Config
    #protected string $resource;
-   protected ? string $host;
-   protected ? int $port;
+   protected null|string $host;
+   protected null|int $port;
    protected int $workers;
    // @ Mode
    protected int $mode;
@@ -54,13 +70,13 @@ class TCP_Client_CLI
    // * Data
    // ! On
    // @ on Worker
-   public static ? \Closure $onInstance = null;
+   public static null|Closure $onInstance = null;
    // @ on Connection
-   public static ? \Closure $onConnect = null;
-   public static ? \Closure $onDisconnect = null;
+   public static null|Closure $onConnect = null;
+   public static null|Closure $onDisconnect = null;
    // @ on Packages
-   public static ? \Closure $onRead = null;
-   public static ? \Closure $onWrite = null;
+   public static null|Closure $onRead = null;
+   public static null|Closure $onWrite = null;
 
    // * Metadata
    public const VERSION = '0.0.1';
@@ -85,7 +101,7 @@ class TCP_Client_CLI
 
    public function __construct (int $mode = self::MODE_DEFAULT)
    {
-      if (\PHP_SAPI !== 'cli') {
+      if (PHP_SAPI !== 'cli') {
          return;
       }
 
@@ -114,7 +130,7 @@ class TCP_Client_CLI
       // ! Connection(s)
       $this->Connections = new Connections($this);
       // ! Web\@\Events
-      static::$Event = new Select($this->Connections);
+      static::$Event = new Select($this->Connections); // @phpstan-ignore-line
 
       // ! @\Process
       $Process = $this->Process = new Process($this);
@@ -159,9 +175,9 @@ class TCP_Client_CLI
    }
    public function on
    (
-      ? \Closure $instance = null,
-      ? \Closure $connect = null, ? \Closure $disconnect = null,
-      ? \Closure $read = null, ? \Closure $write = null
+      null|Closure $instance = null,
+      null|Closure $connect = null, null|Closure $disconnect = null,
+      null|Closure $read = null, null|Closure $write = null
    ): void
    {
       // @ Worker
@@ -292,7 +308,7 @@ class TCP_Client_CLI
             context: $context
          );
       }
-      catch (\Throwable) {
+      catch (Throwable) {
          $Socket = false;
       }
       finally {

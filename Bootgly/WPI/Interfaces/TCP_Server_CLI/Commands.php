@@ -54,7 +54,7 @@ class Commands extends CLI\Terminal
       'clear',
       'help'
    ];
-   /** @var array<string,array<string>>> */
+   /** @var array<string,array<string>> */
    public static array $subcommands = [
       // ! Server
       // @ operations
@@ -114,6 +114,7 @@ class Commands extends CLI\Terminal
          // TODO 'benchmark'
          'check jit' =>
             $this->log(
+               // @phpstan-ignore-next-line
                (\function_exists('opcache_get_status') && @\opcache_get_status()['jit']['enabled'])
                ? 'JIT enabled' : 'JIT disabled'
             ) && true,

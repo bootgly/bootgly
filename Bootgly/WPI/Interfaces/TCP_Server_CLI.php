@@ -11,22 +11,42 @@
 namespace Bootgly\WPI\Interfaces;
 
 
+use const SIGINT;
+use const SIGUSR2;
+use const SOL_SOCKET;
+use const SO_KEEPALIVE;
+use const STREAM_SERVER_BIND;
+use const STREAM_SERVER_LISTEN;
+use const WNOHANG;
+use const WUNTRACED;
+use function fclose;
+use function function_exists;
+use function pcntl_signal_dispatch;
+use function pcntl_wait;
+use function register_shutdown_function;
+use function socket_import_stream;
+use function socket_set_option;
+use function stream_context_create;
+use function stream_socket_enable_crypto;
+use function stream_socket_server;
+use function time;
+use function usleep;
+use Throwable;
+
 use Bootgly\ABI\Debugging\Data\Vars;
 use Bootgly\ABI\Debugging\Shutdown;
-
 use Bootgly\ACI\Events\Loops;
 use Bootgly\ACI\Events\Timer;
 use Bootgly\ACI\Logs\Logging;
 use Bootgly\ACI\Logs\Logger;
 use Bootgly\ACI\Logs\LoggableEscaped;
-
 use Bootgly\API\Environment;
 use Bootgly\API\Environments;
 use Bootgly\API\Projects;
 use Bootgly\API\Server as SAPI;
-
 use const Bootgly\CLI;
-
+use Bootgly\WPI\Endpoints\Decoder;
+use Bootgly\WPI\Endpoints\Encoder;
 use Bootgly\WPI\Endpoints\Servers;
 use Bootgly\WPI\Endpoints\Servers\Modes;
 use Bootgly\WPI\Endpoints\Servers\Status;
@@ -43,7 +63,7 @@ class TCP_Server_CLI implements Servers, Logging
 
 
    // !
-   /** @var resource|false|null */
+   /** @var resource */
    protected $Socket;
 
    public static Events & Loops $Event;
@@ -52,29 +72,29 @@ class TCP_Server_CLI implements Servers, Logging
    protected Process $Process;
 
    // * Config
-   protected ?string $domain;
-   protected ?string $host;
-   protected ?int $port;
+   protected null|string $domain;
+   protected null|string $host;
+   protected null|int $port;
    protected int $workers;
    /** @var array<string> */
-   protected ?array $ssl; // SSL Stream Context
+   protected null|array $ssl; // SSL Stream Context
    // # Mode
    public Modes $Mode;
    // # Verbosity
 
    // * Data
    // # SAPI
-   public static ?string $Application = null; 
-   public static ?object $Decoder = null;
-   public static ?object $Encoder = null;
+   public static null|string $Application = null; 
+   public static null|Decoder $Decoder = null;
+   public static null|Encoder $Encoder = null;
 
    // * Metadata
    public const string VERSION = '0.0.1-alpha';
    // # State
    protected int $started = 0;
    // # Socket
-   protected ?string $socket;
-   /** @var array<string> */
+   protected null|string $socket;
+   /** @var array<array<bool|int|string>|string> */
    public static array $context;
    // # Status
    protected Status $Status = Status::Booting;
@@ -85,7 +105,7 @@ class TCP_Server_CLI implements Servers, Logging
 
    public function __construct (Modes $Mode = Modes::Monitor)
    {
-      if (\PHP_SAPI !== 'cli') {
+      if (PHP_SAPI !== 'cli') {
          return;
       }
 
@@ -111,7 +131,7 @@ class TCP_Server_CLI implements Servers, Logging
 
       // * Metadata
       // # State
-      $this->started = \time();
+      $this->started = time();
       // # Status
       $this->Status = Status::Booting;
 
@@ -129,7 +149,7 @@ class TCP_Server_CLI implements Servers, Logging
       $this->Connections = new Connections($this);
 
       // ! WPI\Events
-      static::$Event = new Select($this->Connections);
+      static::$Event = new Select($this->Connections); // @phpstan-ignore-line
 
       // ! @\Process
       $Process = $this->Process = new Process($this);
@@ -139,7 +159,7 @@ class TCP_Server_CLI implements Servers, Logging
       CLI->Commands->autoload(__CLASS__, Context: $this, Script: $this);
 
       // @ Register shutdown function to avoid orphaned children
-      \register_shutdown_function(function () use ($Process) {
+      register_shutdown_function(function () use ($Process) {
          Shutdown::debug();
          $Process->sendSignal(SIGINT, master: true, children:true);
       });
@@ -175,7 +195,7 @@ class TCP_Server_CLI implements Servers, Logging
 
             return true;
          case '@test':
-            if ($this->Process->level === 'master' && self::$Application && \method_exists(self::$Application, 'test')) {
+            if ($this->Process->level === 'master' && self::$Application && method_exists(self::$Application, 'test')) {
                self::$Application::test($this);
             }
 
@@ -219,7 +239,7 @@ class TCP_Server_CLI implements Servers, Logging
       string $host,
       int $port,
       int $workers,
-      ? array $ssl = null
+      null|array $ssl = null
    ): self
    {
       $this->Status = Status::Configuring;
@@ -299,11 +319,11 @@ class TCP_Server_CLI implements Servers, Logging
       }
 
       // @ Create context
-      $Context = \stream_context_create(self::$context);
+      $Context = stream_context_create(self::$context);
 
       // @ Create server socket
       try {
-         $this->Socket = @\stream_socket_server(
+         $Socket = @stream_socket_server(
             'tcp://' . $this->host . ':' . $this->port,
             $error_code,
             $error_message,
@@ -311,23 +331,38 @@ class TCP_Server_CLI implements Servers, Logging
             $Context
          );
       }
-      catch (\Throwable) {}
+      catch (Throwable) {
+         $Socket = false;
+      }
 
-      if ($this->Socket === false) {
+      if ($Socket === false) {
          $this->log('@\;Could not create socket: ' . $error_message, self::LOG_ERROR_LEVEL);
          exit(1);
       }
+      /** @var resource $Socket */
+      $this->Socket = $Socket;
 
       // @ On success
 
       // @ Disable Crypto in Main Socket
       if ( ! empty($this->ssl) ) {
-         \stream_socket_enable_crypto($this->Socket, false);
+         stream_socket_enable_crypto($this->Socket, false);
       }
       // @ Enable Keep Alive if possible
-      if (\function_exists('socket_import_stream')) {
-         $Socket = \socket_import_stream($this->Socket);
-         \socket_set_option($Socket, SOL_SOCKET, SO_KEEPALIVE, 1);
+      if (function_exists('socket_import_stream')) {
+         try {
+            $Socket = socket_import_stream($this->Socket);
+         }
+         catch (Throwable) {
+            $Socket = false;
+         }
+
+         if ($Socket === false) {
+            $this->log('@\;Failed to import stream socket!@\;', self::LOG_ERROR_LEVEL);
+            exit(1);
+         }
+
+         socket_set_option($Socket, SOL_SOCKET, SO_KEEPALIVE, 1);
       }
 
       $this->Status = Status::Running;
@@ -356,10 +391,10 @@ class TCP_Server_CLI implements Servers, Logging
 
       while ($this->Mode === Modes::Interactive) {
          // @ Calls signal handlers for pending signals
-         \pcntl_signal_dispatch();
+         pcntl_signal_dispatch();
 
          // @ Suspends execution of the current process until a child has exited, or until a signal is delivered
-         \pcntl_wait($status, WNOHANG | WUNTRACED);
+         pcntl_wait($status, WNOHANG | WUNTRACED);
 
          // If child is running?
          if ($status === 0) {
@@ -369,7 +404,7 @@ class TCP_Server_CLI implements Servers, Logging
 
             // @ Wait for command output before looping
             if ($interact === false) {
-               \usleep(100000 * $this->workers); // @ wait 0.1 s * qt workers
+               usleep(100000 * $this->workers); // @ wait 0.1 s * qt workers
             }
          }
          else if ($status > 0) { // If a child has already exited?
@@ -412,13 +447,13 @@ class TCP_Server_CLI implements Servers, Logging
       // @ Loop
       while ($this->Mode === Modes::Monitor) {
          // @ Calls signal handlers for pending signals
-         \pcntl_signal_dispatch();
+         pcntl_signal_dispatch();
 
          // @ Suspends execution of the current process until a child has exited, or until a signal is delivered
-         \pcntl_wait($status, WUNTRACED);
+         pcntl_wait($status, WUNTRACED);
 
          // @ Calls signal handlers for pending signals again
-         \pcntl_signal_dispatch();
+         pcntl_signal_dispatch();
 
          // If child is running?
          if ($status === 0) {
@@ -446,29 +481,20 @@ class TCP_Server_CLI implements Servers, Logging
       }
    }
 
-   private function close (): void
+   public function close (): bool
    {
-      if ($this->Socket === null || $this->Socket === false) {
-         #$this->log('@\;$this->Socket is already closed?@\;');
-         return;
-      }
-
       try {
-         $closed = @\fclose($this->Socket);
+         $closed = @fclose($this->Socket);
       }
-      catch (\Throwable) {
+      catch (Throwable) {
          $closed = false;
       }
 
       if ($closed === false) {
          $this->log('@\;Failed to close $this->Socket!');
       }
-      else {
-         // TODO $this->alert?
-         #$this->log('@\;Sockets closed successful.', self::LOG_INFO_LEVEL);
-      }
 
-      $this->Socket = null;
+      return $closed;
    }
 
    public function resume (): bool
@@ -527,7 +553,7 @@ class TCP_Server_CLI implements Servers, Logging
          case 'master':
             $children = (string) count($this->Process->Children->PIDs);
             $this->log("{$children} worker(s) stopped!@\\;", 3);
-            \pcntl_wait($status);
+            pcntl_wait($status);
 
             $CI_CD = Environment::get('GITHUB_ACTIONS')
                || Environment::get('TRAVIS')

@@ -11,7 +11,6 @@
 namespace Bootgly\CLI;
 
 
-use function array_slice;
 use function count;
 use function is_array;
 use Closure;
@@ -19,6 +18,7 @@ use Error;
 
 use const BOOTGLY_ROOT_DIR;
 use Bootgly\ABI\Data\__String\Path;
+use Bootgly\CLI\Command;
 use Bootgly\CLI\Commands\Arguments;
 
 
@@ -113,11 +113,16 @@ class Commands
     */
    public function register (
       Command $Command,
-      null|object $Script = null
+      null|object $Script = null,
+      null|object $Context = null
    ): bool
    {
       if ($Script === null) {
          $Script = $this;
+      }
+
+      if ($Context !== null) {
+         $Command($Context);
       }
 
       $this->commands[$Script::class][] = $Command;

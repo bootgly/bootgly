@@ -10,8 +10,10 @@
 
 namespace Bootgly\WPI\Interfaces\TCP_Server_CLI\commands;
 
-use Bootgly\ACI\Logs\Logger;
 
+use Closure;
+
+use Bootgly\ACI\Logs\Logger;
 use Bootgly\CLI\Command;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI as Server;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections;
@@ -27,13 +29,16 @@ return new class extends Command
    public function run (array $arguments = [], array $options = []): bool
    {
       // !
-      // ** @var \Closure $context
+      /** @var null|Closure $context */
       $context = $this->context;
+      if ($context === null) {
+         return false;
+      }
 
       // @
       $context(function () {
          /** @var Server $Server */
-         $Server = $this;
+         $Server = $this; // @phpstan-ignore-line
 
          Logger::$display = Logger::DISPLAY_MESSAGE;
    
@@ -59,7 +64,7 @@ return new class extends Command
    
                switch ($key) {
                   case 'status':
-                     $status = (int) $value;
+                     $status = (int) $value; // @phpstan-ignore-line
 
                      $status = match ($status) {
                         Connections::STATUS_INITIAL     => 'INITIAL',
@@ -74,12 +79,12 @@ return new class extends Command
                      break;
    
                   case 'expiration':
-                     $Server->log($value . ' second(s)' . PHP_EOL);
+                     $Server->log($value . ' second(s)' . PHP_EOL); // @phpstan-ignore-line
                      break;
    
                   case 'used':
                   case 'started':
-                     $Server->log(\date('Y-m-d H:i:s', $value) . PHP_EOL);
+                     $Server->log(\date('Y-m-d H:i:s', $value) . PHP_EOL); // @phpstan-ignore-line
                      break;
    
                   default:
@@ -88,7 +93,7 @@ return new class extends Command
                         $value = \count($value);
                      }
    
-                     $Server->log($value . PHP_EOL);
+                     $Server->log($value . PHP_EOL); // @phpstan-ignore-line
                }
             }
          }

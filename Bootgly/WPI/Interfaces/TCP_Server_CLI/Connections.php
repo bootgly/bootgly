@@ -10,11 +10,21 @@
 
 namespace Bootgly\WPI\Interfaces\TCP_Server_CLI;
 
+#use const PHP_EOL;
+use function explode;
+use function stream_set_blocking;
+#use function stream_set_chunk_size;
+#use function stream_set_read_buffer;
+use function stream_set_timeout;
+#use function stream_set_write_buffer;
+use function stream_socket_accept;
+use function str_starts_with;
+use function substr;
+#use Exception;
+use Throwable;
 
 use Bootgly\ACI\Logs\LoggableEscaped;
-
 use const Bootgly\CLI;
-
 use Bootgly\WPI;
 use Bootgly\WPI\Connections\Packages; // @interface
 use Bootgly\WPI\Interfaces\TCP_Server_CLI as Server;
@@ -27,10 +37,10 @@ class Connections implements WPI\Connections
    use LoggableEscaped;
 
 
-   public ? Server $Server;
+   public Server $Server;
 
    // * Config
-   public ? float $timeout;
+   public null|float $timeout;
 
    // * Data
    // ...
@@ -40,7 +50,7 @@ class Connections implements WPI\Connections
    /** @var array<int,Connection> */
    public static array $Connections;
    // @ Limiter
-   /** @var array<string> */
+   /** @var array<string,bool> */
    public static array $blacklist;
    // @ Stats
    public static bool $stats;
@@ -64,7 +74,7 @@ class Connections implements WPI\Connections
    public Packages $Packages;
 
 
-   public function __construct (? Server &$Server = null)
+   public function __construct (Server &$Server)
    {
       $this->Server = $Server;
 
@@ -99,11 +109,11 @@ class Connections implements WPI\Connections
    public function __get (string $name): mixed
    {
       // Remove @ in name if exists (eg.: @connections -> connections)
-      if (\str_starts_with($name, '@')) {
-         $name = \substr($name, 1);
+      if (str_starts_with($name, '@')) {
+         $name = substr($name, 1);
       }
 
-      CLI->Commands->route(command: [
+      CLI->Commands->route([
          __CLASS__,
          ...explode(" ", $name)
       ], From: $this->Server);
@@ -115,18 +125,19 @@ class Connections implements WPI\Connections
    public function connect (): bool
    {
       try {
-         $Socket = @\stream_socket_accept($this->Server->Socket, null);
+         /** @var resource $Socket */
+         $Socket = @stream_socket_accept($this->Server->Socket, null);
 
-         \stream_set_timeout($Socket, 0);
+         stream_set_timeout($Socket, 0);
 
-         \stream_set_blocking($Socket, false); // +15% performance
+         stream_set_blocking($Socket, false); // +15% performance
 
          #stream_set_chunk_size($Socket, 65535);
 
          #stream_set_read_buffer($Socket, 65535);
          #stream_set_write_buffer($Socket, 65535);
       }
-      catch (\Throwable) {
+      catch (Throwable) {
          $Socket = false;
       }
 

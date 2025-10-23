@@ -21,7 +21,7 @@ class Children
    public protected(set) array $PIDs = [];
 
 
-   public function push (null|int $index = null, int $PID): void
+   public function push (int $PID, null|int $index = null): void
    {
       if ($index !== null) {
          $this->PIDs[$index] = $PID;
