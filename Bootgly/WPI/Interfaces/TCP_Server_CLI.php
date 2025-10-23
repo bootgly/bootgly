@@ -185,6 +185,8 @@ class TCP_Server_CLI implements Servers, Logging
             return $this->Connections;
          case 'Process':
             return $this->Process;
+         case 'ssl':
+            return $this->ssl;
 
          case '@test init':
             SAPI::$Environment = Environments::Test;

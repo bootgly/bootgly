@@ -26,6 +26,7 @@ use function array_unique;
 use function array_filter;
 use function filter_var;
 
+use const Bootgly\WPI;
 use Bootgly\WPI\Modules\HTTP\Server\Requestable;
 use Bootgly\WPI\Modules\HTTP\Server\Request\Raw;
 use Bootgly\WPI\Modules\HTTP\Server\Request\Ranging;
@@ -72,17 +73,18 @@ abstract class Request extends Raw
     */
    public string $scheme {
       get {
-         if (isSet($_SERVER['HTTP_X_FORWARDED_PROTO']) === true) {
-            $scheme = (string) $_SERVER['HTTP_X_FORWARDED_PROTO'];
-         }
-         else if (empty($_SERVER['HTTPS']) === false) {
-            $scheme = 'https';
-         }
-         else {
-            $scheme = 'http';
+         $WPI = WPI;
+         $Server = $WPI->Server ?? null;
+
+         if ($Server !== null) {
+            $SSL = $Server->ssl ?? null;
+
+            if ($SSL !== null) {
+               return 'https';
+            }
          }
 
-         return $scheme;
+         return 'http';
       }
    }
    // | HTTP Request
