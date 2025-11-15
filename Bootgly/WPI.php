@@ -15,10 +15,10 @@ use Exception;
 
 use Bootgly\ABI\Debugging\Data\Vars;
 use Bootgly\API\Projects;
-use Bootgly\WPI\Modules\HTTP\Server;
-use Bootgly\WPI\Modules\HTTP\Server\Request;
-use Bootgly\WPI\Modules\HTTP\Server\Response;
 use Bootgly\WPI\Modules\HTTP\Server\Router;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 
 
 class WPI extends Projects // Web Programming Interface
@@ -35,7 +35,7 @@ class WPI extends Projects // Web Programming Interface
    // ...
 
    // # HTTP
-   public Server $Server;
+   public HTTP_Server_CLI $Server;
    // # HTTP Server
    public Request $Request;
    public Response $Response;

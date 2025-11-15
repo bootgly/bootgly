@@ -15,13 +15,12 @@ use function explode;
 use function strlen;
 use function strpos;
 use function is_string;
+use function strtolower;
 
-use Bootgly\WPI\Modules\HTTP\Server\Request\Raw;
-use Bootgly\WPI\Modules\HTTP\Server\Request\Raw\Header\Defining;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Raw\Header\Cookies;
 
 
-class Header extends Raw\Header implements Defining
+class Header
 {
    protected Cookies $Cookies;
 
@@ -39,11 +38,11 @@ class Header extends Raw\Header implements Defining
          return $this->fields;
       }
    }
-   // .. $raw
+   public readonly string $raw;
 
    // * Metadata
-   // .. $length;
-   // .. $built;
+   public readonly null|int|false $length;
+   protected bool $built;
 
 
    public function __construct ()
@@ -91,6 +90,41 @@ class Header extends Raw\Header implements Defining
       $this->raw ??= $raw;
       // * Metadata
       $this->length ??= strlen($raw);
+   }
+
+      /**
+    * Get a field from the Request Header
+    *
+    * @param string $name 
+    *
+    * @return string|array<string>
+    */
+   public function get (string $name): string|array
+   {
+      if ($this->built === false) {
+         $this->build();
+      }
+
+      return ($this->fields[$name] ?? $this->fields[strtolower($name)] ?? '');
+   }
+
+   /**
+    * Append a field to the Request Header
+    *
+    * @param string $name Field name
+    * @param string $value Field value
+    *
+    * @return bool 
+    */
+   public function append (string $name, string $value): bool
+   {
+      if ( isSet($this->fields[$name]) ) {
+         return false;
+      }
+
+      $this->fields[$name] = $value;
+
+      return true;
    }
 
    /**

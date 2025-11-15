@@ -10,17 +10,19 @@
 
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Raw\Header;
 
-use Bootgly\WPI\Modules\HTTP\Server\Request\Raw;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Raw\Header;
 
 
-final class Cookies extends Raw\Header\Cookies
+final class Cookies
 {
+   private Header $Header;
+
    // * Config
    // ...
 
    // * Data
-   // ... inherited
+   /** @var array<string> */
+   protected array $cookies;
 
    // * Metadata
    // ...
@@ -55,6 +57,8 @@ final class Cookies extends Raw\Header\Cookies
 
          // * Metadata
          // ...
+         default:
+            return $this->cookies[$name] ?? '';
       }
 
       return null;

@@ -11,17 +11,6 @@
 namespace Bootgly\WPI\Modules\HTTP\Server\Response\Raw;
 
 
-/**
- * @property array $preset
- * @property array $prepared
- * 
- * @property array $fields
- * @property string $raw
- * 
- * @property bool $sent
- * @property array $queued
- * @property int $built
- */
 abstract class Header
 {
    // * Config

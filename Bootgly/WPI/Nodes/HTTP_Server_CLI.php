@@ -17,6 +17,7 @@ use function opcache_invalidate;
 use function clearstatcache;
 use Exception;
 use Throwable;
+use Closure;
 
 use Bootgly\ABI\Debugging\Data\Throwables\Exceptions;
 use Bootgly\ABI\IO\FS\File;
@@ -137,7 +138,6 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
 
                if (
                   isset(SAPI::$Suite)
-                  && SAPI::$Suite instanceof Suite
                   && isset(SAPI::$Tests[self::class])
                ) {
                   break;
@@ -236,8 +236,8 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       $TCP_Client_CLI->configure(
          host: ($TCP_Server_CLI->host === '0.0.0.0')
             ? '127.0.0.1'
-            : $TCP_Server_CLI->host,
-         port: $TCP_Server_CLI->port
+            : ($TCP_Server_CLI->host ?? 'localhost'),
+         port: $TCP_Server_CLI->port ?? 80,
       );
       $TCP_Client_CLI->on(
          // on Connection connect
@@ -256,10 +256,10 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
             foreach ($testFiles as $index => $value) {
                /** @var array<string,mixed>|null $test */
                $test = SAPI::$Tests[self::class][$index] ?? null;
-               $test['case'] = $test['case.number'] ?? ($index + 1);
+               $test['case'] = $test['case.number'] ?? ((int) $index + 1);
                // @ Init Test
                $Test = $Suite->test($test);
-               if ($Test === null || count($test) < 3) {
+               if ($Test === null || !is_array($test) || count($test) < 3) {
                   $Suite->skip();
                   continue;
                }
@@ -268,16 +268,16 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
                $responseLength = @$test['response.length'] ?? null;
                // ! Client
                // ? Request
-               $requestData = $test['request']("{$TCP_Client_CLI->host}:{$TCP_Client_CLI->port}");
+               $requestData = ($test['request'] instanceof Closure)
+                  ? $test['request']("{$TCP_Client_CLI->host}:{$TCP_Client_CLI->port}")
+                  : '';
                $requestLength = strlen($requestData);
                // @ Send Request to Server
                $Connection::$output = $requestData;
-
                if ( ! $Connection->writing($Socket, $requestLength) ) {
                   $Test->fail();
                   break;
                }
-
                // ? Response
                $timeout = 2;
                $input = '';

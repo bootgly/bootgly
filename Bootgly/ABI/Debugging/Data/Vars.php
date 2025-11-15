@@ -482,7 +482,7 @@ class Vars implements Debugging
       // backtraces
       if ($backtraces !== null) {
          foreach ($backtraces as $backtrace) {
-            $output .= self::$backtraces[$backtrace];
+            $output .= self::$backtraces[(int) $backtrace];
          }
       }
       // vars

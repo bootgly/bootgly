@@ -13,22 +13,9 @@ namespace Bootgly\WPI\Modules\HTTP\Server;
 
 use Bootgly\ABI\IO\FS\File;
 
-use Bootgly\WPI\Modules\HTTP\Server\Response\Authenticable;
-use Bootgly\WPI\Modules\HTTP\Server\Response\Bootable;
-use Bootgly\WPI\Modules\HTTP\Server\Response\Extendable;
-use Bootgly\WPI\Modules\HTTP\Server\Response\Redirectable;
-use Bootgly\WPI\Modules\HTTP\Server\Response\Renderable;
-
 
 abstract class Response
 {
-   use Authenticable;
-   use Bootable;
-   use Extendable;
-   use Redirectable;
-   use Renderable;
-
-
    const PROTOCOL = 'HTTP/1.1';
 
    // * Config

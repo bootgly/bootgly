@@ -17,16 +17,16 @@ use function rawurlencode;
 class Cookie
 {
    // * Config
-   private string $name;
-   private string $value;
+   public int|null $expiration;
+   public string $path;
+   public string $domain;
+   public bool $secure;
+   public bool $HTTP_only;
+   public string $same_site;
 
    // * Data
-   private ?int $expiration;
-   private string $path;
-   private string $domain;
-   private bool $secure;
-   private bool $HTTP_only;
-   private string $same_site;
+   protected string $name;
+   protected string $value;
 
    // * Metadata
    // ...
@@ -37,7 +37,6 @@ class Cookie
       $this->name = $name;
       $this->value = $value;
 
-      // * Data
       $this->expiration = null;
       $this->path = '';
       $this->domain = '';

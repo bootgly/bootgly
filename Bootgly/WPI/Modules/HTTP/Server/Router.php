@@ -10,11 +10,19 @@
 
 namespace Bootgly\WPI\Modules\HTTP\Server;
 
+use function call_user_func_array;
+use function explode;
+use function is_int;
+use function is_array;
+use function preg_match;
+use Closure;
+use Generator;
 
 use Bootgly\ABI\Data\__String\Path;
 use Bootgly\ABI\IO\FS\File;
 use const Bootgly\WPI;
 use Bootgly\WPI\Modules\HTTP\Server\Route;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 
 
 class Router
@@ -31,7 +39,7 @@ class Router
    // _ Stats
    private int $routes;
    // _ History
-   /** @var array<string> */
+   /** @var array<list<(callable)|null>|string> */
    private array $routeds;
 
 
@@ -78,7 +86,7 @@ class Router
       $boot = $path . '/router/';
       $Index = new File($boot . 'index.php');
       // @ Boot (include router index file)
-      if ($Index->file !== false) {
+      if ($Index->file) {
          (static function (string $__file__, array $__data__) {
             \extract($__data__);
             include_once $__file__;
@@ -89,7 +97,7 @@ class Router
       $instances = (array) $instances;
       foreach ($instances as $instance) {
          $Instance = new File($boot . $instance . '.php');
-         if ($Instance->file !== false) {
+         if ($Instance->file) {
             (static function (string $__file__, array $__data__) {
                \extract($__data__);
                @include_once $__file__;
@@ -173,10 +181,10 @@ class Router
             $Params = &$Route->Params;
 
             foreach ($Params as $param => $value) {
-               if ( \is_int($value) ) {
+               if ( is_int($value) ) {
                   $Params->$param = @$parts[$value - 1];
                }
-               else if ( \is_array($value) ) {
+               else if ( is_array($value) ) {
                   foreach ($value as $index => $location) {
                      $Params->$param[$index] = @$parts[$location - 1];
                   }
@@ -187,7 +195,7 @@ class Router
          }
 
          // @ Call
-         if ($handler instanceof \Closure) {
+         if ($handler instanceof Closure) {
             $handler = $handler->bindTo($Route, $Route);
 
             $Response = $handler(
@@ -196,7 +204,8 @@ class Router
             );
          }
          else {
-            $Response = \call_user_func_array(
+            /** @var Response|Generator */
+            $Response = call_user_func_array(
                callback: $handler,
                args: [
                   WPI->Request,
@@ -214,10 +223,10 @@ class Router
          ];
 
          // @ Reset
-         if ($Response instanceof \Generator) {
+         if ($Response instanceof Generator) {
             // Route nested
          }
-         else if ($Response && $Response !== WPI->Response) {
+         else if ($Response && $Response !== WPI->Response && $Response instanceof Response) {
             $WPI = WPI;
             $WPI->Response = $Response;
          }
@@ -228,10 +237,10 @@ class Router
 
       return false;
    }
-   public function routing (\Generator $Routes): \Generator
+   public function routing (Generator $Routes): Generator
    {
       foreach ($Routes as $Response) {
-         if ($Response instanceof \Generator) {
+         if ($Response instanceof Generator) {
             $this->Route->nested = true;
             yield from $this->routing($Response);
             break;
@@ -269,7 +278,7 @@ class Router
                $subject = WPI->Request->URL;
             }
             // @
-            \preg_match($pattern, $subject, $matches);
+            preg_match($pattern, $subject, $matches);
 
             if ($Route->catched === '(.*)') {
                // TODO check if matches[1] is null
@@ -302,14 +311,14 @@ class Router
 
       // ! Prepare Route Path
       // ? Route path
-      $paths = \explode('/', \str_replace("/", "\/", $Route->path));
+      $paths = explode('/', \str_replace("/", "\/", $Route->path));
       // ? Request path (full | relative)
       // Get catched path instead of Request path
       if ($Route->catched) {
-         $locations = \explode('/', \str_replace("/", "\/", $Route->catched));
+         $locations = explode('/', \str_replace("/", "\/", $Route->catched));
       }
       else {
-         $locations = \explode('/', \str_replace("/", "\/", WPI->Request->URL));
+         $locations = explode('/', \str_replace("/", "\/", WPI->Request->URL));
       }
       // ? Route Path Node replaced by Regex
       $regex_replaced = [];
@@ -338,7 +347,7 @@ class Router
                // ! BAD IDEA?! 🤔
                if (@$node[-1] === ')') {
                   // TODO validate In-URL Regex 🥵 - only accept this characters -> "azdDw-[]^|" ???
-                  $params = \explode('(', \rtrim($param, ')'));
+                  $params = explode('(', \rtrim($param, ')'));
                   $param = $params[0];
 
                   $Route->Params->$param = $params[1]; // @ Set Param Regex

@@ -11,19 +11,30 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI;
 
 
-use AllowDynamicProperties;
+use function ob_start;
 use function strval;
+use function strtolower;
+use function json_decode;
+use function is_array;
+use function is_iterable;
+use function is_string;
+use function json_encode;
+use function getType;
+use AllowDynamicProperties;
+use Closure;
+use Throwable;
 
+use Bootgly\ABI\Debugging\Data\Throwables;
 use Bootgly\ABI\Data\__String\Path;
 use Bootgly\ABI\IO\FS\File;
-
+use Bootgly\ABI\Templates\Template;
 use const Bootgly\WPI;
 use Bootgly\WPI\Modules\HTTP;
 use Bootgly\WPI\Modules\HTTP\Server;
+use Bootgly\WPI\Modules\HTTP\Server\Response\Authentication;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Raw;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Raw\Body;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Raw\Header;
-
 
 /**
  * * Config
@@ -41,8 +52,8 @@ class Response extends Server\Response
    // * Data
    // # Resource
    // @ Content
-   public ?string $source;
-   public ?string $type;
+   public string|null $source;
+   public string|null $type;
 
    // * Metadata
    // @ State (sets)
@@ -55,6 +66,8 @@ class Response extends Server\Response
    // # Resource
    // @ Content
    private ?string $resource;
+   /** @var array<string,mixed> */
+   protected array $uses = [];
    // @ Status (sets ...)
    public bool $initied = false;
    public bool $prepared;
@@ -184,6 +197,265 @@ class Response extends Server\Response
       return $this;
    }
 
+   // # Authentication
+   /**
+    * Authenticate the user with the provided authentication method.
+    *
+    * @param Authentication $Method The authentication method to use.
+    *
+    * @return self The Response instance, for chaining
+    */
+   public function authenticate (Authentication $Method): self
+   {
+      $this->__set('code', 401);
+
+      switch ($Method) {
+         case $Method instanceof Authentication\Basic:
+            $this->Header->set(
+               'WWW-Authenticate',
+               'Basic realm="' . $Method->realm . '"'
+            );
+            break;
+      }
+
+      return $this;
+   }
+   // # Bootable
+   protected function prepare (?string $resource = null): self
+   {
+      if ($this->initied === false) {
+         $this->source  = null;
+         $this->type    = null;
+
+         $this->content = "";
+
+         $this->initied = true;
+      }
+
+      if ($resource === null) {
+         $resource = $this->resource;
+      }
+      else {
+         $resource = strtolower($resource);
+      }
+
+      switch ($resource) {
+         // Content
+         case 'json':
+            $this->source   = 'content';
+            $this->type     = 'json';
+            break;
+         case 'jsonp':
+            $this->source   = 'content';
+            $this->type     = 'jsonp';
+            break;
+         case 'pre':
+         case 'raw':
+            $this->source   = 'content';
+            $this->type     = '';
+            break;
+
+         // File
+         case 'view':
+            $this->source = 'file';
+            $this->type = 'php';
+            break;
+
+         default:
+            if ($resource) {
+               // TODO inject Resource with custom prepare()
+               // $prepared = $this->resources[$resource]->prepare();
+               // $this->source = $prepared['source'];
+               // $this->type = $prepared['type'];
+            }
+      }
+
+      $this->prepared = true;
+
+      return $this;
+   }
+   protected function process (mixed $data, ?string $resource = null): self
+   {
+      if ($resource === null) {
+         $resource = $this->resource;
+      }
+      else {
+         $resource = strtolower($resource);
+      }
+
+      switch ($resource) {
+         // Content
+         case 'json':
+         case 'jsonp':
+            if ( is_array($data) ) {
+               $this->content = $data;
+               break;
+            }
+
+            $this->content = json_decode($data, true);
+
+            break;
+         case 'pre':
+            if ($data === null) {
+               $data = $this->content;
+            }
+
+            $this->content = '<pre>'.$data.'</pre>';
+
+            break;
+
+         // File
+         case 'view':
+            $File = new File(BOOTGLY_PROJECT->path . 'views/' . $data);
+
+            $this->source = 'file';
+            $this->type   = $File->extension;
+
+            $this->File   = $File;
+
+            break;
+
+         // Raw
+         case 'raw':
+            $this->content = $data;
+
+            break;
+
+         default:
+            if ($resource) {
+               // TODO Inject resource with custom process() created by user
+            }
+            else {
+               switch ( getType($data) ) {
+                  case 'string':
+                     // TODO check if string is a valid path
+                     $File = match ($data[0]) {
+                        #!
+                        '/' => new File(BOOTGLY_WORKING_DIR . 'projects' . $data),
+                        '@' => new File(BOOTGLY_WORKING_DIR . 'projects/' . $data),
+                        default => new File(BOOTGLY_PROJECT->path . $data)
+                     };
+
+                     $this->source = 'file';
+                     $this->type   = $File->extension;
+
+                     $this->File   = &$File;
+
+                     break;
+                  case 'object':
+                     if ($data instanceof File) {
+                        $File = $data;
+
+                        $this->source = 'file';
+                        $this->type   = $File->extension;
+
+                        $this->File   = $File;
+                     }
+
+                     break;
+               }
+            }
+      }
+
+      $this->resource = null;
+
+      $this->processed = true;
+
+      return $this;
+   }
+
+   /**
+    * Appends the provided data to the body of the response.
+    *
+    * @param mixed $body The data that should be appended to the response body.
+    *
+    * @return self The Response instance, for chaining
+    */
+   public function append ($body): self
+   {
+      $this->initied = true;
+      $this->content .= $body . "\n";
+
+      return $this;
+   }
+
+   /**
+    * Export variables to the File Response.
+    *
+    * @param array<string, mixed> ...$variables Variables to be passed to the File Response.
+    *
+    * @return self The Response instance, for chaining
+    */
+   public function export (array ...$variables): self
+   {
+      foreach ($variables as $var) {
+         if (is_iterable($var) === false) {
+            continue;
+         }
+
+         foreach ($var as $key => $value) {
+            $this->uses[$key] = $value;
+         }
+      }
+
+      return $this;
+   }
+   /**
+    * Renders the specified view with the provided data.
+    *
+    * @param string $view The view to render.
+    * @param array<string,mixed>|null $data The data to provide to the view.
+    * @param Closure|null $callback Optional callback.
+    *
+    * @return self The Response instance, for chaining
+    */
+   public function render (string $view, ?array $data = null, ?Closure $callback = null): self
+   {
+      // !
+      $this->prepare('view');
+      $this->process($view . '.template.php', 'view');
+
+      // ?
+      $File = $this->File ?? null;
+      if ($File === null || !$File instanceof File || $File->exists === false) {
+         // throw new \Exception(message: 'Template file not found!');
+         return $this;
+      }
+
+      // @ Set variables
+      if ($data === null) {
+         $data = [];
+      }
+      $data['Route'] = WPI->Router->Route;
+
+      // @ Extend variables
+      $data = $data + $this->uses;
+
+      // @ Output/Buffer start()
+      ob_start();
+      // @ Render Template
+      $Template = new Template($File);
+      try {
+         $rendered = $Template->render($data);
+      }
+      catch (Throwable $Throwable) {
+         $rendered = '';
+         Throwables::report($Throwable);
+      }
+      // @ Output/Buffer clean()->get()
+      $this->content = $rendered;
+
+      // @ Set $Response properties
+      $this->source = 'content';
+      $this->type = '';
+
+      // @ Call callback
+      if ($callback !== null && $callback instanceof Closure) {
+         $callback($this->content, $Throwable ?? null);
+      }
+
+      return $this;
+   }
    /**
     * Compresses the response body using the specified method.
     *
@@ -240,6 +512,45 @@ class Response extends Server\Response
    }
 
    /**
+    * Redirects to a new URI. Default return is 307 for GET (Temporary Redirect) and 303 (See Other) for POST.
+    *
+    * @param string $URI The new URI to redirect to.
+    * @param ?int $code The HTTP status code to use for the redirection.
+    *
+    * @return self The Response instance, for chaining.
+    */
+   public function redirect (string $URI, int|null $code = null): self
+   {
+      // !?
+      switch ($code) {
+         case 300: // Multiple Choices
+         case 301: // Moved Permanently
+         case 302: // Found (or Moved Temporarily)
+         case 303: // See Other
+         case 307: // Temporary Redirect
+         case 308: // Permanent Redirect
+
+            break;
+         default:
+            $code = null;
+      }
+
+      // ? Set default code
+      if ($code === null) {
+         $code = match (WPI->Request->method) {
+            'POST' => 303, // See Other
+            default => 307 // Temporary Redirect
+         };
+      }
+
+      // @
+      $this->__set('code', $code);
+      $this->Header->set('Location', $URI);
+      $this->end();
+
+      return $this;
+   }
+   /**
     * Set the HTTP Server Response code.
     *
     * @param int $code 
@@ -294,19 +605,19 @@ class Response extends Server\Response
                   // TODO move to prepare or process
                   $this->Header->set('Content-Type', 'application/json');
 
-                  if ($body && \is_string($body) === true) {
+                  if ($body && is_string($body) === true) {
                      break;
                   }
 
                   $flags = (int) $options[0] ?? 0;
-                  $body = \json_encode($body, $flags);
+                  $body = json_encode($body, $flags);
 
                   break;
                case 'jsonp':
                   // TODO move to prepare or process
                   $this->Header->set('Content-Type', 'application/json');
 
-                  $body = WPI->Request->queries['callback'].'('.\json_encode($body).')';
+                  $body = WPI->Request->queries['callback'].'('.json_encode($body).')';
 
                   break;
             }

@@ -21,7 +21,7 @@ class Bytes
       $units = ['B', 'KB', 'MB', 'GB', 'TB'];
 
       $bytes = (float) max($bytes, 0);
-      $pow = min(
+      $pow = (int) min(
          floor(($bytes ? log($bytes): 0) / log(1024)),
          count($units) - 1
       );

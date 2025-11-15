@@ -150,7 +150,7 @@ class Suite
     */
    public function autoboot (string $pathbase): void
    {
-      $this->separate(header: $this->name ?? ''); // Test Suite Specs
+      $this->separate(header: $this->name); // Test Suite Specs
 
       // @@
       // !

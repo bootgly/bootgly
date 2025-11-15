@@ -35,7 +35,7 @@ class Server
    public static Suite $Suite;
    /**
     * Test Cases files
-    * @var array<string,array<string,Closure>>
+    * @var array<string,array<int|string,string>>
     */
    public static array $tests;
 
@@ -44,7 +44,7 @@ class Server
    // # Tests
    /**
     * Test Cases instances
-    * @var array<string,array<string,Closure>>
+    * @var array<string,array<int|string,array<string,mixed>|Closure>>
     */
    public static array $Tests;
 

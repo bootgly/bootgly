@@ -16,19 +16,20 @@ use function preg_match;
 use function parse_str;
 use function json_validate;
 
-use Bootgly\WPI\Modules\HTTP\Server\Request\Raw;
 
-
-class Body extends Raw\Body
+class Body
 {
    // * Config
-   // ... inherited
+   // ...
 
    // * Data
-   // ... inherited
+   public string $raw;
+   public string|null $input;
 
    // * Metadata
-   // ... inherited
+   public int|null $length;
+   public null|int|false $position;
+   public int|null $downloaded;
    public bool $waiting;
 
 

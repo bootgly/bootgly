@@ -81,7 +81,7 @@ class TCP_Client_CLI
    // * Metadata
    public const VERSION = '0.0.1';
    // @ Error
-   /** @var array<string> */
+   /** @var array<int|string|null> */
    public array $error = [];
    // @ State
    protected static int $started = 0;

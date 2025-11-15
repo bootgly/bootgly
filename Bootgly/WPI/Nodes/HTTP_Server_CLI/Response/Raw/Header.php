@@ -11,15 +11,28 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Raw;
 
 
-use Bootgly\WPI\Modules\HTTP\Server\Response\Raw;
+use Bootgly\WPI\Modules\HTTP\Server\Response\Raw\Header as HeaderBase;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Raw\Header\Cookies;
 
 
-class Header extends Raw\Header
+class Header extends HeaderBase
 {
    // * Data
    public string $raw;
+   // Fields
+   /** @var array<string,mixed> */
+   protected array $preset;
+   /** @var array<string,mixed> */
+   protected array $prepared;
+   /** @var array<string,mixed> */
+   protected array $fields;
 
+   // * Metadata
+   protected bool $sent;
+   // Fields
+   /** @var array<int,string> */
+   protected array $queued;
+   protected int $built;
 
    public Cookies $Cookies;
 
@@ -121,7 +134,7 @@ class Header extends Raw\Header
       $this->built = 0;
    }
 
-   public function preset (string $name, ? string $value = null): void
+   public function preset (string $name, string|null $value = null): void
    {
       if ($value) {
          $this->preset[$name] = $value;

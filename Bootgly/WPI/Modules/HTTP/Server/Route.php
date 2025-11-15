@@ -11,6 +11,11 @@
 namespace Bootgly\WPI\Modules\HTTP\Server;
 
 
+use ArrayIterator;
+use IteratorAggregate;
+use Traversable;
+use function array_key_exists;
+
 use const Bootgly\WPI;
 
 
@@ -19,11 +24,22 @@ class Route
    public const START_PARAM = ':';
 
    // * Config
-   private ? string $name;
+   private string|null $name;
+   public string $path;
+   /** @var IteratorAggregate<string,string|int|array<int>> */
+   public object $Params;
 
    // * Data
-   protected string $path;
-   protected object $Params;
+   public string $base {
+      get {
+         $WPI = WPI;
+         return $WPI->Request->base;
+      }
+      set (string $value) {
+         $WPI = WPI;
+         $WPI->Request->base = $value;
+      }
+   }
 
    // * Metadata
    private bool $parameterized;
@@ -48,15 +64,32 @@ class Route
       // TODO deny user to set Catch-All this object
       // TODO validate Param value (Regex)
       // TODO validate Param name
-      $this->Params = new class // TODO move to class
+      $this->Params = new class implements IteratorAggregate // TODO move to class
       {
-         public function __get (string $name): mixed
+         /** @var array<string,string|int|array<int>|null> */
+         private array $params = [];
+
+         /** @return string|int|array<int>|null */
+         public function &__get (string $name)
          {
-            return $this->$name ?? null;
+            if (array_key_exists($name, $this->params) === false) {
+               $this->params[$name] = null;
+            }
+
+            return $this->params[$name];
          }
-         public function __set (string $param, string $regex): void
+         /**
+          * @param string $param
+          * @param string|int|array<int> $value
+         */
+         public function __set (string $param, string|int|array $value): void
          {
-            @$this->$param = $regex;
+            $this->params[$param] = $value;
+         }
+
+         public function getIterator (): Traversable
+         {
+            return new ArrayIterator($this->params);
          }
       };
 
@@ -98,17 +131,6 @@ class Route
    {
       switch ($name) {
          // * Data
-         case 'path':
-            $this->path = $value;
-            break;
-
-         // * Metadata
-         case 'base':
-         case 'prefix': // TODO refactor
-            $WPI = WPI;
-            $WPI->Request->base = $value;
-            break;
-
          default:
             $this->$name = $value;
       }

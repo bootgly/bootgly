@@ -98,6 +98,8 @@ class Test
       $this->debugged = false;
       // # Profiling
       $this->started = microtime(true);
+      $this->finished = $this->started;
+      $this->elapsed = Benchmark::format($this->started, $this->finished);
       // # Reporting
       $this->AssertionError = null;
    }
@@ -371,9 +373,9 @@ class Test
    {
       #$this->debugged ??= ob_get_clean();
 
-      $this->finished ??= microtime(true);
+      $this->finished = microtime(true);
 
-      $this->elapsed ??= Benchmark::format($this->started, $this->finished);
+      $this->elapsed = Benchmark::format($this->started, $this->finished);
    }
 
    // @ Reporting
