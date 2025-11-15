@@ -15,7 +15,7 @@ use function time;
 use function substr;
 
 use const Bootgly\WPI;
-use Bootgly\WPI\Connections\Packages;
+use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI as Server;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders;
 
@@ -57,7 +57,8 @@ class Decoder_Waiting extends Decoders
 
          // ... Continue reading the Request Body
          if ($Body->downloaded === null) {
-            $Body->raw = substr($buffer, $Body->position, $Body->length);
+            $offset = $Body->position ?? 0;
+            $Body->raw = substr($buffer, $offset, $Body->length);
          }
          else {
             $Body->raw .= $buffer;
@@ -72,7 +73,7 @@ class Decoder_Waiting extends Decoders
 
          $Body->waiting = false;
 
-         return $Body->length;
+         return $Body->length ?? 0;
       }
 
       $Server::$Decoder = new Decoder_;

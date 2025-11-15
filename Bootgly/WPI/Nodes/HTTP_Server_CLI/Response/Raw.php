@@ -31,6 +31,10 @@ trait Raw
     *
     * @return string The Response Raw to be sent
     */
+   /**
+    * @param int<0, max>|null $length
+    * @param-out int<0, max>|null $length
+    */
    public function encode (Packages $Package, ?int &$length): string
    {
       $Header  = &$this->Header;
@@ -45,7 +49,9 @@ trait Raw
       if ($this->stream) {
          $length = strlen($this->response) + 1 + strlen($Header->raw) + 5;
 
-         $Package->uploading = $this->files;
+         /** @var array<int, array<string, mixed>> $uploadQueue */
+         $uploadQueue = $this->files;
+         $Package->uploading = $uploadQueue;
 
          $this->files = [];
          $this->stream = false;

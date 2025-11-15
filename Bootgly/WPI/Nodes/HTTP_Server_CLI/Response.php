@@ -16,9 +16,12 @@ use function strval;
 use function strtolower;
 use function json_decode;
 use function is_array;
-use function is_iterable;
+use function is_scalar;
+use function is_object;
+use function is_resource;
 use function is_string;
 use function json_encode;
+use function method_exists;
 use function getType;
 use AllowDynamicProperties;
 use Closure;
@@ -68,6 +71,8 @@ class Response extends Server\Response
    private ?string $resource;
    /** @var array<string,mixed> */
    protected array $uses = [];
+   /** @var array<int, array<string, mixed>> */
+   protected array $files;
    // @ Status (sets ...)
    public bool $initied = false;
    public bool $prepared;
@@ -283,6 +288,38 @@ class Response extends Server\Response
          $resource = strtolower($resource);
       }
 
+      /** @var Closure(mixed):string $convert */
+      /** @var Closure(mixed):string $convert */
+      $convert = static function (mixed $value): string {
+         if (is_string($value)) {
+            return $value;
+         }
+
+         if ($value === null || is_scalar($value)) {
+            return strval($value);
+         }
+
+         if (is_object($value)) {
+            if (method_exists($value, '__toString')) {
+               return (string) $value;
+            }
+
+            $encodedObject = json_encode($value);
+            return $encodedObject === false ? '' : $encodedObject;
+         }
+
+         if (is_array($value)) {
+            $encodedArray = json_encode($value);
+            return $encodedArray === false ? '' : $encodedArray;
+         }
+
+         if (is_resource($value)) {
+            return '';
+         }
+
+         return '';
+      };
+
       switch ($resource) {
          // Content
          case 'json':
@@ -292,24 +329,38 @@ class Response extends Server\Response
                break;
             }
 
-            $this->content = json_decode($data, true);
+            if (is_string($data)) {
+               $decoded = json_decode($data, true);
+               $this->content = is_array($decoded) ? $decoded : [];
+               break;
+            }
+
+            $this->content = [];
 
             break;
          case 'pre':
-            if ($data === null) {
-               $data = $this->content;
+            $preData = $data;
+            if ($preData === null) {
+               $preData = $this->content;
             }
 
-            $this->content = '<pre>'.$data.'</pre>';
+            /** @var string $preString */
+            $preString = $convert($preData);
+            $this->content = '<pre>' . $preString . '</pre>';
 
             break;
 
          // File
          case 'view':
+            if (! is_string($data)) {
+               break;
+            }
+
             $File = new File(BOOTGLY_PROJECT->path . 'views/' . $data);
 
             $this->source = 'file';
-            $this->type   = $File->extension;
+            $extension = $File->extension;
+            $this->type   = is_string($extension) ? $extension : '';
 
             $this->File   = $File;
 
@@ -317,7 +368,9 @@ class Response extends Server\Response
 
          // Raw
          case 'raw':
-            $this->content = $data;
+            /** @var string $rawString */
+            $rawString = $convert($data);
+            $this->content = $rawString;
 
             break;
 
@@ -328,8 +381,13 @@ class Response extends Server\Response
             else {
                switch ( getType($data) ) {
                   case 'string':
+                     if ($data === '') {
+                        break;
+                     }
+
+                     $prefix = $data[0] ?? '';
                      // TODO check if string is a valid path
-                     $File = match ($data[0]) {
+                     $File = match ($prefix) {
                         #!
                         '/' => new File(BOOTGLY_WORKING_DIR . 'projects' . $data),
                         '@' => new File(BOOTGLY_WORKING_DIR . 'projects/' . $data),
@@ -337,7 +395,8 @@ class Response extends Server\Response
                      };
 
                      $this->source = 'file';
-                     $this->type   = $File->extension;
+                     $extension = $File->extension;
+                     $this->type   = is_string($extension) ? $extension : '';
 
                      $this->File   = &$File;
 
@@ -347,7 +406,8 @@ class Response extends Server\Response
                         $File = $data;
 
                         $this->source = 'file';
-                        $this->type   = $File->extension;
+                        $extension = $File->extension;
+                        $this->type   = is_string($extension) ? $extension : '';
 
                         $this->File   = $File;
                      }
@@ -374,7 +434,39 @@ class Response extends Server\Response
    public function append ($body): self
    {
       $this->initied = true;
-      $this->content .= $body . "\n";
+
+      $convert = static function (mixed $value): string {
+         if (is_string($value)) {
+            return $value;
+         }
+
+         if ($value === null || is_scalar($value)) {
+            return strval($value);
+         }
+
+         if (is_object($value)) {
+            if (method_exists($value, '__toString')) {
+               return (string) $value;
+            }
+
+            $encodedObject = json_encode($value);
+            return $encodedObject === false ? '' : $encodedObject;
+         }
+
+         if (is_array($value)) {
+            $encodedArray = json_encode($value);
+            return $encodedArray === false ? '' : $encodedArray;
+         }
+
+         if (is_resource($value)) {
+            return '';
+         }
+
+         return '';
+      };
+
+      $current = is_string($this->content) ? $this->content : '';
+      $this->content = $current . $convert($body) . "\n";
 
       return $this;
    }
@@ -389,10 +481,6 @@ class Response extends Server\Response
    public function export (array ...$variables): self
    {
       foreach ($variables as $var) {
-         if (is_iterable($var) === false) {
-            continue;
-         }
-
          foreach ($var as $key => $value) {
             $this->uses[$key] = $value;
          }
@@ -417,7 +505,7 @@ class Response extends Server\Response
 
       // ?
       $File = $this->File ?? null;
-      if ($File === null || !$File instanceof File || $File->exists === false) {
+      if ($File === null || $File->exists === false) {
          // throw new \Exception(message: 'Template file not found!');
          return $this;
       }
@@ -443,14 +531,14 @@ class Response extends Server\Response
          Throwables::report($Throwable);
       }
       // @ Output/Buffer clean()->get()
-      $this->content = $rendered;
+      $this->content = is_string($rendered) ? $rendered : '';
 
       // @ Set $Response properties
       $this->source = 'content';
       $this->type = '';
 
       // @ Call callback
-      if ($callback !== null && $callback instanceof Closure) {
+      if ($callback !== null) {
          $callback($this->content, $Throwable ?? null);
       }
 
@@ -609,15 +697,29 @@ class Response extends Server\Response
                      break;
                   }
 
-                  $flags = (int) $options[0] ?? 0;
-                  $body = json_encode($body, $flags);
+                  $flags = isset($options[0]) && is_int($options[0]) ? $options[0] : 0;
+                  $encoded = json_encode($body, $flags);
+                  $body = $encoded === false ? 'null' : $encoded;
 
                   break;
                case 'jsonp':
                   // TODO move to prepare or process
                   $this->Header->set('Content-Type', 'application/json');
 
-                  $body = WPI->Request->queries['callback'].'('.json_encode($body).')';
+                  $callbackSource = WPI->Request->queries['callback'] ?? null;
+                  if (is_array($callbackSource)) {
+                     $callbackSource = $callbackSource[0] ?? null;
+                  }
+                  $callback = is_string($callbackSource) && $callbackSource !== ''
+                     ? $callbackSource
+                     : 'callback';
+
+                  $json = json_encode($body);
+                  if ($json === false) {
+                     $json = 'null';
+                  }
+
+                  $body = $callback . '(' . $json . ')';
 
                   break;
             }
@@ -640,7 +742,12 @@ class Response extends Server\Response
                case 'ico':
                   $this->Header->set('Content-Type', 'image/x-icon');
 
-                  $body = $File->contents;
+                  $contents = $File->contents;
+                  if ($contents === false) {
+                     return $this;
+                  }
+
+                  $body = $contents;
 
                   break;
 
@@ -659,7 +766,8 @@ class Response extends Server\Response
                      require $__file__;
                   })($File, $__data__);
 
-                  $body = \ob_get_clean(); // @ Output/Buffer clean()->get()
+                  $captured = \ob_get_clean(); // @ Output/Buffer clean()->get()
+                  $body = $captured === false ? '' : $captured;
             }
 
             break;
@@ -673,7 +781,38 @@ class Response extends Server\Response
 
       // @ Output
       if ($body !== null) {
-         $this->Body->raw = strval($body); // @phpstan-ignore-line
+         /** @var Closure(mixed):string $convert */
+         $convert = static function (mixed $value): string {
+            if (is_string($value)) {
+               return $value;
+            }
+
+            if ($value === null || is_scalar($value)) {
+               return strval($value);
+            }
+
+            if (is_object($value)) {
+               if (method_exists($value, '__toString')) {
+                  return (string) $value;
+               }
+
+               $encodedObject = json_encode($value);
+               return $encodedObject === false ? '' : $encodedObject;
+            }
+
+            if (is_array($value)) {
+               $encodedArray = json_encode($value);
+               return $encodedArray === false ? '' : $encodedArray;
+            }
+
+            if (is_resource($value)) {
+               return '';
+            }
+
+            return '';
+         };
+
+         $this->Body->raw = $convert($body);
       }
 
       $this->sent = true;
@@ -715,6 +854,10 @@ class Response extends Server\Response
 
       // @
       $size = $File->size;
+      if (! is_int($size)) {
+         $this->__set('code', 500);
+         return $this;
+      }
 
       // @ Prepare HTTP headers
       $this->Header->prepare([
@@ -734,7 +877,9 @@ class Response extends Server\Response
 
       $ranges = [];
       $parts = [];
-      if ( $Range = WPI->Request->Header->get('Range') ) {
+      $Range = WPI->Request->Header->get('Range');
+
+      if (is_string($Range) && $Range !== '') {
          // @ Parse Client range requests
          $ranges = WPI->Request->range($size, $Range);
 
@@ -746,13 +891,19 @@ class Response extends Server\Response
                $this->end(416, (string) $size);
                return $this;
             default:
+               if (! is_array($ranges)) {
+                  return $this;
+               }
+
+               /** @var mixed $type */
                $type = \array_pop($ranges);
                // @ Check Range type
-               if ($type !== 'bytes') {
+               if (! is_string($type) || $type !== 'bytes') {
                   $this->end(416, (string) $size);
                   return $this;
                }
 
+               /** @var array<int, array{start:int,end:int|null}> $ranges */
                foreach ($ranges as $range) {
                   $start = $range['start'];
                   $end = $range['end'];
@@ -791,7 +942,7 @@ class Response extends Server\Response
       }
       // @ Set HTTP range requests Headers
       $pads = [];
-      if ($ranges[0]['end'] !== null || $ranges[0]['start']) {
+      if (! empty($ranges) && ($ranges[0]['end'] !== null || $ranges[0]['start'])) {
          // @ Set Response status
          $this->code(206); // 206 Partial Content
 

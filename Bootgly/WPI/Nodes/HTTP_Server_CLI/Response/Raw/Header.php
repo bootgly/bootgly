@@ -11,6 +11,10 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Raw;
 
 
+use function array_key_exists;
+use function is_array;
+use function is_string;
+
 use Bootgly\WPI\Modules\HTTP\Server\Response\Raw\Header as HeaderBase;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Raw\Header\Cookies;
 
@@ -20,11 +24,27 @@ class Header extends HeaderBase
    // * Data
    public string $raw;
    // Fields
-   /** @var array<string,mixed> */
-   protected array $preset;
-   /** @var array<string,mixed> */
+   /** @var array<string, string|true> */
+   protected array $preset {
+      get => $this->preset;
+      set {
+         $normalized = [];
+
+         foreach ($value as $key => $presetValue) {
+            if ($presetValue === true) {
+               $normalized[$key] = true;
+               continue;
+            }
+
+            $normalized[$key] = (string) $presetValue;
+         }
+
+         $this->preset = $normalized;
+      }
+   }
+   /** @var array<string, string> */
    protected array $prepared;
-   /** @var array<string,mixed> */
+   /** @var array<string, string> */
    protected array $fields;
 
    // * Metadata
@@ -94,9 +114,6 @@ class Header extends HeaderBase
 
          // * Data
          // Fields
-         case 'preset':
-            $this->preset = (array) $value;
-            break;
          case 'prepared':
             break;
          // case 'fields':
@@ -136,15 +153,19 @@ class Header extends HeaderBase
 
    public function preset (string $name, string|null $value = null): void
    {
-      if ($value) {
-         $this->preset[$name] = $value;
+      $preset = $this->preset;
+
+      if ($value !== null) {
+         $preset[$name] = $value;
       }
       else {
-         unset($this->preset[$name]);
+         unset($preset[$name]);
       }
+
+      $this->preset = $preset;
    }
    /**
-    * @param array<string> $fields
+    * @param array<string, string> $fields
     */
    public function prepare (array $fields): void // @ Prepare to build
    {
@@ -177,7 +198,16 @@ class Header extends HeaderBase
 
    public function get (string $name): string
    {
-      return (string) (@$this->fields[$name] ?? @$this->fields[\strtolower($name)] ?? '');
+      if (array_key_exists($name, $this->fields)) {
+         return (string) $this->fields[$name];
+      }
+
+      $lower = \strtolower($name);
+      if (array_key_exists($lower, $this->fields)) {
+         return (string) $this->fields[$lower];
+      }
+
+      return '';
    }
 
    public function set (string $field, string $value): bool
@@ -194,6 +224,8 @@ class Header extends HeaderBase
    {
       // TODO map separator (with const?)
       // Header that can have only value to append, only entire header, etc.
+
+      $separator ??= ', ';
 
       if ( isSet($this->fields[$field]) ) {
          $this->fields[$field] .= $separator . $value;
@@ -224,8 +256,10 @@ class Header extends HeaderBase
       // @ Merge fields
       $fields = $this->preset + $this->fields + $this->prepared;
 
-      // @ Set default headers
-      $fields['Content-Type'] ??= 'text/html; charset=UTF-8';
+         // @ Set default headers
+         if (! array_key_exists('Content-Type', $fields)) {
+            $fields['Content-Type'] = 'text/html; charset=UTF-8';
+         }
 
       // @ Build headers
       $queued = $this->queued;
@@ -237,6 +271,9 @@ class Header extends HeaderBase
                'Date' => \gmdate('D, d M Y H:i:s \G\M\T'),
                default => ''
             };
+         }
+         else {
+            $value = (string) $value;
          }
 
          $queued[] = "$name: $value";

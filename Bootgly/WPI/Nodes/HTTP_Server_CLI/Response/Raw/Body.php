@@ -26,7 +26,8 @@ class Body
    // * Metadata
    public protected(set) int $length {
       get {
-         return $this->length = strlen($this->raw);
+         $this->length = strlen($this->raw);
+         return $this->length;
       }
       set (int $value) {
          $this->length = $value;
@@ -35,7 +36,8 @@ class Body
    // Encoded
    public protected(set) string $chunked {
       get {
-         return $this->chunked = dechex(strlen($this->raw)) . "\r\n$this->raw\r\n";
+         $this->chunked = dechex(strlen($this->raw)) . "\r\n{$this->raw}\r\n";
+         return $this->chunked;
       }
       set (string $value) {
          $this->chunked = $value;

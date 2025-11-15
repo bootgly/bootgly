@@ -10,6 +10,13 @@
 
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Raw\Header;
 
+use function array_pad;
+use function explode;
+use function is_array;
+use function is_string;
+use function preg_split;
+use function trim;
+
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Raw\Header;
 
 
@@ -21,7 +28,7 @@ final class Cookies
    // ...
 
    // * Data
-   /** @var array<string> */
+   /** @var array<int, array<string, string>> */
    protected array $cookies;
 
    // * Metadata
@@ -60,8 +67,6 @@ final class Cookies
          default:
             return $this->cookies[$name] ?? '';
       }
-
-      return null;
    }
 
    public function build (): bool
@@ -70,14 +75,48 @@ final class Cookies
          return false;
       }
 
-      $replaced = \preg_replace('/; ?/', '&', $this->Header->get('Cookie'));
+      $fields = $this->Header->fields;
+      $rawCookies = $fields['Cookie'] ?? $fields['cookie'] ?? null;
 
+      if ($rawCookies === null) {
+         return false;
+      }
+
+      $cookieLines = is_array($rawCookies) ? $rawCookies : [$rawCookies];
       $cookies = &$this->cookies;
 
-      foreach ($replaced as $cookie) {
-         \parse_str($cookie, $value);
+      foreach ($cookieLines as $line) {
+         $line = trim((string) $line);
+         if ($line === '') {
+            continue;
+         }
 
-         $cookies[] = $value;
+         $segments = preg_split('/;\s*/', $line, flags: PREG_SPLIT_NO_EMPTY);
+         if ($segments === false) {
+            continue;
+         }
+
+         $cookie = [];
+
+         foreach ($segments as $segment) {
+            $segment = trim($segment);
+            if ($segment === '') {
+               continue;
+            }
+
+            [$key, $value] = array_pad(explode('=', $segment, 2), 2, '');
+            $key = trim($key);
+
+            if ($key === '') {
+               continue;
+            }
+
+            $cookie[$key] = trim($value);
+         }
+
+         if ($cookie !== []) {
+            $cookies[] = $cookie;
+         }
       }
 
       return true;

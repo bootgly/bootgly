@@ -12,9 +12,11 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Raw;
 
 
 use function explode;
+use function implode;
+use function is_array;
+use function is_string;
 use function strlen;
 use function strpos;
-use function is_string;
 use function strtolower;
 
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Raw\Header\Cookies;
@@ -28,7 +30,7 @@ class Header
    // ... inherited
 
    // * Data
-   /** @var array<string|array<string>> */
+   /** @var array<string, string|array<int,string>> */
    public array $fields {
       get {
          if ($this->built === false) {
@@ -97,15 +99,43 @@ class Header
     *
     * @param string $name 
     *
-    * @return string|array<string>
+    * @return string|null
     */
-   public function get (string $name): string|array
+   public function get (string $name): ?string
    {
       if ($this->built === false) {
          $this->build();
       }
 
-      return ($this->fields[$name] ?? $this->fields[strtolower($name)] ?? '');
+      $value = $this->fields[$name] ?? $this->fields[strtolower($name)] ?? null;
+
+      if ($value === null) {
+         return null;
+      }
+
+      if (is_array($value)) {
+         $normalized = [];
+         foreach ($value as $entry) {
+            $entryString = (string) $entry;
+            if ($entryString === '') {
+               continue;
+            }
+
+            $normalized[] = $entryString;
+         }
+
+         if ($normalized === []) {
+            return null;
+         }
+
+         $glue = strtolower($name) === 'cookie' ? '; ' : ', ';
+
+         return implode($glue, $normalized);
+      }
+
+      $stringValue = (string) $value;
+
+      return $stringValue === '' ? null : $stringValue;
    }
 
    /**

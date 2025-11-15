@@ -11,18 +11,19 @@
 namespace Bootgly\WPI\Endpoints;
 
 
-use Bootgly\WPI\Connections\Packages;
+use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages;
 
 
 interface Encoder
 {
-   /**
-    * Encodes the given package into a string.
-    *
-    * @param Packages $Package
-    * @param int<0,max>|null $length 
-    *
-    * @return string 
-    */
-   public static function encode (Packages $Package, null|int &$length): string;
+  /**
+   * Encodes the given package into a string.
+   *
+   * @param Packages $Package
+   * @param int<0, max>|null $length
+   * @param-out int<0, max>|null $length
+   *
+   * @return string 
+   */
+  public static function encode (Packages $Package, null|int &$length): string;
 }

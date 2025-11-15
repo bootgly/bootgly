@@ -12,7 +12,7 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_CLI;
 
 
 use Bootgly\WPI\Endpoints\Decoder;
-use Bootgly\WPI\Connections\Packages;
+use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages;
 
 
 abstract class Decoders implements Decoder

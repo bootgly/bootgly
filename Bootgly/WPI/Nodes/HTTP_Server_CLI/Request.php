@@ -41,6 +41,7 @@ use function clearstatcache;
 use function is_file;
 use function unlink;
 use function stripos;
+use function trim;
 use AllowDynamicProperties;
 use JsonException;
 
@@ -52,6 +53,16 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Raw\Body;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Raw\Header;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Raw\Header\Cookies;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Downloader;
+
+
+final class AuthenticationCredentials
+{
+   public function __construct
+   (
+      public string $username,
+      public string $password
+   ){}
+}
 
 
 #[AllowDynamicProperties]
@@ -222,7 +233,7 @@ class Request
          $IPs = [];
          $field = $this->Header->get('X-Forwarded-For');
 
-         if ($field && is_string($field)) {
+         if (is_string($field) && $field !== '') {
             $IPs = explode(',', $field);
             $IPs = array_map('trim', $IPs);
             $IPs = array_unique($IPs);
@@ -260,10 +271,15 @@ class Request
     *
     * @var array<string>
     */
+   /**
+    * @var array<string, string|string[]>
+    */
    public array $queries {
       get {
+         $queries = [];
          parse_str($this->query, $queries);
 
+         /** @var array<string, string|string[]> $queries */
          return $queries;
       }
    }
@@ -277,7 +293,7 @@ class Request
    /**
     * The Request cookies.
     *
-    * @var array<string>
+    * @var array<int, array<string, string>>
     */
    public array $cookies {
       get => $this->Cookies->cookies;
@@ -293,24 +309,34 @@ class Request
    /**
     * The Request POST data.
     *
-    * @var array<string>|string
+      * @var array|string
+      * @phpstan-var array<string, array<string>|bool|float|int|string>|string
     */
    public array|string $post {
       get {
          if ($this->method === 'POST' && $_POST === []) {
-            return $this->input();
+            /** @var array<string, array<string>|bool|float|int|string>|null $input */
+            $input = $this->input();
+            return $input ?? [];
          }
 
-         return $_POST;
+         /** @var array<string, array<string>|bool|float|int|string> $post */
+         $post = $_POST;
+         return $post;
       }
    }
    /**
     * The Request files.
     *
-    * @var array<string>
+    * @var array<string, array<string, bool|int|string|array<int|string, bool|int|string>>> 
     */
    public array $files {
-      get => $_FILES;
+      get {
+         /** @var array<string, array<string, bool|int|string|array<int|string, bool|int|string>>> $files */
+         $files = $_FILES;
+
+         return $files;
+      }
    }
 
    // * Metadata
@@ -330,29 +356,41 @@ class Request
    }
    // \ TCP
    // / Connection
-   public string $secure {
+   public bool $secure {
       get => $this->scheme === 'https';
    }
    // | HTTP
    // HTTP Basic Authentication
    public string $username {
       get {
-         $username = $this->authenticate()->username;
+         if ($this->authUsername === '') {
+            $auth = $this->authenticate();
+            if ($auth !== null) {
+               $this->authUsername = $auth->username;
+               $this->authPassword = $auth->password;
+            }
+         }
 
-         return $username;
+         return $this->authUsername;
       }
       set {
-         $this->username = $value;
+         $this->authUsername = $value;
       }
    }
    public string $password {
       get {
-         $password = $this->authenticate()->password;
+         if ($this->authPassword === '') {
+            $auth = $this->authenticate();
+            if ($auth !== null) {
+               $this->authUsername = $auth->username;
+               $this->authPassword = $auth->password;
+            }
+         }
 
-         return $password;
+         return $this->authPassword;
       }
       set {
-         $this->password = $value;
+         $this->authPassword = $value;
       }
    }
    // HTTP Content Negotiation (RFC 7231 section-5.3)
@@ -408,7 +446,7 @@ class Request
       get => ! $this->fresh;
    }
 
-   /** @var array<string> */
+   /** @var array<string, mixed> */
    protected array $_SERVER;
 
    // * Metadata
@@ -418,6 +456,9 @@ class Request
    public static int $multiparts = 0;
 
    private Downloader $Downloader;
+
+   private string $authUsername = '';
+   private string $authPassword = '';
 
 
    public function __construct ()
@@ -487,6 +528,10 @@ class Request
       // @ Get Request Meta raw
       // Sample: GET /path HTTP/1.1
       $meta_raw = strstr($buffer, "\r\n", true);
+      if ($meta_raw === false) {
+         $Package->reject("HTTP/1.1 400 Bad Request\r\n\r\n");
+         return 0;
+      }
 
       @[$method, $URI, $protocol] = explode(' ', $meta_raw, 3);
 
@@ -525,7 +570,7 @@ class Request
          $content_length = (int) substr($header_raw, $_ + 18, 10);
       }
       else if (preg_match("/\r\ncontent-length: ?(\d+)/i", $header_raw, $match) === 1) {
-         $content_length = $match[1];
+         $content_length = (int) $match[1];
       }
       else if (stripos($header_raw, "\r\nTransfer-Encoding:") !== false) {
          $Package->reject("HTTP/1.1 400 Bad Request\r\n\r\n");
@@ -625,26 +670,35 @@ class Request
     *
     * @return array<array<string>>|null The request method.
     */
+   /**
+    * @return array<string, mixed>|null
+    */
    public function download (? string $key = null): array|null
    {
       // ?
+      $content_type = $this->Header->get('Content-Type');
       $boundary = $this->Body->parse(
          content: 'Form-data',
-         type: $this->Header->get('Content-Type')
+         type: $content_type
       );
 
       // @ Set FILES data
-      if ($boundary) {
+      if (is_string($boundary)) {
          $this->Downloader->downloading($boundary);
       }
 
       // :
       if ($key === null) {
-         return $_FILES;
+         /** @var array<string, array<string, bool|int|string|array<int|string, bool|int|string>>> $files */
+         $files = $_FILES;
+
+         return $files;
       }
 
-      if ( isSet($_FILES[$key]) ) {
-         return $_FILES[$key];
+      if ( isSet($_FILES[$key]) && is_array($_FILES[$key]) ) {
+         /** @var array<string, bool|int|string|array<int|string, bool|int|string>> $file */
+         $file = $_FILES[$key];
+         return $file;
       }
 
       return null;
@@ -654,55 +708,77 @@ class Request
     *
     * @return array<array<string>>|string|null The request method.
     */
+   /**
+    * @return array<string, mixed>|string|null
+    */
    public function receive (? string $key = null): array|string|null
    {
+      $content_type = $this->Header->get('Content-Type');
       $parsed = $this->Body->parse(
          content: 'raw',
-         type: $this->Header->get('Content-Type')
+         type: $content_type
       );
 
       // @ Set POST data
-      if ($parsed) {
+      if (is_string($parsed)) {
          $this->Downloader->downloading($parsed);
       }
 
       // : parsed $_POST || null
       if ($key === null) {
-         return $_POST;
+         /** @var array<string, array<string>|bool|float|int|string> $post */
+         $post = $_POST;
+         return $post;
       }
 
       if ( isSet($_POST[$key]) ) {
-         return $_POST[$key];
+         $value = $_POST[$key];
+
+         if (is_array($value)) {
+            /** @var array<string, mixed> $value */
+            return $value;
+         }
+
+         if (is_scalar($value)) {
+            return (string) $value;
+         }
       }
 
       return null;
    }
 
    // HTTP Basic Authentication
-   public function authenticate (): object|null
+   /**
+    * @return AuthenticationCredentials|null
+    */
+   public function authenticate (): AuthenticationCredentials|null
    {
-      /** @var string|null $authorization */
       $authorization = $this->Header->get('Authorization');
 
-      $username = '';
-      $password = '';
-      if (strpos($authorization, 'Basic') === 0) {
-         $encoded_credentials = substr($authorization, 6);
-         $decoded_credentials = base64_decode($encoded_credentials);
-
-         [$username, $password] = explode(':', $decoded_credentials, 2);
-
-         $this->username = $username;
-         $this->password = $password;
+      if (! is_string($authorization) || strpos($authorization, 'Basic ') !== 0) {
+         return null;
       }
 
-      return new class ($username, $password) {
-         public function __construct 
-         (
-            public string $username,
-            public string $password
-         ){}
-      };
+      $encoded_credentials = trim(substr($authorization, 6));
+      if ($encoded_credentials === '') {
+         return null;
+      }
+
+      $decoded_credentials = base64_decode($encoded_credentials, true);
+      if ($decoded_credentials === false) {
+         return null;
+      }
+
+      if (strpos($decoded_credentials, ':') === false) {
+         return null;
+      }
+
+      [$username, $password] = explode(':', $decoded_credentials, 2);
+
+      $this->username = $username;
+      $this->password = $password;
+
+      return new AuthenticationCredentials($username, $password);
    }
 
    // HTTP Content Negotiation
@@ -744,6 +820,10 @@ class Request
             $pattern = '/([a-z0-9]{1,8}(?:[-_][a-z0-9]{1,8}){0,3})\s*(?:;\s*q\s*=\s*(\d*(?:\.\d+)?))?/i';
 
             break;
+         default:
+            $header = null;
+            $pattern = null;
+            break;
       }
 
       // @ Validate header
@@ -751,9 +831,13 @@ class Request
          return [];
       }
 
+      if ($pattern === null) {
+         return [];
+      }
+
       // @ Validate RegEx
       preg_match_all(
-         $pattern ?? self::ACCEPTS_TYPES,
+         $pattern,
          $header,
          $matches,
          PREG_SET_ORDER
@@ -771,9 +855,7 @@ class Request
          return $b <=> $a;
       });
 
-      $results = array_merge(array_keys($results), $results);
-
-      return $results;
+      return array_keys($results);
    }
 
    // HTTP Caching Specification
@@ -843,7 +925,7 @@ class Request
       }
 
       // @ if-modified-since
-      if ($if_modified_since) {
+      if ($if_modified_since !== null) {
          $last_modified = WPI->Response->Header->get('Last-Modified');
          if ($last_modified === '') {
             return false;

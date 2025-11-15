@@ -28,7 +28,7 @@ class Body
 
    // * Metadata
    public int|null $length;
-   public null|int|false $position;
+   public int|null $position;
    public int|null $downloaded;
    public bool $waiting;
 
@@ -50,8 +50,12 @@ class Body
       $this->waiting = false;
    }
 
-   public function parse (string $content, string $type): bool|string
+   public function parse (string $content, ?string $type): bool|string
    {
+      if ($type === null) {
+         return false;
+      }
+
       switch ($content) {
          case 'Form-data':
             // @ Parse Form-data (boundary)

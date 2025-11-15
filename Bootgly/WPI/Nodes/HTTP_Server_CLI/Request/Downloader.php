@@ -57,11 +57,11 @@ class Downloader
    /**
     * Download a section of the request body.
     *
-    * @param string $boundary The boundary string to use for the download.
-    * @param int $sectionStart The start position of the section to download.
-    * @param string $postEncoded The POST data encoded string.
-    * @param string $filesEncoded The FILES data encoded string.
-    * @param array<array<string>> $files The FILES data array.
+   * @param string $boundary The boundary string to use for the download.
+   * @param int $sectionStart The start position of the section to download.
+   * @param string $postEncoded The POST data encoded string.
+   * @param string $filesEncoded The FILES data encoded string.
+   * @param array<int, array<string, bool|int|string>> $files The FILES data array.
     *
     * @return int The end position of the section downloaded.
     */

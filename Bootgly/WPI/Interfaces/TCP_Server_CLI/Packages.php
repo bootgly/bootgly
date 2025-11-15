@@ -12,6 +12,7 @@ namespace Bootgly\WPI\Interfaces\TCP_Server_CLI;
 
 
 use const SEEK_SET;
+use function array_key_exists;
 use function disk_free_space;
 use function dirname;
 use function fclose;
@@ -21,7 +22,10 @@ use function fread;
 use function fseek;
 use function fwrite;
 use function get_resource_type;
+use function is_array;
+use function is_int;
 use function is_resource;
+use function is_string;
 use function microtime;
 use function strlen;
 use function substr;
@@ -58,9 +62,9 @@ abstract class Packages implements WPI\Connections\Packages
    /** @var array<string> */
    public array $callbacks;
    // @ Stream
-   /** @var array<array<string>> */
+   /** @var array<int, array<string, mixed>> */
    public array $downloading;
-   /** @var array<array<string>> */
+   /** @var array<int, array<string, mixed>> */
    public array $uploading;
    // @ Expiration
    public bool $expired;
@@ -323,15 +327,28 @@ abstract class Packages implements WPI\Connections\Packages
    public function downloading ($Socket): int|false
    {
       // TODO test!!!
-      $file = $this->downloading[0]['file'];
+      $queued = $this->downloading[0] ?? null;
+      if (! is_array($queued)) {
+         return false;
+      }
+
+      if (! array_key_exists('file', $queued) || ! is_string($queued['file']) || $queued['file'] === '') {
+         return false;
+      }
+      $file = $queued['file'];
+
       $Handler = @fopen($file, 'w+');
       if ($Handler === false) {
          return false;
       }
 
-      /** @var int $length */
-      $length = $this->downloading[0]['length'];
-      $close = $this->downloading[0]['close'];
+      if (! array_key_exists('length', $queued) || ! is_int($queued['length'])) {
+         @fclose($Handler);
+         return false;
+      }
+      $length = $queued['length'];
+
+      $close = array_key_exists('close', $queued) ? (bool) $queued['close'] : false;
 
       $read = 0; // int Socket read in bytes
 
@@ -393,25 +410,50 @@ abstract class Packages implements WPI\Connections\Packages
     */
    public function uploading ($Socket): int
    { // TODO support to upload multiple files
-      $Handler = @fopen($this->uploading[0]['file'], 'r');
+      $queued = $this->uploading[0] ?? null;
+      if (! is_array($queued)) {
+         return 0;
+      }
+
+      if (! array_key_exists('file', $queued) || ! is_string($queued['file']) || $queued['file'] === '') {
+         return 0;
+      }
+      $file = $queued['file'];
+
+      $Handler = @fopen($file, 'r');
       if ($Handler === false) {
          return 0;
       }
-      /** @var array<array<string>> $parts */
-      $parts = $this->uploading[0]['parts'];
-      $pads = $this->uploading[0]['pads'];
-      $close = $this->uploading[0]['close'];
+      $parts = (array) ($queued['parts'] ?? []);
+      $pads = (array) ($queued['pads'] ?? []);
+      $close = array_key_exists('close', $queued) ? (bool) $queued['close'] : false;
 
       $written = 0;
 
       foreach ($parts as $index => $part) {
-         /** @var int $offset */
-         $offset = $part['offset'];
-         /** @var int $length */
-         $length = $part['length'];
+         if (! is_array($part)) {
+            continue;
+         }
 
-         /** @var array<string>|null $pad */
+         $offsetValue = $part['offset'] ?? null;
+         $lengthValue = $part['length'] ?? null;
+         if (! is_int($offsetValue) || ! is_int($lengthValue)) {
+            continue;
+         }
+
+         $offset = $offsetValue;
+         $length = $lengthValue;
+
          $pad = $pads[$index] ?? null;
+         $prepend = '';
+         $append = '';
+
+         if (is_array($pad)) {
+            $prependValue = $pad['prepend'] ?? null;
+            $appendValue = $pad['append'] ?? null;
+            $prepend = is_string($prependValue) ? $prependValue : '';
+            $append = is_string($appendValue) ? $appendValue : '';
+         }
 
          // @ Move pointer of file to offset
          try {
@@ -422,9 +464,9 @@ abstract class Packages implements WPI\Connections\Packages
          }
 
          // @ Prepend
-         if ( ! empty($pad['prepend']) ) {
+         if ($prepend !== '') {
             try {
-               $sent = @fwrite($Socket, $pad['prepend']);
+               $sent = @fwrite($Socket, $prepend);
             }
             catch (Throwable) {
                break;
@@ -457,9 +499,9 @@ abstract class Packages implements WPI\Connections\Packages
          $written += $this->upload($Socket, $Handler, $rate, $length); // @phpstan-ignore-line
 
          // @ Append
-         if ( ! empty($pad['append']) ) {
+         if ($append !== '') {
             try {
-               $sent = @fwrite($Socket, $pad['append']);
+               $sent = @fwrite($Socket, $append);
             }
             catch (Throwable) {
                break;

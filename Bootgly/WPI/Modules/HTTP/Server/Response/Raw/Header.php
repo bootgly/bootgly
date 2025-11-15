@@ -15,13 +15,13 @@ abstract class Header
 {
    // * Config
    // Fields
-   /** @var array<string> */
+   /** @var array<string, string|true> */
    protected array $preset;
-   /** @var array<string> */
+   /** @var array<string, string> */
    protected array $prepared;
 
    // * Data
-   /** @var array<string> */
+   /** @var array<string, string> */
    protected array $fields;
    protected string $raw;
 
@@ -36,7 +36,7 @@ abstract class Header
    abstract public function clean (): void;
 
    /**
-    * @param array<string> $fields
+    * @param array<string, string> $fields
     */
    abstract public function prepare (array $fields): void;
 

@@ -11,7 +11,7 @@
 namespace Bootgly\WPI\Endpoints;
 
 
-use Bootgly\WPI\Connections\Packages;
+use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages;
 
 
 interface Decoder
