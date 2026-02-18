@@ -1,8 +1,8 @@
 <?php
 use Bootgly\WPI\Modules\HTTP\Server\Router;
 
-use Bootgly\WPI\Nodes\HTTP_Server_\Request;
-use Bootgly\WPI\Nodes\HTTP_Server_\Response;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 
 /** @var Router $Router */
 
@@ -155,7 +155,7 @@ $Router->route('/requesting', function (Request $Request, Response $Response) {
    #return $Response->send->Pre->send($Request->Header->raw);
    // ? Header/Cookie
    #return $Response->JSON->send($Request->cookies); // @ {...}
-   #return $Response->send($Request->Cookies->test);  // @ {...}
+   #return $Response->send($Request->Cookies->get('test'));  // @ {...}
    // ? Body
    #return $Response->send($Request->inputs);        // @ {...}
    #return $Response->send($Request->post);          // @ {...}

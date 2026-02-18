@@ -41,17 +41,21 @@ use function clearstatcache;
 use function is_file;
 use function unlink;
 use function stripos;
+use function bin2hex;
+use function random_bytes;
 use function trim;
 use AllowDynamicProperties;
 use JsonException;
 
 use const Bootgly\WPI;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages;
+use Bootgly\WPI\Modules\HTTP\Server\Response\Raw\Header\Cookie;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Decoder_Waiting;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Raw\Body;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Raw\Header;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Raw\Header\Cookies;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Session;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Downloader;
 
 
@@ -70,6 +74,7 @@ class Request
 {
    public protected(set) Header $Header;
    public protected(set) Body $Body;
+
 
    // * Config
    public string $base {
@@ -298,6 +303,38 @@ class Request
    public array $cookies {
       get => $this->Cookies->cookies;
    }
+   // / Session
+   /**
+    * The Request Session.
+    */
+   public private(set) ?Session $Session = null {
+      get {
+         if ($this->Session === null) {
+            // !
+            $name = Session::$name;
+            $id = $this->Cookies->get($name);
+
+            if ($id === '') {
+               $id = bin2hex(random_bytes(16));
+            }
+
+            $this->Session = new Session($id);
+
+            // @
+            $Cookie = new Cookie($name, $id);
+            $Cookie->expiration = Session::$cookieLifetime;
+            $Cookie->path = Session::$cookiePath;
+            $Cookie->domain = Session::$domain;
+            $Cookie->secure = Session::$secure;
+            $Cookie->HTTP_only = Session::$httpOnly;
+            $Cookie->same_site = Session::$sameSite;
+
+            HTTP_Server_CLI::$Response->Header->Cookies->append($Cookie);
+         }
+
+         return $this->Session;
+      }
+   }
    // / Body
    /**
     * The Request Body input.
@@ -489,6 +526,8 @@ class Request
    public function __clone ()
    {
       $this->_SERVER = $_SERVER;
+
+      $this->Session = null;
    }
    public function reboot (): void
    {

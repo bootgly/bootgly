@@ -80,7 +80,19 @@ return new Suite(
          '2.3.2-request_cache-if-none-match-if-modified-since',
          '2.3.3-request_cache-if-none-match-if-modified-since',
          '2.3.4-request_cache-if-none-match-if-modified-since',
+
          '2.4-request_cache-no-cache',
+         // Session
+         '3.2-request_session',
+         '3.2.01-request_session-method-set_get',
+         '3.2.02-request_session-method-has',
+         '3.2.03-request_session-method-delete',
+         '3.2.04-request_session-method-pull',
+         '3.2.05-request_session-method-put',
+         '3.2.06-request_session-method-forget',
+         '3.2.08-request_session-method-list',
+         '3.2.09-request_session-method-flush',
+         '3.2.10-request_session-method-check',
       ],
       'Response/' => [
          '1.1-respond_with_a_simple_hello_world',

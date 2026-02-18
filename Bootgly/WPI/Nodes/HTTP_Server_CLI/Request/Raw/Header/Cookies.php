@@ -13,7 +13,6 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Raw\Header;
 use function array_pad;
 use function explode;
 use function is_array;
-use function is_string;
 use function preg_split;
 use function trim;
 
@@ -29,7 +28,15 @@ final class Cookies
 
    // * Data
    /** @var array<int, array<string, string>> */
-   protected array $cookies;
+   public protected(set) array $cookies {
+      get {
+         if (isSet($this->cookies) === false) {
+            $this->cookies = $this->build();
+         }
+
+         return $this->cookies;
+      }
+   }
 
    // * Metadata
    // ...
@@ -44,46 +51,37 @@ final class Cookies
       // ...
 
       // * Data
-      $this->cookies = [];
+      // ...
 
       // * Metadata
       // ...
    }
 
-   public function __get (string $name): mixed
+   public function get (string $name): string
    {
-      switch ($name) {
-         // * Config
-         // ...
-
-         // * Data
-         case 'cookies':
-            $this->build();
-
-            return $this->cookies;
-
-         // * Metadata
-         // ...
-         default:
-            return $this->cookies[$name] ?? '';
+      foreach ($this->cookies as $cookie) {
+         if ( isSet($cookie[$name]) ) {
+            return $cookie[$name];
+         }
       }
+
+      return '';
    }
 
-   public function build (): bool
+   /**
+    * @return array<int, array<string, string>>
+    */
+   private function build (): array
    {
-      if ( ! empty($this->cookies) ) {
-         return false;
-      }
-
       $fields = $this->Header->fields;
       $rawCookies = $fields['Cookie'] ?? $fields['cookie'] ?? null;
 
       if ($rawCookies === null) {
-         return false;
+         return [];
       }
 
       $cookieLines = is_array($rawCookies) ? $rawCookies : [$rawCookies];
-      $cookies = &$this->cookies;
+      $cookies = [];
 
       foreach ($cookieLines as $line) {
          $line = trim((string) $line);
@@ -119,6 +117,6 @@ final class Cookies
          }
       }
 
-      return true;
+      return $cookies;
    }
 }

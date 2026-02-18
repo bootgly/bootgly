@@ -258,6 +258,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
                $test = SAPI::$Tests[self::class][$index] ?? null;
                $test['case'] = $test['case.number'] ?? ((int) $index + 1);
                // @ Init Test
+
                $Test = $Suite->test($test);
                if ($Test === null || !is_array($test) || count($test) < 3) {
                   $Suite->skip();

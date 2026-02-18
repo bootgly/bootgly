@@ -56,3 +56,9 @@ _*.test.php
 /workdata/temp/*
 /workdata/tests/*
 /workdata/tests/snapshots/*
+/workdata/sessions/*
+# Ignore IA folders
+.github/agents/*
+.github/hooks/*
+.agent/*
+.github/copilot-instructions.md
