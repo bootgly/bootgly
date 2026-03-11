@@ -50,6 +50,14 @@ Bootgly is a base framework for developing APIs and Apps for both CLI (Console) 
 
 > "Bootgly is focused on **efficiency** and follows a minimum dependency policy. Thanks to this approach, its **unique I2P architecture**, along with some uncommon code conventions and design patterns, allows Bootgly to offer **superior performance** while providing an **easy-to-understand Code APIs**."
 
+### Core Principles
+
+| Principle | Description |
+|-----------|-------------|
+| 🔒 **One-way policy** | There is exactly one canonical way to do each thing — one HTTP server, one config schema, one autoloader, one test framework. This avoids confusion, reduces maintenance burden and keeps AI-generated code precise. |
+| 📦 **Minimum dependency** | No third-party packages in the framework core. Every feature is built-in and fully integrated, maximizing cohesion and reducing supply-chain risk. |
+| 🧱 **Strict layer separation** | Six interfaces (ABI → ACI → ADI → API → CLI → WPI) with a strict dependency direction — no cross-layer skipping allowed. Each top-level interface creates a **Platform** through the I2P architecture: CLI creates the **Console** platform, WPI creates the **Web** platform. Future platforms: **AI** (from ADI), **Graphics** (from GUI), Embedded, Mobile. |
+
 ### Bootgly CLI 📟
 
 > Command Line Interface
