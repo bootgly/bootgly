@@ -2,14 +2,12 @@
 
 use Bootgly\ABI\IO\FS\File;
 use Bootgly\ABI\Templates\Template;
+use Bootgly\ACI\Tests\Suite\Test\Specification;
 
-return [
-   // @ configure
-   'describe' => 'It should render Template file',
-   // @ simulate
-   // ...
-   // @ test
-   'test' => function () {
+
+return new Specification(
+   description: 'It should render Template file',
+   test: function () {
       // @ Valid
       $Template = new Template(
          new File(__DIR__ . '/testing.template.php')
@@ -35,4 +33,4 @@ return [
       // @ Invalid
       // ...
    }
-];
+);

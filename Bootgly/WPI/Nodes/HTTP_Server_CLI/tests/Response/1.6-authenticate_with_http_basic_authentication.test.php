@@ -1,33 +1,26 @@
 <?php
 
 use Bootgly\ABI\Debugging\Data\Vars;
+use Bootgly\ACI\Tests\Suite\Test\Specification\Separator;
 use Bootgly\WPI\Modules\HTTP\Server\Response\Authentication\Basic;
-// SAPI
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
-// CAPI?
-#use Bootgly\WPI\Nodes\HTTP\Client\Request;
-#use Bootgly\WPI\Nodes\HTTP\Client\Response;
-// TODO ?
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test\Specification;
 
-return [
-   // @ configure
-   'separator.header' => '@authenticate',
 
-   // @ simulate
-   // Server API
-   'response' => function (Request $Request, Response $Response): Response {
-      $Response(body: 'Unauthorized page!');
-      return $Response->authenticate(new Basic());
-   },
-   // Client API
-   'request' => function () {
+return new Specification(
+   Separator: new Separator(header: '@authenticate'),
+
+   request: function () {
       // return $Request->get('/test/auth/1');
       return "GET /test/auth/1 HTTP/1.0\r\n\r\n";
    },
+   response: function (Request $Request, Response $Response): Response {
+      $Response(body: 'Unauthorized page!');
+      return $Response->authenticate(new Basic());
+   },
 
-   // @ test
-   'test' => function ($response) {
+   test: function ($response) {
       // ! Asserts
       // @ Assert response raw
       $expected = <<<HTML_RAW
@@ -49,4 +42,4 @@ return [
 
       return true;
    }
-];
+);

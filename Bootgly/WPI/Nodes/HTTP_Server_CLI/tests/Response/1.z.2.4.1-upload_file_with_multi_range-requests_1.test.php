@@ -1,28 +1,17 @@
 <?php
 
 use Bootgly\ABI\Debugging\Data\Vars;
-// SAPI
+use Bootgly\ACI\Tests\Suite\Test\Specification\Separator;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
-// CAPI?
-#use Bootgly\WPI\Nodes\HTTP\Client\Request;
-#use Bootgly\WPI\Nodes\HTTP\Client\Response;
-// TODO ?
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test\Specification;
 
-return [
-   // @ configure
-   'describe' => 'It should return parts of file `bytes=1-2,4-5,-1`',
-   'separator.left' => '.2.4 - Requests Range - Client - Multi Part (Valid)',
 
-   'response.length' => 557,
+return new Specification(
+   description: 'It should return parts of file `bytes=1-2,4-5,-1`',
+   Separator: new Separator(left: '.2.4 - Requests Range - Client - Multi Part (Valid)'),
 
-   // @ simulate
-   // Server API
-   'response' => function (Request $Request, Response $Response): Response {
-      return $Response->upload('statics/alphanumeric.txt', close: false);
-   },
-   // Client API
-   'request' => function ($host) {
+   request: function ($host) {
       $raw = <<<HTTP_RAW
       GET /test/download/file_with_range/multi_range/1 HTTP/1.1\r
       Host: {$host}\r
@@ -33,9 +22,12 @@ return [
 
       return $raw;
    },
+   response: function (Request $Request, Response $Response): Response {
+      return $Response->upload('statics/alphanumeric.txt', close: false);
+   },
+   responseLength: 557,
 
-   // @ test
-   'test' => function ($response) {
+   test: function ($response) {
       if (preg_match('/Last-Modified: (.*)\r\n/i', $response, $matches)) {
          $lastModified = $matches[1];
       } else {
@@ -79,4 +71,4 @@ return [
 
       return true;
    }
-];
+);

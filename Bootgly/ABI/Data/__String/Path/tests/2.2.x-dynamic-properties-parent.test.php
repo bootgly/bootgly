@@ -5,15 +5,12 @@ use Generator;
 use Bootgly\ABI\Data\__String\Path;
 use Bootgly\ACI\Tests\Assertion;
 use Bootgly\ACI\Tests\Assertions;
+use Bootgly\ACI\Tests\Suite\Test\Specification;
 
 
-return [
-   // @ configure
-   'describe' => 'It should return parent dir',
-   // @ simulate
-   // ...
-   // @ test
-   'test' => new Assertions(Case: function (): Generator
+return new Specification(
+   description: 'It should return parent dir',
+   test: new Assertions(Case: function (): Generator
    {
       // @
       // ! Dir
@@ -121,4 +118,4 @@ return [
             expected: '/',
          );
    })
-];
+);

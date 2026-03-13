@@ -1,22 +1,18 @@
 <?php
 
 use Bootgly\ABI\Debugging\Data\Vars;
-// SAPI
+use Bootgly\ACI\Tests\Suite\Test\Specification\Separator;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
-// CAPI?
-#use Bootgly\WPI\Nodes\HTTP\Client\Request;
-#use Bootgly\WPI\Nodes\HTTP\Client\Response;
-// TODO ?
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test\Specification;
 
-return [
-   // @ configure
-   'separator.line' => true,
-   'describe' => 'It should process request $_POST / $_FILE (1 file, 1 field)',
-   // @ simulate
-   // Client API
-   'request' => function () {
-      // ...
+
+return new Specification(
+   description: 'It should process request $_POST / $_FILE (1 file, 1 field)',
+   Separator: new Separator(line: true),
+
+   request: function () {
+
       return
       <<<HTTP
       POST / HTTP/1.1\r
@@ -38,8 +34,7 @@ return [
       --X-INSOMNIA-BOUNDARY--\r\n
       HTTP;
    },
-   // Server API
-   'response' => function (Request $Request, Response $Response): Response {
+   response: function (Request $Request, Response $Response): Response {
       $Request->download();
 
       return $Response->Json->send(
@@ -47,8 +42,7 @@ return [
       );
    },
 
-   // @ test
-   'test' => function ($response) {
+   test: function ($response) {
       $parts = explode("\r\n\r\n", $response);
       $header = $parts[0];
       $body = json_decode($parts[1], true);
@@ -78,4 +72,4 @@ return [
 
       return true;
    }
-];
+);

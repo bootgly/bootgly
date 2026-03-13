@@ -1,19 +1,16 @@
 <?php
 
 use Bootgly\ABI\IO\FS\File;
+use Bootgly\ACI\Tests\Suite\Test\Specification;
 
 
-return [
-   // @ configure
-   'describe' => '',
-   // @ simulate
-   // ...
-   // @ test
-   'test' => function () {
+return new Specification(
+   description: '',
+   test: function () {
       // @ Valid
       $File1 = new File(__DIR__ . '/1.1-construct-real_file.test.php');
       yield assert(
-         assertion: $File1->size === 500,
+         assertion: $File1->size === 502,
          description: 'File #1 size: ' . $File1->size
       );
 
@@ -31,4 +28,4 @@ return [
          description: 'File #3 should have size === null!'
       );
    }
-];
+);

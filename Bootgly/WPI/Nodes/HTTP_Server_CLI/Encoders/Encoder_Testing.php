@@ -43,7 +43,11 @@ class Encoder_Testing extends Encoders
       // ! Response
       // @ Try to Invoke SAPI Closure
       try {
-         $Routes = (SAPI::$Handler)($Request, $Response, $Router);
+         $Routes = SAPI::$Middlewares->process($Request, $Response,
+            function (object $Request, object $Response) use ($Router): mixed {
+               return (SAPI::$Handler)($Request, $Response, $Router);
+            }
+         );
 
          if ($Routes instanceof \Generator) {
             foreach ($Router->routing($Routes) as $Responses) {

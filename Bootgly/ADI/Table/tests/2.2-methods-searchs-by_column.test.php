@@ -1,11 +1,12 @@
 <?php
 
 use Bootgly\ADI\Table;
+use Bootgly\ACI\Tests\Suite\Test\Specification;
 
-return [
-   'describe' => 'It should find value (body) by column => value',
 
-   'test' => function () {
+return new Specification(
+   description: 'It should find value (body) by column => value',
+   test: function () {
       // Create an instance of the Table class
       $Table = new Table;
 
@@ -34,4 +35,4 @@ return [
          description: 'Invalid find result: ' . $findResult
       );
    }
-];
+);

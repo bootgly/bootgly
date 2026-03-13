@@ -1,26 +1,15 @@
 <?php
 
 use Bootgly\ABI\Debugging\Data\Vars;
-// SAPI
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
-// CAPI?
-#use Bootgly\WPI\Nodes\HTTP\Client\Request;
-#use Bootgly\WPI\Nodes\HTTP\Client\Response;
-// TODO ?
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test\Specification;
 
-return [
-   // @ configure
-   'response.length' => 363,
-   'describe' => 'It should return the entire file when `end` overlap',
 
-   // @ simulate
-   // Server API
-   'response' => function (Request $Request, Response $Response): Response {
-      return $Response->upload('statics/alphanumeric.txt', close: false);
-   },
-   // Client API
-   'request' => function ($host) {
+return new Specification(
+   description: 'It should return the entire file when `end` overlap',
+
+   request: function ($host) {
       $raw = <<<HTTP_RAW
       GET /test/download/file_with_range/one_range/4 HTTP/1.1\r
       Host: {$host}\r
@@ -31,9 +20,12 @@ return [
 
       return $raw;
    },
+   response: function (Request $Request, Response $Response): Response {
+      return $Response->upload('statics/alphanumeric.txt', close: false);
+   },
+   responseLength: 363,
 
-   // @ test
-   'test' => function ($response) {
+   test: function ($response) {
       if (preg_match('/Last-Modified: (.*)\r\n/i', $response, $matches)) {
          $lastModified = $matches[1];
       } else {
@@ -62,4 +54,4 @@ return [
 
       return true;
    }
-];
+);

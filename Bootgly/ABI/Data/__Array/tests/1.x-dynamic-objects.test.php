@@ -1,15 +1,12 @@
 <?php
 
 use Bootgly\ABI\Data\__Array;
+use Bootgly\ACI\Tests\Suite\Test\Specification;
 
 
-return [
-   // @ configure
-   'describe' => '',
-   // @ simulate
-   // ...
-   // @ test
-   'test' => function () {
+return new Specification(
+   description: '',
+   test: function () {
       // ...
 
       $__Array = new __Array(['a', 'b', 'c']);
@@ -68,4 +65,4 @@ return [
          description: 'First value is: ' . $First->value
       );
    }
-];
+);

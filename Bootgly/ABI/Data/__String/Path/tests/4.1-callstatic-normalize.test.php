@@ -2,16 +2,14 @@
 
 
 use Bootgly\ABI\Data\__String\Path;
+use Bootgly\ACI\Tests\Suite\Test\Specification;
+use Bootgly\ACI\Tests\Suite\Test\Specification\Separator;
 
 
-return [
-   // @ configure
-   'describe' => 'It should normalize path',
-   'separator.left' => 'Static methods',
-   // @ simulate
-   // ...
-   // @ test
-   'test' => function () {
+return new Specification(
+   Separator: new Separator(left: 'Static methods'),
+   description: 'It should normalize path',
+   test: function () {
       $normalized = Path::normalize('../../etc/passwd');
 
       yield assert(
@@ -19,4 +17,4 @@ return [
          'Path not normalized!'
       );
    }
-];
+);

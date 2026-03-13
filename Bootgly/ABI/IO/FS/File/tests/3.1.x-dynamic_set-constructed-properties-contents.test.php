@@ -1,16 +1,14 @@
 <?php
 
 use Bootgly\ABI\IO\FS\File;
+use Bootgly\ACI\Tests\Suite\Test\Specification;
+use Bootgly\ACI\Tests\Suite\Test\Specification\Separator;
 
 
-return [
-   // @ configure
-   'describe' => '',
-   'separator.line' => true,
-   // @ simulate
-   // ...
-   // @ test
-   'test' => function () {
+return new Specification(
+   Separator: new Separator(line: true),
+   description: '',
+   test: function () {
       // @ Valid
       $File1 = new File(__DIR__ . '/1.1-construct-real_file.test.php');
       // @ get file contents
@@ -25,7 +23,7 @@ return [
       // @ revert file contents
       $File1->contents = $contents;
       yield assert(
-         assertion: $File1->lines === 27,
+         assertion: $File1->lines === 24,
          description: 'Invalid Reverted File lines count: ' . $File1->lines
       );
 
@@ -52,4 +50,4 @@ return [
          description: 'File #3 lines to invalid file should be null!'
       );
    }
-];
+);

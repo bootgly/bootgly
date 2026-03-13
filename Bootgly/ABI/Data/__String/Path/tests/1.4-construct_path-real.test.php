@@ -5,14 +5,12 @@ use Generator;
 use Bootgly\ABI\Data\__String\Path;
 use Bootgly\ACI\Tests\Assertion;
 use Bootgly\ACI\Tests\Assertions;
+use Bootgly\ACI\Tests\Suite\Test\Specification;
 
-return [
-   // @ configure
-   'describe' => 'It should valid real paths',
-   // @ simulate
-   // ...
-   // @ test
-   'test' => new Assertions(Case: function (): Generator
+
+return new Specification(
+   description: 'It should valid real paths',
+   test: new Assertions(Case: function (): Generator
    {
       // @
       // Valid
@@ -43,4 +41,4 @@ return [
             expected: '',
          );
    })
-];
+);

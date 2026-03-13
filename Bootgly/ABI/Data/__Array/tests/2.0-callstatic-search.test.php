@@ -1,15 +1,12 @@
 <?php
 
 use Bootgly\ABI\Data\__Array;
+use Bootgly\ACI\Tests\Suite\Test\Specification;
 
 
-return [
-   // @ configure
-   'describe' => '',
-   // @ simulate
-   // ...
-   // @ test
-   'test' => function () {
+return new Specification(
+   description: '',
+   test: function () {
       // ...
 
       $__Array = new __Array(['Bootgly', 'base', 'PHP', 'framework', 'to', 'Multi', 'Projects']);
@@ -28,4 +25,4 @@ return [
          description: 'Result not found!'
       );
    }
-];
+);

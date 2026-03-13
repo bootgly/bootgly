@@ -2,15 +2,12 @@
 
 
 use Bootgly\ABI\Data\__String\Path;
+use Bootgly\ACI\Tests\Suite\Test\Specification;
 
 
-return [
-   // @ configure
-   'describe' => 'It should split path',
-   // @ simulate
-   // ...
-   // @ test
-   'test' => function () {
+return new Specification(
+   description: 'It should split path',
+   test: function () {
       $paths1 = Path::split('/home/bootgly/');
       yield assert(
          assertion: count($paths1) === 2 && $paths1[0] === 'home' && $paths1[1] === 'bootgly',
@@ -27,4 +24,4 @@ return [
          description: 'The path #3 was not split'
       );
    }
-];
+);

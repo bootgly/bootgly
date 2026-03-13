@@ -1,20 +1,18 @@
 <?php
+
 use Bootgly\ABI\Debugging\Data\Vars;
 use Bootgly\WPI\Modules\HTTP\Server\Response\Raw\Header\Cookie;
-// SAPI
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
-// CAPI?
-#use Bootgly\WPI\Nodes\HTTP\Client\Request;
-#use Bootgly\WPI\Nodes\HTTP\Client\Response;
-// TODO ?
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test\Specification;
 
-return [
-   // @ configure
 
-   // @ simulate
-   // Server API
-   'response' => function (Request $Request, Response $Response): Response {
+return new Specification(
+   request: function () {
+      // return $Request->get('//header/changed/1');
+      return "GET /header/cookies/1 HTTP/1.0\r\n\r\n";
+   },
+   response: function (Request $Request, Response $Response): Response {
       $Cookies = $Response->Header->Cookies;
 
       $Cookies->append(new Cookie('Test1', 'value1'));
@@ -22,14 +20,8 @@ return [
 
       return $Response(body: 'Hello World!');
    },
-   // Client API
-   'request' => function () {
-      // return $Request->get('//header/changed/1');
-      return "GET /header/cookies/1 HTTP/1.0\r\n\r\n";
-   },
 
-   // @ test
-   'test' => function ($response) {
+   test: function ($response) {
       /*
       return $Response->code === '500'
       && $Response->body === ' ';
@@ -55,4 +47,4 @@ return [
 
       return true;
    }
-];
+);

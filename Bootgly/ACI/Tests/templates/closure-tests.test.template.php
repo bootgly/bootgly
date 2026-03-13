@@ -1,16 +1,11 @@
 <?php
 
+use Bootgly\ACI\Tests\Suite\Test\Specification;
 
-// * put uses here *
 
-
-return [
-   // @ configure
-   'describe' => '',
-   // @ simulate
-   // ...
-   // @ test
-   'test' => function () {
+return new Specification(
+   description: '',
+   test: function () {
       // ...
 
       // Subtests
@@ -21,4 +16,4 @@ return [
          description: null
       );
    }
-];
+);

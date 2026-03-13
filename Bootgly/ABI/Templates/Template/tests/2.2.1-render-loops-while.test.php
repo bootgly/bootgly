@@ -3,14 +3,12 @@
 use Bootgly\ABI\Templates\Template;
 use Bootgly\ACI\Tests\Assertion;
 use Bootgly\ACI\Tests\Assertions;
+use Bootgly\ACI\Tests\Suite\Test\Specification;
 
-return [
-   // @ configure
-   'describe' => 'It should render loops: while',
-   // @ simulate
-   // ...
-   // @ test
-   'test' => new Assertions(function () {
+
+return new Specification(
+   description: 'It should render loops: while',
+   test: new Assertions(function () {
       // @ Valid
       $Template11 = new Template(
          <<<'TEMPLATE'
@@ -61,4 +59,4 @@ return [
       // @ Invalid
       // ...
    })
-];
+);

@@ -4,16 +4,14 @@ namespace Bootgly;
 
 use Bootgly\ACI\Tests\Assertion;
 use Bootgly\ACI\Tests\Assertions;
+use Bootgly\ACI\Tests\Suite\Test\Specification;
 use Bootgly\API\Project;
 use Bootgly\API\Projects;
 
-return [
-   // @ Configure
-   'describe' => 'Select project',
-   // @ Simulate
-   // ...
-   // @ Test
-   'test' => new Assertions(function () {
+
+return new Specification(
+   description: 'Select project',
+   test: new Assertions(function () {
       // ! Project 1 instance
       $Project1 = new Project;
 
@@ -40,4 +38,4 @@ return [
          ->to->be(Projects::CONSUMER_DIR . 'Bootgly/')
          ->assert();
    })
-];
+);

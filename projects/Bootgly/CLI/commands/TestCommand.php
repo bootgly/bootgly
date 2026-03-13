@@ -15,7 +15,6 @@ use Closure;
 
 use Bootgly\ABI\Data\__String\Path;
 use Bootgly\ACI\Tests\Suite;
-use Bootgly\ACI\Tests\Suites;
 use Bootgly\ACI\Tests;
 use const Bootgly\CLI;
 use Bootgly\CLI\Command;
@@ -41,13 +40,15 @@ class TestCommand extends Command
 
       // !
       // arguments
+      // # suite index
       $suite_index = (int) ($arguments[0] ?? 0);
+      if ($suite_index < 1) {
+         $suite_index = 0;
+      }
+      // # case index
       $case_index = (int) ($arguments[1] ?? 0);
       if ($case_index < 1) {
          $case_index = 0;
-      }
-      if ($suite_index < 1) {
-         $suite_index = 0;
       }
       // options
       // ...
@@ -57,9 +58,9 @@ class TestCommand extends Command
       $Tests = new Tests;
       // $Tester = new Tester;
       $Tests->Suites->iterate(
-         $suite_index,
-         $case_index,
-         fn (string $suiteDir, int $index) => $this->test($suiteDir, $index)
+         suite: $suite_index,
+         case: $case_index,
+         iterator: fn (string $suite_dir, int $index) => $this->test($suite_dir, $index)
       );
       $Tests->Suites->summarize();
 
@@ -67,13 +68,13 @@ class TestCommand extends Command
    }
 
    // # Test Suite
-   public function test (string $suiteDir, null|int $index): null|true|Suite
+   public function test (string $suite_dir, null|int $index): null|true|Suite
    {
       // !
-      $bootstrapFile = Path::normalize($suiteDir . '/tests/@.php');
+      $bootstrap_file = Path::normalize($suite_dir . '/tests/@.php');
       BOOTGLY_ROOT_DIR !== BOOTGLY_WORKING_DIR
-         ? $Suite = (include BOOTGLY_WORKING_DIR . $bootstrapFile)
-         : $Suite = (include BOOTGLY_ROOT_DIR . $bootstrapFile);
+         ? $Suite = (include BOOTGLY_WORKING_DIR . $bootstrap_file)
+         : $Suite = (include BOOTGLY_ROOT_DIR . $bootstrap_file);
       // ?
       if ($Suite instanceof Suite === false) {
          return null;

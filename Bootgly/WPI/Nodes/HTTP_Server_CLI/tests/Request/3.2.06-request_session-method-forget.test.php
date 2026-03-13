@@ -2,13 +2,13 @@
 
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test\Specification;
 
-return [
-   // @ configure
-   'describe' => 'It should test Session forget method (bulk)',
 
-   // @ simulate
-   'request' => function ($host) {
+return new Specification(
+   description: 'It should test Session forget method (bulk)',
+
+   request: function ($host) {
       $request = <<<HTTP
       GET / HTTP/1.1\r
       Host: {$host}\r
@@ -17,7 +17,7 @@ return [
 
       return $request;
    },
-   'response' => function (Request $Request, Response $Response) {
+   response: function (Request $Request, Response $Response) {
       $Session = $Request->Session;
       $Session->set('key1', 'val1');
       $Session->set('key2', 'val2');
@@ -29,11 +29,10 @@ return [
       ]);
    },
 
-   // @ test
-   'test' => function ($response) {
+   test: function ($response) {
       $body = substr($response, strpos($response, "\r\n\r\n") + 4);
       $results = json_decode($body, true);
 
       return ($results['key1_gone'] ?? false) && ($results['key2_gone'] ?? false);
    }
-];
+);

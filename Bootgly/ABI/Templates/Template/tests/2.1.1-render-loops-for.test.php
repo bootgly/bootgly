@@ -1,15 +1,12 @@
 <?php
 
 use Bootgly\ABI\Templates\Template;
+use Bootgly\ACI\Tests\Suite\Test\Specification;
 
 
-return [
-   // @ configure
-   'describe' => 'It should render loops: for',
-   // @ simulate
-   // ...
-   // @ test
-   'test' => function () {
+return new Specification(
+   description: 'It should render loops: for',
+   test: function () {
       // @ Valid
       // Template #1
       $Template1 = new Template(<<<'TEMPLATE'
@@ -47,4 +44,4 @@ return [
       // @ Invalid
       // ...
    }
-];
+);

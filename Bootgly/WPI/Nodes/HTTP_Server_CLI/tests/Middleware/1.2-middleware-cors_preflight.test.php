@@ -1,0 +1,48 @@
+<?php
+
+use Bootgly\ABI\Debugging\Data\Vars;
+use Bootgly\WPI\Modules\HTTP\Server\Router\Middlewares\CORS;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test\Specification;
+
+
+return new Specification(
+   description: 'It should return 204 on CORS preflight OPTIONS request',
+
+   request: function () {
+      return <<<HTTP
+      OPTIONS / HTTP/1.1\r
+      Host: localhost\r
+      Origin: http://example.com\r
+      \r\n
+      HTTP;
+   },
+   middlewares: [new CORS],
+   response: function (Request $Request, Response $Response): Response {
+      return $Response(body: 'Should not reach here');
+   },
+
+   test: function ($response) {
+      $expected = <<<HTML_RAW
+      HTTP/1.1 204 No Content\r
+      Server: Bootgly\r
+      Access-Control-Allow-Origin: *\r
+      Access-Control-Allow-Methods: GET, POST, PUT, DELETE, PATCH, OPTIONS\r
+      Access-Control-Allow-Headers: Content-Type, Authorization\r
+      Access-Control-Max-Age: 86400\r
+      Content-Length: 0\r
+      Content-Type: text/html; charset=UTF-8\r
+      \r\n
+      HTML_RAW;
+
+      // @ Assert
+      if ($response !== $expected) {
+         Vars::$labels = ['HTTP Response:', 'Expected:'];
+         dump(json_encode($response), json_encode($expected));
+         return 'CORS preflight response not matched';
+      }
+
+      return true;
+   }
+);

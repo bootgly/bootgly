@@ -1,16 +1,14 @@
 <?php
 
 use Bootgly\ABI\IO\FS\File;
+use Bootgly\ACI\Tests\Suite\Test\Specification;
+use Bootgly\ACI\Tests\Suite\Test\Specification\Separator;
 
 
-return [
-   // @ configure
-   'describe' => '',
-   'separator.left' => '__get - Content',
-   // @ simulate
-   // ...
-   // @ test
-   'test' => function () {
+return new Specification(
+   Separator: new Separator(left: '__get - Content'),
+   description: '',
+   test: function () {
       // @ Valid
       $File1 = new File(__DIR__ . '/1.1-construct-real_file.test.php');
       $MIME1 = $File1->MIME;
@@ -35,4 +33,4 @@ return [
          description: 'File #3 (fake) - MIME should be null'
       );
    }
-];
+);

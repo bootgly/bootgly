@@ -1,15 +1,12 @@
 <?php
 
 use Bootgly\ABI\Data\__String;
+use Bootgly\ACI\Tests\Suite\Test\Specification;
 
 
-return [
-   // @ configure
-   'describe' => '',
-   // @ simulate
-   // ...
-   // @ test
-   'test' => function () {
+return new Specification(
+   description: '',
+   test: function () {
       // @ Valid
       // ASCII text
       $ASCII = new __String('Bootgly is efficient!', 'ASCII');
@@ -26,4 +23,4 @@ return [
       // @ Invalid
       // ...
    }
-];
+);

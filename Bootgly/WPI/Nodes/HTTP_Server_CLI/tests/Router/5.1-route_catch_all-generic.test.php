@@ -1,26 +1,21 @@
 <?php
+
 use Bootgly\ABI\Debugging\Data\Vars;
-// SAPI
+use Bootgly\ACI\Tests\Suite\Test\Specification\Separator;
 use Bootgly\WPI\Modules\HTTP\Server\Router;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
-// CAPI?
-#use Bootgly\WPI\Nodes\HTTP\Client\Request;
-#use Bootgly\WPI\Nodes\HTTP\Client\Response;
-// TODO ?
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test\Specification;
 
-return [
-   // @ configure
-   'separator.left' => 'Route Catch-All',
 
-   // @ simulate
-   // Client API
-   'request' => function () {
+return new Specification(
+   Separator: new Separator(left: 'Route Catch-All'),
+
+   request: function () {
       // return $Request->get('/');
       return "GET /catch1 HTTP/1.0\r\n\r\n";
    },
-   // Server API
-   'response' => function (Request $Request, Response $Response, Router $Router)
+   response: function (Request $Request, Response $Response, Router $Router)
    {
       yield $Router->route('/', function ($Request, $Response) {
          return $Response(body: 'Fail...');
@@ -50,8 +45,7 @@ return [
       }, GET);
    },
 
-   // @ test
-   'test' => function ($response) {
+   test: function ($response) {
       /*
       return $Response->status === '200 OK'
       && $Response->body === '127.0.0.1';
@@ -75,4 +69,4 @@ return [
 
       return true;
    }
-];
+);

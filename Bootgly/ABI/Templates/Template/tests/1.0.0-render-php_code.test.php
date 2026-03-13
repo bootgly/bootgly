@@ -1,14 +1,12 @@
 <?php
 
 use Bootgly\ABI\Templates\Template;
+use Bootgly\ACI\Tests\Suite\Test\Specification;
 
-return [
-   // @ configure
-   'describe' => 'It should render pure PHP',
-   // @ simulate
-   // ...
-   // @ test
-   'test' => function () {
+
+return new Specification(
+   description: 'It should render pure PHP',
+   test: function () {
       // @ Valid
       $Template11 = new Template(
          <<<'TEMPLATE'
@@ -46,4 +44,4 @@ return [
       // @ Invalid
       // ...
    }
-];
+);

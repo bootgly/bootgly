@@ -4,14 +4,12 @@ use Generator;
 
 use Bootgly\ACI\Tests\Assertion;
 use Bootgly\ACI\Tests\Assertions;
+use Bootgly\ACI\Tests\Suite\Test\Specification;
 
-return [
-   // @ configure
-   'describe' => 'It should test using throwers',
-   // @ simulate
-   // ...
-   // @ test
-   'test' => new Assertions(Case: function (): Generator
+
+return new Specification(
+   description: 'It should test using throwers',
+   test: new Assertions(Case: function (): Generator
    {
       // Exception
       $callable = function () {
@@ -25,4 +23,4 @@ return [
          ->to->throw(new Exception('Exception'))
          ->assert();
    })
-];
+);

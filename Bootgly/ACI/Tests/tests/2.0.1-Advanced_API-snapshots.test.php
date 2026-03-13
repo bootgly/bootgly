@@ -7,14 +7,12 @@ use Bootgly\ACI\Tests\Assertion\Expectations\Delimiters\ClosedInterval;
 use Bootgly\ACI\Tests\Assertion\Snapshots;
 use Bootgly\ACI\Tests\Assertion;
 use Bootgly\ACI\Tests\Assertions;
+use Bootgly\ACI\Tests\Suite\Test\Specification;
 
-return [
-   // @ configure
-   'describe' => 'It should handle snapshots correctly',
-   // @ simulate
-   // ...
-   // @ test
-   'test' => new Assertions(Case: function (): Generator
+
+return new Specification(
+   description: 'It should handle snapshots correctly',
+   test: new Assertions(Case: function (): Generator
    {
       // @ Using capture(...) and restore(...) [string]
       $string1 = 'value';
@@ -118,4 +116,4 @@ return [
             using: new Snapshots\FileStorageSnapshot
          );
    })
-];
+);

@@ -1,11 +1,12 @@
 <?php
 
 use Bootgly\ADI\Table;
+use Bootgly\ACI\Tests\Suite\Test\Specification;
 
-return [
-   'describe' => 'It should set Table Data: header, body and footer',
 
-   'test' => function () {
+return new Specification(
+   description: 'It should set Table Data: header, body and footer',
+   test: function () {
       // Create an instance of the Table class
       $Table = new Table;
 
@@ -53,4 +54,4 @@ return [
       // @ Invalid
       // ...
    }
-];
+);

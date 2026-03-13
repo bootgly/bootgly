@@ -4,14 +4,12 @@ use Generator;
 
 use Bootgly\ACI\Tests\Assertion;
 use Bootgly\ACI\Tests\Assertions;
+use Bootgly\ACI\Tests\Suite\Test\Specification;
 
-return [
-   // @ configure
-   'describe' => 'It should test using waiters',
-   // @ simulate
-   // ...
-   // @ test
-   'test' => new Assertions(Case: function (): Generator
+
+return new Specification(
+   description: 'It should test using waiters',
+   test: new Assertions(Case: function (): Generator
    {
       // Normal use
       yield new Assertion(
@@ -43,4 +41,4 @@ return [
          })
          ->assert();
    })
-];
+);

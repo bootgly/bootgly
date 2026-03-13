@@ -19,6 +19,7 @@ use Bootgly\ACI\Benchmark;
 use Bootgly\ACI\Logs\LoggableEscaped;
 use Bootgly\ACI\Tests\Assertions;
 use Bootgly\ACI\Tests\Suite\Test;
+use Bootgly\ACI\Tests\Suite\Test\Specification;
 use Bootgly\ACI\Tests\Suites;
 use Bootgly\API\Environment;
 
@@ -44,7 +45,7 @@ class Suite
    public string $name;
    /** @var array<string> */
    public array $tests;
-   /** @var array<int,array<string,mixed>> */
+   /** @var array<int,Specification> */
    public array $Tests;
    public protected(set) Test $Test;
    /** @var array<string> */
@@ -165,7 +166,7 @@ class Suite
          }
 
          // @
-         /** @var array<string,mixed>|false $Test */
+         /** @var Specification|false $Test */
          $Test = @include "{$dir}{$test}.test.php";
          // ?
          if ($test[0] === '_' && $Test === false) {
@@ -174,18 +175,17 @@ class Suite
          else if ($test[0] !== '_' && $Test === false) {
             throw new Exception("Test case not found: \n {$dir}{$test}");
          }
-         else if (is_array($Test) === false) {
-            throw new Exception("Test case must return an array: \n {$dir}{$test}");
+         else if ($Test instanceof Specification === false) {
+            throw new Exception("Test case must return a Specification instance: \n {$dir}{$test}");
          }
 
          // * Metadata (Test Case)
          // target
          $this->case = $case_index;
-         $Test['case'] = $case_index;
-         // last
-         if ($this->assertions === $case_index) {
-            $Test['last'] = true;
-         }
+         $Test->index(
+            case: $case_index,
+            last: $this->assertions === $case_index ? true : null
+         );
 
          $this->Tests[] = $Test;
       }
@@ -213,9 +213,7 @@ class Suite
                continue;
             }
             // ? Skip
-            $skip = $Test['skip'] ?? false;
-            $ignore = $Test['ignore'] ?? false;
-            if ($skip === true && $ignore === false) {
+            if ($Test->skip === true && $Test->ignore === false) {
                $this->skip();
 
                continue;
@@ -291,13 +289,13 @@ class Suite
    /**
     * Test the current Test Case.
     * 
-    * @param null|array<string,mixed> $Test
+    * @param null|Specification $Test
     *
     * @return Test|null
     */
-   public function test (null|array &$Test): Test|null
+   public function test (null|Specification $Test): Test|null
    {
-      if ( empty($Test) ) {
+      if ($Test === null) {
          $this->skipped++;
 
          next($this->tests);

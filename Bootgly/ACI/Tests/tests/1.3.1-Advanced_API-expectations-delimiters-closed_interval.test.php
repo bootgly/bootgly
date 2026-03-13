@@ -4,14 +4,12 @@ use Generator;
 
 use Bootgly\ACI\Tests\Assertion;
 use Bootgly\ACI\Tests\Assertions;
+use Bootgly\ACI\Tests\Suite\Test\Specification;
 
-return [
-   // @ configure
-   'describe' => 'It should compare between values (using Expectations)',
-   // @ simulate
-   // ...
-   // @ test
-   'test' => new Assertions(Case: function (): Generator
+
+return new Specification(
+   description: 'It should compare between values (using Expectations)',
+   test: new Assertions(Case: function (): Generator
    {
       // integer
       yield new Assertion(
@@ -40,5 +38,5 @@ return [
          ->expect($date)
          ->to->delimit($date, new DateTime('2023-01-02'))
          ->assert();
-   }),
-];
+   })
+);

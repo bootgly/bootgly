@@ -12,32 +12,35 @@ namespace Bootgly\ACI\Tests\Suite\Test;
 
 
 use Closure;
-use Exception;
 
 use Bootgly\ACI\Tests\Assertions;
 use Bootgly\ACI\Tests\Suite\Test\Specification\Separator;
 
 
-class Specification // in context of Suite
+class Specification
 {
    // * Config
    /**
     * The test case description.
     */
-   public null|string $description = null;
+   public null|string $description;
    /**
     * The Separator configuration.
     */
    public Separator $Separator;
    /**
+    * Indicates if the test case should be skipped.
+    */
+   public bool $skip;
+   /**
     * Indicates if the test case should be ignored.
     * Skip without output (used to skip with command arguments)
     */
-   public null|bool $ignore = null;
+   public bool $ignore;
    /**
     * The retest Closure.
     */
-   public null|Closure $retest = null;
+   public null|Closure $retest;
 
    // * Data
    /**
@@ -49,118 +52,46 @@ class Specification // in context of Suite
    /**
     * The test case index + 1.
     */
-   public null|int $case = null;
-   /**
-    * Indicates if the test case was retested.
-    */
-   public null|bool $retested = null;
+   public private(set) null|int $case = null;
    /**
     * Indicates if the test case is the last one.
     */
-   public null|true $last = null;
+   public private(set) null|true $last = null;
 
 
-   /**
-    * Specification constructor.
-    * 
-    * @param array<string,mixed> $specification
-    */
-   public function __construct (array $specification)
+   public function __construct (
+      // * Data (required)
+      Assertions|Closure $test,
+      // * Config (optional)
+      null|string $description = null,
+      null|Separator $Separator = null,
+      bool $skip = false,
+      bool $ignore = false,
+      null|Closure $retest = null,
+   )
    {
-      // !
-      // * Config (optional User Input)
-      // $description
-      $description = $specification['describe'] ?? $specification['description'] ?? null;
-      if (
-         $description !== null
-         && is_string($description) === false
-      ) {
-         throw new Exception('Description only accepts string');
-      }
-      // $Separator
-      $separator_line = $specification['separator.line'] ?? null;
-      if (
-         $separator_line !== null
-         && (
-            $separator_line !== true
-            && is_string($separator_line) === false
-         )
-      ) {
-         throw new Exception('Separator line only accepts boolean or string');
-      }
-      $separator_left = $specification['separator.left'] ?? null;
-      if (
-         $separator_left !== null
-         && is_string($separator_left) === false
-      ) {
-         throw new Exception('Separator left only accepts string');
-      }
-      $separator_header = $specification['separator.header'] ?? null;
-      if (
-         $separator_header !== null
-         && is_string($separator_header) === false
-      ) {
-         throw new Exception('Separator header only accepts string');
-      }
-      // $ignore
-      $ignore = $specification['ignore'] ?? null;
-      if (
-         $ignore !== null
-         && is_bool($ignore) === false
-      ) {
-         throw new Exception('Ignore only accepts boolean');
-      }
-      // $retest
-      $retest = $specification['retest'] ?? null;
-      if (
-         $retest !== null
-         && $retest instanceof Closure === false
-      ) {
-         throw new Exception('Retest only accepts Closure');
-      }
-
-      // * Data (required User Input)
-      // $test
-      $test = $specification['test']
-         ?? throw new Exception('Test case not defined');
-      if ($test instanceof Closure === false && $test instanceof Assertions === false) {
-         throw new Exception('Test case only accepts Closure or Assertions instance');
-      }
-
-      // * Metadata (Internal Use)
-      // $case
-      /** @var null|int $case */
-      $case = $specification['case'] ?? null;
-      // $retested
-      /** @var null|bool $retested */
-      $retested = $specification['retested'] ?? null;
-      // $last
-      /** @var null|true $last */
-      $last = $specification['last'] ?? null;
-
-      // ---
-
-      // @
       // * Config
-      // $description
       $this->description = $description;
-      // $Separator
-      $this->Separator = new Separator;
-      $this->Separator->line = $separator_line;
-      $this->Separator->left = $separator_left;
-      $this->Separator->header = $separator_header;
-      // $ignore
+      $this->Separator = $Separator ?? new Separator;
+      $this->skip = $skip;
       $this->ignore = $ignore;
-      // $retest
       $this->retest = $retest;
 
       // * Data
       $this->test = $test;
+   }
 
+   /**
+    * Index this Specification in the Suite.
+    *
+    * @param int $case The test case index.
+    * @param null|true $last Whether this is the last test case.
+    */
+   public function index (int $case, null|true $last = null): void
+   {
       // * Metadata
       $this->case = $case;
-      $this->retested = $retested;
-      $this->last = $last;
+      $this->last = $last ?? $this->last;
    }
 }
 

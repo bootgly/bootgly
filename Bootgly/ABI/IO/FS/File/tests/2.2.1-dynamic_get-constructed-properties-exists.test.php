@@ -1,16 +1,14 @@
 <?php
 
 use Bootgly\ABI\IO\FS\File;
+use Bootgly\ACI\Tests\Suite\Test\Specification;
+use Bootgly\ACI\Tests\Suite\Test\Specification\Separator;
 
 
-return [
-   // @ configure
-   'describe' => '',
-   'separator.line' => true,
-   // @ simulate
-   // ...
-   // @ test
-   'test' => function () {
+return new Specification(
+   Separator: new Separator(line: true),
+   description: '',
+   test: function () {
       // @ Valid
       $File1 = new File(__DIR__ . '/1.1-construct-real_file.test.php');
       yield assert(
@@ -32,4 +30,4 @@ return [
          description: 'File #3 should not exist!'
       );
    }
-];
+);

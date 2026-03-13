@@ -1,15 +1,12 @@
 <?php
 
 use Bootgly\ABI\IO\FS\File;
+use Bootgly\ACI\Tests\Suite\Test\Specification;
 
 
-return [
-   // @ configure
-   'describe' => '',
-   // @ simulate
-   // ...
-   // @ test
-   'test' => function () {
+return new Specification(
+   description: '',
+   test: function () {
       // @ Valid
       // Basedir valid
       // w
@@ -65,4 +62,4 @@ return [
       );
       $File32->close();
    }
-];
+);

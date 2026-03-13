@@ -34,7 +34,11 @@ class Encoder_ extends Encoders
 
       // @ Try to Invoke SAPI Closure
       try {
-         $Result = (SAPI::$Handler)($Request, $Response, $Router);
+         $Result = SAPI::$Middlewares->process($Request, $Response,
+            function (object $Request, object $Response) use ($Router): mixed {
+               return (SAPI::$Handler)($Request, $Response, $Router);
+            }
+         );
 
          if ($Result instanceof \Generator) {
             foreach ($Router->routing($Result) as $Responses) {

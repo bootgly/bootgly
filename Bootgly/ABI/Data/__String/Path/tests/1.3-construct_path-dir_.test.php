@@ -6,15 +6,12 @@ use Generator;
 use Bootgly\ABI\Data\__String\Path;
 use Bootgly\ACI\Tests\Assertion;
 use Bootgly\ACI\Tests\Assertions;
+use Bootgly\ACI\Tests\Suite\Test\Specification;
 
 
-return [
-   // @ configure
-   'describe' => 'It should fix path separators',
-   // @ simulate
-   // ...
-   // @ test
-   'test' => new Assertions(Case: function (): Generator
+return new Specification(
+   description: 'It should fix path separators',
+   test: new Assertions(Case: function (): Generator
    {
       $Path = new Path;
       // * Config
@@ -32,4 +29,4 @@ return [
             expected: '/home/bootgly/',
          );
    })
-];
+);

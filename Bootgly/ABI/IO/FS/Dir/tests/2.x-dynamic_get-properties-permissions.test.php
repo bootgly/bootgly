@@ -1,15 +1,12 @@
 <?php
 
 use Bootgly\ABI\IO\FS\Dir;
+use Bootgly\ACI\Tests\Suite\Test\Specification;
 
 
-return [
-   // @ configure
-   'describe' => '',
-   // @ simulate
-   // ...
-   // @ test
-   'test' => function () {
+return new Specification(
+   description: '',
+   test: function () {
       // @ Valid
       $Dir1 = new Dir(__DIR__);
       yield assert(
@@ -24,4 +21,4 @@ return [
          description: 'The /usr/sbin directory cannot have modified permissions!'
       );      
    }
-];
+);

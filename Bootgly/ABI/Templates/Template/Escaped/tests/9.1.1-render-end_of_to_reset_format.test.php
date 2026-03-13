@@ -1,15 +1,12 @@
 <?php
 
 use Bootgly\ABI\Templates\Template\Escaped;
+use Bootgly\ACI\Tests\Suite\Test\Specification;
 
 
-return [
-   // @ configure
-   'describe' => 'It should render reset character',
-   // @ simulate
-   // ...
-   // @ test
-   'test' => function () {
+return new Specification(
+   description: 'It should render reset character',
+   test: function () {
       // @ Valid
       $output = Escaped::render(
          <<<'TEMPLATE'
@@ -37,4 +34,4 @@ return [
       // @ Invalid
       // ...
    }
-];
+);

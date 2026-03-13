@@ -1,16 +1,14 @@
 <?php
 namespace Bootgly;
 
+use Bootgly\ACI\Tests\Suite\Test\Specification;
 use Bootgly\API\Project;
 use Bootgly\API\Projects;
 
-return [
-   // @ configure
-   'describe' => 'Test dynamic method: construct',
-   // @ simulate
-   // ...
-   // @ test
-   'test' => function () {
+
+return new Specification(
+   description: 'Test dynamic method: construct',
+   test: function () {
       // ! Project 1 instance
       $Project1 = new Project;
 
@@ -26,4 +24,4 @@ return [
          description: 'Failed to construct Project path 2'
       );
    }
-];
+);

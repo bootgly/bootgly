@@ -19,8 +19,11 @@ use function file_exists;
 use function function_exists;
 use Closure;
 
-use Bootgly\API\Environments;
 use Bootgly\ACI\Tests\Suite;
+use Bootgly\ACI\Tests\Suite\Test\Specification;
+use Bootgly\API\Environments;
+use Bootgly\API\Server\Handling;
+use Bootgly\API\Server\Middlewares;
 
 
 class Server
@@ -31,6 +34,7 @@ class Server
 
    // * Data
    public static Closure $Handler;
+   public static Middlewares $Middlewares;
    // # Tests
    public static Suite $Suite;
    /**
@@ -44,7 +48,7 @@ class Server
    // # Tests
    /**
     * Test Cases instances
-    * @var array<string,array<int|string,array<string,mixed>|Closure>>
+    * @var array<string,array<int|string,Specification|Closure|null>>
     */
    public static array $Tests;
 
@@ -53,6 +57,11 @@ class Server
       bool $reset = false, string $base = '', null|string $key = null
    ): bool
    {
+      // !
+      if (isSet(self::$Middlewares) === false) {
+         self::$Middlewares = new Middlewares;
+      }
+
       // * Data
       $key ??= self::$key;
       self::$key = $key;
@@ -71,7 +80,16 @@ class Server
 
             if (count(self::$Tests[$base]) > 0) {
                $test = array_shift(self::$Tests[$base]);
-               self::$Handler = $test[$key]; // @phpstan-ignore-line
+
+               if ($test instanceof Handling) {
+                  self::$Handler = $test->response;
+
+                  // @ Configure test middlewares
+                  self::$Middlewares = new Middlewares;
+                  if ($test->middlewares !== []) {
+                     self::$Middlewares->pipe(...$test->middlewares);
+                  }
+               }
             }
 
             return true;

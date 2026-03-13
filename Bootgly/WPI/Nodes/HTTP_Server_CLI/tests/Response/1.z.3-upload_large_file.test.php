@@ -1,32 +1,24 @@
 <?php
 
 use Bootgly\ABI\Debugging\Data\Vars;
-// SAPI
+use Bootgly\ACI\Tests\Suite\Test\Specification\Separator;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
-// CAPI?
-#use Bootgly\WPI\Nodes\HTTP\Client\Request;
-#use Bootgly\WPI\Nodes\HTTP\Client\Response;
-// TODO ?
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test\Specification;
 
-return [
-   // @ configure
-   'separator.line' => true,
 
-   'response.length' => 3101895,
+return new Specification(
+   Separator: new Separator(line: true),
 
-   // @ simulate
-   // Server API
-   'response' => function (Request $Request, Response $Response): Response {
-      return $Response->upload('statics/screenshot.gif', close: false);
-   },
-   // Client API
-   'request' => function () {
+   request: function () {
       return "GET /test/download/large_file/1 HTTP/1.0\r\n\r\n";
    },
+   response: function (Request $Request, Response $Response): Response {
+      return $Response->upload('statics/screenshot.gif', close: false);
+   },
+   responseLength: 3101895,
 
-   // @ test
-   'test' => function ($response) {
+   test: function ($response) {
       // ! Asserts
       // @ Assert length of response
       $expected = 3101895;
@@ -39,4 +31,4 @@ return [
 
       return true;
    }
-];
+);

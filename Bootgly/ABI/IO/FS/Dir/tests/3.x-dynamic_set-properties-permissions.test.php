@@ -1,15 +1,12 @@
 <?php
 
 use Bootgly\ABI\IO\FS\Dir;
+use Bootgly\ACI\Tests\Suite\Test\Specification;
 
 
-return [
-   // @ configure
-   'describe' => '',
-   // @ simulate
-   // ...
-   // @ test
-   'test' => function () {
+return new Specification(
+   description: '',
+   test: function () {
       // @ Valid
       $Dir1 = new Dir(__DIR__);
       $Dir1->permissions = 0750;
@@ -29,4 +26,4 @@ return [
          EOT
       );
    }
-];
+);

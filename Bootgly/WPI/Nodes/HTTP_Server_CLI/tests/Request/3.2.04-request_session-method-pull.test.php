@@ -2,13 +2,13 @@
 
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test\Specification;
 
-return [
-   // @ configure
-   'describe' => 'It should test Session pull method',
 
-   // @ simulate
-   'request' => function ($host) {
+return new Specification(
+   description: 'It should test Session pull method',
+
+   request: function ($host) {
       $request = <<<HTTP
       GET / HTTP/1.1\r
       Host: {$host}\r
@@ -17,7 +17,7 @@ return [
 
       return $request;
    },
-   'response' => function (Request $Request, Response $Response) {
+   response: function (Request $Request, Response $Response) {
       $Session = $Request->Session;
       $Session->set('pull_me', 'pulled');
       $val = $Session->pull('pull_me');
@@ -28,11 +28,10 @@ return [
       ]);
    },
 
-   // @ test
-   'test' => function ($response) {
+   test: function ($response) {
       $body = substr($response, strpos($response, "\r\n\r\n") + 4);
       $results = json_decode($body, true);
 
       return ($results['pulled'] ?? false) && ($results['gone'] ?? false);
    }
-];
+);

@@ -36,11 +36,13 @@ return new Suites(
 
       // Application Programming Interface (API)
       'Bootgly/API/',
+      'Bootgly/API/Server/',
 
       // Command Line Interface (CLI)
       'Bootgly/CLI/Commands/',
 
       // Web Programming Interface (WPI)
+      'Bootgly/WPI/Modules/HTTP/Server/Router/Middlewares/',
       'Bootgly/WPI/Nodes/HTTP_Server_CLI/',
    ]
 );

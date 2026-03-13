@@ -6,14 +6,12 @@ use Bootgly\ACI\Tests\Assertion\Auxiliaries\Op;
 use Bootgly\ACI\Tests\Assertion\Comparators\Identical;
 use Bootgly\ACI\Tests\Assertion;
 use Bootgly\ACI\Tests\Assertions;
+use Bootgly\ACI\Tests\Suite\Test\Specification;
 
-return [
-   // @ configure
-   'describe' => 'It should use assert API',
-   // @ simulate
-   // ...
-   // @ test
-   'test' => new Assertions(Case: function (): Generator
+
+return new Specification(
+   description: 'It should use assert API',
+   test: new Assertions(Case: function (): Generator
    {
       // expect (comparing values)
       yield new Assertion(
@@ -91,4 +89,4 @@ return [
          ->to->be(true)
          ->assert();
    })
-];
+);

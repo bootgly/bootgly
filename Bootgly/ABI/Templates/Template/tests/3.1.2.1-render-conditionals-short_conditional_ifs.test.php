@@ -1,15 +1,12 @@
 <?php
 
 use Bootgly\ABI\Templates\Template;
+use Bootgly\ACI\Tests\Suite\Test\Specification;
 
 
-return [
-   // @ configure
-   'describe' => 'It should render short conditional ifs: not empty',
-   // @ simulate
-   // ...
-   // @ test
-   'test' => function () {
+return new Specification(
+   description: 'It should render short conditional ifs: not empty',
+   test: function () {
       // @ Valid
       // Not Empty false
       $Template = new Template(
@@ -37,4 +34,4 @@ return [
       // @ Invalid
       // ...
    }
-];
+);

@@ -6,15 +6,12 @@ use Generator;
 use Bootgly\ABI\Data\__String\Path;
 use Bootgly\ACI\Tests\Assertion;
 use Bootgly\ACI\Tests\Assertions;
+use Bootgly\ACI\Tests\Suite\Test\Specification;
 
 
-return [
-   // @ configure
-   'describe' => 'It should return current part (base name)',
-   // @ simulate
-   // ...
-   // @ test
-   'test' => new Assertions(Case: function (): Generator
+return new Specification(
+   description: 'It should return current part (base name)',
+   test: new Assertions(Case: function (): Generator
    {
       // Relative paths
       $Path = new Path('etc');
@@ -109,4 +106,4 @@ return [
             expected: 'test',
          );
    })
-];
+);

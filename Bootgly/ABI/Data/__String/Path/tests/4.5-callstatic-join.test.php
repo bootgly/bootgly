@@ -2,15 +2,12 @@
 
 
 use Bootgly\ABI\Data\__String\Path;
+use Bootgly\ACI\Tests\Suite\Test\Specification;
 
 
-return [
-   // @ configure
-   'describe' => 'It should join path nodes',
-   // @ simulate
-   // ...
-   // @ test
-   'test' => function () {
+return new Specification(
+   description: 'It should join path nodes',
+   test: function () {
       $path = Path::join(['home', 'bootgly']);
       yield assert(
          assertion: $path === 'home/bootgly',
@@ -29,4 +26,4 @@ return [
          description: 'Path: ' . $path
       );
    }
-];
+);

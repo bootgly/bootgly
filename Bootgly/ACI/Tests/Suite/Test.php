@@ -69,20 +69,22 @@ class Test
    private string $elapsed;
    // @ Reporting
    private null|AssertionError $AssertionError;
+   // @ Retesting
+   private null|bool $retested = null;
 
 
    /**
     * Test Case constructor.
     * 
     * @param Suite $Suite Test Suite instance
-    * @param array<string,mixed> $specifications Test cases specifications
+    * @param Specification $Specification Test case specification
     */
-   public function __construct (Suite $Suite, array $specifications)
+   public function __construct (Suite $Suite, Specification $Specification)
    {
       $this->Suite = $Suite;
 
       // * Config
-      $this->Specification = new Specification($specifications);
+      $this->Specification = $Specification;
       // ...inherited:
       $this->descriptions = [
          $this->Specification->description ?? null
@@ -233,7 +235,7 @@ class Test
     */
    private function pretest (): bool
    {
-      $retested = $this->Specification->retested ?? null;
+      $retested = $this->retested ?? null;
 
       // @ Skip without output (used to skip with command arguments)
       if ($this->Specification->ignore ?? false) {
@@ -355,7 +357,7 @@ class Test
          if ($retest) {
             $this->Specification->test = $retest;
             $this->Specification->retest = null;
-            $this->Specification->retested = true;
+            $this->retested = true;
 
             $passed = $this->__get('passed');
             $arguments = [$test, $passed, ...$arguments];

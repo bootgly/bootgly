@@ -2,15 +2,12 @@
 
 
 use Bootgly\ABI\Data\__String\Path;
+use Bootgly\ACI\Tests\Suite\Test\Specification;
 
 
-return [
-   // @ configure
-   'describe' => 'It should construct combined',
-   // @ simulate
-   // ...
-   // @ test
-   'test' => function () {
+return new Specification(
+   description: 'It should construct combined',
+   test: function () {
       $Path = new Path;
       // * Config
       // @ convert
@@ -38,4 +35,4 @@ return [
          description: 'Fake path valid?!'
       );
    }
-];
+);

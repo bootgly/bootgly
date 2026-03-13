@@ -6,14 +6,12 @@ use stdClass;
 use Bootgly\ACI\Tests\Assertion;
 use Bootgly\ACI\Tests\Assertions;
 use Bootgly\ACI\Tests\Assertions\Hook;
+use Bootgly\ACI\Tests\Suite\Test\Specification;
 
-return [
-   // @ configure
-   'describe' => 'It should compare equal values',
-   // @ simulate
-   // ...
-   // @ test
-   'test' => new Assertions(Case: function (): Generator
+
+return new Specification(
+   description: 'It should compare equal values',
+   test: new Assertions(Case: function (): Generator
    {
       // boolean
       yield new Assertion(
@@ -76,4 +74,4 @@ return [
       {
          // do anything before each assertion
       })
-];
+);

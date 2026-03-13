@@ -2,15 +2,12 @@
 
 
 use Bootgly\ABI\Data\__String\Path;
+use Bootgly\ACI\Tests\Suite\Test\Specification;
 
 
-return [
-   // @ configure
-   'describe' => 'It should return path type',
-   // @ simulate
-   // ...
-   // @ test
-   'test' => function () {
+return new Specification(
+   description: 'It should return path type',
+   test: function () {
       // @
       // Valid
       $Path = new Path;
@@ -22,4 +19,4 @@ return [
          description: 'Return Path type: ' . $Path->type
       );
    }
-];
+);

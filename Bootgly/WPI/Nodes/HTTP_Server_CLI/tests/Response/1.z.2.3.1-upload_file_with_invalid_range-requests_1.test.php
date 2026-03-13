@@ -1,26 +1,17 @@
 <?php
 
 use Bootgly\ABI\Debugging\Data\Vars;
-// SAPI
+use Bootgly\ACI\Tests\Suite\Test\Specification\Separator;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
-// CAPI?
-#use Bootgly\WPI\Nodes\HTTP\Client\Request;
-#use Bootgly\WPI\Nodes\HTTP\Client\Response;
-// TODO ?
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test\Specification;
 
-return [
-   // @ configure
-   'describe' => 'It should return 416 status: negative range start `-5-10`',
-   'separator.left' => '.2.3 - Requests Range - Client - Single Part (Invalid)',
 
-   // @ simulate
-   // Server API
-   'response' => function (Request $Request, Response $Response): Response {
-      return $Response->upload('statics/alphanumeric.txt', close: false);
-   },
-   // Client API
-   'request' => function ($host) {
+return new Specification(
+   description: 'It should return 416 status: negative range start `-5-10`',
+   Separator: new Separator(left: '.2.3 - Requests Range - Client - Single Part (Invalid)'),
+
+   request: function ($host) {
       $raw = <<<HTTP_RAW
       GET /test/download/file_with_range/one_range/5 HTTP/1.1\r
       Host: {$host}\r
@@ -31,9 +22,11 @@ return [
 
       return $raw;
    },
+   response: function (Request $Request, Response $Response): Response {
+      return $Response->upload('statics/alphanumeric.txt', close: false);
+   },
 
-   // @ test
-   'test' => function ($response) {
+   test: function ($response) {
       $expected = <<<HTML_RAW
       HTTP/1.1 416 Range Not Satisfiable\r
       Server: Bootgly\r
@@ -52,4 +45,4 @@ return [
 
       return true;
    }
-];
+);

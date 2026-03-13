@@ -1,16 +1,14 @@
 <?php
 namespace Bootgly;
 
+use Bootgly\ACI\Tests\Suite\Test\Specification;
 use Bootgly\API\Project;
 use Bootgly\API\Projects;
 
-return [
-   // @ Configure
-   'describe' => 'Get project path by index',
-   // @ Simulate
-   // ...
-   // @ Test
-   'test' => function () {
+
+return new Specification(
+   description: 'Get project path by index',
+   test: function () {
       // ! Project 1 instance
       $Project1 = new Project;
 
@@ -23,4 +21,4 @@ return [
          description: 'Failed to get Project path 1'
       );
    }
-];
+);

@@ -21,6 +21,8 @@ use Generator;
 use Bootgly\ABI\Data\__String\Path;
 use Bootgly\ABI\IO\FS\File;
 use const Bootgly\WPI;
+use Bootgly\API\Server\Middleware;
+use Bootgly\API\Server\Middlewares;
 use Bootgly\WPI\Modules\HTTP\Server\Route;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 
@@ -33,6 +35,9 @@ class Router
    // * Data
    // @ Status
    protected bool $active;
+   // @ Middleware
+   /** @var array<Middleware> */
+   private array $middlewares = [];
 
    // * Metadata
    public Route $Route;
@@ -116,18 +121,35 @@ class Router
 
    // @ default
    /**
+    * Register middlewares for the current route group.
+    *
+    * @param Middleware $middlewares The middlewares to register.
+    *
+    * @return void
+    */
+   public function intercept (Middleware ...$middlewares): void
+   {
+      // @
+      foreach ($middlewares as $middleware) {
+         $this->middlewares[] = $middleware;
+      }
+   }
+
+   /**
     * Route a path to a handler.
     *
     * @param string $route The route path.
     * @param callable $handler The handler to call.
     * @param null|string|array<string> $methods The methods to match.
+    * @param array<Middleware> $middlewares The middlewares to apply.
     *
     * @return false|object
     */
    public function route (
       string $route,
       callable $handler,
-      null|string|array $methods = null
+      null|string|array $methods = null,
+      array $middlewares = []
    ): false|object
    {
       // !
@@ -195,24 +217,57 @@ class Router
          }
 
          // @ Call
+         // # Merge route-level + group-level middlewares
+         $merged = \array_merge($this->middlewares, $middlewares);
+
          if ($handler instanceof Closure) {
             $handler = $handler->bindTo($Route, $Route);
 
-            $Response = $handler(
-               WPI->Request,
-               WPI->Response
-            );
-         }
-         else {
-            /** @var Response|Generator */
-            $Response = call_user_func_array(
-               callback: $handler,
-               args: [
+            if ($merged !== []) {
+               $Pipeline = new Middlewares;
+               $Pipeline->pipe(...$merged);
+               $Response = $Pipeline->process(
                   WPI->Request,
                   WPI->Response,
-                  $Route
-               ]
-            );
+                  function (object $Request, object $Response) use ($handler): mixed {
+                     return $handler($Request, $Response);
+                  }
+               );
+            }
+            else {
+               $Response = $handler(
+                  WPI->Request,
+                  WPI->Response
+               );
+            }
+         }
+         else {
+            if ($merged !== []) {
+               $Pipeline = new Middlewares;
+               $Pipeline->pipe(...$merged);
+               /** @var Response|Generator */
+               $Response = $Pipeline->process(
+                  WPI->Request,
+                  WPI->Response,
+                  function (object $Request, object $Response) use ($handler, $Route): mixed {
+                     return call_user_func_array(
+                        callback: $handler,
+                        args: [$Request, $Response, $Route]
+                     );
+                  }
+               );
+            }
+            else {
+               /** @var Response|Generator */
+               $Response = call_user_func_array(
+                  callback: $handler,
+                  args: [
+                     WPI->Request,
+                     WPI->Response,
+                     $Route
+                  ]
+               );
+            }
          }
 
          // @ Log
@@ -243,6 +298,8 @@ class Router
          if ($Response instanceof Generator) {
             $this->Route->nested = true;
             yield from $this->routing($Response);
+            // @ Reset group middlewares on group exit
+            $this->middlewares = [];
             break;
          }
          else if ($Response !== false) {

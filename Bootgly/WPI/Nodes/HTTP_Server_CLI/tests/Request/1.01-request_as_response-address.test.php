@@ -1,31 +1,25 @@
 <?php
+
 use Bootgly\ABI\Debugging\Data\Vars;
-// SAPI
+use Bootgly\ACI\Tests\Suite\Test\Specification\Separator;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
-// CAPI?
-#use Bootgly\WPI\Nodes\HTTP\Client\Request;
-#use Bootgly\WPI\Nodes\HTTP\Client\Response;
-// TODO ?
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test\Specification;
 
-return [
-   // @ configure
-   'separator.line' => 'Request',
 
-   // @ simulate
-   // Client API
-   'request' => function () {
+return new Specification(
+   Separator: new Separator(line: 'Request'),
+
+   request: function () {
       // return $Request->get('/');
       return "GET / HTTP/1.0\r\n\r\n";
    },
-   // Server API
-   'response' => function (Request $Request, Response $Response): Response {
+   response: function (Request $Request, Response $Response): Response {
       $address = $Request->address;
       return $Response(body: $address);
    },
 
-   // @ test
-   'test' => function ($response) {
+   test: function ($response) {
       /*
       return $Response->status === '200 OK'
       && $Response->body === '127.0.0.1';
@@ -49,4 +43,4 @@ return [
 
       return true;
    }
-];
+);

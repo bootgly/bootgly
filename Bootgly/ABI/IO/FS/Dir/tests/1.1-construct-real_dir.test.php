@@ -1,15 +1,12 @@
 <?php
 
 use Bootgly\ABI\IO\FS\Dir;
+use Bootgly\ACI\Tests\Suite\Test\Specification;
 
 
-return [
-   // @ configure
-   'describe' => '',
-   // @ simulate
-   // ...
-   // @ test
-   'test' => function () {
+return new Specification(
+   description: '',
+   test: function () {
       // @ Valid
       // absolute real base to real dir
       $Dir10 = new Dir(__DIR__);
@@ -52,4 +49,4 @@ return [
          description: 'Invalid Dir #3.1 (absolute fake base to real dir): ' . $Dir31
       );
    }
-];
+);

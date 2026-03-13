@@ -5,14 +5,12 @@ use Generator;
 use Bootgly\ACI\Tests\Assertion\Expectations\Finders\EndsWith;
 use Bootgly\ACI\Tests\Assertion;
 use Bootgly\ACI\Tests\Assertions;
+use Bootgly\ACI\Tests\Suite\Test\Specification;
 
-return [
-   // @ configure
-   'describe' => 'It should compare using the finder "End"',
-   // @ simulate
-   // ...
-   // @ test
-   'test' => new Assertions(Case: function (): Generator
+
+return new Specification(
+   description: 'It should compare using the finder "End"',
+   test: new Assertions(Case: function (): Generator
    {
       // string
       yield new Assertion(
@@ -24,4 +22,4 @@ return [
             expected: new EndsWith('World!'),
          );
    })
-];
+);

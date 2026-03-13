@@ -2,15 +2,12 @@
 
 
 use Bootgly\ABI\Data\__String\Path;
+use Bootgly\ACI\Tests\Suite\Test\Specification;
 
 
-return [
-   // @ configure
-   'describe' => 'It should return root dir',
-   // @ simulate
-   // ...
-   // @ test
-   'test' => function () {
+return new Specification(
+   description: 'It should return root dir',
+   test: function () {
       // @
       // ! Dir
       // ? Absolute
@@ -81,4 +78,4 @@ return [
          description: 'Path #34 - root: ' . $Path->root
       );
    }
-];
+);

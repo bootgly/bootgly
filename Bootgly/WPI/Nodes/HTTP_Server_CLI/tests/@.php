@@ -156,6 +156,28 @@ return new Suite(
          '4.2-route_group-parameterized',
          // Route Catch-All
          '5.1-route_catch_all-generic',
+      ],
+      'Middleware/' => [
+         // CORS
+         '1.1-middleware-cors',
+         '1.2-middleware-cors_preflight',
+         // SecureHeaders
+         '2.1-middleware-secure_headers',
+         // RequestId
+         '3.1-middleware-request_id',
+         '3.2-middleware-request_id_preserved',
+         // ETag
+         '4.1-middleware-etag',
+         '4.2-middleware-etag_304',
+         // Compression
+         '5.1-middleware-compression',
+         // BodyParser
+         '6.1-middleware-body_parser',
+         '6.2-middleware-body_parser_413',
+         // RateLimit
+         '7.1-middleware-rate_limit',
+         // TrustedProxy
+         '8.1-middleware-trusted_proxy',
       ]
    ]
 );

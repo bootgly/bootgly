@@ -1,21 +1,16 @@
 <?php
 
 use Bootgly\ABI\Debugging\Data\Vars;
-// SAPI
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
-// CAPI?
-#use Bootgly\WPI\Nodes\HTTP\Client\Request;
-#use Bootgly\WPI\Nodes\HTTP\Client\Response;
-// TODO ?
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test\Specification;
 
-return [
-   // @ configure
-   'describe' => 'It should be stale when none matches',
-   // @ simulate
-   // Client API
-   'request' => function () {
-      // ...
+
+return new Specification(
+   description: 'It should be stale when none matches',
+
+   request: function () {
+
       return
       <<<HTTP
       GET / HTTP/1.1\r
@@ -27,8 +22,7 @@ return [
       \r\n\r\n
       HTTP;
    },
-   // Server API
-   'response' => function (Request $Request, Response $Response): Response {
+   response: function (Request $Request, Response $Response): Response {
       $Response->Header->set('Last-Modified', 'Fri, 14 Jul 2023 12:00:00 GMT');
       $Response->Header->set('ETag', '"foo"');
 
@@ -39,8 +33,7 @@ return [
       }
    },
 
-   // @ test
-   'test' => function ($response) {
+   test: function ($response) {
       $expected = <<<HTML_RAW
       HTTP/1.1 200 OK\r
       Server: Bootgly\r
@@ -61,4 +54,4 @@ return [
 
       return true;
    }
-];
+);

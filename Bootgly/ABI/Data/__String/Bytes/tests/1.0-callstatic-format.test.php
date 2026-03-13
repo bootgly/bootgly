@@ -1,15 +1,12 @@
 <?php
 
 use Bootgly\ABI\Data\__String\Bytes;
+use Bootgly\ACI\Tests\Suite\Test\Specification;
 
 
-return [
-   // @ configure
-   'describe' => '',
-   // @ simulate
-   // ...
-   // @ test
-   'test' => function () {
+return new Specification(
+   description: '',
+   test: function () {
       // @ Valid
       // bytes
       $bytes = Bytes::format(512, 2);
@@ -49,4 +46,4 @@ return [
       // @ Invalid
       // ...
    }
-];
+);

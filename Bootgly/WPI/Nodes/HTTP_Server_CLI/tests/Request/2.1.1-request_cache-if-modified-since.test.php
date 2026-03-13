@@ -1,22 +1,18 @@
 <?php
 
 use Bootgly\ABI\Debugging\Data\Vars;
-// SAPI
+use Bootgly\ACI\Tests\Suite\Test\Specification\Separator;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
-// CAPI?
-#use Bootgly\WPI\Nodes\HTTP\Client\Request;
-#use Bootgly\WPI\Nodes\HTTP\Client\Response;
-// TODO ?
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test\Specification;
 
-return [
-   // @ configure
-   'describe' => 'It should return stale when modified since the date',
-   'separator.left' => 'HTTP/1.1 Caching Specification (RFC 7234)',
-   // @ simulate
-   // Client API
-   'request' => function () {
-      // ...
+
+return new Specification(
+   description: 'It should return stale when modified since the date',
+   Separator: new Separator(left: 'HTTP/1.1 Caching Specification (RFC 7234)'),
+
+   request: function () {
+
       return
       <<<HTTP
       GET / HTTP/1.1\r
@@ -27,8 +23,7 @@ return [
       \r\n\r\n
       HTTP;
    },
-   // Server API
-   'response' => function (Request $Request, Response $Response): Response {
+   response: function (Request $Request, Response $Response): Response {
       $Response->Header->set('Last-Modified', 'Fri, 14 Jul 2023 10:00:00 GMT');
 
       if ($Request->fresh) {
@@ -39,8 +34,7 @@ return [
       }
    },
 
-   // @ test
-   'test' => function ($response) {
+   test: function ($response) {
       $expected = <<<HTML_RAW
       HTTP/1.1 200 OK\r
       Server: Bootgly\r
@@ -60,4 +54,4 @@ return [
 
       return true;
    }
-];
+);

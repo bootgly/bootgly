@@ -1,15 +1,12 @@
 <?php
 
 use Bootgly\ABI\IO\FS\File;
+use Bootgly\ACI\Tests\Suite\Test\Specification;
 
 
-return [
-   // @ configure
-   'describe' => '',
-   // @ simulate
-   // ...
-   // @ test
-   'test' => function () {
+return new Specification(
+   description: '',
+   test: function () {
       // @ Valid
       $File1 = new File('/bin/sh');
       yield assert(
@@ -31,4 +28,4 @@ return [
          description: 'File #3 - fake file - link should be null'
       );
    }
-];
+);

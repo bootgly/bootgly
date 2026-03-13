@@ -2,15 +2,12 @@
 
 
 use Bootgly\ABI\Data\__String\Path;
+use Bootgly\ACI\Tests\Suite\Test\Specification;
 
 
-return [
-   // @ configure
-   'describe' => 'It should return true if path is relative',
-   // @ simulate
-   // ...
-   // @ test
-   'test' => function () {
+return new Specification(
+   description: 'It should return true if path is relative',
+   test: function () {
       // @
       // Valid - relative
       $Path = new Path('www/bootgly/index.php');
@@ -25,4 +22,4 @@ return [
          description: 'Path is absolute!'
       );
    }
-];
+);

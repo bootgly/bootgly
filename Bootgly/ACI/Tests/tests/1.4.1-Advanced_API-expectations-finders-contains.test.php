@@ -5,14 +5,12 @@ use Generator;
 use Bootgly\ACI\Tests\Assertion\Expectations\Finders\Contains;
 use Bootgly\ACI\Tests\Assertion;
 use Bootgly\ACI\Tests\Assertions;
+use Bootgly\ACI\Tests\Suite\Test\Specification;
 
-return [
-   // @ configure
-   'describe' => 'It should compare using the finder "Contain"',
-   // @ simulate
-   // ...
-   // @ test
-   'test' => new Assertions(Case: function (): Generator
+
+return new Specification(
+   description: 'It should compare using the finder "Contain"',
+   test: new Assertions(Case: function (): Generator
    {
       // string
       yield new Assertion(
@@ -45,5 +43,5 @@ return [
             actual: $object,
             expected: new Contains('property'),
          );
-   }),
-];
+   })
+);

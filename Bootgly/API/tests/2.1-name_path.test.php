@@ -2,17 +2,14 @@
 namespace Bootgly;
 
 use Bootgly\ACI\Tests\Assertion;
-
+use Bootgly\ACI\Tests\Suite\Test\Specification;
 use Bootgly\API\Project;
 use Bootgly\API\Projects;
 
-return [
-   // @ Configure
-   'describe' => 'Naming and selecting project by name',
-   // @ Simulate
-   // ...
-   // @ Test
-   'test' => function () {
+
+return new Specification(
+   description: 'Naming and selecting project by name',
+   test: function () {
       $Project1 = new Project;
 
       // @ Construct
@@ -35,4 +32,4 @@ return [
             expected: Projects::CONSUMER_DIR . 'Bootgly/CLI/',
          );
    }
-];
+);

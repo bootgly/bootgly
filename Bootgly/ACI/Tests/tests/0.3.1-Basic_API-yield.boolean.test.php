@@ -2,14 +2,12 @@
 
 use Generator;
 use Bootgly\ACI\Tests\Assertion;
+use Bootgly\ACI\Tests\Suite\Test\Specification;
 
-return [
-   // @ configure
-   'describe' => 'It should assert returning true (with yield)',
-   // @ simulate
-   // ...
-   // @ test
-   'test' => function (): Generator
+
+return new Specification(
+   description: 'It should assert returning true (with yield)',
+   test: function (): Generator
    {
       yield true === true;
 
@@ -25,4 +23,4 @@ return [
          yield true;
       }
    }
-];
+);

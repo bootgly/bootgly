@@ -2,15 +2,12 @@
 
 
 use Bootgly\ABI\Data\__String\Path;
+use Bootgly\ACI\Tests\Suite\Test\Specification;
 
 
-return [
-   // @ configure
-   'describe' => 'It should cut path nodes',
-   // @ simulate
-   // ...
-   // @ test
-   'test' => function () {
+return new Specification(
+   description: 'It should cut path nodes',
+   test: function () {
       // @
       // Valid
       // Negative (absolute dir)
@@ -65,4 +62,4 @@ return [
       $cutted04 = Path::cut('/var/www/html/test/', -3, 1);
       yield assert($cutted04 === '', "Cut #0.4 wrong: @; $cutted04");
    }
-];
+);

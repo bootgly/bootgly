@@ -1,34 +1,25 @@
 <?php
 
 use Bootgly\ABI\Debugging\Data\Vars;
-// SAPI
+use Bootgly\ACI\Tests\Suite\Test\Specification\Separator;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
-// CAPI?
-#use Bootgly\WPI\Nodes\HTTP\Client\Request;
-#use Bootgly\WPI\Nodes\HTTP\Client\Response;
-// TODO ?
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test\Specification;
 
-return [
-   // @ configure
-   'separator.line' => true,
-   'separator.left' => '.2.1 - Requests Range - Dev',
 
-   'response.length' => 301,
+return new Specification(
+   Separator: new Separator(left: '.2.1 - Requests Range - Dev'),
 
-   // @ simulate
-   // Server API
-   'response' => function (Request $Request, Response $Response): Response {
-      return $Response->upload('statics/alphanumeric.txt', offset: 0, length: 2, close: false);
-   },
-   // Client API
-   'request' => function () {
+   request: function () {
       // return $Request->get('//header/changed/1');
       return "GET /test/download/file_with_offset_length/1 HTTP/1.0\r\n\r\n";
    },
+   response: function (Request $Request, Response $Response): Response {
+      return $Response->upload('statics/alphanumeric.txt', offset: 0, length: 2, close: false);
+   },
+   responseLength: 301,
 
-   // @ test
-   'test' => function ($response) {
+   test: function ($response) {
       if (preg_match('/Last-Modified: (.*)\r\n/i', $response, $matches)) {
          $lastModified = $matches[1];
       } else {
@@ -57,4 +48,4 @@ return [
 
       return true;
    }
-];
+);

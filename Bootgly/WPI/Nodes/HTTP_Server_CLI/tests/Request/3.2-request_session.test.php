@@ -1,17 +1,16 @@
 <?php
 
+use Bootgly\ACI\Tests\Suite\Test\Specification\Separator;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test\Specification;
 
 
-return [
-   // @ configure
-   'describe' => 'It should start a session and persist data',
-   'separator.left' => 'Session',
+return new Specification(
+   description: 'It should start a session and persist data',
+   Separator: new Separator(left: 'Session'),
 
-
-   // @ simulate
-   'request' => function ($host) {
+   request: function ($host) {
       $request = <<<HTTP
       GET / HTTP/1.1\r
       Host: {$host}\r
@@ -20,7 +19,7 @@ return [
 
       return $request;
    },
-   'response' => function (Request $Request, Response $Response) {
+   response: function (Request $Request, Response $Response) {
       $Session = $Request->Session;
       $Session->set('foo', 'bar');
 
@@ -28,8 +27,7 @@ return [
          ->send($Session->get('foo'));
    },
 
-   // @ test
-   'test' => function ($response) {
+   test: function ($response) {
       // @ Verify Set-Cookie header
       if (strpos($response, 'Set-Cookie: PHPSID=') === false) {
          return false;
@@ -42,4 +40,4 @@ return [
 
       return true;
    }
-];
+);

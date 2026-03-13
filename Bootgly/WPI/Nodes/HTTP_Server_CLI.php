@@ -11,18 +11,17 @@
 namespace Bootgly\WPI\Nodes;
 
 
-use function count;
 use function function_exists;
 use function opcache_invalidate;
 use function clearstatcache;
 use Exception;
 use Throwable;
-use Closure;
 
 use Bootgly\ABI\Debugging\Data\Throwables\Exceptions;
 use Bootgly\ABI\IO\FS\File;
 use Bootgly\ACI\Logs\Logger;
 use Bootgly\ACI\Tests\Suite;
+use Bootgly\ACI\Tests\Suite\Test\Specification;
 use Bootgly\API\Environments;
 use Bootgly\API\Projects;
 use Bootgly\API\Server as SAPI;
@@ -212,14 +211,16 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
          }
 
          try {
-            /** @var array<string,mixed>|null $test */
+            /** @var Specification|null $test */
             $test = require $Test_Case_File;
          }
          catch (Throwable) {
             $test = null;
          }
 
-         $test['case.number'] = $index + 1;
+         if ($test instanceof Specification) {
+            $test->index(case: $index + 1);
+         }
          SAPI::$Tests[self::class][] = $test;
          SAPI::$tests[self::class][] = $case;
       }
@@ -254,24 +255,25 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
             // !
             $testFiles = SAPI::$tests[self::class] ?? [];
             foreach ($testFiles as $index => $value) {
-               /** @var array<string,mixed>|null $test */
+               /** @var Specification|null $test */
                $test = SAPI::$Tests[self::class][$index] ?? null;
-               $test['case'] = $test['case.number'] ?? ((int) $index + 1);
+               if ($test instanceof Specification) {
+                  $test->index(case: $test->case ?? ((int) $index + 1));
+               }
                // @ Init Test
+               $Suite->case = $test->case ?? ((int) $index + 1);
 
                $Test = $Suite->test($test);
-               if ($Test === null || !is_array($test) || count($test) < 3) {
+               if ($Test === null || !($test instanceof \Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test\Specification)) {
                   $Suite->skip();
                   continue;
                }
 
                // ! Server
-               $responseLength = @$test['response.length'] ?? null;
+               $responseLength = $test->responseLength;
                // ! Client
                // ? Request
-               $requestData = ($test['request'] instanceof Closure)
-                  ? $test['request']("{$TCP_Client_CLI->host}:{$TCP_Client_CLI->port}")
-                  : '';
+               $requestData = ($test->request)("{$TCP_Client_CLI->host}:{$TCP_Client_CLI->port}");
                $requestLength = strlen($requestData);
                // @ Send Request to Server
                $Connection::$output = $requestData;

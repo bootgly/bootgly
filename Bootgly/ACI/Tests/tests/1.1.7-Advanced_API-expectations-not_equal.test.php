@@ -6,14 +6,12 @@ use stdClass;
 use Bootgly\ACI\Tests\Assertion\Auxiliaries\Op;
 use Bootgly\ACI\Tests\Assertion;
 use Bootgly\ACI\Tests\Assertions;
+use Bootgly\ACI\Tests\Suite\Test\Specification;
 
-return [
-   // @ configure
-   'describe' => 'It should compare not equal',
-   // @ simulate
-   // ...
-   // @ test
-   'test' => new Assertions(Case: function (): Generator
+
+return new Specification(
+   description: 'It should compare not equal',
+   test: new Assertions(Case: function (): Generator
    {
       // boolean
       yield new Assertion(
@@ -66,4 +64,4 @@ return [
          ->expect($object1, Op::NotEqual, $object2)
          ->assert();
    })
-];
+);

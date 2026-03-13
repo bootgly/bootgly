@@ -5,15 +5,14 @@ use StdClass;
 
 use Bootgly\ACI\Tests\Assertion;
 use Bootgly\ACI\Tests\Assertions;
+use Bootgly\ACI\Tests\Suite\Test\Specification;
+use Bootgly\ACI\Tests\Suite\Test\Specification\Separator;
 
-return [
-   // @ configure
-   'separator.line' => 'Advanced API',
-   'describe' => 'It should handle API',
-   // @ simulate
-   // ...
-   // @ test
-   'test' => new Assertions(Case: function (): Generator
+
+return new Specification(
+   Separator: new Separator(line: 'Advanced API'),
+   description: 'It should handle API',
+   test: new Assertions(Case: function (): Generator
    {
       $Assertion = new Assertion(
          description: 'Cannot access private `asserted` property',
@@ -35,4 +34,4 @@ return [
          );
       }
    })
-];
+);

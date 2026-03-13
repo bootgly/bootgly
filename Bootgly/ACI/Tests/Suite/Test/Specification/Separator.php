@@ -17,4 +17,16 @@ class Separator
    public null|bool|string $line = null;
    public null|string $left = null;
    public null|string $header = null;
+
+
+   public function __construct (
+      null|bool|string $line = null,
+      null|string $left = null,
+      null|string $header = null
+   )
+   {
+      $this->line = $line;
+      $this->left = $left;
+      $this->header = $header;
+   }
 }

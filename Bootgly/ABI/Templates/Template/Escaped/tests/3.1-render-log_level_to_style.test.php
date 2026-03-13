@@ -1,15 +1,12 @@
 <?php
 
 use Bootgly\ABI\Templates\Template\Escaped;
+use Bootgly\ACI\Tests\Suite\Test\Specification;
 
 
-return [
-   // @ configure
-   'describe' => 'It should render log levels to style',
-   // @ simulate
-   // ...
-   // @ test
-   'test' => function () {
+return new Specification(
+   description: 'It should render log levels to style',
+   test: function () {
       // @ Valid
       $output = Escaped::render(
          <<<'TEMPLATE'
@@ -27,4 +24,4 @@ return [
       // @ Invalid
       // ...
    }
-];
+);

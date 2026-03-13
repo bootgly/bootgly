@@ -1,15 +1,12 @@
 <?php
 
 use Bootgly\ABI\IO\FS\Dir;
+use Bootgly\ACI\Tests\Suite\Test\Specification;
 
 
-return [
-   // @ configure
-   'describe' => '',
-   // @ simulate
-   // ...
-   // @ test
-   'test' => function () {
+return new Specification(
+   description: '',
+   test: function () {
       // @ Valid
       $Dir1 = new Dir(__DIR__);
       $pathnames = $Dir1->scan(recursive: false);
@@ -23,4 +20,4 @@ return [
          description: 'Scanned dir paths[-1]: ' . $pathnames[$paths]
       );      
    }
-];
+);

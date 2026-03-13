@@ -5,15 +5,12 @@ use Generator;
 use Bootgly\ABI\Data\__String\Path;
 use Bootgly\ACI\Tests\Assertion;
 use Bootgly\ACI\Tests\Assertions;
+use Bootgly\ACI\Tests\Suite\Test\Specification;
 
 
-return [
-   // @ configure
-   'describe' => 'It should return path parts',
-   // @ simulate
-   // ...
-   // @ test
-   'test' => new Assertions(Case: function (): Generator
+return new Specification(
+   description: 'It should return path parts',
+   test: new Assertions(Case: function (): Generator
    {
       // Valid
       $Path = new Path('/var/www/bootgly/index.php');
@@ -26,4 +23,4 @@ return [
             expected: ['var', 'www', 'bootgly', 'index.php'],
          );
    })
-];
+);

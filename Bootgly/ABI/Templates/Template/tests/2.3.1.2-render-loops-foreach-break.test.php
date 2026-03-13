@@ -1,15 +1,12 @@
 <?php
 
 use Bootgly\ABI\Templates\Template;
+use Bootgly\ACI\Tests\Suite\Test\Specification;
 
 
-return [
-   // @ configure
-   'describe' => 'It should render loops: foreach (with break)',
-   // @ simulate
-   // ...
-   // @ test
-   'test' => function () {
+return new Specification(
+   description: 'It should render loops: foreach (with break)',
+   test: function () {
       // @ Valid
       // with break
       $Template = new Template(
@@ -41,4 +38,4 @@ return [
       // @ Invalid
       // ...
    }
-];
+);

@@ -1,32 +1,24 @@
 <?php
+
 use Bootgly\ABI\Debugging\Data\Vars;
-// SAPI
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
-// CAPI?
-#use Bootgly\WPI\Nodes\HTTP\Client\Request;
-#use Bootgly\WPI\Nodes\HTTP\Client\Response;
-// TODO ?
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test\Specification;
 
-return [
-   // @ configure
 
-   // @ simulate
-   // Client API
-   'request' => function ()
+return new Specification(
+   request: function ()
    {
       // return $Request->get('/test/foo?query=abc&query2=xyz');
       return "GET /test/foo?query=abc&query2=xyz HTTP/1.1\r\n\r\n";
    },
-   // Server API
-   'response' => function (Request $Request, Response $Response): Response
+   response: function (Request $Request, Response $Response): Response
    {
       $URL = $Request->URL;
       return $Response(body: $URL);
    },
 
-   // @ test
-   'test' => function ($response)
+   test: function ($response)
    {
       $expected = <<<HTML_RAW
       HTTP/1.1 200 OK\r
@@ -46,4 +38,4 @@ return [
 
       return true;
    }
-];
+);

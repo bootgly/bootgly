@@ -6,14 +6,12 @@ use Generator;
 use Bootgly\ACI\Tests\Assertion\Expectations\Matchers\VariadicDirPath;
 use Bootgly\ACI\Tests\Assertion;
 use Bootgly\ACI\Tests\Assertions;
+use Bootgly\ACI\Tests\Suite\Test\Specification;
 
-return [
-   // @ configure
-   'describe' => 'It should compare using the matcher "VariadicDirPath"',
-   // @ simulate
-   // ...
-   // @ test
-   'test' => new Assertions(Case: function (): Generator
+
+return new Specification(
+   description: 'It should compare using the matcher "VariadicDirPath"',
+   test: new Assertions(Case: function (): Generator
    {
       // Path
       $Path = new Path('/etc/php/');
@@ -25,5 +23,5 @@ return [
             actual: (string) $Path,
             expected: new VariadicDirPath('/etc/php/8.*'),
          );
-   }),
-];
+   })
+);
