@@ -35,16 +35,19 @@ trait Behaviors
    {
       $namespace = Behaviors::class;
 
-      if ($expected instanceof Type || $expected instanceof Value) {
-         $class = $expected->name;
+      if ($expected instanceof Type) {
          /** @var Asserting $Behavior */
-         $Behavior = new ("{$namespace}\Type{$class}");
+         $Behavior = new ("{$namespace}\Type{$expected->name}");
+      }
+      else if ($expected instanceof Value) {
+         /** @var Asserting $Behavior */
+         $Behavior = new ("{$namespace}\Value{$expected->name}");
       }
 
       $this->push(match (true) {
          $expected instanceof Type,
          $expected instanceof Value
-            => $Behavior,
+            => $Behavior, // @phpstan-ignore variable.undefined
 
          $expected instanceof Asserting
             => $expected,
