@@ -41,6 +41,7 @@ trait Behaviors
       }
       else if ($expected instanceof Value) {
          /** @var Asserting $Behavior */
+         /** @phpstan-ignore-next-line */
          $Behavior = new ("{$namespace}\Value{$expected->name}");
       }
 
