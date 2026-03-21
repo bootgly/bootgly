@@ -27,8 +27,8 @@ return new Specification(
       HTTP/1.1 401 Unauthorized\r
       Server: Bootgly\r
       WWW-Authenticate: Basic realm="Protected area"\r
-      Content-Length: 18\r
       Content-Type: text/html; charset=UTF-8\r
+      Content-Length: 18\r
       \r
       Unauthorized page!
       HTML_RAW;

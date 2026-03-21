@@ -14,7 +14,7 @@ namespace Bootgly\WPI\Interfaces\TCP_Server_CLI;
 use function explode;
 use function stream_set_blocking;
 #use function stream_set_chunk_size;
-#use function stream_set_read_buffer;
+use function stream_set_read_buffer;
 use function stream_set_timeout;
 #use function stream_set_write_buffer;
 use function stream_socket_accept;
@@ -131,6 +131,8 @@ class Connections implements WPI\Connections
          stream_set_timeout($Socket, 0);
 
          stream_set_blocking($Socket, false); // +15% performance
+
+         stream_set_read_buffer($Socket, 0);
 
          #stream_set_chunk_size($Socket, 65535);
 

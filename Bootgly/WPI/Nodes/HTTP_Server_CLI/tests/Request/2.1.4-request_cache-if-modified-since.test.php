@@ -36,8 +36,8 @@ return new Specification(
       HTTP/1.1 200 OK\r
       Server: Bootgly\r
       Last-Modified: Fri, 14 Jul 2023 10:00:00 GMT\r
-      Content-Length: 4\r
       Content-Type: text/html; charset=UTF-8\r
+      Content-Length: 4\r
       \r
       test
       HTML_RAW;

@@ -29,8 +29,8 @@ return new Specification(
       Content-Security-Policy: default-src 'self'\r
       Permissions-Policy: camera=(), microphone=(), geolocation=()\r
       Strict-Transport-Security: max-age=31536000; includeSubDomains\r
-      Content-Length: 7\r
       Content-Type: text/html; charset=UTF-8\r
+      Content-Length: 7\r
       \r
       Secure!
       HTML_RAW;

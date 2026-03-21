@@ -27,8 +27,8 @@ return new Specification(
       $expected = <<<HTML_RAW
       HTTP/1.1 200 OK\r
       Server: Bootgly\r
-      Content-Length: 22\r
       Content-Type: text/html; charset=UTF-8\r
+      Content-Length: 22\r
       \r
       Multiple HTTP methods!
       HTML_RAW;

@@ -37,6 +37,7 @@ _*.test.php
 
 #-- /resources --#
 /vendor/
+/tmp/
 
 #- /public
 /public/*
@@ -52,6 +53,7 @@ _*.test.php
 /workdata/@*/
 # Ignore known folders
 /workdata/cache/*
+/workdata/pids/*
 /workdata/logs/*
 /workdata/temp/*
 /workdata/tests/*

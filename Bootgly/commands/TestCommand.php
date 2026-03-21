@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace projects\Bootgly\CLI\commands;
+namespace Bootgly\commands;
 
 
 use Closure;

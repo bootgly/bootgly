@@ -14,6 +14,7 @@ namespace Bootgly\WPI\Interfaces\TCP_Server_CLI;
 use const LOCK_EX;
 use const LOCK_UN;
 use const SIGALRM;
+use const SIGCHLD;
 use const SIGCONT;
 use const SIGHUP;
 use const SIGINT;
@@ -25,6 +26,8 @@ use const SIGTERM;
 use const SIGTSTP;
 use const SIGUSR1;
 use const SIGUSR2;
+use const WNOHANG;
+use function array_search;
 use function clearstatcache;
 use function cli_get_process_title;
 use function cli_set_process_title;
@@ -35,15 +38,20 @@ use function file;
 use function file_put_contents;
 use function flock;
 use function fopen;
+use function is_dir;
 use function is_file;
+use function json_encode;
+use function mkdir;
 use function pcntl_fork;
 use function pcntl_signal;
 use function pcntl_signal_dispatch;
+use function pcntl_waitpid;
 use function posix_getpid;
 use function posix_getpwuid;
 use function posix_getuid;
 use function posix_kill;
 use function rtrim;
+use function time;
 use function unlink;
 use function usleep;
 use Exception;
@@ -52,6 +60,7 @@ use Bootgly\ACI\Events\Timer;
 use Bootgly\ACI\Logs\Logger;
 use Bootgly\ACI\Logs\LoggableEscaped;
 use const Bootgly\CLI;
+use Bootgly\API\Projects\Project;
 use Bootgly\API\Server as SAPI;
 use Bootgly\WPI\Endpoints\Servers\Modes;
 use Bootgly\WPI\Events\Select;
@@ -101,10 +110,18 @@ class Process
    // # Id
    public static int $index;
    public static int $master;
-   // File
-   public static string $commandFile = BOOTGLY_WORKING_DIR . '/workdata/server.command';
-   public static string $pidFile = BOOTGLY_WORKING_DIR . '/workdata/server.pid';
-   public static string $pidLockFile = BOOTGLY_WORKING_DIR . '/workdata/server.pid.lock';
+   // # File (per-project state files)
+   public string $commandFile;
+   public string $pidFile;
+   public string $pidLockFile;
+   // # Server context (set on save)
+   private string $serverHost = '0.0.0.0';
+   private int $serverPort = 0;
+   // # Lifecycle
+   public bool $stopping = false;
+
+   /** @var string */
+   private string $pidsDir;
 
 
    public function __construct (Server &$Server)
@@ -122,9 +139,21 @@ class Process
       // * Metadata
       self::$master = posix_getpid();
 
+      // @ Resolve per-project state directory
+      $project = Project::$current;
+      $projectName = $project !== null && $project->folder !== '' ? $project->folder : 'default';
+      $this->pidsDir = BOOTGLY_WORKING_DIR . '/workdata/pids/';
 
-      static::lock();
-      static::saveMasterPid();
+      if (is_dir($this->pidsDir) === false) {
+         @mkdir($this->pidsDir, 0755, true);
+      }
+
+      $this->pidFile     = $this->pidsDir . $projectName . '.json';
+      $this->pidLockFile = $this->pidsDir . $projectName . '.lock';
+      $this->commandFile = $this->pidsDir . $projectName . '.command';
+
+      $this->lock();
+      $this->saveMasterPid();
 
       // @ Init Process Timer
       Timer::init([$this, 'handleSignal']);
@@ -137,11 +166,11 @@ class Process
     *
     * @return void
     */
-   protected static function lock (int $flag = LOCK_EX): void
+   protected function lock (int $flag = LOCK_EX): void
    {
       static $file;
 
-      $lock_file = static::$pidLockFile;
+      $lock_file = $this->pidLockFile;
 
       $file = $file ?: fopen($lock_file, 'a+');
 
@@ -182,6 +211,8 @@ class Process
       pcntl_signal(SIGCONT, $signalHandler, false); // 18
       // @ reload()
       pcntl_signal(SIGUSR2, $signalHandler, false); // 12
+      // @ recover()
+      pcntl_signal(SIGCHLD, $signalHandler, false); // 17
 
       // ! \Connection
       // ? @info
@@ -206,7 +237,7 @@ class Process
          // * Custom command
          case SIGUSR1:  // 10
             // TODO review security concious (+1)
-            $lines = @file(static::$commandFile);
+            $lines = @file($this->commandFile);
 
             if ($lines) {
                $line = $lines[count($lines) - 1];
@@ -247,7 +278,22 @@ class Process
             break;
          // @ reload()
          case SIGUSR2: // 12
-            SAPI::boot(reset: true);
+            if ($this->level === 'master') {
+               $this->sendSignal(SIGUSR2, master: false);
+            }
+            else if (Server::$Application) {
+               Server::$Application::boot(SAPI::$Environment);
+            }
+            else {
+               SAPI::boot(reset: true);
+            }
+            break;
+
+         // @ recover()
+         case SIGCHLD: // 17
+            if ($this->level === 'master') {
+               $this->recover($this->Server);
+            }
             break;
 
          // ! \Connection
@@ -356,19 +402,122 @@ class Process
     *
     * @return void
     */
-   protected static function saveMasterPid (): void
+   protected function saveMasterPid (): void
    {
-      if (file_put_contents(static::$pidFile, static::$master) === false) {
-         throw new Exception('Can not save master pid to ' . static::$pidFile);
+      if (file_put_contents($this->pidFile, (string) self::$master) === false) {
+         throw new Exception('Can not save master pid to ' . $this->pidFile);
       }
+   }
+
+   /**
+    * Save full process state (master + workers + host + port) to the PID file.
+    *
+    * @param string $host The server host address.
+    * @param int $port The server port number.
+    *
+    * @return void
+    */
+   public function save (string $host, int $port): void
+   {
+      $this->serverHost = $host;
+      $this->serverPort = $port;
+
+      $data = [
+         'master'  => self::$master,
+         'workers' => $this->Children->PIDs,
+         'host'    => $host,
+         'port'    => $port,
+         'started' => time(),
+         'type'    => 'WPI'
+      ];
+
+      $json = json_encode($data);
+      if ($json === false || file_put_contents($this->pidFile, $json) === false) {
+         throw new Exception('Can not save process state to ' . $this->pidFile);
+      }
+   }
+
+   /**
+    * Recover crashed workers by reforking at the same index.
+    *
+    * @param Server $Server The server instance.
+    *
+    * @return void
+    */
+   public function recover (Server $Server): void
+   {
+      // ? Skip during shutdown
+      if ($this->stopping) {
+         return;
+      }
+
+      // @ Reap all dead children
+      while (($pid = pcntl_waitpid(-1, $status, WNOHANG)) > 0) {
+         // @ Find the index of the dead worker
+         $deadIndex = array_search($pid, $this->Children->PIDs, true);
+
+         if ($deadIndex === false) {
+            continue;
+         }
+
+         $this->log("Worker #{$deadIndex} (PID: {$pid}) crashed, reforking...", self::LOG_WARNING_LEVEL);
+
+         // @ Fork a replacement worker at the same index
+         $newPID = pcntl_fork();
+
+         // # Child process (new worker)
+         if ($newPID === 0) {
+            $this->Children->push($this->id, (int) $deadIndex);
+            self::$index = (int) $deadIndex + 1;
+
+            $this->title = 'Bootgly_WPI_Server: child process (Worker #' . self::$index . ')';
+
+            Logger::$display = Logger::DISPLAY_MESSAGE_WHEN_ID;
+
+            $Server->instance();
+
+            $Server::$Event->add(
+               $Server->Socket,
+               Select::EVENT_CONNECT,
+               true
+            );
+            $Server::$Event->loop();
+
+            $Server->stop();
+
+            exit(0);
+         }
+         // # Master process
+         else if ($newPID > 0) {
+            $this->Children->push($newPID, (int) $deadIndex);
+
+            $this->log("Worker #{$deadIndex} recovered (new PID: {$newPID})", self::LOG_NOTICE_LEVEL);
+
+            // @ Update PID file
+            $this->save($this->serverHost, $this->serverPort);
+         }
+      }
+   }
+
+   /**
+    * Clean all per-project state files (PID, lock, command).
+    *
+    * @return void
+    */
+   public function clean (): void
+   {
+      @unlink($this->commandFile);
+      @unlink($this->pidFile);
+
+      $this->lock(LOCK_UN);
    }
 
    public function __destruct ()
    {
       if ($this->level === 'master') {
-         @unlink(static::$commandFile);
-         @unlink(static::$pidFile);
-         @unlink(static::$pidLockFile);
+         @unlink($this->commandFile);
+
+         $this->lock(LOCK_UN);
       }
    }
 }

@@ -32,22 +32,35 @@ class Encoder_ extends Encoders
       $Response = &Server::$Response;
       $Router   = Server::$Router;
 
+      // ! Reset Response state for new request
+      $Response->reset();
+
       // @ Try to Invoke SAPI Closure
       try {
          $Result = SAPI::$Middlewares->process($Request, $Response,
-            function (object $Request, object $Response) use ($Router): mixed {
-               return (SAPI::$Handler)($Request, $Response, $Router);
+            function (object $Request, object $Res) use ($Router): mixed {
+               $Result = (SAPI::$Handler)($Request, $Res, $Router);
+
+               // @ Resolve Generator-based routing inside the pipeline
+               if ($Result instanceof \Generator) {
+                  foreach ($Router->routing($Result) as $Responses) {
+                     if ($Responses instanceof Response) {
+                        $Res = $Responses;
+                     }
+                  }
+
+                  return $Res;
+               }
+
+               if ($Result instanceof Response) {
+                  return $Result;
+               }
+
+               return $Res;
             }
          );
 
-         if ($Result instanceof \Generator) {
-            foreach ($Router->routing($Result) as $Responses) {
-               if ($Responses instanceof Response) {
-                  $Response = $Responses;
-               }
-            }
-         }
-         else if ($Result instanceof Response && $Result !== $Response) {
+         if ($Result instanceof Response && $Result !== $Response) {
             $Response = $Result;
          }
       }

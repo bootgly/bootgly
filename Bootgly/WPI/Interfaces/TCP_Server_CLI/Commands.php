@@ -153,7 +153,7 @@ class Commands extends CLI\Terminal
    }
    public function saveCommand (string $command, string $context = ''): bool
    {
-      $file = BOOTGLY_WORKING_DIR . '/workdata/server.command';
+      $file = $this->Server->Process->commandFile;
 
       $line = $command . ':' . $context . PHP_EOL;
 

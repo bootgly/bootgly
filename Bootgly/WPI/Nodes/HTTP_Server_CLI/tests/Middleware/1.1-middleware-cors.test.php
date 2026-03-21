@@ -33,8 +33,8 @@ return new Specification(
       Access-Control-Allow-Methods: GET, POST, PUT, DELETE, PATCH, OPTIONS\r
       Access-Control-Allow-Headers: Content-Type, Authorization\r
       Access-Control-Max-Age: 86400\r
-      Content-Length: 12\r
       Content-Type: text/html; charset=UTF-8\r
+      Content-Length: 12\r
       \r
       Hello World!
       HTML_RAW;

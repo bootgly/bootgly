@@ -32,8 +32,8 @@ return new Specification(
       $expected = <<<HTML_RAW
       HTTP/1.1 413 Request Entity Too Large\r
       Server: Bootgly\r
-      Content-Length: 17\r
       Content-Type: text/html; charset=UTF-8\r
+      Content-Length: 17\r
       \r
       Payload Too Large
       HTML_RAW;

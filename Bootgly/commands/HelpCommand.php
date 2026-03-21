@@ -8,25 +8,28 @@
  * --------------------------------------------------------------------------
  */
 
-namespace projects\Bootgly;
+namespace Bootgly\commands;
 
 
-use Bootgly;
+use const BOOTGLY_VERSION;
+use const PHP_VERSION;
+use const PHP_EOL;
+use const STR_PAD_LEFT;
+use function implode;
+use function is_string;
+use function rtrim;
+use function strlen;
+use function str_pad;
+use function trim;
+
 use Bootgly\ABI\Data\__String\Path;
 use const Bootgly\CLI;
 use Bootgly\CLI\Command;
 use Bootgly\CLI\UI\Components\Fieldset;
 use Bootgly\CLI\UI\Components\Header;
 
-if ($this instanceof Bootgly\CLI !== true) {
-   return;
-}
 
-// $Commands, $Scripts, $Terminal availables...
-$Commands = CLI->Commands;
-
-// @ Set Commands Helper
-$Commands->register(Command: $Help = new class extends Command
+class HelpCommand extends Command
 {
    // * Config
    public int $group = 0;
@@ -49,9 +52,12 @@ $Commands->register(Command: $Help = new class extends Command
       // @
       // # Banner
       $Header = new Header($Output);
-      $output .= $Header
+      $rendered = $Header
          ->generate(word: 'Bootgly', inline: true)
          ->render($Header::RETURN_OUTPUT);
+      if (is_string($rendered)) {
+         $output .= $rendered;
+      }
       $output .= "@.;";
       $Output->render($output);
 
@@ -67,9 +73,11 @@ $Commands->register(Command: $Help = new class extends Command
       $largest_command_name = 0;
       // !
       $Commands = CLI->Commands;
-      foreach ($Commands->list(null) as $namespace => $commands) {
+      /** @var array<string,array<Command>> $commandsByNamespace */
+      $commandsByNamespace = $Commands->list(null);
+      foreach ($commandsByNamespace as $namespace => $commands) {
          foreach ($commands as $Command) {
-            $command_name_length = \strlen($Command->name);
+            $command_name_length = strlen($Command->name);
             if ($largest_command_name < $command_name_length) {
                $largest_command_name = $command_name_length;
             }
@@ -102,11 +110,11 @@ $Commands->register(Command: $Help = new class extends Command
          }
          $command['isGlobal'] ? $color = '@#Green:' : $color = '@#Yellow:';
 
-         $output .=  $color . \str_pad($command['name'], $largest_command_name + 2) . ' @; ';
+         $output .=  $color . str_pad($command['name'], $largest_command_name + 2) . ' @; ';
          $output .= $command['description'] . PHP_EOL;
       }
 
-      $output = \rtrim($output);
+      $output = rtrim($output);
       $Fieldset1->content = $output;
       $Fieldset1->render();
 
@@ -114,13 +122,13 @@ $Commands->register(Command: $Help = new class extends Command
       $output = '';
       $largest_option_name = 0;
       foreach ($options as $option_description => $option_names) {
-         $option_name_length = \strlen(\implode(', ', $option_names));
+         $option_name_length = strlen(implode(', ', $option_names));
          if ($largest_option_name < $option_name_length) {
             $largest_option_name = $option_name_length;
          }
       }
       foreach ($options as $option_description => $option_names) {
-         $output .= '@#Yellow:' . \str_pad(\implode(', ', $option_names), $largest_option_name + 2) . ' @; ';
+         $output .= '@#Yellow:' . str_pad(implode(', ', $option_names), $largest_option_name + 2) . ' @; ';
          $output .= $option_description . PHP_EOL;
       }
       $output = trim($output);
@@ -150,7 +158,7 @@ $Commands->register(Command: $Help = new class extends Command
       if ($verbosity >= 1) {
          $usage .= <<<OUTPUT
             @..;Example:
-         @#Black:{$script} serve
+         @#Black:{$script} project run
          OUTPUT;
       }
 
@@ -161,26 +169,17 @@ $Commands->register(Command: $Help = new class extends Command
       $Fieldset4->render();
 
       // # Versions (Bootgly, PHP)
-      $PHP = \PHP_VERSION;
-      $Bootgly = \BOOTGLY_VERSION;
+      $PHP = PHP_VERSION;
+      $Bootgly = BOOTGLY_VERSION;
 
       $Output->pad(<<<OUTPUT
          @#Black:Bootgly @_:v{$Bootgly} @; | @#Black:PHP @_:v{$PHP} @;@..;
          OUTPUT,
          $Fieldset1->width + 5,
          " ",
-         \STR_PAD_LEFT
+         STR_PAD_LEFT
       );
 
       return true;
    }
-}, Script: $Commands);
-
-// @ Register commands
-$commands = require('CLI/commands/@.php');
-foreach ($commands as $Command) {
-   $Commands->register($Command, Script: $this);
 }
-
-// @ Route commands
-$Commands->route(From: $this);

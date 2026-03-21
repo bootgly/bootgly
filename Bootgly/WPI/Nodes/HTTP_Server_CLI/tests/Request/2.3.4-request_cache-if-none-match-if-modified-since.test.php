@@ -39,8 +39,8 @@ return new Specification(
       Server: Bootgly\r
       Last-Modified: Fri, 14 Jul 2023 12:00:00 GMT\r
       ETag: "foo"\r
-      Content-Length: 4\r
       Content-Type: text/html; charset=UTF-8\r
+      Content-Length: 4\r
       \r
       test
       HTML_RAW;

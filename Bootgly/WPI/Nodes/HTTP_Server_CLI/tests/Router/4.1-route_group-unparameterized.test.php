@@ -53,8 +53,8 @@ return new Specification(
       $expected = <<<HTML_RAW
       HTTP/1.1 200 OK\r
       Server: Bootgly\r
-      Content-Length: 16\r
       Content-Type: text/html; charset=UTF-8\r
+      Content-Length: 16\r
       \r
       Default Profile!
       HTML_RAW;

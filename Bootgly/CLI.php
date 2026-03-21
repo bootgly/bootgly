@@ -11,19 +11,21 @@
 namespace Bootgly;
 
 
+use const PHP_SAPI;
+use function is_array;
+use Exception;
+
 use Bootgly\ABI\Debugging\Data\Vars;
-
 use Bootgly\API\Projects;
-
+use Bootgly\CLI\Command;
 use Bootgly\CLI\Commands;
 use Bootgly\CLI\Scripts;
 use Bootgly\CLI\Terminal;
+use Bootgly\commands\HelpCommand;
 
 
 class CLI extends Projects // Command Line Interface
 {
-   public const string BOOT_FILE = 'CLI.boot.php';
-
    // * Config
    public static bool $interactive = false;
 
@@ -31,7 +33,7 @@ class CLI extends Projects // Command Line Interface
    // ...
 
    // * Metadata
-   private static bool $booted = false;
+   // ...
 
    public readonly Commands $Commands;
    public readonly Scripts $Scripts;
@@ -50,7 +52,7 @@ class CLI extends Projects // Command Line Interface
       Vars::$exit = false;
 
       // @ Instance variables
-      $this->Commands = new Commands;
+      $Commands = $this->Commands = new Commands;
       $Scripts = $this->Scripts  = new Scripts;
       $this->Terminal = new Terminal;
 
@@ -65,7 +67,7 @@ class CLI extends Projects // Command Line Interface
             break;
          case -1:
             // TODO custom bootgly exception
-            throw new \Exception(<<<MESSAGE
+            throw new Exception(<<<MESSAGE
                Invalid script: script `{$Scripts->filename}` not registered in bootstrap file!
                Please, register it in `scripts/@.php`.
                MESSAGE
@@ -73,14 +75,29 @@ class CLI extends Projects // Command Line Interface
          case 0: // @ Running external script
             break;
          default: // @ Boot CLI
-            // Consumer
+            // @ Register Help command
+            $Commands->register(Command: new HelpCommand, Script: $Commands);
+
+            // @ Register framework commands
+            /** @var array<Command> $commands */
+            $commands = require(__DIR__ . '/commands/@.php');
+            foreach ($commands as $Command) {
+               $Commands->register($Command, Script: $this);
+            }
+
+            // @ Register consumer commands
             if (BOOTGLY_ROOT_DIR !== BOOTGLY_WORKING_DIR) {
-               self::$booted = (@include Projects::CONSUMER_DIR . 'Bootgly/' . self::BOOT_FILE);
+               $consumer_commands = @include(Projects::CONSUMER_DIR . 'Bootgly/commands/@.php');
+               if (is_array($consumer_commands)) {
+                  /** @var array<Command> $consumer_commands */
+                  foreach ($consumer_commands as $Command) {
+                     $Commands->register($Command, Script: $this);
+                  }
+               }
             }
-            // Author
-            if (self::$booted === false) {
-               require(Projects::AUTHOR_DIR . 'Bootgly/' . self::BOOT_FILE);
-            }
+
+            // @ Route commands
+            $Commands->route(From: $this);
       }
    }
 }

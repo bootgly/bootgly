@@ -1,5 +1,5 @@
 <?php
-namespace projects\Bootgly\CLI\commands;
+namespace Bootgly\commands;
 
 return [
    new DemoCommand,
@@ -9,5 +9,4 @@ return [
    new TestCommand,
 
    new ProjectCommand,
-   new ServeCommand,
 ];

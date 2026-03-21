@@ -28,7 +28,7 @@ class Encoder_Testing extends Encoders
     */
    public static function encode (Packages $Packages, ? int &$length): string
    {
-      // @ Instance callbacks
+      // @ Instance new callbacks
       Server::$Response = new Response;
       Server::$Router = new Router;
 
@@ -43,18 +43,31 @@ class Encoder_Testing extends Encoders
       // ! Response
       // @ Try to Invoke SAPI Closure
       try {
-         $Routes = SAPI::$Middlewares->process($Request, $Response,
-            function (object $Request, object $Response) use ($Router): mixed {
-               return (SAPI::$Handler)($Request, $Response, $Router);
+         $Result = SAPI::$Middlewares->process($Request, $Response,
+            function (object $Request, object $Res) use ($Router): mixed {
+               $Result = (SAPI::$Handler)($Request, $Res, $Router);
+
+               // @ Resolve Generator-based routing inside the pipeline
+               if ($Result instanceof \Generator) {
+                  foreach ($Router->routing($Result) as $Responses) {
+                     if ($Responses instanceof Response) {
+                        $Res = $Responses;
+                     }
+                  }
+
+                  return $Res;
+               }
+
+               if ($Result instanceof Response) {
+                  return $Result;
+               }
+
+               return $Res;
             }
          );
 
-         if ($Routes instanceof \Generator) {
-            foreach ($Router->routing($Routes) as $Responses) {
-               if ($Responses instanceof Response) {
-                  $Response = $Responses;
-               }
-            }
+         if ($Result instanceof Response && $Result !== $Response) {
+            $Response = $Result;
          }
       }
       catch (\Throwable $Throwable) {

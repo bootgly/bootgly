@@ -108,7 +108,9 @@ return new class extends Command
          // TODO
 
          // SAPI
-         $SAPI = Path::relativize(SAPI::$production, BOOTGLY_ROOT_DIR);
+         $SAPI = SAPI::$production !== ''
+            ? Path::relativize(SAPI::$production, BOOTGLY_ROOT_DIR)
+            : 'N/A';
          $Decoder = (Server::$Decoder
             ? Server::$Decoder::class
             : 'N/A'

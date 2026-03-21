@@ -11,6 +11,11 @@
 namespace Bootgly\API;
 
 
+use function count;
+use function is_dir;
+use function is_string;
+use Exception;
+
 use Bootgly\ABI\Resources;
 
 
@@ -58,31 +63,39 @@ abstract class Projects
    public static function autobooting (): null|Project
    {
       if ( isSet(self::$booted) )
-         throw new \Exception("Project autoboot can only be called once.");
+         throw new Exception("Project autoboot can only be called once.");
 
+      // @ Load from consumer first, then author
       $bootstrap = @include(Projects::CONSUMER_DIR . '@.php');
-      if ($bootstrap === null) {
+      if ($bootstrap === false || $bootstrap === null) {
+         $bootstrap = @include(Projects::AUTHOR_DIR . '@.php');
+      }
+      if ($bootstrap === false || $bootstrap === null) {
+         self::$booted = true;
          return null;
       }
 
-      $projects = $bootstrap['projects'];
-      foreach ($projects as $index => $project) {
+      // @ Resolve default project
+      $default = $bootstrap['default'] ?? null;
+      if ($default !== null) {
          $Project = new Project;
 
-         foreach ($project['paths'] as $path) {
+         // @ Try consumer dir first
+         $path = $default . '/';
+         $consumerPath = Projects::CONSUMER_DIR . $path;
+         $authorPath = Projects::AUTHOR_DIR . $path;
+
+         if (is_dir($consumerPath)) {
+            $Project->construct($path);
+         }
+         else if (is_dir($authorPath)) {
             $Project->construct($path);
          }
 
          self::add($Project);
-
-         if ($name = $project['name'] ?? false) {
-            $Project->name($name);
-            self::index($name);
-         }
-
-         if ($index === 'default') {
-            self::$Default = $Project;
-         }
+         $Project->name($default);
+         self::index($default);
+         self::$Default = $Project;
       }
 
       self::$booted = true;

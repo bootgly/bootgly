@@ -44,8 +44,8 @@ return new Specification(
       $expected = <<<HTML_RAW
       HTTP/1.1 200 OK\r
       Server: Bootgly\r
-      Content-Length: 32\r
       Content-Type: text/html; charset=UTF-8\r
+      Content-Length: 32\r
       \r
       Different named params: 123, abc
       HTML_RAW;

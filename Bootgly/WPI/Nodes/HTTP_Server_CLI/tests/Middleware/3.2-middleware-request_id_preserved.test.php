@@ -28,8 +28,8 @@ return new Specification(
       HTTP/1.1 200 OK\r
       Server: Bootgly\r
       X-Request-Id: my-custom-trace-id-123\r
-      Content-Length: 2\r
       Content-Type: text/html; charset=UTF-8\r
+      Content-Length: 2\r
       \r
       OK
       HTML_RAW;

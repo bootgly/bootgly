@@ -32,8 +32,8 @@ return new Specification(
       Set-Cookie: Test1=value1\r
       Set-Cookie: Test2=value2\r
       Server: Bootgly\r
-      Content-Length: 12\r
       Content-Type: text/html; charset=UTF-8\r
+      Content-Length: 12\r
       \r
       Hello World!
       HTML_RAW;

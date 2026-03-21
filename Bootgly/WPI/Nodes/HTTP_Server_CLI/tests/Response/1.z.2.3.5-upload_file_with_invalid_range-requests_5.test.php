@@ -29,8 +29,8 @@ return new Specification(
       HTTP/1.1 416 Range Not Satisfiable\r
       Server: Bootgly\r
       Content-Range: bytes */62\r
-      Content-Length: 1\r
       Content-Type: text/html; charset=UTF-8\r
+      Content-Length: 1\r
       \r
        
       HTML_RAW;

@@ -36,8 +36,8 @@ return new Specification(
       HTTP/1.1 304 Not Modified\r
       Server: Bootgly\r
       ETag: W/"foo"\r
-      Content-Length: 0\r
       Content-Type: text/html; charset=UTF-8\r
+      Content-Length: 0\r
       \r
       
       HTML_RAW;

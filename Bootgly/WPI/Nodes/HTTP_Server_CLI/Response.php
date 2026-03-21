@@ -193,13 +193,46 @@ class Response extends Server\Response
     */
    public function __invoke (int $code = 200, array $headers = [], string $body = ''): self
    {
-      $this->Header->reset();
-
-      $this->code($code);
-      $this->Header->prepare($headers);
+      if ($code !== $this->code) {
+         $this->code($code);
+      }
+      if ($headers !== []) {
+         $this->Header->prepare($headers);
+      }
       $this->Body->raw = $body;
 
       return $this;
+   }
+
+   /**
+    * Reset the response to its initial state.
+    *
+    * @return void
+    */
+   public function reset (): void
+   {
+      // * Data
+      // # Resource
+      // @ Content
+      $this->source = null;
+      $this->type = null;
+
+      // * Metadata
+      // @ State (sets)
+      $this->chunked = false;
+      $this->encoded = false;
+      // @ Type (set)
+      $this->stream = false;
+      // @ Status (sets ...)
+      $this->initied = false;
+      $this->sent = false;
+
+      $this->Header->clean();
+      $this->Body->raw = '';
+
+      if ($this->code !== 200) {
+         $this->code(200);
+      }
    }
 
    // # Authentication
@@ -651,17 +684,13 @@ class Response extends Server\Response
       // @ status
       $this->code = $code;
 
-      $status = $code . ' ' . HTTP::RESPONSE_STATUS[$code];
+      $message = HTTP::RESPONSE_STATUS[$code];
 
-      @[$code, $message] = explode(' ', $status);
-
-      if ($code && $message) {
-         // * Metadata
-         // @ status
-         $this->message = $message;
-         $this->status = $status;
-         $this->response = parent::PROTOCOL . ' ' . $status;
-      }
+      // * Metadata
+      // @ status
+      $this->message = $message;
+      $this->status = $code . ' ' . $message;
+      $this->response = parent::PROTOCOL . ' ' . $this->status;
 
       return $this;
    }

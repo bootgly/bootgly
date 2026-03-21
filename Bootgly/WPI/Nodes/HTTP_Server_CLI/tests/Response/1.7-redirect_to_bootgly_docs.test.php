@@ -25,8 +25,8 @@ return new Specification(
       HTTP/1.1 307 Temporary Redirect\r
       Server: Bootgly\r
       Location: https://docs.bootgly.com/\r
-      Content-Length: 0\r
       Content-Type: text/html; charset=UTF-8\r
+      Content-Length: 0\r
       \r
       
       HTML_RAW;

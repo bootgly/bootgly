@@ -23,13 +23,14 @@ use Bootgly\ACI\Tests\Suite;
 use Bootgly\ACI\Tests\Suite\Test\Specification;
 use Bootgly\API\Environments;
 use Bootgly\API\Server\Handling;
+use Bootgly\API\Server\Middleware;
 use Bootgly\API\Server\Middlewares;
 
 
 class Server
 {
    // * Config
-   public static string $production;
+   public static string $production = '';
    public static Environments $Environment = Environments::Production;
 
    // * Data
@@ -70,6 +71,11 @@ class Server
       $bootstrap = '';
       switch (self::$Environment) {
          case Environments::Production:
+            // ? No production file when handler set via handle()
+            if (self::$production === '') {
+               return true;
+            }
+
             $bootstrap = self::$production;
             break;
          case Environments::Test:
@@ -109,6 +115,14 @@ class Server
             $Handler->bindTo(null, "static"); // @phpstan-ignore-line
             self::$Handler = $Handler;
          }
+
+         // @ Load global middlewares from SAPI
+         /** @var array<Middleware> $middlewares */
+         $middlewares = $SAPI['on.Middlewares'] ?? [];
+         self::$Middlewares = new Middlewares;
+         if ($middlewares !== []) {
+            self::$Middlewares->pipe(...$middlewares);
+         }
       }
 
       return true;
@@ -118,6 +132,11 @@ class Server
    public static function check (): bool
    {
       static $modified = 0;
+
+      // ? No production file to watch
+      if (self::$production === '') {
+         return false;
+      }
 
       if (file_exists(self::$production) === true) {
          // @ Clear production file cache

@@ -14,6 +14,7 @@ namespace Bootgly\WPI\Nodes;
 use function function_exists;
 use function opcache_invalidate;
 use function clearstatcache;
+use Closure;
 use Exception;
 use Throwable;
 
@@ -23,8 +24,8 @@ use Bootgly\ACI\Logs\Logger;
 use Bootgly\ACI\Tests\Suite;
 use Bootgly\ACI\Tests\Suite\Test\Specification;
 use Bootgly\API\Environments;
-use Bootgly\API\Projects;
 use Bootgly\API\Server as SAPI;
+use Bootgly\API\Server\Middlewares;
 use const Bootgly\WPI;
 use Bootgly\WPI\Endpoints\Servers\Modes;
 use Bootgly\WPI\Interfaces\TCP_Client_CLI;
@@ -55,7 +56,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
    public static Router $Router;
 
 
-   public function __construct (Modes $Mode = Modes::Monitor)
+   public function __construct (Modes $Mode = Modes::Daemon)
    {
       // * Config
       // ...inherited from TCP_Server_CLI
@@ -128,6 +129,27 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       return $this;
    }
 
+   /**
+    * Set the request handler for the HTTP Server.
+    *
+    * @param Closure(Request, Response, Router): mixed $Handler The request handler.
+    *
+    * @return self The HTTP Server instance, for chaining.
+    */
+   public function handle (Closure $Handler): self
+   {
+      // !
+      if (isSet(SAPI::$Middlewares) === false) {
+         SAPI::$Middlewares = new Middlewares;
+      }
+
+      // @
+      SAPI::$Handler = $Handler;
+
+      // :
+      return $this;
+   }
+
    public static function boot (Environments $Environment): void
    {
       switch ($Environment) {
@@ -169,10 +191,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
 
             break;
          default:
-            SAPI::$production = Projects::CONSUMER_DIR . 'Bootgly/WPI/HTTP_Server_CLI-1.SAPI.php';
             self::$Encoder = new Encoder_;
-
-            SAPI::boot(reset: true, key: 'on.Request');
       }
    }
 

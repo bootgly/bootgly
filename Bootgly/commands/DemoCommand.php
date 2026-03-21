@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace projects\Bootgly\CLI\commands;
+namespace Bootgly\commands;
 
 
 use const Bootgly\CLI;
@@ -104,14 +104,11 @@ class DemoCommand extends Command
             continue;
          }
 
-         $file = 'Bootgly/CLI/demo/' . $example;
-
-         $wait = 3;
-
+         $file = 'Demo_CLI/' . $example;
          $location = 'projects/' . $file;
-         require BOOTGLY_ROOT_DIR . 'projects/' . $file;
+         require BOOTGLY_ROOT_DIR . $location;
 
-         sleep($wait);
+         sleep(3);
 
          CLI->Terminal->clear();
       }

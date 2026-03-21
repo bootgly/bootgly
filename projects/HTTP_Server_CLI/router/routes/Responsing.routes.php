@@ -3,8 +3,8 @@
 use Bootgly\WPI\Modules\HTTP\Server\Response\Authentication;
 use Bootgly\WPI\Modules\HTTP\Server\Router;
 
-use Bootgly\WPI\Nodes\HTTP_Server_\Request;
-use Bootgly\WPI\Nodes\HTTP_Server_\Response;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 
 
 /** @var Router $Router */

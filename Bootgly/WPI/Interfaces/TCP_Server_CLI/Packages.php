@@ -156,7 +156,7 @@ abstract class Packages implements WPI\Connections\Packages
       // @
       try {
          do {
-            $buffer = @fread($Socket, $length ?? 65535); // @phpstan-ignore-line
+            $buffer = @fread($Socket, $length ?? 65536); // @phpstan-ignore-line
 
             if ($buffer === false) break;
             if ($buffer === '') {

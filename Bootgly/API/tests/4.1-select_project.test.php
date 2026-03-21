@@ -16,13 +16,13 @@ return new Specification(
       $Project1 = new Project;
 
       // @ Construct new Project Path
-      $Project1->construct('Bootgly/');
-      $Project1->name('Bootgly');
+      $Project1->construct('Example/');
+      $Project1->name('Example');
 
       // @ Add Project to list
       Projects::add($Project1);
       // @ Index Project
-      Projects::index('Bootgly');
+      Projects::index('Example');
 
       // ---------
 
@@ -30,12 +30,12 @@ return new Specification(
       new Project;
 
       // @ Select Project
-      $Project = Projects::select(project: 'Bootgly');
+      $Project = Projects::select(project: 'Example');
       yield new Assertion(
          fallback: 'Failed to select Project by name'
       )
          ->expect($Project->path)
-         ->to->be(Projects::CONSUMER_DIR . 'Bootgly/')
+         ->to->be(Projects::CONSUMER_DIR . 'Example/')
          ->assert();
    })
 );

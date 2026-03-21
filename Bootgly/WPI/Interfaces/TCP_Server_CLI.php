@@ -14,15 +14,21 @@ namespace Bootgly\WPI\Interfaces;
 use const SIGINT;
 use const SIGUSR2;
 use const SOL_SOCKET;
+use const SOL_TCP;
 use const SO_KEEPALIVE;
 use const STREAM_SERVER_BIND;
 use const STREAM_SERVER_LISTEN;
+use const TCP_NODELAY;
 use const WNOHANG;
 use const WUNTRACED;
 use function fclose;
 use function function_exists;
+use function pcntl_fork;
 use function pcntl_signal_dispatch;
 use function pcntl_wait;
+use function pcntl_waitpid;
+use function posix_getpid;
+use function posix_setsid;
 use function register_shutdown_function;
 use function socket_import_stream;
 use function socket_set_option;
@@ -31,6 +37,7 @@ use function stream_socket_enable_crypto;
 use function stream_socket_server;
 use function time;
 use function usleep;
+use Closure;
 use Throwable;
 
 use Bootgly\ABI\Debugging\Data\Vars;
@@ -42,7 +49,6 @@ use Bootgly\ACI\Logs\Logger;
 use Bootgly\ACI\Logs\LoggableEscaped;
 use Bootgly\API\Environment;
 use Bootgly\API\Environments;
-use Bootgly\API\Projects;
 use Bootgly\API\Server as SAPI;
 use const Bootgly\CLI;
 use Bootgly\WPI\Endpoints\Decoder;
@@ -89,9 +95,10 @@ class TCP_Server_CLI implements Servers, Logging
    public static null|Encoder $Encoder = null;
 
    // * Metadata
-   public const string VERSION = '0.0.1-alpha';
+   public const string VERSION = '0.1.2-beta';
    // # State
    protected int $started = 0;
+   protected bool $daemonized = false;
    // # Socket
    protected null|string $socket;
    /** @var array<array<bool|int|string>|string> */
@@ -160,18 +167,15 @@ class TCP_Server_CLI implements Servers, Logging
 
       // @ Register shutdown function to avoid orphaned children
       register_shutdown_function(function () use ($Process) {
-         Shutdown::debug();
-         $Process->sendSignal(SIGINT, master: true, children:true);
-      });
+         // ? Skip if this process daemonized (workers belong to daemon child)
+         if ($this->daemonized) {
+            return;
+         }
 
-      // @ Boot Server API
-      if (self::$Application) {
-         self::$Application::boot(Environments::Production);
-      } 
-      else {
-         SAPI::$production = Projects::CONSUMER_DIR . 'Bootgly/WPI/TCP_Server_CLI.SAPI.php';
-         SAPI::boot(reset: true, key: 'on.Package.Receive');
-      }
+         Shutdown::debug();
+
+         $Process->sendSignal(SIGINT, master: true, children: true);
+      });
    }
    public function __get (string $name): mixed
    {
@@ -185,8 +189,15 @@ class TCP_Server_CLI implements Servers, Logging
             return $this->Connections;
          case 'Process':
             return $this->Process;
+
+         case 'host':
+            return $this->host;
+         case 'port':
+            return $this->port;
          case 'ssl':
             return $this->ssl;
+         case 'Status':
+            return $this->Status;
 
          case '@test init':
             SAPI::$Environment = Environments::Test;
@@ -258,6 +269,19 @@ class TCP_Server_CLI implements Servers, Logging
 
       return $this;
    }
+   /**
+    * Set the package handler for the TCP Server.
+    *
+    * @param Closure $Handler The package receive handler.
+    *
+    * @return self
+    */
+   public function handle (Closure $Handler): self
+   {
+      SAPI::$Handler = $Handler;
+
+      return $this;
+   }
    public function start (): bool
    {
       $this->Status = Status::Starting;
@@ -265,6 +289,15 @@ class TCP_Server_CLI implements Servers, Logging
       Logger::$display = Logger::$display === 0 ? 0 : Logger::DISPLAY_MESSAGE;
 
       $this->log('@\;Starting Server...', self::LOG_NOTICE_LEVEL);
+
+      // @ Boot Server API
+      if (self::$Application) {
+         self::$Application::boot(Environments::Production);
+      }
+      else if (isSet(SAPI::$Handler) === false) {
+         $this->log('@\;No handler defined. Call handle() before start().@\;', self::LOG_ERROR_LEVEL);
+         exit(1);
+      }
 
       // ! Process
       // ? Signals
@@ -275,6 +308,9 @@ class TCP_Server_CLI implements Servers, Logging
 
       // @ Fork process workers...
       $this->Process->fork($this->workers);
+
+      // @ Save full process state (master + workers + host + port)
+      $this->Process->save($this->host ?? '0.0.0.0', $this->port ?? 0);
 
       // ... Continue to master process:
       switch ($this->Mode) {
@@ -365,6 +401,7 @@ class TCP_Server_CLI implements Servers, Logging
          }
 
          socket_set_option($Socket, SOL_SOCKET, SO_KEEPALIVE, 1);
+         socket_set_option($Socket, SOL_TCP, TCP_NODELAY, 1);
       }
 
       $this->Status = Status::Running;
@@ -376,9 +413,39 @@ class TCP_Server_CLI implements Servers, Logging
    {
       $this->Status = Status::Running;
 
-      // TODO
+      $this->log('@\;Running in Daemon mode (no UI)...@\;', self::LOG_INFO_LEVEL);
 
-      exit(0);
+      // @ Fork: parent returns to terminal, child becomes daemon master
+      $pid = pcntl_fork();
+
+      if ($pid === -1) {
+         $this->log('@\;Failed to fork daemon process!@\;', self::LOG_ERROR_LEVEL);
+         exit(1);
+      }
+
+      // # Parent process (CLI caller): return control to terminal
+      if ($pid > 0) {
+         $this->daemonized = true;
+         $this->log('@\;Daemon started (PID: ' . $pid . ')@\;', self::LOG_NOTICE_LEVEL);
+         return;
+      }
+
+      // # Child process (new daemon master): become session leader
+      posix_setsid();
+
+      // @ Update master PID to daemon child and re-save PID file
+      Process::$master = posix_getpid();
+      $this->Process->save($this->host ?? '0.0.0.0', $this->port ?? 0);
+
+      // @ Daemon master loop (Status changes via signal handlers)
+      while ($this->Status === Status::Running) { // @phpstan-ignore identical.alwaysTrue
+         pcntl_signal_dispatch();
+
+         // @ Reap any zombie children
+         pcntl_waitpid(-1, $status, WNOHANG);
+
+         usleep(500000); // 0.5s
+      }
    }
    private function interacting (): void
    {
@@ -548,6 +615,7 @@ class TCP_Server_CLI implements Servers, Logging
    public function stop (): void
    {
       $this->Status = Status::Stopping;
+      $this->Process->stopping = true;
 
       Logger::$display = Logger::DISPLAY_MESSAGE;
 
@@ -567,13 +635,17 @@ class TCP_Server_CLI implements Servers, Logging
                $closable = false;
             }
 
-            $this->Process->Children->kill();
+            $this->Process->Children->terminate();
+
+            // @ Clean all per-project state files
+            $this->Process->clean();
 
             if ($closable) {
                exit(0);
             }
          case 'child':
-            $this->Process->Children->kill();
+            $this->Process->Children->terminate();
+            exit(0);
       }
    }
 

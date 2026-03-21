@@ -53,6 +53,7 @@ class Header extends HeaderBase
    /** @var array<int,string> */
    protected array $queued;
    protected int $built;
+   protected bool $dirty;
 
    public Cookies $Cookies;
 
@@ -74,6 +75,7 @@ class Header extends HeaderBase
       // Fields
       $this->queued = [];
       $this->built = 0;
+      $this->dirty = true;
 
       // /
       $this->Cookies = new Cookies($this);
@@ -143,12 +145,17 @@ class Header extends HeaderBase
    {
       // * Data
       // Fields
-      $this->prepared = [];
-      $this->fields = [];
+      if ($this->fields !== []) {
+         $this->fields = [];
+         $this->dirty = true;
+      }
+      if ($this->prepared !== []) {
+         $this->prepared = [];
+         $this->dirty = true;
+      }
       // * Metadata
       // Fields
       $this->queued = [];
-      $this->built = 0;
    }
 
    public function preset (string $name, string|null $value = null): void
@@ -169,7 +176,10 @@ class Header extends HeaderBase
     */
    public function prepare (array $fields): void // @ Prepare to build
    {
-      $this->prepared = $fields;
+      if ($fields !== $this->prepared) {
+         $this->prepared = $fields;
+         $this->dirty = true;
+      }
    }
    public function translate (string $field, int|float|string ...$values): string
    {
@@ -213,7 +223,10 @@ class Header extends HeaderBase
    public function set (string $field, string $value): bool
    {
       if ($field) {
-         $this->fields[$field] = $value;
+         if (! isSet($this->fields[$field]) || $this->fields[$field] !== $value) {
+            $this->fields[$field] = $value;
+            $this->dirty = true;
+         }
 
          return true;
       }
@@ -232,11 +245,14 @@ class Header extends HeaderBase
       } else {
          $this->fields[$field] = $value;
       }
+
+      $this->dirty = true;
    }
    public function queue (string $field, string $value = ''): bool
    {
       if ($field) {
          $this->queued[] = "$field: $value";
+         $this->dirty = true;
 
          return true;
       }
@@ -248,18 +264,13 @@ class Header extends HeaderBase
    public function build (): true // @ raw
    {
       // ?
-      if (\time() === $this->built) {
+      if ($this->dirty === false && \time() === $this->built) {
          return true;
       }
 
       // @
       // @ Merge fields
       $fields = $this->preset + $this->fields + $this->prepared;
-
-         // @ Set default headers
-         if (! array_key_exists('Content-Type', $fields)) {
-            $fields['Content-Type'] = 'text/html; charset=UTF-8';
-         }
 
       // @ Build headers
       $queued = $this->queued;
@@ -279,9 +290,15 @@ class Header extends HeaderBase
          $queued[] = "$name: $value";
       }
 
+      // @ Set default Content-Type if not present
+      if (! array_key_exists('Content-Type', $fields)) {
+         $queued[] = 'Content-Type: text/html; charset=UTF-8';
+      }
+
       $this->raw = \implode("\r\n", $queued);
 
       $this->built = \time();
+      $this->dirty = false;
 
       return true;
    }

@@ -28,7 +28,7 @@ class Decoder_ extends Decoders
       static $inputs = []; // @ Instance local cache
 
       // ? Check local cache and return
-      if ($size <= 512 && isSet($inputs[$buffer])) {
+      if ($size <= 2048 && isSet($inputs[$buffer])) {
          Server::$Request = $inputs[$buffer];
 
          if ($Package->changed) {
@@ -52,7 +52,7 @@ class Decoder_ extends Decoders
       $length = $Request->decode($Package, $buffer, $size);
 
       // @ Write to local cache
-      if ($length > 0 && $length <= 512) {
+      if ($length > 0 && $length <= 2048) {
          $inputs[$buffer] = clone $Request;
 
          if (count($inputs) > 512) {

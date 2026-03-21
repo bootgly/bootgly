@@ -1,6 +1,6 @@
 {
    "name": "bootgly/bootgly",
-   "version": "0.9.1-beta",
+   "version": "0.10.0-beta",
    "type": "library",
    "description": "The Bootgly PHP Framework.",
    "license": "MIT",
@@ -22,12 +22,6 @@
    "autoload": {
       "files": [
          "./autoboot.php"
-      ]
-   },
-   "scripts": {
-      "serve": [
-         "Composer\\Config::disableProcessTimeout",
-         "php /scripts/http-server-cli.php"
       ]
    },
 

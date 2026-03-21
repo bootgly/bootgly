@@ -224,15 +224,30 @@ class Router
             $handler = $handler->bindTo($Route, $Route);
 
             if ($merged !== []) {
+               $GroupGenerator = null;
+
                $Pipeline = new Middlewares;
                $Pipeline->pipe(...$merged);
                $Response = $Pipeline->process(
                   WPI->Request,
                   WPI->Response,
-                  function (object $Request, object $Response) use ($handler): mixed {
-                     return $handler($Request, $Response);
+                  function (object $Request, object $Response) use ($handler, &$GroupGenerator): mixed {
+                     $Result = $handler($Request, $Response);
+
+                     // ? Group route (nested) — extract Generator, skip post-processing
+                     if ($Result instanceof Generator) {
+                        $GroupGenerator = $Result;
+                        return $Response;
+                     }
+
+                     return $Result instanceof Response ? $Result : $Response;
                   }
                );
+
+               // @ Swap pipeline result with Generator for group routes
+               if ($GroupGenerator instanceof Generator) {
+                  $Response = $GroupGenerator;
+               }
             }
             else {
                $Response = $handler(
@@ -243,19 +258,34 @@ class Router
          }
          else {
             if ($merged !== []) {
+               $GroupGenerator = null;
+
                $Pipeline = new Middlewares;
                $Pipeline->pipe(...$merged);
                /** @var Response|Generator */
                $Response = $Pipeline->process(
                   WPI->Request,
                   WPI->Response,
-                  function (object $Request, object $Response) use ($handler, $Route): mixed {
-                     return call_user_func_array(
+                  function (object $Request, object $Response) use ($handler, $Route, &$GroupGenerator): mixed {
+                     $Result = call_user_func_array(
                         callback: $handler,
                         args: [$Request, $Response, $Route]
                      );
+
+                     // ? Group route (nested) — extract Generator, skip post-processing
+                     if ($Result instanceof Generator) {
+                        $GroupGenerator = $Result;
+                        return $Response;
+                     }
+
+                     return $Result instanceof Response ? $Result : $Response;
                   }
                );
+
+               // @ Swap pipeline result with Generator for group routes
+               if ($GroupGenerator instanceof Generator) {
+                  $Response = $GroupGenerator;
+               }
             }
             else {
                /** @var Response|Generator */
@@ -292,14 +322,20 @@ class Router
 
       return false;
    }
-   public function routing (Generator $Routes): Generator
+   public function routing (Generator $Routes, bool $nested = false): Generator
    {
+      // ! Reset middlewares for new request / save for nested group
+      if ($nested === false) {
+         $this->middlewares = [];
+      }
+      $parentMiddlewares = $this->middlewares;
+
       foreach ($Routes as $Response) {
          if ($Response instanceof Generator) {
             $this->Route->nested = true;
-            yield from $this->routing($Response);
-            // @ Reset group middlewares on group exit
-            $this->middlewares = [];
+            yield from $this->routing($Response, nested: true);
+            // @ Restore parent middlewares on group exit
+            $this->middlewares = $parentMiddlewares;
             break;
          }
          else if ($Response !== false) {

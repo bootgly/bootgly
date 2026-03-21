@@ -40,8 +40,10 @@ trait Raw
       $Header  = &$this->Header;
       $Body = &$this->Body;
 
+      // @ Build Content-Length inline (avoid Header->set to preserve cache)
+      $contentLength = '';
       if (! $this->stream && ! $this->chunked && ! $this->encoded) {
-         $Header->set('Content-Length', (string) $Body->length);
+         $contentLength = "\r\nContent-Length: " . $Body->length;
       }
 
       $Header->build();
@@ -57,11 +59,6 @@ trait Raw
          $this->stream = false;
       }
 
-      return <<<HTTP_RAW
-      {$this->response}\r
-      {$Header->raw}\r
-      \r
-      {$Body->raw}
-      HTTP_RAW;
+      return "{$this->response}\r\n{$Header->raw}{$contentLength}\r\n\r\n{$Body->raw}";
    }
 }

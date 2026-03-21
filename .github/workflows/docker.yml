@@ -2,11 +2,12 @@ name: Docker (build + push)
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - 'main'
-    paths:
-      - 'Bootgly/ABI/**'
+  # Disabled: HTTP Server CLI script refactored, Docker images need update
+  # push:
+  #   branches:
+  #     - 'main'
+  #   paths:
+  #     - 'Bootgly/ABI/**'
 
 jobs:
   build:

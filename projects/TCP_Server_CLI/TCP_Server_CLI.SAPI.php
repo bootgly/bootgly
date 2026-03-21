@@ -1,6 +1,6 @@
 <?php
 
-namespace projects\Bootgly\WPI;
+namespace projects\TCP_Server_CLI;
 
 
 return [
