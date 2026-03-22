@@ -186,6 +186,10 @@ return new Suite(
          '1.3-response_header_reset_across_routes',
          // Idempotency
          '1.4-response_idempotent_same_route',
+         // Upload + normal request interleaving
+         '2.1-response_upload_then_normal_request',
+         '2.2-response_normal_then_upload_request',
+         '2.3-response_upload_then_different_upload',
       ]
    ]
 );

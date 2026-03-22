@@ -28,8 +28,9 @@ class Encoder_Testing extends Encoders
     */
    public static function encode (Packages $Packages, ? int &$length): string
    {
-      // @ Instance new callbacks
-      Server::$Response = new Response;
+      // @ Reset Response state (same as production Encoder_)
+      Server::$Response->reset();
+      // @ Instance new Router (per-test: each test defines different routes)
       Server::$Router = new Router;
 
       // @ Reset SAPI

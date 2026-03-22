@@ -216,8 +216,10 @@ class Response extends Server\Response
       // @ Content
       $this->source = null;
       $this->type = null;
+      $this->files = [];
 
       // * Metadata
+      $this->resource = null;
       // @ State (sets)
       $this->chunked = false;
       $this->encoded = false;
@@ -225,6 +227,8 @@ class Response extends Server\Response
       $this->stream = false;
       // @ Status (sets ...)
       $this->initied = false;
+      $this->prepared = true;
+      $this->processed = true;
       $this->sent = false;
 
       $this->Header->clean();

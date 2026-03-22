@@ -40,10 +40,12 @@ return new Project(
       $Server->configure(
          host: '0.0.0.0',
          port: getenv('PORT') ? (int) getenv('PORT') : 8082,
-         workers: 11,
+         // get CPU count directly from the system for optimal performance / 2
+         workers: max(1, (int) shell_exec('nproc') ?: 1) / 2
       );
       #$Server->handle(require __DIR__ . '/router/routes/Middlewares.routes.php');
-      $Server->handle(fn ($Request, $Response) => $Response(body: 'Hello, World!'));
+      #$Server->handle(fn ($Request, $Response) => $Response(body: 'Hello, World!'));
+      $Server->handle(require __DIR__ . '/router/HTTP_Server_CLI-benchmark-static_router.SAPI.php');
       $Server->start();
    }
 );
