@@ -1,0 +1,813 @@
+#!/usr/bin/env bash
+#
+# Bootgly Benchmarks
+# Multi-case benchmark runner. Each case is a self-contained directory
+# under scripts/benchmarks/ (e.g. HTTP_Server_CLI).
+#
+# Usage:
+#   bash scripts/benchmark <CASE> --competitors=bootgly
+#   bash scripts/benchmark <CASE> --competitors=bootgly,competitor
+#   bash scripts/benchmark <CASE> --competitors=bootgly,competitor --scenarios=1,3,6
+#
+# Arguments:
+#   <CASE>              Benchmark case (directory under scripts/benchmarks/)
+#
+# Options:
+#   --competitors=LIST  Comma-separated list (bootgly required as first)
+#   --scenarios=LIST    Comma-separated scenario numbers (default: all)
+#   --help, -h          Show help
+#
+# Each case directory must contain: scenarios/, competitors/
+# Drivers are pluggable bash files that must export:
+#   DRIVER_NAME      — Display name (e.g. "Workerman")
+#   DRIVER_VERSION   — Version string
+#   DRIVER_WORKERS   — Worker process count
+#   driver_start ()  — Start the server (block until ready)
+#   driver_stop ()   — Stop the server and release the port
+#
+# See scripts/benchmarks/HTTP_Server_CLI/competitors/Template.example.sh
+#
+# Environment variables:
+#   PORT              Server port (default: 8082)
+#   WRK_THREADS       wrk threads (default: 10)
+#   WRK_CONNECTIONS   wrk connections (default: 514)
+#   WRK_DURATION      wrk duration (default: 10s)
+#   WARMUP_DURATION   Warmup duration (default: 2s)
+#   WARMUP_THREADS    Warmup threads (default: 2)
+#   WARMUP_CONNECTIONS Warmup connections (default: 64)
+#   READY_TIMEOUT     Seconds to wait for server to start (default: 10)
+
+set -euo pipefail
+
+# --- Resolve paths ---
+BOOTGLY_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+BENCHMARKS_DIR="$BOOTGLY_DIR/scripts/benchmarks"
+
+# --- Colors (needed early for help/errors) ---
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
+WHITE='\033[1;37m'
+GRAY='\033[0;90m'
+NC='\033[0m'
+BOLD='\033[1m'
+DIM='\033[2m'
+
+# --- List available benchmark cases ---
+list_cases () {
+   local cases=()
+   for d in "$BENCHMARKS_DIR"/*/; do
+      [[ -d "$d" ]] && cases+=("$(basename "$d")")
+   done
+   echo "${cases[@]}"
+}
+
+# --- General help (no case selected) ---
+show_general_help () {
+   echo ""
+   echo -e "${BOLD}${WHITE}  Bootgly Benchmarks${NC}"
+   echo ""
+   echo -e "  ${BOLD}Usage:${NC}"
+   echo -e "    bash scripts/benchmark ${CYAN}<CASE>${NC} ${CYAN}--competitors=bootgly${NC}"
+   echo -e "    bash scripts/benchmark ${CYAN}<CASE>${NC} ${CYAN}--competitors=bootgly,competitor${NC}"
+   echo -e "    bash scripts/benchmark ${CYAN}<CASE>${NC} ${CYAN}--competitors=bootgly,competitor${NC} ${CYAN}--scenarios=1,3,6${NC}"
+   echo ""
+   echo -e "  ${BOLD}Available cases:${NC}"
+   for c in $(list_cases); do
+      echo -e "    ${GREEN}${c}${NC}"
+   done
+   echo ""
+   echo -e "  ${BOLD}Options:${NC}"
+   echo -e "    ${CYAN}--competitors${NC}=LIST  Comma-separated names (${CYAN}bootgly${NC} required as first)"
+   echo -e "    ${CYAN}--scenarios${NC}=LIST    Comma-separated scenario numbers (default: all)"
+   echo -e "    ${CYAN}--help${NC}, ${CYAN}-h${NC}          Show help"
+   echo ""
+}
+
+# --- Parse first positional argument as BENCHMARK_CASE ---
+BENCHMARK_CASE=""
+
+# No args → general help
+if [[ $# -eq 0 ]]; then
+   show_general_help
+   exit 0
+fi
+
+# Extract the case (first non-option argument)
+declare -a REMAINING_ARGS=()
+for arg in "$@"; do
+   case "$arg" in
+      --help|-h)
+         if [[ -z "$BENCHMARK_CASE" ]]; then
+            show_general_help
+            exit 0
+         fi
+         REMAINING_ARGS+=("$arg")
+         ;;
+      --*)
+         REMAINING_ARGS+=("$arg")
+         ;;
+      *)
+         if [[ -z "$BENCHMARK_CASE" ]]; then
+            BENCHMARK_CASE="$arg"
+         else
+            echo -e "${RED}ERROR: Unknown argument: $arg${NC}"
+            show_general_help
+            exit 1
+         fi
+         ;;
+   esac
+done
+
+# Validate the case
+if [[ -z "$BENCHMARK_CASE" ]]; then
+   echo -e "${RED}ERROR: Benchmark case is required as the first argument.${NC}"
+   show_general_help
+   exit 1
+fi
+
+BENCHMARK_DIR="$BENCHMARKS_DIR/$BENCHMARK_CASE"
+if [[ ! -d "$BENCHMARK_DIR" ]]; then
+   echo -e "${RED}ERROR: Benchmark case not found: ${BENCHMARK_CASE}${NC}"
+   echo -e "${DIM}  Available cases:${NC}"
+   for c in $(list_cases); do
+      echo -e "    ${GREEN}${c}${NC}"
+   done
+   echo ""
+   exit 1
+fi
+
+SCENARIOS_DIR="$BENCHMARK_DIR/scenarios"
+COMPETITORS_DIR="$BENCHMARK_DIR/competitors"
+
+# --- Resolve a driver file path ---
+# Searches: 1) $COMPETITORS_DIR/<name>.sh  2) $COMPETITORS_DIR/<subdir>/<name>.sh
+resolve_driver () {
+   local name="$1"
+   # Direct match at root level (e.g. bootgly.sh)
+   if [[ -f "$COMPETITORS_DIR/${name}.sh" ]]; then
+      echo "$COMPETITORS_DIR/${name}.sh"
+      return 0
+   fi
+   # Search in subdirectories
+   local match
+   match=$(find "$COMPETITORS_DIR" -mindepth 2 -maxdepth 2 -name "${name}.sh" -not -name "*.example.sh" 2>/dev/null | head -1)
+   if [[ -n "$match" ]]; then
+      echo "$match"
+      return 0
+   fi
+   return 1
+}
+
+# --- Resolve a driver example file path ---
+resolve_driver_example () {
+   local name="$1"
+   if [[ -f "$COMPETITORS_DIR/${name}.example.sh" ]]; then
+      echo "$COMPETITORS_DIR/${name}.example.sh"
+      return 0
+   fi
+   local match
+   match=$(find "$COMPETITORS_DIR" -mindepth 2 -maxdepth 2 -name "${name}.example.sh" 2>/dev/null | head -1)
+   if [[ -n "$match" ]]; then
+      echo "$match"
+      return 0
+   fi
+   return 1
+}
+
+# --- Configuration ---
+PORT="${PORT:-8082}"
+WRK_THREADS="${WRK_THREADS:-10}"
+WRK_CONNECTIONS="${WRK_CONNECTIONS:-514}"
+WRK_DURATION="${WRK_DURATION:-10s}"
+WARMUP_DURATION="${WARMUP_DURATION:-2s}"
+WARMUP_THREADS="${WARMUP_THREADS:-2}"
+WARMUP_CONNECTIONS="${WARMUP_CONNECTIONS:-64}"
+READY_TIMEOUT="${READY_TIMEOUT:-10}"
+
+# --- All scenario definitions: "label|lua_file" ---
+ALL_SCENARIOS=(
+   "1 static route|single-static.lua"
+   "3 static routes|3-static.lua"
+   "5 static routes|5-static.lua"
+   "10 static routes|10-static.lua"
+   "3 dynamic routes|3-dynamic.lua"
+   "Mixed (5 static + 3 dynamic)|mixed-8.lua"
+)
+
+# =============================================================================
+# Case-specific help
+# =============================================================================
+
+show_help () {
+   echo ""
+   echo -e "${BOLD}${WHITE}  Bootgly Benchmarks - ${BENCHMARK_CASE}${NC}"
+   echo ""
+   echo -e "  ${BOLD}Usage:${NC}"
+   echo -e "    bash scripts/benchmark ${BENCHMARK_CASE} ${CYAN}--competitors=bootgly${NC}"
+   echo -e "    bash scripts/benchmark ${BENCHMARK_CASE} ${CYAN}--competitors=bootgly,competitor${NC}"
+   echo -e "    bash scripts/benchmark ${BENCHMARK_CASE} ${CYAN}--competitors=bootgly,competitor${NC} ${CYAN}--scenarios=1,3,6${NC}"
+   echo ""
+   echo -e "  ${BOLD}Options:${NC}"
+   echo -e "    ${CYAN}--competitors${NC}=LIST  Comma-separated names (${CYAN}bootgly${NC} required as first)"
+   echo -e "    ${CYAN}--scenarios${NC}=LIST    Comma-separated scenario numbers (default: all)"
+   echo -e "    ${CYAN}--help${NC}, ${CYAN}-h${NC}          Show this help"
+   echo ""
+   
+   # Separator
+   echo -e "  ${DIM}$(printf '─%.0s' {1..62})${NC}"
+   echo ""
+
+   echo -e "  ${BOLD}Competitors (available drivers):${NC}"
+   while IFS= read -r f; do
+      [[ ! -f "$f" ]] && continue
+      [[ "$f" == *.example.sh ]] && continue
+      local base rel
+      base=$(basename "$f" .sh)
+      rel="${f#$BOOTGLY_DIR/}"
+      echo -e "    ${GREEN}${base}${NC}  ${DIM}(${rel})${NC}"
+   done < <(find "$COMPETITORS_DIR" -name "*.sh" -not -name "*.example.sh" | sort)
+   echo ""
+   echo -e "  ${BOLD}Scenarios:${NC}"
+   for i in "${!ALL_SCENARIOS[@]}"; do
+      IFS='|' read -r name _ <<< "${ALL_SCENARIOS[$i]}"
+      echo -e "    ${GREEN}$((i+1))${NC}  $name"
+   done
+   echo ""
+
+   # Separator
+   echo -e "  ${DIM}$(printf '─%.0s' {1..62})${NC}"
+   echo ""
+
+   echo -e "  ${BOLD}Example drivers (copy to activate):${NC}"
+   while IFS= read -r f; do
+      [[ ! -f "$f" ]] && continue
+      local base
+      base=$(basename "$f" .example.sh)
+      # Skip if an active driver already exists
+      resolve_driver "$base" >/dev/null 2>&1 && continue
+      echo -e "    ${YELLOW}${base}${NC}  ${DIM}→ cp $(basename "$f") ${base}.sh${NC}"
+   done < <(find "$COMPETITORS_DIR" -name "*.example.sh" | sort)
+   echo ""
+   echo -e "  ${BOLD}Environment variables:${NC}"
+   echo -e "    ${DIM}PORT${NC}=8082  ${DIM}WRK_THREADS${NC}=10  ${DIM}WRK_CONNECTIONS${NC}=514  ${DIM}WRK_DURATION${NC}=10s"
+   echo -e "    ${DIM}WARMUP_DURATION${NC}=2s  ${DIM}WARMUP_THREADS${NC}=2  ${DIM}WARMUP_CONNECTIONS${NC}=64"
+   echo -e "    ${DIM}READY_TIMEOUT${NC}=10"
+   echo ""
+}
+
+# =============================================================================
+# Parse remaining arguments
+# =============================================================================
+
+COMPETITORS_ARG=""
+SCENARIO_ARG=""
+
+for arg in "${REMAINING_ARGS[@]}"; do
+   case "$arg" in
+      --help|-h)
+         show_help
+         exit 0
+         ;;
+      --competitors=*)
+         COMPETITORS_ARG="${arg#--competitors=}"
+         ;;
+      --scenarios=*)
+         SCENARIO_ARG="${arg#--scenarios=}"
+         ;;
+      *)
+         echo -e "${RED}ERROR: Unknown argument: $arg${NC}"
+         show_help
+         exit 1
+         ;;
+   esac
+done
+
+# --competitors is required
+if [[ -z "$COMPETITORS_ARG" ]]; then
+   echo -e "${RED}ERROR: --competitors is required.${NC}"
+   echo ""
+   show_help
+   exit 1
+fi
+
+# Parse competitors list
+IFS=',' read -ra COMPETITOR_LIST <<< "$COMPETITORS_ARG"
+
+if [[ ${#COMPETITOR_LIST[@]} -eq 0 ]]; then
+   echo -e "${RED}ERROR: --competitors list is empty.${NC}"
+   exit 1
+fi
+
+# First must be "bootgly"
+if [[ "${COMPETITOR_LIST[0]}" != "bootgly" ]]; then
+   echo -e "${RED}ERROR: First competitor must be 'bootgly' (baseline).${NC}"
+   echo -e "${DIM}  Example: --competitors=bootgly,competitor${NC}"
+   exit 1
+fi
+
+# Validate all driver files exist
+for name in "${COMPETITOR_LIST[@]}"; do
+   if ! resolve_driver "$name" >/dev/null 2>&1; then
+      echo -e "${RED}ERROR: Driver not found: ${name}${NC}"
+      _example_path=""
+      if _example_path=$(resolve_driver_example "$name" 2>/dev/null); then
+         echo -e "${YELLOW}HINT: An example driver exists. Copy it to activate:${NC}"
+         echo -e "  cp $(basename "$_example_path") ${name}.sh"
+      fi
+      echo ""
+      exit 1
+   fi
+done
+
+# Separate baseline from competitors
+BASELINE_DRIVER="${COMPETITOR_LIST[0]}"
+declare -a REQUESTED_DRIVERS=()
+if [[ ${#COMPETITOR_LIST[@]} -gt 1 ]]; then
+   REQUESTED_DRIVERS=("${COMPETITOR_LIST[@]:1}")
+fi
+
+# --- Parse scenario filter ---
+declare -a ACTIVE_INDICES=()
+
+if [[ -n "$SCENARIO_ARG" ]]; then
+   IFS=',' read -ra SCENARIO_NUMS <<< "$SCENARIO_ARG"
+   for num in "${SCENARIO_NUMS[@]}"; do
+      if ! [[ "$num" =~ ^[0-9]+$ ]]; then
+         echo -e "${RED}ERROR: Invalid scenario number: $num${NC}"
+         exit 1
+      fi
+      idx=$((num - 1))
+      if [[ $idx -lt 0 || $idx -ge ${#ALL_SCENARIOS[@]} ]]; then
+         echo -e "${RED}ERROR: Scenario $num out of range (1-${#ALL_SCENARIOS[@]}).${NC}"
+         exit 1
+      fi
+      ACTIVE_INDICES+=("$idx")
+   done
+else
+   for i in "${!ALL_SCENARIOS[@]}"; do
+      ACTIVE_INDICES+=("$i")
+   done
+fi
+
+# Build active scenarios array
+declare -a SCENARIOS=()
+for idx in "${ACTIVE_INDICES[@]}"; do
+   SCENARIOS+=("${ALL_SCENARIOS[$idx]}")
+done
+
+# --- Dependencies check ---
+for cmd in wrk php lsof awk nproc; do
+   command -v "$cmd" >/dev/null 2>&1 || { echo -e "${RED}ERROR: '$cmd' not found${NC}"; exit 1; }
+done
+
+# Validate scenario lua files
+for entry in "${SCENARIOS[@]}"; do
+   IFS='|' read -r _ lua <<< "$entry"
+   if [[ ! -f "$SCENARIOS_DIR/$lua" ]]; then
+      echo -e "${RED}ERROR: Scenario file not found: $SCENARIOS_DIR/$lua${NC}"
+      exit 1
+   fi
+done
+
+# =============================================================================
+# Shared helpers (available to all drivers)
+# =============================================================================
+
+kill_port () {
+   local pids
+   pids=$(lsof -ti :"$PORT" 2>/dev/null || true)
+   if [[ -n "$pids" ]]; then
+      echo "$pids" | xargs kill -9 2>/dev/null || true
+      sleep 1
+   fi
+}
+
+wait_for_server () {
+   local elapsed=0
+   while ! lsof -ti :"$PORT" >/dev/null 2>&1; do
+      sleep 0.5
+      elapsed=$((elapsed + 1))
+      if [[ $elapsed -ge $((READY_TIMEOUT * 2)) ]]; then
+         echo -e "${RED}ERROR: Server did not start on port $PORT within ${READY_TIMEOUT}s${NC}" >&2
+         return 1
+      fi
+   done
+   sleep 1
+}
+
+warmup () {
+   echo -e "${GRAY}  Warming up (${WARMUP_DURATION})...${NC}"
+   wrk -t"$WARMUP_THREADS" -c"$WARMUP_CONNECTIONS" -d"$WARMUP_DURATION" \
+      "http://127.0.0.1:$PORT/" >/dev/null 2>&1
+}
+
+run_wrk () {
+   local lua_file="$1"
+   local output
+   output=$(wrk -t"$WRK_THREADS" -c"$WRK_CONNECTIONS" -d"$WRK_DURATION" \
+      -s "$SCENARIOS_DIR/$lua_file" "http://127.0.0.1:$PORT/" 2>&1)
+
+   local rps latency
+   rps=$(echo "$output" | awk '/Requests\/sec:/ {printf "%.0f", $2}')
+   latency=$(echo "$output" | awk '/Latency/ && !/Distribution/ {print $2}')
+
+   echo "${rps:-0}|${latency:-N/A}"
+}
+
+format_number () {
+   printf "%'d" "$1" 2>/dev/null || echo "$1"
+}
+
+calc_diff () {
+   local a="$1" b="$2"
+   if [[ "$b" -eq 0 ]]; then
+      echo "N/A"
+      return
+   fi
+   awk "BEGIN { diff = (($a - $b) / $b) * 100; printf \"%+.1f%%\", diff }"
+}
+
+# =============================================================================
+# Load drivers
+# =============================================================================
+
+# --- Bootgly (baseline) ---
+# shellcheck disable=SC1090
+source "$(resolve_driver "$BASELINE_DRIVER")"
+
+BASELINE_NAME="$DRIVER_NAME"
+BASELINE_VERSION="$DRIVER_VERSION"
+BASELINE_WORKERS="$DRIVER_WORKERS"
+BASELINE_PATH="$(resolve_driver "$BASELINE_DRIVER")"
+
+# --- Competitor drivers ---
+declare -a COMP_NAMES=()
+declare -a COMP_VERSIONS=()
+declare -a COMP_WORKERS=()
+declare -a COMP_PATHS=()
+
+for name in "${REQUESTED_DRIVERS[@]}"; do
+   DRIVER_NAME="" DRIVER_VERSION="" DRIVER_WORKERS=""
+   _driver_path="$(resolve_driver "$name")"
+   # shellcheck disable=SC1090
+   source "$_driver_path"
+   COMP_NAMES+=("$DRIVER_NAME")
+   COMP_VERSIONS+=("$DRIVER_VERSION")
+   COMP_WORKERS+=("$DRIVER_WORKERS")
+   COMP_PATHS+=("$_driver_path")
+done
+
+COMP_COUNT=${#COMP_NAMES[@]}
+
+# =============================================================================
+# System information
+# =============================================================================
+
+SYS_OS=$(uname -sr 2>/dev/null || echo "unknown")
+SYS_CPU_MODEL=$(lscpu 2>/dev/null | awk -F: '/Model name/ {gsub(/^[ \t]+/, "", $2); print $2; exit}' || echo "unknown")
+SYS_CPU_COUNT=$(nproc 2>/dev/null || echo "?")
+SYS_PHP=$(php -v 2>/dev/null | head -1 || echo "unknown")
+SYS_WRK=$(wrk -v 2>&1 || true)
+SYS_WRK=$(echo "$SYS_WRK" | grep -oP 'wrk\s+\S+' | head -1)
+[[ -z "$SYS_WRK" ]] && SYS_WRK="unknown"
+SYS_DATE=$(date '+%Y-%m-%d %H:%M:%S')
+
+# --- RAM details (try dmidecode for brand/model/speed, fallback to free -h) ---
+SYS_RAM_TOTAL=$(free -h 2>/dev/null | awk '/Mem:/ {print $2}' || echo "unknown")
+SYS_RAM=""
+_dmi_out=$(dmidecode -t memory 2>/dev/null || true)
+if [[ -n "$_dmi_out" ]]; then
+   _ram_manufacturer=$(echo "$_dmi_out" | awk -F: '/Manufacturer/ && !/Not Specified|Unknown/ {gsub(/^[ \t]+/,"",$2); print $2; exit}')
+   _ram_part=$(echo "$_dmi_out" | awk -F: '/Part Number/ && !/Not Specified|Unknown/ {gsub(/^[ \t]+/,"",$2); print $2; exit}')
+   _ram_speed=$(echo "$_dmi_out" | awk -F: '/Configured Memory Speed|Speed/ && /MT\/s|MHz/ {gsub(/^[ \t]+/,"",$2); print $2; exit}')
+   _ram_type=$(echo "$_dmi_out" | awk -F: '/^\tType:/ && !/Unknown|Other/ {gsub(/^[ \t]+/,"",$2); print $2; exit}')
+   if [[ -n "$_ram_manufacturer" || -n "$_ram_part" ]]; then
+      SYS_RAM="${_ram_manufacturer:+$_ram_manufacturer }${_ram_part:+$_ram_part }${_ram_type:+$_ram_type }${_ram_speed:+@ $_ram_speed }(${SYS_RAM_TOTAL})"
+   fi
+fi
+[[ -z "$SYS_RAM" ]] && SYS_RAM="$SYS_RAM_TOTAL"
+
+# =============================================================================
+# Banner
+# =============================================================================
+
+echo ""
+echo -e "${BOLD}${WHITE}  ┌──────────────────────────────────────────────────────────────┐${NC}"
+_title="Bootgly Benchmarks - ${BENCHMARK_CASE}"
+printf -v _padded "%-52s" "$_title"
+echo -e "${BOLD}${WHITE}  │     ${_padded}     │${NC}"
+echo -e "${BOLD}${WHITE}  └──────────────────────────────────────────────────────────────┘${NC}"
+echo ""
+echo -e "  ${BOLD}${WHITE}System${NC}"
+echo -e "  ${DIM}OS${NC}        $SYS_OS"
+echo -e "  ${DIM}CPU${NC}       $SYS_CPU_MODEL (${SYS_CPU_COUNT} cores)"
+echo -e "  ${DIM}RAM${NC}       $SYS_RAM"
+echo -e "  ${DIM}PHP${NC}       $SYS_PHP"
+echo -e "  ${DIM}wrk${NC}       $SYS_WRK"
+echo -e "  ${DIM}Date${NC}      $SYS_DATE"
+echo ""
+echo -e "  ${BOLD}${WHITE}Configuration${NC}"
+echo -e "  ${DIM}wrk${NC}       -t${WRK_THREADS} -c${WRK_CONNECTIONS} -d${WRK_DURATION}"
+echo -e "  ${DIM}Warmup${NC}    -t${WARMUP_THREADS} -c${WARMUP_CONNECTIONS} -d${WARMUP_DURATION}"
+echo -e "  ${DIM}Port${NC}      ${PORT}"
+echo ""
+echo -e "  ${DIM}$(printf '─%.0s' {1..62})${NC}"
+echo ""
+echo -e "  ${BOLD}${WHITE}Competitors${NC}"
+echo -e "  ${CYAN}▸ $BASELINE_NAME${NC} ${BASELINE_VERSION}  (${BASELINE_WORKERS} workers)  ${DIM}[baseline]${NC}"
+for i in "${!COMP_NAMES[@]}"; do
+   echo -e "  ${CYAN}▸ ${COMP_NAMES[$i]}${NC} ${COMP_VERSIONS[$i]}  (${COMP_WORKERS[$i]} workers)"
+done
+echo ""
+echo -e "  ${BOLD}${WHITE}Scenarios${NC} ${DIM}(${#SCENARIOS[@]})${NC}"
+for i in "${!SCENARIOS[@]}"; do
+   IFS='|' read -r _label _lua <<< "${SCENARIOS[$i]}"
+   echo -e "  ${DIM}$((i + 1)).${NC} ${_label}"
+done
+echo ""
+echo -e "  ${DIM}$(printf '─%.0s' {1..62})${NC}"
+echo ""
+
+# =============================================================================
+# Run benchmarks
+# =============================================================================
+
+declare -a BASELINE_RPS=()
+declare -a BASELINE_LAT=()
+declare -a ALL_COMP_RPS=()
+declare -a ALL_COMP_LAT=()
+
+SCENARIO_COUNT=${#SCENARIOS[@]}
+
+# --- Benchmark Bootgly (baseline) ---
+echo -e "${CYAN}▸ Starting ${BASELINE_NAME}...${NC}"
+kill_port
+# Re-source baseline driver to restore its functions
+source "$BASELINE_PATH"
+driver_start
+echo -e "${GREEN}  ${BASELINE_NAME} ready (port $PORT).${NC}"
+warmup
+
+for i in "${!SCENARIOS[@]}"; do
+   IFS='|' read -r name lua <<< "${SCENARIOS[$i]}"
+   echo -ne "${GRAY}  [$((i+1))/${SCENARIO_COUNT}] ${name}... ${NC}"
+   result=$(run_wrk "$lua")
+   IFS='|' read -r rps lat <<< "$result"
+   BASELINE_RPS+=("$rps")
+   BASELINE_LAT+=("$lat")
+   echo -e "${GREEN}$(format_number "$rps") req/s${NC}  ${DIM}(${lat})${NC}"
+done
+
+driver_stop
+echo ""
+
+# --- Benchmark each competitor ---
+for c in "${!COMP_PATHS[@]}"; do
+   echo -e "${CYAN}▸ Starting ${COMP_NAMES[$c]}...${NC}"
+   kill_port
+
+   DRIVER_NAME="" DRIVER_VERSION="" DRIVER_WORKERS=""
+   unset -f driver_start driver_stop 2>/dev/null || true
+   # shellcheck disable=SC1090
+   source "${COMP_PATHS[$c]}"
+   driver_start
+   echo -e "${GREEN}  ${COMP_NAMES[$c]} ready (port $PORT).${NC}"
+   warmup
+
+   for i in "${!SCENARIOS[@]}"; do
+      IFS='|' read -r name lua <<< "${SCENARIOS[$i]}"
+      echo -ne "${GRAY}  [$((i+1))/${SCENARIO_COUNT}] ${name}... ${NC}"
+      result=$(run_wrk "$lua")
+      IFS='|' read -r rps lat <<< "$result"
+      ALL_COMP_RPS+=("$rps")
+      ALL_COMP_LAT+=("$lat")
+      echo -e "${GREEN}$(format_number "$rps") req/s${NC}  ${DIM}(${lat})${NC}"
+   done
+
+   driver_stop
+   echo ""
+done
+
+# =============================================================================
+# Results table (terminal)
+# =============================================================================
+
+echo ""
+echo -e "  ${BOLD}${WHITE}Results${NC}"
+echo ""
+
+if [[ "$COMP_COUNT" -eq 0 ]]; then
+   # ---- Bootgly-only table ----
+   W_SCEN=8; W_RPS=5; W_LAT=7
+   for i in "${!SCENARIOS[@]}"; do
+      IFS='|' read -r name _ <<< "${SCENARIOS[$i]}"
+      L=${#name}; [[ $L -gt $W_SCEN ]] && W_SCEN=$L
+      val=$(format_number "${BASELINE_RPS[$i]}")
+      L=${#val}; [[ $L -gt $W_RPS ]] && W_RPS=$L
+      L=${#BASELINE_LAT[$i]}; [[ $L -gt $W_LAT ]] && W_LAT=$L
+   done
+
+   SEP_LEN=$((W_SCEN + W_RPS + W_LAT + 10))
+   SEP="$(printf '─%.0s' $(seq 1 "$SEP_LEN"))"
+
+   echo -e "  ${DIM}${SEP}${NC}"
+   printf "  ${BOLD}${WHITE}│ %-${W_SCEN}s │ %${W_RPS}s │ %${W_LAT}s │${NC}\n" \
+      "Scenario" "req/s" "Latency"
+   echo -e "  ${DIM}${SEP}${NC}"
+
+   for i in "${!SCENARIOS[@]}"; do
+      IFS='|' read -r name _ <<< "${SCENARIOS[$i]}"
+      printf "  │ %-${W_SCEN}s │ %${W_RPS}s │ %${W_LAT}s │\n" \
+         "$name" \
+         "$(format_number "${BASELINE_RPS[$i]}")" \
+         "${BASELINE_LAT[$i]}"
+   done
+   echo -e "  ${DIM}${SEP}${NC}"
+
+else
+   # ---- Pairwise tables: Bootgly vs each competitor ----
+   for c in "${!COMP_NAMES[@]}"; do
+      [[ "$c" -gt 0 ]] && echo ""
+
+      echo -e "  ${BOLD}${CYAN}${BASELINE_NAME} vs ${COMP_NAMES[$c]}${NC}"
+      echo ""
+
+      # Compute column widths
+      W_SCEN=8
+      W_BASE=${#BASELINE_NAME}; [[ $W_BASE -lt 13 ]] && W_BASE=13
+      W_COMP=${#COMP_NAMES[$c]}; [[ $W_COMP -lt 13 ]] && W_COMP=13
+      W_DIFF=4
+      W_BLAT=10
+      W_CLAT=10
+
+      for i in "${!SCENARIOS[@]}"; do
+         IFS='|' read -r name _ <<< "${SCENARIOS[$i]}"
+         flat_idx=$((c * SCENARIO_COUNT + i))
+
+         L=${#name}; [[ $L -gt $W_SCEN ]] && W_SCEN=$L
+
+         val=$(format_number "${BASELINE_RPS[$i]}")
+         L=${#val}; [[ $L -gt $W_BASE ]] && W_BASE=$L
+
+         val=$(format_number "${ALL_COMP_RPS[$flat_idx]}")
+         L=${#val}; [[ $L -gt $W_COMP ]] && W_COMP=$L
+
+         diff=$(calc_diff "${BASELINE_RPS[$i]}" "${ALL_COMP_RPS[$flat_idx]}")
+         L=${#diff}; [[ $L -gt $W_DIFF ]] && W_DIFF=$L
+
+         L=${#BASELINE_LAT[$i]}; [[ $L -gt $W_BLAT ]] && W_BLAT=$L
+
+         comp_lat="${ALL_COMP_LAT[$flat_idx]}"
+         L=${#comp_lat}; [[ $L -gt $W_CLAT ]] && W_CLAT=$L
+      done
+
+      SEP_LEN=$((W_SCEN + W_BASE + W_COMP + W_DIFF + W_BLAT + W_CLAT + 19))
+      SEP="$(printf '─%.0s' $(seq 1 "$SEP_LEN"))"
+
+      echo -e "  ${DIM}${SEP}${NC}"
+      printf "  ${BOLD}${WHITE}│ %-${W_SCEN}s │ %${W_BASE}s │ %${W_COMP}s │ %${W_DIFF}s │ %${W_BLAT}s │ %${W_CLAT}s │${NC}\n" \
+         "Scenario" "${BASELINE_NAME}" "${COMP_NAMES[$c]}" "Diff" "B. Latency" "C. Latency"
+      echo -e "  ${DIM}${SEP}${NC}"
+
+      for i in "${!SCENARIOS[@]}"; do
+         IFS='|' read -r name _ <<< "${SCENARIOS[$i]}"
+         flat_idx=$((c * SCENARIO_COUNT + i))
+
+         comp_rps="${ALL_COMP_RPS[$flat_idx]}"
+         comp_lat="${ALL_COMP_LAT[$flat_idx]}"
+         diff=$(calc_diff "${BASELINE_RPS[$i]}" "$comp_rps")
+
+         # Pre-pad diff then colorize (escape codes don't affect alignment)
+         padded_diff=$(printf "%${W_DIFF}s" "$diff")
+         if [[ "$diff" == +* ]]; then
+            colored_diff="${GREEN}${padded_diff}${NC}"
+         else
+            colored_diff="${RED}${padded_diff}${NC}"
+         fi
+
+         printf "  │ %-${W_SCEN}s │ %${W_BASE}s │ %${W_COMP}s │ %b │ %${W_BLAT}s │ %${W_CLAT}s │\n" \
+            "$name" \
+            "$(format_number "${BASELINE_RPS[$i]}")" \
+            "$(format_number "$comp_rps")" \
+            "$colored_diff" \
+            "${BASELINE_LAT[$i]}" \
+            "$comp_lat"
+      done
+      echo -e "  ${DIM}${SEP}${NC}"
+   done
+fi
+
+echo ""
+
+# =============================================================================
+# Save results to file
+# =============================================================================
+
+RESULTS_DIR="$BOOTGLY_DIR/workdata/tests/benchmarks/$BENCHMARK_CASE"
+mkdir -p "$RESULTS_DIR"
+TIMESTAMP=$(date '+%Y-%m-%d_%H-%M-%S')
+RESULTS_FILE="$RESULTS_DIR/${TIMESTAMP}_bench.marks"
+
+{
+   echo "=== Bootgly Benchmarks - ${BENCHMARK_CASE} ==="
+   echo "Date: $SYS_DATE"
+   echo ""
+   echo "System"
+   echo "  OS:   $SYS_OS"
+   echo "  CPU:  $SYS_CPU_MODEL ($SYS_CPU_COUNT cores)"
+   echo "  RAM:  $SYS_RAM"
+   echo "  PHP:  $SYS_PHP"
+   echo "  wrk:  $SYS_WRK"
+   echo ""
+   echo "Competitors"
+   echo "  $BASELINE_NAME $BASELINE_VERSION ($BASELINE_WORKERS workers) [baseline]"
+   for i in "${!COMP_NAMES[@]}"; do
+      echo "  ${COMP_NAMES[$i]} ${COMP_VERSIONS[$i]} (${COMP_WORKERS[$i]} workers)"
+   done
+   echo ""
+   echo "Configuration"
+   echo "  wrk:       -t${WRK_THREADS} -c${WRK_CONNECTIONS} -d${WRK_DURATION}"
+   echo "  Warmup:    -t${WARMUP_THREADS} -c${WARMUP_CONNECTIONS} -d${WARMUP_DURATION}"
+   echo "  Port:      ${PORT}"
+   echo "  Scenarios: ${SCENARIO_COUNT}"
+   echo ""
+   echo "$(printf '=%.0s' {1..80})"
+   echo ""
+
+   if [[ "$COMP_COUNT" -eq 0 ]]; then
+      W_SCEN=8; W_RPS=5; W_LAT=7
+      for i in "${!SCENARIOS[@]}"; do
+         IFS='|' read -r name _ <<< "${SCENARIOS[$i]}"
+         L=${#name}; [[ $L -gt $W_SCEN ]] && W_SCEN=$L
+         val=$(format_number "${BASELINE_RPS[$i]}")
+         L=${#val}; [[ $L -gt $W_RPS ]] && W_RPS=$L
+         L=${#BASELINE_LAT[$i]}; [[ $L -gt $W_LAT ]] && W_LAT=$L
+      done
+
+      printf "%-${W_SCEN}s  %${W_RPS}s  %${W_LAT}s\n" "Scenario" "req/s" "Latency"
+      printf '%.0s-' $(seq 1 $((W_SCEN + W_RPS + W_LAT + 4))); echo ""
+
+      for i in "${!SCENARIOS[@]}"; do
+         IFS='|' read -r name _ <<< "${SCENARIOS[$i]}"
+         printf "%-${W_SCEN}s  %${W_RPS}s  %${W_LAT}s\n" \
+            "$name" \
+            "$(format_number "${BASELINE_RPS[$i]}")" \
+            "${BASELINE_LAT[$i]}"
+      done
+   else
+      for c in "${!COMP_NAMES[@]}"; do
+         [[ "$c" -gt 0 ]] && echo ""
+
+         echo "${BASELINE_NAME} vs ${COMP_NAMES[$c]}"
+         echo ""
+
+         W_SCEN=8
+         W_BASE=${#BASELINE_NAME}; [[ $W_BASE -lt 13 ]] && W_BASE=13
+         W_COMP=${#COMP_NAMES[$c]}; [[ $W_COMP -lt 13 ]] && W_COMP=13
+         W_DIFF=4; W_BLAT=10; W_CLAT=10
+
+         for i in "${!SCENARIOS[@]}"; do
+            IFS='|' read -r name _ <<< "${SCENARIOS[$i]}"
+            flat_idx=$((c * SCENARIO_COUNT + i))
+
+            L=${#name}; [[ $L -gt $W_SCEN ]] && W_SCEN=$L
+            val=$(format_number "${BASELINE_RPS[$i]}")
+            L=${#val}; [[ $L -gt $W_BASE ]] && W_BASE=$L
+            val=$(format_number "${ALL_COMP_RPS[$flat_idx]}")
+            L=${#val}; [[ $L -gt $W_COMP ]] && W_COMP=$L
+            diff=$(calc_diff "${BASELINE_RPS[$i]}" "${ALL_COMP_RPS[$flat_idx]}")
+            L=${#diff}; [[ $L -gt $W_DIFF ]] && W_DIFF=$L
+            L=${#BASELINE_LAT[$i]}; [[ $L -gt $W_BLAT ]] && W_BLAT=$L
+            comp_lat="${ALL_COMP_LAT[$flat_idx]}"
+            L=${#comp_lat}; [[ $L -gt $W_CLAT ]] && W_CLAT=$L
+         done
+
+         printf "%-${W_SCEN}s  %${W_BASE}s  %${W_COMP}s  %${W_DIFF}s  %${W_BLAT}s  %${W_CLAT}s\n" \
+            "Scenario" "${BASELINE_NAME}" "${COMP_NAMES[$c]}" "Diff" "B. Latency" "C. Latency"
+         printf '%.0s-' $(seq 1 $((W_SCEN + W_BASE + W_COMP + W_DIFF + W_BLAT + W_CLAT + 10))); echo ""
+
+         for i in "${!SCENARIOS[@]}"; do
+            IFS='|' read -r name _ <<< "${SCENARIOS[$i]}"
+            flat_idx=$((c * SCENARIO_COUNT + i))
+            comp_rps="${ALL_COMP_RPS[$flat_idx]}"
+            comp_lat="${ALL_COMP_LAT[$flat_idx]}"
+            diff=$(calc_diff "${BASELINE_RPS[$i]}" "$comp_rps")
+
+            printf "%-${W_SCEN}s  %${W_BASE}s  %${W_COMP}s  %${W_DIFF}s  %${W_BLAT}s  %${W_CLAT}s\n" \
+               "$name" \
+               "$(format_number "${BASELINE_RPS[$i]}")" \
+               "$(format_number "$comp_rps")" \
+               "$diff" \
+               "${BASELINE_LAT[$i]}" \
+               "$comp_lat"
+         done
+      done
+   fi
+
+   echo ""
+} > "$RESULTS_FILE"
+
+echo -e "  ${DIM}Results saved to: workdata/tests/benchmarks/${BENCHMARK_CASE}/${TIMESTAMP}_bench.marks${NC}"
+echo ""

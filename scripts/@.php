@@ -2,7 +2,7 @@
 return [
    'scripts' => [
       'built-in' => [ # Relative to scripts/ (bootgly's root directory)
-         'benchmark-http-routing',
+         'benchmark',
       ],
       'imported' => [ # Relative to working directory (your root directory)
          'vendor/bin/phpstan'
