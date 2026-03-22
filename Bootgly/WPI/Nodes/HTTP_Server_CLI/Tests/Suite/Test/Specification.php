@@ -33,6 +33,12 @@ class Specification extends Base implements Handling
     */
    public Closure $request;
    /**
+    * @var array<Closure>
+    * An array of closures, each returning a raw HTTP request string.
+    * When non-empty, the test is "multi-request" — $request (singular) is ignored.
+    */
+   public array $requests;
+   /**
     * @var array<Middleware>
     * An array of middleware instances to be used in E2E tests.
     */
@@ -47,10 +53,17 @@ class Specification extends Base implements Handling
     * The length of the expected HTTP response.
     */
    public null|int $responseLength;
+   /**
+    * @var array<null|int>
+    * The expected response lengths per request (for multi-request tests).
+    */
+   public array $responseLengths;
 
 
    /**
+    * @param array<Closure> $requests
     * @param array<Middleware> $middlewares
+    * @param array<null|int> $responseLengths
     */
    public function __construct (
       // * Data (required)
@@ -64,8 +77,10 @@ class Specification extends Base implements Handling
       bool $ignore = false,
       null|Closure $retest = null,
       // * Data (optional - E2E)
+      array $requests = [],
       array $middlewares = [],
       null|int $responseLength = null,
+      array $responseLengths = [],
    )
    {
       // @
@@ -80,8 +95,10 @@ class Specification extends Base implements Handling
 
       // * Data
       $this->request = $request;
+      $this->requests = $requests;
       $this->response = $response;
       $this->middlewares = $middlewares;
       $this->responseLength = $responseLength;
+      $this->responseLengths = $responseLengths;
    }
 }

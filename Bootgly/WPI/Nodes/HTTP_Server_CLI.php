@@ -11,9 +11,11 @@
 namespace Bootgly\WPI\Nodes;
 
 
+use function count;
 use function function_exists;
 use function opcache_invalidate;
 use function clearstatcache;
+use function strlen;
 use Closure;
 use Exception;
 use Throwable;
@@ -242,6 +244,17 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
          }
          SAPI::$Tests[self::class][] = $test;
          SAPI::$tests[self::class][] = $case;
+
+         // @ Expand handler queue for multi-request tests
+         if (
+            $test instanceof \Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test\Specification
+            && $test->requests !== []
+         ) {
+            $extra = count($test->requests) - 1;
+            for ($i = 0; $i < $extra; $i++) {
+               SAPI::$Tests[self::class][] = $test;
+            }
+         }
       }
 
       $Suite->tests = SAPI::$tests[self::class];
@@ -273,9 +286,10 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
             // @@ Iterate Test Cases
             // !
             $testFiles = SAPI::$tests[self::class] ?? [];
+            $specIndex = 0;
             foreach ($testFiles as $index => $value) {
                /** @var Specification|null $test */
-               $test = SAPI::$Tests[self::class][$index] ?? null;
+               $test = SAPI::$Tests[self::class][$specIndex] ?? null;
                if ($test instanceof Specification) {
                   $test->index(case: $test->case ?? ((int) $index + 1));
                }
@@ -285,8 +299,67 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
                $Test = $Suite->test($test);
                if ($Test === null || !($test instanceof \Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test\Specification)) {
                   $Suite->skip();
+                  $specIndex++;
                   continue;
                }
+
+               // @ Multi-request test
+               if ($test->requests !== []) {
+                  $responses = [];
+                  $failed = false;
+
+                  foreach ($test->requests as $reqIndex => $requestClosure) {
+                     // ! Server
+                     $responseLength = $test->responseLengths[$reqIndex] ?? null;
+                     // ! Client
+                     // ? Request
+                     $requestData = $requestClosure("{$TCP_Client_CLI->host}:{$TCP_Client_CLI->port}");
+                     $requestLength = strlen($requestData);
+                     // @ Send Request to Server
+                     $Connection::$output = $requestData;
+                     if ( ! $Connection->writing($Socket, $requestLength) ) {
+                        $failed = true;
+                        break;
+                     }
+                     // ? Response
+                     $timeout = 2;
+                     $input = '';
+                     // @ Get Response from Server
+                     if ( $Connection->reading($Socket, $responseLength, $timeout) ) {
+                        $input = $Connection::$input;
+                     }
+
+                     if ($Connection->expired) {
+                        $failed = true;
+                        break;
+                     }
+
+                     $responses[] = $input;
+                  }
+
+                  $specIndex += count($test->requests);
+
+                  if ($failed) {
+                     $Test->fail();
+                     break;
+                  }
+
+                  // @ Execute Test
+                  $Test->test($responses);
+                  // @ Output Test result
+                  if ($Test->passed) {
+                     $Test->pass();
+                  }
+                  else {
+                     $Test->fail();
+                     break;
+                  }
+
+                  continue;
+               }
+
+               // @ Single-request test (existing behavior)
+               $specIndex++;
 
                // ! Server
                $responseLength = $test->responseLength;

@@ -178,6 +178,14 @@ return new Suite(
          '7.1-middleware-rate_limit',
          // TrustedProxy
          '8.1-middleware-trusted_proxy',
+      ],
+      'Sequential/' => [
+         // Response state reset across sequential requests
+         '1.1-response_body_reset_across_routes',
+         '1.2-response_status_code_reset_across_routes',
+         '1.3-response_header_reset_across_routes',
+         // Idempotency
+         '1.4-response_idempotent_same_route',
       ]
    ]
 );
