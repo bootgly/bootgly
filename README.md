@@ -178,9 +178,7 @@ Your sponsorship will keep this project always **up to date** with **new feature
 <details>
    <summary><kbd>Run Bootgly CLI demo</kbd></summary><br>
 
-   1) See the examples in `projects/Bootgly/CLI/examples/`;
-   2) Check the file `projects/Bootgly/CLI.php`;
-   3) Run the Bootgly CLI demo in terminal:
+   1) Run the Bootgly CLI demo in terminal:
 
    ```bash
    php bootgly demo
@@ -200,11 +198,22 @@ Your sponsorship will keep this project always **up to date** with **new feature
 <details>
    <summary><kbd>Perform Bootgly tests</kbd></summary><br>
 
-   1) Check the bootstrap tests file `tests/@.php`;
+   1) Check the global bootstrap tests file `tests/@.php`;
    2) Run the Bootgly CLI test command in terminal:
 
    ```bash
    bootgly test
+   ```
+
+   ---
+
+   You can also run specific suites or test files by index:
+
+   ```bash
+   bootgly test 16
+   ```
+   ```
+   bootgly test 16 1
    ```
 </details>
 
@@ -213,46 +222,17 @@ Your sponsorship will keep this project always **up to date** with **new feature
 <details>
    <summary><kbd>Running a HTTP Server</kbd></summary>
 
-   ##### **Option 1: Non-CLI SAPI (Apache, LiteSpeed, Nginx, etc)**
-
-   1) Enable support to `rewrite`;
-   2) Configure the WPI boot file in `projects/Bootgly/WPI.boot.php` file;
-   3) Run the Non-CLI HTTP Server pointing to `index.php`.
-
-   ##### **Option 2: CLI SAPI**
-
-   Directly in Linux OS *(max performance)*:
-
-   1) Configure the Bootgly HTTP Server script in `scripts/http-server-cli` file;
-   2) Configure the HTTP Server API in `projects/Bootgly/WPI/HTTP_Server_CLI-1.SAPI.php` file;
+   1) Configure the Bootgly HTTP Server CLI project in `projects/HTTP_Server_CLI/HTTP_Server_CLI.project.php` file;
    3) Run the Bootgly HTTP Server CLI in the terminal:
 
    ```bash
-   bootgly serve
-   ```
-   or
-   ```bash
-   php scripts/http-server-cli
-   ```
-
-   --
-
-   or using Docker:
-
-   1) Pull the image:
-
-   ```bash
-   docker pull bootgly/http-server-cli
-   ```
-
-   2) Run the container in interactive mode and in the host network for max performance:
-
-   ```bash
-   docker run -it --network host bootgly/http-server-cli
+   bootgly project run HTTP_Server_CLI
    ```
 </details>
 
 <b>[Routing HTTP Requests on the Server-side][ROUTING]</b>
+
+Check the documentation for more details and examples: [Bootgly Docs][PROJECT_DOCS].
 
 ---
 
