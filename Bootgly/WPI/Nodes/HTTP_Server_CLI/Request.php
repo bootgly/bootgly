@@ -18,7 +18,6 @@ use function strtotime;
 use function base64_decode;
 use function preg_match_all;
 use function uasort;
-use function array_merge;
 use function array_keys;
 use function strtok;
 use function rtrim;
@@ -38,7 +37,9 @@ use function date;
 use function time;
 use function array_walk_recursive;
 use function clearstatcache;
+use function is_array;
 use function is_file;
+use function is_string;
 use function unlink;
 use function stripos;
 use function bin2hex;
@@ -52,21 +53,13 @@ use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages;
 use Bootgly\WPI\Modules\HTTP\Server\Response\Raw\Header\Cookie;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Decoder_Waiting;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Decoder_Downloading;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Raw\Body;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Raw\Header;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Raw\Header\Cookies;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Authentications;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Authentications\Basic;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Session;
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Downloader;
-
-
-final class AuthenticationCredentials
-{
-   public function __construct
-   (
-      public string $username,
-      public string $password
-   ){}
-}
 
 
 #[AllowDynamicProperties]
@@ -77,6 +70,11 @@ class Request
 
 
    // * Config
+   /** @var int Maximum file size in bytes for multipart/form-data downloads (default: 500MB) */
+   public static int $maxFileSize = 500 * 1024 * 1024; // @ 500 megabytes
+   /** @var int Maximum body size in bytes for non-multipart requests (default: 10MB) */
+   public static int $maxBodySize = 10 * 1024 * 1024; // @ 10 megabytes
+
    public string $base {
       get => $this->base;
       set {
@@ -307,7 +305,7 @@ class Request
    /**
     * The Request Session.
     */
-   public private(set) ?Session $Session = null {
+   public private(set) null|Session $Session = null {
       get {
          if ($this->Session === null) {
             // !
@@ -351,7 +349,7 @@ class Request
     */
    public array|string $post {
       get {
-         if ($this->method === 'POST' && $_POST === []) {
+         if ($this->method === 'POST' && $_POST === [] && ! $this->Body->streaming) {
             /** @var array<string, array<string>|bool|float|int|string>|null $input */
             $input = $this->input();
             return $input ?? [];
@@ -492,8 +490,6 @@ class Request
    public readonly int $time;
    public static int $multiparts = 0;
 
-   private Downloader $Downloader;
-
    private string $authUsername = '';
    private string $authPassword = '';
 
@@ -519,8 +515,6 @@ class Request
       $this->at = date("H:i:s");
       $this->time = time();
 
-
-      $this->Downloader = new Downloader($this);
    }
 
    public function __clone ()
@@ -563,7 +557,7 @@ class Request
       // @ Init Request length
       $length = $separator_position + 4;
 
-      // ? Request Meta (first line of HTTP Header)
+      // # Request Meta (first line of HTTP Header)
       // @ Get Request Meta raw
       // Sample: GET /path HTTP/1.1
       $meta_raw = strstr($buffer, "\r\n", true);
@@ -595,15 +589,15 @@ class Request
       }
       // URI
       // protocol
-
+      
       // @ Set Request Meta length
       $meta_length = strlen($meta_raw);
 
-      // ? Request Header
+      // # Request Header
       // @ Get Request Header raw
       $header_raw = substr($buffer, $meta_length + 2, $separator_position - $meta_length);
 
-      // ? Request Body
+      // # Request Body
       // @ Set Request Body length if possible
       if ( $_ = strpos($header_raw, "\r\nContent-Length: ") ) {
          $content_length = (int) substr($header_raw, $_ + 18, 10);
@@ -620,7 +614,19 @@ class Request
       if ( isSet($content_length) ) {
          $length += $content_length; // @ Add Request Body length
 
-         if ($length > 10485760) { // @ 10 megabytes
+         // @ Detect multipart/form-data for streaming download
+         $isMultipart = false;
+         $multipartBoundary = '';
+         if ( $ctPos = stripos($header_raw, "\r\nContent-Type: multipart/form-data") ) {
+            $isMultipart = true;
+            if ( preg_match('/boundary="?(\S+)"?/', substr($header_raw, $ctPos, 200), $bMatch) ) {
+               $multipartBoundary = trim('--' . $bMatch[1], '"');
+            }
+         }
+
+         // ?: Validate max request size
+         $maxSize = $isMultipart ? static::$maxFileSize : static::$maxBodySize;
+         if ($length > $maxSize) {
             $Package->reject("HTTP/1.1 413 Request Entity Too Large\r\n\r\n");
             return 0;
          }
@@ -628,13 +634,52 @@ class Request
          if ($content_length > 0) {
             // @ Check if HTTP content is not empty
             if ($size >= $separator_position + 4) {
-               $this->Body->raw = substr($buffer, $separator_position + 4, $content_length);
-               $this->Body->downloaded = strlen($this->Body->raw);
+               $initialBody = substr($buffer, $separator_position + 4, $content_length);
+               $initialLength = strlen($initialBody);
+            }
+            else {
+               $initialBody = '';
+               $initialLength = 0;
             }
 
-            if ($content_length > $this->Body->downloaded) {
-               $this->Body->waiting = true;
-               HTTP_Server_CLI::$Decoder = new Decoder_Waiting;
+            // @ Use streaming decoder for multipart/form-data
+            if ($isMultipart && $multipartBoundary !== '') {
+               if ($initialLength >= $content_length) {
+                  // @ Complete body available: process immediately via streaming decoder
+                  $this->Body->downloaded = $initialLength;
+                  $this->Body->length = $content_length;
+                  $this->Body->waiting = true;
+                  $this->Body->streaming = true;
+
+                  Decoder_Downloading::init($multipartBoundary);
+                  Decoder_Downloading::feedInitial($initialBody);
+                  // @ Simulate decode call with the full body data
+                  Decoder_Downloading::decode($Package, '', 0);
+               }
+               else {
+                  // @ Incomplete body: set streaming decoder for subsequent chunks
+                  $this->Body->downloaded = $initialLength;
+                  $this->Body->waiting = true;
+                  $this->Body->streaming = true;
+
+                  Decoder_Downloading::init($multipartBoundary);
+
+                  if ($initialBody !== '') {
+                     Decoder_Downloading::feedInitial($initialBody);
+                  }
+
+                  HTTP_Server_CLI::$Decoder = new Decoder_Downloading;
+               }
+            }
+            else {
+               // @ Non-multipart: buffer in memory (original behavior)
+               $this->Body->raw = $initialBody;
+               $this->Body->downloaded = $initialLength;
+
+               if ($content_length > $this->Body->downloaded) {
+                  $this->Body->waiting = true;
+                  HTTP_Server_CLI::$Decoder = new Decoder_Waiting;
+               }
             }
          }
 
@@ -642,7 +687,7 @@ class Request
       }
 
       // @ Set Request
-      // ! Request
+      // # Request
       // address
       $this->address = $Package->Connection->ip;
       // port
@@ -657,13 +702,13 @@ class Request
       // protocol
       $this->protocol = $protocol;
 
-      // ! Request Header
+      // # Request Header
       // raw
       $this->Header->define(raw: $header_raw);
       // host
       #$_SERVER['HTTP_HOST'] = $this->Header->get('HOST');
 
-      // ! Request Body
+      // # Request Body
       $this->Body->position = $separator_position + 4;
 
       // @ return Request length
@@ -712,21 +757,9 @@ class Request
    /**
     * @return array<string, mixed>|null
     */
-   public function download (? string $key = null): array|null
+   public function download (null|string $key = null): array|null
    {
-      // ?
-      $content_type = $this->Header->get('Content-Type');
-      $boundary = $this->Body->parse(
-         content: 'Form-data',
-         type: $content_type
-      );
-
-      // @ Set FILES data
-      if (is_string($boundary)) {
-         $this->Downloader->downloading($boundary);
-      }
-
-      // :
+      // : parsed $_FILES || null
       if ($key === null) {
          /** @var array<string, array<string, bool|int|string|array<int|string, bool|int|string>>> $files */
          $files = $_FILES;
@@ -750,18 +783,13 @@ class Request
    /**
     * @return array<string, mixed>|string|null
     */
-   public function receive (? string $key = null): array|string|null
+   public function receive (null|string $key = null): array|string|null
    {
       $content_type = $this->Header->get('Content-Type');
       $parsed = $this->Body->parse(
          content: 'raw',
          type: $content_type
       );
-
-      // @ Set POST data
-      if (is_string($parsed)) {
-         $this->Downloader->downloading($parsed);
-      }
 
       // : parsed $_POST || null
       if ($key === null) {
@@ -788,9 +816,9 @@ class Request
 
    // HTTP Basic Authentication
    /**
-    * @return AuthenticationCredentials|null
+    * @return Basic|null
     */
-   public function authenticate (): AuthenticationCredentials|null
+   public function authenticate (): Basic|null
    {
       $authorization = $this->Header->get('Authorization');
 
@@ -817,7 +845,7 @@ class Request
       $this->username = $username;
       $this->password = $password;
 
-      return new AuthenticationCredentials($username, $password);
+      return new Basic($username, $password);
    }
 
    // HTTP Content Negotiation

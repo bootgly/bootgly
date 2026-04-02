@@ -11,12 +11,16 @@
 namespace Bootgly\WPI\Interfaces\TCP_Server_CLI;
 
 
-use Bootgly\ACI\Logs\LoggableEscaped;
+use function error_reporting;
+use function file_put_contents;
+use function function_exists;
+use function ini_set;
+use function opcache_get_status;
 
+use Bootgly\ACI\Logs\LoggableEscaped;
 use const Bootgly\CLI;
 use Bootgly\CLI;
-
-use Bootgly\WPI\Endpoints\Servers\Modes;
+use Bootgly\API\Endpoints\Server\Modes;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI as Server;
 
 
@@ -97,14 +101,14 @@ class Commands extends CLI\Terminal
                '@\;Stopping ' . (string) count($this->Server->Process->Children->PIDs) . ' worker(s)... ',
                self::LOG_WARNING_LEVEL
             )
-            && $this->Server->Process->sendSignal(SIGINT)
+            && $this->Server->Process->Signals->send(SIGINT)
             && false,
          'pause' =>
-            $this->Server->Process->sendSignal(SIGTSTP) && false,
+            $this->Server->Process->Signals->send(SIGTSTP) && false,
          'resume' =>
-            $this->Server->Process->sendSignal(SIGCONT) && false,
+            $this->Server->Process->Signals->send(SIGCONT) && false,
          'reload' =>
-            $this->Server->Process->sendSignal(SIGUSR2, master: false)
+            $this->Server->Process->Signals->send(SIGUSR2, master: false)
             && true,
          // TODO restart command
          // @ mode
@@ -115,33 +119,33 @@ class Commands extends CLI\Terminal
          'check jit' =>
             $this->log(
                // @phpstan-ignore-next-line
-               (\function_exists('opcache_get_status') && @\opcache_get_status()['jit']['enabled'])
+               (function_exists('opcache_get_status') && @opcache_get_status()['jit']['enabled'])
                ? 'JIT enabled' : 'JIT disabled'
             ) && true,
          'error on' =>
-            \error_reporting(E_ALL) && \ini_set('display_errors', 'On') && true,
+            error_reporting(E_ALL) && ini_set('display_errors', 'On') && true,
          'error off' =>
-            \error_reporting(0) && \ini_set('display_errors', 'Off') && true,
+            error_reporting(0) && ini_set('display_errors', 'Off') && true,
          // TODO 'log'
          'test' => // TODO use CLI wizard to choose the tests
             $this->saveCommand('test init')
-            && $this->Server->Process->sendSignal(SIGUSR1, master: false, children: true)
+            && $this->Server->Process->Signals->send(SIGUSR1, master: false, children: true)
 
             && $this->saveCommand('test')
-            && $this->Server->Process->sendSignal(SIGUSR1, master: true, children: false)
+            && $this->Server->Process->Signals->send(SIGUSR1, master: true, children: false)
 
             && $this->saveCommand('test end')
-            && $this->Server->Process->sendSignal(SIGUSR1, master: false, children: true) && true, // @phpstan-ignore-line
+            && $this->Server->Process->Signals->send(SIGUSR1, master: false, children: true) && true, // @phpstan-ignore-line
 
          // ! \ Connection
          'stats' =>
-            $this->Server->Process->sendSignal(SIGIO, master: false) && false,
+            $this->Server->Process->Signals->send(SIGIO, master: false) && false,
          'stats reset' =>
             $this->saveCommand($command, 'Connections')
-            && $this->Server->Process->sendSignal(SIGUSR1, master: false) && true,
+            && $this->Server->Process->Signals->send(SIGUSR1, master: false) && true,
 
          'connections' =>
-            $this->Server->Process->sendSignal(SIGIOT, master: false) && false,
+            $this->Server->Process->Signals->send(SIGIOT, master: false) && false,
          // *
          'clear' =>
             $this->clear() && true, // @phpstan-ignore-line
@@ -153,11 +157,11 @@ class Commands extends CLI\Terminal
    }
    public function saveCommand (string $command, string $context = ''): bool
    {
-      $file = $this->Server->Process->commandFile;
+      $file = $this->Server->Process->State->commandFile;
 
       $line = $command . ':' . $context . PHP_EOL;
 
-      if (\file_put_contents($file, $line, FILE_APPEND) === false) {
+      if (file_put_contents($file, $line, FILE_APPEND) === false) {
          return false;
       }
 

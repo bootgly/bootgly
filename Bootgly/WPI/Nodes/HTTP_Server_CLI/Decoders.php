@@ -11,7 +11,7 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI;
 
 
-use Bootgly\WPI\Endpoints\Decoder;
+use Bootgly\WPI\Endpoints\Servers\Decoder;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages;
 
 

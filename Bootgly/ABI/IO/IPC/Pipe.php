@@ -11,20 +11,21 @@
 namespace Bootgly\ABI\IO\IPC;
 
 
+use const STREAM_PF_UNIX;
+use const STREAM_SOCK_STREAM;
+use const STREAM_IPPROTO_IP;
+use function fclose;
+use function fread;
+use function fwrite;
+use function pcntl_signal_dispatch;
 use function stream_socket_pair;
 use function stream_set_blocking;
 use function stream_select;
-use function fread;
-use function fwrite;
-use function fclose;
-use function pcntl_signal_dispatch;
 use Throwable;
 use Generator;
 
-use Bootgly\ABI\IO\IPC;
 
-
-class Pipe implements IPC
+class Pipe
 {
    // * Config
    public bool $blocking;

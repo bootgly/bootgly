@@ -11,20 +11,25 @@
 namespace Bootgly\CLI\Terminal;
 
 
+use const SIGTERM;
+use function defined;
 use function cli_set_process_title;
 use function fread;
 use function pcntl_fork;
 use function pcntl_signal;
 use function pcntl_signal_dispatch;
 use function pcntl_waitpid;
+use function posix_getpid;
 use function posix_kill;
 use function register_shutdown_function;
 use function stream_set_blocking;
 use function system;
+use function time;
 use Closure;
 use Throwable;
 
 use Bootgly\ABI\IO\IPC\Pipe;
+use Bootgly\ACI\Process\State;
 
 
 class Input
@@ -141,6 +146,10 @@ class Input
       // @ Fork process
       $pid = pcntl_fork();
 
+      // @ Save PID state for show/stop visibility
+      $stateId = defined('BOOTGLY_PROJECT') ? BOOTGLY_PROJECT->folder : self::class;
+      $State = new State(id: $stateId);
+
       if ($pid === 0) { // @ Child (Client)
          cli_set_process_title("BootglyCLI: Client");
 
@@ -168,6 +177,22 @@ class Input
       else if ($pid > 0) { // @ Parent (Server)
          cli_set_process_title("BootglyCLI: Server");
 
+         // @ Handle SIGTERM: kill child before exiting
+         pcntl_signal(SIGTERM, function () use ($pid, $State) {
+            posix_kill($pid, SIGTERM);
+            pcntl_waitpid($pid, $status);
+            $State->clean();
+            exit(0);
+         });
+
+         // @ Save PID state
+         $State->save([
+            'master'  => posix_getpid(),
+            'workers' => [$pid],
+            'type'    => 'CLI-IPC',
+            'started' => time()
+         ]);
+
          try {
             // @ Call Terminal Server API passing the Pipe reading method
             $SAPI([$Pipe, 'reading']);
@@ -181,6 +206,9 @@ class Input
 
          // Wait for child process to exit
          pcntl_waitpid($pid, $status);
+
+         // @ Clean PID state
+         $State->clean();
       }
       else if ($pid === -1) {
          die('Could not fork process!');

@@ -13,7 +13,7 @@ namespace Bootgly\WPI\Modules;
 
 interface HTTP
 {
-   public const RESPONSE_STATUS = [
+   public const array RESPONSE_STATUS = [
       100 => 'Continue',
       101 => 'Switching Protocols',
       102 => 'Processing',
@@ -78,5 +78,5 @@ interface HTTP
       511 => 'Network Authentication Required',
    ];
 
-   public const RESPONSE_DATE_RFC = 'D, d M Y H:i:s \G\M\T';
+   public const string RESPONSE_DATE_RFC = 'D, d M Y H:i:s \G\M\T';
 }

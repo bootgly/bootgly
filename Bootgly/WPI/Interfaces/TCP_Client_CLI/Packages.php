@@ -277,8 +277,10 @@ class Packages implements WPI\Connections\Packages
       return true;
    }
 
-   public function write (&$Socket, null|int $length = null): void
-   {}
+   public function write (&$Socket, null|int $length = null): bool
+   {
+      return false;
+   }
    public function read (&$Socket): void
    {}
 }

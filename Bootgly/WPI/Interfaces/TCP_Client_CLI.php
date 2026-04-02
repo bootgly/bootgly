@@ -12,11 +12,24 @@ namespace Bootgly\WPI\Interfaces;
 
 use const E_WARNING;
 use const PHP_SAPI;
+use const SIGALRM;
+use const SIGCONT;
+use const SIGHUP;
 use const SIGINT;
+use const SIGIO;
+use const SIGIOT;
+use const SIGPIPE;
+use const SIGQUIT;
+use const SIGTERM;
+use const SIGTSTP;
+use const SIGUSR1;
+use const SIGUSR2;
 use const STREAM_CLIENT_ASYNC_CONNECT;
 use const STREAM_CLIENT_CONNECT;
 use const WUNTRACED;
 use function count;
+use function defined;
+use function pcntl_signal;
 use function pcntl_signal_dispatch;
 use function pcntl_wait;
 use function register_shutdown_function;
@@ -31,13 +44,14 @@ use Throwable;
 
 use Bootgly\ABI\Debugging\Data\Vars;
 use Bootgly\ACI\Events\Loops;
+use Bootgly\ACI\Events\Timer;
 use Bootgly\ACI\Logs\Logger;
 use Bootgly\ACI\Logs\LoggableEscaped;
+use Bootgly\ACI\Process;
 use Bootgly\WPI\Events;
 use Bootgly\WPI\Events\Select;
 use Bootgly\WPI\Interfaces\TCP_Client_CLI\Commands;
 use Bootgly\WPI\Interfaces\TCP_Client_CLI\Connections;
-use Bootgly\WPI\Interfaces\TCP_Client_CLI\Process;
 
 
 class TCP_Client_CLI
@@ -133,13 +147,16 @@ class TCP_Client_CLI
       static::$Event = new Select($this->Connections); // @phpstan-ignore-line
 
       // ! @\Process
-      $Process = $this->Process = new Process($this);
+      $processId = defined('BOOTGLY_PROJECT') ? BOOTGLY_PROJECT->folder : static::class;
+      $Process = $this->Process = new Process(id: $processId);
+      $Process->State->lock();
+      $Process->Signals->handler = fn (int $signal) => $this->handle($signal);
       // ! @\Commands
       $this->Commands = new Commands($this);
 
       // @ Register shutdown function to avoid orphaned children
       register_shutdown_function(function () use ($Process) {
-         $Process->sendSignal(SIGINT);
+         $Process->Signals->send(SIGINT);
       });
    }
    public function __get (string $name): mixed
@@ -189,6 +206,40 @@ class TCP_Client_CLI
       self::$onRead = $read;
       self::$onWrite = $write;
    }
+   public function handle (int $signal): void
+   {
+      switch ($signal) {
+         // * Timer
+         case SIGALRM:
+            Timer::tick();
+            break;
+
+         // * Custom command
+         case SIGUSR1:  // 10
+            break;
+
+         // ! Client
+         // @ stop()
+         case SIGHUP:  // 1
+         case SIGINT:  // 2 (CTRL + C)
+         case SIGQUIT: // 3
+         case SIGTERM: // 15
+            $this->stop();
+            break;
+
+         case SIGTSTP: // 20 (CTRL + Z)
+            break;
+         case SIGCONT: // 18
+            break;
+         case SIGUSR2: // 12
+            break;
+
+         case SIGIOT:  // 6
+            break;
+         case SIGIO:   // 29
+            break;
+      }
+   }
    public function start (): bool
    {
       self::$status = self::STATUS_STARTING;
@@ -199,9 +250,47 @@ class TCP_Client_CLI
          // ! Process
          // ? Signals
          // @ Install process signals
-         $this->Process->installSignal();
+         $this->Process->Signals->install([
+            SIGALRM,  // Timer
+            SIGUSR1,  // Custom command
+            SIGHUP,   // stop
+            SIGINT,   // stop (CTRL + C)
+            SIGQUIT,  // stop
+            SIGTERM,  // stop
+            SIGTSTP,  // pause (CTRL + Z)
+            SIGCONT,  // resume
+            SIGUSR2,  // reload
+            SIGIOT,   // info
+            SIGIO,    // stats
+         ]);
+         pcntl_signal(SIGPIPE, SIG_IGN, false);
+
          // @ Fork process workers...
-         $this->Process->fork($this->workers);
+         $this->Process->fork($this->workers, instance: function (Process $Process, int $index): void {
+            $Process->title = 'Bootgly_WPI_Client: child process (Worker #' . Process::$index . ')';
+
+            Logger::$display = Logger::DISPLAY_MESSAGE_WHEN_ID;
+
+            // @ Call On Worker instance
+            if (self::$onInstance) {
+               (self::$onInstance)($this);
+            }
+
+            $this->stop();
+         });
+
+         // @ Set master process title
+         $this->Process->title = 'Bootgly_WPI_Client: master process';
+
+         // @ Save full process state
+         $this->Process->State->save([
+            'master'  => Process::$master,
+            'workers' => $this->Process->Children->PIDs,
+            'host'    => $this->host ?? '0.0.0.0',
+            'port'    => $this->port ?? 0,
+            'started' => time(),
+            'type'    => 'WPI-Client'
+         ]);
       }
 
       $this->log('@\;@\;');
@@ -254,7 +343,7 @@ class TCP_Client_CLI
          }
          else if ($pid > 0) { // If a child has already exited?
             $this->log('@\;Process child exited!@\;', self::LOG_ERROR_LEVEL);
-            $this->Process->sendSignal(SIGINT);
+            $this->Process->Signals->send(SIGINT);
             break;
          }
          else if ($pid === -1) { // If error ignore
@@ -343,7 +432,7 @@ class TCP_Client_CLI
 
       Logger::$display = Logger::DISPLAY_MESSAGE;
 
-      $children = (string) count($this->Process::$children);
+      $children = (string) count($this->Process->Children->PIDs);
       match ($this->Process->level) {
          'master' => $this->log("{$children} worker(s) stopped!@\\;", 3),
          'child' => null,

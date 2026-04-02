@@ -11,6 +11,7 @@
 namespace Bootgly;
 
 use const PHP_SAPI;
+use function is_array;
 use function is_dir;
 use function is_file;
 use Exception;
@@ -61,30 +62,30 @@ class WPI extends Projects // Web Programming Interface
             // ---
 
             // @ Boot WPI for web SAPI
-            // @ Discover default WPI project
-            $config = @include(Projects::CONSUMER_DIR . '@.php');
-            if ($config === false) {
-               $config = @include(Projects::AUTHOR_DIR . '@.php');
+            // @ Load WPI projects index
+            $indexFile = Projects::CONSUMER_DIR . 'WPI.projects.php';
+            if (is_file($indexFile) === false) {
+               $indexFile = Projects::AUTHOR_DIR . 'WPI.projects.php';
             }
 
-            $default = $config['default'] ?? null;
-            if ($default === null) {
-               throw new Exception('No default project configured.');
+            /** @var array<string>|false $index */
+            $index = @include $indexFile;
+            if (is_array($index) === false || empty($index)) {
+               throw new Exception('No WPI projects configured.');
             }
 
-            // @ Look for WPI.project.php or Web.project.php
+            // @ Use the first WPI project as default
+            $default = $index[0];
+
             $projectDir = Projects::CONSUMER_DIR . $default . '/';
             if (is_dir($projectDir) === false) {
                $projectDir = Projects::AUTHOR_DIR . $default . '/';
             }
 
-            $autobootFile = $projectDir . 'WPI.project.php';
-            if (is_file($autobootFile) === false) {
-               $autobootFile = $projectDir . 'Web.project.php';
-            }
+            $projectFile = $projectDir . $default . '.project.php';
 
-            if (is_file($autobootFile)) {
-               $result = require $autobootFile;
+            if (is_file($projectFile)) {
+               $result = require $projectFile;
                if ($result instanceof Project) {
                   $result->boot();
                }

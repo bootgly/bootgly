@@ -31,6 +31,7 @@ class Body
    public int|null $position;
    public int|null $downloaded;
    public bool $waiting;
+   public bool $streaming;
 
 
    public function __construct ()
@@ -48,6 +49,7 @@ class Body
       $this->downloaded = null;
       // ---
       $this->waiting = false;
+      $this->streaming = false;
    }
 
    public function parse (string $content, ?string $type): bool|string

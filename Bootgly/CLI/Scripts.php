@@ -11,17 +11,24 @@
 namespace Bootgly\CLI;
 
 
+use const BOOTGLY_ROOT_BASE;
+use const BOOTGLY_ROOT_DIR;
+use const BOOTGLY_WORKING_BASE;
+use const BOOTGLY_WORKING_DIR;
+use function getcwd;
+use function in_array;
+
 use Bootgly\ABI\Data\__String\Path;
 use Bootgly\ABI\IO\FS\File;
 
 
 class Scripts
 {
-   public const ROOT_BASE = \BOOTGLY_ROOT_BASE . '/scripts';
-   public const WORKING_BASE = \BOOTGLY_WORKING_BASE . '/scripts';
+   public const ROOT_BASE = BOOTGLY_ROOT_BASE . '/scripts';
+   public const WORKING_BASE = BOOTGLY_WORKING_BASE . '/scripts';
 
-   public const ROOT_DIR = \BOOTGLY_ROOT_BASE . '/scripts/';
-   public const WORKING_DIR = \BOOTGLY_WORKING_BASE . '/scripts/';
+   public const ROOT_DIR = BOOTGLY_ROOT_BASE . '/scripts/';
+   public const WORKING_DIR = BOOTGLY_WORKING_BASE . '/scripts/';
 
    // * Config
    // ...
@@ -46,18 +53,18 @@ class Scripts
       // * Data
       $this->includes = [
          'paths' => [
-            \BOOTGLY_ROOT_BASE,
-            \BOOTGLY_WORKING_BASE,
+            BOOTGLY_ROOT_BASE,
+            BOOTGLY_WORKING_BASE,
 
-            \BOOTGLY_ROOT_DIR,
-            \BOOTGLY_WORKING_DIR,
+            BOOTGLY_ROOT_DIR,
+            BOOTGLY_WORKING_DIR,
 
             self::WORKING_BASE,
             self::WORKING_DIR,
          ],
          'filenames' => [
             'bootstrap' => [
-               \BOOTGLY_ROOT_DIR . 'bootgly', // absolute
+               BOOTGLY_ROOT_DIR . 'bootgly', // absolute
                '/usr/local/bin/bootgly',      // global
                'bootgly'                      // relative
             ]
@@ -119,9 +126,9 @@ class Scripts
    {
       // !
       /** @var string $PWD **/
-      $PWD = $_SERVER['PWD'];
+      $PWD = $_SERVER['PWD'] ?? getcwd();
       /** @var string $SCRIPT_FILENAME **/
-      $SCRIPT_FILENAME = $_SERVER['SCRIPT_FILENAME'];
+      $SCRIPT_FILENAME = $_SERVER['SCRIPT_FILENAME'] ?? '';
       // ---
       $this->path ??= $PWD ?: null;
       $this->filename ??= $SCRIPT_FILENAME ?: null;
@@ -135,11 +142,11 @@ class Scripts
 
       // @
       // Global scripts (absolute paths)
-      if (\in_array($this->filename, $this->scripts) !== false) {
+      if (in_array($this->filename, $this->scripts) !== false) {
          return $this->validation = 1;
       }
       // Local scripts (relative to scripts/ working directory)
-      if (\in_array($this->path . '/' . $this->filename, $this->scripts) !== false) {
+      if (in_array($this->path . '/' . $this->filename, $this->scripts) !== false) {
          return $this->validation = 0;
       }
 

@@ -11,10 +11,10 @@
 namespace Bootgly\WPI\Interfaces\TCP_Client_CLI;
 
 
+use function count;
+
 use Bootgly\ACI\Logs\LoggableEscaped;
-
 use Bootgly\CLI;
-
 use Bootgly\WPI\Interfaces\TCP_Client_CLI as Client;
 
 
@@ -50,15 +50,15 @@ class Commands extends CLI\Terminal
    {
       // TODO split command in subcommands by space
 
-      $children = (string) count($this->Client->Process::$children);
+      $children = (string) count($this->Client->Process->Children->PIDs);
       return match ($command) {
          // ! Client
          'quit' =>
             $this->log(
-               '@\;Stopping ' . $children . ' worker(s)... ',
+               "@\\;Stopping $children worker(s)... ",
                self::LOG_WARNING_LEVEL
             )
-            && $this->Client->Process->sendSignal(SIGINT) // @phpstan-ignore-line
+            && $this->Client->Process->Signals->send(SIGINT)
             && false,
 
          'clear' =>

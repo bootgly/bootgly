@@ -222,7 +222,7 @@ abstract class Packages implements WPI\Connections\Packages
       }
 
       if ($received) {
-         $this->writing($Socket);
+         $this->write($Socket);
       }
 
       return true;
@@ -236,7 +236,7 @@ abstract class Packages implements WPI\Connections\Packages
     *
     * @return bool 
     */
-   public function writing (&$Socket, null|int $length = null): bool
+   public function write (&$Socket, null|int $length = null): bool
    {
       // !
       if (Server::$Encoder) { // @ Encode Application Data if exists
@@ -247,7 +247,22 @@ abstract class Packages implements WPI\Connections\Packages
          $buffer = (SAPI::$Handler)(...$this->callbacks);
       }
 
+      // :
+      return $this->writing($Socket, length: $length, buffer: $buffer);
+   }
+   /**
+    * Write a response buffer to the client socket in loop
+    *
+    * @param resource $Socket 
+    * @param int<0,max>|null $length 
+    * @param string $buffer 
+    *
+    * @return bool 
+    */
+   public function writing (&$Socket, null|int $length = null, string $buffer = ''): bool
+   {
       // !
+      $length ??= strlen($buffer);
       $written = 0;
       $failed = false;
       $sent = 0; // Bytes sent to client per write loop iteration
@@ -307,10 +322,6 @@ abstract class Packages implements WPI\Connections\Packages
       return true;
    }
    public function read (&$Socket): void
-   {
-      // N/A
-   }
-   public function write (&$Socket, null|int $length = null): void
    {
       // N/A
    }
@@ -546,7 +557,6 @@ abstract class Packages implements WPI\Connections\Packages
     */
    public function download (&$Socket, &$Handler, int $rate, int $length): int
    {
-      // TODO test!!!
       $read = 0;
       $stored = 0;
 

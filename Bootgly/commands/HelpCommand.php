@@ -11,10 +11,7 @@
 namespace Bootgly\commands;
 
 
-use const BOOTGLY_VERSION;
-use const PHP_VERSION;
 use const PHP_EOL;
-use const STR_PAD_LEFT;
 use function implode;
 use function is_string;
 use function rtrim;
@@ -25,6 +22,7 @@ use function trim;
 use Bootgly\ABI\Data\__String\Path;
 use const Bootgly\CLI;
 use Bootgly\CLI\Command;
+use Bootgly\CLI\UI\Components\Alert;
 use Bootgly\CLI\UI\Components\Fieldset;
 use Bootgly\CLI\UI\Components\Header;
 
@@ -48,6 +46,14 @@ class HelpCommand extends Command
 
       $Output = CLI->Terminal->Output;
       $output = "@.;";
+
+      // # Message
+      if ($message) {
+         $Alert = new Alert($Output);
+         $Alert->Type::Failure->set();
+         $Alert->message = $message;
+         $Alert->render();
+      }
 
       // @
       // # Banner
@@ -118,7 +124,7 @@ class HelpCommand extends Command
       $Fieldset1->content = $output;
       $Fieldset1->render();
 
-      // # Options
+      // # Command options
       $output = '';
       $largest_option_name = 0;
       foreach ($options as $option_description => $option_names) {
@@ -137,15 +143,6 @@ class HelpCommand extends Command
       $Fieldset2->content = $output;
       $Fieldset2->width = $Fieldset1->width;
       $Fieldset2->render();
-
-      // # Message
-      if ($message) {
-         $Fieldset3 = new Fieldset($Output);
-         $Fieldset3->title = '@#Red: helper message@;';
-         $Fieldset3->content = $message;
-         $Fieldset3->width = $Fieldset1->width;
-         $Fieldset3->render();
-      }
 
       // # Script usage
       $script = $this->script;
@@ -167,18 +164,6 @@ class HelpCommand extends Command
       $Fieldset4->content = $usage;
       $Fieldset4->width = $Fieldset1->width;
       $Fieldset4->render();
-
-      // # Versions (Bootgly, PHP)
-      $PHP = PHP_VERSION;
-      $Bootgly = BOOTGLY_VERSION;
-
-      $Output->pad(<<<OUTPUT
-         @#Black:Bootgly @_:v{$Bootgly} @; | @#Black:PHP @_:v{$PHP} @;@..;
-         OUTPUT,
-         $Fieldset1->width + 5,
-         " ",
-         STR_PAD_LEFT
-      );
 
       return true;
    }

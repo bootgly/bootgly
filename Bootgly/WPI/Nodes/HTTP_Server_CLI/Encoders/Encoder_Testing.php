@@ -41,6 +41,9 @@ class Encoder_Testing extends Encoders
       $Response = &Server::$Response;
       $Router   = Server::$Router;
 
+      // ! Bind Package context for deferred responses
+      $Response->bind($Packages, $Packages->Connection->Socket);
+
       // ! Response
       // @ Try to Invoke SAPI Closure
       try {
@@ -77,15 +80,19 @@ class Encoder_Testing extends Encoders
          Throwables::debug($Throwable);
       }
       finally {
-         // @ Check if Request Body is waiting data
+         // ?: Check if Request Body is waiting data
          if ($Request->Body->waiting) {
+            return '';
+         }
+         // ?: Check if Response is deferred (async Fiber)
+         if ($Response->deferred) {
             return '';
          }
 
          // @ Remove dynamic Headers
          $Response->Header->preset('Date', null);
 
-         // @ Encode HTTP Response
+         // : Encode HTTP Response
          return $Response->encode($Packages, $length);
       }
    }

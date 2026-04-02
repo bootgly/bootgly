@@ -17,8 +17,8 @@
  *   - Catch-all: paths that match any route not previously defined
  *
  * NOTE: This file uses the generator (yield) handler pattern.
- *       To use it, register it in WPI.project.php:
- *         $Server->handle(require __DIR__ . '/router/routes/Core.routes.php');
+ *       To use it, register it in HTTP_Server_CLI.project.php:
+ *         $Server->on(request: require __DIR__ . '/router/routes/Core.routes.php');
  */
 
 use Bootgly\WPI\Modules\HTTP\Server\Router;

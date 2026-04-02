@@ -12,8 +12,10 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Raw;
 
 
 use function array_key_exists;
-use function is_array;
-use function is_string;
+use function gmdate;
+use function implode;
+use function strtolower;
+use function time;
 
 use Bootgly\WPI\Modules\HTTP\Server\Response\Raw\Header as HeaderBase;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Raw\Header\Cookies;
@@ -24,7 +26,7 @@ class Header extends HeaderBase
    // * Data
    public string $raw;
    // Fields
-   /** @var array<string, string|true> */
+   /** @var array<string,string|true> */
    protected array $preset {
       get => $this->preset;
       set {
@@ -42,9 +44,9 @@ class Header extends HeaderBase
          $this->preset = $normalized;
       }
    }
-   /** @var array<string, string> */
+   /** @var array<string,string> */
    protected array $prepared;
-   /** @var array<string, string> */
+   /** @var array<string,string> */
    protected array $fields;
 
    // * Metadata
@@ -212,7 +214,7 @@ class Header extends HeaderBase
          return (string) $this->fields[$name];
       }
 
-      $lower = \strtolower($name);
+      $lower = strtolower($name);
       if (array_key_exists($lower, $this->fields)) {
          return (string) $this->fields[$lower];
       }
@@ -235,7 +237,6 @@ class Header extends HeaderBase
    }
    public function append (string $field, string $value = '', ? string $separator = ', '): void
    {
-      // TODO map separator (with const?)
       // Header that can have only value to append, only entire header, etc.
 
       $separator ??= ', ';
@@ -260,11 +261,10 @@ class Header extends HeaderBase
       return false;
    }
 
-   // TODO increase performance
    public function build (): true // @ raw
    {
       // ?
-      if ($this->dirty === false && \time() === $this->built) {
+      if ($this->dirty === false && time() === $this->built) {
          return true;
       }
 
@@ -279,7 +279,7 @@ class Header extends HeaderBase
          // Dynamic fields
          if ($value === true) {
             $value = match ($name) {
-               'Date' => \gmdate('D, d M Y H:i:s \G\M\T'),
+               'Date' => gmdate('D, d M Y H:i:s \G\M\T'),
                default => ''
             };
          }
@@ -295,9 +295,9 @@ class Header extends HeaderBase
          $queued[] = 'Content-Type: text/html; charset=UTF-8';
       }
 
-      $this->raw = \implode("\r\n", $queued);
+      $this->raw = implode("\r\n", $queued);
 
-      $this->built = \time();
+      $this->built = time();
       $this->dirty = false;
 
       return true;

@@ -35,6 +35,9 @@ class Encoder_ extends Encoders
       // ! Reset Response state for new request
       $Response->reset();
 
+      // ! Bind Package context for deferred responses
+      $Response->bind($Packages, $Packages->Connection->Socket);
+
       // @ Try to Invoke SAPI Closure
       try {
          $Result = SAPI::$Middlewares->process($Request, $Response,
@@ -70,12 +73,16 @@ class Encoder_ extends Encoders
          Throwables::debug($Throwable);
       }
       finally {
-         // @ Check if Request Body is waiting data
+         // ?: Check if Request Body is waiting data
          if ($Request->Body->waiting) {
             return '';
          }
+         // ?: Check if Response is deferred (async Fiber)
+         if ($Response->deferred) {
+            return '';
+         }
 
-         // @ Encode HTTP Response
+         // : Encode HTTP Response
          return $Response->encode($Packages, $length);
       }
    }

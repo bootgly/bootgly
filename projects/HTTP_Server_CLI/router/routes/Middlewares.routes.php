@@ -21,8 +21,8 @@
  *   Global before → Group before → Per-route before → Handler → Per-route after → Group after → Global after
  *
  * NOTE: This file uses the generator (yield) handler pattern.
- *       To use it, register it in WPI.project.php:
- *         $Server->handle(require __DIR__ . '/router/routes/Middlewares.routes.php');
+ *       To use it, register it in HTTP_Server_CLI.project.php:
+ *         $Server->on(request: require __DIR__ . '/router/routes/Middlewares.routes.php');
  */
 
 use Bootgly\WPI\Modules\HTTP\Server\Router;

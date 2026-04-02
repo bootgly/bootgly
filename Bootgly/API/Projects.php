@@ -12,11 +12,10 @@ namespace Bootgly\API;
 
 
 use function count;
-use function is_dir;
 use function is_string;
-use Exception;
 
 use Bootgly\ABI\Resources;
+use Bootgly\API\Projects\Project;
 
 
 abstract class Projects
@@ -38,13 +37,10 @@ abstract class Projects
    protected static array $projects = [];
 
    // * Metadata
-   private static Project $Default;
    // @ index
    private static int $index = 0;
    /** @var int[] */
    private static array $indexes = [];
-   // @autoboot
-   private static bool $booted;
 
 
    public static function add (Project $Project): int
@@ -54,53 +50,6 @@ abstract class Projects
       self::$projects[$index] = $Project;
 
       return $index;
-   }
-   /**
-    * Autoboot projects from the consumer directory. If no projects are found, it will return null.
-    *
-    * @return null|Project 
-    */
-   public static function autobooting (): null|Project
-   {
-      if ( isSet(self::$booted) )
-         throw new Exception("Project autoboot can only be called once.");
-
-      // @ Load from consumer first, then author
-      $bootstrap = @include(Projects::CONSUMER_DIR . '@.php');
-      if ($bootstrap === false || $bootstrap === null) {
-         $bootstrap = @include(Projects::AUTHOR_DIR . '@.php');
-      }
-      if ($bootstrap === false || $bootstrap === null) {
-         self::$booted = true;
-         return null;
-      }
-
-      // @ Resolve default project
-      $default = $bootstrap['default'] ?? null;
-      if ($default !== null) {
-         $Project = new Project;
-
-         // @ Try consumer dir first
-         $path = $default . '/';
-         $consumerPath = Projects::CONSUMER_DIR . $path;
-         $authorPath = Projects::AUTHOR_DIR . $path;
-
-         if (is_dir($consumerPath)) {
-            $Project->construct($path);
-         }
-         else if (is_dir($authorPath)) {
-            $Project->construct($path);
-         }
-
-         self::add($Project);
-         $Project->name($default);
-         self::index($default);
-         self::$Default = $Project;
-      }
-
-      self::$booted = true;
-
-      return self::$Default ?? null;
    }
 
    /**

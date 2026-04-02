@@ -11,6 +11,9 @@
 namespace Bootgly\WPI\Interfaces\TCP_Server_CLI\commands;
 
 
+use function count;
+use function date;
+use function is_array;
 use Closure;
 
 use Bootgly\ACI\Logs\Logger;
@@ -84,13 +87,13 @@ return new class extends Command
    
                   case 'used':
                   case 'started':
-                     $Server->log(\date('Y-m-d H:i:s', $value) . PHP_EOL); // @phpstan-ignore-line
+                     $Server->log(date('Y-m-d H:i:s', $value) . PHP_EOL); // @phpstan-ignore-line
                      break;
    
                   default:
                      // @phpstan-ignore-next-line
-                     if ( \is_array($value) ) {
-                        $value = \count($value);
+                     if ( is_array($value) ) {
+                        $value = count($value);
                      }
    
                      $Server->log($value . PHP_EOL); // @phpstan-ignore-line

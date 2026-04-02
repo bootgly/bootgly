@@ -20,7 +20,7 @@ use const Bootgly\CLI;
 use Bootgly\CLI\Command;
 use Bootgly\CLI\UI\Components\Fieldset;
 use Bootgly\CLI\UI\Components\Progress;
-use Bootgly\WPI\Endpoints\Servers\Modes;
+use Bootgly\API\Endpoints\Server\Modes;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI as Server;
 
 

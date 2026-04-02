@@ -11,8 +11,10 @@
 namespace Bootgly\WPI\Endpoints;
 
 
-interface Servers
+use Bootgly\API\Endpoints\Server;
+
+
+interface Servers extends Server
 {
    public function configure (string $host, int $port, int $workers): self;
-   public function start (): bool;
 }

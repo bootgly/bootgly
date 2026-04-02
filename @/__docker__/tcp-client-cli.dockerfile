@@ -29,4 +29,4 @@ RUN composer install --optimize-autoloader --classmap-authoritative --no-dev -vv
 ENV PORT=8080
 EXPOSE $PORT
 
-CMD ["sh", "-c", "php /bootgly/projects/TCP_Client_CLI/WPI.project.php -- --port=$PORT"]
+CMD ["sh", "-c", "php /bootgly/projects/TCP_Client_CLI/TCP_Client_CLI.project.php -- --port=$PORT"]

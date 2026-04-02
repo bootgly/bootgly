@@ -11,11 +11,26 @@
 namespace Bootgly\WPI\Nodes;
 
 
+use const SIGALRM;
+use const SIGCHLD;
+use const SIGCONT;
+use const SIGHUP;
+use const SIGINT;
+use const SIGIO;
+use const SIGIOT;
+use const SIGPIPE;
+use const SIGQUIT;
+use const SIGTERM;
+use const SIGTSTP;
+use const SIGUSR1;
+use const SIGUSR2;
 use function count;
 use function function_exists;
 use function opcache_invalidate;
 use function clearstatcache;
+use function pcntl_signal;
 use function strlen;
+use function time;
 use Closure;
 use Exception;
 use Throwable;
@@ -23,13 +38,15 @@ use Throwable;
 use Bootgly\ABI\Debugging\Data\Throwables\Exceptions;
 use Bootgly\ABI\IO\FS\File;
 use Bootgly\ACI\Logs\Logger;
+use Bootgly\ACI\Process;
 use Bootgly\ACI\Tests\Suite;
 use Bootgly\ACI\Tests\Suite\Test\Specification;
 use Bootgly\API\Environments;
 use Bootgly\API\Server as SAPI;
 use Bootgly\API\Server\Middlewares;
 use const Bootgly\WPI;
-use Bootgly\WPI\Endpoints\Servers\Modes;
+use Bootgly\API\Endpoints\Server\Modes;
+use Bootgly\API\Endpoints\Server\Status;
 use Bootgly\WPI\Interfaces\TCP_Client_CLI;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI;
 use Bootgly\WPI\Modules\HTTP;
@@ -49,6 +66,9 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
 
    // * Data
    // ...inherited from TCP_Server_CLI
+   // # Hooks
+   protected static null|Closure $onStarted = null;
+   protected static null|Closure $onStopped = null;
 
    // * Metadata
    // ...inherited from TCP_Server_CLI
@@ -81,7 +101,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
 
       // . Request, Response, Router
       self::$Request = new Request;
-      self::$Response ??= new Response;
+      self::$Response = new Response;
       self::$Router = new Router;
 
       // . Decoders, Encoders
@@ -110,14 +130,21 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
     * @param int $port Port to bind the server to.
     * @param int $workers Number of workers to spawn.
     * @param null|array<string> $ssl SSL configuration.
+    * @param null|string $user User to drop privileges to after socket binding.
+    * @param null|string $group Group to drop privileges to after socket binding.
+    * @param null|int $requestMaxFileSize Maximum file size in bytes for multipart/form-data downloads.
+    * @param null|int $requestMaxBodySize Maximum body size in bytes for non-multipart requests.
     *
     * @return self The HTTP Server instance, for chaining 
     */
    public function configure (
-      string $host, int $port, int $workers, ?array $ssl = null
+      string $host, int $port, int $workers,
+      null|array $ssl = null,
+      null|string $user = null, null|string $group = null,
+      null|int $requestMaxFileSize = null, null|int $requestMaxBodySize = null
    ): self
    {
-      parent::configure($host, $port, $workers, $ssl);
+      parent::configure($host, $port, $workers, $ssl, $user, $group);
 
       if ($host === '0.0.0.0') {
          $this->domain ??= 'localhost';
@@ -128,28 +155,146 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
          ? 'https://'
          : 'http://';
 
+      // @ Request limits
+      if ($requestMaxFileSize !== null) {
+         Request::$maxFileSize = $requestMaxFileSize;
+      }
+      if ($requestMaxBodySize !== null) {
+         Request::$maxBodySize = $requestMaxBodySize;
+      }
+
       return $this;
    }
 
    /**
-    * Set the request handler for the HTTP Server.
+    * Register hooks for the HTTP Server.
     *
-    * @param Closure(Request, Response, Router): mixed $Handler The request handler.
+    * @param Closure(Request, Response, Router): mixed $request The request handler.
+    * @param null|Closure(static): void $started Called after workers are spawned (server is ready).
+    * @param null|Closure(static): void $stopped Called when the server is stopping.
     *
     * @return self The HTTP Server instance, for chaining.
     */
-   public function handle (Closure $Handler): self
+   public function on (
+      Closure $request,
+      null|Closure $started = null,
+      null|Closure $stopped = null
+   ): self
    {
-      // !
-      if (isSet(SAPI::$Middlewares) === false) {
+      // @ Request handler
+      if (isset(SAPI::$Middlewares) === false) {
          SAPI::$Middlewares = new Middlewares;
       }
+      SAPI::$Handler = $request;
 
-      // @
-      SAPI::$Handler = $Handler;
+      // @ Lifecycle hooks
+      self::$onStarted = $started;
+      self::$onStopped = $stopped;
 
       // :
       return $this;
+   }
+
+   public function start (): bool
+   {
+      $this->Status = Status::Starting;
+
+      Logger::$display = Logger::$display === 0 ? 0 : Logger::DISPLAY_MESSAGE;
+      $this->log('@\;Starting Server...', self::LOG_NOTICE_LEVEL);
+
+      // @ Boot Server API
+      if (self::$Application) {
+         self::$Application::boot(Environments::Production);
+      }
+      else if (isSet(SAPI::$Handler) === false) {
+         $this->log('@\;No request handler defined. Call on(request:) before start().@\;', self::LOG_ERROR_LEVEL);
+         exit(1);
+      }
+
+      // # Process
+      // @ Install signal handlers for graceful shutdown
+      $this->Process->Signals->install([
+         SIGALRM,  // Timer
+         SIGUSR1,  // Custom command
+         SIGHUP,   // stop
+         SIGINT,   // stop (CTRL + C)
+         SIGQUIT,  // stop
+         SIGTERM,  // stop
+         SIGTSTP,  // pause (CTRL + Z)
+         SIGCONT,  // resume
+         SIGUSR2,  // reload
+         SIGCHLD,  // recover
+         SIGIOT,   // connection info
+         SIGIO,    // connection stats
+      ]);
+      pcntl_signal(SIGPIPE, SIG_IGN, false);
+
+      // @ Fork process workers...
+      $this->Process->fork($this->workers, instance: function (Process $Process, int $index): void {
+         $Process->title = 'Bootgly_WPI_Server: child process (Worker #' . Process::$index . ')';
+
+         Logger::$display = Logger::DISPLAY_MESSAGE_WHEN_ID;
+
+         // @ Create stream socket server
+         $this->instance();
+
+         // Event Loop
+         self::$Event->add(
+            $this->Socket,
+            self::$Event::EVENT_CONNECT,
+            true
+         );
+         self::$Event->loop();
+
+         // @ Close stream socket server
+         $this->stop();
+      });
+
+      // @ Set master process title
+      $this->Process->title = 'Bootgly_WPI_Server: master process';
+
+      // @ Save full process state (master + workers + host + port)
+      $this->Process->State->save([
+         'master'  => Process::$master,
+         'workers' => $this->Process->Children->PIDs,
+         'host'    => $this->host ?? '0.0.0.0',
+         'port'    => $this->port ?? 0,
+         'started' => time(),
+         'type'    => 'WPI'
+      ]);
+
+      // # Hook
+      // @ Invoke started hook (server is ready for connections)
+      if (self::$onStarted !== null) {
+         (self::$onStarted)($this);
+      }
+
+      // @
+      // ... Continue to master process:
+      switch ($this->Mode) {
+         case Modes::Daemon:
+            $this->daemonize();
+            break;
+         case Modes::Interactive:
+            $this->interacting();
+            break;
+         case Modes::Monitor:
+            $this->monitoring();
+            break;
+      }
+
+      return true;
+   }
+
+   public function stop (): void
+   {
+      // # Hook
+      // @ Invoke stopped hook before shutdown
+      if (self::$onStopped !== null && $this->Process->level === 'master') {
+         (self::$onStopped)($this);
+      }
+
+      parent::stop();
    }
 
    public static function boot (Environments $Environment): void
@@ -197,7 +342,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       }
    }
 
-   public static function pretest (Suite|null $Suite): void
+   public static function pretest (null|Suite $Suite): void
    {
       if ($Suite === null) {
          return;
@@ -365,7 +510,10 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
                $responseLength = $test->responseLength;
                // ! Client
                // ? Request
-               $requestData = ($test->request)("{$TCP_Client_CLI->host}:{$TCP_Client_CLI->port}");
+               $request = $test->request;
+               $requestData = $request !== null
+                  ? $request("{$TCP_Client_CLI->host}:{$TCP_Client_CLI->port}")
+                  : '';
                $requestLength = strlen($requestData);
                // @ Send Request to Server
                $Connection::$output = $requestData;

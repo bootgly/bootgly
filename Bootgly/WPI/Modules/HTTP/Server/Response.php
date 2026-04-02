@@ -16,23 +16,23 @@ use Bootgly\ABI\IO\FS\File;
 
 abstract class Response
 {
-   const PROTOCOL = 'HTTP/1.1';
+   const string PROTOCOL = 'HTTP/1.1';
 
    // * Config
    // ...
 
    // * Data
-   // @ Content
+   // # Content
    /** @var null|string|array<mixed> */
    protected null|string|array $content = '';
    protected File $File;
    /** @var array<mixed> */
    protected array $files = [];
-   // @ status
+   // # status
    protected int $code = 200;
 
    // * Metadata
-   // @ status
+   // # status
    protected string $message = 'OK';
    protected string $status = '200 OK';
    protected string $response = self::PROTOCOL . ' 200 OK';

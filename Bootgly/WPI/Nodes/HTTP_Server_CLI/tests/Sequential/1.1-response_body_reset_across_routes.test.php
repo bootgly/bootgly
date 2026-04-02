@@ -11,9 +11,6 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test\Specification;
 return new Specification(
    Separator: new Separator(line: 'Sequential'),
 
-   request: function () {
-      return "GET /route-a HTTP/1.0\r\n\r\n";
-   },
    requests: [
       function () {
          return "GET /route-a HTTP/1.0\r\n\r\n";

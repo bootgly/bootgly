@@ -12,6 +12,8 @@ namespace Bootgly\WPI\Interfaces\TCP_Server_CLI\commands;
 
 
 use Closure;
+use function number_format;
+use function sprintf;
 
 use Bootgly\ABI\Data\__String\Bytes;
 use Bootgly\ACI\Logs\Logger;
@@ -59,12 +61,12 @@ return new class extends Command
    
          Logger::$display = Logger::DISPLAY_MESSAGE;
    
-         $worker = \sprintf("%02d", $Server->Process::$index);
+         $worker = sprintf("%02d", $Server->Process::$index);
    
          $connections = $Server->Connections->connections;
    
-         $reads = \number_format(Connections::$reads, 0, '', ',');
-         $writes = \number_format(Connections::$writes, 0, '', ',');
+         $reads = number_format(Connections::$reads, 0, '', ',');
+         $writes = number_format(Connections::$writes, 0, '', ',');
    
          // @ Format bytes
          $read = Bytes::format(Connections::$read);

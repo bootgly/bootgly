@@ -20,3 +20,6 @@ parameters:
       - identifier: property.readOnlyAssignNotInConstructor
       - identifier: property.readOnlyAssignOutOfClass
       - identifier: assign.propertyReadOnly
+      -
+         message: '#.*BOOTGLY_PROJECT not found\.#'
+         identifier: constant.notFound

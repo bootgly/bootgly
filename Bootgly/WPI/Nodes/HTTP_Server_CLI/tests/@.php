@@ -4,13 +4,20 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\tests;
 
 use Bootgly\ACI\Tests\Suite;
 use Bootgly\ACI\Logs\Logger;
-use Bootgly\WPI\Endpoints\Servers\Modes;
+use Bootgly\API\Endpoints\Server\Modes;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI;
 
 return new Suite(
    // * Config
    autoBoot: function (Suite|null $Suite = null): true {
       Logger::$display = Logger::DISPLAY_NONE;
+
+      // @ Define BOOTGLY_PROJECT for upload tests (requires project path)
+      if ( !defined('BOOTGLY_PROJECT') ) {
+         $projectFile = BOOTGLY_ROOT_DIR . 'projects/HTTP_Server_CLI/HTTP_Server_CLI.project.php';
+         $TestProject = require $projectFile;
+         define('BOOTGLY_PROJECT', $TestProject);
+      }
 
       HTTP_Server_CLI::pretest($Suite);
 
@@ -59,9 +66,17 @@ return new Suite(
          '1.19.1-request_as_response-content-post-file',
          '1.19.2-request_as_response-content-post-file',
          '1.19.3-request_as_response-content-post-file',
-         '1.20-request_as_response-on',
-         '1.21-request_as_response-at',
-         '1.22-request_as_response-time',
+         // Streaming Decoder (multipart/form-data → disk)
+         '1.20.1-request_as_response-content-streaming-file',
+         '1.20.2-request_as_response-content-streaming-file',
+         '1.20.3-request_as_response-content-streaming-file',
+         '1.20.4-request_as_response-content-streaming-file',
+         '1.20.5-request_as_response-content-streaming-file',
+         '1.20.6-request_as_response-content-streaming-file',
+         '1.20.7-request_as_response-content-streaming-file',
+         '1.21-request_as_response-on',
+         '1.22-request_as_response-at',
+         '1.23-request_as_response-time',
          // HTTP/1.1 Caching Specification (RFC 7234)
          '2.1.1-request_cache-if-modified-since',
          '2.1.2-request_cache-if-modified-since',
@@ -190,6 +205,15 @@ return new Suite(
          '2.1-response_upload_then_normal_request',
          '2.2-response_normal_then_upload_request',
          '2.3-response_upload_then_different_upload',
+      ],
+      'Scheduled/' => [
+         '1.1-scheduled_sync_baseline',
+         '1.2-scheduled_deferred_response',
+         '1.3-scheduled_deferred_concurrent',
+         '1.4-scheduled_deferred_io_aware',
+         '1.5-scheduled_deferred_hybrid',
+         '1.6-scheduled_deferred_http_request',
+         '1.7-scheduled_deferred_ordering',
       ]
    ]
 );

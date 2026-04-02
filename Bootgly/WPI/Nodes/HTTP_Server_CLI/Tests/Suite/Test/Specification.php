@@ -12,6 +12,7 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test;
 
 
 use Closure;
+use InvalidArgumentException;
 
 use Bootgly\ACI\Tests\Assertions;
 use Bootgly\ACI\Tests\Suite\Test\Specification as Base;
@@ -28,10 +29,11 @@ class Specification extends Base implements Handling
    // * Data
    // ...inherited
    /**
-    * @var Closure
-    * A closure that returns a raw HTTP request string to be used in E2E tests.
+    * @var null|Closure
+    * A closure that returns a raw HTTP request string to be used in single-request E2E tests.
+    * Mutually exclusive with $requests.
     */
-   public Closure $request;
+   public null|Closure $request;
    /**
     * @var array<Closure>
     * An array of closures, each returning a raw HTTP request string.
@@ -67,7 +69,6 @@ class Specification extends Base implements Handling
     */
    public function __construct (
       // * Data (required)
-      Closure $request,
       Closure $response,
       Assertions|Closure $test,
       // * Config (optional - inherited)
@@ -77,6 +78,7 @@ class Specification extends Base implements Handling
       bool $ignore = false,
       null|Closure $retest = null,
       // * Data (optional - E2E)
+      null|Closure $request = null,
       array $requests = [],
       array $middlewares = [],
       null|int $responseLength = null,
@@ -84,6 +86,17 @@ class Specification extends Base implements Handling
    )
    {
       // @
+      if ($request === null && $requests === []) {
+         throw new InvalidArgumentException(
+            'Either "request" or "requests" must be provided.'
+         );
+      }
+      if ($request !== null && $requests !== []) {
+         throw new InvalidArgumentException(
+            '"request" and "requests" are mutually exclusive.'
+         );
+      }
+
       parent::__construct(
          test: $test,
          description: $description,

@@ -11,12 +11,22 @@
 namespace Bootgly\WPI\Events;
 
 
+use function count;
+use function is_resource;
+use function microtime;
+use function pcntl_signal_dispatch;
+use function sleep;
+use function stream_select;
+use Fiber;
+use Throwable;
+
 use Bootgly\ACI\Events\Loops;
+use Bootgly\ACI\Events\Scheduler;
 use Bootgly\WPI\Connections;
 use Bootgly\WPI\Events;
 
 
-class Select implements Events, Loops
+class Select implements Events, Loops, Scheduler
 {
    public Connections $Connections;
 
@@ -24,7 +34,7 @@ class Select implements Events, Loops
    public bool $loop = true;
 
    // * Data
-   // @ Sockets
+   // # Sockets
    /** @var array<int,resource> */
    protected array $reads = [];
    /** @var array<int,resource> */
@@ -33,7 +43,7 @@ class Select implements Events, Loops
    protected array $excepts = [];
 
    // * Metadata
-   // @ Events
+   // # Events
    // Client/Server
    /** @var array<int,mixed> */
    private array $connecting = [];
@@ -44,7 +54,14 @@ class Select implements Events, Loops
    private array $writing = [];
    /** @var array<int,mixed> */
    private array $excepting = [];
-   // @ Loop
+   // # Async
+   // Tick-based (resumed every iteration)
+   /** @var array<int,Fiber<mixed,mixed,mixed,mixed>> */
+   private array $Fibers = [];
+   // I/O-bound (resumed when stream_select signals readiness)
+   /** @var array<int,Fiber<mixed,mixed,mixed,mixed>> */
+   private array $awaiting = [];
+   // # Loop
    public readonly float $started;
    public readonly float $finished;
 
@@ -69,7 +86,7 @@ class Select implements Events, Loops
          // Client/Server
          case self::EVENT_CONNECT:
             // System call select exceeded the maximum number of connections 1024.
-            if (\count($this->reads) >= 1000) {
+            if (count($this->reads) >= 1000) {
                return false;
             }
 
@@ -83,7 +100,7 @@ class Select implements Events, Loops
          // Package
          case self::EVENT_READ:
             // System call select exceeded the maximum number of connections 1024.
-            if (\count($this->reads) >= 1000) {
+            if (count($this->reads) >= 1000) {
                return false;
             }
 
@@ -96,7 +113,7 @@ class Select implements Events, Loops
             return true;
          case self::EVENT_WRITE:
             // System call select exceeded the maximum number of connections 1024.
-            if (\count($this->writes) >= 1000) {
+            if (count($this->writes) >= 1000) {
                return false;
             }
 
@@ -109,7 +126,7 @@ class Select implements Events, Loops
             return true;
          case self::EVENT_EXCEPT:
             // System call select exceeded the maximum number of connections 1024.
-            if (\count($this->excepts) >= 1000) {
+            if (count($this->excepts) >= 1000) {
                return false;
             }
 
@@ -171,18 +188,42 @@ class Select implements Events, Loops
    }
 
    /**
-    * Start the event loop.
+    * Start the event loop (Fiber-scheduled).
     *
     * @return void
     */
    public function loop (): void
    {
-      $this->started = \microtime(true);
+      $this->started = microtime(true);
 
       $Connections = $this->Connections;
 
       while (true) {
-         \pcntl_signal_dispatch();
+         pcntl_signal_dispatch();
+
+         // @ Resume tick-based Fibers (no I/O association)
+         if ($this->Fibers) {
+            foreach ($this->Fibers as $id => $Fiber) {
+               if ($Fiber->isSuspended()) {
+                  $value = $Fiber->resume();
+
+                  // @ Convert to I/O-awaiting if Fiber suspended with a socket
+                  if ( !$Fiber->isTerminated() && is_resource($value)) {
+                     unset($this->Fibers[$id]);
+
+                     $socketId = (int) $value;
+                     $this->awaiting[$socketId] = $Fiber;
+                     $this->reads[$socketId] = $value;
+
+                     continue;
+                  }
+               }
+
+               if ($Fiber->isTerminated()) {
+                  unset($this->Fibers[$id]);
+               }
+            }
+         }
 
          $read   = $this->reads;
          $write  = $this->writes;
@@ -190,16 +231,18 @@ class Select implements Events, Loops
 
          if ($read || $write || $except) {
             try {
-               // Waiting $this->timeout for read / write / excepts events.
-               $streams = @\stream_select($read, $write, $except, null);
+               // @ Non-blocking poll if Fibers are suspended, otherwise block
+               $timeout = $this->Fibers ? 0 : null;
+               // Waiting for read / write / excepts events.
+               $streams = @stream_select($read, $write, $except, $timeout);
             }
-            catch (\Throwable) {
+            catch (Throwable) {
                $streams = false;
             }
          }
          else {
             // @ Sleep for 1 second and continue (Used to pause the Server)
-            \sleep(1);
+            sleep(1);
 
             if ($this->loop === false) {
                break;
@@ -212,10 +255,38 @@ class Select implements Events, Loops
             continue;
          }
 
-         // @ Call
+         // @ Dispatch (direct call — Fibers are created by handlers when needed)
          if ($read) {
             foreach ($read as $Socket) {
                $id = (int) $Socket;
+
+               // @ Resume I/O-awaiting Fiber (stream is now readable)
+               if ( isSet($this->awaiting[$id]) ) {
+                  $Fiber = $this->awaiting[$id];
+
+                  unset($this->awaiting[$id]);
+                  unset($this->reads[$id]);
+
+                  if ($Fiber->isSuspended()) {
+                     $value = $Fiber->resume();
+
+                     // @ Re-schedule if Fiber suspended again
+                     if ( !$Fiber->isTerminated()) {
+                        if (is_resource($value)) {
+                           $newId = (int) $value;
+
+                           $this->awaiting[$newId] = $Fiber;
+
+                           $this->reads[$newId] = $value;
+                        }
+                        else {
+                           $this->Fibers[] = $Fiber;
+                        }
+                     }
+                  }
+
+                  continue;
+               }
 
                // @ Select action
                if ( isSet($this->connecting[$id]) ) {
@@ -245,7 +316,43 @@ class Select implements Events, Loops
          // if ($except) {}
       }
 
-      $this->finished = \microtime(true);
+   $this->finished = microtime(true);
+   }
+
+   /**
+    * Schedule a suspended Fiber for resumption in the event loop.
+    *
+    * When $value is a stream resource, the Fiber becomes I/O-bound:
+    * it is registered in stream_select() and only resumed when readable.
+    * When $value is null, the Fiber is tick-based: resumed every iteration.
+    *
+    * @param Fiber<mixed, mixed, mixed, mixed> $Fiber
+    * @param mixed $value The suspended value from Fiber::start() or resume().
+    *
+    * @return bool
+    */
+   public function schedule (Fiber $Fiber, mixed $value = null): bool
+   {
+      // ?
+      if ($Fiber->isTerminated()) {
+         return false;
+      }
+
+      // @ I/O-bound: register socket in stream_select + map to Fiber
+      if (is_resource($value)) {
+         $id = (int) $value;
+
+         $this->awaiting[$id] = $Fiber;
+         $this->reads[$id] = $value;
+
+         return true;
+      }
+
+      // @ Tick-based: resume every iteration
+      $this->Fibers[] = $Fiber;
+
+      // :
+      return true;
    }
 
    /**
@@ -259,6 +366,11 @@ class Select implements Events, Loops
       $this->writes = [];
       $this->excepts = [];
 
+      // # Async
+      $this->awaiting = [];
+      $this->Fibers = [];
+
+      // # Loop
       $this->loop = false;
    }
 }

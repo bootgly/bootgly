@@ -22,6 +22,7 @@ use Bootgly\CLI\Commands;
 use Bootgly\CLI\Scripts;
 use Bootgly\CLI\Terminal;
 use Bootgly\commands\HelpCommand;
+use Bootgly\commands\VersionFooterMiddleware;
 
 
 class CLI extends Projects // Command Line Interface
@@ -85,6 +86,9 @@ class CLI extends Projects // Command Line Interface
                $Commands->register($Command, Script: $this);
             }
 
+            // @ Register framework command middlewares
+            $Commands->Middlewares->pipe(new VersionFooterMiddleware);
+
             // @ Register consumer commands
             if (BOOTGLY_ROOT_DIR !== BOOTGLY_WORKING_DIR) {
                $consumer_commands = @include(Projects::CONSUMER_DIR . 'Bootgly/commands/@.php');
@@ -97,7 +101,9 @@ class CLI extends Projects // Command Line Interface
             }
 
             // @ Route commands
-            $Commands->route(From: $this);
+            if ($Commands->route(From: $this) === false) {
+               exit(1);
+            }
       }
    }
 }

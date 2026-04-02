@@ -11,17 +11,19 @@
 namespace Bootgly\WPI\Modules\HTTP\Server;
 
 
+use function array_key_exists;
+use function strpos;
+use function strstr;
 use ArrayIterator;
 use IteratorAggregate;
 use Traversable;
-use function array_key_exists;
 
 use const Bootgly\WPI;
 
 
 class Route
 {
-   public const START_PARAM = ':';
+   public const string START_PARAM = ':';
 
    // * Config
    private string|null $name;
@@ -112,14 +114,14 @@ class Route
          case 'parameterized':
             $parameterized = false;
 
-            if (\strpos($this->path, self::START_PARAM) !== false) {
+            if (strpos($this->path, self::START_PARAM) !== false) {
                $parameterized = true;
             }
 
             return $this->parameterized = $parameterized;
 
          case 'node':
-            $node = \strstr($this->path, ':');
+            $node = strstr($this->path, ':');
 
             return $node;
 

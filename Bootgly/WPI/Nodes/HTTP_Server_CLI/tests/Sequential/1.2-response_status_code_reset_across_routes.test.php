@@ -8,9 +8,6 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test\Specification;
 
 
 return new Specification(
-   request: function () {
-      return "GET /error HTTP/1.0\r\n\r\n";
-   },
    requests: [
       function () {
          return "GET /error HTTP/1.0\r\n\r\n";

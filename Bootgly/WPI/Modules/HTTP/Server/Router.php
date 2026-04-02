@@ -10,12 +10,20 @@
 
 namespace Bootgly\WPI\Modules\HTTP\Server;
 
+
 use function call_user_func_array;
 use function explode;
+use function extract;
+use function in_array;
 use function is_int;
 use function is_array;
+use function is_string;
 use function preg_match;
+use function rtrim;
+use function str_replace;
+use function trim;
 use Closure;
+use Exception;
 use Generator;
 
 use Bootgly\ABI\Data\__String\Path;
@@ -88,12 +96,12 @@ class Router
 
       // @ Instance file
       // ? File path
-      $boot = $path . '/router/';
-      $Index = new File($boot . 'index.php');
+      $boot = "$path/router/";
+      $Index = new File("{$boot}index.php");
       // @ Boot (include router index file)
       if ($Index->file) {
          (static function (string $__file__, array $__data__) {
-            \extract($__data__);
+            extract($__data__);
             include_once $__file__;
          })($Index->file, $data);
       }
@@ -104,7 +112,7 @@ class Router
          $Instance = new File($boot . $instance . '.php');
          if ($Instance->file) {
             (static function (string $__file__, array $__data__) {
-               \extract($__data__);
+               extract($__data__);
                @include_once $__file__;
             })($Instance->file, $data);
          }
@@ -161,12 +169,12 @@ class Router
          return false;
       }
       if ($Route->nested && $route[0] === '/') {
-         throw new \Exception('Nested route path must be relative!');
+         throw new Exception('Nested route path must be relative!');
       }
 
       // # Route Methods
       // @ Match
-      if (empty($methods) || \in_array(WPI->Request->method, (array) $methods)) {
+      if (empty($methods) || in_array(WPI->Request->method, (array) $methods)) {
          $routed = 1;
       }
 
@@ -175,7 +183,7 @@ class Router
       if ($routed === 1) {
          $route = ($route === '/'
             ? ''
-            : \rtrim($route, '/')
+            : rtrim($route, '/')
          );
          $Route->path = $route;
 
@@ -218,7 +226,7 @@ class Router
 
          // @ Call
          // # Merge route-level + group-level middlewares
-         $merged = \array_merge($this->middlewares, $middlewares);
+         $merged = [...$this->middlewares, ...$middlewares];
 
          if ($handler instanceof Closure) {
             $handler = $handler->bindTo($Route, $Route);
@@ -361,7 +369,7 @@ class Router
 
          if ($Route->parsed) {
             // $pattern
-            $pattern = '/^' . $Route->parsed . '$/m';
+            $pattern = "/^{$Route->parsed}\$/m";
             // $subject
             if ($Route->catched && $Route->catched !== '(.*)') {
                $subject = $Route->catched;
@@ -404,14 +412,14 @@ class Router
 
       // ! Prepare Route Path
       // ? Route path
-      $paths = explode('/', \str_replace("/", "\/", $Route->path));
+      $paths = explode('/', str_replace("/", "\/", $Route->path));
       // ? Request path (full | relative)
       // Get catched path instead of Request path
       if ($Route->catched) {
-         $locations = explode('/', \str_replace("/", "\/", $Route->catched));
+         $locations = explode('/', str_replace("/", "\/", $Route->catched));
       }
       else {
-         $locations = explode('/', \str_replace("/", "\/", WPI->Request->URL));
+         $locations = explode('/', str_replace("/", "\/", WPI->Request->URL));
       }
       // ? Route Path Node replaced by Regex
       $regex_replaced = [];
@@ -427,12 +435,12 @@ class Router
       foreach ($paths as $index => $node) {
          if ($index > 0 || $node !== '\\') {
             if (@$node[-1] === '*' || @$node[-2] === '*') { //? Catch-All Param
-               $node = \str_replace(':*', '(.*)', $node); //? Replace with (...) capture everything enclosed
+               $node = str_replace(':*', '(.*)', $node); //? Replace with (...) capture everything enclosed
                $Route->catched = '(.*)';
                // TODO error if detected next node after Catch-All param?
             }
             else if (@$node[0] === ':') { //? Param
-               $param = \trim($node, ':\\'); //? Get Param name
+               $param = trim($node, ':\\'); //? Get Param name
                // TODO get param name with In-URL Regex
                // TODO validate all $param name 😓 - only accept a-z, A-Z, 0-9 and "-"?
 
@@ -440,12 +448,12 @@ class Router
                // ! BAD IDEA?! 🤔
                if (@$node[-1] === ')') {
                   // TODO validate In-URL Regex 🥵 - only accept this characters -> "azdDw-[]^|" ???
-                  $params = explode('(', \rtrim($param, ')'));
+                  $params = explode('(', rtrim($param, ')'));
                   $param = $params[0];
 
                   $Route->Params->$param = $params[1]; // @ Set Param Regex
 
-                  $Route->path = \str_replace('(' . $params[1] . ')', '', $Route->path);
+                  $Route->path = str_replace('(' . $params[1] . ')', '', $Route->path);
                }
 
                // ? Param without Regex
@@ -454,8 +462,8 @@ class Router
                   $Route->Params->$param = '(.*)\/?(.*)';
                }
 
-               if (\is_string($Route->Params->$param)) {
-                  $node = \str_replace(':' . $param, $Route->Params->$param, $node);
+               if (is_string($Route->Params->$param)) {
+                  $node = str_replace(':' . $param, $Route->Params->$param, $node);
                   // @ Store values to use in equals params
                   $regex_replaced[$param] = $Route->Params->$param;
 
@@ -463,7 +471,7 @@ class Router
                   $Route->Params->$param = $index + $Route->nodes;
                }
                else {
-                  $node = \str_replace(':' . $param, $regex_replaced[$param], $node);
+                  $node = str_replace(':' . $param, $regex_replaced[$param], $node);
                   $Route->Params->$param = (array) $Route->Params->$param;
                   $Route->Params->$param[] = $index + $Route->nodes;
                }

@@ -11,11 +11,28 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI;
 
 
+use const BOOTGLY_PROJECT;
+use const STR_PAD_LEFT;
+use const ZLIB_ENCODING_DEFLATE;
+use const ZLIB_ENCODING_GZIP;
+use const ZLIB_ENCODING_RAW;
+use function array_pop;
+use function count;
+use function defined;
+use function extract;
+use function gmdate;
+use function gzcompress;
+use function gzdeflate;
+use function gzencode;
+use function ob_get_clean;
 use function ob_start;
+use function str_pad;
+use function strlen;
 use function strval;
 use function strtolower;
 use function json_decode;
 use function is_array;
+use function is_int;
 use function is_scalar;
 use function is_object;
 use function is_resource;
@@ -25,6 +42,8 @@ use function method_exists;
 use function getType;
 use AllowDynamicProperties;
 use Closure;
+use Error;
+use Fiber;
 use Throwable;
 
 use Bootgly\ABI\Debugging\Data\Throwables;
@@ -35,6 +54,8 @@ use const Bootgly\WPI;
 use Bootgly\WPI\Modules\HTTP;
 use Bootgly\WPI\Modules\HTTP\Server;
 use Bootgly\WPI\Modules\HTTP\Server\Response\Authentication;
+use Bootgly\WPI\Interfaces\TCP_Server_CLI;
+use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Raw;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Raw\Body;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Raw\Header;
@@ -54,30 +75,37 @@ class Response extends Server\Response
 
    // * Data
    // # Resource
-   // @ Content
+   // Content
    public string|null $source;
    public string|null $type;
 
    // * Metadata
-   // @ State (sets)
+   // # State (sets)
    public bool $chunked;
    public bool $encoded;
-   // @ Type (set)
+   // # Type (set)
    #public bool $dynamic;
    #public bool $static;
    public bool $stream;
    // # Resource
-   // @ Content
-   private ?string $resource;
+   // Content
+   private null|string $resource;
    /** @var array<string,mixed> */
    protected array $uses = [];
-   /** @var array<int, array<string, mixed>> */
+   /** @var array<int,array<string,mixed>> */
    protected array $files;
-   // @ Status (sets ...)
+   // # Status (sets ...)
    public bool $initied = false;
    public bool $prepared;
    public bool $processed;
    public bool $sent;
+   // # Deferred
+   public bool $deferred;
+   private null|Packages $Package;
+   /** @var resource|null */
+   private mixed $Socket;
+   /** @var null|Fiber<mixed, mixed, mixed, mixed> */
+   private null|Fiber $Fiber;
 
    // / HTTP
    public Header $Header;
@@ -90,7 +118,7 @@ class Response extends Server\Response
     * @param array<string>|null $headers The headers of the response.
     * @param string $body The body of the response.
     */
-   public function __construct (int $code = 200, ? array $headers = null, string $body = '')
+   public function __construct (int $code = 200, null|array $headers = null, string $body = '')
    {
       // * Config
       // ...
@@ -108,6 +136,11 @@ class Response extends Server\Response
       $this->prepared = true;
       $this->processed = true;
       $this->sent = false;
+      // # Deferred
+      $this->deferred = false;
+      $this->Package = null;
+      $this->Socket = null;
+      $this->Fiber = null;
       // @ State
       $this->chunked = false;
       $this->encoded = false;
@@ -175,7 +208,7 @@ class Response extends Server\Response
       switch ($name) {
          // @ Response Metadata
          case 'code':
-            if (\is_int($value) && $value > 99 && $value < 600) {
+            if (is_int($value) && $value > 99 && $value < 600) {
                $this->code($value);
             }
             break;
@@ -213,23 +246,28 @@ class Response extends Server\Response
    {
       // * Data
       // # Resource
-      // @ Content
+      // Content
       $this->source = null;
       $this->type = null;
       $this->files = [];
 
       // * Metadata
       $this->resource = null;
-      // @ State (sets)
+      // # State (sets)
       $this->chunked = false;
       $this->encoded = false;
-      // @ Type (set)
+      // # Type (set)
       $this->stream = false;
-      // @ Status (sets ...)
+      // # Status (sets ...)
       $this->initied = false;
       $this->prepared = true;
       $this->processed = true;
       $this->sent = false;
+      // # Deferred
+      $this->deferred = false;
+      $this->Package = null;
+      $this->Socket = null;
+      $this->Fiber = null;
 
       $this->Header->clean();
       $this->Body->raw = '';
@@ -393,6 +431,10 @@ class Response extends Server\Response
                break;
             }
 
+            if ( !defined('BOOTGLY_PROJECT') ) {
+               throw new Error('HTTP_Server_CLI must be started through a Project. BOOTGLY_PROJECT is not defined.');
+            }
+
             $File = new File(BOOTGLY_PROJECT->path . 'views/' . $data);
 
             $this->source = 'file';
@@ -424,6 +466,9 @@ class Response extends Server\Response
 
                      $prefix = $data[0] ?? '';
                      // TODO check if string is a valid path
+                     if ($prefix !== '/' && $prefix !== '@' && !defined('BOOTGLY_PROJECT')) {
+                        throw new Error('HTTP_Server_CLI must be started through a Project. BOOTGLY_PROJECT is not defined.');
+                     }
                      $File = match ($prefix) {
                         #!
                         '/' => new File(BOOTGLY_WORKING_DIR . 'projects' . $data),
@@ -600,20 +645,20 @@ class Response extends Server\Response
       try {
          switch ($method) {
             case 'gzip':
-               $encoding ??= \ZLIB_ENCODING_GZIP;
-               $encoded = @\gzencode($raw, $level, $encoding);
+               $encoding ??= ZLIB_ENCODING_GZIP;
+               $encoded = @gzencode($raw, $level, $encoding);
                break;
             case 'deflate':
-               $encoding ??= \ZLIB_ENCODING_RAW;
-               $deflated = @\gzdeflate($raw, $level, $encoding);
+               $encoding ??= ZLIB_ENCODING_RAW;
+               $deflated = @gzdeflate($raw, $level, $encoding);
                break;
             case 'compress':
-               $encoding ??= \ZLIB_ENCODING_DEFLATE;
-               $compressed = @\gzcompress($raw, $level, $encoding);
+               $encoding ??= ZLIB_ENCODING_DEFLATE;
+               $compressed = @gzcompress($raw, $level, $encoding);
                break;
          }
       }
-      catch (\Throwable) {
+      catch (Throwable) {
          // ...
       }
 
@@ -786,7 +831,7 @@ class Response extends Server\Response
 
                default: // Dynamic (PHP)
                   // @ Output/Buffer start()
-                  \ob_start();
+                  ob_start();
 
                   $__data__ = [
                      'Request' => WPI->Request,
@@ -795,11 +840,11 @@ class Response extends Server\Response
 
                   // @ Isolate context with anonymous static function
                   (static function (string $__file__, array $__data__) {
-                     \extract($__data__);
+                     extract($__data__);
                      require $__file__;
                   })($File, $__data__);
 
-                  $captured = \ob_get_clean(); // @ Output/Buffer clean()->get()
+                  $captured = ob_get_clean(); // @ Output/Buffer clean()->get()
                   $body = $captured === false ? '' : $captured;
             }
 
@@ -869,15 +914,11 @@ class Response extends Server\Response
          $File = $file;
       }
       else {
-         /**
-          * @var ?\Bootgly\API\Project $Project
-         */
-         $Project = \BOOTGLY_PROJECT;
-         if ($Project === null) {
-            $this->__set('code', 500);
-            return $this;
+         if ( !defined('BOOTGLY_PROJECT') ) {
+            throw new Error('HTTP_Server_CLI must be started through a Project. BOOTGLY_PROJECT is not defined.');
          }
-         $File = new File($Project . Path::normalize($file));
+
+         $File = new File(BOOTGLY_PROJECT->path . Path::normalize($file));
       }
 
       if ($File->readable === false) {
@@ -894,7 +935,7 @@ class Response extends Server\Response
 
       // @ Prepare HTTP headers
       $this->Header->prepare([
-         'Last-Modified' => \gmdate('D, d M Y H:i:s \G\M\T', $File->modified),
+         'Last-Modified' => gmdate('D, d M Y H:i:s \G\M\T', $File->modified),
          // Cache
          'Cache-Control' => 'no-cache, must-revalidate',
          'Expires' => '0',
@@ -929,7 +970,7 @@ class Response extends Server\Response
                }
 
                /** @var mixed $type */
-               $type = \array_pop($ranges);
+               $type = array_pop($ranges);
                // @ Check Range type
                if (! is_string($type) || $type !== 'bytes') {
                   $this->end(416, (string) $size);
@@ -968,7 +1009,7 @@ class Response extends Server\Response
       }
 
       // ! Header
-      $rangesCount = \count($ranges);
+      $rangesCount = count($ranges);
       // @ Set Content Length Header
       if ($rangesCount === 1) {
          $this->Header->set('Content-Length', (string) $parts[0]['length']);
@@ -980,11 +1021,11 @@ class Response extends Server\Response
          $this->code(206); // 206 Partial Content
 
          if ($rangesCount > 1) { // @ HTTP Multipart ranges
-            $boundary = \str_pad(
+            $boundary = str_pad(
                string: (string) ++WPI->Request::$multiparts,
                length: 20,
                pad_string: '0',
-               pad_type: \STR_PAD_LEFT
+               pad_type: STR_PAD_LEFT
             );
 
             $this->Header->set('Content-Type', 'multipart/byteranges; boundary=' . $boundary);
@@ -1010,8 +1051,8 @@ class Response extends Server\Response
                }
 
                $length += $parts[$index]['length'];
-               $length += \strlen($prepend);
-               $length += \strlen($append ?? '');
+               $length += strlen($prepend);
+               $length += strlen($append ?? '');
 
                $pads[] = [
                   'prepend' => $prepend,
@@ -1054,6 +1095,115 @@ class Response extends Server\Response
       ];
 
       $this->sent = true;
+
+      return $this;
+   }
+
+   // # Deferred
+   /**
+    * Bind the Package and Socket context for deferred responses.
+    *
+    * @param Packages $Package
+    * @param resource $Socket
+    *
+    * @return void
+    */
+   public function bind (Packages $Package, mixed $Socket): void
+   {
+      $this->Package = $Package;
+      $this->Socket = $Socket;
+   }
+   /**
+    * Defer the response to be completed asynchronously via Fiber.
+    *
+    * @param Closure $work The async work to execute inside a Fiber.
+    * 
+    * @return Response The Response instance, for chaining
+    */
+   public function defer (Closure $work): self
+   {
+      // !
+      $this->deferred = true;
+
+      $Response = $this;
+      $Package = $this->Package;
+      $Socket = $this->Socket;
+
+      // @ Create Fiber to run deferred work
+      $Fiber = new Fiber(function ()
+      use ($work, $Response, $Package, $Socket): void {
+         // ?
+         if ($Package === null || $Socket === null) {
+            return;
+         }
+
+         try {
+            // @ Execute user work (may call Fiber::suspend())
+            $work();
+
+            // ? Guard: socket may have been closed while Fiber was suspended
+            if (! is_resource($Socket)) {
+               return;
+            }
+
+            // @ Encode and send response after work completes
+            $buffer = $Response->encode($Package, $length);
+            $Package->writing($Socket, length: $length, buffer: $buffer);
+         }
+         catch (Throwable $Throwable) {
+            Throwables::report($Throwable);
+
+            // ? Guard: socket may have been closed
+            if (! is_resource($Socket)) {
+               return;
+            }
+
+            // @ Send 500 on failure
+            $Response->code(500);
+            $Response->Body->raw = ' ';
+
+            $buffer = $Response->encode($Package, $length);
+            $Package->writing($Socket, length: $length, buffer: $buffer);
+         }
+      });
+
+      // @ Store Fiber reference for wait() guard (must be set before start)
+      $this->Fiber = $Fiber;
+
+      // @ Start Fiber
+      $suspendedValue = $Fiber->start();
+
+      // @ Schedule suspended Fiber in event loop
+      // (forwards suspended value for I/O-aware routing)
+      if ($Fiber->isSuspended()) {
+         TCP_Server_CLI::$Event->schedule($Fiber, $suspendedValue);
+      }
+
+      return $this;
+   }
+   /**
+    * Wait for the deferred work to complete and the response to be sent.
+    *
+    * Yields control back to the event loop. The Fiber is resumed based on the value passed:
+    * - `null` (default): tick-based — resumes on the next event loop iteration.
+    * - `resource` (stream): I/O-bound — resumes when `stream_select()` detects readiness on the stream.
+    *
+    * @param resource|null $value A stream resource for I/O-bound scheduling, or null for tick-based.
+    *
+    * @return Response The Response instance, for chaining.
+    */
+   public function wait (mixed $value = null): self
+   {
+      // ?
+      if ($this->deferred === false) {
+         return $this;
+      }
+      if (Fiber::getCurrent() !== $this->Fiber) {
+         return $this;
+      }
+
+      // @ Suspend current Fiber until resumed by deferred work
+      Fiber::suspend($value);
 
       return $this;
    }

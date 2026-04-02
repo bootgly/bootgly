@@ -35,7 +35,6 @@ return new Suites(
       'Bootgly/ADI/Table/',
 
       // Application Programming Interface (API)
-      'Bootgly/API/',
       'Bootgly/API/Server/',
 
       // Command Line Interface (CLI)

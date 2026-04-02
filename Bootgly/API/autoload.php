@@ -9,8 +9,3 @@
  */
 
 namespace Bootgly\API;
-
-
-$Project = Projects::autobooting();
-
-define('BOOTGLY_PROJECT', $Project);

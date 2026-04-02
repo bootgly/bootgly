@@ -47,8 +47,9 @@ interface Packages
     * Write data to the socket
     *
     * @param resource $Socket 
+    * @param null|int $length
     *
-    * @return void 
+    * @return bool 
     */
-   public function write (&$Socket, null|int $length = null): void;
+   public function write (&$Socket, null|int $length = null): bool;
 }

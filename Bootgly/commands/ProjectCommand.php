@@ -12,14 +12,10 @@ namespace Bootgly\commands;
 
 
 use function array_keys;
-use function array_merge;
 use function array_slice;
-use function array_unique;
 use function basename;
 use function count;
-use function dirname;
 use function file_get_contents;
-use function file_put_contents;
 use function glob;
 use function implode;
 use function in_array;
@@ -31,6 +27,8 @@ use function json_decode;
 use function posix_kill;
 use function rtrim;
 use function str_pad;
+use function strlen;
+use function substr;
 use function time;
 use function unlink;
 use function usleep;
@@ -58,65 +56,50 @@ class ProjectCommand extends Command
    public int $group = 2;
 
    // * Data
-   // @ Command
+   // # Command
    public string $name = 'project';
    public string $description = 'Manage Bootgly projects';
    /** @phpstan-ignore property.phpDocType */
-   /** @var array<string,array<string,list<string>|string>> */
+   /** @var array<string,array<string,array<string,string>|string>> */
    public array $arguments = [ // @phpstan-ignore property.phpDocType
       'list' => [
          'description' => 'List all registered projects',
-         'options'     => []
+         'arguments'   => []
       ],
-      'set' => [
-         'description' => 'Set project properties (e.g. default)',
-         'options'     => [
-            '--default'
-         ]
-      ],
-      // TODO: add separator here
       'run' => [
-         'description' => 'Run a project (default or named)',
-         'options'     => [
-            '--cli',
-            '--wpi',
-            '-d',
-            '-it',
-            '-m'
+         'description' => 'Run a project by name',
+         'arguments'   => [
+            '<name>' => 'Project name to run'
          ]
       ],
       'stop' => [
          'description' => 'Stop a running project',
-         'options'     => [
-            '<name>'
+         'arguments'   => [
+            '<name>' => 'Project name to stop'
          ]
       ],
       'show' => [
          'description' => 'Show status of a running project',
-         'options'     => [
-            '<name>'
+         'arguments'   => [
+            '<name>' => 'Project name'
          ]
       ],
       'reload' => [
          'description' => 'Hot-reload a running project',
-         'options'     => [
-            '<name>'
+         'arguments'   => [
+            '<name>' => 'Project name to reload'
          ]
       ],
       'restart' => [
-         'description' => 'Restart a running project',
-         'options'     => [
-            '--cli',
-            '--wpi',
-            '-d',
-            '-it',
-            '-m'
+         'description' => 'Restart a running project by name',
+         'arguments'   => [
+            '<name>' => 'Project name to restart'
          ]
       ],
       'info' => [
          'description' => 'Show detailed info about a project',
-         'options'     => [
-            '<name>'
+         'arguments'   => [
+            '<name>' => 'Project name'
          ]
       ],
    ];
@@ -132,12 +115,25 @@ class ProjectCommand extends Command
     */
    public function run (array $arguments = [], array $options = []): bool
    {
+      // @ Normalize argument order
+      // Supports both: `project <subcommand> <name>` and `project <name> <subcommand>`
+      $subcommands = array_keys($this->arguments);
+      if (
+         isSet($arguments[0], $arguments[1])
+         && in_array($arguments[0], $subcommands) === false
+      ) {
+         if (in_array($arguments[1], $subcommands)) {
+            // Swap: project <name> <subcommand> → project <subcommand> <name>
+            [$arguments[0], $arguments[1]] = [$arguments[1], $arguments[0]];
+         }
+         else {
+            // project <name> <invalid> → report the invalid subcommand, not the project name
+            [$arguments[0], $arguments[1]] = [$arguments[1], $arguments[0]];
+         }
+      }
+
       return match ($arguments[0] ?? null) {
          'list'    => $this->list(),
-         'set'     => $this->set(
-            array_slice($arguments, 1),
-            $options
-         ),
          'run'     => $this->start(
             array_slice($arguments, 1),
             $options
@@ -149,13 +145,13 @@ class ProjectCommand extends Command
             array_slice($arguments, 1),
             $options
          ),
-         'info'    => $this->info($arguments),
+         'info'    => $this->info(array_slice($arguments, 1)),
 
          default   => $this->help($arguments)
       };
    }
 
-   // @ Subcommands
+   // # Subcommands
    /**
     * List all discovered projects with their interfaces and default marker.
     *
@@ -165,29 +161,22 @@ class ProjectCommand extends Command
    {
       $Output = CLI->Terminal->Output;
 
-      // @ Load @.php
-      $config = @include(BOOTGLY_WORKING_DIR . 'projects/@.php');
-      if ($config === false) {
-         $config = @include(BOOTGLY_ROOT_DIR . 'projects/@.php');
-      }
-      $default = $config['default'] ?? '';
-
       // @ Discover CLI projects
-      $cli_projects = $this->discover('CLI');
+      $projects_CLI = $this->discover('CLI');
       // @ Discover WPI projects
-      $wpi_projects = $this->discover('WPI');
+      $projects_WPI = $this->discover('WPI');
 
       // @ Merge all projects
       /** @var array<string, array{interfaces: list<string>, name: string, description: string}> $all */
       $all = [];
-      foreach ($cli_projects as $folder => $meta) {
+      foreach ($projects_CLI as $folder => $meta) {
          $all[$folder] = [
             'interfaces'  => ['CLI'],
             'name'        => $meta['name'],
             'description' => $meta['description']
          ];
       }
-      foreach ($wpi_projects as $folder => $meta) {
+      foreach ($projects_WPI as $folder => $meta) {
          if (isSet($all[$folder])) {
             $all[$folder]['interfaces'][] = 'WPI';
          }
@@ -205,24 +194,27 @@ class ProjectCommand extends Command
          return true;
       }
 
-      $Output->render('@.;@#cyan: Project list: @; @.;');
+      $Output->render('@.;@#cyan: Project list: @;@..;');
 
       $index = 1;
       foreach ($all as $folder => $info) {
          $interfaceList = implode(', ', $info['interfaces']);
-         $defaultMark = ($folder === $default) ? " @#green:[default]@;" : '';
 
          $Output->render(
             "@#magenta: #{$index} @; - "
-            . "@#yellow:{$info['name']}@; @#Black:(projects/{$folder})@; [{$interfaceList}]{$defaultMark}"
+            . "@#yellow:{$folder}@;"
             . PHP_EOL
          );
 
          if ($info['description'] !== '') {
             $Output->render(
-               "     @#white:{$info['description']}@;" . PHP_EOL
+               "     @#green:Description:@; {$info['description']}" . PHP_EOL
             );
          }
+
+         $Output->render(
+            "     @#green:Type:@; {$interfaceList}@..;"
+         );
 
          $index++;
       }
@@ -230,66 +222,6 @@ class ProjectCommand extends Command
       $Output->write(PHP_EOL);
 
       return true;
-   }
-
-   /**
-    * Set project properties (e.g. default).
-    * 
-    * @param array<string> $arguments
-    * @param array<string, bool|int|string> $options
-    */
-   public function set (array $arguments, array $options): bool
-   {
-      $Output = CLI->Terminal->Output;
-
-      // ? Validate project name
-      $projectName = $arguments[0] ?? null;
-      if ($projectName === null || $projectName === '') {
-         $Alert = new Alert($Output);
-         $Alert->Type::Failure->set();
-         $Alert->message = 'Usage: project set <name> --default';
-         $Alert->render();
-         return false;
-      }
-
-      // ? Validate project exists
-      $cli = $this->discover('CLI');
-      $wpi = $this->discover('WPI');
-      $allProjects = array_unique(array_merge(
-         array_keys($cli),
-         array_keys($wpi)
-      ));
-
-      if (in_array($projectName, $allProjects) === false) {
-         $Alert = new Alert($Output);
-         $Alert->Type::Failure->set();
-         $Alert->message = "Project @#cyan:{$projectName}@; not found.";
-         $Alert->render();
-         return false;
-      }
-
-      // # Set as default
-      if (isSet($options['default'])) {
-         $configPath = BOOTGLY_WORKING_DIR . 'projects/@.php';
-         if (is_file($configPath) === false) {
-            $configPath = BOOTGLY_ROOT_DIR . 'projects/@.php';
-         }
-
-         $content = "<?php\nreturn [\n   'default' => '{$projectName}'\n];\n";
-         file_put_contents($configPath, $content);
-
-         $Output->render("@.;@#green: Default project set to:  @;@#cyan: {$projectName} @;@.;");
-
-         return true;
-      }
-
-      // ? No option specified
-      $Alert = new Alert($Output);
-      $Alert->Type::Failure->set();
-      $Alert->message = 'No option specified. Use --default.';
-      $Alert->render();
-
-      return false;
    }
 
    /**
@@ -307,33 +239,14 @@ class ProjectCommand extends Command
       // @ Determine project name
       $projectName = $arguments[0] ?? null;
 
-      if ($projectName === null) {
-         // @ Load default from @.php
-         $config = @include(BOOTGLY_WORKING_DIR . 'projects/@.php');
-         if ($config === false) {
-            $config = @include(BOOTGLY_ROOT_DIR . 'projects/@.php');
-         }
-         $projectName = $config['default'] ?? null;
-      }
-
+      // ? Require project name
       if ($projectName === null || $projectName === '') {
-         $Alert = new Alert($Output);
-         $Alert->Type::Failure->set();
-         $Alert->message = 'No project specified and no default set.';
-         $Alert->render();
-         return false;
+         return $this->help(['run']);
       }
 
       // @ Resolve project directory
-      $projectDir = BOOTGLY_WORKING_DIR . 'projects/' . $projectName . '/';
-      if (is_dir($projectDir) === false) {
-         $projectDir = BOOTGLY_ROOT_DIR . 'projects/' . $projectName . '/';
-      }
-      if (is_dir($projectDir) === false) {
-         $Alert = new Alert($Output);
-         $Alert->Type::Failure->set();
-         $Alert->message = "Project directory not found: @#cyan:{$projectName}@;";
-         $Alert->render();
+      $projectDir = $this->resolve($projectName);
+      if ($projectDir === null) {
          return false;
       }
 
@@ -342,83 +255,44 @@ class ProjectCommand extends Command
       if ($PIDs !== null && $this->probe($PIDs['master'])) {
          $Alert = new Alert($Output);
          $Alert->Type::Failure->set();
-         $Alert->message = "Project @#cyan:{$projectName}@; is already running (PID: {$PIDs['master']}). Use `project restart` instead.";
+         $Alert->message = "Project @#cyan:{$projectName}@; is already running (PID: {$PIDs['master']}). Use `project restart` instead.@.;";
          $Alert->render();
+
          return false;
       }
 
       // @ Slice out the project name from arguments for boot
-      $bootArguments = $projectName === ($arguments[0] ?? null)
+      $bootArguments = $projectName === $arguments[0] // @phpstan-ignore identical.alwaysTrue
          ? array_slice($arguments, 1)
          : $arguments;
 
-      // @ Determine which @autoboot files to run
-      $filterCLI = isSet($options['cli']);
-      $filterWPI = isSet($options['wpi']);
-      $noFilter = !$filterCLI && !$filterWPI;
-
-      $booted = false;
-
-      // @ Boot WPI
-      if ($filterWPI || $noFilter) {
-         $wpiFile = $projectDir . 'WPI.project.php';
-         if (is_file($wpiFile) === false) {
-            $wpiFile = $projectDir . 'Web.project.php';
-         }
-         if (is_file($wpiFile)) {
-            $Project = require $wpiFile;
-
-            // @ Show project header
-            if ($Project instanceof Project) {
-               $Project->folder = $projectName;
-               Project::$current = $Project;
-
-               $Output->render(
-                  '@.;@#yellow:' . $Project->name . '@;'
-                  . ($Project->description !== '' ? ' — ' . $Project->description : '')
-                  . '@.;'
-               );
-               $Project->boot($bootArguments, $options);
-            }
-
-            $booted = true;
-         }
-      }
-
-      // @ Boot CLI
-      if ($filterCLI || $noFilter) {
-         $cliFile = $projectDir . 'CLI.project.php';
-         if (is_file($cliFile) === false) {
-            $cliFile = $projectDir . 'Console.project.php';
-         }
-         if (is_file($cliFile)) {
-            $Project = require $cliFile;
-
-            // @ Show project header
-            if ($Project instanceof Project) {
-               $Project->folder = $projectName;
-               Project::$current = $Project;
-
-               $Output->render(
-                  '@.;@#cyan: Starting @;@#yellow:' . $Project->name . '@;'
-                  . ($Project->description !== '' ? ' — ' . $Project->description : '')
-                  . '@.;'
-               );
-               $Project->boot($bootArguments, $options);
-            }
-
-            $booted = true;
-         }
-      }
-
-      if ($booted === false) {
+      // @ Load and boot the project file
+      $projectFile = $projectDir . $projectName . '.project.php';
+      if (is_file($projectFile) === false) {
          $Alert = new Alert($Output);
          $Alert->Type::Failure->set();
-         $filter = $filterCLI ? 'CLI' : ($filterWPI ? 'WPI' : 'any');
-         $Alert->message = "No project file found for @#cyan:{$projectName}@; ({$filter}).";
+         $Alert->message = "No project file found for @#cyan:{$projectName}@;.";
          $Alert->render();
+
          return false;
       }
+
+      $Project = require $projectFile;
+      if ($Project instanceof Project === false) {
+         $Alert = new Alert($Output);
+         $Alert->Type::Failure->set();
+         $Alert->message = "Invalid project file for @#cyan:{$projectName}@;.";
+         $Alert->render();
+
+         return false;
+      }
+
+      $Output->render(
+         '@.;@#yellow:' . $Project->name . '@;'
+         . ($Project->description !== '' ? ' — ' . $Project->description : '')
+         . '@.;'
+      );
+      $Project->boot($bootArguments, $options);
 
       return true;
    }
@@ -434,48 +308,91 @@ class ProjectCommand extends Command
    {
       $Output = CLI->Terminal->Output;
 
-      // @
-      $projectName = $this->resolve($arguments);
-      if ($projectName === null) {
+      // ? Require project name
+      $projectName = $arguments[0] ?? null;
+      if ($projectName === null || $projectName === '') {
+         return $this->help(['stop']);
+      }
+
+      // ? Validate project exists
+      if ($this->resolve($projectName) === null) {
          return false;
       }
 
-      $PIDs = $this->locate($projectName);
-      if ($PIDs === null || $this->probe($PIDs['master']) === false) {
+      // @ Collect all instances to stop
+      $instances = $this->locateAll($projectName);
+      if (count($instances) === 0) {
          $Alert = new Alert($Output);
          $Alert->Type::Failure->set();
-         $Alert->message = "Project @#cyan:{$projectName}@; is not running.";
+         $Alert->message = "Project @#cyan:{$projectName}@; is not running.@.;";
          $Alert->render();
          return false;
       }
 
-      $masterPid = $PIDs['master'];
+      $stopped = 0;
+      foreach ($instances as $instance => $PIDs) {
+         if ($this->probe($PIDs['master']) === false) {
+            // @ Clean stale PID file
+            $suffix = $instance !== '' ? '.' . $instance : '';
+            $pidFile = BOOTGLY_WORKING_DIR . '/workdata/pids/' . $projectName . $suffix . '.json';
+            if (is_file($pidFile)) {
+               @unlink($pidFile);
+            }
+            continue;
+         }
 
-      // @ Send SIGTERM to master
-      posix_kill($masterPid, SIGTERM);
+         $masterPid = $PIDs['master'];
 
-      // @ Wait for graceful shutdown
-      $elapsed = 0.0;
-      while ($elapsed < 5.0 && $this->probe($masterPid)) {
-         usleep(100000); // 100ms
-         $elapsed += 0.1;
-      }
+         // @ Send SIGTERM to master
+         posix_kill($masterPid, SIGTERM);
 
-      // @ Force kill if still alive
-      if ($this->probe($masterPid)) {
-         posix_kill($masterPid, SIGKILL);
+         // @ Wait for graceful shutdown
+         $elapsed = 0.0;
+         while ($elapsed < 5.0 && $this->probe($masterPid)) {
+            usleep(100000); // 100ms
+            $elapsed += 0.1;
+         }
+
+         // @ Force kill if still alive
+         if ($this->probe($masterPid)) {
+            posix_kill($masterPid, SIGKILL);
+            usleep(100000);
+         }
+
+         // @ Kill remaining workers
+         foreach ($PIDs['workers'] as $workerPid) {
+            if ($this->probe($workerPid)) {
+               posix_kill($workerPid, SIGTERM);
+            }
+         }
          usleep(100000);
+         foreach ($PIDs['workers'] as $workerPid) {
+            if ($this->probe($workerPid)) {
+               posix_kill($workerPid, SIGKILL);
+            }
+         }
+
+         // @ Remove PID file
+         $suffix = $instance !== '' ? '.' . $instance : '';
+         $pidFile = BOOTGLY_WORKING_DIR . '/workdata/pids/' . $projectName . $suffix . '.json';
+         if (is_file($pidFile)) {
+            @unlink($pidFile);
+         }
+
+         $stopped++;
       }
 
-      // @ Remove PID file
-      $pidFile = BOOTGLY_WORKING_DIR . '/workdata/pids/' . $projectName . '.json';
-      if (is_file($pidFile)) {
-         @unlink($pidFile);
+      if ($stopped === 0) {
+         $Alert = new Alert($Output);
+         $Alert->Type::Failure->set();
+         $Alert->message = "Project @#cyan:{$projectName}@; is not running.@.;";
+         $Alert->render();
+         return false;
       }
 
       $Alert = new Alert($Output);
       $Alert->Type::Success->set();
-      $Alert->message = "Project @#cyan:{$projectName}@; stopped.";
+      $Alert->message = "Project @#cyan:{$projectName}@; stopped.@.;";
       $Alert->render();
 
       return true;
@@ -492,66 +409,81 @@ class ProjectCommand extends Command
    {
       $Output = CLI->Terminal->Output;
 
-      // @
-      $projectName = $this->resolve($arguments);
-      if ($projectName === null) {
+      // ? Require project name
+      $projectName = $arguments[0] ?? null;
+      if ($projectName === null || $projectName === '') {
+         return $this->help(['show']);
+      }
+
+      // ? Validate project exists
+      if ($this->resolve($projectName) === null) {
          return false;
       }
 
-      $PIDs = $this->locate($projectName);
-      if ($PIDs === null) {
+      $instances = $this->locateAll($projectName);
+      if (count($instances) === 0) {
          $Alert = new Alert($Output);
          $Alert->Type::Failure->set();
-         $Alert->message = "No running instance found for project @#cyan:{$projectName}@;.";
+         $Alert->message = "No running instance found for project @#cyan:{$projectName}@;.@.;";
          $Alert->render();
+
          return false;
       }
 
-      // @ Check master
-      $masterAlive = $this->probe($PIDs['master']);
-      $status = $masterAlive ? '@#green:running@;' : '@#red:stopped@;';
+      foreach ($instances as $instance => $PIDs) {
+         // @ Check master
+         $masterAlive = $this->probe($PIDs['master']);
+         $status = $masterAlive ? '@#green:running@;' : '@#red:stopped@;';
 
-      // @ Count alive workers
-      $workers = $PIDs['workers'];
-      $aliveWorkers = 0;
-      foreach ($workers as $workerPid) {
-         if ($this->probe($workerPid)) {
-            $aliveWorkers++;
+         // @ Count alive workers
+         $workers = $PIDs['workers'];
+         $aliveWorkers = 0;
+         foreach ($workers as $workerPid) {
+            if ($this->probe($workerPid)) {
+               $aliveWorkers++;
+            }
          }
+         $totalWorkers = count($workers);
+
+         // @ Calculate uptime
+         $uptime = '';
+         if ($masterAlive) {
+            $seconds = time() - $PIDs['started'];
+            $hours = intdiv($seconds, 3600);
+            $minutes = intdiv($seconds % 3600, 60);
+            $secs = $seconds % 60;
+            $uptime = "{$hours}h {$minutes}m {$secs}s";
+         }
+
+         // @ Build Fieldset content
+         $displayName = $instance !== '' ? $projectName . '.' . $instance : $projectName;
+
+         $content = '';
+         $content .= '@#Green:' . str_pad('Project', 14) . ' @; ' . $displayName . PHP_EOL;
+         $content .= '@#Green:' . str_pad('Type', 14) . ' @; ' . $PIDs['type'] . PHP_EOL;
+         $content .= '@#Green:' . str_pad('Status', 14) . ' @; ' . $status . PHP_EOL;
+         $content .= '@#Green:' . str_pad('Master PID', 14) . ' @; ' . $PIDs['master'] . PHP_EOL;
+
+         if ($PIDs['type'] === 'WPI' || $PIDs['type'] === 'WPI-Client') {
+            $content .= '@#Green:' . str_pad('Workers', 14) . ' @; ' . $aliveWorkers . '/' . $totalWorkers . PHP_EOL;
+         }
+
+         if ($PIDs['type'] === 'WPI') {
+            $content .= '@#Green:' . str_pad('Address', 14) . ' @; ' . $PIDs['host'] . ':' . $PIDs['port'] . PHP_EOL;
+         }
+
+         if ($uptime !== '') {
+            $content .= '@#Green:' . str_pad('Uptime', 14) . ' @; ' . $uptime;
+         }
+
+         $content = rtrim($content);
+
+         $Output->write(PHP_EOL);
+         $Fieldset = new Fieldset($Output);
+         $Fieldset->title = '@#Cyan: Project Status @;';
+         $Fieldset->content = $content;
+         $Fieldset->render();
       }
-      $totalWorkers = count($workers);
-
-      // @ Calculate uptime
-      $uptime = '';
-      if ($masterAlive) {
-         $seconds = time() - $PIDs['started'];
-         $hours = intdiv($seconds, 3600);
-         $minutes = intdiv($seconds % 3600, 60);
-         $secs = $seconds % 60;
-         $uptime = "{$hours}h {$minutes}m {$secs}s";
-      }
-
-      // @ Build Fieldset content
-      $content = '';
-      $content .= '@#Green:' . str_pad('Project', 14) . ' @; ' . $projectName . PHP_EOL;
-      $content .= '@#Green:' . str_pad('Type', 14) . ' @; ' . $PIDs['type'] . PHP_EOL;
-      $content .= '@#Green:' . str_pad('Status', 14) . ' @; ' . $status . PHP_EOL;
-      $content .= '@#Green:' . str_pad('Master PID', 14) . ' @; ' . $PIDs['master'] . PHP_EOL;
-      $content .= '@#Green:' . str_pad('Workers', 14) . ' @; ' . $aliveWorkers . '/' . $totalWorkers . PHP_EOL;
-
-      $content .= '@#Green:' . str_pad('Address', 14) . ' @; ' . $PIDs['host'] . ':' . $PIDs['port'] . PHP_EOL;
-
-      if ($uptime !== '') {
-         $content .= '@#Green:' . str_pad('Uptime', 14) . ' @; ' . $uptime;
-      }
-
-      $content = rtrim($content);
-
-      $Output->write(PHP_EOL);
-      $Fieldset = new Fieldset($Output);
-      $Fieldset->title = '@#Cyan: Project Status @;';
-      $Fieldset->content = $content;
-      $Fieldset->render();
 
       return true;
    }
@@ -567,9 +499,14 @@ class ProjectCommand extends Command
    {
       $Output = CLI->Terminal->Output;
 
-      // @
-      $projectName = $this->resolve($arguments);
-      if ($projectName === null) {
+      // ? Require project name
+      $projectName = $arguments[0] ?? null;
+      if ($projectName === null || $projectName === '') {
+         return $this->help(['reload']);
+      }
+
+      // ? Validate project exists
+      if ($this->resolve($projectName) === null) {
          return false;
       }
 
@@ -577,8 +514,9 @@ class ProjectCommand extends Command
       if ($PIDs === null || $this->probe($PIDs['master']) === false) {
          $Alert = new Alert($Output);
          $Alert->Type::Failure->set();
-         $Alert->message = "Project @#cyan:{$projectName}@; is not running.";
+         $Alert->message = "Project @#cyan:{$projectName}@; is not running.@.;";
          $Alert->render();
+
          return false;
       }
 
@@ -587,7 +525,7 @@ class ProjectCommand extends Command
 
       $Alert = new Alert($Output);
       $Alert->Type::Success->set();
-      $Alert->message = "Reload signal sent to project @#cyan:{$projectName}@;.";
+      $Alert->message = "Reload signal sent to project @#cyan:{$projectName}@;.@.;";
       $Alert->render();
 
       return true;
@@ -605,9 +543,14 @@ class ProjectCommand extends Command
    {
       $Output = CLI->Terminal->Output;
 
-      // @
-      $projectName = $this->resolve($arguments);
-      if ($projectName === null) {
+      // ? Require project name
+      $projectName = $arguments[0] ?? null;
+      if ($projectName === null || $projectName === '') {
+         return $this->help(['restart']);
+      }
+
+      // ? Validate project exists
+      if ($this->resolve($projectName) === null) {
          return false;
       }
 
@@ -624,46 +567,48 @@ class ProjectCommand extends Command
 
    // @ Helpers
    /**
-    * Resolve a project name from arguments or default config.
+    * Resolve the project directory path.
     *
-    * @param array<string> $arguments
+    * @param string $projectName
     *
-    * @return null|string
+    * @return null|string The resolved directory path, or null if not found.
     */
-   private function resolve (array $arguments): null|string
+   private function resolve (string $projectName): null|string
    {
-      $projectName = $arguments[0] ?? null;
-
-      if ($projectName === null) {
-         $config = @include(BOOTGLY_WORKING_DIR . 'projects/@.php');
-         if ($config === false) {
-            $config = @include(BOOTGLY_ROOT_DIR . 'projects/@.php');
-         }
-         $projectName = $config['default'] ?? null;
+      $projectDir = BOOTGLY_WORKING_DIR . 'projects/' . $projectName . '/';
+      if (is_dir($projectDir) === false) {
+         $projectDir = BOOTGLY_ROOT_DIR . 'projects/' . $projectName . '/';
       }
-
-      if ($projectName === null || $projectName === '') {
+      if (is_dir($projectDir) === false) {
          $Output = CLI->Terminal->Output;
+
          $Alert = new Alert($Output);
          $Alert->Type::Failure->set();
-         $Alert->message = 'No project specified and no default set.';
+         $Alert->message = "Project not found: @#cyan:{$projectName}@;@.;";
          $Alert->render();
+
+         $Output->render(
+            '@#Green:Tip:@; Use @#Black:bootgly project list@; to see all available projects.@..;'
+         );
+
          return null;
       }
 
-      return $projectName;
+      return $projectDir;
    }
 
    /**
     * Locate a running project's PID data from its state file.
     *
     * @param string $projectName
+    * @param null|string $instance Optional instance qualifier (e.g. 'test').
     *
     * @return null|array{master: int, workers: array<int>, host: string, port: int, started: int, type: string}
     */
-   private function locate (string $projectName): null|array
+   private function locate (string $projectName, null|string $instance = null): null|array
    {
-      $pidFile = BOOTGLY_WORKING_DIR . '/workdata/pids/' . $projectName . '.json';
+      $suffix = $instance !== null ? '.' . $instance : '';
+      $pidFile = BOOTGLY_WORKING_DIR . '/workdata/pids/' . $projectName . $suffix . '.json';
 
       if (is_file($pidFile) === false) {
          return null;
@@ -682,6 +627,42 @@ class ProjectCommand extends Command
       }
 
       return $data;
+   }
+
+   /**
+    * List all running instances for a project.
+    *
+    * @param string $projectName
+    *
+    * @return array<string, array{master: int, workers: array<int>, host: string, port: int, started: int, type: string}>
+    *         Keys are instance names ('' for primary, 'test' for test, etc.)
+    */
+   private function locateAll (string $projectName): array
+   {
+      $pidsDir = BOOTGLY_WORKING_DIR . '/workdata/pids/';
+      $instances = [];
+
+      // @ Primary instance
+      $primary = $this->locate($projectName);
+      if ($primary !== null) {
+         $instances[''] = $primary;
+      }
+
+      // @ Named instances (e.g. HTTP_Server_CLI.test.json)
+      $pattern = $pidsDir . $projectName . '.*.json';
+      $files = glob($pattern);
+      if ($files !== false) {
+         foreach ($files as $file) {
+            $basename = basename($file, '.json'); // HTTP_Server_CLI.test
+            $instance = substr($basename, strlen($projectName) + 1); // test
+            $data = $this->locate($projectName, $instance);
+            if ($data !== null) {
+               $instances[$instance] = $data;
+            }
+         }
+      }
+
+      return $instances;
    }
 
    /**
@@ -708,29 +689,27 @@ class ProjectCommand extends Command
       // !
       $projects = [];
 
-      $platformSuffix = match ($interface) {
-         'CLI' => 'Console',
-         'WPI' => 'Web',
-         default => null
-      };
-
       // @ Try consumer dir first, then framework dir
       $projectsDir = is_dir(BOOTGLY_WORKING_DIR . 'projects')
-         ? BOOTGLY_WORKING_DIR . 'projects'
-         : BOOTGLY_ROOT_DIR . 'projects';
+         ? BOOTGLY_WORKING_DIR . 'projects/'
+         : BOOTGLY_ROOT_DIR . 'projects/';
 
-      // # Framework Interface suffixes
-      foreach (glob($projectsDir . "/*/{$interface}.project.php") ?: [] as $file) {
-         $folder = basename(dirname($file));
-         $projects[$folder] = $this->get($file, $folder);
+      // @ Load the interface index file
+      $indexFile = $projectsDir . $interface . '.projects.php';
+      if (is_file($indexFile) === false) {
+         return $projects;
       }
-      // # Consumer Platform suffixes
-      if ($platformSuffix !== null) {
-         foreach (glob($projectsDir . "/*/{$platformSuffix}.project.php") ?: [] as $file) {
-            $folder = basename(dirname($file));
-            if (isSet($projects[$folder]) === false) {
-               $projects[$folder] = $this->get($file, $folder);
-            }
+
+      /** @var array<string>|false $index */
+      $index = @include $indexFile;
+      if (is_array($index) === false) {
+         return $projects;
+      }
+
+      foreach ($index as $folder) {
+         $file = $projectsDir . $folder . '/' . $folder . '.project.php';
+         if (is_file($file)) {
+            $projects[$folder] = $this->get($file, $folder);
          }
       }
 
@@ -781,47 +760,32 @@ class ProjectCommand extends Command
    {
       $Output = CLI->Terminal->Output;
 
-      // ? Validate argument
-      $folder = $arguments[1] ?? null;
+      // ? Require project name
+      $folder = $arguments[0] ?? null;
       if ($folder === null || $folder === '') {
-         $Alert = new Alert($Output);
-         $Alert->Type::Failure->set();
-         $Alert->message = 'Usage: project info <name>';
-         $Alert->render();
-         return false;
+         return $this->help(['info']);
       }
 
       // @ Resolve project directory
-      $projectDir = BOOTGLY_WORKING_DIR . 'projects/' . $folder;
-      if (is_dir($projectDir) === false) {
-         $projectDir = BOOTGLY_ROOT_DIR . 'projects/' . $folder;
-      }
-      if (is_dir($projectDir) === false) {
-         $Alert = new Alert($Output);
-         $Alert->Type::Failure->set();
-         $Alert->message = "Project not found: @#cyan:{$folder}@;";
-         $Alert->render();
+      $projectDir = $this->resolve($folder);
+      if ($projectDir === null) {
          return false;
       }
 
-      // @ Load metadata from first project file found
-      $autobootFile = null;
-      foreach (['WPI.project.php', 'Web.project.php', 'CLI.project.php', 'Console.project.php'] as $candidate) {
-         if (is_file($projectDir . '/' . $candidate)) {
-            $autobootFile = $projectDir . '/' . $candidate;
-            break;
-         }
-      }
-      $meta = $autobootFile !== null
-         ? $this->get($autobootFile, $folder)
+      // @ Load metadata from project file
+      $projectFile = $projectDir . $folder . '.project.php';
+      $meta = is_file($projectFile)
+         ? $this->get($projectFile, $folder)
          : ['name' => $folder, 'description' => '', 'version' => '', 'author' => ''];
 
-      // @ Detect interfaces
+      // @ Detect interfaces from index files
       $interfaces = [];
-      if (is_file($projectDir . '/CLI.project.php') || is_file($projectDir . '/Console.project.php')) {
+      $projects_CLI = $this->discover('CLI');
+      $projects_WPI = $this->discover('WPI');
+      if (isSet($projects_CLI[$folder])) {
          $interfaces[] = 'CLI';
       }
-      if (is_file($projectDir . '/WPI.project.php') || is_file($projectDir . '/Web.project.php')) {
+      if (isSet($projects_WPI[$folder])) {
          $interfaces[] = 'WPI';
       }
 
@@ -840,6 +804,7 @@ class ProjectCommand extends Command
       $Fieldset->title = '@#Cyan: Project Info @;';
       $Fieldset->content = $content;
       $Fieldset->render();
+      $Output->write(PHP_EOL);
 
       return true;
    }
@@ -858,40 +823,119 @@ class ProjectCommand extends Command
 
       // @
       $output = '';
+      $status = true;
 
       if ( empty($arguments) ) {
          $Output->write(PHP_EOL);
 
+         // # Arguments
          $content = '';
          foreach ($this->arguments as $name => $value) {
-            /** @var string $description */
-            $description = is_array($value) ? ($value['description'] ?? '') : $value; // @phpstan-ignore function.alreadyNarrowedType, cast.string
-            $content .= '@#Green:' . str_pad($name, 12) . ' @; ' . $description . PHP_EOL;
+            /** @var array{description: string, arguments: array<string,string>}|string $value */
+            $description = is_array($value) ? $value['description'] : $value;
+            $label = $name;
+            $content .= '@#Yellow:' . $name . '@;';
+            $content .= str_pad('', 10 - strlen($label)) . '  ' . $description . PHP_EOL;
          }
          $content = rtrim($content);
-
          $Fieldset = new Fieldset($Output);
          $Fieldset->title = '@#Cyan: Project arguments @;';
          $Fieldset->content = $content;
          $Fieldset->render();
+
+         // # Usage
+         $Fieldset = new Fieldset($Output);
+         $Fieldset->title = '@#Cyan: Project usage @;';
+         $Fieldset->content = 'bootgly project @#Black: <argument> @;@.;';
+         $Fieldset->content .= 'bootgly project @#Black: <argument> <name> @;@.;';
+         $Fieldset->content .= 'bootgly project @#Black: <name> <argument> @;';
+         $Fieldset->render();
+
+         // # Examples
+         $exampleLines = '@#Black:bootgly project list@;' . PHP_EOL;
+         $exampleLines .= '@#Black:bootgly project run HTTP_Server_CLI@;' . PHP_EOL;
+         $exampleLines .= '@#Black:bootgly project stop HTTP_Server_CLI@;' . PHP_EOL;
+         $exampleLines .= '@#Black:bootgly project show HTTP_Server_CLI@;' . PHP_EOL;
+         $exampleLines .= '@#Black:bootgly project restart HTTP_Server_CLI@;' . PHP_EOL;
+         $exampleLines .= '@#Black:bootgly project info HTTP_Server_CLI@;' . PHP_EOL;
+         $exampleLines .= PHP_EOL;
+         $exampleLines .= '@#Black:bootgly project HTTP_Server_CLI run@;' . PHP_EOL;
+         $exampleLines .= '@#Black:bootgly project HTTP_Server_CLI stop@;' . PHP_EOL;
+         $exampleLines .= '@#Black:bootgly project HTTP_Server_CLI show@;';
+         $Fieldset = new Fieldset($Output);
+         $Fieldset->title = '@#Cyan: Project examples @;';
+         $Fieldset->content = $exampleLines;
+         $Fieldset->render();
       }
-      else if ( count($arguments) > 1 ) {
+      else if ( isSet($this->arguments[$arguments[0]]) ) {
+         $status = false;
+
+         // @ Show usage for a valid subcommand
+         $subcommand = $arguments[0];
+         /** @var array{description: string, arguments: array<string,string>} $meta */
+         $meta = $this->arguments[$subcommand];
+
+         $Output->write(PHP_EOL);
+         $Output->render("@#Black: {$meta['description']}@;@.;");
+
+         // @ Alert missing <name>
          $Alert = new Alert($Output);
          $Alert->Type::Failure->set();
-         $Alert->message = 'Too many arguments!';
+         $Alert->message = 'Missing required argument: @#cyan:<name>@;';
          $Alert->render();
+         $Output->write(PHP_EOL);
+
+         // @ Show arguments if any
+         if ( !empty($meta['arguments']) ) {
+            $argLines = '';
+            foreach ($meta['arguments'] as $arg => $argDesc) {
+               $argLines .= '@#cyan:' . str_pad($arg, 9) . '@; ' . $argDesc . PHP_EOL;
+            }
+            $argLines = rtrim($argLines);
+
+            $Fieldset = new Fieldset($Output);
+            $Fieldset->title = '@#Cyan: Project ' . $subcommand . ' arguments @;';
+            $Fieldset->content = $argLines;
+            $Fieldset->render();
+         }
+
+         // # Usage
+         $Fieldset = new Fieldset($Output);
+         $Fieldset->title = '@#Cyan: Project ' . $subcommand . ' usage @;';
+         $Fieldset->content = 'bootgly project ' . $subcommand . ' @#Black: <name> @;' . PHP_EOL
+            . 'bootgly project @#Black: <name>  @;' . $subcommand;
+         $Fieldset->render();
+
+         // # Example
+         $Fieldset = new Fieldset($Output);
+         $Fieldset->title = '@#Cyan: Project ' . $subcommand . ' example @;';
+         $Fieldset->content = '@#Black:bootgly project ' . $subcommand . ' HTTP_Server_CLI@;' . PHP_EOL
+            . '@#Black:bootgly project HTTP_Server_CLI ' . $subcommand . '@;';
+         $Fieldset->render();
+
+         // # Hint
+         $Output->render(
+            '@.;@#Green:Tip:@; Use @#Black:bootgly project list@; to see all available projects.@.;'
+         );
       }
       else {
+         $status = false;
+
+         // @ Show invalid argument alert then general help
          $Alert = new Alert($Output);
          $Alert->Type::Failure->set();
          $Alert->message = "Invalid argument: @#cyan:{$arguments[0]}@;.";
          $Alert->render();
+
+         $this->help([]);
+
+         return false;
       }
 
       $output .= '@.;';
 
       $Output->render($output);
 
-      return true;
+      return $status;
    }
 }

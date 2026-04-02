@@ -20,6 +20,7 @@ use const BOOTGLY_ROOT_DIR;
 use Bootgly\ABI\Data\__String\Path;
 use Bootgly\CLI\Command;
 use Bootgly\CLI\Commands\Arguments;
+use Bootgly\CLI\Commands\Middlewares;
 
 
 class Commands
@@ -43,7 +44,8 @@ class Commands
 
 
    public function __construct (
-      public Arguments $Arguments = new Arguments
+      public Arguments $Arguments = new Arguments,
+      public Middlewares $Middlewares = new Middlewares
    )
    {
       // * Config
@@ -247,8 +249,13 @@ class Commands
       }
 
       // @ Run the command
-      $Command->run($arguments, $options);
-
-      return true;
+      return $this->Middlewares->process(
+         $Command,
+         $arguments,
+         $options,
+         handler: function (Command $Command, array $arguments, array $options): bool {
+            return $Command->run($arguments, $options);
+         }
+      );
    }
 }

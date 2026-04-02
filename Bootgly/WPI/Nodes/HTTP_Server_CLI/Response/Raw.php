@@ -51,7 +51,7 @@ trait Raw
       if ($this->stream) {
          $length = strlen($this->response) + 1 + strlen($Header->raw) + 5;
 
-         /** @var array<int, array<string, mixed>> $uploadQueue */
+         /** @var array<int,array<string,mixed>> $uploadQueue */
          $uploadQueue = $this->files;
          $Package->uploading = $uploadQueue;
 

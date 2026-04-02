@@ -10,6 +10,7 @@
 
 namespace Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections;
 
+
 use function explode;
 use function fclose;
 use function stream_set_blocking;
@@ -182,11 +183,11 @@ class Connection extends Packages
       static $writes = 0;
 
       if ($writes < $this->writes) {
-         $this->used = \time();
+         $this->used = time();
       }
       if ($writes > $this->writes) {
          $writes = $this->writes;
-         $this->used = \time();
+         $this->used = time();
       }
 
       if ((time() - $this->used) >= $timeout) {
