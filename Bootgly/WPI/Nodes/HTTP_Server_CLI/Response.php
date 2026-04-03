@@ -267,7 +267,8 @@ class Response extends Server\Response
       $this->deferred = false;
       $this->Package = null;
       $this->Socket = null;
-      $this->Fiber = null;
+      // NOTE: $this->Fiber is NOT reset here — it must survive across requests
+      // so that wait() can still guard against the correct Fiber after reset().
 
       $this->Header->clean();
       $this->Body->raw = '';
@@ -1194,10 +1195,7 @@ class Response extends Server\Response
     */
    public function wait (mixed $value = null): self
    {
-      // ?
-      if ($this->deferred === false) {
-         return $this;
-      }
+      // ? Guard: only suspend from the Fiber created by defer()
       if (Fiber::getCurrent() !== $this->Fiber) {
          return $this;
       }
