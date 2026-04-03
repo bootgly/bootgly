@@ -109,7 +109,7 @@ Above is the native compatibility, of course it is possible to run on Windows an
 
 ### ⚙️ Dependencies
 
-- PHP 8.2+ ⚠️
+- PHP 8.4+ ⚠️
 - Opcache + JIT enabled (+50% performance) 👍
 
 #### \- Bootgly CLI 📟
