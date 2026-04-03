@@ -234,9 +234,9 @@ return static function
    // @ Deferred response: simulated database query with latency (tick-based wait loop)
    yield $Router->route('/deferred/db', function (Request $Request, Response $Response) {
       return $Response->defer(function () use ($Response) {
-         // @ Simulate 3 sequential DB queries with ~100ms latency each
+         // @ Simulate 100 sequential DB queries with ~10000ms latency each
          $results = [];
-         for ($i = 1; $i <= 3; $i++) {
+         for ($i = 1; $i <= 100; $i++) {
             $start = microtime(true);
             while (microtime(true) - $start < 0.1) {
                // @ Yield to event loop between queries — worker serves other requests
@@ -250,9 +250,9 @@ return static function
    }, GET);
    // @ Blocking: simulated database query with latency (usleep blocks everything)
    yield $Router->route('/blocking/db', function (Request $Request, Response $Response) {
-      // @ Simulate 3 sequential DB queries with ~100ms latency each
+      // @ Simulate 100 sequential DB queries with ~10000ms latency each
       $results = [];
-      for ($i = 1; $i <= 3; $i++) {
+      for ($i = 1; $i <= 100; $i++) {
          // @ Worker is completely blocked — no other requests processed
          usleep(100_000);
          $results[] = "query{$i}:ok";

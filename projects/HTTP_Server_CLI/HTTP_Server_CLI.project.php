@@ -48,11 +48,11 @@ return new Project(
          // requestMaxFileSize: 500 * 1024 * 1024, // 500 MB (default)
          // requestMaxBodySize: 10 * 1024 * 1024,  // 10 MB (default)
       );
-      #$Server->on(request: require __DIR__ . '/router/routes/Middlewares.routes.php');
-      #$Server->on(request: require __DIR__ . '/router/HTTP_Server_CLI-benchmark-static_router.SAPI.php');
-      #$Server->on(request: require __DIR__ . '/router/HTTP_Server_CLI-scheduled.SAPI.php');
-      #$Server->on(request: require __DIR__ . '/router/HTTP_Server_CLI-download.SAPI.php');
       $Server->on(
+         #request: require __DIR__ . '/router/routes/Middlewares.routes.php',
+         #request: require __DIR__ . '/router/HTTP_Server_CLI-benchmark-static_router.SAPI.php',
+         #request: require __DIR__ . '/router/HTTP_Server_CLI-scheduled.SAPI.php',
+         #request: require __DIR__ . '/router/HTTP_Server_CLI-download.SAPI.php',
          request: fn ($Request, $Response) => $Response(body: 'Hello, World!'),
 
          started: function ($Server) {
@@ -75,7 +75,6 @@ return new Project(
             $Output->render('@.;@#yellow:■ Bootgly HTTP Server stopped@;@.;');
          }
       );
-
       $Server->start();
    }
 );

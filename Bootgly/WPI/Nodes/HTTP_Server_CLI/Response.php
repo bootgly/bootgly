@@ -44,6 +44,7 @@ use AllowDynamicProperties;
 use Closure;
 use Error;
 use Fiber;
+use SplObjectStorage;
 use Throwable;
 
 use Bootgly\ABI\Debugging\Data\Throwables;
@@ -104,8 +105,8 @@ class Response extends Server\Response
    private null|Packages $Package;
    /** @var resource|null */
    private mixed $Socket;
-   /** @var null|Fiber<mixed, mixed, mixed, mixed> */
-   private null|Fiber $Fiber;
+   /** @var SplObjectStorage<Fiber<mixed,mixed,mixed,mixed>,true> */
+   private SplObjectStorage $Fibers;
 
    // / HTTP
    public Header $Header;
@@ -140,7 +141,7 @@ class Response extends Server\Response
       $this->deferred = false;
       $this->Package = null;
       $this->Socket = null;
-      $this->Fiber = null;
+      $this->Fibers = new SplObjectStorage;
       // @ State
       $this->chunked = false;
       $this->encoded = false;
@@ -267,8 +268,8 @@ class Response extends Server\Response
       $this->deferred = false;
       $this->Package = null;
       $this->Socket = null;
-      // NOTE: $this->Fiber is NOT reset here — it must survive across requests
-      // so that wait() can still guard against the correct Fiber after reset().
+      // NOTE: $this->Fibers is NOT reset here — active Fibers must survive across requests
+      // so that wait() can still guard correctly after reset().
 
       $this->Header->clean();
       $this->Body->raw = '';
@@ -1166,10 +1167,17 @@ class Response extends Server\Response
             $buffer = $Response->encode($Package, $length);
             $Package->writing($Socket, length: $length, buffer: $buffer);
          }
+         finally {
+            // @ Unregister Fiber from wait() guard
+            $self = Fiber::getCurrent();
+            if ($self !== null) {
+               $Response->Fibers->detach($self);
+            }
+         }
       });
 
-      // @ Store Fiber reference for wait() guard (must be set before start)
-      $this->Fiber = $Fiber;
+      // @ Register Fiber for wait() guard (must be set before start)
+      $this->Fibers->attach($Fiber);
 
       // @ Start Fiber
       $suspendedValue = $Fiber->start();
@@ -1195,8 +1203,9 @@ class Response extends Server\Response
     */
    public function wait (mixed $value = null): self
    {
-      // ? Guard: only suspend from the Fiber created by defer()
-      if (Fiber::getCurrent() !== $this->Fiber) {
+      // ? Guard: only suspend from a Fiber created by defer()
+      $current = Fiber::getCurrent();
+      if ($current === null || !$this->Fibers->contains($current)) {
          return $this;
       }
 
