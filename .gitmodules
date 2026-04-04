@@ -1,0 +1,3 @@
+[submodule "scripts/benchmarks"]
+	path = scripts/benchmarks
+	url = https://github.com/bootgly/bootgly_benchmarks.git

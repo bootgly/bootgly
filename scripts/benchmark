@@ -186,18 +186,21 @@ WARMUP_THREADS="${WARMUP_THREADS:-2}"
 WARMUP_CONNECTIONS="${WARMUP_CONNECTIONS:-64}"
 READY_TIMEOUT="${READY_TIMEOUT:-10}"
 
-# --- Auto-scan scenario definitions: "label|lua_file|group" ---
+# --- Auto-scan scenario definitions: "label|lua_file|group|competitors" ---
 # Reads *.lua files from $SCENARIOS_DIR sorted by name.
 # Each file must contain "-- @label: <text>" and "-- @group: <text>" lines.
+# Optional "-- @competitors: all" or "-- @competitors: name1,name2" to restrict.
 ALL_SCENARIOS=()
 while IFS= read -r _lua_path; do
    _lua_file=$(basename "$_lua_path")
    _label=$(grep -m1 '^-- @label:' "$_lua_path" 2>/dev/null | sed 's/^-- @label:[[:space:]]*//')
    _group=$(grep -m1 '^-- @group:' "$_lua_path" 2>/dev/null | sed 's/^-- @group:[[:space:]]*//')
+   _competitors=$(grep -m1 '^-- @competitors:' "$_lua_path" 2>/dev/null | sed 's/^-- @competitors:[[:space:]]*//')
    if [[ -z "$_label" ]]; then
       _label="${_lua_file%.lua}"
    fi
-   ALL_SCENARIOS+=("${_label}|${_lua_file}|${_group}")
+   [[ -z "$_competitors" ]] && _competitors="all"
+   ALL_SCENARIOS+=("${_label}|${_lua_file}|${_group}|${_competitors}")
 done < <(find "$SCENARIOS_DIR" -maxdepth 1 -name '*.lua' -type f | sort)
 
 # =============================================================================
@@ -363,8 +366,11 @@ fi
 
 # Build active scenarios array
 declare -a SCENARIOS=()
+declare -a SCENARIO_COMPETITORS=()
 for idx in "${ACTIVE_INDICES[@]}"; do
-   SCENARIOS+=("${ALL_SCENARIOS[$idx]}")
+   IFS='|' read -r _s_label _s_lua _s_grp _s_comp <<< "${ALL_SCENARIOS[$idx]}"
+   SCENARIOS+=("${_s_label}|${_s_lua}|${_s_grp}")
+   SCENARIO_COMPETITORS+=("${_s_comp:-all}")
 done
 
 # --- Dependencies check ---
@@ -424,6 +430,21 @@ run_wrk () {
    latency=$(echo "$output" | awk '/Latency/ && !/Distribution/ {print $2}')
 
    echo "${rps:-0}|${latency:-N/A}"
+}
+
+# Check whether a driver is allowed to run a scenario.
+# $1 = driver display name, $2 = @competitors value from scenario.
+driver_allowed () {
+   local driver_name="$1" allowed="$2"
+   [[ "$allowed" == "all" ]] && return 0
+   local dn="${driver_name,,}"  # lowercase
+   local IFS=','
+   for name in $allowed; do
+      name="${name## }"         # trim leading space
+      name="${name%% }"         # trim trailing space
+      [[ "${name,,}" == "$dn" ]] && return 0
+   done
+   return 1
 }
 
 format_number () {
@@ -604,6 +625,14 @@ for c in "${!COMP_PATHS[@]}"; do
          echo -e "${WHITE}  ${_grp}${NC}"
          _prev_group="$_grp"
       fi
+
+      if ! driver_allowed "${COMP_NAMES[$c]}" "${SCENARIO_COMPETITORS[$i]}"; then
+         echo -e "${GRAY}  [$((i+1))/${SCENARIO_COUNT}] ${name}... ${YELLOW}Skipped${NC}"
+         ALL_COMP_RPS+=("0")
+         ALL_COMP_LAT+=("N/A")
+         continue
+      fi
+
       echo -ne "${GRAY}  [$((i+1))/${SCENARIO_COUNT}] ${name}... ${NC}"
       result=$(run_wrk "$lua")
       IFS='|' read -r rps lat <<< "$result"
@@ -719,6 +748,15 @@ else
 
          comp_rps="${ALL_COMP_RPS[$flat_idx]}"
          comp_lat="${ALL_COMP_LAT[$flat_idx]}"
+
+         if ! driver_allowed "${COMP_NAMES[$c]}" "${SCENARIO_COMPETITORS[$i]}"; then
+            printf "  │ %-${W_SCEN}s │ %${W_BASE}s │ %${W_COMP}s │ %${W_DIFF}s │ %${W_BLAT}s │ %${W_CLAT}s │\n" \
+               "$name" \
+               "$(format_number "${BASELINE_RPS[$i]}")" \
+               "—" "—" "${BASELINE_LAT[$i]}" "—"
+            continue
+         fi
+
          diff=$(calc_diff "${BASELINE_RPS[$i]}" "$comp_rps")
 
          # Pre-pad diff then colorize (escape codes don't affect alignment)
@@ -847,6 +885,15 @@ RESULTS_FILE="$RESULTS_DIR/${TIMESTAMP}_bench.marks"
             flat_idx=$((c * SCENARIO_COUNT + i))
             comp_rps="${ALL_COMP_RPS[$flat_idx]}"
             comp_lat="${ALL_COMP_LAT[$flat_idx]}"
+
+            if ! driver_allowed "${COMP_NAMES[$c]}" "${SCENARIO_COMPETITORS[$i]}"; then
+               printf "%-${W_SCEN}s  %${W_BASE}s  %${W_COMP}s  %${W_DIFF}s  %${W_BLAT}s  %${W_CLAT}s\n" \
+                  "$name" \
+                  "$(format_number "${BASELINE_RPS[$i]}")" \
+                  "—" "—" "${BASELINE_LAT[$i]}" "—"
+               continue
+            fi
+
             diff=$(calc_diff "${BASELINE_RPS[$i]}" "$comp_rps")
 
             printf "%-${W_SCEN}s  %${W_BASE}s  %${W_COMP}s  %${W_DIFF}s  %${W_BLAT}s  %${W_CLAT}s\n" \
