@@ -291,13 +291,11 @@ class Response extends Server\Response
    {
       $this->__set('code', 401);
 
-      switch ($Method) {
-         case $Method instanceof Authentication\Basic:
-            $this->Header->set(
-               'WWW-Authenticate',
-               'Basic realm="' . $Method->realm . '"'
-            );
-            break;
+      if ($Method instanceof Authentication\Basic) {
+         $this->Header->set(
+            'WWW-Authenticate',
+            'Basic realm="' . $Method->realm . '"'
+         );
       }
 
       return $this;

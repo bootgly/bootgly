@@ -125,6 +125,7 @@ return new Suite(
          '1.5-send_content_in_json_using_resources',
          // @ authenticate
          '1.6-authenticate_with_http_basic_authentication',
+         '1.6.1-authenticate_with_unknown_authentication_method',
          // @ redirect
          '1.7-redirect_to_bootgly_docs',
          '1.7.2-redirect_with_302_to_bootgly_docs',
