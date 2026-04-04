@@ -1,6 +1,6 @@
 <?php
 
-use Bootgly\WPI\Modules\HTTP\Server\Router\Routes;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Routes;
 
 return new Routes(
    description: 'HTTP Server CLI Routes',

@@ -166,11 +166,25 @@ return new Suite(
          '3.2.2-route_route-multiple_param-equals',
          '3.2.3-route_route-multiple_param-equals-different',
          #'3.3.1-route_route-multiple_param-equals-different',
+         // Param constraint types
+         '3.4.1-route_route-param_constraint_int_valid',
+         '3.4.2-route_route-param_constraint_int_invalid',
+         '3.4.3-route_route-param_constraint_slug_valid',
+         '3.4.4-route_route-param_constraint_alpha_valid',
+         '3.4.5-route_route-param_constraint_alpha_invalid',
+         '3.4.6-route_route-param_constraint_alphanum_valid',
+         '3.4.7-route_route-param_constraint_alphanum_invalid',
+         '3.4.8-route_route-param_constraint_slug_invalid',
+         '3.4.9-route_route-param_constraint_uuid_valid',
+         '3.4.10-route_route-param_constraint_uuid_invalid',
          // Route group
          '4.1-route_group-unparameterized',
          '4.2-route_group-parameterized',
          // Route Catch-All
          '5.1-route_catch_all-generic',
+         // Route Catch-All parameterized
+         '5.2-route_catch_all-parameterized_single',
+         '5.3-route_catch_all-parameterized_multi',
       ],
       'Middleware/' => [
          // CORS

@@ -126,7 +126,7 @@ Virtual/computed properties: `public null|string $format { get => $this->MIME?->
 | Properties | Substantive nouns | `$host`, `$workers` |
 | Wrapper types | `__` prefix for PHP primitive wrappers | `__String`, `__Array` |
 
-**Method rules**: No pseudo-property accessors — use actual property hooks. Keep leading-verb rule (`renderRoute`, not `routeRender`). Single responsibility per method. Never repeat the class context in the method name — e.g., `Cookies->build()` not `Cookies->buildCookies()` (the class already provides the noun).
+**Method rules**: No pseudo-property accessors — use actual property hooks. Keep leading-verb rule (`renderRoute`, not `routeRender`). Single responsibility per method. Never repeat the class context in the method name — e.g., `Cookies->build()` not `Cookies->buildCookies()` (the class already provides the noun). Prefer single-word method names when possible (`render()`, not `renderRoute()`), especially for core actions in the context of the class.
 
 ## Imports
 
@@ -160,13 +160,10 @@ Unregistered scripts fail validation. Follow this pattern when adding new regist
 - UI components: `Alert`, `Fieldset`, `Header`, `Menu`, `Progress`, `Table` in `Bootgly\CLI\Terminal\components/`
 - Run: `php bootgly <command>` or `bootgly <command>` (if globally installed)
 - Global setup: `sudo php bootgly setup`
-- Example: `projects/Bootgly/CLI/commands/ServeCommand.php`
 
 ## WPI Development
 
 - HTTP Server (the only implementation): `Bootgly\WPI\Nodes\HTTP_Server_CLI` — `configure()` then `start()`
-- Handler: `projects/Bootgly/WPI/HTTP_Server_CLI-1.SAPI.php` returns `on.Request` closure
-- Run: `php scripts/http-server-cli` or `bootgly serve`
 - Use `Bootgly\API\Environments` enum (not strings) for environment modes
 
 **Router** — use `yield` for multi-route definitions (Generator-based):

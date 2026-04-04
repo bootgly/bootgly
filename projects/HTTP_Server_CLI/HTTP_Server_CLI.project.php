@@ -17,7 +17,7 @@ use function getenv;
 use Bootgly\API\Projects\Project;
 use const Bootgly\CLI;
 use Bootgly\API\Endpoints\Server\Modes;
-use Bootgly\WPI\Modules\HTTP\Server\Router;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
@@ -25,7 +25,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 
 return new Project(
    name: 'HTTP Server CLI',
-   description: 'HTTP server demo with static/dynamic routing and catch-all 404',
+   description: 'HTTP server demo project for testing and benchmarking Bootgly\'s HTTP Server capabilities in CLI mode.',
    version: '0.1.0',
    author: 'Rodrigo Vieira',
 
@@ -49,11 +49,24 @@ return new Project(
          // requestMaxBodySize: 10 * 1024 * 1024,  // 10 MB (default)
       );
       $Server->on(
-         #request: require __DIR__ . '/router/routes/Middlewares.routes.php',
+         // # Test (Benchmarking)
+         request: require __DIR__ . '/router/HTTP_Server_CLI-benchmark-bootgly_router.SAPI.php',
          #request: require __DIR__ . '/router/HTTP_Server_CLI-benchmark-static_router.SAPI.php',
-         #request: require __DIR__ . '/router/HTTP_Server_CLI-scheduled.SAPI.php',
-         #request: require __DIR__ . '/router/HTTP_Server_CLI-download.SAPI.php',
-         request: fn ($Request, $Response) => $Response(body: 'Hello, World!'),
+
+         // # Test Request - Download (streaming decoder writes directly to disk)
+         #request: require __DIR__ . '/router/HTTP_Server_CLI-request-download.SAPI.php',
+         // # Test Request - Basic request tests
+         #request: require __DIR__ . '/router/HTTP_Server_CLI-request.SAPI.php',
+   
+         // # Test Response - Basic response tests
+         #request: require __DIR__ . '/router/HTTP_Server_CLI-response.SAPI.php',
+         // # Test Response - Scheduled (delayed/async) responses
+         #request: require __DIR__ . '/router/HTTP_Server_CLI-response-scheduled.SAPI.php',
+
+         // # Test Router - all route cases from Testing.routes.php adapted to Generator pattern
+         #request: require __DIR__ . '/router/HTTP_Server_CLI-router.SAPI.php',
+
+         #request: fn ($Request, $Response) => $Response(body: 'Hello, World!'),
 
          started: function ($Server) {
             $Output = CLI->Terminal->Output;

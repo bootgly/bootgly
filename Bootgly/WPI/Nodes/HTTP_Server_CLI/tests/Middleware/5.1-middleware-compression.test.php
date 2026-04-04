@@ -6,7 +6,7 @@ use function str_repeat;
 use function strpos;
 use function substr;
 
-use Bootgly\WPI\Modules\HTTP\Server\Router\Middlewares\Compression;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Middlewares\Compression;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test\Specification;

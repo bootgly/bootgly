@@ -21,7 +21,7 @@
  *         $Server->on(request: require __DIR__ . '/router/routes/Core.routes.php');
  */
 
-use Bootgly\WPI\Modules\HTTP\Server\Router;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 

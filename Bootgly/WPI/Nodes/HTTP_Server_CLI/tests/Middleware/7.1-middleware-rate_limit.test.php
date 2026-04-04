@@ -2,7 +2,7 @@
 
 use function str_contains;
 
-use Bootgly\WPI\Modules\HTTP\Server\Router\Middlewares\RateLimit;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Middlewares\RateLimit;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test\Specification;

@@ -41,7 +41,7 @@ return new Suites(
       'Bootgly/CLI/Commands/',
 
       // Web Programming Interface (WPI)
-      'Bootgly/WPI/Modules/HTTP/Server/Router/Middlewares/',
+      'Bootgly/WPI/Nodes/HTTP_Server_CLI/Router/Middlewares/',
       'Bootgly/WPI/Nodes/HTTP_Server_CLI/',
    ]
 );

@@ -302,7 +302,7 @@ Bootgly uses [Semantic Versioning 2.0][SEMANTIC_VERSIONING].
 [CONSOLE_PLATFORM]: https://github.com/bootgly/bootgly-console
 
 [WPI_INTERFACE]: https://github.com/bootgly/bootgly/tree/main/Bootgly/WPI/
-[HTTP_SERVER_ROUTER_CLASS]: https://github.com/bootgly/bootgly/blob/main/Bootgly/WPI/Modules/HTTP/Server/Router.php
+[HTTP_SERVER_ROUTER_CLASS]: https://github.com/bootgly/bootgly/blob/main/Bootgly/WPI/Nodes/HTTP_Server_CLI/Router.php
 [WEB_TCP_CLIENT_INTERFACE]: https://github.com/bootgly/bootgly/blob/main/Bootgly/WPI/Interfaces/TCP_Client_CLI.php
 [WEB_TCP_SERVER_INTERFACE]: https://github.com/bootgly/bootgly/blob/main/Bootgly/WPI/Interfaces/TCP_Server_CLI.php
 [WEB_HTTP_SERVER_CLI]: https://github.com/bootgly/bootgly/blob/main/Bootgly/WPI/Nodes/HTTP_Server_CLI.php

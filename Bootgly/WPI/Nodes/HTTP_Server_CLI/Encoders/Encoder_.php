@@ -11,6 +11,9 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders;
 
 
+use Generator;
+use Throwable;
+
 use Bootgly\ABI\Debugging\Data\Throwables;
 use Bootgly\API\Server as SAPI;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages;
@@ -40,34 +43,50 @@ class Encoder_ extends Encoders
 
       // @ Try to Invoke SAPI Closure
       try {
-         $Result = SAPI::$Middlewares->process($Request, $Response,
-            function (object $Request, object $Res) use ($Router): mixed {
-               $Result = (SAPI::$Handler)($Request, $Res, $Router);
+         $resolved = false;
 
-               // @ Resolve Generator-based routing inside the pipeline
-               if ($Result instanceof \Generator) {
-                  foreach ($Router->routing($Result) as $Responses) {
-                     if ($Responses instanceof Response) {
-                        $Res = $Responses;
+         // @ Fast path: resolve from route cache (bypass Generator entirely)
+         if ($Router->cached) {
+            $Result = $Router->resolve();
+
+            if ($Result instanceof Response) {
+               $resolved = true;
+               if ($Result !== $Response) {
+                  $Response = $Result;
+               }
+            }
+         }
+
+         if ($resolved === false) {
+            $Result = SAPI::$Middlewares->process($Request, $Response,
+               function (object $Request, object $Res) use ($Router): mixed {
+                  $Result = (SAPI::$Handler)($Request, $Res, $Router);
+
+                  // @ Resolve Generator-based routing inside the pipeline
+                  if ($Result instanceof Generator) {
+                     foreach ($Router->routing($Result) as $Responses) {
+                        if ($Responses instanceof Response) {
+                           $Res = $Responses;
+                        }
                      }
+
+                     return $Res;
+                  }
+
+                  if ($Result instanceof Response) {
+                     return $Result;
                   }
 
                   return $Res;
                }
+            );
 
-               if ($Result instanceof Response) {
-                  return $Result;
-               }
-
-               return $Res;
+            if ($Result instanceof Response && $Result !== $Response) {
+               $Response = $Result;
             }
-         );
-
-         if ($Result instanceof Response && $Result !== $Response) {
-            $Response = $Result;
          }
       }
-      catch (\Throwable $Throwable) {
+      catch (Throwable $Throwable) {
          $Response = new Response(code: 500, body: ' ');
 
          Throwables::debug($Throwable);

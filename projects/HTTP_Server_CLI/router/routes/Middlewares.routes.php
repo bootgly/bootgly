@@ -25,16 +25,16 @@
  *         $Server->on(request: require __DIR__ . '/router/routes/Middlewares.routes.php');
  */
 
-use Bootgly\WPI\Modules\HTTP\Server\Router;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 // Middlewares
-use Bootgly\WPI\Modules\HTTP\Server\Router\Middlewares\BodyParser;
-use Bootgly\WPI\Modules\HTTP\Server\Router\Middlewares\CORS;
-use Bootgly\WPI\Modules\HTTP\Server\Router\Middlewares\ETag;
-use Bootgly\WPI\Modules\HTTP\Server\Router\Middlewares\RateLimit;
-use Bootgly\WPI\Modules\HTTP\Server\Router\Middlewares\RequestId;
-use Bootgly\WPI\Modules\HTTP\Server\Router\Middlewares\SecureHeaders;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Middlewares\BodyParser;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Middlewares\CORS;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Middlewares\ETag;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Middlewares\RateLimit;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Middlewares\RequestId;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Middlewares\SecureHeaders;
 
 
 return static function (Request $Request, Response $Response, Router $Router)

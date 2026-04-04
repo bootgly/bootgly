@@ -19,7 +19,7 @@ use Exception;
 use Bootgly\ABI\Debugging\Data\Vars;
 use Bootgly\API\Projects;
 use Bootgly\API\Projects\Project;
-use Bootgly\WPI\Modules\HTTP\Server\Router;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;

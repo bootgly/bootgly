@@ -186,15 +186,19 @@ WARMUP_THREADS="${WARMUP_THREADS:-2}"
 WARMUP_CONNECTIONS="${WARMUP_CONNECTIONS:-64}"
 READY_TIMEOUT="${READY_TIMEOUT:-10}"
 
-# --- All scenario definitions: "label|lua_file" ---
-ALL_SCENARIOS=(
-   "1 static route|single-static.lua"
-   "3 static routes|3-static.lua"
-   "5 static routes|5-static.lua"
-   "10 static routes|10-static.lua"
-   "3 dynamic routes|3-dynamic.lua"
-   "Mixed (5 static + 3 dynamic)|mixed-8.lua"
-)
+# --- Auto-scan scenario definitions: "label|lua_file|group" ---
+# Reads *.lua files from $SCENARIOS_DIR sorted by name.
+# Each file must contain "-- @label: <text>" and "-- @group: <text>" lines.
+ALL_SCENARIOS=()
+while IFS= read -r _lua_path; do
+   _lua_file=$(basename "$_lua_path")
+   _label=$(grep -m1 '^-- @label:' "$_lua_path" 2>/dev/null | sed 's/^-- @label:[[:space:]]*//')
+   _group=$(grep -m1 '^-- @group:' "$_lua_path" 2>/dev/null | sed 's/^-- @group:[[:space:]]*//')
+   if [[ -z "$_label" ]]; then
+      _label="${_lua_file%.lua}"
+   fi
+   ALL_SCENARIOS+=("${_label}|${_lua_file}|${_group}")
+done < <(find "$SCENARIOS_DIR" -maxdepth 1 -name '*.lua' -type f | sort)
 
 # =============================================================================
 # Case-specific help
@@ -230,9 +234,15 @@ show_help () {
    done < <(find "$COMPETITORS_DIR" -name "*.sh" -not -name "*.example.sh" | sort)
    echo ""
    echo -e "  ${BOLD}Scenarios:${NC}"
+   local _prev_group=""
    for i in "${!ALL_SCENARIOS[@]}"; do
-      IFS='|' read -r name _ <<< "${ALL_SCENARIOS[$i]}"
-      echo -e "    ${GREEN}$((i+1))${NC}  $name"
+      IFS='|' read -r name _ _grp <<< "${ALL_SCENARIOS[$i]}"
+      if [[ -n "$_grp" && "$_grp" != "$_prev_group" ]]; then
+         [[ -n "$_prev_group" ]] && echo ""
+         echo -e "    ${WHITE}${_grp}${NC}"
+         _prev_group="$_grp"
+      fi
+      echo -e "      ${GREEN}$((i+1))${NC}  $name"
    done
    echo ""
 
@@ -364,7 +374,7 @@ done
 
 # Validate scenario lua files
 for entry in "${SCENARIOS[@]}"; do
-   IFS='|' read -r _ lua <<< "$entry"
+   IFS='|' read -r _ lua _ <<< "$entry"
    if [[ ! -f "$SCENARIOS_DIR/$lua" ]]; then
       echo -e "${RED}ERROR: Scenario file not found: $SCENARIOS_DIR/$lua${NC}"
       exit 1
@@ -522,9 +532,15 @@ for i in "${!COMP_NAMES[@]}"; do
 done
 echo ""
 echo -e "  ${BOLD}${WHITE}Scenarios${NC} ${DIM}(${#SCENARIOS[@]})${NC}"
+_prev_group=""
 for i in "${!SCENARIOS[@]}"; do
-   IFS='|' read -r _label _lua <<< "${SCENARIOS[$i]}"
-   echo -e "  ${DIM}$((i + 1)).${NC} ${_label}"
+   IFS='|' read -r _label _lua _grp <<< "${SCENARIOS[$i]}"
+   if [[ -n "$_grp" && "$_grp" != "$_prev_group" ]]; then
+      [[ -n "$_prev_group" ]] && echo ""
+      echo -e "    ${WHITE}${_grp}${NC}"
+      _prev_group="$_grp"
+   fi
+   echo -e "      ${DIM}$((i + 1)).${NC} ${_label}"
 done
 echo ""
 echo -e "  ${DIM}$(printf '─%.0s' {1..62})${NC}"
@@ -550,8 +566,13 @@ driver_start
 echo -e "${GREEN}  ${BASELINE_NAME} ready (port $PORT).${NC}"
 warmup
 
+_prev_group=""
 for i in "${!SCENARIOS[@]}"; do
-   IFS='|' read -r name lua <<< "${SCENARIOS[$i]}"
+   IFS='|' read -r name lua _grp <<< "${SCENARIOS[$i]}"
+   if [[ -n "$_grp" && "$_grp" != "$_prev_group" ]]; then
+      echo -e "${WHITE}  ${_grp}${NC}"
+      _prev_group="$_grp"
+   fi
    echo -ne "${GRAY}  [$((i+1))/${SCENARIO_COUNT}] ${name}... ${NC}"
    result=$(run_wrk "$lua")
    IFS='|' read -r rps lat <<< "$result"
@@ -576,8 +597,13 @@ for c in "${!COMP_PATHS[@]}"; do
    echo -e "${GREEN}  ${COMP_NAMES[$c]} ready (port $PORT).${NC}"
    warmup
 
+   _prev_group=""
    for i in "${!SCENARIOS[@]}"; do
-      IFS='|' read -r name lua <<< "${SCENARIOS[$i]}"
+      IFS='|' read -r name lua _grp <<< "${SCENARIOS[$i]}"
+      if [[ -n "$_grp" && "$_grp" != "$_prev_group" ]]; then
+         echo -e "${WHITE}  ${_grp}${NC}"
+         _prev_group="$_grp"
+      fi
       echo -ne "${GRAY}  [$((i+1))/${SCENARIO_COUNT}] ${name}... ${NC}"
       result=$(run_wrk "$lua")
       IFS='|' read -r rps lat <<< "$result"
@@ -617,8 +643,16 @@ if [[ "$COMP_COUNT" -eq 0 ]]; then
       "Scenario" "req/s" "Latency"
    echo -e "  ${DIM}${SEP}${NC}"
 
+   _prev_group=""
    for i in "${!SCENARIOS[@]}"; do
-      IFS='|' read -r name _ <<< "${SCENARIOS[$i]}"
+      IFS='|' read -r name _lua _grp <<< "${SCENARIOS[$i]}"
+      if [[ -n "$_grp" && "$_grp" != "$_prev_group" ]]; then
+         [[ -n "$_prev_group" ]] && echo -e "  ${DIM}${SEP}${NC}"
+         printf "  ${BOLD}${WHITE}│ %-${W_SCEN}s │ %${W_RPS}s │ %${W_LAT}s │${NC}\n" \
+            "$_grp" "" ""
+         echo -e "  ${DIM}${SEP}${NC}"
+         _prev_group="$_grp"
+      fi
       printf "  │ %-${W_SCEN}s │ %${W_RPS}s │ %${W_LAT}s │\n" \
          "$name" \
          "$(format_number "${BASELINE_RPS[$i]}")" \
@@ -671,8 +705,16 @@ else
          "Scenario" "${BASELINE_NAME}" "${COMP_NAMES[$c]}" "Diff" "B. Latency" "C. Latency"
       echo -e "  ${DIM}${SEP}${NC}"
 
+      _prev_group=""
       for i in "${!SCENARIOS[@]}"; do
-         IFS='|' read -r name _ <<< "${SCENARIOS[$i]}"
+         IFS='|' read -r name _lua _grp <<< "${SCENARIOS[$i]}"
+         if [[ -n "$_grp" && "$_grp" != "$_prev_group" ]]; then
+            [[ -n "$_prev_group" ]] && echo -e "  ${DIM}${SEP}${NC}"
+            printf "  ${BOLD}${WHITE}│ %-${W_SCEN}s │ %${W_BASE}s │ %${W_COMP}s │ %${W_DIFF}s │ %${W_BLAT}s │ %${W_CLAT}s │${NC}\n" \
+               "$_grp" "" "" "" "" ""
+            echo -e "  ${DIM}${SEP}${NC}"
+            _prev_group="$_grp"
+         fi
          flat_idx=$((c * SCENARIO_COUNT + i))
 
          comp_rps="${ALL_COMP_RPS[$flat_idx]}"
@@ -749,8 +791,14 @@ RESULTS_FILE="$RESULTS_DIR/${TIMESTAMP}_bench.marks"
       printf "%-${W_SCEN}s  %${W_RPS}s  %${W_LAT}s\n" "Scenario" "req/s" "Latency"
       printf '%.0s-' $(seq 1 $((W_SCEN + W_RPS + W_LAT + 4))); echo ""
 
+      _prev_group=""
       for i in "${!SCENARIOS[@]}"; do
-         IFS='|' read -r name _ <<< "${SCENARIOS[$i]}"
+         IFS='|' read -r name _lua _grp <<< "${SCENARIOS[$i]}"
+         if [[ -n "$_grp" && "$_grp" != "$_prev_group" ]]; then
+            [[ -n "$_prev_group" ]] && echo ""
+            echo "[$_grp]"
+            _prev_group="$_grp"
+         fi
          printf "%-${W_SCEN}s  %${W_RPS}s  %${W_LAT}s\n" \
             "$name" \
             "$(format_number "${BASELINE_RPS[$i]}")" \
@@ -788,8 +836,14 @@ RESULTS_FILE="$RESULTS_DIR/${TIMESTAMP}_bench.marks"
             "Scenario" "${BASELINE_NAME}" "${COMP_NAMES[$c]}" "Diff" "B. Latency" "C. Latency"
          printf '%.0s-' $(seq 1 $((W_SCEN + W_BASE + W_COMP + W_DIFF + W_BLAT + W_CLAT + 10))); echo ""
 
+         _prev_group=""
          for i in "${!SCENARIOS[@]}"; do
-            IFS='|' read -r name _ <<< "${SCENARIOS[$i]}"
+            IFS='|' read -r name _lua _grp <<< "${SCENARIOS[$i]}"
+            if [[ -n "$_grp" && "$_grp" != "$_prev_group" ]]; then
+               [[ -n "$_prev_group" ]] && echo ""
+               echo "[$_grp]"
+               _prev_group="$_grp"
+            fi
             flat_idx=$((c * SCENARIO_COUNT + i))
             comp_rps="${ALL_COMP_RPS[$flat_idx]}"
             comp_lat="${ALL_COMP_LAT[$flat_idx]}"
@@ -810,4 +864,12 @@ RESULTS_FILE="$RESULTS_DIR/${TIMESTAMP}_bench.marks"
 } > "$RESULTS_FILE"
 
 echo -e "  ${DIM}Results saved to: workdata/tests/benchmarks/${BENCHMARK_CASE}/${TIMESTAMP}_bench.marks${NC}"
+echo ""
+
+# =============================================================================
+# Cleanup
+# =============================================================================
+
+kill_port
+echo -e "  ${DIM}HTTP server stopped after benchmark run.${NC}"
 echo ""
