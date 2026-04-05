@@ -20,7 +20,7 @@ return new Specification(
    Separator: new Separator(line: ''),
 
    request: function () {
-      return "GET /deferred/http HTTP/1.0\r\n\r\n";
+      return "GET /deferred/http HTTP/1.1\r\nHost: localhost\r\n\r\n";
    },
    response: function (Request $Request, Response $Response, Router $Router)
    {
@@ -35,7 +35,7 @@ return new Specification(
                $errstr,
                timeout: 5
             );
-            fwrite($client, "GET / HTTP/1.0\r\nHost: example.com\r\nConnection: close\r\n\r\n");
+            fwrite($client, "GET / HTTP/1.1\r\nHost: example.com\r\nConnection: close\r\n\r\n");
             stream_set_blocking($client, false);
 
             // @ Suspend with socket: event loop resumes when response is readable
@@ -45,7 +45,7 @@ return new Specification(
             $raw = fread($client, 8192);
             fclose($client);
 
-            // @ Extract status code from HTTP response (e.g. "HTTP/1.0 200 OK")
+            // @ Extract status code from HTTP response (e.g. "HTTP/1.1 200 OK")
             $statusLine = substr($raw, 0, strpos($raw, "\r\n"));
             $statusCode = substr($statusLine, 9, 3);
 

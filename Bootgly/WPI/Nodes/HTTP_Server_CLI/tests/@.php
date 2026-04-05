@@ -124,6 +124,9 @@ return new Suite(
          '4.13-request_compliance-expect_100_continue',
          '4.14-request_compliance-expect_417',
          '4.15-request_compliance-uri_too_long',
+         // HTTP/1.0 backward compatibility (RFC 9110 §2.5)
+         '4.16-request_compliance-http10_status_line',
+         '4.17-request_compliance-http10_chunked_disable',
       ],
       'Response/' => [
          '1.1-respond_with_a_simple_hello_world',
@@ -203,7 +206,7 @@ return new Suite(
          '5.2-route_catch_all-parameterized_single',
          '5.3-route_catch_all-parameterized_multi',
       ],
-      'Middleware/' => [
+      'Router/Middleware/' => [
          // CORS
          '1.1-middleware-cors',
          '1.2-middleware-cors_preflight',
@@ -225,7 +228,7 @@ return new Suite(
          // TrustedProxy
          '8.1-middleware-trusted_proxy',
       ],
-      'Sequential/' => [
+      'Response/Sequential/' => [
          // Response state reset across sequential requests
          '1.1-response_body_reset_across_routes',
          '1.2-response_status_code_reset_across_routes',
@@ -237,7 +240,7 @@ return new Suite(
          '2.2-response_normal_then_upload_request',
          '2.3-response_upload_then_different_upload',
       ],
-      'Scheduled/' => [
+      'Response/Scheduled/' => [
          '1.1-scheduled_sync_baseline',
          '1.2-scheduled_deferred_response',
          '1.3-scheduled_deferred_concurrent',

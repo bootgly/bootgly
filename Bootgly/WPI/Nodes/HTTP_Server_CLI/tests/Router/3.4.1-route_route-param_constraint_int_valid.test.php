@@ -12,7 +12,7 @@ return new Specification(
    Separator: new Separator(left: 'Param constraint types'),
 
    request: function () {
-      return "GET /user/42 HTTP/1.0\r\n\r\n";
+      return "GET /user/42 HTTP/1.1\r\nHost: localhost\r\n\r\n";
    },
    response: function (Request $Request, Response $Response, Router $Router)
    {

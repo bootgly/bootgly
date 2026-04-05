@@ -50,7 +50,7 @@ return new Project(
       );
       $Server->on(
          // # Test (Benchmarking)
-         request: require __DIR__ . '/router/HTTP_Server_CLI-benchmark-bootgly_router.SAPI.php',
+         #request: require __DIR__ . '/router/HTTP_Server_CLI-benchmark-bootgly_router.SAPI.php',
          #request: require __DIR__ . '/router/HTTP_Server_CLI-benchmark-static_router.SAPI.php',
 
          // # Test Request - Download (streaming decoder writes directly to disk)
@@ -66,7 +66,7 @@ return new Project(
          // # Test Router - all route cases from Testing.routes.php adapted to Generator pattern
          #request: require __DIR__ . '/router/HTTP_Server_CLI-router.SAPI.php',
 
-         #request: fn ($Request, $Response) => $Response(body: 'Hello, World!'),
+         request: fn ($Request, $Response) => $Response(body: 'Hello, World!'),
 
          started: function ($Server) {
             $Output = CLI->Terminal->Output;

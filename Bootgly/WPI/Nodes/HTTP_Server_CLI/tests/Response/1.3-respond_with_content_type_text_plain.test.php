@@ -12,7 +12,7 @@ return new Specification(
 
    request: function () {
       // return $Request->get('//header/changed/1');
-      return "GET /header/changed/1 HTTP/1.0\r\n\r\n";
+      return "GET /header/changed/1 HTTP/1.1\r\nHost: localhost\r\n\r\n";
    },
    response: function (Request $Request, Response $Response): Response {
       $Response->Header->set('Content-Type', 'text/plain');

@@ -9,7 +9,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test\Specification;
 
 return new Specification(
    request: function () {
-      return "GET /resource/550e8400-e29b-41d4-a716-446655440000 HTTP/1.0\r\n\r\n";
+      return "GET /resource/550e8400-e29b-41d4-a716-446655440000 HTTP/1.1\r\nHost: localhost\r\n\r\n";
    },
    response: function (Request $Request, Response $Response, Router $Router)
    {

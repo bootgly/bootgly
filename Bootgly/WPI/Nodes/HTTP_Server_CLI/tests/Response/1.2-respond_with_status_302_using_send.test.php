@@ -12,7 +12,7 @@ return new Specification(
 
    request: function () {
       // return $Request->get('/status');
-      return "GET /status HTTP/1.0\r\n\r\n";
+      return "GET /status HTTP/1.1\r\nHost: localhost\r\n\r\n";
    },
    response: function (Request $Request, Response $Response): Response {
       return $Response(code: 302); // 302 Not Found

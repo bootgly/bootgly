@@ -12,7 +12,7 @@ return new Specification(
 
    request: function () {
       // return $Request->get('/');
-      return "GET / HTTP/1.0\r\n\r\n";
+      return "GET / HTTP/1.1\r\nHost: localhost\r\n\r\n";
    },
    response: function (Request $Request, Response $Response): Response {
       return $Response(body: 'Hello World!');

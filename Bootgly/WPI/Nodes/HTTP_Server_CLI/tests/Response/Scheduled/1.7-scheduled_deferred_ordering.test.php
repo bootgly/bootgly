@@ -29,11 +29,11 @@ return new Specification(
       function (string $hostPort) use (&$connection2, &$sendTime): string {
          // ! Open a separate connection for the deferred (slow) request
          $connection2 = stream_socket_client("tcp://{$hostPort}", $errno, $errstr, timeout: 5);
-         fwrite($connection2, "GET /deferred/http HTTP/1.0\r\n\r\n");
+         fwrite($connection2, "GET /deferred/http HTTP/1.1\r\nHost: localhost\r\n\r\n");
          $sendTime = microtime(true);
 
          // : Return the fast request for the main connection
-         return "GET /fast HTTP/1.0\r\n\r\n";
+         return "GET /fast HTTP/1.1\r\nHost: localhost\r\n\r\n";
       },
    ],
 
@@ -50,7 +50,7 @@ return new Specification(
          use ($Response) {
             // @ Open connection to example.com
             $client = stream_socket_client('tcp://example.com:80', $errno, $errstr, timeout: 5);
-            fwrite($client, "GET / HTTP/1.0\r\nHost: example.com\r\nConnection: close\r\n\r\n");
+            fwrite($client, "GET / HTTP/1.1\r\nHost: example.com\r\nConnection: close\r\n\r\n");
             stream_set_blocking($client, false);
             // @ Suspend with socket: event loop resumes when response is readable
             $Response->wait($client);

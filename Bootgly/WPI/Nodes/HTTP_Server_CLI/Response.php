@@ -354,7 +354,7 @@ class Response extends Server\Response
 
       return $this;
    }
-   protected function process (mixed $data, ?string $resource = null): self
+   protected function process (mixed $data, null|string $resource = null): self
    {
       if ($resource === null) {
          $resource = $this->resource;
@@ -583,12 +583,12 @@ class Response extends Server\Response
    {
       // !
       $this->prepare('view');
-      $this->process($view . '.template.php', 'view');
+      $this->process("$view.template.php", 'view');
 
       // ?
       $File = $this->File ?? null;
       if ($File === null || $File->exists === false) {
-         // throw new \Exception(message: 'Template file not found!');
+         // throw new Exception(message: 'Template file not found!');
          return $this;
       }
 
@@ -636,7 +636,7 @@ class Response extends Server\Response
     *
     * @return string|false The compressed content or false on failure.
     */
-   public function compress (string $raw, string $method = 'gzip', int $level = 9, ? int $encoding = null): string|false
+   public function compress (string $raw, string $method = 'gzip', int $level = 9, null|int $encoding = null): string|false
    {
       $encoded = false;
       $deflated = false;
@@ -705,7 +705,7 @@ class Response extends Server\Response
             $code = null;
       }
 
-      // ? Set default code
+      // # Set default code
       if ($code === null) {
          $code = match (WPI->Request->method) {
             'POST' => 303, // See Other
@@ -738,7 +738,7 @@ class Response extends Server\Response
       // * Metadata
       // @ status
       $this->message = $message;
-      $this->status = $code . ' ' . $message;
+      $this->status = "$code $message";
       $this->response = parent::PROTOCOL . ' ' . $this->status;
 
       return $this;
@@ -751,7 +751,7 @@ class Response extends Server\Response
     *
     * @return Response The Response instance, for chaining
     */
-   public function send ($body = null, ...$options): self
+   public function send (mixed $body = null, mixed ...$options): self
    {
       // ?
       if ($this->sent === true) {
@@ -797,7 +797,7 @@ class Response extends Server\Response
                      $json = 'null';
                   }
 
-                  $body = $callback . '(' . $json . ')';
+                  $body = "$callback($json)";
 
                   break;
             }
@@ -907,7 +907,7 @@ class Response extends Server\Response
     * 
     * @return Response The Response instance, for chaining
     */
-   public function upload (string|File $file, int $offset = 0, ? int $length = null, bool $close = true): self
+   public function upload (string|File $file, int $offset = 0, null|int $length = null, bool $close = true): self
    {
       // ?!
       if ($file instanceof File) {
@@ -1221,7 +1221,7 @@ class Response extends Server\Response
     *
     * @return Response Returns Response.
     */
-   public function end (? int $code = null, ? string $context = null): self
+   public function end (null|int $code = null, null|string $context = null): self
    {
       // ?
       if ($this->sent === true) {

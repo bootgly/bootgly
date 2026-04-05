@@ -13,10 +13,10 @@ return new Specification(
 
    requests: [
       function () {
-         return "GET /route-a HTTP/1.0\r\n\r\n";
+         return "GET /route-a HTTP/1.1\r\nHost: localhost\r\n\r\n";
       },
       function () {
-         return "GET /route-b HTTP/1.0\r\n\r\n";
+         return "GET /route-b HTTP/1.1\r\nHost: localhost\r\n\r\n";
       },
    ],
    response: function (Request $Request, Response $Response, Router $Router)

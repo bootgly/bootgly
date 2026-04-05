@@ -12,7 +12,7 @@ return new Specification(
 
    request: function () {
       // return $Request->get('/test/auth/1');
-      return "GET /test/redirect/1 HTTP/1.0\r\n\r\n";
+      return "GET /test/redirect/1 HTTP/1.1\r\nHost: localhost\r\n\r\n";
    },
    response: function (Request $Request, Response $Response): Response {
       return $Response->redirect('https://docs.bootgly.com/');

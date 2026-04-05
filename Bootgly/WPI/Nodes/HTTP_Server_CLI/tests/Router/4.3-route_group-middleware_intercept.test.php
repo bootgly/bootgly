@@ -14,7 +14,7 @@ return new Specification(
    description: 'It should apply group middlewares from intercept() to nested routes',
 
    request: function () {
-      return "GET /api/users HTTP/1.0\r\n\r\n";
+      return "GET /api/users HTTP/1.1\r\nHost: localhost\r\n\r\n";
    },
    response: function (Request $Request, Response $Response, Router $Router)
    {

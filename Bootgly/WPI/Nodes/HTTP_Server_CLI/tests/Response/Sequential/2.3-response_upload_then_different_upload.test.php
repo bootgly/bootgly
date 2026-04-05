@@ -10,10 +10,10 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test\Specification;
 return new Specification(
    requests: [
       function () {
-         return "GET /download/text HTTP/1.0\r\n\r\n";
+         return "GET /download/text HTTP/1.1\r\nHost: localhost\r\n\r\n";
       },
       function () {
-         return "GET /download/image HTTP/1.0\r\n\r\n";
+         return "GET /download/image HTTP/1.1\r\nHost: localhost\r\n\r\n";
       },
    ],
    responseLengths: [342, 82928],

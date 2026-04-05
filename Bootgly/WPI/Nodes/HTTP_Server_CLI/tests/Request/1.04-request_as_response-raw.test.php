@@ -9,7 +9,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test\Specification;
 return new Specification(
    request: function () {
       // return $Request->get('/');
-      return "GET / HTTP/1.0\r\n\r\n";
+      return "GET / HTTP/1.1\r\nHost: localhost\r\n\r\n";
    },
    response: function (Request $Request, Response $Response): Response {
       $raw = $Request->raw;
@@ -21,9 +21,9 @@ return new Specification(
       HTTP/1.1 200 OK\r
       Server: Bootgly\r
       Content-Type: text/html; charset=UTF-8\r
-      Content-Length: 18\r
+      Content-Length: 35\r
       \r
-      GET / HTTP/1.0\r\n\r\n
+      GET / HTTP/1.1\r\nHost: localhost\r\n\r\n
       HTML_RAW;
 
       // @ Assert

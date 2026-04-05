@@ -1,36 +1,29 @@
 <?php
 
 use Bootgly\ABI\Debugging\Data\Vars;
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test\Specification;
 
 
 return new Specification(
+   description: 'It should respond with HTTP/1.0 status-line for HTTP/1.0 clients (RFC 9110 §2.5)',
+
    request: function () {
-      // return $Request->get('/');
-      return "GET /route5 HTTP/1.1\r\nHost: localhost\r\n\r\n";
+      return "GET / HTTP/1.0\r\n\r\n";
    },
-   response: function (Request $Request, Response $Response, Router $Router) {
-      $Router->route('/route5', function ($Request, $Response) {
-         return $Response(body: 'Multiple HTTP methods!');
-      }, [GET, POST]);
+   response: function (Request $Request, Response $Response): Response {
+      return $Response(body: 'ok');
    },
 
    test: function ($response) {
-      /*
-      return $Response->status === '200 OK'
-      && $Response->body === '127.0.0.1';
-      */
-
       $expected = <<<HTML_RAW
-      HTTP/1.1 200 OK\r
+      HTTP/1.0 200 OK\r
       Server: Bootgly\r
       Content-Type: text/html; charset=UTF-8\r
-      Content-Length: 22\r
+      Content-Length: 2\r
       \r
-      Multiple HTTP methods!
+      ok
       HTML_RAW;
 
       // @ Assert

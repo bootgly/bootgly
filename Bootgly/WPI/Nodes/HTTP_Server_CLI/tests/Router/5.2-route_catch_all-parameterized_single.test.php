@@ -12,7 +12,7 @@ return new Specification(
    Separator: new Separator(left: 'Catch-All parameterized'),
 
    request: function () {
-      return "GET /search/hello HTTP/1.0\r\n\r\n";
+      return "GET /search/hello HTTP/1.1\r\nHost: localhost\r\n\r\n";
    },
    response: function (Request $Request, Response $Response, Router $Router)
    {

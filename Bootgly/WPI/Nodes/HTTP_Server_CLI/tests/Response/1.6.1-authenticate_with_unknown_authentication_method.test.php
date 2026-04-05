@@ -15,7 +15,7 @@ return new Specification(
    Separator: new Separator(header: '@authenticate - unknown method'),
 
    request: function () {
-      return "GET /test/auth/2 HTTP/1.0\r\n\r\n";
+      return "GET /test/auth/2 HTTP/1.1\r\nHost: localhost\r\n\r\n";
    },
    response: function (Request $Request, Response $Response) use ($UnknownAuth): Response {
       $Response(body: 'Unauthorized page!');

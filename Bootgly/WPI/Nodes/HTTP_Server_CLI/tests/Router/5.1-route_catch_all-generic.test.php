@@ -13,7 +13,7 @@ return new Specification(
 
    request: function () {
       // return $Request->get('/');
-      return "GET /catch1 HTTP/1.0\r\n\r\n";
+      return "GET /catch1 HTTP/1.1\r\nHost: localhost\r\n\r\n";
    },
    response: function (Request $Request, Response $Response, Router $Router)
    {

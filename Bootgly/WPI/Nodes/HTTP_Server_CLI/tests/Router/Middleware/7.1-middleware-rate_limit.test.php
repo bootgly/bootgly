@@ -12,7 +12,7 @@ return new Specification(
    description: 'It should set rate limit headers on the response',
 
    request: function () {
-      return "GET / HTTP/1.0\r\n\r\n";
+      return "GET / HTTP/1.1\r\nHost: localhost\r\n\r\n";
    },
    middlewares: [new RateLimit(limit: 100, window: 60)],
    response: function (Request $Request, Response $Response): Response {

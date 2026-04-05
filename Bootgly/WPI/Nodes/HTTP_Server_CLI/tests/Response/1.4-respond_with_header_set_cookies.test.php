@@ -10,7 +10,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test\Specification;
 return new Specification(
    request: function () {
       // return $Request->get('//header/changed/1');
-      return "GET /header/cookies/1 HTTP/1.0\r\n\r\n";
+      return "GET /header/cookies/1 HTTP/1.1\r\nHost: localhost\r\n\r\n";
    },
    response: function (Request $Request, Response $Response): Response {
       $Cookies = $Response->Header->Cookies;

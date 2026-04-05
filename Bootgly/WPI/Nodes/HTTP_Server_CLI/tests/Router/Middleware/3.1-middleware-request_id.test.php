@@ -13,7 +13,7 @@ return new Specification(
    description: 'It should generate X-Request-Id header on the response',
 
    request: function () {
-      return "GET / HTTP/1.0\r\n\r\n";
+      return "GET / HTTP/1.1\r\nHost: localhost\r\n\r\n";
    },
    middlewares: [new RequestId],
    response: function (Request $Request, Response $Response): Response {
