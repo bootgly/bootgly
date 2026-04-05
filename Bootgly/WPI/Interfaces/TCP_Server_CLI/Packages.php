@@ -234,6 +234,13 @@ abstract class Packages implements WPI\Connections\Packages
             $this->Connection->close();
          }
       }
+      // @ Consume test handler on reject (decoder returned 0 but encoder never ran)
+      else if (SAPI::$Suite !== null) { // @phpstan-ignore notIdentical.alwaysTrue
+         $base = array_key_first(SAPI::$Tests);
+         if ($base !== null) {
+            SAPI::boot(reset: true, base: $base, key: 'response');
+         }
+      }
 
       return true;
    }

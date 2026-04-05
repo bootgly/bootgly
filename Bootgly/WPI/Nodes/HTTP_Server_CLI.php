@@ -428,11 +428,40 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
             $Suite = SAPI::$Suite;
             $Suite->separate('HTTP Server');
 
+            // @ Reconnection closure (for tests that close the connection)
+            $reconnect = static function () use ($TCP_Client_CLI, &$Socket): void {
+               $context = stream_context_create([
+                  'socket' => ['tcp_nodelay' => true]
+               ]);
+               $newSocket = @stream_socket_client(
+                  'tcp://' . $TCP_Client_CLI->host . ':' . $TCP_Client_CLI->port,
+                  $errno,
+                  $errstr,
+                  timeout: 5,
+                  context: $context
+               );
+               if ($newSocket !== false) {
+                  stream_set_blocking($newSocket, false);
+                  $Socket = $newSocket;
+               }
+            };
+
             // @@ Iterate Test Cases
             // !
             $testFiles = SAPI::$tests[self::class] ?? [];
             $specIndex = 0;
             foreach ($testFiles as $index => $value) {
+               // @ Reset connection state from previous test
+               $Connection->expired = false;
+
+               // @ Detect dead connection from previous test's reject/close
+               $r = [$Socket]; $w = null; $e = null;
+               if (@stream_select($r, $w, $e, 0) > 0) {
+                  if (@fread($Socket, 1) === '' || @feof($Socket)) {
+                     $reconnect();
+                  }
+               }
+
                /** @var Specification|null $test */
                $test = SAPI::$Tests[self::class][$specIndex] ?? null;
                if ($test instanceof Specification) {
@@ -462,9 +491,13 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
                      $requestLength = strlen($requestData);
                      // @ Send Request to Server
                      $Connection::$output = $requestData;
-                     if ( ! $Connection->writing($Socket, $requestLength) ) {
-                        $failed = true;
-                        break;
+                     if ( ! $Connection->writing($Socket, $requestLength) ) { // @phpstan-ignore booleanNot.alwaysTrue
+                        // @ Reconnect and retry
+                        $reconnect();
+                        if ( ! $Connection->writing($Socket, $requestLength) ) { // @phpstan-ignore booleanNot.alwaysTrue
+                           $failed = true;
+                           break;
+                        }
                      }
                      // ? Response
                      $timeout = 2;
@@ -473,8 +506,19 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
                      if ( $Connection->reading($Socket, $responseLength, $timeout) ) {
                         $input = $Connection::$input;
                      }
+                     // @ Reconnect and retry if response is empty (half-closed connection)
+                     if ($input === '' && $Connection->expired) { // @phpstan-ignore booleanAnd.rightAlwaysFalse
+                        $reconnect();
+                        $Connection->expired = false;
+                        $Connection::$output = $requestData;
+                        if ($Connection->writing($Socket, $requestLength)) {
+                           if ($Connection->reading($Socket, $responseLength, $timeout)) {
+                              $input = $Connection::$input;
+                           }
+                        }
+                     }
 
-                     if ($Connection->expired) {
+                     if ($Connection->expired) { // @phpstan-ignore if.alwaysFalse
                         $failed = true;
                         break;
                      }
@@ -517,9 +561,13 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
                $requestLength = strlen($requestData);
                // @ Send Request to Server
                $Connection::$output = $requestData;
-               if ( ! $Connection->writing($Socket, $requestLength) ) {
-                  $Test->fail();
-                  break;
+               if ( ! $Connection->writing($Socket, $requestLength) ) { // @phpstan-ignore booleanNot.alwaysTrue
+                  // @ Reconnect and retry
+                  $reconnect();
+                  if ( ! $Connection->writing($Socket, $requestLength) ) { // @phpstan-ignore booleanNot.alwaysTrue
+                     $Test->fail();
+                     break;
+                  }
                }
                // ? Response
                $timeout = 2;
@@ -528,11 +576,22 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
                if ( $Connection->reading($Socket, $responseLength, $timeout) ) {
                   $input = $Connection::$input;
                }
+               // @ Reconnect and retry if response is empty (half-closed connection)
+               if ($input === '' && $Connection->expired) { // @phpstan-ignore booleanAnd.rightAlwaysFalse
+                  $reconnect();
+                  $Connection->expired = false;
+                  $Connection::$output = $requestData;
+                  if ($Connection->writing($Socket, $requestLength)) {
+                     if ($Connection->reading($Socket, $responseLength, $timeout)) {
+                        $input = $Connection::$input;
+                     }
+                  }
+               }
 
                // @ Execute Test
                $Test->test($input);
                // @ Output Test result
-               if (! $Connection->expired && $Test->passed) {
+               if (! $Connection->expired && $Test->passed) { // @phpstan-ignore booleanNot.alwaysTrue
                   $Test->pass();
                }
                else {

@@ -3,6 +3,7 @@
 # Ignore files by extension...
 *.iso
 *.log
+*.md
 # Ignore locks, bin, envs...
 composer
 composer.lock
@@ -22,6 +23,7 @@ composer.lock
 !@/__docker__/
 # Adittional files
 !@/phpstan.neon
+!README.md
 
 ## Private files
 # Benchmarks
