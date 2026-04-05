@@ -44,7 +44,7 @@ return new Project(
          port: getenv('PORT') ? (int) getenv('PORT') : 8082,
          // get CPU count directly from the system for optimal performance / 2
          // workers: max(1, (int) shell_exec('nproc') ?: 1) / 2
-         workers: 11, // in my tests, 11 workers has the best performance with wrk with 10 threads (CPU count is 24)
+         workers: getenv('BOOTGLY_WORKERS') ? (int) getenv('BOOTGLY_WORKERS') : 11, // default: 11 workers (best with wrk 10 threads, CPU count 24)
          // requestMaxFileSize: 500 * 1024 * 1024, // 500 MB (default)
          // requestMaxBodySize: 10 * 1024 * 1024,  // 10 MB (default)
       );
