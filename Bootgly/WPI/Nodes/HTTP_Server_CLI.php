@@ -29,6 +29,10 @@ use function function_exists;
 use function opcache_invalidate;
 use function clearstatcache;
 use function pcntl_signal;
+use function stream_context_create;
+use function stream_select;
+use function stream_set_blocking;
+use function stream_socket_client;
 use function strlen;
 use function time;
 use Closure;
@@ -434,7 +438,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
                   'socket' => ['tcp_nodelay' => true]
                ]);
                $newSocket = @stream_socket_client(
-                  'tcp://' . $TCP_Client_CLI->host . ':' . $TCP_Client_CLI->port,
+                  "tcp://{$TCP_Client_CLI->host}:{$TCP_Client_CLI->port}",
                   $errno,
                   $errstr,
                   timeout: 5,
