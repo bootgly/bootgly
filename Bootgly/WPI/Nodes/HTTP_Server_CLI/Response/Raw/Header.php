@@ -235,6 +235,16 @@ class Header extends HeaderBase
 
       return false;
    }
+   public function remove (string $field): bool
+   {
+      if ( isSet($this->fields[$field]) ) {
+         unset($this->fields[$field]);
+         $this->dirty = true;
+         return true;
+      }
+
+      return false;
+   }
    public function append (string $field, string $value = '', ? string $separator = ', '): void
    {
       // Header that can have only value to append, only entire header, etc.

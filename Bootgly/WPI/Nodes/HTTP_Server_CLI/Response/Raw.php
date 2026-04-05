@@ -36,31 +36,47 @@ trait Raw
     * @param int<0, max>|null $length
     * @param-out int<0, max>|null $length
     */
-   public function encode (Packages $Package, ?int &$length): string
+   public function encode (Packages $Package, null|int &$length): string
    {
       $Header  = &$this->Header;
       $Body = &$this->Body;
 
-      // @ Build Content-Length inline (avoid Header->set to preserve cache)
+      // HTTP/1.0 backward compatibility (RFC 9110 §2.5)
+      $Request = Server::$Request;
+      if ($Request->protocol === 'HTTP/1.0') {
+         // Respond with HTTP/1.0 status-line for 1.0 clients
+         $response = "HTTP/1.0 {$this->status}";
+
+         // ? Disable chunked Transfer-Encoding for HTTP/1.0 responses
+         if ($this->chunked) {
+            $this->chunked = false;
+            $Header->remove('Transfer-Encoding');
+         }
+      }
+
+      // @ Prepare
+      // ?! Content-Length inline (avoid Header->set to preserve cache)
       $contentLength = '';
       if (! $this->stream && ! $this->chunked && ! $this->encoded) {
          $contentLength = "\r\nContent-Length: " . $Body->length;
       }
 
+      // @ Build
+      // Header
       $Header->build();
-
+      // Body
+      $response ??= $this->response;
       if ($this->stream) {
-         $length = strlen($this->response) + 1 + strlen($Header->raw) + 5;
+         $length = strlen($response) + 1 + strlen($Header->raw) + 5;
 
-         /** @var array<int,array<string,mixed>> $uploadQueue */
-         $uploadQueue = $this->files;
-         $Package->uploading = $uploadQueue;
+         $Package->uploading = $this->files;
 
          $this->files = [];
          $this->stream = false;
       }
 
-      return "{$this->response}\r\n{$Header->raw}{$contentLength}\r\n\r\n"
-         . (Server::$Request->method === 'HEAD' ? '' : $Body->raw);
+      // :
+      return "{$response}\r\n{$Header->raw}{$contentLength}\r\n\r\n"
+         . ($Request->method === 'HEAD' ? '' : $Body->raw);
    }
 }
