@@ -101,6 +101,15 @@ class Encoder_ extends Encoders
             return '';
          }
 
+         // @ Connection management (RFC 9112 §9.3)
+         if ($Request->closeConnection) {
+            if ($Request->protocol === 'HTTP/1.1') {
+               $Response->Header->set('Connection', 'close');
+            }
+
+            $Packages->closeAfterWrite = true;
+         }
+
          // : Encode HTTP Response
          return $Response->encode($Packages, $length);
       }

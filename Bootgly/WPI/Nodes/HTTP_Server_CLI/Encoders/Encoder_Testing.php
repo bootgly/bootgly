@@ -92,6 +92,15 @@ class Encoder_Testing extends Encoders
          // @ Remove dynamic Headers
          $Response->Header->preset('Date', null);
 
+         // @ Connection management (RFC 9112 §9.3)
+         if ($Request->closeConnection) {
+            if ($Request->protocol === 'HTTP/1.1') {
+               $Response->Header->set('Connection', 'close');
+            }
+
+            $Packages->closeAfterWrite = true;
+         }
+
          // : Encode HTTP Response
          return $Response->encode($Packages, $length);
       }

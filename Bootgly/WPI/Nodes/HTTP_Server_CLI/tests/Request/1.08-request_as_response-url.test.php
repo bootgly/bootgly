@@ -10,7 +10,7 @@ return new Specification(
    request: function ()
    {
       // return $Request->get('/test/foo?query=abc&query2=xyz');
-      return "GET /test/foo?query=abc&query2=xyz HTTP/1.1\r\n\r\n";
+      return "GET /test/foo?query=abc&query2=xyz HTTP/1.1\r\nHost: localhost\r\n\r\n";
    },
    response: function (Request $Request, Response $Response): Response
    {

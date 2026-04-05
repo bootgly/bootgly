@@ -12,6 +12,7 @@ return new Specification(
       return
       <<<HTTP
       GET / HTTP/1.1\r
+      Host: localhost\r
       Cookie: cookie1=value1; Expires=Wed, 21 Oct 2023 07:28:00 GMT; Path=/\r
       Cookie: cookie2=value2; Expires=Wed, 21 Oct 2023 07:28:00 GMT; Path=/\r
       Cookie: cookie3=value3; Expires=Wed, 21 Oct 2023 07:28:00 GMT; Path=/\r

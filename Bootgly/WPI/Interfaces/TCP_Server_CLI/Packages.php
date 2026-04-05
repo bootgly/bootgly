@@ -68,6 +68,8 @@ abstract class Packages implements WPI\Connections\Packages
    public array $uploading;
    // @ Expiration
    public bool $expired;
+   // @ Connection management
+   public bool $closeAfterWrite;
 
 
    public function __construct (Connection &$Connection)
@@ -93,6 +95,8 @@ abstract class Packages implements WPI\Connections\Packages
       $this->uploading = [];
       // @ Expiration
       $this->expired = false;
+      // @ Connection management
+      $this->closeAfterWrite = false;
    }
 
    /**
@@ -223,6 +227,12 @@ abstract class Packages implements WPI\Connections\Packages
 
       if ($received) {
          $this->write($Socket);
+
+         // @ Close connection if signaled (Connection: close, HTTP/1.0, etc.)
+         if ($this->closeAfterWrite) {
+            $this->closeAfterWrite = false;
+            $this->Connection->close();
+         }
       }
 
       return true;

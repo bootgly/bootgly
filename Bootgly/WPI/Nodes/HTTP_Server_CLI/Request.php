@@ -54,10 +54,10 @@ use Bootgly\WPI\Modules\HTTP\Server\Response\Raw\Header\Cookie;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Decoder_Waiting;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Decoder_Downloading;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Decoder_Chunked;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Raw\Body;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Raw\Header;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Raw\Header\Cookies;
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Authentications;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Authentications\Basic;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Session;
 
@@ -489,6 +489,8 @@ class Request
    public readonly string $at;
    public readonly int $time;
    public static int $multiparts = 0;
+   // @ Connection management
+   public bool $closeConnection = false;
 
    private string $authUsername = '';
    private string $authPassword = '';
@@ -583,11 +585,19 @@ class Request
          case 'DELETE':
          case 'OPTIONS':
             break;
+         case 'TRACE':
+         case 'CONNECT':
+            $Package->reject("HTTP/1.1 501 Not Implemented\r\n\r\n");
+            return 0;
          default:
-            $Package->reject("HTTP/1.1 405 Method Not Allowed\r\n\r\n");
+            $Package->reject("HTTP/1.1 405 Method Not Allowed\r\nAllow: GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS\r\n\r\n");
             return 0;
       }
       // URI
+      if (strlen($URI) > 8192) {
+         $Package->reject("HTTP/1.1 414 URI Too Long\r\n\r\n");
+         return 0;
+      }
       // protocol
       
       // @ Set Request Meta length
@@ -605,9 +615,52 @@ class Request
       else if (preg_match("/\r\ncontent-length: ?(\d+)/i", $header_raw, $match) === 1) {
          $content_length = (int) $match[1];
       }
-      else if (stripos($header_raw, "\r\nTransfer-Encoding:") !== false) {
-         $Package->reject("HTTP/1.1 400 Bad Request\r\n\r\n");
-         return 0;
+
+      // @ Handle Transfer-Encoding (RFC 9112 §6.3)
+      if (stripos($header_raw, "\r\nTransfer-Encoding:") !== false) {
+         // @ Transfer-Encoding + Content-Length conflict
+         if (isSet($content_length)) {
+            $Package->reject("HTTP/1.1 400 Bad Request\r\n\r\n");
+            return 0;
+         }
+
+         // @ Check for chunked transfer encoding
+         if (stripos($header_raw, "\r\nTransfer-Encoding: chunked") !== false
+            || stripos($header_raw, "\r\ntransfer-encoding: chunked") !== false
+         ) {
+            $this->Body->waiting = true;
+            $this->Body->length = 0;
+
+            Decoder_Chunked::init();
+
+            // @ Feed initial body data if any
+            $initialBody = substr($buffer, $separator_position + 4);
+            if ($initialBody !== '') {
+               Decoder_Chunked::feedInitial($initialBody);
+            }
+
+            HTTP_Server_CLI::$Decoder = new Decoder_Chunked;
+         }
+         else {
+            // @ Unknown Transfer-Encoding
+            $Package->reject("HTTP/1.1 501 Not Implemented\r\n\r\n");
+            return 0;
+         }
+      }
+
+      // @ Handle Expect header (RFC 9110 §10.1.1)
+      if (strpos($header_raw, "\r\nExpect: ") !== false
+         || stripos($header_raw, "\r\nexpect: ") !== false
+      ) {
+         if (stripos($header_raw, "\r\nExpect: 100-continue") !== false
+            || stripos($header_raw, "\r\nexpect: 100-continue") !== false
+         ) {
+            @fwrite($Package->Connection->Socket, "HTTP/1.1 100 Continue\r\n\r\n");
+         }
+         else {
+            $Package->reject("HTTP/1.1 417 Expectation Failed\r\n\r\n");
+            return 0;
+         }
       }
 
       // @ Set Request Body raw if possible
@@ -701,6 +754,14 @@ class Request
       $this->URI = $URI;
       // protocol
       $this->protocol = $protocol;
+      // @ Validate Host header (RFC 9112 §3.2) — required for HTTP/1.1
+      if ($protocol === 'HTTP/1.1' && stripos($header_raw, "Host:") === false) {
+         $Package->reject("HTTP/1.1 400 Bad Request\r\n\r\n");
+         return 0;
+      }
+      // @ Connection management (RFC 9112 §9.3)
+      // Close connection only when explicitly requested via Connection: close header
+      $this->closeConnection = stripos($header_raw, 'Connection: close') !== false;
 
       // # Request Header
       // raw

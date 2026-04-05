@@ -12,6 +12,7 @@ return new Specification(
       return
       <<<HTTP
       GET / HTTP/1.1\r
+      Host: localhost\r
       User-Agent: Bootgly/TCP-Server\r
       Content-Type: text/plain\r
       \r

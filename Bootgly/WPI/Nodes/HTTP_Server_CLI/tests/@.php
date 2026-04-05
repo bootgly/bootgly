@@ -108,6 +108,10 @@ return new Suite(
          '3.2.08-request_session-method-list',
          '3.2.09-request_session-method-flush',
          '3.2.10-request_session-method-check',
+         // HTTP/1.1 Compliance (RFC 9110/9112)
+         '4.02-request_compliance-host_header_valid',
+         '4.03-request_compliance-http10_no_host',
+         '4.07-request_compliance-head_no_body',
       ],
       'Response/' => [
          '1.1-respond_with_a_simple_hello_world',

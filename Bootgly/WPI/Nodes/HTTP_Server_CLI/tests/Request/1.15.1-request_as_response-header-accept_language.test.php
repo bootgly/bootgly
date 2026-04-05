@@ -11,6 +11,7 @@ return new Specification(
 
       return <<<HTTP
       GET / HTTP/1.1\r
+      Host: localhost\r
       Accept-Language: en-US, es;q=0.8, de;q=0.5, pt-BR;q=0.2\r
       \r
 

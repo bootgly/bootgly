@@ -7,39 +7,30 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test\Specification;
 
 
 return new Specification(
-   request: function () {
+   description: 'It should suppress body for HEAD requests but keep Content-Length',
 
-      return
-      <<<HTTP
-      GET / HTTP/1.1\r
-      Host: localhost\r
-      User-Agent: Bootgly/TCP-Server\r
-      Content-Type: text/plain\r
-      \r
-      
-      HTTP;
+   request: function () {
+      return "HEAD / HTTP/1.1\r\nHost: localhost\r\n\r\n";
    },
    response: function (Request $Request, Response $Response): Response {
-      return $Response(body: $Request->time);
+      return $Response(body: 'Hello World!');
    },
 
    test: function ($response) {
-      $time = time();
-
       $expected = <<<HTML_RAW
       HTTP/1.1 200 OK\r
       Server: Bootgly\r
       Content-Type: text/html; charset=UTF-8\r
-      Content-Length: 10\r
+      Content-Length: 12\r
       \r
-      $time
+
       HTML_RAW;
 
       // @ Assert
       if ($response !== $expected) {
          Vars::$labels = ['HTTP Response:', 'Expected:'];
          dump(json_encode($response), json_encode($expected));
-         return 'Response raw not matched';
+         return 'HEAD response should have headers with Content-Length but no body';
       }
 
       return true;
