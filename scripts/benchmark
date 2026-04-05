@@ -81,6 +81,7 @@ show_general_help () {
    echo -e "  ${BOLD}Options:${NC}"
    echo -e "    ${CYAN}--competitors${NC}=LIST  Comma-separated names (${CYAN}bootgly${NC} required as first)"
    echo -e "    ${CYAN}--scenarios${NC}=LIST    Comma-separated scenario numbers (default: all)"
+   echo -e "    ${CYAN}--vary${NC}=PARAMS       Vary parameters across rounds (e.g. ${CYAN}workers:1,threads:2${NC})"
    echo -e "    ${CYAN}--help${NC}, ${CYAN}-h${NC}          Show help"
    echo ""
 }
@@ -219,6 +220,7 @@ show_help () {
    echo -e "  ${BOLD}Options:${NC}"
    echo -e "    ${CYAN}--competitors${NC}=LIST  Comma-separated names (${CYAN}bootgly${NC} required as first)"
    echo -e "    ${CYAN}--scenarios${NC}=LIST    Comma-separated scenario numbers (default: all)"
+   echo -e "    ${CYAN}--vary${NC}=PARAMS       Vary parameters across rounds (e.g. ${CYAN}workers:1,threads:2${NC})"
    echo -e "    ${CYAN}--help${NC}, ${CYAN}-h${NC}          Show this help"
    echo ""
    
@@ -276,6 +278,7 @@ show_help () {
 
 COMPETITORS_ARG=""
 SCENARIO_ARG=""
+VARY_ARG=""
 
 for arg in "${REMAINING_ARGS[@]}"; do
    case "$arg" in
@@ -289,6 +292,9 @@ for arg in "${REMAINING_ARGS[@]}"; do
       --scenarios=*)
          SCENARIO_ARG="${arg#--scenarios=}"
          ;;
+      --vary=*)
+         VARY_ARG="${arg#--vary=}"
+         ;;
       *)
          echo -e "${RED}ERROR: Unknown argument: $arg${NC}"
          show_help
@@ -296,6 +302,27 @@ for arg in "${REMAINING_ARGS[@]}"; do
          ;;
    esac
 done
+
+# --- Parse --vary flag ---
+VARY_WORKERS_STEP=0
+VARY_THREADS_STEP=0
+if [[ -n "$VARY_ARG" ]]; then
+   IFS=',' read -ra _vary_parts <<< "$VARY_ARG"
+   for v in "${_vary_parts[@]}"; do
+      if [[ "$v" =~ ^workers:([0-9]+)$ ]]; then
+         VARY_WORKERS_STEP="${BASH_REMATCH[1]}"
+      elif [[ "$v" =~ ^threads:([0-9]+)$ ]]; then
+         VARY_THREADS_STEP="${BASH_REMATCH[1]}"
+      elif [[ "$v" =~ ^(workers|threads)$ ]]; then
+         echo -e "${RED}ERROR: Step required for --vary=$v. Use ${v}:N, e.g. ${v}:1${NC}"
+         exit 1
+      else
+         echo -e "${RED}ERROR: Unknown --vary value: $v${NC}"
+         echo -e "${DIM}  Valid values: workers:N, threads:N${NC}"
+         exit 1
+      fi
+   done
+fi
 
 # --competitors is required
 if [[ -z "$COMPETITORS_ARG" ]]; then
@@ -460,6 +487,56 @@ calc_diff () {
    awk "BEGIN { diff = (($a - $b) / $b) * 100; printf \"%+.1f%%\", diff }"
 }
 
+# Format RPS value with reqs/s unit (when --vary is active)
+format_rps () {
+   local rps="$1"
+   local formatted
+   formatted=$(format_number "$rps")
+   if [[ "$VARY_WORKERS_STEP" -gt 0 || "$VARY_THREADS_STEP" -gt 0 ]]; then
+      echo "${formatted} reqs/s"
+   else
+      echo "$formatted"
+   fi
+}
+
+# Compute rounds for a driver based on --vary config
+# Sets global: ROUND_WORKERS[], ROUND_WRK_THREADS[], ROUND_COUNT
+compute_rounds () {
+   local base_w="$1" base_t="$2"
+   ROUND_WORKERS=()
+   ROUND_WRK_THREADS=()
+
+   # Build workers values
+   local -a w_vals=()
+   if [[ "$VARY_WORKERS_STEP" -gt 0 ]]; then
+      local w_lo=$((base_w - VARY_WORKERS_STEP))
+      [[ "$w_lo" -lt 1 ]] && w_lo=1
+      w_vals=("$w_lo" "$base_w" "$((base_w + VARY_WORKERS_STEP))")
+   else
+      w_vals=("$base_w")
+   fi
+
+   # Build threads values
+   local -a t_vals=()
+   if [[ "$VARY_THREADS_STEP" -gt 0 ]]; then
+      local t_lo=$((base_t - VARY_THREADS_STEP))
+      [[ "$t_lo" -lt 1 ]] && t_lo=1
+      t_vals=("$t_lo" "$base_t" "$((base_t + VARY_THREADS_STEP))")
+   else
+      t_vals=("$base_t")
+   fi
+
+   # Cartesian product
+   for w in "${w_vals[@]}"; do
+      for t in "${t_vals[@]}"; do
+         ROUND_WORKERS+=("$w")
+         ROUND_WRK_THREADS+=("$t")
+      done
+   done
+
+   ROUND_COUNT=${#ROUND_WORKERS[@]}
+}
+
 # =============================================================================
 # Load drivers
 # =============================================================================
@@ -471,22 +548,25 @@ source "$(resolve_driver "$BASELINE_DRIVER")"
 BASELINE_NAME="$DRIVER_NAME"
 BASELINE_VERSION="$DRIVER_VERSION"
 BASELINE_WORKERS="$DRIVER_WORKERS"
+BASELINE_WRK_THREADS="${DRIVER_WRK_THREADS:-$(( $(nproc 2>/dev/null || echo 1) / 2 ))}"
 BASELINE_PATH="$(resolve_driver "$BASELINE_DRIVER")"
 
 # --- Competitor drivers ---
 declare -a COMP_NAMES=()
 declare -a COMP_VERSIONS=()
 declare -a COMP_WORKERS=()
+declare -a COMP_WRK_THREADS=()
 declare -a COMP_PATHS=()
 
 for name in "${REQUESTED_DRIVERS[@]}"; do
-   DRIVER_NAME="" DRIVER_VERSION="" DRIVER_WORKERS=""
+   DRIVER_NAME="" DRIVER_VERSION="" DRIVER_WORKERS="" DRIVER_WRK_THREADS=""
    _driver_path="$(resolve_driver "$name")"
    # shellcheck disable=SC1090
    source "$_driver_path"
    COMP_NAMES+=("$DRIVER_NAME")
    COMP_VERSIONS+=("$DRIVER_VERSION")
    COMP_WORKERS+=("$DRIVER_WORKERS")
+   COMP_WRK_THREADS+=("${DRIVER_WRK_THREADS:-$(( $(nproc 2>/dev/null || echo 1) / 2 ))}")
    COMP_PATHS+=("$_driver_path")
 done
 
@@ -543,6 +623,15 @@ echo -e "  ${BOLD}${WHITE}Configuration${NC}"
 echo -e "  ${DIM}wrk${NC}       -t${WRK_THREADS} -c${WRK_CONNECTIONS} -d${WRK_DURATION}"
 echo -e "  ${DIM}Warmup${NC}    -t${WARMUP_THREADS} -c${WARMUP_CONNECTIONS} -d${WARMUP_DURATION}"
 echo -e "  ${DIM}Port${NC}      ${PORT}"
+if [[ "$VARY_WORKERS_STEP" -gt 0 || "$VARY_THREADS_STEP" -gt 0 ]]; then
+   _vary_desc=""
+   [[ "$VARY_WORKERS_STEP" -gt 0 ]] && _vary_desc+="workers:${VARY_WORKERS_STEP}"
+   if [[ "$VARY_THREADS_STEP" -gt 0 ]]; then
+      [[ -n "$_vary_desc" ]] && _vary_desc+=","
+      _vary_desc+="threads:${VARY_THREADS_STEP}"
+   fi
+   echo -e "  ${DIM}Vary${NC}      ${_vary_desc}"
+fi
 echo ""
 echo -e "  ${DIM}$(printf '─%.0s' {1..62})${NC}"
 echo ""
@@ -573,49 +662,46 @@ echo ""
 
 declare -a BASELINE_RPS=()
 declare -a BASELINE_LAT=()
+declare -a BASELINE_BEST_WORKERS=()
+declare -a BASELINE_BEST_THREADS=()
 declare -a ALL_COMP_RPS=()
 declare -a ALL_COMP_LAT=()
+declare -a ALL_COMP_BEST_WORKERS=()
+declare -a ALL_COMP_BEST_THREADS=()
 
 SCENARIO_COUNT=${#SCENARIOS[@]}
 
+# Per-round temporary storage (flat arrays indexed by round*SCENARIO_COUNT+scenario)
+declare -a _ROUND_RPS=()
+declare -a _ROUND_LAT=()
+
 # --- Benchmark Bootgly (baseline) ---
-echo -e "${CYAN}▸ Starting ${BASELINE_NAME}...${NC}"
-kill_port
-# Re-source baseline driver to restore its functions
-source "$BASELINE_PATH"
-driver_start
-echo -e "${GREEN}  ${BASELINE_NAME} ready (port $PORT).${NC}"
-warmup
+compute_rounds "$BASELINE_WORKERS" "$BASELINE_WRK_THREADS"
 
-_prev_group=""
-for i in "${!SCENARIOS[@]}"; do
-   IFS='|' read -r name lua _grp <<< "${SCENARIOS[$i]}"
-   if [[ -n "$_grp" && "$_grp" != "$_prev_group" ]]; then
-      echo -e "${WHITE}  ${_grp}${NC}"
-      _prev_group="$_grp"
+if [[ "$ROUND_COUNT" -gt 1 ]]; then
+   _rounds_detail=""
+   for _r in $(seq 0 $((ROUND_COUNT - 1))); do
+      [[ -n "$_rounds_detail" ]] && _rounds_detail+=", "
+      _rounds_detail+="${ROUND_WORKERS[$_r]}w/${ROUND_WRK_THREADS[$_r]}t"
+   done
+   echo -e "${CYAN}▸ ${BASELINE_NAME}: ${ROUND_COUNT} rounds (${_rounds_detail})${NC}"
+fi
+
+for _r in $(seq 0 $((ROUND_COUNT - 1))); do
+   DRIVER_WORKERS="${ROUND_WORKERS[$_r]}"
+   _cur_wrk_threads="${ROUND_WRK_THREADS[$_r]}"
+
+   if [[ "$ROUND_COUNT" -gt 1 ]]; then
+      echo -e "${CYAN}▸ Round $((_r+1))/${ROUND_COUNT} (${DRIVER_WORKERS} workers, ${_cur_wrk_threads} wrk threads)${NC}"
    fi
-   echo -ne "${GRAY}  [$((i+1))/${SCENARIO_COUNT}] ${name}... ${NC}"
-   result=$(run_wrk "$lua")
-   IFS='|' read -r rps lat <<< "$result"
-   BASELINE_RPS+=("$rps")
-   BASELINE_LAT+=("$lat")
-   echo -e "${GREEN}$(format_number "$rps") req/s${NC}  ${DIM}(${lat})${NC}"
-done
 
-driver_stop
-echo ""
-
-# --- Benchmark each competitor ---
-for c in "${!COMP_PATHS[@]}"; do
-   echo -e "${CYAN}▸ Starting ${COMP_NAMES[$c]}...${NC}"
+   echo -e "${CYAN}▸ Starting ${BASELINE_NAME}...${NC}"
    kill_port
-
-   DRIVER_NAME="" DRIVER_VERSION="" DRIVER_WORKERS=""
-   unset -f driver_start driver_stop 2>/dev/null || true
-   # shellcheck disable=SC1090
-   source "${COMP_PATHS[$c]}"
+   # Re-source baseline driver to restore its functions
+   source "$BASELINE_PATH"
+   DRIVER_WORKERS="${ROUND_WORKERS[$_r]}"
    driver_start
-   echo -e "${GREEN}  ${COMP_NAMES[$c]} ready (port $PORT).${NC}"
+   echo -e "${GREEN}  ${BASELINE_NAME} ready (port $PORT).${NC}"
    warmup
 
    _prev_group=""
@@ -625,24 +711,127 @@ for c in "${!COMP_PATHS[@]}"; do
          echo -e "${WHITE}  ${_grp}${NC}"
          _prev_group="$_grp"
       fi
-
-      if ! driver_allowed "${COMP_NAMES[$c]}" "${SCENARIO_COMPETITORS[$i]}"; then
-         echo -e "${GRAY}  [$((i+1))/${SCENARIO_COUNT}] ${name}... ${YELLOW}Skipped${NC}"
-         ALL_COMP_RPS+=("0")
-         ALL_COMP_LAT+=("N/A")
-         continue
-      fi
-
       echo -ne "${GRAY}  [$((i+1))/${SCENARIO_COUNT}] ${name}... ${NC}"
-      result=$(run_wrk "$lua")
+      result=$(WRK_THREADS="$_cur_wrk_threads" run_wrk "$lua")
       IFS='|' read -r rps lat <<< "$result"
-      ALL_COMP_RPS+=("$rps")
-      ALL_COMP_LAT+=("$lat")
+      _flat=$((_r * SCENARIO_COUNT + i))
+      _ROUND_RPS[$_flat]="$rps"
+      _ROUND_LAT[$_flat]="$lat"
       echo -e "${GREEN}$(format_number "$rps") req/s${NC}  ${DIM}(${lat})${NC}"
    done
 
    driver_stop
    echo ""
+done
+
+# Pick best RPS per scenario across rounds (baseline)
+for i in "${!SCENARIOS[@]}"; do
+   _best_rps=0
+   _best_lat="N/A"
+   _best_w="${ROUND_WORKERS[0]}"
+   _best_t="${ROUND_WRK_THREADS[0]}"
+   for _r in $(seq 0 $((ROUND_COUNT - 1))); do
+      _flat=$((_r * SCENARIO_COUNT + i))
+      _rps="${_ROUND_RPS[$_flat]}"
+      if [[ "$_rps" -gt "$_best_rps" ]]; then
+         _best_rps="$_rps"
+         _best_lat="${_ROUND_LAT[$_flat]}"
+         _best_w="${ROUND_WORKERS[$_r]}"
+         _best_t="${ROUND_WRK_THREADS[$_r]}"
+      fi
+   done
+   BASELINE_RPS+=("$_best_rps")
+   BASELINE_LAT+=("$_best_lat")
+   BASELINE_BEST_WORKERS+=("$_best_w")
+   BASELINE_BEST_THREADS+=("$_best_t")
+done
+
+# --- Benchmark each competitor ---
+for c in "${!COMP_PATHS[@]}"; do
+   _ROUND_RPS=()
+   _ROUND_LAT=()
+
+   compute_rounds "${COMP_WORKERS[$c]}" "${COMP_WRK_THREADS[$c]}"
+
+   if [[ "$ROUND_COUNT" -gt 1 ]]; then
+      _rounds_detail=""
+      for _r in $(seq 0 $((ROUND_COUNT - 1))); do
+         [[ -n "$_rounds_detail" ]] && _rounds_detail+=", "
+         _rounds_detail+="${ROUND_WORKERS[$_r]}w/${ROUND_WRK_THREADS[$_r]}t"
+      done
+      echo -e "${CYAN}▸ ${COMP_NAMES[$c]}: ${ROUND_COUNT} rounds (${_rounds_detail})${NC}"
+   fi
+
+   for _r in $(seq 0 $((ROUND_COUNT - 1))); do
+      DRIVER_WORKERS="${ROUND_WORKERS[$_r]}"
+      _cur_wrk_threads="${ROUND_WRK_THREADS[$_r]}"
+
+      if [[ "$ROUND_COUNT" -gt 1 ]]; then
+         echo -e "${CYAN}▸ Round $((_r+1))/${ROUND_COUNT} (${DRIVER_WORKERS} workers, ${_cur_wrk_threads} wrk threads)${NC}"
+      fi
+
+      echo -e "${CYAN}▸ Starting ${COMP_NAMES[$c]}...${NC}"
+      kill_port
+
+      DRIVER_NAME="" DRIVER_VERSION="" DRIVER_WORKERS=""
+      unset -f driver_start driver_stop 2>/dev/null || true
+      # shellcheck disable=SC1090
+      source "${COMP_PATHS[$c]}"
+      DRIVER_WORKERS="${ROUND_WORKERS[$_r]}"
+      driver_start
+      echo -e "${GREEN}  ${COMP_NAMES[$c]} ready (port $PORT).${NC}"
+      warmup
+
+      _prev_group=""
+      for i in "${!SCENARIOS[@]}"; do
+         IFS='|' read -r name lua _grp <<< "${SCENARIOS[$i]}"
+         if [[ -n "$_grp" && "$_grp" != "$_prev_group" ]]; then
+            echo -e "${WHITE}  ${_grp}${NC}"
+            _prev_group="$_grp"
+         fi
+
+         if ! driver_allowed "${COMP_NAMES[$c]}" "${SCENARIO_COMPETITORS[$i]}"; then
+            echo -e "${GRAY}  [$((i+1))/${SCENARIO_COUNT}] ${name}... ${YELLOW}Skipped${NC}"
+            _flat=$((_r * SCENARIO_COUNT + i))
+            _ROUND_RPS[$_flat]="0"
+            _ROUND_LAT[$_flat]="N/A"
+            continue
+         fi
+
+         echo -ne "${GRAY}  [$((i+1))/${SCENARIO_COUNT}] ${name}... ${NC}"
+         result=$(WRK_THREADS="$_cur_wrk_threads" run_wrk "$lua")
+         IFS='|' read -r rps lat <<< "$result"
+         _flat=$((_r * SCENARIO_COUNT + i))
+         _ROUND_RPS[$_flat]="$rps"
+         _ROUND_LAT[$_flat]="$lat"
+         echo -e "${GREEN}$(format_number "$rps") req/s${NC}  ${DIM}(${lat})${NC}"
+      done
+
+      driver_stop
+      echo ""
+   done
+
+   # Pick best RPS per scenario across rounds (competitor)
+   for i in "${!SCENARIOS[@]}"; do
+      _best_rps=0
+      _best_lat="N/A"
+      _best_w="${ROUND_WORKERS[0]}"
+      _best_t="${ROUND_WRK_THREADS[0]}"
+      for _r in $(seq 0 $((ROUND_COUNT - 1))); do
+         _flat=$((_r * SCENARIO_COUNT + i))
+         _rps="${_ROUND_RPS[$_flat]}"
+         if [[ "$_rps" -gt "$_best_rps" ]]; then
+            _best_rps="$_rps"
+            _best_lat="${_ROUND_LAT[$_flat]}"
+            _best_w="${ROUND_WORKERS[$_r]}"
+            _best_t="${ROUND_WRK_THREADS[$_r]}"
+         fi
+      done
+      ALL_COMP_RPS+=("$_best_rps")
+      ALL_COMP_LAT+=("$_best_lat")
+      ALL_COMP_BEST_WORKERS+=("$_best_w")
+      ALL_COMP_BEST_THREADS+=("$_best_t")
+   done
 done
 
 # =============================================================================
@@ -659,7 +848,7 @@ if [[ "$COMP_COUNT" -eq 0 ]]; then
    for i in "${!SCENARIOS[@]}"; do
       IFS='|' read -r name _ <<< "${SCENARIOS[$i]}"
       L=${#name}; [[ $L -gt $W_SCEN ]] && W_SCEN=$L
-      val=$(format_number "${BASELINE_RPS[$i]}")
+      val=$(format_rps "${BASELINE_RPS[$i]}")
       L=${#val}; [[ $L -gt $W_RPS ]] && W_RPS=$L
       L=${#BASELINE_LAT[$i]}; [[ $L -gt $W_LAT ]] && W_LAT=$L
    done
@@ -684,7 +873,7 @@ if [[ "$COMP_COUNT" -eq 0 ]]; then
       fi
       printf "  │ %-${W_SCEN}s │ %${W_RPS}s │ %${W_LAT}s │\n" \
          "$name" \
-         "$(format_number "${BASELINE_RPS[$i]}")" \
+         "$(format_rps "${BASELINE_RPS[$i]}")" \
          "${BASELINE_LAT[$i]}"
    done
    echo -e "  ${DIM}${SEP}${NC}"
@@ -697,10 +886,18 @@ else
       echo -e "  ${BOLD}${CYAN}${BASELINE_NAME} vs ${COMP_NAMES[$c]}${NC}"
       echo ""
 
+      # Compute header labels (with w/t config when vary is active)
+      _base_header="$BASELINE_NAME"
+      _comp_header="${COMP_NAMES[$c]}"
+      if [[ "$VARY_WORKERS_STEP" -gt 0 || "$VARY_THREADS_STEP" -gt 0 ]]; then
+         _base_header+=" (${BASELINE_WORKERS}w/${BASELINE_WRK_THREADS}t)"
+         _comp_header+=" (${COMP_WORKERS[$c]}w/${COMP_WRK_THREADS[$c]}t)"
+      fi
+
       # Compute column widths
       W_SCEN=8
-      W_BASE=${#BASELINE_NAME}; [[ $W_BASE -lt 13 ]] && W_BASE=13
-      W_COMP=${#COMP_NAMES[$c]}; [[ $W_COMP -lt 13 ]] && W_COMP=13
+      W_BASE=${#_base_header}; [[ $W_BASE -lt 13 ]] && W_BASE=13
+      W_COMP=${#_comp_header}; [[ $W_COMP -lt 13 ]] && W_COMP=13
       W_DIFF=4
       W_BLAT=10
       W_CLAT=10
@@ -711,10 +908,10 @@ else
 
          L=${#name}; [[ $L -gt $W_SCEN ]] && W_SCEN=$L
 
-         val=$(format_number "${BASELINE_RPS[$i]}")
+         val=$(format_rps "${BASELINE_RPS[$i]}")
          L=${#val}; [[ $L -gt $W_BASE ]] && W_BASE=$L
 
-         val=$(format_number "${ALL_COMP_RPS[$flat_idx]}")
+         val=$(format_rps "${ALL_COMP_RPS[$flat_idx]}")
          L=${#val}; [[ $L -gt $W_COMP ]] && W_COMP=$L
 
          diff=$(calc_diff "${BASELINE_RPS[$i]}" "${ALL_COMP_RPS[$flat_idx]}")
@@ -731,7 +928,7 @@ else
 
       echo -e "  ${DIM}${SEP}${NC}"
       printf "  ${BOLD}${WHITE}│ %-${W_SCEN}s │ %${W_BASE}s │ %${W_COMP}s │ %${W_DIFF}s │ %${W_BLAT}s │ %${W_CLAT}s │${NC}\n" \
-         "Scenario" "${BASELINE_NAME}" "${COMP_NAMES[$c]}" "Diff" "B. Latency" "C. Latency"
+         "Scenario" "$_base_header" "$_comp_header" "Diff" "B. Latency" "C. Latency"
       echo -e "  ${DIM}${SEP}${NC}"
 
       _prev_group=""
@@ -752,7 +949,7 @@ else
          if ! driver_allowed "${COMP_NAMES[$c]}" "${SCENARIO_COMPETITORS[$i]}"; then
             printf "  │ %-${W_SCEN}s │ %${W_BASE}s │ %${W_COMP}s │ %${W_DIFF}s │ %${W_BLAT}s │ %${W_CLAT}s │\n" \
                "$name" \
-               "$(format_number "${BASELINE_RPS[$i]}")" \
+               "$(format_rps "${BASELINE_RPS[$i]}")" \
                "—" "—" "${BASELINE_LAT[$i]}" "—"
             continue
          fi
@@ -769,8 +966,8 @@ else
 
          printf "  │ %-${W_SCEN}s │ %${W_BASE}s │ %${W_COMP}s │ %b │ %${W_BLAT}s │ %${W_CLAT}s │\n" \
             "$name" \
-            "$(format_number "${BASELINE_RPS[$i]}")" \
-            "$(format_number "$comp_rps")" \
+            "$(format_rps "${BASELINE_RPS[$i]}")" \
+            "$(format_rps "$comp_rps")" \
             "$colored_diff" \
             "${BASELINE_LAT[$i]}" \
             "$comp_lat"
@@ -812,6 +1009,15 @@ RESULTS_FILE="$RESULTS_DIR/${TIMESTAMP}_bench.marks"
    echo "  Warmup:    -t${WARMUP_THREADS} -c${WARMUP_CONNECTIONS} -d${WARMUP_DURATION}"
    echo "  Port:      ${PORT}"
    echo "  Scenarios: ${SCENARIO_COUNT}"
+   if [[ "$VARY_WORKERS_STEP" -gt 0 || "$VARY_THREADS_STEP" -gt 0 ]]; then
+      _vary_desc=""
+      [[ "$VARY_WORKERS_STEP" -gt 0 ]] && _vary_desc+="workers:${VARY_WORKERS_STEP}"
+      if [[ "$VARY_THREADS_STEP" -gt 0 ]]; then
+         [[ -n "$_vary_desc" ]] && _vary_desc+=","
+         _vary_desc+="threads:${VARY_THREADS_STEP}"
+      fi
+      echo "  Vary:      ${_vary_desc}"
+   fi
    echo ""
    echo "$(printf '=%.0s' {1..80})"
    echo ""
@@ -821,7 +1027,7 @@ RESULTS_FILE="$RESULTS_DIR/${TIMESTAMP}_bench.marks"
       for i in "${!SCENARIOS[@]}"; do
          IFS='|' read -r name _ <<< "${SCENARIOS[$i]}"
          L=${#name}; [[ $L -gt $W_SCEN ]] && W_SCEN=$L
-         val=$(format_number "${BASELINE_RPS[$i]}")
+         val=$(format_rps "${BASELINE_RPS[$i]}")
          L=${#val}; [[ $L -gt $W_RPS ]] && W_RPS=$L
          L=${#BASELINE_LAT[$i]}; [[ $L -gt $W_LAT ]] && W_LAT=$L
       done
@@ -839,7 +1045,7 @@ RESULTS_FILE="$RESULTS_DIR/${TIMESTAMP}_bench.marks"
          fi
          printf "%-${W_SCEN}s  %${W_RPS}s  %${W_LAT}s\n" \
             "$name" \
-            "$(format_number "${BASELINE_RPS[$i]}")" \
+            "$(format_rps "${BASELINE_RPS[$i]}")" \
             "${BASELINE_LAT[$i]}"
       done
    else
@@ -849,9 +1055,16 @@ RESULTS_FILE="$RESULTS_DIR/${TIMESTAMP}_bench.marks"
          echo "${BASELINE_NAME} vs ${COMP_NAMES[$c]}"
          echo ""
 
+         _base_header="$BASELINE_NAME"
+         _comp_header="${COMP_NAMES[$c]}"
+         if [[ "$VARY_WORKERS_STEP" -gt 0 || "$VARY_THREADS_STEP" -gt 0 ]]; then
+            _base_header+=" (${BASELINE_WORKERS}w/${BASELINE_WRK_THREADS}t)"
+            _comp_header+=" (${COMP_WORKERS[$c]}w/${COMP_WRK_THREADS[$c]}t)"
+         fi
+
          W_SCEN=8
-         W_BASE=${#BASELINE_NAME}; [[ $W_BASE -lt 13 ]] && W_BASE=13
-         W_COMP=${#COMP_NAMES[$c]}; [[ $W_COMP -lt 13 ]] && W_COMP=13
+         W_BASE=${#_base_header}; [[ $W_BASE -lt 13 ]] && W_BASE=13
+         W_COMP=${#_comp_header}; [[ $W_COMP -lt 13 ]] && W_COMP=13
          W_DIFF=4; W_BLAT=10; W_CLAT=10
 
          for i in "${!SCENARIOS[@]}"; do
@@ -859,9 +1072,9 @@ RESULTS_FILE="$RESULTS_DIR/${TIMESTAMP}_bench.marks"
             flat_idx=$((c * SCENARIO_COUNT + i))
 
             L=${#name}; [[ $L -gt $W_SCEN ]] && W_SCEN=$L
-            val=$(format_number "${BASELINE_RPS[$i]}")
+            val=$(format_rps "${BASELINE_RPS[$i]}")
             L=${#val}; [[ $L -gt $W_BASE ]] && W_BASE=$L
-            val=$(format_number "${ALL_COMP_RPS[$flat_idx]}")
+            val=$(format_rps "${ALL_COMP_RPS[$flat_idx]}")
             L=${#val}; [[ $L -gt $W_COMP ]] && W_COMP=$L
             diff=$(calc_diff "${BASELINE_RPS[$i]}" "${ALL_COMP_RPS[$flat_idx]}")
             L=${#diff}; [[ $L -gt $W_DIFF ]] && W_DIFF=$L
@@ -871,7 +1084,7 @@ RESULTS_FILE="$RESULTS_DIR/${TIMESTAMP}_bench.marks"
          done
 
          printf "%-${W_SCEN}s  %${W_BASE}s  %${W_COMP}s  %${W_DIFF}s  %${W_BLAT}s  %${W_CLAT}s\n" \
-            "Scenario" "${BASELINE_NAME}" "${COMP_NAMES[$c]}" "Diff" "B. Latency" "C. Latency"
+            "Scenario" "$_base_header" "$_comp_header" "B. Latency" "C. Latency"
          printf '%.0s-' $(seq 1 $((W_SCEN + W_BASE + W_COMP + W_DIFF + W_BLAT + W_CLAT + 10))); echo ""
 
          _prev_group=""
@@ -889,7 +1102,7 @@ RESULTS_FILE="$RESULTS_DIR/${TIMESTAMP}_bench.marks"
             if ! driver_allowed "${COMP_NAMES[$c]}" "${SCENARIO_COMPETITORS[$i]}"; then
                printf "%-${W_SCEN}s  %${W_BASE}s  %${W_COMP}s  %${W_DIFF}s  %${W_BLAT}s  %${W_CLAT}s\n" \
                   "$name" \
-                  "$(format_number "${BASELINE_RPS[$i]}")" \
+                  "$(format_rps "${BASELINE_RPS[$i]}")" \
                   "—" "—" "${BASELINE_LAT[$i]}" "—"
                continue
             fi
@@ -898,8 +1111,8 @@ RESULTS_FILE="$RESULTS_DIR/${TIMESTAMP}_bench.marks"
 
             printf "%-${W_SCEN}s  %${W_BASE}s  %${W_COMP}s  %${W_DIFF}s  %${W_BLAT}s  %${W_CLAT}s\n" \
                "$name" \
-               "$(format_number "${BASELINE_RPS[$i]}")" \
-               "$(format_number "$comp_rps")" \
+               "$(format_rps "${BASELINE_RPS[$i]}")" \
+               "$(format_rps "$comp_rps")" \
                "$diff" \
                "${BASELINE_LAT[$i]}" \
                "$comp_lat"
