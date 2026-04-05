@@ -119,6 +119,11 @@ return new Suite(
          '4.08-request_compliance-te_cl_conflict',
          '4.09-request_compliance-unknown_te_501',
          '4.10-request_compliance-connection_close',
+         '4.11-request_compliance-chunked_single',
+         '4.12-request_compliance-chunked_multi',
+         '4.13-request_compliance-expect_100_continue',
+         '4.14-request_compliance-expect_417',
+         '4.15-request_compliance-uri_too_long',
       ],
       'Response/' => [
          '1.1-respond_with_a_simple_hello_world',

@@ -760,8 +760,10 @@ class Request
          return 0;
       }
       // @ Connection management (RFC 9112 §9.3)
-      // Close connection only when explicitly requested via Connection: close header
-      $this->closeConnection = stripos($header_raw, 'Connection: close') !== false;
+      // HTTP/1.1: close only when explicitly requested via Connection: close
+      // HTTP/1.0: close by default unless Connection: keep-alive
+      $this->closeConnection = stripos($header_raw, 'Connection: close') !== false
+         || ($protocol === 'HTTP/1.0' && stripos($header_raw, 'Connection: keep-alive') === false);
 
       // # Request Header
       // raw

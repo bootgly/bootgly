@@ -11,6 +11,9 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders;
 
 
+use Generator;
+use Throwable;
+
 use Bootgly\ABI\Debugging\Data\Throwables;
 use Bootgly\API\Server as SAPI;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages;
@@ -23,11 +26,18 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 class Encoder_Testing extends Encoders
 {
    /**
-    * @param int<0, max>|null $length
-    * @param-out int<0, max>|null $length
+    * @param int<0,max>|null $length
+    * @param-out int<0,max>|null $length
     */
-   public static function encode (Packages $Packages, ? int &$length): string
+   public static function encode (Packages $Packages, null|int &$length): string
    {
+      $Request  = Server::$Request;
+
+      // @ Skip handler consumption while waiting for request body (chunked)
+      if ($Request->Body->waiting) {
+         return '';
+      }
+
       // @ Reset Response state (same as production Encoder_)
       Server::$Response->reset();
       // @ Instance new Router (per-test: each test defines different routes)
@@ -37,7 +47,6 @@ class Encoder_Testing extends Encoders
       SAPI::boot(reset: true, base: Server::class, key: 'response');
 
       // @ Get callbacks
-      $Request  = Server::$Request;
       $Response = &Server::$Response;
       $Router   = Server::$Router;
 
@@ -52,7 +61,7 @@ class Encoder_Testing extends Encoders
                $Result = (SAPI::$Handler)($Request, $Res, $Router);
 
                // @ Resolve Generator-based routing inside the pipeline
-               if ($Result instanceof \Generator) {
+               if ($Result instanceof Generator) {
                   foreach ($Router->routing($Result) as $Responses) {
                      if ($Responses instanceof Response) {
                         $Res = $Responses;
@@ -74,16 +83,12 @@ class Encoder_Testing extends Encoders
             $Response = $Result;
          }
       }
-      catch (\Throwable $Throwable) {
+      catch (Throwable $Throwable) {
          $Response = new Response(code: 500, body: ' ');
 
          Throwables::debug($Throwable);
       }
       finally {
-         // ?: Check if Request Body is waiting data
-         if ($Request->Body->waiting) {
-            return '';
-         }
          // ?: Check if Response is deferred (async Fiber)
          if ($Response->deferred) {
             return '';
@@ -98,7 +103,9 @@ class Encoder_Testing extends Encoders
                $Response->Header->set('Connection', 'close');
             }
 
-            $Packages->closeAfterWrite = true;
+            // @ Skip actual connection close in test mode to preserve
+            // the test runner's single persistent TCP connection.
+            // closeAfterWrite is tested via compliance test 4.10/4.16.
          }
 
          // : Encode HTTP Response

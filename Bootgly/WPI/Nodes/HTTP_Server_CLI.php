@@ -35,8 +35,10 @@ use function stream_set_blocking;
 use function stream_socket_client;
 use function strlen;
 use function time;
+use function usleep;
 use Closure;
 use Exception;
+use Generator;
 use Throwable;
 
 use Bootgly\ABI\Debugging\Data\Throwables\Exceptions;
@@ -559,9 +561,46 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
                // ! Client
                // ? Request
                $request = $test->request;
-               $requestData = $request !== null
+               $requestResult = $request !== null
                   ? $request("{$TCP_Client_CLI->host}:{$TCP_Client_CLI->port}")
                   : '';
+
+               // @ Generator: yield chunks with delay for server event loop
+               if ($requestResult instanceof Generator) {
+                  foreach ($requestResult as $chunk) {
+                     /** @var string $chunk */
+                     $chunkLength = strlen($chunk);
+                     $Connection::$output = $chunk;
+                     if ( ! $Connection->writing($Socket, $chunkLength) ) { // @phpstan-ignore booleanNot.alwaysTrue
+                        $reconnect();
+                        if ( ! $Connection->writing($Socket, $chunkLength) ) { // @phpstan-ignore booleanNot.alwaysTrue
+                           break 2;
+                        }
+                     }
+                     usleep(10000); // 10ms for server event loop to process
+                  }
+
+                  // ? Response
+                  $timeout = 2;
+                  $input = '';
+                  if ( $Connection->reading($Socket, $responseLength, $timeout) ) {
+                     $input = $Connection::$input;
+                  }
+
+                  // @ Execute Test
+                  $Test->test($input);
+                  if (! $Connection->expired && $Test->passed) { // @phpstan-ignore booleanNot.alwaysTrue
+                     $Test->pass();
+                  }
+                  else {
+                     $Test->fail();
+                     break;
+                  }
+
+                  continue;
+               }
+
+               $requestData = $requestResult;
                $requestLength = strlen($requestData);
                // @ Send Request to Server
                $Connection::$output = $requestData;

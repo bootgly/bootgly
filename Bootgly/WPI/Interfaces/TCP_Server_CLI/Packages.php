@@ -235,7 +235,8 @@ abstract class Packages implements WPI\Connections\Packages
          }
       }
       // @ Consume test handler on reject (decoder returned 0 but encoder never ran)
-      else if (SAPI::$Suite !== null) { // @phpstan-ignore notIdentical.alwaysTrue
+      // Only consume when socket was closed by reject, not when waiting for more data (chunked)
+      else if (SAPI::$Suite !== null && !is_resource($Socket)) { // @phpstan-ignore notIdentical.alwaysTrue
          $base = array_key_first(SAPI::$Tests);
          if ($base !== null) {
             SAPI::boot(reset: true, base: $base, key: 'response');

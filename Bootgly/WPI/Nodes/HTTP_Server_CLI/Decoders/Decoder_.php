@@ -52,7 +52,8 @@ class Decoder_ extends Decoders
       $length = $Request->decode($Package, $buffer, $size);
 
       // @ Write to local cache
-      if ($length > 0 && $length <= 2048) {
+      // Skip caching when Body is waiting for more data (chunked/streaming)
+      if ($length > 0 && $length <= 2048 && ! $Request->Body->waiting) {
          $inputs[$buffer] = clone $Request;
 
          if (count($inputs) > 512) {
