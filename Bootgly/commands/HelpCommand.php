@@ -139,7 +139,7 @@ class HelpCommand extends Command
       }
       $output = trim($output);
       $Fieldset2 = new Fieldset($Output);
-      $Fieldset2->title = '@#Cyan: Commands options@;';
+      $Fieldset2->title = '@#green: Commands options@;';
       $Fieldset2->content = $output;
       $Fieldset2->width = $Fieldset1->width;
       $Fieldset2->render();
@@ -155,15 +155,25 @@ class HelpCommand extends Command
       if ($verbosity >= 1) {
          $usage .= <<<OUTPUT
             @..;Example:
-         @#Black:{$script} project run
+         @#Black:{$script} project start
          OUTPUT;
       }
 
       $Fieldset4 = new Fieldset($Output);
-      $Fieldset4->title = '@#Cyan:Commands usage@;';
+      $Fieldset4->title = '@#green:Commands usage@;';
       $Fieldset4->content = $usage;
       $Fieldset4->width = $Fieldset1->width;
       $Fieldset4->render();
+
+      // # Commands examples
+      $exampleLines = '@#Black:' . $script . ' project list@;' . PHP_EOL;
+      $exampleLines .= '@#Black:' . $script . ' project start HTTP_Server_CLI@;' . PHP_EOL;
+      $exampleLines .= '@#Black:' . $script . ' project stop HTTP_Server_CLI@;';
+      $Fieldset5 = new Fieldset($Output);
+      $Fieldset5->title = '@#green: Commands examples @;';
+      $Fieldset5->content = $exampleLines;
+      $Fieldset5->width = $Fieldset1->width;
+      $Fieldset5->render();
 
       return true;
    }

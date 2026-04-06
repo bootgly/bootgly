@@ -226,7 +226,7 @@ Your sponsorship will keep this project always **up to date** with **new feature
    3) Run the Bootgly HTTP Server CLI in the terminal:
 
    ```bash
-   bootgly project run HTTP_Server_CLI
+   bootgly project start HTTP_Server_CLI
    ```
 </details>
 

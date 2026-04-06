@@ -46,7 +46,7 @@ use Bootgly\CLI\UI\Components\Fieldset;
 /**
  * CLI command for managing Bootgly projects.
  *
- * Provides subcommands to list, set, run, and inspect projects
+ * Provides subcommands to list, set, start, and inspect projects
  * registered in the projects/ directory (consumer or framework).
  */
 class ProjectCommand extends Command
@@ -66,10 +66,10 @@ class ProjectCommand extends Command
          'description' => 'List all registered projects',
          'arguments'   => []
       ],
-      'run' => [
-         'description' => 'Run a project by name',
+      'start' => [
+         'description' => 'Start a project by name',
          'arguments'   => [
-            '<name>' => 'Project name to run'
+            '<name>' => 'Project name to start'
          ]
       ],
       'stop' => [
@@ -134,7 +134,7 @@ class ProjectCommand extends Command
 
       return match ($arguments[0] ?? null) {
          'list'    => $this->list(),
-         'run'     => $this->start(
+         'start'   => $this->start(
             array_slice($arguments, 1),
             $options
          ),
@@ -241,7 +241,7 @@ class ProjectCommand extends Command
 
       // ? Require project name
       if ($projectName === null || $projectName === '') {
-         return $this->help(['run']);
+         return $this->help(['start']);
       }
 
       // @ Resolve project directory
@@ -845,7 +845,7 @@ class ProjectCommand extends Command
 
          // # Usage
          $Fieldset = new Fieldset($Output);
-         $Fieldset->title = '@#Cyan: Project usage @;';
+         $Fieldset->title = '@#green: Project usage @;';
          $Fieldset->content = 'bootgly project @#Black: <argument> @;@.;';
          $Fieldset->content .= 'bootgly project @#Black: <argument> <name> @;@.;';
          $Fieldset->content .= 'bootgly project @#Black: <name> <argument> @;';
@@ -853,17 +853,17 @@ class ProjectCommand extends Command
 
          // # Examples
          $exampleLines = '@#Black:bootgly project list@;' . PHP_EOL;
-         $exampleLines .= '@#Black:bootgly project run HTTP_Server_CLI@;' . PHP_EOL;
+         $exampleLines .= '@#Black:bootgly project start HTTP_Server_CLI@;' . PHP_EOL;
          $exampleLines .= '@#Black:bootgly project stop HTTP_Server_CLI@;' . PHP_EOL;
          $exampleLines .= '@#Black:bootgly project show HTTP_Server_CLI@;' . PHP_EOL;
          $exampleLines .= '@#Black:bootgly project restart HTTP_Server_CLI@;' . PHP_EOL;
          $exampleLines .= '@#Black:bootgly project info HTTP_Server_CLI@;' . PHP_EOL;
          $exampleLines .= PHP_EOL;
-         $exampleLines .= '@#Black:bootgly project HTTP_Server_CLI run@;' . PHP_EOL;
+         $exampleLines .= '@#Black:bootgly project HTTP_Server_CLI start@;' . PHP_EOL;
          $exampleLines .= '@#Black:bootgly project HTTP_Server_CLI stop@;' . PHP_EOL;
          $exampleLines .= '@#Black:bootgly project HTTP_Server_CLI show@;';
          $Fieldset = new Fieldset($Output);
-         $Fieldset->title = '@#Cyan: Project examples @;';
+         $Fieldset->title = '@#green: Project examples @;';
          $Fieldset->content = $exampleLines;
          $Fieldset->render();
       }
