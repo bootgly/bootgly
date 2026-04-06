@@ -288,7 +288,7 @@ Bootgly uses [Semantic Versioning 2.0][SEMANTIC_VERSIONING].
 
 <!-- Links -->
 [I2P_ARQUITECTURE]: https://docs.bootgly.com/manual/Bootgly/basic/architecture/overview
-[ROUTING]: https://docs.bootgly.com/manual/WPI/HTTP/HTTP_Server_Router/overview
+[ROUTING]: https://docs.bootgly.com/manual/WPI/HTTP/HTTP_Server_CLI/Router/overview
 
 [CLI_INTERFACE]: https://github.com/bootgly/bootgly/tree/main/Bootgly/CLI/
 [CLI_TERMINAL_COMPONENTS]: https://github.com/bootgly/bootgly/tree/main/Bootgly/CLI/Terminal/components
