@@ -234,7 +234,7 @@ class Commands
             : null
       );
 
-      $Command->script ??= $this->script;
+      $Command->script = $this->script;
 
       // @ Prerun the command
       // Parse verbosity options
