@@ -11,6 +11,7 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI;
 
 
+use function count;
 use function call_user_func_array;
 use function explode;
 use function extract;
@@ -25,6 +26,7 @@ use function preg_quote;
 use function rtrim;
 use function str_replace;
 use function strpos;
+use function substr_count;
 use function trim;
 use Closure;
 use Exception;
@@ -61,7 +63,7 @@ class Router
    // # Cache
    /** @var array<string,array<string,array{handler:callable,middlewares:array<Middleware>,pipeline:Closure|null}>> */
    private array $staticCache = [];
-   /** @var array<string,array<array{pattern:string,methods:array<string>,handler:callable,paramNames:array<string>,paramPositions:array<int>,middlewares:array<Middleware>,duplicateParams:array<string,bool>,pipeline:Closure|null}>> */
+   /** @var array<string,array<int,array<array{type:string,pattern:string,methods:array<string>,handler:callable,paramNames:array<string>,paramPositions:array<int>,fixedSegments:array<int,string>,paramIndices:array<int>,middlewares:array<Middleware>,duplicateParams:array<string,bool>,pipeline:Closure|null}>>> */
    private array $dynamicCache = [];
    /** @var null|array{handler:callable,middlewares:array<Middleware>,pipeline:Closure|null} */
    private array|null $catchAllCache = null;
@@ -411,7 +413,6 @@ class Router
          }
          else if ($Response !== false) {
             #$this->Route->nested = false;
-            $this->Route = new Route;
             yield $Response;
             // @ Continue loop in registration mode to cache remaining routes
             if ($this->cacheWarmed === false && $nested === false) {
@@ -481,6 +482,9 @@ class Router
             $this->groupPrefix = $savedPrefix;
          }
       }
+
+      // @ Clear group prefixes — all nested routes are now in cache
+      $this->groupPrefixes = [];
    }
 
    /**
@@ -621,12 +625,53 @@ class Router
             }
          }
 
-         $this->dynamicCache[$parts[0][0] === ':' ? '' : $parts[0]][] = [
+         // @ Classify route type: simple (no regex needed) or complex
+         $isSimple = ($duplicateParams === []);
+         if ($isSimple) {
+            foreach ($regexParts as $rp) {
+               if ($rp !== '([^\\/]+)') {
+                  $isSimple = false;
+                  break;
+               }
+            }
+         }
+
+         // @ Build segment-based matching data for simple routes
+         $firstSegKey = $parts[0][0] === ':' ? '' : $parts[0];
+         /** @var array<int,string> $fixedSegments */
+         $fixedSegments = [];
+         /** @var array<int> $paramIndices */
+         $paramIndices = [];
+         if ($isSimple) {
+            foreach ($parts as $index => $part) {
+               $segPos = $index + 1;
+               if (isset($part[0]) && $part[0] === ':') {
+                  $paramIndices[] = $segPos;
+               } else if ($index > 0 || $firstSegKey === '') {
+                  $fixedSegments[$segPos] = $part;
+               }
+            }
+         }
+
+         // @ Segment-count key for indexing (0 = variable-length catch-all)
+         $hasCatchAll = false;
+         foreach ($regexParts as $rp) {
+            if ($rp === '(.+)') {
+               $hasCatchAll = true;
+               break;
+            }
+         }
+         $segCountKey = $hasCatchAll ? 0 : count($parts);
+
+         $this->dynamicCache[$firstSegKey][$segCountKey][] = [
+            'type' => $isSimple ? 'simple' : 'complex',
             'pattern' => $pattern,
             'methods' => $methodsList,
             'handler' => $boundHandler,
             'paramNames' => $paramNames,
             'paramPositions' => $paramPositions,
+            'fixedSegments' => $fixedSegments,
+            'paramIndices' => $paramIndices,
             'middlewares' => $mergedMiddlewares,
             'duplicateParams' => $duplicateParams,
             'pipeline' => $this->pipeline($boundHandler, $mergedMiddlewares),
@@ -741,72 +786,119 @@ class Router
          return $Result instanceof Response ? $Result : $ResponseObj;
       }
 
-      // 2. Dynamic route lookup — O(1) segment index + O(m) regex within bucket
+      // 2. Dynamic route lookup — segment-indexed + segment-count bucketed
       $slashPos = strpos($url, '/', 1);
       $firstSegment = $slashPos !== false ? substr($url, 1, $slashPos - 1) : substr($url, 1);
+      $segCount = substr_count($url, '/');
+      /** @var array<string>|null $segments */
+      $segments = null;
 
-      // @ Check segment-specific bucket, then wildcard bucket
       for ($bucketIdx = 0; $bucketIdx < 2; $bucketIdx++) {
-         $bucket = $bucketIdx === 0
+         $segBucket = $bucketIdx === 0
             ? ($this->dynamicCache[$firstSegment] ?? null)
             : ($this->dynamicCache[''] ?? null);
 
-         if ($bucket === null) {
+         if ($segBucket === null) {
             continue;
          }
 
-         foreach ($bucket as $entry) {
-         // @ Method check
-         if ($entry['methods'] !== [] && !in_array($method, $entry['methods'])) {
-            continue;
-         }
+         // @ Check exact segment-count bucket, then catch-all bucket (key 0)
+         for ($scIdx = 0; $scIdx < 2; $scIdx++) {
+            $bucket = $scIdx === 0
+               ? ($segBucket[$segCount] ?? null)
+               : ($segBucket[0] ?? null);
 
-         if (preg_match($entry['pattern'], $url, $matches)) {
-            // @ Set up Route params (reuse existing Route, reset Params)
-            $Route = $this->Route;
-            $Route->path = $url;
-
-            $duplicateParams = $entry['duplicateParams'];
-            foreach ($entry['paramNames'] as $i => $paramName) {
-               if (isset($duplicateParams[$paramName])) {
-                  // @ Duplicate param — accumulate as array
-                  $current = $Route->Params->$paramName;
-                  if ($current === null || !is_array($current)) {
-                     $Route->Params->$paramName = [$matches[$i + 1]];
-                  }
-                  else {
-                     $current[] = $matches[$i + 1];
-                     $Route->Params->$paramName = $current;
-                  }
-               }
-               else {
-                  $Route->Params->$paramName = $matches[$i + 1];
-               }
+            if ($bucket === null) {
+               continue;
             }
 
-            // @ Handler is already pre-bound to Route
-            $pipeline = $entry['pipeline'];
-            if ($pipeline !== null) {
-               $Result = $pipeline($Request, $ResponseObj);
+            foreach ($bucket as $entry) {
+               // @ Method check
+               if ($entry['methods'] !== [] && !in_array($method, $entry['methods'])) {
+                  continue;
+               }
+
+               if ($entry['type'] === 'simple') {
+                  // @ Segment-based matching (no regex)
+                  if ($entry['fixedSegments'] !== []) {
+                     if ($segments === null) {
+                        $segments = explode('/', $url);
+                     }
+                     $match = true;
+                     foreach ($entry['fixedSegments'] as $pos => $expected) {
+                        if ($segments[$pos] !== $expected) {
+                           $match = false;
+                           break;
+                        }
+                     }
+                     if (!$match) {
+                        continue;
+                     }
+                  }
+
+                  // @ Direct param extraction via batch set
+                  $Route = $this->Route;
+                  $Route->path = $url;
+                  if ($segments === null) {
+                     $segments = explode('/', $url);
+                  }
+                  /** @var array<string,string> $pv */
+                  $pv = [];
+                  foreach ($entry['paramIndices'] as $i => $segIdx) {
+                     $pv[$entry['paramNames'][$i]] = $segments[$segIdx];
+                  }
+                  $Route->Params->set($pv);
+               }
+               else {
+                  // @ Complex route: regex matching
+                  if (!preg_match($entry['pattern'], $url, $matches)) {
+                     continue;
+                  }
+
+                  $Route = $this->Route;
+                  $Route->path = $url;
+                  $duplicateParams = $entry['duplicateParams'];
+                  foreach ($entry['paramNames'] as $i => $paramName) {
+                     if (isset($duplicateParams[$paramName])) {
+                        $current = $Route->Params->$paramName;
+                        if ($current === null || !is_array($current)) {
+                           $Route->Params->$paramName = [$matches[$i + 1]];
+                        }
+                        else {
+                           $current[] = $matches[$i + 1];
+                           $Route->Params->$paramName = $current;
+                        }
+                     }
+                     else {
+                        $Route->Params->$paramName = $matches[$i + 1];
+                     }
+                  }
+               }
+
+               // @ Execute handler (shared between simple and complex)
+               $pipeline = $entry['pipeline'];
+               if ($pipeline !== null) {
+                  $Result = $pipeline($Request, $ResponseObj);
+
+                  if ($Result instanceof Response && $Result !== $ResponseObj) {
+                     $WPI->Response = $Result;
+                     return $Result;
+                  }
+
+                  return $ResponseObj;
+               }
+
+               /** @var Response|mixed */
+               $Result = ($entry['handler'])($Request, $ResponseObj);
 
                if ($Result instanceof Response && $Result !== $ResponseObj) {
                   $WPI->Response = $Result;
                   return $Result;
                }
 
-               return $ResponseObj;
+               return $Result instanceof Response ? $Result : $ResponseObj;
             }
-
-            $Result = ($entry['handler'])($Request, $ResponseObj);
-
-            if ($Result instanceof Response && $Result !== $ResponseObj) {
-               $WPI->Response = $Result;
-               return $Result;
-            }
-
-            return $Result instanceof Response ? $Result : $ResponseObj;
          }
-      }
       }
 
       // 3. Check for group route prefixes — fall back to Generator

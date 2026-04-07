@@ -42,6 +42,15 @@ class Params implements IteratorAggregate
    {
       $this->params[$param] = $value;
    }
+   /**
+    * Replace all params at once (batch assignment).
+    *
+    * @param array<string,string> $params
+    */
+   public function set (array $params): void
+   {
+      $this->params = $params;
+   }
 
    /** @return ArrayIterator<string,string|int|array<int>|null> */
    public function getIterator (): Traversable
