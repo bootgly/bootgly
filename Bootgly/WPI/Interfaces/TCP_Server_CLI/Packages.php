@@ -221,6 +221,7 @@ abstract class Packages implements WPI\Connections\Packages
       }
 
       // @ Write data
+      $inputLength = $received; // Store original buffer length for pipelining
       if (Server::$Decoder) { // @ Decode Application Data if exists
          $received = Server::$Decoder::decode($this, $input, $received);
       }
@@ -232,11 +233,41 @@ abstract class Packages implements WPI\Connections\Packages
          if ($this->closeAfterWrite) {
             $this->closeAfterWrite = false;
             $this->Connection->close();
+            return true;
+         }
+
+         // @ Pipeline: process remaining requests in the same buffer
+         if (Server::$Decoder && $received < $inputLength) {
+            $offset = $received;
+
+            while ($offset < $inputLength) {
+               $remaining = substr($input, $offset);
+               $remainingLength = $inputLength - $offset;
+
+               $this->changed = true;
+               self::$input = $remaining;
+
+               $decoded = Server::$Decoder::decode($this, $remaining, $remainingLength);
+
+               if ($decoded <= 0) {
+                  break; // Incomplete request — will arrive on next fread
+               }
+
+               $this->write($Socket);
+
+               if ($this->closeAfterWrite) { // @phpstan-ignore if.alwaysFalse
+                  $this->closeAfterWrite = false;
+                  $this->Connection->close();
+                  return true;
+               }
+
+               $offset += $decoded;
+            }
          }
       }
       // @ Consume test handler on reject (decoder returned 0 but encoder never ran)
       // Only consume when socket was closed by reject, not when waiting for more data (chunked)
-      else if (SAPI::$Suite !== null && !is_resource($Socket)) { // @phpstan-ignore notIdentical.alwaysTrue
+      else if (isset(SAPI::$Suite) && !is_resource($Socket)) { // @phpstan-ignore notIdentical.alwaysTrue
          $base = array_key_first(SAPI::$Tests);
          if ($base !== null) {
             SAPI::boot(reset: true, base: $base, key: 'response');
