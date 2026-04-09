@@ -104,8 +104,8 @@ class DemoCommand extends Command
             continue;
          }
 
-         $file = 'Demo_CLI/' . $example;
-         $location = 'projects/' . $file;
+         $file = "Demo/CLI/$example";
+         $location = "projects/$file";
          require BOOTGLY_ROOT_DIR . $location;
 
          sleep(3);

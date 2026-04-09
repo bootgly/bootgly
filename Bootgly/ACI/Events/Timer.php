@@ -12,6 +12,16 @@
 namespace Bootgly\ACI\Events;
 
 
+use const SIGALRM;
+use function array_key_exists;
+use function call_user_func_array;
+use function function_exists;
+use function pcntl_alarm;
+use function pcntl_signal;
+use function time;
+use Throwable;
+
+
 class Timer
 {
    // * Config
@@ -29,6 +39,13 @@ class Timer
    protected static int $id = 0;
 
 
+   /**
+    * Initialize the timer.
+    *
+    * @param callable $handler The signal handler for SIGALRM.
+    *
+    * @return bool Returns true on success, false on failure.
+    */
    public static function init (callable $handler): bool
    {
       if (function_exists('pcntl_signal')) {
@@ -75,6 +92,11 @@ class Timer
       return self::$id;
    }
 
+   /**
+    * Tick the timer, executing due tasks.
+    *
+    * @return void
+    */
    public static function tick (): void
    {
       if ( empty(self::$tasks) ) {
@@ -96,7 +118,7 @@ class Timer
                try {
                   call_user_func_array($handler, $args);
                }
-               catch (\Throwable) {
+               catch (Throwable) {
                   // ...
                }
 

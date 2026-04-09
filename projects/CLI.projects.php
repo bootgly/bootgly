@@ -1,4 +1,5 @@
 <?php
 return [
-   'Demo_CLI'
+   'Benchmark',
+   'Demo'
 ];
