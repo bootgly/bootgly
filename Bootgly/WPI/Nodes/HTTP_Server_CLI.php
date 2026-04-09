@@ -237,7 +237,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
 
       // @ Fork process workers...
       $this->Process->fork($this->workers, instance: function (Process $Process, int $index): void {
-         $Process->title = 'Bootgly_WPI_Server: child process (Worker #' . Process::$index . ')';
+         $Process->title = 'Bootgly_HTTP_Server: child process (Worker #' . Process::$index . ')';
 
          Logger::$display = Logger::DISPLAY_MESSAGE_WHEN_ID;
 
@@ -257,7 +257,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       });
 
       // @ Set master process title
-      $this->Process->title = 'Bootgly_WPI_Server: master process';
+      $this->Process->title = 'Bootgly_HTTP_Server: master process';
 
       // @ Save full process state (master + workers + host + port)
       $this->Process->State->save([

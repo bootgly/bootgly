@@ -25,7 +25,7 @@ use AssertionError;
 use Generator;
 use UnderflowException;
 
-use Bootgly\ACI\Benchmark;
+use Bootgly\ACI\Tests\Benchmark;
 use Bootgly\ACI\Logs\LoggableEscaped;
 use Bootgly\ACI\Tests\Suite;
 use Bootgly\ACI\Tests\Assertions;

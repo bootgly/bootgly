@@ -8,14 +8,16 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\ACI;
+namespace Bootgly\ACI\Tests;
 
 
 use function array_search;
 use function array_splice;
 use function file;
 use function file_put_contents;
+use function getenv;
 use function implode;
+use function json_encode;
 use function memory_get_usage;
 use function microtime;
 use function number_format;
@@ -166,5 +168,34 @@ abstract class Benchmark
       }
 
       return Benchmark::class;
+   }
+
+   public static function output (null|string $tag = null): void
+   {
+      // ?!
+      if (!$tag && !self::$tag) {
+         return;
+      }
+      $tag ??= self::$tag;
+
+      // @
+      $data = [];
+
+      if (self::$time && isset(self::$results[$tag]['time'])) {
+         $data['time'] = self::$results[$tag]['time'];
+      }
+
+      if (self::$memory && isset(self::$results[$tag]['memory'])) {
+         $data['memory'] = self::$results[$tag]['memory'];
+      }
+
+      // @ Output result
+      $resultFile = getenv('BENCHMARK_RESULT_FILE');
+      if ($resultFile !== false) {
+         file_put_contents($resultFile, json_encode($data));
+      }
+      else {
+         echo json_encode($data);
+      }
    }
 }

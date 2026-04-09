@@ -13,7 +13,6 @@ namespace Bootgly\ACI\Tests;
 
 use function count;
 
-use Bootgly\ACI\Benchmark;
 use Bootgly\ACI\Logs\LoggableEscaped;
 use Bootgly\ACI\Tests\Assertions;
 

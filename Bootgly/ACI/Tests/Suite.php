@@ -15,7 +15,6 @@ use function is_array;
 use Closure;
 use Exception;
 
-use Bootgly\ACI\Benchmark;
 use Bootgly\ACI\Logs\LoggableEscaped;
 use Bootgly\ACI\Tests\Assertions;
 use Bootgly\ACI\Tests\Suite\Test;

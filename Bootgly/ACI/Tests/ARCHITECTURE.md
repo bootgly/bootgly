@@ -115,6 +115,20 @@ Bootgly/ACI/Tests/
 ├── Suites/                                # ── Suites (collection) support ──
 │   └── Reports/                           # (reserved for future report formats)
 │
+├── Benchmark.php                          # class — micro-benchmark (start/stop/format/output)
+├── Benchmark/                             # ── Benchmark framework ──
+│   ├── Competitor.php                     # class — competitor VO (name, script, version, workers)
+│   ├── Result.php                         # class — result VO (time, memory, rps, latency, transfer)
+│   ├── Runner.php                         # abstract class — add(Competitor), abstract run()
+│   ├── Runner/
+│   │   ├── Code.php                       # class — code benchmark runner (proc_open → JSON)
+│   │   ├── Wrk.php                        # class — HTTP server benchmark runner (wrk)
+│   │   ├── Reporter.php                   # class — ANSI tables + .marks file output
+│   │   └── SystemInfo.php                 # class — OS, CPU, RAM, PHP, wrk version
+│   ├── Scenario.php                       # class — scenario VO (label, group, luaFile)
+│   └── Scenario/
+│       └── Loader.php                     # class — loads .lua files with @label/@group metadata
+│
 ├── templates/                             # test file templates
 ├── tests/                                 # self-tests (@.php + *.test.php)
 └── docs/
@@ -375,6 +389,59 @@ classDiagram
     }
     Subassertion ..|> Output_interface : implements
     Subassertion ..> Actual : uses
+
+    %% ━━━ Benchmark ━━━
+    class Benchmark {
+        <<abstract>>
+        +$time: bool
+        +$memory: bool
+        +$results: array
+        +start(tag) void
+        +stop(tag) string
+        +format(initial, final, precision) string
+        +show(tag) string
+        +save(tag) string
+        +output(tag) void
+    }
+
+    class BenchmarkRunner {
+        <<abstract Runner>>
+        #competitors: array
+        +add(Competitor) void
+        +run(filter) array
+    }
+
+    class Code {
+        +timeout: int
+        +iterations: int
+        +warmup: int
+        +run(filter) array
+    }
+    Code --|> BenchmarkRunner : extends
+
+    class Wrk {
+        +port / threads / connections: int
+        +duration: string
+        +load(scenariosDir) void
+        +run(filter) array
+    }
+    Wrk --|> BenchmarkRunner : extends
+
+    class Competitor {
+        +name / script / version: string
+        +workers: int│null
+    }
+    BenchmarkRunner --> Competitor : uses
+
+    class BenchmarkResult {
+        <<Result>>
+        +time: string│null
+        +memory: int│null
+        +rps: float│null
+        +latency / transfer: string│null
+    }
+    Code --> BenchmarkResult : produces
+    Wrk --> BenchmarkResult : produces
 ```
 
 ---

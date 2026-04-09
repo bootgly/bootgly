@@ -104,7 +104,7 @@ class Connections implements WPI\Connections
          stream_set_blocking($Socket, $this->blocking);
 
          // @ Set Buffer sizes
-         #stream_set_read_buffer($Socket, 65535);
+         stream_set_read_buffer($Socket, 0);
          #stream_set_write_buffer($Socket, 65535);
 
          // @ Set Chunk size

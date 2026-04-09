@@ -78,8 +78,8 @@ class TCP_Client_CLI
    protected int $workers;
    // @ Mode
    protected int $mode;
-   public const MODE_DEFAULT = 1;
-   public const MODE_MONITOR = 2;
+   public const int MODE_DEFAULT = 1;
+   public const int MODE_MONITOR = 2;
 
    // * Data
    // ! On
@@ -93,7 +93,7 @@ class TCP_Client_CLI
    public static null|Closure $onWrite = null;
 
    // * Metadata
-   public const VERSION = '0.0.1';
+   public const string VERSION = '0.0.1';
    // @ Error
    /** @var array<int|string|null> */
    public array $error = [];
@@ -101,12 +101,12 @@ class TCP_Client_CLI
    protected static int $started = 0;
    // @ Status
    protected static int $status = 0;
-   protected const STATUS_BOOTING = 1;
-   protected const STATUS_CONFIGURING = 2;
-   protected const STATUS_STARTING = 4;
-   protected const STATUS_RUNNING = 8;
-   protected const STATUS_PAUSED = 16;
-   protected const STATUS_STOPING = 32;
+   protected const int STATUS_BOOTING = 1;
+   protected const int STATUS_CONFIGURING = 2;
+   protected const int STATUS_STARTING = 4;
+   protected const int STATUS_RUNNING = 8;
+   protected const int STATUS_PAUSED = 16;
+   protected const int STATUS_STOPING = 32;
 
 
    // ! Connection(s)
@@ -389,7 +389,7 @@ class TCP_Client_CLI
          });
 
          $Socket = stream_socket_client(
-            'tcp://' . $this->host . ':' . $this->port,
+            "tcp://{$this->host}:{$this->port}",
             $this->error['code'],
             $this->error['message'],
             timeout: 0,
