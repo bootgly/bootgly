@@ -20,16 +20,21 @@ use function strtolower;
 
 class Configs
 {
+   /** @var null|array<string> Competitor names to include (null = all). */
    public protected(set) null|array $competitors;
-   /** @var null|array<int> 1-based scenario indices to include (null = all). */
    /** @var null|string Runner name (lowercase). */
    public protected(set) null|string $runner;
-   /** @var null|array<string> Competitor names to include (null = all). */
+   /** @var null|array<int> 1-based scenario indices to include (null = all). */
    public protected(set) null|array $scenarios;
    /** @var array<string,int> Variation parameters (e.g. ['workers' => 2]). */
    public protected(set) array $vary;
 
 
+   /**
+    * @param null|array<string> $competitors
+    * @param null|array<int> $scenarios
+    * @param array<string,int> $vary
+    */
    private function __construct (
       null|array $competitors = null,
       null|string $runner = null,

@@ -11,19 +11,15 @@
 namespace Bootgly\commands;
 
 
-use function array_map;
 use function array_slice;
 use function array_unique;
-use function count;
-use function explode;
-use function implode;
-use function intval;
+use function is_array;
 use function is_dir;
 use function is_file;
+use function is_string;
 use function putenv;
 use function scandir;
 use function sort;
-use function strtolower;
 use Closure;
 
 use Bootgly\ABI\Data\__String\Escapeable\Text\Formattable;
@@ -227,12 +223,16 @@ class TestCommand extends Command
          // @ Case-local options + Runner options (only in contextual help)
          if ($caseName !== null && $caseDir !== null) {
             // # Case-local options from options.php
-            $optionsFile = $caseDir . '/options.php';
+            $optionsFile = "$caseDir/options.php";
             if (is_file($optionsFile)) {
                $caseOptions = include $optionsFile;
                if (is_array($caseOptions) && $caseOptions !== []) {
                   echo "  {$BOLD}{$caseName} options:{$RESET}\n";
                   foreach ($caseOptions as $flag => $desc) {
+                     if ( ! is_string($desc) ) {
+                        continue;
+                     }
+
                      echo "    {$CYAN}{$flag}{$RESET}  {$desc}\n";
                   }
                   echo "\n";
@@ -240,7 +240,7 @@ class TestCommand extends Command
             }
 
             // # Runner options (load @.php to get Runner instance)
-            $casePath = $caseDir . '/@.php';
+            $casePath = "$caseDir/@.php";
             $Configs = Configs::parse($options);
             if ($Configs->runner !== null) {
                putenv('BENCHMARK_RUNNER=' . $Configs->runner);
