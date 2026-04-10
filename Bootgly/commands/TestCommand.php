@@ -88,7 +88,7 @@ class TestCommand extends Command
       );
       $Tests->Suites->summarize();
 
-      return true;
+      return $Tests->Suites->failed === 0;
    }
 
    // # Test Suite

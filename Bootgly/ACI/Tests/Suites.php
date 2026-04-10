@@ -12,7 +12,9 @@ namespace Bootgly\ACI\Tests;
 
 
 use function count;
+use Throwable;
 
+use Bootgly\ABI\Debugging\Data\Throwables\Exceptions;
 use Bootgly\ACI\Logs\LoggableEscaped;
 use Bootgly\ACI\Tests\Assertions;
 
@@ -79,10 +81,16 @@ class Suites
             continue;
          }
 
-         /** @var null|true|Suite $Suite */
-         $Suite = $iterator($dir, $case);
+         try {
+            /** @var null|true|Suite $Suite */
+            $Suite = $iterator($dir, $case);
 
-         $this->passed++;
+            $this->passed++;
+         }
+         catch (Throwable $T) {
+            Exceptions::collect($T);
+            $this->failed++;
+         }
       }
    }
 
