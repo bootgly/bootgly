@@ -9,10 +9,7 @@
 </p>
 <p align="center">
   <a href="https://packagist.org/packages/bootgly/bootgly">
-    <img alt="Github Actions - Bootgly Workflow" src="https://img.shields.io/github/actions/workflow/status/bootgly/bootgly/bootgly.yml?label=Bootgly"/>
-    <img alt="Github Actions - Docker Workflow" src="https://img.shields.io/github/actions/workflow/status/bootgly/bootgly/docker.yml?label=Docker"/>
-    <img alt="Github Actions - PHPStan Workflow" src="https://img.shields.io/github/actions/workflow/status/bootgly/bootgly/phpstan.yml?label=PHPStan"/>
-    <br>
+    <img alt="Github Actions - Bootgly Workflow" src="https://img.shields.io/github/actions/workflow/status/bootgly/bootgly/bootgly.yml?label=test"/>
     <img alt="Bootgly License" src="https://img.shields.io/github/license/bootgly/bootgly"/>
   </a>
 </p>

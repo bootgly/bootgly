@@ -1,6 +1,3 @@
-includes:
-   - ../vendor/marc-mabe/php-enum-phpstan/extension.neon
-
 parameters:
    excludePaths:
       analyse:
