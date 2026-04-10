@@ -15,7 +15,7 @@ return new Specification(
       return "GET /test/download/small_file/1 HTTP/1.1\r\nHost: localhost\r\n\r\n";
    },
    response: function (Request $Request, Response $Response): Response {
-      return $Response->upload('statics/image1.jpg', close: false);
+      return $Response->upload('HTTP_Server_CLI/statics/image1.jpg', close: false);
    },
    responseLength: 82928,
 

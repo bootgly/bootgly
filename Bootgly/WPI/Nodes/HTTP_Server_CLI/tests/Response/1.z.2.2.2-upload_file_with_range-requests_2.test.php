@@ -21,7 +21,7 @@ return new Specification(
       return $raw;
    },
    response: function (Request $Request, Response $Response): Response {
-      return $Response->upload('statics/alphanumeric.txt', close: false);
+      return $Response->upload('HTTP_Server_CLI/statics/alphanumeric.txt', close: false);
    },
    responseLength: 300,
 

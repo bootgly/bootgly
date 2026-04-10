@@ -14,7 +14,7 @@ return new Specification(
       return "GET /test/download/large_file/1 HTTP/1.1\r\nHost: localhost\r\n\r\n";
    },
    response: function (Request $Request, Response $Response): Response {
-      return $Response->upload('statics/screenshot.gif', close: false);
+      return $Response->upload('HTTP_Server_CLI/statics/screenshot.gif', close: false);
    },
    responseLength: 3101895,
 
