@@ -17,6 +17,7 @@ use Exception;
 
 use Bootgly\ACI\Logs\LoggableEscaped;
 use Bootgly\ACI\Tests\Assertions;
+use Bootgly\ACI\Tests\Results;
 use Bootgly\ACI\Tests\Suite\Test;
 use Bootgly\ACI\Tests\Suite\Test\Specification;
 use Bootgly\ACI\Tests\Suites;
@@ -335,6 +336,14 @@ class Suite
          "\033[0;30;43m SKIP \033 @; " .
          "\033[90m" . $file . "\033[0m" .
          $info . PHP_EOL
+      );
+
+      // @ Record result for AI agent output
+      Results::record(
+         suite: $this->name,
+         case: $this->case,
+         file: $file ?: '',
+         status: 'skipped'
       );
    }
    /**

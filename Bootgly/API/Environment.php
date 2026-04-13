@@ -11,9 +11,13 @@
 namespace Bootgly\API;
 
 
+use Bootgly\API\Environment\Agent;
+
+
 class Environment
 {
    public const int CI_CD = 1;
+   public const int AI_AGENT = 2;
 
    // * Config
    /**
@@ -120,6 +124,7 @@ class Environment
             || Environment::get('CIRCLECI')
             || Environment::get('GITLAB_CI')
          ),
+         Environment::AI_AGENT => Agent::detect()->detected,
          default => false
       };
    }

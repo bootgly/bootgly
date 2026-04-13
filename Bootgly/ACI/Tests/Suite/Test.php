@@ -27,6 +27,7 @@ use UnderflowException;
 
 use Bootgly\ACI\Tests\Benchmark;
 use Bootgly\ACI\Logs\LoggableEscaped;
+use Bootgly\ACI\Tests\Results;
 use Bootgly\ACI\Tests\Suite;
 use Bootgly\ACI\Tests\Assertions;
 use Bootgly\ACI\Tests\Assertion;
@@ -416,6 +417,16 @@ class Test
       // # Debugging
       $this->log($this->debugged ?: '');
 
+      // @ Record result for AI agent output
+      Results::record(
+         suite: $this->Suite->name,
+         case: $this->Specification->case ?? 0,
+         file: $this->filename,
+         status: 'failed',
+         message: $help,
+         elapsedMs: ($this->finished - $this->started) * 1000
+      );
+
       // @ exit
       if (Suite::$exitOnFailure && $this->Specification->retest === null) {
          $this->Suite->summarize();
@@ -445,5 +456,14 @@ class Test
       );
       // assertions
       $this->describing(status: true);
+
+      // @ Record result for AI agent output
+      Results::record(
+         suite: $this->Suite->name,
+         case: $this->Specification->case ?? 0,
+         file: $this->filename,
+         status: 'passed',
+         elapsedMs: ($this->finished - $this->started) * 1000
+      );
    }
 }

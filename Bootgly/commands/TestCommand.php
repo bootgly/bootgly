@@ -24,12 +24,15 @@ use Closure;
 
 use Bootgly\ABI\Data\__String\Escapeable\Text\Formattable;
 use Bootgly\ABI\Data\__String\Path;
+use Bootgly\ACI\Logs\Logger;
 use Bootgly\ACI\Tests\Benchmark\Configs;
 use Bootgly\ACI\Tests\Benchmark\Info;
 use Bootgly\ACI\Tests\Benchmark\Runner;
 use Bootgly\ACI\Tests\Benchmark\Summary;
+use Bootgly\ACI\Tests\Results;
 use Bootgly\ACI\Tests\Suite;
 use Bootgly\ACI\Tests;
+use Bootgly\API\Environment\Agent;
 use const Bootgly\CLI;
 use Bootgly\CLI\Command;
 use Bootgly\CLI\UI\Components\Alert;
@@ -56,6 +59,14 @@ class TestCommand extends Command
             array_slice($arguments, 1),
             $options
          );
+      }
+
+      // ! Agent detection
+      $Agent = Agent::detect();
+      if ($Agent->detected) {
+         Logger::$display = Logger::DISPLAY_NONE;
+         Results::$enabled = true;
+         Results::$agent = $Agent->name;
       }
 
       // ! Tester
@@ -88,6 +99,11 @@ class TestCommand extends Command
       );
       $Tests->Suites->summarize();
 
+      // @ JSON output for AI agents
+      if (Results::$enabled) {
+         echo Results::toJSON();
+      }
+
       return $Tests->Suites->failed === 0;
    }
 
@@ -95,7 +111,8 @@ class TestCommand extends Command
    public function test (string $suite_dir, null|int $index): null|true|Suite
    {
       // !
-      $bootstrap_file = Path::normalize($suite_dir . '/tests/@.php');
+      $hasTests = str_contains($suite_dir, '/tests/') || str_ends_with($suite_dir, '/tests');
+      $bootstrap_file = Path::normalize($suite_dir . ($hasTests ? '' : '/tests') . '/@.php');
       BOOTGLY_ROOT_DIR !== BOOTGLY_WORKING_DIR
          ? $Suite = (include BOOTGLY_WORKING_DIR . $bootstrap_file)
          : $Suite = (include BOOTGLY_ROOT_DIR . $bootstrap_file);

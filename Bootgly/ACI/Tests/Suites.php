@@ -17,6 +17,7 @@ use Throwable;
 use Bootgly\ABI\Debugging\Data\Throwables\Exceptions;
 use Bootgly\ACI\Logs\LoggableEscaped;
 use Bootgly\ACI\Tests\Assertions;
+use Bootgly\ACI\Tests\Results;
 
 
 class Suites
@@ -111,6 +112,15 @@ class Suites
       // # Time
       $started = $this->started;
       $finished = $this->finished = microtime(true);
+
+      // @ Feed stats for AI agent output
+      Results::$suitesTotal = $this->total;
+      Results::$suitesFailed = $this->failed;
+      Results::$suitesSkipped = $this->skipped;
+      Results::$suitesPassed = $this->passed;
+      Results::$assertions = Assertions::$count;
+      Results::$durationMs = ($finished - $started) * 1000;
+
       // duration
       $duration = Benchmark::format($started, $finished);
       $duration = "@#Magenta:" . $duration . "s @;";
