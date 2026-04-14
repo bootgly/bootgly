@@ -11,6 +11,9 @@
 namespace Bootgly\ACI\Tests\Assertion\Expectations\Matchers;
 
 
+use function is_string;
+use function preg_match;
+
 use Bootgly\ACI\Tests\Asserting\Fallback;
 use Bootgly\ACI\Tests\Assertion\Expectation\Matcher;
 

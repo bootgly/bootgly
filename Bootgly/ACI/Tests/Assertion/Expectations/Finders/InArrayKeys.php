@@ -11,6 +11,14 @@
 namespace Bootgly\ACI\Tests\Assertion\Expectations\Finders;
 
 
+use function array_key_exists;
+use function is_array;
+use function is_bool;
+use function is_float;
+use function is_int;
+use function is_resource;
+use function is_string;
+
 use Bootgly\ACI\Tests\Asserting\Fallback;
 use Bootgly\ACI\Tests\Assertion\Expectation\Finder;
 

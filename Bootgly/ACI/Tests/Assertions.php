@@ -11,9 +11,9 @@
 namespace Bootgly\ACI\Tests;
 
 
-
-use Exception;
+use function property_exists;
 use Closure;
+use Exception;
 use Generator;
 use InvalidArgumentException;
 

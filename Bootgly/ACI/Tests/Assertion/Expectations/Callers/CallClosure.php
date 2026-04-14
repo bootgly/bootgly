@@ -11,6 +11,8 @@
 namespace Bootgly\ACI\Tests\Assertion\Expectations\Callers;
 
 
+use function is_callable;
+
 use Bootgly\ACI\Tests\Asserting\Fallback;
 use Bootgly\ACI\Tests\Assertion\Expectation\Caller;
 

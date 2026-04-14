@@ -11,6 +11,10 @@
 namespace Bootgly\ACI\Tests\Assertion\Snapshots;
 
 
+use const BOOTGLY_WORKING_DIR;
+use function serialize;
+use function unserialize;
+
 use Bootgly\ABI\IO\FS\File;
 use Bootgly\ACI\Tests\Assertion\Snapshot;
 

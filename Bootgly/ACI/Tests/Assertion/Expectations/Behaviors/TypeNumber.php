@@ -11,8 +11,12 @@
 namespace Bootgly\ACI\Tests\Assertion\Expectations\Behaviors;
 
 
+use function is_numeric;
+use function is_string;
+
 use Bootgly\ACI\Tests\Asserting\Fallback;
 use Bootgly\ACI\Tests\Assertion\Expectation\Behavior;
+
 
 /**
  * Validate if $actual is number (int or float).

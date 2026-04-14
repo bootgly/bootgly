@@ -12,8 +12,8 @@ namespace Bootgly\ACI\Tests\Assertion;
 
 
 use Bootgly\ABI\Debugging\Backtrace;
-use Bootgly\ACI\Tests\Asserting\Fallback;
 use Bootgly\ACI\Tests\Asserting;
+use Bootgly\ACI\Tests\Asserting\Fallback;
 
 
 /**

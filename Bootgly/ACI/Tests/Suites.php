@@ -12,6 +12,7 @@ namespace Bootgly\ACI\Tests;
 
 
 use function count;
+use function microtime;
 use Throwable;
 
 use Bootgly\ABI\Debugging\Data\Throwables\Exceptions;

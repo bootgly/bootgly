@@ -14,10 +14,10 @@ namespace Bootgly\ACI\Tests\Assertion;
 use function count;
 use AssertionError;
 
+use Bootgly\ACI\Tests\Asserting;
 use Bootgly\ACI\Tests\Asserting\Actual;
 use Bootgly\ACI\Tests\Asserting\Expected;
 use Bootgly\ACI\Tests\Asserting\Modifier;
-use Bootgly\ACI\Tests\Asserting;
 
 
 trait Expectation

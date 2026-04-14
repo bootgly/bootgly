@@ -3,14 +3,18 @@
 namespace Bootgly\ACI\Tests\Assertion\Expectations\Waiters;
 
 
+use const SIGKILL;
+use const WNOHANG;
+use function function_exists;
+use function is_callable;
+use function microtime;
+use function pcntl_fork;
+use function pcntl_waitpid;
+use function posix_kill;
 use ArgumentCountError;
 use AssertionError;
 use Exception;
 use Throwable;
-use function pcntl_fork;
-use function pcntl_waitpid;
-use function posix_kill;
-use const WNOHANG;
 
 use Bootgly\ACI\Tests\Asserting\Fallback;
 use Bootgly\ACI\Tests\Assertion\Expectation\Waiter;

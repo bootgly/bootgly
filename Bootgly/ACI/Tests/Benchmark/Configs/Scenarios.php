@@ -11,13 +11,13 @@
 namespace Bootgly\ACI\Tests\Benchmark\Configs;
 
 
+use const PATHINFO_FILENAME;
 use function file_get_contents;
 use function glob;
 use function pathinfo;
 use function preg_match;
 use function sort;
 use function trim;
-use const PATHINFO_FILENAME;
 
 
 class Scenarios

@@ -11,6 +11,8 @@
 namespace Bootgly\ACI;
 
 
+use const BOOTGLY_ROOT_DIR;
+use const BOOTGLY_WORKING_DIR;
 use RuntimeException;
 
 use Bootgly\ABI\Resources;

@@ -11,6 +11,14 @@
 namespace Bootgly\ACI\Tests\Assertion\Expectations\Finders;
 
 
+use function gettype;
+use function in_array;
+use function is_array;
+use function is_object;
+use function is_string;
+use function property_exists;
+use function str_contains;
+
 use Bootgly\ACI\Tests\Asserting\Fallback;
 use Bootgly\ACI\Tests\Assertion\Expectation\Finder;
 

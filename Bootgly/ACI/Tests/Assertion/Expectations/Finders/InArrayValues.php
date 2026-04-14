@@ -11,6 +11,9 @@
 namespace Bootgly\ACI\Tests\Assertion\Expectations\Finders;
 
 
+use function in_array;
+use function is_array;
+
 use Bootgly\ACI\Tests\Asserting\Fallback;
 use Bootgly\ACI\Tests\Assertion\Expectation\Finder;
 

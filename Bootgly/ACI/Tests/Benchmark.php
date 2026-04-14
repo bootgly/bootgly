@@ -11,6 +11,9 @@
 namespace Bootgly\ACI\Tests;
 
 
+use const BOOTGLY_WORKING_DIR;
+use const FILE_IGNORE_NEW_LINES;
+use const PHP_EOL;
 use function array_search;
 use function array_splice;
 use function file;

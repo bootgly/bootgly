@@ -11,8 +11,12 @@
 namespace Bootgly\ACI\Tests\Assertion\Expectations\Behaviors;
 
 
+use function is_string;
+use function strtolower;
+
 use Bootgly\ACI\Tests\Asserting\Fallback;
 use Bootgly\ACI\Tests\Assertion\Expectation\Behavior;
+
 
 /**
  * Validate if $actual is a lowercase string.

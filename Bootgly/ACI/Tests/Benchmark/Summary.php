@@ -11,6 +11,9 @@
 namespace Bootgly\ACI\Tests\Benchmark;
 
 
+use const BOOTGLY_WORKING_DIR;
+use const PHP_INT_MAX;
+use const STR_PAD_RIGHT;
 use function array_keys;
 use function array_map;
 use function count;
@@ -28,8 +31,6 @@ use function str_repeat;
 use function strlen;
 use function strtolower;
 use function uasort;
-use const PHP_INT_MAX;
-use const STR_PAD_RIGHT;
 
 use Bootgly\ABI\Data\__String\Bytes;
 use Bootgly\ABI\Data\__String\Escapeable\Text\Formattable;

@@ -12,6 +12,7 @@
 namespace Bootgly\ACI\Events;
 
 
+use const PHP_INT_MAX;
 use const SIGALRM;
 use function array_key_exists;
 use function call_user_func_array;

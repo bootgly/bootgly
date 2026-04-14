@@ -11,6 +11,10 @@
 namespace Bootgly\ACI\Logs;
 
 
+use const BOOTGLY_WORKING_BASE;
+use function error_log;
+
+
 trait Loggable
 {
    public Logger $Logger;

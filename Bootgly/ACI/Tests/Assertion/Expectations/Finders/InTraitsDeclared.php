@@ -11,6 +11,9 @@
 namespace Bootgly\ACI\Tests\Assertion\Expectations\Finders;
 
 
+use function is_string;
+use function trait_exists;
+
 use Bootgly\ACI\Tests\Asserting\Fallback;
 use Bootgly\ACI\Tests\Assertion\Expectation\Finder;
 

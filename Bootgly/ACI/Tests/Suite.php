@@ -12,16 +12,19 @@ namespace Bootgly\ACI\Tests;
 
 
 use const DIRECTORY_SEPARATOR;
-use function current;
+use const PHP_EOL;
+use const STR_PAD_BOTH;
 use function count;
+use function current;
 use function is_array;
 use function is_callable;
+use function key;
 use function method_exists;
 use function microtime;
 use function next;
 use function sprintf;
-use function strlen;
 use function str_pad;
+use function strlen;
 use Closure;
 use Exception;
 

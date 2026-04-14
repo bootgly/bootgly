@@ -11,6 +11,7 @@
 namespace Bootgly\ACI\Tests\Assertion\Expectations\Throwers;
 
 
+use function is_callable;
 use Exception;
 
 use Bootgly\ACI\Tests\Asserting\Fallback;

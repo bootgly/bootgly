@@ -11,10 +11,10 @@
 namespace Bootgly\ACI\Logs;
 
 
+use const PHP_EOL;
+
 use Bootgly\ABI\Data\__String\Escapeable\Text\Formattable;
-
 use Bootgly\ABI\Templates\Template\Escaped as TemplateEscaped;
-
 use Bootgly\ACI\Logs\Logger;
 
 

@@ -11,6 +11,12 @@
 namespace Bootgly\ACI\Tests\Asserting;
 
 
+use function array_combine;
+use function array_keys;
+use function array_map;
+use function get_class;
+use function gettype;
+use function vsprintf;
 use Throwable;
 
 

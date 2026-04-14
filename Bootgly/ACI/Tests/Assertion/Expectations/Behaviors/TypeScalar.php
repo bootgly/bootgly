@@ -11,8 +11,11 @@
 namespace Bootgly\ACI\Tests\Assertion\Expectations\Behaviors;
 
 
+use function is_scalar;
+
 use Bootgly\ACI\Tests\Asserting\Fallback;
 use Bootgly\ACI\Tests\Assertion\Expectation\Behavior;
+
 
 /**
  * Validate if $actual is scalar.

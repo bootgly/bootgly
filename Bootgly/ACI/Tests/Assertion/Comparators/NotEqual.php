@@ -11,6 +11,11 @@
 namespace Bootgly\ACI\Tests\Assertion\Comparators;
 
 
+use function is_array;
+use function is_object;
+use function json_encode;
+use function serialize;
+
 use Bootgly\ACI\Tests\Asserting\Fallback;
 use Bootgly\ACI\Tests\Assertion\Comparator;
 

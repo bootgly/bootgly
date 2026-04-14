@@ -11,10 +11,15 @@
 namespace Bootgly\ACI\Tests\Suite;
 
 
+use const PHP_EOL;
+use const STR_PAD_BOTH;
+use const STR_PAD_RIGHT;
 use function array_reduce;
 use function count;
 use function current;
+use function gettype;
 use function microtime;
+use function ob_end_clean;
 use function ob_get_clean;
 use function ob_start;
 use function sprintf;
@@ -25,12 +30,12 @@ use AssertionError;
 use Generator;
 use UnderflowException;
 
-use Bootgly\ACI\Tests\Benchmark;
 use Bootgly\ACI\Logs\LoggableEscaped;
+use Bootgly\ACI\Tests\Assertion;
+use Bootgly\ACI\Tests\Assertions;
+use Bootgly\ACI\Tests\Benchmark;
 use Bootgly\ACI\Tests\Results;
 use Bootgly\ACI\Tests\Suite;
-use Bootgly\ACI\Tests\Assertions;
-use Bootgly\ACI\Tests\Assertion;
 use Bootgly\ACI\Tests\Suite\Test\Specification;
 
 

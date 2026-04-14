@@ -11,6 +11,8 @@
 namespace Bootgly\ACI\Tests\Assertion\Expectations;
 
 
+use function preg_match;
+
 use Bootgly\ACI\Tests\Assertion\Expectation;
 
 
