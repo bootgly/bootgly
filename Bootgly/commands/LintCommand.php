@@ -13,12 +13,16 @@ namespace Bootgly\commands;
 
 use function array_slice;
 use function count;
+use function fclose;
 use function file_put_contents;
+use function fwrite;
 use function implode;
 use function is_array;
 use function is_dir;
 use function is_file;
 use function json_encode;
+use function proc_close;
+use function proc_open;
 use function rtrim;
 use function sort;
 use function str_contains;
@@ -26,6 +30,7 @@ use function str_ends_with;
 use function str_pad;
 use function str_replace;
 use function str_starts_with;
+use function stream_get_contents;
 use function strlen;
 use const JSON_UNESCAPED_SLASHES;
 use const JSON_UNESCAPED_UNICODE;
@@ -179,12 +184,20 @@ class LintCommand extends Command
                }
             }
             else {
-               file_put_contents($file, $corrected);
-               $fixedFiles++;
-               $fixed = true;
+               // @ Validate syntax before writing
+               if ($this->validate($corrected)) {
+                  file_put_contents($file, $corrected);
+                  $fixedFiles++;
+                  $fixed = true;
 
-               if (!$Agent->detected) {
-                  $Output->render("@#Green:   ✓ Fixed {$issueCount} issue(s) @;\n\n");
+                  if (!$Agent->detected) {
+                     $Output->render("@#Green:   ✓ Fixed {$issueCount} issue(s) @;\n\n");
+                  }
+               }
+               else {
+                  if (!$Agent->detected) {
+                     $Output->render("@#Red:   ✗ Fix produced invalid PHP — skipped @;\n\n");
+                  }
                }
             }
          }
@@ -420,5 +433,40 @@ class LintCommand extends Command
       sort($files);
 
       return $files;
+   }
+
+   /**
+    * Validate PHP syntax of source code using php -l.
+    *
+    * @param string $source PHP source code to validate
+    *
+    * @return bool True if syntax is valid
+    */
+   private function validate (string $source): bool
+   {
+      $process = proc_open(
+         'php -l',
+         [
+            0 => ['pipe', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+         ],
+         $pipes
+      );
+
+      if ($process === false) {
+         return true; // If we can't validate, allow the write
+      }
+
+      fwrite($pipes[0], $source);
+      fclose($pipes[0]);
+
+      $output = stream_get_contents($pipes[1]);
+      fclose($pipes[1]);
+      fclose($pipes[2]);
+
+      $exitCode = proc_close($process);
+
+      return $exitCode === 0 && str_contains($output !== false ? $output : '', 'No syntax errors');
    }
 }
