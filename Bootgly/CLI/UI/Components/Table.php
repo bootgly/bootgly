@@ -17,9 +17,9 @@ use Bootgly\ADI\Table as DataTable;
 use Bootgly\API\Component;
 use Bootgly\CLI\Terminal\Output;
 use Bootgly\CLI\UI\Components\Table\Cells;
-use Bootgly\CLI\UI\Components\Table\Rows;
 use Bootgly\CLI\UI\Components\Table\Columns;
 use Bootgly\CLI\UI\Components\Table\Row;
+use Bootgly\CLI\UI\Components\Table\Rows;
 
 
 class Table extends Component
