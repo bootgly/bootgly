@@ -11,6 +11,8 @@
 namespace Bootgly\API;
 
 
+use const BOOTGLY_ROOT_BASE;
+use const BOOTGLY_WORKING_BASE;
 use function count;
 use function is_string;
 

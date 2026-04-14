@@ -11,6 +11,7 @@
 namespace Bootgly\API\Projects;
 
 
+use const DEBUG_BACKTRACE_IGNORE_ARGS;
 use function basename;
 use function debug_backtrace;
 use function define;

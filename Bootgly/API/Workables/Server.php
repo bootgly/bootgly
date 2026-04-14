@@ -14,9 +14,10 @@ namespace Bootgly\API\Workables;
 use function array_shift;
 use function clearstatcache;
 use function count;
-use function filemtime;
 use function file_exists;
+use function filemtime;
 use function function_exists;
+use function opcache_invalidate;
 use Closure;
 
 use Bootgly\ACI\Tests\Suite;
@@ -104,7 +105,7 @@ class Server
       if ($reset) {
          // @ Clear Bootstrap File Cache
          if (function_exists('opcache_invalidate')) {
-            \opcache_invalidate($bootstrap, true);
+            opcache_invalidate($bootstrap, true);
          }
 
          // @ Load Bootstrap File SAPI
