@@ -767,7 +767,13 @@ class Analyzer
          $kindIndex = $kindOrder[$import['kind']];
          $isGlobal = $import['global'];
 
-         // @ Check kind ordering (const before function before class)
+         // @ Reset kind tracking when crossing the global/namespaced boundary
+         if ($isGlobal !== $prevGlobal) {
+            $prevKindIndex = -1;
+            $prevSymbol = '';
+         }
+
+         // @ Check kind ordering (const before function before class), within same group
          if ($kindIndex < $prevKindIndex) {
             $issues[] = new Issue(
                type: 'wrong_order',
