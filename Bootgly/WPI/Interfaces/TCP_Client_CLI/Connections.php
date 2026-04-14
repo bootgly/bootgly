@@ -13,6 +13,7 @@ namespace Bootgly\WPI\Interfaces\TCP_Client_CLI;
 
 use const PHP_EOL;
 use function is_resource;
+use function stream_select;
 use function stream_set_blocking;
 use function stream_set_read_buffer;
 
@@ -135,6 +136,15 @@ class Connections implements WPI\Connections
 
       // @ Instance new connection
       $ssl = $this->Client !== null && $this->Client->ssl !== null;
+
+      // @ Wait for TCP connection to be fully established before TLS handshake
+      if ($ssl) {
+         $read = [];
+         $write = [$Socket];
+         $except = [];
+         @stream_select($read, $write, $except, 5);
+      }
+
       $Connection = new Connection($Socket, $ssl);
 
       // @ Set stats

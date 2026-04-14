@@ -239,6 +239,14 @@ class Packages implements WPI\Connections\Packages
                continue;
             }
 
+            // @ TLS may buffer additional decrypted data that stream_select() cannot see.
+            //   Try one more non-blocking read to drain any remaining SSL-layer bytes.
+            $extra = @fread($Socket, 65535);
+            if ($extra !== false && $extra !== '') {
+               $input .= $extra;
+               $received += strlen($extra);
+            }
+
             break;
          }
          while ($received < $total || $total === 0);

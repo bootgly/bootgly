@@ -13,6 +13,8 @@ namespace Bootgly\WPI\Nodes;
 
 use const BOOTGLY_ROOT_DIR;
 use const SIGTERM;
+use const STREAM_CRYPTO_METHOD_TLSv1_2_SERVER;
+use const STREAM_CRYPTO_METHOD_TLSv1_3_SERVER;
 use const STREAM_SERVER_BIND;
 use const STREAM_SERVER_LISTEN;
 use function count;
@@ -23,7 +25,9 @@ use function pcntl_fork;
 use function pcntl_waitpid;
 use function posix_kill;
 use function str_replace;
+use function stream_context_create;
 use function stream_socket_accept;
+use function stream_socket_enable_crypto;
 use function stream_socket_server;
 use function stripos;
 use function strlen;
@@ -319,8 +323,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
             $Response->status = (string) $parsed['status'];
             $Response->closeConnection = (bool) $parsed['closeConnection'];
 
-            $Response->Header->define((string) $parsed['headerRaw']);
-
+            $Response->Header->define((string) $parsed['headerRaw']);            $Response->Header->build();
             $Response->Body->raw = (string) $parsed['bodyRaw'];
             $Response->Body->length = (int) $parsed['bodyLength'];
             $Response->Body->downloaded = (int) $parsed['bodyDownloaded'];
@@ -555,7 +558,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
     *
     * @return void
     */
-   public static function pretest (null|Suite $Suite): void
+   public static function pretest (null|Suite $Suite, string $testsDir = 'E2E'): void
    {
       if ($Suite === null) {
          return;
@@ -586,7 +589,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
 
       foreach ($selected as $index => $case) {
          $Test_Case_File = new File(
-            BOOTGLY_ROOT_DIR . $classPath . '/tests/E2E/' . $case . '.test.php'
+            BOOTGLY_ROOT_DIR . $classPath . '/tests/' . $testsDir . '/' . $case . '.test.php'
          );
          if ($Test_Case_File->exists === false) {
             continue;
@@ -624,10 +627,11 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
     * Run E2E tests using a mock TCP server.
     *
     * @param int $port Mock server port.
+    * @param array<string,mixed>|null $ssl SSL context for mock server (local_cert, local_pk, etc.)
     *
     * @return bool True if tests completed.
     */
-   public static function test (int $port = 9999): bool
+   public static function test (int $port = 9999, null|array $ssl = null): bool
    {
       Logger::$display = Logger::DISPLAY_NONE;
 
@@ -640,12 +644,21 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
       // # Server
       if ($process_id === 0) {
          // @ Child process: run mock TCP server
+         // @ Create SSL context for server if needed
+         if ($ssl !== null) {
+            $serverContext = stream_context_create(['ssl' => $ssl]);
+         }
+         else {
+            $serverContext = stream_context_create();
+         }
+
          // @ Create simple TCP server socket (blocking, synchronous)
          $server = stream_socket_server(
             "tcp://127.0.0.1:{$port}",
             $errno,
             $errstr,
-            STREAM_SERVER_BIND | STREAM_SERVER_LISTEN
+            STREAM_SERVER_BIND | STREAM_SERVER_LISTEN,
+            $serverContext
          );
 
          if ($server === false) {
@@ -657,6 +670,19 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
 
          // @@ Accept one connection at a time (blocking)
          while ($client = @stream_socket_accept($server, 10)) {
+            // @@ Enable TLS on accepted client if SSL configured
+            if ($ssl !== null) {
+               $crypto = @stream_socket_enable_crypto(
+                  $client,
+                  true,
+                  STREAM_CRYPTO_METHOD_TLSv1_2_SERVER | STREAM_CRYPTO_METHOD_TLSv1_3_SERVER
+               );
+               if ($crypto !== true) {
+                  @fclose($client);
+                  continue;
+               }
+            }
+
             // @@ Read request headers (blocking)
             $input = '';
             while (true) {
@@ -737,7 +763,11 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
       usleep(100000); // 100ms
 
       // @ Run tests as client
-      self::testing($port);
+      self::testing($port, $ssl !== null ? [
+         'verify_peer'       => false,
+         'verify_peer_name'  => false,
+         'allow_self_signed' => true,
+      ] : null);
 
       // @ Cleanup
       posix_kill($process_id, SIGTERM);
@@ -746,28 +776,29 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
       return true;
    }
    /**
-    * Run client tests against the mock server (async batch mode).
+    * Run client tests against the mock server (sequential sync mode).
     *
-    * Schedules all test requests concurrently, drains the event loop once,
-    * then asserts results in original test order.
+    * Each request completes before the next starts, keeping
+    * client and mock server in lock-step order.
     *
     * @param int $port Mock server port.
+    * @param array<string,mixed>|null $ssl SSL context options for the client.
     *
     * @return void
     */
-   protected static function testing (int $port): void
+   protected static function testing (int $port, null|array $ssl = null): void
    {
       Logger::$display = Logger::DISPLAY_MESSAGE;
 
       $Suite = CAPI::$Suite;
-      $Suite->separate('HTTP_Client_CLI E2E');
+      $Suite->separate($Suite->name);
 
       $testFiles = CAPI::$tests[self::class] ?? [];
       $specIndex = 0;
 
       // @ Create a single reusable HTTP client instance (lightweight test mode)
       $HTTP_Client_CLI = new self(self::MODE_TEST);
-      $HTTP_Client_CLI->configure('127.0.0.1', $port);
+      $HTTP_Client_CLI->configure('127.0.0.1', $port, ssl: $ssl);
 
       // # Run each test synchronously (sequential mode)
       // Each request completes before the next starts, keeping

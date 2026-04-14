@@ -44,6 +44,7 @@ return new Suites(
       // # HTTP_Client_CLI
       'Bootgly/WPI/Nodes/HTTP_Client_CLI/tests/Atomic/',
       'Bootgly/WPI/Nodes/HTTP_Client_CLI/tests/E2E/',
+      'Bootgly/WPI/Nodes/HTTP_Client_CLI/tests/E2E_SSL/',
       // # HTTP_Server_CLI
       'Bootgly/WPI/Nodes/HTTP_Server_CLI/',
       'Bootgly/WPI/Nodes/HTTP_Server_CLI/Router/Middlewares/',

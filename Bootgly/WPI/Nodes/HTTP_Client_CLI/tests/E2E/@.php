@@ -31,14 +31,14 @@ return new Suite(
          '6.1-chunked_response',
          '6.2-content_length',
       ],
+      'Headers/' => [
+         '8.1-ows_parsing',
+         '8.2-multi_value_set_cookie',
+      ],
       'Protocol/' => [
          '7.1-100_continue',
          '7.2-informational_1xx',
          '7.3-no_body_204',
-      ],
-      'Headers/' => [
-         '8.1-ows_parsing',
-         '8.2-multi_value_set_cookie',
       ],
    ]
 );

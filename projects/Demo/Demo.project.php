@@ -38,6 +38,7 @@ return new Project(
          'HTTP_Server_CLI',
          'HTTPS_Server_CLI',
          'HTTP_Client_CLI',
+         'HTTPS_Client_CLI',
          'TCP_Server_CLI',
          'TCP_Client_CLI',
       ];
@@ -295,6 +296,9 @@ return new Project(
          })($options),
          'HTTP_Client_CLI' => (function () use ($options) {
             (require __DIR__ . '/HTTP_Client_CLI/HTTP_Client_CLI.SAPI.php')($options);
+         })(),
+         'HTTPS_Client_CLI' => (function () use ($options) {
+            (require __DIR__ . '/HTTPS_Client_CLI/HTTPS_Client_CLI.SAPI.php')($options);
          })(),
          'TCP_Client_CLI' => (function () {
             $TCP_Client = new TCP_Client_CLI(
