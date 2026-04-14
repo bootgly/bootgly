@@ -66,6 +66,17 @@ class Analyzer
    public function analyze (string $file): Result
    {
       $source = file_get_contents($file);
+      if ($source === false) {
+         return new Result(
+            file: $file,
+            source: '',
+            namespace: '',
+            imports: [],
+            importRange: ['start' => -1, 'end' => -1],
+            symbols: [],
+            issues: []
+         );
+      }
 
       $tokens = token_get_all($source);
       $count = count($tokens);
@@ -128,6 +139,7 @@ class Analyzer
                   'function' => $importedFunctions[strtolower($item['alias'])] = true,
                   'const'    => $importedConstants[$item['alias']] = true,
                   'class'    => $importedClasses[strtolower($item['alias'])] = true,
+                  default    => null,
                };
             }
 
@@ -399,6 +411,7 @@ class Analyzer
    {
       $startToken = $tokens[$i];
       $byteStart = $this->getTokenByteOffset($tokens, $i);
+      /** @var array{int,string,int} $startToken */
       $line = $startToken[2];
 
       $i++;
@@ -406,6 +419,7 @@ class Analyzer
       $parts = '';
       $items = [];
       $grouped = false;
+      $prefix = '';
 
       while ($i < $count) {
          $token = $tokens[$i];
@@ -618,9 +632,12 @@ class Analyzer
       for ($i = 0; $i < $index; $i++) {
          $token = $tokens[$i];
          if (is_array($token)) {
-            $offset += strlen($token[1]);
+            /** @var string $content */
+            $content = $token[1];
+            $offset += strlen($content);
          }
          else {
+            /** @var string $token */
             $offset += strlen($token);
          }
       }
@@ -640,9 +657,12 @@ class Analyzer
       $offset = $this->getTokenByteOffset($tokens, $index);
       $token = $tokens[$index];
       if (is_array($token)) {
-         $offset += strlen($token[1]);
+         /** @var string $content */
+         $content = $token[1];
+         $offset += strlen($content);
       }
       else {
+         /** @var string $token */
          $offset += strlen($token);
       }
       return $offset;

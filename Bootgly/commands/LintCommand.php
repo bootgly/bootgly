@@ -80,7 +80,7 @@ class LintCommand extends Command
       // @ Route subcommand
       $submodule = $arguments[0] ?? null;
 
-      if ( !isset($this->arguments[$submodule]) ) {
+      if ( $submodule === null || !isset($this->arguments[$submodule]) ) {
          return $this->help($arguments);
       }
 
@@ -92,6 +92,10 @@ class LintCommand extends Command
    }
 
    // # Lint
+   /**
+    * @param array<int,string> $arguments
+    * @param array<string,mixed> $options
+    */
    private function lint (string $submodule, array $arguments, array $options): bool
    {
       $Output = CLI->Terminal->Output;
@@ -174,7 +178,7 @@ class LintCommand extends Command
                   $Output->render("@#Cyan:   [dry-run] Would fix {$issueCount} issue(s) @;\n\n");
                }
             }
-            else if ($fix) {
+            else {
                file_put_contents($file, $corrected);
                $fixedFiles++;
                $fixed = true;
@@ -251,6 +255,9 @@ class LintCommand extends Command
    }
 
    // # Help
+   /**
+    * @param array<int,string> $arguments
+    */
    public function help (array $arguments): bool
    {
       $Output = CLI->Terminal->Output;
@@ -387,10 +394,12 @@ class LintCommand extends Command
       }
 
       $files = [];
+      /** @var RecursiveIteratorIterator<RecursiveDirectoryIterator> $iterator */
       $iterator = new RecursiveIteratorIterator(
          new RecursiveDirectoryIterator($path)
       );
 
+      /** @var \SplFileInfo $file */
       foreach ($iterator as $file) {
          if ($file->isFile() && str_ends_with($file->getPathname(), '.php')) {
             $pathname = $file->getPathname();

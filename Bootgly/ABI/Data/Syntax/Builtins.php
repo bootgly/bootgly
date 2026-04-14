@@ -11,8 +11,9 @@
 namespace Bootgly\ABI\Data\Syntax;
 
 
+use function array_fill_keys;
 use function array_filter;
-use function array_flip;
+use function array_keys;
 use function array_merge;
 use function get_declared_classes;
 use function get_defined_constants;
@@ -37,7 +38,7 @@ class Builtins
       // @ Functions (case-insensitive → stored lowercase)
       if (self::$functions === null) {
          $internal = get_defined_functions()['internal'];
-         self::$functions = array_flip($internal); // already lowercase
+         self::$functions = array_fill_keys($internal, true); // already lowercase
       }
 
       // @ Constants (case-sensitive)
@@ -47,8 +48,9 @@ class Builtins
          foreach ($grouped as $constants) {
             $all = array_merge($all, $constants);
          }
-         self::$constants = array_flip(
-            \array_keys($all)
+         self::$constants = array_fill_keys(
+            array_keys($all),
+            true
          );
       }
 
@@ -68,7 +70,9 @@ class Builtins
 
    public static function check (string $name, string $kind): bool
    {
-      self::$functions ?? self::load();
+      if (self::$functions === null) {
+         self::load();
+      }
 
       return match ($kind) {
          'function' => isset(self::$functions[strtolower($name)]),
