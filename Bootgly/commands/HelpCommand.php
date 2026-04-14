@@ -15,12 +15,12 @@ use const PHP_EOL;
 use function implode;
 use function is_string;
 use function rtrim;
-use function strlen;
 use function str_pad;
+use function strlen;
 use function trim;
 
-use Bootgly\ABI\Data\__String\Path;
 use const Bootgly\CLI;
+use Bootgly\ABI\Data\__String\Path;
 use Bootgly\CLI\Command;
 use Bootgly\CLI\UI\Components\Alert;
 use Bootgly\CLI\UI\Components\Fieldset;

@@ -7,6 +7,7 @@ return [
 
    new BootCommand,
    new TestCommand,
+   new LintCommand,
 
    new ProjectCommand,
 ];
