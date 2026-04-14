@@ -18,7 +18,8 @@ class Issue
       public readonly string $symbol,
       public readonly string $kind,
       public readonly int $line,
-      public readonly string $message
+      public readonly string $message,
+      public readonly int $offset = -1
    )
    {}
 }

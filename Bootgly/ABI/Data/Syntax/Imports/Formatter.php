@@ -14,9 +14,11 @@ namespace Bootgly\ABI\Data\Syntax\Imports;
 use function array_filter;
 use function count;
 use function implode;
+use function rsort;
 use function str_contains;
 use function strcasecmp;
 use function substr;
+use function substr_replace;
 use function usort;
 
 use Bootgly\ABI\Data\Syntax\Imports\Analyzer\Result;
@@ -34,6 +36,21 @@ class Formatter
    public function format (Result $result): string
    {
       $source = $result->source;
+
+      // @ Remove backslash prefixes from body (process in reverse offset order)
+      $offsets = [];
+      foreach ($result->issues as $Issue) {
+         if ($Issue->type === 'backslash_prefix' && $Issue->offset >= 0) {
+            $offsets[] = $Issue->offset;
+         }
+      }
+
+      if (count($offsets) > 0) {
+         rsort($offsets);
+         foreach ($offsets as $offset) {
+            $source = substr_replace($source, '', $offset, 1);
+         }
+      }
 
       // @ Collect all imports (existing + missing from issues)
       $allImports = $result->imports;
@@ -125,6 +142,17 @@ class Formatter
       if ($result->importRange['start'] !== -1 && $result->importRange['end'] !== -1) {
          $start = $result->importRange['start'];
          $end = $result->importRange['end'];
+
+         // @ Adjust offsets for removed backslash chars before import range
+         foreach ($offsets as $offset) {
+            if ($offset < $start) {
+               $start--;
+               $end--;
+            }
+            else if ($offset < $end) {
+               $end--;
+            }
+         }
 
          // @ Walk back to start of line
          while ($start > 0 && $source[$start - 1] !== "\n") {

@@ -199,6 +199,87 @@ class Analyzer
             continue;
          }
 
+         // @ Detect backslash-prefixed global symbols: \func(), \CONST, \Class::
+         if ($token[0] === T_NAME_FULLY_QUALIFIED) {
+            $fullName = $token[1]; // e.g. "\str_pad"
+            $bsLine = $token[2];
+
+            // @ Only handle single-segment: \name (not \Foo\Bar)
+            $stripped = substr($fullName, 1);
+            if (str_contains($stripped, '\\')) {
+               continue;
+            }
+
+            $bsName = $stripped;
+            $afterToken = $this->getNextMeaningfulToken($tokens, $i, $count);
+            $bsOffset = $this->getTokenByteOffset($tokens, $i);
+            $bsKind = null;
+
+            // * function: \func(
+            if ($afterToken === '(') {
+               if (Builtins::check($bsName, 'function')
+                  || isset($importedFunctions[strtolower($bsName)])
+               ) {
+                  $bsKind = 'function';
+               }
+            }
+            // * constant: \ALL_CAPS
+            else if ($this->isConstantName($bsName)) {
+               if (Builtins::check($bsName, 'const')
+                  || isset($importedConstants[$bsName])
+               ) {
+                  $bsKind = 'const';
+               }
+            }
+            // * class: \Class::
+            else if (is_array($afterToken) && $afterToken[0] === T_PAAMAYIM_NEKUDOTAYIM) {
+               if (Builtins::check($bsName, 'class')
+                  || isset($importedClasses[strtolower($bsName)])
+               ) {
+                  $bsKind = 'class';
+               }
+            }
+
+            if ($bsKind !== null) {
+               $this->trackSymbol($usedSymbols, $bsName, $bsKind, $bsLine);
+
+               // @ backslash_prefix issue (for body fix)
+               $issues[] = new Issue(
+                  type: 'backslash_prefix',
+                  symbol: $bsName,
+                  kind: $bsKind,
+                  line: $bsLine,
+                  message: "Remove \\ prefix: \\{$bsName} → use explicit import",
+                  offset: $bsOffset
+               );
+
+               // @ missing_import issue (if not already imported)
+               $imported = match ($bsKind) {
+                  'function' => isset($importedFunctions[strtolower($bsName)]),
+                  'const'    => isset($importedConstants[$bsName]),
+                  'class'    => isset($importedClasses[strtolower($bsName)]),
+               };
+
+               if (!$imported) {
+                  $importLabel = match ($bsKind) {
+                     'function' => "use function {$bsName};",
+                     'const'    => "use const {$bsName};",
+                     'class'    => "use {$bsName};",
+                  };
+
+                  $issues[] = new Issue(
+                     type: 'missing_import',
+                     symbol: $bsName,
+                     kind: $bsKind,
+                     line: $bsLine,
+                     message: "Missing import: {$importLabel}"
+                  );
+               }
+            }
+
+            continue;
+         }
+
          if ($token[0] !== T_STRING) {
             continue;
          }
