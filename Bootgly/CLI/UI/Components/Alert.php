@@ -11,8 +11,13 @@
 namespace Bootgly\CLI\UI\Components;
 
 
-use Bootgly\API\Component;
+use const PHP_EOL;
+use const STR_PAD_RIGHT;
+use function rewind;
+use function str_pad;
+use function stream_get_contents;
 
+use Bootgly\API\Component;
 use Bootgly\CLI\Terminal\Output;
 
 

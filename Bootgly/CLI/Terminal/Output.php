@@ -17,10 +17,13 @@ use const STR_PAD_RIGHT;
 use function escapeshellcmd;
 use function fopen;
 use function fwrite;
+use function is_resource;
+use function is_string;
 use function json_encode;
 use function str_split;
 use function usleep;
 use Throwable;
+
 use Bootgly\ABI\Data\__String;
 use Bootgly\ABI\Data\__String\Escapeable;
 use Bootgly\ABI\Data\__String\Escapeable\Cursor\Positionable;

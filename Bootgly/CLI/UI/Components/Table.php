@@ -12,11 +12,14 @@ namespace Bootgly\CLI\UI\Components;
 
 
 use function str_repeat;
+use Rows;
 
 use Bootgly\ADI\Table as DataTable;
 use Bootgly\API\Component;
-use Bootgly\CLI\UI\Components\Table\ { Cells, Columns, Row, Rows };
 use Bootgly\CLI\Terminal\Output;
+use Bootgly\CLI\UI\Components\Table\Cells;
+use Bootgly\CLI\UI\Components\Table\Columns;
+use Bootgly\CLI\UI\Components\Table\Row;
 
 
 class Table extends Component

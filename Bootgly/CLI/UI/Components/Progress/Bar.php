@@ -11,6 +11,8 @@
 namespace Bootgly\CLI\UI\Components\Progress;
 
 
+use function implode;
+
 use Bootgly\CLI\Terminal;
 use Bootgly\CLI\UI\Components\Progress;
 

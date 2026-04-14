@@ -12,8 +12,9 @@ namespace Bootgly\CLI\Terminal;
 
 
 use const SIGTERM;
-use function defined;
+use const STDIN;
 use function cli_set_process_title;
+use function defined;
 use function fread;
 use function pcntl_fork;
 use function pcntl_signal;

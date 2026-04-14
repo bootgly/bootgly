@@ -13,8 +13,8 @@ namespace Bootgly\CLI\UI\Components\Table;
 
 use function count;
 
-use Bootgly\ABI\Data\__String;
 use const Bootgly\CLI;
+use Bootgly\ABI\Data\__String;
 use Bootgly\CLI\UI\Components\Table;
 
 

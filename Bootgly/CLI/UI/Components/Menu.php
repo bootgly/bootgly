@@ -19,12 +19,11 @@ use Bootgly\API\Component;
 use Bootgly\CLI\Terminal\Input;
 use Bootgly\CLI\Terminal\Output;
 use Bootgly\CLI\UI\Components\Menu\Items;
-use Bootgly\CLI\UI\Components\Menu\Orientation;
-use Bootgly\CLI\UI\Components\Menu\Items\Option;
-use Bootgly\CLI\UI\Components\Menu\Items\Options;
-// TODO: remove
 use Bootgly\CLI\UI\Components\Menu\Items\extensions\Divisors\Divisor;
 use Bootgly\CLI\UI\Components\Menu\Items\extensions\Headers\Header;
+use Bootgly\CLI\UI\Components\Menu\Items\Option;
+use Bootgly\CLI\UI\Components\Menu\Items\Options;
+use Bootgly\CLI\UI\Components\Menu\Orientation;
 
 
 class Menu extends Component

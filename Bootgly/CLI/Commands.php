@@ -11,12 +11,12 @@
 namespace Bootgly\CLI;
 
 
+use const BOOTGLY_ROOT_DIR;
 use function count;
 use function is_array;
 use Closure;
 use Error;
 
-use const BOOTGLY_ROOT_DIR;
 use Bootgly\ABI\Data\__String\Path;
 use Bootgly\CLI\Command;
 use Bootgly\CLI\Commands\Arguments;

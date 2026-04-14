@@ -11,6 +11,7 @@
 namespace Bootgly\CLI;
 
 
+use function array_merge;
 use Closure;
 
 

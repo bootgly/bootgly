@@ -11,9 +11,10 @@
 namespace Bootgly\CLI\Commands;
 
 
+use function array_slice;
 use function explode;
-use function strpos;
 use function str_split;
+use function strpos;
 use function substr;
 
 

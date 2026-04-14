@@ -11,6 +11,9 @@
 namespace Bootgly\CLI\UI\Components\Menu;
 
 
+use function basename;
+use function get_class;
+use function str_replace;
 use AllowDynamicProperties;
 
 use Bootgly\CLI\UI\Components\Menu;

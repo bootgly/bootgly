@@ -11,8 +11,10 @@
 namespace Bootgly\CLI\UI\Components\Table;
 
 
-use Bootgly\CLI\UI\Components\Table;
+use function count;
+
 use Bootgly\ADI\Table\Section;
+use Bootgly\CLI\UI\Components\Table;
 
 
 class Rows

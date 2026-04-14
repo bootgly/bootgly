@@ -11,8 +11,18 @@
 namespace Bootgly\CLI\UI\Components;
 
 
-use Bootgly\API\Component;
+use const PHP_EOL;
+use const STR_PAD_RIGHT;
+use function array_map;
+use function explode;
+use function implode;
+use function max;
+use function str_pad;
+use function str_split;
+use function strlen;
+use function strtoupper;
 
+use Bootgly\API\Component;
 use Bootgly\CLI\Terminal\Output;
 
 

@@ -11,6 +11,9 @@
 namespace Bootgly\CLI\UI\Components\Menu\Items\extensions\Divisors;
 
 
+use function str_repeat;
+use function strlen;
+
 use Bootgly\CLI\UI\Components\Menu;
 use Bootgly\CLI\UI\Components\Menu\Items;
 use Bootgly\CLI\UI\Components\Menu\Orientation;
