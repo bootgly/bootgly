@@ -11,8 +11,13 @@
 namespace Bootgly\ADI\Table;
 
 
+use function current;
+use function key;
+use function next;
+use function reset;
 use ArrayAccess;
 use Iterator;
+
 
 /**
  * @template TKey of array-key

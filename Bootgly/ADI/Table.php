@@ -11,11 +11,13 @@
 namespace Bootgly\ADI;
 
 
+use function is_numeric;
 use Throwable;
+
+use Bootgly\ADI\Table\Section;
 use Bootgly\ADI\Table\Section\Body;
 use Bootgly\ADI\Table\Section\Footer;
 use Bootgly\ADI\Table\Section\Header;
-use Bootgly\ADI\Table\Section;
 
 
 class Table

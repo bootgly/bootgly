@@ -11,9 +11,10 @@
 namespace Bootgly;
 
 
+use function str_replace;
 use PDO;
-use PDOStatement;
 use PDOException;
+use PDOStatement;
 
 
 class Database
