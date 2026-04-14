@@ -11,6 +11,16 @@
 namespace Bootgly\ABI\Data\__String\Tokens;
 
 
+use const PHP_EOL;
+use const STR_PAD_LEFT;
+use function array_key_last;
+use function array_slice;
+use function max;
+use function str_pad;
+use function str_repeat;
+use function str_replace;
+use function strlen;
+
 use Bootgly\ABI\Data\__String\Escapeable\Text\Formattable;
 use Bootgly\ABI\Data\__String\Theme;
 use Bootgly\ABI\Data\__String\Tokens;
@@ -135,15 +145,15 @@ class Highlighter extends Tokens
    ): string
    {
       // <<
-      $source = \str_replace(["\r\n", "\r"], "\n", $source);
+      $source = str_replace(["\r\n", "\r"], "\n", $source);
       $tokens = $this->tokenize($source);
 
       // |:|
       if ($marked_line !== null) {
          // @ Offset lines - x before and x after marked line number
-         $offset = \max($marked_line - $lines_before - 1, 0);
+         $offset = max($marked_line - $lines_before - 1, 0);
          $length = $lines_after + $lines_before + 1;
-         $tokens = \array_slice($tokens, $offset, $length, true);
+         $tokens = array_slice($tokens, $offset, $length, true);
       }
 
       // >
@@ -189,7 +199,7 @@ class Highlighter extends Tokens
       // * Config
       $mark = ' ' . self::ARROW_SYMBOL . ' ';
       // * Data
-      $line_string_length = \strlen((string) ((int) \array_key_last($lines) + 1));
+      $line_string_length = strlen((string) ((int) array_key_last($lines) + 1));
       $line_string_length = ($line_string_length < self::WIDTH
          ? self::WIDTH
          : $line_string_length
@@ -201,7 +211,7 @@ class Highlighter extends Tokens
          $number = (string) ($line_number);
 
          // @ Pad line
-         $number = \str_pad(
+         $number = str_pad(
             string: (string) $number,
             length: $line_string_length,
             pad_string: ' ',
@@ -213,7 +223,7 @@ class Highlighter extends Tokens
             // Marked symbol / No marked symbol
             $output .= ($marked_line === $line_number
                ? $this->Theme->apply(self::ACTUAL_LINE_MARK, $mark)
-               : \str_repeat(self::NO_MARK, $line_string_length)
+               : str_repeat(self::NO_MARK, $line_string_length)
             );
             // Marked line number / No marked line number
             $number = ($marked_line === $line_number
