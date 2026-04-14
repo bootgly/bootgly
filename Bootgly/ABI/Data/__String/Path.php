@@ -11,6 +11,27 @@
 namespace Bootgly\ABI\Data\__String;
 
 
+use const DIRECTORY_SEPARATOR;
+use function abs;
+use function array_pop;
+use function array_push;
+use function array_slice;
+use function array_unshift;
+use function basename;
+use function count;
+use function dirname;
+use function explode;
+use function glob;
+use function implode;
+use function method_exists;
+use function min;
+use function realpath;
+use function str_replace;
+use function strrchr;
+use function strstr;
+use function strtolower;
+use function substr;
+use function trim;
 use SplFileInfo;
 
 use Bootgly\ABI\Data\__Array;

@@ -11,18 +11,18 @@
 namespace Bootgly\ABI\IO\IPC;
 
 
+use const STREAM_IPPROTO_IP;
 use const STREAM_PF_UNIX;
 use const STREAM_SOCK_STREAM;
-use const STREAM_IPPROTO_IP;
 use function fclose;
 use function fread;
 use function fwrite;
 use function pcntl_signal_dispatch;
-use function stream_socket_pair;
-use function stream_set_blocking;
 use function stream_select;
-use Throwable;
+use function stream_set_blocking;
+use function stream_socket_pair;
 use Generator;
+use Throwable;
 
 
 class Pipe

@@ -11,6 +11,19 @@
 namespace Bootgly\ABI\Data;
 
 
+use function array_is_list;
+use function array_keys;
+use function array_search;
+use function array_values;
+use function current;
+use function end;
+use function is_array;
+use function key;
+use function method_exists;
+use function next;
+use function prev;
+use function reset;
+
 use Bootgly\ABI\Data;
 
 

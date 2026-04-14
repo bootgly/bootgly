@@ -11,6 +11,10 @@
 namespace Bootgly\ABI\Debugging;
 
 
+use const BOOTGLY_WORKING_DIR;
+use const DEBUG_BACKTRACE_IGNORE_ARGS;
+use const PHP_SAPI;
+use function array_map;
 use function array_values;
 use function debug_backtrace;
 use function dirname;
@@ -22,7 +26,7 @@ use Bootgly\ABI\Debugging\Backtrace\Call;
 class Backtrace
 {
    // * Config
-   public static int $options = \DEBUG_BACKTRACE_IGNORE_ARGS;
+   public static int $options = DEBUG_BACKTRACE_IGNORE_ARGS;
    public static int $traces = 4;
    public static bool $counter = true;
 
@@ -91,7 +95,7 @@ class Backtrace
       // TODO use Theme
       $calls = $this->calls;
       if ($calls && $calls[0]->file && $calls[0]->line) {
-         $output .= match (\PHP_SAPI) {
+         $output .= match (PHP_SAPI) {
             'cli'  => '',
             default => '<small>',
          };
@@ -108,30 +112,30 @@ class Backtrace
 
                // Trace counter
                if (self::$counter) {
-                  $trace .= match (\PHP_SAPI) {
+                  $trace .= match (PHP_SAPI) {
                      'cli' => "\033[93m ",
                      default => ' '
                   };
                   $trace .= $n;
-                  $trace .= match (\PHP_SAPI) {
+                  $trace .= match (PHP_SAPI) {
                      'cli' => "\033[0m ",
                      default => ''
                   };
                }
                // Trace file
-               $trace .= match (\PHP_SAPI) {
+               $trace .= match (PHP_SAPI) {
                   'cli' => "\033[0m",
                   default => ''
                };
                $trace .= $file;
                // Trace line
                $trace .= ':';
-               $trace .= match (\PHP_SAPI) {
+               $trace .= match (PHP_SAPI) {
                   'cli' => "\033[96m",
                   default => ''
                };
                $trace .= $line;
-               $trace .= match (\PHP_SAPI) {
+               $trace .= match (PHP_SAPI) {
                   'cli' => "\033[0m",
                   default => ''
                };
@@ -146,7 +150,7 @@ class Backtrace
             $n++;
          }
 
-         $output .= match (\PHP_SAPI) {
+         $output .= match (PHP_SAPI) {
             'cli'  => '',
             default => '</small>',
          };

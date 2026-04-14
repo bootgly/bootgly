@@ -11,6 +11,10 @@
 namespace Bootgly\ABI\IO\FS\File;
 
 
+use function explode;
+use function mime_content_type;
+
+
 class MIME
 {
    // * Data

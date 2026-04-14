@@ -12,9 +12,9 @@ namespace Bootgly\ABI\Data\__String;
 
 
 use function count;
+use function is_array;
 use function is_callable;
 use function is_string;
-use function is_array;
 use Exception;
 
 
@@ -102,7 +102,7 @@ class Theme
     */
    public function add (array $theme): self
    {
-      if (\count($theme) > 1) {
+      if (count($theme) > 1) {
          throw new Exception('Invalid theme structure.');
       }
 

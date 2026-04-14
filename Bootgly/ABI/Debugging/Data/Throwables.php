@@ -11,11 +11,22 @@
 namespace Bootgly\ABI\Debugging\Data;
 
 
+use const BOOTGLY_WORKING_DIR;
 use const PHP_SAPI;
+use function array_reverse;
+use function array_shift;
+use function array_slice;
+use function count;
+use function explode;
 use function file_get_contents;
 use function get_class;
-use Throwable;
+use function str_repeat;
+use function strlen;
+use function strpos;
+use function strrpos;
+use function substr;
 use RuntimeException;
+use Throwable;
 
 use Bootgly\ABI\Data\__String\Escapeable\Text\Formattable;
 use Bootgly\ABI\Data\__String\Path;

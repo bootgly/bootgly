@@ -11,6 +11,9 @@
 namespace Bootgly\ABI\Debugging;
 
 
+use const NULL;
+use function error_get_last;
+
 use Bootgly\ABI\Debugging;
 use Bootgly\ABI\Debugging\Data\Throwables\Errors;
 use Bootgly\ABI\Debugging\Data\Throwables\Exceptions;

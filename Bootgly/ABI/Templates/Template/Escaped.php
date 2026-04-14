@@ -11,6 +11,12 @@
 namespace Bootgly\ABI\Templates\Template;
 
 
+use const PHP_EOL;
+use function is_string;
+use function preg_replace_callback_array;
+use function str_repeat;
+use function strlen;
+
 use Bootgly\ABI\Data\__String\Escapeable;
 use Bootgly\ABI\Data\__String\Escapeable\Cursor\Positionable;
 use Bootgly\ABI\Data\__String\Escapeable\Cursor\Shapeable;

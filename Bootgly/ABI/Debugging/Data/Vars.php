@@ -11,6 +11,19 @@
 namespace Bootgly\ABI\Debugging\Data;
 
 
+use const PHP_SAPI;
+use function count;
+use function get_class;
+use function get_resource_type;
+use function gettype;
+use function is_array;
+use function is_callable;
+use function is_object;
+use function is_string;
+use function str_repeat;
+use function strlen;
+use function substr;
+
 use Bootgly\ABI\Debugging;
 use Bootgly\ABI\Debugging\Backtrace;
 

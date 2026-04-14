@@ -11,6 +11,9 @@
 namespace Bootgly\ABI\Templates;
 
 
+use function implode;
+use function is_array;
+use function is_string;
 use Closure;
 
 use Bootgly\ABI\Data\__String\Path;

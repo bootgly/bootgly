@@ -11,6 +11,11 @@
 namespace Bootgly\ABI;
 
 
+use function end;
+use function explode;
+use function strtolower;
+
+
 trait Resources
 {
    public const string BOOTSTRAP_FILENAME = '@.php';

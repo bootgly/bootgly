@@ -12,6 +12,7 @@ namespace Bootgly\ABI\Templates;
 
 
 use function array_pop;
+use function count;
 use Countable;
 
 

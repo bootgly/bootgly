@@ -11,6 +11,43 @@
 namespace Bootgly\ABI\Data\__String;
 
 
+use const T_CLASS_C;
+use const T_CLOSE_TAG;
+use const T_COALESCE;
+use const T_COMMENT;
+use const T_CONSTANT_ENCAPSED_STRING;
+use const T_DIR;
+use const T_DNUMBER;
+use const T_DOC_COMMENT;
+use const T_ENCAPSED_AND_WHITESPACE;
+use const T_FILE;
+use const T_FUNC_C;
+use const T_INLINE_HTML;
+use const T_IS_EQUAL;
+use const T_IS_GREATER_OR_EQUAL;
+use const T_IS_IDENTICAL;
+use const T_IS_NOT_EQUAL;
+use const T_IS_NOT_IDENTICAL;
+use const T_IS_SMALLER_OR_EQUAL;
+use const T_LINE;
+use const T_LNUMBER;
+use const T_METHOD_C;
+use const T_NAME_FULLY_QUALIFIED;
+use const T_NS_C;
+use const T_OBJECT_OPERATOR;
+use const T_OPEN_TAG;
+use const T_OPEN_TAG_WITH_ECHO;
+use const T_SPACESHIP;
+use const T_STRING;
+use const T_TRAIT_C;
+use const T_VARIABLE;
+use const T_WHITESPACE;
+use function explode;
+use function is_array;
+use function token_get_all;
+use function token_name;
+
+
 class Tokens
 {
    // * Config
@@ -51,7 +88,7 @@ class Tokens
    public function tokenize (string $source, int $fallback = self::AS_TOKEN_GROUP): array
    {
       // * Data
-      $tokens = \token_get_all($source);
+      $tokens = token_get_all($source);
 
       // * Metadata
       $output = [];
@@ -61,59 +98,59 @@ class Tokens
 
       // @
       foreach ($tokens as $token) {
-         if (\is_array($token) === true) {
+         if (is_array($token) === true) {
             $token_type_new = match ($token[0]) {
-               \T_WHITESPACE => null, # 392
+               T_WHITESPACE => null, # 392
 
-               \T_STRING, # 262
-               \T_NAME_FULLY_QUALIFIED, # 263
-               \T_LINE, # 343
-               \T_FILE, # 344
-               \T_DIR, # 345
-               \T_CLASS_C, # 346
-               \T_TRAIT_C, # 347
-               \T_NS_C, # 350
+               T_STRING, # 262
+               T_NAME_FULLY_QUALIFIED, # 263
+               T_LINE, # 343
+               T_FILE, # 344
+               T_DIR, # 345
+               T_CLASS_C, # 346
+               T_TRAIT_C, # 347
+               T_NS_C, # 350
                   => self::TOKEN_DEFAULT, 
 
                // Operators
-               \T_IS_EQUAL, # 366
-               \T_IS_NOT_EQUAL, # 367
-               \T_IS_IDENTICAL, # 368
-               \T_IS_NOT_IDENTICAL, # 369
-               \T_IS_SMALLER_OR_EQUAL, # 370
-               \T_IS_GREATER_OR_EQUAL, # 371
-               \T_SPACESHIP, # 372
-               \T_COALESCE, # 400
+               T_IS_EQUAL, # 366
+               T_IS_NOT_EQUAL, # 367
+               T_IS_IDENTICAL, # 368
+               T_IS_NOT_IDENTICAL, # 369
+               T_IS_SMALLER_OR_EQUAL, # 370
+               T_IS_GREATER_OR_EQUAL, # 371
+               T_SPACESHIP, # 372
+               T_COALESCE, # 400
                   => self::TOKEN_OPERATOR,
 
-               \T_LNUMBER, # 260
-               \T_DNUMBER, # 261
+               T_LNUMBER, # 260
+               T_DNUMBER, # 261
                   => self::TOKEN_NUMBER,
 
-               \T_VARIABLE, # 266
+               T_VARIABLE, # 266
                   => self::TOKEN_VARIABLE,
 
-               \T_METHOD_C, # 348
-               \T_FUNC_C, # 349
+               T_METHOD_C, # 348
+               T_FUNC_C, # 349
                   => self::TOKEN_FUNCTION, 
 
-               \T_COMMENT, # 387
-               \T_DOC_COMMENT, # 388
+               T_COMMENT, # 387
+               T_DOC_COMMENT, # 388
                   => self::TOKEN_COMMENT,
 
-               \T_ENCAPSED_AND_WHITESPACE, # 268
-               \T_CONSTANT_ENCAPSED_STRING, # 269
+               T_ENCAPSED_AND_WHITESPACE, # 268
+               T_CONSTANT_ENCAPSED_STRING, # 269
                   => self::TOKEN_STRING,
 
-               \T_INLINE_HTML, # 267
+               T_INLINE_HTML, # 267
                   => self::TOKEN_HTML,
 
-               \T_OBJECT_OPERATOR, # 384
+               T_OBJECT_OPERATOR, # 384
                   => self::TOKEN_ACCESS,
 
-               \T_OPEN_TAG, # 389
-               \T_OPEN_TAG_WITH_ECHO, # 390
-               \T_CLOSE_TAG, # 391
+               T_OPEN_TAG, # 389
+               T_OPEN_TAG_WITH_ECHO, # 390
+               T_CLOSE_TAG, # 391
                   => null,
 
                #\T_FUNCTION, # 310
@@ -144,7 +181,7 @@ class Tokens
             $token_buffer = '';
             $token_type_current = $token_type_new;
          }
-         $token_buffer .= (\is_array($token)
+         $token_buffer .= (is_array($token)
             ? $token[1]
             : $token
          );
@@ -159,7 +196,7 @@ class Tokens
       foreach ($output as $token) {
          $token_type = $token[0];
          $token_content = $token[1];
-         foreach (\explode("\n", $token_content) as $line_count => $token_line) {
+         foreach (explode("\n", $token_content) as $line_count => $token_line) {
             if ($line_count > 0) {
                $lines[] = $line;
                $line = [];

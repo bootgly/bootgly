@@ -11,6 +11,10 @@
 namespace Bootgly\ABI\Templates;
 
 
+use function count;
+use function current;
+use function key;
+use function next;
 use Countable;
 
 

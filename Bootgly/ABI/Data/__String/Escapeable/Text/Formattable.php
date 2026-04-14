@@ -11,6 +11,8 @@
 namespace Bootgly\ABI\Data\__String\Escapeable\Text;
 
 
+use function implode;
+
 use Bootgly\ABI\Data\__String\Escapeable;
 use Bootgly\ABI\Data\__String\Escapeable\Text;
 

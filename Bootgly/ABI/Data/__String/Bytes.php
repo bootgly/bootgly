@@ -11,7 +11,13 @@
 namespace Bootgly\ABI\Data\__String;
 
 
-use function log, floor, max, min, count, pow, round;
+use function count;
+use function floor;
+use function log;
+use function max;
+use function min;
+use function pow;
+use function round;
 
 
 class Bytes

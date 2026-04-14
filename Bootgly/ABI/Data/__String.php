@@ -11,6 +11,24 @@
 namespace Bootgly\ABI\Data;
 
 
+use const STR_PAD_RIGHT;
+use function file_exists;
+use function floor;
+use function function_exists;
+use function iconv_strlen;
+use function mb_convert_case;
+use function mb_strlen;
+use function mb_strtolower;
+use function mb_strtoupper;
+use function mb_substr;
+use function method_exists;
+use function preg_replace;
+use function strlen;
+use function strpos;
+use function strtolower;
+use function strtoupper;
+use function ucwords;
+
 use Bootgly\ABI\Data;
 
 
