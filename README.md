@@ -26,6 +26,8 @@
 ## Table of Contents
 
 - [🤔 About](#-about)
+  - [💬 Commit Convention](#-commit-convention)
+  - [📑 Versioning System](#-versioning-system)
 - [🟢 Boot Requirements](#-boot-requirements)
   - [🤝 Compatibility](#-compatibility)
   - [⚙️ Dependencies](#️-dependencies)
@@ -37,7 +39,6 @@
 - [🚀 Getting started](#-getting-started)
 - [🖼 Highlights](#-highlights)
 - [📃 License](#-license)
-- [📑 Versioning System](#-versioning-system)
 
 ---
 
@@ -75,6 +76,14 @@ For the base CLI development, Bootgly already has the following UI Components:
 For the base Web development, Bootgly has a [HTTP Server CLI][WEB_HTTP_SERVER_CLI], a [TCP Client CLI][WEB_TCP_CLIENT_INTERFACE] and a [TCP Server CLI][WEB_TCP_SERVER_INTERFACE].
 
 More news may come until the release of v1.0. Stay tuned.
+
+### 💬 Commit Convention
+
+Bootgly uses [Conventional Commits v1.0.0][CONVENTIONAL_COMMITS].
+
+### 📑 Versioning System
+
+Bootgly uses [Semantic Versioning 2.0][SEMANTIC_VERSIONING].
 
 ---
 
@@ -276,12 +285,6 @@ More **Screenshots**, videos and details can be found in the home page of [Bootg
 
 The Bootgly is open-sourced software licensed under the [MIT license][MIT_LICENSE].
 
----
-
-## 📑 Versioning System
-
-Bootgly uses [Semantic Versioning 2.0][SEMANTIC_VERSIONING].
-
 
 <!-- Links -->
 [I2P_ARQUITECTURE]: https://docs.bootgly.com/manual/Bootgly/basic/architecture/overview
@@ -320,6 +323,7 @@ Bootgly uses [Semantic Versioning 2.0][SEMANTIC_VERSIONING].
 
 [CODE_OF_CONDUCT]: https://github.com/bootgly/bootgly/blob/main/.github/CODE_OF_CONDUCT.md
 [SEMANTIC_VERSIONING]: https://semver.org/
+[CONVENTIONAL_COMMITS]: https://www.conventionalcommits.org/en/v1.0.0/
 
 
 [MIT_LICENSE]: https://opensource.org/license/mit/
