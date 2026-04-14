@@ -67,8 +67,8 @@ class Response
     */
    public function reset (): void
    {
-      $this->Header = new Header;
-      $this->Body = new Body;
+      $this->Header->reset();
+      $this->Body->reset();
 
       $this->protocol = 'HTTP/1.1';
       $this->code = 0;

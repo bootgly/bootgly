@@ -43,6 +43,14 @@ class Body
       $this->waiting = false;
    }
 
+   public function reset (): void
+   {
+      $this->raw = '';
+      $this->length = 0;
+      $this->downloaded = 0;
+      $this->waiting = false;
+   }
+
    /**
     * Decode the body content in the given format.
     *

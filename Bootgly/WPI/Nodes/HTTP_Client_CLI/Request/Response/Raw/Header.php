@@ -51,6 +51,14 @@ class Header
       $this->built = false;
    }
 
+   public function reset (): void
+   {
+      $this->fields = [];
+      $this->raw = '';
+      $this->length = null;
+      $this->built = false;
+   }
+
    /**
     * Get a header field value by name.
     *

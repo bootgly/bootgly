@@ -104,6 +104,11 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
    protected bool $batching = false;
    /** Next Request for the connect callback (set before connect()) */
    protected null|Request $nextRequest = null;
+   // # Encoder cache (event-driven mode)
+   /** @var array<string,string> method+URI => encoded output */
+   protected static array $encoderCache = [];
+   /** Cached Request template for event-driven reuse (avoids allocation per cycle) */
+   protected null|Request $cachedRequest = null;
 
 
    public function __construct (int $mode = self::MODE_DEFAULT)
@@ -233,35 +238,47 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
          // @ Track when request was sent for timeout detection
          $Request->sentAt = microtime(true);
 
-         $headerRaw = $template->Header->build();
-         $length = null;
-
-         // @ Detect Expect: 100-continue — send headers only, defer body
-         if (stripos($headerRaw, 'Expect: 100-continue') !== false
-            && $template->Body->raw !== ''
-         ) {
-            $Connection->output = self::$Encoder::encode(
-               $template->method,
-               $template->URI,
-               $template->protocol,
-               $headerRaw,
-               host: self::$targetHost ?? '127.0.0.1',
-               port: self::$targetPort ?? 80,
-               length: $length
-            );
-            $Request->connectionState = 'waiting-100-continue';
+         // @ Use cached encoded output if available (event-driven, same method+URI)
+         $cacheKey = $template->method . ' ' . $template->URI;
+         if (self::$eventDriven && isset(self::$encoderCache[$cacheKey])) {
+            $Connection->output = self::$encoderCache[$cacheKey];
          }
          else {
-            $Connection->output = self::$Encoder::encode(
-               $template->method,
-               $template->URI,
-               $template->protocol,
-               $headerRaw,
-               $template->Body->raw,
-               self::$targetHost ?? '127.0.0.1',
-               self::$targetPort ?? 80,
-               $length
-            );
+            $headerRaw = $template->Header->build();
+            $length = null;
+
+            // @ Detect Expect: 100-continue — send headers only, defer body
+            if (stripos($headerRaw, 'Expect: 100-continue') !== false
+               && $template->Body->raw !== ''
+            ) {
+               $Connection->output = self::$Encoder::encode(
+                  $template->method,
+                  $template->URI,
+                  $template->protocol,
+                  $headerRaw,
+                  host: self::$targetHost ?? '127.0.0.1',
+                  port: self::$targetPort ?? 80,
+                  length: $length
+               );
+               $Request->connectionState = 'waiting-100-continue';
+            }
+            else {
+               $Connection->output = self::$Encoder::encode(
+                  $template->method,
+                  $template->URI,
+                  $template->protocol,
+                  $headerRaw,
+                  $template->Body->raw,
+                  self::$targetHost ?? '127.0.0.1',
+                  self::$targetPort ?? 80,
+                  $length
+               );
+            }
+
+            // @ Cache encoded output for reuse
+            if (self::$eventDriven) {
+               self::$encoderCache[$cacheKey] = $Connection->output;
+            }
          }
 
          self::$Event->add($Socket, self::$Event::EVENT_WRITE, $Connection);
@@ -282,7 +299,14 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
          if ($newSize > 0) {
             self::$bytesReceived += $newSize;
             $Request->bytesReceived += $newSize;
-            $Request->pendingBuffer .= $newBytes;
+
+            // @ Avoid string concat when buffer is empty (direct assignment)
+            if ($Request->pendingBuffer === '') {
+               $Request->pendingBuffer = $newBytes;
+            }
+            else {
+               $Request->pendingBuffer .= $newBytes;
+            }
          }
          else if ($Request->pendingBuffer === '') {
             return; // @ No new data and no pending buffer, nothing to process
@@ -383,7 +407,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
             }
             else {
                // @ Slice consumed bytes; preserve any pipelined/leftover bytes
-               $Request->pendingBuffer = substr($buffer, $consumed);
+               $Request->pendingBuffer = $consumed >= $size ? '' : substr($buffer, $consumed);
 
                // @ Body not yet complete: wait for more data before firing callback
                if ($parsed['bodyWaiting']) {
@@ -490,37 +514,63 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
             if ($HTTP_Client_CLI->nextRequest !== null) {
                $next = $HTTP_Client_CLI->nextRequest;
                $HTTP_Client_CLI->nextRequest = null;
-               $HTTP_Client_CLI->pendingRequests[$socketId] = $next;
 
-               $headerRaw = $next->Header->build();
-               $length = null;
+               // @ Reuse existing Request object when method+URI match (avoid allocation)
+               if ($next->method === $Request->method && $next->URI === $Request->URI) {
+                  $Request->pendingBuffer = '';
+                  $Request->connectionState = 'waiting';
+                  $Request->completed = false;
+                  $Request->bytesReceived = 0;
+                  // @ Skip Response->reset() — cache hit skips repopulation,
+                  // so Response retains correct data from previous cycle
+                  // $Request stays in pendingRequests[$socketId]
 
-               // @ Detect Expect: 100-continue — send headers only, defer body
-               if (stripos($headerRaw, 'Expect: 100-continue') !== false
-                  && $next->Body->raw !== ''
-               ) {
-                  $Connection->output = self::$Encoder::encode(
-                     $next->method,
-                     $next->URI,
-                     $next->protocol,
-                     $headerRaw,
-                     host: self::$targetHost ?? '127.0.0.1',
-                     port: self::$targetPort ?? 80,
-                     length: $length
-                  );
-                  $next->connectionState = 'waiting-100-continue';
+                  // @ Reuse last encoded output directly (avoids cacheKey concat + hash lookup)
+                  static $reusedOutput = null;
+                  $Connection->output = $reusedOutput ??= self::$encoderCache[$next->method . ' ' . $next->URI];
                }
                else {
-                  $Connection->output = self::$Encoder::encode(
-                     $next->method,
-                     $next->URI,
-                     $next->protocol,
-                     $headerRaw,
-                     $next->Body->raw,
-                     self::$targetHost ?? '127.0.0.1',
-                     self::$targetPort ?? 80,
-                     $length
-                  );
+                  $HTTP_Client_CLI->pendingRequests[$socketId] = $next;
+
+                  // @ Use cached encoded output if available
+                  $cacheKey = $next->method . ' ' . $next->URI;
+                  if (isset(self::$encoderCache[$cacheKey])) {
+                     $Connection->output = self::$encoderCache[$cacheKey];
+                  }
+                  else {
+                     $headerRaw = $next->Header->build();
+                     $length = null;
+
+                     // @ Detect Expect: 100-continue — send headers only, defer body
+                     if (stripos($headerRaw, 'Expect: 100-continue') !== false
+                        && $next->Body->raw !== ''
+                     ) {
+                        $Connection->output = self::$Encoder::encode(
+                           $next->method,
+                           $next->URI,
+                           $next->protocol,
+                           $headerRaw,
+                           host: self::$targetHost ?? '127.0.0.1',
+                           port: self::$targetPort ?? 80,
+                           length: $length
+                        );
+                        $next->connectionState = 'waiting-100-continue';
+                     }
+                     else {
+                        $Connection->output = self::$Encoder::encode(
+                           $next->method,
+                           $next->URI,
+                           $next->protocol,
+                           $headerRaw,
+                           $next->Body->raw,
+                           self::$targetHost ?? '127.0.0.1',
+                           self::$targetPort ?? 80,
+                           $length
+                        );
+                     }
+
+                     self::$encoderCache[$cacheKey] = $Connection->output;
+                  }
                }
 
                self::$Event->del($Socket, self::$Event::EVENT_READ);
@@ -706,6 +756,18 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
       mixed $body = null
    ): self|Response
    {
+      // @ Event-driven mode: reuse cached Request when method+URI match (avoid allocation)
+      if (self::$eventDriven
+         && $this->cachedRequest !== null
+         && $this->cachedRequest->method === $method
+         && $this->cachedRequest->URI === $URI
+         && $headers === []
+         && $body === null
+      ) {
+         $this->nextRequest = $this->cachedRequest;
+         return $this;
+      }
+
       // @ Create and prepare request with transport state
       $Request = new Request;
       $Request($method, $URI, $headers, $body);
@@ -713,8 +775,9 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
 
       $this->nextRequest = $Request;
 
-      // @ Event-driven mode: store request, return self
+      // @ Event-driven mode: cache and return self
       if (self::$eventDriven) {
+         $this->cachedRequest = $Request;
          $this->wire();
          return $this;
       }

@@ -36,8 +36,8 @@ class Decoder_ extends Decoder
       /** @var array<string, array{protocol: string, code: int, status: string, headerRaw: string, bodyRaw: string, bodyLength: int, bodyDownloaded: int, bodyWaiting: bool, chunked: bool, closeConnection: bool, interim: bool, consumed: int}> $cache */
       static $cache = [];
 
-      // ? Check local cache (only for method-independent short responses)
-      if ($method === null && $size <= 2048 && isSet($cache[$buffer])) {
+      // ? Check local cache (safe for all methods except HEAD)
+      if ($method !== 'HEAD' && $size <= 2048 && isSet($cache[$buffer])) {
          return $cache[$buffer];
       }
 
@@ -99,8 +99,8 @@ class Decoder_ extends Decoder
             'consumed'        => $headerSectionLength,
          ];
 
-         // @ Cache small, method-independent no-body responses
-         if ($method === null && $headerSectionLength <= 2048) {
+         // @ Cache small no-body responses (safe for all methods except HEAD)
+         if ($method !== 'HEAD' && $headerSectionLength <= 2048) {
             $cache[$buffer] = $parsed;
             if (count($cache) > 512) {
                unset($cache[key($cache)]);
@@ -246,8 +246,8 @@ class Decoder_ extends Decoder
          'consumed'        => $consumed,
       ];
 
-      // @ Cache small, complete, method-independent responses
-      if ($method === null && $consumed > 0 && $consumed <= 2048 && ! $bodyWaiting) {
+      // @ Cache small, complete responses (safe for all methods except HEAD)
+      if ($method !== 'HEAD' && $consumed > 0 && $consumed <= 2048 && ! $bodyWaiting) {
          $cache[$buffer] = $parsed;
          if (count($cache) > 512) {
             unset($cache[key($cache)]);
