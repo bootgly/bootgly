@@ -723,6 +723,15 @@ class Analyzer
          return false;
       }
 
+      // @ Language keywords/literals that look like constants but are not importable
+      static $keywords = [
+         'NULL'  => true, 'TRUE'  => true, 'FALSE' => true,
+         'SELF'  => true, 'STATIC' => true, 'PARENT' => true,
+      ];
+      if (isset($keywords[$name])) {
+         return false;
+      }
+
       // @ Must be ALL_CAPS (allow digits and underscores)
       return preg_match('/^[A-Z][A-Z0-9_]+$/', $name) === 1;
    }
