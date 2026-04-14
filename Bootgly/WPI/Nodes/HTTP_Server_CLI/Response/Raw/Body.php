@@ -11,8 +11,8 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Raw;
 
 
-use function strlen;
 use function dechex;
+use function strlen;
 
 
 class Body

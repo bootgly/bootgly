@@ -11,24 +11,27 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Session\Handlers;
 
 
+use const BOOTGLY_WORKING_DIR;
+use const DIRECTORY_SEPARATOR;
+use function bin2hex;
 use function clearstatcache;
+use function file_exists;
 use function file_get_contents;
 use function file_put_contents;
 use function filemtime;
 use function glob;
 use function is_dir;
 use function is_file;
+use function is_string;
 use function mkdir;
+use function preg_match;
+use function random_bytes;
 use function rename;
+use function strlen;
 use function time;
 use function touch;
-use function unlink;
-use function bin2hex;
-use function file_exists;
-use function is_string;
-use function random_bytes;
-use function strlen;
 use function uniqid;
+use function unlink;
 
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Session;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Session\Handling;

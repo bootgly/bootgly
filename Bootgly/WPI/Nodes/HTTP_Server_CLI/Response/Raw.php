@@ -15,8 +15,8 @@ use function strlen;
 
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI as Server;
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Raw\Header;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Raw\Body;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Raw\Header;
 
 
 trait Raw

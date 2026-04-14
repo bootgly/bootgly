@@ -11,9 +11,14 @@
 namespace Bootgly\WPI\Interfaces\TCP_Client_CLI;
 
 
+use const PHP_EOL;
+use function is_resource;
+use function stream_set_blocking;
+use function stream_set_read_buffer;
+
 use Bootgly\ACI\Logs\LoggableEscaped;
 use Bootgly\WPI;
-use Bootgly\WPI\Connections\Packages; // @interface
+use Bootgly\WPI\Connections\Packages;
 use Bootgly\WPI\Interfaces\TCP_Client_CLI as Client;
 use Bootgly\WPI\Interfaces\TCP_Client_CLI\Connections\Connection;
 

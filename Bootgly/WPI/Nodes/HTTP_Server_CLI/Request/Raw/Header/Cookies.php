@@ -10,6 +10,8 @@
 
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Raw\Header;
 
+
+use const PREG_SPLIT_NO_EMPTY;
 use function array_pad;
 use function explode;
 use function is_array;

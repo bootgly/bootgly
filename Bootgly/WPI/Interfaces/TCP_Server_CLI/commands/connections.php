@@ -11,6 +11,7 @@
 namespace Bootgly\WPI\Interfaces\TCP_Server_CLI\commands;
 
 
+use const PHP_EOL;
 use function count;
 use function date;
 use function is_array;

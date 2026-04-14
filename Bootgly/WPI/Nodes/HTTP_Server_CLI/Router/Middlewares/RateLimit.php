@@ -17,6 +17,7 @@ use function is_array;
 use function is_file;
 use function json_decode;
 use function json_encode;
+use function max;
 use function time;
 use Closure;
 
@@ -76,7 +77,7 @@ class RateLimit implements Middleware
 
       // @ Set rate limit headers
       $Response->Header->set('X-RateLimit-Limit', (string) $this->limit); // @phpstan-ignore-line
-      $Response->Header->set('X-RateLimit-Remaining', (string) \max(0, $remaining)); // @phpstan-ignore-line
+      $Response->Header->set('X-RateLimit-Remaining', (string) max(0, $remaining)); // @phpstan-ignore-line
       $Response->Header->set('X-RateLimit-Reset', (string) ($this->windowStart($ip) + $this->window)); // @phpstan-ignore-line
 
       // ? Rate limit exceeded

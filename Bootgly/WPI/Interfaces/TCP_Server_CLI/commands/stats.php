@@ -11,9 +11,9 @@
 namespace Bootgly\WPI\Interfaces\TCP_Server_CLI\commands;
 
 
-use Closure;
 use function number_format;
 use function sprintf;
+use Closure;
 
 use Bootgly\ABI\Data\__String\Bytes;
 use Bootgly\ACI\Logs\Logger;

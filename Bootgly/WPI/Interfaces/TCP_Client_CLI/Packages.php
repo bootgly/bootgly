@@ -11,6 +11,7 @@
 namespace Bootgly\WPI\Interfaces\TCP_Client_CLI;
 
 
+use const PHP_EOL;
 use function feof;
 use function fread;
 use function fwrite;
@@ -22,7 +23,7 @@ use function substr;
 use Throwable;
 
 use Bootgly\ACI\Logs\LoggableEscaped;
-use Bootgly\WPI; // @interface
+use Bootgly\WPI;
 use Bootgly\WPI\Interfaces\TCP_Client_CLI as Client;
 use Bootgly\WPI\Interfaces\TCP_Client_CLI\Connections;
 use Bootgly\WPI\Interfaces\TCP_Client_CLI\Connections\Connection;

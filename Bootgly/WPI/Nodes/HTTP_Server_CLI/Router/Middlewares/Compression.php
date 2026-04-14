@@ -12,10 +12,10 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Middlewares;
 
 
 use function function_exists;
-use function gzencode;
 use function gzdeflate;
-use function strlen;
+use function gzencode;
 use function str_contains;
+use function strlen;
 use Closure;
 
 use Bootgly\API\Workables\Server\Middleware;

@@ -11,10 +11,10 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Raw;
 
 
-use function trim;
-use function preg_match;
-use function parse_str;
 use function json_validate;
+use function parse_str;
+use function preg_match;
+use function trim;
 
 
 class Body

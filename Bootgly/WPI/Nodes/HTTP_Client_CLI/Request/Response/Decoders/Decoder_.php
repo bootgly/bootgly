@@ -12,14 +12,14 @@ namespace Bootgly\WPI\Nodes\HTTP_Client_CLI\Request\Response\Decoders;
 
 
 use function count;
-use function explode;
 use function end;
+use function explode;
 use function key;
 use function stripos;
 use function strlen;
-use function strtolower;
 use function strpos;
 use function strstr;
+use function strtolower;
 use function substr;
 use function trim;
 

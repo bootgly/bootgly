@@ -11,8 +11,8 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders;
 
 
-use function time;
 use function substr;
+use function time;
 
 use const Bootgly\WPI;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages;

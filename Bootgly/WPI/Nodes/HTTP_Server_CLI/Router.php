@@ -11,35 +11,38 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI;
 
 
-use function count;
+use function array_keys;
 use function call_user_func_array;
+use function count;
 use function explode;
 use function extract;
 use function implode;
 use function in_array;
-use function is_int;
 use function is_array;
+use function is_int;
 use function is_string;
 use function ltrim;
 use function preg_match;
 use function preg_quote;
 use function rtrim;
+use function str_ends_with;
 use function str_replace;
 use function strlen;
 use function strpos;
+use function substr;
 use function substr_count;
 use function trim;
 use Closure;
 use Exception;
 use Generator;
 
+use const Bootgly\WPI;
 use Bootgly\ABI\Data\__String\Path;
 use Bootgly\ABI\IO\FS\File;
-use const Bootgly\WPI;
 use Bootgly\API\Workables\Server\Middleware;
 use Bootgly\API\Workables\Server\Middlewares;
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Route;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Route;
 
 
 class Router

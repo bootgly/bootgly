@@ -10,8 +10,10 @@
 
 namespace Bootgly\WPI\Interfaces;
 
+
 use const E_WARNING;
 use const PHP_SAPI;
+use const SIG_IGN;
 use const SIGALRM;
 use const SIGCONT;
 use const SIGHUP;
@@ -45,8 +47,8 @@ use Throwable;
 use Bootgly\ABI\Debugging\Data\Vars;
 use Bootgly\ACI\Events\Loops;
 use Bootgly\ACI\Events\Timer;
-use Bootgly\ACI\Logs\Logger;
 use Bootgly\ACI\Logs\LoggableEscaped;
+use Bootgly\ACI\Logs\Logger;
 use Bootgly\ACI\Process;
 use Bootgly\WPI\Events;
 use Bootgly\WPI\Events\Select;

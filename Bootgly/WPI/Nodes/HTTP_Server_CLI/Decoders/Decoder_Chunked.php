@@ -11,10 +11,10 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders;
 
 
+use function hexdec;
 use function strlen;
 use function strpos;
 use function substr;
-use function hexdec;
 use function time;
 use function trim;
 

@@ -11,6 +11,7 @@
 namespace Bootgly\WPI\Interfaces\TCP_Client_CLI;
 
 
+use const SIGINT;
 use function count;
 
 use Bootgly\ACI\Logs\LoggableEscaped;
