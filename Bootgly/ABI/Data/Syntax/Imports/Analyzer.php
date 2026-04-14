@@ -34,7 +34,6 @@ use const T_PAAMAYIM_NEKUDOTAYIM;
 use const T_STRING;
 use const T_TRAIT;
 use const T_USE;
-use const T_WHITESPACE;
 use function count;
 use function explode;
 use function file_get_contents;
@@ -53,6 +52,7 @@ use function trim;
 use Bootgly\ABI\Data\Syntax\Builtins;
 use Bootgly\ABI\Data\Syntax\Imports\Analyzer\Issue;
 use Bootgly\ABI\Data\Syntax\Imports\Analyzer\Result;
+use Bootgly\ABI\Data\Syntax\Imports\Analyzer\Tokens;
 
 
 class Analyzer
@@ -108,6 +108,7 @@ class Analyzer
 
       $tokens = token_get_all($source);
       $count = count($tokens);
+      $Tokens = new Tokens($tokens, $count);
 
       // * Data
       $namespace = '';
@@ -155,14 +156,14 @@ class Analyzer
                );
             }
 
-            $namespace = $this->extractNamespaceName($tokens, $i, $count);
+            $namespace = $this->parse($Tokens, $i);
             continue;
          }
 
          // @ Use statements (top-level only)
          if ($token[0] === T_USE) {
             // ? Skip closure `use` (e.g., `function () use ($var)`)
-            if ($this->isClosureUse($tokens, $i)) {
+            if ($Tokens->rewind($i) === ')') {
                continue;
             }
 
@@ -171,7 +172,7 @@ class Analyzer
                continue;
             }
 
-            $import = $this->extractImport($tokens, $i, $count);
+            $import = $this->extract($Tokens, $i);
             if ($import === null) {
                continue;
             }
@@ -262,7 +263,7 @@ class Analyzer
 
          // @ Find function definitions outside class bodies
          if ($token[0] === T_FUNCTION && $classDepth === 0) {
-            $nextToken = $this->getNextMeaningfulToken($tokens, $i, $count);
+            $nextToken = $Tokens->advance($i);
             if ($nextToken !== null && is_array($nextToken) && $nextToken[0] === T_STRING) {
                $localFunctions[strtolower($nextToken[1])] = true;
             }
@@ -310,8 +311,8 @@ class Analyzer
             }
 
             $bsName = $stripped;
-            $afterToken = $this->getNextMeaningfulToken($tokens, $i, $count);
-            $bsOffset = $this->getTokenByteOffset($tokens, $i);
+            $afterToken = $Tokens->advance($i);
+            $bsOffset = $Tokens->locate($i);
             $bsKind = null;
 
             // * function: \func(
@@ -324,7 +325,7 @@ class Analyzer
                }
             }
             // * constant: \ALL_CAPS
-            else if ($this->isConstantName($bsName)) {
+            else if ($this->detect($bsName)) {
                if (Builtins::check($bsName, 'const')
                   || isset($importedConstants[$bsName])
                ) {
@@ -341,7 +342,7 @@ class Analyzer
             }
 
             if ($bsKind !== null) {
-               $this->trackSymbol($usedSymbols, $bsName, $bsKind, $bsLine);
+               $this->track($usedSymbols, $bsName, $bsKind, $bsLine);
 
                // @ backslash_prefix issue (for body fix)
                $issues[] = new Issue(
@@ -389,9 +390,9 @@ class Analyzer
          $line = $token[2];
 
          // @ Get previous meaningful token
-         $prevToken = $this->getPrevMeaningfulToken($tokens, $i);
+         $prevToken = $Tokens->rewind($i);
          // @ Get next meaningful token
-         $nextToken = $this->getNextMeaningfulToken($tokens, $i, $count);
+         $nextToken = $Tokens->advance($i);
 
          // @ Detect function calls: T_STRING followed by `(`
          if ($nextToken === '(') {
@@ -404,19 +405,19 @@ class Analyzer
 
             // ? Skip if already imported
             if (isset($importedFunctions[strtolower($name)])) {
-               $this->trackSymbol($usedSymbols, $name, 'function', $line);
+               $this->track($usedSymbols, $name, 'function', $line);
                continue;
             }
 
             // ? Skip locally-defined functions
             if (isset($localFunctions[strtolower($name)])) {
-               $this->trackSymbol($usedSymbols, $name, 'function', $line);
+               $this->track($usedSymbols, $name, 'function', $line);
                continue;
             }
 
             // ? Check if it's a builtin function
             if (Builtins::check($name, 'function')) {
-               $this->trackSymbol($usedSymbols, $name, 'function', $line);
+               $this->track($usedSymbols, $name, 'function', $line);
                $issues[] = new Issue(
                   type: 'missing_import',
                   symbol: $name,
@@ -430,7 +431,7 @@ class Analyzer
          }
 
          // @ Detect constant usage: ALL_CAPS T_STRING
-         if ($this->isConstantName($name)) {
+         if ($this->detect($name)) {
             // ? Skip if preceded by const keyword, namespace/use, or object access
             if ($prevToken !== null && is_array($prevToken)
                && in_array($prevToken[0], [
@@ -451,13 +452,13 @@ class Analyzer
 
             // ? Skip if already imported
             if (isset($importedConstants[$name])) {
-               $this->trackSymbol($usedSymbols, $name, 'const', $line);
+               $this->track($usedSymbols, $name, 'const', $line);
                continue;
             }
 
             // ? Check if it's a builtin constant
             if (Builtins::check($name, 'const')) {
-               $this->trackSymbol($usedSymbols, $name, 'const', $line);
+               $this->track($usedSymbols, $name, 'const', $line);
                $issues[] = new Issue(
                   type: 'missing_import',
                   symbol: $name,
@@ -476,13 +477,13 @@ class Analyzer
          ) {
             // ? Skip if already imported
             if (isset($importedClasses[strtolower($name)])) {
-               $this->trackSymbol($usedSymbols, $name, 'class', $line);
+               $this->track($usedSymbols, $name, 'class', $line);
                continue;
             }
 
             // ? Check if it's a builtin class
             if (Builtins::check($name, 'class')) {
-               $this->trackSymbol($usedSymbols, $name, 'class', $line);
+               $this->track($usedSymbols, $name, 'class', $line);
                $issues[] = new Issue(
                   type: 'missing_import',
                   symbol: $name,
@@ -502,12 +503,12 @@ class Analyzer
             }
 
             if (isset($importedClasses[strtolower($name)])) {
-               $this->trackSymbol($usedSymbols, $name, 'class', $line);
+               $this->track($usedSymbols, $name, 'class', $line);
                continue;
             }
 
             if (Builtins::check($name, 'class')) {
-               $this->trackSymbol($usedSymbols, $name, 'class', $line);
+               $this->track($usedSymbols, $name, 'class', $line);
                $issues[] = new Issue(
                   type: 'missing_import',
                   symbol: $name,
@@ -542,16 +543,18 @@ class Analyzer
    }
 
    /**
-    * Extract namespace name from tokens.
+    * Parse namespace name from tokens.
     *
-    * @param array<int,mixed> $tokens
+    * @param Tokens $Tokens
     * @param int $i Current position (at T_NAMESPACE)
-    * @param int $count Total tokens
     *
     * @return string
     */
-   private function extractNamespaceName (array &$tokens, int &$i, int $count): string
+   private function parse (Tokens $Tokens, int &$i): string
    {
+      $tokens = &$Tokens->items;
+      $count = $Tokens->count;
+
       $name = '';
       $i++;
       while ($i < $count) {
@@ -573,32 +576,20 @@ class Analyzer
    }
 
    /**
-    * Check if a T_USE token is a closure `use`.
-    *
-    * @param array<int,mixed> $tokens
-    * @param int $i Current position (at T_USE)
-    *
-    * @return bool
-    */
-   private function isClosureUse (array &$tokens, int $i): bool
-   {
-      $prev = $this->getPrevMeaningfulToken($tokens, $i);
-      return $prev === ')';
-   }
-
-   /**
     * Extract a use statement (single or grouped).
     *
-    * @param array<int,mixed> $tokens
+    * @param Tokens $Tokens
     * @param int $i Current position (at T_USE)
-    * @param int $count Total tokens
     *
     * @return null|array{items:array<int,array{symbol:string,kind:string,global:bool,line:int,alias:string}>,byteStart:int,byteEnd:int}
     */
-   private function extractImport (array &$tokens, int &$i, int $count): null|array
+   private function extract (Tokens $Tokens, int &$i): null|array
    {
+      $tokens = &$Tokens->items;
+      $count = $Tokens->count;
+
       $startToken = $tokens[$i];
-      $byteStart = $this->getTokenByteOffset($tokens, $i);
+      $byteStart = $Tokens->locate($i);
       /** @var array{int,string,int} $startToken */
       $line = $startToken[2];
 
@@ -618,11 +609,11 @@ class Analyzer
             for ($k = 0; $k <= $i; $k++) {
                // just use the final semicolon position
             }
-            $byteEnd = $this->getTokenByteEndOffset($tokens, $i);
+            $byteEnd = $Tokens->locate($i, true);
 
             if (trim($parts) !== '') {
                $symbol = trim($parts);
-               $alias = $this->getAlias($symbol);
+               $alias = $this->resolve($symbol);
                $items[] = [
                   'symbol' => $symbol,
                   'kind'   => $kind,
@@ -651,7 +642,7 @@ class Analyzer
             $symbol = trim($parts);
             if ($symbol !== '') {
                $fullSymbol = $grouped ? $prefix . $symbol : $symbol;
-               $alias = $this->getAlias($fullSymbol);
+               $alias = $this->resolve($fullSymbol);
                $items[] = [
                   'symbol' => $fullSymbol,
                   'kind'   => $kind,
@@ -703,7 +694,7 @@ class Analyzer
     *
     * @return string Alias (e.g., 'Command')
     */
-   private function getAlias (string $symbol): string
+   private function resolve (string $symbol): string
    {
       // @ Handle "as" aliases
       if (str_contains($symbol, ' as ')) {
@@ -720,65 +711,13 @@ class Analyzer
    }
 
    /**
-    * Get the previous meaningful (non-whitespace) token.
-    *
-    * @param array<int,mixed> $tokens
-    * @param int $i Current position
-    *
-    * @return mixed Token or null
-    */
-   private function getPrevMeaningfulToken (array &$tokens, int $i): mixed
-   {
-      for ($j = $i - 1; $j >= 0; $j--) {
-         $token = $tokens[$j];
-
-         if (is_array($token) && $token[0] === T_WHITESPACE) {
-            continue;
-         }
-
-         // @ Skip error suppression operator
-         if ($token === '@') {
-            continue;
-         }
-
-         return $token;
-      }
-
-      return null;
-   }
-
-   /**
-    * Get the next meaningful (non-whitespace) token.
-    *
-    * @param array<int,mixed> $tokens
-    * @param int $i Current position
-    * @param int $count Total tokens
-    *
-    * @return mixed Token or null
-    */
-   private function getNextMeaningfulToken (array &$tokens, int $i, int $count): mixed
-   {
-      for ($j = $i + 1; $j < $count; $j++) {
-         $token = $tokens[$j];
-
-         if (is_array($token) && $token[0] === T_WHITESPACE) {
-            continue;
-         }
-
-         return $token;
-      }
-
-      return null;
-   }
-
-   /**
-    * Check if a name looks like a constant (ALL_CAPS with underscores).
+    * Detect if a name looks like a constant (ALL_CAPS with underscores).
     *
     * @param string $name
     *
     * @return bool
     */
-   private function isConstantName (string $name): bool
+   private function detect (string $name): bool
    {
       if (strlen($name) < 2) {
          return false;
@@ -796,62 +735,12 @@ class Analyzer
     * @param string $kind
     * @param int $line
     */
-   private function trackSymbol (array &$symbols, string $name, string $kind, int $line): void
+   private function track (array &$symbols, string $name, string $kind, int $line): void
    {
       if (!isset($symbols[$name])) {
          $symbols[$name] = ['kind' => $kind, 'lines' => []];
       }
       $symbols[$name]['lines'][] = $line;
-   }
-
-   /**
-    * Get byte offset of a token position in source.
-    *
-    * @param array<int,mixed> $tokens
-    * @param int $index
-    *
-    * @return int
-    */
-   private function getTokenByteOffset (array &$tokens, int $index): int
-   {
-      $offset = 0;
-      for ($i = 0; $i < $index; $i++) {
-         $token = $tokens[$i];
-         if (is_array($token)) {
-            /** @var string $content */
-            $content = $token[1];
-            $offset += strlen($content);
-         }
-         else {
-            /** @var string $token */
-            $offset += strlen($token);
-         }
-      }
-      return $offset;
-   }
-
-   /**
-    * Get byte end offset (after token) of a token position in source.
-    *
-    * @param array<int,mixed> $tokens
-    * @param int $index
-    *
-    * @return int
-    */
-   private function getTokenByteEndOffset (array &$tokens, int $index): int
-   {
-      $offset = $this->getTokenByteOffset($tokens, $index);
-      $token = $tokens[$index];
-      if (is_array($token)) {
-         /** @var string $content */
-         $content = $token[1];
-         $offset += strlen($content);
-      }
-      else {
-         /** @var string $token */
-         $offset += strlen($token);
-      }
-      return $offset;
    }
 
    /**
