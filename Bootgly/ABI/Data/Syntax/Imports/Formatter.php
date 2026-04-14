@@ -17,6 +17,8 @@ use function implode;
 use function rsort;
 use function str_contains;
 use function strcasecmp;
+use function strlen;
+use function strpos;
 use function substr;
 use function substr_replace;
 use function usort;
@@ -169,7 +171,7 @@ class Formatter
          }
 
          // @ Walk forward past any trailing newlines after last import
-         $sourceLen = \strlen($source);
+         $sourceLen = strlen($source);
          while ($end < $sourceLen && $source[$end] === "\n") {
             $end++;
          }
@@ -182,13 +184,13 @@ class Formatter
       }
 
       // @ No existing imports: insert after namespace declaration
-      $nsPos = \strpos($source, 'namespace ' . $result->namespace . ';');
+      $nsPos = strpos($source, 'namespace ' . $result->namespace . ';');
       if ($nsPos !== false) {
-         $semiPos = \strpos($source, ';', $nsPos);
+         $semiPos = strpos($source, ';', $nsPos);
          $insertPos = $semiPos + 1;
 
          // @ Skip any newlines after the namespace;
-         $sourceLen = \strlen($source);
+         $sourceLen = strlen($source);
          while ($insertPos < $sourceLen && $source[$insertPos] === "\n") {
             $insertPos++;
          }

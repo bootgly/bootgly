@@ -11,12 +11,40 @@
 namespace Bootgly\ABI\Data\Syntax\Imports;
 
 
+use const T_AS;
+use const T_CASE;
+use const T_CLASS;
+use const T_COMMENT;
+use const T_CONST;
+use const T_DOC_COMMENT;
+use const T_ENUM;
+use const T_EXTENDS;
+use const T_FUNCTION;
+use const T_IMPLEMENTS;
+use const T_INSTANCEOF;
+use const T_INTERFACE;
+use const T_NAME_FULLY_QUALIFIED;
+use const T_NAME_QUALIFIED;
+use const T_NAMESPACE;
+use const T_NEW;
+use const T_NS_SEPARATOR;
+use const T_NULLSAFE_OBJECT_OPERATOR;
+use const T_OBJECT_OPERATOR;
+use const T_PAAMAYIM_NEKUDOTAYIM;
+use const T_STRING;
+use const T_TRAIT;
+use const T_USE;
+use const T_WHITESPACE;
 use function count;
+use function explode;
 use function file_get_contents;
 use function in_array;
 use function is_array;
+use function preg_match;
 use function str_contains;
+use function strcasecmp;
 use function strlen;
+use function strrpos;
 use function strtolower;
 use function substr;
 use function token_get_all;
@@ -97,6 +125,7 @@ class Analyzer
       $importedConstants = [];
       $importedClasses = [];
       $inClassBody = 0;
+      $namespaceCount = 0;
 
       // ---
       // Phase 1: Extract namespace and imports
@@ -111,6 +140,21 @@ class Analyzer
 
          // @ Namespace
          if ($token[0] === T_NAMESPACE) {
+            $namespaceCount++;
+
+            // @ Skip files with multiple namespace blocks
+            if ($namespaceCount > 1) {
+               return new Result(
+                  file: $file,
+                  source: $source,
+                  namespace: $namespace,
+                  imports: [],
+                  importRange: ['start' => -1, 'end' => -1],
+                  symbols: [],
+                  issues: []
+               );
+            }
+
             $namespace = $this->extractNamespaceName($tokens, $i, $count);
             continue;
          }
@@ -170,6 +214,61 @@ class Analyzer
          }
       }
 
+      // @ Skip files without a namespace declaration
+      if ($namespace === '') {
+         return new Result(
+            file: $file,
+            source: $source,
+            namespace: '',
+            imports: [],
+            importRange: ['start' => -1, 'end' => -1],
+            symbols: [],
+            issues: []
+         );
+      }
+
+      // ---
+      // Phase 1.5: Pre-scan for locally-defined functions
+      // ---
+      $localFunctions = [];
+      $classDepth = 0;
+      for ($i = 0; $i < $count; $i++) {
+         $token = $tokens[$i];
+
+         if ($token === '{') {
+            $classDepth++;
+            continue;
+         }
+         if ($token === '}') {
+            $classDepth--;
+            continue;
+         }
+
+         if (!is_array($token)) {
+            continue;
+         }
+
+         // @ Track class/interface/trait/enum bodies
+         if (in_array($token[0], [T_CLASS, T_INTERFACE, T_TRAIT, T_ENUM], true)) {
+            for ($j = $i + 1; $j < $count; $j++) {
+               if ($tokens[$j] === '{') {
+                  $classDepth++;
+                  $i = $j;
+                  break;
+               }
+            }
+            continue;
+         }
+
+         // @ Find function definitions outside class bodies
+         if ($token[0] === T_FUNCTION && $classDepth === 0) {
+            $nextToken = $this->getNextMeaningfulToken($tokens, $i, $count);
+            if ($nextToken !== null && is_array($nextToken) && $nextToken[0] === T_STRING) {
+               $localFunctions[strtolower($nextToken[1])] = true;
+            }
+         }
+      }
+
       // ---
       // Phase 2: Scan body for symbol usage
       // ---
@@ -219,6 +318,7 @@ class Analyzer
             if ($afterToken === '(') {
                if (Builtins::check($bsName, 'function')
                   || isset($importedFunctions[strtolower($bsName)])
+                  || isset($localFunctions[strtolower($bsName)])
                ) {
                   $bsKind = 'function';
                }
@@ -253,9 +353,10 @@ class Analyzer
                   offset: $bsOffset
                );
 
-               // @ missing_import issue (if not already imported)
+               // @ missing_import issue (if not already imported or locally defined)
                $imported = match ($bsKind) {
-                  'function' => isset($importedFunctions[strtolower($bsName)]),
+                  'function' => isset($importedFunctions[strtolower($bsName)])
+                     || isset($localFunctions[strtolower($bsName)]),
                   'const'    => isset($importedConstants[$bsName]),
                   'class'    => isset($importedClasses[strtolower($bsName)]),
                };
@@ -303,6 +404,12 @@ class Analyzer
 
             // ? Skip if already imported
             if (isset($importedFunctions[strtolower($name)])) {
+               $this->trackSymbol($usedSymbols, $name, 'function', $line);
+               continue;
+            }
+
+            // ? Skip locally-defined functions
+            if (isset($localFunctions[strtolower($name)])) {
                $this->trackSymbol($usedSymbols, $name, 'function', $line);
                continue;
             }
@@ -541,21 +648,19 @@ class Analyzer
          }
 
          if ($token === ',') {
-            if ($grouped) {
-               $symbol = trim($parts);
-               if ($symbol !== '') {
-                  $fullSymbol = $prefix . $symbol;
-                  $alias = $this->getAlias($fullSymbol);
-                  $items[] = [
-                     'symbol' => $fullSymbol,
-                     'kind'   => $kind,
-                     'global' => false,
-                     'line'   => $line,
-                     'alias'  => $alias,
-                  ];
-               }
-               $parts = '';
+            $symbol = trim($parts);
+            if ($symbol !== '') {
+               $fullSymbol = $grouped ? $prefix . $symbol : $symbol;
+               $alias = $this->getAlias($fullSymbol);
+               $items[] = [
+                  'symbol' => $fullSymbol,
+                  'kind'   => $kind,
+                  'global' => !str_contains($fullSymbol, '\\'),
+                  'line'   => $line,
+                  'alias'  => $alias,
+               ];
             }
+            $parts = '';
             $i++;
             continue;
          }
@@ -602,11 +707,11 @@ class Analyzer
    {
       // @ Handle "as" aliases
       if (str_contains($symbol, ' as ')) {
-         $parts = \explode(' as ', $symbol);
+         $parts = explode(' as ', $symbol);
          return trim($parts[1]);
       }
 
-      $pos = \strrpos($symbol, '\\');
+      $pos = strrpos($symbol, '\\');
       if ($pos === false) {
          return $symbol;
       }
@@ -680,7 +785,7 @@ class Analyzer
       }
 
       // @ Must be ALL_CAPS (allow digits and underscores)
-      return \preg_match('/^[A-Z][A-Z0-9_]+$/', $name) === 1;
+      return preg_match('/^[A-Z][A-Z0-9_]+$/', $name) === 1;
    }
 
    /**
@@ -797,7 +902,7 @@ class Analyzer
 
          // @ Within same kind and same global/namespaced group: alphabetical
          if ($kindIndex === $prevKindIndex && $isGlobal === $prevGlobal && $prevSymbol !== '') {
-            if (\strcasecmp($import['symbol'], $prevSymbol) < 0) {
+            if (strcasecmp($import['symbol'], $prevSymbol) < 0) {
                $issues[] = new Issue(
                   type: 'not_alphabetical',
                   symbol: $import['symbol'],

@@ -11,8 +11,8 @@
 namespace Bootgly\ABI\Data\Syntax;
 
 
-use Bootgly\ABI\Data\Syntax\Imports\Analyzer\Result;
 use Bootgly\ABI\Data\Syntax\Imports\Analyzer;
+use Bootgly\ABI\Data\Syntax\Imports\Analyzer\Result;
 use Bootgly\ABI\Data\Syntax\Imports\Formatter;
 
 
