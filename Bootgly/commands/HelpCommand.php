@@ -167,8 +167,8 @@ class HelpCommand extends Command
 
       // # Commands examples
       $exampleLines = '@#Black:' . $script . ' project list@;' . PHP_EOL;
-      $exampleLines .= '@#Black:' . $script . ' project start HTTP_Server_CLI@;' . PHP_EOL;
-      $exampleLines .= '@#Black:' . $script . ' project stop HTTP_Server_CLI@;';
+      $exampleLines .= '@#Black:' . $script . ' project Demo start --HTTP_Server_CLI@;' . PHP_EOL;
+      $exampleLines .= '@#Black:' . $script . ' project Demo stop --HTTP_Server_CLI@;';
       $Fieldset5 = new Fieldset($Output);
       $Fieldset5->title = '@#green: Commands examples @;';
       $Fieldset5->content = $exampleLines;
