@@ -22,6 +22,7 @@ use function fclose;
 use function fread;
 use function fwrite;
 use function in_array;
+use function is_int;
 use function microtime;
 use function parse_url;
 use function pcntl_fork;
@@ -776,7 +777,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
                self::$Event->destroy();
             }
 
-            if ($timeoutTimerId !== null) {
+            if (is_int($timeoutTimerId)) {
                Timer::del($timeoutTimerId);
                $timeoutTimerId = null;
             }
@@ -792,12 +793,13 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
       $this->drain();
 
       // @ Clean up timeout timer
-      if ($timeoutTimerId !== null) {
+      if (is_int($timeoutTimerId)) {
          Timer::del($timeoutTimerId);
          $timeoutTimerId = null;
       }
 
       // @ Follow redirects (sync mode only)
+      /** @phpstan-ignore identical.alwaysFalse, booleanAnd.alwaysFalse */
       while ($Request->connectionState === 'redirect' && $Request->redirectTarget !== null) {
          $resolved = $Request->redirectTarget;
          $Request->redirectTarget = null;
@@ -835,6 +837,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
          $this->drain();
 
          // @ Follow redirects after retry
+         /** @phpstan-ignore identical.alwaysFalse, booleanAnd.alwaysFalse */
          while ($Request->connectionState === 'redirect' && $Request->redirectTarget !== null) {
             $resolved = $Request->redirectTarget;
             $Request->redirectTarget = null;
