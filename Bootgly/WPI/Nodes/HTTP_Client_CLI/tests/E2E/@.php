@@ -40,5 +40,17 @@ return new Suite(
          '7.2-informational_1xx',
          '7.3-no_body_204',
       ],
+      'Redirects/' => [
+         '9.1-redirect_301',
+         '9.2-redirect_302',
+         '9.3-redirect_307_preserve_method',
+         '9.4-redirect_max_exceeded',
+      ],
+      'Timeouts/' => [
+         '10.1-response_timeout',
+      ],
+      'Retries/' => [
+         '11.1-retry_on_failure',
+      ],
    ]
 );

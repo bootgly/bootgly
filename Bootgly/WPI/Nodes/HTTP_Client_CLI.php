@@ -21,6 +21,9 @@ use function count;
 use function fclose;
 use function fread;
 use function fwrite;
+use function in_array;
+use function microtime;
+use function parse_url;
 use function pcntl_fork;
 use function pcntl_waitpid;
 use function posix_kill;
@@ -32,6 +35,8 @@ use function stream_socket_server;
 use function stripos;
 use function strlen;
 use function strpos;
+use function strrpos;
+use function strtoupper;
 use function substr;
 use function usleep;
 use Closure;
@@ -39,6 +44,7 @@ use Generator;
 use Throwable;
 
 use Bootgly\ABI\IO\FS\File;
+use Bootgly\ACI\Events\Timer;
 use Bootgly\ACI\Logs\Logger;
 use Bootgly\ACI\Tests\Suite;
 use Bootgly\ACI\Tests\Suite\Test\Specification;
@@ -61,6 +67,19 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
    // * Config
    public static null|string $targetHost = null;
    public static null|int $targetPort = null;
+   // | Redirect
+   /** Maximum number of redirects to follow (0 = disabled). */
+   public int $maxRedirects = 10;
+   // | Timeout
+   /** Connection timeout in seconds (0 = no timeout). */
+   public int|float $connectTimeout = 30;
+   /** Response timeout in seconds (0 = no timeout). */
+   public int|float $timeout = 30;
+   // | Retry
+   /** Maximum number of retries on connection/timeout failure (0 = disabled). */
+   public int $maxRetries = 0;
+   /** Delay between retries in seconds. */
+   public int|float $retryDelay = 1.0;
 
    // * Data
    // # Protocol
@@ -209,6 +228,9 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
 
          $socketId = (int) $Socket;
          $HTTP_Client_CLI->pendingRequests[$socketId] = $Request;
+
+         // @ Track when request was sent for timeout detection
+         $Request->sentAt = microtime(true);
 
          $headerRaw = $template->Header->build();
          $length = null;
@@ -369,6 +391,84 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
             }
          }
 
+         // @ Response complete — handle redirect if applicable
+         $Response = $Request->Response;
+         $redirectCode = $Response->code;
+         if (
+            $HTTP_Client_CLI->maxRedirects > 0
+            && $Request->redirectCount < $HTTP_Client_CLI->maxRedirects
+            && ($redirectCode === 301 || $redirectCode === 302 || $redirectCode === 303
+               || $redirectCode === 307 || $redirectCode === 308)
+         ) {
+            $location = $Response->Header->get('Location');
+            if ($location !== null && $location !== '') {
+               $Request->redirectCount++;
+
+               // @ Save original method/body on first redirect
+               if ($Request->originalMethod === '') {
+                  $Request->originalMethod = $Request->method;
+                  $Request->originalBody = $Request->Body->raw;
+               }
+
+               // @ Determine new method per RFC 7231
+               // 301/302/303: change to GET (except HEAD stays HEAD), clear body
+               // 307/308: preserve original method and body
+               if ($redirectCode === 301 || $redirectCode === 302 || $redirectCode === 303) {
+                  if ($Request->method !== 'HEAD') {
+                     $Request->method = 'GET';
+                  }
+                  $Request->clear();
+               }
+
+               // @ Resolve redirect URL
+               $resolved = $HTTP_Client_CLI->resolve($location, $Request->URI);
+
+               $Request->URI = $resolved['path'];
+               $Request->pendingBuffer = '';
+               $Request->Decoder = new Decoder_;
+               $Request->connectionState = 'redirect';
+
+               // @ Store resolved target for reconnection in request()
+               $Request->redirectTarget = $resolved;
+
+               // @ Check if redirect target is same host/port/scheme
+               $sameHost = ($resolved['host'] === (self::$targetHost ?? '127.0.0.1'))
+                  && ($resolved['port'] === (self::$targetPort ?? 80))
+                  && ($resolved['ssl'] === ($HTTP_Client_CLI->ssl !== null));
+
+               if ($sameHost && !$Response->closeConnection) {
+                  // @ Same host + keep-alive: reuse connection
+                  $Request->Response->reset();
+                  $Request->sentAt = microtime(true);
+
+                  $headerRaw = $Request->Header->build();
+                  $length = null;
+                  $Connection->output = self::$Encoder::encode(
+                     $Request->method,
+                     $Request->URI,
+                     $Request->protocol,
+                     $headerRaw,
+                     $Request->Body->raw,
+                     self::$targetHost ?? '127.0.0.1',
+                     self::$targetPort ?? 80,
+                     $length
+                  );
+
+                  self::$Event->del($Socket, self::$Event::EVENT_READ);
+                  self::$Event->add($Socket, self::$Event::EVENT_WRITE, $Connection);
+               }
+               else {
+                  // @ Close current connection and stop event loop
+                  // Reconnection will be handled by request() redirect loop
+                  unset($HTTP_Client_CLI->pendingRequests[$socketId]);
+                  $Connection->close();
+                  self::$Event->destroy();
+               }
+
+               return;
+            }
+         }
+
          // @ Response complete — branch by mode
          if (self::$eventDriven) {
             // @ Event-driven: fire hook, reuse connection
@@ -457,6 +557,104 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
    }
 
    /**
+    * Resolve a redirect Location header value to host/port/path/ssl.
+    *
+    * @param string $location The Location header value.
+    * @param string $currentURI The current request URI (for relative resolution).
+    *
+    * @return array{host: string, port: int, path: string, ssl: bool}
+    */
+   private function resolve (string $location, string $currentURI): array
+   {
+      $host = self::$targetHost ?? '127.0.0.1';
+      $port = self::$targetPort ?? 80;
+      $ssl = $this->ssl !== null;
+
+      $parsed = parse_url($location);
+
+      if ($parsed === false) {
+         return ['host' => $host, 'port' => $port, 'path' => $location, 'ssl' => $ssl];
+      }
+
+      // @ Absolute URL (has scheme + host)
+      if (isset($parsed['scheme']) && isset($parsed['host'])) {
+         $host = $parsed['host'];
+         $ssl = ($parsed['scheme'] === 'https');
+         $port = $parsed['port'] ?? ($ssl ? 443 : 80);
+         $path = ($parsed['path'] ?? '/') . (isset($parsed['query']) ? '?' . $parsed['query'] : '');
+
+         return ['host' => $host, 'port' => $port, 'path' => $path, 'ssl' => $ssl];
+      }
+
+      // @ Absolute path
+      if (isset($parsed['path']) && ($parsed['path'][0] ?? '') === '/') {
+         $path = $parsed['path'] . (isset($parsed['query']) ? '?' . $parsed['query'] : '');
+
+         return ['host' => $host, 'port' => $port, 'path' => $path, 'ssl' => $ssl];
+      }
+
+      // @ Relative path: resolve against current URI's directory
+      $currentDir = '/';
+      $lastSlash = strrpos($currentURI, '/');
+      if ($lastSlash !== false) {
+         $currentDir = substr($currentURI, 0, $lastSlash + 1);
+      }
+      $path = $currentDir . $location;
+
+      return ['host' => $host, 'port' => $port, 'path' => $path, 'ssl' => $ssl];
+   }
+
+   /**
+    * Handle retry for a failed/timed-out request (sync mode only).
+    *
+    * @param Request $Request The failed request.
+    *
+    * @return bool True if a retry was initiated.
+    */
+   private function retry (Request $Request): bool
+   {
+      if ($this->maxRetries <= 0 || $Request->retryCount >= $this->maxRetries) {
+         return false;
+      }
+
+      // @ Only retry idempotent methods (or any method if request was never sent)
+      $method = strtoupper($Request->method);
+      $idempotent = in_array($method, ['GET', 'HEAD', 'PUT', 'DELETE', 'OPTIONS'], true);
+
+      if (!$idempotent && $Request->sentAt > 0) {
+         return false;
+      }
+
+      $Request->retryCount++;
+      $Request->pendingBuffer = '';
+      $Request->Response->reset();
+      $Request->Decoder = new Decoder_;
+      $Request->connectionState = 'waiting';
+      $Request->completed = false;
+
+      // @ Delay between retries
+      if ($this->retryDelay > 0) {
+         usleep((int) ($this->retryDelay * 1_000_000));
+      }
+
+      // @ Re-issue request
+      $this->nextRequest = $Request;
+      $this->wired = false;
+
+      $Connections = new Connections($this);
+      $this->Connections = $Connections;
+      self::$Event = new Select($Connections);
+
+      $this->wire();
+      $Socket = $this->connect();
+      if ($Socket === false) {
+         return false;
+      }
+
+      return true;
+   }
+
+   /**
     * Run the event loop until all pending requests complete.
     *
     * @return void
@@ -536,7 +734,53 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
       if ($Socket === false) {
          $this->nextRequest = null;
          $Request->completed = true;
+
+         // @ Retry on connection failure
+         if ($this->retry($Request)) {
+            $this->drain();
+         }
+
          return $Request->Response;
+      }
+
+      // @ Register response timeout timer (sync/batch mode)
+      $timeoutTimerId = null;
+      if ($this->timeout > 0) {
+         Timer::init(function () { Timer::tick(); });
+         $HTTP_Client_CLI = $this;
+         $timeoutTimerId = Timer::add(1, function () use ($HTTP_Client_CLI, $Request, &$timeoutTimerId) {
+            if ($Request->completed || $Request->sentAt <= 0) {
+               return;
+            }
+
+            $elapsed = microtime(true) - $Request->sentAt;
+            if ($elapsed < $HTTP_Client_CLI->timeout) {
+               return;
+            }
+
+            // @ Timeout: mark request as timed out
+            $Request->Response->code = 0;
+            $Request->Response->status = 'Timeout';
+            $Request->completed = true;
+            $Request->connectionState = 'idle';
+
+            // @ Close all pending connections
+            foreach ($HTTP_Client_CLI->pendingRequests as $sid => $pendingReq) {
+               if ($pendingReq === $Request) {
+                  unset($HTTP_Client_CLI->pendingRequests[$sid]);
+               }
+            }
+
+            // @ Stop event loop
+            if (empty($HTTP_Client_CLI->pendingRequests)) {
+               self::$Event->destroy();
+            }
+
+            if ($timeoutTimerId !== null) {
+               Timer::del($timeoutTimerId);
+               $timeoutTimerId = null;
+            }
+         }, persistent: true);
       }
 
       // @ Batch mode: return Response reference (filled later by drain())
@@ -546,6 +790,80 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
 
       // @ Sync mode: drain and return completed Response
       $this->drain();
+
+      // @ Clean up timeout timer
+      if ($timeoutTimerId !== null) {
+         Timer::del($timeoutTimerId);
+         $timeoutTimerId = null;
+      }
+
+      // @ Follow redirects (sync mode only)
+      while ($Request->connectionState === 'redirect' && $Request->redirectTarget !== null) {
+         $resolved = $Request->redirectTarget;
+         $Request->redirectTarget = null;
+         $Request->Response->reset();
+         $Request->connectionState = 'waiting';
+         $Request->completed = false;
+
+         // @ Reconfigure for new target
+         $this->configure(
+            $resolved['host'],
+            $resolved['port'],
+            ssl: $resolved['ssl'] ? ['peer_name' => $resolved['host']] : null
+         );
+
+         $this->nextRequest = $Request;
+
+         $Connections = new Connections($this);
+         $this->Connections = $Connections;
+         self::$Event = new Select($Connections);
+         $this->wired = false;
+         $this->wire();
+
+         $Socket = $this->connect();
+         if ($Socket === false) {
+            break;
+         }
+
+         $this->drain();
+      }
+
+      // @ Retry if failed (timeout or connection reset)
+      if ($Request->Response->code === 0
+         && $this->retry($Request)
+      ) {
+         $this->drain();
+
+         // @ Follow redirects after retry
+         while ($Request->connectionState === 'redirect' && $Request->redirectTarget !== null) {
+            $resolved = $Request->redirectTarget;
+            $Request->redirectTarget = null;
+            $Request->Response->reset();
+            $Request->connectionState = 'waiting';
+            $Request->completed = false;
+
+            $this->configure(
+               $resolved['host'],
+               $resolved['port'],
+               ssl: $resolved['ssl'] ? ['peer_name' => $resolved['host']] : null
+            );
+
+            $this->nextRequest = $Request;
+
+            $Connections = new Connections($this);
+            $this->Connections = $Connections;
+            self::$Event = new Select($Connections);
+            $this->wired = false;
+            $this->wire();
+
+            $Socket = $this->connect();
+            if ($Socket === false) {
+               break;
+            }
+
+            $this->drain();
+         }
+      }
 
       return $Request->Response;
    }
@@ -820,14 +1138,14 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
             foreach ($spec->requests as $requestClosure) {
                $responses[] = $requestClosure($HTTP_Client_CLI);
             }
-            $specIndex += count($spec->requests);
          }
          else {
             // @ Single-request test
             $requestClosure = $spec->request;
             $responses[] = $requestClosure($HTTP_Client_CLI);
-            $specIndex++;
          }
+
+         $specIndex++;
 
          // @ Assert results
          if ($spec instanceof Specification) { // @phpstan-ignore instanceof.alwaysTrue
@@ -843,7 +1161,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
          }
 
          if (count($responses) > 1) {
-            $Test->test($responses);
+            $Test->test(...$responses);
          }
          else {
             $Test->test($responses[0]);

@@ -53,11 +53,21 @@ class Request
    // * Metadata
    // | Transport
    public string $pendingBuffer;
-   /** Connection state: 'idle' | 'waiting' | 'waiting-100-continue' */
+   /** Connection state: 'idle' | 'waiting' | 'waiting-100-continue' | 'redirect' */
    public string $connectionState;
    public bool $completed;
    public int $bytesReceived;
    public null|Closure $onComplete;
+   // | Redirect
+   public int $redirectCount;
+   public string $originalMethod;
+   public string $originalBody;
+   /** @var array{host:string,port:int,path:string,ssl:bool}|null */
+   public null|array $redirectTarget;
+   // | Timeout
+   public float $sentAt;
+   // | Retry
+   public int $retryCount;
 
 
    public function __construct ()
@@ -83,6 +93,15 @@ class Request
       $this->completed = false;
       $this->bytesReceived = 0;
       $this->onComplete = null;
+      // | Redirect
+      $this->redirectCount = 0;
+      $this->originalMethod = '';
+      $this->originalBody = '';
+      $this->redirectTarget = null;
+      // | Timeout
+      $this->sentAt = 0.0;
+      // | Retry
+      $this->retryCount = 0;
    }
 
    /**
@@ -153,5 +172,25 @@ class Request
       $this->completed = false;
       $this->bytesReceived = 0;
       $this->onComplete = null;
+      // | Redirect
+      $this->redirectCount = 0;
+      $this->originalMethod = '';
+      $this->originalBody = '';
+      $this->redirectTarget = null;
+      // | Timeout
+      $this->sentAt = 0.0;
+      // | Retry
+      $this->retryCount = 0;
+   }
+
+   /**
+    * Clear request headers and body (used for redirect method change).
+    *
+    * @return void
+    */
+   public function clear (): void
+   {
+      $this->Header = new Header;
+      $this->Body = new Body;
    }
 }
