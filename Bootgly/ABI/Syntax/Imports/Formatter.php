@@ -195,11 +195,11 @@ class Formatter
             $insertPos++;
          }
 
-         $before = substr($source, 0, $insertPos);
+         $before = substr($source, 0, $semiPos + 1);
          $after = substr($source, $insertPos);
 
          // @ 2 blank lines after namespace, 2 blank lines after imports
-         return $before . "\n\n" . $importBlock . "\n\n\n" . $after;
+         return $before . "\n\n\n" . $importBlock . "\n\n\n" . $after;
       }
 
       return $source;
