@@ -10,6 +10,7 @@
 
 namespace Bootgly;
 
+
 use const PHP_SAPI;
 use function is_array;
 use function is_dir;
@@ -19,10 +20,10 @@ use Exception;
 use Bootgly\ABI\Debugging\Data\Vars;
 use Bootgly\API\Projects;
 use Bootgly\API\Projects\Project;
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router;
 
 
 class WPI extends Projects // Web Programming Interface
@@ -55,7 +56,7 @@ class WPI extends Projects // Web Programming Interface
             Vars::$debug = false;
             Vars::$exit = true;
 
-            if (@$_SERVER['REDIRECT_URL'] === NULL) {
+            if (@$_SERVER['REDIRECT_URL'] === null) {
                throw new Exception('Missing Rewrite!');
             }
 

@@ -11,13 +11,13 @@
 namespace Bootgly\commands;
 
 
-use function str_starts_with;
 use const BOOTGLY_VERSION;
 use const PHP_VERSION;
+use function str_starts_with;
 use Closure;
 
-use Bootgly\API\Environment\Agent;
 use const Bootgly\CLI;
+use Bootgly\API\Environment\Agent;
 use Bootgly\CLI\Command;
 use Bootgly\CLI\Commands\Middleware;
 

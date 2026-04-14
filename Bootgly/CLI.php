@@ -11,6 +11,8 @@
 namespace Bootgly;
 
 
+use const BOOTGLY_ROOT_DIR;
+use const BOOTGLY_WORKING_DIR;
 use const PHP_SAPI;
 use function is_array;
 use Exception;

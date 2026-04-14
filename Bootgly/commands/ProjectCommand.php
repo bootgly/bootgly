@@ -11,6 +11,12 @@
 namespace Bootgly\commands;
 
 
+use const BOOTGLY_ROOT_DIR;
+use const BOOTGLY_WORKING_DIR;
+use const PHP_EOL;
+use const SIGKILL;
+use const SIGTERM;
+use const SIGUSR2;
 use function array_keys;
 use function array_slice;
 use function basename;
@@ -32,12 +38,9 @@ use function substr;
 use function time;
 use function unlink;
 use function usleep;
-use const SIGKILL;
-use const SIGTERM;
-use const SIGUSR2;
 
-use Bootgly\API\Projects\Project;
 use const Bootgly\CLI;
+use Bootgly\API\Projects\Project;
 use Bootgly\CLI\Command;
 use Bootgly\CLI\UI\Components\Alert;
 use Bootgly\CLI\UI\Components\Fieldset;

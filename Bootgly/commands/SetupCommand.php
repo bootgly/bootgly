@@ -11,6 +11,24 @@
 namespace Bootgly\commands;
 
 
+use const BOOTGLY_ROOT_DIR;
+use const PHP_BINARY;
+use const PHP_EOL;
+use function chmod;
+use function escapeshellarg;
+use function exec;
+use function file_exists;
+use function file_put_contents;
+use function implode;
+use function is_dir;
+use function is_executable;
+use function is_file;
+use function is_link;
+use function posix_getuid;
+use function shell_exec;
+use function trim;
+use function unlink;
+
 use const Bootgly\CLI;
 use Bootgly\CLI\Command;
 use Bootgly\CLI\UI\Components\Alert;

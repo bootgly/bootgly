@@ -11,6 +11,9 @@
 namespace Bootgly\commands;
 
 
+use const BOOTGLY_ROOT_DIR;
+use function sleep;
+
 use const Bootgly\CLI;
 use Bootgly\CLI\Command;
 

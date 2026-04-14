@@ -11,6 +11,10 @@
 namespace Bootgly\commands;
 
 
+use const BOOTGLY_WORKING_DIR;
+use const JSON_UNESCAPED_SLASHES;
+use const JSON_UNESCAPED_UNICODE;
+use const PHP_EOL;
 use function array_slice;
 use function count;
 use function fclose;
@@ -32,16 +36,14 @@ use function str_replace;
 use function str_starts_with;
 use function stream_get_contents;
 use function strlen;
-use const JSON_UNESCAPED_SLASHES;
-use const JSON_UNESCAPED_UNICODE;
-use const PHP_EOL;
+use function ucfirst;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
 
+use const Bootgly\CLI;
 use Bootgly\ABI\Syntax\Builtins;
 use Bootgly\ABI\Syntax\Imports;
 use Bootgly\API\Environment\Agent;
-use const Bootgly\CLI;
 use Bootgly\CLI\Command;
 use Bootgly\CLI\UI\Components\Alert;
 use Bootgly\CLI\UI\Components\Fieldset;
@@ -131,7 +133,7 @@ class LintCommand extends Command
       }
 
       // @ Section title (human output)
-      $title = 'Lint > ' . \ucfirst($submodule);
+      $title = 'Lint > ' . ucfirst($submodule);
       if (!$Agent->detected) {
          $Output->render("@.;@#Cyan: {$title} @;@.;");
          $Output->render("@#Black: ─────────────────────────────────────── @;@.;");
