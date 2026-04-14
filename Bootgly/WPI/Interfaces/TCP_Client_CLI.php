@@ -76,10 +76,13 @@ class TCP_Client_CLI
    protected null|string $host;
    protected null|int $port;
    protected int $workers;
+   /** @var array<string,mixed>|null SSL Stream Context */
+   protected null|array $ssl = null;
    // @ Mode
    protected int $mode;
    public const int MODE_DEFAULT = 1;
    public const int MODE_MONITOR = 2;
+   public const int MODE_TEST = 3;
 
    // * Data
    // ! On
@@ -146,6 +149,11 @@ class TCP_Client_CLI
       // ! Web\@\Events
       static::$Event = new Select($this->Connections); // @phpstan-ignore-line
 
+      // @ Skip Process/Commands infrastructure in test mode
+      if ($this->mode === self::MODE_TEST) {
+         return;
+      }
+
       // ! @\Process
       $processId = defined('BOOTGLY_PROJECT') ? BOOTGLY_PROJECT->folder : static::class;
       $Process = $this->Process = new Process(id: $processId);
@@ -170,6 +178,8 @@ class TCP_Client_CLI
             return $this->host;
          case 'port':
             return $this->port;
+         case 'ssl':
+            return $this->ssl;
 
          case 'Connections':
             return $this->Connections;
@@ -178,7 +188,10 @@ class TCP_Client_CLI
       return null;
    }
 
-   public function configure (string $host, int $port, int $workers = 0): self
+   /**
+    * @param array<string,mixed>|null $ssl SSL Stream Context options
+    */
+   public function configure (string $host, int $port, int $workers = 0, null|array $ssl = null): self
    {
       self::$status = self::STATUS_CONFIGURING;
 
@@ -187,6 +200,8 @@ class TCP_Client_CLI
       $this->host = $host;
       $this->port = $port;
       $this->workers = $workers;
+
+      $this->ssl = $ssl;
 
       return $this;
    }
@@ -362,7 +377,7 @@ class TCP_Client_CLI
       $error = false;
 
       try {
-         $context = stream_context_create([
+         $contextOptions = [
             'socket' => [
                // Setting this option to true will set SOL_TCP, NO_DELAY=1 appropriately,
                // thus disabling the TCP Nagle algorithm.
@@ -374,7 +389,13 @@ class TCP_Client_CLI
                // let the system choose the IP and/or port.
                #'bindto' => $this->host . ':' . (55000 + $index)
             ]
-         ]);
+         ];
+         // @ Merge SSL context options
+         if ( ! empty($this->ssl) ) {
+            $contextOptions['ssl'] = $this->ssl;
+         }
+
+         $context = stream_context_create($contextOptions);
 
          // @ Set custom handler error
          // function ($code, $message, $file, $line)

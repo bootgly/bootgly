@@ -12,11 +12,13 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Middlewares;
 
 
 use function explode;
+use function filter_var;
 use function in_array;
+use function strtolower;
 use function trim;
 use Closure;
 
-use Bootgly\API\Server\Middleware;
+use Bootgly\API\Workables\Server\Middleware;
 
 
 class TrustedProxy implements Middleware
@@ -55,21 +57,32 @@ class TrustedProxy implements Middleware
       $forwarded = $Request->Header->get('X-Forwarded-For'); // @phpstan-ignore-line
       if ($forwarded !== null) {
          $ips = explode(',', $forwarded);
-         $realIp = trim($ips[0]);
-         $Request->address = $realIp; // @phpstan-ignore-line
+         $candidate = trim($ips[0]);
+         // ! Validate extracted IP before trusting it
+         if (filter_var($candidate, FILTER_VALIDATE_IP) !== false) {
+            $Request->address = $candidate; // @phpstan-ignore-line
+         }
       }
       else {
          // @ Try X-Real-IP
          $realIp = $Request->Header->get('X-Real-IP'); // @phpstan-ignore-line
          if ($realIp !== null) {
-            $Request->address = trim($realIp); // @phpstan-ignore-line
+            $candidate = trim($realIp);
+            // ! Validate extracted IP before trusting it
+            if (filter_var($candidate, FILTER_VALIDATE_IP) !== false) {
+               $Request->address = $candidate; // @phpstan-ignore-line
+            }
          }
       }
 
       // @ Try X-Forwarded-Proto
       $proto = $Request->Header->get('X-Forwarded-Proto'); // @phpstan-ignore-line
       if ($proto !== null) {
-         $Request->scheme = trim($proto); // @phpstan-ignore-line
+         $candidate = strtolower(trim($proto));
+         // ! Only accept valid HTTP schemes
+         if (in_array($candidate, ['http', 'https'], true)) {
+            $Request->scheme = $candidate; // @phpstan-ignore-line
+         }
       }
 
       // :

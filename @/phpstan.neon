@@ -20,3 +20,6 @@ parameters:
       -
          message: '#.*BOOTGLY_PROJECT not found\.#'
          identifier: constant.notFound
+      -
+         message: '#Property Bootgly\\WPI\\Interfaces\\TCP_Client_CLI::\$Connections.*does not accept#'
+         path: ../Bootgly/WPI/Nodes/HTTP_Client_CLI.php

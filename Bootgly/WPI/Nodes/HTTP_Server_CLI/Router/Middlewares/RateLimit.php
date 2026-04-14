@@ -13,15 +13,25 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Middlewares;
 
 use function file_get_contents;
 use function file_put_contents;
+use function is_array;
 use function is_file;
-use function serialize;
+use function json_decode;
+use function json_encode;
 use function time;
-use function unserialize;
 use Closure;
 
-use Bootgly\API\Server\Middleware;
+use Bootgly\API\Workables\Server\Middleware;
 
 
+/**
+ * In-memory rate limiter middleware.
+ *
+ * ⚠️  MULTI-WORKER LIMITATION: Counters are stored in a static PHP array scoped
+ * to each worker process. In a multi-worker deployment, each worker maintains
+ * independent counters, effectively multiplying the configured limit by the number
+ * of workers. For accurate rate limiting in multi-worker setups, replace this
+ * middleware with a shared-backend implementation (Redis, Memcached, etc.).
+ */
 class RateLimit implements Middleware
 {
    // * Config
@@ -116,7 +126,7 @@ class RateLimit implements Middleware
     */
    public static function persist (string $path): void
    {
-      file_put_contents($path, serialize(self::$counters));
+      file_put_contents($path, json_encode(self::$counters));
    }
 
    /**
@@ -127,9 +137,11 @@ class RateLimit implements Middleware
       if (is_file($path)) {
          $data = file_get_contents($path);
          if ($data !== false) {
-            /** @var array<string, array{int, int}> */
-            $counters = unserialize($data);
-            self::$counters = $counters;
+            $counters = json_decode($data, true);
+            if (is_array($counters)) {
+               /** @var array<string, array{int, int}> $counters */
+               self::$counters = $counters;
+            }
          }
       }
    }

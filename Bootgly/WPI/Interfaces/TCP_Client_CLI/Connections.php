@@ -129,7 +129,8 @@ class Connections implements WPI\Connections
       }
 
       // @ Instance new connection
-      $Connection = new Connection($Socket);
+      $ssl = $this->Client !== null && $this->Client->ssl !== null;
+      $Connection = new Connection($Socket, $ssl);
 
       // @ Set stats
       $this->connections++;

@@ -12,13 +12,17 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 
 
 use function array_key_exists;
+use function bin2hex;
 use function extension_loaded;
 use function ini_get;
 use function is_array;
 use function is_scalar;
+use function random_bytes;
 use function random_int;
 use function session_get_cookie_params;
 
+use Bootgly\WPI\Modules\HTTP\Server\Response\Raw\Header\Cookie;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Session\Handler;
 
 
@@ -32,9 +36,18 @@ class Session
    public static int $cookieLifetime = 1440;
    public static string $cookiePath = '/';
    public static string $domain = '';
-   public static bool $secure = false;
+   /**
+    * Transmit session cookie only over HTTPS.
+    * ⚠️ Set to false in local HTTP-only development environments.
+    */
+   public static bool $secure = true;
    public static bool $httpOnly = true;
-   public static string $sameSite = '';
+   /**
+    * SameSite attribute for the session cookie.
+    * 'Lax' protects against CSRF while allowing top-level navigations.
+    * Set to 'Strict' for maximum CSRF protection.
+    */
+   public static string $sameSite = 'Lax';
    // # GC
    /** @var array{int,int} */
    public static array $gcProbability = [1, 20000];
@@ -202,6 +215,41 @@ class Session
       // @
       $this->needSave = true;
       $this->data = [];
+   }
+
+   /**
+    * Regenerate the session ID to prevent session fixation attacks.
+    *
+    * Must be called immediately after authenticating a user or elevating privileges.
+    * Destroys the old session, generates a new cryptographically random ID,
+    * migrates session data and updates the Set-Cookie header on the current response.
+    *
+    * @return void
+    */
+   public function regenerate (): void
+   {
+      // @ Destroy old session data
+      $oldId = $this->id;
+      if (Handler::$instance) {
+         Handler::$instance->destroy($oldId);
+      }
+
+      // @ Generate new session ID
+      $newId = bin2hex(random_bytes(16));
+      $this->id = $newId;
+      $this->needSave = true;
+
+      // @ Update Set-Cookie header on current response
+      $name = static::$name;
+      $Cookie = new Cookie($name, $newId);
+      $Cookie->expiration = static::$cookieLifetime;
+      $Cookie->path = static::$cookiePath;
+      $Cookie->domain = static::$domain;
+      $Cookie->secure = static::$secure;
+      $Cookie->HTTP_only = static::$httpOnly;
+      $Cookie->same_site = static::$sameSite;
+
+      HTTP_Server_CLI::$Response->Header->Cookies->append($Cookie);
    }
 
    /**

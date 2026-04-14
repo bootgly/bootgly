@@ -37,6 +37,7 @@ return new Project(
          'CLI',
          'HTTP_Server_CLI',
          'HTTPS_Server_CLI',
+         'HTTP_Client_CLI',
          'TCP_Server_CLI',
          'TCP_Client_CLI',
       ];
@@ -62,6 +63,7 @@ return new Project(
            @#yellow: --HTTP_Server_CLI @;      HTTP server (router, middleware, request/response);
            @#yellow: --HTTPS_Server_CLI @;     HTTPS server with SSL/TLS;
            @#yellow: --TCP_Server_CLI @;       Raw TCP server;
+           @#yellow: --HTTP_Client_CLI @;      HTTP client (connect to running HTTP server);
            @#yellow: --TCP_Client_CLI @;       TCP client benchmark;
 
          Examples:
@@ -235,19 +237,19 @@ return new Project(
                => Modes::Daemon
             });
             $Server->configure(
-            host: '0.0.0.0',
-            port: getenv('PORT') ? (int) getenv('PORT') : 443,
-            workers: 4,
-            // requestMaxFileSize: 500 * 1024 * 1024, // 500 MB (default)
-            // requestMaxBodySize: 10 * 1024 * 1024,  // 10 MB (default)
-            ssl: [
-               'local_cert' => BOOTGLY_ROOT_DIR . '@/certificates/localhost.cert.pem',
-               'local_pk' => BOOTGLY_ROOT_DIR . '@/certificates/localhost.key.pem',
+               host: '0.0.0.0',
+               port: getenv('PORT') ? (int) getenv('PORT') : 443,
+               workers: 4,
+               // requestMaxFileSize: 500 * 1024 * 1024, // 500 MB (default)
+               // requestMaxBodySize: 10 * 1024 * 1024,  // 10 MB (default)
+               ssl: [
+                  'local_cert' => BOOTGLY_ROOT_DIR . '@/certificates/localhost.cert.pem',
+                  'local_pk' => BOOTGLY_ROOT_DIR . '@/certificates/localhost.key.pem',
 
-               'verify_peer' => false,
-            ],
-            // Drop privileges after binding to port 443
-            user: 'www-data',
+                  'verify_peer' => false,
+               ],
+               // Drop privileges after binding to port 443
+               user: 'www-data',
             );
             $Server->on(
             request: fn($Request, $Response) => $Response(body: 'Hello, Secure World!'),
@@ -291,6 +293,9 @@ return new Project(
             );
             $TCP_Server_CLI->start();
          })($options),
+         'HTTP_Client_CLI' => (function () use ($options) {
+            (require __DIR__ . '/HTTP_Client_CLI/HTTP_Client_CLI.SAPI.php')($options);
+         })(),
          'TCP_Client_CLI' => (function () {
             $TCP_Client = new TCP_Client_CLI(
             TCP_Client_CLI::MODE_MONITOR
@@ -332,7 +337,7 @@ return new Project(
             },
             disconnect: function ($Connection) use ($TCP_Client) {
                $TCP_Client->log(
-               'Connection #' . $Connection->id . ' (' . $Connection->ip . ':' . $Connection->port . ')'
+               'Connection #' . $Connection->id . ' (' . $Connection->address . ':' . $Connection->port . ')'
                . ' from Worker with PID @_:' . $TCP_Client->Process->id . '_@ was closed! @\;'
                );
             },

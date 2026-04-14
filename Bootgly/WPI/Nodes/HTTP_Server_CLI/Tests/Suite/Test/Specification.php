@@ -17,8 +17,8 @@ use InvalidArgumentException;
 use Bootgly\ACI\Tests\Assertions;
 use Bootgly\ACI\Tests\Suite\Test\Specification as Base;
 use Bootgly\ACI\Tests\Suite\Test\Specification\Separator;
-use Bootgly\API\Server\Handling;
-use Bootgly\API\Server\Middleware;
+use Bootgly\API\Workables\Server\Handling;
+use Bootgly\API\Workables\Server\Middleware;
 
 
 class Specification extends Base implements Handling

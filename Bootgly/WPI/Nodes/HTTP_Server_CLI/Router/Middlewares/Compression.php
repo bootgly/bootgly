@@ -18,7 +18,7 @@ use function strlen;
 use function str_contains;
 use Closure;
 
-use Bootgly\API\Server\Middleware;
+use Bootgly\API\Workables\Server\Middleware;
 
 
 class Compression implements Middleware

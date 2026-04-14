@@ -14,7 +14,7 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Middlewares;
 use function strlen;
 use Closure;
 
-use Bootgly\API\Server\Middleware;
+use Bootgly\API\Workables\Server\Middleware;
 
 
 class BodyParser implements Middleware

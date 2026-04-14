@@ -79,13 +79,20 @@ class File implements Handling
 
    public function write (string $sessionId, string $sessionData): bool
    {
+      $target = static::resolve($sessionId);
+
+      // ! Invalid session ID (path traversal guard)
+      if ($target === '') {
+         return false;
+      }
+
       $tempFile = static::$path . uniqid(bin2hex(random_bytes(8)), true);
 
       if (!file_put_contents($tempFile, $sessionData)) {
          return false;
       }
 
-      return rename($tempFile, static::resolve($sessionId));
+      return rename($tempFile, $target);
    }
 
    public function touch (string $sessionId): bool
@@ -134,10 +141,15 @@ class File implements Handling
     * Resolve session file path.
     *
     * @param string $sessionId
-    * @return string
+    * @return string Empty string if session ID is invalid (path traversal guard).
     */
    protected static function resolve (string $sessionId): string
    {
+      // ! Session ID must be a hex string between 32 and 64 characters (path traversal guard)
+      if (preg_match('/^[a-f0-9]{32,64}$/', $sessionId) !== 1) {
+         return '';
+      }
+
       // :
       return static::$path . static::$prefix . $sessionId;
    }
@@ -163,7 +175,7 @@ class File implements Handling
       static::$path = $path;
 
       if (!is_dir($path)) {
-         mkdir($path, 0777, true);
+         mkdir($path, 0700, true);
       }
    }
 }

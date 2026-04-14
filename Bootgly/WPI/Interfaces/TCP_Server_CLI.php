@@ -73,7 +73,7 @@ use Bootgly\ACI\Logs\LoggableEscaped;
 use Bootgly\ACI\Process;
 use Bootgly\API\Environment;
 use Bootgly\API\Environments;
-use Bootgly\API\Server as SAPI;
+use Bootgly\API\Workables\Server as SAPI;
 use const Bootgly\CLI;
 use Bootgly\WPI\Endpoints\Servers\Decoder;
 use Bootgly\WPI\Endpoints\Servers\Encoder;

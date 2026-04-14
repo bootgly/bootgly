@@ -40,8 +40,8 @@ class Packages implements WPI\Connections\Packages
 
    // * Data
    // @ IO
-   public static string $output;
-   public static string $input;
+   public string $output;
+   public string $input;
 
    // * Metadata
    public int $written;
@@ -64,8 +64,8 @@ class Packages implements WPI\Connections\Packages
 
       // * Data
       // @ IO
-      self::$output ='';
-      self::$input = '';
+      $this->output ='';
+      $this->input = '';
 
       // * Metadata
       $this->written = 0;         // Output Data length (bytes written).
@@ -138,7 +138,7 @@ class Packages implements WPI\Connections\Packages
    public function writing (&$Socket, null|int $length = null): bool
    {
       // !
-      $buffer = self::$output;
+      $buffer = $this->output;
       $written = 0;
       $sent = 0; // Bytes sent to server per write loop iteration
 
@@ -259,7 +259,7 @@ class Packages implements WPI\Connections\Packages
       }
 
       // @ Set Input
-      self::$input = $input;
+      $this->input = $input;
 
       // @ Set Stats (disable to max performance in benchmarks)
       if (Connections::$stats) {

@@ -11,7 +11,17 @@
 namespace Bootgly\ACI\Tests;
 
 
+use const DIRECTORY_SEPARATOR;
+use function current;
+use function count;
 use function is_array;
+use function is_callable;
+use function method_exists;
+use function microtime;
+use function next;
+use function sprintf;
+use function strlen;
+use function str_pad;
 use Closure;
 use Exception;
 
@@ -254,7 +264,7 @@ class Suite
          );
 
          // @ Output header separator
-         $this->log('@#white:' . $header . ' @;@\;');
+         $this->log("@#white:$header @;@\\;");
       }
    }
 
@@ -275,9 +285,9 @@ class Suite
          if ( is_array($value) ) {
             $newPrefix = "{$prefix}{$key}";
 
-            $result = array_merge(
-               $result, self::list($value, $newPrefix)
-            );
+            $result = [
+               ...$result, ...self::list($value, $newPrefix)
+            ];
          }
          else {
             $result[] = "{$prefix}{$value}";
@@ -332,10 +342,7 @@ class Suite
       }
 
       $this->log(
-         "\033[30m\033[47m " . $case_index . " \033[0m" .
-         "\033[0;30;43m SKIP \033 @; " .
-         "\033[90m" . $file . "\033[0m" .
-         $info . PHP_EOL
+         "\e[30m\e[47m $case_index \e[0m\e[0;30;43m SKIP \e @; \e[90m$file\e[0m$info" . PHP_EOL
       );
 
       // @ Record result for AI agent output
@@ -346,6 +353,8 @@ class Suite
          status: 'skipped'
       );
    }
+
+   // # Summary
    /**
     * Summarize the Test Suite.
     *
@@ -354,19 +363,19 @@ class Suite
    public function summarize (): void
    {
       // # Result
-      $failed = '@:error:' . $this->failed . ' failed @;';
-      $skipped = '@:notice:' . $this->skipped . ' skipped @;';
-      $passed = '@:success:' . $this->passed . ' passed @;';
+      $failed = "@:error:{$this->failed} failed @;";
+      $skipped = "@:notice:{$this->skipped} skipped @;";
+      $passed = "@:success:{$this->passed} passed @;";
       // # Stats
-      $assertions = '@:info:' . $this->assertions . ' @;';
+      $assertions = "@:info:{$this->assertions} @;";
       // # Time
       $started = $this->started;
       $finished = $this->finished = microtime(true);
       // duration
       $duration = Benchmark::format($started, $finished);
-      $duration = "@#Magenta:" . $duration . "s @;";
+      $duration = "@#Magenta:{$duration}s @;";
 
-      $ran = '@#Black:' . 'Ran all tests cases. @;';
+      $ran = "@#Black:Ran all tests cases. @;";
 
       // TODO temp
       $this->log(<<<TESTS

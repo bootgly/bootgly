@@ -398,6 +398,23 @@ class Response extends Server\Response
       switch ($resource) {
          // Content
          case 'json':
+            if ( is_array($data) ) {
+               $this->content = $data;
+               break;
+            }
+
+            if (is_string($data)) {
+               $decoded = json_decode($data, true);
+               $this->content = is_array($decoded) ? $decoded : [];
+               break;
+            }
+
+            $this->content = [];
+
+            break;
+         // ⚠️ SECURITY: JSONP bypasses the Same-Origin Policy and is inherently insecure.
+         // Any origin can make authenticated requests and read the response.
+         // JSONP is deprecated — use CORS instead for cross-origin data sharing.
          case 'jsonp':
             if ( is_array($data) ) {
                $this->content = $data;
@@ -688,6 +705,18 @@ class Response extends Server\Response
     * @param ?int $code The HTTP status code to use for the redirection.
     *
     * @return self The Response instance, for chaining.
+    *
+    * ⚠️  SECURITY: Open Redirect risk.
+    * Never pass user-supplied input directly to this method without validation.
+    * If the redirect target may be controlled by the user (e.g., a ?next= parameter),
+    * validate that the URI is relative or matches an explicitly allowed host before
+    * calling redirect(). Example:
+    *
+    *   $next = $Request->queries['next'] ?? '/';
+    *   if (!str_starts_with($next, '/')) {
+    *       $next = '/'; // reject external URLs
+    *   }
+    *   $Response->redirect($next);
     */
    public function redirect (string $URI, int|null $code = null): self
    {

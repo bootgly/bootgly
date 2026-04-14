@@ -11,12 +11,11 @@
 namespace Bootgly\ACI\Tests;
 
 
-use function json_encode;
-use function round;
-
 use const JSON_UNESCAPED_SLASHES;
 use const JSON_UNESCAPED_UNICODE;
 use const PHP_EOL;
+use function json_encode;
+use function round;
 
 
 class Results
@@ -25,7 +24,7 @@ class Results
    public static bool $enabled = false;
 
    // * Data
-   public static ?string $agent = null;
+   public static null|string $agent = null;
    /**
     * Collected test case results.
     *
@@ -62,7 +61,7 @@ class Results
       int $case,
       string $file,
       string $status,
-      ?string $message = null,
+      null|string $message = null,
       float $elapsedMs = 0
    ): void
    {

@@ -67,9 +67,14 @@ return new Specification(
          ->to->be(204)
          ->assert();
 
-      // @ Test 5: Credentials enabled sets ACAC header
-      [$Request, $Response] = $createMocks();
-      $CORS = new CORS(credentials: true);
+      // @ Test 5: Credentials enabled with specific origin sets ACAC header
+      // NOTE: credentials=true requires a specific origin (not wildcard '*').
+      // Using CORS(origins: ['*'], credentials: true) is forbidden by the CORS spec
+      // and our implementation forces credentials=false in that case.
+      [$Request, $Response] = $createMocks(
+         requestHeaders: ['Origin' => 'http://trusted.com']
+      );
+      $CORS = new CORS(origins: ['http://trusted.com'], credentials: true);
       $Result = $CORS->process($Request, $Response, $passthrough);
       yield new Assertion(
          description: 'Credentials should set Access-Control-Allow-Credentials header',

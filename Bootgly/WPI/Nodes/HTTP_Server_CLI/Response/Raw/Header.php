@@ -14,6 +14,7 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Raw;
 use function array_key_exists;
 use function gmdate;
 use function implode;
+use function str_replace;
 use function strtolower;
 use function time;
 
@@ -225,6 +226,9 @@ class Header extends HeaderBase
    public function set (string $field, string $value): bool
    {
       if ($field) {
+         // ! Strip CRLF from header values to prevent HTTP response splitting
+         $value = str_replace(["\r", "\n"], '', $value);
+
          if (! isSet($this->fields[$field]) || $this->fields[$field] !== $value) {
             $this->fields[$field] = $value;
             $this->dirty = true;

@@ -48,8 +48,8 @@ use Bootgly\ACI\Process;
 use Bootgly\ACI\Tests\Suite;
 use Bootgly\ACI\Tests\Suite\Test\Specification;
 use Bootgly\API\Environments;
-use Bootgly\API\Server as SAPI;
-use Bootgly\API\Server\Middlewares;
+use Bootgly\API\Workables\Server as SAPI;
+use Bootgly\API\Workables\Server\Middlewares;
 use const Bootgly\WPI;
 use Bootgly\API\Endpoints\Server\Modes;
 use Bootgly\API\Endpoints\Server\Status;
@@ -459,13 +459,15 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
             foreach ($testFiles as $index => $value) {
                // @ Reset connection state from previous test
                $Connection->expired = false;
+               $Connection->input = '';
 
-               // @ Detect dead connection from previous test's reject/close
+               // @ Detect dead/stale connection from previous test's reject/close
                $r = [$Socket]; $w = null; $e = null;
-               if (@stream_select($r, $w, $e, 0) > 0) {
-                  if (@fread($Socket, 1) === '' || @feof($Socket)) {
-                     $reconnect();
-                  }
+               if (@feof($Socket) || @stream_select($r, $w, $e, 0, 10000) > 0) {
+                  // @@ Drain stale data from socket buffer
+                  while (@fread($Socket, 65535) !== '' && !@feof($Socket)) {}
+                  // @ Reconnect with fresh socket
+                  $reconnect();
                }
 
                /** @var Specification|null $test */
@@ -496,7 +498,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
                      $requestData = $requestClosure("{$TCP_Client_CLI->host}:{$TCP_Client_CLI->port}");
                      $requestLength = strlen($requestData);
                      // @ Send Request to Server
-                     $Connection::$output = $requestData;
+                     $Connection->output = $requestData;
                      if ( ! $Connection->writing($Socket, $requestLength) ) { // @phpstan-ignore booleanNot.alwaysTrue
                         // @ Reconnect and retry
                         $reconnect();
@@ -510,16 +512,16 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
                      $input = '';
                      // @ Get Response from Server
                      if ( $Connection->reading($Socket, $responseLength, $timeout) ) {
-                        $input = $Connection::$input;
+                        $input = $Connection->input;
                      }
                      // @ Reconnect and retry if response is empty (half-closed connection)
-                     if ($input === '' && $Connection->expired) { // @phpstan-ignore booleanAnd.rightAlwaysFalse
+                     if ($input === '' && $Connection->expired) { // @phpstan-ignore identical.alwaysTrue, booleanAnd.rightAlwaysFalse
                         $reconnect();
                         $Connection->expired = false;
-                        $Connection::$output = $requestData;
+                        $Connection->output = $requestData;
                         if ($Connection->writing($Socket, $requestLength)) {
                            if ($Connection->reading($Socket, $responseLength, $timeout)) {
-                              $input = $Connection::$input;
+                              $input = $Connection->input;
                            }
                         }
                      }
@@ -570,7 +572,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
                   foreach ($requestResult as $chunk) {
                      /** @var string $chunk */
                      $chunkLength = strlen($chunk);
-                     $Connection::$output = $chunk;
+                     $Connection->output = $chunk;
                      if ( ! $Connection->writing($Socket, $chunkLength) ) { // @phpstan-ignore booleanNot.alwaysTrue
                         $reconnect();
                         if ( ! $Connection->writing($Socket, $chunkLength) ) { // @phpstan-ignore booleanNot.alwaysTrue
@@ -584,7 +586,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
                   $timeout = 2;
                   $input = '';
                   if ( $Connection->reading($Socket, $responseLength, $timeout) ) {
-                     $input = $Connection::$input;
+                     $input = $Connection->input;
                   }
 
                   // @ Execute Test
@@ -603,7 +605,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
                $requestData = $requestResult;
                $requestLength = strlen($requestData);
                // @ Send Request to Server
-               $Connection::$output = $requestData;
+               $Connection->output = $requestData;
                if ( ! $Connection->writing($Socket, $requestLength) ) { // @phpstan-ignore booleanNot.alwaysTrue
                   // @ Reconnect and retry
                   $reconnect();
@@ -617,16 +619,16 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
                $input = '';
                // @ Get Response from Server
                if ( $Connection->reading($Socket, $responseLength, $timeout) ) {
-                  $input = $Connection::$input;
+                  $input = $Connection->input;
                }
                // @ Reconnect and retry if response is empty (half-closed connection)
-               if ($input === '' && $Connection->expired) { // @phpstan-ignore booleanAnd.rightAlwaysFalse
+               if ($input === '' && $Connection->expired) { // @phpstan-ignore identical.alwaysTrue, booleanAnd.rightAlwaysFalse
                   $reconnect();
                   $Connection->expired = false;
-                  $Connection::$output = $requestData;
+                  $Connection->output = $requestData;
                   if ($Connection->writing($Socket, $requestLength)) {
                      if ($Connection->reading($Socket, $responseLength, $timeout)) {
-                        $input = $Connection::$input;
+                        $input = $Connection->input;
                      }
                   }
                }

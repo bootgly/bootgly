@@ -11,6 +11,16 @@
 namespace Bootgly\WPI\Interfaces\TCP_Client_CLI\Connections;
 
 
+use const STREAM_CRYPTO_METHOD_TLSv1_2_CLIENT;
+use const STREAM_CRYPTO_METHOD_TLSv1_3_CLIENT;
+use function explode;
+use function fclose;
+use function stream_set_blocking;
+use function stream_socket_enable_crypto;
+use function stream_socket_get_name;
+use function time;
+use Throwable;
+
 use Bootgly\ACI\Events\Timer;
 use Bootgly\WPI\Interfaces\TCP_Client_CLI as Client;
 use Bootgly\WPI\Interfaces\TCP_Client_CLI\Connections;
@@ -29,31 +39,32 @@ class Connection extends Packages
    public int $expiration;
 
    // * Data
-   // @ Remote
-   public string $ip;
+   // # Remote
+   public string $address;
    public int $port;
 
    // * Metadata
    public int $id;
-   // @ Status
-   public const STATUS_INITIAL = 0;
-   public const STATUS_CONNECTING = 1;
-   public const STATUS_ESTABLISHED = 2;
-   public const STATUS_CLOSING = 4;
-   public const STATUS_CLOSED = 8;
+   // # Status
+   public const int STATUS_INITIAL = 0;
+   public const int STATUS_CONNECTING = 1;
+   public const int STATUS_ESTABLISHED = 2;
+   public const int STATUS_CLOSING = 4;
+   public const int STATUS_CLOSED = 8;
    public int $status;
-   // @ State
+   // # State
    public int $started;
    public int $used;
-   // @ Stats
+   // # Stats
    #public int $reads;
    public int $writes;
 
 
    /**
     * @param resource $Socket
+    * @param bool $ssl Whether SSL/TLS handshake is required
     */
-   public function __construct (&$Socket)
+   public function __construct (&$Socket, bool $ssl = false)
    {
       $this->Socket = $Socket;
 
@@ -67,12 +78,12 @@ class Connection extends Packages
 
       // * Metadata
       $this->id = (int) $Socket;
-      // @ Status
+      // # Status
       $this->status = self::STATUS_ESTABLISHED;
-      // @ Handler
+      // # Handler
       $this->started = time();
       $this->used = time();
-      // @ Stats
+      // # Stats
       $this->writes = 0;
       $this->reads = 0;
 
@@ -87,11 +98,16 @@ class Connection extends Packages
       // * Data
       // @ Remote
       @[$IP, $port] = explode(':', $peer, 2); // TODO IPv6
-      $this->ip = $IP;
+      $this->address = $IP;
       $this->port = (int) $port;
 
 
       parent::__construct($this);
+
+      // @ Call handshake if SSL is enabled
+      if ($ssl && $this->handshake() === false) {
+         return;
+      }
 
       // @ Call On Connection connect
       if (Client::$onConnect) {
@@ -113,7 +129,7 @@ class Connection extends Packages
       try {
          @fclose($this->Socket);
       }
-      catch (\Throwable) {
+      catch (Throwable) {
          // ...
       }
 
@@ -125,6 +141,35 @@ class Connection extends Packages
 
       // @ Destroy itself
       unset(Connections::$Connections[$this->id]);
+
+      return true;
+   }
+
+   public function handshake (): bool|int
+   {
+      try {
+         stream_set_blocking($this->Socket, true);
+
+         $negotiation = @stream_socket_enable_crypto(
+            $this->Socket,
+            true,
+            STREAM_CRYPTO_METHOD_TLSv1_2_CLIENT | STREAM_CRYPTO_METHOD_TLSv1_3_CLIENT
+         );
+
+         stream_set_blocking($this->Socket, false);
+      }
+      catch (Throwable) {
+         $negotiation = false;
+      }
+
+      // @ Check negotiation
+      if ($negotiation === false) {
+         $this->close();
+         return false;
+      }
+      else if ($negotiation === 0) {
+         return 0;
+      }
 
       return true;
    }

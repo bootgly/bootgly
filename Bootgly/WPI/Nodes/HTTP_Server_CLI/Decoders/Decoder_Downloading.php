@@ -12,6 +12,7 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders;
 
 
 use const BOOTGLY_WORKING_BASE;
+use function basename;
 use function count;
 use function time;
 use function strlen;
@@ -21,6 +22,7 @@ use function strtolower;
 use function trim;
 use function explode;
 use function preg_match;
+use function preg_replace;
 use function urlencode;
 use function parse_str;
 use function array_walk_recursive;
@@ -243,8 +245,11 @@ class Decoder_Downloading extends Decoders
                if (preg_match('/name="(.*?)"; filename="(.*?)"/i', $value, $match)) {
                   $isFile = true;
                   $uploadKey = $match[1];
+                  // ! Sanitize filename: strip directory traversal and restrict to safe characters
+                  $rawFilename = basename($match[2]);
+                  $safeFilename = (string) preg_replace('/[^\w.\- ]/', '_', $rawFilename);
                   $file = [
-                     'name' => $match[2],
+                     'name' => $safeFilename,
                      'tmp_name' => '',
                      'size' => 0,
                      'error' => 0,
@@ -268,7 +273,7 @@ class Decoder_Downloading extends Decoders
          $tempUploadedDir = BOOTGLY_WORKING_BASE . '/workdata/temp/files/downloaded/';
 
          if (! is_dir($tempUploadedDir)) {
-            mkdir($tempUploadedDir, 0777, true);
+            mkdir($tempUploadedDir, 0700, true);
          }
 
          // @ Check disk space

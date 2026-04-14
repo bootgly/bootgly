@@ -170,9 +170,10 @@ class Header
          if ( strpos($field, ': ') ) {
             @[$key, $value] = explode(': ', $field, 2);
 
-            #if ( strpos($key, ' ') ) {
-            #   return false; // @ 400 Bad Request
-            #}
+            // ! Reject malformed header names containing spaces (RFC 9112 §5.1)
+            if ( strpos($key, ' ') !== false ) {
+               continue;
+            }
 
             if ( isSet($fields[$key]) ) {
                if ( is_string($fields[$key]) ) {

@@ -15,7 +15,7 @@ use function implode;
 use function in_array;
 use Closure;
 
-use Bootgly\API\Server\Middleware;
+use Bootgly\API\Workables\Server\Middleware;
 
 
 class CORS implements Middleware
@@ -43,6 +43,9 @@ class CORS implements Middleware
     * @param array<string> $headers Allowed request headers.
     * @param int $maxAge Preflight cache duration in seconds.
     * @param bool $credentials Whether to allow credentials.
+    *        NOTE: Cannot be true when $origins is ['*'] — the CORS spec forbids
+    *        wildcard origin with credentials. $credentials will be forced to false
+    *        in that case.
     */
    public function __construct (
       array $origins = ['*'],
@@ -52,6 +55,11 @@ class CORS implements Middleware
       bool $credentials = false
    )
    {
+      // ! Wildcard origin + credentials is forbidden by the CORS spec (Fetch §3.2)
+      if ($origins === ['*'] && $credentials === true) {
+         $credentials = false;
+      }
+
       // * Config
       $this->origins = $origins;
       $this->methods = $methods;

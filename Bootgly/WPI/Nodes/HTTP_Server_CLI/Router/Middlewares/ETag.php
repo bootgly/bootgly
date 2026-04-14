@@ -15,7 +15,7 @@ use function hash;
 use function strlen;
 use Closure;
 
-use Bootgly\API\Server\Middleware;
+use Bootgly\API\Workables\Server\Middleware;
 
 
 class ETag implements Middleware

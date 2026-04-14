@@ -12,10 +12,13 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Middlewares;
 
 
 use function bin2hex;
+use function chr;
+use function ord;
+use function preg_match;
 use function random_bytes;
 use Closure;
 
-use Bootgly\API\Server\Middleware;
+use Bootgly\API\Workables\Server\Middleware;
 
 
 class RequestId implements Middleware
@@ -46,16 +49,17 @@ class RequestId implements Middleware
       // ! Generate or use existing request ID
       $requestId = $Request->Header->get($this->header); // @phpstan-ignore-line
 
-      if ($requestId === null || $requestId === '') {
+      // ! Reject client-supplied IDs containing CRLF (header injection guard)
+      if ($requestId === null || $requestId === '' || preg_match('/[\r\n]/', $requestId) === 1) {
          // @ Generate UUID v4-like ID
          $data = random_bytes(16);
-         $data[6] = \chr(\ord($data[6]) & 0x0f | 0x40);
-         $data[8] = \chr(\ord($data[8]) & 0x3f | 0x80);
+         $data[6] = chr(ord($data[6]) & 0x0f | 0x40);
+         $data[8] = chr(ord($data[8]) & 0x3f | 0x80);
          $requestId = bin2hex($data[0] . $data[1] . $data[2] . $data[3]) . '-'
-            . bin2hex($data[4] . $data[5]) . '-'
-            . bin2hex($data[6] . $data[7]) . '-'
-            . bin2hex($data[8] . $data[9]) . '-'
-            . bin2hex($data[10] . $data[11] . $data[12] . $data[13] . $data[14] . $data[15]);
+            . bin2hex("$data[4]$data[5]") . '-'
+            . bin2hex("$data[6]$data[7]") . '-'
+            . bin2hex("$data[8]$data[9]") . '-'
+            . bin2hex("$data[10]$data[11]$data[12]$data[13]$data[14]$data[15]");
       }
 
       // @ Set request ID on response

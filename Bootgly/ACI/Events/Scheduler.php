@@ -16,6 +16,10 @@ use Fiber;
 
 interface Scheduler
 {
+   // @ I/O flags for Fiber scheduling
+   public const int SCHEDULE_READ = 1;
+   public const int SCHEDULE_WRITE = 2;
+
    /**
     * Schedule a suspended Fiber for resumption in the event loop.
     *
@@ -25,8 +29,9 @@ interface Scheduler
     *
     * @param Fiber<mixed, mixed, mixed, mixed> $Fiber
     * @param mixed $value The suspended value from Fiber::start() or resume().
+    * @param int $flag SCHEDULE_READ (default) or SCHEDULE_WRITE for I/O-bound Fibers.
     *
     * @return bool
     */
-   public function schedule (Fiber $Fiber, mixed $value = null): bool;
+   public function schedule (Fiber $Fiber, mixed $value = null, int $flag = self::SCHEDULE_READ): bool;
 }

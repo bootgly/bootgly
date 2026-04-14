@@ -60,7 +60,9 @@ class Select implements Events, Loops, Scheduler
    private array $Fibers = [];
    // I/O-bound (resumed when stream_select signals readiness)
    /** @var array<int,Fiber<mixed,mixed,mixed,mixed>> */
-   private array $awaiting = [];
+   private array $awaitingReads = [];
+   /** @var array<int,Fiber<mixed,mixed,mixed,mixed>> */
+   private array $awaitingWrites = [];
    // # Loop
    public readonly float $started;
    public readonly float $finished;
@@ -199,6 +201,10 @@ class Select implements Events, Loops, Scheduler
       $Connections = $this->Connections;
 
       while (true) {
+         if (!$this->loop) {
+            break;
+         }
+
          pcntl_signal_dispatch();
 
          // @ Resume tick-based Fibers (no I/O association)
@@ -212,7 +218,7 @@ class Select implements Events, Loops, Scheduler
                      unset($this->Fibers[$id]);
 
                      $socketId = (int) $value;
-                     $this->awaiting[$socketId] = $Fiber;
+                     $this->awaitingReads[$socketId] = $Fiber;
                      $this->reads[$socketId] = $value;
 
                      continue;
@@ -244,7 +250,7 @@ class Select implements Events, Loops, Scheduler
             // @ Sleep for 1 second and continue (Used to pause the Server)
             sleep(1);
 
-            if ($this->loop === false) {
+            if ($this->loop === false) { // @phpstan-ignore identical.alwaysFalse
                break;
             }
 
@@ -261,10 +267,10 @@ class Select implements Events, Loops, Scheduler
                $id = (int) $Socket;
 
                // @ Resume I/O-awaiting Fiber (stream is now readable)
-               if ( isSet($this->awaiting[$id]) ) {
-                  $Fiber = $this->awaiting[$id];
+               if ( isSet($this->awaitingReads[$id]) ) {
+                  $Fiber = $this->awaitingReads[$id];
 
-                  unset($this->awaiting[$id]);
+                  unset($this->awaitingReads[$id]);
                   unset($this->reads[$id]);
 
                   if ($Fiber->isSuspended()) {
@@ -275,7 +281,7 @@ class Select implements Events, Loops, Scheduler
                         if (is_resource($value)) {
                            $newId = (int) $value;
 
-                           $this->awaiting[$newId] = $Fiber;
+                           $this->awaitingReads[$newId] = $Fiber;
 
                            $this->reads[$newId] = $value;
                         }
@@ -304,6 +310,34 @@ class Select implements Events, Loops, Scheduler
             foreach ($write as $Socket) {
                $id = (int) $Socket;
 
+               // @ Resume I/O-awaiting Fiber (stream is now writable)
+               if ( isSet($this->awaitingWrites[$id]) ) {
+                  $Fiber = $this->awaitingWrites[$id];
+
+                  unset($this->awaitingWrites[$id]);
+                  unset($this->writes[$id]);
+
+                  if ($Fiber->isSuspended()) {
+                     $value = $Fiber->resume();
+
+                     // @ Re-schedule if Fiber suspended again
+                     if ( !$Fiber->isTerminated()) {
+                        if (is_resource($value)) {
+                           $newId = (int) $value;
+
+                           $this->awaitingReads[$newId] = $Fiber;
+
+                           $this->reads[$newId] = $value;
+                        }
+                        else {
+                           $this->Fibers[] = $Fiber;
+                        }
+                     }
+                  }
+
+                  continue;
+               }
+
                if ( isSet($this->writing[$id]) ) {
                   /** @var Connections\Packages $Package */
                   $Package = &$this->writing[$id];
@@ -331,7 +365,7 @@ class Select implements Events, Loops, Scheduler
     *
     * @return bool
     */
-   public function schedule (Fiber $Fiber, mixed $value = null): bool
+   public function schedule (Fiber $Fiber, mixed $value = null, int $flag = self::SCHEDULE_READ): bool
    {
       // ?
       if ($Fiber->isTerminated()) {
@@ -342,8 +376,14 @@ class Select implements Events, Loops, Scheduler
       if (is_resource($value)) {
          $id = (int) $value;
 
-         $this->awaiting[$id] = $Fiber;
-         $this->reads[$id] = $value;
+         if ($flag === self::SCHEDULE_WRITE) {
+            $this->awaitingWrites[$id] = $Fiber;
+            $this->writes[$id] = $value;
+         }
+         else {
+            $this->awaitingReads[$id] = $Fiber;
+            $this->reads[$id] = $value;
+         }
 
          return true;
       }
@@ -367,7 +407,8 @@ class Select implements Events, Loops, Scheduler
       $this->excepts = [];
 
       // # Async
-      $this->awaiting = [];
+      $this->awaitingReads = [];
+      $this->awaitingWrites = [];
       $this->Fibers = [];
 
       // # Loop

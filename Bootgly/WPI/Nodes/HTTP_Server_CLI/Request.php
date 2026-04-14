@@ -87,16 +87,12 @@ class Request
    // / Connection
    /**
     * The IP address of the HTTP Client.
+    * Always reflects the TCP-level connection IP.
+    * To trust proxy headers (X-Forwarded-For, cf-connecting-ip, etc.),
+    * use the TrustedProxy middleware with the proxy's IP in the trusted list.
     */
    public string $address {
-      get {
-         $header_field = $this->Header->fields['cf-connecting-ip'] ?? null;
-         if (is_string($header_field)) {
-            return $header_field;
-         }
-
-         return $this->address;
-      }
+      get => $this->address;
    }
    /**
     * The port of the HTTP Client.
