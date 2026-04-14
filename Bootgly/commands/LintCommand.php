@@ -38,8 +38,8 @@ use const PHP_EOL;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
 
-use Bootgly\ABI\Data\Syntax\Builtins;
-use Bootgly\ABI\Data\Syntax\Imports;
+use Bootgly\ABI\Syntax\Builtins;
+use Bootgly\ABI\Syntax\Imports;
 use Bootgly\API\Environment\Agent;
 use const Bootgly\CLI;
 use Bootgly\CLI\Command;
@@ -134,6 +134,7 @@ class LintCommand extends Command
       $title = 'Lint > ' . \ucfirst($submodule);
       if (!$Agent->detected) {
          $Output->render("@.;@#Cyan: {$title} @;@.;");
+         $Output->render("@#Black: ─────────────────────────────────────── @;@.;");
       }
 
       // @ Analyze
@@ -249,14 +250,20 @@ class LintCommand extends Command
 
       // @ Summary (human output)
       if ($totalIssues === 0) {
-         $Output->render("@.;@#Green: ✓ No import issues found. @;@.;\n");
-         return true;
+         $Output->render("@#Green: ✓ No import issues found. @;@.;");
+      }
+      else {
+         $Output->render("@#Yellow: Found {$totalIssues} issue(s) in {$totalFiles} file(s). @;@.;");
+
+         if ($fixedFiles > 0) {
+            $Output->render("@#Green: ✓ Fixed {$fixedFiles} file(s). @;@.;");
+         }
       }
 
-      $Output->render("@#Yellow: Found {$totalIssues} issue(s) in {$totalFiles} file(s). @;@..;");
+      $Output->render("@#Black: ─────────────────────────────────────── @;@..;");
 
-      if ($fixedFiles > 0) {
-         $Output->render("@#Green: ✓ Fixed {$fixedFiles} file(s). @;@..;");
+      if ($totalIssues === 0) {
+         return true;
       }
 
       // @ Exit with failure in check mode

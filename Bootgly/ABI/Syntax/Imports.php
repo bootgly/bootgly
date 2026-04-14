@@ -8,12 +8,12 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\ABI\Data\Syntax;
+namespace Bootgly\ABI\Syntax;
 
 
-use Bootgly\ABI\Data\Syntax\Imports\Analyzer;
-use Bootgly\ABI\Data\Syntax\Imports\Analyzer\Result;
-use Bootgly\ABI\Data\Syntax\Imports\Formatter;
+use Bootgly\ABI\Syntax\Imports\Analyzer;
+use Bootgly\ABI\Syntax\Imports\Analyzer\Result;
+use Bootgly\ABI\Syntax\Imports\Formatter;
 
 
 class Imports

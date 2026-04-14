@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\ABI\Data\Syntax\Imports;
+namespace Bootgly\ABI\Syntax\Imports;
 
 
 use function array_filter;
@@ -23,7 +23,7 @@ use function substr;
 use function substr_replace;
 use function usort;
 
-use Bootgly\ABI\Data\Syntax\Imports\Analyzer\Result;
+use Bootgly\ABI\Syntax\Imports\Analyzer\Result;
 
 
 class Formatter

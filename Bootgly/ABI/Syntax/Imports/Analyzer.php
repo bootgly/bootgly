@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\ABI\Data\Syntax\Imports;
+namespace Bootgly\ABI\Syntax\Imports;
 
 
 use const T_AS;
@@ -49,10 +49,10 @@ use function substr;
 use function token_get_all;
 use function trim;
 
-use Bootgly\ABI\Data\Syntax\Builtins;
-use Bootgly\ABI\Data\Syntax\Imports\Analyzer\Issue;
-use Bootgly\ABI\Data\Syntax\Imports\Analyzer\Result;
-use Bootgly\ABI\Data\Syntax\Imports\Analyzer\Tokens;
+use Bootgly\ABI\Syntax\Builtins;
+use Bootgly\ABI\Syntax\Imports\Analyzer\Issue;
+use Bootgly\ABI\Syntax\Imports\Analyzer\Result;
+use Bootgly\ABI\Syntax\Imports\Analyzer\Tokens;
 
 
 class Analyzer

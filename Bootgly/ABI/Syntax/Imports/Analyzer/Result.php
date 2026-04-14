@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\ABI\Data\Syntax\Imports\Analyzer;
+namespace Bootgly\ABI\Syntax\Imports\Analyzer;
 
 
 use function count;

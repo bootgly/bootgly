@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\ABI\Data\Syntax;
+namespace Bootgly\ABI\Syntax;
 
 
 use function array_fill_keys;
