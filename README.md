@@ -118,15 +118,11 @@ Above is the native compatibility, of course it is possible to run on Windows an
 - PHP 8.4+ ⚠️
 - Opcache + JIT enabled (+50% performance) 👍
 
-#### \- Bootgly CLI 📟
+#### PHP Packages
 
 - `php-cli` ⚠️
 - `php-mbstring` 👍
 - `php-readline` ⚠️
-
-#### \- Bootgly WPI 🌐
-
-- `rewrite` module enabled ⚠️
 
 --
 
