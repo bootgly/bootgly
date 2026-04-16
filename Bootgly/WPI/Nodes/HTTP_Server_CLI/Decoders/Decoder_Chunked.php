@@ -77,14 +77,22 @@ class Decoder_Chunked extends Decoders
 
       // * Metadata
       $elapsed = time() - self::$decoded;
-      if ($elapsed >= 60) {
+      if ($elapsed >= 30) {
          $Body->waiting = false;
+
+         self::$body = '';
+         self::$buffer = '';
+
          $Server::$Decoder = new Decoder_;
+
          return Decoder_::decode($Package, $buffer, $size);
       }
 
       // @ Append incoming data
       self::$buffer .= $buffer;
+
+      // @ Update last decoded time
+      self::$decoded = time();
 
       // @ Process chunks
       while (true) {
@@ -127,7 +135,13 @@ class Decoder_Chunked extends Decoders
                if (self::$totalSize + $chunkSize > self::MAX_BODY_SIZE) {
                   $Package->reject("HTTP/1.1 413 Request Entity Too Large\r\n\r\n");
                   $Body->waiting = false;
+
+                  // @ Clean up static state to prevent cross-request leakage
+                  self::$body = '';
+                  self::$buffer = '';
+
                   $Server::$Decoder = new Decoder_;
+
                   return 0;
                }
 
