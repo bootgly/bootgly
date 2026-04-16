@@ -24,23 +24,21 @@ class Body
    public string $raw = '';
 
    // * Metadata
+   // @ `length` is a virtual property kept for back-compat; hot path in
+   // Response/Raw::encode() bypasses this hook and calls strlen() directly.
    public protected(set) int $length {
-      get {
-         $this->length = strlen($this->raw);
-         return $this->length;
-      }
+      get => strlen($this->raw);
       set (int $value) {
-         $this->length = $value;
+         // @ Accepted for back-compat (e.g. HTTP Client decoded body length),
+         // but value is recomputed from $raw on each read — effectively a no-op.
+         // Kept to preserve the write API without breaking existing callers.
       }
    }
    // Encoded
    public protected(set) string $chunked {
-      get {
-         $this->chunked = dechex(strlen($this->raw)) . "\r\n{$this->raw}\r\n";
-         return $this->chunked;
-      }
+      get => dechex(strlen($this->raw)) . "\r\n{$this->raw}\r\n";
       set (string $value) {
-         $this->chunked = $value;
+         // @ No-op setter (see $length note); chunked is derived from $raw.
       }
    }
 
