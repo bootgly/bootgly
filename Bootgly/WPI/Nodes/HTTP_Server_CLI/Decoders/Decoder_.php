@@ -33,6 +33,10 @@ class Decoder_ extends Decoders
 
          if ($Package->changed) {
             Server::$Request->reboot();
+
+            Server::$Request->address = $Package->Connection->ip;
+            Server::$Request->port = $Package->Connection->port;
+            Server::$Request->scheme = $Package->Connection->encrypted ? 'https' : 'http';
          }
 
          return $size;
