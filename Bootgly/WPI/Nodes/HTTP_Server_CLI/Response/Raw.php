@@ -56,9 +56,10 @@ trait Raw
 
       // @ Prepare
       // ?! Content-Length inline (avoid Header->set to preserve cache)
+      // ?! strlen($Body->raw) bypasses the $Body->length property hook dispatch (hot path)
       $contentLength = '';
       if (! $this->stream && ! $this->chunked && ! $this->encoded) {
-         $contentLength = "\r\nContent-Length: " . $Body->length;
+         $contentLength = "\r\nContent-Length: " . strlen($Body->raw);
       }
 
       // @ Build
