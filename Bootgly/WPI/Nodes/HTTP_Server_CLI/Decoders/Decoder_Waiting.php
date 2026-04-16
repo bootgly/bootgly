@@ -67,6 +67,14 @@ class Decoder_Waiting extends Decoders
          $Body->downloaded += $size;
          self::$read = $Body->downloaded;
 
+         // ! Reject if received data exceeds declared Content-Length (memory exhaustion guard)
+         if ($Body->downloaded > $Body->length) {
+            $Body->waiting = false;
+
+            $Server::$Decoder = new Decoder_;
+            return Decoder_::decode($Package, $buffer, $size);
+         }
+
          if ($Body->length > $Body->downloaded) {
             return 0;
          }
