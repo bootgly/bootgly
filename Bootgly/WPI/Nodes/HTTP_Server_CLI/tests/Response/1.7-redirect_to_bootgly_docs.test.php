@@ -15,7 +15,7 @@ return new Specification(
       return "GET /test/redirect/1 HTTP/1.1\r\nHost: localhost\r\n\r\n";
    },
    response: function (Request $Request, Response $Response): Response {
-      return $Response->redirect('https://docs.bootgly.com/');
+      return $Response->redirect('https://docs.bootgly.com/', allowExternal: true);
    },
 
    test: function ($response) {

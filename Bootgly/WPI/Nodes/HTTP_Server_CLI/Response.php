@@ -37,7 +37,10 @@ use function json_encode;
 use function method_exists;
 use function ob_get_clean;
 use function ob_start;
+use function preg_match;
+use function realpath;
 use function str_pad;
+use function str_starts_with;
 use function strlen;
 use function strtolower;
 use function strval;
@@ -456,6 +459,14 @@ class Response extends Server\Response
 
             $File = new File(BOOTGLY_PROJECT->path . 'views/' . $data);
 
+            // ! Validate resolved path stays within views directory (path traversal guard)
+            $resolved = realpath((string) $File);
+            $basePath = realpath(BOOTGLY_PROJECT->path . 'views/');
+            if ($resolved === false || $basePath === false || !str_starts_with($resolved, $basePath)) {
+               $this->__set('code', 403);
+               return $this;
+            }
+
             $this->source = 'file';
             $extension = $File->extension;
             $this->type   = is_string($extension) ? $extension : '';
@@ -484,7 +495,6 @@ class Response extends Server\Response
                      }
 
                      $prefix = $data[0] ?? '';
-                     // TODO check if string is a valid path
                      if ($prefix !== '/' && $prefix !== '@' && !defined('BOOTGLY_PROJECT')) {
                         throw new Error('HTTP_Server_CLI must be started through a Project. BOOTGLY_PROJECT is not defined.');
                      }
@@ -494,6 +504,14 @@ class Response extends Server\Response
                         '@' => new File(BOOTGLY_WORKING_DIR . 'projects/' . $data),
                         default => new File(BOOTGLY_PROJECT->path . $data)
                      };
+
+                     // ! Validate resolved path stays within projects directory (path traversal guard)
+                     $resolved = realpath((string) $File);
+                     $projectsBase = realpath(BOOTGLY_WORKING_DIR . 'projects');
+                     if ($resolved === false || $projectsBase === false || !str_starts_with($resolved, $projectsBase)) {
+                        $this->__set('code', 403);
+                        return $this;
+                     }
 
                      $this->source = 'file';
                      $extension = $File->extension;
@@ -720,8 +738,16 @@ class Response extends Server\Response
     *   }
     *   $Response->redirect($next);
     */
-   public function redirect (string $URI, int|null $code = null): self
+   public function redirect (string $URI, int|null $code = null, bool $allowExternal = false): self
    {
+      // ! Block external redirects by default (open redirect prevention)
+      if ($allowExternal === false) {
+         // Reject absolute URLs with a scheme (e.g. http://, https://, //)
+         if (preg_match('#^https?://|^//#i', $URI) === 1) {
+            $URI = '/';
+         }
+      }
+
       // !?
       switch ($code) {
          case 300: // Multiple Choices
@@ -819,7 +845,10 @@ class Response extends Server\Response
                   if (is_array($callbackSource)) {
                      $callbackSource = $callbackSource[0] ?? null;
                   }
-                  $callback = is_string($callbackSource) && $callbackSource !== ''
+                  // ! Validate callback name to prevent XSS injection
+                  $callback = is_string($callbackSource)
+                     && $callbackSource !== ''
+                     && preg_match('/^[a-zA-Z_$][a-zA-Z0-9_$.]*$/', $callbackSource) === 1
                      ? $callbackSource
                      : 'callback';
 
@@ -950,6 +979,14 @@ class Response extends Server\Response
          }
 
          $File = new File(BOOTGLY_PROJECT->path . Path::normalize($file));
+
+         // ! Validate resolved path stays within project directory (path traversal guard)
+         $resolved = realpath((string) $File);
+         $basePath = realpath(BOOTGLY_PROJECT->path);
+         if ($resolved === false || $basePath === false || !str_starts_with($resolved, $basePath)) {
+            $this->__set('code', 403);
+            return $this;
+         }
       }
 
       if ($File->readable === false) {
@@ -1157,6 +1194,7 @@ class Response extends Server\Response
       $this->deferred = true;
 
       $Response = $this;
+
       $Package = $this->Package;
       $Socket = $this->Socket;
 
@@ -1173,27 +1211,32 @@ class Response extends Server\Response
             $work();
 
             // ? Guard: socket may have been closed while Fiber was suspended
-            if (! is_resource($Socket)) {
+            if (is_resource($Socket) === false) {
                return;
             }
 
             // @ Encode and send response after work completes
             $buffer = $Response->encode($Package, $length);
+
+            // @ Write response to socket
             $Package->writing($Socket, length: $length, buffer: $buffer);
          }
          catch (Throwable $Throwable) {
             Throwables::report($Throwable);
 
             // ? Guard: socket may have been closed
-            if (! is_resource($Socket)) {
+            if (is_resource($Socket) === false) {
                return;
             }
 
-            // @ Send 500 on failure
+            // @ Prepare 500 on failure
             $Response->code(500);
             $Response->Body->raw = ' ';
 
+            // @ Encode and send response after work completes
             $buffer = $Response->encode($Package, $length);
+
+            // @ Write response to socket
             $Package->writing($Socket, length: $length, buffer: $buffer);
          }
          finally {
