@@ -158,7 +158,9 @@ class Header extends HeaderBase
       }
       // * Metadata
       // Fields
-      $this->queued = [];
+      if ($this->queued !== []) {
+         $this->queued = [];
+      }
    }
 
    public function preset (string $name, string|null $value = null): void
@@ -251,7 +253,9 @@ class Header extends HeaderBase
    }
    public function append (string $field, string $value = '', ? string $separator = ', '): void
    {
-      // Header that can have only value to append, only entire header, etc.
+      // ! Strip CRLF from header values to prevent HTTP response splitting
+      $field = str_replace(["\r", "\n"], '', $field);
+      $value = str_replace(["\r", "\n"], '', $value);
 
       $separator ??= ', ';
 
@@ -265,6 +269,10 @@ class Header extends HeaderBase
    }
    public function queue (string $field, string $value = ''): bool
    {
+      // ! Strip CRLF from header values to prevent HTTP response splitting
+      $field = str_replace(["\r", "\n"], '', $field);
+      $value = str_replace(["\r", "\n"], '', $value);
+
       if ($field) {
          $this->queued[] = "$field: $value";
          $this->dirty = true;
@@ -283,23 +291,43 @@ class Header extends HeaderBase
       }
 
       // @
-      // @ Merge fields
-      $fields = $this->preset + $this->fields + $this->prepared;
-
       // @ Build headers
       $queued = $this->queued;
+
+      // ?! Hot path: most responses have no user fields/prepared — skip array merge.
+      if ($this->fields === [] && $this->prepared === []) {
+         // Preset only
+         foreach ($this->preset as $name => $value) {
+            $value = ($value === true) ? match ($name) {
+               'Date' => gmdate('D, d M Y H:i:s \G\M\T'),
+               default => ''
+            } : (string) $value;
+
+            $queued[] = "$name: $value";
+         }
+
+         // @ Default Content-Type (preset never carries it)
+         if (! array_key_exists('Content-Type', $this->preset)) {
+            $queued[] = 'Content-Type: text/html; charset=UTF-8';
+         }
+
+         $this->raw = implode("\r\n", $queued);
+
+         $this->built = time();
+         $this->dirty = false;
+
+         return true;
+      }
+
+      $fields = $this->preset + $this->fields + $this->prepared;
+
       // Fields
       foreach ($fields as $name => $value) {
          // Dynamic fields
-         if ($value === true) {
-            $value = match ($name) {
-               'Date' => gmdate('D, d M Y H:i:s \G\M\T'),
-               default => ''
-            };
-         }
-         else {
-            $value = (string) $value;
-         }
+         $value = ($value === true) ? match ($name) {
+            'Date' => gmdate('D, d M Y H:i:s \G\M\T'),
+            default => ''
+         } : (string) $value;
 
          $queued[] = "$name: $value";
       }
