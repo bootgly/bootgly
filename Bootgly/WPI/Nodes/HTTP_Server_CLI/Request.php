@@ -27,7 +27,6 @@ use function count;
 use function ctype_digit;
 use function date;
 use function explode;
-use function filter_var;
 use function fwrite;
 use function is_array;
 use function is_file;
@@ -46,8 +45,10 @@ use function strpos;
 use function strrpos;
 use function strstr;
 use function strtok;
+use function strtolower;
 use function strtotime;
 use function substr;
+use function substr_count;
 use function time;
 use function trim;
 use function uasort;
@@ -135,6 +136,14 @@ class Request
     */
    public string $URI {
       get => $this->URI;
+      set (string $value) {
+         $this->URI = $value;
+         // @ Invalidate cached derivations of URI
+         $this->_URL = null;
+         $this->_URN = null;
+         $this->_query = null;
+         $this->_queries = null;
+      }
    }
    /**
     * The Request protocol.
@@ -146,8 +155,13 @@ class Request
    /**
     * The Request URL (Uniform Resource Locator).
     */
+   private null|string $_URL = null;
    public string $URL {
       get {
+         if ($this->_URL !== null) {
+            return $this->_URL;
+         }
+
          $locator = strtok($this->URI, '?');
          if ($locator === false) {
             $locator = '';
@@ -161,20 +175,23 @@ class Request
             $locator = substr($locator, strlen($base));
          }
 
-         return $locator;
+         return $this->_URL = $locator;
       }
    }
    /**
     * The Request URN (Uniform Resource Name).
     */
+   private null|string $_URN = null;
    public string $URN {
       get {
+         if ($this->_URN !== null) {
+            return $this->_URN;
+         }
+
          $URL = $this->URL;
 
          // @ Extract the URN after the last slash
-         $URN = substr($URL, strrpos($URL, '/') + 1);
-
-         return $URN;
+         return $this->_URN = substr($URL, strrpos($URL, '/') + 1);
       }
    }
    // Host
@@ -237,30 +254,22 @@ class Request
     */
    public array $IPs {
       get {
-         $IPs = [];
-         $field = $this->Header->get('X-Forwarded-For');
-
-         if (is_string($field) && $field !== '') {
-            $IPs = explode(',', $field);
-            $IPs = array_map('trim', $IPs);
-            $IPs = array_unique($IPs);
-            $IPs = array_filter($IPs, function($IP) {
-               return filter_var($IP, FILTER_VALIDATE_IP) !== false;
-            });
-         }
-         else {
-            $IPs = [$this->address];
-         }
-
-         return $IPs;
+         // ! Always return TCP peer IP only.
+         // Proxy headers (X-Forwarded-For) are handled by TrustedProxy middleware.
+         return [$this->address];
       }
    }
    // Query
    /**
     * The Request query.
     */
+   private null|string $_query = null;
    public string $query {
       get {
+         if ($this->_query !== null) {
+            return $this->_query;
+         }
+
          $URI = $this->URI;
 
          $mark = strpos($URI, '?');
@@ -270,24 +279,26 @@ class Request
             $query = substr($URI, $mark + 1);
          }
 
-         return $query;
+         return $this->_query = $query;
       }
    }
    /**
     * The Request queries.
-    *
-    * @var array<string>
     */
-   /**
-    * @var array<string, string|string[]>
-    */
+   /** @var array<string,string|string[]>|null */
+   private null|array $_queries = null;
+   /** @var array<string,string|string[]> The Request queries */
    public array $queries {
       get {
+         if ($this->_queries !== null) {
+            return $this->_queries;
+         }
+
          $queries = [];
          parse_str($this->query, $queries);
 
-         /** @var array<string, string|string[]> $queries */
-         return $queries;
+         /** @var array<string,string|string[]> $queries */
+         return $this->_queries = $queries;
       }
    }
    // / Header Cookie
@@ -534,6 +545,32 @@ class Request
       if ( isSet($this->_SERVER) ) {
          $_SERVER = $this->_SERVER;
       }
+
+      $this->Session = null;
+
+      // @ Invalidate URI-derived caches (safe: URI is re-set on cache miss,
+      // but on cache hit the cached Request keeps its URI so these stay valid).
+      // Reset here only when session-sensitive or cross-connection state may have changed.
+      // NOTE: we keep $_URL et al. because the cached Request's URI is unchanged.
+   }
+
+   /**
+    * Get a single query parameter as a string (type-safe).
+    *
+    * @param string $key The query parameter name.
+    * @param string $default The default value if the key is missing or not a scalar.
+    *
+    * @return string
+    */
+   public function query (string $key, string $default = ''): string
+   {
+      $value = $this->queries[$key] ?? null;
+
+      if ($value === null || is_array($value)) {
+         return $default;
+      }
+
+      return (string) $value;
    }
 
    // # Raw
@@ -612,6 +649,11 @@ class Request
       $header_raw = substr($buffer, $meta_length + 2, $separator_position - $meta_length);
 
       // # Request Body
+      // @ Reject duplicate Content-Length headers (RFC 9112 §6.3 — request smuggling guard)
+      if (substr_count(strtolower($header_raw), "\r\ncontent-length:") > 1) {
+         $Package->reject("HTTP/1.1 400 Bad Request\r\n\r\n");
+         return 0;
+      }
       // @ Set Request Body length if possible
       if ( $_ = strpos($header_raw, "\r\nContent-Length: ") ) {
          $content_length = (int) substr($header_raw, $_ + 18, 10);
@@ -759,9 +801,17 @@ class Request
       // protocol
       $this->protocol = $protocol;
       // @ Validate Host header (RFC 9112 §3.2) — required for HTTP/1.1
-      if ($protocol === 'HTTP/1.1' && stripos($header_raw, "Host:") === false) {
-         $Package->reject("HTTP/1.1 400 Bad Request\r\n\r\n");
-         return 0;
+      if ($protocol === 'HTTP/1.1') {
+         // ! Reject duplicate Host headers (request smuggling guard)
+         if (preg_match_all("/(?:^|\r\n)host:/i", $header_raw) > 1) {
+            $Package->reject("HTTP/1.1 400 Bad Request\r\n\r\n");
+            return 0;
+         }
+         // ! Require a valid Host header with non-empty value
+         if (preg_match("/(?:^|\r\n)Host: *(\S+)/i", $header_raw) !== 1) {
+            $Package->reject("HTTP/1.1 400 Bad Request\r\n\r\n");
+            return 0;
+         }
       }
       // @ Connection management (RFC 9112 §9.3)
       // HTTP/1.1: close only when explicitly requested via Connection: close
