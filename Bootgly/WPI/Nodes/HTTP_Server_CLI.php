@@ -245,6 +245,13 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
 
          Logger::$display = Logger::DISPLAY_MESSAGE_WHEN_ID;
 
+         // @ Hot-path: restore default error handler in worker.
+         // The global Errors::collect handler is a userland callback invoked on every
+         // suppressed warning (@fwrite/@fread produce EAGAIN under backpressure).
+         // Userland dispatch dominates up to ~23% of CPU on high-throughput workloads.
+         // CLI default handler is a no-op for suppressed errors (zero cost).
+         restore_error_handler();
+
          // @ Create stream socket server
          $this->instance();
 

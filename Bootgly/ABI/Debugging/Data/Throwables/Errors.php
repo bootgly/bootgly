@@ -47,18 +47,18 @@ abstract class Errors extends Throwables
    // @ Error
    public static function collect (int $level, string $message, string $filename, int $line): bool
    {
+      // ?: Hot path: short-circuit when the error is suppressed (@-operator sets error_reporting to 0).
+      // Skipping the array append avoids per-write overhead under heavy I/O (fwrite/fread warnings).
+      if ( ! (error_reporting() & $level) ) {
+         return false;
+      }
+
       self::$errors[] = [
          'message'  => $message,
          'level'    => $level,
          'filename' => $filename,
          'line'     => $line
       ];
-
-      if ( ! (error_reporting() & $level) ) {
-         // This error code is not included in error_reporting, so let it fall
-         // through to the standard PHP error handler
-         return false;
-      }
 
       throw new ErrorException($message, 0, $level, $filename, $line);
    }

@@ -79,15 +79,15 @@ class Router
    /** @var array<array{prefix:string,handler:callable,methods:array<string>,middlewares:array<Middleware>}> */
    private array $pendingGroups = [];
    private null|string $groupPrefix = null;
-   private bool $cacheWarmed = false;
    private bool $registering = false;
 
    /**
     * Whether the route cache has been warmed (all routes registered).
+    *
+    * ?! Plain public property (no getter hook) — read every request on the hot path.
+    * Written internally via `$this->cached = true;` when warming finishes.
     */
-   public bool $cached {
-      get => $this->cacheWarmed;
-   }
+   public bool $cached = false;
 
    // * Metadata
    public Route $Route;
@@ -849,7 +849,7 @@ class Router
       }
 
       // @ Cache route definition on first pass (before cache is warm)
-      if ($this->cacheWarmed === false) {
+      if ($this->cached === false) {
          $this->cache($route, $handler, $methods, $middlewares);
       }
 
@@ -1032,7 +1032,7 @@ class Router
       $parentMiddlewares = $this->middlewares;
 
       // @ Resolve from cache (all requests after first)
-      if ($this->cacheWarmed && $nested === false) {
+      if ($this->cached && $nested === false) {
          $Result = $this->resolve();
          if ($Result !== null) {
             yield $Result;
@@ -1052,7 +1052,7 @@ class Router
             // @ Restore parent middlewares on group exit
             $this->middlewares = $parentMiddlewares;
             // @ Continue loop in registration mode to cache remaining routes
-            if ($this->cacheWarmed === false && $nested === false) {
+            if ($this->cached === false && $nested === false) {
                $this->registering = true;
                continue;
             }
@@ -1062,7 +1062,7 @@ class Router
             #$this->Route->nested = false;
             yield $Response;
             // @ Continue loop in registration mode to cache remaining routes
-            if ($this->cacheWarmed === false && $nested === false) {
+            if ($this->cached === false && $nested === false) {
                $this->registering = true;
                continue;
             }
@@ -1081,9 +1081,9 @@ class Router
       }
 
       // @ Flatten pending group routes into cache and mark as warmed
-      if ($this->cacheWarmed === false && $nested === false) {
+      if ($this->cached === false && $nested === false) {
          $this->flatten();
-         $this->cacheWarmed = true;
+         $this->cached = true;
       }
    }
 }
