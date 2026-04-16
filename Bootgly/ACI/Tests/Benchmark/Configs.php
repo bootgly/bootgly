@@ -15,7 +15,9 @@ use function array_map;
 use function count;
 use function explode;
 use function intval;
+use function preg_replace;
 use function strtolower;
+use function trim;
 
 
 class Configs
@@ -82,5 +84,17 @@ class Configs
       }
 
       return new self($competitors, $runner, $scenarios, $vary);
+   }
+
+   /**
+    * Normalize a competitor name to a slug for comparison.
+    * e.g. "Swoole (Base)" → "swoole-base", "Workerman" → "workerman"
+    */
+   public static function slug (string $name): string
+   {
+      $name = strtolower($name);
+      $name = preg_replace('/[()]+/', '', $name);
+      $name = preg_replace('/[\s_]+/', '-', trim($name));
+      return trim($name, '-');
    }
 }

@@ -111,7 +111,7 @@ class Summary
 
       $isFirst = true;
       foreach ($Runner->competitors as $Competitor) {
-         if ($Configs->competitors !== null && !in_array(strtolower($Competitor->name), array_map(strtolower(...), $Configs->competitors))) {
+         if ($Configs->competitors !== null && !in_array(Configs::slug($Competitor->name), array_map(Configs::slug(...), $Configs->competitors))) {
             continue;
          }
 
