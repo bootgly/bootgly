@@ -50,11 +50,11 @@ class Encoder_Testing extends Encoders
       $Response = &Server::$Response;
       $Router   = Server::$Router;
 
-      // ! Bind Package context for deferred responses
+      // ! Bind per-request context (used by Response::defer() when needed).
       $Response->bind($Packages, $Packages->Connection->Socket);
 
       // ! Response
-      // @ Try to Invoke SAPI Closure
+      // @
       try {
          $Result = SAPI::$Middlewares->process($Request, $Response,
             function (object $Request, object $Res) use ($Router): mixed {

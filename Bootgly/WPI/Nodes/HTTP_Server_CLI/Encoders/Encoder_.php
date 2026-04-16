@@ -35,13 +35,13 @@ class Encoder_ extends Encoders
       $Response = &Server::$Response;
       $Router   = Server::$Router;
 
-      // ! Reset Response state for new request
+      // @ Reset Response state for new request
       $Response->reset();
 
-      // ! Bind Package context for deferred responses
+      // @ Bind per-request context (used by Response::defer() when needed).
       $Response->bind($Packages, $Packages->Connection->Socket);
 
-      // @ Try to Invoke SAPI Closure
+      // @
       try {
          $resolved = false;
 

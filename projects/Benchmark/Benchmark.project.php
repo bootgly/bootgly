@@ -32,7 +32,7 @@ return new Project(
             ->configure(
                host: '0.0.0.0',
                port: getenv('PORT') ? (int) getenv('PORT') : 8082,
-               workers: getenv('BOOTGLY_WORKERS') ? (int) getenv('BOOTGLY_WORKERS') : 13,
+               workers: getenv('BOOTGLY_WORKERS') ? (int) getenv('BOOTGLY_WORKERS') : max(1, (int) ((int)(exec('nproc 2>/dev/null') ?: 1) / 2)),
                // requestMaxFileSize: 500 * 1024 * 1024, // 500 MB (default)
                // requestMaxBodySize: 10 * 1024 * 1024,  // 10 MB (default)
             )

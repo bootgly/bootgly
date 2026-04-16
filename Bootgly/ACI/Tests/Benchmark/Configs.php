@@ -94,7 +94,17 @@ class Configs
    {
       $name = strtolower($name);
       $name = preg_replace('/[()]+/', '', $name);
+
+      if ($name === null) {
+         return '';
+      }
+
       $name = preg_replace('/[\s_]+/', '-', trim($name));
+
+      if ($name === null) {
+         return '';
+      }
+
       return trim($name, '-');
    }
 }
