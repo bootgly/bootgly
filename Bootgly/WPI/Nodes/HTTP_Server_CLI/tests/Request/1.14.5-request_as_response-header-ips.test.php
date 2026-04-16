@@ -28,9 +28,9 @@ return new Specification(
       HTTP/1.1 200 OK\r
       Server: Bootgly\r
       Content-Type: application/json\r
-      Content-Length: 25\r
+      Content-Length: 13\r
       \r
-      ["127.0.0.1","10.0.10.1"]
+      ["127.0.0.1"]
       HTML_RAW;
 
       // @ Assert
