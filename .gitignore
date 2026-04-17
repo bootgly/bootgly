@@ -24,6 +24,7 @@ composer.lock
 # Adittional files
 !@/phpstan.neon
 !README.md
+!CHANGELOG.md
 
 ## Private files
 # Benchmarks
