@@ -11,14 +11,11 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI;
 
 
-use const FILTER_VALIDATE_IP;
 use const JSON_THROW_ON_ERROR;
 use const PREG_SET_ORDER;
-use function array_filter;
 use function array_keys;
 use function array_map;
 use function array_slice;
-use function array_unique;
 use function array_walk_recursive;
 use function base64_decode;
 use function bin2hex;
@@ -677,15 +674,16 @@ class Request
             $this->Body->waiting = true;
             $this->Body->length = 0;
 
-            Decoder_Chunked::init();
+            $Decoder = new Decoder_Chunked;
+            $Decoder->init();
 
             // @ Feed initial body data if any
             $initialBody = substr($buffer, $separator_position + 4);
             if ($initialBody !== '') {
-               Decoder_Chunked::feedInitial($initialBody);
+               $Decoder->feed($initialBody);
             }
 
-            HTTP_Server_CLI::$Decoder = new Decoder_Chunked;
+            $Package->Decoder = $Decoder;
          }
          else {
             // @ Unknown Transfer-Encoding
@@ -750,10 +748,16 @@ class Request
                   $this->Body->waiting = true;
                   $this->Body->streaming = true;
 
-                  Decoder_Downloading::init($multipartBoundary);
-                  Decoder_Downloading::feedInitial($initialBody);
-                  // @ Simulate decode call with the full body data
-                  Decoder_Downloading::decode($Package, '', 0);
+                  $Decoder = new Decoder_Downloading;
+                  $Decoder->init($multipartBoundary);
+                  $Decoder->feed($initialBody);
+                  // @ Simulate decode call with the full body data.
+                  // @ Body is fully consumed here; do NOT attach the decoder
+                  // to the Connection — otherwise the next request on the
+                  // same connection would dispatch through this stale
+                  // decoder and trigger an extra Request::__construct,
+                  // whose __destruct clears the current $_FILES superglobal.
+                  $Decoder->decode($Package, '', 0);
                }
                else {
                   // @ Incomplete body: set streaming decoder for subsequent chunks
@@ -761,13 +765,14 @@ class Request
                   $this->Body->waiting = true;
                   $this->Body->streaming = true;
 
-                  Decoder_Downloading::init($multipartBoundary);
+                  $Decoder = new Decoder_Downloading;
+                  $Decoder->init($multipartBoundary);
 
                   if ($initialBody !== '') {
-                     Decoder_Downloading::feedInitial($initialBody);
+                     $Decoder->feed($initialBody);
                   }
 
-                  HTTP_Server_CLI::$Decoder = new Decoder_Downloading;
+                  $Package->Decoder = $Decoder;
                }
             }
             else {
@@ -777,7 +782,9 @@ class Request
 
                if ($content_length > $this->Body->downloaded) {
                   $this->Body->waiting = true;
-                  HTTP_Server_CLI::$Decoder = new Decoder_Waiting;
+                  $Waiting = new Decoder_Waiting;
+                  $Waiting->init();
+                  $Package->Decoder = $Waiting;
                }
             }
          }
@@ -878,14 +885,14 @@ class Request
    {
       // : parsed $_FILES || null
       if ($key === null) {
-         /** @var array<string, array<string, bool|int|string|array<int|string, bool|int|string>>> $files */
+         /** @var array<string,array<string,bool|int|string|array<int|string,bool|int|string>>> $files */
          $files = $_FILES;
 
          return $files;
       }
 
       if ( isSet($_FILES[$key]) && is_array($_FILES[$key]) ) {
-         /** @var array<string, bool|int|string|array<int|string, bool|int|string>> $file */
+         /** @var array<string,bool|int|string|array<int|string,bool|int|string>> $file */
          $file = $_FILES[$key];
          return $file;
       }
@@ -910,7 +917,7 @@ class Request
 
       // : parsed $_POST || null
       if ($key === null) {
-         /** @var array<string, array<string>|bool|float|int|string> $post */
+         /** @var array<string,array<string>|bool|float|int|string> $post */
          $post = $_POST;
          return $post;
       }
@@ -919,7 +926,7 @@ class Request
          $value = $_POST[$key];
 
          if (is_array($value)) {
-            /** @var array<string, mixed> $value */
+            /** @var array<string,mixed> $value */
             return $value;
          }
 

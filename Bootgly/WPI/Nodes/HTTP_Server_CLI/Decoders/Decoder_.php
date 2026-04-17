@@ -23,7 +23,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 
 class Decoder_ extends Decoders
 {
-   public static function decode (Packages $Package, string $buffer, int $size): int
+   public function decode (Packages $Package, string $buffer, int $size): int
    {
       static $inputs = []; // @ Instance local cache
 

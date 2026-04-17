@@ -23,17 +23,25 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders;
 class Decoder_Waiting extends Decoders
 {
    // * Metadata
-   private static int $decoded;
+   private int $decoded = 0;
    // @ Request Body
-   private static int $read;
+   private int $read = 0;
 
 
-   public static function decode (Packages $Package, string $buffer, int $size): int
+   public function init (): void
+   {
+      $this->decoded = time();
+      $this->read = 0;
+   }
+
+
+   public function decode (Packages $Package, string $buffer, int $size): int
    {
       // !
       $WPI = WPI;
       /** @var Server $Server */
       $Server = $WPI->Server;
+      assert($Server::$Decoder !== null);
       /** @var Server\Request $Request */
       $Request = $WPI->Request;
       $Body = $Request->Body;
@@ -41,18 +49,19 @@ class Decoder_Waiting extends Decoders
       // @ Check if Request Body is waiting data
       if ($Body->waiting) {
          // * Metadata
-         self::$decoded ??= time();
-         self::$read ??= 0;
+         if ($this->decoded === 0) {
+            $this->decoded = time();
+         }
 
          // ? Valid HTTP Client Body Timeout
          /**
          * Validate if the client is sending the rest of the Content data 
          * within a 60-second interval and if the total data has been received.
          */
-         $elapsed = time() - self::$decoded;
-         if ($elapsed >= 60 && self::$read === $Body->downloaded) {
-            $Server::$Decoder = new Decoder_;
-            return Decoder_::decode($Package, $buffer, $size);
+         $elapsed = time() - $this->decoded;
+         if ($elapsed >= 60 && $this->read === $Body->downloaded) {
+            $Package->Decoder = null;
+            return $Server::$Decoder->decode($Package, $buffer, $size);
          }
 
          // ... Continue reading the Request Body
@@ -65,14 +74,14 @@ class Decoder_Waiting extends Decoders
          }
 
          $Body->downloaded += $size;
-         self::$read = $Body->downloaded;
+         $this->read = $Body->downloaded;
 
          // ! Reject if received data exceeds declared Content-Length (memory exhaustion guard)
          if ($Body->downloaded > $Body->length) {
             $Body->waiting = false;
 
-            $Server::$Decoder = new Decoder_;
-            return Decoder_::decode($Package, $buffer, $size);
+            $Package->Decoder = null;
+            return $Server::$Decoder->decode($Package, $buffer, $size);
          }
 
          if ($Body->length > $Body->downloaded) {
@@ -84,7 +93,7 @@ class Decoder_Waiting extends Decoders
          return $Body->length ?? 0;
       }
 
-      $Server::$Decoder = new Decoder_;
-      return Decoder_::decode($Package, $buffer, $size);
+      $Package->Decoder = null;
+      return $Server::$Decoder->decode($Package, $buffer, $size);
    }
 }

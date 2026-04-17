@@ -37,41 +37,51 @@ use Bootgly\ACI\Logs\LoggableEscaped;
 use Bootgly\ACI\Logs\Logger;
 use Bootgly\API\Workables\Server as SAPI;
 use Bootgly\WPI;
+use Bootgly\WPI\Endpoints\Servers\Decoder;
+use Bootgly\WPI\Endpoints\Servers\Encoder;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI as Server;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections\Connection;
 
 
-// FIXME: extends Packages
 abstract class Packages implements WPI\Connections\Packages
 {
    use LoggableEscaped;
 
-
-   public Connection $Connection;
+   // # Endpoints
+   // @ Per-connection decoder instance (stateful).
+   // When null, the shared default `Server::$Decoder` is used.
+   public null|Decoder $Decoder = null;
+   // @ Per-connection encoder instance (stateful).
+   // When null, the shared default `Server::$Encoder` is used.
+   // Note: `Encoder::encode()` is static, so it is invoked as
+   // `$Encoder::encode(...)` on whichever instance (or class) is active.
+   public null|Encoder $Encoder = null;
 
    // * Config
    public bool $cache;
 
    // * Data
    public bool $changed;
-   // @ IO
+   // # IO
    public static string $input;
    public static string $output;
 
    // * Metadata
-   // @ Handler
+   // # Handler
    /** @var array<string> */
    public array $callbacks;
-   // @ Stream
+   // # Stream
    /** @var array<int, array<string, mixed>> */
    public array $downloading;
    /** @var array<int, array<string, mixed>> */
    public array $uploading;
-   // @ Expiration
+   // # Expiration
    public bool $expired;
-   // @ Connection management
+   // # Connection management
    public bool $closeAfterWrite;
+
+   public Connection $Connection;
 
 
    public function __construct (Connection &$Connection)
@@ -85,19 +95,19 @@ abstract class Packages implements WPI\Connections\Packages
 
       // * Data
       $this->changed = true;
-      // @ IO
+      // # IO
       self::$input = '';
       self::$output = '';
 
       // * Metadata
-      // @ Handler
+      // # Handler
       $this->callbacks = [&self::$input];
-      // @ Stream
+      // # Stream
       $this->downloading = [];
       $this->uploading = [];
-      // @ Expiration
+      // # Expiration
       $this->expired = false;
-      // @ Connection management
+      // # Connection management
       $this->closeAfterWrite = false;
    }
 
@@ -225,7 +235,7 @@ abstract class Packages implements WPI\Connections\Packages
       // @ Write data
       $inputLength = $received; // Store original buffer length for pipelining
       if (Server::$Decoder) { // @ Decode Application Data if exists
-         $received = Server::$Decoder::decode($this, $input, $received);
+         $received = ($this->Decoder ?? Server::$Decoder)->decode($this, $input, $received);
       }
 
       if ($received) {
@@ -249,7 +259,7 @@ abstract class Packages implements WPI\Connections\Packages
                $this->changed = true;
                self::$input = $remaining;
 
-               $decoded = Server::$Decoder::decode($this, $remaining, $remainingLength);
+               $decoded = ($this->Decoder ?? Server::$Decoder)->decode($this, $remaining, $remainingLength);
 
                if ($decoded <= 0) {
                   break; // Incomplete request — will arrive on next fread
@@ -290,8 +300,9 @@ abstract class Packages implements WPI\Connections\Packages
    public function write (&$Socket, null|int $length = null): bool
    {
       // !
-      if (Server::$Encoder) { // @ Encode Application Data if exists
-         $buffer = Server::$Encoder::encode($this, $length);
+      $Encoder = $this->Encoder ?? Server::$Encoder;
+      if ($Encoder) { // @ Encode Application Data if exists
+         $buffer = $Encoder::encode($this, $length);
       }
       else {
          /** @var string $buffer */

@@ -29,83 +29,84 @@ class Decoder_Chunked extends Decoders
    // * Config
    private const int MAX_BODY_SIZE = 10485760; // 10 MB
 
-   // * Data
-   private static string $buffer;
-   private static string $body;
-
-   // * Metadata
-   private static int $decoded;
-   private static int $state;
-   private static int $chunkSize;
-   private static int $chunkRead;
-   private static int $totalSize;
-
    // # States
    private const int READ_SIZE = 0;
    private const int READ_DATA = 1;
 
+   // * Data
+   private string $buffer = '';
+   private string $body = '';
 
-   public static function init (): void
+   // * Metadata
+   private int $decoded = 0;
+   private int $state = self::READ_SIZE;
+   private int $chunkSize = 0;
+   private int $chunkRead = 0;
+   private int $totalSize = 0;
+
+
+   public function init (): void
    {
-      self::$buffer = '';
-      self::$body = '';
-      self::$decoded = time();
-      self::$state = self::READ_SIZE;
-      self::$chunkSize = 0;
-      self::$chunkRead = 0;
-      self::$totalSize = 0;
+      $this->buffer = '';
+      $this->body = '';
+      $this->decoded = time();
+      $this->state = self::READ_SIZE;
+      $this->chunkSize = 0;
+      $this->chunkRead = 0;
+      $this->totalSize = 0;
    }
 
-   public static function feedInitial (string $data): void
+   public function feed (string $data): void
    {
-      self::$buffer .= $data;
+      $this->buffer .= $data;
    }
 
-   public static function decode (Packages $Package, string $buffer, int $size): int
+   public function decode (Packages $Package, string $buffer, int $size): int
    {
       $WPI = WPI;
       /** @var Server $Server */
       $Server = $WPI->Server;
+      assert($Server::$Decoder !== null);
       /** @var Server\Request $Request */
       $Request = $WPI->Request;
       $Body = $Request->Body;
 
       if (! $Body->waiting) {
-         $Server::$Decoder = new Decoder_;
-         return Decoder_::decode($Package, $buffer, $size);
+         $Package->Decoder = null;
+         return $Server::$Decoder->decode($Package, $buffer, $size);
       }
 
       // * Metadata
-      $elapsed = time() - self::$decoded;
+      $elapsed = time() - $this->decoded;
       if ($elapsed >= 30) {
          $Body->waiting = false;
 
-         self::$body = '';
-         self::$buffer = '';
+         $this->body = '';
+         $this->buffer = '';
 
-         $Server::$Decoder = new Decoder_;
+         $Package->Decoder = null;
 
-         return Decoder_::decode($Package, $buffer, $size);
+         return $Server::$Decoder->decode($Package, $buffer, $size);
       }
 
       // @ Append incoming data
-      self::$buffer .= $buffer;
+      $this->buffer .= $buffer;
 
       // @ Update last decoded time
-      self::$decoded = time();
+      $this->decoded = time();
 
       // @ Process chunks
       while (true) {
-         switch (self::$state) {
+         switch ($this->state) {
             case self::READ_SIZE:
                // @ Find the chunk size line (\r\n terminated)
-               $pos = strpos(self::$buffer, "\r\n");
+               $pos = strpos($this->buffer, "\r\n");
                if ($pos === false) {
                   return 0; // Need more data
                }
 
-               $sizeLine = substr(self::$buffer, 0, $pos);
-               self::$buffer = substr(self::$buffer, $pos + 2);
+               $sizeLine = substr($this->buffer, 0, $pos);
+               $this->buffer = substr($this->buffer, $pos + 2);
 
                // @ Strip chunk extensions (RFC 9112 §7.1.1)
                $semiPos = strpos($sizeLine, ';');
@@ -117,64 +118,64 @@ class Decoder_Chunked extends Decoders
 
                if ($chunkSize === 0) {
                   // @ Last chunk: body complete
-                  $Body->raw = self::$body;
-                  $Body->length = self::$totalSize;
-                  $Body->downloaded = self::$totalSize;
+                  $Body->raw = $this->body;
+                  $Body->length = $this->totalSize;
+                  $Body->downloaded = $this->totalSize;
                   $Body->waiting = false;
 
                   // @ Clean up
-                  self::$body = '';
-                  self::$buffer = '';
+                  $this->body = '';
+                  $this->buffer = '';
 
-                  $Server::$Decoder = new Decoder_;
+                  $Package->Decoder = null;
 
-                  return self::$totalSize;
+                  return $this->totalSize;
                }
 
                // @ Validate total size
-               if (self::$totalSize + $chunkSize > self::MAX_BODY_SIZE) {
+               if ($this->totalSize + $chunkSize > self::MAX_BODY_SIZE) {
                   $Package->reject("HTTP/1.1 413 Request Entity Too Large\r\n\r\n");
                   $Body->waiting = false;
 
-                  // @ Clean up static state to prevent cross-request leakage
-                  self::$body = '';
-                  self::$buffer = '';
+                  // @ Clean up instance state to prevent cross-request leakage
+                  $this->body = '';
+                  $this->buffer = '';
 
-                  $Server::$Decoder = new Decoder_;
+                  $Package->Decoder = null;
 
                   return 0;
                }
 
-               self::$chunkSize = $chunkSize;
-               self::$chunkRead = 0;
-               self::$state = self::READ_DATA;
+               $this->chunkSize = $chunkSize;
+               $this->chunkRead = 0;
+               $this->state = self::READ_DATA;
                break;
 
             case self::READ_DATA:
-               $remaining = self::$chunkSize - self::$chunkRead;
-               $available = strlen(self::$buffer);
+               $remaining = $this->chunkSize - $this->chunkRead;
+               $available = strlen($this->buffer);
 
                if ($available === 0) {
                   return 0; // Need more data
                }
 
                $toRead = ($available < $remaining) ? $available : $remaining;
-               self::$body .= substr(self::$buffer, 0, $toRead);
-               self::$buffer = substr(self::$buffer, $toRead);
-               self::$chunkRead += $toRead;
-               self::$totalSize += $toRead;
+               $this->body .= substr($this->buffer, 0, $toRead);
+               $this->buffer = substr($this->buffer, $toRead);
+               $this->chunkRead += $toRead;
+               $this->totalSize += $toRead;
 
-               if (self::$chunkRead < self::$chunkSize) {
+               if ($this->chunkRead < $this->chunkSize) {
                   return 0; // Need more data for this chunk
                }
 
                // @ Consume trailing \r\n after chunk data
-               if (strlen(self::$buffer) < 2) {
+               if (strlen($this->buffer) < 2) {
                   return 0; // Need the trailing CRLF
                }
-               self::$buffer = substr(self::$buffer, 2);
+               $this->buffer = substr($this->buffer, 2);
 
-               self::$state = self::READ_SIZE;
+               $this->state = self::READ_SIZE;
                break;
          }
       }

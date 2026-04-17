@@ -48,26 +48,26 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders;
 class Decoder_Downloading extends Decoders
 {
    // * Config
-   private static string $boundary;
+   private string $boundary;
 
    // * Data
-   private static string $tailBuffer;
-   private static string $headerBuffer;
-   private static string $fieldBuffer;
-   private static string $postEncoded;
+   private string $tailBuffer;
+   private string $headerBuffer;
+   private string $fieldBuffer;
+   private string $postEncoded;
    /** @var array<int,array<string,bool|int|string>> */
-   private static array $files;
+   private array $files;
    /** @var array<int,string> */
-   private static array $filesKeys;
-   private static string $currentFieldName;
+   private array $filesKeys;
+   private string $currentFieldName;
    /** @var resource|null */
-   private static $fileHandler;
+   private $fileHandler = null;
 
    // * Metadata
-   private static int $decoded;
-   private static int $read;
-   private static int $state;
-   private static int $downloaded;
+   private int $decoded;
+   private int $read;
+   private int $state;
+   private int $downloaded;
 
    // # States
    private const int STATE_BOUNDARY_START  = 0;
@@ -76,85 +76,86 @@ class Decoder_Downloading extends Decoders
    private const int STATE_PART_BODY_FIELD = 3;
 
 
-   public static function init (string $boundary): void
+   public function init (string $boundary): void
    {
       // * Config
-      self::$boundary = $boundary;
+      $this->boundary = $boundary;
 
       // * Data
-      self::$tailBuffer = '';
-      self::$headerBuffer = '';
-      self::$fieldBuffer = '';
-      self::$postEncoded = '';
-      self::$files = [];
-      self::$filesKeys = [];
-      self::$currentFieldName = '';
-      self::$fileHandler = null;
+      $this->tailBuffer = '';
+      $this->headerBuffer = '';
+      $this->fieldBuffer = '';
+      $this->postEncoded = '';
+      $this->files = [];
+      $this->filesKeys = [];
+      $this->currentFieldName = '';
+      $this->fileHandler = null;
 
       // * Metadata
-      self::$decoded = time();
-      self::$read = 0;
-      self::$state = self::STATE_BOUNDARY_START;
-      self::$downloaded = 0;
+      $this->decoded = time();
+      $this->read = 0;
+      $this->state = self::STATE_BOUNDARY_START;
+      $this->downloaded = 0;
    }
 
    /**
     * Feed initial body data from the first buffer into the streaming decoder.
     */
-   public static function feedInitial (string $data): void
+   public function feed (string $data): void
    {
-      self::$tailBuffer = $data;
+      $this->tailBuffer = $data;
    }
 
-   public static function decode (Packages $Package, string $buffer, int $size): int
+   public function decode (Packages $Package, string $buffer, int $size): int
    {
       // !
       $WPI = WPI;
       /** @var Server $Server */
       $Server = $WPI->Server;
+      assert($Server::$Decoder !== null);
       /** @var Server\Request $Request */
       $Request = $WPI->Request;
       $Body = $Request->Body;
 
       // @ Check if Request Body is waiting data
       if (! $Body->waiting) {
-         $Server::$Decoder = new Decoder_;
-         return Decoder_::decode($Package, $buffer, $size);
+         $Package->Decoder = null;
+         return $Server::$Decoder->decode($Package, $buffer, $size);
       }
 
       // ? Valid HTTP Client Body Timeout
-      $elapsed = time() - self::$decoded;
-      if ($elapsed >= 60 && self::$read === self::$downloaded) {
-         self::finish();
-         $Server::$Decoder = new Decoder_;
-         return Decoder_::decode($Package, $buffer, $size);
+      $elapsed = time() - $this->decoded;
+      if ($elapsed >= 60 && $this->read === $this->downloaded) {
+         $this->finish();
+         $Package->Decoder = null;
+         return $Server::$Decoder->decode($Package, $buffer, $size);
       }
 
       // @ Accumulate downloaded bytes
-      self::$downloaded += $size;
-      self::$read = self::$downloaded;
+      $this->downloaded += $size;
+      $this->read = $this->downloaded;
 
       // @ Prepend tail buffer from previous chunk
-      $data = self::$tailBuffer . $buffer;
-      self::$tailBuffer = '';
+      $data = $this->tailBuffer . $buffer;
+      $this->tailBuffer = '';
 
       // @ Process data through state machine
       while ($data !== '') {
-         switch (self::$state) {
+         switch ($this->state) {
             case self::STATE_BOUNDARY_START:
-               $data = self::parseBoundaryStart($data);
+               $data = $this->parseBoundaryStart($data);
                break;
 
             case self::STATE_PART_HEADER:
-               $data = self::parsePartHeader($data);
+               $data = $this->parsePartHeader($data);
                break;
 
             case self::STATE_PART_BODY_FILE:
-               $data = self::parsePartBodyFile($data);
+               $data = $this->parsePartBodyFile($data);
                break;
 
             case self::STATE_PART_BODY_FIELD:
-               $data = self::parsePartBodyField($data);
+               $data = $this->parsePartBodyField($data);
                break;
          }
 
@@ -165,27 +166,27 @@ class Decoder_Downloading extends Decoders
       }
 
       // @ Update Body metadata
-      $Body->downloaded = self::$downloaded;
+      $Body->downloaded = $this->downloaded;
 
       // @ Check if all data received
-      if ($Body->length !== null && self::$downloaded >= $Body->length) {
-         self::finish();
+      if ($Body->length !== null && $this->downloaded >= $Body->length) {
+         $this->finish();
          return $Body->length;
       }
 
       return 0;
    }
 
-   private static function parseBoundaryStart (string $data): ?string
+   private function parseBoundaryStart (string $data): ?string
    {
-      $boundary = self::$boundary;
+      $boundary = $this->boundary;
       $boundaryLen = strlen($boundary);
 
       // @ Search for boundary in data
       $pos = strpos($data, $boundary);
       if ($pos === false) {
          // @ Not enough data, save as tail buffer
-         self::$tailBuffer = $data;
+         $this->tailBuffer = $data;
          return null;
       }
 
@@ -194,7 +195,7 @@ class Decoder_Downloading extends Decoders
       if ($afterBoundary + 2 <= strlen($data)) {
          if (substr($data, $afterBoundary, 2) === '--') {
             // @ Final boundary: finish
-            self::finish();
+            $this->finish();
             return '';
          }
       }
@@ -202,31 +203,31 @@ class Decoder_Downloading extends Decoders
       // @ Skip boundary + \r\n
       $nextPos = $afterBoundary + 2; // +2 for \r\n
       if ($nextPos > strlen($data)) {
-         self::$tailBuffer = $data;
+         $this->tailBuffer = $data;
          return null;
       }
 
-      self::$state = self::STATE_PART_HEADER;
-      self::$headerBuffer = '';
+      $this->state = self::STATE_PART_HEADER;
+      $this->headerBuffer = '';
 
       return substr($data, $nextPos);
    }
 
-   private static function parsePartHeader (string $data): ?string
+   private function parsePartHeader (string $data): ?string
    {
-      self::$headerBuffer .= $data;
+      $this->headerBuffer .= $data;
 
       // @ Search for end of headers (\r\n\r\n)
-      $headerEnd = strpos(self::$headerBuffer, "\r\n\r\n");
+      $headerEnd = strpos($this->headerBuffer, "\r\n\r\n");
       if ($headerEnd === false) {
          // @ Need more data
          return null;
       }
 
       // @ Extract headers
-      $headersRaw = substr(self::$headerBuffer, 0, $headerEnd);
-      $remainder = substr(self::$headerBuffer, $headerEnd + 4);
-      self::$headerBuffer = '';
+      $headersRaw = substr($this->headerBuffer, 0, $headerEnd);
+      $remainder = substr($this->headerBuffer, $headerEnd + 4);
+      $this->headerBuffer = '';
 
       // @ Parse headers
       $contentLines = explode("\r\n", trim($headersRaw));
@@ -301,36 +302,36 @@ class Decoder_Downloading extends Decoders
             try {
                $handle = fopen($tempFile, 'w+');
                if ($handle === false) {
-                  self::$fileHandler = null;
+                  $this->fileHandler = null;
                   $file['error'] = UPLOAD_ERR_CANT_WRITE;
                }
                else {
-                  self::$fileHandler = $handle;
+                  $this->fileHandler = $handle;
                }
             }
             catch (Throwable) {
-               self::$fileHandler = null;
+               $this->fileHandler = null;
                $file['error'] = UPLOAD_ERR_CANT_WRITE;
             }
          }
 
-         self::$filesKeys[] = $uploadKey;
-         self::$files[] = $file; // @ Index will be updated with size at close
+         $this->filesKeys[] = $uploadKey;
+         $this->files[] = $file; // @ Index will be updated with size at close
 
-         self::$state = self::STATE_PART_BODY_FILE;
+         $this->state = self::STATE_PART_BODY_FILE;
       }
       else if ($fieldName !== '') {
-         self::$currentFieldName = $fieldName;
-         self::$fieldBuffer = '';
-         self::$state = self::STATE_PART_BODY_FIELD;
+         $this->currentFieldName = $fieldName;
+         $this->fieldBuffer = '';
+         $this->state = self::STATE_PART_BODY_FIELD;
       }
 
       return $remainder;
    }
 
-   private static function parsePartBodyFile (string $data): ?string
+   private function parsePartBodyFile (string $data): ?string
    {
-      $boundary = "\r\n" . self::$boundary;
+      $boundary = "\r\n" . $this->boundary;
       $boundaryLen = strlen($boundary);
 
       // @ Search for boundary in data
@@ -340,12 +341,12 @@ class Decoder_Downloading extends Decoders
          // @ Boundary found: write everything before boundary to file
          $fileData = substr($data, 0, $pos);
 
-         if (self::$fileHandler !== null && $fileData !== '') {
-            fwrite(self::$fileHandler, $fileData);
+         if ($this->fileHandler !== null && $fileData !== '') {
+            fwrite($this->fileHandler, $fileData);
          }
 
          // @ Close file and finalize file entry
-         self::closeCurrentFile();
+         $this->closeCurrentFile();
 
          // @ Move past boundary
          $afterBoundary = $pos + $boundaryLen;
@@ -353,7 +354,7 @@ class Decoder_Downloading extends Decoders
          // @ Check if this is the final boundary (--)
          if ($afterBoundary + 2 <= strlen($data)) {
             if (substr($data, $afterBoundary, 2) === '--') {
-               self::finish();
+               $this->finish();
                return '';
             }
          }
@@ -361,13 +362,13 @@ class Decoder_Downloading extends Decoders
          // @ Skip \r\n after boundary
          $nextPos = $afterBoundary + 2; // +2 for \r\n
          if ($nextPos > strlen($data)) {
-            self::$tailBuffer = substr($data, $afterBoundary);
-            self::$state = self::STATE_BOUNDARY_START;
+            $this->tailBuffer = substr($data, $afterBoundary);
+            $this->state = self::STATE_BOUNDARY_START;
             return null;
          }
 
-         self::$state = self::STATE_PART_HEADER;
-         self::$headerBuffer = '';
+         $this->state = self::STATE_PART_HEADER;
+         $this->headerBuffer = '';
 
          return substr($data, $nextPos);
       }
@@ -379,23 +380,23 @@ class Decoder_Downloading extends Decoders
       if ($safeLen > 0) {
          $safeData = substr($data, 0, $safeLen);
 
-         if (self::$fileHandler !== null) {
-            fwrite(self::$fileHandler, $safeData);
+         if ($this->fileHandler !== null) {
+            fwrite($this->fileHandler, $safeData);
          }
 
-         self::$tailBuffer = substr($data, $safeLen);
+         $this->tailBuffer = substr($data, $safeLen);
       }
       else {
          // @ Not enough data to write safely, keep all in tail buffer
-         self::$tailBuffer = $data;
+         $this->tailBuffer = $data;
       }
 
       return null;
    }
 
-   private static function parsePartBodyField (string $data): ?string
+   private function parsePartBodyField (string $data): ?string
    {
-      $boundary = "\r\n" . self::$boundary;
+      $boundary = "\r\n" . $this->boundary;
       $boundaryLen = strlen($boundary);
 
       // @ Search for boundary in data
@@ -403,15 +404,15 @@ class Decoder_Downloading extends Decoders
 
       if ($pos !== false) {
          // @ Boundary found: accumulate everything before boundary
-         self::$fieldBuffer .= substr($data, 0, $pos);
+         $this->fieldBuffer .= substr($data, 0, $pos);
 
          // @ Store field value
-         $fieldName = self::$currentFieldName;
+         $fieldName = $this->currentFieldName;
          if ($fieldName !== '') {
-            self::$postEncoded .= urlencode($fieldName) . '=' . urlencode(self::$fieldBuffer) . '&';
+            $this->postEncoded .= urlencode($fieldName) . '=' . urlencode($this->fieldBuffer) . '&';
          }
 
-         self::$fieldBuffer = '';
+         $this->fieldBuffer = '';
 
          // @ Move past boundary
          $afterBoundary = $pos + $boundaryLen;
@@ -419,7 +420,7 @@ class Decoder_Downloading extends Decoders
          // @ Check if this is the final boundary (--)
          if ($afterBoundary + 2 <= strlen($data)) {
             if (substr($data, $afterBoundary, 2) === '--') {
-               self::finish();
+               $this->finish();
                return '';
             }
          }
@@ -427,13 +428,13 @@ class Decoder_Downloading extends Decoders
          // @ Skip \r\n after boundary
          $nextPos = $afterBoundary + 2;
          if ($nextPos > strlen($data)) {
-            self::$tailBuffer = substr($data, $afterBoundary);
-            self::$state = self::STATE_BOUNDARY_START;
+            $this->tailBuffer = substr($data, $afterBoundary);
+            $this->state = self::STATE_BOUNDARY_START;
             return null;
          }
 
-         self::$state = self::STATE_PART_HEADER;
-         self::$headerBuffer = '';
+         $this->state = self::STATE_PART_HEADER;
+         $this->headerBuffer = '';
 
          return substr($data, $nextPos);
       }
@@ -442,11 +443,11 @@ class Decoder_Downloading extends Decoders
       $safeLen = strlen($data) - $boundaryLen - 2;
 
       if ($safeLen > 0) {
-         self::$fieldBuffer .= substr($data, 0, $safeLen);
-         self::$tailBuffer = substr($data, $safeLen);
+         $this->fieldBuffer .= substr($data, 0, $safeLen);
+         $this->tailBuffer = substr($data, $safeLen);
       }
       else {
-         self::$tailBuffer = $data;
+         $this->tailBuffer = $data;
       }
 
       return null;
@@ -455,27 +456,27 @@ class Decoder_Downloading extends Decoders
    /**
     * Close the current file handler and update file size.
     */
-   private static function closeCurrentFile (): void
+   private function closeCurrentFile (): void
    {
-      $fileIndex = count(self::$files) - 1;
+      $fileIndex = count($this->files) - 1;
       if ($fileIndex < 0) return;
 
       // @ Update file size and close handler
-      $file = &self::$files[$fileIndex];
+      $file = &$this->files[$fileIndex];
 
-      if (self::$fileHandler !== null) {
+      if ($this->fileHandler !== null) {
          // @ fstat returns size of data written so far (before the last fwrite in the caller)
          // The lastWriteSize was already written before this method is called,
          // so fstat after the write gives the total
-         $stat = fstat(self::$fileHandler);
+         $stat = fstat($this->fileHandler);
          $file['size'] = $stat !== false ? $stat['size'] : 0;
 
          try {
-            fclose(self::$fileHandler);
+            fclose($this->fileHandler);
          }
          catch (Throwable) {}
 
-         self::$fileHandler = null;
+         $this->fileHandler = null;
       }
       else {
          $file['size'] = 0;
@@ -486,33 +487,33 @@ class Decoder_Downloading extends Decoders
    /**
     * Finalize: populate $_FILES and $_POST, reset state.
     */
-   private static function finish (): void
+   private function finish (): void
    {
       // @ Close any open file handler
-      if (self::$fileHandler !== null) {
+      if ($this->fileHandler !== null) {
          try {
-            fclose(self::$fileHandler);
+            fclose($this->fileHandler);
          }
          catch (Throwable) {}
-         self::$fileHandler = null;
+         $this->fileHandler = null;
       }
 
       // @ Populate $_POST
-      if (self::$postEncoded !== '') {
-         parse_str(self::$postEncoded, $_POST);
+      if ($this->postEncoded !== '') {
+         parse_str($this->postEncoded, $_POST);
       }
 
       // @ Populate $_FILES
-      if (! empty(self::$files)) {
+      if (! empty($this->files)) {
          $filesEncoded = '';
 
-         foreach (self::$files as $index => $file) {
-            $uploadKey = self::$filesKeys[$index] ?? '';
+         foreach ($this->files as $index => $file) {
+            $uploadKey = $this->filesKeys[$index] ?? '';
             $filesEncoded .= urlencode($uploadKey) . '=' . $index . '&';
          }
 
          if ($filesEncoded !== '') { // @phpstan-ignore notIdentical.alwaysTrue
-            $filesData = self::$files;
+            $filesData = $this->files;
             parse_str($filesEncoded, $_FILES);
             array_walk_recursive($_FILES, function (&$value) use ($filesData) {
                if (is_numeric($value) && isset($filesData[(int) $value])) {

@@ -33,27 +33,26 @@ class Packages implements WPI\Connections\Packages
 {
    use LoggableEscaped;
 
-
-   public Connection $Connection;
-
    // * Config
    // ...
 
    // * Data
-   // @ IO
+   // # IO
    public string $output;
    public string $input;
 
    // * Metadata
    public int $written;
    public int $read;
-   // @ Stats
+   // # Stats
    public int $writes;
    public int $reads;
    /** @var array<string,int> */
    public array $errors;
-   // @ Expiration
+   // # Expiration
    public bool $expired;
+
+   public Connection $Connection;
 
 
    public function __construct (Connection &$Connection)
@@ -64,19 +63,19 @@ class Packages implements WPI\Connections\Packages
       // ...
 
       // * Data
-      // @ IO
+      // # IO
       $this->output ='';
       $this->input = '';
 
       // * Metadata
       $this->written = 0;         // Output Data length (bytes written).
       $this->read = 0;            // Input Data length (bytes read).
-      // @ Stats
+      // # Stats
       $this->writes = 0;          // Socket Write count
       $this->reads = 0;           // Socket Read count
       $this->errors['write'] = 0; // Socket Writing errors
       $this->errors['read'] = 0;  // Socket Reading errors
-      // @ Expiration
+      // # Expiration
       $this->expired = false;
    }
 
@@ -184,6 +183,7 @@ class Packages implements WPI\Connections\Packages
          }
       }
 
+      // # Hook
       if (Client::$onWrite) {
          (Client::$onWrite)($Socket, $this->Connection, $this);
       }
@@ -279,6 +279,7 @@ class Packages implements WPI\Connections\Packages
          #Connections::$Connections[(int) $Socket]['reads']++;
       }
 
+      // # Hook
       if (Client::$onRead) {
          (Client::$onRead)($Socket, $this->Connection, $this);
       }

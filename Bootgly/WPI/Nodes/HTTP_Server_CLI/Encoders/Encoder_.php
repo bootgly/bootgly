@@ -16,6 +16,7 @@ use Throwable;
 
 use Bootgly\ABI\Debugging\Data\Throwables;
 use Bootgly\API\Workables\Server as SAPI;
+use Bootgly\API\Workables\Server\Middlewares;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI as Server;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders;
@@ -58,31 +59,42 @@ class Encoder_ extends Encoders
          }
 
          if ($resolved === false) {
-            $Result = SAPI::$Middlewares->process($Request, $Response,
-               function (object $Request, object $Res) use ($Router): mixed {
-                  $Result = (SAPI::$Handler)($Request, $Res, $Router);
+            // @ Defensive: Middlewares pipeline may not have been initialized yet
+            //   (e.g. when trailing bytes from a previous test connection arrive
+            //   after @test end but before SAPI::boot() has rebuilt the pipeline).
+            if ( ! isset(SAPI::$Middlewares)) {
+               SAPI::$Middlewares = new Middlewares;
+            }
+            if ( ! isset(SAPI::$Handler)) {
+               $Response = new Response(code: 503, body: '');
+            }
+            else {
+               $Result = SAPI::$Middlewares->process($Request, $Response,
+                  function (object $Request, object $Res) use ($Router): mixed {
+                     $Result = (SAPI::$Handler)($Request, $Res, $Router);
 
-                  // @ Resolve Generator-based routing inside the pipeline
-                  if ($Result instanceof Generator) {
-                     foreach ($Router->routing($Result) as $Responses) {
-                        if ($Responses instanceof Response) {
-                           $Res = $Responses;
+                     // @ Resolve Generator-based routing inside the pipeline
+                     if ($Result instanceof Generator) {
+                        foreach ($Router->routing($Result) as $Responses) {
+                           if ($Responses instanceof Response) {
+                              $Res = $Responses;
+                           }
                         }
+
+                        return $Res;
+                     }
+
+                     if ($Result instanceof Response) {
+                        return $Result;
                      }
 
                      return $Res;
                   }
+               );
 
-                  if ($Result instanceof Response) {
-                     return $Result;
-                  }
-
-                  return $Res;
+               if ($Result instanceof Response && $Result !== $Response) {
+                  $Response = $Result;
                }
-            );
-
-            if ($Result instanceof Response && $Result !== $Response) {
-               $Response = $Result;
             }
          }
       }

@@ -17,5 +17,5 @@ use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages;
 
 abstract class Decoders implements Decoder
 {
-   abstract public static function decode (Packages $Package, string $buffer, int $size): int;
+   abstract public function decode (Packages $Package, string $buffer, int $size): int;
 }

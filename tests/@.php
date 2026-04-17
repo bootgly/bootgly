@@ -4,7 +4,7 @@ use Bootgly\ACI\Tests\Suites;
 
 return new Suites(
    directories: [
-      // Abstract Bootable Interface (ABI)
+      // ! Abstract Bootable Interface (ABI)
       // ? 1
       #'Bootgly/ABI/Configs/*', // ! Not testable (for now)
       // ? 2
@@ -28,25 +28,31 @@ return new Suites(
       'Bootgly/ABI/Templates/Template/',
       'Bootgly/ABI/Templates/Template/Escaped/',
 
-      // Abstract Common Interface (ACI)
+      // ! Abstract Common Interface (ACI)
       'Bootgly/ACI/Tests/',
 
-      // Abstract Data Interface (ADI)
+      // ! Abstract Data Interface (ADI)
       'Bootgly/ADI/Table/',
 
-      // Application Programming Interface (API)
+      // ! Application Programming Interface (API)
       'Bootgly/API/Server/',
 
-      // Command Line Interface (CLI)
+      // ! Command Line Interface (CLI)
       'Bootgly/CLI/Commands/',
 
-      // Web Programming Interface (WPI)
+      // ! Web Programming Interface (WPI)
       // # HTTP_Client_CLI
+      // Atomic
       'Bootgly/WPI/Nodes/HTTP_Client_CLI/tests/Atomic/',
+      // E2E (use Bootgly's TCP_Server_CLI)
       'Bootgly/WPI/Nodes/HTTP_Client_CLI/tests/E2E/',
+      // E2E SSL (use Bootgly's TCP_Server_CLI with SSL)
       'Bootgly/WPI/Nodes/HTTP_Client_CLI/tests/E2E_SSL/',
       // # HTTP_Server_CLI
-      'Bootgly/WPI/Nodes/HTTP_Server_CLI/',
       'Bootgly/WPI/Nodes/HTTP_Server_CLI/Router/Middlewares/',
+      // E2E (use Bootgly's TCP_Client_CLI)
+      'Bootgly/WPI/Nodes/HTTP_Server_CLI/tests/E2E/',
+      // Security
+      'Bootgly/WPI/Nodes/HTTP_Server_CLI/tests/Security/',
    ]
 );

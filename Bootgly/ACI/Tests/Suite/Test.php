@@ -191,10 +191,6 @@ class Test
 
          $index++;
       }
-
-      if (isSet($this->Specification->last) === false) {
-         $this->log(PHP_EOL);
-      }
    }
    public function separate (): void
    {

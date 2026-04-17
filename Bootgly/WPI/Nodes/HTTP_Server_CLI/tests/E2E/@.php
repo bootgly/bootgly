@@ -1,6 +1,6 @@
 <?php
 
-namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\tests;
+namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\tests\E2E;
 
 use Bootgly\ACI\Tests\Suite;
 use Bootgly\ACI\Logs\Logger;
@@ -32,8 +32,15 @@ return new Suite(
 
       $HTTP_Server_CLI->Commands->command('test');
 
+      // @ Teardown: terminate workers and release state lock so the next
+      //   suite running in the same master PHP process can bind/lock cleanly.
+      $HTTP_Server_CLI->Process->stopping = true;
+      $HTTP_Server_CLI->Process->Children->terminate();
+      $HTTP_Server_CLI->Process->State->clean();
+
       return true;
    },
+   suiteName: __NAMESPACE__,
    // * Data
    tests: [
       'Request/' => [

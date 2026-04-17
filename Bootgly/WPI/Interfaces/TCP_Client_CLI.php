@@ -315,6 +315,7 @@ class TCP_Client_CLI
       // ... Continue to master process:
       switch ($this->mode) {
          case self::MODE_DEFAULT:
+         case self::MODE_TEST:
             if (self::$onInstance) {
                (self::$onInstance)($this);
             }

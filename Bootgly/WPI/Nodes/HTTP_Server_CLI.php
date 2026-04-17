@@ -37,6 +37,7 @@ use function stream_context_create;
 use function stream_select;
 use function stream_set_blocking;
 use function stream_socket_client;
+use function str_replace;
 use function strlen;
 use function time;
 use function usleep;
@@ -314,7 +315,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       parent::stop();
    }
 
-   public static function boot (Environments $Environment): void
+   public static function boot (Environments $Environment, string $testsDir = 'E2E'): void
    {
       switch ($Environment) {
          case Environments::Test:
@@ -328,9 +329,12 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
                   break;
                }
 
+               // @ Convert namespace to path (backslash -> forward slash)
+               $classPath = str_replace('\\', '/', __CLASS__);
+
                // * Data
                // !
-               $bootstrap = BOOTGLY_ROOT_DIR . __CLASS__ . '/tests/@.php';
+               $bootstrap = BOOTGLY_ROOT_DIR . $classPath . '/tests/' . $testsDir . '/@.php';
                $Bootstrap = new File($bootstrap);
                // ?
                if ($Bootstrap->exists === false) {
@@ -347,7 +351,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
                if ($Suite instanceof Suite === false) {
                   throw new Exception("Test Suite instance not found: \n {$bootstrap}");
                }
-               self::pretest($Suite);
+               self::pretest($Suite, $testsDir);
             }
             catch (Throwable $Throwable) {
                Exceptions::report($Throwable);
@@ -359,7 +363,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       }
    }
 
-   public static function pretest (null|Suite $Suite): void
+   public static function pretest (null|Suite $Suite, string $testsDir = 'E2E'): void
    {
       if ($Suite === null) {
          return;
@@ -385,9 +389,12 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       SAPI::$Tests[self::class] = [];
       SAPI::$tests[self::class] = [];
 
+      // @ Convert namespace to path (backslash -> forward slash)
+      $classPath = str_replace('\\', '/', __CLASS__);
+
       foreach ($selected as $index => $case) {
          $Test_Case_File = new File(
-            BOOTGLY_ROOT_DIR . __CLASS__ . '/tests/' . $case . '.test.php'
+            BOOTGLY_ROOT_DIR . $classPath . '/tests/' . $testsDir . '/' . $case . '.test.php'
          );
          if ($Test_Case_File->exists === false) {
             continue;
@@ -427,7 +434,11 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
 
       self::boot(Environments::Test);
 
-      $TCP_Client_CLI = new TCP_Client_CLI;
+      // @ MODE_TEST skips per-project State lock + shutdown SIGINT, so multiple
+      //   test suites can run sequentially in the same master PHP process
+      //   without blocking on flock() or tearing down the master on each
+      //   client destruction.
+      $TCP_Client_CLI = new TCP_Client_CLI(mode: TCP_Client_CLI::MODE_TEST);
       $TCP_Client_CLI->configure(
          host: ($TCP_Server_CLI->host === '0.0.0.0')
             ? '127.0.0.1'

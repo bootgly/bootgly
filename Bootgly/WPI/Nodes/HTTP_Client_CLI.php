@@ -84,8 +84,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
 
    // * Data
    // # Protocol
-   /** @var Encoder */
-   public static $Encoder;
+   public static Encoder $Encoder;
    // # Hooks
    protected static null|Closure $onResponse = null;
    protected static null|Closure $httpOnConnect = null;
@@ -94,7 +93,6 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
    // * Metadata
    protected static bool $eventDriven = false;
    public static int $bytesReceived = 0;
-
    // # Request pipeline
    /** @var array<int,Request> Pending requests keyed by socket ID */
    protected array $pendingRequests = [];

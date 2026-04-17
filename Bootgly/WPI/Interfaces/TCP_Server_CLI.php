@@ -205,9 +205,17 @@ class TCP_Server_CLI implements Servers, Logging
             return;
          }
 
+         // ? Only the master should initiate shutdown signaling.
+         //   Children must not signal back to the master on exit — otherwise
+         //   a child exiting during teardown would queue SIGINT on the master
+         //   and kill a subsequent test suite running in the same PHP process.
+         if ($Process->level !== 'master') {
+            return;
+         }
+
          Shutdown::debug();
 
-         $Process->Signals->send(SIGINT, master: true, children: true);
+         $Process->Signals->send(SIGINT, master: false, children: true);
       });
    }
    public function __get (string $name): mixed

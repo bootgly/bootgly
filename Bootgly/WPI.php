@@ -56,10 +56,6 @@ class WPI extends Projects // Web Programming Interface
             Vars::$debug = false;
             Vars::$exit = true;
 
-            if (@$_SERVER['REDIRECT_URL'] === null) {
-               throw new Exception('Missing Rewrite!');
-            }
-
             // ---
 
             // @ Boot WPI for web SAPI
