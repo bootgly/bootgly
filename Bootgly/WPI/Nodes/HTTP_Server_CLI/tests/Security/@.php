@@ -62,5 +62,8 @@ return new Suite(
       // # Request
       // Content-Length validation
       '3.01-content_length_negative_accepted',
+      // # Request Session
+      // file handler unserialise without integrity
+      '4.01-session_file_unserialize_forgery',
    ],
 );

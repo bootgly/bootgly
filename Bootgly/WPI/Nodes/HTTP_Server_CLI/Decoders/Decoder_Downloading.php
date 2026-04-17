@@ -112,7 +112,7 @@ class Decoder_Downloading extends Decoders
       $WPI = WPI;
       /** @var Server $Server */
       $Server = $WPI->Server;
-      assert($Server::$Decoder !== null);
+
       /** @var Server\Request $Request */
       $Request = $WPI->Request;
       $Body = $Request->Body;
