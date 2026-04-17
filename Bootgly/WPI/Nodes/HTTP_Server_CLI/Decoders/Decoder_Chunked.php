@@ -11,6 +11,7 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders;
 
 
+use function ctype_xdigit;
 use function hexdec;
 use function strlen;
 use function strpos;
@@ -114,7 +115,22 @@ class Decoder_Chunked extends Decoders
                   $sizeLine = substr($sizeLine, 0, $semiPos);
                }
 
-               $chunkSize = (int) hexdec(trim($sizeLine));
+               // ! RFC 9112 §7.1 — chunk-size = 1*HEXDIG (no signs, no
+               //   whitespace, no `0x` prefix). `hexdec` silently truncates
+               //   on invalid chars, accepting `-1`, `0x10`, `5 garbage`,
+               //   `0e0`. `ctype_xdigit` on the trimmed line is a single
+               //   C-call that rejects every such variant at near-zero cost.
+               $sizeLine = trim($sizeLine);
+               if ($sizeLine === '' || ! ctype_xdigit($sizeLine)) {
+                  $Package->reject("HTTP/1.1 400 Bad Request\r\n\r\n");
+                  $Body->waiting = false;
+                  $this->body = '';
+                  $this->buffer = '';
+                  $Package->Decoder = null;
+                  return 0;
+               }
+
+               $chunkSize = (int) hexdec($sizeLine);
 
                if ($chunkSize === 0) {
                   // @ Last chunk: body complete
@@ -169,9 +185,21 @@ class Decoder_Chunked extends Decoders
                   return 0; // Need more data for this chunk
                }
 
-               // @ Consume trailing \r\n after chunk data
+               // @ Consume trailing \r\n after chunk data (RFC 9112 §7.1 —
+               //   `chunk = chunk-size [ext] CRLF chunk-data CRLF`). The
+               //   previous code blindly skipped 2 bytes without asserting
+               //   they were CRLF, letting attacker-chosen framing corrupt
+               //   body boundaries.
                if (strlen($this->buffer) < 2) {
                   return 0; // Need the trailing CRLF
+               }
+               if ($this->buffer[0] !== "\r" || $this->buffer[1] !== "\n") {
+                  $Package->reject("HTTP/1.1 400 Bad Request\r\n\r\n");
+                  $Body->waiting = false;
+                  $this->body = '';
+                  $this->buffer = '';
+                  $Package->Decoder = null;
+                  return 0;
                }
                $this->buffer = substr($this->buffer, 2);
 

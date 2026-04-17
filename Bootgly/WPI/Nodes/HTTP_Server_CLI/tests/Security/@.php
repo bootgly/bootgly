@@ -66,5 +66,8 @@ return new Suite(
       // # Request Session
       // file handler unserialise without integrity
       '4.01-session_file_unserialize_forgery',
+      // # Decoder Chunked
+      // blind 2-byte CRLF consumption → TE smuggling
+      '5.01-chunked_decoder_blind_crlf_consumption',
    ],
 );
