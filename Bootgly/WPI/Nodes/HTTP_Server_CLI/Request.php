@@ -41,9 +41,9 @@ use function stripos;
 use function strlen;
 use function strpos;
 use function strrpos;
+use function strspn;
 use function strstr;
 use function strtok;
-use function strtolower;
 use function strtotime;
 use function substr;
 use function time;
@@ -759,7 +759,32 @@ class Request
          if ( $ctPos = stripos($header_raw, "\r\nContent-Type: multipart/form-data") ) {
             $isMultipart = true;
             if ( preg_match('/boundary="?(\S+)"?/', substr($header_raw, $ctPos, 200), $bMatch) ) {
-               $multipartBoundary = trim('--' . $bMatch[1], '"');
+               // ? Validate boundary against RFC 7578 §4.1 / RFC 2046 §5.1.1.
+               //   bchars charset + length 1-70. A permissive `\S+` capture
+               //   would otherwise accept quote-injection (`X";foo="bar`) and
+               //   megabyte-long boundaries, enabling algorithmic DoS via
+               //   `strpos($data, $hugeBoundary)` on every streamed chunk.
+               $b = $bMatch[1];
+               // @ Strip a trailing `"` left by the greedy `\S+` when the
+               //   value is quoted (`boundary="foo"` → `\S+` captures `foo"`).
+               $bl = strlen($b);
+               if ($b[$bl - 1] === '"') {
+                  $b = substr($b, 0, -1);
+                  $bl--;
+               }
+               static $boundaryChars =
+                  "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+                  . "0123456789'()+_,-./:=?";
+               if ($bl < 1 || $bl > 70 || strspn($b, $boundaryChars) !== $bl) {
+                  $Package->reject("HTTP/1.1 400 Bad Request\r\n\r\n");
+                  return 0;
+               }
+               $multipartBoundary = "--$b";
+            }
+            else {
+               // @ multipart/form-data without a boundary is malformed per RFC.
+               $Package->reject("HTTP/1.1 400 Bad Request\r\n\r\n");
+               return 0;
             }
          }
 

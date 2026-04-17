@@ -69,5 +69,8 @@ return new Suite(
       // # Decoder Chunked
       // blind 2-byte CRLF consumption → TE smuggling
       '5.01-chunked_decoder_blind_crlf_consumption',
+      // # Decoder Downloading (multipart)
+      // boundary not validated (charset + length cap) → injection & algorithmic DoS
+      '6.01-multipart_boundary_injection_and_oversize',
    ],
 );
