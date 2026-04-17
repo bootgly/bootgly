@@ -72,5 +72,8 @@ return new Suite(
       // # Decoder Downloading (multipart)
       // boundary not validated (charset + length cap) → injection & algorithmic DoS
       '6.01-multipart_boundary_injection_and_oversize',
+      // # Decoder_ cache
+      // shallow clone → sub-object (Header/Body/Cookies) state bleed
+      '7.01-decoder_cache_shallow_clone_subobject_bleed',
    ],
 );
