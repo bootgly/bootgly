@@ -25,11 +25,17 @@ class Decoder_ extends Decoders
 {
    public function decode (Packages $Package, string $buffer, int $size): int
    {
+      /** @var array<string,Request> $inputs */
       static $inputs = []; // @ Instance local cache
 
       // ? Check local cache and return
       if ($size <= 2048 && isSet($inputs[$buffer])) {
-         Server::$Request = $inputs[$buffer];
+         // ! Security: clone on READ, not only on write. Otherwise handler /
+         //   middleware mutations (dynamic properties, Header writes, auth
+         //   decisions) persist on the cached Request and leak to every
+         //   future connection that sends byte-identical headers.
+         //   See tests/Security/2.01-decoder_cache_shared_request_across_connections.test.php
+         Server::$Request = clone $inputs[$buffer];
 
          if ($Package->changed) {
             Server::$Request->reboot();

@@ -64,8 +64,8 @@ abstract class Packages implements WPI\Connections\Packages
    // * Data
    public bool $changed;
    // # IO
-   public static string $input;
-   public static string $output;
+   public string $input;
+   public string $output;
 
    // * Metadata
    // # Handler
@@ -96,12 +96,12 @@ abstract class Packages implements WPI\Connections\Packages
       // * Data
       $this->changed = true;
       // # IO
-      self::$input = '';
-      self::$output = '';
+      $this->input = '';
+      $this->output = '';
 
       // * Metadata
-      // # Handler
-      $this->callbacks = [&self::$input];
+      // @ Handler
+      $this->callbacks = [&$this->input];
       // # Stream
       $this->downloading = [];
       $this->uploading = [];
@@ -216,11 +216,11 @@ abstract class Packages implements WPI\Connections\Packages
       }
 
       // @ On success
-      $this->changed = (self::$input !== $input);
+      $this->changed = ($this->input !== $input);
 
       // @ Handle cache and set Input
       if ($this->cache === false || $this->changed === true) {
-         self::$input = $input;
+         $this->input = $input;
       }
 
       // @ Set Stats (disable to max performance in benchmarks)
@@ -257,7 +257,7 @@ abstract class Packages implements WPI\Connections\Packages
                $remainingLength = $inputLength - $offset;
 
                $this->changed = true;
-               self::$input = $remaining;
+               $this->input = $remaining;
 
                $decoded = ($this->Decoder ?? Server::$Decoder)->decode($this, $remaining, $remainingLength);
 

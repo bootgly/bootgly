@@ -52,9 +52,12 @@ return new Suite(
    },
    // * Data
    tests: [
-      // # Decoder cross-connection state bleed
+      // # Decoder
+      // cross-connection state bleed
       '1.01-decoder_chunked_cross_connection_state',
       '1.02-decoder_downloading_cross_connection_state',
       '1.03-decoder_waiting_stale_timestamp',
+      // L1 cache cross-connection Request reuse
+      '2.01-decoder_cache_shared_request_across_connections',
    ],
 );
