@@ -120,7 +120,7 @@ class Decoder_Downloading extends Decoders
       // @ Check if Request Body is waiting data
       if (! $Body->waiting) {
          $Package->Decoder = null;
-         return $Server::$Decoder->decode($Package, $buffer, $size);
+         return $Server::$Decoder->decode($Package, $buffer, $size); // @phpstan-ignore method.nonObject
       }
 
       // ? Valid HTTP Client Body Timeout
@@ -128,7 +128,7 @@ class Decoder_Downloading extends Decoders
       if ($elapsed >= 60 && $this->read === $this->downloaded) {
          $this->finish();
          $Package->Decoder = null;
-         return $Server::$Decoder->decode($Package, $buffer, $size);
+         return $Server::$Decoder->decode($Package, $buffer, $size); // @phpstan-ignore method.nonObject
       }
 
       // @ Accumulate downloaded bytes

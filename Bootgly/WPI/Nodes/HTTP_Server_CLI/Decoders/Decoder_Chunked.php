@@ -73,7 +73,7 @@ class Decoder_Chunked extends Decoders
 
       if (! $Body->waiting) {
          $Package->Decoder = null;
-         return $Server::$Decoder->decode($Package, $buffer, $size);
+         return $Server::$Decoder->decode($Package, $buffer, $size); // @phpstan-ignore method.nonObject
       }
 
       // * Metadata
@@ -86,7 +86,7 @@ class Decoder_Chunked extends Decoders
 
          $Package->Decoder = null;
 
-         return $Server::$Decoder->decode($Package, $buffer, $size);
+         return $Server::$Decoder->decode($Package, $buffer, $size); // @phpstan-ignore method.nonObject
       }
 
       // @ Append incoming data

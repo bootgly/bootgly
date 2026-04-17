@@ -61,7 +61,7 @@ class Decoder_Waiting extends Decoders
          $elapsed = time() - $this->decoded;
          if ($elapsed >= 60 && $this->read === $Body->downloaded) {
             $Package->Decoder = null;
-            return $Server::$Decoder->decode($Package, $buffer, $size);
+            return $Server::$Decoder->decode($Package, $buffer, $size); // @phpstan-ignore method.nonObject
          }
 
          // ... Continue reading the Request Body
@@ -81,7 +81,7 @@ class Decoder_Waiting extends Decoders
             $Body->waiting = false;
 
             $Package->Decoder = null;
-            return $Server::$Decoder->decode($Package, $buffer, $size);
+            return $Server::$Decoder->decode($Package, $buffer, $size); // @phpstan-ignore method.nonObject
          }
 
          if ($Body->length > $Body->downloaded) {
@@ -94,6 +94,6 @@ class Decoder_Waiting extends Decoders
       }
 
       $Package->Decoder = null;
-      return $Server::$Decoder->decode($Package, $buffer, $size);
+      return $Server::$Decoder->decode($Package, $buffer, $size); // @phpstan-ignore method.nonObject
    }
 }
