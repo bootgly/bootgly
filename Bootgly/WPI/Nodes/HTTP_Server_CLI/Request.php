@@ -1018,36 +1018,56 @@ class Request
    /**
     * Receive the input data from the request.
     *
+    * Parsing is strictly dispatched on the `Content-Type` media-type. A body
+    * declared `application/json` MUST NOT silently fall through to
+    * `parse_str()` on parse failure — otherwise an attacker can submit an
+    * invalid-JSON / valid-urlencoded payload to inject arbitrary keys into
+    * `$Request->post` (mass-assignment, CSRF-token confusion, `_method`
+    * override). An unknown / missing Content-Type yields `[]`.
+    *
     * @return array<string>|null
     */
    public function input (): array|null
    {
-      /** @var array<string> $inputs */
-      $inputs = [];
+      $input = $this->input;
+      if ($input === '') {
+         return [];
+      }
 
-      // @ Try to convert input automatically
-      try {
-         $input = $this->input;
+      $contentType = $this->Header->get('Content-Type') ?? '';
 
-         // raw (JSON)
-         $decoded = json_decode(
-            json: $input,
-            associative: true,
-            depth: 512,
-            flags: JSON_THROW_ON_ERROR
-         );
+      // @ JSON — strict: on parse failure, return []; never reinterpret.
+      if ($contentType !== '' && stripos($contentType, 'json') !== false) {
+         try {
+            $decoded = json_decode(
+               json: $input,
+               associative: true,
+               depth: 512,
+               flags: JSON_THROW_ON_ERROR
+            );
+            /** @var array<string> $inputs */
+            $inputs = is_array($decoded) ? $decoded : [];
+            return $inputs;
+         }
+         catch (JsonException) {
+            return [];
+         }
+      }
+
+      // @ application/x-www-form-urlencoded — the only media-type where
+      //   parse_str() is a valid parser for the body.
+      if (
+         $contentType !== ''
+         && stripos($contentType, 'application/x-www-form-urlencoded') !== false
+      ) {
          /** @var array<string> $inputs */
-         $inputs = is_array($decoded) ? $decoded : [];
-      }
-      catch (JsonException) {
-         // x-www-form-urlencoded
-         parse_str(
-            string: $input,
-            result: $inputs
-         );
+         $inputs = [];
+         parse_str(string: $input, result: $inputs);
+         return $inputs; // @phpstan-ignore return.type
       }
 
-      return $inputs; // @phpstan-ignore-line
+      // @ Unknown / missing Content-Type — refuse to guess.
+      return [];
    }
    /**
     * Download the request body data (files and fields).

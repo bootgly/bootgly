@@ -52,6 +52,15 @@ return new Suite(
    },
    // * Data
    tests: [
+      // # Request input()
+      // Content-Type confusion — parse_str() fallthrough on invalid JSON
+      //   Placed FIRST: every subsequent Security test couples to a shared
+      //   per-worker handler queue (multi-request arrays, side-sockets,
+      //   decode-reject slot-pops). 12.01 is self-contained (single request,
+      //   no side connection, no middleware) so it belongs outside that
+      //   coupling — any position inside the chain destabilises 4.01, 8.01
+      //   or 11.01 by stealing a handler slot.
+      '12.01-input_content_type_confusion_parse_str_fallthrough',
       // # Decoder
       // cross-connection state bleed
       '1.01-decoder_chunked_cross_connection_state',
