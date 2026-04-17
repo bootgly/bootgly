@@ -59,5 +59,8 @@ return new Suite(
       '1.03-decoder_waiting_stale_timestamp',
       // L1 cache cross-connection Request reuse
       '2.01-decoder_cache_shared_request_across_connections',
+      // # Request
+      // Content-Length validation
+      '3.01-content_length_negative_accepted',
    ],
 );

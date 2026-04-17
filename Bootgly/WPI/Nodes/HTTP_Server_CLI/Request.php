@@ -653,7 +653,18 @@ class Request
       }
       // @ Set Request Body length if possible
       if ( $_ = strpos($header_raw, "\r\nContent-Length: ") ) {
-         $content_length = (int) substr($header_raw, $_ + 18, 10);
+         $slice = substr($header_raw, $_ + 18, 10);
+         // ! RFC 9112 §6.1 — Content-Length = 1*DIGIT. The fast path's
+         //   `(int) $slice` silently accepts "-N" (negative), "+N", leading
+         //   whitespace, and hex-like prefixes, yielding a body length that
+         //   de-syncs with the TCP buffer (CL/CL request smuggling).
+         //   One `ctype_digit` on the first byte rejects all those variants
+         //   at near-zero cost (single C-call, no regex).
+         if ($slice === '' || ! ctype_digit($slice[0])) {
+            $Package->reject("HTTP/1.1 400 Bad Request\r\n\r\n");
+            return 0;
+         }
+         $content_length = (int) $slice;
       }
       else if (preg_match("/\r\ncontent-length: ?(\d+)/i", $header_raw, $match) === 1) {
          $content_length = (int) $match[1];
