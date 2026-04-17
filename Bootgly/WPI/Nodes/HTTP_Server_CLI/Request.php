@@ -837,9 +837,10 @@ class Request
             }
          }
 
-         // ?: Validate max request size
+         // ?: Validate max request body size (Content-Length only, headers
+         //    already capped at 16 KB by the separator check above)
          $maxSize = $isMultipart ? static::$maxFileSize : static::$maxBodySize;
-         if ($length > $maxSize) {
+         if ($content_length > $maxSize) {
             $Package->reject("HTTP/1.1 413 Request Entity Too Large\r\n\r\n");
             return 0;
          }

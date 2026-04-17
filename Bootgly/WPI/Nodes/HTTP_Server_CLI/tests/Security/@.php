@@ -92,5 +92,8 @@ return new Suite(
       // # Request Host
       // Host-header spoofing — allowlist enforcement
       '10.01-host_header_allowlist_spoofing',
+      // # BodyParser Middleware
+      // limit bypass — maxSize not pushed to decode-time gate
+      '11.01-bodyparser_limit_bypass_decode_time',
    ],
 );

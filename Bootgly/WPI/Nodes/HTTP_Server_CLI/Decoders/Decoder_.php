@@ -29,7 +29,7 @@ class Decoder_ extends Decoders
       static $inputs = []; // @ Instance local cache
 
       // ? Check local cache and return
-      if ($size <= 2048 && isSet($inputs[$buffer])) {
+      if ($size <= 2048 && $size <= Request::$maxBodySize && isSet($inputs[$buffer])) {
          // ! Security: clone on READ, not only on write. Otherwise handler /
          //   middleware mutations (dynamic properties, Header writes, auth
          //   decisions) persist on the cached Request and leak to every

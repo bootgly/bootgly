@@ -6,13 +6,15 @@ use Generator;
 use Bootgly\ACI\Tests\Assertion;
 use Bootgly\ACI\Tests\Assertions;
 use Bootgly\ACI\Tests\Suite\Test\Specification;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Middlewares\BodyParser;
 
 
 return new Specification(
    description: 'It should validate request body size and reject oversized payloads',
    test: new Assertions(Case: function (): Generator {
-      // !
+      // ! Save statics that BodyParser::process() may push down
+      $savedMaxBodySize = Request::$maxBodySize;
       $createMocks = require __DIR__ . '/0.mock.php';
       $passthrough = function (object $Request, object $Response): object {
          return $Response;
@@ -70,5 +72,8 @@ return new Specification(
          ->expect($Result->code)
          ->to->be(200)
          ->assert();
+
+      // ! Restore statics pushed down by BodyParser::process()
+      Request::$maxBodySize = $savedMaxBodySize;
    })
 );
