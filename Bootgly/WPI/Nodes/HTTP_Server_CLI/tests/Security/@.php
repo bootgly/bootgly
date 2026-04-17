@@ -89,5 +89,8 @@ return new Suite(
       // # Response
       // path traversal via sibling-prefix bypass (str_starts_with w/o trailing sep)
       '8.01-response_path_traversal_sibling_prefix_bypass',
+      // # Request Host
+      // Host-header spoofing — allowlist enforcement
+      '10.01-host_header_allowlist_spoofing',
    ],
 );

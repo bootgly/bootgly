@@ -80,6 +80,20 @@ class Request
    public static int $maxFileSize = 500 * 1024 * 1024; // @ 500 megabytes
    /** @var int Maximum body size in bytes for non-multipart requests (default: 10MB) */
    public static int $maxBodySize = 10 * 1024 * 1024; // @ 10 megabytes
+   /**
+    * Allowed `Host` header values (RFC 9112 §3.2 / §7.2). When non-empty,
+    *   any request whose `Host` header (case-insensitive, port-agnostic)
+    *   does not match is rejected with `400 Bad Request` at decode time —
+    *   blocks Host-header spoofing (cache poisoning, password-reset
+    *   poisoning in multi-tenant apps).
+    *
+    *   Each entry is a lowercase hostname WITHOUT port. Wildcard prefix
+    *   `*.example.com` matches any single-label subdomain. Empty list
+    *   (default) disables enforcement for backward compatibility.
+    *
+    * @var array<int,string>
+    */
+   public static array $allowedHosts = [];
 
    public string $base {
       get => $this->base;
@@ -920,6 +934,65 @@ class Request
          if (preg_match("/(?:^|\r\n)Host: *(\S+)/i", $header_raw) !== 1) {
             $Package->reject("HTTP/1.1 400 Bad Request\r\n\r\n");
             return 0;
+         }
+
+         // ! Enforce Host allowlist (audit #10): reject spoofed Host headers
+         //   at decode time so handlers that route by `$Request->host`
+         //   cannot be fooled (cache poisoning, password-reset poisoning).
+         //   Hot-path guard: `static::$allowedHosts === []` short-circuits
+         //   the entire block — zero cost when enforcement is disabled
+         //   (the default). The value is re-extracted here (rather than
+         //   captured unconditionally above) so the default path pays
+         //   nothing for match-array allocation.
+         if (static::$allowedHosts !== []) {
+            preg_match(
+               "/(?:^|\r\n)Host: *(\S+)/i",
+               $header_raw,
+               $hostMatch
+            );
+            $hostValue = strtolower($hostMatch[1]);
+            // Strip port (Host = uri-host [":" port] per RFC 9110 §7.2).
+            //   IPv6 literals are bracketed; split on the RIGHT-most `:`
+            //   after the closing `]` — for name hosts, simply last colon.
+            if ($hostValue[0] === '[') {
+               $rb = strpos($hostValue, ']');
+               $hostName = $rb === false ? $hostValue : substr($hostValue, 0, $rb + 1);
+            }
+            else {
+               $colon = strrpos($hostValue, ':');
+               $hostName = $colon === false ? $hostValue : substr($hostValue, 0, $colon);
+            }
+
+            $allowed = false;
+            foreach (static::$allowedHosts as $entry) {
+               // Exact match.
+               if ($entry === $hostName) {
+                  $allowed = true;
+                  break;
+               }
+               // Wildcard prefix: `*.example.com` matches `a.example.com`
+               //   but NOT `example.com` itself (callers must list the
+               //   apex separately if desired) and NOT multi-label
+               //   subdomains (`a.b.example.com`).
+               if (
+                  strlen($entry) > 2
+                  && $entry[0] === '*' && $entry[1] === '.'
+                  && str_ends_with($hostName, substr($entry, 1))
+                  && strpos(
+                     $hostName,
+                     '.',
+                     0
+                  ) === strlen($hostName) - (strlen($entry) - 1)
+               ) {
+                  $allowed = true;
+                  break;
+               }
+            }
+
+            if (! $allowed) {
+               $Package->reject("HTTP/1.1 400 Bad Request\r\n\r\n");
+               return 0;
+            }
          }
       }
       // @ Connection management (RFC 9112 §9.3)
