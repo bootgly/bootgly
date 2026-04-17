@@ -32,14 +32,37 @@ return new Specification(
          ->assert();
 
       // @ Test 2: Trusted proxy + X-Forwarded-For rewrites address
+      //   XFF: `<client>, <trusted-hop>` from trusted edge 127.0.0.1.
+      //   RFC 7239 §5.2: walk from the right, skip trusted hops
+      //   (10.0.0.2 is trusted) → first untrusted = 203.0.113.50.
       [$Request, $Response] = $createMocks(
          requestHeaders: ['X-Forwarded-For' => '203.0.113.50, 10.0.0.2'],
          requestProps: ['address' => '127.0.0.1']
       );
-      $TrustedProxy = new TrustedProxy;
+      $TrustedProxy = new TrustedProxy(proxies: ['127.0.0.1', '::1', '10.0.0.2']);
       $TrustedProxy->process($Request, $Response, $passthrough);
       yield new Assertion(
-         description: 'Trusted proxy should rewrite address from X-Forwarded-For (first IP)',
+         description: 'Trusted proxy should rewrite address from X-Forwarded-For (right-to-left, skip trusted hops)',
+      )
+         ->expect($Request->address)
+         ->to->be('203.0.113.50')
+         ->assert();
+
+      // @ Test 2b: Multi-hop chain — walk right-to-left, skip trusted hops.
+      //   XFF: `<attacker-spoof>, <real-client>, <trusted-hop-1>` from a
+      //   trusted edge `127.0.0.1`. RFC-7239 §5.2: real client is the first
+      //   untrusted entry walking from the right. Old code returned the
+      //   left-most (attacker-declared) IP — chain spoof.
+      [$Request, $Response] = $createMocks(
+         requestHeaders: [
+            'X-Forwarded-For' => '198.51.100.77, 203.0.113.50, 10.0.0.2',
+         ],
+         requestProps: ['address' => '127.0.0.1']
+      );
+      $TrustedProxy = new TrustedProxy(proxies: ['127.0.0.1', '10.0.0.2']);
+      $TrustedProxy->process($Request, $Response, $passthrough);
+      yield new Assertion(
+         description: 'Multi-hop XFF — real client is first untrusted walking from the right (not the spoofable leftmost)',
       )
          ->expect($Request->address)
          ->to->be('203.0.113.50')

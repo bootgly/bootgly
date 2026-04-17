@@ -18,7 +18,7 @@ return new Specification(
       \r\n
       HTTP;
    },
-   middlewares: [new TrustedProxy(proxies: ['127.0.0.1'])],
+   middlewares: [new TrustedProxy(proxies: ['127.0.0.1', '70.41.3.18'])],
    response: function (Request $Request, Response $Response): Response {
       return $Response(body: $Request->address);
    },
