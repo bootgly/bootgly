@@ -38,6 +38,7 @@ return new Project(
             )
             ->on(
                // # Test (Benchmarking)
+               #request: require __DIR__ . '/HTTP_Server_CLI/router/basic.SAPI.php',
                request: require __DIR__ . '/HTTP_Server_CLI/router/default.SAPI.php',
 
                started: function ($HTTP_Server_CLI) {
