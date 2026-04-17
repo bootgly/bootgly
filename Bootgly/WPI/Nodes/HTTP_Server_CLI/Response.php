@@ -459,10 +459,16 @@ class Response extends Server\Response
 
             $File = new File(BOOTGLY_PROJECT->path . 'views/' . $data);
 
-            // ! Validate resolved path stays within views directory (path traversal guard)
+            // ?! Validate resolved path stays within views directory (path traversal guard).
+            //   NOTE: trailing DIRECTORY_SEPARATOR is required to block sibling-prefix
+            //   escapes (e.g. `.../views_leak/` passing `str_starts_with` on `.../views`).
             $resolved = realpath((string) $File);
             $basePath = realpath(BOOTGLY_PROJECT->path . 'views/');
-            if ($resolved === false || $basePath === false || !str_starts_with($resolved, $basePath)) {
+            if (
+               $resolved === false
+               || $basePath === false
+               || !str_starts_with($resolved, $basePath . DIRECTORY_SEPARATOR)
+            ) {
                $this->__set('code', 403);
                return $this;
             }
@@ -505,10 +511,16 @@ class Response extends Server\Response
                         default => new File(BOOTGLY_PROJECT->path . $data)
                      };
 
-                     // ! Validate resolved path stays within projects directory (path traversal guard)
+                     // ! Validate resolved path stays within projects directory (path traversal guard).
+                     //   NOTE: trailing DIRECTORY_SEPARATOR is required to block sibling-prefix
+                     //   escapes (e.g. `.../projects_leak/` passing `str_starts_with` on `.../projects`).
                      $resolved = realpath((string) $File);
                      $projectsBase = realpath(BOOTGLY_WORKING_DIR . 'projects');
-                     if ($resolved === false || $projectsBase === false || !str_starts_with($resolved, $projectsBase)) {
+                     if (
+                        $resolved === false
+                        || $projectsBase === false
+                        || !str_starts_with($resolved, $projectsBase . DIRECTORY_SEPARATOR)
+                     ) {
                         $this->__set('code', 403);
                         return $this;
                      }
@@ -980,10 +992,16 @@ class Response extends Server\Response
 
          $File = new File(BOOTGLY_PROJECT->path . Path::normalize($file));
 
-         // ! Validate resolved path stays within project directory (path traversal guard)
+         // ! Validate resolved path stays within project directory (path traversal guard).
+         //   NOTE: trailing DIRECTORY_SEPARATOR is required to block sibling-prefix
+         //   escapes (e.g. `.../Demo_leak/` passing `str_starts_with` on `.../Demo`).
          $resolved = realpath((string) $File);
          $basePath = realpath(BOOTGLY_PROJECT->path);
-         if ($resolved === false || $basePath === false || !str_starts_with($resolved, $basePath)) {
+         if (
+            $resolved === false
+            || $basePath === false
+            || !str_starts_with($resolved, $basePath . DIRECTORY_SEPARATOR)
+         ) {
             $this->__set('code', 403);
             return $this;
          }

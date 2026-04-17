@@ -75,5 +75,8 @@ return new Suite(
       // # Decoder_ cache
       // shallow clone → sub-object (Header/Body/Cookies) state bleed
       '7.01-decoder_cache_shallow_clone_subobject_bleed',
+      // # Response
+      // path traversal via sibling-prefix bypass (str_starts_with w/o trailing sep)
+      '8.01-response_path_traversal_sibling_prefix_bypass',
    ],
 );
