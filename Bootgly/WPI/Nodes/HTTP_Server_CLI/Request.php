@@ -743,18 +743,45 @@ class Request
       }
 
       // @ Handle Expect header (RFC 9110 §10.1.1)
-      if (strpos($header_raw, "\r\nExpect: ") !== false
-         || stripos($header_raw, "\r\nexpect: ") !== false
+      //   Security: we MUST NOT write `100 Continue` before validating body
+      //   size / transfer form, otherwise:
+      //     (a) Expect + Transfer-Encoding: chunked commits Decoder_Chunked
+      //         to streaming up to MAX_BODY_SIZE per connection without any
+      //         application consent → memory/CPU amplification primitive.
+      //     (b) Expect + oversized Content-Length sends `100 Continue` then
+      //         `413 Request Entity Too Large` back-to-back on the wire.
+      //   Hot-path guard: `strpos("xpect:")` is a 6-byte case-sensitive scan
+      //   that fires on both `Expect:` and `expect:` (shared lowercase
+      //   stem) — requests with no Expect header pay ~one strpos.
+      if (strpos($header_raw, "xpect:") !== false
+         && ($exStart = stripos($header_raw, "\r\nExpect:")) !== false
       ) {
-         if (stripos($header_raw, "\r\nExpect: 100-continue") !== false
-            || stripos($header_raw, "\r\nexpect: 100-continue") !== false
-         ) {
-            @fwrite($Package->Connection->Socket, "HTTP/1.1 100 Continue\r\n\r\n");
-         }
-         else {
+         $exLineEnd = strpos($header_raw, "\r\n", $exStart + 2);
+         $exValue = $exLineEnd === false
+            ? ''
+            : trim(substr($header_raw, $exStart + 9, $exLineEnd - $exStart - 9), " \t");
+
+         if (strcasecmp($exValue, '100-continue') !== 0) {
             $Package->reject("HTTP/1.1 417 Expectation Failed\r\n\r\n");
             return 0;
          }
+
+         // ! Refuse Expect + Transfer-Encoding: chunked without application
+         //   consent (audit finding #9). The application has no opportunity
+         //   to veto a 10 MB chunked body before the decoder is committed.
+         if (isSet($Package->Decoder)) {
+            $Package->reject("HTTP/1.1 417 Expectation Failed\r\n\r\n");
+            return 0;
+         }
+
+         // ! Refuse oversized Content-Length up front so the `100 Continue`
+         //   interim is never paired with a later `413`.
+         if (isSet($content_length) && $content_length > static::$maxFileSize) {
+            $Package->reject("HTTP/1.1 413 Request Entity Too Large\r\n\r\n");
+            return 0;
+         }
+
+         @fwrite($Package->Connection->Socket, "HTTP/1.1 100 Continue\r\n\r\n");
       }
 
       // @ Set Request Body raw if possible

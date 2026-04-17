@@ -75,6 +75,17 @@ return new Suite(
       // # Decoder_ cache
       // shallow clone → sub-object (Header/Body/Cookies) state bleed
       '7.01-decoder_cache_shallow_clone_subobject_bleed',
+      // # Request Expect
+      //   Listed before 8.01 so 7.01's priming-connection queue-drain
+      //   (7.01 opens 2 side sockets + 1 harness request against a queue
+      //   with only 1 entry per test — see 3.01 comment) consumes 9.01 /
+      //   9.02 entries here, leaving 8.01's harness request to inherit the
+      //   handler cached by 9.01 (the last entry popped). 9.01 / 9.02
+      //   reject at decode time, so their handler is never invoked.
+      // `100 Continue` written before body-size validation (TE+Expect unbounded)
+      '9.01-expect_100_continue_with_te_chunked',
+      // `100 Continue` written before oversized Content-Length is rejected
+      '9.02-expect_100_continue_with_oversized_content_length',
       // # Response
       // path traversal via sibling-prefix bypass (str_starts_with w/o trailing sep)
       '8.01-response_path_traversal_sibling_prefix_bypass',
