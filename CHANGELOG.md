@@ -2,6 +2,20 @@
 
 Changelog for Bootgly framework. All notable changes to this project will be documented in this file. Imported from ROADMAP.md.
 
+## v0.13.16-beta ✅
+
+> Focus: **Redirect and file-send path hardening in HTTP Server CLI**
+
+### WPI — Web Programming Interface
+
+- ✅ HTTP Server CLI: `Response::redirect()` now rejects control bytes (`\x00-\x1F`, `\x7F`), backslashes, dangerous URI schemes (`javascript:`, `data:`, `vbscript:`, `file:`), and non-local redirect forms when `allowExternal` is `false`
+- ✅ HTTP Server CLI: Added security regression test `13.01-open_redirect_backslash_bypass` covering protocol-relative and backslash-based redirect bypass payloads
+- ✅ HTTP Server CLI: `Response::send()` received an additional jail check to block file-require bypass attempts outside allowed view/project boundaries
+- ✅ HTTP Server CLI: Added security regression test `14.01-response_send_file_require_bypasses_view_jail`
+- ✅ HTTP Server CLI: Test suite stability improvements for security FIFO ordering compatibility routes
+
+---
+
 ## v0.13.14-beta ✅
 
 > Focus: **BodyParser body-size limit enforced at decode time**
