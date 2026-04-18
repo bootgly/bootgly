@@ -4,6 +4,7 @@
 *.iso
 *.log
 *.md
+*.sh
 # Ignore locks, bin, envs...
 composer
 composer.lock
@@ -67,3 +68,4 @@ _*.test.php
 .github/hooks/*
 .agent/*
 .github/copilot-instructions.md
+.codex

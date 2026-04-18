@@ -754,10 +754,27 @@ class Response extends Server\Response
     */
    public function redirect (string $URI, int|null $code = null, bool $allowExternal = false): self
    {
-      // ! Block external redirects by default (open redirect prevention)
+      // ! Always block dangerous schemes — emitted Location with
+      //   `javascript:` / `data:` / `vbscript:` / `file:` is executed by
+      //   email clients and WebView hybrids even if browsers ignore it.
+      if (preg_match('#^\s*(?:javascript|data|vbscript|file)\s*:#i', $URI) === 1) {
+         $URI = '/';
+      }
+
+      // ! Block external redirects by default (open-redirect prevention)
       if ($allowExternal === false) {
-         // Reject absolute URLs with a scheme (e.g. http://, https://, //)
-         if (preg_match('#^https?://|^//#i', $URI) === 1) {
+         // @ Reject:
+         //   - empty / not-leading-`/` targets (`\\evil.com`, `evil.com`)
+         //   - protocol-relative `//evil.com`
+         //   - backslash-smuggled `/\evil.com` (UA normalises `\` → `/`)
+         //   - any control byte (`\x00-\x1F`, `\x7F`) or backslash anywhere
+         //     (defeats proxy-trimmed `/\t//evil.com` variants)
+         if (
+            $URI === ''
+            || $URI[0] !== '/'
+            || (isset($URI[1]) && ($URI[1] === '/' || $URI[1] === '\\'))
+            || preg_match('/[\x00-\x1F\x7F\\\\]/', $URI) === 1
+         ) {
             $URI = '/';
          }
       }

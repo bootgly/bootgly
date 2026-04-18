@@ -102,6 +102,8 @@ return new Suite(
       '10.01-response_path_traversal_sibling_prefix_bypass',
       // send() require()s arbitrary File via prepare('view') priming source='file'
       '10.02-response_send_file_require_bypasses_view_jail',
+      // redirect() accepts backslash / control-byte open-redirect variants
+      '10.03-response_redirect_open_redirect_backslash_bypass',
       // # Request Host
       // Host-header spoofing — allowlist enforcement
       '11.01-host_header_allowlist_spoofing',
