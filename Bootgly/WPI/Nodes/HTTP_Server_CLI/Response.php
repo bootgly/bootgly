@@ -13,6 +13,7 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_CLI;
 
 use const BOOTGLY_PROJECT;
 use const BOOTGLY_WORKING_DIR;
+use const DIRECTORY_SEPARATOR;
 use const STR_PAD_LEFT;
 use const ZLIB_ENCODING_DEFLATE;
 use const ZLIB_ENCODING_GZIP;
@@ -39,6 +40,7 @@ use function ob_get_clean;
 use function ob_start;
 use function preg_match;
 use function realpath;
+use function str_ends_with;
 use function str_pad;
 use function str_starts_with;
 use function strlen;
@@ -902,6 +904,25 @@ class Response extends Server\Response
                   break;
 
                default: // Dynamic (PHP)
+                  // ! Jail+extension guard — require() must only load
+                  //   `.template.php` files inside `BOOTGLY_PROJECT/views/`.
+                  //   A `File` instance reaches send() via the `view`
+                  //   resource chain bypassing process() case 'view'
+                  //   (which only validates string inputs), so the check
+                  //   must happen here, at the require site.
+                  $__resolved__ = realpath((string) $File);
+                  $__base__     = realpath(BOOTGLY_PROJECT->path . 'views/');
+                  if (
+                     $__resolved__ === false
+                     || $__base__ === false
+                     || ! str_starts_with($__resolved__, $__base__ . DIRECTORY_SEPARATOR)
+                     || ! str_ends_with($__resolved__, '.template.php')
+                  ) {
+                     $this->__set('code', 403);
+                     $this->sent = true;
+                     return $this;
+                  }
+
                   // @ Output/Buffer start()
                   ob_start();
 
@@ -914,7 +935,7 @@ class Response extends Server\Response
                   (static function (string $__file__, array $__data__) {
                      extract($__data__);
                      require $__file__;
-                  })($File, $__data__);
+                  })($__resolved__, $__data__);
 
                   $captured = ob_get_clean(); // @ Output/Buffer clean()->get()
                   $body = $captured === false ? '' : $captured;
