@@ -495,6 +495,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
 
                /** @var Specification|null $test */
                $test = SAPI::$Tests[self::class][$specIndex] ?? null;
+
                if ($test instanceof Specification) {
                   $test->index(case: $test->case ?? ((int) $index + 1));
                }
