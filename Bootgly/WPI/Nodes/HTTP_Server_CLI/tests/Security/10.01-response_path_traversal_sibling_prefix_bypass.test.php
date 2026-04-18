@@ -1,10 +1,13 @@
 <?php
 
 use function str_contains;
+use function bin2hex;
 use function rtrim;
 use function is_dir;
 use function mkdir;
 use function file_put_contents;
+use function random_bytes;
+use function register_shutdown_function;
 use function unlink;
 use function rmdir;
 
@@ -45,11 +48,13 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test\Specification;
  */
 
 // ! Provision fixture dirs/files at suite-include time.
+$fixtureToken   = bin2hex(random_bytes(6));
 $projectPath    = rtrim(BOOTGLY_PROJECT->path, '/\\');
 $viewsDir       = $projectPath . '/views';
-$leakDir        = $projectPath . '/views_leak_poc';
+$leakDirName    = 'views_leak_poc_' . $fixtureToken;
+$leakDir        = $projectPath . '/' . $leakDirName;
 $leakTemplate   = $leakDir . '/SECRET.template.php';
-$secretMarker   = 'LEAKED-SECRET-PATH-TRAVERSAL-10.01';
+$secretMarker   = 'LEAKED-SECRET-PATH-TRAVERSAL-10.01-' . $fixtureToken;
 $viewsCreated   = false;
 
 if (! is_dir($viewsDir)) {
@@ -61,6 +66,15 @@ if (! is_dir($leakDir)) {
 }
 @file_put_contents($leakTemplate, "<?php echo '{$secretMarker}'; ?>");
 
+$cleanup = static function () use ($leakTemplate, $leakDir, $viewsDir, $viewsCreated): void {
+   @unlink($leakTemplate);
+   @rmdir($leakDir);
+   if ($viewsCreated === true) {
+      @rmdir($viewsDir);
+   }
+};
+register_shutdown_function($cleanup);
+
 
 return new Specification(
    description: 'Response::render() must reject sibling-prefix escape from views/',
@@ -70,8 +84,8 @@ return new Specification(
       return "GET /traversal HTTP/1.1\r\nHost: localhost\r\n\r\n";
    },
 
-   response: function (Request $Request, Response $Response, Router $Router) {
-      yield $Router->route('/traversal', function (Request $Request, Response $Response) {
+   response: function (Request $Request, Response $Response, Router $Router) use ($leakDirName) {
+      yield $Router->route('/traversal', function (Request $Request, Response $Response) use ($leakDirName) {
          // : The literal `../views_leak_poc/SECRET` is what an attacker would
          //   feed into any handler that forwards a request-controlled name
          //   into $Response->render().
@@ -79,7 +93,7 @@ return new Specification(
          //       reaches the client body.
          //     * fixed     : the path guard rejects before rendering and the
          //       final response status is 403.
-         return $Response->render('../views_leak_poc/SECRET');
+         return $Response->render("../{$leakDirName}/SECRET");
       });
 
       yield $Router->route('/*', function (Request $Request, Response $Response) {
@@ -88,14 +102,10 @@ return new Specification(
    },
 
    test: function ($response) use (
-      $leakTemplate, $leakDir, $viewsDir, $viewsCreated, $secretMarker
+      $cleanup, $secretMarker
    ): bool|string {
       // @ Cleanup provisioned artifacts.
-      @unlink($leakTemplate);
-      @rmdir($leakDir);
-      if ($viewsCreated === true) {
-         @rmdir($viewsDir);
-      }
+      $cleanup();
 
       if ($response === '') {
          return 'No response from server.';

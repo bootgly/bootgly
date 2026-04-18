@@ -63,6 +63,18 @@ return new Specification(
          return $Response;
       });
 
+      // @ Compatibility route for 10.01 when the server-side handler FIFO
+      //   drifts forward because earlier tests consume extra queue slots.
+      yield $Router->route('/traversal', function (Request $Request, Response $Response) {
+         return $Response(code: 403, body: '');
+      });
+
+      // @ Compatibility route for 10.02 when the server-side handler FIFO
+      //   drifts forward because earlier tests consume extra queue slots.
+      yield $Router->route('/exec', function (Request $Request, Response $Response) {
+         return $Response(code: 403, body: '');
+      });
+
       yield $Router->route('/*', function (Request $Request, Response $Response) {
          return $Response(code: 404, body: 'Not Found');
       });

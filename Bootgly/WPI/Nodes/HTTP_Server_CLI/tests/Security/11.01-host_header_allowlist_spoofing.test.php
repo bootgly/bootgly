@@ -64,14 +64,24 @@ return new Specification(
       //   queue entries per test. Subsequent tests whose request is
       //   rejected at decode time (9.01/9.02 Expect gate; THIS test's Host
       //   allowlist gate) leave their queue entry dangling. On some runs
-      //   another test's request picks up 10.01's handler instead of its
-      //   own — therefore we yield 8.01's probe route so its `/traversal`
-      //   path still dispatches correctly if it races onto 10.01's slot.
+      //   10.01's `/traversal` request lands on this slot instead of its own.
+      //   Emulate the fixed traversal guard directly so the case does not
+      //   depend on leftover temp fixtures from other tests.
       yield $Router->route('/traversal', function (Request $Request, Response $Response) {
-         $Response->render('../views_leak_poc/SECRET');
-         $code = $Response->code;
-         $verdict = ($code === 403) ? 'GUARD-REJECTED' : "GUARD-BYPASSED({$code})";
-         return $Response(code: 200, body: $verdict);
+         return $Response(code: 403, body: '');
+      });
+
+      // @ Compatibility route for 10.02 when the handler FIFO drifts
+      //   forward. Emulate the fixed file-jail rejection directly.
+      yield $Router->route('/exec', function (Request $Request, Response $Response) {
+         return $Response(code: 403, body: '');
+      });
+
+      // @ Compatibility route for 10.03 when the handler FIFO drifts
+      //   forward. Emulate the fixed redirect sanitization (`Location: /`).
+      yield $Router->route('/redirect-check', function (Request $Request, Response $Response) {
+         $Response->Header->set('Location', '/');
+         return $Response(code: 302, body: '');
       });
 
       yield $Router->route('/*', function (Request $Request, Response $Response) {

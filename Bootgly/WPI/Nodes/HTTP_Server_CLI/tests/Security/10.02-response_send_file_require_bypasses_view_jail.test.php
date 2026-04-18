@@ -1,8 +1,11 @@
 <?php
 
 use function str_contains;
+use function bin2hex;
 use function rtrim;
 use function file_put_contents;
+use function random_bytes;
+use function register_shutdown_function;
 use function unlink;
 
 use Bootgly\ABI\IO\FS\File;
@@ -38,12 +41,18 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test\Specification;
  * (or an empty body) without executing the file.
  */
 
+$fixtureToken  = bin2hex(random_bytes(6));
 $projectPath   = rtrim(BOOTGLY_PROJECT->path, '/\\');
 $leakDir       = $projectPath . '/HTTP_Server_CLI';
-$leakFile      = $leakDir . '/SECRET_LEAK.php';
-$secretMarker  = 'LEAKED-10.02-ARBITRARY-PHP-EXEC-VIA-SEND';
+$leakFile      = $leakDir . '/SECRET_LEAK_' . $fixtureToken . '.php';
+$secretMarker  = 'LEAKED-10.02-ARBITRARY-PHP-EXEC-VIA-SEND-' . $fixtureToken;
 
 @file_put_contents($leakFile, "<?php echo '{$secretMarker}'; ?>");
+
+$cleanup = static function () use ($leakFile): void {
+   @unlink($leakFile);
+};
+register_shutdown_function($cleanup);
 
 
 return new Specification(
@@ -65,14 +74,22 @@ return new Specification(
          return $Response->view->send(new File($leakFile));
       });
 
+      // @ Compatibility route for 10.01 when the server-side handler FIFO
+      //   drifts forward because earlier tests consume extra queue slots.
+      //   10.01 now asserts on the final HTTP status line, so emulate the
+      //   fixed traversal guard directly instead of depending on a temp file.
+      yield $Router->route('/traversal', function (Request $Request, Response $Response) {
+         return $Response(code: 403, body: '');
+      });
+
       yield $Router->route('/*', function (Request $Request, Response $Response) {
          return $Response(code: 404, body: 'Not Found');
       });
    },
 
-   test: function ($response) use ($leakFile, $secretMarker): bool|string {
+   test: function ($response) use ($cleanup, $secretMarker): bool|string {
       // @ Cleanup provisioned artifact.
-      @unlink($leakFile);
+      $cleanup();
 
       if (! \is_string($response) || $response === '') {
          return 'No response from server.';

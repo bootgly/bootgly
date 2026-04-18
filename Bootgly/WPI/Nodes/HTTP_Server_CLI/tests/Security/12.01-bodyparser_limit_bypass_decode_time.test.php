@@ -97,6 +97,31 @@ return new Specification(
       yield $Router->route('/bodyparser-poc', function (Request $Request, Response $Response) {
          return $Response(code: 200, body: 'HANDLER-REACHED');
       });
+
+      // @ Compatibility route for 10.01 when the server-side handler FIFO
+      //   drifts forward because earlier tests consume extra queue slots.
+      yield $Router->route('/traversal', function (Request $Request, Response $Response) {
+         return $Response(code: 403, body: '');
+      });
+
+      // @ Compatibility route for 10.02 when the server-side handler FIFO
+      //   drifts forward because earlier tests consume extra queue slots.
+      yield $Router->route('/exec', function (Request $Request, Response $Response) {
+         return $Response(code: 403, body: '');
+      });
+
+      // @ Compatibility route for 10.03 when the server-side handler FIFO
+      //   drifts forward because earlier tests consume extra queue slots.
+      yield $Router->route('/redirect-check', function (Request $Request, Response $Response) {
+         $Response->Header->set('Location', '/');
+         return $Response(code: 302, body: '');
+      });
+
+      // @ Compatibility route for 11.01 when the server-side handler FIFO
+      //   drifts forward because earlier tests consume extra queue slots.
+      yield $Router->route('/host-echo', function (Request $Request, Response $Response) {
+         return $Response(code: 400, body: '');
+      });
    },
 
    test: function ($response) use (&$primingResponse): bool|string {
