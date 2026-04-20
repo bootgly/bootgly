@@ -90,10 +90,11 @@ class Decoder_ extends Decoders
          $inputs[$cacheKey] = clone $Request;
 
          if (count($inputs) > 512) {
+            // @ Cache is deliberately bounded (max 513 before eviction), so this
+            //   eviction path is stable in practice. If capacity grows materially,
+            //   replace this with a dedicated hash + linked-list LRU.
             $oldestKey = array_key_first($inputs);
-            if ($oldestKey !== null) {
-               unset($inputs[$oldestKey]);
-            }
+            unset($inputs[$oldestKey]);
          }
       }
 
