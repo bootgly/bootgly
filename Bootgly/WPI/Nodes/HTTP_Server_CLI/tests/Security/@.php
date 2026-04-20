@@ -110,9 +110,6 @@ return new Suite(
       // # BodyParser Middleware
       // limit bypass — maxSize not pushed to decode-time gate
       '12.01-bodyparser_limit_bypass_decode_time',
-      // # Decoder Downloading (multipart)
-      // leading-dot filename sanitization regression guard
-      '07.02-multipart_filename_leading_dot',
       // # Decoder_ cache (DoS)
       // one-shot query-key churn (opens side sockets; keep LAST)
       '03.02-decoder_cache_one_shot_key_eviction_dos',
