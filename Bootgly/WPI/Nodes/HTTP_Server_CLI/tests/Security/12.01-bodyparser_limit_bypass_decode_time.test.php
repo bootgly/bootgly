@@ -29,17 +29,15 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test\Specification;
  *   bodies immediately — observable by the bare "413 Request Entity
  *   Too Large\r\n\r\n" response (no Server: Bootgly header, no body).
  *
- * This PoC:
- *   1. Opens a side connection and sends a 200-byte POST (priming).
- *      BodyParser catches it at middleware time → shaped 413
- *      (Server: Bootgly, body "Payload Too Large") → pushes limit.
- *   2. Harness sends the same 200-byte POST on its own connection.
- *      Decoder gate catches it → bare 413 → connection closed.
- *   3. Test verifies the harness got the bare 413 (no "Payload Too
- *      Large" body), proving the decoder-level limit was lowered.
+ * This PoC (deterministic, in-band):
+ *   1. Harness request #1 sends oversized body (200 bytes).
+ *      BodyParser middleware catches it via Content-Length check and
+ *      returns shaped 413 (Payload Too Large), while still pushing
+ *      maxSize into Request::$maxBodySize.
+ *   2. Harness request #2 sends oversized body (200 bytes).
+ *      Decoder gate catches it → bare 413 before middleware/handler.
+ *   3. Test verifies #1 got middleware-time 413 and #2 got decode-time 413.
  */
-
-$primingResponse = '';
 
 return new Specification(
    description: 'BodyParser must push maxSize into Request::$maxBodySize for decode-time enforcement',
@@ -47,51 +45,32 @@ return new Specification(
 
    middlewares: [new BodyParser(maxSize: 100)],
 
-   request: function (string $hostPort) use (&$primingResponse): string {
-      $oversizedBody = str_repeat('X', 200);
-      $primingBytes = "POST /bodyparser-poc HTTP/1.1\r\n"
-         . "Host: localhost\r\n"
-         . "Content-Type: text/plain\r\n"
-         . "Content-Length: 200\r\n"
-         . "Connection: close\r\n"
-         . "\r\n"
-         . $oversizedBody;
+   requests: [
+      function (string $hostPort): string {
+         $oversizedBody = str_repeat('X', 200);
 
-      // ! Priming request: opens a side connection to trigger BodyParser
-      //   process(), which pushes maxSize into Request::$maxBodySize.
-      $priming = @\stream_socket_client(
-         "tcp://{$hostPort}", $errno, $errstr, timeout: 5
-      );
-      if (\is_resource($priming)) {
-         \stream_set_blocking($priming, true);
-         \stream_set_timeout($priming, 2);
-         \fwrite($priming, $primingBytes);
+         // @ Priming request: middleware-time 413, and maxSize is pushed.
+         return "POST /bodyparser-poc HTTP/1.1\r\n"
+            . "Host: localhost\r\n"
+            . "Content-Type: text/plain\r\n"
+            . "Content-Length: 200\r\n"
+            . "Connection: keep-alive\r\n"
+            . "\r\n"
+            . $oversizedBody;
+      },
+      function (string $hostPort): string {
+         $oversizedBody = str_repeat('X', 200);
 
-         $deadline = \microtime(true) + 2.0;
-         $buf = '';
-         while (\microtime(true) < $deadline) {
-            $chunk = @\fread($priming, 65535);
-            if ($chunk === false || $chunk === '') {
-               if (@\feof($priming) || str_contains($buf, "\r\n\r\n")) break;
-               continue;
-            }
-            $buf .= $chunk;
-            if (str_contains($buf, "\r\n\r\n")) break;
-         }
-         $primingResponse = $buf;
-         @\fclose($priming);
-      }
-
-      // : Harness sends the same oversized POST on its own connection.
-      //   If the fix works, the decoder catches this with a bare 413.
-      return "POST /bodyparser-poc HTTP/1.1\r\n"
-         . "Host: localhost\r\n"
-         . "Content-Type: text/plain\r\n"
-         . "Content-Length: 200\r\n"
-         . "Connection: close\r\n"
-         . "\r\n"
-         . $oversizedBody;
-   },
+         // @ Probe request: should now be rejected at decode-time gate.
+         return "POST /bodyparser-poc HTTP/1.1\r\n"
+            . "Host: localhost\r\n"
+            . "Content-Type: text/plain\r\n"
+            . "Content-Length: 200\r\n"
+            . "Connection: close\r\n"
+            . "\r\n"
+            . $oversizedBody;
+      },
+   ],
 
    response: function (Request $Request, Response $Response, Router $Router) {
       yield $Router->route('/bodyparser-poc', function (Request $Request, Response $Response) {
@@ -124,33 +103,34 @@ return new Specification(
       });
    },
 
-   test: function ($response) use (&$primingResponse): bool|string {
-      if (! \is_string($response) || $response === '') {
-         return 'No response from server (harness request).';
+   test: function (array $responses): bool|string {
+      $primingResponse = $responses[0] ?? '';
+      $probeResponse = $responses[1] ?? '';
+
+      if ($primingResponse === '' || $probeResponse === '') {
+         return 'Expected 2 responses (priming + probe), got empty response.';
       }
 
-      // @ Verify priming request was caught by BodyParser middleware
-      //   (shaped 413 with "Payload Too Large" body).
+      // @ Priming must be middleware-time 413 (shaped response).
       if (! str_contains($primingResponse, 'Payload Too Large')) {
-         return 'Priming request did not receive BodyParser middleware 413. '
+         return 'Priming request should be middleware-time 413. '
             . 'Got: ' . substr($primingResponse, 0, 200);
       }
 
-      // @ Verify harness request was caught at decode-time (bare 413,
-      //   no "Payload Too Large" body, no "Server: Bootgly" header).
-      if (str_contains($response, 'HANDLER-REACHED')) {
+      // @ Probe must be rejected at decode-time gate.
+      if (str_contains($probeResponse, 'HANDLER-REACHED')) {
          return 'Handler was reached — BodyParser limit was not pushed '
             . 'to decode-time gate. The oversized body was fully buffered.';
       }
 
-      if (str_contains($response, 'Payload Too Large')) {
+      if (str_contains($probeResponse, 'Payload Too Large')) {
          return 'Harness request was caught at middleware time (shaped 413), '
             . 'not at decode time. The decoder-level limit was not lowered. '
-            . 'Response: ' . substr($response, 0, 200);
+            . 'Response: ' . substr($probeResponse, 0, 200);
       }
 
-      if (! str_contains($response, '413')) {
-         return 'Expected 413 response, got: ' . substr($response, 0, 200);
+      if (! str_contains($probeResponse, '413')) {
+         return 'Expected 413 response, got: ' . substr($probeResponse, 0, 200);
       }
 
       // @ A bare "413 Request Entity Too Large\r\n\r\n" (no body, no

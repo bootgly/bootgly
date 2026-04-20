@@ -110,5 +110,8 @@ return new Suite(
       // # BodyParser Middleware
       // limit bypass — maxSize not pushed to decode-time gate
       '12.01-bodyparser_limit_bypass_decode_time',
+      // # Decoder_ cache (DoS)
+      // one-shot query-key churn (opens side sockets; keep LAST)
+      '03.02-decoder_cache_one_shot_key_eviction_dos',
    ],
 );

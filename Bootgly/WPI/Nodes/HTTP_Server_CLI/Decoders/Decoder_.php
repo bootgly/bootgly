@@ -11,8 +11,9 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders;
 
 
+use function array_key_first;
 use function count;
-use function key;
+use function strpos;
 
 use const Bootgly\WPI;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages;
@@ -26,16 +27,38 @@ class Decoder_ extends Decoders
    public function decode (Packages $Package, string $buffer, int $size): int
    {
       /** @var array<string,Request> $inputs */
-      static $inputs = []; // @ Instance local cache
+      static $inputs = []; // @ L1 cache (stable/hot keys)
+
+      $cacheable = ($size <= 2048);
+      $cacheKey = null;
+      if ($cacheable) {
+         // @ Do not cache query-bearing targets. They are attacker-mutable and
+         //   create one-shot key churn that evicts hot entries with no hit-rate
+         //   benefit (DoS amplification vector).
+         $requestLineEnd = strpos($buffer, "\r\n");
+         if ($requestLineEnd !== false) {
+            $queryMark = strpos($buffer, '?');
+            if ($queryMark !== false && $queryMark < $requestLineEnd) {
+               $cacheable = false;
+            }
+         }
+
+         $cacheKey = (!$cacheable) ? null : $buffer;
+      }
 
       // ? Check local cache and return
-      if ($size <= 2048 && $size <= Request::$maxBodySize && isSet($inputs[$buffer])) {
+      if ($cacheKey !== null && isSet($inputs[$cacheKey])) {
+         $cached = $inputs[$cacheKey];
+         // @ LRU touch on hit (move to tail).
+         unset($inputs[$cacheKey]);
+         $inputs[$cacheKey] = $cached;
+
          // ! Security: clone on READ, not only on write. Otherwise handler /
          //   middleware mutations (dynamic properties, Header writes, auth
          //   decisions) persist on the cached Request and leak to every
          //   future connection that sends byte-identical headers.
          //   See tests/Security/2.01-decoder_cache_shared_request_across_connections.test.php
-         Server::$Request = clone $inputs[$buffer];
+         Server::$Request = clone $cached;
 
          if ($Package->changed) {
             Server::$Request->reboot();
@@ -63,11 +86,14 @@ class Decoder_ extends Decoders
 
       // @ Write to local cache
       // Skip caching when Body is waiting for more data (chunked/streaming)
-      if ($length > 0 && $length <= 2048 && ! $Request->Body->waiting) {
-         $inputs[$buffer] = clone $Request;
+      if ($cacheKey !== null && $length > 0 && $length <= 2048 && ! $Request->Body->waiting) {
+         $inputs[$cacheKey] = clone $Request;
 
          if (count($inputs) > 512) {
-            unset($inputs[key($inputs)]);
+            $oldestKey = array_key_first($inputs);
+            if ($oldestKey !== null) {
+               unset($inputs[$oldestKey]);
+            }
          }
       }
 
