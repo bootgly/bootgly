@@ -2,6 +2,20 @@
 
 Changelog for Bootgly framework. All notable changes to this project will be documented in this file. Imported from ROADMAP.md.
 
+## v0.13.18-beta ✅
+
+> Focus: **Multipart upload hardening for hidden filename and safe streaming writes**
+
+### WPI — Web Programming Interface
+
+- ✅ HTTP Server CLI: `Decoder_Downloading` now strips leading dots/spaces/tabs from multipart filenames (`ltrim`) to prevent hidden dotfile uploads (e.g. `.htaccess`)
+- ✅ HTTP Server CLI: Sanitization fallback now enforces safe default filename (`upload`) when the sanitized name becomes empty
+- ✅ HTTP Server CLI: Added guarded chunk writer path with explicit write-failure handling, periodic disk-space checks, and per-file size enforcement during streaming upload
+- ✅ HTTP Server CLI: Security regression test `07.02-multipart_filename_leading_dot` validates rejection of leading-dot filename persistence in `$_FILES`
+- ✅ HTTP Server CLI: Security test index cleanup keeps multipart hardening coverage deterministic across suite runs
+
+---
+
 ## v0.13.17-beta ✅
 
 > Focus: **Decoder L1 cache hardening against one-shot key churn DoS**
