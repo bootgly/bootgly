@@ -2,6 +2,20 @@
 
 Changelog for Bootgly framework. All notable changes to this project will be documented in this file. Imported from ROADMAP.md.
 
+## v0.13.17-beta ✅
+
+> Focus: **Decoder L1 cache hardening against one-shot key churn DoS**
+
+### WPI — Web Programming Interface
+
+- ✅ HTTP Server CLI: `Decoder_` L1 cache no longer admits query-bearing targets (`?` in request-target), reducing one-shot attacker key churn admission
+- ✅ HTTP Server CLI: L1 cache now performs LRU touch on hit (remove + reinsert key) and evicts the oldest key with `array_key_first` when capacity (`512`) is exceeded
+- ✅ HTTP Server CLI: Cache lookup eligibility no longer depends on `Request::$maxBodySize`; `<= 2048` remains the fixed L1 candidate cap
+- ✅ HTTP Server CLI: Security regression coverage expanded with `03.02-decoder_cache_one_shot_key_eviction_dos` and supporting suite-index updates
+
+---
+
+
 ## v0.13.16-beta ✅
 
 > Focus: **Redirect and file-send path hardening in HTTP Server CLI**
