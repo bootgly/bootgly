@@ -13,6 +13,7 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders;
 
 use const BOOTGLY_WORKING_BASE;
 use const UPLOAD_ERR_CANT_WRITE;
+use const UPLOAD_ERR_FORM_SIZE;
 use const UPLOAD_ERR_NO_FILE;
 use function array_walk_recursive;
 use function basename;
@@ -25,6 +26,7 @@ use function fstat;
 use function fwrite;
 use function is_dir;
 use function is_numeric;
+use function ltrim;
 use function mkdir;
 use function parse_str;
 use function preg_match;
@@ -68,6 +70,8 @@ class Decoder_Downloading extends Decoders
    private int $read;
    private int $state;
    private int $downloaded;
+   private int $currentFileSize;
+   private int $bytesSinceDiskCheck;
 
    // # States
    private const int STATE_BOUNDARY_START  = 0;
@@ -96,6 +100,8 @@ class Decoder_Downloading extends Decoders
       $this->read = 0;
       $this->state = self::STATE_BOUNDARY_START;
       $this->downloaded = 0;
+      $this->currentFileSize = 0;
+      $this->bytesSinceDiskCheck = 0;
    }
 
    /**
@@ -253,6 +259,11 @@ class Decoder_Downloading extends Decoders
                   // ! Sanitize filename: strip directory traversal and restrict to safe characters
                   $rawFilename = basename($match[2]);
                   $safeFilename = (string) preg_replace('/[^\w.\- ]/', '_', $rawFilename);
+                  // ! Hidden-dot hardening: reject leading dots like `.htaccess`
+                  $safeFilename = ltrim($safeFilename, ". \t");
+                  if ($safeFilename === '') {
+                     $safeFilename = 'upload';
+                  }
                   $file = [
                      'name' => $safeFilename,
                      'tmp_name' => '',
@@ -292,28 +303,33 @@ class Decoder_Downloading extends Decoders
             $file['error'] = UPLOAD_ERR_CANT_WRITE;
          }
 
-         $tempFile = tempnam($tempUploadedDir, '');
-         if ($tempFile === false) {
-            $file['error'] = UPLOAD_ERR_CANT_WRITE;
-         }
-         else {
-            $file['tmp_name'] = $tempFile;
+         if (($file['error'] ?? 0) === 0) {
+            $tempFile = tempnam($tempUploadedDir, '');
+            if ($tempFile === false) {
+               $file['error'] = UPLOAD_ERR_CANT_WRITE;
+            }
+            else {
+               $file['tmp_name'] = $tempFile;
 
-            try {
-               $handle = fopen($tempFile, 'w+');
-               if ($handle === false) {
+               try {
+                  $handle = fopen($tempFile, 'w+');
+                  if ($handle === false) {
+                     $this->fileHandler = null;
+                     $file['error'] = UPLOAD_ERR_CANT_WRITE;
+                  }
+                  else {
+                     $this->fileHandler = $handle;
+                  }
+               }
+               catch (Throwable) {
                   $this->fileHandler = null;
                   $file['error'] = UPLOAD_ERR_CANT_WRITE;
                }
-               else {
-                  $this->fileHandler = $handle;
-               }
-            }
-            catch (Throwable) {
-               $this->fileHandler = null;
-               $file['error'] = UPLOAD_ERR_CANT_WRITE;
             }
          }
+
+         $this->currentFileSize = 0;
+         $this->bytesSinceDiskCheck = 0;
 
          $this->filesKeys[] = $uploadKey;
          $this->files[] = $file; // @ Index will be updated with size at close
@@ -341,9 +357,7 @@ class Decoder_Downloading extends Decoders
          // @ Boundary found: write everything before boundary to file
          $fileData = substr($data, 0, $pos);
 
-         if ($this->fileHandler !== null && $fileData !== '') {
-            fwrite($this->fileHandler, $fileData);
-         }
+         $this->writeFileChunk($fileData);
 
          // @ Close file and finalize file entry
          $this->closeCurrentFile();
@@ -380,9 +394,7 @@ class Decoder_Downloading extends Decoders
       if ($safeLen > 0) {
          $safeData = substr($data, 0, $safeLen);
 
-         if ($this->fileHandler !== null) {
-            fwrite($this->fileHandler, $safeData);
-         }
+         $this->writeFileChunk($safeData);
 
          $this->tailBuffer = substr($data, $safeLen);
       }
@@ -392,6 +404,74 @@ class Decoder_Downloading extends Decoders
       }
 
       return null;
+   }
+
+   /**
+    * Stream file bytes with runtime safety checks.
+    */
+   private function writeFileChunk (string $chunk): void
+   {
+      if ($chunk === '' || $this->fileHandler === null) {
+         return;
+      }
+
+      $fileIndex = count($this->files) - 1;
+      if ($fileIndex < 0) {
+         return;
+      }
+
+      /** @var array<string,bool|int|string> $file */
+      $file = &$this->files[$fileIndex];
+
+      if (($file['error'] ?? 0) !== 0) {
+         return;
+      }
+
+      $chunkLength = strlen($chunk);
+
+      // ! Enforce per-file cap during streaming.
+      if ($this->currentFileSize + $chunkLength > Server\Request::$maxFileSize) {
+         $file['error'] = UPLOAD_ERR_FORM_SIZE;
+         $this->closeCurrentFile();
+         return;
+      }
+
+      // ! Re-check free disk space periodically while streaming.
+      $this->bytesSinceDiskCheck += $chunkLength;
+      if ($this->bytesSinceDiskCheck >= 1048576) {
+         try {
+            $freeSpace = disk_free_space(BOOTGLY_WORKING_BASE . '/workdata/temp/files/downloaded/');
+            if ($freeSpace !== false && $freeSpace < 1048576) {
+               $file['error'] = UPLOAD_ERR_CANT_WRITE;
+               $this->closeCurrentFile();
+               return;
+            }
+         }
+         catch (Throwable) {
+            $file['error'] = UPLOAD_ERR_CANT_WRITE;
+            $this->closeCurrentFile();
+            return;
+         }
+
+         $this->bytesSinceDiskCheck = 0;
+      }
+
+      $written = fwrite($this->fileHandler, $chunk);
+      if ($written === false) {
+         $file['error'] = UPLOAD_ERR_CANT_WRITE;
+         $this->closeCurrentFile();
+         return;
+      }
+
+      if ($written > 0) {
+         $this->currentFileSize += $written;
+         $file['size'] = $this->currentFileSize;
+      }
+
+      if ($written !== $chunkLength) {
+         $file['error'] = UPLOAD_ERR_CANT_WRITE;
+         $this->closeCurrentFile();
+      }
    }
 
    private function parsePartBodyField (string $data): ?string
@@ -465,11 +545,12 @@ class Decoder_Downloading extends Decoders
       $file = &$this->files[$fileIndex];
 
       if ($this->fileHandler !== null) {
-         // @ fstat returns size of data written so far (before the last fwrite in the caller)
-         // The lastWriteSize was already written before this method is called,
-         // so fstat after the write gives the total
+         $size = $this->currentFileSize;
          $stat = fstat($this->fileHandler);
-         $file['size'] = $stat !== false ? $stat['size'] : 0;
+         if ($stat !== false && $stat['size'] > $size) {
+            $size = (int) $stat['size'];
+         }
+         $file['size'] = $size;
 
          try {
             fclose($this->fileHandler);
@@ -479,9 +560,14 @@ class Decoder_Downloading extends Decoders
          $this->fileHandler = null;
       }
       else {
-         $file['size'] = 0;
-         $file['error'] = UPLOAD_ERR_NO_FILE;
+         $file['size'] = (int) ($file['size'] ?? 0);
+         if (($file['error'] ?? 0) === 0) {
+            $file['error'] = UPLOAD_ERR_NO_FILE;
+         }
       }
+
+      $this->currentFileSize = 0;
+      $this->bytesSinceDiskCheck = 0;
    }
 
    /**
