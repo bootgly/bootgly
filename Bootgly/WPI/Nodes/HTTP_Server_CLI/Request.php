@@ -1005,6 +1005,39 @@ class Request
          || ($protocol === 'HTTP/1.0' && stripos($header_raw, 'Connection: keep-alive') === false);
 
       // # Request Header
+      // @ Test harness: strip `X-Bootgly-Test: N` if present, so neither
+      //   `$Request->raw` nor `$Request->headers` surface a test-only
+      //   artifact to user assertions. The value is parked in a static
+      //   on the Encoder_Testing path via SAPI for index-based dispatch.
+      if (\Bootgly\API\Workables\Server::$Environment
+         === \Bootgly\API\Environments::Test
+      ) {
+         $xbStart = stripos($header_raw, "\r\nX-Bootgly-Test:");
+         if ($xbStart === false && stripos($header_raw, "X-Bootgly-Test:") === 0) {
+            $xbStart = 0;
+            $xbLineEnd = strpos($header_raw, "\r\n");
+            if ($xbLineEnd !== false) {
+               $value = trim(substr($header_raw, 15, $xbLineEnd - 15));
+               \Bootgly\API\Workables\Server::$testIndexHeader =
+                  ctype_digit($value) ? (int) $value : null;
+               // Strip "X-Bootgly-Test: N\r\n" plus trailing "\r\n".
+               $header_raw = substr($header_raw, $xbLineEnd + 2);
+            }
+         }
+         else if ($xbStart !== false) {
+            $xbLineEnd = strpos($header_raw, "\r\n", $xbStart + 2);
+            if ($xbLineEnd !== false) {
+               $value = trim(substr(
+                  $header_raw, $xbStart + 17, $xbLineEnd - $xbStart - 17
+               ));
+               \Bootgly\API\Workables\Server::$testIndexHeader =
+                  ctype_digit($value) ? (int) $value : null;
+               // Strip "\r\nX-Bootgly-Test: N" (keep the next \r\n as line sep).
+               $header_raw = substr($header_raw, 0, $xbStart)
+                  . substr($header_raw, $xbLineEnd);
+            }
+         }
+      }
       // raw
       $this->Header->define(raw: $header_raw);
       // host

@@ -11,9 +11,7 @@
 namespace Bootgly\API\Workables;
 
 
-use function array_shift;
 use function clearstatcache;
-use function count;
 use function file_exists;
 use function filemtime;
 use function function_exists;
@@ -54,9 +52,24 @@ class Server
     */
    public static array $Tests;
 
+   /**
+    * Index of the test whose handler is currently installed, when the
+    * test harness uses index-based dispatch (`X-Bootgly-Test` header).
+    * `null` means FIFO-based dispatch is in effect.
+    */
+   public static null|int $currentTestIndex = null;
+
+   /**
+    * Parsed value of the `X-Bootgly-Test` header stripped by
+    * `Request::decode()` before exposing headers to user code. Read
+    * once by `Encoder_Testing` for index-based handler dispatch.
+    */
+   public static null|int $testIndexHeader = null;
+
 
    public static function boot (
-      bool $reset = false, string $base = '', null|string $key = null
+      bool $reset = false, string $base = '', null|string $key = null,
+      null|int $testIndex = null
    ): bool
    {
       // !
@@ -85,20 +98,37 @@ class Server
                break;
             }
 
-            if (count(self::$Tests[$base]) > 0) {
-               $test = array_shift(self::$Tests[$base]);
+            // @ Index-based dispatch (order-independent):
+            //   When the harness injects an `X-Bootgly-Test: N` header the
+            //   Encoder passes `testIndex: N` here; we install the handler
+            //   at that exact slot WITHOUT mutating the array. This breaks
+            //   the FIFO coupling caused by multi-request arrays, priming
+            //   side-sockets, and decode-time rejects popping extra slots.
+            if (
+               $testIndex !== null
+               && isset(self::$Tests[$base][$testIndex])
+            ) {
+               $test = self::$Tests[$base][$testIndex];
+               self::$currentTestIndex = $testIndex;
 
                if ($test instanceof Handling) {
                   self::$Handler = $test->response;
 
-                  // @ Configure test middlewares
                   self::$Middlewares = new Middlewares;
                   if ($test->middlewares !== []) {
                      self::$Middlewares->pipe(...$test->middlewares);
                   }
                }
+
+               return true;
             }
 
+            // @ No-header fallback: a priming / side-socket request reached
+            //   the encoder without `X-Bootgly-Test`. Do NOT pop the FIFO
+            //   queue — priming requests must not consume slots owned by
+            //   other tests. Reuse the handler already installed for the
+            //   most recent indexed dispatch (or the server-wide default
+            //   handler set by the first request).
             return true;
       }
 

@@ -33,8 +33,8 @@ return new Specification(
    description: 'Decoder_ cache must resist one-shot query-key churn',
    Separator: new Separator(line: true),
 
-   request: function (string $hostPort) use (&$probe): string {
-      $base = "GET /cache-eviction-dos HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
+   request: function (string $hostPort, int $testIndex = 0) use (&$probe): string {
+      $base = "GET /cache-eviction-dos HTTP/1.1\r\nHost: localhost\r\nX-Bootgly-Test: {$testIndex}\r\nConnection: close\r\n\r\n";
 
       $send = static function (string $raw) use ($hostPort): string {
          $socket = @\stream_socket_client(
@@ -102,7 +102,7 @@ return new Specification(
       $probe['baseline'] = $extractTime($second) ?? $extractTime($first);
 
       for ($i = 0; $i < 10000; $i++) {
-         $noise = "GET /cache-eviction-dos?noise={$i} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
+         $noise = "GET /cache-eviction-dos?noise={$i} HTTP/1.1\r\nHost: localhost\r\nX-Bootgly-Test: {$testIndex}\r\nConnection: close\r\n\r\n";
          $send($noise);
       }
 

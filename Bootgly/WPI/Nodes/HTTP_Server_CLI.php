@@ -33,6 +33,7 @@ use function fread;
 use function function_exists;
 use function opcache_invalidate;
 use function pcntl_signal;
+use function preg_match;
 use function restore_error_handler;
 use function str_replace;
 use function stream_context_create;
@@ -40,6 +41,8 @@ use function stream_select;
 use function stream_set_blocking;
 use function stream_socket_client;
 use function strlen;
+use function strpos;
+use function substr;
 use function time;
 use function usleep;
 use Closure;
@@ -475,6 +478,28 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
                }
             };
 
+            // @ Inject `X-Bootgly-Test: N` into the first HTTP request of a
+            //   raw byte payload. Used for index-based handler dispatch (see
+            //   `Server::boot($testIndex)` and `Encoder_Testing::encode()`).
+            //   Leaves payloads that don't start with an HTTP request-line
+            //   (pipelined/smuggled bytes, non-HTTP fuzz) untouched.
+            $injectTestIndex = static function (string $bytes, int $testIndex): string {
+               // Find the end of the request-line (first CRLF).
+               $eol = strpos($bytes, "\r\n");
+               if ($eol === false) {
+                  return $bytes;
+               }
+               // Heuristic: only inject if the request-line looks like
+               //   `METHOD SP request-target SP HTTP/x.y`.
+               $requestLine = substr($bytes, 0, $eol);
+               if (! preg_match('#^[A-Z]+ \S+ HTTP/\d\.\d$#', $requestLine)) {
+                  return $bytes;
+               }
+               return substr($bytes, 0, $eol + 2)
+                  . "X-Bootgly-Test: {$testIndex}\r\n"
+                  . substr($bytes, $eol + 2);
+            };
+
             // @@ Iterate Test Cases
             // !
             $testFiles = SAPI::$tests[self::class] ?? [];
@@ -519,7 +544,9 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
                      $responseLength = $test->responseLengths[$reqIndex] ?? null;
                      // ! Client
                      // ? Request
-                     $requestData = $requestClosure("{$TCP_Client_CLI->host}:{$TCP_Client_CLI->port}");
+                     $requestData = $requestClosure("{$TCP_Client_CLI->host}:{$TCP_Client_CLI->port}", $specIndex + $reqIndex);
+                     // @ Inject handler-dispatch header (index-based).
+                     $requestData = $injectTestIndex($requestData, $specIndex + $reqIndex);
                      $requestLength = strlen($requestData);
                      // @ Send Request to Server
                      $Connection->output = $requestData;
@@ -588,13 +615,18 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
                // ? Request
                $request = $test->request;
                $requestResult = $request !== null
-                  ? $request("{$TCP_Client_CLI->host}:{$TCP_Client_CLI->port}")
+                  ? $request("{$TCP_Client_CLI->host}:{$TCP_Client_CLI->port}", $specIndex - 1)
                   : '';
 
                // @ Generator: yield chunks with delay for server event loop
                if ($requestResult instanceof Generator) {
+                  $injected = false;
                   foreach ($requestResult as $chunk) {
                      /** @var string $chunk */
+                     if (! $injected) {
+                        $chunk = $injectTestIndex($chunk, $specIndex - 1);
+                        $injected = true;
+                     }
                      $chunkLength = strlen($chunk);
                      $Connection->output = $chunk;
                      if ( ! $Connection->writing($Socket, $chunkLength) ) { // @phpstan-ignore booleanNot.alwaysTrue
@@ -627,6 +659,10 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
                }
 
                $requestData = $requestResult;
+               // @ Inject handler-dispatch header (index-based).
+               //   `$specIndex` was pre-incremented above for single-request
+               //   tests, so the correct slot is `$specIndex - 1`.
+               $requestData = $injectTestIndex($requestData, $specIndex - 1);
                $requestLength = strlen($requestData);
                // @ Send Request to Server
                $Connection->output = $requestData;
