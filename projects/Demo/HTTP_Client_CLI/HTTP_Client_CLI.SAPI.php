@@ -7,8 +7,9 @@
  * Licensed under MIT
  * --------------------------------------------------------------------------
  *
- * This demo connects to a running HTTP Server and sends HTTP requests,
- * displaying the response data. Start an HTTP Server first:
+ * This demo connects to a running HTTP Server on localhost (127.0.0.1)
+ * and sends HTTP requests, displaying the response data.
+ * Start an HTTP Server first:
  *
  *   bootgly project Demo start --HTTP_Server_CLI
  *
@@ -36,29 +37,39 @@ return static function (array $options = []): void
    $Output = CLI->Terminal->Output;
    $Output->render('@.;@#cyan:━━━ Bootgly HTTP Client CLI Demo ━━━@;@..;');
 
+   // @ Configure target host and port
+   $host = '127.0.0.1';
+   $port = getenv('PORT') ? (int) getenv('PORT') : 8082;
+   $Output->render("@#Blue:Target:@; http://{$host}:{$port}/ @#yellow:(localhost)@;");
+
    // @ Create HTTP Client
    $Client = new HTTP_Client_CLI;
    $Client->configure(
-      host: '127.0.0.1',
-      port: getenv('PORT') ? (int) getenv('PORT') : 8082,
+      host: $host,
+      port: $port,
       workers: 0
    );
 
    // @ Register HTTP hooks
    $Client->on(
       // on Worker instance
-      instance: function ($Client) {
+      instance: function ($Client) use ($Output, $host, $port) {
          // @ Prepare a GET request
          $Client->request('GET', '/');
 
          $Socket = $Client->connect();
          if ($Socket) {
             $Client::$Event->loop();
+            return;
          }
+
+         $Output->render('@.;@#red:✗ Could not connect to localhost HTTP server.@;');
+         $Output->render("@#yellow:Expected server at:@; http://{$host}:{$port}/");
+         $Output->render('@#yellow:Start it with:@; bootgly project Demo start --HTTP_Server_CLI@.;');
       },
       // on Connection connect
-      connect: function ($Socket, $Connection) use ($Output) {
-         $Output->render('@#green:✓ Connected to server@;@.;');
+      connect: function ($Socket, $Connection) use ($Output, $host, $port) {
+         $Output->render("@#green:✓ Connected to localhost server ({$host}:{$port})@;@.;");
       },
       // on Connection disconnect
       disconnect: function ($Connection) use ($Output) {

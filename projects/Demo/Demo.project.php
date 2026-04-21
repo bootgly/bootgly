@@ -35,11 +35,19 @@ return new Project(
       // * Config
       $demos = [
          'CLI',
+
+         // # WPI - HTTP
+         // HTTP Server
          'HTTP_Server_CLI',
          'HTTPS_Server_CLI',
+         // HTTP Client
          'HTTP_Client_CLI',
          'HTTPS_Client_CLI',
+
+         // # WPI - TCP
+         // TCP Server
          'TCP_Server_CLI',
+         // TCP Client
          'TCP_Client_CLI',
       ];
 
@@ -63,8 +71,9 @@ return new Project(
            @#yellow: --CLI @;                  Terminal Input/Output and UI components;
            @#yellow: --HTTP_Server_CLI @;      HTTP server (router, middleware, request/response);
            @#yellow: --HTTPS_Server_CLI @;     HTTPS server with SSL/TLS;
-           @#yellow: --TCP_Server_CLI @;       Raw TCP server;
            @#yellow: --HTTP_Client_CLI @;      HTTP client (connect to running HTTP server);
+           @#yellow: --HTTPS_Client_CLI @;     HTTPS client with SSL/TLS support;
+           @#yellow: --TCP_Server_CLI @;       Raw TCP server;
            @#yellow: --TCP_Client_CLI @;       TCP client benchmark;
 
          Examples:
@@ -73,7 +82,7 @@ return new Project(
            bootgly project Demo start --HTTP_Server_CLI
            bootgly project Demo start --HTTP_Server_CLI -i
            bootgly project Demo start --TCP_Server_CLI
-
+           bootgly project Demo start --TCP_Client_CLI
 
          HELP);
 
@@ -278,6 +287,13 @@ return new Project(
             $Server->start();
          })($options),
 
+         'HTTP_Client_CLI' => (function () use ($options) {
+            (require __DIR__ . '/HTTP_Client_CLI/HTTP_Client_CLI.SAPI.php')($options);
+         })(),
+         'HTTPS_Client_CLI' => (function () use ($options) {
+            (require __DIR__ . '/HTTPS_Client_CLI/HTTPS_Client_CLI.SAPI.php')($options);
+         })(),
+
          'TCP_Server_CLI' => (function (array $options = []) {
             $TCP_Server_CLI = new TCP_Server_CLI(Mode: match (true) {
                isset($options['i']) => Modes::Interactive,
@@ -294,12 +310,6 @@ return new Project(
             );
             $TCP_Server_CLI->start();
          })($options),
-         'HTTP_Client_CLI' => (function () use ($options) {
-            (require __DIR__ . '/HTTP_Client_CLI/HTTP_Client_CLI.SAPI.php')($options);
-         })(),
-         'HTTPS_Client_CLI' => (function () use ($options) {
-            (require __DIR__ . '/HTTPS_Client_CLI/HTTPS_Client_CLI.SAPI.php')($options);
-         })(),
          'TCP_Client_CLI' => (function () {
             $TCP_Client = new TCP_Client_CLI(
             TCP_Client_CLI::MODE_MONITOR
