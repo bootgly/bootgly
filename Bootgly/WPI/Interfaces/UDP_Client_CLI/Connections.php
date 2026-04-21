@@ -1,0 +1,163 @@
+<?php
+/*
+ * --------------------------------------------------------------------------
+ * Bootgly PHP Framework
+ * Developed by Rodrigo Vieira (@rodrigoslayertech)
+ * Copyright 2023-present
+ * Licensed under MIT
+ * --------------------------------------------------------------------------
+ */
+
+namespace Bootgly\WPI\Interfaces\UDP_Client_CLI;
+
+
+use const PHP_EOL;
+use function is_resource;
+use function stream_set_blocking;
+use function stream_set_read_buffer;
+
+use Bootgly\ACI\Logs\LoggableEscaped;
+use Bootgly\WPI;
+use Bootgly\WPI\Connections\Packages;
+use Bootgly\WPI\Interfaces\UDP_Client_CLI as Client;
+use Bootgly\WPI\Interfaces\UDP_Client_CLI\Connections\Connection;
+
+
+class Connections implements WPI\Connections
+{
+   use LoggableEscaped;
+
+
+   public null|Client $Client;
+
+   // * Config
+   public null|float $timeout;
+   public bool $async;
+   public bool $blocking;
+
+   // * Data
+   /** @var resource */
+   public $Socket;
+
+   // * Metadata
+   // @ Error
+   /** @var array<string> */
+   public array $error = [];
+   // @ Local
+   /** @var array<int,Connection> */
+   public static array $Connections;
+   // @ Stats
+   public static bool $stats;
+   // Connections
+   public int $connections;
+   // Errors
+   /** @var array<string,int> */
+   public static array $errors;
+   // Packages
+   public static int $writes;
+   public static int $reads;
+   public static int $written;
+   public static int $read;
+
+   public Packages $Packages;
+
+
+   public function __construct (null|Client &$Client = null)
+   {
+      $this->Client = $Client;
+
+      // * Config
+      $this->timeout = 5;
+      $this->async = true;
+      $this->blocking = false;
+
+      // * Data
+      // ... dynamicaly
+
+      // * Metadata
+      // @ Error
+      $this->error = [];
+      // @ Remote
+      self::$Connections = []; // Connections peers
+      // @ Stats
+      self::$stats = false;
+      // Connections
+      $this->connections = 0;  // Connections count
+      // Errors
+      self::$errors = [
+         'connection' => 0,    // Socket Connection errors
+         'write' => 0,         // Socket Writing errors
+         'read' => 0           // Socket Reading errors
+      ];
+      // Packages
+      self::$writes = 0;       // Socket Write count
+      self::$reads = 0;        // Socket Read count
+      self::$written = 0;      // Socket Writes in bytes
+      self::$read = 0;         // Socket Reads in bytes
+   }
+
+   /**
+    * Bind the client socket and instantiate its Connection.
+    *
+    * UDP has no handshake and no connect step on the wire — the socket is
+    * simply associated with the remote peer by the kernel. All that's left
+    * here is to set non-blocking mode and register the Connection.
+    */
+   public function connect (): bool
+   {
+      $Socket = &$this->Client->Socket;
+
+      try {
+         // @ Set blocking
+         stream_set_blocking($Socket, $this->blocking);
+
+         // @ Set Buffer sizes
+         stream_set_read_buffer($Socket, 0);
+      }
+      catch (\Throwable) {
+         $Socket = false;
+      }
+
+      if ($Socket === false || is_resource($Socket) === false) {
+         $this->log('Socket is false or invalid!' . PHP_EOL, self::LOG_ERROR_LEVEL);
+         self::$errors['connection']++;
+         return false;
+      }
+
+      // @ Instance new connection
+      $Connection = new Connection($Socket);
+
+      // @ Set stats
+      $this->connections++;
+
+      // @ Set Connection
+      self::$Connections[(int) $Socket] = $Connection;
+
+      return true;
+   }
+
+   /**
+    * Close connection with server / Disconnect from server
+    *
+    * @param resource $Connection
+    *
+    * @return bool
+    */
+   public function close ($Connection): bool
+   {
+      $connection = (int) $Connection;
+
+      if ( isSet(self::$Connections[$connection]) ) {
+         $closed = self::$Connections[$connection]->close();
+      }
+      else {
+         $closed = false;
+      }
+
+      if ($closed) {
+         return true;
+      }
+
+      return false;
+   }
+}
