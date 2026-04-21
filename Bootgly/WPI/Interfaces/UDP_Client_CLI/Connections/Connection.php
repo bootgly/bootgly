@@ -13,13 +13,11 @@ namespace Bootgly\WPI\Interfaces\UDP_Client_CLI\Connections;
 
 use function fclose;
 use function stream_socket_get_name;
-use function strpos;
-use function strrpos;
-use function substr;
 use function time;
 use Throwable;
 
 use Bootgly\ACI\Events\Timer;
+use Bootgly\WPI\Connections\Peer;
 use Bootgly\WPI\Interfaces\UDP_Client_CLI as Client;
 use Bootgly\WPI\Interfaces\UDP_Client_CLI\Connections;
 use Bootgly\WPI\Interfaces\UDP_Client_CLI\Packages;
@@ -90,31 +88,8 @@ class Connection extends Packages
          $this->close();
          return;
       }
-      // @ Remote — IPv6-aware: "[::1]:port" unwraps to "::1" so the
-      //   address matches the canonical unbracketed IPv6 literal. IPv4
-      //   splits on the last ':'.
-      if (isset($peer[0]) && $peer[0] === '[') {
-         $rb = strpos($peer, ']');
-         if ($rb !== false) {
-            $this->address = substr($peer, 1, $rb - 1);
-            $this->port = (int) substr($peer, $rb + 2);
-         }
-         else {
-            $this->address = $peer;
-            $this->port = 0;
-         }
-      }
-      else {
-         $separator = strrpos($peer, ':');
-         if ($separator === false) {
-            $this->address = $peer;
-            $this->port = 0;
-         }
-         else {
-            $this->address = substr($peer, 0, $separator);
-            $this->port = (int) substr($peer, $separator + 1);
-         }
-      }
+      // @ Remote
+      [$this->address, $this->port] = Peer::parse($peer);
 
 
       parent::__construct($this);

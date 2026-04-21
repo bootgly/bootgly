@@ -11,12 +11,10 @@
 namespace Bootgly\WPI\Interfaces\UDP_Server_CLI\Connections;
 
 
-use function strpos;
-use function strrpos;
-use function substr;
 use function time;
 
 use Bootgly\ACI\Events\Timer;
+use Bootgly\WPI\Connections\Peer;
 use Bootgly\WPI\Interfaces\UDP_Server_CLI\Connections;
 use Bootgly\WPI\Interfaces\UDP_Server_CLI\Packages;
 
@@ -61,32 +59,9 @@ class Connection extends Packages
       $this->expiration = 30;
 
       // * Data
-      // @ Remote — IPv6-aware: "[::1]:1234" unwraps to "::1" so $ip
-      //   matches the canonical unbracketed literal used by blacklist,
-      //   TrustedProxy, and RateLimit. IPv4 splits on the last ':'.
+      // @ Remote
       $this->peer = $peer;
-      if (isset($peer[0]) && $peer[0] === '[') {
-         $rb = strpos($peer, ']');
-         if ($rb !== false) {
-            $this->ip = substr($peer, 1, $rb - 1);
-            $this->port = (int) substr($peer, $rb + 2);
-         }
-         else {
-            $this->ip = $peer;
-            $this->port = 0;
-         }
-      }
-      else {
-         $separator = strrpos($peer, ':');
-         if ($separator === false) {
-            $this->ip = $peer;
-            $this->port = 0;
-         }
-         else {
-            $this->ip = substr($peer, 0, $separator);
-            $this->port = (int) substr($peer, $separator + 1);
-         }
-      }
+      [$this->ip, $this->port] = Peer::parse($peer);
 
       // * Metadata
       $this->id = $peer;

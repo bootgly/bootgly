@@ -13,7 +13,6 @@ namespace Bootgly\WPI\Interfaces\TCP_Client_CLI\Connections;
 
 use const STREAM_CRYPTO_METHOD_TLSv1_2_CLIENT;
 use const STREAM_CRYPTO_METHOD_TLSv1_3_CLIENT;
-use function explode;
 use function fclose;
 use function stream_set_blocking;
 use function stream_socket_enable_crypto;
@@ -22,6 +21,7 @@ use function time;
 use Throwable;
 
 use Bootgly\ACI\Events\Timer;
+use Bootgly\WPI\Connections\Peer;
 use Bootgly\WPI\Interfaces\TCP_Client_CLI as Client;
 use Bootgly\WPI\Interfaces\TCP_Client_CLI\Connections;
 use Bootgly\WPI\Interfaces\TCP_Client_CLI\Packages;
@@ -97,9 +97,7 @@ class Connection extends Packages
       }
       // * Data
       // @ Remote
-      @[$IP, $port] = explode(':', $peer, 2); // TODO IPv6
-      $this->address = $IP;
-      $this->port = (int) $port;
+      [$this->address, $this->port] = Peer::parse($peer);
 
 
       parent::__construct($this);
