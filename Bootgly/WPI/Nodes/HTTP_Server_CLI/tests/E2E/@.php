@@ -2,10 +2,14 @@
 
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\tests\E2E;
 
+
+use function defined;
+
 use Bootgly\ACI\Tests\Suite;
 use Bootgly\ACI\Logs\Logger;
 use Bootgly\API\Endpoints\Server\Modes;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI;
+
 
 return new Suite(
    // * Config
@@ -14,7 +18,7 @@ return new Suite(
 
       // @ Define BOOTGLY_PROJECT for upload tests (requires project path)
       if ( !defined('BOOTGLY_PROJECT') ) {
-         $projectFile = BOOTGLY_ROOT_DIR . 'projects/Demo/Demo.project.php';
+         $projectFile = BOOTGLY_ROOT_DIR . 'projects/Demo-HTTP_Server_CLI/Demo-HTTP_Server_CLI.project.php';
          $TestProject = require $projectFile;
          define('BOOTGLY_PROJECT', $TestProject);
       }

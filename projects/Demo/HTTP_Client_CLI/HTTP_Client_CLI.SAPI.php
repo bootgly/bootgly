@@ -11,11 +11,11 @@
  * and sends HTTP requests, displaying the response data.
  * Start an HTTP Server first:
  *
- *   bootgly project Demo start --HTTP_Server_CLI
+ *   bootgly project Demo-HTTP_Server_CLI start
  *
  * Then in another terminal:
  *
- *   bootgly project Demo start --HTTP_Client_CLI
+ *   bootgly project Demo-HTTP_Client_CLI start
  *
  * --------------------------------------------------------------------------
  */
@@ -65,7 +65,7 @@ return static function (array $options = []): void
 
          $Output->render('@.;@#red:✗ Could not connect to localhost HTTP server.@;');
          $Output->render("@#yellow:Expected server at:@; http://{$host}:{$port}/");
-         $Output->render('@#yellow:Start it with:@; bootgly project Demo start --HTTP_Server_CLI@.;');
+         $Output->render('@#yellow:Start it with:@; bootgly project Demo-HTTP_Server_CLI start@.;');
       },
       // on Connection connect
       connect: function ($Socket, $Connection) use ($Output, $host, $port) {

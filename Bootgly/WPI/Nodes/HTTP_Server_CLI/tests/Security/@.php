@@ -16,7 +16,7 @@ return new Suite(
       Logger::$display = Logger::DISPLAY_NONE;
 
       if ( !defined('BOOTGLY_PROJECT') ) {
-         $projectFile = BOOTGLY_ROOT_DIR . 'projects/Demo/Demo.project.php';
+         $projectFile = BOOTGLY_ROOT_DIR . 'projects/Demo-HTTP_Server_CLI/Demo-HTTP_Server_CLI.project.php';
          $TestProject = require $projectFile;
          define('BOOTGLY_PROJECT', $TestProject);
       }

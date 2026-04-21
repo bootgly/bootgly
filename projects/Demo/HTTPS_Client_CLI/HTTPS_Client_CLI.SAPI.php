@@ -11,12 +11,12 @@
  *
  * Usage (against public HTTPS server):
  *
- *   bootgly project Demo start --HTTPS_Client_CLI
+ *   bootgly project Demo-HTTPS_Client_CLI start
  *
  * Usage (against local HTTPS server — start it first):
  *
- *   bootgly project Demo start --HTTPS_Server_CLI
- *   bootgly project Demo start --HTTPS_Client_CLI --local
+ *   bootgly project Demo-HTTPS_Server_CLI start
+ *   bootgly project Demo-HTTPS_Client_CLI start --local
  *
  * --------------------------------------------------------------------------
  */

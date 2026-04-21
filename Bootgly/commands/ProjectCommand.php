@@ -856,15 +856,15 @@ class ProjectCommand extends Command
 
          // # Examples
          $exampleLines = '@#Black:bootgly project list@;' . PHP_EOL;
-         $exampleLines .= '@#Black:bootgly project Demo start --HTTP_Server_CLI@;' . PHP_EOL;
-         $exampleLines .= '@#Black:bootgly project Demo stop --HTTP_Server_CLI@;' . PHP_EOL;
-         $exampleLines .= '@#Black:bootgly project Demo show --HTTP_Server_CLI@;' . PHP_EOL;
-         $exampleLines .= '@#Black:bootgly project Demo restart --HTTP_Server_CLI@;' . PHP_EOL;
-         $exampleLines .= '@#Black:bootgly project Demo info --HTTP_Server_CLI@;' . PHP_EOL;
+         $exampleLines .= '@#Black:bootgly project Demo-HTTP_Server_CLI start@;' . PHP_EOL;
+         $exampleLines .= '@#Black:bootgly project Demo-HTTP_Server_CLI stop@;' . PHP_EOL;
+         $exampleLines .= '@#Black:bootgly project Demo-HTTP_Server_CLI show@;' . PHP_EOL;
+         $exampleLines .= '@#Black:bootgly project Demo-HTTP_Server_CLI restart@;' . PHP_EOL;
+         $exampleLines .= '@#Black:bootgly project Demo-HTTP_Server_CLI info@;' . PHP_EOL;
          $exampleLines .= PHP_EOL;
-         $exampleLines .= '@#Black:bootgly project start Demo --HTTP_Server_CLI@;' . PHP_EOL;
-         $exampleLines .= '@#Black:bootgly project stop Demo --HTTP_Server_CLI@;' . PHP_EOL;
-         $exampleLines .= '@#Black:bootgly project show Demo --HTTP_Server_CLI@;';
+         $exampleLines .= '@#Black:bootgly project start Demo-HTTP_Server_CLI@;' . PHP_EOL;
+         $exampleLines .= '@#Black:bootgly project stop Demo-HTTP_Server_CLI@;' . PHP_EOL;
+         $exampleLines .= '@#Black:bootgly project show Demo-HTTP_Server_CLI@;';
          $Fieldset = new Fieldset($Output);
          $Fieldset->title = '@#green: Project examples @;';
          $Fieldset->content = $exampleLines;
@@ -912,8 +912,8 @@ class ProjectCommand extends Command
          // # Example
          $Fieldset = new Fieldset($Output);
          $Fieldset->title = '@#Cyan: Project ' . $subcommand . ' example @;';
-         $Fieldset->content = '@#Black:bootgly project Demo ' . $subcommand . ' --HTTP_Server_CLI@;' . PHP_EOL
-            . '@#Black:bootgly project ' . $subcommand . ' Demo --HTTP_Server_CLI@;';
+         $Fieldset->content = '@#Black:bootgly project Demo-HTTP_Server_CLI ' . $subcommand . '@;' . PHP_EOL
+            . '@#Black:bootgly project ' . $subcommand . ' Demo-HTTP_Server_CLI@;';
          $Fieldset->render();
 
          // # Hint

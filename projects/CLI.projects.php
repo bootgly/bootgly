@@ -1,5 +1,4 @@
 <?php
 return [
    'Benchmark',
-   'Demo'
 ];

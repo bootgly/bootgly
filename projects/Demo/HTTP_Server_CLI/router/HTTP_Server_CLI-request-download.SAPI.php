@@ -12,7 +12,7 @@
  *      $Server->on(request: require __DIR__ . '/router/HTTP_Server_CLI-download.SAPI.php');
  *
  *   2. Start the server:
- *      bootgly project Demo start --HTTP_Server_CLI
+*      bootgly project Demo-HTTP_Server_CLI start
  *
  *   3. Upload files with curl:
  *      # Single file
