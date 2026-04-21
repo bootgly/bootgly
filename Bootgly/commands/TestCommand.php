@@ -340,7 +340,7 @@ class TestCommand extends Command
       $results = $Runner->run($Configs);
 
       // @ Report
-      Summary::report($results);
+      Summary::report($results, $Runner->metric);
       Summary::save($caseName, $results);
 
       // @ Post-run message

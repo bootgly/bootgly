@@ -12,6 +12,8 @@ namespace Bootgly\ACI\Tests\Benchmark;
 
 
 use function array_map;
+use function array_unique;
+use function array_values;
 use function count;
 use function explode;
 use function intval;
@@ -63,7 +65,16 @@ class Configs
       $vary = [];
 
       if (isset($options['competitors'])) {
-         $competitors = explode(',', (string) $options['competitors']);
+         $competitors = [];
+
+         foreach (explode(',', (string) $options['competitors']) as $competitor) {
+            $normalized = self::normalize($competitor);
+            if ($normalized !== '') {
+               $competitors[] = $normalized;
+            }
+         }
+
+         $competitors = $competitors !== [] ? array_values(array_unique($competitors)) : null;
       }
 
       if (isset($options['runner'])) {
@@ -106,5 +117,21 @@ class Configs
       }
 
       return trim($name, '-');
+   }
+
+   /**
+    * Normalize competitor filter values passed via CLI.
+    * Accepts known aliases/typos to avoid silent skips.
+    */
+   public static function normalize (string $competitor): string
+   {
+      $slug = self::slug($competitor);
+      if ($slug === '') {
+         return '';
+      }
+
+      /** @var array<string, string> $aliases */
+      $aliases = [];
+      return $aliases[$slug] ?? $slug;
    }
 }

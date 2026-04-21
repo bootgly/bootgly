@@ -19,6 +19,8 @@ abstract class Runner
    public protected(set) array $competitors = [];
    /** @var array<\Bootgly\ACI\Tests\Benchmark\Configs\Scenario> */
    public protected(set) array $scenarios = [];
+   /** @var string Throughput unit displayed in the results table (e.g. "req/s", "msg/s"). */
+   public string $metric = 'req/s';
    /** @var string Post-run message (e.g. "HTTP server stopped..."). Empty = no message. */
    public string $postMessage = '';
 

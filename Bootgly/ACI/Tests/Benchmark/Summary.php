@@ -159,7 +159,7 @@ class Summary
     *
     * @param array<string,array<string,Result>> $results
     */
-   public static function report (array $results): void
+   public static function report (array $results, string $metric = 'req/s'): void
    {
       $allCompetitors = array_keys($results);
 
@@ -218,13 +218,14 @@ class Summary
          // ? Solo mode (single competitor)
          if (count($competitors) === 1) {
             $name = $competitors[0];
+            $rpsWidth = max(20, strlen($metric) + 15);
 
-            echo "{$BOLD}  {$name}{$RESET}\n";
+            echo "{$BOLD}  {$CYAN}{$name}{$RESET}\n";
 
             $header = str_pad('Scenario', $scenarioWidth, ' ', STR_PAD_RIGHT)
-               . str_pad('Req/s', 16, ' ', STR_PAD_RIGHT)
+               . str_pad('Metric', $rpsWidth, ' ', STR_PAD_RIGHT)
                . str_pad('Latency', 16, ' ', STR_PAD_RIGHT)
-               . 'Transfer/s';
+               . 'Transfer';
 
             echo "{$BOLD}  {$header}{$RESET}\n";
             echo "  " . str_repeat('─', strlen($header) + 4) . "\n";
@@ -232,13 +233,15 @@ class Summary
             foreach ($allScenarios as $label) {
                $Result = $results[$name][$label] ?? new Result;
 
-               $rps = $Result->rps !== null ? number_format((int) $Result->rps) : 'N/A';
+               $rps = $Result->rps !== null
+                  ? number_format((int) $Result->rps) . ' ' . $metric
+                  : 'N/A';
                $latency = $Result->latency ?? 'N/A';
                $transfer = $Result->transfer ?? 'N/A';
 
                echo "  "
                   . str_pad($label, $scenarioWidth, ' ', STR_PAD_RIGHT)
-                  . str_pad($rps, 16, ' ', STR_PAD_RIGHT)
+                  . str_pad($rps, $rpsWidth, ' ', STR_PAD_RIGHT)
                   . str_pad($latency, 16, ' ', STR_PAD_RIGHT)
                   . $transfer . "\n";
             }
@@ -253,10 +256,12 @@ class Summary
          foreach ($allScenarios as $label) {
             echo self::wrap(self::_MAGENTA_BOLD) . "  ── {$label} ──{$RESET}\n";
 
+            $rpsWidth = max(20, strlen($metric) + 15);
+
             $header = str_pad('Competitor', 20, ' ', STR_PAD_RIGHT)
-               . str_pad('Req/s', 16, ' ', STR_PAD_RIGHT)
+               . str_pad('Metric', $rpsWidth, ' ', STR_PAD_RIGHT)
                . str_pad('Latency', 16, ' ', STR_PAD_RIGHT)
-               . str_pad('Transfer/s', 16, ' ', STR_PAD_RIGHT)
+               . str_pad('Transfer', 16, ' ', STR_PAD_RIGHT)
                . 'vs ' . $baseline;
 
             echo "{$BOLD}  {$header}{$RESET}\n";
@@ -267,7 +272,9 @@ class Summary
             foreach ($competitors as $name) {
                $Result = $results[$name][$label] ?? new Result;
 
-               $rps = $Result->rps !== null ? number_format((int) $Result->rps) : 'N/A';
+               $rps = $Result->rps !== null
+                  ? number_format((int) $Result->rps) . ' ' . $metric
+                  : 'N/A';
                $latency = $Result->latency ?? 'N/A';
                $transfer = $Result->transfer ?? 'N/A';
 
@@ -285,7 +292,7 @@ class Summary
 
                echo "  "
                   . str_pad($name, 20, ' ', STR_PAD_RIGHT)
-                  . str_pad($rps, 16, ' ', STR_PAD_RIGHT)
+                  . str_pad($rps, $rpsWidth, ' ', STR_PAD_RIGHT)
                   . str_pad($latency, 16, ' ', STR_PAD_RIGHT)
                   . str_pad($transfer, 16, ' ', STR_PAD_RIGHT)
                   . $diff . "\n";
