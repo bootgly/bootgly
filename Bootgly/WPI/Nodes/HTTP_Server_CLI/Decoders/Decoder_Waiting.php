@@ -15,7 +15,7 @@ use function substr;
 use function time;
 
 use const Bootgly\WPI;
-use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages;
+use Bootgly\WPI\Endpoints\Servers\Packages;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI as Server;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders;
 

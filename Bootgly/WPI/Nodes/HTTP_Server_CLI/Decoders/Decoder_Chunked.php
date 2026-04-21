@@ -11,6 +11,7 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders;
 
 
+use const Bootgly\WPI;
 use function ctype_xdigit;
 use function hexdec;
 use function strlen;
@@ -18,9 +19,8 @@ use function strpos;
 use function substr;
 use function time;
 use function trim;
-
-use const Bootgly\WPI;
-use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages;
+use Bootgly\WPI\Endpoints\Servers\Packages;
+use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages as TCP_Packages;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI as Server;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders;
 
@@ -64,6 +64,7 @@ class Decoder_Chunked extends Decoders
 
    public function decode (Packages $Package, string $buffer, int $size): int
    {
+      /** @var TCP_Packages $Package */
       $WPI = WPI;
       /** @var Server $Server */
       $Server = $WPI->Server;

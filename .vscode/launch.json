@@ -21,7 +21,7 @@
             "serve",
          ],
 
-         "runtimeExecutable": "php8.3",
+         "runtimeExecutable": "php8.4",
          "runtimeArgs": [
             "-dxdebug.mode=debug",
             "-dxdebug.start_with_request=yes"

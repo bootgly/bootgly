@@ -37,47 +37,22 @@ use Bootgly\ACI\Logs\LoggableEscaped;
 use Bootgly\ACI\Logs\Logger;
 use Bootgly\API\Workables\Server as SAPI;
 use Bootgly\WPI;
-use Bootgly\WPI\Endpoints\Servers\Decoder;
-use Bootgly\WPI\Endpoints\Servers\Encoder;
+use Bootgly\WPI\Endpoints\Servers\Packages as Server_Packages;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI as Server;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections\Connection;
 
 
-abstract class Packages implements WPI\Connections\Packages
+abstract class Packages extends Server_Packages implements WPI\Connections\Packages
 {
    use LoggableEscaped;
 
-   // # Endpoints
-   // @ Per-connection decoder instance (stateful).
-   // When null, the shared default `Server::$Decoder` is used.
-   public null|Decoder $Decoder = null;
-   // @ Per-connection encoder instance (stateful).
-   // When null, the shared default `Server::$Encoder` is used.
-   // Note: `Encoder::encode()` is static, so it is invoked as
-   // `$Encoder::encode(...)` on whichever instance (or class) is active.
-   public null|Encoder $Encoder = null;
-
-   // * Config
-   public bool $cache;
-
-   // * Data
-   public bool $changed;
-   // # IO
-   public string $input;
-   public string $output;
-
    // * Metadata
-   // # Handler
-   /** @var array<string> */
-   public array $callbacks;
    // # Stream
    /** @var array<int, array<string, mixed>> */
    public array $downloading;
    /** @var array<int, array<string, mixed>> */
    public array $uploading;
-   // # Expiration
-   public bool $expired;
    // # Connection management
    public bool $closeAfterWrite;
 
@@ -89,24 +64,12 @@ abstract class Packages implements WPI\Connections\Packages
       $this->Logger = new Logger(channel: __CLASS__);
       $this->Connection = $Connection;
 
-
-      // * Config
-      $this->cache = true;
-
-      // * Data
-      $this->changed = true;
-      // # IO
-      $this->input = '';
-      $this->output = '';
+      parent::__construct();
 
       // * Metadata
-      // @ Handler
-      $this->callbacks = [&$this->input];
       // # Stream
       $this->downloading = [];
       $this->uploading = [];
-      // # Expiration
-      $this->expired = false;
       // # Connection management
       $this->closeAfterWrite = false;
    }
@@ -280,9 +243,16 @@ abstract class Packages implements WPI\Connections\Packages
       // @ Consume test handler on reject (decoder returned 0 but encoder never ran)
       // Only consume when socket was closed by reject, not when waiting for more data (chunked)
       else if (isset(SAPI::$Suite) && !is_resource($Socket)) { // @phpstan-ignore notIdentical.alwaysTrue
-         $base = array_key_first(SAPI::$Tests);
-         if ($base !== null) {
-            SAPI::boot(reset: true, base: $base, key: 'response');
+         // @ Index-based dispatch installs the handler per-request from
+         //   the `X-Bootgly-Test` header — there is no FIFO slot to pop.
+         //   We only shift for legacy/no-header priming requests, but
+         //   never unconditionally: if the harness is active and the
+         //   request was indexed (currentTestIndex set), skip.
+         if (SAPI::$currentTestIndex === null) {
+            $base = array_key_first(SAPI::$Tests);
+            if ($base !== null) {
+               SAPI::boot(reset: true, base: $base, key: 'response');
+            }
          }
       }
 

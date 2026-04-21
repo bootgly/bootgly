@@ -16,7 +16,8 @@ use function count;
 use function strpos;
 
 use const Bootgly\WPI;
-use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages;
+use Bootgly\WPI\Endpoints\Servers\Packages;
+use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages as TCP_Packages;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI as Server;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
@@ -28,6 +29,7 @@ class Decoder_ extends Decoders
    {
       /** @var array<string,Request> $inputs */
       static $inputs = []; // @ L1 cache (stable/hot keys)
+      /** @var TCP_Packages $Package */
 
       $cacheable = ($size <= 2048);
       $cacheKey = null;

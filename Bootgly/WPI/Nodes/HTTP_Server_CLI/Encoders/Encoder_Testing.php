@@ -16,7 +16,8 @@ use Throwable;
 
 use Bootgly\ABI\Debugging\Data\Throwables;
 use Bootgly\API\Workables\Server as SAPI;
-use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages;
+use Bootgly\WPI\Endpoints\Servers\Packages;
+use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages as TCPPackages;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI as Server;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
@@ -31,6 +32,7 @@ class Encoder_Testing extends Encoders
     */
    public static function encode (Packages $Packages, null|int &$length): string
    {
+      /** @var TCPPackages $Packages */
       $Request  = Server::$Request;
 
       // @ Skip handler consumption while waiting for request body (chunked)
@@ -43,8 +45,14 @@ class Encoder_Testing extends Encoders
       // @ Instance new Router (per-test: each test defines different routes)
       Server::$Router = new Router;
 
+      // @ Index-based dispatch: Request::decode() parsed & stripped the
+      //   `X-Bootgly-Test` header and parked the index on SAPI. Install
+      //   the handler at that exact slot (no FIFO pop) for order-
+      //   independent tests. `null` → no-header fallback in SAPI::boot().
+      $testIndex = SAPI::$testIndexHeader;
+      SAPI::$testIndexHeader = null;
       // @ Reset SAPI
-      SAPI::boot(reset: true, base: Server::class, key: 'response');
+      SAPI::boot(reset: true, base: Server::class, key: 'response', testIndex: $testIndex);
 
       // @ Get callbacks
       $Response = &Server::$Response;

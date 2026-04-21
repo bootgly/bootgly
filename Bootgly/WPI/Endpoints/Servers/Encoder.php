@@ -11,9 +11,6 @@
 namespace Bootgly\WPI\Endpoints\Servers;
 
 
-use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages;
-
-
 interface Encoder
 {
   /**

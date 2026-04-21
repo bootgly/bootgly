@@ -11,7 +11,7 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI;
 
 use Bootgly\WPI\Endpoints\Servers\Encoder;
-use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages;
+use Bootgly\WPI\Endpoints\Servers\Packages;
 
 
 abstract class Encoders implements Encoder

@@ -17,7 +17,8 @@ use Throwable;
 use Bootgly\ABI\Debugging\Data\Throwables;
 use Bootgly\API\Workables\Server as SAPI;
 use Bootgly\API\Workables\Server\Middlewares;
-use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages;
+use Bootgly\WPI\Endpoints\Servers\Packages;
+use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages as TCPPackages;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI as Server;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
@@ -31,6 +32,7 @@ class Encoder_ extends Encoders
     */
    public static function encode (Packages $Packages, null|int &$length): string
    {
+      /** @var TCPPackages $Packages */
       // @ Get callbacks
       $Request  = Server::$Request;
       $Response = &Server::$Response;
