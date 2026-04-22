@@ -24,7 +24,7 @@ return new Specification(
       }, GET);
 
       yield $Router->route('/download', function ($Request, $Response) {
-         return $Response->upload('HTTP_Server_CLI/statics/alphanumeric.txt', close: false);
+         return $Response->upload('statics/alphanumeric.txt', close: false);
       }, GET);
    },
 

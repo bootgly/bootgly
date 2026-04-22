@@ -218,8 +218,17 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       $this->log('@\;Starting Server...', self::LOG_NOTICE_LEVEL);
 
       // @ Boot Server API
+      // ! Honor server Mode: under Modes::Test the constructor installs
+      //   Encoder_Testing; booting Production here would flip it back to
+      //   Encoder_ right before fork, leaving workers racing SIGUSR1
+      //   (`@test init`) against the first incoming request and serving
+      //   503 from Encoder_ when the handler hasn't been installed yet.
       if (self::$Application) {
-         self::$Application::boot(Environments::Production);
+         self::$Application::boot(
+            $this->Mode === Modes::Test
+               ? Environments::Test
+               : Environments::Production
+         );
       }
       else if (isSet(SAPI::$Handler) === false) {
          $this->log('@\;No request handler defined. Call on(request:) before start().@\;', self::LOG_ERROR_LEVEL);
@@ -324,6 +333,16 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       switch ($Environment) {
          case Environments::Test:
             try {
+               // @ Propagate Test environment to SAPI so that Request::decode()
+               //   parses & strips the `X-Bootgly-Test: N` harness header on
+               //   the very first request. Without this, a worker booted via
+               //   start() (before SIGUSR1 `@test init` has been dispatched)
+               //   would leave Environment=Production, the header would be
+               //   exposed to user code, and SAPI::$testIndexHeader would
+               //   stay null — Encoder_Testing would then call an
+               //   uninitialized SAPI::$Handler and return 500 / 503.
+               SAPI::$Environment = Environments::Test;
+
                self::$Encoder = new Encoder_Testing;
 
                if (

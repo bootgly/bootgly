@@ -296,7 +296,7 @@ class Response extends Server\Response
     */
    public function authenticate (Authentication $Method): self
    {
-      $this->__set('code', 401);
+      $this->code( 401);
 
       if ($Method instanceof Authentication\Basic) {
          $this->Header->set(
@@ -459,19 +459,10 @@ class Response extends Server\Response
                throw new Error('HTTP_Server_CLI must be started through a Project. BOOTGLY_PROJECT is not defined.');
             }
 
-            $File = new File(BOOTGLY_PROJECT->path . 'views/' . $data);
+            $File = new File(BOOTGLY_PROJECT->path . 'views/' . $data, base: BOOTGLY_PROJECT->path . 'views/');
 
-            // ?! Validate resolved path stays within views directory (path traversal guard).
-            //   NOTE: trailing DIRECTORY_SEPARATOR is required to block sibling-prefix
-            //   escapes (e.g. `.../views_leak/` passing `str_starts_with` on `.../views`).
-            $resolved = realpath((string) $File);
-            $basePath = realpath(BOOTGLY_PROJECT->path . 'views/');
-            if (
-               $resolved === false
-               || $basePath === false
-               || !str_starts_with($resolved, $basePath . DIRECTORY_SEPARATOR)
-            ) {
-               $this->__set('code', 403);
+            if ($File->exists === false) {
+               $this->code( 403);
                return $this;
             }
 
@@ -513,17 +504,8 @@ class Response extends Server\Response
                         default => new File(BOOTGLY_PROJECT->path . $data)
                      };
 
-                     // ! Validate resolved path stays within projects directory (path traversal guard).
-                     //   NOTE: trailing DIRECTORY_SEPARATOR is required to block sibling-prefix
-                     //   escapes (e.g. `.../projects_leak/` passing `str_starts_with` on `.../projects`).
-                     $resolved = realpath((string) $File);
-                     $projectsBase = realpath(BOOTGLY_WORKING_DIR . 'projects');
-                     if (
-                        $resolved === false
-                        || $projectsBase === false
-                        || !str_starts_with($resolved, $projectsBase . DIRECTORY_SEPARATOR)
-                     ) {
-                        $this->__set('code', 403);
+                     if ($File->guard(base: BOOTGLY_WORKING_DIR . 'projects')) {
+                        $this->code( 403);
                         return $this;
                      }
 
@@ -537,6 +519,11 @@ class Response extends Server\Response
                   case 'object':
                      if ($data instanceof File) {
                         $File = $data;
+
+                        if ($File->guard(base: BOOTGLY_WORKING_DIR . 'projects')) {
+                           $this->code( 403);
+                           return $this;
+                        }
 
                         $this->source = 'file';
                         $extension = $File->extension;
@@ -802,7 +789,7 @@ class Response extends Server\Response
       }
 
       // @
-      $this->__set('code', $code);
+      $this->code( $code);
       $this->Header->set('Location', $URI);
       $this->end();
 
@@ -935,7 +922,7 @@ class Response extends Server\Response
                      || ! str_starts_with($__resolved__, $__base__ . DIRECTORY_SEPARATOR)
                      || ! str_ends_with($__resolved__, '.template.php')
                   ) {
-                     $this->__set('code', 403);
+                     $this->code( 403);
                      $this->sent = true;
                      return $this;
                   }
@@ -1010,50 +997,31 @@ class Response extends Server\Response
    /**
     * Start a file upload from the Server to the Client
     *
-    * @param string|File $file The file to be uploaded
+    * @param string $file The project-relative file path to upload.
     * @param int $offset The data offset.
     * @param int|null $length The length of the data to upload.
     * @param bool $close Close the connection after sending.
     * 
     * @return Response The Response instance, for chaining
     */
-   public function upload (string|File $file, int $offset = 0, null|int $length = null, bool $close = true): self
+   public function upload (string $file, int $offset = 0, null|int $length = null, bool $close = true): self
    {
       // ?!
-      if ($file instanceof File) {
-         $File = $file;
+      if ( !defined('BOOTGLY_PROJECT') ) {
+         throw new Error('HTTP_Server_CLI must be started through a Project. BOOTGLY_PROJECT is not defined.');
       }
-      else {
-         if ( !defined('BOOTGLY_PROJECT') ) {
-            throw new Error('HTTP_Server_CLI must be started through a Project. BOOTGLY_PROJECT is not defined.');
-         }
 
-         $File = new File(BOOTGLY_PROJECT->path . Path::normalize($file));
-
-         // ! Validate resolved path stays within project directory (path traversal guard).
-         //   NOTE: trailing DIRECTORY_SEPARATOR is required to block sibling-prefix
-         //   escapes (e.g. `.../Demo_leak/` passing `str_starts_with` on `.../Demo`).
-         $resolved = realpath((string) $File);
-         $basePath = realpath(BOOTGLY_PROJECT->path);
-         if (
-            $resolved === false
-            || $basePath === false
-            || !str_starts_with($resolved, $basePath . DIRECTORY_SEPARATOR)
-         ) {
-            $this->__set('code', 403);
-            return $this;
-         }
-      }
+      $File = new File(BOOTGLY_PROJECT->path . Path::normalize($file), base: BOOTGLY_PROJECT->path);
 
       if ($File->readable === false) {
-         $this->__set('code', 403);
+         $this->code( 403);
          return $this;
       }
 
       // @
       $size = $File->size;
       if (! is_int($size)) {
-         $this->__set('code', 500);
+         $this->code( 500);
          return $this;
       }
 
@@ -1370,7 +1338,7 @@ class Response extends Server\Response
                $this->Body->raw = ' '; // Needs body non-empty
                break;
             default:
-               $this->__set('code', $code);
+               $this->code( $code);
          }
 
          // @ Contextualize

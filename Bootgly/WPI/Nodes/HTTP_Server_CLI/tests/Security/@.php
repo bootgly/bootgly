@@ -92,6 +92,7 @@ return new Suite(
       '10.01-response_path_traversal_sibling_prefix_bypass',
       '10.02-response_send_file_require_bypasses_view_jail',
       '10.03-response_redirect_open_redirect_backslash_bypass',
+      '10.04-response_upload_file_object_bypasses_project_jail',
       // # Request Host
       '11.01-host_header_allowlist_spoofing',
       // # BodyParser Middleware

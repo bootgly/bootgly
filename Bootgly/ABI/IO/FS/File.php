@@ -26,7 +26,9 @@ use function is_file;
 use function ob_get_clean;
 use function ob_start;
 use function readfile;
+use function realpath;
 use function rtrim;
+use function str_starts_with;
 use function strrchr;
 use function strrpos;
 use function substr;
@@ -161,6 +163,7 @@ class File implements FS
    // * Data
    public readonly Path $Path;
    public readonly Dir $Basedir;
+   public readonly string $base;
    public protected(set) string $file {
       get {
          if (isSet($this->file) === false) {
@@ -424,11 +427,13 @@ class File implements FS
    protected null|bool $written = null;
 
 
-   public function __construct (string $path)
+   public function __construct (string $path, string $base = '')
    {
       // * Data
       $this->Path = new Path($path);
       $this->Basedir = new Dir($this->Path->parent);
+
+      $this->base = $base;
    }
    public function __get (string $name): mixed
    {
@@ -485,6 +490,47 @@ class File implements FS
       return $this->file;
    }
 
+   /**
+    * Path-traversal guard: returns true when access should be blocked, false when safe.
+    *
+    * Both parameters fall back to instance values when omitted:
+    * - `$path` → `$this->file` (the pathified path resolved by pathify())
+    * - `$base` → `$this->base` (the jail directory set at construction time)
+    *
+    * The `$base` argument is only used as a fallback when the instance base is empty
+    * (i.e. no `base` was supplied to the constructor). If `$this->base` is already set,
+    * it always takes precedence — the instance base cannot be overridden after construction.
+    *
+    * Returns `true`  (blocked) when:
+    * - the resolved path falls outside the effective jail directory, or
+    * - `realpath()` fails on either argument (fail-closed).
+    *
+    * Returns `false` (allowed) when:
+    * - no effective base is set (unconstrained), or
+    * - the resolved path is confirmed inside the jail.
+    *
+    * @param string $path The file path to validate. Defaults to `$this->file` when empty.
+    * @param string $base The jail directory to validate against. Defaults to `$this->base` when empty.
+    *
+    * @return bool True if path traversal is detected (block the request), false if the path is safe.
+    */
+   public function guard (string $path = '', string $base = ''): bool
+   {
+      $effectivePath = ($path !== '') ? $path : $this->file;
+      $effectiveBase = ($this->base !== '') ? $this->base : $base;
+
+      if ($effectiveBase === '') {
+         return false;
+      }
+
+      $resolved = realpath($effectivePath);
+      $baseReal  = realpath($effectiveBase);
+
+      return $resolved === false
+         || $baseReal === false
+         || !str_starts_with($resolved, $baseReal . DIRECTORY_SEPARATOR);
+   }
+
    private function pathify (): string
    {
       // ?
@@ -496,6 +542,7 @@ class File implements FS
 
       // @
       if ($this->check && is_file($path) === true) { // Only check if the path exists as file
+         if ($this->guard($path)) return $this->file = '';
          return $this->file = $path;
       }
 
@@ -508,12 +555,14 @@ class File implements FS
          // @ Convert base to file with .php
          $base = $path . '.php';
          if (is_file($base) === true) {
+            if ($this->guard($base)) return $this->file = '';
             return $this->file = $base;
          }
 
          // @ Convert base to file with index.php
          $index = $path . DIRECTORY_SEPARATOR . 'index.php';
          if (is_file($index) === true) {
+            if ($this->guard($index)) return $this->file = '';
             return $this->file = $index;
          }
       }

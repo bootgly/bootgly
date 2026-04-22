@@ -20,11 +20,11 @@ return new Specification(
    response: function (Request $Request, Response $Response, Router $Router)
    {
       yield $Router->route('/download/text', function ($Request, $Response) {
-         return $Response->upload('HTTP_Server_CLI/statics/alphanumeric.txt', close: false);
+         return $Response->upload('statics/alphanumeric.txt', close: false);
       }, GET);
 
       yield $Router->route('/download/image', function ($Request, $Response) {
-         return $Response->upload('HTTP_Server_CLI/statics/image1.jpg', close: false);
+         return $Response->upload('statics/image1.jpg', close: false);
       }, GET);
    },
 

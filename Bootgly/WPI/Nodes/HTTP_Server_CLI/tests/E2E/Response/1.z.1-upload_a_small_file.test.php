@@ -1,6 +1,5 @@
 <?php
 
-use Bootgly\ABI\IO\FS\File;
 use Bootgly\ABI\Debugging\Data\Vars;
 use Bootgly\ACI\Tests\Suite\Test\Specification\Separator;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
@@ -16,7 +15,7 @@ return new Specification(
       return "GET /test/download/small_file/1 HTTP/1.1\r\nHost: localhost\r\n\r\n";
    },
    response: function (Request $Request, Response $Response): Response {
-      return $Response->upload(new File(__DIR__ . '/artifacts/image1.jpg'), close: false);
+      return $Response->upload('assets/image1.jpg', close: false);
    },
    responseLength: 82928,
 

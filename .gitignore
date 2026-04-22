@@ -63,9 +63,10 @@ _*.test.php
 /workdata/tests/*
 /workdata/tests/snapshots/*
 /workdata/sessions/*
-# Ignore IA folders
+# Ignore IA folders/files
+.agent/*
+.codex
+.github/copilot-instructions.md
 .github/agents/*
 .github/hooks/*
-.agent/*
-.github/copilot-instructions.md
-.codex
+.vscode/mcp.json

@@ -15,7 +15,7 @@ return new Specification(
       return "GET /test/download/file_with_offset_length/1 HTTP/1.1\r\nHost: localhost\r\n\r\n";
    },
    response: function (Request $Request, Response $Response): Response {
-      return $Response->upload('HTTP_Server_CLI/statics/alphanumeric.txt', offset: 0, length: 2, close: false);
+      return $Response->upload('statics/alphanumeric.txt', offset: 0, length: 2, close: false);
    },
    responseLength: 301,
 
