@@ -2,6 +2,18 @@
 
 Changelog for Bootgly framework. All notable changes to this project will be documented in this file. Imported from ROADMAP.md.
 
+## Unreleased
+
+> Focus: **Rename public secure transport config from `ssl` to `secure`**
+
+### WPI — Web Programming Interface
+
+- ✅ TCP Server CLI / TCP Client CLI: public `configure(..., ssl: ...)` API renamed to `configure(..., secure: ...)`
+- ✅ HTTP Server CLI / HTTP Client CLI: propagated the new `secure` named parameter across runtime, redirects, demos and E2E helpers
+- ✅ Internal PHP stream context integration keeps the native `'ssl'` context key where required by `stream_context_create()`
+
+---
+
 ## v0.13.18-beta ✅
 
 > Focus: **Multipart upload hardening for hidden filename and safe streaming writes**
@@ -412,7 +424,7 @@ Changelog for Bootgly framework. All notable changes to this project will be doc
   - ✅ `started` callback (after server binds and starts listening)
   - ✅ `stopped` callback (after graceful shutdown)
 - ✅ HTTPS Server CLI project (`projects/HTTPS_Server_CLI/`)
-  - ✅ SSL/TLS support (TLSv1.2 + TLSv1.3) via `configure(ssl: [...])`
+  - ✅ SSL/TLS support (TLSv1.2 + TLSv1.3) via `configure(secure: [...])`
   - ✅ Privilege drop via `configure(user: 'www-data')`
 - ✅ `BOOTGLY_PROJECT` validation guards in Response (`throw Error` when not defined)
 - ✅ Code style cleanup — removed `\` prefixes from global function calls in Response/Header

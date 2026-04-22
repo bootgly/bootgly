@@ -40,7 +40,7 @@ return new Project(
          workers: 4,
          // requestMaxFileSize: 500 * 1024 * 1024, // 500 MB (default)
          // requestMaxBodySize: 10 * 1024 * 1024,  // 10 MB (default)
-         ssl: [
+         secure: [
             'local_cert' => BOOTGLY_ROOT_DIR . '@/certificates/localhost.cert.pem',
             'local_pk' => BOOTGLY_ROOT_DIR . '@/certificates/localhost.key.pem',
 

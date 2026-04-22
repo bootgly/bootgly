@@ -62,9 +62,9 @@ class Connection extends Packages
 
    /**
     * @param resource $Socket
-    * @param bool $ssl Whether SSL/TLS handshake is required
+   * @param bool $secure Whether secure SSL/TLS handshake is required
     */
-   public function __construct (&$Socket, bool $ssl = false)
+   public function __construct (&$Socket, bool $secure = false)
    {
       $this->Socket = $Socket;
 
@@ -102,8 +102,8 @@ class Connection extends Packages
 
       parent::__construct($this);
 
-      // @ Call handshake if SSL is enabled
-      if ($ssl && $this->handshake() === false) {
+      // @ Call handshake if secure transport is enabled
+      if ($secure && $this->handshake() === false) {
          return;
       }
 

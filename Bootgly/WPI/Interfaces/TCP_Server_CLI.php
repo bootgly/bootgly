@@ -110,7 +110,7 @@ class TCP_Server_CLI implements Servers, Logging
    protected null|int $port;
    protected int $workers;
    /** @var array<string> */
-   protected null|array $ssl; // SSL Stream Context
+   protected null|array $secure; // Secure SSL/TLS Stream Context
    protected null|string $user = null;
    protected null|string $group = null;
    // # Mode
@@ -152,7 +152,7 @@ class TCP_Server_CLI implements Servers, Logging
       $this->host = null;
       $this->port = null;
       // $workers
-      $this->ssl = null;
+      $this->secure = null;
       // # Mode
       $this->Mode = $Mode;
 
@@ -237,8 +237,8 @@ class TCP_Server_CLI implements Servers, Logging
             return $this->port;
          case 'socket':
             return $this->socket;
-         case 'ssl':
-            return $this->ssl;
+         case 'secure':
+            return $this->secure;
          case 'Status':
             return $this->Status;
 
@@ -287,7 +287,7 @@ class TCP_Server_CLI implements Servers, Logging
     * @param string $host Domain name or IP address
     * @param int $port Port number
     * @param int $workers Number of workers
-    * @param array<string>|null $ssl SSL Stream Context
+   * @param array<string>|null $secure Secure SSL/TLS Stream Context
     * @param string|null $user User to drop privileges to after socket binding
     * @param string|null $group Group to drop privileges to after socket binding
     * 
@@ -297,7 +297,7 @@ class TCP_Server_CLI implements Servers, Logging
       string $host,
       int $port,
       int $workers,
-      null|array $ssl = null,
+      null|array $secure = null,
       null|string $user = null,
       null|string $group = null
    ): self
@@ -312,7 +312,7 @@ class TCP_Server_CLI implements Servers, Logging
       $this->port = $port;
       $this->workers = $workers;
 
-      $this->ssl = $ssl;
+      $this->secure = $secure;
 
       $this->user = $user;
       $this->group = $group;
@@ -569,8 +569,8 @@ class TCP_Server_CLI implements Servers, Logging
          'ipv6_v6only' => false
       ];
       // SSL
-      if ( ! empty($this->ssl) ) {
-         self::$context['ssl'] = $this->ssl;
+      if ( ! empty($this->secure) ) {
+         self::$context['ssl'] = $this->secure;
       }
 
       // @ Create context
@@ -600,7 +600,7 @@ class TCP_Server_CLI implements Servers, Logging
       // @ On success
 
       // @ Disable Crypto in Main Socket
-      if ( ! empty($this->ssl) ) {
+      if ( ! empty($this->secure) ) {
          stream_socket_enable_crypto($this->Socket, false);
       }
       // @ Enable Keep Alive if possible

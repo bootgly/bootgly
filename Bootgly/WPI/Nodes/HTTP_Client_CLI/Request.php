@@ -62,7 +62,7 @@ class Request
    public int $redirectCount;
    public string $originalMethod;
    public string $originalBody;
-   /** @var array{host:string,port:int,path:string,ssl:bool}|null */
+   /** @var array{host:string,port:int,path:string,secure:bool}|null */
    public null|array $redirectTarget;
    // | Timeout
    public float $sentAt;

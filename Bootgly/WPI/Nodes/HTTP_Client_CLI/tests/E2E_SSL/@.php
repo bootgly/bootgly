@@ -12,7 +12,7 @@ return new Suite(
       Logger::$display = Logger::DISPLAY_NONE;
 
       HTTP_Client_CLI::pretest($Suite, 'E2E_SSL');
-      HTTP_Client_CLI::test(9998, ssl: [
+      HTTP_Client_CLI::test(9998, secure: [
          'local_cert' => __DIR__ . '/localhost.cert.pem',
          'local_pk'   => __DIR__ . '/localhost.key.pem',
       ]);

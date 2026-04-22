@@ -135,17 +135,17 @@ class Connections implements WPI\Connections
       }
 
       // @ Instance new connection
-      $ssl = $this->Client !== null && $this->Client->ssl !== null;
+      $secure = $this->Client !== null && $this->Client->secure !== null;
 
       // @ Wait for TCP connection to be fully established before TLS handshake
-      if ($ssl) {
+      if ($secure) {
          $read = [];
          $write = [$Socket];
          $except = [];
          @stream_select($read, $write, $except, 5);
       }
 
-      $Connection = new Connection($Socket, $ssl);
+      $Connection = new Connection($Socket, $secure);
 
       // @ Set stats
       $this->connections++;

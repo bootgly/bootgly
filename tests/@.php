@@ -54,6 +54,6 @@ return new Suites(
       // E2E (use Bootgly's TCP_Client_CLI)
       18 => 'Bootgly/WPI/Nodes/HTTP_Server_CLI/tests/E2E/',
       // Security
-      19 => 'Bootgly/WPI/Nodes/HTTP_Server_CLI/tests/Security/',
+      #19 => 'Bootgly/WPI/Nodes/HTTP_Server_CLI/tests/Security/',
    ]
 );

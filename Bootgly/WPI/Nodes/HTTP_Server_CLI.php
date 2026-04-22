@@ -108,7 +108,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       // \
       parent::__construct($Mode);
       // * Config
-      $this->socket = $this->ssl !== null
+      $this->socket = $this->secure !== null
          ? 'https'
          : 'http';
       // @ Configure Logger
@@ -144,7 +144,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
     * @param string $host The host to bind the server to.
     * @param int $port Port to bind the server to.
     * @param int $workers Number of workers to spawn.
-    * @param null|array<string> $ssl SSL configuration.
+   * @param null|array<string> $secure Secure SSL/TLS configuration.
     * @param null|string $user User to drop privileges to after socket binding.
     * @param null|string $group Group to drop privileges to after socket binding.
     * @param null|int $requestMaxFileSize Maximum file size in bytes for multipart/form-data downloads.
@@ -154,19 +154,19 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
     */
    public function configure (
       string $host, int $port, int $workers,
-      null|array $ssl = null,
+      null|array $secure = null,
       null|string $user = null, null|string $group = null,
       null|int $requestMaxFileSize = null, null|int $requestMaxBodySize = null
    ): self
    {
-      parent::configure($host, $port, $workers, $ssl, $user, $group);
+      parent::configure($host, $port, $workers, $secure, $user, $group);
 
       if ($host === '0.0.0.0') {
          $this->domain ??= 'localhost';
       }
 
       // * Config
-      $this->socket = $this->ssl !== null
+      $this->socket = $this->secure !== null
          ? 'https://'
          : 'http://';
 

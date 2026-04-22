@@ -138,18 +138,18 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
     * @param string $host Target host to connect to.
     * @param int $port Target port to connect to.
     * @param int $workers Number of worker processes.
-    * @param array<string,mixed>|null $ssl SSL Stream Context options.
+   * @param array<string,mixed>|null $secure Secure SSL/TLS Stream Context options.
     *
     * @return self
     */
-   public function configure (string $host, int $port, int $workers = 0, null|array $ssl = null): self
+   public function configure (string $host, int $port, int $workers = 0, null|array $secure = null): self
    {
-      // @ Auto-set peer_name for hostname verification if SSL is enabled
-      if ($ssl !== null && !isset($ssl['peer_name'])) {
-         $ssl['peer_name'] = $host;
+      // @ Auto-set peer_name for hostname verification if secure transport is enabled
+      if ($secure !== null && !isset($secure['peer_name'])) {
+         $secure['peer_name'] = $host;
       }
 
-      parent::configure($host, $port, $workers, $ssl);
+      parent::configure($host, $port, $workers, $secure);
 
       // @ Store for Encoder/Decoder access
       self::$targetHost = $host;
@@ -457,7 +457,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
                // @ Check if redirect target is same host/port/scheme
                $sameHost = ($resolved['host'] === (self::$targetHost ?? '127.0.0.1'))
                   && ($resolved['port'] === (self::$targetPort ?? 80))
-                  && ($resolved['ssl'] === ($HTTP_Client_CLI->ssl !== null));
+                  && ($resolved['secure'] === ($HTTP_Client_CLI->secure !== null));
 
                if ($sameHost && !$Response->closeConnection) {
                   // @ Same host + keep-alive: reuse connection
@@ -606,40 +606,40 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
    }
 
    /**
-    * Resolve a redirect Location header value to host/port/path/ssl.
+   * Resolve a redirect Location header value to host/port/path/secure.
     *
     * @param string $location The Location header value.
     * @param string $currentURI The current request URI (for relative resolution).
     *
-    * @return array{host: string, port: int, path: string, ssl: bool}
+    * @return array{host: string, port: int, path: string, secure: bool}
     */
    private function resolve (string $location, string $currentURI): array
    {
       $host = self::$targetHost ?? '127.0.0.1';
       $port = self::$targetPort ?? 80;
-      $ssl = $this->ssl !== null;
+      $secure = $this->secure !== null;
 
       $parsed = parse_url($location);
 
       if ($parsed === false) {
-         return ['host' => $host, 'port' => $port, 'path' => $location, 'ssl' => $ssl];
+         return ['host' => $host, 'port' => $port, 'path' => $location, 'secure' => $secure];
       }
 
       // @ Absolute URL (has scheme + host)
       if (isset($parsed['scheme']) && isset($parsed['host'])) {
          $host = $parsed['host'];
-         $ssl = ($parsed['scheme'] === 'https');
-         $port = $parsed['port'] ?? ($ssl ? 443 : 80);
+         $secure = ($parsed['scheme'] === 'https');
+         $port = $parsed['port'] ?? ($secure ? 443 : 80);
          $path = ($parsed['path'] ?? '/') . (isset($parsed['query']) ? '?' . $parsed['query'] : '');
 
-         return ['host' => $host, 'port' => $port, 'path' => $path, 'ssl' => $ssl];
+         return ['host' => $host, 'port' => $port, 'path' => $path, 'secure' => $secure];
       }
 
       // @ Absolute path
       if (isset($parsed['path']) && ($parsed['path'][0] ?? '') === '/') {
          $path = $parsed['path'] . (isset($parsed['query']) ? '?' . $parsed['query'] : '');
 
-         return ['host' => $host, 'port' => $port, 'path' => $path, 'ssl' => $ssl];
+         return ['host' => $host, 'port' => $port, 'path' => $path, 'secure' => $secure];
       }
 
       // @ Relative path: resolve against current URI's directory
@@ -650,7 +650,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
       }
       $path = $currentDir . $location;
 
-      return ['host' => $host, 'port' => $port, 'path' => $path, 'ssl' => $ssl];
+      return ['host' => $host, 'port' => $port, 'path' => $path, 'secure' => $secure];
    }
 
    /**
@@ -872,7 +872,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
          $this->configure(
             $resolved['host'],
             $resolved['port'],
-            ssl: $resolved['ssl'] ? ['peer_name' => $resolved['host']] : null
+            secure: $resolved['secure'] ? ['peer_name' => $resolved['host']] : null
          );
 
          $this->nextRequest = $Request;
@@ -909,7 +909,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
             $this->configure(
                $resolved['host'],
                $resolved['port'],
-               ssl: $resolved['ssl'] ? ['peer_name' => $resolved['host']] : null
+               secure: $resolved['secure'] ? ['peer_name' => $resolved['host']] : null
             );
 
             $this->nextRequest = $Request;
@@ -1009,11 +1009,11 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
     * Run E2E tests using a mock TCP server.
     *
     * @param int $port Mock server port.
-    * @param array<string,mixed>|null $ssl SSL context for mock server (local_cert, local_pk, etc.)
+   * @param array<string,mixed>|null $secure Secure SSL/TLS context for mock server (local_cert, local_pk, etc.)
     *
     * @return bool True if tests completed.
     */
-   public static function test (int $port = 9999, null|array $ssl = null): bool
+   public static function test (int $port = 9999, null|array $secure = null): bool
    {
       Logger::$display = Logger::DISPLAY_NONE;
 
@@ -1027,8 +1027,8 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
       if ($process_id === 0) {
          // @ Child process: run mock TCP server
          // @ Create SSL context for server if needed
-         if ($ssl !== null) {
-            $serverContext = stream_context_create(['ssl' => $ssl]);
+         if ($secure !== null) {
+            $serverContext = stream_context_create(['ssl' => $secure]);
          }
          else {
             $serverContext = stream_context_create();
@@ -1053,7 +1053,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
          // @@ Accept one connection at a time (blocking)
          while ($client = @stream_socket_accept($server, 10)) {
             // @@ Enable TLS on accepted client if SSL configured
-            if ($ssl !== null) {
+            if ($secure !== null) {
                $crypto = @stream_socket_enable_crypto(
                   $client,
                   true,
@@ -1145,7 +1145,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
       usleep(100000); // 100ms
 
       // @ Run tests as client
-      self::testing($port, $ssl !== null ? [
+      self::testing($port, $secure !== null ? [
          'verify_peer'       => false,
          'verify_peer_name'  => false,
          'allow_self_signed' => true,
@@ -1164,11 +1164,11 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
     * client and mock server in lock-step order.
     *
     * @param int $port Mock server port.
-    * @param array<string,mixed>|null $ssl SSL context options for the client.
+   * @param array<string,mixed>|null $secure Secure SSL/TLS context options for the client.
     *
     * @return void
     */
-   protected static function testing (int $port, null|array $ssl = null): void
+   protected static function testing (int $port, null|array $secure = null): void
    {
       Logger::$display = Logger::DISPLAY_MESSAGE;
 
@@ -1180,7 +1180,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
 
       // @ Create a single reusable HTTP client instance (lightweight test mode)
       $HTTP_Client_CLI = new self(self::MODE_TEST);
-      $HTTP_Client_CLI->configure('127.0.0.1', $port, ssl: $ssl);
+      $HTTP_Client_CLI->configure('127.0.0.1', $port, secure: $secure);
 
       // # Run each test synchronously (sequential mode)
       // Each request completes before the next starts, keeping

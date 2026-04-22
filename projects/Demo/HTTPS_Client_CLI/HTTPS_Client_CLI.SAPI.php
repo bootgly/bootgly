@@ -48,7 +48,7 @@ return static function (array $options = []): void
       // @ Connect to local HTTPS server (self-signed cert)
       $host = '127.0.0.1';
       $port = getenv('PORT') ? (int) getenv('PORT') : 443;
-      $ssl = [
+      $secure = [
          'verify_peer'       => false,
          'allow_self_signed' => true,
       ];
@@ -59,7 +59,7 @@ return static function (array $options = []): void
       // @ Connect to public HTTPS server
       $host = 'httpbin.org';
       $port = 443;
-      $ssl = [
+      $secure = [
          'verify_peer'      => true,
          'verify_peer_name' => true,
       ];
@@ -75,7 +75,7 @@ return static function (array $options = []): void
       host: $host,
       port: $port,
       workers: 0,
-      ssl: $ssl
+      secure: $secure
    );
 
    // @ Register HTTP hooks

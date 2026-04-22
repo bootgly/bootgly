@@ -78,8 +78,8 @@ class TCP_Client_CLI
    protected null|string $host;
    protected null|int $port;
    protected int $workers;
-   /** @var array<string,mixed>|null SSL Stream Context */
-   protected null|array $ssl = null;
+   /** @var array<string,mixed>|null Secure SSL/TLS Stream Context */
+   protected null|array $secure = null;
    // @ Mode
    protected int $mode;
    public const int MODE_DEFAULT = 1;
@@ -180,8 +180,8 @@ class TCP_Client_CLI
             return $this->host;
          case 'port':
             return $this->port;
-         case 'ssl':
-            return $this->ssl;
+         case 'secure':
+            return $this->secure;
 
          case 'Connections':
             return $this->Connections;
@@ -191,9 +191,9 @@ class TCP_Client_CLI
    }
 
    /**
-    * @param array<string,mixed>|null $ssl SSL Stream Context options
+   * @param array<string,mixed>|null $secure Secure SSL/TLS Stream Context options
     */
-   public function configure (string $host, int $port, int $workers = 0, null|array $ssl = null): self
+   public function configure (string $host, int $port, int $workers = 0, null|array $secure = null): self
    {
       self::$status = self::STATUS_CONFIGURING;
 
@@ -203,7 +203,7 @@ class TCP_Client_CLI
       $this->port = $port;
       $this->workers = $workers;
 
-      $this->ssl = $ssl;
+      $this->secure = $secure;
 
       return $this;
    }
@@ -393,9 +393,9 @@ class TCP_Client_CLI
                #'bindto' => $this->host . ':' . (55000 + $index)
             ]
          ];
-         // @ Merge SSL context options
-         if ( ! empty($this->ssl) ) {
-            $contextOptions['ssl'] = $this->ssl;
+         // @ Merge secure SSL/TLS context options
+         if ( ! empty($this->secure) ) {
+            $contextOptions['ssl'] = $this->secure;
          }
 
          $context = stream_context_create($contextOptions);
