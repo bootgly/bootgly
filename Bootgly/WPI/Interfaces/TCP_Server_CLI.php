@@ -58,6 +58,7 @@ use function register_shutdown_function;
 use function rtrim;
 use function socket_import_stream;
 use function socket_set_option;
+use function str_contains;
 use function stream_context_create;
 use function stream_socket_enable_crypto;
 use function stream_socket_server;

@@ -79,7 +79,7 @@ if (
          // a substring that parses as JSON.
          $json = '';
          if ($buffer !== '') {
-            $clean = preg_replace('/\x1b\[[0-9;?]*[ -\/]*[@-~]/', '', $buffer);
+            $clean = preg_replace('/\x1b\[[0-9;?]*[ -\/]*[@-~]/', '', $buffer) ?? $buffer;
             $len = strlen($clean);
             for ($i = $len - 1; $i >= 0; $i--) {
                if ($clean[$i] !== '{')

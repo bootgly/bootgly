@@ -50,6 +50,7 @@ use function posix_setsid;
 use function posix_setuid;
 use function register_shutdown_function;
 use function rtrim;
+use function str_contains;
 use function stream_context_create;
 use function stream_socket_server;
 use function time;

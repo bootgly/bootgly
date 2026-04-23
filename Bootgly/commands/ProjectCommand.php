@@ -30,6 +30,7 @@ use function is_array;
 use function is_dir;
 use function is_file;
 use function json_decode;
+use function posix_get_last_error;
 use function posix_kill;
 use function rtrim;
 use function str_pad;
