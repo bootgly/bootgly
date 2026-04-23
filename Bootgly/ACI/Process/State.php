@@ -14,6 +14,8 @@ namespace Bootgly\ACI\Process;
 use const BOOTGLY_WORKING_DIR;
 use const LOCK_EX;
 use const LOCK_UN;
+use function chown;
+use function chgrp;
 use function clearstatcache;
 use function fclose;
 use function file_get_contents;
@@ -149,6 +151,26 @@ class State
    public function check (): bool
    {
       return is_file($this->pidFile);
+   }
+
+   /**
+    * Transfer ownership of all state files to the given user/group.
+    * Must be called while the process still has privileges (e.g. root)
+    * before demoting, so the demoted user can later rewrite/unlink them.
+    *
+    * @param int $uid
+    * @param int $gid
+    *
+    * @return void
+    */
+   public function own (int $uid, int $gid): void
+   {
+      foreach ([$this->pidFile, $this->pidLockFile, $this->commandFile] as $file) {
+         if (is_file($file)) {
+            @chown($file, $uid);
+            @chgrp($file, $gid);
+         }
+      }
    }
 
    /**
