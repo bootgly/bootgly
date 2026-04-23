@@ -18,6 +18,7 @@ use function array_reduce;
 use function count;
 use function current;
 use function gettype;
+use function file_put_contents;
 use function microtime;
 use function ob_end_clean;
 use function ob_get_clean;
@@ -134,6 +135,9 @@ class Test
       if ($description === null) {
          return;
       }
+      if (Results::$enabled) {
+         return;
+      }
 
       // Indicator
       # ╚ • ╟ ─
@@ -194,6 +198,10 @@ class Test
    }
    public function separate (): void
    {
+      if (Results::$enabled) {
+         return;
+      }
+
       static $separatorLength;
 
       $line   = $this->Specification->Separator->line   ?? null;
@@ -397,26 +405,28 @@ class Test
       $elapsed = $this->elapsed;
 
       // @ output
-      // header
-      $this->log(
-         "\033[30m\033[47m " . $case . " \033[0m" .
-         "\033[0;30;41m FAIL \033[0m " .
-         "@@:" . $test . " @;" .
-         "\033[1;35m +" . $elapsed . "s\033[0m" . PHP_EOL
-      );
-      // assertions
-      $this->describing(status: false);
-      // fallback
       $help = $message ?? $this->AssertionError?->getMessage();
-      if ($help) {
+      if (Results::$enabled === false) {
+         // header
          $this->log(
-            " ↪️\033[91m" . $help . "\033[0m" .
-            PHP_EOL . PHP_EOL
+            "\033[30m\033[47m " . $case . " \033[0m" .
+            "\033[0;30;41m FAIL \033[0m " .
+            "@@:" . $test . " @;" .
+            "\033[1;35m +" . $elapsed . "s\033[0m" . PHP_EOL
          );
-      }
+         // assertions
+         $this->describing(status: false);
+         // fallback
+         if ($help) {
+            $this->log(
+               " ↪️\033[91m" . $help . "\033[0m" .
+               PHP_EOL . PHP_EOL
+            );
+         }
 
-      // # Debugging
-      $this->log($this->debugged ?: '');
+         // # Debugging
+         $this->log($this->debugged ?: '');
+      }
 
       // @ Record result for AI agent output
       Results::record(
@@ -431,6 +441,11 @@ class Test
       // @ exit
       if (Suite::$exitOnFailure && $this->Specification->retest === null) {
          $this->Suite->summarize();
+
+         if (Results::$enabled) {
+            file_put_contents('php://stdout', Results::toJSON());
+         }
+
          exit(1);
       }
    }
@@ -448,15 +463,17 @@ class Test
       $elapsed = $this->elapsed;
 
       // @ output
-      // header
-      $this->log(
-         "\033[47;30m " . $case . " \033[0m" .
-         "\033[0;30;42m PASS \033[0m " .
-         "\033[90m" . $test . "\033[0m" .
-         "\033[1;35m +" . $elapsed . "s\033[0m" . PHP_EOL
-      );
-      // assertions
-      $this->describing(status: true);
+      if (Results::$enabled === false) {
+         // header
+         $this->log(
+            "\033[47;30m " . $case . " \033[0m" .
+            "\033[0;30;42m PASS \033[0m " .
+            "\033[90m" . $test . "\033[0m" .
+            "\033[1;35m +" . $elapsed . "s\033[0m" . PHP_EOL
+         );
+         // assertions
+         $this->describing(status: true);
+      }
 
       // @ Record result for AI agent output
       Results::record(

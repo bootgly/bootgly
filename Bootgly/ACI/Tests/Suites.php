@@ -122,6 +122,10 @@ class Suites
       Results::$assertions = Assertions::$count;
       Results::$durationMs = ($finished - $started) * 1000;
 
+      if (Results::$enabled) {
+         return;
+      }
+
       // duration
       $duration = Benchmark::format($started, $finished);
       $duration = "@#Magenta:" . $duration . "s @;";

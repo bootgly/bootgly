@@ -252,6 +252,10 @@ class Suite
     */
    public function separate (string $header): void
    {
+      if (Results::$enabled) {
+         return;
+      }
+
       if ($header) {
          // @ Add blue color to header text
          $header = ' @#Cyan:(' . Suites::$count . ') @;' . ' @#Blue: ' . $header . '  @;';
@@ -339,14 +343,17 @@ class Suite
       next($this->tests);
 
       $case_index = sprintf('%03d', $this->case);
-      // @ Set additional info
-      if ($info) {
-         $info = "\033[1;35m $info \033[0m";
-      }
 
-      $this->log(
-         "\e[30m\e[47m $case_index \e[0m\e[0;30;43m SKIP \e @; \e[90m$file\e[0m$info" . PHP_EOL
-      );
+      if (Results::$enabled === false) {
+         // @ Set additional info
+         if ($info) {
+            $info = "\033[1;35m $info \033[0m";
+         }
+
+         $this->log(
+            "\e[30m\e[47m $case_index \e[0m\e[0;30;43m SKIP \e @; \e[90m$file\e[0m$info" . PHP_EOL
+         );
+      }
 
       // @ Record result for AI agent output
       Results::record(
@@ -365,6 +372,28 @@ class Suite
     */
    public function summarize (): void
    {
+      // # Time
+      $started = $this->started;
+      $finished = $this->finished = microtime(true);
+
+      if (Results::$enabled) {
+         // @ Feed incremental stats to Results so the JSON reflects what
+         // actually ran (Suites::summarize() may never run if a case fails
+         // and exitOnFailure triggers exit(1) before reaching the outer
+         // iterator's summarize()).
+         Results::$suitesTotal++;
+         if ($this->failed > 0) {
+            Results::$suitesFailed++;
+         } else if ($this->passed === 0 && $this->skipped > 0) {
+            Results::$suitesSkipped++;
+         } else {
+            Results::$suitesPassed++;
+         }
+         Results::$assertions += $this->assertions;
+         Results::$durationMs += ($finished - $started) * 1000;
+         return;
+      }
+
       // # Result
       $failed = "@:error:{$this->failed} failed @;";
       $skipped = "@:notice:{$this->skipped} skipped @;";
