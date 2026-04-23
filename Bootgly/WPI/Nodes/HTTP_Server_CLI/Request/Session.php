@@ -66,6 +66,11 @@ class Session
    /** @var array{callable-string,callable-string} */
    protected array $serializer = ['serialize', 'unserialize'];
 
+   // ! Tracks whether `Set-Cookie: PHPSID=<id>` has already been appended
+   //   to the current response. Cookie issuance is deferred until the
+   //   session is actually mutated (see `emit()`).
+   protected bool $cookieEmitted = false;
+
 
    public function __construct (string $id)
    {
@@ -119,6 +124,7 @@ class Session
       // @
       $this->data[$name] = $value;
       $this->needSave = true;
+      $this->emit();
    }
 
    /**
@@ -131,6 +137,7 @@ class Session
       // @
       unset($this->data[$name]);
       $this->needSave = true;
+      $this->emit();
    }
 
    /**
@@ -171,6 +178,7 @@ class Session
       }
 
       $this->needSave = true;
+      $this->emit();
    }
 
    /**
@@ -192,6 +200,7 @@ class Session
       }
 
       $this->needSave = true;
+      $this->emit();
    }
 
    /**
@@ -215,6 +224,7 @@ class Session
       // @
       $this->needSave = true;
       $this->data = [];
+      $this->emit();
    }
 
    /**
@@ -250,6 +260,36 @@ class Session
       $Cookie->same_site = static::$sameSite;
 
       HTTP_Server_CLI::$Response->Header->Cookies->append($Cookie);
+      $this->cookieEmitted = true;
+   }
+
+   /**
+    * Emit `Set-Cookie: PHPSID=<id>` on the current response exactly once.
+    *
+    * Called from every mutator (`set`, `put`, `delete`, `forget`, `flush`)
+    * so that cookie issuance is tied to actual session usage rather than
+    * mere instantiation. Read-only access to the session therefore never
+    * emits `Set-Cookie`, closing the fixation + DoS surface described in
+    * the Security_Audit_Report §3.
+    *
+    * @return void
+    */
+   protected function emit (): void
+   {
+      if ($this->cookieEmitted === true) {
+         return;
+      }
+
+      $Cookie = new Cookie(static::$name, $this->id);
+      $Cookie->expiration = static::$cookieLifetime;
+      $Cookie->path = static::$cookiePath;
+      $Cookie->domain = static::$domain;
+      $Cookie->secure = static::$secure;
+      $Cookie->HTTP_only = static::$httpOnly;
+      $Cookie->same_site = static::$sameSite;
+
+      HTTP_Server_CLI::$Response->Header->Cookies->append($Cookie);
+      $this->cookieEmitted = true;
    }
 
    /**

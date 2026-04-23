@@ -58,8 +58,6 @@ use JsonException;
 
 use const Bootgly\WPI;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages;
-use Bootgly\WPI\Modules\HTTP\Server\Response\Raw\Header\Cookie;
-use Bootgly\WPI\Nodes\HTTP_Server_CLI;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Decoder_Chunked;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Decoder_Downloading;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Decoder_Waiting;
@@ -336,7 +334,12 @@ class Request
    public private(set) null|Session $Session = null {
       get {
          if ($this->Session === null) {
-            // !
+            // ! Build Session lazily — do NOT emit Set-Cookie here.
+            //   Cookie issuance is deferred until the session is actually
+            //   mutated (set/put/delete/pull/forget/flush/regenerate).
+            //   Emitting on read-only access is a session-fixation primitive
+            //   and a DoS surface on static assets / API probes. See
+            //   Security_Audit_Report §3.
             $name = Session::$name;
             $id = $this->Cookies->get($name);
 
@@ -345,17 +348,6 @@ class Request
             }
 
             $this->Session = new Session($id);
-
-            // @
-            $Cookie = new Cookie($name, $id);
-            $Cookie->expiration = Session::$cookieLifetime;
-            $Cookie->path = Session::$cookiePath;
-            $Cookie->domain = Session::$domain;
-            $Cookie->secure = Session::$secure;
-            $Cookie->HTTP_only = Session::$httpOnly;
-            $Cookie->same_site = Session::$sameSite;
-
-            HTTP_Server_CLI::$Response->Header->Cookies->append($Cookie);
          }
 
          return $this->Session;

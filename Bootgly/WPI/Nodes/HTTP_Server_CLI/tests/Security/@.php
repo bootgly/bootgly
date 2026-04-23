@@ -21,6 +21,8 @@ return new Suite(
          define('BOOTGLY_PROJECT', $TestProject);
       }
 
+      sleep(3); // @ Ensure the previous suite's worker processes have terminated and released state locks.
+
       HTTP_Server_CLI::pretest($Suite, 'Security');
 
       // @ Ensure Middlewares pipeline is initialized before any request reaches
@@ -97,5 +99,8 @@ return new Suite(
       '11.01-host_header_allowlist_spoofing',
       // # BodyParser Middleware
       '12.01-bodyparser_limit_bypass_decode_time',
+      // # Request Session
+      // unconditional Set-Cookie on read-only access (fixation + DoS)
+      '13.01-session_unconditional_set_cookie_on_read',
    ],
 );
