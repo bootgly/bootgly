@@ -2,6 +2,17 @@
 
 Changelog for Bootgly framework. All notable changes to this project will be documented in this file. Imported from ROADMAP.md.
 
+## v0.14.1-beta ✅
+
+> Focus: **Session Set-Cookie deferred until mutation to prevent session fixation and DoS**
+
+### WPI — Web Programming Interface
+
+- ✅ HTTP Server CLI: `Session` — `Set-Cookie` emission deferred until session is actually mutated (`set`, `put`, `delete`, `pull`, `forget`, `flush`, `regenerate`); read-only access no longer emits a cookie, closing session fixation and API-probe DoS surface
+- ✅ HTTP Server CLI: Security regression test `13.01-session_unconditional_set_cookie_on_read` covering read-only probe, write-triggers-cookie, and no-session-untouched scenarios
+
+---
+
 ## v0.14.0-beta ✅
 
 > Focus: **UDP Server CLI + UDP Client CLI interfaces**
