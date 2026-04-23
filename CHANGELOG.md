@@ -2,6 +2,21 @@
 
 Changelog for Bootgly framework. All notable changes to this project will be documented in this file. Imported from ROADMAP.md.
 
+## v0.14.2-beta ✅
+
+> Focus: **Arbitrary file inclusion prevention via EXTR_SKIP in Template extract()**
+
+### ABI — Abstract Bootable Interface
+
+- ✅ Templates: `Template::render()` now passes `EXTR_SKIP` to `extract()`, preventing template variables from overwriting local scope variables (including `$__template__`) and closing arbitrary file inclusion via attacker-controlled variable names
+
+### WPI — Web Programming Interface
+
+- ✅ HTTP Server CLI: `Response::render()` inherited fix — same EXTR_SKIP protection applied to all HTTP response template rendering
+- ✅ HTTP Server CLI: Security regression test `14.01-response_render_extract_file_inclusion` covering file inclusion via variable override scenario
+
+---
+
 ## v0.14.1-beta ✅
 
 > Focus: **Session Set-Cookie deferred until mutation to prevent session fixation and DoS**
