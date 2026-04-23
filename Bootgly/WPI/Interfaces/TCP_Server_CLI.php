@@ -113,6 +113,7 @@ class TCP_Server_CLI implements Servers, Logging
    protected null|array $secure; // Secure SSL/TLS Stream Context
    protected null|string $user = null;
    protected null|string $group = null;
+   protected bool $demoted = false;
    // # Mode
    public Modes $Mode;
    // # Verbosity
@@ -124,7 +125,6 @@ class TCP_Server_CLI implements Servers, Logging
    public static null|Encoder $Encoder = null;
 
    // * Metadata
-   public const string VERSION = '0.1.2-beta';
    // # State
    protected int $started = 0;
    protected bool $daemonized = false;
@@ -320,16 +320,20 @@ class TCP_Server_CLI implements Servers, Logging
       return $this;
    }
    /**
-    * Register the package handler for the TCP Server.
+    * Register the data handler for the TCP Server.
     *
-    * @param Closure $package The package receive handler.
+    * @param Closure $dataReceive The data receive handler.
     *
     * @return self
     */
-   public function on (Closure $package): self
+   public function on (
+      // on Data
+      Closure $dataReceive
+   ): self
    {
       // @
-      SAPI::$Handler = $package;
+      // on Data
+      SAPI::$Handler = $dataReceive;
 
       // :
       return $this;
@@ -402,7 +406,7 @@ class TCP_Server_CLI implements Servers, Logging
                while ($dead = $this->Process->recover()) {
                   [$deadIndex, $deadPID] = $dead;
 
-                  $this->log("Worker #{$deadIndex} (PID: {$deadPID}) crashed, reforking...", self::LOG_WARNING_LEVEL);
+                  $this->log("Worker #{$deadIndex} (PID: {$deadPID}) crashed, reforking...@.;", self::LOG_WARNING_LEVEL);
 
                   $newPID = pcntl_fork();
 
@@ -411,7 +415,7 @@ class TCP_Server_CLI implements Servers, Logging
                      $this->Process->Children->push($this->Process->id, $deadIndex);
                      Process::$index = $deadIndex + 1;
 
-                     $this->Process->title = 'Bootgly_WPI_Server: child process (Worker #' . Process::$index . ')';
+                     $this->Process->title = 'Bootgly_TCP_Server_CLI: child process (Worker #' . Process::$index . ')';
 
                      Logger::$display = Logger::DISPLAY_MESSAGE_WHEN_ID;
 
@@ -432,7 +436,7 @@ class TCP_Server_CLI implements Servers, Logging
                   else if ($newPID > 0) {
                      $this->Process->Children->push($newPID, $deadIndex);
 
-                     $this->log("Worker #{$deadIndex} recovered (new PID: {$newPID})", self::LOG_NOTICE_LEVEL);
+                     $this->log("Worker #{$deadIndex} recovered (new PID: {$newPID})@.;", self::LOG_NOTICE_LEVEL);
 
                      $this->Process->State->save([
                         'master'  => Process::$master,
@@ -465,18 +469,44 @@ class TCP_Server_CLI implements Servers, Logging
 
       Logger::$display = Logger::$display === 0 ? 0 : Logger::DISPLAY_MESSAGE;
 
-      $this->log('@\;Starting Server...', self::LOG_NOTICE_LEVEL);
+      $this->log('@\;Starting Server...@.;', self::LOG_NOTICE_LEVEL);
 
-      // @ Boot Server API
+      // @ Boot TCP Application
       if (self::$Application) {
          self::$Application::boot(Environments::Production);
       }
       else if (isSet(SAPI::$Handler) === false) {
-         $this->log('@\;No handler defined. Call on(package:) before start().@\;', self::LOG_ERROR_LEVEL);
+         $this->log('@\;No handler defined. Call on(dataReceive:) before start().@\;', self::LOG_ERROR_LEVEL);
          exit(1);
       }
 
       // ! Process
+      // ? Pre-flight: verify socket can be bound before forking workers
+      $probeCode = 0;
+      $probeMessage = '';
+      $probeContext = stream_context_create(['socket' => ['so_reuseport' => true, 'ipv6_v6only' => false]]);
+      try {
+         $probeSocket = @stream_socket_server(
+            'tcp://' . ($this->host ?? '0.0.0.0') . ':' . ($this->port ?? 0),
+            $probeCode,
+            $probeMessage,
+            STREAM_SERVER_BIND | STREAM_SERVER_LISTEN,
+            $probeContext
+         );
+      }
+      catch (Throwable) {
+         $probeSocket = false;
+      }
+      if ($probeSocket === false) {
+         $message = '@\;Could not bind to ' . ($this->host ?? '0.0.0.0') . ':' . ($this->port ?? 0) . ': ' . $probeMessage;
+         if ($probeCode === 13 || str_contains($probeMessage ?? '', 'Permission denied')) {
+            $message .= '@\;Ports below 1024 require elevated privileges. Try running with `sudo`.@.;';
+         }
+         $this->log($message, self::LOG_ERROR_LEVEL);
+         exit(1);
+      }
+      fclose($probeSocket);
+
       // ? Signals
       // @ Install process signals
       $this->Process->Signals->install([
@@ -496,8 +526,9 @@ class TCP_Server_CLI implements Servers, Logging
       pcntl_signal(SIGPIPE, SIG_IGN, false);
 
       // @ Fork process workers...
+      $this->log("Forking {$this->workers} workers... @.;", self::LOG_NOTICE_LEVEL);
       $this->Process->fork($this->workers, instance: function (Process $Process, int $index): void {
-         $Process->title = 'Bootgly_WPI_Server: child process (Worker #' . Process::$index . ')';
+         $Process->title = 'Bootgly_TCP_Server_CLI: child process (Worker #' . Process::$index . ')';
 
          Logger::$display = Logger::DISPLAY_MESSAGE_WHEN_ID;
 
@@ -517,9 +548,13 @@ class TCP_Server_CLI implements Servers, Logging
       });
 
       // @ Set master process title
-      $this->Process->title = 'Bootgly_WPI_Server: master process';
+      $this->Process->title = 'Bootgly_TCP_Server_CLI: master process';
 
-      // @ Save full process state (master + workers + host + port)
+      // @ Save full process state (master + workers + host + port).
+      //   Done while still privileged so the file exists before demote() can
+      //   hand it off to the target user — the PID dir may not be writable
+      //   by the demoted user, but chown on the existing file lets subsequent
+      //   re-saves (e.g. in daemonize()) succeed as that user.
       $this->Process->State->save([
          'master'  => Process::$master,
          'workers' => $this->Process->Children->PIDs,
@@ -528,6 +563,12 @@ class TCP_Server_CLI implements Servers, Logging
          'started' => time(),
          'type'    => 'WPI'
       ]);
+
+      // @ Drop privileges on master post-fork + post-save. Workers kept their
+      //   own bind as root (port <1024) and demote themselves in `instance()`.
+      //   `demote()` also chowns state files so `project stop` from the
+      //   demoted user can unlink them.
+      $this->demote();
 
       // ... Continue to master process:
       switch ($this->Mode) {
@@ -640,7 +681,7 @@ class TCP_Server_CLI implements Servers, Logging
     */
    protected function demote (): void
    {
-      if ($this->user === null || posix_getuid() !== 0) {
+      if ($this->demoted || $this->user === null || posix_getuid() !== 0) {
          return;
       }
 
@@ -663,6 +704,10 @@ class TCP_Server_CLI implements Servers, Logging
          $gid = $groupInfo['gid'];
       }
 
+      // @ Hand over ownership of state files (pid/lock/command) to the
+      //   demoted user, so `project stop` from that user can rewrite/unlink.
+      $this->Process->State->own($uid, $gid);
+
       // @ Drop: group first, then user (order matters!)
       if (posix_setgid($gid) === false) {
          $this->log('@\;Failed to set GID to ' . $gid . '.@\;', self::LOG_ERROR_LEVEL);
@@ -679,14 +724,14 @@ class TCP_Server_CLI implements Servers, Logging
          exit(1);
       }
 
-      $this->log('Dropped privileges to user "' . $this->user . '" (uid=' . $uid . ', gid=' . $gid . ')', self::LOG_INFO_LEVEL);
+      $this->demoted = true;
    }
 
    protected function daemonize (): void
    {
       $this->Status = Status::Running;
 
-      $this->log('Running in Daemon mode (no UI)...', self::LOG_INFO_LEVEL);
+      $this->log('Running in Daemon mode (no UI)...@.;', self::LOG_INFO_LEVEL);
 
       // @ Fork: parent returns to terminal, child becomes daemon master
       $pid = pcntl_fork();
@@ -696,11 +741,16 @@ class TCP_Server_CLI implements Servers, Logging
          exit(1);
       }
 
-      // # Parent process (CLI caller): return control to terminal
+      // # Parent process (CLI caller): return control to terminal.
+      //   The parent owns the worker children but transfers ownership to the
+      //   daemon child by exiting — workers reparent to init (PID 1), which
+      //   keeps the daemon lineage clean and avoids the parent staying alive
+      //   waiting on workers (or catching SIGINT/SIGTERM and invoking
+      //   `stop()`, which would wipe the freshly written PID file).
       if ($pid > 0) {
          $this->daemonized = true;
          $this->log('@\;Daemon started (PID: ' . $pid . ')@\;@.;', self::LOG_NOTICE_LEVEL);
-         return;
+         exit(0);
       }
 
       // # Child process (new daemon master): become session leader
@@ -902,29 +952,26 @@ class TCP_Server_CLI implements Servers, Logging
       switch ($this->Process->level) {
          case 'master':
             $children = (string) count($this->Process->Children->PIDs);
+            $this->log("Stopping {$children} worker(s)...@\\;", 3);
+
+            $this->Process->Children->terminate();
+
             $this->log("{$children} worker(s) stopped!@\\;", 3);
-            pcntl_wait($status);
+
+            // @ Clean all per-project state files
+            $this->Process->State->clean();
 
             $CI_CD = Environment::get('GITHUB_ACTIONS')
                || Environment::get('TRAVIS')
                || Environment::get('CIRCLECI')
                || Environment::get('GITLAB_CI')
                || Environment::get('GIT_EXEC_PATH'); // Git Hooks?
-            $closable = true;
             if ($this->Mode->value >= Modes::Test->value && $CI_CD) {
-               $closable = false;
+               break;
             }
 
-            $this->Process->Children->terminate();
-
-            // @ Clean all per-project state files
-            $this->Process->State->clean();
-
-            if ($closable) {
-               exit(0);
-            }
+            exit(0);
          case 'child':
-            $this->Process->Children->terminate();
             exit(0);
       }
    }

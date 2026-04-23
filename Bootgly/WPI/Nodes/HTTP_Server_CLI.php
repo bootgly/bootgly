@@ -26,8 +26,11 @@ use const SIGTERM;
 use const SIGTSTP;
 use const SIGUSR1;
 use const SIGUSR2;
+use const STREAM_SERVER_BIND;
+use const STREAM_SERVER_LISTEN;
 use function clearstatcache;
 use function count;
+use function fclose;
 use function feof;
 use function fread;
 use function function_exists;
@@ -35,11 +38,13 @@ use function opcache_invalidate;
 use function pcntl_signal;
 use function preg_match;
 use function restore_error_handler;
+use function str_contains;
 use function str_replace;
 use function stream_context_create;
 use function stream_select;
 use function stream_set_blocking;
 use function stream_socket_client;
+use function stream_socket_server;
 use function strlen;
 use function strpos;
 use function substr;
@@ -82,8 +87,8 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
    // * Data
    // ...inherited from TCP_Server_CLI
    // # Hooks
-   protected static null|Closure $onStarted = null;
-   protected static null|Closure $onStopped = null;
+   protected static null|Closure $onServerStarted = null;
+   protected static null|Closure $onServerStopped = null;
 
    // * Metadata
    // ...inherited from TCP_Server_CLI
@@ -144,7 +149,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
     * @param string $host The host to bind the server to.
     * @param int $port Port to bind the server to.
     * @param int $workers Number of workers to spawn.
-   * @param null|array<string> $secure Secure SSL/TLS configuration.
+    * @param null|array<string> $secure Secure SSL/TLS configuration.
     * @param null|string $user User to drop privileges to after socket binding.
     * @param null|string $group Group to drop privileges to after socket binding.
     * @param null|int $requestMaxFileSize Maximum file size in bytes for multipart/form-data downloads.
@@ -184,27 +189,29 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
    /**
     * Register hooks for the HTTP Server.
     *
-    * @param Closure(Request, Response, Router): mixed $request The request handler.
-    * @param null|Closure(static): void $started Called after workers are spawned (server is ready).
-    * @param null|Closure(static): void $stopped Called when the server is stopping.
+    * @param Closure(Request, Response, Router): mixed $requestReceived The request handler.
+    * @param null|Closure(static): void $serverStarted Called after workers are spawned (server is ready).
+    * @param null|Closure(static): void $serverStopped Called when the server is stopping.
     *
     * @return self The HTTP Server instance, for chaining.
     */
    public function on (
-      Closure $request,
-      null|Closure $started = null,
-      null|Closure $stopped = null
+      // on HTTP
+      Closure $requestReceived,
+      // on Server
+      null|Closure $serverStarted = null,
+      null|Closure $serverStopped = null
    ): self
    {
       // @ Request handler
       if (isset(SAPI::$Middlewares) === false) {
          SAPI::$Middlewares = new Middlewares;
       }
-      SAPI::$Handler = $request;
+      SAPI::$Handler = $requestReceived;
 
       // @ Lifecycle hooks
-      self::$onStarted = $started;
-      self::$onStopped = $stopped;
+      self::$onServerStarted = $serverStarted;
+      self::$onServerStopped = $serverStopped;
 
       // :
       return $this;
@@ -215,7 +222,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       $this->Status = Status::Starting;
 
       Logger::$display = Logger::$display === 0 ? 0 : Logger::DISPLAY_MESSAGE;
-      $this->log('@\;Starting Server...', self::LOG_NOTICE_LEVEL);
+      $this->log('@\;Starting Server...@.;', self::LOG_NOTICE_LEVEL);
 
       // @ Boot Server API
       // ! Honor server Mode: under Modes::Test the constructor installs
@@ -236,6 +243,33 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       }
 
       // # Process
+      // ? Pre-flight: verify socket can be bound before forking workers
+      $probeCode = 0;
+      $probeMessage = '';
+      $probeContext = stream_context_create(['socket' => ['so_reuseport' => true, 'ipv6_v6only' => false]]);
+      try {
+         $probeSocket = @stream_socket_server(
+            'tcp://' . ($this->host ?? '0.0.0.0') . ':' . ($this->port ?? 0),
+            $probeCode,
+            $probeMessage,
+            STREAM_SERVER_BIND | STREAM_SERVER_LISTEN,
+            $probeContext
+         );
+      }
+      catch (Throwable) {
+         $probeSocket = false;
+      }
+      if ($probeSocket === false) {
+         $message = '@\;Could not bind to ' . ($this->host ?? '0.0.0.0') . ':' . ($this->port ?? 0) . ': ' . $probeMessage;
+         if ($probeCode === 13 || str_contains($probeMessage ?? '', 'Permission denied')) {
+            $message .= '@\;Ports below 1024 require elevated privileges. Try running with `sudo`.@.;';
+         }
+         $this->log($message, self::LOG_ERROR_LEVEL);
+         exit(1);
+      }
+      fclose($probeSocket);
+
+      $this->log("Forking {$this->workers} workers... @..;", self::LOG_NOTICE_LEVEL);
       // @ Install signal handlers for graceful shutdown
       $this->Process->Signals->install([
          SIGALRM,  // Timer
@@ -284,7 +318,11 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       // @ Set master process title
       $this->Process->title = 'Bootgly_HTTP_Server: master process';
 
-      // @ Save full process state (master + workers + host + port)
+      // @ Save full process state (master + workers + host + port).
+      //   Done while still privileged so the file exists before demote() can
+      //   hand it off to the target user — the PID dir may not be writable
+      //   by the demoted user, but chown on the existing file lets subsequent
+      //   re-saves (e.g. in daemonize()) succeed as that user.
       $this->Process->State->save([
          'master'  => Process::$master,
          'workers' => $this->Process->Children->PIDs,
@@ -294,10 +332,16 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
          'type'    => 'WPI'
       ]);
 
+      // @ Drop privileges on master post-fork + post-save. Workers kept their
+      //   own bind as root (port <1024) and demote themselves in `instance()`.
+      //   `demote()` also chowns state files so `project stop` from the
+      //   demoted user can unlink them.
+      $this->demote();
+
       // # Hook
       // @ Invoke started hook (server is ready for connections)
-      if (self::$onStarted !== null) {
-         (self::$onStarted)($this);
+      if (self::$onServerStarted !== null) {
+         (self::$onServerStarted)($this);
       }
 
       // @
@@ -321,8 +365,8 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
    {
       // # Hook
       // @ Invoke stopped hook before shutdown
-      if (self::$onStopped !== null && $this->Process->level === 'master') {
-         (self::$onStopped)($this);
+      if (self::$onServerStopped !== null && $this->Process->level === 'master') {
+         (self::$onServerStopped)($this);
       }
 
       parent::stop();
@@ -470,7 +514,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       );
       $TCP_Client_CLI->on(
          // on Connection connect
-         connect: static function ($Socket, $Connection)
+         clientConnect: static function ($Socket, $Connection)
          use ($TCP_Client_CLI) 
          {
             Logger::$display = Logger::DISPLAY_MESSAGE;

@@ -28,20 +28,20 @@ return new Project(
    // # Project Boot Function
    boot: function (array $arguments = [], array $options = []): void
    {
-      $Server = new TCP_Server_CLI(Mode: match (true) {
+      $TCP_Server_CLI = new TCP_Server_CLI(Mode: match (true) {
          isset($options['i']) => Modes::Interactive,
          isset($options['m']) => Modes::Monitor,
          default => Modes::Daemon
       });
-      $Server->configure(
+      $TCP_Server_CLI->configure(
          host: '0.0.0.0',
          port: getenv('PORT') ? (int) getenv('PORT') : 8080,
          workers: 12
       );
-      $Server->on(
-         package: (require __DIR__ . '/../Demo/TCP_Server_CLI/TCP_Server_CLI.SAPI.php')['on.Package.Receive']
+      $TCP_Server_CLI->on(
+         dataReceive: require __DIR__ . '/../Demo/TCP_Server_CLI/TCP_Server_CLI.SAPI.php'
       );
 
-      $Server->start();
+      $TCP_Server_CLI->start();
    }
 );

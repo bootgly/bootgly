@@ -113,7 +113,6 @@ class UDP_Server_CLI implements Servers, Logging
    public static null|Encoder $Encoder = null;
 
    // * Metadata
-   public const string VERSION = '0.0.1-beta';
    // # State
    protected int $started = 0;
    protected bool $daemonized = false;
@@ -302,16 +301,20 @@ class UDP_Server_CLI implements Servers, Logging
       return $this;
    }
    /**
-    * Register the package handler for the UDP Server.
+    * Register the datagram handler for the UDP Server.
     *
-    * @param Closure $package The datagram receive handler.
+    * @param Closure $datagramReceive The datagram receive handler.
     *
     * @return self
     */
-   public function on (Closure $package): self
+   public function on (
+      // on Datagram
+      Closure $datagramReceive
+   ): self
    {
       // @
-      SAPI::$Handler = $package;
+      // on Datagram
+      SAPI::$Handler = $datagramReceive;
 
       // :
       return $this;
@@ -384,7 +387,7 @@ class UDP_Server_CLI implements Servers, Logging
                while ($dead = $this->Process->recover()) {
                   [$deadIndex, $deadPID] = $dead;
 
-                  $this->log("Worker #{$deadIndex} (PID: {$deadPID}) crashed, reforking...", self::LOG_WARNING_LEVEL);
+                  $this->log("Worker #{$deadIndex} (PID: {$deadPID}) crashed, reforking...@.;", self::LOG_WARNING_LEVEL);
 
                   $newPID = pcntl_fork();
 
@@ -393,7 +396,7 @@ class UDP_Server_CLI implements Servers, Logging
                      $this->Process->Children->push($this->Process->id, $deadIndex);
                      Process::$index = $deadIndex + 1;
 
-                     $this->Process->title = 'Bootgly_WPI_Server: child process (Worker #' . Process::$index . ')';
+                     $this->Process->title = 'Bootgly_UDP_Server_CLI: child process (Worker #' . Process::$index . ')';
 
                      Logger::$display = Logger::DISPLAY_MESSAGE_WHEN_ID;
 
@@ -414,7 +417,7 @@ class UDP_Server_CLI implements Servers, Logging
                   else if ($newPID > 0) {
                      $this->Process->Children->push($newPID, $deadIndex);
 
-                     $this->log("Worker #{$deadIndex} recovered (new PID: {$newPID})", self::LOG_NOTICE_LEVEL);
+                     $this->log("Worker #{$deadIndex} recovered (new PID: {$newPID})@.;", self::LOG_NOTICE_LEVEL);
 
                      $this->Process->State->save([
                         'master'  => Process::$master,
@@ -454,11 +457,37 @@ class UDP_Server_CLI implements Servers, Logging
          self::$Application::boot(Environments::Production);
       }
       else if (isSet(SAPI::$Handler) === false) {
-         $this->log('@\;No handler defined. Call on(package:) before start().@\;', self::LOG_ERROR_LEVEL);
+         $this->log('@\;No handler defined. Call on(datagramReceive:) before start().@\;', self::LOG_ERROR_LEVEL);
          exit(1);
       }
 
       // ! Process
+      // ? Pre-flight: verify socket can be bound before forking workers
+      $probeCode = 0;
+      $probeMessage = '';
+      $probeContext = stream_context_create(['socket' => ['so_reuseport' => true, 'ipv6_v6only' => false]]);
+      try {
+         $probeSocket = @stream_socket_server(
+            'udp://' . ($this->host ?? '0.0.0.0') . ':' . ($this->port ?? 0),
+            $probeCode,
+            $probeMessage,
+            STREAM_SERVER_BIND,
+            $probeContext
+         );
+      }
+      catch (Throwable) {
+         $probeSocket = false;
+      }
+      if ($probeSocket === false) {
+         $message = '@\;Could not bind to ' . ($this->host ?? '0.0.0.0') . ':' . ($this->port ?? 0) . ': ' . $probeMessage;
+         if ($probeCode === 13 || str_contains((string) $probeMessage, 'Permission denied')) {
+            $message .= '@\;Ports below 1024 require elevated privileges. Try running with `sudo`.@.;';
+         }
+         $this->log($message, self::LOG_ERROR_LEVEL);
+         exit(1);
+      }
+      fclose($probeSocket);
+
       // ? Signals
       // @ Install process signals
       $this->Process->Signals->install([
@@ -479,7 +508,7 @@ class UDP_Server_CLI implements Servers, Logging
 
       // @ Fork process workers...
       $this->Process->fork($this->workers, instance: function (Process $Process, int $index): void {
-         $Process->title = 'Bootgly_WPI_Server: child process (Worker #' . Process::$index . ')';
+         $Process->title = 'Bootgly_UDP_Server_CLI: child process (Worker #' . Process::$index . ')';
 
          Logger::$display = Logger::DISPLAY_MESSAGE_WHEN_ID;
 
@@ -499,7 +528,7 @@ class UDP_Server_CLI implements Servers, Logging
       });
 
       // @ Set master process title
-      $this->Process->title = 'Bootgly_WPI_Server: master process';
+      $this->Process->title = 'Bootgly_UDP_Server_CLI: master process';
 
       // @ Save full process state (master + workers + host + port)
       $this->Process->State->save([
@@ -630,8 +659,6 @@ class UDP_Server_CLI implements Servers, Logging
          $this->log('@\;Failed to set UID to ' . $uid . '.@\;', self::LOG_ERROR_LEVEL);
          exit(1);
       }
-
-      $this->log('Dropped privileges to user "' . $this->user . '" (uid=' . $uid . ', gid=' . $gid . ')', self::LOG_INFO_LEVEL);
    }
 
    protected function daemonize (): void
@@ -854,29 +881,26 @@ class UDP_Server_CLI implements Servers, Logging
       switch ($this->Process->level) {
          case 'master':
             $children = (string) count($this->Process->Children->PIDs);
+            $this->log("Stopping {$children} worker(s)...@\\;", 3);
+
+            $this->Process->Children->terminate();
+
             $this->log("{$children} worker(s) stopped!@\\;", 3);
-            pcntl_wait($status);
+
+            // @ Clean all per-project state files
+            $this->Process->State->clean();
 
             $CI_CD = Environment::get('GITHUB_ACTIONS')
                || Environment::get('TRAVIS')
                || Environment::get('CIRCLECI')
                || Environment::get('GITLAB_CI')
                || Environment::get('GIT_EXEC_PATH'); // Git Hooks?
-            $closable = true;
             if ($this->Mode->value >= Modes::Test->value && $CI_CD) {
-               $closable = false;
+               break;
             }
 
-            $this->Process->Children->terminate();
-
-            // @ Clean all per-project state files
-            $this->Process->State->clean();
-
-            if ($closable) {
-               exit(0);
-            }
+            exit(0);
          case 'child':
-            $this->Process->Children->terminate();
             exit(0);
       }
    }

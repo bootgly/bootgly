@@ -28,8 +28,8 @@ return new Project(
    // # Project Boot Function
    boot: function (array $arguments = [], array $options = []): void
    {
-      $Client = new TCP_Client_CLI(TCP_Client_CLI::MODE_MONITOR);
-      $Client->configure(
+      $TCP_Client_CLI = new TCP_Client_CLI(TCP_Client_CLI::MODE_MONITOR);
+      $TCP_Client_CLI->configure(
          host: '127.0.0.1',
          port: getenv('PORT') ? (int) getenv('PORT') : 8082,
          workers: 1
@@ -37,18 +37,18 @@ return new Project(
 
       // This runs a Benchmark for 10 seconds with 1 Worker
       // type stats command in Server to get stats of writes
-      $Client->on(
-         // on Worker instance
-         instance: function ($Client) {
+      $TCP_Client_CLI->on(
+         // on Worker start
+         workerStarted: function ($TCP_Client_CLI) {
             // @ Connect to Server
-            $Socket = $Client->connect();
+            $Socket = $TCP_Client_CLI->connect();
 
             if ($Socket) {
-               $Client::$Event->loop();
+               $TCP_Client_CLI::$Event->loop();
             }
          },
-         // on Connection connect
-         connect: function ($Socket, $Connection) {
+         // on Client connect
+         clientConnect: function ($Socket, $Connection) {
             // @ Set Connection expiration
             Timer::add(
                interval: 10,
@@ -65,20 +65,20 @@ return new Project(
             // @ Add Package write to Event loop
             TCP_Client_CLI::$Event->add($Socket, TCP_Client_CLI::$Event::EVENT_WRITE, $Connection);
          },
-         disconnect: function ($Connection) use ($Client) {
-            $Client->log(
+         clientDisconnect: function ($Connection) use ($TCP_Client_CLI) {
+            $TCP_Client_CLI->log(
                'Connection #' . $Connection->id . ' (' . $Connection->address . ':' . $Connection->port . ')'
-               . ' from Worker with PID @_:' . $Client->Process->id . '_@ was closed! @\;'
+               . ' from Worker with PID @_:' . $TCP_Client_CLI->Process->id . '_@ was closed! @\;'
             );
          },
-         // on Package write / read
-         write: function ($Socket, $Connection, $Package) {
+         // on Data write / read
+         dataWrite: function ($Socket, $Connection, $Package) {
             // @ Add Package read to Event loop
             TCP_Client_CLI::$Event->add($Socket, TCP_Client_CLI::$Event::EVENT_READ, $Connection);
          },
-         read: null,
+         dataRead: null,
       );
 
-      $Client->start();
+      $TCP_Client_CLI->start();
    }
 );

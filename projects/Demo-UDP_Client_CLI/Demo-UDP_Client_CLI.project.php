@@ -8,10 +8,6 @@
  * --------------------------------------------------------------------------
  */
 
-namespace projects\Demo_UDP_Client_CLI;
-
-
-use function getenv;
 
 use Bootgly\ACI\Events\Timer;
 use Bootgly\API\Projects\Project;
@@ -28,20 +24,20 @@ return new Project(
    // # Project Boot Function
    boot: function (array $arguments = [], array $options = []): void
    {
-      $Client = new UDP_Client_CLI(UDP_Client_CLI::MODE_MONITOR);
-      $Client->configure(
+      $UDP_Client_CLI = new UDP_Client_CLI(UDP_Client_CLI::MODE_MONITOR);
+      $UDP_Client_CLI->configure(
          host: '127.0.0.1',
          port: getenv('PORT') ? (int) getenv('PORT') : 9999,
          workers: 1
       );
-      $Client->on(
-         instance: function ($Client) {
-            $Socket = $Client->connect();
+      $UDP_Client_CLI->on(
+         workerStarted: function ($UDP_Client_CLI) {
+            $Socket = $UDP_Client_CLI->connect();
             if ($Socket) {
-               $Client::$Event->loop();
+               $UDP_Client_CLI::$Event->loop();
             }
          },
-         connect: function ($Socket, $Connection) {
+         clientConnect: function ($Socket, $Connection) {
             Timer::add(
                interval: 10,
                handler: function ($Connection) {
@@ -53,18 +49,18 @@ return new Project(
             $Connection->output = 'Hello, Bootgly UDP!';
             UDP_Client_CLI::$Event->add($Socket, UDP_Client_CLI::$Event::EVENT_WRITE, $Connection);
          },
-         disconnect: function ($Connection) use ($Client) {
-            $Client->log(
+         clientDisconnect: function ($Connection) use ($UDP_Client_CLI) {
+            $UDP_Client_CLI->log(
                'Connection #' . $Connection->id . ' (' . $Connection->address . ':' . $Connection->port . ')'
-               . ' from Worker with PID @_:' . $Client->Process->id . '_@ was closed! @\;'
+               . ' from Worker with PID @_:' . $UDP_Client_CLI->Process->id . '_@ was closed! @\;'
             );
          },
-         write: function ($Socket, $Connection) {
+         datagramWrite: function ($Socket, $Connection) {
             UDP_Client_CLI::$Event->add($Socket, UDP_Client_CLI::$Event::EVENT_WRITE, $Connection);
          },
-         read: null,
+         datagramRead: null,
       );
 
-      $Client->start();
+      $UDP_Client_CLI->start();
    }
 );

@@ -80,31 +80,30 @@ class TCP_Client_CLI
    protected int $workers;
    /** @var array<string,mixed>|null Secure SSL/TLS Stream Context */
    protected null|array $secure = null;
-   // @ Mode
+   // # Mode
    protected int $mode;
    public const int MODE_DEFAULT = 1;
    public const int MODE_MONITOR = 2;
    public const int MODE_TEST = 3;
 
    // * Data
-   // ! On
-   // @ on Worker
-   public static null|Closure $onInstance = null;
-   // @ on Connection
-   public static null|Closure $onConnect = null;
-   public static null|Closure $onDisconnect = null;
-   // @ on Packages
-   public static null|Closure $onRead = null;
-   public static null|Closure $onWrite = null;
+   // # On
+   // on Worker
+   public static null|Closure $onWorkerStarted = null;
+   // on Client
+   public static null|Closure $onClientConnect = null;
+   public static null|Closure $onClientDisconnect = null;
+   // on Data
+   public static null|Closure $onDataRead = null;
+   public static null|Closure $onDataWrite = null;
 
    // * Metadata
-   public const string VERSION = '0.0.1';
-   // @ Error
+   // # Error
    /** @var array<int|string|null> */
    public array $error = [];
-   // @ State
+   // # State
    protected static int $started = 0;
-   // @ Status
+   // # Status
    protected static int $status = 0;
    protected const int STATUS_BOOTING = 1;
    protected const int STATUS_CONFIGURING = 2;
@@ -114,7 +113,7 @@ class TCP_Client_CLI
    protected const int STATUS_STOPING = 32;
 
 
-   // ! Connection(s)
+   // / Connection(s)
    protected Connections $Connections;
 
 
@@ -125,18 +124,18 @@ class TCP_Client_CLI
       }
 
       // * Config
-      // @ Mode
+      // # Mode
       $this->mode = $mode;
 
       // * Data
       // ...
 
       // * Metadata
-      // @ Error
+      // # Error
       $this->error = [];
-      // @ State
+      // # State
       static::$started = time();
-      // @ Status
+      // # Status
       self::$status = self::STATUS_BOOTING;
 
 
@@ -207,21 +206,37 @@ class TCP_Client_CLI
 
       return $this;
    }
+   /**
+    * Register hooks for the TCP Client (event-driven mode).
+    *
+    * @param null|Closure $workerStarted On worker instance callback.
+    * @param null|Closure $clientConnect On client connection established callback.
+    * @param null|Closure $clientDisconnect On client connection closed callback.
+    * @param null|Closure(resource, mixed): void $dataRead On data read callback.
+    * @param null|Closure(resource, mixed): void $dataWrite On data write callback.
+    *
+    * @return void
+    */
    public function on
    (
-      null|Closure $instance = null,
-      null|Closure $connect = null, null|Closure $disconnect = null,
-      null|Closure $read = null, null|Closure $write = null
+      // on Worker
+      null|Closure $workerStarted = null,
+      // on Client
+      null|Closure $clientConnect = null,
+      null|Closure $clientDisconnect = null,
+      // on Data
+      null|Closure $dataRead = null,
+      null|Closure $dataWrite = null
    ): void
    {
-      // @ Worker
-      self::$onInstance = $instance;
-      // @ Connection(s)
-      self::$onConnect = $connect;
-      self::$onDisconnect = $disconnect;
-      // @ Packages
-      self::$onRead = $read;
-      self::$onWrite = $write;
+      // on Worker
+      self::$onWorkerStarted = $workerStarted;
+      // on Client
+      self::$onClientConnect = $clientConnect;
+      self::$onClientDisconnect = $clientDisconnect;
+      // on Data
+      self::$onDataRead = $dataRead;
+      self::$onDataWrite = $dataWrite;
    }
    public function handle (int $signal): void
    {
@@ -289,8 +304,8 @@ class TCP_Client_CLI
             Logger::$display = Logger::DISPLAY_MESSAGE_WHEN_ID;
 
             // @ Call On Worker instance
-            if (self::$onInstance) {
-               (self::$onInstance)($this);
+            if (self::$onWorkerStarted) {
+               (self::$onWorkerStarted)($this);
             }
 
             $this->stop();
@@ -316,8 +331,8 @@ class TCP_Client_CLI
       switch ($this->mode) {
          case self::MODE_DEFAULT:
          case self::MODE_TEST:
-            if (self::$onInstance) {
-               (self::$onInstance)($this);
+            if (self::$onWorkerStarted) {
+               (self::$onWorkerStarted)($this);
             }
             else {
                if ( $this->connect() ) {

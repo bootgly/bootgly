@@ -41,9 +41,9 @@ return new Project(
             ->on(
                // # Test (Benchmarking)
                #request: require __DIR__ . '/HTTP_Server_CLI/router/basic.SAPI.php',
-               request: require __DIR__ . '/HTTP_Server_CLI/router/default.SAPI.php',
+               requestReceived: require __DIR__ . '/HTTP_Server_CLI/router/default.SAPI.php',
 
-               started: function ($HTTP_Server_CLI) {
+               serverStarted: function ($HTTP_Server_CLI) {
                   $Output = CLI->Terminal->Output;
 
                   $protocol = $HTTP_Server_CLI->socket ?? 'http://';
@@ -57,7 +57,7 @@ return new Project(
                   $projectName = defined('BOOTGLY_PROJECT') ? BOOTGLY_PROJECT->folder : 'Benchmark-HTTP_Server_CLI';
                   $Output->render('@#Green:Tip:@; Use @#Black:`bootgly project stop` ' . $projectName . '@; to stop the server.@..;');
                },
-               stopped: function ($HTTP_Server_CLI) {
+               serverStopped: function ($HTTP_Server_CLI) {
                   $Output = CLI->Terminal->Output;
 
                   $Output->render('@.;@#yellow:■ Bootgly HTTP Server stopped@;@.;');
@@ -82,7 +82,7 @@ return new Project(
                workers: getenv('BOOTGLY_WORKERS') ? (int) getenv('BOOTGLY_WORKERS') : max(1, (int) ((int) (exec('nproc 2>/dev/null') ?: 1) / 2)),
             )
             ->on(
-               package: static function (string $input) use ($httpResponse): string {
+               dataReceive: static function (string $input) use ($httpResponse): string {
                   // @ Dual-mode: HTTP or echo
                   if (str_starts_with($input, 'GET ')) {
                      return $httpResponse;
@@ -101,7 +101,7 @@ return new Project(
                workers: getenv(name: 'BOOTGLY_WORKERS') ? (int) getenv('BOOTGLY_WORKERS') : max(1, (int) ((int) (exec('nproc 2>/dev/null') ?: 1) / 2)),
             )
             ->on(
-               package: static function (string $input): string {
+               datagramReceive: static function (string $input): string {
                   return $input; // echo
                }
             )

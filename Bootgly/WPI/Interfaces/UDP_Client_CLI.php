@@ -73,7 +73,7 @@ class UDP_Client_CLI
    protected null|string $host;
    protected null|int $port;
    protected int $workers;
-   // @ Mode
+   // # Mode
    protected int $mode;
    public const int MODE_DEFAULT = 1;
    public const int MODE_MONITOR = 2;
@@ -81,23 +81,22 @@ class UDP_Client_CLI
 
    // * Data
    // ! On
-   // @ on Worker
-   public static null|Closure $onInstance = null;
-   // @ on Connection
-   public static null|Closure $onConnect = null;
-   public static null|Closure $onDisconnect = null;
-   // @ on Packages
-   public static null|Closure $onRead = null;
-   public static null|Closure $onWrite = null;
+   // on Worker
+   public static null|Closure $onWorkerStarted = null;
+   // on Connection
+   public static null|Closure $onClientConnect = null;
+   public static null|Closure $onClientDisconnect = null;
+   // on Datagram
+   public static null|Closure $onDatagramRead = null;
+   public static null|Closure $onDatagramWrite = null;
 
    // * Metadata
-   public const string VERSION = '0.0.1';
-   // @ Error
+   // # Error
    /** @var array<int|string|null> */
    public array $error = [];
-   // @ State
+   // # State
    protected static int $started = 0;
-   // @ Status
+   // # Status
    protected static int $status = 0;
    protected const int STATUS_BOOTING = 1;
    protected const int STATUS_CONFIGURING = 2;
@@ -118,18 +117,18 @@ class UDP_Client_CLI
       }
 
       // * Config
-      // @ Mode
+      // # Mode
       $this->mode = $mode;
 
       // * Data
       // ...
 
       // * Metadata
-      // @ Error
+      // # Error
       $this->error = [];
-      // @ State
+      // # State
       static::$started = time();
-      // @ Status
+      // # Status
       self::$status = self::STATUS_BOOTING;
 
 
@@ -193,21 +192,39 @@ class UDP_Client_CLI
 
       return $this;
    }
+   /**
+     * Register hooks for the UDP Client (event-driven mode).
+     *
+     * @param null|Closure $workerStarted On worker instance callback.
+     * @param null|Closure $clientConnect On client connection established callback.
+     * @param null|Closure $clientDisconnect On client connection closed callback.
+     * @param null|Closure(resource, mixed): void $datagramRead On datagram read callback.
+     * @param null|Closure(resource, mixed): void $datagramWrite On datagram write callback.
+     *
+     * @return void
+     */
    public function on
    (
-      null|Closure $instance = null,
-      null|Closure $connect = null, null|Closure $disconnect = null,
-      null|Closure $read = null, null|Closure $write = null
+      // on Worker
+      null|Closure $workerStarted = null,
+      // on Client
+      null|Closure $clientConnect = null,
+      null|Closure $clientDisconnect = null,
+      // on Datagram
+      null|Closure $datagramRead = null,
+      null|Closure $datagramWrite = null
    ): void
    {
-      // @ Worker
-      self::$onInstance = $instance;
-      // @ Connection(s)
-      self::$onConnect = $connect;
-      self::$onDisconnect = $disconnect;
-      // @ Packages
-      self::$onRead = $read;
-      self::$onWrite = $write;
+      // on Worker
+      self::$onWorkerStarted = $workerStarted;
+      // on Client
+      // TODO: onClientStarted
+      // TODO: onClientStopped
+      self::$onClientConnect = $clientConnect;
+      self::$onClientDisconnect = $clientDisconnect;
+      // on Datagram
+      self::$onDatagramRead = $datagramRead;
+      self::$onDatagramWrite = $datagramWrite;
    }
    public function handle (int $signal): void
    {
@@ -270,20 +287,20 @@ class UDP_Client_CLI
 
          // @ Fork process workers...
          $this->Process->fork($this->workers, instance: function (Process $Process, int $index): void {
-            $Process->title = 'Bootgly_WPI_Client: child process (Worker #' . Process::$index . ')';
+            $Process->title = 'Bootgly_UDP_Client_CLI: child process (Worker #' . Process::$index . ')';
 
             Logger::$display = Logger::DISPLAY_MESSAGE_WHEN_ID;
 
-            // @ Call On Worker instance
-            if (self::$onInstance) {
-               (self::$onInstance)($this);
+            // @ Call On Worker start
+            if (self::$onWorkerStarted) {
+               (self::$onWorkerStarted)($this);
             }
 
             $this->stop();
          });
 
          // @ Set master process title
-         $this->Process->title = 'Bootgly_WPI_Client: master process';
+         $this->Process->title = 'Bootgly_UDP_Client_CLI: master process';
 
          // @ Save full process state
          $this->Process->State->save([
@@ -302,8 +319,8 @@ class UDP_Client_CLI
       switch ($this->mode) {
          case self::MODE_DEFAULT:
          case self::MODE_TEST:
-            if (self::$onInstance) {
-               (self::$onInstance)($this);
+            if (self::$onWorkerStarted) {
+               (self::$onWorkerStarted)($this);
             }
             else {
                if ( $this->connect() ) {

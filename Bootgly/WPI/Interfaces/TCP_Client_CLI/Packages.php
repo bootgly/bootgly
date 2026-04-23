@@ -184,8 +184,8 @@ class Packages implements WPI\Connections\Packages
       }
 
       // # Hook
-      if (Client::$onWrite) {
-         (Client::$onWrite)($Socket, $this->Connection, $this);
+      if (Client::$onDataWrite) {
+         (Client::$onDataWrite)($Socket, $this->Connection, $this);
       }
 
       return true;
@@ -280,8 +280,8 @@ class Packages implements WPI\Connections\Packages
       }
 
       // # Hook
-      if (Client::$onRead) {
-         (Client::$onRead)($Socket, $this->Connection, $this);
+      if (Client::$onDataRead) {
+         (Client::$onDataRead)($Socket, $this->Connection, $this);
       }
 
       return true;

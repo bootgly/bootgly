@@ -66,6 +66,13 @@ class TestCommand extends Command
       }
 
       // ! Agent detection
+      // When an AI agent drives `bootgly test`, the `bootgly` executable
+      // re-invokes itself via proc_open with a pipe on fd 1, drains the
+      // pipe, strips ANSI, and extracts the last valid JSON document.
+      // So we only need to:
+      //   - enable Results collection
+      //   - suppress the framework's own human output (guards on Results::$enabled)
+      //   - emit Results::toJSON() at the end
       $Agent = Agent::detect();
       if ($Agent->detected) {
          Logger::$display = Logger::DISPLAY_NONE;
@@ -103,7 +110,9 @@ class TestCommand extends Command
       );
       $Tests->Suites->summarize();
 
-      // @ JSON output for AI agents
+      // @ JSON output for AI agents — the wrapper in `bootgly` extracts the
+      // last valid JSON document from the captured stdout, so a plain echo
+      // is sufficient.
       if (Results::$enabled) {
          echo Results::toJSON();
       }

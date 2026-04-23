@@ -8,8 +8,6 @@
  * --------------------------------------------------------------------------
  */
 
-namespace projects\Demo_UDP_Server_CLI;
-
 
 use function getenv;
 use function shell_exec;
@@ -29,18 +27,18 @@ return new Project(
    // # Project Boot Function
    boot: function (array $arguments = [], array $options = []): void
    {
-      $Server = new UDP_Server_CLI(Mode: match (true) {
+      $UDP_Server_CLI = new UDP_Server_CLI(Mode: match (true) {
          isset($options['i']) => Modes::Interactive,
          isset($options['m']) => Modes::Monitor,
          default => Modes::Daemon
       });
-      $Server->configure(
+      $UDP_Server_CLI->configure(
          host: '0.0.0.0',
          port: getenv('PORT') ? (int) getenv('PORT') : 9999,
          workers: max(1, (int) shell_exec('nproc') ?: 1),
       );
-      $Server->on(fn ($input) => $input);
+      $UDP_Server_CLI->on(datagramReceive: fn ($data) => $data);
 
-      $Server->start();
+      $UDP_Server_CLI->start();
    }
 );

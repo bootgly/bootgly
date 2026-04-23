@@ -290,11 +290,6 @@ class ProjectCommand extends Command
          return false;
       }
 
-      $Output->render(
-         '@.;@#yellow:' . $Project->name . '@;'
-         . ($Project->description !== '' ? ' — ' . $Project->description : '')
-         . '@.;'
-      );
       $Project->boot($bootArguments, $options);
 
       return true;
@@ -347,7 +342,16 @@ class ProjectCommand extends Command
          $masterPid = $PIDs['master'];
 
          // @ Send SIGTERM to master
-         posix_kill($masterPid, SIGTERM);
+         if (
+            posix_kill($masterPid, SIGTERM) === false
+            && posix_get_last_error() === 1 // EPERM
+         ) {
+            $Alert = new Alert($Output);
+            $Alert->Type::Failure->set();
+            $Alert->message = "Project @#cyan:{$projectName}@; is running as a different user (PID {$masterPid}). Run with @#Black:sudo@; to stop it.@.;";
+            $Alert->render();
+            return false;
+         }
 
          // @ Wait for graceful shutdown
          $elapsed = 0.0;
@@ -671,13 +675,30 @@ class ProjectCommand extends Command
    /**
     * Probe if a process is alive.
     *
+    * Uses `/proc/<pid>` when available (Linux) so we detect processes owned
+    * by other users (e.g. a server demoted to www-data probed by the caller
+    * as rodrigo — `posix_kill($pid, 0)` returns false with EPERM in that
+    * case, which would otherwise be misread as "process not running").
+    *
     * @param int $pid
     *
     * @return bool
     */
    private function probe (int $pid): bool
    {
-      return posix_kill($pid, 0);
+      if ($pid <= 0) {
+         return false;
+      }
+
+      if (is_dir('/proc/' . $pid)) {
+         return true;
+      }
+
+      if (posix_kill($pid, 0)) {
+         return true;
+      }
+
+      return posix_get_last_error() === 1; // EPERM → process exists, not ours
    }
 
    /**

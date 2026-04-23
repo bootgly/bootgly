@@ -95,8 +95,8 @@ class Connection extends Packages
       parent::__construct($this);
 
       // @ Call On Connection connect
-      if (Client::$onConnect) {
-         (Client::$onConnect)($Socket, $this);
+      if (Client::$onClientConnect) {
+         (Client::$onClientConnect)($Socket, $this);
       }
    }
 
@@ -120,8 +120,8 @@ class Connection extends Packages
 
       $this->status = self::STATUS_CLOSED;
 
-      if (Client::$onDisconnect) {
-         (Client::$onDisconnect)($this);
+      if (Client::$onClientDisconnect) {
+         (Client::$onClientDisconnect)($this);
       }
 
       // @ Destroy itself

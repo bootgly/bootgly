@@ -161,20 +161,26 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
    /**
     * Register hooks for the HTTP Client (event-driven mode).
     *
-    * @param null|Closure $instance On worker instance callback.
-    * @param null|Closure $connect On connection established callback.
-    * @param null|Closure $disconnect On connection closed callback.
-    * @param null|Closure(Request, Response): mixed $response On HTTP response received callback.
+    * @param null|Closure $workerStarted On worker instance callback.
+    * @param null|Closure $clientConnect On client connection established callback.
+    * @param null|Closure $clientDisconnect On client connection closed callback.
+    * @param null|Closure(Request, Response): mixed $responseReceive On HTTP response received callback.
     *
     * @return void
     */
    public function on (
-      null|Closure $instance = null,
-      null|Closure $connect = null,
-      null|Closure $disconnect = null,
-      #[\SensitiveParameter] null|Closure $read = null,
-      #[\SensitiveParameter] null|Closure $write = null,
-      null|Closure $response = null
+      // on Worker
+      null|Closure $workerStarted = null,
+      // on Client
+      // TODO: clientStarted?
+      // TODO: clientStopped?
+      null|Closure $clientConnect = null,
+      null|Closure $clientDisconnect = null,
+      // on Data
+      #[\SensitiveParameter] null|Closure $dataRead = null,
+      #[\SensitiveParameter] null|Closure $dataWrite = null,
+      // on HTTP
+      null|Closure $responseReceive = null
    ): void
    {
       // @ Mark as event-driven mode
@@ -182,12 +188,15 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
 
       // @ Store hooks
       // # TCP Client context
-      self::$onInstance = $instance;
-      self::$onDisconnect = $disconnect;
+      // on Worker
+      self::$onWorkerStarted = $workerStarted;
+      // on Client
+      self::$onClientDisconnect = $clientDisconnect;
+
       // # HTTP Client context
-      self::$onResponse = $response;
-      self::$httpOnConnect = $connect;
-      self::$httpOnWrite = $write;
+      self::$onResponse = $responseReceive;
+      self::$httpOnConnect = $clientConnect;
+      self::$httpOnWrite = $dataWrite;
    }
 
    /**
@@ -205,8 +214,8 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
 
       $HTTP_Client_CLI = $this;
 
-      // @ On connect: encode and queue the request for writing
-      parent::$onConnect = function ($Socket, $Connection) use ($HTTP_Client_CLI) {
+      // @ On clientConnect: encode and queue the request for writing
+      parent::$onClientConnect = function ($Socket, $Connection) use ($HTTP_Client_CLI) {
          // @ Call user's connect hook if set
          if (self::$httpOnConnect !== null) {
             (self::$httpOnConnect)($Socket, $Connection);
@@ -283,7 +292,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
       };
 
       // @ On read: decode response using per-request state
-      self::$onRead = function ($Socket, $Connection) use ($HTTP_Client_CLI) {
+      self::$onDataRead = function ($Socket, $Connection) use ($HTTP_Client_CLI) {
          $socketId = (int) $Socket;
          $Request = $HTTP_Client_CLI->pendingRequests[$socketId] ?? null;
          if ($Request === null) {
@@ -595,7 +604,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
       };
 
       // @ After write completes, switch to read mode
-      self::$onWrite = function ($Socket, $Connection) {
+      self::$onDataWrite = function ($Socket, $Connection) {
          self::$Event->del($Socket, self::$Event::EVENT_WRITE);
          self::$Event->add($Socket, self::$Event::EVENT_READ, $Connection);
 

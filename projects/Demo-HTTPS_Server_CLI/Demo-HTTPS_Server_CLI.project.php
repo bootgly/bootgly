@@ -29,12 +29,12 @@ return new Project(
    // # Project Boot Function
    boot: function (array $arguments = [], array $options = []): void
    {
-      $Server = new HTTP_Server_CLI(Mode: match (true) {
+      $HTTP_Server_CLI = new HTTP_Server_CLI(Mode: match (true) {
          isset($options['i']) => Modes::Interactive,
          isset($options['m']) => Modes::Monitor,
          default => Modes::Daemon
       });
-      $Server->configure(
+      $HTTP_Server_CLI->configure(
          host: '0.0.0.0',
          port: getenv('PORT') ? (int) getenv('PORT') : 443,
          workers: 4,
@@ -49,14 +49,14 @@ return new Project(
          // Drop privileges after binding to port 443
          user: 'www-data',
       );
-      $Server->on(
-         request: fn ($Request, $Response) => $Response(body: 'Hello, Secure World!'),
+      $HTTP_Server_CLI->on(
+         requestReceived: fn ($Request, $Response) => $Response(body: 'Hello, Secure World!'),
 
-         started: function ($Server) {
+         serverStarted: function ($HTTP_Server_CLI) {
             $Output = CLI->Terminal->Output;
-            $protocol = $Server->socket ?? 'https://';
-            $host = $Server->host ?? '0.0.0.0';
-            $port = $Server->port ?? 0;
+            $protocol = $HTTP_Server_CLI->socket ?? 'https://';
+            $host = $HTTP_Server_CLI->host ?? '0.0.0.0';
+            $port = $HTTP_Server_CLI->port ?? 0;
 
             $Output->render('@.;@#green:✓ Bootgly HTTPS Server started@;@.;');
             $Output->render('  Listening on @#cyan:' . $protocol . $host . ':' . $port . '@;@.;');
@@ -65,13 +65,13 @@ return new Project(
             $projectName = defined('BOOTGLY_PROJECT') ? BOOTGLY_PROJECT->folder : 'Demo-HTTPS_Server_CLI';
             $Output->render('@#Green:Tip:@; Use @#Black:bootgly project stop ' . $projectName . '@; to stop the server.@..;');
          },
-         stopped: function ($Server) {
+         serverStopped: function ($HTTP_Server_CLI) {
             $Output = CLI->Terminal->Output;
 
             $Output->render('@.;@#yellow:■ Bootgly HTTPS Server stopped@;@.;');
          }
       );
 
-      $Server->start();
+      $HTTP_Server_CLI->start();
    }
 );
