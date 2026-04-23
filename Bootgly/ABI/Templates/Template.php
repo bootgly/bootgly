@@ -12,6 +12,7 @@ namespace Bootgly\ABI\Templates;
 
 
 use const BOOTGLY_WORKING_DIR;
+use const EXTR_SKIP;
 use function extract;
 use function is_string;
 use function ob_end_clean;
@@ -231,7 +232,11 @@ class Template implements Templates
          }
 
          (static function ($__file__, $parameters) {
-            extract($parameters);
+            // ! Security: EXTR_SKIP prevents user-controlled keys in
+            //   $parameters (e.g. `__file__`, `parameters`) from
+            //   overwriting the closure sentinels and hijacking
+            //   `include $__file__` into arbitrary file inclusion.
+            extract($parameters, EXTR_SKIP);
             include $__file__;
          })(
             $this->Cache->file,

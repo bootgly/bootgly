@@ -102,5 +102,8 @@ return new Suite(
       // # Request Session
       // unconditional Set-Cookie on read-only access (fixation + DoS)
       '13.01-session_unconditional_set_cookie_on_read',
+      // # Response render()
+      // user-controlled data overwrites Template closure sentinel via extract()
+      '14.01-response_render_extract_file_inclusion',
    ],
 );

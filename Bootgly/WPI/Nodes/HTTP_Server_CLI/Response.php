@@ -14,6 +14,7 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_CLI;
 use const BOOTGLY_PROJECT;
 use const BOOTGLY_WORKING_DIR;
 use const DIRECTORY_SEPARATOR;
+use const EXTR_SKIP;
 use const STR_PAD_LEFT;
 use const ZLIB_ENCODING_DEFLATE;
 use const ZLIB_ENCODING_GZIP;
@@ -937,7 +938,12 @@ class Response extends Server\Response
 
                   // @ Isolate context with anonymous static function
                   (static function (string $__file__, array $__data__) {
-                     extract($__data__);
+                     // ! Security: EXTR_SKIP prevents a $__data__ key from
+                     //   overwriting the closure's $__file__/$__data__
+                     //   sentinels (defence-in-depth; current callers pass
+                     //   only Request/Response, but future templates may
+                     //   plumb user data).
+                     extract($__data__, EXTR_SKIP);
                      require $__file__;
                   })($__resolved__, $__data__);
 
