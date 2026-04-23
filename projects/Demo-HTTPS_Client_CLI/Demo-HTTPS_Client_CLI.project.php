@@ -38,12 +38,12 @@ return new Project(
       $Output = CLI->Terminal->Output;
       $Output->render('@.;@#cyan:━━━ Bootgly HTTPS Client CLI Demo ━━━@;@..;');
 
-      if (!isset($options['URL'])) {
-         $Output->render('@#red:Error:@; The --URL=<url> option is required.@..;');
+      if (empty($arguments[0])) {
+         $Output->render('@#red:Error:@; A URL is required. Usage: bootgly project Demo-HTTPS_Client_CLI start <url>@..;');
          return;
       }
 
-      $url = (string) $options['URL'];
+      $url = (string) $arguments[0];
       if (!str_contains($url, '://')) {
          $url = 'https://' . $url;
       }
