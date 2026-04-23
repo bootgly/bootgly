@@ -94,8 +94,6 @@ class Process
 
    public function fork (int $workers, Closure $instance): void
    {
-      $this->log("forking $workers workers... ", self::LOG_NOTICE_LEVEL);
-
       for ($index = 0; $index < $workers; $index++) {
          $PID = pcntl_fork();
 
