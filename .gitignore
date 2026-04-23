@@ -69,4 +69,5 @@ _*.test.php
 .github/copilot-instructions.md
 .github/agents/*
 .github/hooks/*
+.github/context-mode/*
 .vscode/mcp.json
