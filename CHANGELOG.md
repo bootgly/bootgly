@@ -2,15 +2,43 @@
 
 Changelog for Bootgly framework. All notable changes to this project will be documented in this file. Imported from ROADMAP.md.
 
-## Unreleased
+## v0.14.0-beta ✅
 
-> Focus: **Rename public secure transport config from `ssl` to `secure`**
+> Focus: **UDP Server CLI + UDP Client CLI interfaces**
 
 ### WPI — Web Programming Interface
 
-- ✅ TCP Server CLI / TCP Client CLI: public `configure(..., ssl: ...)` API renamed to `configure(..., secure: ...)`
-- ✅ HTTP Server CLI / HTTP Client CLI: propagated the new `secure` named parameter across runtime, redirects, demos and E2E helpers
-- ✅ Internal PHP stream context integration keeps the native `'ssl'` context key where required by `stream_context_create()`
+- ✅ UDP Server CLI: New `UDP_Server_CLI` interface — UDP server with connection handling, router, commands, and packages
+- ✅ UDP Client CLI: New `UDP_Client_CLI` interface — UDP client with connection handling, commands, and packages
+- ✅ Connections: New `Peer` class for parsing peer strings (host + port) from connection addresses across TCP and UDP
+- ✅ TCP + UDP: Renamed connection and data lifecycle hooks for clarity and consistency (across all interfaces)
+- ✅ TCP + UDP: Renamed SSL transport configuration key from `ssl` to `secure` across all interfaces (HTTP_Server_CLI, TCP_Server_CLI, TCP_Client_CLI)
+- ✅ HTTP Server CLI: Packages integration in decoders and encoders refactored for consistency with new UDP interfaces
+- ✅ HTTP Server CLI: Added security regression test for `Response::upload()` path traversal guard with `File` instances
+- ✅ HTTP Client CLI: Enhanced Demo with improved connection messages
+
+### ACI — Abstract Common Interface
+
+- ✅ Tests: `Results::$enabled` property controls output suppression when Agents run tests
+- ✅ Tests: Index-based handler dispatch via `X-Bootgly-Test` header in E2E test execution
+
+### API — Application Programming Interface
+
+- ✅ Server: Initialized `key` property to prevent potential null reference
+- ✅ State: Added ownership transfer method for state files
+
+### CLI — Command Line Interface
+
+- ✅ Status command: Removed unused version variable from output
+
+### Bootgly
+
+- ✅ Demo: Removed old monolithic Demo project (split into individual dedicated projects)
+- ✅ Benchmark: Enhanced competitor normalization and metric reporting
+- ✅ Process: Removed unnecessary logging from `Process` constructor during worker forking
+- ✅ PHPStan: Fixed static analysis issues
+- ✅ HTTPS Client CLI: Made URL argument required for startup
+- ✅ .gitignore: Added context-mode folder exclusion
 
 ---
 
