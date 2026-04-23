@@ -44,7 +44,7 @@ class Server
    public static array $tests;
 
    // * Metadata
-   private static string $key;
+   private static string $key = '';
    // # Tests
    /**
     * Test Cases instances
