@@ -21,7 +21,7 @@ if (defined('BOOTGLY_WORKING_BASE') === false) {
    define('BOOTGLY_WORKING_DIR', BOOTGLY_ROOT_DIR);
 }
 
-define('BOOTGLY_VERSION', '0.14.4-beta');
+define('BOOTGLY_VERSION', '0.14.5-beta');
 
 @include(__DIR__ . '/vendor/autoload.php'); // composer
 

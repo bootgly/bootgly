@@ -2,6 +2,17 @@
 
 Changelog for Bootgly framework. All notable changes to this project will be documented in this file. Imported from ROADMAP.md.
 
+## v0.14.5-beta ✅
+
+> Focus: **Prevent handler execution before HTTP request body is fully received**
+
+### WPI — Web Programming Interface
+
+- ✅ HTTP Server CLI: `Encoder_` — production encoder now defers handler dispatch until the request body is fully received, preventing partial-body handler execution that could expose incomplete data to application logic
+- ✅ HTTP Server CLI: Security regression test `17.01-handler_before_body_completion` covering premature handler dispatch scenario
+
+---
+
 ## v0.14.4-beta ✅
 
 > Focus: **BodyParser cross-route limit leak and Content-Length smuggling prevention**
