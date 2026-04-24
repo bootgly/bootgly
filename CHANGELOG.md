@@ -2,6 +2,17 @@
 
 Changelog for Bootgly framework. All notable changes to this project will be documented in this file. Imported from ROADMAP.md.
 
+## v0.14.3-beta ✅
+
+> Focus: **Router negative cache pollution prevention — remove static cache promotion for catch-all misses**
+
+### WPI — Web Programming Interface
+
+- ✅ HTTP Server CLI: `Router` — removed unbounded promotion of attacker-controlled URLs into `staticCache['']` on catch-all misses; `MAX_NEGATIVE_CACHE` constant and `$negativeCacheCount` field removed; net +1.4% throughput improvement on catch-all 404 scenario
+- ✅ HTTP Server CLI: Security regression test `15.01-router_catchall_negative_cache_pollution` — 500 unique miss URLs; vulnerable build reports 500/500 polluted entries, fixed build reports 0/500
+
+---
+
 ## v0.14.2-beta ✅
 
 > Focus: **Arbitrary file inclusion prevention via EXTR_SKIP in Template extract()**
