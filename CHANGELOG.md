@@ -2,6 +2,17 @@
 
 Changelog for Bootgly framework. All notable changes to this project will be documented in this file. Imported from ROADMAP.md.
 
+## v0.14.6-beta ✅
+
+> Focus: **Nonblocking write backpressure spin prevention in TCP Server**
+
+### WPI — Web Programming Interface
+
+- ✅ TCP Server CLI: `Packages` — hardened nonblocking `fwrite()` loop to correctly handle zero-byte write returns (kernel send-buffer full), preventing a busy-spin that could consume 100% CPU when a slow client stalls the connection
+- ✅ HTTP Server CLI: Security regression test `18.01-nonblocking_write_backpressure_spin` covering zero-byte write backpressure scenario
+
+---
+
 ## v0.14.5-beta ✅
 
 > Focus: **Prevent handler execution before HTTP request body is fully received**
