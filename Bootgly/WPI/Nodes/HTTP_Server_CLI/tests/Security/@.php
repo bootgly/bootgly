@@ -105,5 +105,8 @@ return new Suite(
       // # Response render()
       // user-controlled data overwrites Template closure sentinel via extract()
       '14.01-response_render_extract_file_inclusion',
+      // # Router
+      // unbounded promotion of catch-all URLs into staticCache (memory DoS)
+      '15.01-router_catchall_negative_cache_pollution',
    ],
 );

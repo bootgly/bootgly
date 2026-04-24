@@ -50,7 +50,6 @@ class Router
    // * Config
    // ...
    // # Limits
-   private const int MAX_NEGATIVE_CACHE = 10_000;
    // # Param constraint types → regex patterns (compile-time only)
    private const array PARAM_CONSTRAINTS = [
       'int'      => '[0-9]+',
@@ -73,7 +72,6 @@ class Router
    private array $dynamicCache = [];
    /** @var null|array{handler:callable,middlewares:array<Middleware>,pipeline:Closure|null} */
    private array|null $catchAllCache = null;
-   private int $negativeCacheCount = 0;
    /** @var array<string> */
    private array $groupPrefixes = [];
    /** @var array<array{prefix:string,handler:callable,methods:array<string>,middlewares:array<Middleware>}> */
@@ -605,13 +603,13 @@ class Router
       // 4. Catch-all fallback
       if ($this->catchAllCache !== null) {
          $cached = $this->catchAllCache;
+         // ! Security: DO NOT promote attacker-controlled miss URLs into
+         //   `staticCache['']` — `catchAllCache` is already O(1), so
+         //   promotion adds no perf benefit while allowing an
+         //   unauthenticated client to grow the static cache by one
+         //   entry per unique miss URL (bounded memory DoS until the
+         //   worker is recycled). Serve directly from `catchAllCache`.
          $Result = ($cached['handler'])($Request, $ResponseObj);
-
-         // @ Promote to static cache for O(1) lookup on repeat hits
-         if ($this->negativeCacheCount < self::MAX_NEGATIVE_CACHE) {
-            $this->staticCache[''][$url] = $cached;
-            $this->negativeCacheCount++;
-         }
 
          if ($Result instanceof Response && $Result !== $ResponseObj) {
             $WPI->Response = $Result;
