@@ -678,10 +678,15 @@ class Request
       //   GET requests with no Content-* header (the benchmark path) skip
       //   the costly `stripos` entirely — ~10-30ns versus ~200ns stripos on
       //   a typical request header block.
-      if (strpos($header_raw, "ontent-") !== false
-         && ($clStart = stripos($header_raw, "\r\nContent-Length:")) !== false
-      ) {
-         $clLineEnd = strpos($header_raw, "\r\n", $clStart + 2);
+      if (strpos($header_raw, "ontent-") !== false) {
+         $clStart = stripos($header_raw, 'Content-Length:') === 0
+            ? 0
+            : (($clStart = stripos($header_raw, "\r\nContent-Length:")) === false
+               ? false
+               : $clStart + 2);
+      }
+      if (isSet($clStart) && $clStart !== false) {
+         $clLineEnd = strpos($header_raw, "\r\n", $clStart);
          // Reject missing CRLF or duplicate Content-Length (smuggling guard)
          if ($clLineEnd === false
             || stripos($header_raw, "\r\nContent-Length:", $clLineEnd) !== false
@@ -689,9 +694,9 @@ class Request
             $Package->reject("HTTP/1.1 400 Bad Request\r\n\r\n");
             return 0;
          }
-         // "\r\nContent-Length:" is 17 bytes — value follows, OWS = SP/HTAB only.
+         // "Content-Length:" is 15 bytes — value follows, OWS = SP/HTAB only.
          $clValue = trim(
-            substr($header_raw, $clStart + 17, $clLineEnd - $clStart - 17),
+            substr($header_raw, $clStart + 15, $clLineEnd - $clStart - 15),
             " \t"
          );
          if ($clValue === '' || strlen($clValue) > 19 || ! ctype_digit($clValue)) {
@@ -704,15 +709,20 @@ class Request
       // @ Handle Transfer-Encoding (RFC 9112 §6.1 / §6.3)
       //   Same fingerprint trick: `strpos("ransfer-")` skips the stripos for
       //   any request that has no Transfer-* header.
-      if (strpos($header_raw, "ransfer-") !== false
-         && ($teStart = stripos($header_raw, "\r\nTransfer-Encoding:")) !== false
-      ) {
+      if (strpos($header_raw, "ransfer-") !== false) {
+         $teStart = stripos($header_raw, 'Transfer-Encoding:') === 0
+            ? 0
+            : (($teStart = stripos($header_raw, "\r\nTransfer-Encoding:")) === false
+               ? false
+               : $teStart + 2);
+      }
+      if (isSet($teStart) && $teStart !== false) {
          // Transfer-Encoding + Content-Length conflict
          if (isSet($content_length)) {
             $Package->reject("HTTP/1.1 400 Bad Request\r\n\r\n");
             return 0;
          }
-         $teLineEnd = strpos($header_raw, "\r\n", $teStart + 2);
+         $teLineEnd = strpos($header_raw, "\r\n", $teStart);
          // Reject missing CRLF or duplicate Transfer-Encoding (smuggling guard)
          if ($teLineEnd === false
             || stripos($header_raw, "\r\nTransfer-Encoding:", $teLineEnd) !== false
@@ -720,14 +730,14 @@ class Request
             $Package->reject("HTTP/1.1 400 Bad Request\r\n\r\n");
             return 0;
          }
-         // "\r\nTransfer-Encoding:" is 20 bytes. On requests the value MUST
+         // "Transfer-Encoding:" is 18 bytes. On requests the value MUST
          //   be exactly "chunked" (case-insensitive, OWS trimmed). Any list
          //   form (`chunked, gzip`, `gzip, chunked`, `x,chunked`) or variant
          //   (`\tchunked`, `chunked\t`) is rejected — those are the classic
          //   TE-smuggling vectors where an upstream honours `chunked` while
          //   the origin treats the request as opaque.
          $teValue = trim(
-            substr($header_raw, $teStart + 20, $teLineEnd - $teStart - 20),
+            substr($header_raw, $teStart + 18, $teLineEnd - $teStart - 18),
             " \t"
          );
          if (strcasecmp($teValue, 'chunked') !== 0) {
@@ -761,13 +771,18 @@ class Request
       //   Hot-path guard: `strpos("xpect:")` is a 6-byte case-sensitive scan
       //   that fires on both `Expect:` and `expect:` (shared lowercase
       //   stem) — requests with no Expect header pay ~one strpos.
-      if (strpos($header_raw, "xpect:") !== false
-         && ($exStart = stripos($header_raw, "\r\nExpect:")) !== false
-      ) {
-         $exLineEnd = strpos($header_raw, "\r\n", $exStart + 2);
+      if (strpos($header_raw, "xpect:") !== false) {
+         $exStart = stripos($header_raw, 'Expect:') === 0
+            ? 0
+            : (($exStart = stripos($header_raw, "\r\nExpect:")) === false
+               ? false
+               : $exStart + 2);
+      }
+      if (isSet($exStart) && $exStart !== false) {
+         $exLineEnd = strpos($header_raw, "\r\n", $exStart);
          $exValue = $exLineEnd === false
             ? ''
-            : trim(substr($header_raw, $exStart + 9, $exLineEnd - $exStart - 9), " \t");
+            : trim(substr($header_raw, $exStart + 7, $exLineEnd - $exStart - 7), " \t");
 
          if (strcasecmp($exValue, '100-continue') !== 0) {
             $Package->reject("HTTP/1.1 417 Expectation Failed\r\n\r\n");
@@ -799,9 +814,28 @@ class Request
          // @ Detect multipart/form-data for streaming download
          $isMultipart = false;
          $multipartBoundary = '';
-         if ( $ctPos = stripos($header_raw, "\r\nContent-Type: multipart/form-data") ) {
+         $ctStart = false;
+         $ctValue = '';
+         if (strpos($header_raw, "ontent-") !== false) {
+            $ctStart = stripos($header_raw, 'Content-Type:') === 0
+               ? 0
+               : (($ctStart = stripos($header_raw, "\r\nContent-Type:")) === false
+                  ? false
+                  : $ctStart + 2);
+         }
+         if ($ctStart !== false) {
+            $ctLineEnd = strpos($header_raw, "\r\n", $ctStart);
+            $ctLine = $ctLineEnd === false
+               ? ''
+               : substr($header_raw, $ctStart + 13, $ctLineEnd - $ctStart - 13);
+            $ctValue = trim($ctLine, " \t");
+            if (stripos($ctValue, 'multipart/form-data') !== 0) {
+               $ctStart = false;
+            }
+         }
+         if ($ctStart !== false) {
             $isMultipart = true;
-            if ( preg_match('/boundary="?(\S+)"?/', substr($header_raw, $ctPos, 200), $bMatch) ) {
+            if ( preg_match('/boundary="?(\S+)"?/', $ctValue, $bMatch) ) {
                // ? Validate boundary against RFC 7578 §4.1 / RFC 2046 §5.1.1.
                //   bchars charset + length 1-70. A permissive `\S+` capture
                //   would otherwise accept quote-injection (`X";foo="bar`) and
