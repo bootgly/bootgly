@@ -113,5 +113,8 @@ return new Suite(
       // BodyParser(maxSize: N) permanently lowers the global decoder
       // cap, starving unrelated routes of their full body allowance.
       '16.01-bodyparser_global_maxbodysize_cross_route_leak',
+      // # Encoder_
+      // production handler must not execute before Content-Length body completion
+      '17.01-handler_before_body_completion',
    ],
 );

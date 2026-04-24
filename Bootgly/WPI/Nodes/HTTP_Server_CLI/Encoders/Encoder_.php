@@ -38,6 +38,15 @@ class Encoder_ extends Encoders
       $Response = &Server::$Response;
       $Router   = Server::$Router;
 
+      // ?: Do not route / run middleware while request body is incomplete.
+      //   The decoder has already installed a per-connection body decoder;
+      //   executing user code here would duplicate side effects when the
+      //   body later completes. Keep this before Response::reset() so the
+      //   incomplete-read path does the least possible work.
+      if ($Request->Body->waiting) {
+         return '';
+      }
+
       // @ Reset Response state for new request
       $Response->reset();
 
@@ -106,10 +115,6 @@ class Encoder_ extends Encoders
          Throwables::debug($Throwable);
       }
       finally {
-         // ?: Check if Request Body is waiting data
-         if ($Request->Body->waiting) {
-            return '';
-         }
          // ?: Check if Response is deferred (async Fiber)
          if ($Response->deferred) {
             return '';
