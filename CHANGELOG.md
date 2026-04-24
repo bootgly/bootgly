@@ -2,6 +2,17 @@
 
 Changelog for Bootgly framework. All notable changes to this project will be documented in this file. Imported from ROADMAP.md.
 
+## v0.14.4-beta ✅
+
+> Focus: **BodyParser cross-route limit leak and Content-Length smuggling prevention**
+
+### WPI — Web Programming Interface
+
+- ✅ HTTP Server CLI: `BodyParser` — middleware no longer mutates the global `Request::$maxBodySize` static; limit is now applied per-request at decode time via a temporary override, preventing a low-limit route from silently capping uploads on all subsequent routes
+- ✅ HTTP Server CLI: `Request` — hardened against HTTP request smuggling via `Content-Length` placed as first header; security regression tests `12.01-bodyparser_limit_bypass_decode_time`, `16.01-bodyparser_global_maxbodysize_cross_route_leak`, and `04.03-content_length_first_header_smuggling` added
+
+---
+
 ## v0.14.3-beta ✅
 
 > Focus: **Router negative cache pollution prevention — remove static cache promotion for catch-all misses**
