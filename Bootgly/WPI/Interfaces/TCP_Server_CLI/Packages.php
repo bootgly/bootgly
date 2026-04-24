@@ -295,6 +295,10 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
    {
       // !
       $length ??= strlen($buffer);
+      if ($length === 0 || $buffer === '') {
+         return true;
+      }
+
       $written = 0;
       $failed = false;
       $sent = 0; // Bytes sent to client per write loop iteration
@@ -309,7 +313,8 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
                break;
             }
             if ($sent === 0) {
-               continue; // TODO check EOF?
+               $this->Connection->close();
+               return false;
             }
 
             $written += $sent;
@@ -682,7 +687,10 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
             }
 
             if ($sent === false) break;
-            if ($sent === 0) continue; // TODO check EOF?
+            if ($sent === 0) {
+               $this->Connection->close();
+               return $written;
+            }
 
             $written += $sent;
 

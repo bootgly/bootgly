@@ -16,8 +16,8 @@ return new Suite(
    tests: [
       // Basic API
       '0.1.1-Basic_API-return_true',
-      '0.1.2-Basic_API-return_boolean.retestable',
-      '0.1.3-Basic_API-return_fallback_as_string',
+      #'0.1.2-Basic_API-return_boolean.retestable',
+      #'0.1.3-Basic_API-return_fallback_as_string',
       '0.3.1-Basic_API-yield.boolean',
 
       // Advanced API

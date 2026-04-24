@@ -116,5 +116,8 @@ return new Suite(
       // # Encoder_
       // production handler must not execute before Content-Length body completion
       '17.01-handler_before_body_completion',
+      // # TCP_Server_CLI Packages
+      // nonblocking writes must not spin when fwrite() makes no progress
+      '18.01-nonblocking_write_backpressure_spin',
    ],
 );
