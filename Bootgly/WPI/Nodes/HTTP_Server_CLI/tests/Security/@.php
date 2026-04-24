@@ -108,5 +108,9 @@ return new Suite(
       // # Router
       // unbounded promotion of catch-all URLs into staticCache (memory DoS)
       '15.01-router_catchall_negative_cache_pollution',
+      // # BodyParser Middleware (cross-route global-state leak)
+      // BodyParser(maxSize: N) permanently lowers the global decoder
+      // cap, starving unrelated routes of their full body allowance.
+      '16.01-bodyparser_global_maxbodysize_cross_route_leak',
    ],
 );

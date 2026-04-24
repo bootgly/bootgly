@@ -15,7 +15,6 @@ use function strlen;
 use Closure;
 
 use Bootgly\API\Workables\Server\Middleware;
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 
 
 class BodyParser implements Middleware
@@ -43,20 +42,18 @@ class BodyParser implements Middleware
 
    public function process (object $Request, object $Response, Closure $next): object
    {
-      // ! Push the BodyParser limit into the decoder-level gate so the
-      //   server rejects oversized non-multipart bodies at decode time
-      //   (before the full TCP payload is buffered). Without this, the
-      //   global decoder cap (10 MB) would allow the full body to be
-      //   accepted and only rejected later at middleware time — wasting
-      //   bandwidth and memory. The push is idempotent and takes effect
-      //   for subsequent requests (the current request is still validated
-      //   by the Content-Length / body-length checks below).
-      //   Note: $maxFileSize (multipart uploads) is intentionally NOT
-      //   pushed — file upload limits are orthogonal to BodyParser's
-      //   request body concern and have their own dedicated cap.
-      if ($this->maxSize < Request::$maxBodySize) {
-         Request::$maxBodySize = $this->maxSize;
-      }
+      // ! No mutation of Request::$maxBodySize here.
+      //   Earlier revisions pushed $this->maxSize into the global
+      //   Request::$maxBodySize to enable decoder-level rejection of
+      //   oversized bodies. That mutation was PERMANENT and
+      //   WORKER-WIDE, so a single BodyParser(maxSize: N) on one
+      //   restrictive route would starve every *other* route on the
+      //   same worker. Enforcement now happens strictly at middleware
+      //   time via the Content-Length and body-length checks below,
+      //   which are already route-local (scoped to $this->maxSize).
+      //   For server-wide decoder caps use Request::$maxBodySize
+      //   directly in application bootstrap — not per-route middleware.
+
       // ? Validate Content-Length against max size
       $contentLength = $Request->Header->get('Content-Length'); // @phpstan-ignore-line
       if ($contentLength !== null && (int) $contentLength > $this->maxSize) {
