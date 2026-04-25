@@ -2,6 +2,17 @@
 
 Changelog for Bootgly framework. All notable changes to this project will be documented in this file. Imported from ROADMAP.md.
 
+## v0.14.10-beta ✅
+
+> Focus: **Response header name validation against RFC 9110 token syntax**
+
+### WPI — Web Programming Interface
+
+- ✅ HTTP Server CLI: `Response\Raw\Header` — added `isValidName()` private validator (RFC 9110 §5.1 token regex `/^[!#$%&'*+.^_\`|~0-9A-Za-z-]+$/D`); `set()` strips CRLF from field name, validates, and returns `false` on failure; `append()` validates and silently skips on failure; `queue()` validates and returns `false` on failure; `prepare()` filters the array dropping invalid names and CRLF-stripping values before `build()`
+- ✅ HTTP Server CLI: Security regression test `22.01-response_header_name_validation` — drives `set()`, `queue()`, and `prepare()` with CRLF-injected names and values; asserts the built `Header->raw` contains no synthesized header line
+
+---
+
 ## v0.14.9-beta ✅
 
 > Focus: **Session strict mode — rotate client-supplied unknown session IDs before first write**
