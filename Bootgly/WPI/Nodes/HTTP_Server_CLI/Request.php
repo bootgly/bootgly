@@ -37,12 +37,10 @@ use function preg_match_all;
 use function random_bytes;
 use function rtrim;
 use function str_ends_with;
-use function strcasecmp;
 use function stripos;
 use function strlen;
 use function strpos;
 use function strrpos;
-use function strspn;
 use function strstr;
 use function strtok;
 use function strtolower;
@@ -61,6 +59,7 @@ use Bootgly\WPI\Endpoints\Servers\Decoder\States;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Decoder_Chunked;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Decoder_Downloading;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Decoder_Downloading\Downloads;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Decoder_Waiting;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Authentications\Basic;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Frame;
@@ -1275,10 +1274,14 @@ class Request
          // @ Clear cache
          clearstatcache();
 
-         // @ Delete temp files
+         // @ Delete temp files + release aggregate-cap reservations
          array_walk_recursive($_FILES, function ($value, $key) {
-            if ($key === 'tmp_name' && is_file($value) === true) {
-               unlink($value);
+            if ($key === 'tmp_name' && is_string($value) && $value !== '') {
+               if (is_file($value) === true) {
+                  unlink($value);
+               }
+
+               Downloads::discard($value);
             }
          });
 

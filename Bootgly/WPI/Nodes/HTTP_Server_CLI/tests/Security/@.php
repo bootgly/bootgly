@@ -131,5 +131,11 @@ return new Suite(
       // # Response Header
       // header names must be RFC token-validated and CR/LF-stripped
       '22.01-response_header_name_validation',
+      // # Downloads
+      // multipart downloads (server-side temp files materialised from
+      // client uploads) must enforce an aggregate cross-worker
+      // disk-byte ceiling — per-file cap × N-workers exhaustion is
+      // closed by `Downloads::reserve()` over a shared-memory counter
+      '23.01-aggregate_downloads_disk_cap',
    ],
 );

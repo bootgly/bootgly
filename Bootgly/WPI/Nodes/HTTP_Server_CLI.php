@@ -72,6 +72,7 @@ use Bootgly\WPI\Interfaces\TCP_Server_CLI;
 use Bootgly\WPI\Modules\HTTP;
 use Bootgly\WPI\Modules\HTTP\Server;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Decoder_;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Decoder_Downloading\Downloads;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders\Encoder_;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders\Encoder_Testing;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
@@ -156,7 +157,8 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       null|int $requestMaxMultipartFieldSize = null,
       null|int $requestMaxMultipartHeaderSize = null,
       null|int $requestMaxMultipartFields = null,
-      null|int $requestMaxMultipartFiles = null
+      null|int $requestMaxMultipartFiles = null,
+      null|int $downloadsMaxBytesOnDisk = null
    ): self
    {
       parent::configure($host, $port, $workers, $secure, $user, $group);
@@ -188,6 +190,9 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       }
       if ($requestMaxMultipartFiles !== null) {
          Request::$maxMultipartFiles = $requestMaxMultipartFiles;
+      }
+      if ($downloadsMaxBytesOnDisk !== null) {
+         Downloads::$maxBytesOnDisk = $downloadsMaxBytesOnDisk;
       }
 
       return $this;
@@ -277,6 +282,11 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       fclose($probeSocket);
 
       $this->log("Forking {$this->workers} workers... @..;", self::LOG_NOTICE_LEVEL);
+
+      // @ Initialize cross-worker upload byte counter (master-side, before
+      //   fork) so workers inherit the SHM segment + lockfile descriptor.
+      Downloads::init();
+
       // @ Install signal handlers for graceful shutdown
       $this->Process->Signals->install([
          SIGALRM,  // Timer
@@ -374,6 +384,11 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       // @ Invoke stopped hook before shutdown
       if (self::$onServerStopped !== null && $this->Process->level === 'master') {
          (self::$onServerStopped)($this);
+      }
+
+      // @ Tear down cross-worker upload counter (master only).
+      if (isset($this->Process) && $this->Process->level === 'master') {
+         Downloads::destroy();
       }
 
       parent::stop();

@@ -47,6 +47,7 @@ use Bootgly\WPI\Endpoints\Servers\Packages;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages as TCP_Packages;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI as Server;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Decoder_Downloading\Downloads;
 
 
 class Decoder_Downloading extends Decoders
@@ -402,10 +403,10 @@ class Decoder_Downloading extends Decoders
                   // @ Boundary found: write everything before boundary to file
                   $fileData = substr($data, 0, $pos);
 
-                  $this->writeFileChunk($fileData);
+                  $this->write($fileData);
 
                   // @ Close file and finalize file entry
-                  $this->closeCurrentFile();
+                  $this->close();
 
                   // @ Move past boundary
                   $afterBoundary = $pos + $boundaryLen;
@@ -442,7 +443,7 @@ class Decoder_Downloading extends Decoders
                if ($safeLen > 0) {
                   $safeData = substr($data, 0, $safeLen);
 
-                  $this->writeFileChunk($safeData);
+                  $this->write($safeData);
 
                   $this->tailBuffer = substr($data, $safeLen);
                }
@@ -556,7 +557,7 @@ class Decoder_Downloading extends Decoders
    /**
     * Stream file bytes with runtime safety checks.
     */
-   private function writeFileChunk (string $chunk): void
+   private function write (string $chunk): void
    {
       if ($chunk === '' || $this->fileHandler === null) {
          return;
@@ -579,9 +580,22 @@ class Decoder_Downloading extends Decoders
       // ! Enforce per-file cap during streaming.
       if ($this->currentFileSize + $chunkLength > Server\Request::$maxFileSize) {
          $file['error'] = UPLOAD_ERR_FORM_SIZE;
-         $this->closeCurrentFile();
+         $this->close();
          return;
       }
+
+      // ! Enforce aggregate cross-worker disk cap. Reserves bytes against
+      //   the shared counter; if the reservation would breach the global
+      //   ceiling we abort this file with UPLOAD_ERR_CANT_WRITE without
+      //   ever issuing the fwrite. Bytes already reserved for this file
+      //   stay reserved until the temp file is unlinked.
+      if (Downloads::reserve($chunkLength) === false) {
+         $file['error'] = UPLOAD_ERR_CANT_WRITE;
+         $this->close();
+         return;
+      }
+      $tmpName = (string) ($file['tmp_name'] ?? '');
+      Downloads::track($tmpName, $chunkLength);
 
       // ! Re-check free disk space periodically while streaming.
       $this->bytesSinceDiskCheck += $chunkLength;
@@ -590,12 +604,12 @@ class Decoder_Downloading extends Decoders
             $freeSpace = disk_free_space(BOOTGLY_WORKING_BASE . '/workdata/temp/files/downloaded/');
             if ($freeSpace !== false && $freeSpace < 1048576) {
                $file['error'] = UPLOAD_ERR_CANT_WRITE;
-               $this->closeCurrentFile();
+               $this->close();
                return;
             }
          } catch (Throwable) {
             $file['error'] = UPLOAD_ERR_CANT_WRITE;
-            $this->closeCurrentFile();
+            $this->close();
             return;
          }
 
@@ -604,8 +618,12 @@ class Decoder_Downloading extends Decoders
 
       $written = fwrite($this->fileHandler, $chunk);
       if ($written === false) {
+         // @ Reservation made but no bytes hit disk: roll back fully.
+         Downloads::release($chunkLength);
+         $tmpName = (string) ($file['tmp_name'] ?? '');
+         Downloads::untrack($tmpName, $chunkLength);
          $file['error'] = UPLOAD_ERR_CANT_WRITE;
-         $this->closeCurrentFile();
+         $this->close();
          return;
       }
 
@@ -615,15 +633,23 @@ class Decoder_Downloading extends Decoders
       }
 
       if ($written !== $chunkLength) {
+         // @ Partial write: release the unwritten portion so the counter
+         //   tracks actual on-disk bytes.
+         $unwritten = $chunkLength - $written;
+         if ($unwritten > 0) {
+            Downloads::release($unwritten);
+            $tmpName = (string) ($file['tmp_name'] ?? '');
+            Downloads::untrack($tmpName, $unwritten);
+         }
          $file['error'] = UPLOAD_ERR_CANT_WRITE;
-         $this->closeCurrentFile();
+         $this->close();
       }
    }
 
    /**
     * Close the current file handler and update file size.
     */
-   private function closeCurrentFile (): void
+   private function close (): void
    {
       $fileIndex = count($this->files) - 1;
       if ($fileIndex < 0) return;
