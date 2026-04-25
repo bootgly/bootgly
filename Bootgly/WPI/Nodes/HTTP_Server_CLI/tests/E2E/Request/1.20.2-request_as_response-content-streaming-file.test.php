@@ -38,7 +38,7 @@ return new Specification(
       $result = [
          'streaming' => $Request->Body->streaming,
          'files' => $Request->files,
-         'post' => $Request->post,
+         'post' => $Request->fields,
       ];
 
       if (isset($result['files']['file1']['tmp_name'])) {

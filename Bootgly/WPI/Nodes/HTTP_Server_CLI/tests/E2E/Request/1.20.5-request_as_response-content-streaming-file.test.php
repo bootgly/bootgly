@@ -44,7 +44,7 @@ return new Specification(
       $result = [
          'streaming' => $Request->Body->streaming,
          'files' => $Request->files,
-         'post' => $Request->post,
+         'post' => $Request->fields,
       ];
 
       foreach (['a', 'b', 'c'] as $key) {

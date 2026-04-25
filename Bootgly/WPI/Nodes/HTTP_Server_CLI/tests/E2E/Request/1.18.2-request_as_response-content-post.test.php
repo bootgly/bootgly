@@ -25,7 +25,7 @@ return new Specification(
    },
    response: function (Request $Request, Response $Response): Response {
       $Request->receive();
-      return $Response->JSON->send($Request->post);
+      return $Response->JSON->send($Request->fields);
    },
 
    test: function ($response) {

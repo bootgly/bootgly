@@ -684,7 +684,7 @@ class Decoder_Downloading extends Decoders
    }
 
    /**
-    * Finalize: populate $_FILES and $_POST, reset state.
+    * Finalize: populate $Request->fields and $Request->files, reset state.
     */
    private function finish (Packages $Package): void
    {
@@ -697,19 +697,32 @@ class Decoder_Downloading extends Decoders
          try {
             fclose($this->fileHandler);
          }
-         catch (Throwable) {}
+         catch (Throwable) {
+            // ignore
+         }
+
          $this->fileHandler = null;
       }
 
-      // @ Populate $_POST
+      $WPI = WPI;
+      /** @var Server\Request $Request */
+      $Request = $WPI->Request;
+
+      // @ Populate $Request->fields
       if ($this->postEncoded !== '') {
-         parse_str($this->postEncoded, $_POST);
+         /** @var array<string,array<string>|bool|float|int|string> $fields */
+         $fields = [];
+
+         parse_str($this->postEncoded, $fields);
+
+         $Request->fields = $fields; // @phpstan-ignore assign.propertyType
       }
 
-      // @ Populate $_FILES
+      // @ Populate $Request->files
       if (! empty($this->files)) {
          $filesEncoded = '';
 
+         // @@
          foreach ($this->files as $index => $file) {
             $uploadKey = $this->filesKeys[$index] ?? '';
             $filesEncoded .= urlencode($uploadKey) . '=' . $index . '&';
@@ -717,19 +730,21 @@ class Decoder_Downloading extends Decoders
 
          if ($filesEncoded !== '') { // @phpstan-ignore notIdentical.alwaysTrue
             $filesData = $this->files;
-            parse_str($filesEncoded, $_FILES);
-            array_walk_recursive($_FILES, function (&$value) use ($filesData) {
+            /** @var array<string,array<string,bool|int|string|array<int|string,bool|int|string>>> $filesParsed */
+            $filesParsed = [];
+
+            parse_str($filesEncoded, $filesParsed);
+            array_walk_recursive($filesParsed, function (&$value) use ($filesData) {
                if (is_numeric($value) && isset($filesData[(int) $value])) {
                   $value = $filesData[(int) $value];
                }
             });
+
+            $Request->files = $filesParsed; // @phpstan-ignore assign.propertyType
          }
       }
 
       // @ Update Body state
-      $WPI = WPI;
-      /** @var Server\Request $Request */
-      $Request = $WPI->Request;
       $Request->Body->waiting = false;
       $Request->Body->streaming = true;
    }

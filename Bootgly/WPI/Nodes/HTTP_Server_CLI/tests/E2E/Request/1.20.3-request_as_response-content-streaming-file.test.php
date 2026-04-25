@@ -43,7 +43,7 @@ return new Specification(
       $result = [
          'streaming' => $Request->Body->streaming,
          'files' => $Request->files,
-         'post' => $Request->post,
+         'post' => $Request->fields,
       ];
 
       foreach (['doc', 'image'] as $key) {

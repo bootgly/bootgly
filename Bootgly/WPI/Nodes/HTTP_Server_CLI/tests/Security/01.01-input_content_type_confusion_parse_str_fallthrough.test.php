@@ -28,16 +28,16 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test\Specification;
  *
  *     _method=DELETE&_token=attacker-owned
  *
- *   `json_decode()` throws → `parse_str()` runs → `$Request->post` returns
+ *   `json_decode()` throws → `parse_str()` runs → `$Request->fields` returns
  *   `['_method' => 'DELETE', '_token' => 'attacker-owned']`. A handler that
- *   echoes or trusts `$Request->post` has been tricked into honouring
+ *   echoes or trusts `$Request->fields` has been tricked into honouring
  *   urlencoded nested keys on a JSON-only route.
  *
  * Fixed behaviour: `input()` branches on `Content-Type` first. For
  *   `application/json`, a parse failure returns `[]` — it never falls
  *   through to `parse_str()`.
  *
- * Observed on the wire by echoing `$Request->post` as JSON. A vulnerable
+ * Observed on the wire by echoing `$Request->fields` as JSON. A vulnerable
  *   server returns the injected keys; a fixed server returns `[]` / `{}`.
  */
 
@@ -62,11 +62,11 @@ return new Specification(
 
    response: function (Request $Request, Response $Response, Router $Router) {
       yield $Router->route('/json-only', function (Request $Request, Response $Response) {
-         // @ Force body read, then echo $Request->post as JSON — this is
+         // @ Force body read, then echo $Request->fields as JSON — this is
          //   the application-layer surface where the confusion is
          //   observable (mass-assignment / CSRF-token / _method override).
          $Request->receive();
-         return $Response->Json->send($Request->post);
+         return $Response->Json->send($Request->fields);
       });
    },
 
@@ -92,7 +92,7 @@ return new Specification(
       }
 
       // @ Any of these attacker-controlled keys appearing in the echoed
-      //   $Request->post proves parse_str() ran on a JSON-declared body.
+      //   $Request->fields proves parse_str() ran on a JSON-declared body.
       if (
          str_contains($body, '_method')
          || str_contains($body, '_token')
@@ -101,7 +101,7 @@ return new Specification(
       ) {
          return 'Request::input() fell through to parse_str() on invalid '
             . 'JSON with Content-Type: application/json — attacker '
-            . 'urlencoded keys leaked into $Request->post. Body: '
+            . 'urlencoded keys leaked into $Request->fields. Body: '
             . \substr($body, 0, 200);
       }
 

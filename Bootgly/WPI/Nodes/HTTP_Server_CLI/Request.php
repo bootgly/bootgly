@@ -387,40 +387,57 @@ class Request
     * The Request Body input.
     */
    public string $input {
-      /** @phpstan-ignore-next-line */
-      get => $this->Body->input ?? $this->receive();
-   }
-   /**
-    * The Request POST data.
-    *
-      * @var array|string
-      * @phpstan-var array<string, array<string>|bool|float|int|string>|string
-    */
-   public array|string $post {
       get {
-         if ($this->method === 'POST' && $_POST === [] && ! $this->Body->streaming) {
+         if ($this->Body->input === null) {
+            // @ Materialize Body->input via Body->parse (side-effect).
+            $this->receive();
+         }
+         return $this->Body->input ?? '';
+      }
+   }
+
+   /**
+    * @internal Backing storage for $fields.
+    *
+    * @var array<string, array<string>|bool|float|int|string>
+    */
+   private array $_fields = [];
+   /**
+    * @internal Backing storage for $files.
+    *
+    * @var array<string, array<string, bool|int|string|array<int|string, bool|int|string>>>
+    */
+   private array $_files = [];
+   /**
+    * The Request fields (parsed body for application/x-www-form-urlencoded
+    * and multipart/form-data; raw decoded array for application/json).
+    *
+    * Replaces the legacy $post property; no superglobal $_POST is used
+    * anywhere in the HTTP_Server_CLI request lifecycle.
+    *
+    * @var array<string, array<string>|bool|float|int|string>
+    */
+   public array $fields {
+      get {
+         if ($this->method === 'POST' && $this->_fields === [] && ! $this->Body->streaming) {
             /** @var array<string, array<string>|bool|float|int|string>|null $input */
             $input = $this->input();
             return $input ?? [];
          }
 
-         /** @var array<string, array<string>|bool|float|int|string> $post */
-         $post = $_POST;
-         return $post;
+         return $this->_fields;
       }
+      set { $this->_fields = $value; }
    }
    /**
-    * The Request files.
+    * The Request files (uploaded multipart parts written to disk by the
+    * streaming decoder). Replaces the legacy $_FILES superglobal.
     *
-    * @var array<string, array<string, bool|int|string|array<int|string, bool|int|string>>> 
+    * @var array<string, array<string, bool|int|string|array<int|string, bool|int|string>>>
     */
    public array $files {
-      get {
-         /** @var array<string, array<string, bool|int|string|array<int|string, bool|int|string>>> $files */
-         $files = $_FILES;
-
-         return $files;
-      }
+      get { return $this->_files; }
+      set { $this->_files = $value; }
    }
 
    // * Metadata
@@ -530,9 +547,6 @@ class Request
       get => ! $this->fresh;
    }
 
-   /** @var array<string, mixed> */
-   protected array $_SERVER;
-
    // * Metadata
    public readonly string $on;
    public readonly string $at;
@@ -557,9 +571,8 @@ class Request
 
       // * Data
       // ... dynamically
-      $_POST = [];
-      #$_FILES = []; // Reseted on __destruct only
-      $_SERVER = [];
+      $this->_fields = [];
+      $this->_files = [];
 
       // * Metadata
       $this->on = date("Y-m-d");
@@ -570,7 +583,9 @@ class Request
 
    public function __clone ()
    {
-      $this->_SERVER = $_SERVER;
+      // @ Per-request data: never bleed across cached connections.
+      $this->_fields = [];
+      $this->_files = [];
 
       $this->Session = null;
 
@@ -584,9 +599,9 @@ class Request
    }
    public function reboot (): void
    {
-      if ( isSet($this->_SERVER) ) {
-         $_SERVER = $this->_SERVER;
-      }
+      // @ Reset per-request data accumulators.
+      $this->_fields = [];
+      $this->_files = [];
 
       $this->Session = null;
 
@@ -888,17 +903,17 @@ class Request
     */
    public function download (null|string $key = null): array|null
    {
-      // : parsed $_FILES || null
+      // : parsed files || null
       if ($key === null) {
          /** @var array<string,array<string,bool|int|string|array<int|string,bool|int|string>>> $files */
-         $files = $_FILES;
+         $files = $this->_files;
 
          return $files;
       }
 
-      if ( isSet($_FILES[$key]) && is_array($_FILES[$key]) ) {
+      if ( isSet($this->_files[$key]) ) {
          /** @var array<string,bool|int|string|array<int|string,bool|int|string>> $file */
-         $file = $_FILES[$key];
+         $file = $this->_files[$key];
          return $file;
       }
 
@@ -914,30 +929,36 @@ class Request
     */
    public function receive (null|string $key = null): array|string|null
    {
+      // @ Materialize Body->input from Body->raw (validates JSON / handles CT).
+      //   Side-effect: $this->input property hook stops recursing once
+      //   $Body->input is non-null.
       $content_type = $this->Header->get('Content-Type');
-      $parsed = $this->Body->parse(
+      $this->Body->parse(
          content: 'raw',
          type: $content_type
       );
 
-      // : parsed $_POST || null
-      if ($key === null) {
-         /** @var array<string,array<string>|bool|float|int|string> $post */
-         $post = $_POST;
-         return $post;
+      // @ Pure parser: returns parsed body as array (or [] for unknown CT).
+      //   Stored on the Request to back $fields without populating $_POST.
+      $parsed = $this->input();
+      if ($parsed !== null) {
+         $this->_fields = $parsed;
       }
 
-      if ( isSet($_POST[$key]) ) {
-         $value = $_POST[$key];
+      // : parsed fields || null
+      if ($key === null) {
+         return $this->_fields;
+      }
+
+      if (isSet($this->_fields[$key])) {
+         $value = $this->_fields[$key];
 
          if (is_array($value)) {
             /** @var array<string,mixed> $value */
             return $value;
          }
 
-         if (is_scalar($value)) {
-            return (string) $value;
-         }
+         return (string) $value;
       }
 
       return null;
@@ -1270,12 +1291,12 @@ class Request
    public function __destruct ()
    {
       // @ Delete files downloaded by server in temp folder
-      if (empty($_FILES) === false) {
+      if (empty($this->_files) === false) {
          // @ Clear cache
          clearstatcache();
 
          // @ Delete temp files + release aggregate-cap reservations
-         array_walk_recursive($_FILES, function ($value, $key) {
+         array_walk_recursive($this->_files, function ($value, $key) {
             if ($key === 'tmp_name' && is_string($value) && $value !== '') {
                if (is_file($value) === true) {
                   unlink($value);
@@ -1285,8 +1306,7 @@ class Request
             }
          });
 
-         // @ Reset $_FILES
-         $_FILES = [];
+         $this->_files = [];
       }
    }
 }

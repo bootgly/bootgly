@@ -38,7 +38,7 @@ return new Specification(
       $Request->download();
 
       return $Response->Json->send(
-         $Request->files + $Request->post
+         $Request->files + $Request->fields
       );
    },
 

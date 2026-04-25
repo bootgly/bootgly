@@ -69,13 +69,13 @@ $Router->route('/Request/test.j', function (Request $Request, Response $Response
 });
 $Router->route('/Request/test.k', function (Request $Request, Response $Response) {
    return $Response->JSON->send(
-      $Request->inputs
+      $Request->fields
    );
 });
 
 $Router->route('/Request/test.l', function (Request $Request, Response $Response) {
    return $Response->JSON->send(
-      $Request->post
+      $Request->fields
    );
 });
 
@@ -130,7 +130,7 @@ $Router->route('/requesting', function (Request $Request, Response $Response) {
       [
          'input'  => $Request->input,
          'inputs' => $Request->inputs,
-         'post'   => $_POST
+         'post'   => $Request->fields
       ]
    );
 
@@ -158,7 +158,7 @@ $Router->route('/requesting', function (Request $Request, Response $Response) {
    #return $Response->send($Request->Cookies->get('test'));  // @ {...}
    // ? Body
    #return $Response->send($Request->inputs);        // @ {...}
-   #return $Response->send($Request->post);          // @ {...}
+   #return $Response->send($Request->fields);        // @ {...}
    #return $Response->JSON->send($Request->files);   // @ [...]
 
    // * Metadata

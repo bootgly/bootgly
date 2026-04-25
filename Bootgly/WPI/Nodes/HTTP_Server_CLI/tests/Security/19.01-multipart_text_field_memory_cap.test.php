@@ -21,6 +21,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test\Specification;
+use ReflectionProperty;
 use Throwable;
 
 
@@ -96,8 +97,6 @@ return new Specification(
       $OldWPIRequest = $WPI->Request;
       $OldWPIResponse = $WPI->Response;
       $OldWPIRouter = $WPI->Router;
-      $OldPost = $_POST;
-      $OldFiles = $_FILES;
 
       try {
          $Connection = new HTTPServerCLIMultipartFieldConnection($socket);
@@ -159,7 +158,19 @@ return new Specification(
          $probe['rejectRaw'] = $Package->rejectRaw;
          $probe['closed'] = $Connection->closed;
 
-         $payload = $_POST['payload'] ?? null;
+         // @ Probe internal storage via Reflection: bypasses the $fields
+         //   getter (which reads $Request->method that is uninitialized
+         //   in this minimal harness) to assert the oversize text field
+         //   was NOT materialized into Request state.
+         try {
+            $Reflection = new ReflectionProperty(Request::class, '_fields');
+            /** @var array<string,mixed> $stored */
+            $stored = $Reflection->getValue(Server::$Request) ?: [];
+            $payload = $stored['payload'] ?? null;
+         }
+         catch (Throwable) {
+            $payload = null;
+         }
          $probe['postLength'] = is_string($payload) ? strlen($payload) : null;
       }
       catch (Throwable $Throwable) {
@@ -173,8 +184,6 @@ return new Specification(
          $WPI->Request = $OldWPIRequest;
          $WPI->Response = $OldWPIResponse;
          $WPI->Router = $OldWPIRouter;
-         $_POST = $OldPost;
-         $_FILES = $OldFiles;
 
          if (is_resource($socket)) {
             @fclose($socket);
@@ -213,7 +222,7 @@ return new Specification(
       if ($probe['postLength'] !== null) {
          Vars::$labels = ['Probe state'];
          dump(json_encode($probe));
-         return 'Oversized multipart text field was still exposed in $_POST.';
+         return 'Oversized multipart text field was still exposed in $Request->fields.';
       }
 
       if (! str_contains($response, 'HARNESS-OK')) {

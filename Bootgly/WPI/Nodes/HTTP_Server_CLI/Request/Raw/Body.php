@@ -12,7 +12,6 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Raw;
 
 
 use function json_validate;
-use function parse_str;
 use function preg_match;
 use function trim;
 
@@ -88,13 +87,9 @@ class Body
                      return false;
                   }
 
-                  $_POST = $this->raw;
-
                   return true;
                // @ Parse raw - URL Encoded
                case 'application/x-www-form-urlencoded':
-                  parse_str($this->raw, $_POST);
-
                   return true;
             }
       }

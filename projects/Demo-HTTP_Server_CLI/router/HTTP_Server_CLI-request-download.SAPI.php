@@ -98,7 +98,7 @@ return static function
 
       // @ Build response with file metadata
       $files = [];
-      foreach ($_FILES as $key => $file) {
+      foreach ($Request->files as $key => $file) {
          $tmpExists = is_file($file['tmp_name'] ?? '');
 
          $files[$key] = [
@@ -119,7 +119,7 @@ return static function
          'streaming'   => $Request->Body->streaming,
          'files_count' => count($files),
          'files'       => $files,
-         'fields'      => $_POST,
+         'fields'      => $Request->fields,
          'memory_peak' => formatBytes(memory_get_peak_usage(true)),
       ];
 
