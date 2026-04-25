@@ -111,12 +111,17 @@ if (! class_exists('HTTPServerCLIBackpressureConnection', false)) {
 }
 
 /**
- * PoC — server-side nonblocking writes spin when fwrite() reports zero bytes.
+ * Recommendation #3 — server-side nonblocking writes must defer instead of close.
  *
- * A custom stream wrapper deterministically returns 0 for the first writes,
- * then accepts the whole buffer. The vulnerable implementation retries in the
- * same tight loop until success; a backpressure-aware implementation should
- * stop after the first no-progress write and close/defer the client.
+ * Wrapper deterministically returns 0 on the first stream_write, then accepts
+ * the whole buffer. Legacy implementation closed the connection after a single
+ * zero-write (Finding 3 hardening) which killed legitimate slow clients.
+ * The backpressure-aware implementation must:
+ *  - stash the un-sent bytes in $pendingBuffer
+ *  - request EVENT_WRITE notification (no-op when Server::$Event is unset
+ *    in this synchronous probe; the in-memory state is the contract)
+ *  - return true (NOT false) and keep the connection open
+ *  - drain pendingBuffer on the next call (simulating EVENT_WRITE reentry)
  */
 
 $probe = [
@@ -124,13 +129,23 @@ $probe = [
    'writingCalls' => null,
    'writingResult' => null,
    'writingClosed' => null,
+   'writingPending' => null,
+   'writingResumeResult' => null,
+   'writingResumePending' => null,
+   'writingResumeClosed' => null,
+   'writingFinalBytes' => null,
    'uploadCalls' => null,
    'uploadWritten' => null,
    'uploadClosed' => null,
+   'uploadPending' => null,
+   'uploadResumeResult' => null,
+   'uploadResumePending' => null,
+   'uploadResumeClosed' => null,
+   'uploadFinalBytes' => null,
 ];
 
 return new Specification(
-   description: 'TCP server writes must stop on zero-byte backpressure',
+   description: 'TCP server writes must defer (not close) on zero-byte backpressure',
    Separator: new Separator(line: true),
 
    request: function () use (&$probe): string {
@@ -140,7 +155,7 @@ return new Specification(
       }
 
       try {
-         HTTPServerCLIBackpressureStream::reset(8);
+         HTTPServerCLIBackpressureStream::reset(1);
 
          $writingSocket = fopen($scheme . '://writing', 'w+');
          if (! is_resource($writingSocket)) {
@@ -167,18 +182,23 @@ return new Specification(
             }
          };
 
-         $probe['writingResult'] = $WritingPackage->writing(
-            $writingSocket,
-            buffer: "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nOK"
-         );
+         $payloadW = "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nOK";
+
+         $probe['writingResult'] = $WritingPackage->writing($writingSocket, buffer: $payloadW);
          $probe['writingCalls'] = HTTPServerCLIBackpressureStream::$calls;
          $probe['writingClosed'] = $WritingConnection->closed;
+         $probe['writingPending'] = ($WritingPackage->pendingBuffer !== '');
+
+         $probe['writingResumeResult'] = $WritingPackage->writing($writingSocket, buffer: '');
+         $probe['writingResumePending'] = ($WritingPackage->pendingBuffer !== '');
+         $probe['writingResumeClosed'] = $WritingConnection->closed;
+         $probe['writingFinalBytes'] = HTTPServerCLIBackpressureStream::$written;
 
          if (is_resource($writingSocket)) {
             @fclose($writingSocket);
          }
 
-         HTTPServerCLIBackpressureStream::reset(8);
+         HTTPServerCLIBackpressureStream::reset(1);
 
          $uploadSocket = fopen($scheme . '://upload', 'w+');
          $uploadFile = tmpfile();
@@ -187,8 +207,8 @@ return new Specification(
             return "GET /backpressure-harness HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
          }
 
-         $payload = 'UPLOAD-PAYLOAD';
-         fwrite($uploadFile, $payload);
+         $payloadU = 'UPLOAD-PAYLOAD';
+         fwrite($uploadFile, $payloadU);
          rewind($uploadFile);
 
          $UploadConnection = new HTTPServerCLIBackpressureConnection($uploadSocket);
@@ -210,7 +230,7 @@ return new Specification(
             }
          };
 
-         $payloadLength = strlen($payload);
+         $payloadLength = strlen($payloadU);
          $probe['uploadWritten'] = $UploadPackage->upload(
             $uploadSocket,
             $uploadFile,
@@ -219,6 +239,12 @@ return new Specification(
          );
          $probe['uploadCalls'] = HTTPServerCLIBackpressureStream::$calls;
          $probe['uploadClosed'] = $UploadConnection->closed;
+         $probe['uploadPending'] = ($UploadPackage->pendingBuffer !== '');
+
+         $probe['uploadResumeResult'] = $UploadPackage->writing($uploadSocket, buffer: '');
+         $probe['uploadResumePending'] = ($UploadPackage->pendingBuffer !== '');
+         $probe['uploadResumeClosed'] = $UploadConnection->closed;
+         $probe['uploadFinalBytes'] = HTTPServerCLIBackpressureStream::$written;
 
          if (is_resource($uploadSocket)) {
             @fclose($uploadSocket);
@@ -254,16 +280,49 @@ return new Specification(
          return $probe['error'];
       }
 
-      if ($probe['writingCalls'] !== 1 || $probe['writingResult'] !== false || $probe['writingClosed'] !== true) {
+      if (
+         $probe['writingResult'] !== true
+         || $probe['writingClosed'] !== false
+         || $probe['writingPending'] !== true
+         || $probe['writingCalls'] !== 1
+      ) {
          Vars::$labels = ['Probe state'];
          dump(json_encode($probe));
-         return 'writing() retried after zero-byte backpressure instead of stopping immediately.';
+         return 'writing() did not defer cleanly on zero-byte backpressure (must return true, keep connection open, stash pendingBuffer).';
       }
 
-      if ($probe['uploadCalls'] !== 1 || $probe['uploadWritten'] !== 0 || $probe['uploadClosed'] !== true) {
+      $expectedW = "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nOK";
+      if (
+         $probe['writingResumeResult'] !== true
+         || $probe['writingResumePending'] !== false
+         || $probe['writingResumeClosed'] !== false
+         || $probe['writingFinalBytes'] !== $expectedW
+      ) {
          Vars::$labels = ['Probe state'];
          dump(json_encode($probe));
-         return 'upload() retried after zero-byte backpressure instead of stopping immediately.';
+         return 'writing() reentry did not drain pendingBuffer to completion.';
+      }
+
+      if (
+         $probe['uploadCalls'] !== 1
+         || $probe['uploadWritten'] !== 0
+         || $probe['uploadClosed'] !== false
+         || $probe['uploadPending'] !== true
+      ) {
+         Vars::$labels = ['Probe state'];
+         dump(json_encode($probe));
+         return 'upload() did not defer cleanly on zero-byte backpressure (must return 0, keep connection open, stash pendingBuffer).';
+      }
+
+      if (
+         $probe['uploadResumeResult'] !== true
+         || $probe['uploadResumePending'] !== false
+         || $probe['uploadResumeClosed'] !== false
+         || $probe['uploadFinalBytes'] !== 'UPLOAD-PAYLOAD'
+      ) {
+         Vars::$labels = ['Probe state'];
+         dump(json_encode($probe));
+         return 'upload() backlog did not drain via writing() reentry.';
       }
 
       if (! str_contains($response, 'HARNESS-OK')) {

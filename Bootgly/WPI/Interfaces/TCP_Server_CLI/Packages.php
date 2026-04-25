@@ -29,7 +29,6 @@ use function is_int;
 use function is_resource;
 use function is_string;
 use function microtime;
-use function stream_select;
 use function strlen;
 use function substr;
 use Throwable;
@@ -58,6 +57,24 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
    public array $uploading;
    // # Connection management
    public bool $closeAfterWrite;
+   // # Backpressure (Recommendation #3 — async write state machine)
+   //   Bytes that fwrite() could not push to the socket; held until the
+   //   event loop signals EVENT_WRITE readiness. Empty string means no
+   //   deferred write is in flight.
+   public string $pendingBuffer = '';
+   //   Drain cursor inside `$pendingBuffer`. Always 0 after `reset()`.
+   public int $pendingOffset = 0;
+   //   Absolute UNIX timestamp (microtime) past which the deferred write
+   //   is considered stalled and the connection is force-closed.
+   public float $pendingDeadline = 0.0;
+   //   Deferred close-after-write intent. Set when `closeAfterWrite` was
+   //   true at the moment a write deferred; the actual close happens once
+   //   `$pendingBuffer` fully drains.
+   public bool $closeAfterDrain = false;
+   //   Whether this Package has already requested EVENT_WRITE notification
+   //   from the event loop. Idempotent on `Select::add`, but tracking it
+   //   lets us issue a matching `del` on full drain.
+   public bool $writeRegistered = false;
 
 
    public Connection $Connection;
@@ -220,6 +237,18 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
       if ($state === States::Complete) {
          $this->write($Socket);
 
+         // @ Recommendation #3: write deferred to event loop. Do NOT
+         //   pipeline (next request would race with the unflushed bytes)
+         //   and do NOT close synchronously — `writing()` will close on
+         //   drain via `closeAfterDrain`.
+         if ($this->pendingBuffer !== '') {
+            if ($this->closeAfterWrite) {
+               $this->closeAfterDrain = true;
+               $this->closeAfterWrite = false;
+            }
+            return true;
+         }
+
          // @ Close connection if signaled (Connection: close, HTTP/1.0, etc.)
          if ($this->closeAfterWrite) {
             $this->closeAfterWrite = false;
@@ -248,6 +277,17 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
                }
 
                $this->write($Socket);
+
+               // @ Pipeline write deferred — stop and let event loop drain.
+               //   PHPStan cannot infer that `write()` mutates `$pendingBuffer`
+               //   via `writing()`, so it narrows the property to `''` here.
+               if ($this->pendingBuffer !== '') { // @phpstan-ignore notIdentical.alwaysFalse
+                  if ($this->closeAfterWrite) { // @phpstan-ignore if.alwaysFalse
+                     $this->closeAfterDrain = true;
+                     $this->closeAfterWrite = false;
+                  }
+                  return true;
+               }
 
                if ($this->closeAfterWrite) { // @phpstan-ignore if.alwaysFalse
                   $this->closeAfterWrite = false;
@@ -311,16 +351,62 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
     */
    public function writing (&$Socket, null|int $length = null, string $buffer = ''): bool
    {
+      // ! Recommendation #3: Backpressure-aware async write state machine.
+      //   Two entry modes:
+      //   - Forward: caller passes encoded response in `$buffer`. We try
+      //     fwrite once; on EAGAIN-like zero-write we stash the un-sent
+      //     bytes in `$pendingBuffer`, register EVENT_WRITE, and return
+      //     true. Caller (reading()) honors `$pendingBuffer !== ''` and
+      //     stops pipelining.
+      //   - Resume: event loop calls us back with empty `$buffer` after
+      //     the socket signals writable. We drain `$pendingBuffer` from
+      //     `$pendingOffset`. On full drain we del EVENT_WRITE and apply
+      //     `$closeAfterDrain`. Replaces the old synchronous
+      //     `stream_select(..., 200_000)` retry that closed legitimate
+      //     slow clients after 50 zero-writes.
+
+      // @ Resume mode: drain stashed bytes from a previous stall.
+      if ($this->pendingBuffer !== '') {
+         // Deadline guard: stalled longer than maxWriteWallTime \u2192 close.
+         if ($this->pendingDeadline > 0.0 && microtime(true) > $this->pendingDeadline) {
+            $this->reset($Socket);
+            $this->Connection->close();
+            return false;
+         }
+
+         // Optional: caller passed extra bytes alongside resume. Append
+         //   them subject to the per-connection memory cap.
+         if ($buffer !== '') {
+            $remaining = strlen($this->pendingBuffer) - $this->pendingOffset + strlen($buffer);
+            if ($remaining > Server::$maxPendingBytes) {
+               $this->reset($Socket);
+               $this->Connection->close();
+               return false;
+            }
+            $this->pendingBuffer .= $buffer;
+         }
+
+         $buffer = ($this->pendingOffset === 0)
+            ? $this->pendingBuffer
+            : substr($this->pendingBuffer, $this->pendingOffset);
+         $length = strlen($buffer);
+      }
+
       // !
       $length ??= strlen($buffer);
       if ($length === 0 || $buffer === '') {
+         // Nothing to send and nothing pending: ensure event-loop registration is cleared.
+         $this->reset($Socket);
+         if ($this->closeAfterDrain) {
+            $this->closeAfterDrain = false;
+            $this->Connection->close();
+         }
          return true;
       }
 
       $written = 0;
       $failed = false;
       $sent = 0; // Bytes sent to client per write loop iteration
-      $zeroWrites = 0; // Backpressure: consecutive no-progress writes
 
       // @
       try {
@@ -332,27 +418,38 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
                break;
             }
             if ($sent === 0) {
-               // ! Backpressure: wait for write readiness instead of busy-spinning.
-               //   On userspace stream wrappers (used by PoC tests), stream_select()
-               //   cannot cast the resource and throws ValueError: we close immediately,
-               //   matching the original Finding 3 hardening for stuck writers.
-               $writeSet = [$Socket];
-               $readSet = null;
-               $exceptSet = null;
-               try {
-                  $ready = @stream_select($readSet, $writeSet, $exceptSet, 0, 200_000);
-               }
-               catch (Throwable) {
-                  $ready = false;
-               }
-               if ($ready === false || $ready === 0 || ++$zeroWrites > 50) {
+               // ! Backpressure: defer to the event loop instead of
+               //   busy-spinning or closing. Stash the un-sent tail and
+               //   request EVENT_WRITE; the loop will reenter `writing()`
+               //   when the socket is writable.
+               $newPendingLen = strlen($buffer);
+               if ($newPendingLen > Server::$maxPendingBytes) {
+                  $this->reset($Socket);
                   $this->Connection->close();
                   return false;
                }
-               continue;
+
+               $this->pendingBuffer = $buffer;
+               $this->pendingOffset = 0;
+               if ($this->pendingDeadline === 0.0) {
+                  $this->pendingDeadline = microtime(true) + (float) Server::$maxWriteWallTime;
+               }
+               if (! $this->writeRegistered && isset(Server::$Event)) {
+                  Server::$Event->add($Socket, Server::$Event::EVENT_WRITE, $this);
+                  $this->writeRegistered = true;
+               }
+
+               // Stats for the partial write (if any).
+               if ($written > 0 && Connections::$stats) {
+                  Connections::$writes++;
+                  Connections::$written += $written;
+                  if ( isSet(Connections::$Connections[(int) $Socket]) ) {
+                     Connections::$Connections[(int) $Socket]->writes++;
+                  }
+               }
+               return true;
             }
 
-            $zeroWrites = 0;
             $written += $sent;
 
             if ($sent < $length) {
@@ -363,6 +460,17 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
 
             if ( count($this->uploading) ) {
                $written += $this->uploading($Socket);
+               // If uploading() stalled, it set pendingBuffer + EVENT_WRITE.
+               if ($this->pendingBuffer !== '') {
+                  if ($written > 0 && Connections::$stats) {
+                     Connections::$writes++;
+                     Connections::$written += $written;
+                     if ( isSet(Connections::$Connections[(int) $Socket]) ) {
+                        Connections::$Connections[(int) $Socket]->writes++;
+                     }
+                  }
+                  return true;
+               }
             }
 
             break;
@@ -371,6 +479,10 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
       catch (Throwable) {
          $sent = false;
       }
+
+      // @ Full drain reached this point: cleanup deferred-write state
+      //   (idempotent if no EVENT_WRITE was ever registered).
+      $this->reset($Socket);
 
       // @ Close Connection
       if ($sent === false) {
@@ -392,7 +504,34 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
          }
       }
 
+      // @ Apply close-after-drain (deferred close intent from reading()).
+      if ($this->closeAfterDrain) {
+         $this->closeAfterDrain = false;
+         $this->Connection->close();
+      }
+
       return true;
+   }
+   /**
+    * Reset deferred-write state and drop any EVENT_WRITE registration.
+    *
+    * @param resource $Socket
+    */
+   protected function reset (&$Socket): void
+   {
+      $this->pendingBuffer = '';
+      $this->pendingOffset = 0;
+      $this->pendingDeadline = 0.0;
+
+      if ($this->writeRegistered) {
+         if (isset(Server::$Event)) {
+            try {
+               Server::$Event->del($Socket, Server::$Event::EVENT_WRITE);
+            }
+            catch (Throwable) {}
+         }
+         $this->writeRegistered = false;
+      }
    }
    public function read (&$Socket): void
    {
@@ -410,7 +549,6 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
     */
    public function downloading ($Socket): int|false
    {
-      // TODO test!!!
       $queued = $this->downloading[0] ?? null;
       if (! is_array($queued)) {
          return false;
@@ -493,7 +631,7 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
     * @throws Throwable
     */
    public function uploading ($Socket): int
-   { // TODO support to upload multiple files
+   {
       $queued = $this->uploading[0] ?? null;
       if (! is_array($queued)) {
          return 0;
@@ -697,7 +835,6 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
    public function upload (&$Socket, &$Handler, int $rate, int $length): int
    {
       $written = 0;
-      $zeroWrites = 0; // Backpressure: consecutive no-progress writes
 
       while ($written < $length) {
          // ! Stream
@@ -725,26 +862,30 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
 
             if ($sent === false) break;
             if ($sent === 0) {
-               // ! Backpressure: wait for write readiness instead of busy-spinning.
-               //   On userspace stream wrappers (used by PoC tests), stream_select()
-               //   cannot cast the resource and throws ValueError: we close immediately.
-               $writeSet = [$Socket];
-               $readSet = null;
-               $exceptSet = null;
-               try {
-                  $ready = @stream_select($readSet, $writeSet, $exceptSet, 0, 200_000);
-               }
-               catch (Throwable) {
-                  $ready = false;
-               }
-               if ($ready === false || $ready === 0 || ++$zeroWrites > 50) {
+               // ! Recommendation #3: defer instead of synchronously
+               //   closing. Stash the un-sent slice as `pendingBuffer`
+               //   and request EVENT_WRITE; `writing()` will drain it on
+               //   loop reentry. NOTE: bytes still on disk past this
+               //   fread chunk are not auto-resumed in this revision \u2014
+               //   callers that need full-file delivery across stalls
+               //   should keep `$rate >= $length` (single fread).
+               if ($read > Server::$maxPendingBytes) {
                   $this->Connection->close();
                   return $written;
                }
-               continue;
+
+               $this->pendingBuffer = $buffer;
+               $this->pendingOffset = 0;
+               if ($this->pendingDeadline === 0.0) {
+                  $this->pendingDeadline = microtime(true) + (float) Server::$maxWriteWallTime;
+               }
+               if (! $this->writeRegistered && isset(Server::$Event)) {
+                  Server::$Event->add($Socket, Server::$Event::EVENT_WRITE, $this);
+                  $this->writeRegistered = true;
+               }
+               return $written;
             }
 
-            $zeroWrites = 0;
             $written += $sent;
 
             if ($sent < $read) {

@@ -124,6 +124,15 @@ class TCP_Server_CLI implements Servers, Logging
    public static null|string $Application = null; 
    public static null|Decoder $Decoder = null;
    public static null|Encoder $Encoder = null;
+   // # Backpressure (async write state machine)
+   //   Maximum bytes a single connection may keep in its in-memory write
+   //   backlog while the socket is unwritable. Past this threshold the
+   //   connection is closed to avoid memory exhaustion.
+   public static int $maxPendingBytes = 4194304; // 4 MiB
+   //   Wall-clock budget (seconds) a deferred write may remain stalled
+   //   before the connection is closed deterministically. Replaces the
+   //   previous synchronous `stream_select(..., 200_000)` retry loop.
+   public static int $maxWriteWallTime = 30;
 
    // * Metadata
    // # State
