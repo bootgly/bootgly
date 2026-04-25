@@ -92,9 +92,9 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
          $EOF = false;
       }
 
-      // @ Check connection reset (End-Of-File)?
+      // @ Check connection reset (End-of-File)?
       if ($EOF) {
-         #$this->log('Failed to ' . $operation . ' package: End-Of-File!' . PHP_EOL);
+         #$this->log('Failed to ' . $operation . ' package: End-of-File!' . PHP_EOL);
          Connections::$errors[$operation]++;
          $this->Connection->close();
          return true;

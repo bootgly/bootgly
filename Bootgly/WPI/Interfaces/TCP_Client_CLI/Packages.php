@@ -99,10 +99,10 @@ class Packages implements WPI\Connections\Packages
 
       // @ Check connection reset?
       if ($eof) {
-         $this->log(
-            'Failed to ' . $operation . ' package: End-of-file!' . PHP_EOL,
-            self::LOG_WARNING_LEVEL
-         );
+         // $this->log(
+         //    'Failed to ' . $operation . ' package: End-of-file!' . PHP_EOL,
+         //    self::LOG_WARNING_LEVEL
+         // );
 
          $this->Connection->close();
 

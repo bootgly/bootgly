@@ -351,11 +351,31 @@ class Request
             $name = Session::$name;
             $id = $this->Cookies->get($name);
 
-            if ($id === '') {
+            // ! Strict mode for client-supplied session IDs (RFC 6265 + OWASP
+            //   Session Management). Two rejection paths:
+            //     1. The cookie is missing or carries an ID that does not
+            //        match the canonical hex format — generate a fresh ID
+            //        before constructing Session.
+            //     2. The format-valid ID does not resolve to an existing
+            //        server-issued session file (Handler::read() failed to
+            //        load any data) — rotate to a fresh ID before any
+            //        first write so persistence cannot adopt an attacker-
+            //        chosen ID. This closes the session-fixation primitive
+            //        described in `Security_Audit_Report` Finding 6.
+            $clientSupplied = $id !== ''
+               && preg_match('/^[a-f0-9]{32,64}$/', $id) === 1;
+
+            if ( ! $clientSupplied) {
                $id = bin2hex(random_bytes(16));
             }
 
-            $this->Session = new Session($id);
+            $Session = new Session($id);
+
+            if ($clientSupplied && ! $Session->loaded) {
+               $Session->rotate(bin2hex(random_bytes(16)));
+            }
+
+            $this->Session = $Session;
          }
 
          return $this->Session;

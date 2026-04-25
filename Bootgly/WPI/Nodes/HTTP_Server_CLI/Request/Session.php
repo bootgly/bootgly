@@ -62,6 +62,13 @@ class Session
    protected array $data = [];
    protected bool $needSave = false;
    public protected(set) string $id;
+   /**
+    * True when the supplied ID matched an existing server-issued session
+    * file and its data was successfully read. Used by `Request->Session`
+    * to enforce strict mode: unknown client-supplied IDs are rotated to
+    * a fresh server-generated ID before any first write.
+    */
+   public protected(set) bool $loaded = false;
    protected bool $isSafe = true;
    /** @var array{callable-string,callable-string} */
    protected array $serializer = ['serialize', 'unserialize'];
@@ -96,6 +103,7 @@ class Session
 
       if (Handler::$instance && $data = Handler::$instance->read($id)) {
          $this->data = (array) ($this->serializer[1])($data);
+         $this->loaded = true;
       }
    }
 
@@ -290,6 +298,20 @@ class Session
 
       HTTP_Server_CLI::$Response->Header->Cookies->append($Cookie);
       $this->cookieEmitted = true;
+   }
+
+   /**
+    * Replace the session ID without touching the storage backend or
+    * emitting a Set-Cookie. Used by `Request->Session` strict mode to
+    * discard an unknown client-supplied ID before any persistence.
+    *
+    * Cookie issuance is still deferred to `emit()` and only fires on the
+    * next mutation, preserving the read-only no-Set-Cookie invariant.
+    */
+   public function rotate (string $newId): void
+   {
+      $this->id = $newId;
+      $this->loaded = false;
    }
 
    /**

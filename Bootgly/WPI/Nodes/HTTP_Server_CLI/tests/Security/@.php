@@ -125,5 +125,8 @@ return new Suite(
       // # Request Header
       // field-name lookup must be case-insensitive (uppercase/mixed variants)
       '20.01-header_case_insensitivity',
+      // # Request Session
+      // unknown client-supplied IDs must be rotated before first write
+      '21.01-session_strict_mode_unknown_id',
    ],
 );
