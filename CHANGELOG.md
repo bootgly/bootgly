@@ -2,6 +2,18 @@
 
 Changelog for Bootgly framework. All notable changes to this project will be documented in this file. Imported from ROADMAP.md.
 
+## v0.14.7-beta ✅
+
+> Focus: **Multipart text field memory caps and TCP nonblocking write backpressure implementation**
+
+### WPI — Web Programming Interface
+
+- ✅ TCP Server CLI: `Packages` — backpressure implementation for zero-byte nonblocking `fwrite()` returns: stops streaming and closes the slow client immediately instead of busy-spinning (completes the fix whose regression test shipped in v0.14.6)
+- ✅ HTTP Server CLI: `Decoder_Downloading` — independent memory caps for multipart text fields (`maxMultipartFieldSize` 1 MiB), part headers (`maxMultipartHeaderSize` 8 KiB), field count (`maxMultipartFields`), and file count (`maxMultipartFiles`); oversized text fields, headers, and excess parts are now rejected with `413` before buffering; server configuration exposes these limits as optional arguments
+- ✅ HTTP Server CLI: Security regression test `19.01-multipart_text_field_memory_cap` covering 1 MiB+1 field rejection scenario
+
+---
+
 ## v0.14.6-beta ✅
 
 > Focus: **Nonblocking write backpressure spin prevention in TCP Server**
