@@ -2,6 +2,19 @@
 
 Changelog for Bootgly framework. All notable changes to this project will be documented in this file. Imported from ROADMAP.md.
 
+## v0.14.8-beta ✅
+
+> Focus: **Request header field names normalized to lowercase for full case-insensitivity compliance**
+
+### WPI — Web Programming Interface
+
+- ✅ HTTP Server CLI: `Request\Raw\Header::build()` — header field names now lowercased at parse time (RFC 9110 §5.1), making all lookups via `Header::get()` and `Header::append()` operate on a single canonical form; eliminates middleware bypass vectors for `AUTHORIZATION`, `ORIGIN`, `X-FORWARDED-FOR`, `COOKIE`, and any other attacker-controlled mixed-case header names
+- ✅ HTTP Server CLI: `Request\Raw\Header\Cookies::build()` — updated to look up the canonical lowercase `cookie` key
+- ✅ HTTP Server CLI: `Header::get()` simplified to a single lowercase lookup (removed redundant per-call dual lookup)
+- ✅ HTTP Server CLI: Security regression test `20.01-header_case_insensitivity` covering uppercase `AUTHORIZATION`, `ORIGIN`, `X-FORWARDED-FOR`, and `COOKIE` resolution
+
+---
+
 ## v0.14.7-beta ✅
 
 > Focus: **Multipart text field memory caps and TCP nonblocking write backpressure implementation**
