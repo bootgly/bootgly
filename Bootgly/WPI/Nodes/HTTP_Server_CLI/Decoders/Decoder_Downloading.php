@@ -42,6 +42,7 @@ use function urlencode;
 use Throwable;
 
 use const Bootgly\WPI;
+use Bootgly\WPI\Endpoints\Servers\Decoder\States;
 use Bootgly\WPI\Endpoints\Servers\Packages;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages as TCP_Packages;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI as Server;
@@ -76,7 +77,6 @@ class Decoder_Downloading extends Decoders
    private int $fieldsCount;
    private int $filesCount;
    private int $bytesSinceDiskCheck;
-   private bool $rejected;
 
    // # States
    private const int STATE_BOUNDARY_START  = 0;
@@ -110,7 +110,6 @@ class Decoder_Downloading extends Decoders
       $this->fieldsCount = 0;
       $this->filesCount = 0;
       $this->bytesSinceDiskCheck = 0;
-      $this->rejected = false;
    }
 
    /**
@@ -121,7 +120,7 @@ class Decoder_Downloading extends Decoders
       $this->tailBuffer = $data;
    }
 
-   public function decode (Packages $Package, string $buffer, int $size): int
+   public function decode (Packages $Package, string $buffer, int $size): States
    {
       $WPI = WPI;
       /** @var Server $Server */
@@ -133,11 +132,10 @@ class Decoder_Downloading extends Decoders
 
       // ! Reject helper: centralize cleanup and rejection logic
       $reject = function (string $raw) use ($Package, $Request): void {
-         if ($this->rejected) {
+         if ($Package->rejected) {
             return;
          }
 
-         $this->rejected = true;
          $this->tailBuffer = '';
          $this->headerBuffer = '';
          $this->fieldBuffer = '';
@@ -155,7 +153,9 @@ class Decoder_Downloading extends Decoders
          $Request->Body->waiting = false;
 
          if ($Package instanceof TCP_Packages) {
-            $Package->reject($raw);
+            $Package->reject($raw); // sets $Package->rejected = true
+         } else {
+            $Package->rejected = true;
          }
       };
       // ! Append field data with size check, centralize logic for both boundary and non-boundary accumulation
@@ -185,7 +185,7 @@ class Decoder_Downloading extends Decoders
       // ?: Valid HTTP Client Body Timeout
       $elapsed = time() - $this->decoded;
       if ($elapsed >= 60 && $this->read === $this->downloaded) {
-         $this->finish();
+         $this->finish($Package);
          $Package->Decoder = null;
          return $Server::$Decoder->decode($Package, $buffer, $size); // @phpstan-ignore method.nonObject
       }
@@ -219,7 +219,7 @@ class Decoder_Downloading extends Decoders
                if ($afterBoundary + 2 <= strlen($data)) {
                   if (substr($data, $afterBoundary, 2) === '--') {
                      // @ Final boundary: finish
-                     $this->finish();
+                     $this->finish($Package);
                      $data = '';
                      break;
                   }
@@ -413,7 +413,7 @@ class Decoder_Downloading extends Decoders
                   // @ Check if this is the final boundary (--)
                   if ($afterBoundary + 2 <= strlen($data)) {
                      if (substr($data, $afterBoundary, 2) === '--') {
-                        $this->finish();
+                        $this->finish($Package);
                         $data = '';
                         break;
                      }
@@ -483,7 +483,7 @@ class Decoder_Downloading extends Decoders
                   // @ Check if this is the final boundary (--)
                   if ($afterBoundary + 2 <= strlen($data)) {
                      if (substr($data, $afterBoundary, 2) === '--') {
-                        $this->finish();
+                        $this->finish($Package);
                         $data = '';
                         break;
                      }
@@ -523,8 +523,9 @@ class Decoder_Downloading extends Decoders
                break;
          }
 
-         if ($this->rejected) {
-            return 0;
+         if ($Package->rejected) {
+            $Package->consumed = 0;
+            return States::Rejected;
          }
 
          // @ If data is null, we need more data (save remainder in tail buffer)
@@ -536,17 +537,20 @@ class Decoder_Downloading extends Decoders
       // @ Update Body metadata
       $Body->downloaded = $this->downloaded;
 
-      if ($this->rejected) {
-         return 0;
+      if ($Package->rejected) {
+         $Package->consumed = 0;
+         return States::Rejected;
       }
 
       // @ Check if all data received
       if ($Body->length !== null && $this->downloaded >= $Body->length) {
-         $this->finish();
-         return $Body->length;
+         $this->finish($Package);
+         $Package->consumed = $Body->length;
+         return States::Complete;
       }
 
-      return 0;
+      $Package->consumed = 0;
+      return States::Incomplete;
    }
 
    /**
@@ -656,9 +660,9 @@ class Decoder_Downloading extends Decoders
    /**
     * Finalize: populate $_FILES and $_POST, reset state.
     */
-   private function finish (): void
+   private function finish (Packages $Package): void
    {
-      if ($this->rejected) {
+      if ($Package->rejected) {
          return;
       }
 

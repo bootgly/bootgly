@@ -18,6 +18,7 @@ use Throwable;
 use Bootgly\ACI\Logs\LoggableEscaped;
 use Bootgly\ACI\Logs\Logger;
 use Bootgly\WPI;
+use Bootgly\WPI\Endpoints\Servers\Decoder\States;
 use Bootgly\WPI\Interfaces\UDP_Server_CLI as Server;
 
 
@@ -100,10 +101,12 @@ class Router implements WPI\Connections\Packages
 
          // @ Decode + respond
          if (Server::$Decoder) {
-            $decoded = ($Connection->Decoder ?? Server::$Decoder)
+            $Connection->consumed = 0;
+            $Connection->rejected = false;
+            $state = ($Connection->Decoder ?? Server::$Decoder)
                ->decode($Connection, $buffer, $received);
 
-            if ($decoded > 0) {
+            if ($state === States::Complete) {
                $Connection->write($Socket);
             }
          }

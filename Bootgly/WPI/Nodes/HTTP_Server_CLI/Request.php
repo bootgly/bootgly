@@ -57,6 +57,7 @@ use AllowDynamicProperties;
 use JsonException;
 
 use const Bootgly\WPI;
+use Bootgly\WPI\Endpoints\Servers\Decoder\States;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Decoder_Chunked;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Decoder_Downloading;
@@ -623,20 +624,23 @@ class Request
     * @param string $buffer
     * @param int $size
     *
-    * @return int
+    * @return States
     */
-   public function decode (Packages $Package, string &$buffer, int $size): int
+   public function decode (Packages $Package, string &$buffer, int $size): States
    {
       // @ Centralized HTTP/1.1 framing parse (Recommendation #1).
       //   A SINGLE linear scan over the request head produces the canonical
       //   `Frame` value object: request line, lowercased fields map, and
       //   every framing decision (CL / TE / Expect / Content-Type /
       //   Connection / Host duplicate). On rejection the parser has already
-      //   called `$Package->reject()` and returns `null`. Incomplete buffers
-      //   also return `null` (no reject) so we wait for more bytes.
+      //   called `$Package->reject()` (which sets `$Package->rejected`) and
+      //   returns `null`. Incomplete buffers also return `null` (no reject)
+      //   so we wait for more bytes — the two cases are disambiguated via
+      //   `$Package->rejected` (Recommendation #2).
       $Frame = Frame::parse($Package, $buffer, $size);
       if ($Frame === null) {
-         return 0;
+         $Package->consumed = 0;
+         return $Package->rejected ? States::Rejected : States::Incomplete;
       }
 
       $separator_position = $Frame->separatorPosition;
@@ -703,8 +707,9 @@ class Request
                   // same connection would dispatch through this stale
                   // decoder and trigger an extra Request::__construct,
                   // whose __destruct clears the current $_FILES superglobal.
-                  if ($Decoder->decode($Package, $initialBody, $initialLength) <= 0) {
-                     return 0;
+                  if ($Decoder->decode($Package, $initialBody, $initialLength) !== States::Complete) {
+                     $Package->consumed = 0;
+                     return States::Rejected;
                   }
                }
                else {
@@ -798,7 +803,8 @@ class Request
 
          if (! $allowed) {
             $Package->reject("HTTP/1.1 400 Bad Request\r\n\r\n");
-            return 0;
+            $Package->consumed = 0;
+            return States::Rejected;
          }
       }
 
@@ -815,7 +821,8 @@ class Request
       $this->Body->position = $separator_position + 4;
 
       // @ return Request length
-      return $length;
+      $Package->consumed = $length;
+      return States::Complete;
    }
 
    /**

@@ -38,6 +38,20 @@ abstract class Packages
    public array $callbacks;
    // # Expiration
    public bool $expired;
+   // # Decoder outcome
+   /**
+    * Bytes consumed by the most recent `Decoder::decode()` call. Replaces
+    * the integer return value of `decode()`; reset to 0 at the start of
+    * every read cycle.
+    */
+   public int $consumed = 0;
+   /**
+    * `true` once `reject()` has been called for this read cycle. Lets the
+    * read loop distinguish a `States::Rejected` outcome from a
+    * `States::Incomplete` one when no bytes are consumed. Reset to `false`
+    * at the start of every read cycle.
+    */
+   public bool $rejected = false;
 
 
    public function __construct ()

@@ -12,10 +12,11 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_CLI;
 
 
 use Bootgly\WPI\Endpoints\Servers\Decoder;
+use Bootgly\WPI\Endpoints\Servers\Decoder\States;
 use Bootgly\WPI\Endpoints\Servers\Packages;
 
 
 abstract class Decoders implements Decoder
 {
-   abstract public function decode (Packages $Package, string $buffer, int $size): int;
+   abstract public function decode (Packages $Package, string $buffer, int $size): States;
 }

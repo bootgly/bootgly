@@ -38,6 +38,7 @@ use Bootgly\ACI\Logs\LoggableEscaped;
 use Bootgly\ACI\Logs\Logger;
 use Bootgly\API\Workables\Server as SAPI;
 use Bootgly\WPI;
+use Bootgly\WPI\Endpoints\Servers\Decoder\States;
 use Bootgly\WPI\Endpoints\Servers\Packages as Server_Packages;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI as Server;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections;
@@ -48,6 +49,7 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
 {
    use LoggableEscaped;
 
+
    // * Metadata
    // # Stream
    /** @var array<int, array<string, mixed>> */
@@ -56,6 +58,7 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
    public array $uploading;
    // # Connection management
    public bool $closeAfterWrite;
+
 
    public Connection $Connection;
 
@@ -198,11 +201,23 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
 
       // @ Write data
       $inputLength = $received; // Store original buffer length for pipelining
+      // @ Decoder outcome:
+      //   `States::Complete`   \u2192 byte count via `$this->consumed`, write response.
+      //   `States::Incomplete` \u2192 wait for more bytes (no response).
+      //   `States::Rejected`   \u2192 explicit rejection; socket already closed
+      //                          by `reject()`. Replaces the previous
+      //                          `!is_resource($Socket)` socket-state inference.
+      //   When no decoder is registered (raw TCP), there is no framing layer:
+      //   write whatever was fread and skip pipelining.
+      $state = States::Complete;
+      $this->rejected = false;
+      // @ `$this->consumed` is always written by every `decode()` outcome
+      //   (Complete/Incomplete/Rejected); no pre-reset needed.
       if (Server::$Decoder) { // @ Decode Application Data if exists
-         $received = ($this->Decoder ?? Server::$Decoder)->decode($this, $input, $received);
+         $state = ($this->Decoder ?? Server::$Decoder)->decode($this, $input, $received);
       }
 
-      if ($received) {
+      if ($state === States::Complete) {
          $this->write($Socket);
 
          // @ Close connection if signaled (Connection: close, HTTP/1.0, etc.)
@@ -213,8 +228,9 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
          }
 
          // @ Pipeline: process remaining requests in the same buffer
-         if (Server::$Decoder && $received < $inputLength) {
-            $offset = $received;
+         $consumed = $this->consumed;
+         if (Server::$Decoder && $consumed > 0 && $consumed < $inputLength) {
+            $offset = $consumed;
 
             while ($offset < $inputLength) {
                $remaining = substr($input, $offset);
@@ -222,11 +238,13 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
 
                $this->changed = true;
                $this->input = $remaining;
+               $this->consumed = 0;
+               $this->rejected = false;
 
                $decoded = ($this->Decoder ?? Server::$Decoder)->decode($this, $remaining, $remainingLength);
 
-               if ($decoded <= 0) {
-                  break; // Incomplete request — will arrive on next fread
+               if ($decoded !== States::Complete) {
+                  break; // Incomplete or rejected \u2014 stop pipelining
                }
 
                $this->write($Socket);
@@ -237,15 +255,14 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
                   return true;
                }
 
-               $offset += $decoded;
+               $offset += $this->consumed; // @phpstan-ignore smaller.invalid
             }
          }
       }
-      // @ Consume test handler on reject (decoder returned 0 but encoder never ran)
-      // Only consume when socket was closed by reject, not when waiting for more data (chunked)
-      else if (isset(SAPI::$Suite) && !is_resource($Socket)) { // @phpstan-ignore notIdentical.alwaysTrue
+      // @ Consume test handler on reject (decoder rejected, encoder never ran)
+      else if ($state === States::Rejected && isset(SAPI::$Suite)) {
          // @ Index-based dispatch installs the handler per-request from
-         //   the `X-Bootgly-Test` header — there is no FIFO slot to pop.
+         //   the `X-Bootgly-Test` header \u2014 there is no FIFO slot to pop.
          //   We only shift for legacy/no-header priming requests, but
          //   never unconditionally: if the harness is active and the
          //   request was indexed (currentTestIndex set), skip.
@@ -755,6 +772,12 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
 
    public function reject (string $raw): void
    {
+      // ! Mark the package as rejected so callers (Decoder_, Request::decode,
+      //   Frame::parse) can return `States::Rejected` without a separate
+      //   per-decoder boolean flag. Cleared at the start of each `reading()`
+      //   cycle.
+      $this->rejected = true;
+
       try {
          @fwrite($this->Connection->Socket, $raw);
       }

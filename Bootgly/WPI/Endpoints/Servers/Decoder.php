@@ -11,7 +11,10 @@
 namespace Bootgly\WPI\Endpoints\Servers;
 
 
+use Bootgly\WPI\Endpoints\Servers\Decoder\States;
+
+
 interface Decoder
 {
-   public function decode (Packages $Package, string $buffer, int $size): int;
+   public function decode (Packages $Package, string $buffer, int $size): States;
 }

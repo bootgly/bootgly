@@ -15,6 +15,7 @@ use function substr;
 use function time;
 
 use const Bootgly\WPI;
+use Bootgly\WPI\Endpoints\Servers\Decoder\States;
 use Bootgly\WPI\Endpoints\Servers\Packages;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI as Server;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders;
@@ -35,7 +36,7 @@ class Decoder_Waiting extends Decoders
    }
 
 
-   public function decode (Packages $Package, string $buffer, int $size): int
+   public function decode (Packages $Package, string $buffer, int $size): States
    {
       // !
       $WPI = WPI;
@@ -85,12 +86,13 @@ class Decoder_Waiting extends Decoders
          }
 
          if ($Body->length > $Body->downloaded) {
-            return 0;
+            return States::Incomplete;
          }
 
          $Body->waiting = false;
 
-         return $Body->length ?? 0;
+         $Package->consumed = $Body->length ?? 0;
+         return States::Complete;
       }
 
       $Package->Decoder = null;

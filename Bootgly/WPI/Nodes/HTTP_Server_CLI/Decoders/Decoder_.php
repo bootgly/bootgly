@@ -16,6 +16,7 @@ use function count;
 use function strpos;
 
 use const Bootgly\WPI;
+use Bootgly\WPI\Endpoints\Servers\Decoder\States;
 use Bootgly\WPI\Endpoints\Servers\Packages;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages as TCP_Packages;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI as Server;
@@ -25,7 +26,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 
 class Decoder_ extends Decoders
 {
-   public function decode (Packages $Package, string $buffer, int $size): int
+   public function decode (Packages $Package, string $buffer, int $size): States
    {
       /** @var array<string,Request> $inputs */
       static $inputs = []; // @ L1 cache (stable/hot keys)
@@ -70,7 +71,8 @@ class Decoder_ extends Decoders
             Server::$Request->scheme = $Package->Connection->encrypted ? 'https' : 'http';
          }
 
-         return $size;
+         $Package->consumed = $size;
+         return States::Complete;
       }
 
       // !
@@ -84,11 +86,17 @@ class Decoder_ extends Decoders
       $Request = $WPI->Request;
 
       // @
-      $length = $Request->decode($Package, $buffer, $size);
+      $state = $Request->decode($Package, $buffer, $size);
+      $length = $Package->consumed;
 
       // @ Write to local cache
       // Skip caching when Body is waiting for more data (chunked/streaming)
-      if ($cacheKey !== null && $length > 0 && $length <= 2048 && ! $Request->Body->waiting) {
+      if ($state === States::Complete
+         && $cacheKey !== null
+         && $length > 0
+         && $length <= 2048
+         && ! $Request->Body->waiting
+      ) {
          $inputs[$cacheKey] = clone $Request;
 
          if (count($inputs) > 512) {
@@ -100,6 +108,6 @@ class Decoder_ extends Decoders
          }
       }
 
-      return $length; // @ Return Request length (0 = invalid)
+      return $state;
    }
 }

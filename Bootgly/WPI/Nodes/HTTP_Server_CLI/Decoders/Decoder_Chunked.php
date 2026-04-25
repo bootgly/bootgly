@@ -19,6 +19,7 @@ use function strpos;
 use function substr;
 use function time;
 use function trim;
+use Bootgly\WPI\Endpoints\Servers\Decoder\States;
 use Bootgly\WPI\Endpoints\Servers\Packages;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages as TCP_Packages;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI as Server;
@@ -62,7 +63,7 @@ class Decoder_Chunked extends Decoders
       $this->buffer .= $data;
    }
 
-   public function decode (Packages $Package, string $buffer, int $size): int
+   public function decode (Packages $Package, string $buffer, int $size): States
    {
       /** @var TCP_Packages $Package */
       $WPI = WPI;
@@ -104,7 +105,8 @@ class Decoder_Chunked extends Decoders
                // @ Find the chunk size line (\r\n terminated)
                $pos = strpos($this->buffer, "\r\n");
                if ($pos === false) {
-                  return 0; // Need more data
+                  $Package->consumed = 0;
+                  return States::Incomplete; // Need more data
                }
 
                $sizeLine = substr($this->buffer, 0, $pos);
@@ -128,7 +130,8 @@ class Decoder_Chunked extends Decoders
                   $this->body = '';
                   $this->buffer = '';
                   $Package->Decoder = null;
-                  return 0;
+                  $Package->consumed = 0;
+                  return States::Rejected;
                }
 
                $chunkSize = (int) hexdec($sizeLine);
@@ -146,7 +149,8 @@ class Decoder_Chunked extends Decoders
 
                   $Package->Decoder = null;
 
-                  return $this->totalSize;
+                  $Package->consumed = $this->totalSize;
+                  return States::Complete;
                }
 
                // @ Validate total size
@@ -160,7 +164,8 @@ class Decoder_Chunked extends Decoders
 
                   $Package->Decoder = null;
 
-                  return 0;
+                  $Package->consumed = 0;
+                  return States::Rejected;
                }
 
                $this->chunkSize = $chunkSize;
@@ -173,7 +178,8 @@ class Decoder_Chunked extends Decoders
                $available = strlen($this->buffer);
 
                if ($available === 0) {
-                  return 0; // Need more data
+                  $Package->consumed = 0;
+                  return States::Incomplete; // Need more data
                }
 
                $toRead = ($available < $remaining) ? $available : $remaining;
@@ -183,7 +189,8 @@ class Decoder_Chunked extends Decoders
                $this->totalSize += $toRead;
 
                if ($this->chunkRead < $this->chunkSize) {
-                  return 0; // Need more data for this chunk
+                  $Package->consumed = 0;
+                  return States::Incomplete; // Need more data for this chunk
                }
 
                // @ Consume trailing \r\n after chunk data (RFC 9112 §7.1 —
@@ -192,7 +199,8 @@ class Decoder_Chunked extends Decoders
                //   they were CRLF, letting attacker-chosen framing corrupt
                //   body boundaries.
                if (strlen($this->buffer) < 2) {
-                  return 0; // Need the trailing CRLF
+                  $Package->consumed = 0;
+                  return States::Incomplete; // Need the trailing CRLF
                }
                if ($this->buffer[0] !== "\r" || $this->buffer[1] !== "\n") {
                   $Package->reject("HTTP/1.1 400 Bad Request\r\n\r\n");
@@ -200,7 +208,8 @@ class Decoder_Chunked extends Decoders
                   $this->body = '';
                   $this->buffer = '';
                   $Package->Decoder = null;
-                  return 0;
+                  $Package->consumed = 0;
+                  return States::Rejected;
                }
                $this->buffer = substr($this->buffer, 2);
 
