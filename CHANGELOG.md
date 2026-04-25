@@ -2,6 +2,20 @@
 
 Changelog for Bootgly framework. All notable changes to this project will be documented in this file. Imported from ROADMAP.md.
 
+## v0.14.11-beta ✅
+
+> Focus: **Server infrastructure hardening — centralized HTTP/1.1 framing, decoder state machine, async write backpressure, aggregate upload disk cap, and POST globals elimination**
+
+### WPI — Web Programming Interface
+
+- ✅ HTTP Server CLI: `Request\Frame` — new centralized HTTP/1.1 framing parser; `Content-Length`, `Transfer-Encoding`, `Expect`, and multipart `Content-Type` are now matched with `(?:^|\r\n)` anchors covering first-header position, closing the Critical Finding 1 first-header framing blind spot at the architectural level
+- ✅ HTTP Server CLI: `Decoders` — decode methods now return a `States` enum (`INCOMPLETE`, `COMPLETE`, `REJECTED`) instead of overloaded integer byte counts, eliminating ambiguity between "not ready" and "zero bytes decoded" that previously enabled premature handler dispatch
+- ✅ TCP Server CLI: `Packages` — full backpressure-aware async write state machine; partial writes are stored with byte offsets and the socket is registered for write-readiness events, replacing the immediate-close-on-zero strategy with a proper non-blocking write pipeline
+- ✅ HTTP Server CLI: `Decoder_Downloading` — aggregate disk cap across all in-flight multipart uploads per worker (`maxDownloadsDiskCap`); enforced before writing each chunk to temp storage, preventing disk exhaustion via concurrent upload flooding
+- ✅ HTTP Server CLI: `Request::$fields` replaces `$_POST` / `$_FILES` globals; POST form data and uploaded file metadata are now stored in per-request instance state, eliminating cross-request data leakage through PHP superglobals in long-running worker processes (+3% throughput)
+
+---
+
 ## v0.14.10-beta ✅
 
 > Focus: **Response header name validation against RFC 9110 token syntax**
