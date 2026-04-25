@@ -75,8 +75,9 @@ final class Cookies
     */
    private function build (): array
    {
+      // @ Header keys are normalized to lowercase at parse time.
       $fields = $this->Header->fields;
-      $rawCookies = $fields['Cookie'] ?? $fields['cookie'] ?? null;
+      $rawCookies = $fields['cookie'] ?? null;
 
       if ($rawCookies === null) {
          return [];

@@ -107,7 +107,9 @@ class Header
          $this->build();
       }
 
-      $value = $this->fields[$name] ?? $this->fields[strtolower($name)] ?? null;
+      // ! Field names were normalized to lowercase at parse time (RFC 9110 §5.1).
+      $key = strtolower($name);
+      $value = $this->fields[$key] ?? null;
 
       if ($value === null) {
          return null;
@@ -128,7 +130,7 @@ class Header
             return null;
          }
 
-         $glue = strtolower($name) === 'cookie' ? '; ' : ', ';
+         $glue = $key === 'cookie' ? '; ' : ', ';
 
          return implode($glue, $normalized);
       }
@@ -148,11 +150,13 @@ class Header
     */
    public function append (string $name, string $value): bool
    {
-      if ( isSet($this->fields[$name]) ) {
+      $key = strtolower($name);
+
+      if ( isSet($this->fields[$key]) ) {
          return false;
       }
 
-      $this->fields[$name] = $value;
+      $this->fields[$key] = $value;
 
       return true;
    }
@@ -174,6 +178,11 @@ class Header
             if ( strpos($key, ' ') !== false ) {
                continue;
             }
+
+            // @ Normalize field name to lowercase (RFC 9110 §5.1: case-insensitive).
+            //   Stored once at parse time so get() / cookie parsing / duplicate
+            //   detection are all O(1) lowercase lookups.
+            $key = strtolower($key);
 
             if ( isSet($fields[$key]) ) {
                if ( is_string($fields[$key]) ) {

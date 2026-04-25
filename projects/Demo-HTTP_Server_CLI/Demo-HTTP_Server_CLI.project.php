@@ -39,8 +39,12 @@ return new Project(
          host: '0.0.0.0',
          port: getenv('PORT') ? (int) getenv('PORT') : 8082,
          workers: max(1, (int) shell_exec('nproc') ?: 1) / 2,
-         // requestMaxFileSize: 500 * 1024 * 1024, // 500 MB (default)
-         // requestMaxBodySize: 10 * 1024 * 1024,  // 10 MB (default)
+         // requestMaxFileSize: 500 * 1024 * 1024,        // 500 MB (default) — max size per uploaded file part
+         // requestMaxBodySize: 10 * 1024 * 1024,         // 10 MB (default) — max total non-multipart body
+         // requestMaxMultipartFieldSize: 1 * 1024 * 1024, // 1 MB (default) — max size per text field value
+         // requestMaxMultipartHeaderSize: 8 * 1024,        // 8 KB (default) — max size of a single part's headers
+         // requestMaxMultipartFields: 1024,                // 1024 (default) — max number of text fields per request
+         // requestMaxMultipartFiles: 1024,                 // 1024 (default) — max number of file parts per request
       );
       $HTTP_Server_CLI->on(
          // # Test (Benchmarking)

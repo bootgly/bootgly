@@ -30,7 +30,7 @@ return new Specification(
       Content-Type: application/json\r
       Content-Length: 92\r
       \r
-      {"Host":"lab.bootgly.com\\nUser-Agent: Bootgly\/TCP-Server\\nAccept-Language: en-US,en;q=0.9"}
+      {"host":"lab.bootgly.com\\nUser-Agent: Bootgly\/TCP-Server\\nAccept-Language: en-US,en;q=0.9"}
       HTML_RAW;
 
       // @ Assert

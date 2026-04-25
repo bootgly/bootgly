@@ -122,5 +122,8 @@ return new Suite(
       // # Decoder Downloading (multipart)
       // text fields must have independent memory caps
       '19.01-multipart_text_field_memory_cap',
+      // # Request Header
+      // field-name lookup must be case-insensitive (uppercase/mixed variants)
+      '20.01-header_case_insensitivity',
    ],
 );
