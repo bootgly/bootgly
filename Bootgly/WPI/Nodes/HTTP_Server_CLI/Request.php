@@ -62,6 +62,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Decoder_Chunked;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Decoder_Downloading;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Decoder_Waiting;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Authentications\Basic;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Frame;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Raw\Body;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Raw\Header;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Raw\Header\Cookies;
@@ -626,160 +627,31 @@ class Request
     */
    public function decode (Packages $Package, string &$buffer, int $size): int
    {
-      // @ Check Request raw separator
-      $separator_position = strpos($buffer, "\r\n\r\n");
-      // @ Check if the Request raw has a separator
-      if ($separator_position === false) {
-         // @ Check Request raw length
-         if ($size >= 16384) { // Package size
-            $Package->reject("HTTP/1.1 413 Request Entity Too Large\r\n\r\n");
-         }
-
+      // @ Centralized HTTP/1.1 framing parse (Recommendation #1).
+      //   A SINGLE linear scan over the request head produces the canonical
+      //   `Frame` value object: request line, lowercased fields map, and
+      //   every framing decision (CL / TE / Expect / Content-Type /
+      //   Connection / Host duplicate). On rejection the parser has already
+      //   called `$Package->reject()` and returns `null`. Incomplete buffers
+      //   also return `null` (no reject) so we wait for more bytes.
+      $Frame = Frame::parse($Package, $buffer, $size);
+      if ($Frame === null) {
          return 0;
       }
 
-      // @ Init Request length
+      $separator_position = $Frame->separatorPosition;
       $length = $separator_position + 4;
+      $header_raw = $Frame->headerRaw;
+      $protocol = $Frame->protocol;
 
-      // # Request Meta (first line of HTTP Header)
-      // @ Get Request Meta raw
-      // Sample: GET /path HTTP/1.1
-      $meta_raw = strstr($buffer, "\r\n", true);
-      if ($meta_raw === false) {
-         $Package->reject("HTTP/1.1 400 Bad Request\r\n\r\n");
-         return 0;
-      }
-
-      @[$method, $URI, $protocol] = explode(' ', $meta_raw, 3);
-
-      // @ Check Request Meta
-      if (! $method || ! $URI || ! $protocol) {
-         $Package->reject("HTTP/1.1 400 Bad Request\r\n\r\n");
-         return 0;
-      }
-      // method
-      switch ($method) {
-         case 'GET':
-         case 'HEAD':
-         case 'POST':
-         case 'PUT':
-         case 'PATCH':
-         case 'DELETE':
-         case 'OPTIONS':
-            break;
-         case 'TRACE':
-         case 'CONNECT':
-            $Package->reject("HTTP/1.1 501 Not Implemented\r\n\r\n");
-            return 0;
-         default:
-            $Package->reject("HTTP/1.1 405 Method Not Allowed\r\nAllow: GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS\r\n\r\n");
-            return 0;
-      }
-      // URI
-      if (strlen($URI) > 8192) {
-         $Package->reject("HTTP/1.1 414 URI Too Long\r\n\r\n");
-         return 0;
-      }
-      // protocol
-      
-      // @ Set Request Meta length
-      $meta_length = strlen($meta_raw);
-
-      // # Request Header
-      // @ Get Request Header raw
-      $header_raw = substr($buffer, $meta_length + 2, $separator_position - $meta_length);
-
-      // # Request Body
-      // @ Set Request Body length if possible (RFC 9112 §6.1 — strict parse)
-      //
-      //   Single case-insensitive locate + line-slice + `ctype_digit`
-      //   validation rejects every smuggling vector in one pass:
-      //     - negative / signed          `Content-Length: -10`
-      //     - multi-space OWS            `Content-Length:  10`  (fast-path desync)
-      //     - lowercase + multi-space    `Content-length:  10`  (regex bypass)
-      //     - comma / list form          `Content-Length: 10, 20`
-      //     - hex / sci prefixes         `Content-Length: 0x10`
-      //     - duplicate headers          two `Content-Length:` lines
-      //
-      //   Hot-path guard: `strpos("ontent-")` is a case-sensitive 8-byte scan
-      //   that hits both `Content-` and `content-` (shared lowercase stem).
-      //   GET requests with no Content-* header (the benchmark path) skip
-      //   the costly `stripos` entirely — ~10-30ns versus ~200ns stripos on
-      //   a typical request header block.
-      if (strpos($header_raw, "ontent-") !== false) {
-         $clStart = stripos($header_raw, 'Content-Length:') === 0
-            ? 0
-            : (($clStart = stripos($header_raw, "\r\nContent-Length:")) === false
-               ? false
-               : $clStart + 2);
-      }
-      if (isSet($clStart) && $clStart !== false) {
-         $clLineEnd = strpos($header_raw, "\r\n", $clStart);
-         // Reject missing CRLF or duplicate Content-Length (smuggling guard)
-         if ($clLineEnd === false
-            || stripos($header_raw, "\r\nContent-Length:", $clLineEnd) !== false
-         ) {
-            $Package->reject("HTTP/1.1 400 Bad Request\r\n\r\n");
-            return 0;
-         }
-         // "Content-Length:" is 15 bytes — value follows, OWS = SP/HTAB only.
-         $clValue = trim(
-            substr($header_raw, $clStart + 15, $clLineEnd - $clStart - 15),
-            " \t"
-         );
-         if ($clValue === '' || strlen($clValue) > 19 || ! ctype_digit($clValue)) {
-            $Package->reject("HTTP/1.1 400 Bad Request\r\n\r\n");
-            return 0;
-         }
-         $content_length = (int) $clValue;
-      }
-
-      // @ Handle Transfer-Encoding (RFC 9112 §6.1 / §6.3)
-      //   Same fingerprint trick: `strpos("ransfer-")` skips the stripos for
-      //   any request that has no Transfer-* header.
-      if (strpos($header_raw, "ransfer-") !== false) {
-         $teStart = stripos($header_raw, 'Transfer-Encoding:') === 0
-            ? 0
-            : (($teStart = stripos($header_raw, "\r\nTransfer-Encoding:")) === false
-               ? false
-               : $teStart + 2);
-      }
-      if (isSet($teStart) && $teStart !== false) {
-         // Transfer-Encoding + Content-Length conflict
-         if (isSet($content_length)) {
-            $Package->reject("HTTP/1.1 400 Bad Request\r\n\r\n");
-            return 0;
-         }
-         $teLineEnd = strpos($header_raw, "\r\n", $teStart);
-         // Reject missing CRLF or duplicate Transfer-Encoding (smuggling guard)
-         if ($teLineEnd === false
-            || stripos($header_raw, "\r\nTransfer-Encoding:", $teLineEnd) !== false
-         ) {
-            $Package->reject("HTTP/1.1 400 Bad Request\r\n\r\n");
-            return 0;
-         }
-         // "Transfer-Encoding:" is 18 bytes. On requests the value MUST
-         //   be exactly "chunked" (case-insensitive, OWS trimmed). Any list
-         //   form (`chunked, gzip`, `gzip, chunked`, `x,chunked`) or variant
-         //   (`\tchunked`, `chunked\t`) is rejected — those are the classic
-         //   TE-smuggling vectors where an upstream honours `chunked` while
-         //   the origin treats the request as opaque.
-         $teValue = trim(
-            substr($header_raw, $teStart + 18, $teLineEnd - $teStart - 18),
-            " \t"
-         );
-         if (strcasecmp($teValue, 'chunked') !== 0) {
-            $Package->reject("HTTP/1.1 501 Not Implemented\r\n\r\n");
-            return 0;
-         }
-
+      // @ Body decoder dispatch — fed entirely from `Frame` framing decisions.
+      if ($Frame->chunked) {
          $this->Body->waiting = true;
          $this->Body->length = 0;
 
          $Decoder = new Decoder_Chunked;
          $Decoder->init();
 
-         // @ Feed initial body data if any
          $initialBody = substr($buffer, $separator_position + 4);
          if ($initialBody !== '') {
             $Decoder->feed($initialBody);
@@ -788,118 +660,20 @@ class Request
          $Package->Decoder = $Decoder;
       }
 
-      // @ Handle Expect header (RFC 9110 §10.1.1)
-      //   Security: we MUST NOT write `100 Continue` before validating body
-      //   size / transfer form, otherwise:
-      //     (a) Expect + Transfer-Encoding: chunked commits Decoder_Chunked
-      //         to streaming up to MAX_BODY_SIZE per connection without any
-      //         application consent → memory/CPU amplification primitive.
-      //     (b) Expect + oversized Content-Length sends `100 Continue` then
-      //         `413 Request Entity Too Large` back-to-back on the wire.
-      //   Hot-path guard: `strpos("xpect:")` is a 6-byte case-sensitive scan
-      //   that fires on both `Expect:` and `expect:` (shared lowercase
-      //   stem) — requests with no Expect header pay ~one strpos.
-      if (strpos($header_raw, "xpect:") !== false) {
-         $exStart = stripos($header_raw, 'Expect:') === 0
-            ? 0
-            : (($exStart = stripos($header_raw, "\r\nExpect:")) === false
-               ? false
-               : $exStart + 2);
-      }
-      if (isSet($exStart) && $exStart !== false) {
-         $exLineEnd = strpos($header_raw, "\r\n", $exStart);
-         $exValue = $exLineEnd === false
-            ? ''
-            : trim(substr($header_raw, $exStart + 7, $exLineEnd - $exStart - 7), " \t");
-
-         if (strcasecmp($exValue, '100-continue') !== 0) {
-            $Package->reject("HTTP/1.1 417 Expectation Failed\r\n\r\n");
-            return 0;
-         }
-
-         // ! Refuse Expect + Transfer-Encoding: chunked without application
-         //   consent (audit finding #9). The application has no opportunity
-         //   to veto a 10 MB chunked body before the decoder is committed.
-         if (isSet($Package->Decoder)) {
-            $Package->reject("HTTP/1.1 417 Expectation Failed\r\n\r\n");
-            return 0;
-         }
-
-         // ! Refuse oversized Content-Length up front so the `100 Continue`
-         //   interim is never paired with a later `413`.
-         if (isSet($content_length) && $content_length > static::$maxFileSize) {
-            $Package->reject("HTTP/1.1 413 Request Entity Too Large\r\n\r\n");
-            return 0;
-         }
-
+      // @ Expect: 100-continue — write the interim response only after
+      //   `Frame::parse()` has validated CL bound and rejected the
+      //   Expect+chunked combo. Socket I/O stays out of the parser.
+      if ($Frame->expectContinue) {
          @fwrite($Package->Connection->Socket, "HTTP/1.1 100 Continue\r\n\r\n");
       }
 
-      // @ Set Request Body raw if possible
-      if ( isSet($content_length) ) {
-         $length += $content_length; // @ Add Request Body length
+      // @ Body buffer setup when Content-Length is known.
+      if ($Frame->contentLength !== null) {
+         $content_length = $Frame->contentLength;
+         $length += $content_length;
 
-         // @ Detect multipart/form-data for streaming download
-         $isMultipart = false;
-         $multipartBoundary = '';
-         $ctStart = false;
-         $ctValue = '';
-         if (strpos($header_raw, "ontent-") !== false) {
-            $ctStart = stripos($header_raw, 'Content-Type:') === 0
-               ? 0
-               : (($ctStart = stripos($header_raw, "\r\nContent-Type:")) === false
-                  ? false
-                  : $ctStart + 2);
-         }
-         if ($ctStart !== false) {
-            $ctLineEnd = strpos($header_raw, "\r\n", $ctStart);
-            $ctLine = $ctLineEnd === false
-               ? ''
-               : substr($header_raw, $ctStart + 13, $ctLineEnd - $ctStart - 13);
-            $ctValue = trim($ctLine, " \t");
-            if (stripos($ctValue, 'multipart/form-data') !== 0) {
-               $ctStart = false;
-            }
-         }
-         if ($ctStart !== false) {
-            $isMultipart = true;
-            if ( preg_match('/boundary="?(\S+)"?/', $ctValue, $bMatch) ) {
-               // ? Validate boundary against RFC 7578 §4.1 / RFC 2046 §5.1.1.
-               //   bchars charset + length 1-70. A permissive `\S+` capture
-               //   would otherwise accept quote-injection (`X";foo="bar`) and
-               //   megabyte-long boundaries, enabling algorithmic DoS via
-               //   `strpos($data, $hugeBoundary)` on every streamed chunk.
-               $b = $bMatch[1];
-               // @ Strip a trailing `"` left by the greedy `\S+` when the
-               //   value is quoted (`boundary="foo"` → `\S+` captures `foo"`).
-               $bl = strlen($b);
-               if ($b[$bl - 1] === '"') {
-                  $b = substr($b, 0, -1);
-                  $bl--;
-               }
-               static $boundaryChars =
-                  "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
-                  . "0123456789'()+_,-./:=?";
-               if ($bl < 1 || $bl > 70 || strspn($b, $boundaryChars) !== $bl) {
-                  $Package->reject("HTTP/1.1 400 Bad Request\r\n\r\n");
-                  return 0;
-               }
-               $multipartBoundary = "--$b";
-            }
-            else {
-               // @ multipart/form-data without a boundary is malformed per RFC.
-               $Package->reject("HTTP/1.1 400 Bad Request\r\n\r\n");
-               return 0;
-            }
-         }
-
-         // ?: Validate max request body size (Content-Length only, headers
-         //    already capped at 16 KB by the separator check above)
-         $maxSize = $isMultipart ? static::$maxFileSize : static::$maxBodySize;
-         if ($content_length > $maxSize) {
-            $Package->reject("HTTP/1.1 413 Request Entity Too Large\r\n\r\n");
-            return 0;
-         }
+         $multipartBoundary = $Frame->multipartBoundary;
+         $isMultipart = $multipartBoundary !== '';
 
          if ($content_length > 0) {
             // @ Check if HTTP content is not empty
@@ -913,7 +687,7 @@ class Request
             }
 
             // @ Use streaming decoder for multipart/form-data
-            if ($isMultipart && $multipartBoundary !== '') {
+            if ($isMultipart) {
                if ($initialLength >= $content_length) {
                   // @ Complete body available: process immediately via streaming decoder
                   $this->Body->downloaded = $initialLength;
@@ -976,127 +750,66 @@ class Request
       $this->scheme = $Package->Connection->encrypted ? 'https' : 'http';
       // @@
       // method
-      $this->method = $method;
+      $this->method = $Frame->method;
       // URI
-      $this->URI = $URI;
+      $this->URI = $Frame->URI;
       // protocol
       $this->protocol = $protocol;
-      // @ Validate Host header (RFC 9112 §3.2) — required for HTTP/1.1
-      if ($protocol === 'HTTP/1.1') {
-         // ! Reject duplicate Host headers (request smuggling guard)
-         if (preg_match_all("/(?:^|\r\n)host:/i", $header_raw) > 1) {
+
+      // @ Host allowlist enforcement (audit #10).
+      //   `Frame::parse()` already rejected duplicate Host and a missing Host
+      //   on HTTP/1.1. Allowlist enforcement is decoupled because it depends
+      //   on a static config and is opt-in (default: empty list).
+      //   Hot-path guard: `static::$allowedHosts === []` short-circuits.
+      if (static::$allowedHosts !== [] && $Frame->hostValue !== '') {
+         $hostValue = strtolower($Frame->hostValue);
+         // Strip port (Host = uri-host [":" port] per RFC 9110 §7.2).
+         //   IPv6 literals are bracketed; for name hosts use the last colon.
+         if ($hostValue[0] === '[') {
+            $rb = strpos($hostValue, ']');
+            $hostName = $rb === false ? $hostValue : substr($hostValue, 0, $rb + 1);
+         }
+         else {
+            $colon = strrpos($hostValue, ':');
+            $hostName = $colon === false ? $hostValue : substr($hostValue, 0, $colon);
+         }
+
+         $allowed = false;
+         foreach (static::$allowedHosts as $entry) {
+            if ($entry === $hostName) {
+               $allowed = true;
+               break;
+            }
+            // Wildcard prefix `*.example.com` matches `a.example.com` only.
+            if (
+               strlen($entry) > 2
+               && $entry[0] === '*' && $entry[1] === '.'
+               && str_ends_with($hostName, substr($entry, 1))
+               && strpos(
+                  $hostName,
+                  '.',
+                  0
+               ) === strlen($hostName) - (strlen($entry) - 1)
+            ) {
+               $allowed = true;
+               break;
+            }
+         }
+
+         if (! $allowed) {
             $Package->reject("HTTP/1.1 400 Bad Request\r\n\r\n");
             return 0;
-         }
-         // ! Require a valid Host header with non-empty value
-         if (preg_match("/(?:^|\r\n)Host: *(\S+)/i", $header_raw) !== 1) {
-            $Package->reject("HTTP/1.1 400 Bad Request\r\n\r\n");
-            return 0;
-         }
-
-         // ! Enforce Host allowlist (audit #10): reject spoofed Host headers
-         //   at decode time so handlers that route by `$Request->host`
-         //   cannot be fooled (cache poisoning, password-reset poisoning).
-         //   Hot-path guard: `static::$allowedHosts === []` short-circuits
-         //   the entire block — zero cost when enforcement is disabled
-         //   (the default). The value is re-extracted here (rather than
-         //   captured unconditionally above) so the default path pays
-         //   nothing for match-array allocation.
-         if (static::$allowedHosts !== []) {
-            preg_match(
-               "/(?:^|\r\n)Host: *(\S+)/i",
-               $header_raw,
-               $hostMatch
-            );
-            $hostValue = strtolower($hostMatch[1]);
-            // Strip port (Host = uri-host [":" port] per RFC 9110 §7.2).
-            //   IPv6 literals are bracketed; split on the RIGHT-most `:`
-            //   after the closing `]` — for name hosts, simply last colon.
-            if ($hostValue[0] === '[') {
-               $rb = strpos($hostValue, ']');
-               $hostName = $rb === false ? $hostValue : substr($hostValue, 0, $rb + 1);
-            }
-            else {
-               $colon = strrpos($hostValue, ':');
-               $hostName = $colon === false ? $hostValue : substr($hostValue, 0, $colon);
-            }
-
-            $allowed = false;
-            foreach (static::$allowedHosts as $entry) {
-               // Exact match.
-               if ($entry === $hostName) {
-                  $allowed = true;
-                  break;
-               }
-               // Wildcard prefix: `*.example.com` matches `a.example.com`
-               //   but NOT `example.com` itself (callers must list the
-               //   apex separately if desired) and NOT multi-label
-               //   subdomains (`a.b.example.com`).
-               if (
-                  strlen($entry) > 2
-                  && $entry[0] === '*' && $entry[1] === '.'
-                  && str_ends_with($hostName, substr($entry, 1))
-                  && strpos(
-                     $hostName,
-                     '.',
-                     0
-                  ) === strlen($hostName) - (strlen($entry) - 1)
-               ) {
-                  $allowed = true;
-                  break;
-               }
-            }
-
-            if (! $allowed) {
-               $Package->reject("HTTP/1.1 400 Bad Request\r\n\r\n");
-               return 0;
-            }
          }
       }
-      // @ Connection management (RFC 9112 §9.3)
-      // HTTP/1.1: close only when explicitly requested via Connection: close
-      // HTTP/1.0: close by default unless Connection: keep-alive
-      $this->closeConnection = stripos($header_raw, 'Connection: close') !== false
-         || ($protocol === 'HTTP/1.0' && stripos($header_raw, 'Connection: keep-alive') === false);
+
+      // @ Connection management (RFC 9112 §9.3) — already decided by Frame.
+      $this->closeConnection = $Frame->closeConnection;
 
       // # Request Header
-      // @ Test harness: strip `X-Bootgly-Test: N` if present, so neither
-      //   `$Request->raw` nor `$Request->headers` surface a test-only
-      //   artifact to user assertions. The value is parked in a static
-      //   on the Encoder_Testing path via SAPI for index-based dispatch.
-      if (\Bootgly\API\Workables\Server::$Environment
-         === \Bootgly\API\Environments::Test
-      ) {
-         $xbStart = stripos($header_raw, "\r\nX-Bootgly-Test:");
-         if ($xbStart === false && stripos($header_raw, "X-Bootgly-Test:") === 0) {
-            $xbStart = 0;
-            $xbLineEnd = strpos($header_raw, "\r\n");
-            if ($xbLineEnd !== false) {
-               $value = trim(substr($header_raw, 15, $xbLineEnd - 15));
-               \Bootgly\API\Workables\Server::$testIndexHeader =
-                  ctype_digit($value) ? (int) $value : null;
-               // Strip "X-Bootgly-Test: N\r\n" plus trailing "\r\n".
-               $header_raw = substr($header_raw, $xbLineEnd + 2);
-            }
-         }
-         else if ($xbStart !== false) {
-            $xbLineEnd = strpos($header_raw, "\r\n", $xbStart + 2);
-            if ($xbLineEnd !== false) {
-               $value = trim(substr(
-                  $header_raw, $xbStart + 17, $xbLineEnd - $xbStart - 17
-               ));
-               \Bootgly\API\Workables\Server::$testIndexHeader =
-                  ctype_digit($value) ? (int) $value : null;
-               // Strip "\r\nX-Bootgly-Test: N" (keep the next \r\n as line sep).
-               $header_raw = substr($header_raw, 0, $xbStart)
-                  . substr($header_raw, $xbLineEnd);
-            }
-         }
-      }
-      // raw
+      // raw — exposes the (possibly X-Bootgly-Test-stripped) header block.
       $this->Header->define(raw: $header_raw);
-      // host
-      #$_SERVER['HTTP_HOST'] = $this->Header->get('HOST');
+      // fields — adopt the lowercased map produced by the same scan.
+      $this->Header->adopt($Frame->fields);
 
       // # Request Body
       $this->Body->position = $separator_position + 4;

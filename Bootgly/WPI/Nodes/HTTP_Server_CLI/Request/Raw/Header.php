@@ -94,6 +94,19 @@ class Header
       $this->length ??= strlen($raw);
    }
 
+   /**
+    * Adopt a pre-parsed `$fields` map (already lowercased per RFC 9110 §5.1)
+    * produced by `Request\Frame::parse()`. Skips the lazy `build()` reparse —
+    * the centralized framing parser is the single source of truth.
+    *
+    * @param array<string, string|array<int,string>> $fields
+    */
+   public function adopt (array $fields): void
+   {
+      $this->fields = $fields;
+      $this->built = true;
+   }
+
       /**
     * Get a field from the Request Header
     *
