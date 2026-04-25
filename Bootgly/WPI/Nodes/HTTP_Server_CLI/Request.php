@@ -80,6 +80,14 @@ class Request
    public static int $maxFileSize = 500 * 1024 * 1024; // @ 500 megabytes
    /** @var int Maximum body size in bytes for non-multipart requests (default: 10MB) */
    public static int $maxBodySize = 10 * 1024 * 1024; // @ 10 megabytes
+   /** @var int Maximum multipart text field size in bytes (default: 1MB) */
+   public static int $maxMultipartFieldSize = 1 * 1024 * 1024; // @ 1 megabyte
+   /** @var int Maximum multipart part header block size in bytes (default: 8KB) */
+   public static int $maxMultipartHeaderSize = 8 * 1024; // @ 8 kilobytes
+   /** @var int Maximum number of multipart text fields */
+   public static int $maxMultipartFields = 1024;
+   /** @var int Maximum number of multipart file parts */
+   public static int $maxMultipartFiles = 1024;
    /**
     * Allowed `Host` header values (RFC 9112 §3.2 / §7.2). When non-empty,
     *   any request whose `Host` header (case-insensitive, port-agnostic)
@@ -895,14 +903,15 @@ class Request
 
                   $Decoder = new Decoder_Downloading;
                   $Decoder->init($multipartBoundary);
-                  $Decoder->feed($initialBody);
                   // @ Simulate decode call with the full body data.
                   // @ Body is fully consumed here; do NOT attach the decoder
                   // to the Connection — otherwise the next request on the
                   // same connection would dispatch through this stale
                   // decoder and trigger an extra Request::__construct,
                   // whose __destruct clears the current $_FILES superglobal.
-                  $Decoder->decode($Package, '', 0);
+                  if ($Decoder->decode($Package, $initialBody, $initialLength) <= 0) {
+                     return 0;
+                  }
                }
                else {
                   // @ Incomplete body: set streaming decoder for subsequent chunks

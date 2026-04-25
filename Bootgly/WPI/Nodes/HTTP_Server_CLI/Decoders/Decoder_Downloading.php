@@ -43,6 +43,7 @@ use Throwable;
 
 use const Bootgly\WPI;
 use Bootgly\WPI\Endpoints\Servers\Packages;
+use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages as TCP_Packages;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI as Server;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders;
 
@@ -71,7 +72,11 @@ class Decoder_Downloading extends Decoders
    private int $state;
    private int $downloaded;
    private int $currentFileSize;
+   private int $currentFieldSize;
+   private int $fieldsCount;
+   private int $filesCount;
    private int $bytesSinceDiskCheck;
+   private bool $rejected;
 
    // # States
    private const int STATE_BOUNDARY_START  = 0;
@@ -101,7 +106,11 @@ class Decoder_Downloading extends Decoders
       $this->state = self::STATE_BOUNDARY_START;
       $this->downloaded = 0;
       $this->currentFileSize = 0;
+      $this->currentFieldSize = 0;
+      $this->fieldsCount = 0;
+      $this->filesCount = 0;
       $this->bytesSinceDiskCheck = 0;
+      $this->rejected = false;
    }
 
    /**
@@ -114,7 +123,6 @@ class Decoder_Downloading extends Decoders
 
    public function decode (Packages $Package, string $buffer, int $size): int
    {
-      // !
       $WPI = WPI;
       /** @var Server $Server */
       $Server = $WPI->Server;
@@ -123,13 +131,58 @@ class Decoder_Downloading extends Decoders
       $Request = $WPI->Request;
       $Body = $Request->Body;
 
-      // @ Check if Request Body is waiting data
+      // ! Reject helper: centralize cleanup and rejection logic
+      $reject = function (string $raw) use ($Package, $Request): void {
+         if ($this->rejected) {
+            return;
+         }
+
+         $this->rejected = true;
+         $this->tailBuffer = '';
+         $this->headerBuffer = '';
+         $this->fieldBuffer = '';
+         $this->postEncoded = '';
+
+         if ($this->fileHandler !== null) {
+            try {
+               fclose($this->fileHandler);
+            }
+            catch (Throwable) {}
+
+            $this->fileHandler = null;
+         }
+
+         $Request->Body->waiting = false;
+
+         if ($Package instanceof TCP_Packages) {
+            $Package->reject($raw);
+         }
+      };
+      // ! Append field data with size check, centralize logic for both boundary and non-boundary accumulation
+      $appendField = function (string $chunk) use ($reject): bool {
+         if ($chunk === '') {
+            return true;
+         }
+
+         $length = strlen($chunk);
+         if ($this->currentFieldSize + $length > Server\Request::$maxMultipartFieldSize) {
+            $reject("HTTP/1.1 413 Request Entity Too Large\r\n\r\n");
+            return false;
+         }
+
+         $this->fieldBuffer .= $chunk;
+         $this->currentFieldSize += $length;
+
+         return true;
+      };
+
+      // ?: Check if Request Body is waiting data
       if (! $Body->waiting) {
          $Package->Decoder = null;
          return $Server::$Decoder->decode($Package, $buffer, $size); // @phpstan-ignore method.nonObject
       }
 
-      // ? Valid HTTP Client Body Timeout
+      // ?: Valid HTTP Client Body Timeout
       $elapsed = time() - $this->decoded;
       if ($elapsed >= 60 && $this->read === $this->downloaded) {
          $this->finish();
@@ -145,24 +198,333 @@ class Decoder_Downloading extends Decoders
       $data = $this->tailBuffer . $buffer;
       $this->tailBuffer = '';
 
-      // @ Process data through state machine
+      // @@ Process data through state machine
       while ($data !== '') {
          switch ($this->state) {
             case self::STATE_BOUNDARY_START:
-               $data = $this->parseBoundaryStart($data);
+               $boundary = $this->boundary;
+               $boundaryLen = strlen($boundary);
+
+               // @ Search for boundary in data
+               $pos = strpos($data, $boundary);
+               if ($pos === false) {
+                  // @ Not enough data, save as tail buffer
+                  $this->tailBuffer = $data;
+                  $data = null;
+                  break;
+               }
+
+               // @ Check if this is the final boundary (--boundary--)
+               $afterBoundary = $pos + $boundaryLen;
+               if ($afterBoundary + 2 <= strlen($data)) {
+                  if (substr($data, $afterBoundary, 2) === '--') {
+                     // @ Final boundary: finish
+                     $this->finish();
+                     $data = '';
+                     break;
+                  }
+               }
+
+               // @ Skip boundary + \r\n
+               $nextPos = $afterBoundary + 2; // +2 for \r\n
+               if ($nextPos > strlen($data)) {
+                  $this->tailBuffer = $data;
+                  $data = null;
+                  break;
+               }
+
+               $this->state = self::STATE_PART_HEADER;
+               $this->headerBuffer = '';
+
+               $data = substr($data, $nextPos);
                break;
 
             case self::STATE_PART_HEADER:
-               $data = $this->parsePartHeader($data);
+               $this->headerBuffer .= $data;
+
+               // @ Search for end of headers (\r\n\r\n)
+               $headerEnd = strpos($this->headerBuffer, "\r\n\r\n");
+               if ($headerEnd === false) {
+                  if (strlen($this->headerBuffer) > Server\Request::$maxMultipartHeaderSize) {
+                     $reject("HTTP/1.1 413 Request Entity Too Large\r\n\r\n");
+                     $data = '';
+                     break;
+                  }
+
+                  // @ Need more data
+                  $data = null;
+                  break;
+               }
+               if ($headerEnd > Server\Request::$maxMultipartHeaderSize) {
+                  $reject("HTTP/1.1 413 Request Entity Too Large\r\n\r\n");
+                  $data = '';
+                  break;
+               }
+
+               // @ Extract headers
+               $headersRaw = substr($this->headerBuffer, 0, $headerEnd);
+               $remainder = substr($this->headerBuffer, $headerEnd + 4);
+               $this->headerBuffer = '';
+
+               // @ Parse headers
+               $contentLines = explode("\r\n", trim($headersRaw));
+
+               $uploadKey = false;
+               $file = [];
+               $isFile = false;
+               $fieldName = '';
+
+               foreach ($contentLines as $contentLine) {
+                  if (! strpos($contentLine, ': ')) {
+                     continue;
+                  }
+
+                  @[$key, $value] = explode(': ', $contentLine, 2);
+
+                  switch (strtolower($key)) {
+                     case 'content-disposition':
+                        // @ File
+                        if (preg_match('/name="(.*?)"; filename="(.*?)"/i', $value, $match)) {
+                           $isFile = true;
+                           $uploadKey = $match[1];
+                           // ! Sanitize filename: strip directory traversal and restrict to safe characters
+                           $rawFilename = basename($match[2]);
+                           $safeFilename = (string) preg_replace('/[^\w.\- ]/', '_', $rawFilename);
+                           // ! Hidden-dot hardening: reject leading dots like `.htaccess`
+                           $safeFilename = ltrim($safeFilename, ". \t");
+                           if ($safeFilename === '') {
+                              $safeFilename = 'upload';
+                           }
+                           $file = [
+                              'name' => $safeFilename,
+                              'tmp_name' => '',
+                              'size' => 0,
+                              'error' => 0,
+                              'type' => '',
+                           ];
+                        }
+                        // @ Text field
+                        else if (preg_match('/name="(.*?)"$/', $value, $match)) {
+                           $fieldName = $match[1];
+                        }
+
+                        break;
+                     case 'content-type':
+                        $file['type'] = trim($value);
+                        break;
+                  }
+               }
+
+               if ($isFile && $uploadKey !== false) {
+                  if ($this->filesCount >= Server\Request::$maxMultipartFiles) {
+                     $reject("HTTP/1.1 413 Request Entity Too Large\r\n\r\n");
+                     $data = '';
+                     break;
+                  }
+                  $this->filesCount++;
+
+                  // @ Open temp file for streaming writes
+                  $tempUploadedDir = BOOTGLY_WORKING_BASE . '/workdata/temp/files/downloaded/';
+
+                  if (! is_dir($tempUploadedDir)) {
+                     mkdir($tempUploadedDir, 0700, true);
+                  }
+
+                  // @ Check disk space
+                  try {
+                     $freeSpace = disk_free_space($tempUploadedDir);
+                     if ($freeSpace !== false && $freeSpace < 1048576) { // @ Minimum 1MB free
+                        $file['error'] = UPLOAD_ERR_CANT_WRITE;
+                     }
+                  }
+                  catch (Throwable) {
+                     $file['error'] = UPLOAD_ERR_CANT_WRITE;
+                  }
+
+                  if (($file['error'] ?? 0) === 0) {
+                     $tempFile = tempnam($tempUploadedDir, '');
+                     if ($tempFile === false) {
+                        $file['error'] = UPLOAD_ERR_CANT_WRITE;
+                     }
+                     else {
+                        $file['tmp_name'] = $tempFile;
+
+                        try {
+                           $handle = fopen($tempFile, 'w+');
+                           if ($handle === false) {
+                              $this->fileHandler = null;
+                              $file['error'] = UPLOAD_ERR_CANT_WRITE;
+                           }
+                           else {
+                              $this->fileHandler = $handle;
+                           }
+                        }
+                        catch (Throwable) {
+                           $this->fileHandler = null;
+                           $file['error'] = UPLOAD_ERR_CANT_WRITE;
+                        }
+                     }
+                  }
+
+                  $this->currentFileSize = 0;
+                  $this->bytesSinceDiskCheck = 0;
+
+                  $this->filesKeys[] = $uploadKey;
+                  $this->files[] = $file; // @ Index will be updated with size at close
+
+                  $this->state = self::STATE_PART_BODY_FILE;
+               }
+               else if ($fieldName !== '') {
+                  if ($this->fieldsCount >= Server\Request::$maxMultipartFields) {
+                     $reject("HTTP/1.1 413 Request Entity Too Large\r\n\r\n");
+                     $data = '';
+                     break;
+                  }
+                  $this->fieldsCount++;
+
+                  $this->currentFieldName = $fieldName;
+                  $this->fieldBuffer = '';
+                  $this->currentFieldSize = 0;
+                  $this->state = self::STATE_PART_BODY_FIELD;
+               }
+
+               $data = $remainder;
                break;
 
             case self::STATE_PART_BODY_FILE:
-               $data = $this->parsePartBodyFile($data);
+               $boundary = "\r\n" . $this->boundary;
+               $boundaryLen = strlen($boundary);
+
+               // @ Search for boundary in data
+               $pos = strpos($data, $boundary);
+
+               if ($pos !== false) {
+                  // @ Boundary found: write everything before boundary to file
+                  $fileData = substr($data, 0, $pos);
+
+                  $this->writeFileChunk($fileData);
+
+                  // @ Close file and finalize file entry
+                  $this->closeCurrentFile();
+
+                  // @ Move past boundary
+                  $afterBoundary = $pos + $boundaryLen;
+
+                  // @ Check if this is the final boundary (--)
+                  if ($afterBoundary + 2 <= strlen($data)) {
+                     if (substr($data, $afterBoundary, 2) === '--') {
+                        $this->finish();
+                        $data = '';
+                        break;
+                     }
+                  }
+
+                  // @ Skip \r\n after boundary
+                  $nextPos = $afterBoundary + 2; // +2 for \r\n
+                  if ($nextPos > strlen($data)) {
+                     $this->tailBuffer = substr($data, $afterBoundary);
+                     $this->state = self::STATE_BOUNDARY_START;
+                     $data = null;
+                     break;
+                  }
+
+                  $this->state = self::STATE_PART_HEADER;
+                  $this->headerBuffer = '';
+
+                  $data = substr($data, $nextPos);
+                  break;
+               }
+
+               // @ Boundary not found: write data except tail buffer to file
+               // @ Keep enough bytes for boundary detection across chunks
+               $safeLen = strlen($data) - $boundaryLen - 2;
+
+               if ($safeLen > 0) {
+                  $safeData = substr($data, 0, $safeLen);
+
+                  $this->writeFileChunk($safeData);
+
+                  $this->tailBuffer = substr($data, $safeLen);
+               }
+               else {
+                  // @ Not enough data to write safely, keep all in tail buffer
+                  $this->tailBuffer = $data;
+               }
+
+               $data = null;
                break;
 
             case self::STATE_PART_BODY_FIELD:
-               $data = $this->parsePartBodyField($data);
+               $boundary = "\r\n" . $this->boundary;
+               $boundaryLen = strlen($boundary);
+
+               // @ Search for boundary in data
+               $pos = strpos($data, $boundary);
+
+               if ($pos !== false) {
+                  // @ Boundary found: accumulate everything before boundary
+                  if ($appendField(substr($data, 0, $pos)) === false) {
+                     $data = '';
+                     break;
+                  }
+
+                  // @ Store field value
+                  $fieldName = $this->currentFieldName;
+                  if ($fieldName !== '') {
+                     $this->postEncoded .= urlencode($fieldName) . '=' . urlencode($this->fieldBuffer) . '&';
+                  }
+
+                  $this->fieldBuffer = '';
+                  $this->currentFieldSize = 0;
+
+                  // @ Move past boundary
+                  $afterBoundary = $pos + $boundaryLen;
+
+                  // @ Check if this is the final boundary (--)
+                  if ($afterBoundary + 2 <= strlen($data)) {
+                     if (substr($data, $afterBoundary, 2) === '--') {
+                        $this->finish();
+                        $data = '';
+                        break;
+                     }
+                  }
+
+                  // @ Skip \r\n after boundary
+                  $nextPos = $afterBoundary + 2;
+                  if ($nextPos > strlen($data)) {
+                     $this->tailBuffer = substr($data, $afterBoundary);
+                     $this->state = self::STATE_BOUNDARY_START;
+                     $data = null;
+                     break;
+                  }
+
+                  $this->state = self::STATE_PART_HEADER;
+                  $this->headerBuffer = '';
+
+                  $data = substr($data, $nextPos);
+                  break;
+               }
+
+               // @ Boundary not found: accumulate data except tail buffer
+               $safeLen = strlen($data) - $boundaryLen - 2;
+
+               if ($safeLen > 0) {
+                  if ($appendField(substr($data, 0, $safeLen)) === false) {
+                     $data = '';
+                     break;
+                  }
+                  $this->tailBuffer = substr($data, $safeLen);
+               }
+               else {
+                  $this->tailBuffer = $data;
+               }
+
+               $data = null;
                break;
+         }
+
+         if ($this->rejected) {
+            return 0;
          }
 
          // @ If data is null, we need more data (save remainder in tail buffer)
@@ -174,6 +536,10 @@ class Decoder_Downloading extends Decoders
       // @ Update Body metadata
       $Body->downloaded = $this->downloaded;
 
+      if ($this->rejected) {
+         return 0;
+      }
+
       // @ Check if all data received
       if ($Body->length !== null && $this->downloaded >= $Body->length) {
          $this->finish();
@@ -181,229 +547,6 @@ class Decoder_Downloading extends Decoders
       }
 
       return 0;
-   }
-
-   private function parseBoundaryStart (string $data): ?string
-   {
-      $boundary = $this->boundary;
-      $boundaryLen = strlen($boundary);
-
-      // @ Search for boundary in data
-      $pos = strpos($data, $boundary);
-      if ($pos === false) {
-         // @ Not enough data, save as tail buffer
-         $this->tailBuffer = $data;
-         return null;
-      }
-
-      // @ Check if this is the final boundary (--boundary--)
-      $afterBoundary = $pos + $boundaryLen;
-      if ($afterBoundary + 2 <= strlen($data)) {
-         if (substr($data, $afterBoundary, 2) === '--') {
-            // @ Final boundary: finish
-            $this->finish();
-            return '';
-         }
-      }
-
-      // @ Skip boundary + \r\n
-      $nextPos = $afterBoundary + 2; // +2 for \r\n
-      if ($nextPos > strlen($data)) {
-         $this->tailBuffer = $data;
-         return null;
-      }
-
-      $this->state = self::STATE_PART_HEADER;
-      $this->headerBuffer = '';
-
-      return substr($data, $nextPos);
-   }
-
-   private function parsePartHeader (string $data): ?string
-   {
-      $this->headerBuffer .= $data;
-
-      // @ Search for end of headers (\r\n\r\n)
-      $headerEnd = strpos($this->headerBuffer, "\r\n\r\n");
-      if ($headerEnd === false) {
-         // @ Need more data
-         return null;
-      }
-
-      // @ Extract headers
-      $headersRaw = substr($this->headerBuffer, 0, $headerEnd);
-      $remainder = substr($this->headerBuffer, $headerEnd + 4);
-      $this->headerBuffer = '';
-
-      // @ Parse headers
-      $contentLines = explode("\r\n", trim($headersRaw));
-
-      $uploadKey = false;
-      $file = [];
-      $isFile = false;
-      $fieldName = '';
-
-      foreach ($contentLines as $contentLine) {
-         if (! strpos($contentLine, ': ')) {
-            continue;
-         }
-
-         @[$key, $value] = explode(': ', $contentLine, 2);
-
-         switch (strtolower($key)) {
-            case 'content-disposition':
-               // @ File
-               if (preg_match('/name="(.*?)"; filename="(.*?)"/i', $value, $match)) {
-                  $isFile = true;
-                  $uploadKey = $match[1];
-                  // ! Sanitize filename: strip directory traversal and restrict to safe characters
-                  $rawFilename = basename($match[2]);
-                  $safeFilename = (string) preg_replace('/[^\w.\- ]/', '_', $rawFilename);
-                  // ! Hidden-dot hardening: reject leading dots like `.htaccess`
-                  $safeFilename = ltrim($safeFilename, ". \t");
-                  if ($safeFilename === '') {
-                     $safeFilename = 'upload';
-                  }
-                  $file = [
-                     'name' => $safeFilename,
-                     'tmp_name' => '',
-                     'size' => 0,
-                     'error' => 0,
-                     'type' => '',
-                  ];
-               }
-               // @ Text field
-               else if (preg_match('/name="(.*?)"$/', $value, $match)) {
-                  $fieldName = $match[1];
-               }
-
-               break;
-            case 'content-type':
-               $file['type'] = trim($value);
-               break;
-         }
-      }
-
-      if ($isFile && $uploadKey !== false) {
-         // @ Open temp file for streaming writes
-         $tempUploadedDir = BOOTGLY_WORKING_BASE . '/workdata/temp/files/downloaded/';
-
-         if (! is_dir($tempUploadedDir)) {
-            mkdir($tempUploadedDir, 0700, true);
-         }
-
-         // @ Check disk space
-         try {
-            $freeSpace = disk_free_space($tempUploadedDir);
-            if ($freeSpace !== false && $freeSpace < 1048576) { // @ Minimum 1MB free
-               $file['error'] = UPLOAD_ERR_CANT_WRITE;
-            }
-         }
-         catch (Throwable) {
-            $file['error'] = UPLOAD_ERR_CANT_WRITE;
-         }
-
-         if (($file['error'] ?? 0) === 0) {
-            $tempFile = tempnam($tempUploadedDir, '');
-            if ($tempFile === false) {
-               $file['error'] = UPLOAD_ERR_CANT_WRITE;
-            }
-            else {
-               $file['tmp_name'] = $tempFile;
-
-               try {
-                  $handle = fopen($tempFile, 'w+');
-                  if ($handle === false) {
-                     $this->fileHandler = null;
-                     $file['error'] = UPLOAD_ERR_CANT_WRITE;
-                  }
-                  else {
-                     $this->fileHandler = $handle;
-                  }
-               }
-               catch (Throwable) {
-                  $this->fileHandler = null;
-                  $file['error'] = UPLOAD_ERR_CANT_WRITE;
-               }
-            }
-         }
-
-         $this->currentFileSize = 0;
-         $this->bytesSinceDiskCheck = 0;
-
-         $this->filesKeys[] = $uploadKey;
-         $this->files[] = $file; // @ Index will be updated with size at close
-
-         $this->state = self::STATE_PART_BODY_FILE;
-      }
-      else if ($fieldName !== '') {
-         $this->currentFieldName = $fieldName;
-         $this->fieldBuffer = '';
-         $this->state = self::STATE_PART_BODY_FIELD;
-      }
-
-      return $remainder;
-   }
-
-   private function parsePartBodyFile (string $data): ?string
-   {
-      $boundary = "\r\n" . $this->boundary;
-      $boundaryLen = strlen($boundary);
-
-      // @ Search for boundary in data
-      $pos = strpos($data, $boundary);
-
-      if ($pos !== false) {
-         // @ Boundary found: write everything before boundary to file
-         $fileData = substr($data, 0, $pos);
-
-         $this->writeFileChunk($fileData);
-
-         // @ Close file and finalize file entry
-         $this->closeCurrentFile();
-
-         // @ Move past boundary
-         $afterBoundary = $pos + $boundaryLen;
-
-         // @ Check if this is the final boundary (--)
-         if ($afterBoundary + 2 <= strlen($data)) {
-            if (substr($data, $afterBoundary, 2) === '--') {
-               $this->finish();
-               return '';
-            }
-         }
-
-         // @ Skip \r\n after boundary
-         $nextPos = $afterBoundary + 2; // +2 for \r\n
-         if ($nextPos > strlen($data)) {
-            $this->tailBuffer = substr($data, $afterBoundary);
-            $this->state = self::STATE_BOUNDARY_START;
-            return null;
-         }
-
-         $this->state = self::STATE_PART_HEADER;
-         $this->headerBuffer = '';
-
-         return substr($data, $nextPos);
-      }
-
-      // @ Boundary not found: write data except tail buffer to file
-      // @ Keep enough bytes for boundary detection across chunks
-      $safeLen = strlen($data) - $boundaryLen - 2;
-
-      if ($safeLen > 0) {
-         $safeData = substr($data, 0, $safeLen);
-
-         $this->writeFileChunk($safeData);
-
-         $this->tailBuffer = substr($data, $safeLen);
-      }
-      else {
-         // @ Not enough data to write safely, keep all in tail buffer
-         $this->tailBuffer = $data;
-      }
-
-      return null;
    }
 
    /**
@@ -446,8 +589,7 @@ class Decoder_Downloading extends Decoders
                $this->closeCurrentFile();
                return;
             }
-         }
-         catch (Throwable) {
+         } catch (Throwable) {
             $file['error'] = UPLOAD_ERR_CANT_WRITE;
             $this->closeCurrentFile();
             return;
@@ -472,65 +614,6 @@ class Decoder_Downloading extends Decoders
          $file['error'] = UPLOAD_ERR_CANT_WRITE;
          $this->closeCurrentFile();
       }
-   }
-
-   private function parsePartBodyField (string $data): ?string
-   {
-      $boundary = "\r\n" . $this->boundary;
-      $boundaryLen = strlen($boundary);
-
-      // @ Search for boundary in data
-      $pos = strpos($data, $boundary);
-
-      if ($pos !== false) {
-         // @ Boundary found: accumulate everything before boundary
-         $this->fieldBuffer .= substr($data, 0, $pos);
-
-         // @ Store field value
-         $fieldName = $this->currentFieldName;
-         if ($fieldName !== '') {
-            $this->postEncoded .= urlencode($fieldName) . '=' . urlencode($this->fieldBuffer) . '&';
-         }
-
-         $this->fieldBuffer = '';
-
-         // @ Move past boundary
-         $afterBoundary = $pos + $boundaryLen;
-
-         // @ Check if this is the final boundary (--)
-         if ($afterBoundary + 2 <= strlen($data)) {
-            if (substr($data, $afterBoundary, 2) === '--') {
-               $this->finish();
-               return '';
-            }
-         }
-
-         // @ Skip \r\n after boundary
-         $nextPos = $afterBoundary + 2;
-         if ($nextPos > strlen($data)) {
-            $this->tailBuffer = substr($data, $afterBoundary);
-            $this->state = self::STATE_BOUNDARY_START;
-            return null;
-         }
-
-         $this->state = self::STATE_PART_HEADER;
-         $this->headerBuffer = '';
-
-         return substr($data, $nextPos);
-      }
-
-      // @ Boundary not found: accumulate data except tail buffer
-      $safeLen = strlen($data) - $boundaryLen - 2;
-
-      if ($safeLen > 0) {
-         $this->fieldBuffer .= substr($data, 0, $safeLen);
-         $this->tailBuffer = substr($data, $safeLen);
-      }
-      else {
-         $this->tailBuffer = $data;
-      }
-
-      return null;
    }
 
    /**
@@ -575,6 +658,10 @@ class Decoder_Downloading extends Decoders
     */
    private function finish (): void
    {
+      if ($this->rejected) {
+         return;
+      }
+
       // @ Close any open file handler
       if ($this->fileHandler !== null) {
          try {

@@ -119,5 +119,8 @@ return new Suite(
       // # TCP_Server_CLI Packages
       // nonblocking writes must not spin when fwrite() makes no progress
       '18.01-nonblocking_write_backpressure_spin',
+      // # Decoder Downloading (multipart)
+      // text fields must have independent memory caps
+      '19.01-multipart_text_field_memory_cap',
    ],
 );

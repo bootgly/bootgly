@@ -146,22 +146,17 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
    /**
     * Configure the HTTP Server.
     *
-    * @param string $host The host to bind the server to.
-    * @param int $port Port to bind the server to.
-    * @param int $workers Number of workers to spawn.
-    * @param null|array<string> $secure Secure SSL/TLS configuration.
-    * @param null|string $user User to drop privileges to after socket binding.
-    * @param null|string $group Group to drop privileges to after socket binding.
-    * @param null|int $requestMaxFileSize Maximum file size in bytes for multipart/form-data downloads.
-    * @param null|int $requestMaxBodySize Maximum body size in bytes for non-multipart requests.
-    *
     * @return self The HTTP Server instance, for chaining 
     */
    public function configure (
       string $host, int $port, int $workers,
       null|array $secure = null,
       null|string $user = null, null|string $group = null,
-      null|int $requestMaxFileSize = null, null|int $requestMaxBodySize = null
+      null|int $requestMaxFileSize = null, null|int $requestMaxBodySize = null,
+      null|int $requestMaxMultipartFieldSize = null,
+      null|int $requestMaxMultipartHeaderSize = null,
+      null|int $requestMaxMultipartFields = null,
+      null|int $requestMaxMultipartFiles = null
    ): self
    {
       parent::configure($host, $port, $workers, $secure, $user, $group);
@@ -181,6 +176,18 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       }
       if ($requestMaxBodySize !== null) {
          Request::$maxBodySize = $requestMaxBodySize;
+      }
+      if ($requestMaxMultipartFieldSize !== null) {
+         Request::$maxMultipartFieldSize = $requestMaxMultipartFieldSize;
+      }
+      if ($requestMaxMultipartHeaderSize !== null) {
+         Request::$maxMultipartHeaderSize = $requestMaxMultipartHeaderSize;
+      }
+      if ($requestMaxMultipartFields !== null) {
+         Request::$maxMultipartFields = $requestMaxMultipartFields;
+      }
+      if ($requestMaxMultipartFiles !== null) {
+         Request::$maxMultipartFiles = $requestMaxMultipartFiles;
       }
 
       return $this;
