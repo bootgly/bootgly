@@ -29,6 +29,7 @@ use function is_int;
 use function is_resource;
 use function is_string;
 use function microtime;
+use function stream_select;
 use function strlen;
 use function substr;
 use Throwable;
@@ -302,6 +303,7 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
       $written = 0;
       $failed = false;
       $sent = 0; // Bytes sent to client per write loop iteration
+      $zeroWrites = 0; // Backpressure: consecutive no-progress writes
 
       // @
       try {
@@ -313,10 +315,27 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
                break;
             }
             if ($sent === 0) {
-               $this->Connection->close();
-               return false;
+               // ! Backpressure: wait for write readiness instead of busy-spinning.
+               //   On userspace stream wrappers (used by PoC tests), stream_select()
+               //   cannot cast the resource and throws ValueError: we close immediately,
+               //   matching the original Finding 3 hardening for stuck writers.
+               $writeSet = [$Socket];
+               $readSet = null;
+               $exceptSet = null;
+               try {
+                  $ready = @stream_select($readSet, $writeSet, $exceptSet, 0, 200_000);
+               }
+               catch (Throwable) {
+                  $ready = false;
+               }
+               if ($ready === false || $ready === 0 || ++$zeroWrites > 50) {
+                  $this->Connection->close();
+                  return false;
+               }
+               continue;
             }
 
+            $zeroWrites = 0;
             $written += $sent;
 
             if ($sent < $length) {
@@ -661,6 +680,7 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
    public function upload (&$Socket, &$Handler, int $rate, int $length): int
    {
       $written = 0;
+      $zeroWrites = 0; // Backpressure: consecutive no-progress writes
 
       while ($written < $length) {
          // ! Stream
@@ -688,10 +708,26 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
 
             if ($sent === false) break;
             if ($sent === 0) {
-               $this->Connection->close();
-               return $written;
+               // ! Backpressure: wait for write readiness instead of busy-spinning.
+               //   On userspace stream wrappers (used by PoC tests), stream_select()
+               //   cannot cast the resource and throws ValueError: we close immediately.
+               $writeSet = [$Socket];
+               $readSet = null;
+               $exceptSet = null;
+               try {
+                  $ready = @stream_select($readSet, $writeSet, $exceptSet, 0, 200_000);
+               }
+               catch (Throwable) {
+                  $ready = false;
+               }
+               if ($ready === false || $ready === 0 || ++$zeroWrites > 50) {
+                  $this->Connection->close();
+                  return $written;
+               }
+               continue;
             }
 
+            $zeroWrites = 0;
             $written += $sent;
 
             if ($sent < $read) {
