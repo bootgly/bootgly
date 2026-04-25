@@ -2,6 +2,18 @@
 
 Changelog for Bootgly framework. All notable changes to this project will be documented in this file. Imported from ROADMAP.md.
 
+## v0.14.9-beta ✅
+
+> Focus: **Session strict mode — rotate client-supplied unknown session IDs before first write**
+
+### WPI — Web Programming Interface
+
+- ✅ HTTP Server CLI: `Request->Session` getter — cookie IDs failing the canonical `^[a-f0-9]{32,64}$` format are replaced with a fresh ID before `Session` construction; format-valid IDs that do not load existing data are rotated via `Session::rotate()` before any first write, preventing an attacker-chosen ID from ever being persisted
+- ✅ HTTP Server CLI: `Session` — added `$loaded` flag (true only when `Handler::read()` returns existing data) and `rotate(string $newId)` method that replaces the ID in-place without touching storage or emitting `Set-Cookie`
+- ✅ HTTP Server CLI: Security regression test `21.01-session_strict_mode_unknown_id` — sends a format-valid but server-unknown `PHPSID` cookie and asserts the handler's mutated session uses a fresh server-generated ID
+
+---
+
 ## v0.14.8-beta ✅
 
 > Focus: **Request header field names normalized to lowercase for full case-insensitivity compliance**
