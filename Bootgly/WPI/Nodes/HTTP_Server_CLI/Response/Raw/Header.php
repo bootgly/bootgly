@@ -14,6 +14,7 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Raw;
 use function array_key_exists;
 use function gmdate;
 use function implode;
+use function preg_match;
 use function str_replace;
 use function strtolower;
 use function time;
@@ -162,6 +163,27 @@ class Header extends HeaderBase
          $this->queued = [];
       }
    }
+   /**
+    * Validate a response header field name against the RFC 9110 §5.1
+    * `token` production: `1*tchar` where `tchar` is one of
+    * `!#$%&'*+.^_`|~0-9A-Za-z-`. CRLF is implicitly excluded, closing the
+    * response-splitting primitive when application code passes
+    * attacker-controlled bytes into a header NAME (custom routing,
+    * locale tags, A/B headers, etc.).
+    *
+    * Reject-over-mutate is intentional: silently truncating an injected
+    * name would still give the attacker partial control of the on-wire
+    * header line.
+    */
+   private static function validate (string $field): bool
+   {
+      if ($field === '') {
+         return false;
+      }
+
+      // ! ASCII-only token regex; preg_match returns 1 on full match.
+      return preg_match("/^[!#\$%&'*+.^_`|~0-9A-Za-z-]+\$/D", $field) === 1;
+   }
 
    public function preset (string $name, string|null $value = null): void
    {
@@ -181,8 +203,23 @@ class Header extends HeaderBase
     */
    public function prepare (array $fields): void // @ Prepare to build
    {
-      if ($fields !== $this->prepared) {
-         $this->prepared = $fields;
+      // ! Validate names against RFC 9110 token syntax and strip CRLF from
+      //   values before they reach build() — prepare() is a bulk entry
+      //   point that previously emitted attacker-controlled bytes verbatim.
+      $sanitized = [];
+
+      foreach ($fields as $name => $value) {
+         $name = str_replace(["\r", "\n"], '', (string) $name);
+
+         if (! self::validate($name)) {
+            continue;
+         }
+
+         $sanitized[$name] = str_replace(["\r", "\n"], '', (string) $value);
+      }
+
+      if ($sanitized !== $this->prepared) {
+         $this->prepared = $sanitized;
          $this->dirty = true;
       }
    }
@@ -227,19 +264,24 @@ class Header extends HeaderBase
 
    public function set (string $field, string $value): bool
    {
-      if ($field) {
-         // ! Strip CRLF from header values to prevent HTTP response splitting
-         $value = str_replace(["\r", "\n"], '', $value);
+      // ! Strip CRLF from the field name AND validate against RFC 9110 token
+      //   syntax to prevent HTTP response splitting via attacker-controlled
+      //   header names. Reject invalid names to surface bugs visibly.
+      $field = str_replace(["\r", "\n"], '', $field);
 
-         if (! isSet($this->fields[$field]) || $this->fields[$field] !== $value) {
-            $this->fields[$field] = $value;
-            $this->dirty = true;
-         }
-
-         return true;
+      if (! self::validate($field)) {
+         return false;
       }
 
-      return false;
+      // ! Strip CRLF from header values to prevent HTTP response splitting
+      $value = str_replace(["\r", "\n"], '', $value);
+
+      if (! isSet($this->fields[$field]) || $this->fields[$field] !== $value) {
+         $this->fields[$field] = $value;
+         $this->dirty = true;
+      }
+
+      return true;
    }
    public function remove (string $field): bool
    {
@@ -257,6 +299,11 @@ class Header extends HeaderBase
       $field = str_replace(["\r", "\n"], '', $field);
       $value = str_replace(["\r", "\n"], '', $value);
 
+      // ! Reject invalid RFC 9110 tokens silently (signature is void).
+      if (! self::validate($field)) {
+         return;
+      }
+
       $separator ??= ', ';
 
       if ( isSet($this->fields[$field]) ) {
@@ -273,14 +320,14 @@ class Header extends HeaderBase
       $field = str_replace(["\r", "\n"], '', $field);
       $value = str_replace(["\r", "\n"], '', $value);
 
-      if ($field) {
-         $this->queued[] = "$field: $value";
-         $this->dirty = true;
-
-         return true;
+      if (! self::validate($field)) {
+         return false;
       }
 
-      return false;
+      $this->queued[] = "$field: $value";
+      $this->dirty = true;
+
+      return true;
    }
 
    public function build (): true // @ raw

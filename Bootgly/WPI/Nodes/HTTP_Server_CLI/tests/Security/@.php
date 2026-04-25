@@ -128,5 +128,8 @@ return new Suite(
       // # Request Session
       // unknown client-supplied IDs must be rotated before first write
       '21.01-session_strict_mode_unknown_id',
+      // # Response Header
+      // header names must be RFC token-validated and CR/LF-stripped
+      '22.01-response_header_name_validation',
    ],
 );
