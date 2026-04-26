@@ -2,6 +2,17 @@
 
 Changelog for Bootgly framework. All notable changes to this project will be documented in this file. Imported from ROADMAP.md.
 
+## v0.14.12-beta ✅
+
+> Focus: **Property-based fuzz testing infrastructure for HTTP_Server_CLI and RFC-compliant header parsing fix**
+
+### WPI — Web Programming Interface
+
+- ✅ HTTP Server CLI: `Tests/Fuzz` — property-based fuzz testing infrastructure (`Grammar`, `Grammar/Body`, `Grammar/Headers`, `Property`, `Sockets`); 5 fuzz scenarios covering header casing/ordering invariants, pipelined CL+chunked mix, slow body trickling, multipart shape fuzz, and degenerate framing
+- ✅ HTTP Server CLI: `Request/Frame` + `Request/Raw/Header` — RFC compliance fix: RFC 9110–valid header values that contain no folding whitespace were incorrectly rejected; acceptance logic corrected and regression test `04.04-rfc_valid_no_space_headers` added
+
+---
+
 ## v0.14.11-beta ✅
 
 > Focus: **Server infrastructure hardening — centralized HTTP/1.1 framing, decoder state machine, async write backpressure, aggregate upload disk cap, and POST globals elimination**

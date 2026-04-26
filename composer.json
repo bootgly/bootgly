@@ -1,6 +1,6 @@
 {
    "name": "bootgly/bootgly",
-   "version": "0.14.11-beta",
+   "version": "0.14.12-beta",
    "type": "library",
    "description": "The Bootgly PHP Framework.",
    "license": "MIT",
