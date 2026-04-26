@@ -55,5 +55,7 @@ return new Suites(
       18 => 'Bootgly/WPI/Nodes/HTTP_Server_CLI/tests/E2E/',
       // Security
       19 => 'Bootgly/WPI/Nodes/HTTP_Server_CLI/tests/Security/',
+      // Fuzz (property-based / structure-aware fuzzing)
+      20 => 'Bootgly/WPI/Nodes/HTTP_Server_CLI/tests/Fuzz/',
    ]
 );

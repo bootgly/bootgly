@@ -76,6 +76,7 @@ return new Suite(
       '04.01-content_length_negative_accepted',
       '04.02-content_length_strict_parse_bypass',
       '04.03-content_length_first_header_smuggling',
+      '04.04-rfc_valid_no_space_headers',
       // # Request Session
       // file handler unserialise without integrity
       '05.01-session_file_unserialize_forgery',

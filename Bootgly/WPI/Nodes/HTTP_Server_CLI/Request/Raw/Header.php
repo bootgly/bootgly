@@ -18,6 +18,8 @@ use function is_string;
 use function strlen;
 use function strpos;
 use function strtolower;
+use function substr;
+use function trim;
 
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Raw\Header\Cookies;
 
@@ -184,31 +186,38 @@ class Header
       $fields = [];
 
       foreach (explode("\r\n", $this->raw ?? '') as $field) {
-         if ( strpos($field, ': ') ) {
-            @[$key, $value] = explode(': ', $field, 2);
+         if ($field === '') {
+            continue;
+         }
 
-            // ! Reject malformed header names containing spaces (RFC 9112 §5.1)
-            if ( strpos($key, ' ') !== false ) {
-               continue;
+         $sepPos = strpos($field, ':');
+         if ($sepPos === false) {
+            continue;
+         }
+
+         $key = substr($field, 0, $sepPos);
+         if ($key === '' || strpos($key, ' ') !== false || strpos($key, "\t") !== false) {
+            continue;
+         }
+
+         $value = trim(substr($field, $sepPos + 1), " \t");
+
+         // @ Normalize field name to lowercase (RFC 9110 §5.1: case-insensitive).
+         //   Stored once at parse time so get() / cookie parsing / duplicate
+         //   detection are all O(1) lowercase lookups.
+         $key = strtolower($key);
+
+         if ( isSet($fields[$key]) ) {
+            if ( is_string($fields[$key]) ) {
+               $fields[$key] = [
+                  $fields[$key]
+               ];
             }
 
-            // @ Normalize field name to lowercase (RFC 9110 §5.1: case-insensitive).
-            //   Stored once at parse time so get() / cookie parsing / duplicate
-            //   detection are all O(1) lowercase lookups.
-            $key = strtolower($key);
-
-            if ( isSet($fields[$key]) ) {
-               if ( is_string($fields[$key]) ) {
-                  $fields[$key] = [
-                     $fields[$key]
-                  ];
-               }
-
-               $fields[$key][] = $value;
-            }
-            else {
-               $fields[$key] = $value;
-            }
+            $fields[$key][] = $value;
+         }
+         else {
+            $fields[$key] = $value;
          }
       }
 

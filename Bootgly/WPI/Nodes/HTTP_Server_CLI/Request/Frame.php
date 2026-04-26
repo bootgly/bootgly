@@ -180,17 +180,24 @@ final class Frame
       $keepAliveSeen = false;
 
       foreach (explode("\r\n", $header_raw) as $line) {
-         // ! Match Header::build() admission: require `: ` (colon + space)
-         //   AND no space in the field name.
-         $sepPos = strpos($line, ': ');
+         if ($line === '') {
+            continue;
+         }
+
+         // @ RFC 9110 §5.5: field-line = field-name ":" OWS field-value OWS.
+         //   A SP after ':' is optional (`Content-Length:10` is valid), but
+         //   whitespace before ':' is not. Parse at the first colon so
+         //   framing and application lookup cannot silently diverge.
+         $sepPos = strpos($line, ':');
          if ($sepPos === false) {
             continue;
          }
          $rawKey = substr($line, 0, $sepPos);
-         if (strpos($rawKey, ' ') !== false) {
-            continue;
+         if ($rawKey === '' || strpos($rawKey, ' ') !== false || strpos($rawKey, "\t") !== false) {
+            $Package->reject("HTTP/1.1 400 Bad Request\r\n\r\n");
+            return null;
          }
-         $rawValue = substr($line, $sepPos + 2);
+         $rawValue = trim(substr($line, $sepPos + 1), " \t");
          $key = strtolower($rawKey);
 
          // # fields map (RFC 9110 §5.1: case-insensitive).
