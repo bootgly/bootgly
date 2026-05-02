@@ -68,6 +68,23 @@ trait Formattable
    public const string _MAGENTA_BRIGHT_BACKGROUND = '105';
    public const string _CYAN_BRIGHT_BACKGROUND    = '106';
    public const string _WHITE_BRIGHT_BACKGROUND   = '107';
+   // @ soft foregrounds
+   public const string _BLACK_SOFT_FOREGROUND  = '38;2;102;102;102';
+   public const string _RED_DIM_FOREGROUND     = '38;2;177;88;88';
+   public const string _RED_SOFT_FOREGROUND    = '38;2;204;102;102';
+   public const string _RED_PALE_FOREGROUND    = '38;2;255;204;204';
+   public const string _GREEN_DIM_FOREGROUND   = '38;2;88;177;88';
+   public const string _GREEN_SOFT_FOREGROUND  = '38;2;102;204;102';
+   public const string _GREEN_PALE_FOREGROUND  = '38;2;204;255;204';
+   public const string _YELLOW_SOFT_FOREGROUND = '38;2;255;221;153';
+   public const string _YELLOW_PALE_FOREGROUND = '38;2;255;242;214';
+   // @ soft backgrounds
+   public const string _RED_DIM_BACKGROUND    = '48;2;50;42;42';
+   public const string _RED_SOFT_BACKGROUND   = '48;2;58;48;48';
+   public const string _RED_PALE_BACKGROUND   = '48;2;97;38;38';
+   public const string _GREEN_DIM_BACKGROUND  = '48;2;42;50;42';
+   public const string _GREEN_SOFT_BACKGROUND = '48;2;48;58;48';
+   public const string _GREEN_PALE_BACKGROUND = '48;2;38;97;38';
 
 
    // ! Styling
@@ -95,6 +112,15 @@ trait Formattable
    public const string _GREEN_BLACK = '32;40';
    // @ default background + default foreground
    public const string _BLACK_WHITE = '47;30';
+   // @ soft foreground + soft background
+   public const string _RED_DIM    = '38;2;177;88;88;48;2;50;42;42';
+   public const string _RED_SOFT   = '38;2;204;102;102;48;2;58;48;48';
+   public const string _RED_PALE   = '38;2;255;204;204;48;2;97;38;38';
+   public const string _GREEN_DIM  = '38;2;88;177;88;48;2;42;50;42';
+   public const string _GREEN_SOFT = '38;2;102;204;102;48;2;48;58;48';
+   public const string _GREEN_PALE = '38;2;204;255;204;48;2;38;97;38';
+   // @ dim style + soft foreground
+   public const string _YELLOW_PALE_DIM = '2;38;2;255;242;214';
 
 
    protected static function wrap (string ...$codes): string
