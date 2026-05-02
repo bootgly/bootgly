@@ -52,6 +52,7 @@ return new Suite(
 
       return true;
    },
+   suiteName: __NAMESPACE__,
    // * Data
    tests: [
       // @ Order-independence: the harness injects an `X-Bootgly-Test: N`

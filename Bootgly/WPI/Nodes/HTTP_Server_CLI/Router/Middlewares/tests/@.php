@@ -1,5 +1,7 @@
 <?php
 
+namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Middlewares\Tests;
+
 use Bootgly\ACI\Tests\Suite;
 
 return new Suite(
@@ -9,8 +11,8 @@ return new Suite(
    autoReport: true,
    autoSummarize: true,
    exitOnFailure: true,
+   suiteName: __NAMESPACE__,
    // * Data
-   suiteName: 'WPI\Nodes\HTTP_Server_CLI\Router\Middlewares',
    tests: [
       '1.1-cors',
       '2.1-rate_limit',

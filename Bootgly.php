@@ -9,8 +9,6 @@
  */
 
 
-use Exception;
-
 use Bootgly\CLI;
 use Bootgly\WPI;
 
