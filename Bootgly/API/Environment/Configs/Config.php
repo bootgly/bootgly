@@ -158,18 +158,6 @@ class Config
    }
 
    /**
-    * Bind this node to a required env/local-env key.
-    *
-    * This is the fail-closed shorthand for `bind(required: true)`.
-    *
-    * @throws RuntimeException when the value is absent or empty.
-    */
-   public function need (string $key, null|Types $cast = null): self
-   {
-      return $this->bind(key: $key, cast: $cast, required: true);
-   }
-
-   /**
     * Clear this node and throw a required-config failure.
     *
     * The missing value is never included in the exception message.

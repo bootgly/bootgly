@@ -17,7 +17,7 @@ return new Suite(
       '1.x-config_construct',
       '1.x-config_bind',
       '1.x-config_types',
-      '1.x-config_need',
+      '1.x-config_required',
 
       '2.x-scopes_registry',
 
