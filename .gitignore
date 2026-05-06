@@ -20,8 +20,7 @@ composer.lock
 # Metafolder (@)
 @/*
 # Additional folders
-!@/__php__/
-!@/__docker__/
+!@/phpstan/
 # Adittional files
 !@/phpstan.neon
 !README.md
@@ -42,6 +41,15 @@ _*.test.php
 #-- /resources --#
 /vendor/
 /tmp/
+
+#- /configs
+# Config environment files (secrets)
+configs/**/.env
+configs/**/.env.*
+projects/configs/**/.env
+projects/configs/**/.env.*
+projects/**/configs/**/.env
+projects/**/configs/**/.env.*
 
 #- /public
 /public/*

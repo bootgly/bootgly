@@ -29,6 +29,12 @@
       "php": "^8.4",
       "ext-pdo": "*"
    },
+   "autoload-dev": {
+      "psr-4": {
+         "Bootgly\\PHPStan\\": "@/phpstan/"
+      }
+   },
+
    "require-dev": {
       "phpstan/phpstan": "2.1.40"
    }

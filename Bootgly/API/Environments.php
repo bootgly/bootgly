@@ -13,6 +13,8 @@ namespace Bootgly\API;
 
 enum Environments
 {
+   case Development;
    case Production;
+   case Staging;
    case Test;
 }

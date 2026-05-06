@@ -19,6 +19,7 @@ use function parse_ini_file;
 use function putenv;
 
 use Bootgly\API\Environment\Agent;
+use Bootgly\API\Environment\Configs;
 
 
 class Environment
@@ -39,6 +40,9 @@ class Environment
     * @var string|null
     */
    public static $suffix = '';
+
+   // * Data
+   public static null|Configs $Configs = null;
 
 
    /**

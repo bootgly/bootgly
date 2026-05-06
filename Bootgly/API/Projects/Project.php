@@ -17,10 +17,12 @@ use function debug_backtrace;
 use function define;
 use function defined;
 use function dirname;
+use function is_dir;
 use Closure;
 use Error;
 
 use Bootgly\API\Projects;
+use Bootgly\API\Projects\Configs;
 
 
 /**
@@ -47,6 +49,7 @@ class Project
 
    // * Data
    public Closure $boot;
+   public null|Configs $Configs = null;
 
 
    public function __construct (
@@ -97,6 +100,12 @@ class Project
 
       define('BOOTGLY_PROJECT', $this);
       Projects::add($this);
+
+      // @ Configs
+      $configsDir = "{$this->path}configs/";
+      if (is_dir($configsDir)) {
+         $this->Configs = new Configs($configsDir);
+      }
 
       // @
       ($this->boot)($arguments, $options);

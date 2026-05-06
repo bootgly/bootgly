@@ -56,6 +56,7 @@ return new Suite(
 
       return true;
    },
+   suiteName: __NAMESPACE__,
    // * Data
    tests: [
       // @ Property-based / fuzz tests built on top of an HTTP grammar.

@@ -1,4 +1,5 @@
 parameters:
+   level: 9
    excludePaths:
       analyse:
          - */&/*
@@ -6,7 +7,6 @@ parameters:
          - */tests/*
          - */examples/*
    reportUnmatchedIgnoredErrors: false
-   level: 9
 
    paths:
       - ../Bootgly/
@@ -23,3 +23,20 @@ parameters:
       -
          message: '#Property Bootgly\\WPI\\Interfaces\\TCP_Client_CLI::\$Connections.*does not accept#'
          path: ../Bootgly/WPI/Nodes/HTTP_Client_CLI.php
+
+services:
+   -
+      class: Bootgly\PHPStan\Rules\ConfigPropertiesExtension
+      tags:
+         - phpstan.broker.propertiesClassReflectionExtension
+   -
+      class: Bootgly\PHPStan\Rules\ConfigBindCollector
+      tags:
+         - phpstan.collector
+   -
+      class: Bootgly\PHPStan\Rules\ConfigGetCollector
+      tags:
+         - phpstan.collector
+
+rules:
+   - Bootgly\PHPStan\Rules\UnboundConfigAccessRule
