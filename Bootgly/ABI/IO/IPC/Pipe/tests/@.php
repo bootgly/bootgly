@@ -14,6 +14,6 @@ return new Suite(
    // * Data
    suiteName: __NAMESPACE__,
    tests: [
-      '_1.0-construct-',
+      '1.0-construct-',
    ]
 );
