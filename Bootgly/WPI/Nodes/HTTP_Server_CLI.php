@@ -28,12 +28,14 @@ use const SIGUSR1;
 use const SIGUSR2;
 use const STREAM_SERVER_BIND;
 use const STREAM_SERVER_LISTEN;
+use function array_values;
 use function clearstatcache;
 use function count;
 use function fclose;
 use function feof;
 use function fread;
 use function function_exists;
+use function is_a;
 use function opcache_invalidate;
 use function pcntl_signal;
 use function preg_match;
@@ -53,6 +55,11 @@ use function usleep;
 use Closure;
 use Exception;
 use Generator;
+use ReflectionFunction;
+use ReflectionIntersectionType;
+use ReflectionNamedType;
+use ReflectionType;
+use ReflectionUnionType;
 use Throwable;
 
 use const Bootgly\WPI;
@@ -60,6 +67,7 @@ use Bootgly\ABI\Debugging\Data\Throwables\Exceptions;
 use Bootgly\ABI\IO\FS\File;
 use Bootgly\ACI\Logs\Logger;
 use Bootgly\ACI\Process;
+use Bootgly\ACI\Tests\Fixture;
 use Bootgly\ACI\Tests\Suite;
 use Bootgly\ACI\Tests\Suite\Test\Specification;
 use Bootgly\API\Endpoints\Server\Modes;
@@ -543,7 +551,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
 
             // ! Suite
             $Suite = SAPI::$Suite;
-            $Suite->separate('HTTP Server');
+            $Suite->separate($Suite->name);
 
             // @ Reconnection closure (for tests that close the connection)
             $reconnect = static function () use ($TCP_Client_CLI, &$Socket): void {
@@ -619,6 +627,11 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
                   continue;
                }
 
+               // @ Fixture lifecycle — early prepare() so request: closure can
+               //   read seeded state. Idempotent: base Test::pretest() will
+               //   call prepare() again later as a no-op.
+               $test->Fixture?->prepare();
+
                // @ Multi-request test
                if ($test->requests !== []) {
                   $responses = [];
@@ -629,7 +642,17 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
                      $responseLength = $test->responseLengths[$reqIndex] ?? null;
                      // ! Client
                      // ? Request
-                     $requestData = $requestClosure("{$TCP_Client_CLI->host}:{$TCP_Client_CLI->port}", $specIndex + $reqIndex);
+                     try {
+                        $requestArguments = ["{$TCP_Client_CLI->host}:{$TCP_Client_CLI->port}", $specIndex + $reqIndex];
+                        $requestArguments = self::inject($requestArguments, $requestClosure, $test->Fixture);
+
+                        $requestData = $requestClosure(...$requestArguments);
+                     }
+                     catch (Throwable $Throwable) {
+                        $test->Fixture?->dispose();
+
+                        throw $Throwable;
+                     }
                      // @ Inject handler-dispatch header (index-based).
                      $requestData = $injectTestIndex($requestData, $specIndex + $reqIndex);
                      $requestLength = strlen($requestData);
@@ -673,6 +696,8 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
                   $specIndex += count($test->requests);
 
                   if ($failed) {
+                     $test->Fixture?->dispose();
+
                      $Test->fail();
                      break;
                   }
@@ -699,28 +724,50 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
                // ! Client
                // ? Request
                $request = $test->request;
-               $requestResult = $request !== null
-                  ? $request("{$TCP_Client_CLI->host}:{$TCP_Client_CLI->port}", $specIndex - 1)
-                  : '';
+               try {
+                  if ($request !== null) {
+                     $requestArguments = ["{$TCP_Client_CLI->host}:{$TCP_Client_CLI->port}", $specIndex - 1];
+                     $requestArguments = self::inject($requestArguments, $request, $test->Fixture);
+
+                     $requestResult = $request(...$requestArguments);
+                  }
+                  else {
+                     $requestResult = '';
+                  }
+               }
+               catch (Throwable $Throwable) {
+                  $test->Fixture?->dispose();
+
+                  throw $Throwable;
+               }
 
                // @ Generator: yield chunks with delay for server event loop
                if ($requestResult instanceof Generator) {
                   $injected = false;
-                  foreach ($requestResult as $chunk) {
-                     /** @var string $chunk */
-                     if (! $injected) {
-                        $chunk = $injectTestIndex($chunk, $specIndex - 1);
-                        $injected = true;
-                     }
-                     $chunkLength = strlen($chunk);
-                     $Connection->output = $chunk;
-                     if ( ! $Connection->writing($Socket, $chunkLength) ) { // @phpstan-ignore booleanNot.alwaysTrue
-                        $reconnect();
-                        if ( ! $Connection->writing($Socket, $chunkLength) ) { // @phpstan-ignore booleanNot.alwaysTrue
-                           break 2;
+                  try {
+                     foreach ($requestResult as $chunk) {
+                        /** @var string $chunk */
+                        if (! $injected) {
+                           $chunk = $injectTestIndex($chunk, $specIndex - 1);
+                           $injected = true;
                         }
+                        $chunkLength = strlen($chunk);
+                        $Connection->output = $chunk;
+                        if ( ! $Connection->writing($Socket, $chunkLength) ) { // @phpstan-ignore booleanNot.alwaysTrue
+                           $reconnect();
+                           if ( ! $Connection->writing($Socket, $chunkLength) ) { // @phpstan-ignore booleanNot.alwaysTrue
+                              $test->Fixture?->dispose();
+
+                              break 2;
+                           }
+                        }
+                        usleep(10000); // 10ms for server event loop to process
                      }
-                     usleep(10000); // 10ms for server event loop to process
+                  }
+                  catch (Throwable $Throwable) {
+                     $test->Fixture?->dispose();
+
+                     throw $Throwable;
                   }
 
                   // ? Response
@@ -755,6 +802,8 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
                   // @ Reconnect and retry
                   $reconnect();
                   if ( ! $Connection->writing($Socket, $requestLength) ) { // @phpstan-ignore booleanNot.alwaysTrue
+                     $test->Fixture?->dispose();
+
                      $Test->fail();
                      break;
                   }
@@ -802,5 +851,83 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       $TCP_Client_CLI->start();
 
       return true;
+   }
+   private static function check (null|ReflectionType $Type, Fixture $Fixture): bool
+   {
+      if ($Type === null) {
+         return true;
+      }
+
+      if ($Type instanceof ReflectionUnionType) {
+         foreach ($Type->getTypes() as $Inner) {
+            if (self::check($Inner, $Fixture)) {
+               return true;
+            }
+         }
+
+         return false;
+      }
+
+      if ($Type instanceof ReflectionIntersectionType) {
+         foreach ($Type->getTypes() as $Inner) {
+            if (self::check($Inner, $Fixture) === false) {
+               return false;
+            }
+         }
+
+         return true;
+      }
+
+      if ($Type instanceof ReflectionNamedType) {
+         $name = $Type->getName();
+         if ($name === 'mixed' || $name === 'object') {
+            return true;
+         }
+         if ($Type->isBuiltin()) {
+            return false;
+         }
+
+         return is_a($Fixture, $name);
+      }
+
+      return false;
+   }
+   /**
+    * @param array<int,mixed> $arguments
+    *
+    * @return array<int,mixed>
+    */
+   private static function inject (array $arguments, Closure $Closure, null|Fixture $Fixture): array
+   {
+      $arguments = array_values($arguments);
+
+      if ($Fixture === null) {
+         return $arguments;
+      }
+
+      $Function = new ReflectionFunction($Closure);
+      $parameters = $Function->getParameters();
+      $Parameter = $parameters[count($arguments)] ?? null;
+
+      if ($Parameter === null) {
+         foreach ($parameters as $Candidate) {
+            if ($Candidate->isVariadic()) {
+               $Parameter = $Candidate;
+               break;
+            }
+         }
+      }
+
+      if ($Parameter === null) {
+         return $arguments;
+      }
+
+      if (self::check($Parameter->getType(), $Fixture) === false) {
+         return $arguments;
+      }
+
+      $arguments[] = $Fixture;
+
+      return $arguments;
    }
 }

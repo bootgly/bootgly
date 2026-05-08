@@ -15,10 +15,14 @@ use const BOOTGLY_ROOT_BASE;
 use const BOOTGLY_ROOT_DIR;
 use const BOOTGLY_WORKING_BASE;
 use const BOOTGLY_WORKING_DIR;
+use const DIRECTORY_SEPARATOR;
+use function array_pop;
+use function explode;
 use function getcwd;
+use function implode;
 use function in_array;
+use function str_replace;
 
-use Bootgly\ABI\Data\__String\Path;
 use Bootgly\ABI\IO\FS\File;
 
 
@@ -138,7 +142,7 @@ class Scripts
       }
 
       // !
-      $this->filename = Path::normalize($this->filename);
+      $this->filename = self::normalize($this->filename);
 
       // @
       // Global scripts (absolute paths)
@@ -162,7 +166,7 @@ class Scripts
 
       $found = false;
       foreach ($basedirs as $basedir) {
-         $path = $basedir . Path::normalize($script);
+         $path = $basedir . self::normalize($script);
          $Script = new File($path);
 
          if ($Script->exists) {
@@ -176,5 +180,44 @@ class Scripts
       if ($found === false) {
          throw new \Exception("Script not found: `$script`");
       }
+   }
+
+   /**
+    * Normalize bootstrap script paths without loading ABI Path.
+    */
+   private static function normalize (string $path): string
+   {
+      if ($path === '') {
+         return '';
+      }
+
+      $directory = $path[-1] === '\\' || $path[-1] === '/';
+      $path = match (DIRECTORY_SEPARATOR) {
+         '/' => str_replace('\\', '/', $path),
+         '\\' => str_replace('/', '\\', $path),
+      };
+
+      $parts = explode(DIRECTORY_SEPARATOR, $path);
+      $normalized = [];
+
+      if ($path[0] === DIRECTORY_SEPARATOR) {
+         $normalized[] = '';
+      }
+
+      foreach ($parts as $part) {
+         if ($part === '..') {
+            array_pop($normalized);
+         }
+         else if ($part !== '.' && $part !== '') {
+            $normalized[] = $part;
+         }
+      }
+
+      $path = implode(DIRECTORY_SEPARATOR, $normalized);
+      if ($directory) {
+         $path .= DIRECTORY_SEPARATOR;
+      }
+
+      return $path;
    }
 }

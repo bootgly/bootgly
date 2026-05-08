@@ -48,6 +48,10 @@ class Suite
    public bool|Closure $autoInstance;
    public bool $autoReport;
    public bool $autoSummarize;
+   /**
+    * Default Fixture propagated to Specifications without their own Fixture.
+    */
+   public null|Fixture $Fixture;
    // exit
    public static bool $exitOnFailure = false;
    // pretesting
@@ -92,6 +96,7 @@ class Suite
     * @param null|bool $exitOnFailure
     * @param null|array<object> $testables
     * @param null|string $suiteName
+   * @param null|Fixture $Fixture
     * @param array<int|string,string|array<string>> $tests
     */
    public function __construct (
@@ -105,6 +110,7 @@ class Suite
       null|bool $exitOnFailure = null,
       null|array $testables = null,
       null|string $suiteName = null,
+      null|Fixture $Fixture = null,
    )
    {
       // !
@@ -114,6 +120,7 @@ class Suite
       $this->autoInstance = $autoInstance ?? false;
       $this->autoReport = $autoReport ?? false;
       $this->autoSummarize = $autoSummarize ?? false;
+      $this->Fixture = $Fixture;
       // exit
       self::$exitOnFailure = $exitOnFailure ?? self::$exitOnFailure;
       // pretesting
@@ -319,6 +326,8 @@ class Suite
 
          return null;
       }
+
+      $Test->Fixture ??= $this->Fixture;
 
       $this->Test = new Test($this, $Test);
 

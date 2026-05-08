@@ -1,15 +1,12 @@
 <?php
 
-use function json_encode;
-use function str_contains;
-
 use Bootgly\ABI\Debugging\Data\Vars;
 use Bootgly\ACI\Tests\Suite\Test\Specification\Separator;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Raw\Header;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Fixtures\Probe;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test\Specification;
-use Throwable;
 
 
 /**
@@ -22,19 +19,20 @@ use Throwable;
  * be silently bypassed depending on attacker-controlled header casing.
  */
 
-$probe = [
+$Probe = new Probe([
    'error'         => '',
    'authorization' => null,
    'origin'        => null,
    'forwardedFor'  => null,
    'sessionId'     => null,
-];
+]);
 
 return new Specification(
    description: 'Header field lookup must be case-insensitive (uppercase variants must resolve)',
    Separator: new Separator(line: true),
+   Fixture: $Probe,
 
-   request: function () use (&$probe): string {
+   request: function () use ($Probe): string {
       try {
          $Header = new Header;
          $Header->define(
@@ -44,13 +42,13 @@ return new Specification(
             . "COOKIE: sid=ZXKQ; theme=dark"
          );
 
-         $probe['authorization'] = $Header->get('Authorization');
-         $probe['origin']        = $Header->get('Origin');
-         $probe['forwardedFor']  = $Header->get('X-Forwarded-For');
-         $probe['sessionId']     = $Header->Cookies->get('sid');
+         $Probe->State->update('authorization', $Header->get('Authorization'));
+         $Probe->State->update('origin',        $Header->get('Origin'));
+         $Probe->State->update('forwardedFor',  $Header->get('X-Forwarded-For'));
+         $Probe->State->update('sessionId',     $Header->Cookies->get('sid'));
       }
       catch (Throwable $Throwable) {
-         $probe['error'] = $Throwable::class . ': ' . $Throwable->getMessage();
+         $Probe->State->update('error', $Throwable::class . ': ' . $Throwable->getMessage());
       }
 
       return "GET /header-case-harness HTTP/1.1\r\n"
@@ -63,34 +61,40 @@ return new Specification(
       return $Response(code: 200, body: 'HARNESS-OK');
    },
 
-   test: function (string $response) use (&$probe): bool|string {
-      if ($probe['error'] !== '') {
+   test: function (string $response) use ($Probe): bool|string {
+      $error         = $Probe->fetch('error');
+      $authorization = $Probe->fetch('authorization');
+      $origin        = $Probe->fetch('origin');
+      $forwardedFor  = $Probe->fetch('forwardedFor');
+      $sessionId     = $Probe->fetch('sessionId');
+
+      if ($error !== '') {
          Vars::$labels = ['Probe state'];
-         dump(json_encode($probe));
-         return $probe['error'];
+         dump(json_encode($Probe->State->bag));
+         return $error;
       }
 
-      if ($probe['authorization'] !== 'Bearer abc123') {
+      if ($authorization !== 'Bearer abc123') {
          Vars::$labels = ['Probe state'];
-         dump(json_encode($probe));
+         dump(json_encode($Probe->State->bag));
          return 'Header::get("Authorization") missed the uppercase AUTHORIZATION field.';
       }
 
-      if ($probe['origin'] !== 'https://example.test') {
+      if ($origin !== 'https://example.test') {
          Vars::$labels = ['Probe state'];
-         dump(json_encode($probe));
+         dump(json_encode($Probe->State->bag));
          return 'Header::get("Origin") missed the uppercase ORIGIN field — CORS bypass surface.';
       }
 
-      if ($probe['forwardedFor'] !== '198.51.100.7') {
+      if ($forwardedFor !== '198.51.100.7') {
          Vars::$labels = ['Probe state'];
-         dump(json_encode($probe));
+         dump(json_encode($Probe->State->bag));
          return 'Header::get("X-Forwarded-For") missed uppercase X-FORWARDED-FOR.';
       }
 
-      if ($probe['sessionId'] !== 'ZXKQ') {
+      if ($sessionId !== 'ZXKQ') {
          Vars::$labels = ['Probe state'];
-         dump(json_encode($probe));
+         dump(json_encode($Probe->State->bag));
          return 'Cookies::get("sid") missed cookies sent under uppercase COOKIE: header.';
       }
 

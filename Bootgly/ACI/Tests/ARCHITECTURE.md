@@ -129,10 +129,51 @@ Bootgly/ACI/Tests/
 │   └── Scenario/
 │       └── Loader.php                     # class — loads .lua files with @label/@group metadata
 │
+├── Coverage.php                           # class — start()/stop()/report(); auto-detect Driver
+├── Coverage/                              # ── Code coverage (v0.15.0-beta) ──
+│   ├── Driver.php                         # abstract class — start()/stop()/collect()
+│   ├── Drivers/                           # ── Coverage backends ──
+│   │   ├── Native.php                     # pure-PHP backend (tokenizer + stream filter)
+│   │   ├── Nothing.php                    # last-resort no-op (default when no ext)
+│   │   ├── PCOV.php                       # ext-pcov backend
+│   │   └── XDebug.php                     # ext-xdebug backend (XDEBUG_MODE=coverage)
+│   ├── Report.php                         # abstract class — render(array $data): string
+│   └── Reports/                           # ── Coverage formatters ──
+│       ├── Clover.php                     # Clover XML for CI
+│       ├── HTML.php                       # single-page HTML
+│       └── Text.php                       # CLI text breakdown
+│
+├── Faker.php                              # abstract class — generate(); deterministic seed
+├── Fakers.php                             # trait — fake($kind, $seed) entry-point
+├── Fakers/                                # ── Concrete fakers (extend Faker) ──
+│   ├── Email.php
+│   ├── Integer.php                        # named to avoid the `int` keyword
+│   ├── Name.php
+│   ├── Text.php
+│   └── UUID.php                           # RFC 4122 v4
+│
+├── Fixturable.php                         # trait — hosts ?Fixture slot
+├── Fixture.php                            # abstract class — prepare()/dispose()/fetch()/reset()
+├── Fixture/                               # ── Fixture support ──
+│   ├── Lifecycles.php                     # enum — Pristine, Preparing, Ready, Disposing, Disposed
+│   └── State.php                          # class — bag/seed VO (fetch/update/reset/clear)
+│
+├── Doubles.php                            # class — registry/collection (add/reset/clear)
+├── Doubles/                               # ── Test doubles ──
+│   ├── Mock/                              # ── Mock + Spy internals ──
+│   │   ├── Call.php                       # class — VO: method, arguments, returned, Threw, at
+│   │   ├── Calls.php                      # class — collection of Call (push/count/filter)
+│   │   ├── Proxy.php                      # final class — runtime eval-built typesafe proxy
+│   │   ├── Stub.php                       # final class — internal mock rule: method, return, Throws, Matcher
+│   │   └── Stubs.php                      # class — LIFO collection of Stub
+│   ├── Doubling.php                       # interface — reset()
+│   ├── Mock.php                           # class — $Proxy property; stub()/verify()/reset()
+│   └── Spy.php                            # class — $Wrapped property; verify()/reset() on real instance
+│
 ├── templates/                             # test file templates
 ├── tests/                                 # self-tests (@.php + *.test.php)
 └── docs/
-    └── ROADMAP.md
+    └─ ROADMAP.md
 ```
 
 ---

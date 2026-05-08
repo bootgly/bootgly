@@ -15,10 +15,12 @@ use const PHP_EOL;
 use const STR_PAD_BOTH;
 use const STR_PAD_RIGHT;
 use function array_reduce;
+use function array_values;
 use function count;
 use function current;
 use function file_put_contents;
 use function gettype;
+use function is_a;
 use function microtime;
 use function ob_end_clean;
 use function ob_get_clean;
@@ -28,13 +30,21 @@ use function str_pad;
 use function str_repeat;
 use function strlen;
 use AssertionError;
+use Closure;
 use Generator;
+use ReflectionFunction;
+use ReflectionIntersectionType;
+use ReflectionNamedType;
+use ReflectionType;
+use ReflectionUnionType;
+use Throwable;
 use UnderflowException;
 
 use Bootgly\ACI\Logs\LoggableEscaped;
 use Bootgly\ACI\Tests\Assertion;
 use Bootgly\ACI\Tests\Assertions;
 use Bootgly\ACI\Tests\Benchmark;
+use Bootgly\ACI\Tests\Fixture;
 use Bootgly\ACI\Tests\Results;
 use Bootgly\ACI\Tests\Suite;
 use Bootgly\ACI\Tests\Suite\Test\Specification;
@@ -257,6 +267,11 @@ class Test
          $this->separate();
       }
 
+      // @ Fixture lifecycle — idempotent: no-op if already Ready (e.g. when
+      //   a domain runner like WPI HTTP_Server_CLI prepared the fixture
+      //   before sending the request).
+      $this->Specification->Fixture?->prepare();
+
       return true;
    }
    /**
@@ -268,6 +283,8 @@ class Test
     */
    public function test (mixed ...$arguments): void
    {
+      $arguments = array_values($arguments);
+
       if ($this->pretest() === false) {
          $this->postest();
          return;
@@ -278,13 +295,19 @@ class Test
       // !
       $test = $this->Specification->test;
       $retest = $this->Specification->retest ?? null;
+      $runtimeArguments = $arguments;
 
       try {
          ob_start();
 
-         $test instanceof Assertions
-            ? $Assertions = $test->run(...$arguments)
-            : $Assertions = $test(...$arguments);
+         if ($test instanceof Assertions) {
+            $test->Fixture ??= $this->Specification->Fixture;
+            $Assertions = $test->run(...$runtimeArguments);
+         }
+         else {
+            $runtimeArguments = $this->inject($runtimeArguments, $test);
+            $Assertions = $test(...$runtimeArguments);
+         }
 
          $this->debugged = ob_get_clean();
 
@@ -361,7 +384,18 @@ class Test
          }
       }
       catch (UnderflowException $Exception) {
-         // @ ignore
+         // @ ignore — but still run postest() so the fixture lifecycle
+         //   completes even when an assertion yielded null.
+         $this->postest();
+      }
+      catch (Throwable $Throwable) {
+         @ob_end_clean();
+
+         $this->postest();
+
+         $retest = null;
+
+         throw $Throwable;
       }
       finally {
          if ($retest) {
@@ -376,6 +410,89 @@ class Test
          }
       }
    }
+
+   /**
+    * @param array<int,mixed> $arguments
+    *
+    * @return array<int,mixed>
+    */
+   private function inject (array $arguments, Closure $Closure): array
+   {
+      $Fixture = $this->Specification->Fixture;
+      if ($Fixture === null) {
+         return $arguments;
+      }
+
+      $Function = new ReflectionFunction($Closure);
+      $parameters = $Function->getParameters();
+      $Parameter = $parameters[count($arguments)] ?? null;
+
+      if ($Parameter === null) {
+         foreach ($parameters as $Candidate) {
+            if ($Candidate->isVariadic()) {
+               $Parameter = $Candidate;
+               break;
+            }
+         }
+      }
+
+      if ($Parameter === null) {
+         return $arguments;
+      }
+
+      if ($this->check($Parameter->getType(), $Fixture) === false) {
+         return $arguments;
+      }
+
+      $arguments[] = $Fixture;
+
+      return $arguments;
+   }
+
+   /**
+    * Check if a reflected parameter type accepts the active Fixture.
+    */
+   private function check (null|ReflectionType $Type, Fixture $Fixture): bool
+   {
+      if ($Type === null) {
+         return true;
+      }
+
+      if ($Type instanceof ReflectionUnionType) {
+         foreach ($Type->getTypes() as $Inner) {
+            if ($this->check($Inner, $Fixture)) {
+               return true;
+            }
+         }
+
+         return false;
+      }
+
+      if ($Type instanceof ReflectionIntersectionType) {
+         foreach ($Type->getTypes() as $Inner) {
+            if ($this->check($Inner, $Fixture) === false) {
+               return false;
+            }
+         }
+
+         return true;
+      }
+
+      if ($Type instanceof ReflectionNamedType) {
+         $name = $Type->getName();
+         if ($name === 'mixed' || $name === 'object') {
+            return true;
+         }
+         if ($Type->isBuiltin()) {
+            return false;
+         }
+
+         return is_a($Fixture, $name);
+      }
+
+      return false;
+   }
+
    /**
     * Postest the Test Case.
     * 
@@ -388,6 +505,10 @@ class Test
       $this->finished = microtime(true);
 
       $this->elapsed = Benchmark::format($this->started, $this->finished);
+
+      // @ Fixture lifecycle — idempotent: no-op if already Disposed
+      //   (when a domain runner already disposed before reaching here).
+      $this->Specification->Fixture?->dispose();
    }
 
    // @ Reporting
@@ -396,12 +517,7 @@ class Test
       $this->Suite->failed++;
 
       $case = sprintf('%03d', $this->Specification->case);
-      $test = str_pad(
-         "{$this->filename}:",
-         Suite::$width,
-         ' ',
-         STR_PAD_RIGHT
-      );
+      $test = str_pad("{$this->filename}:", Suite::$width, ' ', STR_PAD_RIGHT);
       $elapsed = $this->elapsed;
 
       // @ output
@@ -454,12 +570,7 @@ class Test
       $this->Suite->passed++;
 
       $case = sprintf('%03d', $this->Specification->case);
-      $test = str_pad(
-         string: $this->filename,
-         length: Suite::$width,
-         pad_string: '.',
-         pad_type: STR_PAD_RIGHT
-      );
+      $test = str_pad($this->filename, Suite::$width, ' ', STR_PAD_RIGHT);
       $elapsed = $this->elapsed;
 
       // @ output

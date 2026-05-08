@@ -14,10 +14,11 @@ namespace Bootgly\CLI;
 use const BOOTGLY_ROOT_DIR;
 use function count;
 use function is_array;
+use function preg_replace;
+use function str_replace;
 use Closure;
 use Error;
 
-use Bootgly\ABI\Data\__String\Path;
 use Bootgly\CLI\Command;
 use Bootgly\CLI\Commands\Arguments;
 use Bootgly\CLI\Commands\Middlewares;
@@ -76,7 +77,11 @@ class Commands
    ): bool
    {
       // !?
-      $commands = require Path::normalize(BOOTGLY_ROOT_DIR . $location . '/commands/@.php');
+      // Keep command bootstrap path normalization local so the Path SUT
+      // remains autoloadable under Native coverage.
+      $file = str_replace('\\', '/', BOOTGLY_ROOT_DIR . $location . '/commands/@.php');
+      $file = preg_replace('#(?<!:)/{2,}#', '/', $file) ?? $file;
+      $commands = require $file;
       if (
          $commands === false
          || !is_array($commands)

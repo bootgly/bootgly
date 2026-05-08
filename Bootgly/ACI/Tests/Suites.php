@@ -85,7 +85,7 @@ class Suites
 
          try {
             /** @var null|true|Suite $Suite */
-            $Suite = $iterator($dir, $case);
+            $Suite = $iterator($dir, $case, $index + 1);
 
             $this->passed++;
          }

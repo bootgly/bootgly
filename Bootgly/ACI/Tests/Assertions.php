@@ -11,11 +11,19 @@
 namespace Bootgly\ACI\Tests;
 
 
+use function array_values;
+use function count;
+use function is_a;
 use function property_exists;
 use Closure;
 use Exception;
 use Generator;
 use InvalidArgumentException;
+use ReflectionFunction;
+use ReflectionIntersectionType;
+use ReflectionNamedType;
+use ReflectionType;
+use ReflectionUnionType;
 
 use Bootgly\ACI\Tests\Assertions\Hook;
 
@@ -23,6 +31,10 @@ use Bootgly\ACI\Tests\Assertions\Hook;
 class Assertions
 {
    // * Config
+   /**
+    * Fixture injected by the owning Specification/Test runner.
+    */
+   public null|Fixture $Fixture = null;
    /**
     * The descriptions of the Assertion.
     * @var array<string|null>
@@ -58,7 +70,7 @@ class Assertions
    public function __construct (Closure $Case)
    {
       // * Config
-      // -
+      $this->Fixture = null;
 
       // * Data
       $this->Closure = $Case->bindTo(
@@ -146,7 +158,8 @@ class Assertions
       // -
       // * Data
       // # Dataset
-      $arguments = $this->arguments ?? $arguments;
+      $arguments = array_values($this->arguments ?? $arguments);
+      $arguments = $this->inject($arguments, $this->Closure);
       // # Hooks
       $OnBeforeAll = $this->onBeforeAll ?? null;
       $OnAfterAll = $this->onAfterAll ?? null;
@@ -184,5 +197,87 @@ class Assertions
       if ($OnAfterAll) {
          $OnAfterAll($Assertions, $arguments);
       }
+   }
+
+   /**
+    * @param array<int,mixed> $arguments
+    *
+    * @return array<int,mixed>
+    */
+   private function inject (array $arguments, Closure $Closure): array
+   {
+      $Fixture = $this->Fixture;
+      if ($Fixture === null) {
+         return $arguments;
+      }
+
+      $Function = new ReflectionFunction($Closure);
+      $parameters = $Function->getParameters();
+      $Parameter = $parameters[count($arguments)] ?? null;
+
+      if ($Parameter === null) {
+         foreach ($parameters as $Candidate) {
+            if ($Candidate->isVariadic()) {
+               $Parameter = $Candidate;
+               break;
+            }
+         }
+      }
+
+      if ($Parameter === null) {
+         return $arguments;
+      }
+
+      if ($this->check($Parameter->getType(), $Fixture) === false) {
+         return $arguments;
+      }
+
+      $arguments[] = $Fixture;
+
+      return $arguments;
+   }
+
+   /**
+    * Check if a reflected parameter type accepts the active Fixture.
+    */
+   private function check (null|ReflectionType $Type, Fixture $Fixture): bool
+   {
+      if ($Type === null) {
+         return true;
+      }
+
+      if ($Type instanceof ReflectionUnionType) {
+         foreach ($Type->getTypes() as $Inner) {
+            if ($this->check($Inner, $Fixture)) {
+               return true;
+            }
+         }
+
+         return false;
+      }
+
+      if ($Type instanceof ReflectionIntersectionType) {
+         foreach ($Type->getTypes() as $Inner) {
+            if ($this->check($Inner, $Fixture) === false) {
+               return false;
+            }
+         }
+
+         return true;
+      }
+
+      if ($Type instanceof ReflectionNamedType) {
+         $name = $Type->getName();
+         if ($name === 'mixed' || $name === 'object') {
+            return true;
+         }
+         if ($Type->isBuiltin()) {
+            return false;
+         }
+
+         return is_a($Fixture, $name);
+      }
+
+      return false;
    }
 }

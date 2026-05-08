@@ -138,6 +138,8 @@ return new Suite(
          // HTTP/1.0 backward compatibility (RFC 9110 §2.5)
          '4.16-request_compliance-http10_status_line',
          '4.17-request_compliance-http10_chunked_disable',
+         // Fixture injection
+         '5.1-request_fixture-injection',
       ],
       'Response/' => [
          '1.1-respond_with_a_simple_hello_world',

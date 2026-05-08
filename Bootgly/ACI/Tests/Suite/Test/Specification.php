@@ -14,6 +14,7 @@ namespace Bootgly\ACI\Tests\Suite\Test;
 use Closure;
 
 use Bootgly\ACI\Tests\Assertions;
+use Bootgly\ACI\Tests\Fixture;
 use Bootgly\ACI\Tests\Suite\Test\Specification\Separator;
 
 
@@ -41,6 +42,15 @@ class Specification
     * The retest Closure.
     */
    public null|Closure $retest;
+   /**
+    * Fixture orchestrating per-case state.
+    *
+      * When set, Test::pretest() calls $Fixture->prepare() before the test
+      * closure, and Test::postest() calls $Fixture->dispose() after.
+    * Lifecycle is idempotent — runners that need state earlier (e.g. WPI
+    * E2E) may invoke prepare() ahead of time without conflict.
+    */
+   public null|Fixture $Fixture;
 
    // * Data
    /**
@@ -68,6 +78,7 @@ class Specification
       bool $skip = false,
       bool $ignore = false,
       null|Closure $retest = null,
+      null|Fixture $Fixture = null,
    )
    {
       // * Config
@@ -76,6 +87,7 @@ class Specification
       $this->skip = $skip;
       $this->ignore = $ignore;
       $this->retest = $retest;
+      $this->Fixture = $Fixture;
 
       // * Data
       $this->test = $test;

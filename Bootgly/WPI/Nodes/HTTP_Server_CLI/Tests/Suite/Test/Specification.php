@@ -15,6 +15,7 @@ use Closure;
 use InvalidArgumentException;
 
 use Bootgly\ACI\Tests\Assertions;
+use Bootgly\ACI\Tests\Fixture;
 use Bootgly\ACI\Tests\Suite\Test\Specification as Base;
 use Bootgly\ACI\Tests\Suite\Test\Specification\Separator;
 use Bootgly\API\Workables\Server\Handling;
@@ -77,6 +78,7 @@ class Specification extends Base implements Handling
       bool $skip = false,
       bool $ignore = false,
       null|Closure $retest = null,
+      null|Fixture $Fixture = null,
       // * Data (optional - E2E)
       null|Closure $request = null,
       array $requests = [],
@@ -104,6 +106,7 @@ class Specification extends Base implements Handling
          skip: $skip,
          ignore: $ignore,
          retest: $retest,
+         Fixture: $Fixture,
       );
 
       // * Data
