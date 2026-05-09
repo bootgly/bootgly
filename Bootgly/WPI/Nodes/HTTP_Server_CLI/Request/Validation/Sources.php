@@ -8,13 +8,16 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\API\Workables\Server;
+namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Validation;
 
 
-use Closure;
-
-
-interface Middleware
+enum Sources
 {
-   public function process (object $Request, object $Response, Closure $next): object;
+   case Queries;
+   // Header
+   case Headers;
+   case Cookies;
+   // Body
+   case Fields;
+   case Files;
 }

@@ -8,13 +8,12 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\API\Workables\Server;
+namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 
 
-use Closure;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Validation\Condition;
 
 
-interface Middleware
+abstract class Validators extends Condition
 {
-   public function process (object $Request, object $Response, Closure $next): object;
 }

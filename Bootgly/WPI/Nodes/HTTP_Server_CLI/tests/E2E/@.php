@@ -240,6 +240,8 @@ return new Suite(
          '7.1-middleware-rate_limit',
          // TrustedProxy
          '8.1-middleware-trusted_proxy',
+         // Validator
+         '9.1-middleware-validator',
       ],
       'Response/Sequential/' => [
          // Response state reset across sequential requests
