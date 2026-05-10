@@ -12,64 +12,77 @@ namespace Bootgly\API\Security;
 
 
 use const JSON_THROW_ON_ERROR;
-use function base64_decode;
-use function base64_encode;
 use function count;
-use function ctype_digit;
 use function explode;
-use function hash_equals;
-use function hash_hmac;
-use function is_array;
-use function is_float;
-use function is_int;
 use function is_string;
-use function json_decode;
 use function json_encode;
-use function rtrim;
-use function str_repeat;
-use function strlen;
-use function strtr;
-use function time;
 use InvalidArgumentException;
 use JsonException;
 use RuntimeException;
+
+use Bootgly\API\Security\JWT\Encoder;
+use Bootgly\API\Security\JWT\Failures;
+use Bootgly\API\Security\JWT\Header;
+use Bootgly\API\Security\JWT\Key;
+use Bootgly\API\Security\JWT\KeySet;
+use Bootgly\API\Security\JWT\Policies;
+use Bootgly\API\Security\JWT\Signer;
+use Bootgly\API\Security\JWT\Validator;
+use Bootgly\API\Security\JWT\Verification;
 
 
 /**
  * Native JSON Web Token signer and verifier.
  *
- * This class implements compact JWS tokens with the HS256 algorithm using
- * only PHP core functions. It is suitable for Bootgly's core authentication
- * guards and intentionally avoids third-party dependencies. Tokens are
- * expected to travel through HTTP as Bearer credentials, but this primitive
- * remains independent from HTTP request/response classes.
+ * This class implements compact JWS tokens using Bootgly core primitives. It
+ * keeps the original HS256 `sign()`/`verify()` API intact while exposing the
+ * richer `inspect()` path for key ids, verified headers, typed failures, and
+ * asymmetric algorithms.
  */
 class JWT
 {
    // * Config
    /**
-    * HMAC secret used to sign and verify HS256 tokens.
-    *
-    * The constructor enforces at least 32 bytes to avoid trivially weak demo
-    * or production secrets.
+      * Backwards-compatible key material mirror for legacy HS256 consumers.
+      *
+      * Asymmetric JWT instances expose `null`; RS256 callers should use `Key`
+      * objects instead of treating RSA material as a shared secret.
     */
-   public private(set) string $secret;
+   public private(set) null|string $secret;
 
    // * Data
    /**
-    * JWS algorithm identifier.
-    *
-    * Currently fixed to `HS256` so Bootgly can start with one explicit,
-    * auditable implementation before adding asymmetric algorithms.
+    * Active signing algorithm.
     */
    public private(set) string $algorithm;
    /**
     * Clock skew tolerance, in seconds, for `exp`, `nbf`, and `iat` claims.
-      *
-      * Defaults to `0` for strict verification. Applications running across
-      * clocks with expected drift may set a small value such as `5`.
     */
    public int $leeway = 0;
+   /**
+      * Optional timestamp override for deterministic verification.
+    */
+   public private(set) null|int $timestamp = null;
+   /**
+    * Active signing key.
+    */
+   private Key $Key;
+   /**
+    * Verification key collection.
+    */
+   private KeySet $Keys;
+   /**
+    * Compact segment encoder.
+    */
+   private Encoder $Encoder;
+   /**
+    * Signature engine.
+    */
+   private Signer $Signer;
+   /**
+    * Registered-claim validator.
+    */
+   private Validator $Validator;
 
    // * Metadata
    // ...
@@ -78,52 +91,112 @@ class JWT
    /**
     * Configure a JWT signer/verifier.
     *
-    * @param string $secret Shared HMAC secret with at least 32 bytes.
-    * @param string $algorithm Supported algorithm. Only `HS256` is accepted.
-    *
-    * @throws InvalidArgumentException When the algorithm or secret is unsafe.
+    * @throws InvalidArgumentException When the algorithm or key is unsafe.
     */
-   public function __construct (string $secret, string $algorithm = 'HS256')
+   public function __construct (#[\SensitiveParameter] string $secret, string $algorithm = 'HS256')
    {
-      // ? Bootgly core supports native JWS HS256 first.
-      if ($algorithm !== 'HS256') {
-         throw new InvalidArgumentException('Only HS256 JWT signing is supported.');
-      }
-
-      if (strlen($secret) < 32) {
-         throw new InvalidArgumentException('HS256 secrets must be at least 32 bytes.');
-      }
+      $Key = new Key($secret, $algorithm);
 
       // * Config
-      $this->secret = $secret;
+      $this->secret = $algorithm === 'HS256' ? $secret : null;
 
       // * Data
       $this->algorithm = $algorithm;
+      $this->Key = $Key;
+      $this->Keys = new KeySet($Key);
+      $this->Encoder = new Encoder;
+      $this->Signer = new Signer;
+      $this->Validator = new Validator;
+   }
+
+   /**
+    * Set the active signing key and replace the verification set with it.
+    */
+   public function select (Key $Key): self
+   {
+      // * Data
+      $this->Key = $Key;
+      $this->algorithm = $Key->algorithm;
+
+      $material = $Key->Material;
+      $this->secret = $Key->algorithm === 'HS256' && is_string($material) ? $material : null;
+
+      $this->Keys = new KeySet($Key);
+
+      return $this;
+   }
+
+   /**
+    * Add a verification key without changing the active signing key.
+    */
+   public function add (Key $Key): self
+   {
+      $this->Keys->add($Key);
+
+      return $this;
+   }
+
+   /**
+    * Replace the verification key set.
+    */
+   public function trust (KeySet $Keys): self
+   {
+      $this->Keys = $Keys;
+
+      return $this;
+   }
+
+   /**
+    * Freeze verification time for deterministic checks.
+    */
+   public function freeze (int $timestamp): self
+   {
+      if ($timestamp < 0) {
+         throw new InvalidArgumentException('JWT timestamp must not be negative.');
+      }
+
+      $this->timestamp = $timestamp;
+
+      return $this;
+   }
+
+   /**
+    * Resume wall-clock verification time.
+    */
+   public function resume (): self
+   {
+      $this->timestamp = null;
+
+      return $this;
    }
 
    /**
     * Sign claims as a compact JWT.
     *
-    * The protected header is always normalized to `typ=JWT` and the configured
-    * algorithm. JSON encoding failures throw so callers cannot accidentally
-    * issue an empty token.
+    * The protected header always reserves `alg` and `kid` for the active key.
+    * `typ` remains normalized to `JWT` for compatibility with the previous
+    * Bootgly contract.
     *
     * @param array<string,mixed> $claims
     * @param array<string,mixed> $headers
     *
-    * @throws RuntimeException When claims or headers cannot be JSON encoded.
+    * @throws RuntimeException When claims/headers cannot be encoded or signed.
     */
    public function sign (array $claims, array $headers = []): string
    {
       // ! Header
       $Header = $headers;
+      unset($Header['alg'], $Header['kid']);
       $Header['typ'] = 'JWT';
-      $Header['alg'] = $this->algorithm;
+      $Header['alg'] = $this->Key->algorithm;
+      if ($this->Key->id !== null) {
+         $Header['kid'] = $this->Key->id;
+      }
 
       try {
          // @ Encode protected header and payload.
-         $header = $this->pack(json_encode($Header, JSON_THROW_ON_ERROR));
-         $payload = $this->pack(json_encode($claims, JSON_THROW_ON_ERROR));
+         $header = $this->Encoder->pack(json_encode($Header, JSON_THROW_ON_ERROR));
+         $payload = $this->Encoder->pack(json_encode($claims, JSON_THROW_ON_ERROR));
       }
       catch (JsonException $Exception) {
          throw new RuntimeException('JWT JSON encoding failed.', previous: $Exception);
@@ -131,185 +204,96 @@ class JWT
 
       // @ Sign.
       $data = "{$header}.{$payload}";
-      $signature = $this->pack(hash_hmac('sha256', $data, $this->secret, true));
+      $signature = $this->Encoder->pack($this->Signer->seal($data, $this->Key));
 
       // :
       return "{$data}.{$signature}";
    }
 
    /**
+    * Inspect a compact JWT and return a typed verification result.
+    */
+   public function inspect (string $token, null|Policies $Policies = null): Verification
+   {
+      // ! Segments
+      $parts = explode('.', $token);
+      if (count($parts) !== 3) {
+         return Verification::fail(Failures::Malformed, 'Wrong number of JWT segments.');
+      }
+
+      [$header, $payload, $signature] = $parts;
+      if ($header === '' || $payload === '' || $signature === '') {
+         return Verification::fail(Failures::Malformed, 'JWT segments must not be empty.');
+      }
+
+      // ! Decode header.
+      $decodedHeader = $this->Encoder->decode($header, Failures::Header);
+      if ($decodedHeader instanceof Failures) {
+         return Verification::fail($decodedHeader, $this->Validator->describe($decodedHeader));
+      }
+
+      $algorithm = $decodedHeader['alg'] ?? null;
+      if (is_string($algorithm) === false || $this->Signer->support($algorithm) === false) {
+         return Verification::fail(Failures::Algorithm, 'Unsupported JWT algorithm.');
+      }
+
+      $type = $decodedHeader['typ'] ?? null;
+      if (is_string($type) === false || ($type !== 'JWT' && $type !== 'at+jwt')) {
+         return Verification::fail(Failures::Header, 'Unsupported JWT type.');
+      }
+
+      $id = $decodedHeader['kid'] ?? null;
+      if ($id !== null && is_string($id) === false) {
+         return Verification::fail(Failures::Header, 'JWT key id must be a string.');
+      }
+
+      $Key = $this->Keys->resolve($id, $algorithm);
+      if ($Key === null) {
+         return Verification::fail(Failures::Key, 'JWT key could not be resolved.');
+      }
+
+      // @ Verify signature before trusting payload or header.
+      $signatureBytes = $this->Encoder->unpack($signature);
+      if ($signatureBytes === null) {
+         return Verification::fail(Failures::Signature, 'Invalid JWT signature encoding.');
+      }
+
+      $Failure = $this->Signer->check("{$header}.{$payload}", $signatureBytes, $Key);
+      if ($Failure !== null) {
+         return Verification::fail($Failure, $this->Validator->describe($Failure));
+      }
+
+      // ! Decode payload.
+      $claims = $this->Encoder->decode($payload, Failures::Payload);
+      if ($claims instanceof Failures) {
+         return Verification::fail($claims, $this->Validator->describe($claims));
+      }
+
+      $Failure = $this->Validator->validate($claims, $this->leeway, $this->timestamp);
+      if ($Failure !== null) {
+         return Verification::fail($Failure, $this->Validator->describe($Failure));
+      }
+
+      if ($Policies !== null) {
+         $Failure = $this->Validator->enforce($claims, $Policies);
+         if ($Failure !== null) {
+            return Verification::fail($Failure, $this->Validator->describe($Failure));
+         }
+      }
+
+      // : Trusted result.
+      return Verification::pass($claims, new Header($decodedHeader), $Key);
+   }
+
+   /**
     * Verify a compact JWT and return trusted claims.
-    *
-    * Verification is strict: three segments are required, the protected header
-    * algorithm must match the configured algorithm, `typ` must be `JWT` or
-    * `at+jwt`, the signature must match using `hash_equals`, and registered
-    * time claims must be valid considering the configured leeway.
     *
     * @return array<string,mixed>|null
     */
    public function verify (string $token): null|array
    {
-      // ! Segments
-      $parts = explode('.', $token);
-      if (count($parts) !== 3) {
-         return null;
-      }
+      $Verification = $this->inspect($token);
 
-      [$header, $payload, $signature] = $parts;
-
-      // ? Missing segment.
-      if ($header === '' || $payload === '' || $signature === '') {
-         return null;
-      }
-
-      // ! Decode header.
-      $headerJson = $this->unpack($header);
-      if ($headerJson === null) {
-         return null;
-      }
-
-      try {
-         $Header = json_decode($headerJson, true, 512, JSON_THROW_ON_ERROR);
-      }
-      catch (JsonException) {
-         return null;
-      }
-
-      if (is_array($Header) === false || ($Header['alg'] ?? '') !== $this->algorithm) {
-         return null;
-      }
-
-      $type = $Header['typ'] ?? '';
-      if (is_string($type) === false || ($type !== 'JWT' && $type !== 'at+jwt')) {
-         return null;
-      }
-
-      // @ Verify signature before trusting payload.
-      $data = "{$header}.{$payload}";
-      $expected = $this->pack(hash_hmac('sha256', $data, $this->secret, true));
-      if (hash_equals($expected, $signature) === false) {
-         return null;
-      }
-
-      // ! Decode payload.
-      $payloadJson = $this->unpack($payload);
-      if ($payloadJson === null) {
-         return null;
-      }
-
-      try {
-         $decodedClaims = json_decode($payloadJson, true, 512, JSON_THROW_ON_ERROR);
-      }
-      catch (JsonException) {
-         return null;
-      }
-
-      if (is_array($decodedClaims) === false) {
-         return null;
-      }
-
-      /** @var array<string,mixed> $claims */
-      $claims = [];
-      foreach ($decodedClaims as $name => $value) {
-         if (is_string($name) === false) {
-            return null;
-         }
-
-         $claims[$name] = $value;
-      }
-
-      if ($this->validate($claims) === false) {
-         return null;
-      }
-
-      // :
-      return $claims;
-   }
-
-   /**
-    * Encode binary data with base64url without padding.
-    */
-   private function pack (string $value): string
-   {
-      // : Base64url without padding.
-      return rtrim(strtr(base64_encode($value), '+/', '-_'), '=');
-   }
-
-   /**
-    * Decode base64url data with restored padding.
-    */
-   private function unpack (string $value): null|string
-   {
-      // ! Restore padding for strict base64 decoding.
-      $base64 = strtr($value, '-_', '+/');
-      $remainder = strlen($base64) % 4;
-      if ($remainder !== 0) {
-         $padding = str_repeat('=', 4 - $remainder);
-         $base64 = "{$base64}{$padding}";
-      }
-
-      // @ Decode.
-      $decoded = base64_decode($base64, true);
-      if (is_string($decoded) === false) {
-         return null;
-      }
-
-      // :
-      return $decoded;
-   }
-
-   /**
-    * Validate JWT registered time claims.
-    *
-    * @param array<string,mixed> $claims
-    */
-   private function validate (array $claims): bool
-   {
-      // ! Registered time claims.
-      $now = time();
-
-      if (isset($claims['exp'])) {
-         $expiration = $this->coerce($claims['exp']);
-         if ($expiration === null || $expiration <= $now - $this->leeway) {
-            return false;
-         }
-      }
-
-      if (isset($claims['nbf'])) {
-         $notBefore = $this->coerce($claims['nbf']);
-         if ($notBefore === null || $notBefore > $now + $this->leeway) {
-            return false;
-         }
-      }
-
-      if (isset($claims['iat'])) {
-         $issuedAt = $this->coerce($claims['iat']);
-         if ($issuedAt === null || $issuedAt > $now + $this->leeway) {
-            return false;
-         }
-      }
-
-      // :
-      return true;
-   }
-
-   /**
-    * Convert a NumericDate-like value to an integer timestamp.
-    */
-   private function coerce (mixed $value): null|int
-   {
-      if (is_int($value)) {
-         return $value;
-      }
-
-      if (is_float($value)) {
-         return (int) $value;
-      }
-
-      if (is_string($value) && ctype_digit($value)) {
-         return (int) $value;
-      }
-
-      return null;
+      return $Verification->valid ? $Verification->claims : null;
    }
 }

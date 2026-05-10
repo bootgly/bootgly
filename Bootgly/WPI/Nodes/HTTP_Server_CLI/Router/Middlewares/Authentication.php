@@ -15,8 +15,8 @@ use function count;
 use Closure;
 use InvalidArgumentException;
 
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Middlewares\Authenticating\Challenge;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Middleware;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Middlewares\Authenticating\Challenge;
 
 
 /**
@@ -63,11 +63,10 @@ class Authentication implements Middleware
       * @throws InvalidArgumentException When no guard is configured.
     */
    public function __construct (
-      null|Authenticating $Authenticating = null,
+      Authenticating $Authenticating,
       null|Closure $Fallback = null
    )
    {
-      $Authenticating ??= new Authenticating;
       if (count($Authenticating->Guards) === 0) {
          throw new InvalidArgumentException('Authentication middleware requires at least one guard.');
       }

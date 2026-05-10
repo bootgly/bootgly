@@ -83,7 +83,6 @@ return static function (Request $Request, Response $Response, Router $Router) us
          'authorization' => "Bearer {$token}",
       ]);
    }, GET);
-
    yield $Router->route('/auth/jwt', function (Request $Request, Response $Response) {
       return $Response->JSON->send([
          'authorized' => true,

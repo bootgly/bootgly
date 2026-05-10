@@ -18,6 +18,7 @@ use function trim;
 
 use Bootgly\API\Security\Identity;
 use Bootgly\API\Security\JWT as Token;
+use Bootgly\API\Security\JWT\Policies;
 
 
 /**
@@ -25,7 +26,9 @@ use Bootgly\API\Security\JWT as Token;
  *
  * The guard extracts the Bearer token, verifies it with the configured
  * `Bootgly\API\Security\JWT` primitive, exposes trusted claims to handlers,
- * and creates an `Identity` when the `sub` claim is present.
+ * and creates an `Identity` when the `sub` claim is present. It inherits from
+ * `Bearer` only for extraction and RFC 6750 challenge formatting; its resolver
+ * is intentionally inert because JWT validation is handled by `$Token`.
  */
 class JWT extends Bearer
 {
@@ -34,6 +37,10 @@ class JWT extends Bearer
     * JWT signer/verifier used to validate incoming tokens.
     */
    public private(set) Token $Token;
+   /**
+    * Optional claim policies enforced after token verification.
+    */
+   public private(set) null|Policies $Policies;
 
    // * Data
    // ...inherited Bearer challenge data
@@ -47,6 +54,7 @@ class JWT extends Bearer
     */
    public function __construct (
       Token $Token,
+      null|Policies $Policies = null,
       string $realm = 'Protected area',
       string $error = 'invalid_token',
       string $description = '',
@@ -67,6 +75,7 @@ class JWT extends Bearer
 
       // * Config
       $this->Token = $Token;
+      $this->Policies = $Policies;
    }
 
    /**
@@ -81,13 +90,19 @@ class JWT extends Bearer
       }
 
       // @ Verify JWT.
-      $claims = $this->Token->verify($token);
-      if ($claims === null) {
+      $Verification = $this->Token->inspect($token, $this->Policies);
+      if ($Verification->valid === false) {
          return false;
       }
 
+      $claims = $Verification->claims;
+
       // @ Expose claims and identity to handlers.
       $this->expose($Request, 'claims', $claims);
+      if ($Verification->Header !== null) {
+         $this->expose($Request, 'tokenHeaders', $Verification->Header->fields);
+      }
+
       if (isset($claims['sub']) && is_string($claims['sub'])) {
          $this->expose($Request, 'identity', new Identity(
             id: $claims['sub'],
@@ -103,8 +118,9 @@ class JWT extends Bearer
     * Normalize JWT `scope`/`scp` claims into exact `Identity` scope grants.
     *
     * OAuth-style JWTs commonly encode scopes as a single space-separated
-    * string in the `scope` claim. Arrays of string grants are accepted for
-    * `scp` or application-defined tokens.
+      * string in the `scope` claim. Bootgly gives `scope` precedence over `scp`
+      * when both are present. Arrays of string grants are accepted for `scp` or
+      * application-defined tokens.
     *
     * @return array<int,string>
     */
@@ -134,5 +150,4 @@ class JWT extends Bearer
 
       return [];
    }
-
 }

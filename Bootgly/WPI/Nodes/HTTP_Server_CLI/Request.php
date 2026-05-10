@@ -588,6 +588,12 @@ class Request
     * @var array<string,mixed>
     */
    public array $claims = [];
+   /**
+    * Verified token headers exposed by token-based guards.
+    *
+    * @var array<string,mixed>
+    */
+   public array $tokenHeaders = [];
    // @ Connection management
    public bool $closeConnection = false;
 
@@ -637,6 +643,7 @@ class Request
       $this->authTokenParsed = false;
       $this->identity = null;
       $this->claims = [];
+      $this->tokenHeaders = [];
 
       $this->Session = null;
 
@@ -661,6 +668,7 @@ class Request
       $this->authTokenParsed = false;
       $this->identity = null;
       $this->claims = [];
+      $this->tokenHeaders = [];
 
       $this->Session = null;
 

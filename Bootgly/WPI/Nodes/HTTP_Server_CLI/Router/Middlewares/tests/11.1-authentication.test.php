@@ -6,6 +6,7 @@ use Bootgly\ACI\Tests\Assertions;
 use Bootgly\ACI\Tests\Suite\Test\Specification;
 use Bootgly\API\Security\Identity;
 use Bootgly\API\Security\JWT;
+use Bootgly\API\Security\JWT\Policies;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Middlewares\Authenticating;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Middlewares\Authentication;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Middlewares\Authentication\Bearer;
@@ -133,6 +134,11 @@ return new Specification(
          ->to->be('user-42')
          ->assert();
 
+      yield new Assertion(description: 'JWT guard should expose token headers')
+         ->expect($Request->tokenHeaders['alg'])
+         ->to->be('HS256')
+         ->assert();
+
       yield new Assertion(description: 'JWT guard should expose identity scopes')
          ->expect($Request->identity->check('demo:read'))
          ->to->be(true)
@@ -151,10 +157,64 @@ return new Specification(
          ->to->be(true)
          ->assert();
 
+      // @ JWT claim policies pass and fail closed.
+      $Policies = new Policies(
+         issuers: 'https://issuer.bootgly.dev',
+         audiences: 'api://bootgly-demo',
+         subject: true
+      );
+      $token = $JWT->sign([
+         'iss' => 'https://issuer.bootgly.dev',
+         'aud' => 'api://bootgly-demo',
+         'sub' => 'user-44',
+         'exp' => time() + 60,
+      ]);
+      [$Request, $Response] = $createMocks(requestProps: ['token' => $token]);
+      $PolicyMiddleware = new Authentication(new Authenticating(new JWTGuard($JWT, Policies: $Policies)));
+      $Result = $PolicyMiddleware->process($Request, $Response, $passthrough);
+
+      yield new Assertion(description: 'JWT policy guard should pass valid claims')
+         ->expect($Result->Body->raw)
+         ->to->be('passed')
+         ->assert();
+
+      yield new Assertion(description: 'JWT policy guard should expose identity')
+         ->expect($Request->identity->id)
+         ->to->be('user-44')
+         ->assert();
+
+      $called = false;
+      $token = $JWT->sign([
+         'iss' => 'https://issuer.bootgly.dev',
+         'aud' => 'api://other',
+         'sub' => 'user-44',
+         'exp' => time() + 60,
+      ]);
+      [$Request, $Response] = $createMocks(requestProps: ['token' => $token]);
+      $Result = $PolicyMiddleware->process(
+         $Request,
+         $Response,
+         function (object $Request, object $Response) use (&$called): object {
+            $called = true;
+            return $Response;
+         }
+      );
+
+      yield new Assertion(description: 'JWT policy guard should reject invalid audience')
+         ->expect($Result->code)
+         ->to->be(401)
+         ->assert();
+
+      yield new Assertion(description: 'JWT policy guard should not call handler on invalid audience')
+         ->expect($called)
+         ->to->be(false)
+         ->assert();
+
       // @ Request authentication metadata resets across reuse boundaries.
       $Original = new Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
       $Original->identity = 'user-42';
       $Original->claims = ['sub' => 'user-42'];
+      $Original->tokenHeaders = ['alg' => 'HS256'];
       $Clone = clone $Original;
 
       yield new Assertion(description: 'Request clone should reset identity')
@@ -167,8 +227,14 @@ return new Specification(
          ->to->be([])
          ->assert();
 
+      yield new Assertion(description: 'Request clone should reset token headers')
+         ->expect($Clone->tokenHeaders)
+         ->to->be([])
+         ->assert();
+
       $Original->identity = 'user-42';
       $Original->claims = ['sub' => 'user-42'];
+      $Original->tokenHeaders = ['alg' => 'HS256'];
       $Original->reboot();
 
       yield new Assertion(description: 'Request reboot should reset identity')
@@ -178,6 +244,11 @@ return new Specification(
 
       yield new Assertion(description: 'Request reboot should reset claims')
          ->expect($Original->claims)
+         ->to->be([])
+         ->assert();
+
+      yield new Assertion(description: 'Request reboot should reset token headers')
+         ->expect($Original->tokenHeaders)
          ->to->be([])
          ->assert();
 

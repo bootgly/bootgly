@@ -144,7 +144,7 @@ abstract class Guard
       if (! is_string($authorization) || $authorization === '') {
          $headers = $Request->headers ?? [];
          if (is_array($headers)) {
-            $authorization = $headers['Authorization'] ?? $headers['authorization'] ?? '';
+            $authorization = $headers['authorization'] ?? '';
          }
       }
 
