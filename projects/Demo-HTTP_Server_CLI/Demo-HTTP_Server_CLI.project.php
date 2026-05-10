@@ -49,26 +49,26 @@ return new Project(
       $HTTP_Server_CLI->on(
          // # Test (Benchmarking)
          requestReceived: require __DIR__ . '/router/HTTP_Server_CLI-benchmark-bootgly_router.SAPI.php',
-         #request: require __DIR__ . '/router/HTTP_Server_CLI-benchmark-static_router.SAPI.php',
+         #requestReceived: require __DIR__ . '/router/HTTP_Server_CLI-benchmark-static_router.SAPI.php',
 
          // # Test Request - Download (streaming decoder writes directly to disk)
-         #request: require __DIR__ . '/router/HTTP_Server_CLI-request-download.SAPI.php',
+         #requestReceived: require __DIR__ . '/router/HTTP_Server_CLI-request-download.SAPI.php',
          // # Test Request - Basic request tests
-         #request: require __DIR__ . '/router/HTTP_Server_CLI-request.SAPI.php',
+         #requestReceived: require __DIR__ . '/router/HTTP_Server_CLI-request.SAPI.php',
          // # Test Request - Input validation examples
-         #request: require __DIR__ . '/router/HTTP_Server_CLI-validation.SAPI.php',
+         #requestReceived: require __DIR__ . '/router/HTTP_Server_CLI-validation.SAPI.php',
          // # Test Request - Authentication examples (Basic, Bearer, JWT)
-         #request: require __DIR__ . '/router/HTTP_Server_CLI-authentication.SAPI.php',
+         #requestReceived: require __DIR__ . '/router/HTTP_Server_CLI-authentication.SAPI.php',
 
          // # Test Response - Basic response tests
-         #request: require __DIR__ . '/router/HTTP_Server_CLI-response.SAPI.php',
+         #requestReceived: require __DIR__ . '/router/HTTP_Server_CLI-response.SAPI.php',
          // # Test Response - Scheduled (delayed/async) responses
-         #request: require __DIR__ . '/router/HTTP_Server_CLI-response-scheduled.SAPI.php',
+         #requestReceived: require __DIR__ . '/router/HTTP_Server_CLI-response-scheduled.SAPI.php',
 
          // # Test Router - all route cases from Testing.routes.php adapted to Generator pattern
-         #request: require __DIR__ . '/router/HTTP_Server_CLI-router.SAPI.php',
+         #requestReceived: require __DIR__ . '/router/HTTP_Server_CLI-router.SAPI.php',
 
-         #request: fn ($Request, $Response) => $Response(body: 'Hello, World!'),
+         #requestReceived: fn ($Request, $Response) => $Response(body: 'Hello, World!'),
 
          serverStarted: function ($HTTP_Server_CLI) {
             $Output = CLI->Terminal->Output;
