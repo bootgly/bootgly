@@ -16,8 +16,25 @@ use Bootgly\WPI\Modules\HTTP\Server\Response\Authentication;
 
 class Basic implements Authentication
 {
-   public function __construct (
-      public string $realm = "Protected area"
-   )
-   {}
+   // * Config
+   // ...
+
+   // * Data
+   /**
+    * Authentication protection space advertised to the client.
+    */
+   public string $realm;
+
+   // * Metadata
+   // ...
+
+
+   /**
+    * Configure a Basic `WWW-Authenticate` challenge descriptor.
+    */
+   public function __construct (string $realm = 'Protected area')
+   {
+      // * Data
+      $this->realm = $realm;
+   }
 }

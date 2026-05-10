@@ -466,7 +466,7 @@ class Request
       get {
          if ($this->authUsername === '') {
             $auth = $this->authenticate();
-            if ($auth !== null) {
+            if ($auth instanceof Basic) {
                $this->authUsername = $auth->username;
                $this->authPassword = $auth->password;
             }
@@ -482,7 +482,7 @@ class Request
       get {
          if ($this->authPassword === '') {
             $auth = $this->authenticate();
-            if ($auth !== null) {
+            if ($auth instanceof Basic) {
                $this->authUsername = $auth->username;
                $this->authPassword = $auth->password;
             }
@@ -492,6 +492,32 @@ class Request
       }
       set {
          $this->authPassword = $value;
+      }
+   }
+   // HTTP Bearer Authentication
+   /**
+    * Bearer token extracted from the `Authorization` header.
+    *
+    * The value is resolved lazily and cached per request. Assigning this
+    * property lets tests or middleware inject a token without reparsing
+    * headers.
+    */
+   public string $token {
+      get {
+         if ($this->authTokenParsed === false) {
+            $authorization = $this->Header->get('Authorization');
+            if (is_string($authorization) && stripos($authorization, 'Bearer ') === 0) {
+               $this->authToken = trim(substr($authorization, 7));
+            }
+
+            $this->authTokenParsed = true;
+         }
+
+         return $this->authToken;
+      }
+      set {
+         $this->authToken = $value;
+         $this->authTokenParsed = true;
       }
    }
    // HTTP Content Negotiation (RFC 7231 section-5.3)
@@ -552,11 +578,28 @@ class Request
    public readonly string $at;
    public readonly int $time;
    public static int $multiparts = 0;
+   /**
+    * Authenticated principal exposed by router authentication guards.
+    */
+   public mixed $identity = null;
+   /**
+    * Verified authentication claims exposed by token-based guards.
+    *
+    * @var array<string,mixed>
+    */
+   public array $claims = [];
    // @ Connection management
    public bool $closeConnection = false;
 
    private string $authUsername = '';
    private string $authPassword = '';
+   private bool $authParsed = false;
+   private null|Basic $authCredentials = null;
+   /**
+    * Cached Bearer token parsed from the Authorization header.
+    */
+   private string $authToken = '';
+   private bool $authTokenParsed = false;
 
 
    public function __construct ()
@@ -586,6 +629,14 @@ class Request
       // @ Per-request data: never bleed across cached connections.
       $this->_fields = [];
       $this->_files = [];
+      $this->authUsername = '';
+      $this->authPassword = '';
+      $this->authParsed = false;
+      $this->authCredentials = null;
+      $this->authToken = '';
+      $this->authTokenParsed = false;
+      $this->identity = null;
+      $this->claims = [];
 
       $this->Session = null;
 
@@ -602,6 +653,14 @@ class Request
       // @ Reset per-request data accumulators.
       $this->_fields = [];
       $this->_files = [];
+      $this->authUsername = '';
+      $this->authPassword = '';
+      $this->authParsed = false;
+      $this->authCredentials = null;
+      $this->authToken = '';
+      $this->authTokenParsed = false;
+      $this->identity = null;
+      $this->claims = [];
 
       $this->Session = null;
 
@@ -964,38 +1023,55 @@ class Request
       return null;
    }
 
-   // HTTP Basic Authentication
+   // HTTP Authentication
    /**
+    * Parse supported HTTP `Authorization` credentials.
+    *
+    * Supports Basic credentials only. Bearer tokens are exposed through the
+    * `$token` property and verified by router authentication guards.
+    *
     * @return Basic|null
     */
    public function authenticate (): Basic|null
    {
+      if ($this->authParsed) {
+         return $this->authCredentials;
+      }
+
+      $this->authParsed = true;
+
       $authorization = $this->Header->get('Authorization');
 
-      if (! is_string($authorization) || strpos($authorization, 'Basic ') !== 0) {
+      if (! is_string($authorization)) {
          return null;
       }
 
-      $encoded_credentials = trim(substr($authorization, 6));
-      if ($encoded_credentials === '') {
-         return null;
+      // ? Basic credentials.
+      if (stripos($authorization, 'Basic ') === 0) {
+         $encoded_credentials = trim(substr($authorization, 6));
+         if ($encoded_credentials === '') {
+            return null;
+         }
+
+         $decoded_credentials = base64_decode($encoded_credentials, true);
+         if ($decoded_credentials === false) {
+            return null;
+         }
+
+         if (strpos($decoded_credentials, ':') === false) {
+            return null;
+         }
+
+         [$username, $password] = explode(':', $decoded_credentials, 2);
+
+         $this->username = $username;
+         $this->password = $password;
+
+         $this->authCredentials = new Basic($username, $password);
+         return $this->authCredentials;
       }
 
-      $decoded_credentials = base64_decode($encoded_credentials, true);
-      if ($decoded_credentials === false) {
-         return null;
-      }
-
-      if (strpos($decoded_credentials, ':') === false) {
-         return null;
-      }
-
-      [$username, $password] = explode(':', $decoded_credentials, 2);
-
-      $this->username = $username;
-      $this->password = $password;
-
-      return new Basic($username, $password);
+      return null;
    }
 
    // HTTP Content Negotiation

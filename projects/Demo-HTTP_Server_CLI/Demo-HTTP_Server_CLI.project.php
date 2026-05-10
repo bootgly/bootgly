@@ -57,6 +57,8 @@ return new Project(
          #request: require __DIR__ . '/router/HTTP_Server_CLI-request.SAPI.php',
          // # Test Request - Input validation examples
          #request: require __DIR__ . '/router/HTTP_Server_CLI-validation.SAPI.php',
+         // # Test Request - Authentication examples (Basic, Bearer, JWT)
+         #request: require __DIR__ . '/router/HTTP_Server_CLI-authentication.SAPI.php',
 
          // # Test Response - Basic response tests
          #request: require __DIR__ . '/router/HTTP_Server_CLI-response.SAPI.php',

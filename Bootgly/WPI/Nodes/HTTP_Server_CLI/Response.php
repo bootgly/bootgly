@@ -289,7 +289,11 @@ class Response extends Server\Response
 
    // # Authentication
    /**
-    * Authenticate the user with the provided authentication method.
+      * Build an HTTP authentication challenge response.
+      *
+      * Sets status `401 Unauthorized` and emits the correct `WWW-Authenticate`
+      * header for supported response authentication descriptors. Bearer/JWT
+      * challenges are owned by router authentication guards.
     *
     * @param Authentication $Method The authentication method to use.
     *
@@ -302,7 +306,7 @@ class Response extends Server\Response
       if ($Method instanceof Authentication\Basic) {
          $this->Header->set(
             'WWW-Authenticate',
-            'Basic realm="' . $Method->realm . '"'
+            "Basic realm=\"{$Method->realm}\""
          );
       }
 

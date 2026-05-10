@@ -82,7 +82,23 @@ return function (
       public function __invoke (int $code = 200, array|null $headers = null, string $body = ''): static
       {
          $this->code = $code;
+         if ($headers !== null) {
+            foreach ($headers as $name => $value) {
+               $this->Header->set($name, $value);
+            }
+         }
          $this->Body->raw = $body;
+         return $this;
+      }
+
+      public function authenticate (object $Method): static
+      {
+         $this->code = 401;
+
+         if ($Method instanceof \Bootgly\WPI\Modules\HTTP\Server\Response\Authentication\Basic) {
+            $this->Header->set('WWW-Authenticate', "Basic realm=\"{$Method->realm}\"");
+         }
+
          return $this;
       }
    };

@@ -23,6 +23,7 @@ return new Suite(
       '7.1-request_id',
       '8.1-trusted_proxy',
       '9.1-csrf',
-      '10.1-validator'
+      '10.1-validator',
+      '11.1-authentication'
    ]
 );

@@ -59,6 +59,7 @@ return new Suite(
          '1.10-request_as_response-query',
          '1.11-request_as_response-queries',
          '1.12-request_as_response-basic-auth',
+         '1.12.1-request_as_response-bearer-auth',
          '1.13-request_as_response-headers',
          '1.14.1-request_as_response-header-host',
          '1.14.2-request_as_response-header-host',
@@ -242,6 +243,22 @@ return new Suite(
          '8.1-middleware-trusted_proxy',
          // Validator
          '9.1-middleware-validator',
+         // Authentication
+         '10.1-middleware-authentication_bearer_success',
+         '10.2-middleware-authentication_bearer_failure',
+         '10.3-middleware-authentication_jwt_success',
+         '10.4-middleware-authentication_basic_success',
+         '10.5-middleware-authentication_jwt_expired_failure',
+         '10.6-middleware-authentication_jwt_tampered_failure',
+         '10.7-middleware-authentication_jwt_alg_failure',
+         '10.8-middleware-authentication_jwt_malformed_failure',
+         '10.9-middleware-authentication_session_missing_failure',
+         '10.9.1-middleware-authentication_session_missing_key_failure',
+         '10.10-middleware-authentication_basic_wrong_failure',
+         '10.11-middleware-authentication_basic_malformed_failure',
+         '10.12-middleware-authentication_basic_missing_colon_failure',
+         '10.13-middleware-authentication_authorization_fuzz_failure',
+         '10.14-middleware-authentication_metadata_reset',
       ],
       'Response/Sequential/' => [
          // Response state reset across sequential requests

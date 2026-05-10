@@ -38,6 +38,7 @@ return new Suites(
 
       // ! Application Programming Interface (API)
       'Bootgly/API/Environment/Configs/',
+      'Bootgly/API/Security/',
       'Bootgly/API/Workables/Server/',
 
       // ! Command Line Interface (CLI)

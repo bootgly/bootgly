@@ -11,20 +11,16 @@ return new Specification(
    Separator: new Separator(line: 'Request Header'),
 
    request: function () {
-
       return <<<HTTP
       GET / HTTP/1.1\r
       Host: lab.bootgly.com\r
-      Authorization: basic dXNlcm5hbWU6cGFzc3dvcmQ=\r
+      Authorization: Bearer abc.def.ghi\r
       \r
       
       HTTP;
    },
    response: function (Request $Request, Response $Response): Response {
-      $username = $Request->username;
-      $password = $Request->password;
-
-      return $Response(body: "{$username}:{$password}");
+      return $Response(body: $Request->token);
    },
 
    test: function ($response) {
@@ -32,9 +28,9 @@ return new Specification(
       HTTP/1.1 200 OK\r
       Server: Bootgly\r
       Content-Type: text/html; charset=UTF-8\r
-      Content-Length: 17\r
+      Content-Length: 11\r
       \r
-      username:password
+      abc.def.ghi
       HTML_RAW;
 
       // @ Assert
