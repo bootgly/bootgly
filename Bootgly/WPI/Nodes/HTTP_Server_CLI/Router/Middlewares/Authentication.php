@@ -15,8 +15,6 @@ use function count;
 use Closure;
 use InvalidArgumentException;
 
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Middlewares\Authenticating\Challenge;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Middleware;
 
@@ -46,7 +44,7 @@ class Authentication implements Middleware
       * before and after the callback, so fallback formatters can customize the
       * body/headers without accidentally returning a successful status.
     *
-    * @var null|Closure(Request,Response):object
+      * @var null|Closure(object,object):object
     */
    public private(set) null|Closure $Fallback;
 
@@ -60,7 +58,7 @@ class Authentication implements Middleware
       * At least one guard is required. Empty strategies fail during middleware
       * creation so protected routes cannot be misconfigured silently.
       *
-    * @param null|Closure(Request,Response):object $Fallback
+      * @param null|Closure(object,object):object $Fallback
       *
       * @throws InvalidArgumentException When no guard is configured.
     */
@@ -82,9 +80,7 @@ class Authentication implements Middleware
    /**
     * Run the middleware pipeline with authentication enforcement.
     *
-    * @param Closure(Request,Response):object $next
-    * @param Request $Request
-    * @param Response $Response
+      * @param Closure(object,object):object $next
     */
    public function process (object $Request, object $Response, Closure $next): object
    {
@@ -106,10 +102,6 @@ class Authentication implements Middleware
    {
       // ?: Custom fallback.
       if ($this->Fallback !== null) {
-         if ($Request instanceof Request === false || $Response instanceof Response === false) {
-            return Challenge::reject($Response);
-         }
-
          Challenge::mark($Response);
 
          $Result = ($this->Fallback)($Request, $Response);
