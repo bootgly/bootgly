@@ -2,6 +2,33 @@
 
 Changelog for Bootgly framework. All notable changes to this project will be documented in this file. Imported from ROADMAP.md.
 
+## v0.15.0-beta ✅
+
+> Focus: **Testing improvements + Configuration + 2 new middlewares (Authentication + Validation)**
+
+### ABI — Abstract Bootable Interface
+
+- ✅ Differ engine (`ABI/Differ`): diff model (`Diff`, `Chunk`, `Line`), LCS calculators (memory and time strategies), output renderers (changed-lines, unified, strict unified, ANSI), unified diff parser, and self-tests
+
+### ACI — Abstract Common Interface
+
+- ✅ Tests/Fixtures: lifecycle state machine (`Pristine`→`Ready`→`Disposed`), idempotent `prepare()`/`dispose()` hooks, deterministic state bag (`fetch`, `update`, `reset`, `clear`), `Fixturable` integration, HTTP Server test fixtures
+- ✅ Tests/Doubles (Mock, Spy, Faker): typesafe `Mock` proxy generation, stubbed returns + throwable paths, call recording with `verify()`, `Spy` real-instance wrapper with delegation, deterministic `Faker` base, built-in fakers (Email, Integer, Name, Text, UUID)
+- ✅ Tests/Coverage: `Coverage` session API (`start`, `stop`, `report`), driver abstraction (XDebug, PCOV, Native, Nothing), include scopes + SUT target filtering, text/Clover XML/HTML reports, optional per-file diff via `ABI/Differ`, `bootgly test` coverage flags
+- ✅ Tests/Fakes: `Fake` abstract base implementing `Doubling`, `Fake/Memory` in-memory KV substitute, `Fake/Clock` deterministic time substitute; CSRF and rate-limit tests refactored to use Fakes
+
+### API — Application Programming Interface
+
+- ✅ Configuration system base (`API/Environment/Configs`): `Configs` loader/facade, `Config` mutable tree node, `Config/Types` strict scalar casts, `Scopes` registry, directory-per-scope structure, scoped `.env` files with environment-aware resolution, lazy loading, path traversal hardening, PHPStan integration
+- ✅ Configuration system project-level (`API/Projects/Configs`): extends base path to project `configs/`, `overlay()` deep-merges project scopes over framework defaults, `Project->Configs` initialized on boot
+
+### WPI — Web Programming Interface
+
+- ✅ Input Validation middleware: rule-based validators (`Required`, `Minimum`, `Maximum`, `Email`, `Regex`, `Integer`, `Size`, `MIME`, `Extension`), `Validator` middleware over `Request/Validation` pipeline, custom validation rules
+- ✅ Authentication system: HTTP Basic auth, Bearer token auth, Session-based guards; JWT with HS256/RS256, `Key`/`KeySet`, `kid`, claim policies (`iss`, `aud`, `sub`, `jti`), remote JWKS fetch with process-local cache, refresh token rotation, family revocation, and `jti` replay protection
+
+---
+
 ## v0.14.12-beta ✅
 
 > Focus: **Property-based fuzz testing infrastructure for HTTP_Server_CLI and RFC-compliant header parsing fix**
