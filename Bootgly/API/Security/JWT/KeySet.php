@@ -18,7 +18,7 @@ use InvalidArgumentException;
 /**
  * Ordered JWT key collection with `kid` resolution.
  */
-class KeySet
+class KeySet implements KeyResolver
 {
    // * Config
    // ...
@@ -118,5 +118,13 @@ class KeySet
       }
 
       return $Matches[0];
+   }
+
+   /**
+    * Key sets have no resolver failure state.
+    */
+   public function fail (): null|Failures
+   {
+      return null;
    }
 }

@@ -30,6 +30,11 @@ enum Failures
    case Issued;
    case JSON;
    case OpenSSL;
+   case Network;
+   case Status;
+   case JWKS;
+   case Revoked;
+   case Replay;
    case Issuer;
    case Audience;
    case Subject;

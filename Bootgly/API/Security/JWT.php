@@ -20,13 +20,15 @@ use InvalidArgumentException;
 use JsonException;
 use RuntimeException;
 
-use Bootgly\API\Security\JWT\Encoder;
 use Bootgly\API\Security\JWT\Failures;
 use Bootgly\API\Security\JWT\Header;
 use Bootgly\API\Security\JWT\Key;
+use Bootgly\API\Security\JWT\KeyResolver;
 use Bootgly\API\Security\JWT\KeySet;
 use Bootgly\API\Security\JWT\Policies;
+use Bootgly\API\Security\JWT\Segments;
 use Bootgly\API\Security\JWT\Signer;
+use Bootgly\API\Security\JWT\Usage;
 use Bootgly\API\Security\JWT\Validator;
 use Bootgly\API\Security\JWT\Verification;
 
@@ -66,15 +68,15 @@ class JWT
    /**
     * Active signing key.
     */
-   private Key $Key;
+   private null|Key $Key;
    /**
     * Verification key collection.
     */
-   private KeySet $Keys;
+   private KeyResolver $Keys;
    /**
-    * Compact segment encoder.
+    * Compact token segment codec.
     */
-   private Encoder $Encoder;
+   private Segments $Segments;
    /**
     * Signature engine.
     */
@@ -83,6 +85,10 @@ class JWT
     * Registered-claim validator.
     */
    private Validator $Validator;
+   /**
+    * Optional persistent `jti` usage guard.
+    */
+   private null|Usage $Usage = null;
 
    // * Metadata
    // ...
@@ -93,8 +99,24 @@ class JWT
     *
     * @throws InvalidArgumentException When the algorithm or key is unsafe.
     */
-   public function __construct (#[\SensitiveParameter] string $secret, string $algorithm = 'HS256')
+   public function __construct (#[\SensitiveParameter] string|KeyResolver $secret, string $algorithm = 'HS256')
    {
+      if ($secret instanceof KeyResolver) {
+         // * Config
+         $this->secret = null;
+
+         // * Data
+         $this->algorithm = $algorithm;
+         $this->Key = null;
+         $this->Keys = $secret;
+         $this->Segments = new Segments;
+         $this->Signer = new Signer;
+         $this->Validator = new Validator;
+         $this->Usage = null;
+
+         return;
+      }
+
       $Key = new Key($secret, $algorithm);
 
       // * Config
@@ -104,9 +126,10 @@ class JWT
       $this->algorithm = $algorithm;
       $this->Key = $Key;
       $this->Keys = new KeySet($Key);
-      $this->Encoder = new Encoder;
+      $this->Segments = new Segments;
       $this->Signer = new Signer;
       $this->Validator = new Validator;
+      $this->Usage = null;
    }
 
    /**
@@ -131,7 +154,13 @@ class JWT
     */
    public function add (Key $Key): self
    {
-      $this->Keys->add($Key);
+      $Keys = $this->Keys;
+      if ($Keys instanceof KeySet === false) {
+         throw new InvalidArgumentException('JWT verification source does not accept local keys.');
+      }
+
+      /** @var KeySet $Keys */
+      $Keys->add($Key);
 
       return $this;
    }
@@ -139,9 +168,19 @@ class JWT
    /**
     * Replace the verification key set.
     */
-   public function trust (KeySet $Keys): self
+   public function trust (KeyResolver $Keys): self
    {
       $this->Keys = $Keys;
+
+      return $this;
+   }
+
+   /**
+    * Track verified JWT identifiers through a persistent usage guard.
+    */
+   public function track (Usage $Usage): self
+   {
+      $this->Usage = $Usage;
 
       return $this;
    }
@@ -184,19 +223,24 @@ class JWT
     */
    public function sign (array $claims, array $headers = []): string
    {
+      $Key = $this->Key;
+      if ($Key === null) {
+         throw new RuntimeException('JWT signing requires an active key.');
+      }
+
       // ! Header
       $Header = $headers;
       unset($Header['alg'], $Header['kid']);
       $Header['typ'] = 'JWT';
-      $Header['alg'] = $this->Key->algorithm;
-      if ($this->Key->id !== null) {
-         $Header['kid'] = $this->Key->id;
+      $Header['alg'] = $Key->algorithm;
+      if ($Key->id !== null) {
+         $Header['kid'] = $Key->id;
       }
 
       try {
          // @ Encode protected header and payload.
-         $header = $this->Encoder->pack(json_encode($Header, JSON_THROW_ON_ERROR));
-         $payload = $this->Encoder->pack(json_encode($claims, JSON_THROW_ON_ERROR));
+         $header = $this->Segments->pack(json_encode($Header, JSON_THROW_ON_ERROR));
+         $payload = $this->Segments->pack(json_encode($claims, JSON_THROW_ON_ERROR));
       }
       catch (JsonException $Exception) {
          throw new RuntimeException('JWT JSON encoding failed.', previous: $Exception);
@@ -204,7 +248,7 @@ class JWT
 
       // @ Sign.
       $data = "{$header}.{$payload}";
-      $signature = $this->Encoder->pack($this->Signer->seal($data, $this->Key));
+      $signature = $this->Segments->pack($this->Signer->seal($data, $Key));
 
       // :
       return "{$data}.{$signature}";
@@ -227,7 +271,7 @@ class JWT
       }
 
       // ! Decode header.
-      $decodedHeader = $this->Encoder->decode($header, Failures::Header);
+      $decodedHeader = $this->Segments->decode($header, Failures::Header);
       if ($decodedHeader instanceof Failures) {
          return Verification::fail($decodedHeader, $this->Validator->describe($decodedHeader));
       }
@@ -249,11 +293,12 @@ class JWT
 
       $Key = $this->Keys->resolve($id, $algorithm);
       if ($Key === null) {
-         return Verification::fail(Failures::Key, 'JWT key could not be resolved.');
+         $Failure = $this->Keys->fail() ?? Failures::Key;
+         return Verification::fail($Failure, $this->Validator->describe($Failure));
       }
 
       // @ Verify signature before trusting payload or header.
-      $signatureBytes = $this->Encoder->unpack($signature);
+      $signatureBytes = $this->Segments->unpack($signature);
       if ($signatureBytes === null) {
          return Verification::fail(Failures::Signature, 'Invalid JWT signature encoding.');
       }
@@ -264,7 +309,7 @@ class JWT
       }
 
       // ! Decode payload.
-      $claims = $this->Encoder->decode($payload, Failures::Payload);
+      $claims = $this->Segments->decode($payload, Failures::Payload);
       if ($claims instanceof Failures) {
          return Verification::fail($claims, $this->Validator->describe($claims));
       }
@@ -276,6 +321,13 @@ class JWT
 
       if ($Policies !== null) {
          $Failure = $this->Validator->enforce($claims, $Policies);
+         if ($Failure !== null) {
+            return Verification::fail($Failure, $this->Validator->describe($Failure));
+         }
+      }
+
+      if ($this->Usage !== null) {
+         $Failure = $this->Usage->verify($claims, $this->leeway, $this->timestamp);
          if ($Failure !== null) {
             return Verification::fail($Failure, $this->Validator->describe($Failure));
          }

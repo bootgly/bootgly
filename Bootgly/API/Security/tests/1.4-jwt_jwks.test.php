@@ -2,8 +2,8 @@
 
 use Bootgly\ACI\Tests\Suite\Test\Specification;
 use Bootgly\API\Security\JWT;
-use Bootgly\API\Security\JWT\JWKS;
 use Bootgly\API\Security\JWT\Key;
+use Bootgly\API\Security\JWT\KeysJWKS;
 
 
 return new Specification(
@@ -56,7 +56,7 @@ return new Specification(
       [$private, $public, $jwk] = $createRSA();
 
       // @ JWKS parses into a KeySet that verifies matching RS256 tokens.
-      $Keys = JWKS::parse(['keys' => [$jwk]]);
+      $Keys = KeysJWKS::parse(['keys' => [$jwk]]);
       $Signer = new JWT($private, 'RS256');
       $Signer->select(new Key($private, 'RS256', 'rsa1'));
       $Verifier = new JWT($public, 'RS256');
@@ -76,7 +76,7 @@ return new Specification(
       // @ Missing alg can use an explicit default.
       $NoAlg = $jwk;
       unset($NoAlg['alg']);
-      $DefaultKeys = JWKS::parse(['keys' => [$NoAlg]], 'RS256');
+      $DefaultKeys = KeysJWKS::parse(['keys' => [$NoAlg]], 'RS256');
       $DefaultVerifier = new JWT($public, 'RS256');
       $DefaultVerifier->trust($DefaultKeys);
 
@@ -88,7 +88,7 @@ return new Specification(
       // @ Missing alg without default is rejected.
       $failed = false;
       try {
-         JWKS::parse(['keys' => [$NoAlg]]);
+         KeysJWKS::parse(['keys' => [$NoAlg]]);
       }
       catch (InvalidArgumentException) {
          $failed = true;
@@ -104,7 +104,7 @@ return new Specification(
       $PrivateJWK['d'] = 'private';
       $failed = false;
       try {
-         JWKS::parse(['keys' => [$PrivateJWK]]);
+         KeysJWKS::parse(['keys' => [$PrivateJWK]]);
       }
       catch (InvalidArgumentException) {
          $failed = true;
@@ -118,7 +118,7 @@ return new Specification(
       // @ Duplicate kid is rejected.
       $failed = false;
       try {
-         JWKS::parse(['keys' => [$jwk, $jwk]]);
+         KeysJWKS::parse(['keys' => [$jwk, $jwk]]);
       }
       catch (InvalidArgumentException) {
          $failed = true;
@@ -132,7 +132,7 @@ return new Specification(
       // @ Empty JWKS is rejected.
       $failed = false;
       try {
-         JWKS::parse(['keys' => []]);
+         KeysJWKS::parse(['keys' => []]);
       }
       catch (InvalidArgumentException) {
          $failed = true;

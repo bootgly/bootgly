@@ -19,5 +19,7 @@ return new Suite(
       '1.3-jwt_rs256',
       '1.4-jwt_jwks',
       '1.5-jwt_claim_policies',
+      '1.6-jwt_jwks_remote',
+      '1.7-jwt_lifecycle',
    ]
 );

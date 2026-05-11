@@ -28,9 +28,9 @@ use InvalidArgumentException;
 
 
 /**
- * Minimal JSON Web Key parser for RSA public keys.
+ * Minimal RSA JSON Web Key parser.
  */
-class JWK
+class KeysJWK
 {
    private const string RSA_ALGORITHM = "\x30\x0d\x06\x09\x2a\x86\x48\x86\xf7\x0d\x01\x01\x01\x05\x00";
 

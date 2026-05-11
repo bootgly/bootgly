@@ -28,7 +28,7 @@ use JsonException;
 /**
  * Compact JWT segment encoder and decoder.
  */
-class Encoder
+class Segments
 {
    /**
     * Encode binary data with base64url without padding.

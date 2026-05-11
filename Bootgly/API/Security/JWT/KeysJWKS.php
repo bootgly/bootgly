@@ -16,9 +16,9 @@ use InvalidArgumentException;
 
 
 /**
- * Minimal JSON Web Key Set parser for RSA public keys.
+ * Minimal RSA JSON Web Key Set parser.
  */
-class JWKS
+class KeysJWKS
 {
    /**
     * Parse a JWKS document into a JWT key set.
@@ -43,7 +43,7 @@ class JWKS
          }
 
          /** @var array<string,mixed> $jwk */
-         $KeySet->add(JWK::parse($jwk, $algorithm));
+         $KeySet->add(KeysJWK::parse($jwk, $algorithm));
       }
 
       return $KeySet;
