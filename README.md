@@ -123,6 +123,7 @@ Above is the native compatibility, of course it is possible to run on Windows an
 - `php-cli` ⚠️
 - `php-mbstring` 👍
 - `php-readline` ⚠️
+- `php-openssl` ⚠️
 
 --
 
