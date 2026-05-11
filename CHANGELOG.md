@@ -4,28 +4,144 @@ Changelog for Bootgly framework. All notable changes to this project will be doc
 
 ## v0.15.0-beta ✅
 
-> Focus: **Testing improvements + Configuration + 2 new middlewares (Authentication + Validation)**
+> Focus: **Testing improvements + Configuration + 2 new middlewares(Authentication + Input Validation)**
 
 ### ABI — Abstract Bootable Interface
 
-- ✅ Differ engine (`ABI/Differ`): diff model (`Diff`, `Chunk`, `Line`), LCS calculators (memory and time strategies), output renderers (changed-lines, unified, strict unified, ANSI), unified diff parser, and self-tests
+- ✅ Differ engine (`ABI/Differ`) for test diagnostics and coverage diffs
+  - ✅ Diff model (`Diff`, `Chunk`, `Line`) with iterable value objects
+  - ✅ LCS calculators optimized for memory and time strategies
+  - ✅ Output renderers: changed-lines only, unified, strict unified, ANSI escaped
+  - ✅ Unified diff parser
+  - ✅ Self-tests for model, calculators, renderers, parser, and configuration errors
 
 ### ACI — Abstract Common Interface
 
-- ✅ Tests/Fixtures: lifecycle state machine (`Pristine`→`Ready`→`Disposed`), idempotent `prepare()`/`dispose()` hooks, deterministic state bag (`fetch`, `update`, `reset`, `clear`), `Fixturable` integration, HTTP Server test fixtures
-- ✅ Tests/Doubles (Mock, Spy, Faker): typesafe `Mock` proxy generation, stubbed returns + throwable paths, call recording with `verify()`, `Spy` real-instance wrapper with delegation, deterministic `Faker` base, built-in fakers (Email, Integer, Name, Text, UUID)
-- ✅ Tests/Coverage: `Coverage` session API (`start`, `stop`, `report`), driver abstraction (XDebug, PCOV, Native, Nothing), include scopes + SUT target filtering, text/Clover XML/HTML reports, optional per-file diff via `ABI/Differ`, `bootgly test` coverage flags
-- ✅ Tests/Fakes: `Fake` abstract base implementing `Doubling`, `Fake/Memory` in-memory KV substitute, `Fake/Clock` deterministic time substitute; CSRF and rate-limit tests refactored to use Fakes
+- ✅ Tests: Fixtures (`ACI/Tests/Fixture`)
+  - ✅ Lifecycle state machine (`Pristine`, `Preparing`, `Ready`, `Disposing`, `Disposed`)
+  - ✅ Idempotent `prepare()` / `dispose()` hooks
+  - ✅ Deterministic state bag with `fetch()`, `update()`, `reset()`, and `clear()`
+  - ✅ `Fixturable` integration in test specifications
+  - ✅ HTTP Server test fixtures (`WPI/Nodes/HTTP_Server_CLI/Tests/Fixtures`)
+- ✅ Tests: Mocks / Fakers / Spies
+  - ✅ Typesafe `Mock` proxy generation for interfaces and non-final classes
+  - ✅ Stubbed return values and configured throwable paths
+  - ✅ Call recording with method, arguments, return value, throwable, and timestamp
+  - ✅ `verify()` call-count assertions and `reset()` cleanup
+  - ✅ `Spy` wrapper for real instances with delegation and call tracking
+  - ✅ Deterministic `Faker` base and `Fakers` trait dispatch
+  - ✅ Built-in fakers: Email, Integer, Name, Text, UUID
+- ✅ Tests: Code coverage integration
+  - ✅ `Coverage` session API: `start()`, `stop()`, `report()`
+  - ✅ Driver abstraction with XDebug, PCOV, Native, and Nothing drivers
+  - ✅ XDebug coverage-mode guard and PCOV fallback detection
+  - ✅ Native coverage analyzer/compiler/universe with strict and parity modes
+  - ✅ Coverage hit collection, reset, executable-line seeding, and canonical path merge
+  - ✅ Include scopes and exact SUT target filtering
+  - ✅ Text, Clover XML, and single-page HTML reports
+  - ✅ Optional text report per-file diff output via `ABI/Differ`
+  - ✅ `bootgly test` coverage flags: driver, report, native mode, and diff
+- ✅ Tests: Fakes (`ACI/Tests/Doubles/Fake`)
+  - **Need**: stateful in-memory working impls of collaborators (Session, Cache, Repository, Clock) for unit tests where `Mock`'s per-method canned-return contract does not fit. `Mock` matches arguments and returns fixed values; it cannot natively express coupling like `set('k','v')` → `check('k')` → `get('k')` across multiple calls without forcing tests to bind shared state through closures and `ArrayObject` references — same code volume as inline anonymous classes plus `eval`/Reflection overhead per Proxy build. `Fake` fills this exact gap: a working substitute keyed by behavior, not by canned returns.
+  - ✅ `Fake.php` — abstract base class implementing the existing `Bootgly\ACI\Tests\Doubles\Doubling` interface (`reset(): static`); registers in the existing `Doubles` collection alongside `Mock` and `Spy`. No new collection wiring required.
+  - ✅ `Fake/Memory.php` — in-memory key-value substitute matching the `Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Session` access shape: `check(string $name): bool`, `get(string $name, mixed $default = null): mixed`, `set(string $name, mixed $value): void`, `delete(string $name): void`, `list(): array<string,mixed>`, `flush(): void`, `reset(): static`. Drop-in for any KV-shaped collaborator, not coupled to `Session::class`.
+  - ✅ `Fake/Clock.php` — deterministic time substitute with `now: float`, `advance(int|float $seconds): void`, `freeze(int|float $at): void`, `reset(): static`. Removes `time()`/`microtime()` flakiness from rate-limiter and TTL tests.
+  - ✅ Self-tests in the existing ACI suite (`Bootgly/ACI/Tests/tests/5.3.x-Fake-*.test.php`) — round-trip `set`/`get`/`check`/`delete`/`list`/`flush`/`reset` for `Memory`; deterministic `advance`/`freeze`/`reset` for `Clock`. Reuses the existing `Specification` + `Assertions` (Level 3) test format already used across `Bootgly/ACI/Tests/Doubles/`.
+  - ✅ Refactor `Bootgly/WPI/Nodes/HTTP_Server_CLI/Router/Middlewares/tests/9.1-csrf.test.php` — replace the inline anonymous-class Session double inside `$createSession` with `new Fake\Memory()`. Token-persistence, set-then-get, and `check()` calls all flow without bespoke mock code.
+  - ✅ Refactor `Bootgly/WPI/Nodes/HTTP_Server_CLI/Router/Middlewares/tests/2.1-rate_limit.test.php` — replace the random-IP static-counter pollution workaround (`$ip = 'test-' . bin2hex(random_bytes(4))`) with `Fake\Clock`; `RateLimit` accepts a `null|Closure` clock provider and exposes `reset()` for deterministic static-counter cleanup.
+  - ✅ No third-party dependency. Same layering rule as `Mock`/`Spy`: `Fake` lives in ACI; WPI tests reference it across the allowed direction.
 
 ### API — Application Programming Interface
 
-- ✅ Configuration system base (`API/Environment/Configs`): `Configs` loader/facade, `Config` mutable tree node, `Config/Types` strict scalar casts, `Scopes` registry, directory-per-scope structure, scoped `.env` files with environment-aware resolution, lazy loading, path traversal hardening, PHPStan integration
-- ✅ Configuration system project-level (`API/Projects/Configs`): extends base path to project `configs/`, `overlay()` deep-merges project scopes over framework defaults, `Project->Configs` initialized on boot
+- ✅ Configuration system — base infrastructure (`API/Environment/Configs`)
+  - ✅ `Configs.php` — base loader/facade for framework `configs/` scopes
+  - ✅ `Configs/Config.php` — mutable config tree node with object navigation, `bind()`, `get()`, `up()`, `down()`, required bindings and deep `merge()`
+  - ✅ `Configs/Config/Types.php` — strict scalar casts for `Integer`, `Float`, `Boolean`, and `String`
+  - ✅ `Configs/Scopes.php` — registry/collection of loaded scopes
+  - ✅ Directory-per-scope structure — each config category is a folder (e.g. `configs/database/`, `configs/server/`)
+  - ✅ Scoped `.env` files per category (not monolithic):
+    - `configs/<scope>/.env` — shared across all environments
+    - `configs/<scope>/.env.development` — development-only overrides
+    - `configs/<scope>/.env.production` — production-only overrides
+  - ✅ PHP config file per scope: `configs/<scope>/<scope>.config.php` — structure + defaults referencing env vars
+  - ✅ Environment-aware resolution: `.env` → `.env.<environment>` → `.config.php` (later env files override earlier env values before PHP config binds)
+  - ✅ Config access via scope lookup + object navigation (`$Configs->get('database')->Default->get()`)
+  - ⭕️ Dot-notation (`$Environment->Configs->get('database.default')`) rejected; `Configs::get()` is scope-only to avoid public-property collisions and keep PHPStan checks precise
+  - ✅ Lazy loading — config scope loaded on first access, not at boot
+  - ✅ `.env` values stay local to the loader instance; no `putenv()` leakage between scopes/projects
+  - ✅ Fail-closed `.env` policy: uppercase variable validation, per-scope `allow()` allowlists, and `lock()` runtime-only keys
+  - ✅ Path traversal hardening with scope/environment validation and `File::guard()` before reading `.env` or requiring `.config.php`
+  - ✅ Required config values use `bind(required: true)` as the single canonical path
+  - ✅ Trust boundary documented for executable `<scope>.config.php` files
+  - ✅ `.env` files gitignored by default — secrets never versionable; `*.config.php` files always versionable
+  - ✅ PHPStan integration for dynamic config properties and unbound `Config::get()` checks
+- ✅ Configuration system — project-level extension (`API/Projects/Configs`)
+  - ✅ `Configs.php` extends `Environment\Configs` — overrides base path to project `configs/`
+  - ✅ Same scoped `.env` + `.config.php` structure per project directory
+  - ✅ `Projects\Configs::overlay()` deep-merges project scopes over framework scopes; project values win
+  - ✅ Overlay keeps framework/project `.env` values local and does not mutate process environment
+  - ✅ `Project` gains nullable `->Configs` property; `Project->boot()` initializes it when the project has a `configs/` directory
+  - 📋 Define lazy auto-overlay behavior for `Project->Configs` over `Environment::$Configs`
 
 ### WPI — Web Programming Interface
 
-- ✅ Input Validation middleware: rule-based validators (`Required`, `Minimum`, `Maximum`, `Email`, `Regex`, `Integer`, `Size`, `MIME`, `Extension`), `Validator` middleware over `Request/Validation` pipeline, custom validation rules
-- ✅ Authentication system: HTTP Basic auth, Bearer token auth, Session-based guards; JWT with HS256/RS256, `Key`/`KeySet`, `kid`, claim policies (`iss`, `aud`, `sub`, `jti`), remote JWKS fetch with process-local cache, refresh token rotation, family revocation, and `jti` replay protection
+- ✅ Input Validation layer
+  - ✅ Rule-based validators (`Required`, `Minimum`, `Maximum`, `Email`, `Regex`, `Integer`, `Size`, `MIME`, `Extension`)
+  - ✅ Request validation integration via `Validator` middleware over `Request/Validation` pipeline
+  - ✅ Custom validation rules (extend `Request\Validators`)
+- ✅ Authentication system
+  - ✅ HTTP Basic auth compatibility
+  - ✅ Token-based auth (Bearer)
+  - ✅ Session-based guards (file driver only at v0.15; pluggable session drivers — DB/Redis-like — move with v0.16 ADI Database and v0.17 ABI Cache)
+  - JWT
+    - ✅ JWT integration — HS256, typed verification, `Key`/`KeySet`, `kid`, verified headers, RS256, and local RSA JWKS parsing
+    - ✅ JWT claim policies (`iss`, `aud`, required `sub`, required `jti`) and deterministic clock controls
+    - ✅ JWT remote JWKS fetch with process-local cache and refresh on `kid` miss
+    - ✅ JWT remote JWKS persistent cache/store integration via `Session`
+    - ✅ JWT refresh token rotation, family revocation, and `jti` replay protection with persistent cache/store
+    - ⭕️ JWT additional algorithms (`HS384`, `HS512`, `RS384`, `RS512`, ECDSA, EdDSA)
+  - ⭕️ Digest HTTP auth (`WPI/Modules/HTTP/Server/Response/Authentication/Digest`)
+
+### Bootgly
+
+#### Verifications
+
+- [x] ABI Differ self-tests pass for model, calculators, renderers, and parser
+- [x] Mocks can assert method calls and parameters
+- [x] Mocks record returned values and thrown exceptions
+- [x] Spies can wrap real instances, delegate calls, and preserve recorded arguments/returns
+- [x] Fakers generate deterministic values from seeds
+- [x] Code coverage reports generated correctly in text, Clover, and HTML formats
+- [x] Coverage driver detection supports XDebug, PCOV, Native, and Nothing backends
+- [x] Native coverage can instrument executable lines and collect hits without third-party packages
+- [x] Coverage reports can be scoped to selected suites and exact SUT files
+- [x] Coverage text reports can render covered/uncovered line diffs
+- [x] Fixtures can set up and tear down test state
+- [x] Fixtures can reset deterministic state between cases
+- [ ] API Server tests can use fixtures for request/response setup
+- [x] WPI HTTP Server tests can use fixtures for request/response probe state
+- [] API Server tests can use mocks for middleware and handlers
+- [x] WPI middleware tests can use mocks for Request/Response
+- [x] Authentication methods correctly authenticate valid credentials and reject invalid ones
+- [x] `API/Environment/Configs` loads framework scopes from `configs/<scope>/` directories
+- [x] Scoped `.env` loads base values, `.env.<environment>` overrides per environment
+- [x] `<scope>.config.php` resolves env/local-env/default values through `Config::bind()`
+- [x] Config values accessible via scope lookup + object navigation (`$Configs->get('database')->Default->get()`)
+- [x] Dot-notation config access rejected; `Configs::get()` is scope-only
+- [x] Config scopes lazy-loaded on first access
+- [x] `.env` files excluded from version control; `*.config.php` files safe to commit
+- [x] `.env` values remain isolated from the process environment and project overlays
+- [x] Required config bindings fail closed and strict casts reject ambiguous scalar values
+- [x] Config scope/environment names are path-safe and guarded against traversal
+- [x] Config `.env` policy supports uppercase validation, allowlists and locked runtime-only keys
+- [x] `API/Projects/Configs` extends `Environment/Configs` with project base path
+- [x] `Projects\Configs::overlay()` deep-merges project scopes over framework defaults
+- [x] `Project->boot()` initializes `Project->Configs` when the project has a `configs/` directory
+- [x] `Project->Configs` provides project-scoped config access
+- [ ] Lazy auto-overlay for `Project->Configs` over `Environment::$Configs` is defined and implemented
+- [x] Config-specific PHPStan dynamic properties/unbound-access rules registered
+- [x] Static analysis — PHPStan level 9
+- [x] Code style — Bootgly conventions / rules
 
 ---
 
