@@ -3,6 +3,7 @@
 use Bootgly\ACI\Tests\Suite\Test\Specification;
 use Bootgly\API\Security\JWT;
 use Bootgly\API\Security\JWT\Failures;
+use Bootgly\API\Security\JWT\Replay;
 use Bootgly\API\Security\JWT\Token;
 use Bootgly\API\Security\JWT\Tokens;
 use Bootgly\API\Security\JWT\Usage;
@@ -66,8 +67,11 @@ return new Specification(
       $Replay = $Tokens->rotate($Issued->refresh, 60);
 
       yield assert(
-         assertion: $Replay === null && $Tokens->check($Rotated->refresh) === false,
-         description: 'refresh token replay revokes the token family across workers'
+         assertion: $Replay instanceof Replay
+            && $Replay->subject === 'user-42'
+            && $Replay->claims['role'] === 'admin'
+            && $Tokens->check($Rotated->refresh) === false,
+         description: 'refresh token replay returns an incident and revokes the token family across workers'
       );
 
       $Logout = $Tokens->mint('user-99', 60);
@@ -76,6 +80,22 @@ return new Specification(
          assertion: $Tokens->revoke($Logout->refresh) === true
             && $Tokens->check($Logout->refresh) === false,
          description: 'refresh token revocation invalidates active families'
+      );
+
+      $BadVault = new Vault($path);
+      $bad = $path . '/jwt_' . hash('sha256', 'bad-record');
+      $temp = $path . '/jwt_.tmp.dead';
+      file_put_contents($bad, 'bad');
+      file_put_contents($temp, 'temp');
+      $Read = $BadVault->read('bad-record');
+      $Purged = $BadVault->purge();
+
+      yield assert(
+         assertion: $Read === null
+            && is_file($bad) === false
+            && is_file($temp) === false
+            && $Purged === true,
+         description: 'vault reads invalid records safely and purge removes invalid records plus temp files'
       );
 
       $secret = 'bootgly-test-secret-32-bytes-long';
@@ -120,6 +140,28 @@ return new Specification(
             && $Second->valid === false
             && $Second->failure === Failures::Replay,
          description: 'single-use JWT usage guard rejects replayed jti values'
+      );
+
+      $Missing = new JWT($secret);
+      $Missing->freeze($now);
+      $Missing->track(new Usage(new Vault($path)));
+      $missing = $Missing->sign([
+         'sub' => 'user-42',
+         'exp' => $now + 60,
+      ]);
+
+      yield assert(
+         assertion: $Missing->inspect($missing)->failure === Failures::Identifier,
+         description: 'JWT usage guard requires jti by default even outside single-use mode'
+      );
+
+      $Optional = new JWT($secret);
+      $Optional->freeze($now);
+      $Optional->track(new Usage(new Vault($path), required: false));
+
+      yield assert(
+         assertion: $Optional->inspect($missing)->valid === true,
+         description: 'JWT usage guard can explicitly allow tokens without jti'
       );
 
       $clean($path);

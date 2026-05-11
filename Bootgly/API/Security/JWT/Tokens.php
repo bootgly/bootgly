@@ -118,32 +118,44 @@ class Tokens
    /**
     * Rotate a refresh token, revoking its family on replay.
     */
-   public function rotate (string $refresh, int $ttl): null|Token
+   public function rotate (string $refresh, int $ttl): null|Replay|Token
    {
       if ($ttl < 1) {
          throw new InvalidArgumentException('JWT refresh token ttl must be positive.');
       }
 
-      $Record = $this->take($refresh);
-      if ($Record === null) {
-         $Spent = $this->detect($refresh);
-         if ($Spent !== null) {
-            $this->write($this->index('family', $Spent['family']), '1', $this->limit($Spent['expires']));
+      $Result = $this->Cache->lock(function () use ($refresh, $ttl): null|Replay|Token {
+         $Record = $this->take($refresh);
+         if ($Record === null) {
+            $Spent = $this->detect($refresh);
+            if ($Spent !== null) {
+               $this->write($this->index('family', $Spent['family']), '1', $this->limit($Spent['expires']));
+
+               return $this->report($Spent);
+            }
+
+            return null;
          }
 
-         return null;
+         if ($this->Cache->read($this->index('family', $Record['family'])) !== null) {
+            return null;
+         }
+
+         $this->write($this->index('spent', $refresh), $this->encode([
+            'subject' => $Record['subject'],
+            'family' => $Record['family'],
+            'claims' => $Record['claims'],
+            'expires' => $Record['expires'],
+         ]), $this->limit($Record['expires']));
+
+         return $this->issue($Record['subject'], $Record['family'], $ttl, $Record['claims']);
+      });
+
+      if ($Result === null || $Result instanceof Replay || $Result instanceof Token) {
+         return $Result;
       }
 
-      if ($this->Cache->read($this->index('family', $Record['family'])) !== null) {
-         return null;
-      }
-
-      $this->write($this->index('spent', $refresh), $this->encode([
-         'family' => $Record['family'],
-         'expires' => $Record['expires'],
-      ]), $this->limit($Record['expires']));
-
-      return $this->issue($Record['subject'], $Record['family'], $ttl, $Record['claims']);
+      throw new RuntimeException('JWT refresh token rotation returned an invalid result.');
    }
 
    /**
@@ -151,27 +163,33 @@ class Tokens
     */
    public function revoke (string $refresh): bool
    {
-      $Record = $this->take($refresh);
-      if ($Record === null) {
-         $Spent = $this->detect($refresh);
-         if ($Spent === null) {
-            return false;
+      $Result = $this->Cache->lock(function () use ($refresh): bool {
+         $Record = $this->take($refresh);
+         if ($Record === null) {
+            $Spent = $this->detect($refresh);
+            if ($Spent === null) {
+               return false;
+            }
+
+            $this->write($this->index('family', $Spent['family']), '1', $this->limit($Spent['expires']));
+
+            return true;
          }
 
-         $this->write($this->index('family', $Spent['family']), '1', $this->limit($Spent['expires']));
+         $ttl = $this->limit($Record['expires']);
+         $this->write($this->index('spent', $refresh), $this->encode([
+            'subject' => $Record['subject'],
+            'family' => $Record['family'],
+            'claims' => $Record['claims'],
+            'expires' => $Record['expires'],
+         ]), $ttl);
+
+         $this->write($this->index('family', $Record['family']), '1', $ttl);
 
          return true;
-      }
+      });
 
-      $ttl = $this->limit($Record['expires']);
-      $this->write($this->index('spent', $refresh), $this->encode([
-         'family' => $Record['family'],
-         'expires' => $Record['expires'],
-      ]), $ttl);
-
-      $this->write($this->index('family', $Record['family']), '1', $ttl);
-
-      return true;
+      return $Result === true;
    }
 
    /**
@@ -245,7 +263,7 @@ class Tokens
    /**
     * Read a spent refresh-token tombstone.
     *
-    * @return null|array{family:string,expires:int}
+      * @return null|array{subject:string,family:string,claims:array<string,mixed>,expires:int}
     */
    private function detect (string $refresh): null|array
    {
@@ -263,14 +281,28 @@ class Tokens
 
       if (
          is_array($decoded) === false
+         || is_string($decoded['subject'] ?? null) === false
          || is_string($decoded['family'] ?? null) === false
+         || is_array($decoded['claims'] ?? null) === false
          || is_int($decoded['expires'] ?? null) === false
       ) {
          return null;
       }
 
+      /** @var array<string,mixed> $claims */
+      $claims = [];
+      foreach ($decoded['claims'] as $name => $value) {
+         if (is_string($name) === false) {
+            return null;
+         }
+
+         $claims[$name] = $value;
+      }
+
       return [
+         'subject' => $decoded['subject'],
          'family' => $decoded['family'],
+         'claims' => $claims,
          'expires' => $decoded['expires'],
       ];
    }
@@ -347,6 +379,21 @@ class Tokens
          $Record['family'],
          $Record['claims'],
          $Record['issued'],
+         $Record['expires']
+      );
+   }
+
+   /**
+    * Build a replay incident from a tombstone.
+    *
+    * @param array{subject:string,family:string,claims:array<string,mixed>,expires:int} $Record
+    */
+   private function report (array $Record): Replay
+   {
+      return new Replay(
+         $Record['subject'],
+         $Record['family'],
+         $Record['claims'],
          $Record['expires']
       );
    }

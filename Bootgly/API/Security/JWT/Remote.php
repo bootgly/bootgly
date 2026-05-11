@@ -160,11 +160,10 @@ class Remote implements KeyResolver
       }
 
       $now = time();
-      if ($this->missed > 0 && $now - $this->missed < $this->cooldown) {
+      if ($this->throttle($now)) {
          $this->mark(Failures::Key, 'JWT key could not be resolved.', $this->status);
          return null;
       }
-      $this->missed = $now;
 
       $Keys = $this->load(true);
       if ($Keys instanceof Failures) {
@@ -205,7 +204,7 @@ class Remote implements KeyResolver
       if ($force === false && $this->Cache !== null && $this->ttl > 0) {
          $body = $this->Cache->read($this->index());
          if ($body !== null) {
-            $Keys = $this->parse($body, $this->status, $now);
+            $Keys = $this->parse($body, $this->status, $now, $this->ttl);
             if ($Keys instanceof Failures === false) {
                return $Keys;
             }
@@ -223,13 +222,14 @@ class Remote implements KeyResolver
          return $this->mark(Failures::Status, 'Remote JWKS returned a non-success status.', $Response->status);
       }
 
-      $Keys = $this->parse($Response->body, $Response->status, $now);
+      $ttl = $this->limit($Response);
+      $Keys = $this->parse($Response->body, $Response->status, $now, $ttl);
       if ($Keys instanceof Failures) {
          return $Keys;
       }
 
-      if ($this->Cache !== null && $this->ttl > 0) {
-         $this->Cache->write($this->index(), $Response->body, $this->ttl);
+      if ($this->Cache !== null && $ttl > 0) {
+         $this->Cache->write($this->index(), $Response->body, $ttl);
       }
 
       return $Keys;
@@ -238,7 +238,7 @@ class Remote implements KeyResolver
    /**
     * Parse and cache a JWKS body.
     */
-   private function parse (string $body, int $status, int $now): KeySet|Failures
+   private function parse (string $body, int $status, int $now, int $ttl): KeySet|Failures
    {
       if (strlen($body) > $this->size) {
          return $this->mark(Failures::JWKS, 'Remote JWKS response is too large.', $status);
@@ -265,18 +265,54 @@ class Remote implements KeyResolver
 
       $this->Keys = $Keys;
       $this->fetched = $now;
-      $this->expires = $this->ttl > 0 ? $now + $this->ttl : 0;
+      $this->expires = $ttl > 0 ? $now + $ttl : 0;
       $this->clear($status);
 
       return $Keys;
    }
 
    /**
+    * Compute the effective cache TTL from remote headers.
+    */
+   private function limit (Response $Response): int
+   {
+      foreach ($Response->headers as $header) {
+         if (preg_match('/(?:^|[\s,])max-age\s*=\s*(\d+)/i', $header, $matches) === 1) {
+            return (int) $matches[1];
+         }
+      }
+
+      return $this->ttl;
+   }
+
+   /**
+    * Throttle refresh-on-miss attempts.
+    */
+   private function throttle (int $now): bool
+   {
+      if ($this->cooldown < 1) {
+         return false;
+      }
+
+      if ($this->Cache !== null) {
+         return $this->Cache->claim($this->index('miss'), (string) $now, $this->cooldown) === false;
+      }
+
+      if ($this->missed > 0 && $now - $this->missed < $this->cooldown) {
+         return true;
+      }
+
+      $this->missed = $now;
+
+      return false;
+   }
+
+   /**
     * Build the shared cache key for this remote JWKS source.
     */
-   private function index (): string
+   private function index (string $scope = 'body'): string
    {
-      return "jwt:jwks:{$this->algorithm}:{$this->URI}";
+      return "jwt:jwks:{$scope}:{$this->algorithm}:{$this->URI}";
    }
 
    /**
@@ -334,6 +370,8 @@ class Remote implements KeyResolver
          return Failures::Network;
       }
 
+      // @ PHP populates `$http_response_header` in this local scope after
+      //   `file_get_contents()` HTTP stream requests.
       $headers = $http_response_header;
       $status = 0;
       if (isset($headers[0]) && preg_match('/^HTTP\/\S+\s+(\d{3})/', $headers[0], $matches) === 1) {
@@ -343,7 +381,7 @@ class Remote implements KeyResolver
          return Failures::Network;
       }
 
-      return new Response($status, $body);
+      return new Response($status, $body, $headers);
    }
 
    /**

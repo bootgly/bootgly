@@ -11,11 +11,19 @@
 namespace Bootgly\API\Security\JWT;
 
 
+use Closure;
+
+
 /**
  * JWT-local shared cache/store contract.
  */
 interface Cache
 {
+   /**
+    * Run a critical cache section under an exclusive lock.
+    */
+   public function lock (Closure $Closure): mixed;
+
    /**
     * Read a non-expired value.
     */

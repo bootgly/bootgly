@@ -101,18 +101,20 @@ class JWT
     */
    public function __construct (#[\SensitiveParameter] string|KeyResolver $secret, string $algorithm = 'HS256')
    {
+      // * Data
+      $this->algorithm = $algorithm;
+      $this->Segments = new Segments;
+      $this->Signer = new Signer;
+      $this->Validator = new Validator;
+      $this->Usage = null;
+
       if ($secret instanceof KeyResolver) {
          // * Config
          $this->secret = null;
 
          // * Data
-         $this->algorithm = $algorithm;
          $this->Key = null;
          $this->Keys = $secret;
-         $this->Segments = new Segments;
-         $this->Signer = new Signer;
-         $this->Validator = new Validator;
-         $this->Usage = null;
 
          return;
       }
@@ -123,13 +125,8 @@ class JWT
       $this->secret = $algorithm === 'HS256' ? $secret : null;
 
       // * Data
-      $this->algorithm = $algorithm;
       $this->Key = $Key;
       $this->Keys = new KeySet($Key);
-      $this->Segments = new Segments;
-      $this->Signer = new Signer;
-      $this->Validator = new Validator;
-      $this->Usage = null;
    }
 
    /**

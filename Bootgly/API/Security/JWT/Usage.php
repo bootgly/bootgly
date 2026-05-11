@@ -27,6 +27,7 @@ class Usage
 {
    // * Config
    public private(set) bool $single;
+   public private(set) bool $required;
 
    // * Data
    private Cache $Cache;
@@ -41,10 +42,11 @@ class Usage
    /**
     * Configure a JWT usage guard.
     */
-   public function __construct (Cache $Cache, bool $single = false)
+   public function __construct (Cache $Cache, bool $single = false, bool $required = true)
    {
       // * Config
       $this->single = $single;
+      $this->required = $required;
 
       // * Data
       $this->Cache = $Cache;
@@ -115,7 +117,7 @@ class Usage
    {
       $identifier = $claims['jti'] ?? null;
       if (is_string($identifier) === false || $identifier === '') {
-         return Failures::Identifier;
+         return $this->required ? Failures::Identifier : null;
       }
 
       if ($this->Cache->read($this->index('blocked', $identifier)) !== null) {

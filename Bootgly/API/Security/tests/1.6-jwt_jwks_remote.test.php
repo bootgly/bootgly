@@ -178,6 +178,53 @@ return new Specification(
          description: 'remote JWKS can be refreshed explicitly'
       );
 
+      $HeaderRemote = new Remote(
+         'https://issuer.example/max-age',
+         static fn (): Response => new Response(200, $encode(['keys' => [$jwk1]]), [
+            'Cache-Control: public, max-age=2',
+         ]),
+         ttl: 60
+      );
+      $HeaderKeys = $HeaderRemote->fetch();
+
+      yield assert(
+         assertion: $HeaderKeys instanceof KeySet
+            && $HeaderRemote->expires - $HeaderRemote->fetched === 2,
+         description: 'remote JWKS honors Cache-Control max-age when present'
+      );
+
+      $coolPath = sys_get_temp_dir() . '/bootgly-jwks-cooldown-' . bin2hex(random_bytes(4));
+      $coolCalls = 0;
+      $CoolA = new Remote(
+         'https://issuer.example/cooldown',
+         static function () use (&$coolCalls, $documents, $encode): string {
+            $coolCalls++;
+            return $encode($documents[0]);
+         },
+         cooldown: 60
+      );
+      $CoolA->cache(new Vault($coolPath));
+      $CoolAVerifier = new JWT($CoolA, 'RS256');
+      $CoolAVerifier->inspect($rotatedToken);
+      $CoolB = new Remote(
+         'https://issuer.example/cooldown',
+         static function () use (&$coolCalls, $documents, $encode): string {
+            $coolCalls++;
+            return $encode($documents[1]);
+         },
+         cooldown: 60
+      );
+      $CoolB->cache(new Vault($coolPath));
+      $CoolBVerifier = new JWT($CoolB, 'RS256');
+      $CoolBResult = $CoolBVerifier->inspect($rotatedToken);
+
+      yield assert(
+         assertion: $CoolBResult->valid === false && $coolCalls === 2,
+         description: 'remote JWKS refresh-on-miss cooldown is shared across workers'
+      );
+
+      $clean($coolPath);
+
       $Status = new Remote(
          'https://issuer.example/status',
          static fn (): Response => new Response(500, '{}')
@@ -190,6 +237,17 @@ return new Specification(
             && $StatusVerification->failure === Failures::Status
             && $Status->status === 500,
          description: 'remote JWKS HTTP status failures are exposed internally'
+      );
+
+      $Network = new Remote(
+         'https://issuer.example/network',
+         static fn (): array => []
+      );
+
+      yield assert(
+         assertion: $Network->fetch() === Failures::Network
+            && $Network->failure === Failures::Network,
+         description: 'remote JWKS network failures are categorized'
       );
 
       $InvalidJSON = new Remote(
