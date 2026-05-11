@@ -105,7 +105,7 @@ class CSRF implements Middleware
       /** @var Session $Session */
 
       // @ Ensure token exists (covers safe + unsafe paths)
-      if ($Session->has($this->sessionKey) === false) {
+      if ($Session->check($this->sessionKey) === false) {
          $Session->set($this->sessionKey, bin2hex(random_bytes(max(1, $this->tokenBytes))));
       }
 

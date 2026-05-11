@@ -38,6 +38,7 @@ class RateLimit implements Middleware
    // * Config
    public private(set) int $limit;
    public private(set) int $window;
+   public private(set) null|Closure $clock;
 
    // * Data
    /**
@@ -53,18 +54,22 @@ class RateLimit implements Middleware
 
    public function __construct (
       int $limit = 60,
-      int $window = 60
+      int $window = 60,
+      null|Closure $clock = null
    )
    {
       // * Config
       $this->limit = $limit;
       $this->window = $window;
+      $this->clock = $clock;
    }
 
    public function process (object $Request, object $Response, Closure $next): object
    {
       // !
-      $now = time();
+      $now = $this->clock === null
+         ? time()
+         : (int) ($this->clock)();
       $ip = $Request->address; // @phpstan-ignore-line
 
       // @ Purge expired entries periodically
@@ -120,6 +125,15 @@ class RateLimit implements Middleware
       }
 
       self::$lastPurge = $now;
+   }
+
+   /**
+    * Reset in-memory counters.
+    */
+   public static function reset (): void
+   {
+      self::$counters = [];
+      self::$lastPurge = 0;
    }
 
    /**

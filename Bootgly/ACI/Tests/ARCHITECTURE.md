@@ -1,6 +1,6 @@
 # ACI Tests — Architecture
 
-> Last updated: 2026-03-11
+> Last updated: 2026-05-11
 
 ## Overview
 
@@ -160,6 +160,9 @@ Bootgly/ACI/Tests/
 │
 ├── Doubles.php                            # class — registry/collection (add/reset/clear)
 ├── Doubles/                               # ── Test doubles ──
+│   ├── Fake/                              # ── Behavior-backed fakes ──
+│   │   ├── Clock.php                      # final class — deterministic time substitute
+│   │   └── Memory.php                     # final class — in-memory key-value substitute
 │   ├── Mock/                              # ── Mock + Spy internals ──
 │   │   ├── Call.php                       # class — VO: method, arguments, returned, Threw, at
 │   │   ├── Calls.php                      # class — collection of Call (push/count/filter)
@@ -167,6 +170,7 @@ Bootgly/ACI/Tests/
 │   │   ├── Stub.php                       # final class — internal mock rule: method, return, Throws, Matcher
 │   │   └── Stubs.php                      # class — LIFO collection of Stub
 │   ├── Doubling.php                       # interface — reset()
+│   ├── Fake.php                           # abstract class — resettable behavior-backed substitute
 │   ├── Mock.php                           # class — $Proxy property; stub()/verify()/reset()
 │   └── Spy.php                            # class — $Wrapped property; verify()/reset() on real instance
 │

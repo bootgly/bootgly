@@ -73,6 +73,10 @@ return new Suite(
       // Doubles
       '5.2.1-Doubles-registry_reset_clear',
 
+      // Fake
+      '5.3.1-Fake-Memory-key_value_state',
+      '5.3.2-Fake-Clock-deterministic_time',
+
       // Faker
       '6.1.1-Faker-deterministic_seed',
       '6.1.2-Fakers-trait_dispatch',

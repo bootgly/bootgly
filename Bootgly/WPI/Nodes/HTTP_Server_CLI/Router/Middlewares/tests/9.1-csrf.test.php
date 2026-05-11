@@ -1,9 +1,8 @@
 <?php
 
-use Generator;
-
 use Bootgly\ACI\Tests\Assertion;
 use Bootgly\ACI\Tests\Assertions;
+use Bootgly\ACI\Tests\Doubles\Fake\Memory;
 use Bootgly\ACI\Tests\Suite\Test\Specification;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Middlewares\CSRF;
 
@@ -18,23 +17,7 @@ return new Specification(
       };
 
       $createSession = function (): object {
-         return new class {
-            /** @var array<string,mixed> */
-            private array $data = [];
-
-            public function has (string $name): bool
-            {
-               return isset($this->data[$name]);
-            }
-            public function get (string $name, mixed $default = null): mixed
-            {
-               return $this->data[$name] ?? $default;
-            }
-            public function set (string $name, mixed $value): void
-            {
-               $this->data[$name] = $value;
-            }
-         };
+         return new Memory();
       };
 
       // @ Test 1: GET request creates token in session and passes through
@@ -51,7 +34,7 @@ return new Specification(
          ->assert();
 
       yield (new Assertion(description: 'GET should populate session with CSRF token'))
-         ->expect($Session->has('_csrf_token'))
+         ->expect($Session->check('_csrf_token'))
          ->to->be(true)
          ->assert();
 
