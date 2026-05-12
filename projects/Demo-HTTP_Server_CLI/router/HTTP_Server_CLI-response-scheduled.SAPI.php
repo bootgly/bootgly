@@ -15,7 +15,7 @@ use function stream_socket_pair;
 use function strlen;
 use function strpos;
 use function substr;
-
+use function usleep;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
@@ -248,6 +248,8 @@ return static function
          $Response(body: 'Async DB: ' . json_encode($results));
       });
    }, GET);
+   // ---
+
    // @ Blocking: simulated database query with latency (usleep blocks everything)
    yield $Router->route('/blocking/db', function (Request $Request, Response $Response) {
       // @ Simulate 100 sequential DB queries with ~10000ms latency each

@@ -34,6 +34,7 @@ return new Suites(
       'Bootgly/ACI/Tests/',
 
       // ! Abstract Data Interface (ADI)
+      'Bootgly/ADI/Database/',
       'Bootgly/ADI/Table/',
 
       // ! Application Programming Interface (API)

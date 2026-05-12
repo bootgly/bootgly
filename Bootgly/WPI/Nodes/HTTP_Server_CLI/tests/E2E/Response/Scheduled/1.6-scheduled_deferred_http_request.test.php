@@ -3,6 +3,8 @@
 use function fclose;
 use function fread;
 use function fwrite;
+use function json_encode;
+use function preg_replace;
 use function stream_set_blocking;
 use function stream_socket_client;
 use function strpos;
@@ -59,6 +61,8 @@ return new Specification(
    },
 
    test: function ($response) {
+      $normalized = preg_replace("/Date: .*\r\n/", '', $response) ?? $response;
+
       $expected = <<<HTML_RAW
       HTTP/1.1 200 OK\r
       Server: Bootgly\r
@@ -69,9 +73,9 @@ return new Specification(
       HTML_RAW;
 
       // @ Assert
-      if ($response !== $expected) {
+      if ($normalized !== $expected) {
          Vars::$labels = ['HTTP Response:', 'Expected:'];
-         dump(json_encode($response), json_encode($expected));
+         dump(json_encode($normalized), json_encode($expected));
          return 'Async HTTP deferred response not matched';
       }
 

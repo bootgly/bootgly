@@ -1,5 +1,8 @@
 <?php
 
+use function json_encode;
+use function preg_replace;
+
 use Bootgly\ABI\Debugging\Data\Vars;
 use Bootgly\ACI\Tests\Suite\Test\Specification\Separator;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router;
@@ -37,6 +40,9 @@ return new Specification(
    },
 
    test: function (array $responses) {
+      $first = preg_replace("/Date: .*\r\n/", '', $responses[0]) ?? $responses[0];
+      $second = preg_replace("/Date: .*\r\n/", '', $responses[1]) ?? $responses[1];
+
       $expected = <<<HTML_RAW
       HTTP/1.1 200 OK\r
       Server: Bootgly\r
@@ -47,16 +53,16 @@ return new Specification(
       HTML_RAW;
 
       // @ Assert Response 1
-      if ($responses[0] !== $expected) {
+      if ($first !== $expected) {
          Vars::$labels = ['Response 1:', 'Expected:'];
-         dump(json_encode($responses[0]), json_encode($expected));
+         dump(json_encode($first), json_encode($expected));
          return 'First deferred response not matched';
       }
 
       // @ Assert Response 2
-      if ($responses[1] !== $expected) {
+      if ($second !== $expected) {
          Vars::$labels = ['Response 2:', 'Expected:'];
-         dump(json_encode($responses[1]), json_encode($expected));
+         dump(json_encode($second), json_encode($expected));
          return 'Second deferred response not matched (state corruption)';
       }
 

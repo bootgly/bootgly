@@ -1,0 +1,452 @@
+{
+  "info": {
+    "_postman_id": "7a8d0551-7f5b-4d76-9a3f-e4f7cccb6a4d",
+    "name": "Bootgly Demo HTTP_Server_CLI - Native Async PostgreSQL",
+    "description": "Postman collection for the Bootgly Demo HTTP_Server_CLI native async PostgreSQL handler.\n\nBefore running:\n1. In projects/Demo-HTTP_Server_CLI/Demo-HTTP_Server_CLI.project.php, enable the response-database handler.\n2. Configure DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASS as needed. DB_ENABLED defaults to true for this demo.\n3. Start the Demo HTTP server.\n4. Run requests in order, starting with Setup demo table.\n\nDefault base_url: http://127.0.0.1:8082",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://127.0.0.1:8082",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "00 - Index",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/",
+        "description": "Lists the database demo routes exposed by HTTP_Server_CLI-response-database.SAPI.php."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "pm.test('JSON body', function () {",
+              "  pm.response.to.have.jsonBody();",
+              "});",
+              "const json = pm.response.json();",
+              "pm.test('status ok', function () {",
+              "  pm.expect(json.status).to.eql('ok');",
+              "});",
+              "pm.test('routes available', function () {",
+              "  pm.expect(json.routes).to.include('/deferred/database/setup');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "00.1 - Effective database config",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/deferred/database/config",
+        "description": "Shows the effective database configuration used by the demo handler. Password is masked as empty/set."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "pm.test('JSON body', function () {",
+              "  pm.response.to.have.jsonBody();",
+              "});",
+              "const json = pm.response.json();",
+              "pm.test('config status ok', function () {",
+              "  pm.expect(json.status).to.eql('ok');",
+              "});",
+              "pm.test('host and port are present', function () {",
+              "  pm.expect(json.host).to.be.a('string');",
+              "  pm.expect(json.port).to.be.a('number');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "01 - Setup demo table",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/deferred/database/setup",
+        "description": "Creates and seeds the bootgly_demo_users table. Run this before the users/user requests."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "pm.test('JSON body', function () {",
+              "  pm.response.to.have.jsonBody();",
+              "});",
+              "const json = pm.response.json();",
+              "pm.test('setup status ok', function () {",
+              "  pm.expect(json.status).to.eql('ok');",
+              "});",
+              "pm.test('demo table ready message', function () {",
+              "  pm.expect(json.message).to.include('bootgly_demo_users');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 - Ping database",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/deferred/database/ping",
+        "description": "Runs SELECT 1 AS ok."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "pm.test('JSON body', function () {",
+              "  pm.response.to.have.jsonBody();",
+              "});",
+              "const json = pm.response.json();",
+              "pm.test('status ok', function () {",
+              "  pm.expect(json.status).to.eql('ok');",
+              "});",
+              "pm.test('row ok equals 1', function () {",
+              "  pm.expect(json.rows[0].ok).to.eql(1);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 - Base async query",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/deferred/database",
+        "description": "Runs SELECT $1::int AS value with value 42 through the native async PostgreSQL client."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "pm.test('JSON body', function () {",
+              "  pm.response.to.have.jsonBody();",
+              "});",
+              "const json = pm.response.json();",
+              "pm.test('value equals 42', function () {",
+              "  pm.expect(json.rows[0].value).to.eql(42);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 - Parameterized query",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/deferred/database/parameters",
+        "description": "Runs a parameterized query using int and text values."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "pm.test('JSON body', function () {",
+              "  pm.response.to.have.jsonBody();",
+              "});",
+              "const json = pm.response.json();",
+              "pm.test('parameter values returned', function () {",
+              "  pm.expect(json.rows[0].value).to.eql(42);",
+              "  pm.expect(json.rows[0].label).to.eql('bootgly');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 - Scalar type conversion",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/deferred/database/types",
+        "description": "Checks bool, int, float8, and numeric result conversion. Numeric is intentionally preserved as string."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "pm.test('JSON body', function () {",
+              "  pm.response.to.have.jsonBody();",
+              "});",
+              "const json = pm.response.json();",
+              "pm.test('typed values returned', function () {",
+              "  pm.expect(json.rows[0].enabled).to.eql(true);",
+              "  pm.expect(json.rows[0].count).to.eql(7);",
+              "  pm.expect(json.rows[0].ratio).to.eql(1.5);",
+              "  pm.expect(json.rows[0].amount).to.eql('123.45');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 - List demo users",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/deferred/database/users",
+        "description": "Lists rows from bootgly_demo_users. Requires Setup demo table first."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "pm.test('JSON body', function () {",
+              "  pm.response.to.have.jsonBody();",
+              "});",
+              "const json = pm.response.json();",
+              "pm.test('three demo users', function () {",
+              "  pm.expect(json.status).to.eql('ok');",
+              "  pm.expect(json.rows.length).to.be.at.least(3);",
+              "});",
+              "pm.test('Ada Lovelace present', function () {",
+              "  pm.expect(json.rows.map(row => row.name)).to.include('Ada Lovelace');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "07 - Fetch demo user",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/deferred/database/user",
+        "description": "Fetches demo user id 1 using a PostgreSQL parameter. Requires Setup demo table first."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "pm.test('JSON body', function () {",
+              "  pm.response.to.have.jsonBody();",
+              "});",
+              "const json = pm.response.json();",
+              "pm.test('Ada Lovelace returned', function () {",
+              "  pm.expect(json.status).to.eql('ok');",
+              "  pm.expect(json.rows[0].id).to.eql(1);",
+              "  pm.expect(json.rows[0].name).to.eql('Ada Lovelace');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "08 - Expected recoverable error",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/deferred/database/error",
+        "description": "Runs an intentionally invalid query. The expected response is HTTP 500 with JSON status expected-error."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 500 expected', function () {",
+              "  pm.response.to.have.status(500);",
+              "});",
+              "pm.test('JSON body', function () {",
+              "  pm.response.to.have.jsonBody();",
+              "});",
+              "const json = pm.response.json();",
+              "pm.test('recoverable database error returned', function () {",
+              "  pm.expect(json.status).to.eql('expected-error');",
+              "  pm.expect(json.message).to.be.a('string');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "09 - Pool with multiple operations",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/deferred/database/pool",
+        "description": "Starts three operations through the async connection pool and returns pool counters."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "pm.test('JSON body', function () {",
+              "  pm.response.to.have.jsonBody();",
+              "});",
+              "const json = pm.response.json();",
+              "pm.test('pool rows returned', function () {",
+              "  pm.expect(json.status).to.eql('ok');",
+              "  pm.expect(json.rows.length).to.eql(3);",
+              "  pm.expect(json.pool.created).to.be.a('number');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "10 - Slow query sleep",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/deferred/database/sleep",
+        "description": "Runs SELECT pg_sleep(2), $1::int AS value. Use this together with another quick request to observe non-blocking behavior."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "pm.test('JSON body', function () {",
+              "  pm.response.to.have.jsonBody();",
+              "});",
+              "const json = pm.response.json();",
+              "pm.test('sleep query returned value', function () {",
+              "  pm.expect(json.status).to.eql('ok');",
+              "  pm.expect(json.rows[0].value).to.eql(42);",
+              "});"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

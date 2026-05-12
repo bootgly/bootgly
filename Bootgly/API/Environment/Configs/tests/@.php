@@ -30,5 +30,7 @@ return new Suite(
       '3.x-configs_navigation',
 
       '4.x-project_configs_overlay',
+
+      '5.x-database_config_adapter',
    ]
 );

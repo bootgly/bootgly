@@ -21,6 +21,7 @@ use Fiber;
 use Throwable;
 
 use Bootgly\ACI\Events\Loops;
+use Bootgly\ACI\Events\Readiness;
 use Bootgly\ACI\Events\Scheduler;
 use Bootgly\WPI\Connections;
 use Bootgly\WPI\Events;
@@ -59,10 +60,14 @@ class Select implements Events, Loops, Scheduler
    /** @var array<int,Fiber<mixed,mixed,mixed,mixed>> */
    private array $Fibers = [];
    // I/O-bound (resumed when stream_select signals readiness)
-   /** @var array<int,Fiber<mixed,mixed,mixed,mixed>> */
+   /** @var array<int,array<int,Fiber<mixed,mixed,mixed,mixed>>> */
    private array $awaitingReads = [];
-   /** @var array<int,Fiber<mixed,mixed,mixed,mixed>> */
+   /** @var array<int,array<int,Fiber<mixed,mixed,mixed,mixed>>> */
    private array $awaitingWrites = [];
+   /** @var array<int,float> */
+   private array $awaitingReadDeadlines = [];
+   /** @var array<int,float> */
+   private array $awaitingWriteDeadlines = [];
    // # Loop
    public readonly float $started;
    public readonly float $finished;
@@ -206,6 +211,7 @@ class Select implements Events, Loops, Scheduler
          }
 
          pcntl_signal_dispatch();
+         $deadline = $this->tick();
 
          // @ Resume tick-based Fibers (no I/O association)
          if ($this->Fibers) {
@@ -213,13 +219,9 @@ class Select implements Events, Loops, Scheduler
                if ($Fiber->isSuspended()) {
                   $value = $Fiber->resume();
 
-                  // @ Convert to I/O-awaiting if Fiber suspended with a socket
-                  if ( !$Fiber->isTerminated() && is_resource($value)) {
+                  // @ Convert to I/O-awaiting if Fiber suspended with readiness
+                  if ( !$Fiber->isTerminated() && $this->queue($Fiber, $value)) {
                      unset($this->Fibers[$id]);
-
-                     $socketId = (int) $value;
-                     $this->awaitingReads[$socketId] = $Fiber;
-                     $this->reads[$socketId] = $value;
 
                      continue;
                   }
@@ -229,6 +231,8 @@ class Select implements Events, Loops, Scheduler
                   unset($this->Fibers[$id]);
                }
             }
+
+            $deadline = $this->tick();
          }
 
          $read   = $this->reads;
@@ -239,8 +243,23 @@ class Select implements Events, Loops, Scheduler
             try {
                // @ Non-blocking poll if Fibers are suspended, otherwise block
                $timeout = $this->Fibers ? 0 : null;
+               $microseconds = null;
+
+               if ($timeout === null && $deadline !== null) {
+                  $remaining = $deadline - microtime(true);
+
+                  if ($remaining < 0) {
+                     $remaining = 0.0;
+                  }
+
+                  $timeout = (int) $remaining;
+                  $microseconds = (int) (($remaining - $timeout) * 1_000_000);
+               }
+
                // Waiting for read / write / excepts events.
-               $streams = @stream_select($read, $write, $except, $timeout);
+               $streams = $microseconds === null
+                  ? @stream_select($read, $write, $except, $timeout)
+                  : @stream_select($read, $write, $except, $timeout, $microseconds);
             }
             catch (Throwable) {
                $streams = false;
@@ -258,6 +277,8 @@ class Select implements Events, Loops, Scheduler
          }
 
          if ($streams === false || $streams === 0) {
+            $this->tick();
+
             continue;
          }
 
@@ -268,27 +289,14 @@ class Select implements Events, Loops, Scheduler
 
                // @ Resume I/O-awaiting Fiber (stream is now readable)
                if ( isSet($this->awaitingReads[$id]) ) {
-                  $Fiber = $this->awaitingReads[$id];
+                  $Fibers = $this->awaitingReads[$id];
 
                   unset($this->awaitingReads[$id]);
+                  unset($this->awaitingReadDeadlines[$id]);
                   unset($this->reads[$id]);
 
-                  if ($Fiber->isSuspended()) {
-                     $value = $Fiber->resume();
-
-                     // @ Re-schedule if Fiber suspended again
-                     if ( !$Fiber->isTerminated()) {
-                        if (is_resource($value)) {
-                           $newId = (int) $value;
-
-                           $this->awaitingReads[$newId] = $Fiber;
-
-                           $this->reads[$newId] = $value;
-                        }
-                        else {
-                           $this->Fibers[] = $Fiber;
-                        }
-                     }
+                  foreach ($Fibers as $Fiber) {
+                     $this->resume($Fiber);
                   }
 
                   continue;
@@ -312,27 +320,14 @@ class Select implements Events, Loops, Scheduler
 
                // @ Resume I/O-awaiting Fiber (stream is now writable)
                if ( isSet($this->awaitingWrites[$id]) ) {
-                  $Fiber = $this->awaitingWrites[$id];
+                  $Fibers = $this->awaitingWrites[$id];
 
                   unset($this->awaitingWrites[$id]);
+                  unset($this->awaitingWriteDeadlines[$id]);
                   unset($this->writes[$id]);
 
-                  if ($Fiber->isSuspended()) {
-                     $value = $Fiber->resume();
-
-                     // @ Re-schedule if Fiber suspended again
-                     if ( !$Fiber->isTerminated()) {
-                        if (is_resource($value)) {
-                           $newId = (int) $value;
-
-                           $this->awaitingReads[$newId] = $Fiber;
-
-                           $this->reads[$newId] = $value;
-                        }
-                        else {
-                           $this->Fibers[] = $Fiber;
-                        }
-                     }
+                  foreach ($Fibers as $Fiber) {
+                     $this->resume($Fiber);
                   }
 
                   continue;
@@ -356,8 +351,10 @@ class Select implements Events, Loops, Scheduler
    /**
     * Schedule a suspended Fiber for resumption in the event loop.
     *
-    * When $value is a stream resource, the Fiber becomes I/O-bound:
+    * When $value is a stream resource, the Fiber becomes read I/O-bound:
     * it is registered in stream_select() and only resumed when readable.
+    * When $value is a Readiness object, the Fiber becomes read/write I/O-bound
+    * according to Readiness::$flag.
     * When $value is null, the Fiber is tick-based: resumed every iteration.
     *
     * @param Fiber<mixed, mixed, mixed, mixed> $Fiber
@@ -373,18 +370,7 @@ class Select implements Events, Loops, Scheduler
       }
 
       // @ I/O-bound: register socket in stream_select + map to Fiber
-      if (is_resource($value)) {
-         $id = (int) $value;
-
-         if ($flag === self::SCHEDULE_WRITE) {
-            $this->awaitingWrites[$id] = $Fiber;
-            $this->writes[$id] = $value;
-         }
-         else {
-            $this->awaitingReads[$id] = $Fiber;
-            $this->reads[$id] = $value;
-         }
-
+      if ($this->queue($Fiber, $value, $flag)) {
          return true;
       }
 
@@ -393,6 +379,159 @@ class Select implements Events, Loops, Scheduler
 
       // :
       return true;
+   }
+
+   /**
+    * Queue a Fiber by explicit stream readiness.
+    *
+    * @param Fiber<mixed, mixed, mixed, mixed> $Fiber
+    * @param mixed $value
+    */
+   private function queue (Fiber $Fiber, mixed $value = null, int $flag = self::SCHEDULE_READ): bool
+   {
+      $deadline = 0.0;
+
+      if ($value instanceof Readiness) {
+         $flag = $value->flag;
+         $deadline = $value->deadline;
+         $value = $value->socket;
+      }
+
+      if (is_resource($value) === false) {
+         return false;
+      }
+
+      $id = (int) $value;
+
+      if ($flag === self::SCHEDULE_WRITE) {
+         foreach ($this->awaitingWrites[$id] ?? [] as $Queued) {
+            if ($Queued === $Fiber) {
+               return true;
+            }
+         }
+
+         $this->awaitingWrites[$id][] = $Fiber;
+         $this->track($this->awaitingWriteDeadlines, $id, $deadline);
+         $this->writes[$id] = $value;
+
+         return true;
+      }
+
+      foreach ($this->awaitingReads[$id] ?? [] as $Queued) {
+         if ($Queued === $Fiber) {
+            return true;
+         }
+      }
+
+      $this->awaitingReads[$id][] = $Fiber;
+      $this->track($this->awaitingReadDeadlines, $id, $deadline);
+      $this->reads[$id] = $value;
+
+      return true;
+   }
+
+   /**
+    * Register the nearest deadline for a socket wait list.
+    *
+    * @param array<int,float> $deadlines
+    */
+   private function track (array &$deadlines, int $id, float $deadline): void
+   {
+      if (isset($deadlines[$id]) === false) {
+         $deadlines[$id] = $deadline;
+
+         return;
+      }
+
+      if ($deadline > 0.0 && ($deadlines[$id] <= 0.0 || $deadline < $deadlines[$id])) {
+         $deadlines[$id] = $deadline;
+      }
+   }
+
+   /**
+    * Tick timed I/O Fibers and return the next deadline.
+    */
+   private function tick (): null|float
+   {
+      $now = microtime(true);
+      $deadline = null;
+
+      $this->expire($this->awaitingReads, $this->reads, $this->awaitingReadDeadlines, $now);
+      $this->expire($this->awaitingWrites, $this->writes, $this->awaitingWriteDeadlines, $now);
+      $this->limit($this->awaitingReadDeadlines, $deadline);
+      $this->limit($this->awaitingWriteDeadlines, $deadline);
+
+      return $deadline;
+   }
+
+   /**
+    * Expire timed I/O Fibers.
+    *
+   * @param array<int,array<int,Fiber<mixed,mixed,mixed,mixed>>> $Fibers
+    * @param array<int,resource> $sockets
+    * @param array<int,float> $deadlines
+    */
+   private function expire (array &$Fibers, array &$sockets, array &$deadlines, float $now): void
+   {
+      foreach ($deadlines as $id => $deadline) {
+         if ($deadline <= 0.0) {
+            continue;
+         }
+
+         if ($deadline > $now) {
+            continue;
+         }
+
+         $Queued = $Fibers[$id] ?? [];
+
+         unset($Fibers[$id]);
+         unset($sockets[$id]);
+         unset($deadlines[$id]);
+
+         foreach ($Queued as $Fiber) {
+            $this->resume($Fiber);
+         }
+      }
+   }
+
+   /**
+    * Limit stream_select by the nearest timed I/O deadline.
+    *
+    * @param array<int,float> $deadlines
+    */
+   private function limit (array $deadlines, null|float &$next): void
+   {
+      foreach ($deadlines as $deadline) {
+         if ($deadline <= 0.0) {
+            continue;
+         }
+
+         if ($next === null || $deadline < $next) {
+            $next = $deadline;
+         }
+      }
+   }
+
+   /**
+    * Resume one suspended Fiber and requeue its next wait target.
+    *
+    * @param Fiber<mixed,mixed,mixed,mixed> $Fiber
+    */
+   private function resume (Fiber $Fiber): void
+   {
+      if ($Fiber->isSuspended() === false) {
+         return;
+      }
+
+      $value = $Fiber->resume();
+
+      if ($Fiber->isTerminated()) {
+         return;
+      }
+
+      if ($this->queue($Fiber, $value) === false) {
+         $this->Fibers[] = $Fiber;
+      }
    }
 
    /**
@@ -409,6 +548,8 @@ class Select implements Events, Loops, Scheduler
       // # Async
       $this->awaitingReads = [];
       $this->awaitingWrites = [];
+      $this->awaitingReadDeadlines = [];
+      $this->awaitingWriteDeadlines = [];
       $this->Fibers = [];
 
       // # Loop

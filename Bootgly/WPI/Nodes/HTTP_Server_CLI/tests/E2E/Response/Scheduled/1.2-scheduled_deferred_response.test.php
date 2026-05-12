@@ -1,5 +1,8 @@
 <?php
 
+use function json_encode;
+use function preg_replace;
+
 use Bootgly\ABI\Debugging\Data\Vars;
 use Bootgly\ACI\Tests\Suite\Test\Specification\Separator;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router;
@@ -36,6 +39,8 @@ return new Specification(
    },
 
    test: function ($response) {
+      $normalized = preg_replace("/Date: .*\r\n/", '', $response) ?? $response;
+
       $expected = <<<HTML_RAW
       HTTP/1.1 200 OK\r
       Server: Bootgly\r
@@ -46,9 +51,9 @@ return new Specification(
       HTML_RAW;
 
       // @ Assert
-      if ($response !== $expected) {
+      if ($normalized !== $expected) {
          Vars::$labels = ['HTTP Response:', 'Expected:'];
-         dump(json_encode($response), json_encode($expected));
+         dump(json_encode($normalized), json_encode($expected));
          return 'Deferred response not matched';
       }
 

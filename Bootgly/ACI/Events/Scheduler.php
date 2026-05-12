@@ -23,8 +23,10 @@ interface Scheduler
    /**
     * Schedule a suspended Fiber for resumption in the event loop.
     *
-    * When $value is a stream resource, the Fiber becomes I/O-bound:
-    * it will only resume when stream_select() signals readiness.
+    * When $value is a stream resource, the Fiber becomes read I/O-bound:
+    * it will only resume when stream_select() signals read readiness.
+    * When $value is a Readiness object, the Fiber becomes read/write I/O-bound
+    * according to Readiness::$flag.
     * When $value is null, the Fiber is tick-based: resumed every iteration.
     *
     * @param Fiber<mixed, mixed, mixed, mixed> $Fiber

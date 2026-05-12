@@ -59,6 +59,7 @@ use Bootgly\ABI\Data\__String\Path;
 use Bootgly\ABI\Debugging\Data\Throwables;
 use Bootgly\ABI\IO\FS\File;
 use Bootgly\ABI\Templates\Template;
+use Bootgly\ACI\Events\Readiness;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages;
 use Bootgly\WPI\Modules\HTTP;
@@ -1301,9 +1302,10 @@ class Response extends Server\Response
     *
     * Yields control back to the event loop. The Fiber is resumed based on the value passed:
     * - `null` (default): tick-based — resumes on the next event loop iteration.
-    * - `resource` (stream): I/O-bound — resumes when `stream_select()` detects readiness on the stream.
+    * - `resource` (stream): read I/O-bound — resumes when `stream_select()` detects readability on the stream.
+    * - `Readiness`: explicit read/write I/O-bound — resumes when `stream_select()` detects the requested readiness.
     *
-    * @param resource|null $value A stream resource for I/O-bound scheduling, or null for tick-based.
+    * @param Readiness|resource|null $value A readiness request, stream resource, or null for tick-based.
     *
     * @return Response The Response instance, for chaining.
     */

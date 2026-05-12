@@ -280,6 +280,7 @@ return new Suite(
          '1.5-scheduled_deferred_hybrid',
          '1.6-scheduled_deferred_http_request',
          '1.7-scheduled_deferred_ordering',
+         '1.8-scheduled_deferred_readiness_write',
       ]
    ]
 );

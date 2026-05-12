@@ -8,230 +8,81 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly;
+namespace Bootgly\ADI;
 
 
-use function str_replace;
-use PDO;
-use PDOException;
-use PDOStatement;
+use Bootgly\ADI\Database\Config;
+use Bootgly\ADI\Database\Connection;
+use Bootgly\ADI\Database\Operation;
+use Bootgly\ADI\Database\Pool;
+use Bootgly\ADI\Database\Pools;
 
 
+/**
+ * Canonical ADI database entry point.
+ *
+ * This facade is intentionally transport-agnostic. Async scheduling stays in
+ * ACI/WPI through readiness tokens; ADI only creates operations and owns data
+ * protocol state.
+ */
 class Database
 {
    // * Config
-   public bool $debug;
+   public Config $Config;
 
    // * Data
-   /** @var array<string,string> */
-   protected array $configs;
+   public Connection $Connection;
+   public Pool $Pool;
+   public Pools $Pools;
 
    // * Metadata
-   // PDO
-   public null|PDO $PDO;
-   public PDOStatement|bool $Query;
-   public null|PDOException $Exception;
+   // ...
 
 
    /**
-    * Database constructor.
-    * 
-    * @param array<string,string> $configs
+    * Create a database facade from ADI-native config data.
+    *
+    * @param array<string,mixed>|Config $config
     */
-   public function __construct (array $configs)
+   public function __construct (array|Config $config = [])
    {
       // * Config
-      $this->debug = true;
+      $this->Config = $config instanceof Config
+         ? $config
+         : new Config($config);
 
       // * Data
-      $this->configs = $configs;
-
-      // * Metadata
-      // PDO
-      $this->PDO = null;
-      $this->Query = false;
-      $this->Exception = null;
+      $this->Connection = new Connection($this->Config);
+      $this->Pools = new Pools($this->Config, $this->Connection);
+      $this->Pool = $this->Pools->fetch($this->Config->driver);
    }
 
-   public function __get (string $index): mixed
+   /**
+    * Create an async database operation.
+    *
+    * The returned Operation is advanced by protocol-specific code and awaited
+    * by platform code through ACI readiness tokens.
+    *
+    * @param array<int|string,mixed> $parameters
+    */
+   public function query (string $sql, array $parameters = []): Operation
    {
-      switch ($index) {
-         case 'connected':
-            if ($this->PDO instanceof PDO) {
-               return true;
-            }
-
-            return false;
-
-         case 'id':
-            if ($this->PDO instanceof PDO) {
-               return $this->PDO->lastInsertId();
-            }
-
-            return null;
-
-         case 'PDOException':
-            return $this->Exception;
-
-         default:
-            return null;
-      }
+      return $this->Pool->query($sql, $parameters);
    }
 
-   // ! Database
-   public function connect (): bool
+   /**
+    * Advance an async database operation through the selected protocol.
+    */
+   public function advance (Operation $Operation): Operation
    {
-      try {
-         if ($this->PDO === null) {
-            $configs = $this->configs;
-            // ---
-            $driver = $configs['driver'];
-
-            $host = $configs['host'];
-            $db = $configs['db'];
-            $user = $configs['user'];
-            $password = $configs['password'];
-            // ---
-            $this->PDO = new PDO("$driver:host=$host;dbname=$db;", $user, $password);
-
-            $this->PDO->setAttribute(PDO::ATTR_EMULATE_PREPARES, false);
-            $this->PDO->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-            $this->PDO->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
-
-            // $this->PDO->setAttribute(PDO::MYSQL_ATTR_USE_BUFFERED_QUERY, true);
-         }
-
-         return true;
-      }
-      catch (PDOException $PDOException) {
-         $this->Exception = $PDOException;
-      }
-
-      return false;
+      return $this->Pool->advance($Operation);
    }
-   public function disconnect (): bool
+
+   /**
+    * Cancel one running database operation when supported by the protocol.
+    */
+   public function cancel (Operation $Operation): Operation
    {
-      $this->PDO = null;
-
-      return true;
+      return $this->Pool->cancel($Operation);
    }
-   public function use (string $database = ''): bool
-   {
-      try {
-         if ($database === '') {
-            $database = $this->configs['db'];
-         }
-
-         if ($this->PDO instanceof PDO) {
-            $Statement = $this->PDO->prepare('USE :database');
-            $Statement->bindParam(':database', $database);
-            $Statement->execute();
-
-            return true;
-         }
-      }
-      catch (PDOException $PDOException) {
-         $this->Exception = $PDOException;
-      }
-
-      return false;
-   }
-
-   // ! Query
-   public function prepare (string $query): PDOStatement|bool
-   {
-      try {
-         if ($this->configs['driver'] === 'pgsql') {
-            $query = str_replace('`', '"', $query);
-         }
-
-         // ! PDO
-         $PDO = $this->PDO;
-         // ?
-         if ($PDO === null) {
-            return false;
-         }
-
-         // @
-         $this->Query = $PDO->prepare($query);
-
-         return $this->Query;
-      }
-      catch (PDOException $PDOException) {
-         $this->Exception = $PDOException;
-      }
-
-      return false;
-   }
-
-   // ! Transaction
-   public function transact (): bool|null
-   {
-      try {
-         // ! PDO
-         $PDO = $this->PDO;
-         // ?
-         if ($PDO === null) {
-            return null;
-         }
-
-         return $PDO->beginTransaction();
-      }
-      catch (PDOException $PDOException) {
-         $this->Exception = $PDOException;
-      }
-
-      return null;
-   }
-   public function commit (): bool|null
-   {
-      try {
-         // ! PDO
-         $PDO = $this->PDO;
-         // ?
-         if ($PDO === null) {
-            return null;
-         }
-
-         return $PDO->commit();
-      }
-      catch (PDOException $PDOException) {
-         $this->Exception = $PDOException;
-      }
-
-      return null;
-   }
-   public function rollback (): bool|null
-   {
-      try {
-         // ! PDO
-         $PDO = $this->PDO;
-         // ?
-         if ($PDO === null) {
-            return null;
-         }
-
-         return $PDO->rollBack();
-      }
-      catch (PDOException $PDOException) {
-         $this->Exception = $PDOException;
-      }
-
-      return null;
-   }
-
-   // ! Database
-   // ? User
-
-   // ? Connection
-
-   // ? Query
-   // ? Result
-
-   // ? Transaction
-
-   // ! Table
-   // ? Column
-   // ? Row
-   // ? Cell
 }

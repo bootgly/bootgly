@@ -1,5 +1,8 @@
 <?php
 
+use const STREAM_IPPROTO_IP;
+use const STREAM_PF_UNIX;
+use const STREAM_SOCK_STREAM;
 use function fclose;
 use function fread;
 use function fwrite;
@@ -9,6 +12,7 @@ use function stream_set_blocking;
 use function stream_socket_pair;
 
 use Bootgly\ABI\Debugging\Data\Vars;
+use Bootgly\ACI\Events\Readiness;
 use Bootgly\ACI\Tests\Suite\Test\Specification\Separator;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
@@ -20,27 +24,27 @@ return new Specification(
    Separator: new Separator(line: ''),
 
    request: function () {
-      return "GET /deferred/io HTTP/1.1\r\nHost: localhost\r\n\r\n";
+      return "GET /deferred/readiness-write HTTP/1.1\r\nHost: localhost\r\n\r\n";
    },
    response: function (Request $Request, Response $Response, Router $Router)
    {
-      yield $Router->route('/', function (Request $Request, Response $Response) {
-         return $Response(body: 'Hello World!');
-      }, GET);
-
-      yield $Router->route('/deferred/io', function (Request $Request, Response $Response) {
+      yield $Router->route('/deferred/readiness-write', function (Request $Request, Response $Response) {
          return $Response->defer(function ()
          use ($Response) {
-            // @ Create a local socket pair to simulate async I/O
+            // @ Create a local socket pair to simulate async write/read I/O
             [$reader, $writer] = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
             stream_set_blocking($reader, false);
+            stream_set_blocking($writer, false);
 
-            // @ Write data and close writer (simulates external service response)
-            fwrite($writer, 'I/O Ready!');
+            // @ Suspend with explicit write readiness
+            $Response->wait(Readiness::write($writer));
+
+            // @ Socket is writable — produce data
+            fwrite($writer, 'Writable OK!');
             fclose($writer);
 
-            // @ Suspend with socket: event loop registers in stream_select()
-            $Response->wait($reader);
+            // @ Suspend with explicit read readiness
+            $Response->wait(Readiness::read($reader));
 
             // @ Socket is readable — consume data
             $data = fread($reader, 8192);
@@ -62,16 +66,16 @@ return new Specification(
       HTTP/1.1 200 OK\r
       Server: Bootgly\r
       Content-Type: text/html; charset=UTF-8\r
-      Content-Length: 10\r
+      Content-Length: 12\r
       \r
-      I/O Ready!
+      Writable OK!
       HTML_RAW;
 
       // @ Assert
       if ($normalized !== $expected) {
          Vars::$labels = ['HTTP Response:', 'Expected:'];
          dump(json_encode($normalized), json_encode($expected));
-         return 'I/O-aware deferred response not matched';
+         return 'Write-readiness deferred response not matched';
       }
 
       return true;
