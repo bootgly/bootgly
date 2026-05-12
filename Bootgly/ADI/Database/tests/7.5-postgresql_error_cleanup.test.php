@@ -1,9 +1,10 @@
 <?php
 
 use Bootgly\ACI\Tests\Suite\Test\Specification;
-use Bootgly\ADI\Database;
+use Bootgly\ADI\Databases\SQL;
 use Bootgly\ADI\Database\ConnectionStates;
 use Bootgly\ADI\Database\OperationStates;
+use Bootgly\ADI\Databases\SQL\Drivers\PostgreSQL;
 
 
 return new Specification(
@@ -13,10 +14,15 @@ return new Specification(
       stream_set_blocking($client, false);
       stream_set_blocking($server, false);
 
-      $Database = new Database;
+      $Database = new SQL;
       $Database->Connection->attach($client);
       $Operation = $Database->query('SELECT $1::int AS value', [1]);
-      $Database->Connection->cache($Operation->statement);
+      $Driver = $Operation->Protocol;
+
+      if ($Driver instanceof PostgreSQL) {
+         $Driver->cache($Operation->statement);
+      }
+
       $Database->advance($Operation);
       fread($server, 8192);
 
@@ -32,7 +38,7 @@ return new Specification(
       );
 
       yield assert(
-         assertion: isset($Database->Connection->statements[$Operation->statement]) === false,
+         assertion: $Driver instanceof PostgreSQL && isset($Driver->statements[$Operation->statement]) === false,
          description: 'Failed statement is removed from the prepared cache'
       );
 

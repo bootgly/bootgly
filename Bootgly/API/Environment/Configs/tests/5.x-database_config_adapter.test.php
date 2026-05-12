@@ -1,7 +1,7 @@
 <?php
 
 use Bootgly\ACI\Tests\Suite\Test\Specification;
-use Bootgly\ADI\Database\Config as ADIConfig;
+use Bootgly\ADI\Databases\SQL\Config as ADIConfig;
 use Bootgly\API\Environment\Configs\Config;
 use Bootgly\API\Environment\Configs\DatabaseConfig;
 

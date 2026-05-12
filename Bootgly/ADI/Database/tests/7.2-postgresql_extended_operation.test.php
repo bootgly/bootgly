@@ -12,7 +12,8 @@ use function stream_set_blocking;
 use function stream_socket_pair;
 
 use Bootgly\ACI\Tests\Suite\Test\Specification;
-use Bootgly\ADI\Database;
+use Bootgly\ADI\Databases\SQL;
+use Bootgly\ADI\Databases\SQL\Drivers\PostgreSQL;
 
 
 return new Specification(
@@ -22,7 +23,7 @@ return new Specification(
       stream_set_blocking($client, false);
       stream_set_blocking($server, false);
 
-      $Database = new Database;
+      $Database = new SQL;
       $Database->Pool->attach($Database->Connection->attach($client));
       $sql = 'SELECT $1::int AS value';
       $Operation = $Database->query($sql, [42]);
@@ -65,6 +66,7 @@ return new Specification(
       fwrite($server, $backend);
       $Database->advance($Operation);
       $Result = $Operation->Result;
+      $Driver = $Operation->Protocol;
 
       yield assert(
          assertion: $Result !== null && $Result->rows === [['value' => 42]],
@@ -72,8 +74,10 @@ return new Specification(
       );
 
       yield assert(
-         assertion: $Operation->prepared && ($Database->Connection->statements[$Operation->statement] ?? false),
-         description: 'ParseComplete stores prepared statement in connection cache'
+         assertion: $Driver instanceof PostgreSQL
+            && $Operation->prepared
+            && ($Driver->statements[$Operation->statement] ?? false),
+         description: 'ParseComplete stores prepared statement in driver cache'
       );
 
       fclose($server);

@@ -11,20 +11,45 @@
 namespace Bootgly\ADI\Database\Operation;
 
 
+use function count;
+
+
 /**
  * Database operation result.
  */
 class Result
 {
-   // * Config
-   public string $status;
-
    // * Data
+   public string $status;
    /** @var array<int,array<string,mixed>> */
    public array $rows;
    /** @var array<int,string> */
    public array $columns;
    public int $affected;
+
+   // # Views
+   /** @var array<string,mixed> */
+   public array $row {
+      get => $this->rows[0] ?? [];
+   }
+
+   public mixed $cell {
+      get {
+         foreach ($this->row as $value) {
+            return $value;
+         }
+
+         return null;
+      }
+   }
+
+   public int $count {
+      get => count($this->rows);
+   }
+
+   public bool $empty {
+      get => $this->rows === [];
+   }
 
    // * Metadata
    // ...
@@ -38,10 +63,8 @@ class Result
     */
    public function __construct (string $status = '', array $rows = [], array $columns = [], int $affected = 0)
    {
-      // * Config
-      $this->status = $status;
-
       // * Data
+      $this->status = $status;
       $this->rows = $rows;
       $this->columns = $columns;
       $this->affected = $affected;

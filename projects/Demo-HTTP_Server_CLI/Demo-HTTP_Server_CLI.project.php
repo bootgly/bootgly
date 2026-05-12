@@ -12,7 +12,6 @@ namespace projects\Demo_HTTP_Server_CLI;
 
 
 use function getenv;
-use function shell_exec;
 
 use Bootgly\API\Projects\Project;
 use Bootgly\API\Endpoints\Server\Modes;
@@ -48,7 +47,7 @@ return new Project(
       );
       $HTTP_Server_CLI->on(
          // # Test (Benchmarking)
-         #requestReceived: require __DIR__ . '/router/HTTP_Server_CLI-benchmark-bootgly_router.SAPI.php',
+         requestReceived: require __DIR__ . '/router/HTTP_Server_CLI-benchmark-bootgly_router.SAPI.php',
          #requestReceived: require __DIR__ . '/router/HTTP_Server_CLI-benchmark-static_router.SAPI.php',
 
          // # Test Request - Download (streaming decoder writes directly to disk)
@@ -65,7 +64,9 @@ return new Project(
          // # Test Response - Scheduled (delayed/async) responses
          #requestReceived: require __DIR__ . '/router/HTTP_Server_CLI-response-scheduled.SAPI.php',
          // # Test Response - Database (native async PostgreSQL examples)
-         requestReceived: require __DIR__ . '/router/HTTP_Server_CLI-response-database.SAPI.php',
+         #requestReceived: require __DIR__ . '/router/HTTP_Server_CLI-response-database.SAPI.php',
+         // # Test Response - Database Runner (helper-based async PostgreSQL examples)
+         #requestReceived: require __DIR__ . '/router/HTTP_Server_CLI-response-database-runner.SAPI.php',
 
          // # Test Router - all route cases from Testing.routes.php adapted to Generator pattern
          #requestReceived: require __DIR__ . '/router/HTTP_Server_CLI-router.SAPI.php',

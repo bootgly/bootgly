@@ -13,8 +13,9 @@ use function stream_socket_pair;
 
 use Bootgly\ACI\Events\Readiness;
 use Bootgly\ACI\Tests\Suite\Test\Specification;
-use Bootgly\ADI\Database;
+use Bootgly\ADI\Databases\SQL;
 use Bootgly\ADI\Database\OperationStates;
+use Bootgly\ADI\Databases\SQL\Drivers\PostgreSQL;
 
 
 return new Specification(
@@ -24,7 +25,7 @@ return new Specification(
       stream_set_blocking($client, false);
       stream_set_blocking($server, false);
 
-      $Database = new Database;
+      $Database = new SQL;
       $Database->Connection->attach($client);
 
       $Operation = $Database->query('SELECT 1 AS value');
@@ -78,6 +79,7 @@ return new Specification(
 
       $Operation = $Database->advance($Operation);
       $Result = $Operation->Result;
+      $Driver = $Operation->Protocol;
 
       yield assert(
          assertion: $Operation->finished && $Result !== null,
@@ -95,17 +97,19 @@ return new Specification(
       );
 
       yield assert(
-         assertion: $Database->Connection->backendProcess === 123
-            && $Database->Connection->backendSecret === 456
-            && ($Database->Connection->parameters['server_version'] ?? null) === '16.4',
-         description: 'Connection stores backend key and parameter status metadata'
+         assertion: $Driver instanceof PostgreSQL
+            && $Driver->backendProcess === 123
+            && $Driver->backendSecret === 456
+            && ($Driver->parameters['server_version'] ?? null) === '16.4',
+         description: 'Driver stores backend key and parameter status metadata'
       );
 
       yield assert(
-         assertion: ($Database->Connection->notices[0]['message'] ?? null) === 'hello'
-            && ($Database->Connection->notifications[0]['channel'] ?? null) === 'events'
-            && ($Database->Connection->notifications[0]['payload'] ?? null) === 'payload',
-         description: 'Connection stores notice and notification metadata'
+         assertion: $Driver instanceof PostgreSQL
+            && ($Driver->notices[0]['message'] ?? null) === 'hello'
+            && ($Driver->notifications[0]['channel'] ?? null) === 'events'
+            && ($Driver->notifications[0]['payload'] ?? null) === 'payload',
+         description: 'Driver stores notice and notification metadata'
       );
 
       fclose($server);

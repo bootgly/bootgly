@@ -10,7 +10,7 @@ use function substr;
 use Bootgly\ACI\Events\Readiness;
 use Bootgly\ACI\Events\Scheduler;
 use Bootgly\ACI\Tests\Suite\Test\Specification;
-use Bootgly\ADI\Database\Config;
+use Bootgly\ADI\Databases\SQL\Config;
 use Bootgly\ADI\Database\Connection;
 use Bootgly\ADI\Database\ConnectionStates;
 

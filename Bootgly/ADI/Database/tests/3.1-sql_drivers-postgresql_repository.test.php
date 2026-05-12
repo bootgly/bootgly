@@ -1,15 +1,15 @@
 <?php
 
 use Bootgly\ACI\Tests\Suite\Test\Specification;
-use Bootgly\ADI\Database;
-use Bootgly\ADI\Database\Connection\Protocols\Driver;
-use Bootgly\ADI\Database\Connection\Protocols\PostgreSQL;
+use Bootgly\ADI\Databases\SQL;
+use Bootgly\ADI\Database\Driver;
+use Bootgly\ADI\Databases\SQL\Drivers\PostgreSQL;
 
 
 return new Specification(
    description: 'Database: resolve PostgreSQL protocol through Pool connection cache',
    test: function () {
-      $Database = new Database;
+      $Database = new SQL;
       $Operation = $Database->query('SELECT 1');
 
       yield assert(

@@ -1,7 +1,7 @@
 <?php
 
 use Bootgly\ACI\Tests\Suite\Test\Specification;
-use Bootgly\ADI\Database;
+use Bootgly\ADI\Databases\SQL;
 
 
 return new Specification(
@@ -11,7 +11,7 @@ return new Specification(
       stream_set_blocking($client, false);
       stream_set_blocking($server, false);
 
-      $Database = new Database;
+      $Database = new SQL;
       $Database->Connection->attach($client);
       $Operation = $Database->query('SELECT 123.45::numeric AS amount, current_date AS day, now() AS moment, decode(\'48656c6c6f\', \'hex\') AS payload');
       $Database->advance($Operation);
@@ -44,7 +44,7 @@ return new Specification(
       fwrite($server, "T{$columnLength}{$columnPayload}D{$rowLength}{$rowPayload}C{$commandLength}{$commandPayload}Z{$readyLength}I");
       $Database->advance($Operation);
       $Result = $Operation->Result;
-      $Row = $Result === null ? [] : ($Result->rows[0] ?? []);
+      $Row = $Result === null ? [] : $Result->row;
 
       yield assert(
          assertion: ($Row['amount'] ?? null) === '123.45',
@@ -66,5 +66,6 @@ return new Specification(
 
       fclose($server);
       $Database->Connection->disconnect();
+      $Row = $Result === null ? [] : $Result->row;
    }
 );

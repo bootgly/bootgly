@@ -1,6 +1,6 @@
 <?php
 
-use Bootgly\ADI\Database\Config as ADIConfig;
+use Bootgly\ADI\Databases\SQL\Config as ADIConfig;
 use Bootgly\API\Environment\Configs\Config;
 use Bootgly\API\Environment\Configs\Config\Types;
 

@@ -1,9 +1,10 @@
 <?php
 
 use Bootgly\ACI\Tests\Suite\Test\Specification;
-use Bootgly\ADI\Database;
+use Bootgly\ADI\Databases\SQL;
 use Bootgly\ADI\Database\OperationStates;
-use Bootgly\ADI\Database\Connection\Protocols\PostgreSQL\Encoder;
+use Bootgly\ADI\Databases\SQL\Drivers\PostgreSQL;
+use Bootgly\ADI\Databases\SQL\Drivers\PostgreSQL\Encoder;
 
 
 return new Specification(
@@ -32,13 +33,18 @@ return new Specification(
 
       $separator = strrpos($name, ':');
       $port = $separator === false ? 0 : (int) substr($name, $separator + 1);
-      $Database = new Database([
+      $Database = new SQL([
          'host' => '127.0.0.1',
          'port' => $port,
          'timeout' => 1,
       ]);
       $Operation = $Database->query('SELECT pg_sleep(10)');
-      $Database->Connection->identify(123, 456);
+      $Driver = $Operation->Protocol;
+
+      if ($Driver instanceof PostgreSQL) {
+         $Driver->identify(123, 456);
+      }
+
       $Database->cancel($Operation);
       $cancel = stream_socket_accept($server, 1);
 
@@ -66,7 +72,7 @@ return new Specification(
 
       fclose($cancel);
 
-      $Missing = new Database([
+      $Missing = new SQL([
          'host' => '127.0.0.1',
          'port' => $port,
       ]);

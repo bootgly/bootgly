@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\ADI\Database\Connection\Protocols;
+namespace Bootgly\ADI\Databases\SQL\Drivers;
 
 
 use function array_key_first;
@@ -40,17 +40,18 @@ use Throwable;
 
 use Bootgly\ACI\Events\Readiness;
 use Bootgly\ACI\Events\Scheduler;
-use Bootgly\ADI\Database\Config;
+use Bootgly\ADI\Databases\SQL\Config;
 use Bootgly\ADI\Database\Connection;
-use Bootgly\ADI\Database\Connection\Protocols\Driver;
-use Bootgly\ADI\Database\Connection\Protocols\PostgreSQL\Authentication;
-use Bootgly\ADI\Database\Connection\Protocols\PostgreSQL\Decoder;
-use Bootgly\ADI\Database\Connection\Protocols\PostgreSQL\Encoder;
-use Bootgly\ADI\Database\Connection\Protocols\PostgreSQL\Message;
+use Bootgly\ADI\Databases\SQL\Driver;
+use Bootgly\ADI\Databases\SQL\Drivers\PostgreSQL\Authentication;
+use Bootgly\ADI\Databases\SQL\Drivers\PostgreSQL\Decoder;
+use Bootgly\ADI\Databases\SQL\Drivers\PostgreSQL\Encoder;
+use Bootgly\ADI\Databases\SQL\Drivers\PostgreSQL\Message;
 use Bootgly\ADI\Database\ConnectionStates;
-use Bootgly\ADI\Database\Operation;
+use Bootgly\ADI\Database\Operation as DatabaseOperation;
 use Bootgly\ADI\Database\Operation\Result;
 use Bootgly\ADI\Database\OperationStates;
+use Bootgly\ADI\Databases\SQL\Operation;
 
 
 /**
@@ -64,7 +65,16 @@ class PostgreSQL extends Driver
    public Decoder $Decoder;
 
    // * Data
-   // ...
+   /** @var array<string,bool|array<int,int>> */
+   public private(set) array $statements = [];
+   public private(set) int $backendProcess = 0;
+   public private(set) int $backendSecret = 0;
+   /** @var array<string,string> */
+   public private(set) array $parameters = [];
+   /** @var array<int,array<string,mixed>> */
+   public private(set) array $notices = [];
+   /** @var array<int,array<string,mixed>> */
+   public private(set) array $notifications = [];
 
    // * Metadata
    /** @var array<int,Operation> */
@@ -91,15 +101,22 @@ class PostgreSQL extends Driver
    public function query (string $sql, array $parameters = []): Operation
    {
       $Operation = new Operation($this->Connection, $sql, $parameters, $this->Config->timeout);
+      $this->prepare($Operation);
 
-      return $this->prepare($Operation);
+      return $Operation;
    }
 
    /**
     * Prepare an operation for PostgreSQL execution.
     */
-   public function prepare (Operation $Operation): Operation
+   public function prepare (DatabaseOperation $Operation): DatabaseOperation
    {
+      if ($Operation instanceof Operation === false) {
+         return $Operation->fail('PostgreSQL requires an SQL operation.');
+      }
+
+      /** @var Operation $Operation */
+
       $Operation->Connection = $this->Connection;
       $Operation->Protocol = $this;
       $Operation->state = OperationStates::Queued;
@@ -114,7 +131,7 @@ class PostgreSQL extends Driver
          $hash = sha1($Operation->sql);
          $Operation->statement = "bootgly_{$hash}";
          $Operation->portal = '';
-         $cached = $this->Connection->statements[$Operation->statement] ?? false;
+         $cached = $this->statements[$Operation->statement] ?? false;
          $Operation->prepared = $cached !== false;
          $types = [];
          $index = 0;
@@ -135,8 +152,8 @@ class PostgreSQL extends Driver
          $sync = $this->Encoder->encode(Encoder::SYNC);
 
          if ($Operation->prepared) {
-            $this->Connection->evict($Operation->statement);
-            $this->Connection->cache($Operation->statement, $cached);
+            $this->evict($Operation->statement);
+            $this->cache($Operation->statement, $cached);
             $Operation->write = "{$bind}{$describe}{$execute}{$sync}";
 
             return $Operation;
@@ -144,9 +161,9 @@ class PostgreSQL extends Driver
 
          $close = '';
 
-         if ($this->Config->statements > 0 && count($this->Connection->statements) >= $this->Config->statements) {
-            $evicted = array_key_first($this->Connection->statements);
-            $this->Connection->evict($evicted);
+         if ($this->SQLConfig->statements > 0 && count($this->statements) >= $this->SQLConfig->statements) {
+            $evicted = array_key_first($this->statements);
+            $this->evict($evicted);
             $close = $this->Encoder->encode(Encoder::CLOSE, [
                'type' => 'S',
                'name' => $evicted,
@@ -174,8 +191,14 @@ class PostgreSQL extends Driver
    /**
     * Advance a PostgreSQL operation.
     */
-   public function advance (Operation $Operation): Operation
+   public function advance (DatabaseOperation $Operation): DatabaseOperation
    {
+      if ($Operation instanceof Operation === false) {
+         return $Operation->fail('PostgreSQL requires an SQL operation.');
+      }
+
+      /** @var Operation $Operation */
+
       // ?
       if ($Operation->finished) {
          return $Operation;
@@ -312,9 +335,15 @@ class PostgreSQL extends Driver
     * backend reports ErrorResponse/ReadyForQuery on the main socket, or until
     * the operation deadline expires.
     */
-   public function cancel (Operation $Operation): Operation
+   public function cancel (DatabaseOperation $Operation): DatabaseOperation
    {
-      if ($this->Connection->backendProcess <= 0 || $this->Connection->backendSecret <= 0) {
+      if ($Operation instanceof Operation === false) {
+         return $Operation->fail('PostgreSQL requires an SQL operation.');
+      }
+
+      /** @var Operation $Operation */
+
+      if ($this->backendProcess <= 0 || $this->backendSecret <= 0) {
          return $Operation->fail('PostgreSQL cancellation requires BackendKeyData.');
       }
 
@@ -330,8 +359,8 @@ class PostgreSQL extends Driver
       }
 
       $packet = $this->Encoder->encode(Encoder::CANCEL, [
-         'process' => $this->Connection->backendProcess,
-         'secret' => $this->Connection->backendSecret,
+         'process' => $this->backendProcess,
+         'secret' => $this->backendSecret,
       ]);
       $written = @fwrite($socket, $packet);
       fclose($socket);
@@ -366,6 +395,84 @@ class PostgreSQL extends Driver
       return $Completed;
    }
 
+
+   /**
+    * Cache prepared statement metadata.
+    *
+    * @param bool|array<int,int> $metadata
+    */
+   public function cache (string $statement, bool|array $metadata = true): self
+   {
+      if ($statement === '') {
+         return $this;
+      }
+
+      $this->statements[$statement] = $metadata;
+
+      return $this;
+   }
+
+   /**
+    * Evict prepared statement metadata.
+    */
+   public function evict (string $statement): self
+   {
+      unset($this->statements[$statement]);
+
+      return $this;
+   }
+
+   /**
+    * Identify this connection with backend cancellation keys.
+    */
+   public function identify (int $process, int $secret): self
+   {
+      $this->backendProcess = $process;
+      $this->backendSecret = $secret;
+
+      return $this;
+   }
+
+   /**
+    * Record one backend parameter status.
+    */
+   public function record (string $name, string $value): self
+   {
+      if ($name === '') {
+         return $this;
+      }
+
+      $this->parameters[$name] = $value;
+
+      return $this;
+   }
+
+   /**
+    * Notice one backend message.
+    *
+    * @param array<string,mixed> $notice
+    */
+   public function notice (array $notice): self
+   {
+      $this->notices[] = $notice;
+
+      return $this;
+   }
+
+   /**
+    * Notify one backend asynchronous message.
+    */
+   public function notify (int $process, string $channel, string $payload): self
+   {
+      $this->notifications[] = [
+         'process' => $process,
+         'channel' => $channel,
+         'payload' => $payload,
+      ];
+
+      return $this;
+   }
+
    /**
     * Wait for socket readiness.
     */
@@ -374,14 +481,18 @@ class PostgreSQL extends Driver
       $socket = $this->Connection->socket;
 
       if (is_resource($socket) === false) {
-         return $Operation->fail('PostgreSQL socket is not available.');
+         $Operation->fail('PostgreSQL socket is not available.');
+
+         return $Operation;
       }
 
       $Readiness = $flag === Scheduler::SCHEDULE_WRITE
          ? Readiness::write($socket, $Operation->deadline)
          : Readiness::read($socket, $Operation->deadline);
 
-      return $Operation->await($Readiness);
+      $Operation->await($Readiness);
+
+      return $Operation;
    }
 
    /**
@@ -440,18 +551,24 @@ class PostgreSQL extends Driver
       $socket = $this->Connection->socket;
 
       if (is_resource($socket) === false) {
-         return $Operation->fail('PostgreSQL socket is not available.');
+         $Operation->fail('PostgreSQL socket is not available.');
+
+         return $Operation;
       }
 
       $response = @fread($socket, 1);
 
       if ($response === false) {
-         return $Operation->fail('PostgreSQL SSL response read failed.');
+         $Operation->fail('PostgreSQL SSL response read failed.');
+
+         return $Operation;
       }
 
       if ($response === '') {
          if (feof($socket)) {
-            return $Operation->fail('PostgreSQL socket closed during SSL negotiation.');
+            $Operation->fail('PostgreSQL socket closed during SSL negotiation.');
+
+            return $Operation;
          }
 
          return $this->await($Operation, Scheduler::SCHEDULE_READ);
@@ -467,7 +584,9 @@ class PostgreSQL extends Driver
          $mode = $this->Config->secure['mode'];
 
          if ($mode !== Config::SECURE_PREFER) {
-            return $Operation->fail('PostgreSQL server refused required TLS.');
+            $Operation->fail('PostgreSQL server refused required TLS.');
+
+            return $Operation;
          }
 
          $this->Connection->transition(ConnectionStates::Startup);
@@ -475,10 +594,14 @@ class PostgreSQL extends Driver
          $Operation->write = $this->Encoder->encode(Encoder::STARTUP, $this->Config);
          $Operation->state = OperationStates::Startup;
 
-         return $this->advance($Operation);
+         $this->advance($Operation);
+
+         return $Operation;
       }
 
-      return $Operation->fail('PostgreSQL SSL response is invalid.');
+      $Operation->fail('PostgreSQL SSL response is invalid.');
+
+      return $Operation;
    }
 
    /**
@@ -565,7 +688,7 @@ class PostgreSQL extends Driver
       if ($Message->type === 'K') {
          $process = $Message->fields['process'] ?? 0;
          $secret = $Message->fields['secret'] ?? 0;
-         $this->Connection->identify(
+         $this->identify(
             is_int($process) ? $process : 0,
             is_int($secret) ? $secret : 0
          );
@@ -578,7 +701,7 @@ class PostgreSQL extends Driver
          $value = $Message->fields['value'] ?? '';
 
          if (is_string($name) && $name !== '' && is_string($value)) {
-            $this->Connection->record($name, $value);
+            $this->record($name, $value);
          }
 
          return $Operation;
@@ -586,7 +709,7 @@ class PostgreSQL extends Driver
 
       if ($Message->type === 'N') {
          $notice = $Message->fields['notice'] ?? [];
-         $this->Connection->notice(is_array($notice) ? $notice : []);
+         $this->notice(is_array($notice) ? $notice : []);
 
          return $Operation;
       }
@@ -595,7 +718,7 @@ class PostgreSQL extends Driver
          $process = $Message->fields['process'] ?? 0;
          $channel = $Message->fields['channel'] ?? '';
          $payload = $Message->fields['payload'] ?? '';
-         $this->Connection->notify(
+         $this->notify(
             is_int($process) ? $process : 0,
             is_string($channel) ? $channel : '',
             is_string($payload) ? $payload : ''
@@ -605,8 +728,8 @@ class PostgreSQL extends Driver
       }
 
       if ($Message->type === '1') {
-         if ($Operation->statement !== '' && $this->Config->statements > 0) {
-            $this->Connection->cache($Operation->statement);
+         if ($Operation->statement !== '' && $this->SQLConfig->statements > 0) {
+            $this->cache($Operation->statement);
             $Operation->prepared = true;
          }
 
@@ -623,8 +746,8 @@ class PostgreSQL extends Driver
             }
          }
 
-         if ($Operation->statement !== '' && $this->Config->statements > 0) {
-            $this->Connection->cache($Operation->statement, $Operation->parameterTypes);
+         if ($Operation->statement !== '' && $this->SQLConfig->statements > 0) {
+            $this->cache($Operation->statement, $Operation->parameterTypes);
          }
 
          return $Operation;
@@ -718,7 +841,7 @@ class PostgreSQL extends Driver
          $message = $Message->fields['message'] ?? 'PostgreSQL error.';
 
          if ($Operation->statement !== '') {
-            $this->Connection->evict($Operation->statement);
+            $this->evict($Operation->statement);
             $Operation->prepared = false;
          }
 

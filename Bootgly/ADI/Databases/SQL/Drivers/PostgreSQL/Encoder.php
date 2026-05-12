@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\ADI\Database\Connection\Protocols\PostgreSQL;
+namespace Bootgly\ADI\Databases\SQL\Drivers\PostgreSQL;
 
 
 use function count;

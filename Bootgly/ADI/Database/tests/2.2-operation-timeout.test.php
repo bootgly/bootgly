@@ -1,14 +1,14 @@
 <?php
 
 use Bootgly\ACI\Tests\Suite\Test\Specification;
-use Bootgly\ADI\Database;
+use Bootgly\ADI\Databases\SQL;
 use Bootgly\ADI\Database\OperationStates;
 
 
 return new Specification(
    description: 'Database: operation timeout fails active and pending operations',
    test: function () {
-      $Database = new Database([
+      $Database = new SQL([
          'timeout' => 0.001,
       ]);
       $Operation = $Database->query('SELECT 1 AS value');
@@ -25,7 +25,7 @@ return new Specification(
       stream_set_blocking($client, false);
       stream_set_blocking($server, false);
 
-      $Pool = new Database([
+      $Pool = new SQL([
          'timeout' => 0.001,
          'pool' => [
             'min' => 0,

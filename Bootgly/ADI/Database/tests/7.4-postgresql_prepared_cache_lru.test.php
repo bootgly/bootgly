@@ -1,7 +1,8 @@
 <?php
 
 use Bootgly\ACI\Tests\Suite\Test\Specification;
-use Bootgly\ADI\Database;
+use Bootgly\ADI\Databases\SQL;
+use Bootgly\ADI\Databases\SQL\Drivers\PostgreSQL;
 
 
 return new Specification(
@@ -11,7 +12,7 @@ return new Specification(
       stream_set_blocking($client, false);
       stream_set_blocking($server, false);
 
-      $Database = new Database([
+      $Database = new SQL([
          'statements' => 1,
       ]);
       $Database->Connection->attach($client);
@@ -29,6 +30,7 @@ return new Specification(
       $backend = "{$parseComplete}{$bindComplete}C{$commandLength}{$commandPayload}Z{$readyLength}I";
       fwrite($server, $backend);
       $Database->advance($First);
+      $Driver = $First->Protocol;
 
       $Second = $Database->query('SELECT $1::int AS second', [2]);
 
@@ -38,7 +40,7 @@ return new Specification(
       );
 
       yield assert(
-         assertion: isset($Database->Connection->statements[$First->statement]) === false,
+         assertion: $Driver instanceof PostgreSQL && isset($Driver->statements[$First->statement]) === false,
          description: 'Evicted statement is removed from the local prepared cache'
       );
 

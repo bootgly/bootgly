@@ -1,8 +1,9 @@
 <?php
 
 use Bootgly\ACI\Tests\Suite\Test\Specification;
-use Bootgly\ADI\Database;
-use Bootgly\ADI\Database\Connection\Protocols\PostgreSQL\Encoder;
+use Bootgly\ADI\Databases\SQL;
+use Bootgly\ADI\Databases\SQL\Drivers\PostgreSQL;
+use Bootgly\ADI\Databases\SQL\Drivers\PostgreSQL\Encoder;
 
 
 return new Specification(
@@ -12,7 +13,7 @@ return new Specification(
       stream_set_blocking($client, false);
       stream_set_blocking($server, false);
 
-      $Database = new Database;
+      $Database = new SQL;
       $Database->Connection->attach($client);
       $sql = 'SELECT $1::int AS value';
       $Operation = $Database->query($sql, [42]);
@@ -58,10 +59,12 @@ return new Specification(
       fwrite($server, "{$parseComplete}t{$parameterLength}{$parameterPayload}T{$columnLength}{$columnPayload}{$bindComplete}D{$rowLength}{$rowPayload}C{$commandLength}{$commandPayload}Z{$readyLength}I");
       $Database->advance($Operation);
       $Result = $Operation->Result;
+      $Driver = $Operation->Protocol;
 
       yield assert(
          assertion: $Operation->parameterTypes === [23]
-            && ($Database->Connection->statements[$Operation->statement] ?? null) === [23]
+         && $Driver instanceof PostgreSQL
+         && ($Driver->statements[$Operation->statement] ?? null) === [23]
             && $Result !== null
             && $Result->rows === [['value' => 42]],
          description: 'ParameterDescription and statement RowDescription are applied before BindComplete'

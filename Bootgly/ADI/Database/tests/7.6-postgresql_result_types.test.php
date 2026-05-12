@@ -1,7 +1,7 @@
 <?php
 
 use Bootgly\ACI\Tests\Suite\Test\Specification;
-use Bootgly\ADI\Database;
+use Bootgly\ADI\Databases\SQL;
 
 
 return new Specification(
@@ -11,7 +11,7 @@ return new Specification(
       stream_set_blocking($client, false);
       stream_set_blocking($server, false);
 
-      $Database = new Database;
+      $Database = new SQL;
       $Database->Connection->attach($client);
       $Operation = $Database->query('SELECT 42 AS integer, true AS flag, 1.5::float8 AS ratio, text \'hello\' AS label');
       $Database->advance($Operation);

@@ -15,7 +15,7 @@ use function in_array;
 use function is_scalar;
 use InvalidArgumentException;
 
-use Bootgly\ADI\Database\Config as ADIConfig;
+use Bootgly\ADI\Databases\SQL\Config as ADIConfig;
 use Bootgly\API\Environment\Configs\Config;
 
 

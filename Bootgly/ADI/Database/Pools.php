@@ -14,6 +14,7 @@ namespace Bootgly\ADI\Database;
 use Bootgly\ABI\Data\Registry;
 use Bootgly\ADI\Database\Config;
 use Bootgly\ADI\Database\Connection;
+use Bootgly\ADI\Database\Drivers;
 use Bootgly\ADI\Database\Pool;
 
 
@@ -27,17 +28,23 @@ class Pools extends Registry
    // * Config
    public Config $Config;
    public Connection $Connection;
+   /** @var class-string<Drivers> */
+   public string $drivers;
 
-   public function __construct (Config $Config, Connection $Connection)
+   /**
+    * @param class-string<Drivers> $drivers
+    */
+   public function __construct (Config $Config, Connection $Connection, string $drivers = Drivers::class)
    {
       parent::__construct('Database pool');
 
       // * Config
       $this->Config = $Config;
       $this->Connection = $Connection;
+      $this->drivers = $drivers;
 
       // * Data
-      $this->register('pgsql', new Pool($Config, $Connection));
+      $this->register($Config->driver, new Pool($Config, $Connection, $drivers));
    }
 
    /**

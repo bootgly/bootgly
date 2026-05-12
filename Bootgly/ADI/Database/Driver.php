@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\ADI\Database\Connection\Protocols;
+namespace Bootgly\ADI\Database;
 
 
 use Bootgly\ADI\Database\Config;
@@ -17,10 +17,10 @@ use Bootgly\ADI\Database\Operation;
 
 
 /**
- * Database wire protocol base.
+ * Database wire driver base.
  *
- * Concrete protocols own driver-specific encoding, decoding and operation
- * progression while Database keeps a single transport-agnostic entry point.
+ * Concrete drivers own protocol-specific encoding, decoding and operation
+ * progression while Database keeps a single transport-agnostic core.
  */
 abstract class Driver
 {
@@ -43,32 +43,25 @@ abstract class Driver
    }
 
    /**
-    * Create a protocol-specific query operation.
-    *
-    * @param array<int|string,mixed> $parameters
-    */
-   abstract public function query (string $sql, array $parameters = []): Operation;
-
-   /**
-    * Prepare an existing operation for this protocol.
+    * Prepare an existing operation for this driver.
     */
    abstract public function prepare (Operation $Operation): Operation;
 
    /**
-    * Advance a pending operation through the protocol state machine.
+    * Advance a pending operation through the driver state machine.
     */
    abstract public function advance (Operation $Operation): Operation;
 
    /**
-    * Cancel one running operation when the concrete protocol supports it.
+    * Cancel one running operation when the concrete driver supports it.
     */
    public function cancel (Operation $Operation): Operation
    {
-      return $Operation->fail('Database protocol does not support cancellation.');
+      return $Operation->fail('Database driver does not support cancellation.');
    }
 
    /**
-    * Check whether this protocol still has in-flight operations.
+    * Check whether this driver still has in-flight operations.
     */
    public function check (): bool
    {
@@ -76,7 +69,7 @@ abstract class Driver
    }
 
    /**
-    * Drain operations completed internally by this protocol.
+    * Drain operations completed internally by this driver.
     *
     * @return array<int,Operation>
     */

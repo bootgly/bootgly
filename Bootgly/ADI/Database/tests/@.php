@@ -19,7 +19,8 @@ return new Suite(
       '1.1-construct-default_config',
       '2.1-query-operation',
       '2.2-operation-timeout',
-      '3.1-protocols-postgresql_repository',
+      '2.3-result_views',
+      '3.1-sql_drivers-postgresql_repository',
       '3.2-postgresql_encoder',
       '3.3-postgresql_decoder',
       '3.4-postgresql_operation_stream',
@@ -46,5 +47,8 @@ return new Suite(
       '7.11-postgresql_statement_describe',
       '7.12-postgresql_pipeline',
       '7.13-postgresql_pipeline_release',
+      '8.1-databases-registry',
+      '8.2-paradigm-abstract',
+      '8.3-kv_driver_fake',
    ]
 );

@@ -1,15 +1,15 @@
 <?php
 
 use Bootgly\ACI\Tests\Suite\Test\Specification;
-use Bootgly\ADI\Database;
-use Bootgly\ADI\Database\Operation;
+use Bootgly\ADI\Databases\SQL;
+use Bootgly\ADI\Databases\SQL\Operation;
 use Bootgly\ADI\Database\OperationStates;
 
 
 return new Specification(
    description: 'Database: query creates pending async operation',
    test: function () {
-      $Database = new Database([
+      $Database = new SQL([
          'database' => 'bootgly_test',
          'pool' => [
             'min' => 1,

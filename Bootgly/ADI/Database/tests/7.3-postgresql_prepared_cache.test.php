@@ -12,7 +12,7 @@ use function stream_set_blocking;
 use function stream_socket_pair;
 
 use Bootgly\ACI\Tests\Suite\Test\Specification;
-use Bootgly\ADI\Database;
+use Bootgly\ADI\Databases\SQL;
 
 
 return new Specification(
@@ -22,7 +22,7 @@ return new Specification(
       stream_set_blocking($client, false);
       stream_set_blocking($server, false);
 
-      $Database = new Database;
+      $Database = new SQL;
       $Database->Connection->attach($client);
       $sql = 'SELECT $1::int AS value';
       $First = $Database->query($sql, [42]);

@@ -6,8 +6,8 @@ use function strlen;
 use function substr;
 
 use Bootgly\ACI\Tests\Suite\Test\Specification;
-use Bootgly\ADI\Database\Connection\Protocols\PostgreSQL\Decoder;
-use Bootgly\ADI\Database\Connection\Protocols\PostgreSQL\Message;
+use Bootgly\ADI\Databases\SQL\Drivers\PostgreSQL\Decoder;
+use Bootgly\ADI\Databases\SQL\Drivers\PostgreSQL\Message;
 
 
 return new Specification(

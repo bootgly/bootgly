@@ -13,22 +13,24 @@ namespace Bootgly\ADI;
 
 use Bootgly\ADI\Database\Config;
 use Bootgly\ADI\Database\Connection;
-use Bootgly\ADI\Database\Operation;
+use Bootgly\ADI\Database\Drivers;
 use Bootgly\ADI\Database\Pool;
 use Bootgly\ADI\Database\Pools;
 
 
 /**
- * Canonical ADI database entry point.
+ * Abstract ADI database transport core.
  *
- * This facade is intentionally transport-agnostic. Async scheduling stays in
- * ACI/WPI through readiness tokens; ADI only creates operations and owns data
- * protocol state.
+ * Paradigm facades under Databases/* add concrete access verbs such as SQL
+ * query(), KV get()/set() or Document find()/insert(). The singular Database
+ * class only wires shared config, connection and pool composition.
  */
-class Database
+abstract class Database
 {
    // * Config
    public Config $Config;
+   /** @var class-string<Drivers> */
+   public string $drivers;
 
    // * Data
    public Connection $Connection;
@@ -40,49 +42,22 @@ class Database
 
 
    /**
-    * Create a database facade from ADI-native config data.
+    * Create a database transport core from ADI-native config data.
     *
     * @param array<string,mixed>|Config $config
+    * @param class-string<Drivers> $drivers
     */
-   public function __construct (array|Config $config = [])
+   public function __construct (array|Config $config = [], string $drivers = Drivers::class)
    {
       // * Config
       $this->Config = $config instanceof Config
          ? $config
          : new Config($config);
+      $this->drivers = $drivers;
 
       // * Data
       $this->Connection = new Connection($this->Config);
-      $this->Pools = new Pools($this->Config, $this->Connection);
+      $this->Pools = new Pools($this->Config, $this->Connection, $drivers);
       $this->Pool = $this->Pools->fetch($this->Config->driver);
-   }
-
-   /**
-    * Create an async database operation.
-    *
-    * The returned Operation is advanced by protocol-specific code and awaited
-    * by platform code through ACI readiness tokens.
-    *
-    * @param array<int|string,mixed> $parameters
-    */
-   public function query (string $sql, array $parameters = []): Operation
-   {
-      return $this->Pool->query($sql, $parameters);
-   }
-
-   /**
-    * Advance an async database operation through the selected protocol.
-    */
-   public function advance (Operation $Operation): Operation
-   {
-      return $this->Pool->advance($Operation);
-   }
-
-   /**
-    * Cancel one running database operation when supported by the protocol.
-    */
-   public function cancel (Operation $Operation): Operation
-   {
-      return $this->Pool->cancel($Operation);
    }
 }

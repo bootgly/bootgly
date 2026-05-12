@@ -15,7 +15,6 @@ use function in_array;
 use function is_array;
 use function is_bool;
 use function is_scalar;
-use function max;
 use InvalidArgumentException;
 
 
@@ -36,7 +35,6 @@ class Config
    public const float DEFAULT_TIMEOUT = 30.0;
    public const int DEFAULT_POOL_MIN = 0;
    public const int DEFAULT_POOL_MAX = 8;
-   public const int DEFAULT_STATEMENTS = 256;
    public const string SECURE_DISABLE = 'disable';
    public const string SECURE_PREFER = 'prefer';
    public const string SECURE_REQUIRE = 'require';
@@ -65,8 +63,6 @@ class Config
    public array $secure;
    /** @var array{min:int,max:int} */
    public array $pool;
-   /** Maximum number of prepared statements cached per connection. */
-   public int $statements;
 
    // * Data
    // ...
@@ -101,7 +97,6 @@ class Config
       $timeout = $config['timeout'] ?? self::DEFAULT_TIMEOUT;
       $poolMin = $pool['min'] ?? self::DEFAULT_POOL_MIN;
       $poolMax = $pool['max'] ?? self::DEFAULT_POOL_MAX;
-      $statements = $config['statements'] ?? self::DEFAULT_STATEMENTS;
       $secureMode = $secure['mode'] ?? self::DEFAULT_SECURE_MODE;
       $securePeer = $secure['peer'] ?? self::DEFAULT_SECURE_PEER;
       $secureCA = $secure['cafile'] ?? self::DEFAULT_SECURE_CAFILE;
@@ -146,7 +141,6 @@ class Config
          'min' => is_scalar($poolMin) ? (int) $poolMin : self::DEFAULT_POOL_MIN,
          'max' => is_scalar($poolMax) ? (int) $poolMax : self::DEFAULT_POOL_MAX,
       ];
-      $this->statements = is_scalar($statements) ? max(0, (int) $statements) : self::DEFAULT_STATEMENTS;
    }
 
    /**

@@ -17,6 +17,7 @@ use Bootgly\API\Environment\Configs\DatabaseConfig;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Runner;
 
 
 return static function
@@ -80,38 +81,14 @@ return static function
       return $Database;
    };
 
-   $Execute = static function (SQL $Database, Response $Response, string $sql, array $parameters, int $limit) use ($Send): null|Operation {
-      $Operation = $Database->query($sql, $parameters);
-      $steps = 0;
-
-      while ($Operation->finished === false && $steps < $limit) {
-         $steps++;
-         $Operation = $Database->advance($Operation);
-
-         if ($Operation->finished) {
-            break;
-         }
-
-         $Readiness = $Operation->Readiness;
-
-         if ($Readiness !== null) {
-            $Response->wait($Readiness);
-         }
-         else {
-            $Response->wait();
-         }
-      }
-
-      if ($Operation->finished === false) {
-         $Send($Response, [
-            'status' => 'timeout',
-            'message' => 'Async database operation did not finish before the demo loop limit.',
-         ], 504);
-
+   $Execute = static function (SQL $Database, Response $Response, string $sql, array $parameters, int $limit): null|Operation {
+      if ($limit <= 0) {
          return null;
       }
 
-      return $Operation;
+      $Runner = new Runner($Database, $Response);
+
+      return $Runner->query($sql, $parameters);
    };
 
    $Rows = static function (Operation $Operation): array {

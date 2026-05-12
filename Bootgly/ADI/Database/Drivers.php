@@ -8,22 +8,21 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\ADI\Database\Connection;
+namespace Bootgly\ADI\Database;
 
 
 use Bootgly\ABI\Data\Registry;
 use Bootgly\ADI\Database\Config;
 use Bootgly\ADI\Database\Connection;
-use Bootgly\ADI\Database\Connection\Protocols\Driver;
-use Bootgly\ADI\Database\Connection\Protocols\PostgreSQL;
+use Bootgly\ADI\Database\Driver;
 
 
 /**
- * Repository of available database protocols.
+ * Registry of available database drivers for one paradigm.
  *
  * @extends Registry<Driver>
  */
-class Protocols extends Registry
+class Drivers extends Registry
 {
    // * Config
    public Config $Config;
@@ -31,28 +30,25 @@ class Protocols extends Registry
 
    public function __construct (Config $Config, Connection $Connection)
    {
-      parent::__construct('Database protocol');
+      parent::__construct('Database driver');
 
       // * Config
       $this->Config = $Config;
       $this->Connection = $Connection;
-
-      // * Data
-      $this->register('pgsql', new PostgreSQL($Config, $Connection));
    }
 
    /**
-    * Register a protocol by driver name.
+    * Register a driver by driver name.
     */
-   public function register (string $driver, Driver $Protocol): self
+   public function register (string $driver, Driver $Driver): self
    {
-      $this->store($driver, $Protocol);
+      $this->store($driver, $Driver);
 
       return $this;
    }
 
    /**
-    * Fetch a protocol by driver name.
+    * Fetch a driver by driver name.
     */
    public function fetch (string $driver = ''): Driver
    {
@@ -60,8 +56,8 @@ class Protocols extends Registry
          $driver = $this->Config->driver;
       }
 
-      $Protocol = $this->load($driver);
+      $Driver = $this->load($driver);
 
-      return $Protocol;
+      return $Driver;
    }
 }

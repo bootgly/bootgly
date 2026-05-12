@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\ADI\Database\Connection\Protocols\PostgreSQL;
+namespace Bootgly\ADI\Databases\SQL\Drivers\PostgreSQL;
 
 
 use function strlen;
@@ -17,7 +17,7 @@ use function substr;
 use function unpack;
 use InvalidArgumentException;
 
-use Bootgly\ADI\Database\Connection\Protocols\PostgreSQL\Message;
+use Bootgly\ADI\Databases\SQL\Drivers\PostgreSQL\Message;
 
 
 /**

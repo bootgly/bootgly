@@ -18,8 +18,8 @@ use function spl_object_id;
 
 use Bootgly\ADI\Database\Config;
 use Bootgly\ADI\Database\Connection;
-use Bootgly\ADI\Database\Connection\Protocols;
-use Bootgly\ADI\Database\Connection\Protocols\Driver;
+use Bootgly\ADI\Database\Driver;
+use Bootgly\ADI\Database\Drivers;
 use Bootgly\ADI\Database\ConnectionStates;
 use Bootgly\ADI\Database\Operation;
 use Bootgly\ADI\Database\OperationStates;
@@ -35,6 +35,8 @@ class Pool
    public Connection $Connection;
    public int $min;
    public int $max;
+   /** @var class-string<Drivers> */
+   public string $drivers;
 
    // * Data
    /** @var array<int,Connection> */
@@ -50,13 +52,17 @@ class Pool
    private array $counted = [];
 
 
-   public function __construct (Config $Config, Connection $Connection)
+   /**
+    * @param class-string<Drivers> $drivers
+    */
+   public function __construct (Config $Config, Connection $Connection, string $drivers = Drivers::class)
    {
       // * Config
       $this->Config = $Config;
       $this->Connection = $Connection;
       $this->min = $Config->pool['min'];
       $this->max = $Config->pool['max'];
+      $this->drivers = $drivers;
    }
 
    /**
@@ -70,18 +76,6 @@ class Pool
       $this->idle[$id] = $Connection;
 
       return $this;
-   }
-
-   /**
-    * Create or queue a pooled query operation.
-    *
-    * @param array<int|string,mixed> $parameters
-    */
-   public function query (string $sql, array $parameters = []): Operation
-   {
-      $Operation = new Operation(null, $sql, $parameters, $this->Config->timeout);
-
-      return $this->assign($Operation);
    }
 
    /**
@@ -113,12 +107,6 @@ class Pool
 
       $Protocol->advance($Operation);
       $released = $this->drain($Protocol, $Operation);
-
-      if ($Operation->expire()) {
-         $this->release($Operation);
-
-         return $Operation;
-      }
 
       if ($Operation->finished && $released === false) {
          $this->release($Operation);
@@ -222,14 +210,8 @@ class Pool
    /**
     * Assign an available connection and protocol to an operation.
     */
-   private function assign (Operation $Operation): Operation
+   public function assign (Operation $Operation): Operation
    {
-      if ($Operation->expire()) {
-         $this->forget($Operation);
-
-         return $Operation;
-      }
-
       $Connection = $this->acquire();
 
       if ($Connection === null) {
@@ -358,12 +340,13 @@ class Pool
          return $Connection->Protocol;
       }
 
-      $Protocols = new Protocols($this->Config, $Connection);
-      $Protocol = $Protocols->fetch($this->Config->driver);
+      $drivers = $this->drivers;
+      $Drivers = new $drivers($this->Config, $Connection);
+      $Driver = $Drivers->fetch($this->Config->driver);
 
-      $Connection->bind($Protocol);
+      $Connection->bind($Driver);
 
-      return $Protocol;
+      return $Driver;
    }
 
    /**

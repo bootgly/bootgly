@@ -25,7 +25,7 @@ use RuntimeException;
 
 use Bootgly\ACI\Events\Readiness;
 use Bootgly\ADI\Database\Config;
-use Bootgly\ADI\Database\Connection\Protocols\Driver;
+use Bootgly\ADI\Database\Driver;
 use Bootgly\ADI\Database\ConnectionStates;
 
 
@@ -48,16 +48,6 @@ class Connection
 
    // * Metadata
    public private(set) null|Driver $Protocol = null;
-   /** @var array<string,bool|array<int,int>> */
-   public private(set) array $statements = [];
-   public private(set) int $backendProcess = 0;
-   public private(set) int $backendSecret = 0;
-   /** @var array<string,string> */
-   public private(set) array $parameters = [];
-   /** @var array<int,array<string,mixed>> */
-   public private(set) array $notices = [];
-   /** @var array<int,array<string,mixed>> */
-   public private(set) array $notifications = [];
 
 
    public function __construct (Config $Config)
@@ -183,83 +173,6 @@ class Connection
    }
 
    /**
-    * Cache prepared statement metadata.
-    *
-    * @param bool|array<int,int> $metadata
-    */
-   public function cache (string $statement, bool|array $metadata = true): self
-   {
-      if ($statement === '') {
-         return $this;
-      }
-
-      $this->statements[$statement] = $metadata;
-
-      return $this;
-   }
-
-   /**
-    * Evict prepared statement metadata.
-    */
-   public function evict (string $statement): self
-   {
-      unset($this->statements[$statement]);
-
-      return $this;
-   }
-
-   /**
-    * Identify this connection with backend cancellation keys.
-    */
-   public function identify (int $process, int $secret): self
-   {
-      $this->backendProcess = $process;
-      $this->backendSecret = $secret;
-
-      return $this;
-   }
-
-   /**
-    * Record one backend parameter status.
-    */
-   public function record (string $name, string $value): self
-   {
-      if ($name === '') {
-         return $this;
-      }
-
-      $this->parameters[$name] = $value;
-
-      return $this;
-   }
-
-   /**
-    * Notice one backend message.
-    *
-    * @param array<string,mixed> $notice
-    */
-   public function notice (array $notice): self
-   {
-      $this->notices[] = $notice;
-
-      return $this;
-   }
-
-   /**
-    * Notify one backend asynchronous message.
-    */
-   public function notify (int $process, string $channel, string $payload): self
-   {
-      $this->notifications[] = [
-         'process' => $process,
-         'channel' => $channel,
-         'payload' => $payload,
-      ];
-
-      return $this;
-   }
-
-   /**
     * Close the attached stream resource.
     */
    public function disconnect (): bool
@@ -272,12 +185,6 @@ class Connection
       $this->connected = false;
       $this->state = ConnectionStates::Idle;
       $this->Protocol = null;
-      $this->statements = [];
-      $this->backendProcess = 0;
-      $this->backendSecret = 0;
-      $this->parameters = [];
-      $this->notices = [];
-      $this->notifications = [];
 
       return true;
    }

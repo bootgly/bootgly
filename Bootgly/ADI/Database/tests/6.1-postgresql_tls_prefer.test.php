@@ -10,12 +10,12 @@ use function stream_set_blocking;
 use function stream_socket_pair;
 
 use Bootgly\ACI\Tests\Suite\Test\Specification;
-use Bootgly\ADI\Database\Config;
+use Bootgly\ADI\Databases\SQL\Config;
 use Bootgly\ADI\Database\Connection;
-use Bootgly\ADI\Database\Operation;
+use Bootgly\ADI\Databases\SQL\Operation;
 use Bootgly\ADI\Database\OperationStates;
-use Bootgly\ADI\Database\Connection\Protocols\PostgreSQL;
-use Bootgly\ADI\Database\Connection\Protocols\PostgreSQL\Encoder;
+use Bootgly\ADI\Databases\SQL\Drivers\PostgreSQL;
+use Bootgly\ADI\Databases\SQL\Drivers\PostgreSQL\Encoder;
 
 
 return new Specification(

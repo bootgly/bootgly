@@ -1,7 +1,7 @@
 <?php
 
 use Bootgly\ACI\Tests\Suite\Test\Specification;
-use Bootgly\ADI\Database;
+use Bootgly\ADI\Databases\SQL;
 use Bootgly\ADI\Database\OperationStates;
 
 
@@ -12,7 +12,7 @@ return new Specification(
       stream_set_blocking($client, false);
       stream_set_blocking($server, false);
 
-      $Database = new Database([
+      $Database = new SQL([
          'pool' => [
             'min' => 0,
             'max' => 1,

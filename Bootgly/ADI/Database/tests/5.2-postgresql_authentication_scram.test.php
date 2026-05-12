@@ -1,8 +1,8 @@
 <?php
 
 use Bootgly\ACI\Tests\Suite\Test\Specification;
-use Bootgly\ADI\Database\Config;
-use Bootgly\ADI\Database\Connection\Protocols\PostgreSQL\Authentication;
+use Bootgly\ADI\Databases\SQL\Config;
+use Bootgly\ADI\Databases\SQL\Drivers\PostgreSQL\Authentication;
 
 
 return new Specification(

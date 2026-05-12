@@ -15,7 +15,7 @@ use function microtime;
 
 use Bootgly\ACI\Events\Readiness;
 use Bootgly\ADI\Database\Connection;
-use Bootgly\ADI\Database\Connection\Protocols\Driver;
+use Bootgly\ADI\Database\Driver;
 use Bootgly\ADI\Database\Operation\Result;
 use Bootgly\ADI\Database\OperationStates;
 
@@ -31,28 +31,13 @@ class Operation
 {
    // * Config
    public null|Connection $Connection;
-   public string $sql;
    /** @var array<int|string,mixed> */
    public array $parameters;
    public float $timeout;
 
    // * Data
    public null|Driver $Protocol = null;
-   public string $statement = '';
-   public string $portal = '';
-   public bool $prepared = false;
    public OperationStates $state = OperationStates::Pending;
-   public string $write = '';
-   public string $status = '';
-   /** @var array<int,array<string,mixed>> */
-   public array $rows = [];
-   /** @var array<int,string> */
-   public array $columns = [];
-   /** @var array<int,int> */
-   public array $types = [];
-   /** @var array<int,int> */
-   public array $parameterTypes = [];
-   public int $affected = 0;
    public private(set) null|Readiness $Readiness = null;
    public private(set) null|Result $Result = null;
    public private(set) null|string $error = null;
@@ -70,11 +55,10 @@ class Operation
     *
     * @param array<int|string,mixed> $parameters
     */
-   public function __construct (null|Connection $Connection, string $sql, array $parameters = [], float $timeout = 0.0)
+   public function __construct (null|Connection $Connection, array $parameters = [], float $timeout = 0.0)
    {
       // * Config
       $this->Connection = $Connection;
-      $this->sql = $sql;
       $this->parameters = $parameters;
       $this->timeout = $timeout;
 
@@ -99,7 +83,6 @@ class Operation
    public function resolve (Result $Result): self
    {
       $this->Result = $Result;
-      $this->write = '';
       $this->Readiness = null;
       $this->finished = true;
       $this->state = OperationStates::Finished;
@@ -113,7 +96,6 @@ class Operation
    public function fail (string $error): self
    {
       $this->error = $error;
-      $this->write = '';
       $this->Readiness = null;
       $this->finished = true;
       $this->state = OperationStates::Failed;

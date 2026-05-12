@@ -4,8 +4,8 @@ use function pack;
 use function strlen;
 
 use Bootgly\ACI\Tests\Suite\Test\Specification;
-use Bootgly\ADI\Database\Config;
-use Bootgly\ADI\Database\Connection\Protocols\PostgreSQL\Encoder;
+use Bootgly\ADI\Databases\SQL\Config;
+use Bootgly\ADI\Databases\SQL\Drivers\PostgreSQL\Encoder;
 
 
 return new Specification(

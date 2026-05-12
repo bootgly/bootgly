@@ -1,15 +1,15 @@
 <?php
 
 use Bootgly\ACI\Tests\Suite\Test\Specification;
-use Bootgly\ADI\Database;
-use Bootgly\ADI\Database\Config;
+use Bootgly\ADI\Databases\SQL;
+use Bootgly\ADI\Databases\SQL\Config;
 use Bootgly\ADI\Database\Connection;
 
 
 return new Specification(
    description: 'Database: construct default PostgreSQL async config',
    test: function () {
-      $Database = new Database;
+      $Database = new SQL;
 
       yield assert(
          assertion: $Database->Config instanceof Config,

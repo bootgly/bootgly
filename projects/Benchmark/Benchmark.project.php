@@ -30,6 +30,13 @@ return new Project(
 
    boot: function (array $arguments = [], array $options = []): void {
       if ($options['HTTP_Server_CLI'] ?? false) {
+         $router = getenv('BOOTGLY_HTTP_SERVER_CLI_ROUTER') ?: 'default';
+         $routerFile = match ($router) {
+            'basic' => 'basic.SAPI.php',
+            'database' => 'database.SAPI.php',
+            default => 'default.SAPI.php',
+         };
+
          new HTTP_Server_CLI(Modes::Daemon)
             ->configure(
                host: '0.0.0.0',
@@ -41,7 +48,7 @@ return new Project(
             ->on(
                // # Test (Benchmarking)
                #request: require __DIR__ . '/HTTP_Server_CLI/router/basic.SAPI.php',
-               requestReceived: require __DIR__ . '/HTTP_Server_CLI/router/default.SAPI.php',
+               requestReceived: require __DIR__ . "/HTTP_Server_CLI/router/{$routerFile}",
 
                serverStarted: function ($HTTP_Server_CLI) {
                   $Output = CLI->Terminal->Output;
