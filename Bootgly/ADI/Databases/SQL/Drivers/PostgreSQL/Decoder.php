@@ -11,10 +11,10 @@
 namespace Bootgly\ADI\Databases\SQL\Drivers\PostgreSQL;
 
 
+use function ord;
 use function strlen;
 use function strpos;
 use function substr;
-use function unpack;
 use InvalidArgumentException;
 
 use Bootgly\ADI\Databases\SQL\Drivers\PostgreSQL\Message;
@@ -46,22 +46,40 @@ class Decoder
    public string $buffer = '';
 
    // * Metadata
-   // ...
+   private int $offset = 0;
+
+   /** Reclaim consumed buffer head when offset exceeds this threshold. */
+   private const int COMPACT_THRESHOLD = 16384;
 
 
    /**
     * Decode backend messages from an incremental byte stream.
     *
+    * Uses an offset cursor instead of slicing the buffer on every consumed
+    * message. The substr(buffer, total) call previously allocated a new
+    * string per message — replaced with offset arithmetic that only
+    * compacts the head when the consumed prefix is large.
+    *
     * @return array<int,Message>
     */
    public function decode (string $bytes): array
    {
-      $this->buffer .= $bytes;
+      if ($bytes !== '') {
+         $this->buffer .= $bytes;
+      }
+
+      $buffer = $this->buffer;
+      $offset = $this->offset;
+      $size = strlen($buffer);
       $Messages = [];
 
-      while (strlen($this->buffer) >= 5) {
-         $type = $this->buffer[0];
-         $length = $this->unpack('N', $this->buffer, 1);
+      while ($size - $offset >= 5) {
+         $type = $buffer[$offset];
+         // @ Inline 32-bit unsigned big-endian read — avoids unpack() syscall.
+         $length = (ord($buffer[$offset + 1]) << 24)
+                 | (ord($buffer[$offset + 2]) << 16)
+                 | (ord($buffer[$offset + 3]) << 8)
+                 | ord($buffer[$offset + 4]);
 
          if ($length < 4) {
             throw new InvalidArgumentException('PostgreSQL message length is invalid.');
@@ -69,14 +87,23 @@ class Decoder
 
          $total = $length + 1;
 
-         if (strlen($this->buffer) < $total) {
+         if ($size - $offset < $total) {
             break;
          }
 
-         $payload = substr($this->buffer, 5, $length - 4);
-         $this->buffer = substr($this->buffer, $total);
+         $payload = substr($buffer, $offset + 5, $length - 4);
+         $offset += $total;
 
          $Messages[] = $this->parse($type, $payload);
+      }
+
+      // @ Compact the buffer only when the consumed prefix grows large.
+      if ($offset >= self::COMPACT_THRESHOLD) {
+         $this->buffer = substr($buffer, $offset);
+         $this->offset = 0;
+      }
+      else {
+         $this->offset = $offset;
       }
 
       return $Messages;
@@ -308,22 +335,27 @@ class Decoder
 
    /**
     * Unpack an unsigned integer from a payload offset.
+    *
+    * Uses raw byte indexing + bit shifting instead of PHP's unpack(), which
+    * has to parse the format string and allocate the result array on every
+    * call. This path is invoked for every column, row field and OID, so the
+    * function-call cost would otherwise dominate decoder time.
     */
    private function unpack (string $format, string $payload, int $offset): int
    {
       $width = $format === 'n' ? 2 : 4;
-      $bytes = substr($payload, $offset, $width);
 
-      if (strlen($bytes) !== $width) {
+      if ($offset + $width > strlen($payload)) {
          throw new InvalidArgumentException('PostgreSQL payload ended before integer boundary.');
       }
 
-      $data = unpack("{$format}value", $bytes);
-
-      if ($data === false) {
-         throw new InvalidArgumentException('PostgreSQL integer unpack failed.');
+      if ($format === 'n') {
+         return (ord($payload[$offset]) << 8) | ord($payload[$offset + 1]);
       }
 
-      return (int) $data['value'];
+      return (ord($payload[$offset]) << 24)
+           | (ord($payload[$offset + 1]) << 16)
+           | (ord($payload[$offset + 2]) << 8)
+           | ord($payload[$offset + 3]);
    }
 }

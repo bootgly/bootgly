@@ -94,15 +94,17 @@ class Pool
          return $this->assign($Operation);
       }
 
+      // @ assign() always sets a Driver on Pending → !Pending operations.
+      //   The null guard covers raw Operations that bypass assign().
       $Protocol = $Operation->Protocol;
 
-      if ($Protocol instanceof Driver === false) {
+      if ($Protocol === null) {
          $Operation = $this->assign($Operation);
          $Protocol = $Operation->Protocol;
-      }
 
-      if ($Protocol instanceof Driver === false) {
-         return $Operation;
+         if ($Protocol === null) {
+            return $Operation;
+         }
       }
 
       $Protocol->advance($Operation);
@@ -122,7 +124,7 @@ class Pool
    {
       $Protocol = $Operation->Protocol;
 
-      if ($Protocol instanceof Driver === false) {
+      if ($Protocol === null) {
          return $Operation->fail('Database operation has no protocol to cancel.');
       }
 
@@ -181,16 +183,18 @@ class Pool
       $id = spl_object_id($Connection);
       $Protocol = $Operation->Protocol;
 
-      if ($Protocol instanceof Driver && $Protocol->check()) {
+      if ($Protocol !== null && $Protocol->check()) {
          return $this;
       }
 
       unset($this->busy[$id]);
 
-      if (is_resource($Connection->socket) === false || $Connection->state !== ConnectionStates::Ready) {
+      $alive = is_resource($Connection->socket);
+
+      if ($alive === false || $Connection->state !== ConnectionStates::Ready) {
          unset($this->idle[$id]);
 
-         if (is_resource($Connection->socket)) {
+         if ($alive) {
             $Connection->disconnect();
          }
 
@@ -254,7 +258,9 @@ class Pool
 
       if ($this->created >= $this->max) {
          foreach ($this->busy as $Connection) {
-            if ($Connection->connected && $Connection->state === ConnectionStates::Ready && is_resource($Connection->socket) && $Connection->Protocol instanceof Driver && $Connection->Protocol->check()) {
+            $Protocol = $Connection->Protocol;
+
+            if ($Protocol !== null && $Connection->connected && $Connection->state === ConnectionStates::Ready && is_resource($Connection->socket) && $Protocol->check()) {
                return $Connection;
             }
          }
@@ -336,8 +342,10 @@ class Pool
     */
    private function create (Connection $Connection): Driver
    {
-      if ($Connection->Protocol instanceof Driver) {
-         return $Connection->Protocol;
+      $Protocol = $Connection->Protocol;
+
+      if ($Protocol !== null) {
+         return $Protocol;
       }
 
       $drivers = $this->drivers;

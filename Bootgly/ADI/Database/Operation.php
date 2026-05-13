@@ -46,7 +46,6 @@ class Operation
    public bool $cancelled = false;
 
    // * Metadata
-   public private(set) float $started;
    public private(set) float $deadline;
 
 
@@ -63,8 +62,8 @@ class Operation
       $this->timeout = $timeout;
 
       // * Metadata
-      $this->started = microtime(true);
-      $this->deadline = $timeout > 0.0 ? $this->started + $timeout : 0.0;
+      // @ Skip microtime() syscall when no timeout is configured.
+      $this->deadline = $timeout > 0.0 ? microtime(true) + $timeout : 0.0;
    }
 
    /**

@@ -29,10 +29,9 @@ class Readiness
    /** @var resource */
    public private(set) mixed $socket;
    public private(set) int $flag;
-   public private(set) float $deadline;
 
    // * Data
-   // ...
+   public float $deadline;
 
    // * Metadata
    // ...
@@ -57,6 +56,8 @@ class Readiness
       // * Config
       $this->socket = $socket;
       $this->flag = $flag;
+
+      // * Data
       $this->deadline = $deadline;
    }
 
@@ -78,5 +79,19 @@ class Readiness
    public static function write (mixed $socket, float $deadline = 0.0): self
    {
       return new self($socket, Scheduler::SCHEDULE_WRITE, $deadline);
+   }
+
+   /**
+    * Update the deadline of an existing Readiness without re-allocation.
+    *
+    * Enables driver-level Readiness reuse: a paradigm driver can keep one
+    * read- and one write-Readiness per socket and only refresh the deadline
+    * when re-suspending. Saves an object allocation per advance() step.
+    */
+   public function renew (float $deadline = 0.0): self
+   {
+      $this->deadline = $deadline;
+
+      return $this;
    }
 }

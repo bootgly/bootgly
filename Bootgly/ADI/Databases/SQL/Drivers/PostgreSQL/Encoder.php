@@ -42,6 +42,9 @@ class Encoder
    public const string SSL = 'ssl';
    public const string SYNC = 'sync';
 
+   /** Precomputed Sync packet — its 5-byte wire form is constant. */
+   public const string SYNC_BYTES = "S\x00\x00\x00\x04";
+
    // * Config
    // ...
 
@@ -176,7 +179,7 @@ class Encoder
    /**
     * Encode a Simple Query message.
     */
-   private function query (mixed $payload): string
+   public function query (mixed $payload): string
    {
       if (is_string($payload) === false) {
          throw new InvalidArgumentException('PostgreSQL query payload must be a string.');
@@ -190,7 +193,7 @@ class Encoder
    /**
     * Encode a Parse message.
     */
-   private function parse (mixed $payload): string
+   public function parse (mixed $payload): string
    {
       if (is_array($payload) === false || is_string($payload['statement'] ?? null) === false || is_string($payload['sql'] ?? null) === false) {
          throw new InvalidArgumentException('PostgreSQL Parse payload must contain statement and sql strings.');
@@ -216,7 +219,7 @@ class Encoder
    /**
     * Encode a Bind message with per-parameter format selection.
     */
-   private function bind (mixed $payload): string
+   public function bind (mixed $payload): string
    {
       if (is_array($payload) === false || is_string($payload['portal'] ?? null) === false || is_string($payload['statement'] ?? null) === false) {
          throw new InvalidArgumentException('PostgreSQL Bind payload must contain portal and statement strings.');
@@ -270,7 +273,7 @@ class Encoder
    /**
     * Encode a Describe statement or portal message.
     */
-   private function describe (mixed $payload): string
+   public function describe (mixed $payload): string
    {
       $type = 'P';
       $name = '';
@@ -299,7 +302,7 @@ class Encoder
    /**
     * Encode an Execute message.
     */
-   private function execute (mixed $payload): string
+   public function execute (mixed $payload): string
    {
       if (is_string($payload) === false) {
          throw new InvalidArgumentException('PostgreSQL Execute payload must be a portal string.');
@@ -326,11 +329,9 @@ class Encoder
    /**
     * Encode a Sync message.
     */
-   private function sync (): string
+   public function sync (): string
    {
-      $length = pack('N', 4);
-
-      return "S{$length}";
+      return self::SYNC_BYTES;
    }
 
    /**

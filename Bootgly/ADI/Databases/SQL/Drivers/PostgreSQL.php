@@ -81,6 +81,12 @@ class PostgreSQL extends Driver
    private array $pipeline = [];
    /** @var array<int,Operation> */
    private array $completed = [];
+   /** @var array<string,string> */
+   private array $names = [];
+   private null|Readiness $ReadReadiness = null;
+   private null|Readiness $WriteReadiness = null;
+   /** @var resource|null */
+   private mixed $cachedSocket = null;
 
 
    public function __construct (Config $Config, Connection $Connection)
@@ -122,14 +128,23 @@ class PostgreSQL extends Driver
       $Operation->state = OperationStates::Queued;
 
       try {
+         $Encoder = $this->Encoder;
+
          if ($Operation->parameters === []) {
-            $Operation->write = $this->Encoder->encode(Encoder::QUERY, $Operation->sql);
+            $Operation->write = $Encoder->query($Operation->sql);
 
             return $Operation;
          }
 
-         $hash = sha1($Operation->sql);
-         $Operation->statement = "bootgly_{$hash}";
+         $statement = $this->names[$Operation->sql] ?? '';
+
+         if ($statement === '') {
+            $hash = sha1($Operation->sql);
+            $statement = "bootgly_{$hash}";
+            $this->names[$Operation->sql] = $statement;
+         }
+
+         $Operation->statement = $statement;
          $Operation->portal = '';
          $cached = $this->statements[$Operation->statement] ?? false;
          $Operation->prepared = $cached !== false;
@@ -141,15 +156,15 @@ class PostgreSQL extends Driver
             $index++;
          }
 
-         $bind = $this->Encoder->encode(Encoder::BIND, [
+         $bind = $Encoder->bind([
             'portal' => $Operation->portal,
             'statement' => $Operation->statement,
             'parameters' => $Operation->parameters,
             'types' => is_array($cached) ? $cached : [],
          ]);
-         $describe = $this->Encoder->encode(Encoder::DESCRIBE, $Operation->portal);
-         $execute = $this->Encoder->encode(Encoder::EXECUTE, $Operation->portal);
-         $sync = $this->Encoder->encode(Encoder::SYNC);
+         $describe = $Encoder->describe($Operation->portal);
+         $execute = $Encoder->execute($Operation->portal);
+         $sync = Encoder::SYNC_BYTES;
 
          if ($Operation->prepared) {
             $this->evict($Operation->statement);
@@ -164,18 +179,18 @@ class PostgreSQL extends Driver
          if ($this->SQLConfig->statements > 0 && count($this->statements) >= $this->SQLConfig->statements) {
             $evicted = array_key_first($this->statements);
             $this->evict($evicted);
-            $close = $this->Encoder->encode(Encoder::CLOSE, [
+            $close = $Encoder->encode(Encoder::CLOSE, [
                'type' => 'S',
                'name' => $evicted,
             ]);
          }
 
-         $parse = $this->Encoder->encode(Encoder::PARSE, [
+         $parse = $Encoder->parse([
             'statement' => $Operation->statement,
             'sql' => $Operation->sql,
             'types' => $types,
          ]);
-         $describeStatement = $this->Encoder->encode(Encoder::DESCRIBE, [
+         $describeStatement = $Encoder->describe([
             'type' => 'S',
             'name' => $Operation->statement,
          ]);
@@ -475,6 +490,10 @@ class PostgreSQL extends Driver
 
    /**
     * Wait for socket readiness.
+    *
+    * Reuses one read- and one write-Readiness per socket so the hot advance
+    * path does not allocate a Readiness object on every suspension. The cache
+    * is rebuilt only when the underlying socket changes (reconnect, attach).
     */
    private function await (Operation $Operation, int $flag): Operation
    {
@@ -486,9 +505,23 @@ class PostgreSQL extends Driver
          return $Operation;
       }
 
-      $Readiness = $flag === Scheduler::SCHEDULE_WRITE
-         ? Readiness::write($socket, $Operation->deadline)
-         : Readiness::read($socket, $Operation->deadline);
+      // @ Invalidate Readiness cache when the socket changes.
+      if ($this->cachedSocket !== $socket) {
+         $this->cachedSocket = $socket;
+         $this->ReadReadiness = null;
+         $this->WriteReadiness = null;
+      }
+
+      if ($flag === Scheduler::SCHEDULE_WRITE) {
+         $Readiness = $this->WriteReadiness
+            ?? ($this->WriteReadiness = Readiness::write($socket, $Operation->deadline));
+         $Readiness->renew($Operation->deadline);
+      }
+      else {
+         $Readiness = $this->ReadReadiness
+            ?? ($this->ReadReadiness = Readiness::read($socket, $Operation->deadline));
+         $Readiness->renew($Operation->deadline);
+      }
 
       $Operation->await($Readiness);
 
@@ -682,203 +715,26 @@ class PostgreSQL extends Driver
 
    /**
     * Apply a decoded backend message to an operation.
+    *
+    * Branch order matches per-query message frequency: every result emits
+    * D × N + T + C + Z, so those four are checked first. Prepare-time and
+    * connect-time messages live below.
     */
    private function apply (Operation $Operation, Message $Message): Operation
    {
-      if ($Message->type === 'K') {
-         $process = $Message->fields['process'] ?? 0;
-         $secret = $Message->fields['secret'] ?? 0;
-         $this->identify(
-            is_int($process) ? $process : 0,
-            is_int($secret) ? $secret : 0
-         );
+      $type = $Message->type;
 
-         return $Operation;
-      }
-
-      if ($Message->type === 'S') {
-         $name = $Message->fields['name'] ?? '';
-         $value = $Message->fields['value'] ?? '';
-
-         if (is_string($name) && $name !== '' && is_string($value)) {
-            $this->record($name, $value);
-         }
-
-         return $Operation;
-      }
-
-      if ($Message->type === 'N') {
-         $notice = $Message->fields['notice'] ?? [];
-         $this->notice(is_array($notice) ? $notice : []);
-
-         return $Operation;
-      }
-
-      if ($Message->type === 'A') {
-         $process = $Message->fields['process'] ?? 0;
-         $channel = $Message->fields['channel'] ?? '';
-         $payload = $Message->fields['payload'] ?? '';
-         $this->notify(
-            is_int($process) ? $process : 0,
-            is_string($channel) ? $channel : '',
-            is_string($payload) ? $payload : ''
-         );
-
-         return $Operation;
-      }
-
-      if ($Message->type === '1') {
-         if ($Operation->statement !== '' && $this->SQLConfig->statements > 0) {
-            $this->cache($Operation->statement);
-            $Operation->prepared = true;
-         }
-
-         return $Operation;
-      }
-
-      if ($Message->type === 't') {
-         $parameters = $Message->fields['parameters'] ?? [];
-         $Operation->parameterTypes = [];
-
-         if (is_array($parameters)) {
-            foreach ($parameters as $parameter) {
-               $Operation->parameterTypes[] = is_int($parameter) ? $parameter : 0;
-            }
-         }
-
-         if ($Operation->statement !== '' && $this->SQLConfig->statements > 0) {
-            $this->cache($Operation->statement, $Operation->parameterTypes);
-         }
-
-         return $Operation;
-      }
-
-      if ($Message->type === '2' || $Message->type === 'n' || $Message->type === 's') {
-         return $Operation;
-      }
-
-      if ($Message->type === 'R') {
-         $code = $Message->fields['code'] ?? -1;
-
-         if (is_int($code) === false) {
-            $code = -1;
-         }
-
-         if ($code === 0) {
-            $this->Authentication->authenticated = true;
-
-            return $Operation;
-         }
-
-         if ($code === 3) {
-            $Operation->write = $this->Encoder->encode(Encoder::PASSWORD, $this->Config->password);
-            $Operation->state = OperationStates::Password;
-
-            return $Operation;
-         }
-
-         if ($code === 5) {
-            $salt = $Message->fields['salt'] ?? '';
-
-            if (is_string($salt) === false) {
-               return $Operation->fail('PostgreSQL MD5 authentication salt is invalid.');
-            }
-
-            $Operation->write = $this->Encoder->encode(Encoder::PASSWORD, $this->Authentication->hash($salt));
-            $Operation->state = OperationStates::Password;
-
-            return $Operation;
-         }
-
-         if ($code === 10) {
-            $mechanisms = $Message->fields['mechanisms'] ?? [];
-
-            if (is_array($mechanisms) === false) {
-               return $Operation->fail('PostgreSQL SASL mechanisms are invalid.');
-            }
-
-            $mechanismList = [];
-
-            foreach ($mechanisms as $mechanism) {
-               if (is_string($mechanism)) {
-                  $mechanismList[] = $mechanism;
-               }
-            }
-
-            $Operation->write = $this->Encoder->encode(Encoder::SASL, $this->Authentication->start($mechanismList));
-            $Operation->state = OperationStates::Password;
-
-            return $Operation;
-         }
-
-         if ($code === 11) {
-            $message = $Message->fields['data'] ?? '';
-
-            if (is_string($message) === false) {
-               return $Operation->fail('PostgreSQL SASL continue message is invalid.');
-            }
-
-            $Operation->write = $this->Encoder->encode(Encoder::RESPONSE, $this->Authentication->resume($message));
-            $Operation->state = OperationStates::Password;
-
-            return $Operation;
-         }
-
-         if ($code === 12) {
-            $message = $Message->fields['data'] ?? '';
-
-            if (is_string($message) === false || $this->Authentication->finish($message) === false) {
-               return $Operation->fail('PostgreSQL SASL server signature is invalid.');
-            }
-
-            return $Operation;
-         }
-
-         return $Operation->fail("PostgreSQL authentication method is not supported: {$code}.");
-      }
-
-      if ($Message->type === 'E') {
-         $message = $Message->fields['message'] ?? 'PostgreSQL error.';
-
-         if ($Operation->statement !== '') {
-            $this->evict($Operation->statement);
-            $Operation->prepared = false;
-         }
-
-         if (is_scalar($message) === false) {
-            $message = 'PostgreSQL error.';
-         }
-
-         return $Operation->fail((string) $message);
-      }
-
-      if ($Message->type === 'T') {
-         $Operation->columns = [];
-         $Operation->types = [];
-         $columns = $Message->fields['columns'] ?? [];
-
-         if (is_array($columns)) {
-            foreach ($columns as $column) {
-               if (is_array($column) && isset($column['name']) && is_string($column['name'])) {
-                  $Operation->columns[] = $column['name'];
-                  $type = $column['type'] ?? 0;
-                  $Operation->types[] = is_int($type) ? $type : 0;
-               }
-            }
-         }
-
-         return $Operation;
-      }
-
-      if ($Message->type === 'D') {
+      if ($type === 'D') {
          $row = [];
          $values = $Message->fields['values'] ?? [];
 
          if (is_array($values)) {
+            $columns = $Operation->columns;
+            $types = $Operation->types;
+
             foreach ($values as $index => $value) {
-               $key = $Operation->columns[$index] ?? (string) $index;
-               $type = $Operation->types[$index] ?? 0;
-               $row[$key] = $this->cast($value, $type);
+               $key = $columns[$index] ?? (string) $index;
+               $row[$key] = $this->cast($value, $types[$index] ?? 0);
             }
 
             $Operation->rows[] = $row;
@@ -887,7 +743,7 @@ class PostgreSQL extends Driver
          return $Operation;
       }
 
-      if ($Message->type === 'C') {
+      if ($type === 'C') {
          $command = $Message->fields['command'] ?? '';
 
          if (is_scalar($command) === false) {
@@ -903,7 +759,7 @@ class PostgreSQL extends Driver
          return $Operation;
       }
 
-      if ($Message->type === 'Z') {
+      if ($type === 'Z') {
          if ($Operation->state === OperationStates::Failed) {
             $this->Connection->transition();
 
@@ -929,6 +785,194 @@ class PostgreSQL extends Driver
             $Operation->columns,
             $Operation->affected
          ));
+      }
+
+      if ($type === 'T') {
+         $Operation->columns = [];
+         $Operation->types = [];
+         $columns = $Message->fields['columns'] ?? [];
+
+         if (is_array($columns)) {
+            foreach ($columns as $column) {
+               if (is_array($column) && isset($column['name']) && is_string($column['name'])) {
+                  $Operation->columns[] = $column['name'];
+                  $columnType = $column['type'] ?? 0;
+                  $Operation->types[] = is_int($columnType) ? $columnType : 0;
+               }
+            }
+         }
+
+         return $Operation;
+      }
+
+      // @ Extended query no-ops — emitted by Bind / NoData / PortalSuspended.
+      if ($type === '2' || $type === 'n' || $type === 's') {
+         return $Operation;
+      }
+
+      if ($type === '1') {
+         if ($Operation->statement !== '' && $this->SQLConfig->statements > 0) {
+            $this->cache($Operation->statement);
+            $Operation->prepared = true;
+         }
+
+         return $Operation;
+      }
+
+      if ($type === 't') {
+         $parameters = $Message->fields['parameters'] ?? [];
+         $Operation->parameterTypes = [];
+
+         if (is_array($parameters)) {
+            foreach ($parameters as $parameter) {
+               $Operation->parameterTypes[] = is_int($parameter) ? $parameter : 0;
+            }
+         }
+
+         if ($Operation->statement !== '' && $this->SQLConfig->statements > 0) {
+            $this->cache($Operation->statement, $Operation->parameterTypes);
+         }
+
+         return $Operation;
+      }
+
+      if ($type === 'E') {
+         $message = $Message->fields['message'] ?? 'PostgreSQL error.';
+
+         if ($Operation->statement !== '') {
+            $this->evict($Operation->statement);
+            $Operation->prepared = false;
+         }
+
+         if (is_scalar($message) === false) {
+            $message = 'PostgreSQL error.';
+         }
+
+         return $Operation->fail((string) $message);
+      }
+
+      if ($type === 'R') {
+         $code = $Message->fields['code'] ?? -1;
+
+         if (is_int($code) === false) {
+            $code = -1;
+         }
+
+         if ($code === 0) {
+            $this->Authentication->authenticated = true;
+
+            return $Operation;
+         }
+
+         $Encoder = $this->Encoder;
+
+         if ($code === 3) {
+            $Operation->write = $Encoder->encode(Encoder::PASSWORD, $this->Config->password);
+            $Operation->state = OperationStates::Password;
+
+            return $Operation;
+         }
+
+         if ($code === 5) {
+            $salt = $Message->fields['salt'] ?? '';
+
+            if (is_string($salt) === false) {
+               return $Operation->fail('PostgreSQL MD5 authentication salt is invalid.');
+            }
+
+            $Operation->write = $Encoder->encode(Encoder::PASSWORD, $this->Authentication->hash($salt));
+            $Operation->state = OperationStates::Password;
+
+            return $Operation;
+         }
+
+         if ($code === 10) {
+            $mechanisms = $Message->fields['mechanisms'] ?? [];
+
+            if (is_array($mechanisms) === false) {
+               return $Operation->fail('PostgreSQL SASL mechanisms are invalid.');
+            }
+
+            $mechanismList = [];
+
+            foreach ($mechanisms as $mechanism) {
+               if (is_string($mechanism)) {
+                  $mechanismList[] = $mechanism;
+               }
+            }
+
+            $Operation->write = $Encoder->encode(Encoder::SASL, $this->Authentication->start($mechanismList));
+            $Operation->state = OperationStates::Password;
+
+            return $Operation;
+         }
+
+         if ($code === 11) {
+            $message = $Message->fields['data'] ?? '';
+
+            if (is_string($message) === false) {
+               return $Operation->fail('PostgreSQL SASL continue message is invalid.');
+            }
+
+            $Operation->write = $Encoder->encode(Encoder::RESPONSE, $this->Authentication->resume($message));
+            $Operation->state = OperationStates::Password;
+
+            return $Operation;
+         }
+
+         if ($code === 12) {
+            $message = $Message->fields['data'] ?? '';
+
+            if (is_string($message) === false || $this->Authentication->finish($message) === false) {
+               return $Operation->fail('PostgreSQL SASL server signature is invalid.');
+            }
+
+            return $Operation;
+         }
+
+         return $Operation->fail("PostgreSQL authentication method is not supported: {$code}.");
+      }
+
+      if ($type === 'K') {
+         $process = $Message->fields['process'] ?? 0;
+         $secret = $Message->fields['secret'] ?? 0;
+         $this->identify(
+            is_int($process) ? $process : 0,
+            is_int($secret) ? $secret : 0
+         );
+
+         return $Operation;
+      }
+
+      if ($type === 'S') {
+         $name = $Message->fields['name'] ?? '';
+         $value = $Message->fields['value'] ?? '';
+
+         if (is_string($name) && $name !== '' && is_string($value)) {
+            $this->record($name, $value);
+         }
+
+         return $Operation;
+      }
+
+      if ($type === 'N') {
+         $notice = $Message->fields['notice'] ?? [];
+         $this->notice(is_array($notice) ? $notice : []);
+
+         return $Operation;
+      }
+
+      if ($type === 'A') {
+         $process = $Message->fields['process'] ?? 0;
+         $channel = $Message->fields['channel'] ?? '';
+         $payload = $Message->fields['payload'] ?? '';
+         $this->notify(
+            is_int($process) ? $process : 0,
+            is_string($channel) ? $channel : '',
+            is_string($payload) ? $payload : ''
+         );
+
+         return $Operation;
       }
 
       return $Operation;
