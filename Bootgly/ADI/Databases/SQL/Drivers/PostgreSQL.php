@@ -83,6 +83,8 @@ class PostgreSQL extends Driver
    private array $completed = [];
    /** @var array<string,string> */
    private array $names = [];
+   /** @var array<string,true> */
+   private array $preparing = [];
    private null|Readiness $ReadReadiness = null;
    private null|Readiness $WriteReadiness = null;
    /** @var resource|null */
@@ -147,7 +149,8 @@ class PostgreSQL extends Driver
          $Operation->statement = $statement;
          $Operation->portal = '';
          $cached = $this->statements[$Operation->statement] ?? false;
-         $Operation->prepared = $cached !== false;
+         $preparing = isset($this->preparing[$Operation->statement]);
+         $Operation->prepared = $cached !== false || $preparing;
          $types = [];
          $index = 0;
 
@@ -167,8 +170,11 @@ class PostgreSQL extends Driver
          $sync = Encoder::SYNC_BYTES;
 
          if ($Operation->prepared) {
-            $this->evict($Operation->statement);
-            $this->cache($Operation->statement, $cached);
+            if ($cached !== false) {
+               $this->evict($Operation->statement);
+               $this->cache($Operation->statement, $cached);
+            }
+
             $Operation->write = "{$bind}{$describe}{$execute}{$sync}";
 
             return $Operation;
@@ -323,6 +329,10 @@ class PostgreSQL extends Driver
             return $Operation;
          }
 
+         if ($Operation->statement !== '' && $Operation->prepared === false) {
+            $this->preparing[$Operation->statement] = true;
+         }
+
          $Operation->state = OperationStates::Reading;
          $this->queue($Operation);
 
@@ -422,6 +432,7 @@ class PostgreSQL extends Driver
          return $this;
       }
 
+      unset($this->preparing[$statement]);
       $this->statements[$statement] = $metadata;
 
       return $this;
@@ -432,6 +443,7 @@ class PostgreSQL extends Driver
     */
    public function evict (string $statement): self
    {
+      unset($this->preparing[$statement]);
       unset($this->statements[$statement]);
 
       return $this;
