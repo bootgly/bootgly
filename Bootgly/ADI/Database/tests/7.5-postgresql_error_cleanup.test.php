@@ -2,8 +2,8 @@
 
 use Bootgly\ACI\Tests\Suite\Test\Specification;
 use Bootgly\ADI\Databases\SQL;
-use Bootgly\ADI\Database\ConnectionStates;
-use Bootgly\ADI\Database\OperationStates;
+use Bootgly\ADI\Database\Connection\ConnectionStates;
+use Bootgly\ADI\Database\Operation\OperationStates;
 use Bootgly\ADI\Databases\SQL\Drivers\PostgreSQL;
 
 

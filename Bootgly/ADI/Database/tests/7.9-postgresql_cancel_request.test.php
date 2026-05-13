@@ -2,7 +2,7 @@
 
 use Bootgly\ACI\Tests\Suite\Test\Specification;
 use Bootgly\ADI\Databases\SQL;
-use Bootgly\ADI\Database\OperationStates;
+use Bootgly\ADI\Database\Operation\OperationStates;
 use Bootgly\ADI\Databases\SQL\Drivers\PostgreSQL;
 use Bootgly\ADI\Databases\SQL\Drivers\PostgreSQL\Encoder;
 

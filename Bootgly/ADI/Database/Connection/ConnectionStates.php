@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\ADI\Database;
+namespace Bootgly\ADI\Database\Connection;
 
 
 /**

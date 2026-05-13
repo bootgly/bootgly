@@ -3,7 +3,7 @@
 use Bootgly\ACI\Tests\Suite\Test\Specification;
 use Bootgly\ADI\Databases\SQL;
 use Bootgly\ADI\Databases\SQL\Operation;
-use Bootgly\ADI\Database\OperationStates;
+use Bootgly\ADI\Database\Operation\OperationStates;
 
 
 return new Specification(

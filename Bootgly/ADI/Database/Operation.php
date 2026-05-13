@@ -17,7 +17,7 @@ use Bootgly\ACI\Events\Readiness;
 use Bootgly\ADI\Database\Connection;
 use Bootgly\ADI\Database\Driver;
 use Bootgly\ADI\Database\Operation\Result;
-use Bootgly\ADI\Database\OperationStates;
+use Bootgly\ADI\Database\Operation\OperationStates;
 
 
 /**

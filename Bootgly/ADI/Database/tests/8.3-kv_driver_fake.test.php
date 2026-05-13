@@ -5,7 +5,7 @@ use Bootgly\ADI\Database\Config;
 use Bootgly\ADI\Database\Connection;
 use Bootgly\ADI\Database\Operation as DatabaseOperation;
 use Bootgly\ADI\Database\Operation\Result;
-use Bootgly\ADI\Database\OperationStates;
+use Bootgly\ADI\Database\Operation\OperationStates;
 use Bootgly\ADI\Databases\KV\Driver;
 use Bootgly\ADI\Databases\KV\Operation;
 

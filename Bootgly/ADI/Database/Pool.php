@@ -20,9 +20,9 @@ use Bootgly\ADI\Database\Config;
 use Bootgly\ADI\Database\Connection;
 use Bootgly\ADI\Database\Driver;
 use Bootgly\ADI\Database\Drivers;
-use Bootgly\ADI\Database\ConnectionStates;
+use Bootgly\ADI\Database\Connection\ConnectionStates;
 use Bootgly\ADI\Database\Operation;
-use Bootgly\ADI\Database\OperationStates;
+use Bootgly\ADI\Database\Operation\OperationStates;
 
 
 /**

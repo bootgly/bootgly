@@ -12,7 +12,7 @@ use Bootgly\ACI\Events\Scheduler;
 use Bootgly\ACI\Tests\Suite\Test\Specification;
 use Bootgly\ADI\Databases\SQL\Config;
 use Bootgly\ADI\Database\Connection;
-use Bootgly\ADI\Database\ConnectionStates;
+use Bootgly\ADI\Database\Connection\ConnectionStates;
 
 
 return new Specification(

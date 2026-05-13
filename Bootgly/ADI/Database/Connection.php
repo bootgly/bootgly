@@ -26,7 +26,7 @@ use RuntimeException;
 use Bootgly\ACI\Events\Readiness;
 use Bootgly\ADI\Database\Config;
 use Bootgly\ADI\Database\Driver;
-use Bootgly\ADI\Database\ConnectionStates;
+use Bootgly\ADI\Database\Connection\ConnectionStates;
 
 
 /**

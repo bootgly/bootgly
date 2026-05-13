@@ -15,7 +15,7 @@ use Bootgly\ACI\Tests\Suite\Test\Specification;
 use Bootgly\ADI\Databases\SQL\Config;
 use Bootgly\ADI\Database\Connection;
 use Bootgly\ADI\Databases\SQL\Operation;
-use Bootgly\ADI\Database\OperationStates;
+use Bootgly\ADI\Database\Operation\OperationStates;
 use Bootgly\ADI\Databases\SQL\Drivers\PostgreSQL;
 
 
