@@ -17,16 +17,16 @@ use const STREAM_CRYPTO_METHOD_TLS_CLIENT;
 use function fclose;
 use function is_resource;
 use function stream_context_create;
-use function stream_socket_enable_crypto;
 use function stream_set_blocking;
 use function stream_socket_client;
+use function stream_socket_enable_crypto;
 use InvalidArgumentException;
 use RuntimeException;
 
 use Bootgly\ACI\Events\Readiness;
 use Bootgly\ADI\Database\Config;
-use Bootgly\ADI\Database\Driver;
 use Bootgly\ADI\Database\Connection\ConnectionStates;
+use Bootgly\ADI\Database\Driver;
 
 
 /**

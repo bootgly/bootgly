@@ -16,8 +16,8 @@ use function microtime;
 use Bootgly\ACI\Events\Readiness;
 use Bootgly\ADI\Database\Connection;
 use Bootgly\ADI\Database\Driver;
-use Bootgly\ADI\Database\Operation\Result;
 use Bootgly\ADI\Database\Operation\OperationStates;
+use Bootgly\ADI\Database\Operation\Result;
 
 
 /**
@@ -42,6 +42,10 @@ class Operation
    public private(set) null|Result $Result = null;
    public private(set) null|string $error = null;
    public private(set) bool $finished = false;
+   /** Keep the assigned pool connection reserved after this operation completes. */
+   public bool $lock = false;
+   /** Release a previously reserved pool connection after this operation completes. */
+   public bool $unlock = false;
    /** CancelRequest was sent; the main operation still resolves, fails or expires later. */
    public bool $cancelled = false;
 

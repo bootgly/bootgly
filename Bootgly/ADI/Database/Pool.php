@@ -18,9 +18,9 @@ use function spl_object_id;
 
 use Bootgly\ADI\Database\Config;
 use Bootgly\ADI\Database\Connection;
+use Bootgly\ADI\Database\Connection\ConnectionStates;
 use Bootgly\ADI\Database\Driver;
 use Bootgly\ADI\Database\Drivers;
-use Bootgly\ADI\Database\Connection\ConnectionStates;
 use Bootgly\ADI\Database\Operation;
 use Bootgly\ADI\Database\Operation\OperationStates;
 
@@ -50,6 +50,8 @@ class Pool
    // * Metadata
    /** @var array<int,true> */
    private array $counted = [];
+   /** @var array<int,true> */
+   private array $locked = [];
 
 
    /**
@@ -187,12 +189,17 @@ class Pool
          return $this;
       }
 
+      if ($Operation->unlock || ($Operation->lock && $Operation->state === OperationStates::Failed)) {
+         $this->unlock($Connection);
+      }
+
       unset($this->busy[$id]);
 
       $alive = is_resource($Connection->socket);
 
       if ($alive === false || $Connection->state !== ConnectionStates::Ready) {
          unset($this->idle[$id]);
+         unset($this->locked[$id]);
 
          if ($alive) {
             $Connection->disconnect();
@@ -201,6 +208,12 @@ class Pool
          $this->drop($Connection);
 
          $this->promote();
+
+         return $this;
+      }
+
+      if (isset($this->locked[$id])) {
+         $this->busy[$id] = $Connection;
 
          return $this;
       }
@@ -216,7 +229,7 @@ class Pool
     */
    public function assign (Operation $Operation): Operation
    {
-      $Connection = $this->acquire();
+      $Connection = $this->acquire($Operation->Connection);
 
       if ($Connection === null) {
          $Operation->state = OperationStates::Pending;
@@ -232,6 +245,10 @@ class Pool
       $Operation->Connection = $Connection;
       $Operation->Protocol = $Protocol;
 
+      if ($Operation->lock) {
+         $this->lock($Connection);
+      }
+
       $Operation = $Protocol->prepare($Operation);
 
       if ($Operation->finished) {
@@ -242,10 +259,47 @@ class Pool
    }
 
    /**
+    * Reserve one pool connection for an owner such as a SQL transaction.
+    */
+   public function lock (Connection $Connection): self
+   {
+      $id = spl_object_id($Connection);
+
+      if (isset($this->counted[$id])) {
+         $this->locked[$id] = true;
+      }
+
+      return $this;
+   }
+
+   /**
+    * Release a reserved pool connection back to normal pool scheduling.
+    */
+   public function unlock (Connection $Connection): self
+   {
+      unset($this->locked[spl_object_id($Connection)]);
+
+      return $this;
+   }
+
+   /**
     * Acquire an idle connection or reserve capacity for a new one.
     */
-   private function acquire (): null|Connection
+   private function acquire (null|Connection $Pinned = null): null|Connection
    {
+      if ($Pinned !== null) {
+         $id = spl_object_id($Pinned);
+
+         if (isset($this->counted[$id]) === false || is_resource($Pinned->socket) === false) {
+            return null;
+         }
+
+         unset($this->idle[$id]);
+         $this->busy[$id] = $Pinned;
+
+         return $Pinned;
+      }
+
       $id = array_key_first($this->idle);
 
       if ($id !== null) {
@@ -257,7 +311,11 @@ class Pool
       }
 
       if ($this->created >= $this->max) {
-         foreach ($this->busy as $Connection) {
+         foreach ($this->busy as $id => $Connection) {
+            if (isset($this->locked[$id])) {
+               continue;
+            }
+
             $Protocol = $Connection->Protocol;
 
             if ($Protocol !== null && $Connection->connected && $Connection->state === ConnectionStates::Ready && is_resource($Connection->socket) && $Protocol->check()) {
@@ -277,7 +335,6 @@ class Pool
 
       return $Connection;
    }
-
    /**
     * Track one pool-owned connection.
     */

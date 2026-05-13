@@ -15,6 +15,7 @@ use Bootgly\ADI\Database;
 use Bootgly\ADI\Databases\SQL\Config;
 use Bootgly\ADI\Databases\SQL\Drivers;
 use Bootgly\ADI\Databases\SQL\Operation;
+use Bootgly\ADI\Databases\SQL\Transaction;
 
 
 /**
@@ -59,6 +60,14 @@ class SQL extends Database
       $this->Pool->assign($Operation);
 
       return $Operation;
+   }
+
+   /**
+    * Begin a SQL transaction pinned to one pooled connection.
+    */
+   public function begin (): Transaction
+   {
+      return new Transaction($this);
    }
 
    /**
