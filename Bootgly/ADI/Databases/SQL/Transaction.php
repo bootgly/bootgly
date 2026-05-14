@@ -13,10 +13,13 @@ namespace Bootgly\ADI\Databases\SQL;
 
 use function array_pop;
 use function array_search;
-use function str_replace;
+use BackedEnum;
+use Stringable;
 
 use Bootgly\ADI\Database\Connection;
 use Bootgly\ADI\Databases\SQL as SQLDatabase;
+use Bootgly\ADI\Databases\SQL\Builder;
+use Bootgly\ADI\Databases\SQL\Builder\Query;
 
 
 /**
@@ -73,10 +76,15 @@ class Transaction
    /**
     * Run one SQL statement inside the transaction connection.
     *
+    * @param string|Builder|Query $query
     * @param array<int|string,mixed> $parameters
     */
-   public function query (string $sql, array $parameters = []): Operation
+   public function query (string|Builder|Query $query, array $parameters = []): Operation
    {
+      $Normalized = new Normalized($query, $parameters);
+      $sql = $Normalized->sql;
+      $parameters = $Normalized->parameters;
+
       if ($this->ready() === false) {
          return $this->fail($sql, $parameters, 'SQL transaction operation is still active.');
       }
@@ -86,6 +94,16 @@ class Transaction
       }
 
       return $this->create($sql, $parameters);
+   }
+
+   /**
+    * Start a SQL query builder for one transaction table.
+    */
+   public function table (BackedEnum|Stringable|Builder|Query $Table, null|BackedEnum|Stringable $Alias = null): Builder
+   {
+      $Builder = new Builder($this->Database->Dialect);
+
+      return $Builder->table($Table, $Alias);
    }
 
    /**
@@ -290,8 +308,6 @@ class Transaction
     */
    private function quote (string $name): string
    {
-      $name = str_replace('"', '""', $name);
-
-      return "\"{$name}\"";
+      return $this->Database->Dialect->quote($name);
    }
 }

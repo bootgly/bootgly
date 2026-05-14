@@ -11,9 +11,17 @@
 namespace Bootgly\ADI\Databases;
 
 
+use BackedEnum;
+use Stringable;
+
 use Bootgly\ADI\Database;
+use Bootgly\ADI\Databases\SQL\Builder;
+use Bootgly\ADI\Databases\SQL\Builder\Dialect;
+use Bootgly\ADI\Databases\SQL\Builder\Dialects;
+use Bootgly\ADI\Databases\SQL\Builder\Query;
 use Bootgly\ADI\Databases\SQL\Config;
 use Bootgly\ADI\Databases\SQL\Drivers;
+use Bootgly\ADI\Databases\SQL\Normalized;
 use Bootgly\ADI\Databases\SQL\Operation;
 use Bootgly\ADI\Databases\SQL\Transaction;
 
@@ -25,6 +33,7 @@ class SQL extends Database
 {
    // * Config
    public Config $SQLConfig;
+   public private(set) Dialect $Dialect;
 
    // * Data
    // ...
@@ -46,20 +55,35 @@ class SQL extends Database
          : new Config($config);
       $this->SQLConfig = $Config;
 
+      $Dialects = new Dialects;
+      $this->Dialect = $Dialects->fetch($Config->driver);
+
       parent::__construct($Config, Drivers::class);
    }
 
    /**
     * Create an async SQL query operation.
     *
+    * @param string|Builder|Query $query
     * @param array<int|string,mixed> $parameters
     */
-   public function query (string $sql, array $parameters = []): Operation
+   public function query (string|Builder|Query $query, array $parameters = []): Operation
    {
-      $Operation = new Operation(null, $sql, $parameters, $this->Config->timeout);
+      $Normalized = new Normalized($query, $parameters);
+      $Operation = new Operation(null, $Normalized->sql, $Normalized->parameters, $this->Config->timeout);
       $this->Pool->assign($Operation);
 
       return $Operation;
+   }
+
+   /**
+    * Start a SQL query builder for one table.
+    */
+   public function table (BackedEnum|Stringable|Builder|Query $Table, null|BackedEnum|Stringable $Alias = null): Builder
+   {
+      $Builder = new Builder($this->Dialect);
+
+      return $Builder->table($Table, $Alias);
    }
 
    /**

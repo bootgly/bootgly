@@ -47,6 +47,7 @@ return new Suite(
       '7.11-postgresql_statement_describe',
       '7.12-postgresql_pipeline',
       '7.13-postgresql_pipeline_release',
+      '7.14-sql_transactions',
       '8.1-databases-registry',
       '8.2-paradigm-abstract',
       '8.3-kv_driver_fake',
