@@ -169,6 +169,8 @@ class SyncFixture extends Fixture
 
       $this->path = BOOTGLY_WORKING_DIR . 'workdata/tests/schema-sync-' . uniqid() . '/';
       $this->Database = new SyncDatabase(['migrations' => 'schema_history', 'pool' => ['min' => 0, 'max' => 0]]);
+      // The fixture resolves operations synchronously and does not emulate pooled transactions.
+      $this->Database->structure()->Dialect->transactions = false;
       $this->Runner = new Runner(
          $this->Database,
          $this->path,
