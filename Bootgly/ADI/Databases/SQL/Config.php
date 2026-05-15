@@ -13,6 +13,7 @@ namespace Bootgly\ADI\Databases\SQL;
 
 use function is_scalar;
 use function max;
+use function trim;
 
 
 /**
@@ -20,9 +21,12 @@ use function max;
  */
 class Config extends \Bootgly\ADI\Database\Config
 {
+   public const string DEFAULT_MIGRATIONS = '_bootgly_migrations';
    public const int DEFAULT_STATEMENTS = 256;
 
    // * Config
+   /** Migration repository table name. */
+   public string $migrations;
    /** Maximum number of prepared statements cached per connection. */
    public int $statements;
 
@@ -42,9 +46,12 @@ class Config extends \Bootgly\ADI\Database\Config
    {
       parent::__construct($config);
 
+      $migrations = $config['migrations'] ?? self::DEFAULT_MIGRATIONS;
       $statements = $config['statements'] ?? self::DEFAULT_STATEMENTS;
 
       // * Config
+      $migrations = is_scalar($migrations) ? trim((string) $migrations) : '';
+      $this->migrations = $migrations === '' ? self::DEFAULT_MIGRATIONS : $migrations;
       $this->statements = is_scalar($statements) ? max(0, (int) $statements) : self::DEFAULT_STATEMENTS;
    }
 }

@@ -23,6 +23,7 @@ use Bootgly\ADI\Databases\SQL\Config;
 use Bootgly\ADI\Databases\SQL\Drivers;
 use Bootgly\ADI\Databases\SQL\Normalized;
 use Bootgly\ADI\Databases\SQL\Operation;
+use Bootgly\ADI\Databases\SQL\Schema;
 use Bootgly\ADI\Databases\SQL\Transaction;
 
 
@@ -39,6 +40,7 @@ class SQL extends Database
    // ...
 
    // * Metadata
+   private null|Schema $Schema = null;
    // ...
 
 
@@ -84,6 +86,18 @@ class SQL extends Database
       $Builder = new Builder($this->Dialect);
 
       return $Builder->table($Table, $Alias);
+   }
+
+   /**
+    * Start the SQL schema structure builder.
+    */
+   public function structure (): Schema
+   {
+      if ($this->Schema === null) {
+         $this->Schema = new Schema($this->Dialect);
+      }
+
+      return $this->Schema;
    }
 
    /**

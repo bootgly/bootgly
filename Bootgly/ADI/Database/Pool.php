@@ -15,7 +15,10 @@ use function array_key_first;
 use function array_shift;
 use function is_resource;
 use function spl_object_id;
+use function stream_select;
+use RuntimeException;
 
+use Bootgly\ACI\Events\Scheduler;
 use Bootgly\ADI\Database\Config;
 use Bootgly\ADI\Database\Connection;
 use Bootgly\ADI\Database\Connection\ConnectionStates;
@@ -114,6 +117,47 @@ class Pool
 
       if ($Operation->finished && $released === false) {
          $this->release($Operation);
+      }
+
+      return $Operation;
+   }
+
+   /**
+    * Wait for one operation to finish using its readiness hints.
+    */
+   public function wait (Operation $Operation): Operation
+   {
+      while (true) {
+         $this->advance($Operation);
+
+         $Readiness = $Operation->Readiness;
+         if ($Operation->finished) {
+            break;
+         }
+
+         if ($Readiness === null) {
+            throw new RuntimeException('Database operation did not provide readiness.');
+         }
+
+         $read = [];
+         $write = [];
+         $except = [];
+
+         if ($Readiness->flag === Scheduler::SCHEDULE_READ) {
+            $read[] = $Readiness->socket;
+         }
+         else {
+            $write[] = $Readiness->socket;
+         }
+
+         $selected = stream_select($read, $write, $except, 1, 0);
+         if ($selected === false) {
+            throw new RuntimeException('Database operation readiness wait failed.');
+         }
+      }
+
+      if ($Operation->error !== null) {
+         throw new RuntimeException($Operation->error);
       }
 
       return $Operation;

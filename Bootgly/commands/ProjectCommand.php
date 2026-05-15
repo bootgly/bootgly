@@ -29,18 +29,28 @@ use function intdiv;
 use function is_array;
 use function is_dir;
 use function is_file;
+use function is_numeric;
 use function json_decode;
 use function posix_get_last_error;
 use function posix_kill;
+use function readline;
 use function rtrim;
 use function str_pad;
 use function strlen;
+use function strtolower;
 use function substr;
 use function time;
+use function trim;
 use function unlink;
 use function usleep;
+use Throwable;
 
 use const Bootgly\CLI;
+use Bootgly\ADI\Databases\SQL;
+use Bootgly\ADI\Databases\SQL\Schema\Migrations;
+use Bootgly\ADI\Databases\SQL\Schema\Runner;
+use Bootgly\API\Environment\Configs\DatabaseConfig;
+use Bootgly\API\Projects\Configs;
 use Bootgly\API\Projects\Project;
 use Bootgly\CLI\Command;
 use Bootgly\CLI\UI\Components\Alert;
@@ -106,6 +116,14 @@ class ProjectCommand extends Command
             '<name>' => 'Project name'
          ]
       ],
+      'migrate' => [
+         'description' => 'Run project database migrations',
+         'arguments'   => [
+            '<name>'   => 'Project name',
+            '<action>' => 'status, up, down, sync, or create',
+            '[value]'  => 'Migration name for create or step count for down'
+         ]
+      ],
    ];
 
 
@@ -150,6 +168,10 @@ class ProjectCommand extends Command
             $options
          ),
          'info'    => $this->info(array_slice($arguments, 1)),
+         'migrate' => $this->migrate(
+            array_slice($arguments, 1),
+            $options
+         ),
 
          default   => $this->help($arguments)
       };
@@ -573,7 +595,279 @@ class ProjectCommand extends Command
       return $this->start($arguments, $options);
    }
 
+   /**
+    * Run project database migrations.
+    *
+    * @param array<string> $arguments
+    * @param array<string, bool|int|string> $options
+    *
+    * @return bool
+    */
+   public function migrate (array $arguments, array $options): bool
+   {
+      $Output = CLI->Terminal->Output;
+
+      $projectName = $arguments[0] ?? null;
+      if ($projectName === null || $projectName === '') {
+         return $this->help(['migrate']);
+      }
+
+      $projectDir = $this->resolve($projectName);
+      if ($projectDir === null) {
+         return false;
+      }
+
+      $action = $arguments[1] ?? 'status';
+      $migrationsPath = $projectDir . 'database/migrations';
+
+      if ($action === 'create') {
+         $name = $arguments[2] ?? null;
+         if ($name === null || $name === '') {
+            return $this->help(['migrate']);
+         }
+
+         $Migrations = new Migrations($migrationsPath);
+         $file = $Migrations->create($name);
+
+         $Alert = new Alert($Output);
+         $Alert->Type::Success->set();
+         $Alert->message = "Migration created: @#cyan:{$file}@;@.;";
+         $Alert->render();
+
+         return true;
+      }
+
+      $Project = $this->open($projectName);
+      if ($Project === null) {
+         return false;
+      }
+
+      $Database = $this->configure($Project);
+      if ($Database === null) {
+         return false;
+      }
+
+      $lockFile = BOOTGLY_WORKING_DIR . 'workdata/locks/migrations/' . $projectName . '.lock';
+      $Runner = new Runner($Database, $migrationsPath, $lockFile);
+
+      try {
+         if ($action === 'status') {
+            $Status = $Runner->report();
+
+            $content = '';
+            $content .= '@#Green:' . str_pad('Applied', 12) . ' @; ' . count($Status['applied']) . PHP_EOL;
+            $content .= '@#Green:' . str_pad('Local only', 12) . ' @; ' . count($Status['pending']) . PHP_EOL;
+            $content .= '@#Green:' . str_pad('DB only', 12) . ' @; ' . count($Status['missing']);
+
+            if ($Status['pending'] !== []) {
+               $content .= PHP_EOL . '@#Green:' . str_pad('Next', 12) . ' @; ' . $Status['pending'][0];
+            }
+
+            if ($Status['missing'] !== []) {
+               $content .= PHP_EOL . '@#Green:' . str_pad('Remove', 12) . ' @; ' . $Status['missing'][0];
+            }
+
+            $Output->write(PHP_EOL);
+            $Fieldset = new Fieldset($Output);
+            $Fieldset->title = '@#Cyan: Migration Status @;';
+            $Fieldset->content = $content;
+            $Fieldset->render();
+            $Output->write(PHP_EOL);
+
+            return true;
+         }
+
+         if ($action === 'sync') {
+            $Status = $Runner->report();
+
+            $content = '';
+            $content .= '@#Green:' . str_pad('Applied', 12) . ' @; ' . count($Status['applied']) . PHP_EOL;
+            $content .= '@#Green:' . str_pad('Add', 12) . ' @; ' . count($Status['pending']) . PHP_EOL;
+            $content .= '@#Green:' . str_pad('Delete', 12) . ' @; ' . count($Status['missing']);
+
+            if ($Status['pending'] !== []) {
+               $content .= PHP_EOL . '@#Green:' . str_pad('Add first', 12) . ' @; ' . $Status['pending'][0];
+            }
+
+            if ($Status['missing'] !== []) {
+               $content .= PHP_EOL . '@#Green:' . str_pad('Delete first', 12) . ' @; ' . $Status['missing'][0];
+            }
+
+            $Output->write(PHP_EOL);
+            $Fieldset = new Fieldset($Output);
+            $Fieldset->title = '@#Cyan: Migration Sync Check @;';
+            $Fieldset->content = $content;
+            $Fieldset->render();
+            $Output->write(PHP_EOL);
+
+            if ($Status['pending'] === [] && $Status['missing'] === []) {
+               $Alert = new Alert($Output);
+               $Alert->Type::Success->set();
+               $Alert->message = 'Migration history is already synchronized.@.;';
+               $Alert->render();
+
+               return true;
+            }
+
+            if ($this->confirm("Apply migration sync to {$Runner->Repository->table}? [y/N]") === false) {
+               $Alert = new Alert($Output);
+               $Alert->Type::Attention->set();
+               $Alert->message = 'Migration sync cancelled.@.;';
+               $Alert->render();
+
+               return true;
+            }
+
+            $Sync = $Runner->sync();
+
+            $content = '';
+            $content .= '@#Green:' . str_pad('Added', 12) . ' @; ' . count($Sync['added']) . PHP_EOL;
+            $content .= '@#Green:' . str_pad('Deleted', 12) . ' @; ' . count($Sync['deleted']);
+
+            $Output->write(PHP_EOL);
+            $Fieldset = new Fieldset($Output);
+            $Fieldset->title = '@#Cyan: Migration Sync Applied @;';
+            $Fieldset->content = $content;
+            $Fieldset->render();
+            $Output->write(PHP_EOL);
+
+            return true;
+         }
+
+         if ($action === 'up') {
+            $limit = isset($arguments[2]) && is_numeric($arguments[2]) ? (int) $arguments[2] : 0;
+            $applied = $Runner->up($limit);
+
+            $Alert = new Alert($Output);
+            $Alert->Type::Success->set();
+            $Alert->message = 'Migrations applied: @#cyan:' . count($applied) . '@;@.;';
+            $Alert->render();
+
+            return true;
+         }
+
+         if ($action === 'down') {
+            if (isset($arguments[2]) === false || is_numeric($arguments[2]) === false) {
+               $Alert = new Alert($Output);
+               $Alert->Type::Failure->set();
+               $Alert->message = 'Migration down requires a numeric step count.@.;';
+               $Alert->render();
+
+               return false;
+            }
+
+            $reverted = $Runner->down((int) $arguments[2]);
+
+            $Alert = new Alert($Output);
+            $Alert->Type::Success->set();
+            $Alert->message = 'Migrations reverted: @#cyan:' . count($reverted) . '@;@.;';
+            $Alert->render();
+
+            return true;
+         }
+      }
+      catch (Throwable $Throwable) {
+         $Alert = new Alert($Output);
+         $Alert->Type::Failure->set();
+         $Alert->message = $Throwable->getMessage() . '@.;';
+         $Alert->render();
+
+         return false;
+      }
+
+      $Alert = new Alert($Output);
+      $Alert->Type::Failure->set();
+      $Alert->message = "Invalid migration action: @#cyan:{$action}@;@.;";
+      $Alert->render();
+
+      return false;
+   }
+
    // @ Helpers
+   /**
+    * Confirm one destructive CLI action.
+    */
+   private function confirm (string $question): bool
+   {
+      $answer = readline($question . ' ');
+      if ($answer === false) {
+         return false;
+      }
+
+      return in_array(strtolower(trim($answer)), ['y', 'yes'], true);
+   }
+
+   /**
+    * Open one project file without booting it.
+    */
+   private function open (string $projectName): null|Project
+   {
+      $Output = CLI->Terminal->Output;
+      $projectDir = $this->resolve($projectName);
+      if ($projectDir === null) {
+         return null;
+      }
+
+      $projectFile = $projectDir . $projectName . '.project.php';
+      if (is_file($projectFile) === false) {
+         $Alert = new Alert($Output);
+         $Alert->Type::Failure->set();
+         $Alert->message = "No project file found for @#cyan:{$projectName}@;.";
+         $Alert->render();
+
+         return null;
+      }
+
+      $Project = require $projectFile;
+      if ($Project instanceof Project === false) {
+         $Alert = new Alert($Output);
+         $Alert->Type::Failure->set();
+         $Alert->message = "Invalid project file for @#cyan:{$projectName}@;.";
+         $Alert->render();
+
+         return null;
+      }
+
+      return $Project;
+   }
+
+   /**
+    * Configure the project database facade from the database config scope.
+    */
+   private function configure (Project $Project): null|SQL
+   {
+      $Output = CLI->Terminal->Output;
+      $configsDir = $Project->path . 'configs/';
+
+      if (is_dir($configsDir) === false) {
+         $Alert = new Alert($Output);
+         $Alert->Type::Failure->set();
+         $Alert->message = "Project has no configs directory: @#cyan:{$Project->folder}@;@.;";
+         $Alert->render();
+
+         return null;
+      }
+
+      $Configs = new Configs($configsDir);
+      if ($Configs->load('database') === false) {
+         $Alert = new Alert($Output);
+         $Alert->Type::Failure->set();
+         $Alert->message = "Project has no database config scope: @#cyan:{$Project->folder}@;@.;";
+         $Alert->render();
+
+         return null;
+      }
+
+      $Scope = $Configs->Scopes->get('database');
+      if ($Scope === null) {
+         return null;
+      }
+
+      $Config = (new DatabaseConfig($Scope))->configure();
+
+      return new SQL($Config);
+   }
+
    /**
     * Resolve the project directory path.
     *
