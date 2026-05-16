@@ -72,6 +72,20 @@ return new Specification(
       $Query = (new Builder)
          ->table(Tables::Users)
          ->select(Columns::Id)
+         ->filter(Columns::Name, Operators::Equal, 'Ada')
+         ->or
+         ->filter(Columns::Id, Operators::Equal, 1)
+         ->compile($Dialect);
+
+      yield assert(
+         assertion: $Query->sql === 'SELECT `id` FROM `users` WHERE `name` = ?1 OR `id` = ?2'
+            && $Query->parameters === ['Ada', 1],
+         description: 'Builder replays fluent conjunction predicates through compile-time dialect selection'
+      );
+
+      $Query = (new Builder)
+         ->table(Tables::Users)
+         ->select(Columns::Id)
          ->filter(Columns::Id, Operators::Equal, 1)
          ->compile(new SQLite);
 

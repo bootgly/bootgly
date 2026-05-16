@@ -36,6 +36,7 @@ use Bootgly\ADI\Databases\SQL\Builder\Auxiliaries\Modes;
 use Bootgly\ADI\Databases\SQL\Builder\Auxiliaries\Nulls;
 use Bootgly\ADI\Databases\SQL\Builder\Auxiliaries\Operators;
 use Bootgly\ADI\Databases\SQL\Builder\Auxiliaries\Orders;
+use Bootgly\ADI\Databases\SQL\Builder\Conjunction;
 use Bootgly\ADI\Databases\SQL\Builder\Dialect;
 use Bootgly\ADI\Databases\SQL\Builder\Dialects\PostgreSQL;
 use Bootgly\ADI\Databases\SQL\Builder\Expression;
@@ -45,6 +46,8 @@ use Bootgly\ADI\Databases\SQL\Builder\Query;
 
 /**
  * SQL query builder with Bootgly-compliant fluent verbs.
+ * The lowercase $and/$or properties are a deliberate fluent-API exception:
+ * they mirror SQL conjunction tokens and return pure Conjunction proxies.
  *
  * @phpstan-type Predicate array{column:string,operator:Operators|Matches,value:mixed,junction:Junctions}
  * @phpstan-type PredicateGroup array{filters:array<int,array<string,mixed>>,junction:Junctions}
@@ -53,6 +56,20 @@ class Builder
 {
    use Aliasable;
    use Predicateable;
+
+   // * Fluent API
+   /**
+    * Combine the next predicate with AND.
+    */
+   public Conjunction $and {
+      get => new Conjunction($this, Junctions::And);
+   }
+   /**
+    * Combine the next predicate with OR.
+    */
+   public Conjunction $or {
+      get => new Conjunction($this, Junctions::Or);
+   }
 
    // * Config
    public private(set) Dialect $Dialect;
@@ -383,6 +400,7 @@ class Builder
     */
    public function filter (BackedEnum|Stringable $Column, Operators $Operator, mixed $value = null, Junctions $Junction = Junctions::And): static
    {
+      $Junction = $this->filters === [] ? Junctions::And : $Junction;
       $this->validate($Operator, $value);
 
       $this->filters[] = [
@@ -403,6 +421,7 @@ class Builder
     */
    public function nest (Closure $Group, Junctions $Junction = Junctions::And): static
    {
+      $Junction = $this->filters === [] ? Junctions::And : $Junction;
       $this->filters[] = $this->scope($Group, $Junction);
       $this->record(__FUNCTION__, $Group, $Junction);
 
@@ -414,6 +433,8 @@ class Builder
     */
    public function match (BackedEnum|Stringable $Column, mixed $value, Matches $Match = Matches::Like, Junctions $Junction = Junctions::And): static
    {
+      $Junction = $this->filters === [] ? Junctions::And : $Junction;
+
       if (is_string($value) === false) {
          throw new InvalidArgumentException('SQL text match value must be a string.');
       }
@@ -434,6 +455,7 @@ class Builder
     */
    public function having (BackedEnum|Stringable $Column, Operators $Operator, mixed $value = null, Junctions $Junction = Junctions::And): static
    {
+      $Junction = $this->havings === [] ? Junctions::And : $Junction;
       $this->validate($Operator, $value);
 
       $this->havings[] = [

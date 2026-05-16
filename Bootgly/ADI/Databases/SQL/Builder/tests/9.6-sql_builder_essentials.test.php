@@ -5,9 +5,11 @@ namespace Bootgly\ADI\Databases\SQL\Builder\Tests\Essentials;
 
 use function assert;
 use InvalidArgumentException;
+use ReflectionProperty;
 
 use Bootgly\ACI\Tests\Suite\Test\Specification;
 use Bootgly\ADI\Databases\SQL\Builder;
+use Bootgly\ADI\Databases\SQL\Builder\Conjunction;
 use Bootgly\ADI\Databases\SQL\Builder\Auxiliaries\Aggregates;
 use Bootgly\ADI\Databases\SQL\Builder\Auxiliaries\Joins;
 use Bootgly\ADI\Databases\SQL\Builder\Auxiliaries\Junctions;
@@ -206,6 +208,55 @@ return new Specification(
          description: 'Builder compiles explicit SQL literal filters without values'
       );
 
+      $Query = (new Builder)
+         ->table(Tables::Users)
+         ->select(Columns::Id)
+         ->filter(Columns::Active, Operators::IsTrue)
+         ->or
+         ->filter(Columns::Name, Operators::IsNotNull)
+         ->compile();
+
+      yield assert(
+         assertion: $Query->sql === 'SELECT "id" FROM "users" WHERE "active" IS TRUE OR "name" IS NOT NULL'
+            && $Query->parameters === [],
+         description: 'Builder combines fluent filters with OR property hooks'
+      );
+
+      $Builder = (new Builder)
+         ->table(Tables::Users)
+         ->select(Columns::Id)
+         ->filter(Columns::Active, Operators::IsTrue);
+      $Conjunction = $Builder->or;
+      $Query = $Builder
+         ->filter(Columns::Name, Operators::IsNotNull)
+         ->compile();
+
+      yield assert(
+         assertion: $Conjunction instanceof Conjunction
+            && $Query->sql === 'SELECT "id" FROM "users" WHERE "active" IS TRUE AND "name" IS NOT NULL'
+            && $Query->parameters === [],
+         description: 'Builder keeps fluent conjunction property reads side-effect free'
+      );
+
+      $Builder = (new Builder)
+         ->table(Tables::Users)
+         ->select(Columns::Id);
+      $Query = $Builder
+         ->or
+         ->filter(Columns::Name, Operators::IsNotNull)
+         ->compile();
+      $Filters = new ReflectionProperty($Builder, 'filters')->getValue($Builder);
+      $Actions = new ReflectionProperty($Builder, 'actions')->getValue($Builder);
+
+      /** @var array<int,array{junction:Junctions}> $Filters */
+      /** @var array<int,array{method:string,arguments:array<int|string,mixed>}> $Actions */
+      yield assert(
+         assertion: $Query->sql === 'SELECT "id" FROM "users" WHERE "name" IS NOT NULL'
+            && $Filters[0]['junction'] === Junctions::And
+            && $Actions[2]['arguments'][3] === Junctions::And,
+         description: 'Builder normalizes first fluent conjunction predicates before storing state'
+      );
+
       $blocked = false;
 
       try {
@@ -261,10 +312,28 @@ return new Specification(
       $Query = (new Builder)
          ->table(Tables::Users)
          ->select(Columns::Id)
+         ->filter(Columns::Active, Operators::IsTrue)
+         ->group(Columns::Id)
+         ->having(Columns::Name, Operators::IsNotNull)
+         ->or
+         ->filter(Columns::Id, Operators::Greater, 10)
+         ->having(Columns::Active, Operators::IsTrue)
+         ->compile();
+
+      yield assert(
+         assertion: $Query->sql === 'SELECT "id" FROM "users" WHERE "active" IS TRUE OR "id" > $1 GROUP BY "id" HAVING "name" IS NOT NULL AND "active" IS TRUE'
+            && $Query->parameters === [10],
+         description: 'Builder keeps fluent conjunctions bound to the next predicate without cross-clause leakage'
+      );
+
+      $Query = (new Builder)
+         ->table(Tables::Users)
+         ->select(Columns::Id)
          ->nest(function (Builder $Group): void {
             $Group
                ->filter(Columns::Active, Operators::IsTrue)
-               ->filter(Columns::Name, Operators::Equal, 'Ada', Junctions::Or);
+               ->or
+               ->filter(Columns::Name, Operators::Equal, 'Ada');
          })
          ->filter(Columns::Id, Operators::Greater, 10)
          ->compile();
@@ -273,6 +342,22 @@ return new Specification(
          assertion: $Query->sql === 'SELECT "id" FROM "users" WHERE ("active" IS TRUE OR "name" = $1) AND "id" > $2'
             && $Query->parameters === ['Ada', 10],
          description: 'Builder preserves nested filter precedence with grouped predicates'
+      );
+
+      $Query = (new Builder)
+         ->table(Tables::Users)
+         ->select(Columns::Id)
+         ->nest(function (Builder $Group): void {
+            $Group->filter(Columns::Active, Operators::IsTrue);
+         })
+         ->or
+         ->filter(Columns::Id, Operators::Greater, 10)
+         ->compile();
+
+      yield assert(
+         assertion: $Query->sql === 'SELECT "id" FROM "users" WHERE ("active" IS TRUE) OR "id" > $1'
+            && $Query->parameters === [10],
+         description: 'Builder applies fluent OR between grouped and top-level predicates'
       );
 
       $Now = new Expression('NOW()');
