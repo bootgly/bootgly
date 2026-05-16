@@ -11,10 +11,16 @@
 namespace Bootgly\ADI\Databases\SQL\Schema\Blueprint;
 
 
+use function is_bool;
+use function is_float;
+use function is_int;
+use function is_string;
 use BackedEnum;
+use InvalidArgumentException;
 use Stringable;
 
 use Bootgly\ADI\Databases\SQL\Builder\Expression;
+use Bootgly\ADI\Databases\SQL\Schema\Auxiliaries\Defaults;
 use Bootgly\ADI\Databases\SQL\Schema\Auxiliaries\Keys;
 use Bootgly\ADI\Databases\SQL\Schema\Auxiliaries\Types;
 
@@ -30,12 +36,43 @@ class Column
    public private(set) Types $Type;
 
    // * Data
-   public private(set) bool $nullable = false;
+   public bool $nullable {
+      get => $this->Nullable;
+      set (bool $value) {
+         $this->Nullable = $value;
+      }
+   }
    public private(set) bool $generated = false;
    public private(set) bool $primary = false;
    public private(set) bool $unique = false;
    public private(set) bool $defaulted = false;
-   public private(set) null|bool|float|int|string|Stringable|Expression $default = null;
+   public null|bool|float|int|string|Stringable|Defaults $default {
+      get => $this->Default;
+      set (mixed $value) {
+         if ($value === Defaults::None) {
+            $this->defaulted = false;
+            $this->Default = null;
+
+            return;
+         }
+
+         if (
+            $value === null
+            || is_bool($value)
+            || is_float($value)
+            || is_int($value)
+            || is_string($value)
+            || $value instanceof Stringable
+         ) {
+            $this->defaulted = true;
+            $this->Default = $value;
+
+            return;
+         }
+
+         throw new InvalidArgumentException('Schema column default must be scalar, Stringable or Expression.');
+      }
+   }
    /** Default string length; dialect compilers ignore it for fixed-size types. */
    public private(set) int $length = 255;
    public private(set) int $precision = 0;
@@ -45,7 +82,8 @@ class Column
    public private(set) array $checks = [];
 
    // * Metadata
-   // ...
+   private null|bool|float|int|string|Stringable $Default = null;
+   private bool $Nullable = false;
 
 
    public function __construct (string $table, string $name, Types $Type)
@@ -54,26 +92,6 @@ class Column
       $this->table = $table;
       $this->name = $name;
       $this->Type = $Type;
-   }
-
-   /**
-    * Allow NULL values.
-    */
-   public function allow (): self
-   {
-      $this->nullable = true;
-
-      return $this;
-   }
-
-   /**
-    * Require non-NULL values.
-    */
-   public function require (): self
-   {
-      $this->nullable = false;
-
-      return $this;
    }
 
    /**
@@ -93,17 +111,6 @@ class Column
    {
       $this->precision = $precision;
       $this->scale = $scale;
-
-      return $this;
-   }
-
-   /**
-    * Set a database default expression or literal value.
-    */
-   public function default (null|bool|float|int|string|Stringable|Expression $value): self
-   {
-      $this->defaulted = true;
-      $this->default = $value;
 
       return $this;
    }

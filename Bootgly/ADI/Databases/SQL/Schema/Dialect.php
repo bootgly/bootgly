@@ -11,6 +11,8 @@
 namespace Bootgly\ADI\Databases\SQL\Schema;
 
 
+use function array_pop;
+use function explode;
 use function is_bool;
 use function is_float;
 use function is_int;
@@ -57,6 +59,29 @@ abstract class Dialect
    public function check (Capabilities $Capability): bool
    {
       return true;
+   }
+
+   /**
+    * Guard one dialect feature capability before compiling syntax that needs it.
+    */
+   protected function guard (Capabilities $Capability): void
+   {
+      if ($this->check($Capability)) {
+         return;
+      }
+
+      $this->fail($Capability);
+   }
+
+   /**
+    * Throw the uniform schema capability exception.
+    */
+   protected function fail (Capabilities $Capability): never
+   {
+      $parts = explode('\\', static::class);
+      $dialect = array_pop($parts);
+
+      throw new InvalidArgumentException("{$dialect} schema dialect lacks capability: {$Capability->name}.");
    }
 
    /**

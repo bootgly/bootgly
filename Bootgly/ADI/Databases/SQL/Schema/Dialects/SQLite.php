@@ -93,19 +93,27 @@ class SQLite extends Dialect
    public function alter (Blueprint $Blueprint): Query
    {
       if ($Blueprint->changes !== []) {
-         throw new InvalidArgumentException('SQLite schema dialect does not support ALTER COLUMN TYPE.');
-      }
+         foreach ($Blueprint->changes as $Change) {
+            if ($Change->expression !== null) {
+               $this->guard(Capabilities::AlterColumnUsing);
+            }
 
-      if ($Blueprint->nullabilities !== []) {
-         throw new InvalidArgumentException('SQLite schema dialect does not support ALTER COLUMN nullability changes.');
-      }
+            if ($Change->nullable !== null) {
+               $this->guard(Capabilities::AlterColumnNullability);
+            }
 
-      if ($Blueprint->defaults !== []) {
-         throw new InvalidArgumentException('SQLite schema dialect does not support ALTER COLUMN default changes.');
+            if ($Change->defaulted || $Change->dropped) {
+               $this->guard(Capabilities::AlterColumnDefault);
+            }
+
+            if ($Change->typed) {
+               $this->guard(Capabilities::AlterColumnType);
+            }
+         }
       }
 
       if ($Blueprint->references !== []) {
-         throw new InvalidArgumentException('SQLite schema dialect does not support ADD CONSTRAINT in ALTER TABLE.');
+         $this->guard(Capabilities::AddConstraint);
       }
 
       $actions = [];
@@ -116,12 +124,14 @@ class SQLite extends Dialect
       }
 
       foreach ($Blueprint->renames as $Rename) {
+         $this->guard(Capabilities::RenameColumn);
          $from = $this->quote($Rename->from);
          $to = $this->quote($Rename->to);
          $actions[] = "RENAME COLUMN {$from} TO {$to}";
       }
 
       foreach ($Blueprint->drops as $drop) {
+         $this->guard(Capabilities::DropColumn);
          $column = $this->quote($drop);
          $actions[] = "DROP COLUMN {$column}";
       }
@@ -131,7 +141,7 @@ class SQLite extends Dialect
       }
 
       if (count($actions) > 1) {
-         throw new InvalidArgumentException('SQLite schema dialect supports one ALTER TABLE action per statement.');
+         $this->guard(Capabilities::MultiActionAlter);
       }
 
       $table = $this->quote($Blueprint->table);
@@ -203,7 +213,7 @@ class SQLite extends Dialect
       bool $exists = true
    ): Query
    {
-      throw new InvalidArgumentException('SQLite schema dialect does not support DROP CONSTRAINT.');
+      $this->fail(Capabilities::DropConstraint);
    }
 
    /**

@@ -4,9 +4,15 @@ namespace Bootgly\ADI\Databases\SQL\Schema\Tests\RepositoryLock;
 
 
 use const BOOTGLY_WORKING_DIR;
+use const LOCK_EX;
+use const LOCK_UN;
 use function assert;
+use function fclose;
 use function file_put_contents;
+use function flock;
+use function fopen;
 use function is_dir;
+use function is_file;
 use function mkdir;
 use function rmdir;
 use function uniqid;
@@ -22,11 +28,20 @@ return new Specification(
    description: 'Database: SQL schema repository queries and lock file behavior',
    test: function () {
       $Database = new SQL;
-      $Repository = new Repository($Database->Dialect, $Database->SQLConfig->migrations);
+      $Repository = new Repository(
+         $Database->Dialect,
+         $Database->structure()->Dialect,
+         $Database->SQLConfig->migrations
+      );
 
       yield assert(
-         assertion: $Repository->create()->sql === 'CREATE TABLE IF NOT EXISTS "_bootgly_migrations" ("migration" VARCHAR(255) NOT NULL PRIMARY KEY, "batch" INTEGER NOT NULL, "created_at" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP)',
+         assertion: $Repository->create()->sql === 'CREATE TABLE IF NOT EXISTS "_bootgly_migrations" ("migration" VARCHAR(191) NOT NULL PRIMARY KEY, "batch" INTEGER NOT NULL, "created_at" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP)',
          description: 'Repository compiles PostgreSQL migration status table creation through the Schema Builder'
+      );
+
+      yield assert(
+         assertion: $Repository->SchemaDialect === $Database->structure()->Dialect,
+         description: 'Repository reuses the SQL Schema dialect resolved by the Schema facade'
       );
 
       $Query = $Repository->insert('20260514000000_create_accounts', 3);
@@ -45,11 +60,11 @@ return new Specification(
       );
 
       $MySQL = new SQL(['driver' => 'mysql']);
-      $MySQLRepository = new Repository($MySQL->Dialect, $MySQL->SQLConfig->migrations);
+      $MySQLRepository = new Repository($MySQL->Dialect, $MySQL->structure()->Dialect, $MySQL->SQLConfig->migrations);
       $MySQLInsert = $MySQLRepository->insert('20260514000000_create_accounts', 3);
 
       yield assert(
-         assertion: $MySQLRepository->create()->sql === 'CREATE TABLE IF NOT EXISTS `_bootgly_migrations` (`migration` VARCHAR(255) NOT NULL PRIMARY KEY, `batch` INT NOT NULL, `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP)'
+         assertion: $MySQLRepository->create()->sql === 'CREATE TABLE IF NOT EXISTS `_bootgly_migrations` (`migration` VARCHAR(191) NOT NULL PRIMARY KEY, `batch` INT NOT NULL, `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP)'
             && $MySQLRepository->fetch()->sql === 'SELECT `migration`, `batch`, `created_at` FROM `_bootgly_migrations` ORDER BY `batch` DESC, `migration` DESC'
             && $MySQLRepository->peek()->sql === 'SELECT COALESCE(MAX(`batch`), 0) AS `batch` FROM `_bootgly_migrations`'
             && $MySQLInsert->sql === 'INSERT INTO `_bootgly_migrations` (`migration`, `batch`) VALUES (?, ?)'
@@ -59,7 +74,11 @@ return new Specification(
       );
 
       $SQLite = new SQL(['driver' => 'sqlite']);
-      $SQLiteRepository = new Repository($SQLite->Dialect, $SQLite->SQLConfig->migrations);
+      $SQLiteRepository = new Repository(
+         $SQLite->Dialect,
+         $SQLite->structure()->Dialect,
+         $SQLite->SQLConfig->migrations
+      );
       $SQLiteInsert = $SQLiteRepository->insert('20260514000000_create_accounts', 3);
 
       yield assert(
@@ -93,9 +112,24 @@ return new Specification(
       $Lock->release();
 
       yield assert(
-         assertion: $Lock->check() === false,
-         description: 'Lock releases the local migration lock file'
+         assertion: $Lock->check() === false
+            && is_file($dir . 'migrations.lock.guard'),
+         description: 'Lock releases the local migration lock and keeps the reusable guard sidecar'
       );
+
+      $Guard = fopen($dir . 'guarded.lock.guard', 'c');
+      assert($Guard !== false);
+      flock($Guard, LOCK_EX);
+
+      $Guarded = new Lock($dir . 'guarded.lock');
+
+      yield assert(
+         assertion: $Guarded->acquire() === false && $Guarded->check() === false,
+         description: 'Lock returns false when the guard file is already locked'
+      );
+
+      flock($Guard, LOCK_UN);
+      fclose($Guard);
 
       $Stale = new Lock($dir . 'stale.lock');
       file_put_contents($dir . 'stale.lock', "pid=0\ntime=0\n");
@@ -108,6 +142,7 @@ return new Specification(
       $Stale->release();
 
       unlink($dir . 'migrations.lock.guard');
+      unlink($dir . 'guarded.lock.guard');
       unlink($dir . 'stale.lock.guard');
 
       rmdir($dir);

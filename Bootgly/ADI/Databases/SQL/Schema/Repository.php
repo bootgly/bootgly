@@ -26,24 +26,26 @@ class Repository
    private const string MIGRATION = 'migration';
    private const string BATCH = 'batch';
    private const string CREATED_AT = 'created_at';
+   private const int MIGRATION_LENGTH = 191;
 
    // * Config
    public private(set) string $table;
    public SQLDialect $Dialect;
+   public private(set) Dialect $SchemaDialect;
 
    // * Data
    // ...
 
    // * Metadata
-   private Dialect $SchemaDialect;
+   // ...
 
 
-   public function __construct (SQLDialect $Dialect, string $table)
+   public function __construct (SQLDialect $Dialect, Dialect $SchemaDialect, string $table)
    {
       // * Config
       $this->Dialect = $Dialect;
+      $this->SchemaDialect = $SchemaDialect;
       $this->table = $table;
-      $this->SchemaDialect = (new Dialects)->fetch($Dialect);
    }
 
    /**
@@ -53,11 +55,10 @@ class Repository
    {
       $Blueprint = new Blueprint($this->table);
       $Blueprint->add(self::MIGRATION, Types::String)
-         ->limit(255)
+         ->limit(self::MIGRATION_LENGTH)
          ->constrain(Keys::Primary);
       $Blueprint->add(self::BATCH, Types::Integer);
-      $Blueprint->add(self::CREATED_AT, Types::Timestamp)
-         ->default(new Expression('CURRENT_TIMESTAMP'));
+      $Blueprint->add(self::CREATED_AT, Types::Timestamp)->default = new Expression('CURRENT_TIMESTAMP');
 
       return $this->SchemaDialect->create($Blueprint, exists: true);
    }

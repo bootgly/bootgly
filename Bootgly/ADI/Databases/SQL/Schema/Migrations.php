@@ -122,6 +122,7 @@ class Migrations
  * --------------------------------------------------------------------------
  */
 
+use Bootgly\ADI\Databases\SQL\Schema\Auxiliaries\Defaults;
 use Bootgly\ADI\Databases\SQL\Schema\Auxiliaries\Keys;
 use Bootgly\ADI\Databases\SQL\Schema\Auxiliaries\References;
 use Bootgly\ADI\Databases\SQL\Schema\Auxiliaries\Types;

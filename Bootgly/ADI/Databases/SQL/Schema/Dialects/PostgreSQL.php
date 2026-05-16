@@ -85,42 +85,39 @@ class PostgreSQL extends Dialect
 
       foreach ($Blueprint->changes as $Change) {
          $name = $this->quote($Change->name);
-         $type = $this->cast($Change);
-         $action = "ALTER COLUMN {$name} TYPE {$type}";
 
-         if ($Change->expression !== null) {
-            $expression = $Change->expression instanceof Expression
-               ? $Change->expression->sql
-               : $Change->expression;
-            $action = "{$action} USING {$expression}";
+         if ($Change->typed) {
+            $type = $this->cast($Change);
+            $action = "ALTER COLUMN {$name} TYPE {$type}";
+
+            if ($Change->expression !== null) {
+               $expression = $Change->expression instanceof Expression
+                  ? $Change->expression->sql
+                  : $Change->expression;
+               $action = "{$action} USING {$expression}";
+            }
+
+            $actions[] = $action;
          }
 
-         $actions[] = $action;
+         if ($Change->nullable !== null) {
+            $action = $Change->nullable ? 'DROP NOT NULL' : 'SET NOT NULL';
+            $actions[] = "ALTER COLUMN {$name} {$action}";
+         }
+
+         if ($Change->dropped) {
+            $actions[] = "ALTER COLUMN {$name} DROP DEFAULT";
+         }
+         elseif ($Change->defaulted) {
+            $value = $this->escape($Change->default);
+            $actions[] = "ALTER COLUMN {$name} SET DEFAULT {$value}";
+         }
       }
 
       foreach ($Blueprint->renames as $Rename) {
          $from = $this->quote($Rename->from);
          $to = $this->quote($Rename->to);
          $actions[] = "RENAME COLUMN {$from} TO {$to}";
-      }
-
-      foreach ($Blueprint->nullabilities as $Nullability) {
-         $name = $this->quote($Nullability->name);
-         $action = $Nullability->nullable ? 'DROP NOT NULL' : 'SET NOT NULL';
-         $actions[] = "ALTER COLUMN {$name} {$action}";
-      }
-
-      foreach ($Blueprint->defaults as $Default) {
-         $name = $this->quote($Default->name);
-
-         if ($Default->dropped) {
-            $actions[] = "ALTER COLUMN {$name} DROP DEFAULT";
-
-            continue;
-         }
-
-         $value = $this->escape($Default->value);
-         $actions[] = "ALTER COLUMN {$name} SET DEFAULT {$value}";
       }
 
       foreach ($Blueprint->drops as $drop) {

@@ -12,6 +12,7 @@ namespace Bootgly\ADI\Databases\SQL\Schema;
 
 
 use const LOCK_EX;
+use const LOCK_NB;
 use const LOCK_UN;
 use function dirname;
 use function fclose;
@@ -32,6 +33,10 @@ use function unlink;
 
 /**
  * Local migration lock file.
+ *
+ * The `.guard` sidecar is persistent by design. It is the reusable advisory
+ * `flock()` target that serializes create/reclaim/write critical sections;
+ * `release()` removes only the ownership lock file.
  */
 class Lock
 {
@@ -67,10 +72,13 @@ class Lock
          return false;
       }
 
+      $guarded = false;
+
       try {
-         if (flock($guard, LOCK_EX) === false) {
+         if (flock($guard, LOCK_EX | LOCK_NB) === false) {
             return false;
          }
+         $guarded = true;
 
          $handle = @fopen($this->file, 'x');
          if ($handle === false) {
@@ -90,7 +98,9 @@ class Lock
          fclose($handle);
       }
       finally {
-         flock($guard, LOCK_UN);
+         if ($guarded) {
+            flock($guard, LOCK_UN);
+         }
          fclose($guard);
       }
 

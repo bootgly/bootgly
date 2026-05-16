@@ -12,6 +12,7 @@ namespace Bootgly\ADI\Databases\SQL\Schema;
 
 
 use Bootgly\ADI\Databases\SQL\Schema\Auxiliaries\Capabilities;
+use Bootgly\ADI\Databases\SQL\Schema\Auxiliaries\Defaults;
 use Bootgly\ADI\Databases\SQL\Schema\Auxiliaries\Directions;
 use Bootgly\ADI\Databases\SQL\Schema\Auxiliaries\Keys;
 use Bootgly\ADI\Databases\SQL\Schema\Auxiliaries\References;
@@ -25,6 +26,7 @@ class Auxiliaries
 {
    public const array ENUMS = [
       Capabilities::class,
+      Defaults::class,
       Directions::class,
       Keys::class,
       References::class,

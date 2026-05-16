@@ -95,43 +95,52 @@ class MySQL extends Dialect
 
       foreach ($Blueprint->changes as $Change) {
          if ($Change->expression !== null) {
-            throw new InvalidArgumentException('MySQL schema dialect does not support ALTER COLUMN USING expressions.');
+            $this->guard(Capabilities::AlterColumnUsing);
+         }
+
+         if ($Change->nullable !== null) {
+            $this->guard(Capabilities::AlterColumnNullability);
+         }
+
+         if ($Change->defaulted || $Change->dropped) {
+            $this->guard(Capabilities::AlterColumnDefault);
          }
 
          $name = $this->quote($Change->name);
-         $type = $this->cast($Change);
-         $actions[] = "MODIFY COLUMN {$name} {$type}";
-      }
 
-      foreach ($Blueprint->renames as $Rename) {
-         $from = $this->quote($Rename->from);
-         $to = $this->quote($Rename->to);
-         $actions[] = "RENAME COLUMN {$from} TO {$to}";
-      }
+         if ($Change->typed) {
+            $this->guard(Capabilities::AlterColumnType);
+            $type = $this->cast($Change);
+            $actions[] = "MODIFY COLUMN {$name} {$type}";
+         }
 
-      if ($Blueprint->nullabilities !== []) {
-         throw new InvalidArgumentException('MySQL schema dialect requires a full column definition to alter nullability.');
-      }
-
-      foreach ($Blueprint->defaults as $Default) {
-         $name = $this->quote($Default->name);
-
-         if ($Default->dropped) {
+         if ($Change->dropped) {
             $actions[] = "ALTER COLUMN {$name} DROP DEFAULT";
 
             continue;
          }
 
-         $value = $this->escape($Default->value);
-         $actions[] = "ALTER COLUMN {$name} SET DEFAULT {$value}";
+         if ($Change->defaulted) {
+            $value = $this->escape($Change->default);
+            $actions[] = "ALTER COLUMN {$name} SET DEFAULT {$value}";
+         }
+      }
+
+      foreach ($Blueprint->renames as $Rename) {
+         $this->guard(Capabilities::RenameColumn);
+         $from = $this->quote($Rename->from);
+         $to = $this->quote($Rename->to);
+         $actions[] = "RENAME COLUMN {$from} TO {$to}";
       }
 
       foreach ($Blueprint->drops as $drop) {
+         $this->guard(Capabilities::DropColumn);
          $column = $this->quote($drop);
          $actions[] = "DROP COLUMN {$column}";
       }
 
       foreach ($Blueprint->references as $Reference) {
+         $this->guard(Capabilities::AddConstraint);
          $reference = $this->reference($Reference, true);
          $actions[] = "ADD {$reference}";
       }
@@ -210,6 +219,8 @@ class MySQL extends Dialect
       bool $exists = true
    ): Query
    {
+      $this->guard(Capabilities::DropConstraint);
+
       $table = $this->quote($Table);
       $name = $this->quote($Name);
 

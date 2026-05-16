@@ -16,13 +16,10 @@ use function is_array;
 use BackedEnum;
 use Stringable;
 
-use Bootgly\ADI\Databases\SQL\Builder\Expression;
 use Bootgly\ADI\Databases\SQL\Schema\Auxiliaries\Types;
 use Bootgly\ADI\Databases\SQL\Schema\Blueprint\Change;
 use Bootgly\ADI\Databases\SQL\Schema\Blueprint\Column;
-use Bootgly\ADI\Databases\SQL\Schema\Blueprint\DefaultValue;
 use Bootgly\ADI\Databases\SQL\Schema\Blueprint\Index;
-use Bootgly\ADI\Databases\SQL\Schema\Blueprint\Nullability;
 use Bootgly\ADI\Databases\SQL\Schema\Blueprint\Reference;
 use Bootgly\ADI\Databases\SQL\Schema\Blueprint\Rename;
 
@@ -40,12 +37,8 @@ class Blueprint
    public private(set) array $columns = [];
    /** @var array<int,Change> */
    public private(set) array $changes = [];
-   /** @var array<int,DefaultValue> */
-   public private(set) array $defaults = [];
    /** @var array<int,string> */
    public private(set) array $drops = [];
-   /** @var array<int,Nullability> */
-   public private(set) array $nullabilities = [];
    /** @var array<int,Reference> */
    public private(set) array $references = [];
    /** @var array<int,Rename> */
@@ -99,49 +92,6 @@ class Blueprint
    public function rename (BackedEnum|Stringable|string $From, BackedEnum|Stringable|string $To): self
    {
       $this->renames[] = new Rename($this->normalize($From), $this->normalize($To));
-
-      return $this;
-   }
-
-   /**
-    * Allow NULL values for one existing column.
-    */
-   public function allow (BackedEnum|Stringable|string $Column): self
-   {
-      $this->nullabilities[] = new Nullability($this->normalize($Column), true);
-
-      return $this;
-   }
-
-   /**
-    * Require non-NULL values for one existing column.
-    */
-   public function require (BackedEnum|Stringable|string $Column): self
-   {
-      $this->nullabilities[] = new Nullability($this->normalize($Column), false);
-
-      return $this;
-   }
-
-   /**
-    * Set the default value for one existing column.
-    */
-   public function default (
-      BackedEnum|Stringable|string $Column,
-      null|bool|float|int|string|Stringable|Expression $value
-   ): self
-   {
-      $this->defaults[] = new DefaultValue($this->normalize($Column), $value);
-
-      return $this;
-   }
-
-   /**
-    * Drop the default value for one existing column.
-    */
-   public function undefault (BackedEnum|Stringable|string $Column): self
-   {
-      $this->defaults[] = new DefaultValue($this->normalize($Column), dropped: true);
 
       return $this;
    }

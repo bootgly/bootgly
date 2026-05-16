@@ -175,7 +175,11 @@ class SyncFixture extends Fixture
          $this->Database,
          $this->path,
          $this->path . 'sync.lock',
-         Repository: new SyncRepository($this->Database->Dialect, $this->Database->SQLConfig->migrations)
+         Repository: new SyncRepository(
+            $this->Database->Dialect,
+            $this->Database->structure()->Dialect,
+            $this->Database->SQLConfig->migrations
+         )
       );
    }
 

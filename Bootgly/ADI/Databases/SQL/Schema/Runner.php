@@ -63,7 +63,8 @@ class Runner
       $this->Database = $Database;
       $this->Schema = $Database->structure();
       $this->Migrations = new Migrations($path);
-      $this->Repository = $Repository ?? new Repository($Database->Dialect, $table ?? $Database->SQLConfig->migrations);
+      $this->Repository = $Repository
+         ?? new Repository($Database->Dialect, $this->Schema->Dialect, $table ?? $Database->SQLConfig->migrations);
       $this->Lock = new Lock($lock);
    }
 

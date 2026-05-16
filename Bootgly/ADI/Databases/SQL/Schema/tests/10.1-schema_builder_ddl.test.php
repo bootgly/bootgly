@@ -13,6 +13,7 @@ use Bootgly\ADI\Databases\SQL;
 use Bootgly\ADI\Databases\SQL\Builder\Expression;
 use Bootgly\ADI\Databases\SQL\Schema as SQLSchema;
 use Bootgly\ADI\Databases\SQL\Schema\Auxiliaries\Capabilities;
+use Bootgly\ADI\Databases\SQL\Schema\Auxiliaries\Defaults;
 use Bootgly\ADI\Databases\SQL\Schema\Auxiliaries\Keys;
 use Bootgly\ADI\Databases\SQL\Schema\Auxiliaries\References;
 use Bootgly\ADI\Databases\SQL\Schema\Auxiliaries\Types;
@@ -68,10 +69,8 @@ return new Specification(
          $Table->add(Columns::Email, Types::String)
             ->limit(190)
             ->constrain(Keys::Unique);
-         $Table->add(Columns::Active, Types::Boolean)
-            ->default(true);
-         $Table->add(Columns::Created, Types::Timestamp)
-            ->default(new Expression('CURRENT_TIMESTAMP'));
+         $Table->add(Columns::Active, Types::Boolean)->default = true;
+         $Table->add(Columns::Created, Types::Timestamp)->default = new Expression('CURRENT_TIMESTAMP');
       });
 
       yield assert(
@@ -109,7 +108,7 @@ return new Specification(
       );
 
       $Query = $Schema->alter(Tables::Users, function (Blueprint $Table): void {
-         $Table->add('bio', Types::Text)->allow();
+         $Table->add('bio', Types::Text)->nullable = true;
          $Table->remove(Columns::Legacy);
          $Table->reference(Columns::Team, Tables::Teams, Columns::Id)
             ->delete(References::Cascade)
@@ -142,18 +141,28 @@ return new Specification(
       );
 
       $Query = $Schema->alter(Tables::Users, function (Blueprint $Table): void {
-         $Table->change(Columns::Email, Types::String)->limit(320);
+         $Email = $Table->change(Columns::Email, Types::String)->limit(320);
+         $Email->nullable = false;
          $Table->change('legacy_id', Types::BigInteger)->cast(new Expression('legacy_id::bigint'));
+         $Active = $Table->change(Columns::Active, Types::Boolean);
+         $Active->nullable = true;
+         $Active->default = false;
+         $Table->change(Columns::Created, Types::Timestamp)->default = Defaults::None;
          $Table->rename('bio', 'profile');
-         $Table->allow(Columns::Active);
-         $Table->require(Columns::Email);
-         $Table->default(Columns::Active, false);
-         $Table->undefault(Columns::Created);
       });
 
       yield assert(
-         assertion: $Query->sql === 'ALTER TABLE "users" ALTER COLUMN "email" TYPE VARCHAR(320), ALTER COLUMN "legacy_id" TYPE BIGINT USING legacy_id::bigint, RENAME COLUMN "bio" TO "profile", ALTER COLUMN "active" DROP NOT NULL, ALTER COLUMN "email" SET NOT NULL, ALTER COLUMN "active" SET DEFAULT FALSE, ALTER COLUMN "created_at" DROP DEFAULT',
+         assertion: $Query->sql === 'ALTER TABLE "users" ALTER COLUMN "email" TYPE VARCHAR(320), ALTER COLUMN "email" SET NOT NULL, ALTER COLUMN "legacy_id" TYPE BIGINT USING legacy_id::bigint, ALTER COLUMN "active" DROP NOT NULL, ALTER COLUMN "active" SET DEFAULT FALSE, ALTER COLUMN "created_at" DROP DEFAULT, RENAME COLUMN "bio" TO "profile"',
          description: 'Schema compiles ALTER COLUMN type rename nullability and default actions'
+      );
+
+      $Query = $Schema->alter('profiles', function (Blueprint $Table): void {
+         $Table->change('age', Types::Integer);
+      });
+
+      yield assert(
+         assertion: $Query->sql === 'ALTER TABLE "profiles" ALTER COLUMN "age" TYPE INTEGER',
+         description: 'Schema preserves explicit type-only column changes'
       );
 
       $Query = $Schema->index(Tables::Users, [Columns::Email, Columns::Created], unique: true);

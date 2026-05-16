@@ -53,6 +53,7 @@ return new Specification(
       yield assert(
          assertion: str_contains($contents, 'return new Migration(')
             && str_contains($contents, 'function (Migrating $Schema)')
+            && str_contains($contents, 'use Bootgly\ADI\Databases\SQL\Schema\Auxiliaries\Defaults;')
             && str_contains($contents, 'use Bootgly\ADI\Databases\SQL\Schema\Auxiliaries\Keys;')
             && str_contains($contents, 'use Bootgly\ADI\Databases\SQL\Schema\Auxiliaries\References;')
             && str_contains($contents, 'use Bootgly\ADI\Databases\SQL\Schema\Auxiliaries\Types;'),
