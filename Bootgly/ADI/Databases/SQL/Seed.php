@@ -19,5 +19,16 @@ use Bootgly\ACI\Fakers;
  */
 class Seed
 {
-   use Fakers;
+   use Fakers {
+      fake as private faker;
+   }
+
+
+   /**
+    * Generate one fake value by concrete faker kind.
+    */
+   public function fake (string $kind, null|int $seed = null): mixed
+   {
+      return $this->faker($kind, $seed);
+   }
 }
