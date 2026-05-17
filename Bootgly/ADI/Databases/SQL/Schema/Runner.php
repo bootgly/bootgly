@@ -18,16 +18,19 @@ use RuntimeException;
 use Throwable;
 
 use Bootgly\ADI\Databases\SQL as SQLDatabase;
-use Bootgly\ADI\Databases\SQL\Runner as SQLRunner;
 use Bootgly\ADI\Databases\SQL\Schema\Auxiliaries\Directions;
 
 
 /**
  * Migration runner for one SQL database and migrations path.
  */
-class Runner extends SQLRunner
+class Runner
 {
    // * Config
+   public private(set) SQLDatabase $Database;
+   public private(set) Migrating $Schema;
+   public private(set) Dialect $Dialect;
+   public private(set) Guard $Guard;
    public private(set) Migrations $Migrations;
    public private(set) Repository $Repository;
 
@@ -46,12 +49,16 @@ class Runner extends SQLRunner
       null|Repository $Repository = null
    )
    {
-      parent::__construct($Database, $lock, $path, 'Migration');
+      $Schema = $Database->structure();
 
       // * Config
+      $this->Database = $Database;
+      $this->Schema = $Schema;
+      $this->Dialect = $Schema->Dialect;
+      $this->Guard = new Guard($Database, $Database->Pool, $this->Dialect, $path, $lock, 'Migration');
       $this->Migrations = new Migrations($path);
       $this->Repository = $Repository
-         ?? new Repository($Database->Dialect, $this->Schema->Dialect, $table ?? $Database->SQLConfig->migrations);
+         ?? new Repository($Database->Dialect, $this->Dialect, $table ?? $Database->SQLConfig->migrations);
    }
 
    /**
@@ -71,7 +78,7 @@ class Runner extends SQLRunner
    {
       $this->boot();
 
-      $applied = $this->fetch($this->Repository->fetch());
+      $applied = $this->Guard->fetch($this->Repository->fetch());
       $files = $this->Migrations->discover();
       $known = [];
       $missing = [];
@@ -110,7 +117,7 @@ class Runner extends SQLRunner
     */
    public function up (int $limit = 0): array
    {
-      $this->lock();
+      $this->Guard->lock();
 
       try {
          $Status = $this->report();
@@ -128,7 +135,7 @@ class Runner extends SQLRunner
          }
       }
       finally {
-         $this->unlock();
+         $this->Guard->unlock();
       }
 
       return $applied;
@@ -149,7 +156,7 @@ class Runner extends SQLRunner
          throw new InvalidArgumentException('Migration down requires a positive batch number.');
       }
 
-      $this->lock();
+      $this->Guard->lock();
 
       try {
          $Status = $this->report();
@@ -187,7 +194,7 @@ class Runner extends SQLRunner
          }
       }
       finally {
-         $this->unlock();
+         $this->Guard->unlock();
       }
 
       return $reverted;
@@ -200,7 +207,7 @@ class Runner extends SQLRunner
     */
    public function sync (): array
    {
-      $this->lock();
+      $this->Guard->lock();
 
       try {
          $Status = $this->report();
@@ -208,7 +215,7 @@ class Runner extends SQLRunner
          $deleted = [];
 
          foreach ($Status['missing'] as $name) {
-            $this->execute($this->Repository->delete($name));
+            $this->Guard->execute($this->Repository->delete($name));
             $deleted[] = $name;
          }
 
@@ -216,13 +223,13 @@ class Runner extends SQLRunner
             $batch = $this->peek() + 1;
 
             foreach ($Status['pending'] as $name) {
-               $this->execute($this->Repository->insert($name, $batch));
+               $this->Guard->execute($this->Repository->insert($name, $batch));
                $added[] = $name;
             }
          }
       }
       finally {
-         $this->unlock();
+         $this->Guard->unlock();
       }
 
       return [
@@ -240,7 +247,7 @@ class Runner extends SQLRunner
          return;
       }
 
-      $this->execute($this->Repository->create());
+      $this->Guard->execute($this->Repository->create());
       $this->bootstrapped = true;
    }
 
@@ -251,7 +258,7 @@ class Runner extends SQLRunner
    {
       $up = $Direction === Directions::Up;
 
-      if ($this->Schema->Dialect->transactions) {
+      if ($this->Dialect->transactions) {
          $Transaction = $this->Database->begin();
          if ($Transaction->Operation !== null) {
             $this->Database->Pool->wait($Transaction->Operation);
@@ -261,8 +268,8 @@ class Runner extends SQLRunner
             $queries = $up
                ? $Migration->up($this->Schema)
                : $Migration->down($this->Schema);
-            $this->execute($queries, $Transaction);
-            $this->execute(
+            $this->Guard->execute($queries, $Transaction);
+            $this->Guard->execute(
                $up
                   ? $this->Repository->insert($Migration->name, $batch)
                   : $this->Repository->delete($Migration->name),
@@ -282,8 +289,8 @@ class Runner extends SQLRunner
       $queries = $up
          ? $Migration->up($this->Schema)
          : $Migration->down($this->Schema);
-      $this->execute($queries);
-      $this->execute(
+      $this->Guard->execute($queries);
+      $this->Guard->execute(
          $up
             ? $this->Repository->insert($Migration->name, $batch)
             : $this->Repository->delete($Migration->name)

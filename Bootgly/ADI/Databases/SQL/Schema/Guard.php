@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\ADI\Databases\SQL;
+namespace Bootgly\ADI\Databases\SQL\Schema;
 
 
 use const PHP_INT_SIZE;
@@ -22,20 +22,23 @@ use InvalidArgumentException;
 use RuntimeException;
 use Throwable;
 
-use Bootgly\ADI\Databases\SQL as SQLDatabase;
+use Bootgly\ADI\Database\Pool;
 use Bootgly\ADI\Databases\SQL\Builder;
 use Bootgly\ADI\Databases\SQL\Builder\Query as SQLQuery;
-use Bootgly\ADI\Databases\SQL\Schema as SQLSchema;
+use Bootgly\ADI\Databases\SQL\Lock;
+use Bootgly\ADI\Databases\SQL\Normalized;
+use Bootgly\ADI\Databases\SQL\Querying;
 
 
 /**
- * Shared engine for SQL runners that execute files under a coordinated lock.
+ * Shared guard for SQL runners that execute files under a coordinated lock.
  */
-abstract class Runner
+class Guard
 {
    // * Config
-   public private(set) SQLDatabase $Database;
-   public private(set) SQLSchema $Schema;
+   public private(set) Querying $Database;
+   public private(set) Pool $Pool;
+   public private(set) Dialect $Dialect;
    public private(set) Lock $Lock;
 
    // * Data
@@ -47,11 +50,19 @@ abstract class Runner
    private bool $advised = false;
 
 
-   public function __construct (SQLDatabase $Database, string $lock, string $path, string $kind)
+   public function __construct (
+      Querying $Database,
+      Pool $Pool,
+      Dialect $Dialect,
+      string $path,
+      string $lock,
+      string $kind
+   )
    {
       // * Config
       $this->Database = $Database;
-      $this->Schema = $Database->structure();
+      $this->Pool = $Pool;
+      $this->Dialect = $Dialect;
       $this->Lock = new Lock($lock);
 
       // * Metadata
@@ -62,7 +73,7 @@ abstract class Runner
    /**
     * Acquire local and dialect advisory locks.
     */
-   protected function lock (): void
+   public function lock (): void
    {
       if ($this->Lock->acquire() === false) {
          throw new RuntimeException("{$this->kind} lock is already active.");
@@ -81,14 +92,14 @@ abstract class Runner
    /**
     * Release dialect advisory and local locks.
     */
-   protected function unlock (): void
+   public function unlock (): void
    {
       try {
          if ($this->advised === false) {
             return;
          }
 
-         $Query = $this->Schema->Dialect->unlock($this->hash());
+         $Query = $this->Dialect->unlock($this->hash());
          if ($Query !== null) {
             $this->execute($Query);
          }
@@ -101,11 +112,68 @@ abstract class Runner
    }
 
    /**
+    * Execute one query or list of queries.
+    */
+   public function execute (mixed $queries, null|Querying $Querying = null): void
+   {
+      $Querying ??= $this->Database;
+
+      foreach ($this->normalize($queries) as $Query) {
+         $Operation = $Querying->query($Query->sql, $Query->parameters);
+         $this->Pool->wait($Operation);
+      }
+   }
+
+   /**
+    * Fetch rows for one query.
+    *
+    * @return array<int,array<string,mixed>>
+    */
+   public function fetch (SQLQuery $Query): array
+   {
+      $Operation = $this->Database->query($Query);
+      $this->Pool->wait($Operation);
+
+      return $Operation->Result === null ? [] : $Operation->Result->rows;
+   }
+
+   /**
+    * Normalize one query or list of queries.
+    *
+    * @return array<int,Normalized>
+    */
+   public function normalize (mixed $queries): array
+   {
+      if ($queries === null) {
+         return [];
+      }
+
+      if ($queries instanceof Builder || $queries instanceof SQLQuery || is_string($queries)) {
+         return [new Normalized($queries)];
+      }
+
+      if (is_array($queries)) {
+         $normalized = [];
+         foreach ($queries as $query) {
+            foreach ($this->normalize($query) as $Query) {
+               $normalized[] = $Query;
+            }
+         }
+
+         return $normalized;
+      }
+
+      throw new InvalidArgumentException(
+         "{$this->kind} must return null, string, Builder, Query, or an array of those."
+      );
+   }
+
+   /**
     * Acquire a dialect advisory lock when supported.
     */
    private function advise (): void
    {
-      $Query = $this->Schema->Dialect->lock($this->hash());
+      $Query = $this->Dialect->lock($this->hash());
       if ($Query === null) {
          return;
       }
@@ -152,62 +220,5 @@ abstract class Runner
       $value = strtolower($value);
 
       return $value === '1' || $value === 't' || $value === 'true';
-   }
-
-   /**
-    * Execute one query or list of queries.
-    */
-   protected function execute (mixed $queries, null|Transaction $Transaction = null): void
-   {
-      foreach ($this->normalize($queries) as $Query) {
-         $Operation = $Transaction === null
-            ? $this->Database->query($Query->sql, $Query->parameters)
-            : $Transaction->query($Query->sql, $Query->parameters);
-         $this->Database->Pool->wait($Operation);
-      }
-   }
-
-   /**
-    * Normalize one query or list of queries.
-    *
-    * @return array<int,Normalized>
-    */
-   protected function normalize (mixed $queries): array
-   {
-      if ($queries === null) {
-         return [];
-      }
-
-      if ($queries instanceof Builder || $queries instanceof SQLQuery || is_string($queries)) {
-         return [new Normalized($queries)];
-      }
-
-      if (is_array($queries)) {
-         $normalized = [];
-         foreach ($queries as $query) {
-            foreach ($this->normalize($query) as $Query) {
-               $normalized[] = $Query;
-            }
-         }
-
-         return $normalized;
-      }
-
-      throw new InvalidArgumentException(
-         "{$this->kind} must return null, string, Builder, Query, or an array of those."
-      );
-   }
-
-   /**
-    * Fetch rows for one query.
-    *
-    * @return array<int,array<string,mixed>>
-    */
-   protected function fetch (SQLQuery $Query): array
-   {
-      $Operation = $this->Database->query($Query);
-      $this->Database->Pool->wait($Operation);
-
-      return $Operation->Result === null ? [] : $Operation->Result->rows;
    }
 }

@@ -25,7 +25,7 @@ use Bootgly\ADI\Databases\SQL\Builder\Query;
 /**
  * SQL transaction pinned to one pooled database connection.
  */
-class Transaction
+class Transaction implements Querying
 {
    // * Config
    public SQLDatabase $Database;

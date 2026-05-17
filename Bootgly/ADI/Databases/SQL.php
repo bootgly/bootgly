@@ -23,6 +23,7 @@ use Bootgly\ADI\Databases\SQL\Config;
 use Bootgly\ADI\Databases\SQL\Drivers;
 use Bootgly\ADI\Databases\SQL\Normalized;
 use Bootgly\ADI\Databases\SQL\Operation;
+use Bootgly\ADI\Databases\SQL\Querying;
 use Bootgly\ADI\Databases\SQL\Schema;
 use Bootgly\ADI\Databases\SQL\Transaction;
 
@@ -30,7 +31,7 @@ use Bootgly\ADI\Databases\SQL\Transaction;
 /**
  * SQL database facade.
  */
-class SQL extends Database
+class SQL extends Database implements Querying
 {
    // * Config
    public Config $SQLConfig;

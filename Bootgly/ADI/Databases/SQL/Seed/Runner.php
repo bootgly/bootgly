@@ -15,16 +15,18 @@ use RuntimeException;
 use Throwable;
 
 use Bootgly\ADI\Databases\SQL as SQLDatabase;
-use Bootgly\ADI\Databases\SQL\Runner as SQLRunner;
+use Bootgly\ADI\Databases\SQL\Schema\Guard;
 use Bootgly\ADI\Databases\SQL\Seed;
 
 
 /**
  * Seeder runner for one SQL database and seeders path.
  */
-class Runner extends SQLRunner
+class Runner
 {
    // * Config
+   public private(set) SQLDatabase $Database;
+   public private(set) Guard $Guard;
    public private(set) Seeders $Seeders;
 
    // * Data
@@ -36,9 +38,11 @@ class Runner extends SQLRunner
 
    public function __construct (SQLDatabase $Database, string $path, string $lock, null|Seed $Seed = null)
    {
-      parent::__construct($Database, $lock, $path, 'Seeder');
+      $Schema = $Database->structure();
 
       // * Config
+      $this->Database = $Database;
+      $this->Guard = new Guard($Database, $Database->Pool, $Schema->Dialect, $path, $lock, 'Seeder');
       $this->Seeders = new Seeders($path);
 
       // * Data
@@ -70,7 +74,7 @@ class Runner extends SQLRunner
     */
    public function run (null|string $name = null): array
    {
-      $this->lock();
+      $this->Guard->lock();
 
       try {
          $files = $this->collect($name);
@@ -83,7 +87,7 @@ class Runner extends SQLRunner
          }
       }
       finally {
-         $this->unlock();
+         $this->Guard->unlock();
       }
 
       return $ran;
@@ -103,7 +107,7 @@ class Runner extends SQLRunner
          $queries = $Seeder->run($this->Database, $this->Seed);
          $preview[$seeder] = [];
 
-         foreach ($this->normalize($queries) as $Query) {
+         foreach ($this->Guard->normalize($queries) as $Query) {
             $preview[$seeder][] = [
                'sql'        => $Query->sql,
                'parameters' => $Query->parameters,
@@ -119,7 +123,7 @@ class Runner extends SQLRunner
     */
    private function apply (Seeder $Seeder): void
    {
-      if ($this->Schema->Dialect->transactions) {
+      if ($this->Guard->Dialect->transactions) {
          $Transaction = $this->Database->begin();
          if ($Transaction->Operation !== null) {
             $this->Database->Pool->wait($Transaction->Operation);
@@ -127,7 +131,7 @@ class Runner extends SQLRunner
 
          try {
             $queries = $Seeder->run($this->Database, $this->Seed);
-            $this->execute($queries, $Transaction);
+            $this->Guard->execute($queries, $Transaction);
             $this->Database->Pool->wait($Transaction->commit());
          }
          catch (Throwable $Throwable) {
@@ -140,7 +144,7 @@ class Runner extends SQLRunner
       }
 
       $queries = $Seeder->run($this->Database, $this->Seed);
-      $this->execute($queries);
+      $this->Guard->execute($queries);
    }
 
    /**
