@@ -8,12 +8,12 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\ACI\Tests\Fakers;
+namespace Bootgly\ACI\Fakers;
 
 
 use function count;
 
-use Bootgly\ACI\Tests\Faker;
+use Bootgly\ACI\Faker;
 
 
 /**
@@ -21,9 +21,9 @@ use Bootgly\ACI\Tests\Faker;
  */
 final class Text extends Faker
 {
-    /**
-      * Number of words generated per text value.
-      */
+   /**
+    * Number of words generated per text value.
+    */
    public int $words = 5;
 
    /**

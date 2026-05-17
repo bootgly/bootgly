@@ -2,8 +2,8 @@
 
 use Bootgly\ACI\Tests\Assertion;
 use Bootgly\ACI\Tests\Assertions;
-use Bootgly\ACI\Tests\Fakers\Integer;
-use Bootgly\ACI\Tests\Fakers\UUID;
+use Bootgly\ACI\Fakers\Integer;
+use Bootgly\ACI\Fakers\UUID;
 use Bootgly\ACI\Tests\Suite\Test\Specification;
 
 

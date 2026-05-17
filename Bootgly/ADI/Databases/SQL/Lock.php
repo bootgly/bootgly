@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\ADI\Databases\SQL\Schema;
+namespace Bootgly\ADI\Databases\SQL;
 
 
 use const LOCK_EX;
@@ -32,7 +32,7 @@ use function unlink;
 
 
 /**
- * Local migration lock file.
+ * Local SQL runner lock file.
  *
  * The `.guard` sidecar is persistent by design. It is the reusable advisory
  * `flock()` target that serializes create/reclaim/write critical sections;
@@ -57,7 +57,7 @@ class Lock
    }
 
    /**
-    * Acquire the local migration lock.
+    * Acquire the local SQL runner lock.
     */
    public function acquire (): bool
    {
@@ -110,7 +110,7 @@ class Lock
    }
 
    /**
-    * Check whether the local migration lock exists.
+    * Check whether the local SQL runner lock exists.
     */
    public function check (): bool
    {
@@ -118,7 +118,7 @@ class Lock
    }
 
    /**
-    * Release the local migration lock.
+    * Release the local SQL runner lock.
     */
    public function release (): void
    {

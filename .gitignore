@@ -1,5 +1,8 @@
 # Ignore IDEs folders...
 .idea/
+# Ignore AI folders
+.agents/
+.claude/
 # Ignore files by extension...
 *.iso
 *.log
@@ -8,6 +11,7 @@
 # Ignore locks, bin, envs...
 composer
 composer.lock
+skills-lock.json
 
 
 ### @Bootgly ###

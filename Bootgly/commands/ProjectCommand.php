@@ -31,6 +31,7 @@ use function is_dir;
 use function is_file;
 use function is_numeric;
 use function json_decode;
+use function json_encode;
 use function posix_get_last_error;
 use function posix_kill;
 use function readline;
@@ -48,7 +49,9 @@ use Throwable;
 use const Bootgly\CLI;
 use Bootgly\ADI\Databases\SQL;
 use Bootgly\ADI\Databases\SQL\Schema\Migrations;
-use Bootgly\ADI\Databases\SQL\Schema\Runner;
+use Bootgly\ADI\Databases\SQL\Schema\Runner as MigrationRunner;
+use Bootgly\ADI\Databases\SQL\Seed\Runner as SeedRunner;
+use Bootgly\ADI\Databases\SQL\Seed\Seeders;
 use Bootgly\API\Environment\Configs\DatabaseConfig;
 use Bootgly\API\Projects\Configs;
 use Bootgly\API\Projects\Project;
@@ -124,6 +127,19 @@ class ProjectCommand extends Command
             '[value]'  => 'Migration name for create or step count for down'
          ]
       ],
+      'seed' => [
+         'description' => 'Run project database seeders',
+         'arguments'   => [
+            '<name>'   => 'Project name',
+            '<action>' => 'list, run, or create',
+            '[value]'  => 'Seeder name for create or run'
+         ]
+      ],
+   ];
+   /** @var array<string,array<string>> */
+   public array $options = [
+      'Increase the verbosity of the command' => ['-v', '-vv', '-vvv'],
+      'Preview seed run without executing SQL' => ['--dry-run'],
    ];
 
 
@@ -169,6 +185,10 @@ class ProjectCommand extends Command
          ),
          'info'    => $this->info(array_slice($arguments, 1)),
          'migrate' => $this->migrate(
+            array_slice($arguments, 1),
+            $options
+         ),
+         'seed'    => $this->seed(
             array_slice($arguments, 1),
             $options
          ),
@@ -648,7 +668,7 @@ class ProjectCommand extends Command
       }
 
       $lockFile = BOOTGLY_WORKING_DIR . 'workdata/locks/migrations/' . $projectName . '.lock';
-      $Runner = new Runner($Database, $migrationsPath, $lockFile);
+      $Runner = new MigrationRunner($Database, $migrationsPath, $lockFile);
 
       try {
          if ($action === 'status') {
@@ -778,6 +798,151 @@ class ProjectCommand extends Command
       $Alert = new Alert($Output);
       $Alert->Type::Failure->set();
       $Alert->message = "Invalid migration action: @#cyan:{$action}@;@.;";
+      $Alert->render();
+
+      return false;
+   }
+
+   /**
+    * Run project database seeders.
+    *
+    * @param array<string> $arguments
+    * @param array<string, bool|int|string> $options
+    *
+    * @return bool
+    */
+   public function seed (array $arguments, array $options): bool
+   {
+      $Output = CLI->Terminal->Output;
+
+      $projectName = $arguments[0] ?? null;
+      if ($projectName === null || $projectName === '') {
+         return $this->help(['seed']);
+      }
+
+      $projectDir = $this->resolve($projectName);
+      if ($projectDir === null) {
+         return false;
+      }
+
+      $action = $arguments[1] ?? 'list';
+      $seedersPath = "{$projectDir}database/seeders";
+      $Seeders = new Seeders($seedersPath);
+
+      try {
+         if ($action === 'create') {
+            $name = $arguments[2] ?? null;
+            if ($name === null || $name === '') {
+               return $this->help(['seed']);
+            }
+
+            $file = $Seeders->create($name);
+
+            $Alert = new Alert($Output);
+            $Alert->Type::Success->set();
+            $Alert->message = "Seeder created: @#cyan:{$file}@;@.;";
+            $Alert->render();
+
+            return true;
+         }
+
+         if ($action === 'list') {
+            $files = $Seeders->discover();
+
+            $content = '';
+            $content .= '@#Green:' . str_pad('Count', 12) . ' @; ' . count($files);
+
+            foreach (array_keys($files) as $name) {
+               $content .= PHP_EOL . '@#Green:' . str_pad('Seeder', 12) . ' @; ' . $name;
+            }
+
+            $Output->write(PHP_EOL);
+            $Fieldset = new Fieldset($Output);
+            $Fieldset->title = '@#Cyan: Seeder List @;';
+            $Fieldset->content = $content;
+            $Fieldset->render();
+            $Output->write(PHP_EOL);
+
+            return true;
+         }
+
+         if ($action === 'run') {
+            $Project = $this->open($projectName);
+            if ($Project === null) {
+               return false;
+            }
+
+            $Database = $this->configure($Project);
+            if ($Database === null) {
+               return false;
+            }
+
+            $lockFile = BOOTGLY_WORKING_DIR . "workdata/locks/seeders/{$projectName}.lock";
+            $Runner = new SeedRunner($Database, $seedersPath, $lockFile);
+            $name = $arguments[2] ?? null;
+
+            if (isset($options['dry-run'])) {
+               $Preview = $Runner->preview($name === '' ? null : $name);
+
+               $content = '';
+               $content .= '@#Green:' . str_pad('Seeders', 12) . ' @; ' . count($Preview);
+
+               foreach ($Preview as $seeder => $queries) {
+                  $content .= PHP_EOL . '@#Green:' . str_pad('Seeder', 12) . " @; {$seeder}";
+
+                  if ($queries === []) {
+                     $content .= PHP_EOL . '@#Green:' . str_pad('SQL', 12) . ' @; (none)';
+                     continue;
+                  }
+
+                  foreach ($queries as $index => $query) {
+                     $number = $index + 1;
+                     $content .= PHP_EOL . '@#Green:' . str_pad("SQL {$number}", 12) . " @; {$query['sql']}";
+
+                     if ($query['parameters'] !== []) {
+                        $parameters = json_encode($query['parameters']) ?: '[]';
+                        $content .= PHP_EOL . '@#Green:' . str_pad('Parameters', 12) . " @; {$parameters}";
+                     }
+                  }
+               }
+
+               $Output->write(PHP_EOL);
+               $Fieldset = new Fieldset($Output);
+               $Fieldset->title = '@#Cyan: Seeder Dry Run @;';
+               $Fieldset->content = $content;
+               $Fieldset->render();
+               $Output->write(PHP_EOL);
+
+               $Alert = new Alert($Output);
+               $Alert->Type::Attention->set();
+               $Alert->message = 'Dry run only; no seeder SQL was executed.@.;';
+               $Alert->render();
+
+               return true;
+            }
+
+            $ran = $Runner->run($name === '' ? null : $name);
+
+            $Alert = new Alert($Output);
+            $Alert->Type::Success->set();
+            $Alert->message = 'Seeders run: @#cyan:' . count($ran) . '@;@.;';
+            $Alert->render();
+
+            return true;
+         }
+      }
+      catch (Throwable $Throwable) {
+         $Alert = new Alert($Output);
+         $Alert->Type::Failure->set();
+         $Alert->message = $Throwable->getMessage() . '@.;';
+         $Alert->render();
+
+         return false;
+      }
+
+      $Alert = new Alert($Output);
+      $Alert->Type::Failure->set();
+      $Alert->message = "Invalid seeder action: @#cyan:{$action}@;@.;";
       $Alert->render();
 
       return false;

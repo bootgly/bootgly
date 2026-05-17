@@ -249,9 +249,7 @@ return new Specification(
       $Database = $Fixture->Database;
       $Runner = $Fixture->Runner;
       $hash = hash('sha256', $Fixture->path);
-      $high = (int) hexdec(substr($hash, 0, 8));
-      $low = (int) hexdec(substr($hash, 8, 8));
-      $advisory = ($high << 32) | $low;
+      $advisory = (int) hexdec(substr($hash, 0, 15));
       $Status = $Runner->report();
 
       yield assert(
@@ -300,8 +298,9 @@ return new Specification(
             && $Database->creates === 1
             && $Database->advisoryLocks === 1
             && $Database->advisoryUnlocks === 1
-            && $Database->advisoryKeys === [$advisory, $advisory],
-         description: 'Sync only changes the migration history repository'
+            && $Database->advisoryKeys === [$advisory, $advisory]
+            && $advisory >= 0,
+         description: 'Sync only changes the migration history repository and uses a non-overflowing advisory key'
       );
 
       $Reverted = $Runner->down(10, batch: 2);

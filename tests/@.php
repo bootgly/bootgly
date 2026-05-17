@@ -37,6 +37,7 @@ return new Suites(
       'Bootgly/ADI/Database/',
       'Bootgly/ADI/Databases/SQL/Builder/',
       'Bootgly/ADI/Databases/SQL/Schema/',
+      'Bootgly/ADI/Databases/SQL/Seed/',
       'Bootgly/ADI/Table/',
 
       // ! Application Programming Interface (API)

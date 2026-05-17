@@ -8,12 +8,12 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\ACI\Tests\Fakers;
+namespace Bootgly\ACI\Fakers;
 
 
 use const PHP_INT_MAX;
 
-use Bootgly\ACI\Tests\Faker;
+use Bootgly\ACI\Faker;
 
 
 /**

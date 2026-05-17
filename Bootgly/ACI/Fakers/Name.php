@@ -8,12 +8,12 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\ACI\Tests\Fakers;
+namespace Bootgly\ACI\Fakers;
 
 
 use function count;
 
-use Bootgly\ACI\Tests\Faker;
+use Bootgly\ACI\Faker;
 
 
 /**
@@ -44,6 +44,7 @@ final class Name extends Faker
    {
       $first = $this->firsts[$this->Randomizer->getInt(0, count($this->firsts) - 1)];
       $last = $this->lasts[$this->Randomizer->getInt(0, count($this->lasts) - 1)];
+
       return "{$first} {$last}";
    }
 }

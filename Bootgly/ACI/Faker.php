@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\ACI\Tests;
+namespace Bootgly\ACI;
 
 
 use Random\Engine\Mt19937;
@@ -20,7 +20,7 @@ use Random\Randomizer;
  *
  * Subclasses override generate() to return a value of their domain
  * (Email, UUID, Integer, ...). The trait Fakers exposes a single
- * fake($kind, $seed) entry-point for tests.
+ * fake($kind, $seed) entry-point.
  */
 abstract class Faker
 {
@@ -31,8 +31,7 @@ abstract class Faker
 
    // * Config
    /**
-    * The seed used to initialize the Randomizer, if any. May be used by
-    * tests to correlate Faker output with Coverage reports.
+    * The seed used to initialize the Randomizer, if any.
     */
    public private(set) null|int $seed = null;
 

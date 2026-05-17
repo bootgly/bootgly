@@ -20,7 +20,7 @@ use function unlink;
 
 use Bootgly\ACI\Tests\Suite\Test\Specification;
 use Bootgly\ADI\Databases\SQL;
-use Bootgly\ADI\Databases\SQL\Schema\Lock;
+use Bootgly\ADI\Databases\SQL\Lock;
 use Bootgly\ADI\Databases\SQL\Schema\Repository;
 
 
@@ -101,7 +101,7 @@ return new Specification(
 
       yield assert(
          assertion: $Lock->acquire() && $Lock->check(),
-         description: 'Lock acquires a local migration lock file'
+         description: 'Lock acquires a local SQL runner lock file'
       );
 
       yield assert(
@@ -114,7 +114,7 @@ return new Specification(
       yield assert(
          assertion: $Lock->check() === false
             && is_file($dir . 'migrations.lock.guard'),
-         description: 'Lock releases the local migration lock and keeps the reusable guard sidecar'
+         description: 'Lock releases the local SQL runner lock and keeps the reusable guard sidecar'
       );
 
       $Guard = fopen($dir . 'guarded.lock.guard', 'c');
@@ -136,7 +136,7 @@ return new Specification(
 
       yield assert(
          assertion: $Stale->acquire() && $Stale->check(),
-         description: 'Lock reclaims stale migration lock files'
+         description: 'Lock reclaims stale SQL runner lock files'
       );
 
       $Stale->release();

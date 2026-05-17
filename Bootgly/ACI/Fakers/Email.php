@@ -8,14 +8,14 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\ACI\Tests\Fakers;
+namespace Bootgly\ACI\Fakers;
 
 
 use function count;
 use function str_replace;
 use function strtolower;
 
-use Bootgly\ACI\Tests\Faker;
+use Bootgly\ACI\Faker;
 
 
 /**

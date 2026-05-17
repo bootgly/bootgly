@@ -8,14 +8,14 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\ACI\Tests\Fakers;
+namespace Bootgly\ACI\Fakers;
 
 
 use function bin2hex;
 use function chr;
 use function ord;
 
-use Bootgly\ACI\Tests\Faker;
+use Bootgly\ACI\Faker;
 
 
 /**

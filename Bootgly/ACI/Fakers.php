@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\ACI\Tests;
+namespace Bootgly\ACI;
 
 
 use function class_exists;
@@ -20,7 +20,7 @@ use LogicException;
  * Entry-point trait — exposes fake($kind, $seed) on the consuming class.
  *
  * $kind is matched case-insensitively against the concrete fakers shipped
- * under Bootgly\ACI\Tests\Fakers\*.
+ * under Bootgly\ACI\Fakers\*.
  */
 trait Fakers // @phpstan-ignore trait.unused
 {
