@@ -12,9 +12,6 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_CLI;
 
 
 use const BOOTGLY_PROJECT;
-use const BOOTGLY_WORKING_DIR;
-use const DIRECTORY_SEPARATOR;
-use const EXTR_SKIP;
 use const STR_PAD_LEFT;
 use const ZLIB_ENCODING_DEFLATE;
 use const ZLIB_ENCODING_GZIP;
@@ -22,35 +19,22 @@ use const ZLIB_ENCODING_RAW;
 use function array_pop;
 use function count;
 use function defined;
-use function extract;
-use function getType;
+use function explode;
 use function gmdate;
 use function gzcompress;
 use function gzdeflate;
 use function gzencode;
 use function is_array;
 use function is_int;
-use function is_object;
 use function is_resource;
-use function is_scalar;
 use function is_string;
-use function json_decode;
-use function json_encode;
-use function method_exists;
-use function ob_get_clean;
-use function ob_start;
 use function preg_match;
-use function realpath;
-use function str_ends_with;
 use function str_pad;
-use function str_starts_with;
 use function strlen;
-use function strtolower;
-use function strval;
-use AllowDynamicProperties;
 use Closure;
 use Error;
 use Fiber;
+use InvalidArgumentException;
 use SplObjectStorage;
 use Throwable;
 
@@ -58,7 +42,6 @@ use const Bootgly\WPI;
 use Bootgly\ABI\Data\__String\Path;
 use Bootgly\ABI\Debugging\Data\Throwables;
 use Bootgly\ABI\IO\FS\File;
-use Bootgly\ABI\Templates\Template;
 use Bootgly\ACI\Events\Readiness;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages;
@@ -68,13 +51,25 @@ use Bootgly\WPI\Modules\HTTP\Server\Response\Authentication;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Raw;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Raw\Body;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Raw\Header;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resource as ResponseResource;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resource\Scheduling;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\Database as DatabaseResource;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\JSON as JSONResource;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\JSONP as JSONPResource;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\Pre as PreResource;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\View as ViewResource;
 
 
 /**
  * * Config
  * @property int $code
+ * @property-read DatabaseResource $Database
+ * @property-read JSONResource $JSON
+ * @property-read JSONPResource $JSONP
+ * @property-read PreResource $Pre
+ * @property-read ViewResource $View
  */
-#[AllowDynamicProperties]
 class Response extends Server\Response
 {
    use Raw;
@@ -84,8 +79,7 @@ class Response extends Server\Response
    // ...
 
    // * Data
-   // # Resource
-   // Content
+   // # Content
    public string|null $source;
    public string|null $type;
 
@@ -97,11 +91,6 @@ class Response extends Server\Response
    #public bool $dynamic;
    #public bool $static;
    public bool $stream;
-   // # Resource
-   // Content
-   private null|string $resource;
-   /** @var array<string,mixed> */
-   protected array $uses = [];
    /** @var array<int,array<string,mixed>> */
    protected array $files;
    // # Status (sets ...)
@@ -120,6 +109,8 @@ class Response extends Server\Response
    // / HTTP
    public Header $Header;
    public Body $Body;
+
+   public Resources $Resources;
 
    /**
     * Construct a new Response instance.
@@ -140,8 +131,7 @@ class Response extends Server\Response
       $this->type = null;
 
       // * Metadata
-      $this->resource = null;
-      // @ Status
+      // # Status
       $this->initied = false;
       $this->prepared = true;
       $this->processed = true;
@@ -151,10 +141,10 @@ class Response extends Server\Response
       $this->Package = null;
       $this->Socket = null;
       $this->Fibers = new SplObjectStorage;
-      // @ State
+      // # State
       $this->chunked = false;
       $this->encoded = false;
-      // @ Type
+      // # Type
       #$this->dynamic = false;
       #$this->static = false;
       $this->stream = false;
@@ -162,6 +152,11 @@ class Response extends Server\Response
       // / HTTP
       $this->Header = new Header;
       $this->Body = new Body;
+
+      $this->Resources = new Resources(
+         fn (ResponseResource $Resource): ResponseResource => $this->attach($Resource),
+         $this
+      );
 
       // @
       if ($code !== 200) {
@@ -177,13 +172,13 @@ class Response extends Server\Response
       }
    }
    /**
-    * Get the specified property from the Response or Response Resource.
+    * Get the specified property, mounted resource or content format.
     *
-    * @param string $name The name of the property or Response Resource to get.
+    * @param string $name The name of the property, mounted resource or content format to get.
     *
-    * @return bool|string|int|array<mixed>|self The value of the property or the Response instance, for chaining.
+    * @return bool|string|int|array<mixed>|ResponseResource The value of the property or resource.
     */
-   public function __get (string $name): bool|string|int|array|self
+   public function __get (string $name): bool|string|int|array|ResponseResource
    {
       switch ($name) {
          // TODO: move to property hooks
@@ -202,15 +197,14 @@ class Response extends Server\Response
 
             return $this->Body->chunked;
 
-         default: // @ Contruct Non-Raw Response
-            $this->resource = $name;
+         default: // @ Construct Resource on demand
+            $Resource = $this->Resources->fetch($name);
 
-            $this->prepared = false;
-            $this->processed = false;
+            if ($Resource !== null) {
+               return $Resource;
+            }
 
-            $this->prepare($name);
-
-            return $this;
+            throw new InvalidArgumentException("Unknown response property or resource: {$name}");
       }
    }
    public function __set (string $name, mixed $value): void
@@ -223,6 +217,21 @@ class Response extends Server\Response
             }
             break;
       }
+   }
+
+   /**
+    * Mount one response resource and bind it to this response scheduler.
+    *
+    * @template T of ResponseResource
+    * @param T $Resource
+    * @return T
+    */
+   public function mount (ResponseResource $Resource, null|string $name = null): ResponseResource
+   {
+      $parts = explode('\\', $Resource::class);
+      $name ??= (string) array_pop($parts);
+
+      return $this->Resources->set($name, $Resource);
    }
 
    /**
@@ -255,14 +264,13 @@ class Response extends Server\Response
    public function reset (): void
    {
       // * Data
-      // # Resource
-      // Content
+      // # Content
       $this->source = null;
       $this->type = null;
+      $this->content = '';
       $this->files = [];
 
       // * Metadata
-      $this->resource = null;
       // # State (sets)
       $this->chunked = false;
       $this->encoded = false;
@@ -282,10 +290,23 @@ class Response extends Server\Response
 
       $this->Header->clean();
       $this->Body->raw = '';
+      $this->Resources->reset();
 
       if ($this->code !== 200) {
          $this->code(200);
       }
+   }
+
+   /**
+    * Attach one response resource to this response lifecycle.
+    */
+   private function attach (ResponseResource $Resource): ResponseResource
+   {
+      if ($Resource instanceof Scheduling) {
+         $Resource->schedule(fn (mixed $value = null): self => $this->wait($value));
+      }
+
+      return $Resource;
    }
 
    // # Authentication
@@ -313,243 +334,6 @@ class Response extends Server\Response
 
       return $this;
    }
-   // # Bootable
-   protected function prepare (?string $resource = null): self
-   {
-      if ($this->initied === false) {
-         $this->source  = null;
-         $this->type    = null;
-
-         $this->content = "";
-
-         $this->initied = true;
-      }
-
-      if ($resource === null) {
-         $resource = $this->resource;
-      }
-      else {
-         $resource = strtolower($resource);
-      }
-
-      switch ($resource) {
-         // Content
-         case 'json':
-            $this->source   = 'content';
-            $this->type     = 'json';
-            break;
-         case 'jsonp':
-            $this->source   = 'content';
-            $this->type     = 'jsonp';
-            break;
-         case 'pre':
-         case 'raw':
-            $this->source   = 'content';
-            $this->type     = '';
-            break;
-
-         // File
-         case 'view':
-            $this->source = 'file';
-            $this->type = 'php';
-            break;
-
-         default:
-            if ($resource) {
-               // TODO inject Resource with custom prepare()
-               // $prepared = $this->resources[$resource]->prepare();
-               // $this->source = $prepared['source'];
-               // $this->type = $prepared['type'];
-            }
-      }
-
-      $this->prepared = true;
-
-      return $this;
-   }
-   protected function process (mixed $data, null|string $resource = null): self
-   {
-      if ($resource === null) {
-         $resource = $this->resource;
-      }
-      else {
-         $resource = strtolower($resource);
-      }
-
-      /** @var Closure(mixed):string $convert */
-      /** @var Closure(mixed):string $convert */
-      $convert = static function (mixed $value): string {
-         if (is_string($value)) {
-            return $value;
-         }
-
-         if ($value === null || is_scalar($value)) {
-            return strval($value);
-         }
-
-         if (is_object($value)) {
-            if (method_exists($value, '__toString')) {
-               return (string) $value;
-            }
-
-            $encodedObject = json_encode($value);
-            return $encodedObject === false ? '' : $encodedObject;
-         }
-
-         if (is_array($value)) {
-            $encodedArray = json_encode($value);
-            return $encodedArray === false ? '' : $encodedArray;
-         }
-
-         if (is_resource($value)) {
-            return '';
-         }
-
-         return '';
-      };
-
-      switch ($resource) {
-         // Content
-         case 'json':
-            if ( is_array($data) ) {
-               $this->content = $data;
-               break;
-            }
-
-            if (is_string($data)) {
-               $decoded = json_decode($data, true);
-               $this->content = is_array($decoded) ? $decoded : [];
-               break;
-            }
-
-            $this->content = [];
-
-            break;
-         // ⚠️ SECURITY: JSONP bypasses the Same-Origin Policy and is inherently insecure.
-         // Any origin can make authenticated requests and read the response.
-         // JSONP is deprecated — use CORS instead for cross-origin data sharing.
-         case 'jsonp':
-            if ( is_array($data) ) {
-               $this->content = $data;
-               break;
-            }
-
-            if (is_string($data)) {
-               $decoded = json_decode($data, true);
-               $this->content = is_array($decoded) ? $decoded : [];
-               break;
-            }
-
-            $this->content = [];
-
-            break;
-         case 'pre':
-            $preData = $data;
-            if ($preData === null) {
-               $preData = $this->content;
-            }
-
-            /** @var string $preString */
-            $preString = $convert($preData);
-            $this->content = '<pre>' . $preString . '</pre>';
-
-            break;
-
-         // File
-         case 'view':
-            if (! is_string($data)) {
-               break;
-            }
-
-            if ( !defined('BOOTGLY_PROJECT') ) {
-               throw new Error('HTTP_Server_CLI must be started through a Project. BOOTGLY_PROJECT is not defined.');
-            }
-
-            $File = new File(BOOTGLY_PROJECT->path . 'views/' . $data, base: BOOTGLY_PROJECT->path . 'views/');
-
-            if ($File->exists === false) {
-               $this->code( 403);
-               return $this;
-            }
-
-            $this->source = 'file';
-            $extension = $File->extension;
-            $this->type   = is_string($extension) ? $extension : '';
-
-            $this->File   = $File;
-
-            break;
-
-         // Raw
-         case 'raw':
-            /** @var string $rawString */
-            $rawString = $convert($data);
-            $this->content = $rawString;
-
-            break;
-
-         default:
-            if ($resource) {
-               // TODO Inject resource with custom process() created by user
-            }
-            else {
-               switch ( getType($data) ) {
-                  case 'string':
-                     if ($data === '') {
-                        break;
-                     }
-
-                     $prefix = $data[0] ?? '';
-                     if ($prefix !== '/' && $prefix !== '@' && !defined('BOOTGLY_PROJECT')) {
-                        throw new Error('HTTP_Server_CLI must be started through a Project. BOOTGLY_PROJECT is not defined.');
-                     }
-                     $File = match ($prefix) {
-                        #!
-                        '/' => new File(BOOTGLY_WORKING_DIR . 'projects' . $data),
-                        '@' => new File(BOOTGLY_WORKING_DIR . 'projects/' . $data),
-                        default => new File(BOOTGLY_PROJECT->path . $data)
-                     };
-
-                     if ($File->guard(base: BOOTGLY_WORKING_DIR . 'projects')) {
-                        $this->code( 403);
-                        return $this;
-                     }
-
-                     $this->source = 'file';
-                     $extension = $File->extension;
-                     $this->type   = is_string($extension) ? $extension : '';
-
-                     $this->File   = &$File;
-
-                     break;
-                  case 'object':
-                     if ($data instanceof File) {
-                        $File = $data;
-
-                        if ($File->guard(base: BOOTGLY_WORKING_DIR . 'projects')) {
-                           $this->code( 403);
-                           return $this;
-                        }
-
-                        $this->source = 'file';
-                        $extension = $File->extension;
-                        $this->type   = is_string($extension) ? $extension : '';
-
-                        $this->File   = $File;
-                     }
-
-                     break;
-               }
-            }
-      }
-
-      $this->resource = null;
-
-      $this->processed = true;
-
-      return $this;
-   }
-
    /**
     * Appends the provided data to the body of the response.
     *
@@ -561,115 +345,12 @@ class Response extends Server\Response
    {
       $this->initied = true;
 
-      $convert = static function (mixed $value): string {
-         if (is_string($value)) {
-            return $value;
-         }
-
-         if ($value === null || is_scalar($value)) {
-            return strval($value);
-         }
-
-         if (is_object($value)) {
-            if (method_exists($value, '__toString')) {
-               return (string) $value;
-            }
-
-            $encodedObject = json_encode($value);
-            return $encodedObject === false ? '' : $encodedObject;
-         }
-
-         if (is_array($value)) {
-            $encodedArray = json_encode($value);
-            return $encodedArray === false ? '' : $encodedArray;
-         }
-
-         if (is_resource($value)) {
-            return '';
-         }
-
-         return '';
-      };
-
       $current = is_string($this->content) ? $this->content : '';
-      $this->content = $current . $convert($body) . "\n";
+      $this->content = $current . $this->Body->stringify($body) . "\n";
 
       return $this;
    }
 
-   /**
-    * Export variables to the File Response.
-    *
-    * @param array<string, mixed> ...$variables Variables to be passed to the File Response.
-    *
-    * @return self The Response instance, for chaining
-    */
-   public function export (array ...$variables): self
-   {
-      foreach ($variables as $var) {
-         foreach ($var as $key => $value) {
-            $this->uses[$key] = $value;
-         }
-      }
-
-      return $this;
-   }
-   /**
-    * Renders the specified view with the provided data.
-    *
-    * @param string $view The view to render.
-    * @param array<string,mixed>|null $data The data to provide to the view.
-    * @param Closure|null $callback Optional callback.
-    *
-    * @return self The Response instance, for chaining
-    */
-   public function render (string $view, ?array $data = null, ?Closure $callback = null): self
-   {
-      // !
-      $this->prepare('view');
-      $this->process("$view.template.php", 'view');
-
-      // ?
-      $File = $this->File ?? null;
-      if ($File === null || $File->exists === false) {
-         // throw new Exception(message: 'Template file not found!');
-         return $this;
-      }
-
-      // @ Set variables
-      if ($data === null) {
-         $data = [];
-      }
-      $data['Route'] = WPI->Router->Route;
-
-      // @ Extend variables
-      $data = $data + $this->uses;
-
-      // @ Output/Buffer start()
-      ob_start();
-      // @ Render Template
-      $Template = new Template($File);
-      try {
-         $rendered = $Template->render($data);
-      }
-      catch (Throwable $Throwable) {
-         $rendered = '';
-         Throwables::report($Throwable);
-      }
-      // @ Output/Buffer clean()->get()
-      $this->content = is_string($rendered) ? $rendered : '';
-
-      // @ Set $Response properties
-      $this->source = 'content';
-      $this->type = '';
-
-      // @ Call callback
-      if ($callback !== null) {
-         $callback($this->content, $Throwable ?? null);
-      }
-
-      return $this;
-   }
    /**
     * Compresses the response body using the specified method.
     *
@@ -838,168 +519,15 @@ class Response extends Server\Response
       if ($this->sent === true) {
          return $this;
       }
-      if ($this->processed === false) {
-         $this->process($body, $this->resource);
-      }
-
-      // TODO refactor.
-      switch ($this->source) {
-         case 'content':
-            // @ Set body/content
-            switch ($this->type) {
-               case 'application/json':
-               case 'json':
-                  // TODO move to prepare or process
-                  $this->Header->set('Content-Type', 'application/json');
-
-                  if ($body && is_string($body) === true) {
-                     break;
-                  }
-
-                  $flags = isset($options[0]) && is_int($options[0]) ? $options[0] : 0;
-                  $encoded = json_encode($body, $flags);
-                  $body = $encoded === false ? 'null' : $encoded;
-
-                  break;
-               case 'jsonp':
-                  // TODO move to prepare or process
-                  $this->Header->set('Content-Type', 'application/json');
-
-                  $callbackSource = WPI->Request->queries['callback'] ?? null;
-                  if (is_array($callbackSource)) {
-                     $callbackSource = $callbackSource[0] ?? null;
-                  }
-                  // ! Validate callback name to prevent XSS injection
-                  $callback = is_string($callbackSource)
-                     && $callbackSource !== ''
-                     && preg_match('/^[a-zA-Z_$][a-zA-Z0-9_$.]*$/', $callbackSource) === 1
-                     ? $callbackSource
-                     : 'callback';
-
-                  $json = json_encode($body);
-                  if ($json === false) {
-                     $json = 'null';
-                  }
-
-                  $body = "$callback($json)";
-
-                  break;
-            }
-
-            break;
-         case 'file':
-            if ($body === false || $body === null || $body instanceof File === false) {
-               return $this;
-            }
-
-            $File = $body;
-
-            if ($File->readable === false) {
-               return $this;
-            }
-
-            // @ Set body/content
-            switch ($this->type) {
-               case 'image/x-icon':
-               case 'ico':
-                  $this->Header->set('Content-Type', 'image/x-icon');
-
-                  $contents = $File->contents;
-                  if ($contents === false) {
-                     return $this;
-                  }
-
-                  $body = $contents;
-
-                  break;
-
-               default: // Dynamic (PHP)
-                  // ! Jail+extension guard — require() must only load
-                  //   `.template.php` files inside `BOOTGLY_PROJECT/views/`.
-                  //   A `File` instance reaches send() via the `view`
-                  //   resource chain bypassing process() case 'view'
-                  //   (which only validates string inputs), so the check
-                  //   must happen here, at the require site.
-                  $__resolved__ = realpath((string) $File);
-                  $__base__     = realpath(BOOTGLY_PROJECT->path . 'views/');
-                  if (
-                     $__resolved__ === false
-                     || $__base__ === false
-                     || ! str_starts_with($__resolved__, $__base__ . DIRECTORY_SEPARATOR)
-                     || ! str_ends_with($__resolved__, '.template.php')
-                  ) {
-                     $this->code( 403);
-                     $this->sent = true;
-                     return $this;
-                  }
-
-                  // @ Output/Buffer start()
-                  ob_start();
-
-                  $__data__ = [
-                     'Request' => WPI->Request,
-                     'Response' => WPI->Response
-                  ];
-
-                  // @ Isolate context with anonymous static function
-                  (static function (string $__file__, array $__data__) {
-                     // ! Security: EXTR_SKIP prevents a $__data__ key from
-                     //   overwriting the closure's $__file__/$__data__
-                     //   sentinels (defence-in-depth; current callers pass
-                     //   only Request/Response, but future templates may
-                     //   plumb user data).
-                     extract($__data__, EXTR_SKIP);
-                     require $__file__;
-                  })($__resolved__, $__data__);
-
-                  $captured = ob_get_clean(); // @ Output/Buffer clean()->get()
-                  $body = $captured === false ? '' : $captured;
-            }
-
-            break;
-         default:
-            if ($body === null) {
-               $this->sent = true;
-
-               return $this;
-            }
-      }
 
       // @ Output
-      if ($body !== null) {
-         /** @var Closure(mixed):string $convert */
-         $convert = static function (mixed $value): string {
-            if (is_string($value)) {
-               return $value;
-            }
-
-            if ($value === null || is_scalar($value)) {
-               return strval($value);
-            }
-
-            if (is_object($value)) {
-               if (method_exists($value, '__toString')) {
-                  return (string) $value;
-               }
-
-               $encodedObject = json_encode($value);
-               return $encodedObject === false ? '' : $encodedObject;
-            }
-
-            if (is_array($value)) {
-               $encodedArray = json_encode($value);
-               return $encodedArray === false ? '' : $encodedArray;
-            }
-
-            if (is_resource($value)) {
-               return '';
-            }
-
-            return '';
-         };
-
-         $this->Body->raw = $convert($body);
+      if ($body === null) {
+         $body = $this->Body->raw !== ''
+            ? $this->Body->raw
+            : $this->content;
       }
+
+      $this->Body->raw = $this->Body->stringify($body);
 
       $this->sent = true;
 
@@ -1219,7 +747,7 @@ class Response extends Server\Response
    /**
     * Defer the response to be completed asynchronously via Fiber.
     *
-    * @param Closure $work The async work to execute inside a Fiber.
+    * @param Closure(self):void $work The async work to execute inside a Fiber.
     * 
     * @return Response The Response instance, for chaining
     */
@@ -1243,7 +771,7 @@ class Response extends Server\Response
 
          try {
             // @ Execute user work (may call Fiber::suspend())
-            $work();
+            $work($Response);
 
             // ? Guard: socket may have been closed while Fiber was suspended
             if (is_resource($Socket) === false) {
@@ -1311,6 +839,10 @@ class Response extends Server\Response
     */
    public function wait (mixed $value = null): self
    {
+      if ($value !== null && $value instanceof Readiness === false && is_resource($value) === false) {
+         throw new InvalidArgumentException('HTTP response wait expects Readiness, resource or null.');
+      }
+
       // ? Guard: only suspend from a Fiber created by defer()
       $current = Fiber::getCurrent();
       if ($current === null || !$this->Fibers->contains($current)) {

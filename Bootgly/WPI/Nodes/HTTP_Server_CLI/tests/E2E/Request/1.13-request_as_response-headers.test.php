@@ -20,7 +20,7 @@ return new Specification(
    },
    response: function (Request $Request, Response $Response): Response {
       $headers = $Request->headers;
-      return $Response->Json->send($headers);
+      return $Response->JSON->send($headers);
    },
 
    test: function ($response) {

@@ -33,7 +33,7 @@ return static function
 
    // @ Deferred response: tick-based (Fiber resumed every loop iteration)
    yield $Router->route('/deferred/tick', function (Request $Request, Response $Response) {
-      return $Response->defer(function () use ($Response) {
+      return $Response->defer(function (Response $Response) {
          // @ Simulate awaiting async work (~100ms delay across loop iterations)
          $start = microtime(true);
          while (microtime(true) - $start < 0.1) {
@@ -46,7 +46,7 @@ return static function
    }, GET);
    // @ Deferred response: I/O-aware (Fiber resumed only when socket is readable)
    yield $Router->route('/deferred/io', function (Request $Request, Response $Response) {
-      return $Response->defer(function () use ($Response) {
+      return $Response->defer(function (Response $Response) {
          // @ Create a local socket pair to simulate async I/O
          [$reader, $writer] = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
          stream_set_blocking($reader, false);
@@ -70,7 +70,7 @@ return static function
 
    // @ Deferred response: async HTTP request to external host (non-blocking)
    yield $Router->route('/deferred/http', function (Request $Request, Response $Response) {
-      return $Response->defer(function () use ($Response) {
+      return $Response->defer(function (Response $Response) {
          // @ Open connection to example.com (blocking connect)
          $client = stream_socket_client(
             'tcp://example.com:80',
@@ -121,7 +121,7 @@ return static function
 
    // @ Deferred response: async file download (non-blocking, multi-chunk I/O)
    yield $Router->route('/deferred/download', function (Request $Request, Response $Response) {
-      return $Response->defer(function () use ($Response) {
+      return $Response->defer(function (Response $Response) {
          // @ Open connection to test file server (blocking connect)
          $client = stream_socket_client(
             'tcp://speedtest.tele2.net:80',
@@ -175,7 +175,7 @@ return static function
 
    // @ Deferred response: multiple sequential HTTP requests (non-blocking)
    yield $Router->route('/deferred/multi', function (Request $Request, Response $Response) {
-      return $Response->defer(function () use ($Response) {
+      return $Response->defer(function (Response $Response) {
          $hosts = ['example.com', 'httpbin.org', 'example.com', 'httpbin.org', 'example.com'];
          $results = [];
 
@@ -233,7 +233,7 @@ return static function
 
    // @ Deferred response: simulated database query with latency (tick-based wait loop)
    yield $Router->route('/deferred/db', function (Request $Request, Response $Response) {
-      return $Response->defer(function () use ($Response) {
+      return $Response->defer(function (Response $Response) {
          // @ Simulate 100 sequential DB queries with ~10000ms latency each
          $results = [];
          for ($i = 1; $i <= 100; $i++) {

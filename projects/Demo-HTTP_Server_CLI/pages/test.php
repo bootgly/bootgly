@@ -8,7 +8,7 @@
    <meta name="author" content="Rodrigo Vieira (@rodrigoslayertech)">
 </head>
 <body>
-   <div>Testing $Response->render(...)!</div>
+   <div>Testing $Response->View->render(...)!</div>
    <div>$title: <?php echo @$meta['title']; ?></div>
 </body>
 </html>

@@ -22,7 +22,7 @@ return new Specification(
    },
    response: function (Request $Request, Response $Response): Response {
       $cookies = $Request->cookies;
-      return $Response->Json->send($cookies);
+      return $Response->JSON->send($cookies);
    },
 
    test: function ($response) {

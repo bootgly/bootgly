@@ -15,7 +15,7 @@ return new Specification(
       return "GET /test/content/json/1 HTTP/1.1\r\nHost: localhost\r\n\r\n";
    },
    response: function (Request $Request, Response $Response): Response {
-      return $Response->Json->send(['Hello' => 'World!']); // JSON
+      return $Response->JSON->send(['Hello' => 'World!']); // JSON
    },
 
    test: function ($response) {

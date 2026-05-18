@@ -40,7 +40,7 @@ return new Specification(
          unset($result['files']['empty']['tmp_name']);
       }
 
-      return $Response->Json->send($result);
+      return $Response->JSON->send($result);
    },
 
    test: function ($response) {

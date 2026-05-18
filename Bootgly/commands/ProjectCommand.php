@@ -1028,7 +1028,7 @@ class ProjectCommand extends Command
          return null;
       }
 
-      $Config = (new DatabaseConfig($Scope))->configure();
+      $Config = new DatabaseConfig($Scope)->configure();
 
       return new SQL($Config);
    }

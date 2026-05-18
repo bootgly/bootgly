@@ -125,7 +125,7 @@ return new Specification(
          $file = $Request->files['file'] ?? null;
          $name = is_array($file) ? (string) ($file['name'] ?? '') : '';
 
-         return $Response->Json->send([
+         return $Response->JSON->send([
             'name' => $name,
             'error' => is_array($file) ? (int) ($file['error'] ?? -1) : -1,
          ]);

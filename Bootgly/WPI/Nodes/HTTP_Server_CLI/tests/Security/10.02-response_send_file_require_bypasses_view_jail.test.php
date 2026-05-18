@@ -18,7 +18,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test\Specification;
 
 /**
  * PoC — `Response::send()` `require`s ANY `File` passed through the
- * `$Response->view->send(...)` chain, with NO jail check and NO
+ * `$Response->View->send(...)` chain, with NO jail check and NO
  * extension allowlist. Source code execution is driven entirely by
  * `prepare('view')` priming `source='file'` / `type='php'` — the
  * jail check inside `Response::process()` case `'view'` only guards
@@ -28,8 +28,8 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test\Specification;
  * `require $__file__` branch on arbitrary filesystem paths.
  *
  * Vulnerable call shape (reachable from any handler that forwards a
- * user-influenced path into a File before `view->send`):
- *   $Response->view->send(new File($userControlledPath));
+ * user-influenced path into a File before `View->send`):
+ *   $Response->View->send(new File($userControlledPath));
  *
  * Attack layout (auto-provisioned below):
  *   BOOTGLY_PROJECT->path/
@@ -71,7 +71,7 @@ return new Specification(
          //   File instance bypasses the jail check entirely while
          //   `prepare('view')` has already primed source='file'/type='php'.
          //   Without the fix, `send()` `require`s $File unconditionally.
-         return $Response->view->send(new File($leakFile));
+         return $Response->View->send(new File($leakFile));
       });
 
       // @ Compatibility route for 10.01 when the server-side handler FIFO

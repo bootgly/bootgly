@@ -155,6 +155,8 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
    /**
     * Configure the HTTP Server.
     *
+    * @param null|array<string,Closure(object):Response\Resource> $responseResources Lazy response resource factories.
+    *
     * @return self The HTTP Server instance, for chaining 
     */
    public function configure (
@@ -166,7 +168,8 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       null|int $requestMaxMultipartHeaderSize = null,
       null|int $requestMaxMultipartFields = null,
       null|int $requestMaxMultipartFiles = null,
-      null|int $downloadsMaxBytesOnDisk = null
+      null|int $downloadsMaxBytesOnDisk = null,
+      null|array $responseResources = null
    ): self
    {
       parent::configure($host, $port, $workers, $secure, $user, $group);
@@ -201,6 +204,9 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       }
       if ($downloadsMaxBytesOnDisk !== null) {
          Downloads::$maxBytesOnDisk = $downloadsMaxBytesOnDisk;
+      }
+      if ($responseResources !== null) {
+         self::$Response->Resources->load($responseResources);
       }
 
       return $this;

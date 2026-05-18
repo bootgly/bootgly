@@ -92,7 +92,7 @@ return new Specification(
 
       yield $Router->route('/victim', function (Request $Request, Response $Response) {
          $auth = $Request->Header->get('Authorization') ?? '';
-         return $Response->Json->send([
+         return $Response->JSON->send([
             'method' => $Request->method,
             'uri'    => $Request->URI,
             'auth'   => $auth,

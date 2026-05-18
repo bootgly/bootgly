@@ -57,13 +57,13 @@ abstract class Response
    abstract public function __invoke (int $code = 200, array $headers = [], string $body = ''): self;
 
    /**
-    * Get the specified property from the Response or Response Resource.
+    * Get the specified property, mounted resource or content format.
     *
-    * @param string $name The name of the property or Response Resource to get.
+    * @param string $name The name of the property, mounted resource or content format to get.
     *
-    * @return bool|string|int|array<mixed>|self The value of the property or the Response instance, for chaining.
+    * @return bool|string|int|array<mixed>|object The value of the property, resource or Response instance.
     */
-   abstract public function __get (string $name): bool|string|int|array|self;
+   abstract public function __get (string $name): bool|string|int|array|object;
    /**
     * Set the HTTP Server Response code.
     *

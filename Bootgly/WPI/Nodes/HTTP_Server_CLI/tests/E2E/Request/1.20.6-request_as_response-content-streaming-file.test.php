@@ -49,7 +49,7 @@ return new Specification(
          unset($result['files']['attachment']['tmp_name']);
       }
 
-      return $Response->Json->send($result);
+      return $Response->JSON->send($result);
    },
 
    test: function ($response) {

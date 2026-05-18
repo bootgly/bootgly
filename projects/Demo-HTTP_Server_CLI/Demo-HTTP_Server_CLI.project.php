@@ -11,12 +11,21 @@
 namespace projects\Demo_HTTP_Server_CLI;
 
 
-use function getenv;
-
-use Bootgly\API\Projects\Project;
-use Bootgly\API\Endpoints\Server\Modes;
 use const Bootgly\CLI;
+use function getenv;
+use function intdiv;
+use function shell_exec;
+use RuntimeException;
+
+use Bootgly\ADI\Databases\SQL;
+use Bootgly\API\Endpoints\Server\Modes;
+use Bootgly\API\Environment\Configs;
+use Bootgly\API\Environment\Configs\Config;
+use Bootgly\API\Environment\Configs\DatabaseConfig;
+use Bootgly\API\Projects\Project;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\Database as DatabaseResource;
 
 
 return new Project(
@@ -29,6 +38,45 @@ return new Project(
    // # Project Boot Function
    boot: function (array $arguments = [], array $options = []): void
    {
+      $DatabaseResource = static function (object $Context): DatabaseResource {
+         static $Database = null;
+
+         if ($Context instanceof Response === false) {
+            throw new RuntimeException('Database response resource expects a Response context.');
+         }
+
+         if ($Database instanceof SQL === false) {
+            $Configs = new Configs(__DIR__ . '/configs/');
+            $Configs->allow('database', [
+               'DB_CONNECTION',
+               'DB_ENABLED',
+               'DB_HOST',
+               'DB_NAME',
+               'DB_PASS',
+               'DB_POOL_MAX',
+               'DB_POOL_MIN',
+               'DB_PORT',
+               'DB_SSLCAFILE',
+               'DB_SSLMODE',
+               'DB_SSLPEER',
+               'DB_SSLVERIFY',
+               'DB_STATEMENTS',
+               'DB_TIMEOUT',
+               'DB_USER',
+            ]);
+            $Scope = $Configs->get('database');
+
+            // @phpstan-ignore-next-line
+            if ($Scope instanceof Config === false || $Scope->Enabled->get() !== true) {
+               throw new RuntimeException('Enable DB_ENABLED=true in the database config scope and set DB_HOST, DB_PORT, DB_NAME, DB_USER and DB_PASS as needed.');
+            }
+
+            $Database = new SQL((new DatabaseConfig($Scope))->configure());
+         }
+
+         return new DatabaseResource($Database);
+      };
+
       $HTTP_Server_CLI = new HTTP_Server_CLI(Mode: match (true) {
          isset($options['i']) => Modes::Interactive,
          isset($options['m']) => Modes::Monitor,
@@ -37,7 +85,10 @@ return new Project(
       $HTTP_Server_CLI->configure(
          host: '0.0.0.0',
          port: getenv('PORT') ? (int) getenv('PORT') : 8082,
-         workers: max(1, (int) shell_exec('nproc') ?: 1) / 2,
+         workers: max(1, intdiv((int) shell_exec('nproc') ?: 1, 2)),
+         responseResources: [
+            'Database' => $DatabaseResource,
+         ],
          // requestMaxFileSize: 500 * 1024 * 1024,        // 500 MB (default) — max size per uploaded file part
          // requestMaxBodySize: 10 * 1024 * 1024,         // 10 MB (default) — max total non-multipart body
          // requestMaxMultipartFieldSize: 1 * 1024 * 1024, // 1 MB (default) — max size per text field value
@@ -65,9 +116,6 @@ return new Project(
          #requestReceived: require __DIR__ . '/router/HTTP_Server_CLI-response-scheduled.SAPI.php',
          // # Test Response - Database (native async PostgreSQL examples)
          #requestReceived: require __DIR__ . '/router/HTTP_Server_CLI-response-database.SAPI.php',
-         // # Test Response - Database Runner (helper-based async PostgreSQL examples)
-         #requestReceived: require __DIR__ . '/router/HTTP_Server_CLI-response-database-runner.SAPI.php',
-
          // # Test Router - all route cases from Testing.routes.php adapted to Generator pattern
          #requestReceived: require __DIR__ . '/router/HTTP_Server_CLI-router.SAPI.php',
 

@@ -21,6 +21,7 @@ $Router->route('/Response/test.c', function (Request $Request, Response $Respons
    $test1 = 'abc';
 
    return $Response
+      ->View
       ->export(
          ['test1' => $test1],
          ['test2' => '123']
@@ -82,7 +83,7 @@ $Router->route('/send-headers-as-json-1', function (Request $Request, Response $
 }, GET);
 
 $Router->route('/simple-file-render-1', function (Request $Request, Response $Response) {
-   return $Response
+   return $Response->View
       ->render(
          view: 'pages/test.php',
          data: ['meta' => ['title' => 'Bootgly']],
@@ -95,7 +96,7 @@ $Router->route('/simple-file-render-1', function (Request $Request, Response $Re
 }, GET);
 
 $Router->route('/simple-view-render-1', function (Request $Request, Response $Response) {
-   return $Response->render('test', [
+   return $Response->View->render('test', [
       'meta' => ['title' => 'Testing Response->View->render(...) in Bootgly!']
    ])->send();
 }, GET);

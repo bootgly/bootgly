@@ -15,14 +15,14 @@ $Router->route('/templating-raw', function (Request $Request, Response $Response
    <p>1+ in line -> [title]: @>> $title1; @>> $title2;</p>
    HTML;
 
-   $Response->render($raw, [
+   $Response->View->render($raw, [
       'title1' => 'Bootgly Testing templating',
       'title2' => '| Using Bootgly templating'
    ]);
 });
 $Router->route('/templating-file', function (Request $Request, Response $Response)
 {
-   $Response->render('index', [
+   $Response->View->render('index', [
       'title' => 'Bootgly Testing templating',
       'description' => 'Using Bootgly Template engine!',
 

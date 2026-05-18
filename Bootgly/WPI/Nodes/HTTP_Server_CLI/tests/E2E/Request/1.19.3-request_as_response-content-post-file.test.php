@@ -42,7 +42,7 @@ return new Specification(
    response: function (Request $Request, Response $Response): Response {
       $Request->download();
 
-      return $Response->Json->send(
+      return $Response->JSON->send(
          $Request->files + $Request->fields
       );
    },

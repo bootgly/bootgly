@@ -25,7 +25,7 @@ return new Specification(
    response: function (Request $Request, Response $Response, Router $Router)
    {
       yield $Router->route('/deferred', function (Request $Request, Response $Response) {
-         return $Response->defer(function () use ($Response) {
+         return $Response->defer(function (Response $Response) {
             // @ Simulate awaiting async I/O
             $Response->wait();
 

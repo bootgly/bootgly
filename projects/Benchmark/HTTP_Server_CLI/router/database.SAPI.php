@@ -25,7 +25,6 @@ use Bootgly\ADI\Databases\SQL\Operation;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router;
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Runner;
 
 
 return static function
@@ -185,12 +184,14 @@ return static function
       return $Response(code: 500, body: $Throwable->getMessage());
    };
 
+   // ---
+
    yield $Router->route('/', function (Request $Request, Response $Response) {
       return $Response(body: 'Database Benchmark');
    }, GET);
 
    yield $Router->route('/database/native/ping', function (Request $Request, Response $Response) use ($Connect, $Exception, $Native, $Send) {
-      return $Response->defer(function () use ($Response, $Connect, $Exception, $Native, $Send): void {
+      return $Response->defer(function (Response $Response) use ($Connect, $Exception, $Native, $Send): void {
          try {
             $Database = $Connect();
             $Operation = $Native($Database, $Response, $Database->query('SELECT 1 AS ok'));
@@ -203,12 +204,11 @@ return static function
       });
    }, GET);
 
-   yield $Router->route('/database/runner/ping', function (Request $Request, Response $Response) use ($Connect, $Exception, $Send) {
-      return $Response->defer(function () use ($Response, $Connect, $Exception, $Send): void {
+   yield $Router->route('/database/resource/ping', function (Request $Request, Response $Response) use ($Exception, $Send) {
+      return $Response->defer(function (Response $Response) use ($Exception, $Send): void {
          try {
-            $Database = $Connect();
-            $Runner = new Runner($Database, $Response);
-            $Operation = $Runner->query('SELECT 1 AS ok');
+            $Database = $Response->Database;
+            $Operation = $Database->query('SELECT 1 AS ok');
 
             $Send($Response, $Operation);
          }
@@ -219,7 +219,7 @@ return static function
    }, GET);
 
    yield $Router->route('/database/native/parameters', function (Request $Request, Response $Response) use ($Connect, $Exception, $Native, $Send) {
-      return $Response->defer(function () use ($Response, $Connect, $Exception, $Native, $Send): void {
+      return $Response->defer(function (Response $Response) use ($Connect, $Exception, $Native, $Send): void {
          try {
             $Database = $Connect();
             $Operation = $Native($Database, $Response, $Database->query('SELECT $1::int AS value, $2::text AS label', [42, 'bootgly']));
@@ -232,12 +232,11 @@ return static function
       });
    }, GET);
 
-   yield $Router->route('/database/runner/parameters', function (Request $Request, Response $Response) use ($Connect, $Exception, $Send) {
-      return $Response->defer(function () use ($Response, $Connect, $Exception, $Send): void {
+   yield $Router->route('/database/resource/parameters', function (Request $Request, Response $Response) use ($Exception, $Send) {
+      return $Response->defer(function (Response $Response) use ($Exception, $Send): void {
          try {
-            $Database = $Connect();
-            $Runner = new Runner($Database, $Response);
-            $Operation = $Runner->query('SELECT $1::int AS value, $2::text AS label', [42, 'bootgly']);
+            $Database = $Response->Database;
+            $Operation = $Database->query('SELECT $1::int AS value, $2::text AS label', [42, 'bootgly']);
 
             $Send($Response, $Operation);
          }
@@ -248,7 +247,7 @@ return static function
    }, GET);
 
    yield $Router->route('/database/native/pool', function (Request $Request, Response $Response) use ($Connect, $Drain, $Exception, $Pool) {
-      return $Response->defer(function () use ($Response, $Connect, $Drain, $Exception, $Pool): void {
+      return $Response->defer(function (Response $Response) use ($Connect, $Drain, $Exception, $Pool): void {
          try {
             $Database = $Connect();
             $Operations = [
@@ -266,19 +265,19 @@ return static function
       });
    }, GET);
 
-   yield $Router->route('/database/runner/pool', function (Request $Request, Response $Response) use ($Connect, $Exception, $Pool) {
-      return $Response->defer(function () use ($Response, $Connect, $Exception, $Pool): void {
+   yield $Router->route('/database/resource/pool', function (Request $Request, Response $Response) use ($Exception, $Pool) {
+      return $Response->defer(function (Response $Response) use ($Exception, $Pool): void {
          try {
-            $Database = $Connect();
-            $Runner = new Runner($Database, $Response);
+            $Database = $Response->Database;
+            $Connection = $Database->Database;
             $Operations = [
-               $Database->query('SELECT $1::int AS value', [1]),
-               $Database->query('SELECT $1::int AS value', [2]),
-               $Database->query('SELECT $1::int AS value', [3]),
+               $Connection->query('SELECT $1::int AS value', [1]),
+               $Connection->query('SELECT $1::int AS value', [2]),
+               $Connection->query('SELECT $1::int AS value', [3]),
             ];
-            $Operations = $Runner->drain($Operations);
+            $Operations = $Database->drain($Operations);
 
-            $Pool($Response, $Database, $Operations);
+            $Pool($Response, $Connection, $Operations);
          }
          catch (Throwable $Throwable) {
             $Exception($Response, $Throwable);
@@ -287,7 +286,7 @@ return static function
    }, GET);
 
    yield $Router->route('/database/native/sleep', function (Request $Request, Response $Response) use ($Connect, $Exception, $Native, $Send) {
-      return $Response->defer(function () use ($Response, $Connect, $Exception, $Native, $Send): void {
+      return $Response->defer(function (Response $Response) use ($Connect, $Exception, $Native, $Send): void {
          try {
             $Database = $Connect();
             $Operation = $Native($Database, $Response, $Database->query('SELECT pg_sleep(0.05), $1::int AS value', [42]));
@@ -300,12 +299,11 @@ return static function
       });
    }, GET);
 
-   yield $Router->route('/database/runner/sleep', function (Request $Request, Response $Response) use ($Connect, $Exception, $Send) {
-      return $Response->defer(function () use ($Response, $Connect, $Exception, $Send): void {
+   yield $Router->route('/database/resource/sleep', function (Request $Request, Response $Response) use ($Exception, $Send) {
+      return $Response->defer(function (Response $Response) use ($Exception, $Send): void {
          try {
-            $Database = $Connect();
-            $Runner = new Runner($Database, $Response);
-            $Operation = $Runner->query('SELECT pg_sleep(0.05), $1::int AS value', [42]);
+            $Database = $Response->Database;
+            $Operation = $Database->query('SELECT pg_sleep(0.05), $1::int AS value', [42]);
 
             $Send($Response, $Operation);
          }

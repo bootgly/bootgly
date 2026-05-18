@@ -11,15 +11,22 @@
 namespace projects\HTTP_Server_CLI;
 
 
+use const Bootgly\CLI;
 use function defined;
 use function getenv;
+use function is_numeric;
+use function strtolower;
+use RuntimeException;
 
-use Bootgly\API\Projects\Project;
+use Bootgly\ADI\Databases\SQL;
+use Bootgly\ADI\Databases\SQL\Config;
 use Bootgly\API\Endpoints\Server\Modes;
-use const Bootgly\CLI;
+use Bootgly\API\Projects\Project;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI;
 use Bootgly\WPI\Interfaces\UDP_Server_CLI;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\Database as DatabaseResource;
 
 
 return new Project(
@@ -37,11 +44,69 @@ return new Project(
             default => 'default.SAPI.php',
          };
 
+         $responseResources = null;
+
+         if ($router === 'database') {
+            $Env = static function (string $name, string $default): string {
+               $value = getenv($name);
+
+               return $value === false || $value === '' ? $default : $value;
+            };
+
+            $Bool = static function (string $name, bool $default) use ($Env): bool {
+               $value = strtolower($Env($name, $default ? 'true' : 'false'));
+
+               return $value === '1' || $value === 'true' || $value === 'yes' || $value === 'on';
+            };
+
+            $responseResources = [
+               'Database' => static function (object $Context) use ($Env, $Bool): DatabaseResource {
+                  static $Database = null;
+
+                  if ($Context instanceof Response === false) {
+                     throw new RuntimeException('Database response resource expects a Response context.');
+                  }
+
+                  if ($Database instanceof SQL === false) {
+                     $port = $Env('DB_PORT', (string) Config::DEFAULT_PORT);
+                     $timeout = $Env('DB_TIMEOUT', (string) Config::DEFAULT_TIMEOUT);
+                     $poolMin = $Env('DB_POOL_MIN', (string) Config::DEFAULT_POOL_MIN);
+                     $poolMax = $Env('DB_POOL_MAX', (string) Config::DEFAULT_POOL_MAX);
+                     $statements = $Env('DB_STATEMENTS', (string) Config::DEFAULT_STATEMENTS);
+
+                     $Database = new SQL([
+                        'driver' => $Env('DB_CONNECTION', Config::DEFAULT_DRIVER),
+                        'host' => $Env('DB_HOST', Config::DEFAULT_HOST),
+                        'port' => is_numeric($port) ? (int) $port : Config::DEFAULT_PORT,
+                        'database' => $Env('DB_NAME', Config::DEFAULT_DATABASE),
+                        'username' => $Env('DB_USER', Config::DEFAULT_USERNAME),
+                        'password' => $Env('DB_PASS', Config::DEFAULT_PASSWORD),
+                        'timeout' => is_numeric($timeout) ? (float) $timeout : Config::DEFAULT_TIMEOUT,
+                        'statements' => is_numeric($statements) ? (int) $statements : Config::DEFAULT_STATEMENTS,
+                        'pool' => [
+                           'min' => is_numeric($poolMin) ? (int) $poolMin : Config::DEFAULT_POOL_MIN,
+                           'max' => is_numeric($poolMax) ? (int) $poolMax : Config::DEFAULT_POOL_MAX,
+                        ],
+                        'secure' => [
+                           'mode' => $Env('DB_SSLMODE', Config::SECURE_DISABLE),
+                           'verify' => $Bool('DB_SSLVERIFY', false),
+                           'peer' => $Env('DB_SSLPEER', ''),
+                           'cafile' => $Env('DB_SSLCAFILE', ''),
+                        ],
+                     ]);
+                  }
+
+                  return new DatabaseResource($Database);
+               },
+            ];
+         }
+
          new HTTP_Server_CLI(Modes::Daemon)
             ->configure(
                host: '0.0.0.0',
                port: getenv('PORT') ? (int) getenv('PORT') : 8082,
                workers: getenv('BOOTGLY_WORKERS') ? (int) getenv('BOOTGLY_WORKERS') : max(1, (int) ((int)(exec('nproc 2>/dev/null') ?: 1) / 2)),
+               responseResources: $responseResources,
                // requestMaxFileSize: 500 * 1024 * 1024, // 500 MB (default)
                // requestMaxBodySize: 10 * 1024 * 1024,  // 10 MB (default)
             )

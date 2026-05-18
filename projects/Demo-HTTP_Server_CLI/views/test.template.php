@@ -14,7 +14,7 @@
       </style>
    </head>
    <body>
-      <div>Testing Bootgly $Response->render(...) method!</div>
+      <div>Testing Bootgly $Response->View->render(...) method!</div>
       <h2>Template parameters - built-in</h2>
       <p>There are 3 parameters data built-in into WPI Templates: <b>$Request</b>, <b>$Response</b> and <b>$Route</b>!</p>
       <p><b>Examples:</b></p>

@@ -12,7 +12,15 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Raw;
 
 
 use function dechex;
+use function is_array;
+use function is_object;
+use function is_resource;
+use function is_scalar;
+use function is_string;
+use function json_encode;
+use function method_exists;
 use function strlen;
+use function strval;
 
 
 class Body
@@ -46,5 +54,39 @@ class Body
    {
       // * Data
       $this->raw = '';
+   }
+
+   /**
+    * Convert one response body value to text.
+    */
+   public function stringify (mixed $value): string
+   {
+      if (is_string($value)) {
+         return $value;
+      }
+
+      if ($value === null || is_scalar($value)) {
+         return strval($value);
+      }
+
+      if (is_object($value)) {
+         if (method_exists($value, '__toString')) {
+            return (string) $value;
+         }
+
+         $encodedObject = json_encode($value);
+         return $encodedObject === false ? '' : $encodedObject;
+      }
+
+      if (is_array($value)) {
+         $encodedArray = json_encode($value);
+         return $encodedArray === false ? '' : $encodedArray;
+      }
+
+      if (is_resource($value)) {
+         return '';
+      }
+
+      return '';
    }
 }

@@ -19,13 +19,13 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test\Specification;
 
 
 /**
- * PoC — `Response::process()` (and `render()`/`upload()`) validate file paths
+ * PoC — `Response::process()` (and `View::render()`/`upload()`) validate file paths
  * with `str_starts_with($resolved, $base)` where `$base` has NO trailing
  * directory separator. A sibling directory whose name shares a prefix with
  * the base (e.g. `.../views_leak_poc/` vs base `.../views`) passes the guard
  * even though it is OUTSIDE the intended tree.
  *
- * Exercise via `Response::render()` because it renders the resolved template
+ * Exercise via `View::render()` because it renders the resolved template
  * immediately into the HTTP response body. `render()` concatenates
  * `$view . '.template.php'` and opens
  * `BOOTGLY_PROJECT->path . 'views/' . $that`.
@@ -77,7 +77,7 @@ register_shutdown_function($cleanup);
 
 
 return new Specification(
-   description: 'Response::render() must reject sibling-prefix escape from views/',
+   description: 'View::render() must reject sibling-prefix escape from views/',
    Separator: new Separator(line: true),
 
    request: function (): string {
@@ -88,12 +88,12 @@ return new Specification(
       yield $Router->route('/traversal', function (Request $Request, Response $Response) use ($leakDirName) {
          // : The literal `../views_leak_poc/SECRET` is what an attacker would
          //   feed into any handler that forwards a request-controlled name
-         //   into $Response->render().
+         //   into $Response->View->render().
          //     * vulnerable: the sibling template is rendered and its marker
          //       reaches the client body.
          //     * fixed     : the path guard rejects before rendering and the
          //       final response status is 403.
-         return $Response->render("../{$leakDirName}/SECRET");
+         return $Response->View->render("../{$leakDirName}/SECRET");
       });
 
       yield $Router->route('/*', function (Request $Request, Response $Response) {
@@ -120,7 +120,7 @@ return new Specification(
       $body = \substr($response, $separator + 4);
 
       if (str_contains($body, $secretMarker)) {
-         return 'Path traversal: Response::render() rendered a sibling-prefix '
+         return 'Path traversal: View::render() rendered a sibling-prefix '
             . 'escape (views/ → views_leak_poc/) outside the intended jail. '
             . 'Fix all three guards in Response.php (process() view branch, '
             . 'process() default branch, upload()).';

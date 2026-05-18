@@ -123,7 +123,7 @@ return static function
          'memory_peak' => formatBytes(memory_get_peak_usage(true)),
       ];
 
-      return $Response->Json->send($result);
+      return $Response->JSON->send($result);
    }, POST);
 
    // @ 404

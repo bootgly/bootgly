@@ -59,6 +59,7 @@ return new Suites(
       'Bootgly/WPI/Nodes/HTTP_Client_CLI/tests/E2E_SSL/',
       // # HTTP_Server_CLI
       'Bootgly/WPI/Nodes/HTTP_Server_CLI/Router/Middlewares/',
+      'Bootgly/WPI/Nodes/HTTP_Server_CLI/Response/Resources/',
       // E2E (use Bootgly's TCP_Client_CLI)
       'Bootgly/WPI/Nodes/HTTP_Server_CLI/tests/E2E/',
       // Request validation

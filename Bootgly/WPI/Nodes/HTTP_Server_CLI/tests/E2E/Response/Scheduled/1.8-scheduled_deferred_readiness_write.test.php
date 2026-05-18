@@ -29,8 +29,7 @@ return new Specification(
    response: function (Request $Request, Response $Response, Router $Router)
    {
       yield $Router->route('/deferred/readiness-write', function (Request $Request, Response $Response) {
-         return $Response->defer(function ()
-         use ($Response) {
+         return $Response->defer(function (Response $Response) {
             // @ Create a local socket pair to simulate async write/read I/O
             [$reader, $writer] = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
             stream_set_blocking($reader, false);

@@ -52,7 +52,7 @@ return new Specification(
          }
       }
 
-      return $Response->Json->send($result);
+      return $Response->JSON->send($result);
    },
 
    test: function ($response) {

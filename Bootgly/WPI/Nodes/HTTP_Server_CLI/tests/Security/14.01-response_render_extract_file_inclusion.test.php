@@ -27,15 +27,15 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test\Specification;
  *   })($this->Cache->file, $parameters);
  *
  * The `$parameters` array is plumbed straight through
- * `Response::render(string $view, array $data)` (which also merges
- * `$this->uses`, populated via `$Response->export(...)`). If an attacker
+ * `View::render(string $view, array $data)` (which also merges
+ * `$this->uses`, populated via `$Response->View->export(...)`). If an attacker
  * controls any key in that array, `extract()` overwrites the closure's
  * `$__file__` sentinel — the next line `include $__file__` loads an
  * attacker-chosen PHP file instead of the cached template.
  *
  * Vulnerable call shape (any handler that forwards a user-influenced
  * array into render() / export()):
- *   $Response->render('test', $Request->post);   // or export($Request->post)
+ *   $Response->View->render('test', $Request->post);   // or export($Request->post)
  *
  * Attack layout (auto-provisioned below):
  *   <sys_temp_dir>/bootgly-14.01-inclusion-<token>.php
@@ -43,7 +43,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test\Specification;
  *       <sys_temp_dir>/bootgly-14.01-witness-<token>.txt when executed.
  *
  * Observed on the wire — the response body is a side channel here
- * because `Response::render()` pipes into the Template and the
+ * because `View::render()` pipes into the Template and the
  * captured output is set via `$this->content` (a no-op under the
  * current __set hook). The real signal is the witness file: if
  * `include $__file__` fires, the witness file is created on disk.
@@ -71,7 +71,7 @@ register_shutdown_function($cleanup);
 
 
 return new Specification(
-   description: 'Response::render() must not let user-controlled data overwrite the Template closure sentinel',
+   description: 'View::render() must not let user-controlled data overwrite the Template closure sentinel',
    Separator: new Separator(line: true),
 
    request: function (): string {
@@ -86,7 +86,7 @@ return new Specification(
          //   sentinel — on a vulnerable build, `extract()` overwrites the
          //   local `$__file__` and `include $__file__` loads the
          //   attacker-controlled file.
-         $Response->render('test', [
+         $Response->View->render('test', [
             '__file__' => $leakFile,
          ]);
 

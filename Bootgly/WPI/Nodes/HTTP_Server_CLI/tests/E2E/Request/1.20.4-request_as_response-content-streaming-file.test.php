@@ -40,7 +40,7 @@ return new Specification(
          'post' => $Request->fields,
       ];
 
-      return $Response->Json->send($result);
+      return $Response->JSON->send($result);
    },
 
    test: function ($response) {

@@ -46,8 +46,7 @@ return new Specification(
 
       // @ Deferred endpoint (async HTTP request to external host)
       yield $Router->route('/deferred/http', function (Request $Request, Response $Response) {
-         return $Response->defer(function ()
-         use ($Response) {
+         return $Response->defer(function (Response $Response) {
             // @ Open connection to example.com
             $client = stream_socket_client('tcp://example.com:80', $errno, $errstr, timeout: 5);
             fwrite($client, "GET / HTTP/1.1\r\nHost: example.com\r\nConnection: close\r\n\r\n");

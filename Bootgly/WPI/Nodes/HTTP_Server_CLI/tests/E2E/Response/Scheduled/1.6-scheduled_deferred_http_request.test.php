@@ -28,8 +28,7 @@ return new Specification(
    {
       // @ Deferred endpoint (makes async HTTP request to external host)
       yield $Router->route('/deferred/http', function (Request $Request, Response $Response) {
-         return $Response->defer(function ()
-         use ($Response) {
+         return $Response->defer(function (Response $Response) {
             // @ Open connection to example.com (blocking connect)
             $client = stream_socket_client(
                'tcp://example.com:80',

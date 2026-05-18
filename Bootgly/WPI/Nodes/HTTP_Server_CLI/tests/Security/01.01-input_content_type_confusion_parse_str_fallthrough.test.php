@@ -66,7 +66,7 @@ return new Specification(
          //   the application-layer surface where the confusion is
          //   observable (mass-assignment / CSRF-token / _method override).
          $Request->receive();
-         return $Response->Json->send($Request->fields);
+         return $Response->JSON->send($Request->fields);
       });
    },
 

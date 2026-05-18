@@ -32,7 +32,7 @@ return new Specification(
    },
    response: function (Request $Request, Response $Response): Response {
       $Request->download();
-      return $Response->Json->send($Request->files);
+      return $Response->JSON->send($Request->files);
    },
 
    test: function ($response) {
