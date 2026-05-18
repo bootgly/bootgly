@@ -38,7 +38,11 @@ return new Specification(
             'name' => true,
             'peer' => Config::DEFAULT_HOST,
             'cafile' => Config::DEFAULT_SECURE_CAFILE,
-         ] && $Database->Config->statements === Config::DEFAULT_STATEMENTS,
+         ] && $Database->Config->statements === Config::DEFAULT_STATEMENTS
+            && $Database->Config->replicas === []
+            && $Database->Config->routing === [
+               'sticky' => Config::DEFAULT_ROUTING_STICKY,
+            ],
          description: 'Default TLS and prepared-cache config are hardened'
       );
 

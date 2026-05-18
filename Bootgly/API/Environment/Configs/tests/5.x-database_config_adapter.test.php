@@ -32,6 +32,24 @@ return new Specification(
       $Pool->Min->bind(default: 1);
       $Pool->Max->bind(default: 4);
 
+      $PostgreSQL->Routing->Sticky->bind(default: 0.25);
+
+      $Replica = $PostgreSQL->Replicas->Replica1;
+      $Replica->Host->bind(default: 'replica.local');
+      $Replica->Port->bind(default: 55433);
+      $Replica->Database->bind(default: 'bootgly_read');
+      $Replica->Username->bind(default: 'reader');
+      $Replica->Password->bind(default: 'read-secret');
+      $Replica->Timeout->bind(default: 1.5);
+      $Replica->Statements->bind(default: 16);
+      $Replica->Secure->Mode->bind(default: 'require');
+      $Replica->Secure->Verify->bind(default: true);
+      $Replica->Secure->Peer->bind(default: 'replica.internal');
+      $Replica->Secure->CAFile->bind(default: '/tmp/replica-ca.pem');
+      $Replica->Pool->Min->bind(default: 0);
+      $Replica->Pool->Max->bind(default: 2);
+      $PostgreSQL->Replicas->Replica2->Host->bind(default: null);
+
       $DatabaseConfig = new DatabaseConfig($Scope);
       $Config = $DatabaseConfig->configure();
 
@@ -69,6 +87,30 @@ return new Specification(
             'max' => 4,
          ],
          description: 'Adapter maps pool fields'
+      );
+
+      yield assert(
+         assertion: $Config->routing === [
+            'sticky' => 0.25,
+         ] && count($Config->replicas) === 1
+            && $Config->replicas[0]['host'] === 'replica.local'
+            && $Config->replicas[0]['port'] === 55433
+            && $Config->replicas[0]['database'] === 'bootgly_read'
+            && $Config->replicas[0]['username'] === 'reader'
+            && $Config->replicas[0]['password'] === 'read-secret'
+            && $Config->replicas[0]['timeout'] === 1.5
+            && $Config->replicas[0]['statements'] === 16
+            && $Config->replicas[0]['secure'] === [
+               'mode' => 'require',
+               'verify' => true,
+               'name' => true,
+               'peer' => 'replica.internal',
+               'cafile' => '/tmp/replica-ca.pem',
+            ] && $Config->replicas[0]['pool'] === [
+               'min' => 0,
+               'max' => 2,
+            ],
+         description: 'Adapter maps read replicas and skips disabled replica nodes'
       );
 
       $Fallback = new Config(scope: 'database');

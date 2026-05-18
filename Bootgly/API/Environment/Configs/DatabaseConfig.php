@@ -133,7 +133,106 @@ class DatabaseConfig
          $config['pool'] = $pool;
       }
 
+      $Routing = $Connection->Routing;
+      $sticky = $this->resolve($Routing, 'Sticky');
+
+      if ($sticky !== null) {
+         $config['routing'] = [
+            'sticky' => $sticky,
+         ];
+      }
+
+      $replicas = $this->extract($Connection->Replicas);
+
+      if ($replicas !== []) {
+         $config['replicas'] = $replicas;
+      }
+
       return new ADIConfig($config);
+   }
+
+   /**
+    * Extract read replica connection configs from a connection subtree.
+    *
+    * @return array<int,array<string,mixed>>
+    */
+   private function extract (Config $Replicas): array
+   {
+      $replicas = [];
+
+      foreach ($Replicas->walk() as $Replica) {
+         $host = $this->resolve($Replica, 'Host');
+
+         if (is_scalar($host) === false || (string) $host === '') {
+            continue;
+         }
+
+         $config = [
+            'host' => $host,
+         ];
+
+         foreach ([
+            'driver' => 'Driver',
+            'port' => 'Port',
+            'database' => 'Database',
+            'username' => 'Username',
+            'password' => 'Password',
+            'timeout' => 'Timeout',
+            'statements' => 'Statements',
+         ] as $key => $name) {
+            $value = $this->resolve($Replica, $name);
+
+            if ($value !== null) {
+               $config[$key] = $value;
+            }
+         }
+
+         $Secure = $Replica->Secure;
+         $secure = [];
+         $mode = $this->resolve($Secure, 'Mode');
+
+         if ($mode !== null) {
+            $secure['mode'] = $this->validate($mode);
+         }
+
+         foreach ([
+            'verify' => 'Verify',
+            'peer' => 'Peer',
+            'cafile' => 'CAFile',
+         ] as $key => $name) {
+            $value = $this->resolve($Secure, $name);
+
+            if ($value !== null) {
+               $secure[$key] = $value;
+            }
+         }
+
+         if ($secure !== []) {
+            $config['secure'] = $secure;
+         }
+
+         $Pool = $Replica->Pool;
+         $pool = [];
+
+         foreach ([
+            'min' => 'Min',
+            'max' => 'Max',
+         ] as $key => $name) {
+            $value = $this->resolve($Pool, $name);
+
+            if ($value !== null) {
+               $pool[$key] = $value;
+            }
+         }
+
+         if ($pool !== []) {
+            $config['pool'] = $pool;
+         }
+
+         $replicas[] = $config;
+      }
+
+      return $replicas;
    }
 
    /**

@@ -40,8 +40,12 @@ final class RecordingSQL extends SQL
    public WeakMap $steps;
    /** @var array<int,string> */
    public array $advanced = [];
+   /** @var array<int,null|object> */
+   public array $scopes = [];
    /** @var array<int,string> */
    public array $tables = [];
+   /** @var array<int,null|object> */
+   public array $touches = [];
    public RecordingTransaction $Transaction;
 
    public function __construct ()
@@ -50,8 +54,10 @@ final class RecordingSQL extends SQL
       $this->Transaction = new RecordingTransaction;
    }
 
-   public function query (string|Builder|Query $query, array $parameters = []): Operation
+   public function query (string|Builder|Query $query, array $parameters = [], null|object $Scope = null): Operation
    {
+      $this->scopes[] = $Scope;
+
       if ($query instanceof Builder) {
          $query = $query->compile();
       }
@@ -60,6 +66,11 @@ final class RecordingSQL extends SQL
       $parameters = $query instanceof Query ? $query->parameters : $parameters;
 
       return new Operation(null, $sql, $parameters);
+   }
+
+   public function touch (null|object $Scope = null): void
+   {
+      $this->touches[] = $Scope;
    }
 
    public function table (BackedEnum|Stringable|Builder|Query $Table, null|BackedEnum|Stringable $Alias = null): Builder
@@ -123,7 +134,7 @@ final class RecordingTransaction extends Transaction
    {
    }
 
-   public function query (string|Builder|Query $query, array $parameters = []): Operation
+   public function query (string|Builder|Query $query, array $parameters = [], null|object $Scope = null): Operation
    {
       $this->events[] = 'query';
 
@@ -291,9 +302,11 @@ return new Specification(
       $LazyAgain = $Response->LazyDatabase;
       $reset();
       $LazyAfterReset = $Response->LazyDatabase;
+      $SQL->scopes = [];
       $LazyOperation = $LazyAfterReset instanceof Database
          ? $LazyAfterReset->query('WAIT')
          : null;
+      $RequestScope = $SQL->scopes[0] ?? null;
 
       yield assert(
          assertion: $Lazy instanceof Database
@@ -301,9 +314,25 @@ return new Specification(
             && $LazyAfterReset instanceof Database
             && $LazyAfterReset !== $Lazy
             && $LazyOperation?->finished === true
+            && $RequestScope !== $Package
+            && $RequestScope !== $Request
             && $lazyBuilds === 2
             && $lazyContext === $Response,
-         description: 'Response resource definitions are lazy and survive response reset'
+         description: 'Response resource definitions are lazy and use a per-request SQL stickiness scope'
+      );
+
+      $Deferred = clone $Response;
+      $DeferredLazy = $Deferred->LazyDatabase;
+      $SQL->scopes = [];
+      $DeferredOperation = $DeferredLazy instanceof Database
+         ? $DeferredLazy->query('WAIT')
+         : null;
+
+      yield assert(
+         assertion: $DeferredLazy instanceof Database
+            && $DeferredOperation?->finished === true
+            && ($SQL->scopes[0] ?? null) === $RequestScope,
+         description: 'Forked response database resources keep the same per-request SQL stickiness scope'
       );
 
       $Scheduling = new RecordingSchedulingResource;

@@ -79,7 +79,7 @@ class Transaction implements Querying
     * @param string|Builder|Query $query
     * @param array<int|string,mixed> $parameters
     */
-   public function query (string|Builder|Query $query, array $parameters = []): Operation
+   public function query (string|Builder|Query $query, array $parameters = [], null|object $Scope = null): Operation
    {
       $Normalized = new Normalized($query, $parameters);
       $sql = $Normalized->sql;
@@ -91,6 +91,10 @@ class Transaction implements Querying
 
       if ($this->active() === false) {
          return $this->fail($sql, $parameters, 'SQL transaction is not active.');
+      }
+
+      if ($Normalized->reading === false) {
+         $this->Database->touch($Scope);
       }
 
       return $this->create($sql, $parameters);

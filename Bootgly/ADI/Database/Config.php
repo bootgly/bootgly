@@ -63,6 +63,8 @@ class Config
    public array $secure;
    /** @var array{min:int,max:int} */
    public array $pool;
+   /** @var array<int,array<string,mixed>> */
+   public array $replicas;
 
    // * Data
    // ...
@@ -140,6 +142,120 @@ class Config
       $this->pool = [
          'min' => is_scalar($poolMin) ? (int) $poolMin : self::DEFAULT_POOL_MIN,
          'max' => is_scalar($poolMax) ? (int) $poolMax : self::DEFAULT_POOL_MAX,
+      ];
+      $this->replicas = $this->normalize($config['replicas'] ?? []);
+   }
+
+   /**
+    * Normalize read replica endpoint configs.
+    *
+    * @return array<int,array<string,mixed>>
+    */
+   private function normalize (mixed $replicas): array
+   {
+      if (is_array($replicas) === false) {
+         return [];
+      }
+
+      $normalized = [];
+
+      foreach ($replicas as $replica) {
+         $replica = $this->accept($replica);
+
+         if ($replica === null) {
+            continue;
+         }
+
+         $host = (string) $replica['host'];
+
+         $secure = $replica['secure'];
+         if (is_array($secure) === false) {
+            $secure = [];
+         }
+
+         $pool = $replica['pool'];
+         if (is_array($pool) === false) {
+            $pool = [];
+         }
+
+         $secureMode = $secure['mode'] ?? $this->secure['mode'];
+         $securePeer = $secure['peer'] ?? self::DEFAULT_SECURE_PEER;
+         $secureCA = $secure['cafile'] ?? $this->secure['cafile'];
+         $secureMode = $this->validate(is_scalar($secureMode) ? (string) $secureMode : $this->secure['mode']);
+         $secureVerify = $secure['verify'] ?? $this->secure['verify'];
+         $secureVerify = is_bool($secureVerify) ? $secureVerify : $this->secure['verify'];
+         $secureName = $secure['name'] ?? $this->secure['name'];
+
+         if ($secureMode === self::SECURE_VERIFY_CA) {
+            $secureVerify = true;
+            $secureName = false;
+         }
+
+         if ($secureMode === self::SECURE_DISABLE) {
+            $secureVerify = false;
+            $secureName = false;
+         }
+
+         if ($secureMode === self::SECURE_VERIFY_FULL) {
+            $secureVerify = true;
+            $secureName = true;
+         }
+
+         $endpoint = [
+            'driver' => is_scalar($replica['driver']) ? (string) $replica['driver'] : $this->driver,
+            'host' => $host,
+            'port' => is_scalar($replica['port']) ? (int) $replica['port'] : $this->port,
+            'database' => is_scalar($replica['database']) ? (string) $replica['database'] : $this->database,
+            'username' => is_scalar($replica['username']) ? (string) $replica['username'] : $this->username,
+            'password' => is_scalar($replica['password']) ? (string) $replica['password'] : $this->password,
+            'timeout' => is_scalar($replica['timeout']) ? (float) $replica['timeout'] : $this->timeout,
+            'secure' => [
+               'mode' => $secureMode,
+               'verify' => $secureVerify,
+               'name' => is_bool($secureName) ? $secureName : true,
+               'peer' => is_scalar($securePeer) && (string) $securePeer !== '' ? (string) $securePeer : (string) $host,
+               'cafile' => is_scalar($secureCA) ? (string) $secureCA : self::DEFAULT_SECURE_CAFILE,
+            ],
+            'pool' => [
+               'min' => is_scalar($pool['min'] ?? null) ? (int) $pool['min'] : $this->pool['min'],
+               'max' => is_scalar($pool['max'] ?? null) ? (int) $pool['max'] : $this->pool['max'],
+            ],
+         ];
+
+         $normalized[] = $endpoint;
+      }
+
+      return $normalized;
+   }
+
+   /**
+    * Accept one replica config with a non-empty host.
+    *
+      * @return null|array{driver:mixed,host:string,port:mixed,database:mixed,username:mixed,password:mixed,timeout:mixed,secure:mixed,pool:mixed,statements:mixed}
+    */
+   protected function accept (mixed $replica): null|array
+   {
+      if (is_array($replica) === false) {
+         return null;
+      }
+
+      $host = $replica['host'] ?? null;
+
+      if (is_scalar($host) === false || (string) $host === '') {
+         return null;
+      }
+
+      return [
+         'driver' => $replica['driver'] ?? null,
+         'host' => (string) $host,
+         'port' => $replica['port'] ?? null,
+         'database' => $replica['database'] ?? null,
+         'username' => $replica['username'] ?? null,
+         'password' => $replica['password'] ?? null,
+         'timeout' => $replica['timeout'] ?? null,
+         'secure' => $replica['secure'] ?? null,
+         'pool' => $replica['pool'] ?? null,
+         'statements' => $replica['statements'] ?? null,
       ];
    }
 

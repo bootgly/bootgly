@@ -42,7 +42,7 @@ class RecordingSQL extends SQL
     * @param string|Builder|SQLQuery $query
     * @param array<int|string,mixed> $parameters
     */
-   public function query (string|Builder|SQLQuery $query, array $parameters = []): SQLOperation
+   public function query (string|Builder|SQLQuery $query, array $parameters = [], null|object $Scope = null): SQLOperation
    {
       $Normalized = new Normalized($query, $parameters);
       $Operation = new SQLOperation(null, $Normalized->sql, $Normalized->parameters, $this->Config->timeout);

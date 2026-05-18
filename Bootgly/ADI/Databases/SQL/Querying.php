@@ -26,5 +26,5 @@ interface Querying
     * @param string|Builder|Query $query
     * @param array<int|string,mixed> $parameters
     */
-   public function query (string|Builder|Query $query, array $parameters = []): Operation;
+   public function query (string|Builder|Query $query, array $parameters = [], null|object $Scope = null): Operation;
 }

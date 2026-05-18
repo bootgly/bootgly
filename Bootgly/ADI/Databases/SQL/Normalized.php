@@ -11,6 +11,12 @@
 namespace Bootgly\ADI\Databases\SQL;
 
 
+use function ltrim;
+use function preg_match;
+use function str_contains;
+use function strcspn;
+use function strtoupper;
+use function substr;
 use function trim;
 use InvalidArgumentException;
 
@@ -27,6 +33,7 @@ class Normalized
    public private(set) string $sql;
    /** @var array<int|string,mixed> */
    public private(set) array $parameters;
+   public private(set) bool $reading;
 
    // * Data
    // ...
@@ -43,14 +50,21 @@ class Normalized
     */
    public function __construct (string|Builder|Query $query, array $parameters = [])
    {
+      $reading = false;
+
       if ($query instanceof Builder) {
          $Query = $query->compile();
+         $reading = $Query->reading;
          $query = $Query->sql;
          $parameters = $Query->parameters;
       }
       else if ($query instanceof Query) {
+         $reading = $query->reading;
          $parameters = $query->parameters;
          $query = $query->sql;
+      }
+      else {
+         $reading = $this->check($query);
       }
 
       if (trim($query) === '') {
@@ -60,5 +74,31 @@ class Normalized
       // * Config
       $this->sql = $query;
       $this->parameters = $parameters;
+      $this->reading = $reading;
+   }
+
+   /**
+    * Check whether a raw SQL string is safe to route to a replica.
+    */
+   private function check (string $sql): bool
+   {
+      $sql = ltrim($sql);
+      $upper = strtoupper($sql);
+      $token = substr($upper, 0, strcspn($upper, " \t\r\n("));
+
+      return match ($token) {
+         'SELECT', 'SHOW' => true,
+         'EXPLAIN' => str_contains($upper, 'ANALYZE') === false,
+         'WITH' => $this->write($upper) === false,
+         default => false,
+      };
+   }
+
+   /**
+    * Check whether SQL text contains write tokens.
+    */
+   private function write (string $sql): bool
+   {
+      return preg_match('/\b(ALTER|CREATE|DELETE|DROP|INSERT|MERGE|TRUNCATE|UPDATE)\b/', $sql) === 1;
    }
 }

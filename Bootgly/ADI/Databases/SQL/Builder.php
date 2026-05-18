@@ -633,7 +633,8 @@ class Builder
          Modes::Update => $this->change($parameters),
       };
 
-      $this->Query = new Query("{$prefix}{$sql}", $parameters);
+      $reading = $this->Mode === Modes::Select && $this->Lock === null;
+      $this->Query = new Query("{$prefix}{$sql}", $parameters, $reading);
 
       return $this->Query;
    }

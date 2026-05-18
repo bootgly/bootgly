@@ -36,6 +36,7 @@ use Error;
 use Fiber;
 use InvalidArgumentException;
 use SplObjectStorage;
+use stdClass;
 use Throwable;
 
 use const Bootgly\WPI;
@@ -85,6 +86,7 @@ class Response extends Server\Response
    // # Content
    public string|null $source;
    public string|null $type;
+   private object $Scope;
 
    // * Metadata
    // # State (sets)
@@ -133,6 +135,7 @@ class Response extends Server\Response
 
       $this->source = null;
       $this->type = null;
+      $this->Scope = new stdClass;
 
       // * Metadata
       // # Status
@@ -294,6 +297,7 @@ class Response extends Server\Response
       // # Content
       $this->source = null;
       $this->type = null;
+      $this->Scope = new stdClass;
       $this->content = '';
       $this->files = [];
 
@@ -327,6 +331,10 @@ class Response extends Server\Response
     */
    private function attach (ResponseResource $Resource): ResponseResource
    {
+      if ($Resource instanceof DatabaseResource) {
+         $Resource->scope($this->Scope);
+      }
+
       if ($Resource instanceof Scheduling) {
          $Resource->schedule(fn (mixed $value = null): self => $this->wait($value));
       }

@@ -14,6 +14,8 @@ namespace Bootgly\ADI\Database;
 use function array_key_first;
 use function array_shift;
 use function is_resource;
+use function microtime;
+use function mt_rand;
 use function spl_object_id;
 use function stream_select;
 use RuntimeException;
@@ -33,6 +35,10 @@ use Bootgly\ADI\Database\Operation\OperationStates;
  */
 class Pool
 {
+   public const int DEFAULT_FAILURES = 2;
+   public const float DEFAULT_RETRY = 5.0;
+   public const float DEFAULT_JITTER = 0.25;
+
    // * Config
    public Config $Config;
    public Connection $Connection;
@@ -49,8 +55,15 @@ class Pool
    /** @var array<int,Operation> */
    public array $pending = [];
    public int $created = 0;
+   public private(set) int $failures = 0;
+   public private(set) float $retry = 0.0;
 
    // * Metadata
+   public bool $healthy {
+      get {
+         return $this->retry <= 0.0 || microtime(true) >= $this->retry;
+      }
+   }
    /** @var array<int,true> */
    private array $counted = [];
    /** @var array<int,true> */
@@ -88,15 +101,30 @@ class Pool
     */
    public function advance (Operation $Operation): Operation
    {
+      $Pool = $Operation->Pool;
+
+      if ($Pool !== null && $Pool !== $this) {
+         return $Pool->advance($Operation);
+      }
+
+      if ($this->fallback($Operation)) {
+         return $Operation;
+      }
+
       if ($Operation->expire()) {
          $this->forget($Operation);
          $this->release($Operation);
+
+         $this->fallback($Operation);
 
          return $Operation;
       }
 
       if ($Operation->state === OperationStates::Pending) {
-         return $this->assign($Operation);
+         $this->assign($Operation);
+         $this->fallback($Operation);
+
+         return $Operation;
       }
 
       // @ assign() always sets a Driver on Pending → !Pending operations.
@@ -119,6 +147,8 @@ class Pool
          $this->release($Operation);
       }
 
+      $this->fallback($Operation);
+
       return $Operation;
    }
 
@@ -127,6 +157,12 @@ class Pool
     */
    public function wait (Operation $Operation): Operation
    {
+      $Pool = $Operation->Pool;
+
+      if ($Pool !== null && $Pool !== $this) {
+         return $Pool->wait($Operation);
+      }
+
       while (true) {
          $this->advance($Operation);
 
@@ -168,6 +204,12 @@ class Pool
     */
    public function cancel (Operation $Operation): Operation
    {
+      $Pool = $Operation->Pool;
+
+      if ($Pool !== null && $Pool !== $this) {
+         return $Pool->cancel($Operation);
+      }
+
       $Protocol = $Operation->Protocol;
 
       if ($Protocol === null) {
@@ -220,6 +262,14 @@ class Pool
     */
    public function release (Operation $Operation): self
    {
+      $Pool = $Operation->Pool;
+
+      if ($Pool !== null && $Pool !== $this) {
+         $Pool->release($Operation);
+
+         return $this;
+      }
+
       $Connection = $Operation->Connection;
 
       if ($Connection === null) {
@@ -256,6 +306,10 @@ class Pool
          return $this;
       }
 
+      if ($Operation->state === OperationStates::Finished) {
+         $this->recover();
+      }
+
       if (isset($this->locked[$id])) {
          $this->busy[$id] = $Connection;
 
@@ -273,6 +327,7 @@ class Pool
     */
    public function assign (Operation $Operation): Operation
    {
+      $Operation->Pool = $this;
       $Connection = $this->acquire($Operation->Connection);
 
       if ($Connection === null) {
@@ -300,6 +355,40 @@ class Pool
       }
 
       return $Operation;
+   }
+
+   /**
+    * Quarantine this pool after a failed fallback.
+    */
+   public function penalize (float $seconds = self::DEFAULT_RETRY, int $failures = self::DEFAULT_FAILURES, float $jitter = self::DEFAULT_JITTER): self
+   {
+      $this->failures++;
+
+      if ($this->failures < $failures) {
+         return $this;
+      }
+
+      $spread = 0.0;
+      $limit = (int) ($jitter * 1000000);
+
+      if ($limit > 0) {
+         $spread = mt_rand(1, $limit) / 1000000;
+      }
+
+      $this->retry = microtime(true) + $seconds + $spread;
+
+      return $this;
+   }
+
+   /**
+    * Clear replica health penalty after a successful operation.
+    */
+   public function recover (): self
+   {
+      $this->failures = 0;
+      $this->retry = 0.0;
+
+      return $this;
    }
 
    /**
@@ -436,6 +525,28 @@ class Pool
             unset($this->pending[$id]);
          }
       }
+   }
+
+   /**
+    * Retry a failed operation through its fallback pool once.
+    */
+   private function fallback (Operation $Operation): bool
+   {
+      $FallbackPool = $Operation->FallbackPool;
+
+      if ($FallbackPool === null || $FallbackPool === $this || $Operation->fallback || $Operation->cancelled || $Operation->state !== OperationStates::Failed) {
+         return false;
+      }
+
+      if ($Operation->quarantine) {
+         $this->penalize();
+      }
+
+      $Operation->fallback = true;
+      $Operation->retry();
+      $FallbackPool->assign($Operation);
+
+      return true;
    }
 
    /**

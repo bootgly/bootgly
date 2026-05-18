@@ -93,7 +93,7 @@ class SyncDatabase extends SQL
    /**
     * @param array<int|string,mixed> $parameters
     */
-   public function query (string|Builder|SQLQuery $query, array $parameters = []): Operation
+   public function query (string|Builder|SQLQuery $query, array $parameters = [], null|object $Scope = null): Operation
    {
       $Normalized = new Normalized($query, $parameters);
       $Operation = new Operation(null, $Normalized->sql, $Normalized->parameters);

@@ -233,6 +233,8 @@ class PostgreSQL extends Driver
                return $Operation->await($this->Connection->connect($Operation->deadline));
             }
             catch (Throwable $Throwable) {
+               $Operation->quarantine = true;
+
                return $Operation->fail($Throwable->getMessage());
             }
          }
@@ -285,6 +287,8 @@ class PostgreSQL extends Driver
          if ($encrypted === null) {
             return $this->await($Operation, Scheduler::SCHEDULE_WRITE);
          }
+
+         $Operation->quarantine = true;
 
          return $Operation->fail('PostgreSQL TLS handshake failed.');
       }
@@ -512,6 +516,7 @@ class PostgreSQL extends Driver
       $socket = $this->Connection->socket;
 
       if (is_resource($socket) === false) {
+         $Operation->quarantine = $this->Connection->state !== ConnectionStates::Ready;
          $Operation->fail('PostgreSQL socket is not available.');
 
          return $Operation;
@@ -552,6 +557,7 @@ class PostgreSQL extends Driver
       $socket = $this->Connection->socket;
 
       if (is_resource($socket) === false) {
+         $Operation->quarantine = $this->Connection->state !== ConnectionStates::Ready;
          $Operation->fail('PostgreSQL socket is not available.');
 
          return false;
@@ -560,6 +566,7 @@ class PostgreSQL extends Driver
       $written = @fwrite($socket, $Operation->write);
 
       if ($written === false) {
+         $Operation->quarantine = $this->Connection->state !== ConnectionStates::Ready;
          $Operation->fail('PostgreSQL socket write failed.');
 
          return false;
@@ -567,6 +574,7 @@ class PostgreSQL extends Driver
 
       if ($written === 0) {
          if (feof($socket)) {
+            $Operation->quarantine = $this->Connection->state !== ConnectionStates::Ready;
             $Operation->fail('PostgreSQL socket closed during write.');
 
             return false;
@@ -596,6 +604,7 @@ class PostgreSQL extends Driver
       $socket = $this->Connection->socket;
 
       if (is_resource($socket) === false) {
+         $Operation->quarantine = true;
          $Operation->fail('PostgreSQL socket is not available.');
 
          return $Operation;
@@ -604,6 +613,7 @@ class PostgreSQL extends Driver
       $response = @fread($socket, 1);
 
       if ($response === false) {
+         $Operation->quarantine = true;
          $Operation->fail('PostgreSQL SSL response read failed.');
 
          return $Operation;
@@ -611,6 +621,7 @@ class PostgreSQL extends Driver
 
       if ($response === '') {
          if (feof($socket)) {
+            $Operation->quarantine = true;
             $Operation->fail('PostgreSQL socket closed during SSL negotiation.');
 
             return $Operation;
@@ -629,6 +640,7 @@ class PostgreSQL extends Driver
          $mode = $this->Config->secure['mode'];
 
          if ($mode !== Config::SECURE_PREFER) {
+            $Operation->quarantine = true;
             $Operation->fail('PostgreSQL server refused required TLS.');
 
             return $Operation;
@@ -644,6 +656,7 @@ class PostgreSQL extends Driver
          return $Operation;
       }
 
+   $Operation->quarantine = true;
       $Operation->fail('PostgreSQL SSL response is invalid.');
 
       return $Operation;
@@ -657,6 +670,7 @@ class PostgreSQL extends Driver
       $socket = $this->Connection->socket;
 
       if (is_resource($socket) === false) {
+         $Operation->quarantine = $this->Connection->state !== ConnectionStates::Ready;
          $Operation->fail('PostgreSQL socket is not available.');
 
          return $Operation->state;
@@ -665,6 +679,7 @@ class PostgreSQL extends Driver
       $bytes = @fread($socket, 8192);
 
       if ($bytes === false) {
+         $Operation->quarantine = $this->Connection->state !== ConnectionStates::Ready;
          $Operation->fail('PostgreSQL socket read failed.');
 
          return $Operation->state;
@@ -672,6 +687,7 @@ class PostgreSQL extends Driver
 
       if ($bytes === '') {
          if (feof($socket)) {
+            $Operation->quarantine = $this->Connection->state !== ConnectionStates::Ready;
             $Operation->fail('PostgreSQL socket closed.');
 
             return $Operation->state;

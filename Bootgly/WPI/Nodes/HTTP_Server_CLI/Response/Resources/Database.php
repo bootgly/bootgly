@@ -14,6 +14,7 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources;
 use BackedEnum;
 use Closure;
 use RuntimeException;
+use stdClass;
 use Stringable;
 use Throwable;
 
@@ -37,6 +38,7 @@ class Database extends Resource implements Scheduling
 
    // * Data
    private null|Closure $Wait = null;
+   private object $Scope;
 
    // * Metadata
    // ...
@@ -48,6 +50,19 @@ class Database extends Resource implements Scheduling
 
       // * Config
       $this->Database = $Database;
+
+      // * Data
+      $this->Scope = new stdClass;
+   }
+
+   /**
+    * Bind the logical read-after-write scope.
+    */
+   public function scope (object $Scope): static
+   {
+      $this->Scope = $Scope;
+
+      return $this;
    }
 
    /**
@@ -74,9 +89,9 @@ class Database extends Resource implements Scheduling
     * @param string|Builder|Query $query
     * @param array<int|string,mixed> $parameters
     */
-   public function query (string|Builder|Query $query, array $parameters = []): Operation
+   public function query (string|Builder|Query $query, array $parameters = [], null|object $Scope = null): Operation
    {
-      return $this->await($this->Database->query($query, $parameters));
+      return $this->await($this->Database->query($query, $parameters, $Scope ?? $this->Scope));
    }
 
    /**
@@ -85,9 +100,9 @@ class Database extends Resource implements Scheduling
     * @param string|Builder|Query $query
     * @param array<int|string,mixed> $parameters
     */
-   public function fetch (string|Builder|Query $query, array $parameters = []): Result
+   public function fetch (string|Builder|Query $query, array $parameters = [], null|object $Scope = null): Result
    {
-      $Operation = $this->query($query, $parameters);
+      $Operation = $this->query($query, $parameters, $Scope);
       $this->check($Operation);
 
       $Result = $Operation->Result;
@@ -184,6 +199,7 @@ class Database extends Resource implements Scheduling
          $result = $work($Transaction, $this);
          $Commit = $this->await($Transaction->commit());
          $this->check($Commit);
+         $this->Database->touch($this->Scope);
 
          return $result;
       }

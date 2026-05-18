@@ -180,6 +180,18 @@ class Config
       return $this->value;
    }
 
+   /**
+    * Walk direct child nodes.
+    *
+    * @return iterable<string,self>
+    */
+   public function walk (): iterable
+   {
+      foreach ($this->children as $name => $Child) {
+         yield $name => $Child;
+      }
+   }
+
    // # Navigating
    /**
     * Move to the parent node, or stay on root.

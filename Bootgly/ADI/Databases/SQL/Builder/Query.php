@@ -23,6 +23,7 @@ class Query implements Stringable
    public private(set) string $sql;
    /** @var array<int,mixed> */
    public private(set) array $parameters;
+   public private(set) bool $reading;
 
    // * Data
    // ...
@@ -34,11 +35,12 @@ class Query implements Stringable
    /**
     * @param array<int,mixed> $parameters
     */
-   public function __construct (string $sql, array $parameters = [])
+   public function __construct (string $sql, array $parameters = [], bool $reading = false)
    {
       // * Config
       $this->sql = $sql;
       $this->parameters = $parameters;
+      $this->reading = $reading;
    }
 
    /**

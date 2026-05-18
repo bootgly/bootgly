@@ -18,6 +18,7 @@ use Bootgly\ADI\Database\Connection;
 use Bootgly\ADI\Database\Driver;
 use Bootgly\ADI\Database\Operation\OperationStates;
 use Bootgly\ADI\Database\Operation\Result;
+use Bootgly\ADI\Database\Pool;
 
 
 /**
@@ -36,6 +37,8 @@ class Operation
    public float $timeout;
 
    // * Data
+   public null|Pool $Pool = null;
+   public null|Pool $FallbackPool = null;
    public null|Driver $Protocol = null;
    public OperationStates $state = OperationStates::Pending;
    public private(set) null|Readiness $Readiness = null;
@@ -48,6 +51,10 @@ class Operation
    public bool $unlock = false;
    /** CancelRequest was sent; the main operation still resolves, fails or expires later. */
    public bool $cancelled = false;
+   /** Operation was retried through its fallback pool. */
+   public bool $fallback = false;
+   /** Failure should count against the owning pool health. */
+   public bool $quarantine = false;
 
    // * Metadata
    public private(set) float $deadline;
@@ -102,6 +109,26 @@ class Operation
       $this->Readiness = null;
       $this->finished = true;
       $this->state = OperationStates::Failed;
+
+      return $this;
+   }
+
+   /**
+    * Retry this operation from a clean pending state.
+    */
+   public function retry (null|Connection $Connection = null): self
+   {
+      $this->Connection = $Connection;
+      $this->Pool = null;
+      $this->Protocol = null;
+      $this->Readiness = null;
+      $this->Result = null;
+      $this->error = null;
+      $this->finished = false;
+      $this->cancelled = false;
+      $this->quarantine = false;
+      $this->state = OperationStates::Pending;
+      $this->deadline = $this->timeout > 0.0 ? microtime(true) + $this->timeout : 0.0;
 
       return $this;
    }
