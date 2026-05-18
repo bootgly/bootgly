@@ -73,6 +73,18 @@ class Resources
       $Resources = new self($Attach, $Context);
       $Resources->definitions = $this->definitions;
 
+      // @ Carry user-mounted instances (those without a definition) into the
+      //   fork, re-attaching their scheduler bridge to the new context.
+      //   Definition-backed names (built-ins, configured resources) are left
+      //   to rebuild lazily so they bind to the forked response, not the old.
+      foreach ($this->resources as $name => $Resource) {
+         if (isset($Resources->definitions[$name])) {
+            continue;
+         }
+
+         $Resources->set($name, $Resource);
+      }
+
       return $Resources;
    }
 

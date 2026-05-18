@@ -280,11 +280,11 @@ class Response extends Server\Response
     * Reset the response to its initial state.
     *
     * @param Packages $Package
-    * @param Request|null $Request
+    * @param Request $Request
     *
     * @return void
     */
-   public function reset (Packages $Package, null|Request $Request = null): void
+   public function reset (Packages $Package, Request $Request): void
    {
       $this->Package = $Package;
 
@@ -310,8 +310,9 @@ class Response extends Server\Response
       $this->sent = false;
       // # Deferred
       $this->deferred = false;
-      // NOTE: $this->Fibers is NOT reset here — active Fibers must survive across requests
-      // so that wait() can still guard correctly after reset().
+      // NOTE: $this->Fibers is intentionally left untouched. Deferred work runs on a
+      // private clone (see defer()/__clone) that owns its own Fibers guard; the shared
+      // singleton's Fibers is never populated, so there is nothing to reset here.
       $this->Header->clean();
       $this->Body->raw = '';
       $this->Resources->reset();

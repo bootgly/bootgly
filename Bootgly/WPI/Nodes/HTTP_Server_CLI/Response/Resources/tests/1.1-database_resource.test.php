@@ -25,6 +25,7 @@ use Bootgly\ADI\Databases\SQL\Builder\Query;
 use Bootgly\ADI\Databases\SQL\Operation;
 use Bootgly\ADI\Databases\SQL\Transaction;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections\Connection;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resource;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resource\Scheduling;
@@ -188,8 +189,9 @@ return new Specification(
       $Response = new Response;
       /** @var Connection $Package */
       $Package = (new ReflectionClass(Connection::class))->newInstanceWithoutConstructor();
-      $reset = static function () use ($Response, $Package): void {
-         $Response->reset($Package);
+      $Request = new Request;
+      $reset = static function () use ($Response, $Package, $Request): void {
+         $Response->reset($Package, $Request);
       };
 
       $SQL = new RecordingSQL;
@@ -208,6 +210,16 @@ return new Specification(
       yield assert(
          assertion: $MountedSync === $SyncResource && $SyncResource->async === false && $Response->Resources->fetch('SyncResource') === $SyncResource,
          description: 'Response::mount registers sync resources without scheduler binding'
+      );
+
+      $Fork = clone $Response;
+
+      yield assert(
+         assertion: $Fork->Resources->fetch('Database') === $Resource
+            && $Fork->Resources->fetch('SyncResource') === $SyncResource
+            && $Fork->Database === $Resource
+            && $Response->Resources->fetch('Database') === $Resource,
+         description: 'Response::__clone forks mounted resources into the deferred clone (mount() + defer())'
       );
 
       $prepared = $Response->prepared;
