@@ -9,6 +9,7 @@ use function str_contains;
 use BackedEnum;
 use Closure;
 use InvalidArgumentException;
+use ReflectionClass;
 use ReflectionProperty;
 use RuntimeException;
 use Stringable;
@@ -23,6 +24,7 @@ use Bootgly\ADI\Databases\SQL\Builder\Identifier;
 use Bootgly\ADI\Databases\SQL\Builder\Query;
 use Bootgly\ADI\Databases\SQL\Operation;
 use Bootgly\ADI\Databases\SQL\Transaction;
+use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections\Connection;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resource;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resource\Scheduling;
@@ -184,6 +186,12 @@ return new Specification(
    description: 'HTTP_Server_CLI Response Database resource awaits SQL operations',
    test: function () {
       $Response = new Response;
+      /** @var Connection $Package */
+      $Package = (new ReflectionClass(Connection::class))->newInstanceWithoutConstructor();
+      $reset = static function () use ($Response, $Package): void {
+         $Response->reset($Package);
+      };
+
       $SQL = new RecordingSQL;
       $Resource = new Database($SQL);
       $Mounted = $Response->mount($Resource);
@@ -211,7 +219,7 @@ return new Specification(
          description: 'Response::__get returns mounted resources without mutating response state'
       );
 
-      $Response->reset();
+      $reset();
       $JSON = $Response->JSON;
 
       yield assert(
@@ -222,7 +230,7 @@ return new Specification(
       $JSON->send(['status' => 'ok']);
       $jsonSent = $Response->Body->raw === '{"status":"ok"}'
          && $Response->Header->fields['Content-Type'] === 'application/json';
-      $Response->reset();
+      $reset();
       $JSONAfterReset = $Response->JSON;
 
       yield assert(
@@ -232,7 +240,7 @@ return new Specification(
          description: 'JSON resource formats content and persists after lazy first use'
       );
 
-      $Response->reset();
+      $reset();
       $Pre = $Response->Pre;
       $Pre->send(['status' => 'ok']);
 
@@ -269,7 +277,7 @@ return new Specification(
 
       $Lazy = $Response->LazyDatabase;
       $LazyAgain = $Response->LazyDatabase;
-      $Response->reset();
+      $reset();
       $LazyAfterReset = $Response->LazyDatabase;
       $LazyOperation = $LazyAfterReset instanceof Database
          ? $LazyAfterReset->query('WAIT')

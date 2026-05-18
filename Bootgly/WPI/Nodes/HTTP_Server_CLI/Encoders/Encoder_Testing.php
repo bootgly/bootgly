@@ -40,8 +40,6 @@ class Encoder_Testing extends Encoders
          return '';
       }
 
-      // @ Reset Response state (same as production Encoder_)
-      Server::$Response->reset();
       // @ Instance new Router (per-test: each test defines different routes)
       Server::$Router = new Router;
 
@@ -58,8 +56,8 @@ class Encoder_Testing extends Encoders
       $Response = &Server::$Response;
       $Router   = Server::$Router;
 
-      // ! Bind per-request context (used by Response::defer() when needed).
-      $Response->bind($Packages, $Packages->Connection->Socket);
+      // ! Reset Response state and bind per-request context.
+      $Response->reset($Packages, $Request);
 
       // ! Response
       // @

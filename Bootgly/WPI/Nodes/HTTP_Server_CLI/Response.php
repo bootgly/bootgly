@@ -75,6 +75,9 @@ class Response extends Server\Response
    use Raw;
 
 
+   private null|Packages $Package;
+   private null|Request $Request;
+
    // * Config
    // ...
 
@@ -100,16 +103,13 @@ class Response extends Server\Response
    public bool $sent;
    // # Deferred
    public bool $deferred;
-   private null|Packages $Package;
-   /** @var resource|null */
-   private mixed $Socket;
    /** @var SplObjectStorage<Fiber<mixed,mixed,mixed,mixed>,true> */
    private SplObjectStorage $Fibers;
 
    // / HTTP
    public Header $Header;
    public Body $Body;
-
+   // / Resources
    public Resources $Resources;
 
    /**
@@ -121,6 +121,10 @@ class Response extends Server\Response
     */
    public function __construct (int $code = 200, null|array $headers = null, string $body = '')
    {
+      $this->Package = null;
+
+      $this->Request = null;
+
       // * Config
       // ...
 
@@ -138,8 +142,6 @@ class Response extends Server\Response
       $this->sent = false;
       // # Deferred
       $this->deferred = false;
-      $this->Package = null;
-      $this->Socket = null;
       $this->Fibers = new SplObjectStorage;
       // # State
       $this->chunked = false;
@@ -152,7 +154,7 @@ class Response extends Server\Response
       // / HTTP
       $this->Header = new Header;
       $this->Body = new Body;
-
+      // / Resources
       $this->Resources = new Resources(
          fn (ResponseResource $Resource): ResponseResource => $this->attach($Resource),
          $this
@@ -170,6 +172,24 @@ class Response extends Server\Response
       if ($body !== '') {
          $this->Body->raw = $body;
       }
+   }
+   public function __clone ()
+   {
+      $this->Header = clone $this->Header;
+      $this->Body = clone $this->Body;
+
+      if ($this->Request !== null) {
+         $this->Request = clone $this->Request;
+      }
+
+      // # Deferred
+      $this->Fibers = new SplObjectStorage;
+
+      // / Resources
+      $this->Resources = $this->Resources->fork(
+         fn (ResponseResource $Resource): ResponseResource => $this->attach($Resource),
+         $this
+      );
    }
    /**
     * Get the specified property, mounted resource or content format.
@@ -259,10 +279,17 @@ class Response extends Server\Response
    /**
     * Reset the response to its initial state.
     *
+    * @param Packages $Package
+    * @param Request|null $Request
+    *
     * @return void
     */
-   public function reset (): void
+   public function reset (Packages $Package, null|Request $Request = null): void
    {
+      $this->Package = $Package;
+
+      $this->Request = $Request;
+
       // * Data
       // # Content
       $this->source = null;
@@ -283,11 +310,8 @@ class Response extends Server\Response
       $this->sent = false;
       // # Deferred
       $this->deferred = false;
-      $this->Package = null;
-      $this->Socket = null;
       // NOTE: $this->Fibers is NOT reset here — active Fibers must survive across requests
       // so that wait() can still guard correctly after reset().
-
       $this->Header->clean();
       $this->Body->raw = '';
       $this->Resources->reset();
@@ -729,21 +753,7 @@ class Response extends Server\Response
 
       return $this;
    }
-
    // # Deferred
-   /**
-    * Bind the Package and Socket context for deferred responses.
-    *
-    * @param Packages $Package
-    * @param resource $Socket
-    *
-    * @return void
-    */
-   public function bind (Packages $Package, mixed $Socket): void
-   {
-      $this->Package = $Package;
-      $this->Socket = $Socket;
-   }
    /**
     * Defer the response to be completed asynchronously via Fiber.
     *
@@ -756,16 +766,14 @@ class Response extends Server\Response
       // !
       $this->deferred = true;
 
-      $Response = $this;
-
       $Package = $this->Package;
-      $Socket = $this->Socket;
+      $Response = clone $this;
 
       // @ Create Fiber to run deferred work
       $Fiber = new Fiber(function ()
-      use ($work, $Response, $Package, $Socket): void {
+      use ($work, $Response, $Package): void {
          // ?
-         if ($Package === null || $Socket === null) {
+         if ($Package === null) {
             return;
          }
 
@@ -774,7 +782,7 @@ class Response extends Server\Response
             $work($Response);
 
             // ? Guard: socket may have been closed while Fiber was suspended
-            if (is_resource($Socket) === false) {
+            if (is_resource($Package->Connection->Socket) === false) {
                return;
             }
 
@@ -782,13 +790,13 @@ class Response extends Server\Response
             $buffer = $Response->encode($Package, $length);
 
             // @ Write response to socket
-            $Package->writing($Socket, length: $length, buffer: $buffer);
+            $Package->writing($Package->Connection->Socket, length: $length, buffer: $buffer);
          }
          catch (Throwable $Throwable) {
             Throwables::report($Throwable);
 
             // ? Guard: socket may have been closed
-            if (is_resource($Socket) === false) {
+            if (is_resource($Package->Connection->Socket) === false) {
                return;
             }
 
@@ -800,7 +808,7 @@ class Response extends Server\Response
             $buffer = $Response->encode($Package, $length);
 
             // @ Write response to socket
-            $Package->writing($Socket, length: $length, buffer: $buffer);
+            $Package->writing($Package->Connection->Socket, length: $length, buffer: $buffer);
          }
          finally {
             // @ Unregister Fiber from wait() guard
@@ -812,7 +820,7 @@ class Response extends Server\Response
       });
 
       // @ Register Fiber for wait() guard (must be set before start)
-      $this->Fibers->attach($Fiber);
+      $Response->Fibers->attach($Fiber);
 
       // @ Start Fiber
       $suspendedValue = $Fiber->start();

@@ -47,11 +47,8 @@ class Encoder_ extends Encoders
          return '';
       }
 
-      // @ Reset Response state for new request
-      $Response->reset();
-
-      // @ Bind per-request context (used by Response::defer() when needed).
-      $Response->bind($Packages, $Packages->Connection->Socket);
+      // @ Reset Response state and bind per-request context.
+      $Response->reset($Packages, $Request);
 
       // @
       try {

@@ -55,14 +55,25 @@ class Resources
       $this->Context = $Context;
 
       if ($Context instanceof ServerResponse) {
-         $Response = $Context;
-
          // * Data
-         $this->define('JSON', static fn (object $Context): JSON => new JSON($Response));
-         $this->define('JSONP', static fn (object $Context): JSONP => new JSONP($Response));
-         $this->define('Pre', static fn (object $Context): Pre => new Pre($Response));
-         $this->define('View', static fn (object $Context): View => new View($Response));
+         $this->define('JSON', static fn (object $Context): JSON => new JSON(self::guard($Context)));
+         $this->define('JSONP', static fn (object $Context): JSONP => new JSONP(self::guard($Context)));
+         $this->define('Pre', static fn (object $Context): Pre => new Pre(self::guard($Context)));
+         $this->define('View', static fn (object $Context): View => new View(self::guard($Context)));
       }
+   }
+
+   /**
+    * Fork definitions into a new response context.
+    *
+    * @param Closure(Resource):mixed $Attach
+    */
+   public function fork (Closure $Attach, object $Context): self
+   {
+      $Resources = new self($Attach, $Context);
+      $Resources->definitions = $this->definitions;
+
+      return $Resources;
    }
 
    /**
@@ -196,5 +207,17 @@ class Resources
 
       /** @var T $Attached */
       return $Attached;
+   }
+
+   /**
+    * Validate one built-in factory context.
+    */
+   private static function guard (object $Context): ServerResponse
+   {
+      if ($Context instanceof ServerResponse === false) {
+         throw new RuntimeException('Built-in response resource factory expects a Response context.');
+      }
+
+      return $Context;
    }
 }

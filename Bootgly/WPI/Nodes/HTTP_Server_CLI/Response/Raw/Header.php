@@ -84,6 +84,10 @@ class Header extends HeaderBase
       // /
       $this->Cookies = new Cookies($this);
    }
+   public function __clone ()
+   {
+      $this->Cookies = new Cookies($this);
+   }
    public function __get (string $name): mixed
    {
       switch ($name) {

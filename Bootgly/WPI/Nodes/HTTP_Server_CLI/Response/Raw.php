@@ -42,7 +42,7 @@ trait Raw
       $Body = &$this->Body;
 
       // HTTP/1.0 backward compatibility (RFC 9110 §2.5)
-      $Request = Server::$Request;
+      $Request = $this->Request ?? Server::$Request;
       if ($Request->protocol === 'HTTP/1.0') {
          // Respond with HTTP/1.0 status-line for 1.0 clients
          $response = "HTTP/1.0 {$this->status}";
