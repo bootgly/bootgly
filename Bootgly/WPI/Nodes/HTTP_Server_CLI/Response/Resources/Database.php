@@ -20,9 +20,11 @@ use Throwable;
 
 use Bootgly\ADI\Database\Operation\Result;
 use Bootgly\ADI\Databases\SQL;
+use Bootgly\ADI\Databases\SQL\Awaiting;
 use Bootgly\ADI\Databases\SQL\Builder;
 use Bootgly\ADI\Databases\SQL\Builder\Query;
 use Bootgly\ADI\Databases\SQL\Operation;
+use Bootgly\ADI\Databases\SQL\Repository;
 use Bootgly\ADI\Databases\SQL\Transaction;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resource;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resource\Scheduling;
@@ -31,7 +33,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resource\Scheduling;
 /**
  * HTTP response resource for awaiting async SQL database operations.
  */
-class Database extends Resource implements Scheduling
+class Database extends Resource implements Awaiting, Scheduling
 {
    // * Config
    public SQL $Database;
@@ -81,6 +83,16 @@ class Database extends Resource implements Scheduling
    public function table (BackedEnum|Stringable|Builder|Query $Table, null|BackedEnum|Stringable $Alias = null): Builder
    {
       return $this->Database->table($Table, $Alias);
+   }
+
+   /**
+    * Create one ORM repository through the wrapped database.
+    *
+    * @param class-string $Entity
+    */
+   public function map (string $Entity): Repository
+   {
+      return $this->Database->map($Entity, $this->Scope, $this);
    }
 
    /**

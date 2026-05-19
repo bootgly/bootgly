@@ -21,15 +21,18 @@ use WeakMap;
 use Bootgly\ADI\Database;
 use Bootgly\ADI\Database\Connection;
 use Bootgly\ADI\Database\Pool;
+use Bootgly\ADI\Databases\SQL\Awaiting;
 use Bootgly\ADI\Databases\SQL\Builder;
 use Bootgly\ADI\Databases\SQL\Builder\Dialect;
 use Bootgly\ADI\Databases\SQL\Builder\Dialects;
 use Bootgly\ADI\Databases\SQL\Builder\Query;
 use Bootgly\ADI\Databases\SQL\Config;
 use Bootgly\ADI\Databases\SQL\Drivers;
+use Bootgly\ADI\Databases\SQL\Models;
 use Bootgly\ADI\Databases\SQL\Normalized;
 use Bootgly\ADI\Databases\SQL\Operation;
 use Bootgly\ADI\Databases\SQL\Querying;
+use Bootgly\ADI\Databases\SQL\Repository;
 use Bootgly\ADI\Databases\SQL\Schema;
 use Bootgly\ADI\Databases\SQL\Transaction;
 
@@ -37,11 +40,12 @@ use Bootgly\ADI\Databases\SQL\Transaction;
 /**
  * SQL database facade.
  */
-class SQL extends Database implements Querying
+class SQL extends Database implements Awaiting, Querying
 {
    // * Config
    public Config $SQLConfig;
    public private(set) Dialect $Dialect;
+   public private(set) Models $Models;
 
    // * Data
    /** @var array<int,Pool> */
@@ -68,6 +72,7 @@ class SQL extends Database implements Querying
          : new Config($config);
       $this->SQLConfig = $Config;
       $this->Written = new WeakMap;
+      $this->Models = new Models;
 
       $Dialects = new Dialects;
       $this->Dialect = $Dialects->fetch($Config->driver);
@@ -126,6 +131,29 @@ class SQL extends Database implements Querying
    }
 
    /**
+    * Create one ORM repository context for a mapped entity class.
+    *
+    * The await bridge is NOT defaulted to this connection: a raw `SQL` repository
+    * stays in explicit/deferred relation mode unless the caller opts into eager/lazy
+    * by passing an `Awaiting` bridge (e.g. the WPI `Response\Resources\Database`
+    * resource, which passes itself). `Transaction::map()` defaults to the
+    * transaction because a transaction is already an active awaited context.
+    *
+    * @param class-string $Entity
+    */
+   public function map (string $Entity, null|object $Scope = null, null|Awaiting $Awaiting = null): Repository
+   {
+      return Repository::create(
+         $this,
+         $this->Dialect,
+         $this->Models,
+         $Entity,
+         $Scope,
+         $Awaiting
+      );
+   }
+
+   /**
     * Start the SQL schema structure builder.
     */
    public function structure (): Schema
@@ -152,6 +180,17 @@ class SQL extends Database implements Querying
    {
       $Pool = $Operation->Pool ?? $this->Pool;
       $Pool->advance($Operation);
+
+      return $Operation;
+   }
+
+   /**
+    * Await one SQL operation through the owning pool.
+    */
+   public function await (Operation $Operation): Operation
+   {
+      $Pool = $Operation->Pool ?? $this->Pool;
+      $Pool->wait($Operation);
 
       return $Operation;
    }

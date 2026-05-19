@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "7a8d0551-7f5b-4d76-9a3f-e4f7cccb6a4d",
     "name": "Bootgly Demo HTTP_Server_CLI - Native Async PostgreSQL",
-    "description": "Postman collection for the Bootgly Demo HTTP_Server_CLI native async PostgreSQL handler.\n\nBefore running:\n1. In projects/Demo-HTTP_Server_CLI/Demo-HTTP_Server_CLI.project.php, enable the response-database handler.\n2. Configure DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASS as needed. DB_ENABLED defaults to true for this demo.\n3. Start the Demo HTTP server.\n4. Run requests in order, starting with Setup demo table.\n\nDefault base_url: http://127.0.0.1:8082",
+    "description": "Postman collection for the Bootgly Demo HTTP_Server_CLI native async PostgreSQL and ORM Data Mapper handler.\n\nBefore running:\n1. In projects/Demo-HTTP_Server_CLI/Demo-HTTP_Server_CLI.project.php, enable the response-database handler.\n2. Configure DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASS as needed. DB_ENABLED defaults to true for this demo.\n3. Start the Demo HTTP server.\n4. Run requests in order, starting with Setup demo tables.\n\nDefault base_url: http://127.0.0.1:8082",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -44,6 +44,8 @@
               "});",
               "pm.test('routes available', function () {",
               "  pm.expect(json.routes).to.include('/deferred/database/setup');",
+              "  pm.expect(json.routes).to.include('/deferred/database/orm/users');",
+              "  pm.expect(json.routes).to.include('/deferred/database/orm/lazy-relations');",
               "});"
             ]
           }
@@ -99,7 +101,7 @@
           }
         ],
         "url": "{{base_url}}/deferred/database/setup",
-        "description": "Creates and seeds the bootgly_demo_users table. Run this before the users/user requests."
+        "description": "Creates and seeds the bootgly_demo_users, bootgly_orm_users and bootgly_orm_posts tables. Run this before the users/user/ORM requests."
       },
       "event": [
         {
@@ -343,7 +345,188 @@
       ]
     },
     {
-      "name": "08 - Expected recoverable error",
+      "name": "08 - ORM list users",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/deferred/database/orm/users",
+        "description": "Lists active ORM users through SQL::map(), Repository::fetch(), Database::await(), and Repository::hydrate(). Requires Setup demo tables first."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "pm.test('JSON body', function () {",
+              "  pm.response.to.have.jsonBody();",
+              "});",
+              "const json = pm.response.json();",
+              "pm.test('ORM active users returned', function () {",
+              "  pm.expect(json.status).to.eql('ok');",
+              "  pm.expect(json.entities.length).to.be.at.least(2);",
+              "  pm.expect(json.entities.map(user => user.name)).to.include('Ada Lovelace');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "09 - ORM fetch user",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/deferred/database/orm/user",
+        "description": "Fetches ORM user id 1 through Repository::find() and explicit hydration. Requires Setup demo tables first."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "pm.test('JSON body', function () {",
+              "  pm.response.to.have.jsonBody();",
+              "});",
+              "const json = pm.response.json();",
+              "pm.test('ORM user returned', function () {",
+              "  pm.expect(json.status).to.eql('ok');",
+              "  pm.expect(json.entity.id).to.eql(1);",
+              "  pm.expect(json.entity.name).to.eql('Ada Lovelace');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "10 - ORM load relations",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/deferred/database/orm/relations",
+        "description": "Fetches ORM users and eagerly loads posts through Selection::load() with the WPI Database await bridge. Requires Setup demo tables first."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "pm.test('JSON body', function () {",
+              "  pm.response.to.have.jsonBody();",
+              "});",
+              "const json = pm.response.json();",
+              "pm.test('ORM relations returned', function () {",
+              "  pm.expect(json.status).to.eql('ok');",
+              "  const ada = json.entities.find(user => user.id === 1);",
+              "  pm.expect(ada.posts.length).to.be.at.least(2);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "10.1 - ORM lazy load relations",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/deferred/database/orm/lazy-relations",
+        "description": "Fetches ORM users and lazy-loads posts through Relation(lazy: true) with the WPI Database await bridge. Requires Setup demo tables first."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "pm.test('JSON body', function () {",
+              "  pm.response.to.have.jsonBody();",
+              "});",
+              "const json = pm.response.json();",
+              "pm.test('ORM lazy relations returned', function () {",
+              "  pm.expect(json.status).to.eql('ok');",
+              "  const ada = json.entities.find(user => user.id === 1);",
+              "  pm.expect(ada.posts_count).to.be.at.least(2);",
+              "  pm.expect(ada.posts.length).to.be.at.least(2);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "11 - ORM save generated user",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/deferred/database/orm/save",
+        "description": "Inserts one ORM user with generated identity key and hydrates the RETURNING row. Requires Setup demo tables first."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "pm.test('JSON body', function () {",
+              "  pm.response.to.have.jsonBody();",
+              "});",
+              "const json = pm.response.json();",
+              "pm.test('ORM generated user saved', function () {",
+              "  pm.expect(json.status).to.eql('ok');",
+              "  pm.expect(json.entity.id).to.be.a('number');",
+              "  pm.expect(json.entity.name).to.eql('Katherine Johnson');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "12 - Expected recoverable error",
       "request": {
         "method": "GET",
         "header": [
@@ -378,7 +561,7 @@
       ]
     },
     {
-      "name": "09 - Pool with multiple operations",
+      "name": "13 - Pool with multiple operations",
       "request": {
         "method": "GET",
         "header": [
@@ -414,7 +597,7 @@
       ]
     },
     {
-      "name": "10 - Slow query sleep",
+      "name": "14 - Slow query sleep",
       "request": {
         "method": "GET",
         "header": [

@@ -20,12 +20,13 @@ use Bootgly\ADI\Database\Connection;
 use Bootgly\ADI\Databases\SQL as SQLDatabase;
 use Bootgly\ADI\Databases\SQL\Builder;
 use Bootgly\ADI\Databases\SQL\Builder\Query;
+use Bootgly\ADI\Databases\SQL\Repository;
 
 
 /**
  * SQL transaction pinned to one pooled database connection.
  */
-class Transaction implements Querying
+class Transaction implements Awaiting, Querying
 {
    // * Config
    public SQLDatabase $Database;
@@ -108,6 +109,31 @@ class Transaction implements Querying
       $Builder = new Builder($this->Database->Dialect);
 
       return $Builder->table($Table, $Alias);
+   }
+
+   /**
+    * Create one ORM repository context for this transaction.
+    *
+    * @param class-string $Entity
+    */
+   public function map (string $Entity, null|object $Scope = null, null|Awaiting $Awaiting = null): Repository
+   {
+      return Repository::create(
+         $this,
+         $this->Database->Dialect,
+         $this->Database->Models,
+         $Entity,
+         $Scope,
+         $Awaiting ?? $this
+      );
+   }
+
+   /**
+    * Await one transaction SQL operation through the owning database.
+    */
+   public function await (Operation $Operation): Operation
+   {
+      return $this->Database->await($Operation);
    }
 
    /**

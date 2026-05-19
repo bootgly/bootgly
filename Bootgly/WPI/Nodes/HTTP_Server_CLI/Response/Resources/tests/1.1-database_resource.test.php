@@ -22,6 +22,9 @@ use Bootgly\ADI\Databases\SQL;
 use Bootgly\ADI\Databases\SQL\Builder;
 use Bootgly\ADI\Databases\SQL\Builder\Identifier;
 use Bootgly\ADI\Databases\SQL\Builder\Query;
+use Bootgly\ADI\Databases\SQL\Model\Column;
+use Bootgly\ADI\Databases\SQL\Model\Key;
+use Bootgly\ADI\Databases\SQL\Model\Table;
 use Bootgly\ADI\Databases\SQL\Operation;
 use Bootgly\ADI\Databases\SQL\Transaction;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections\Connection;
@@ -50,6 +53,8 @@ final class RecordingSQL extends SQL
 
    public function __construct ()
    {
+      parent::__construct(['driver' => 'sqlite', 'pool' => ['min' => 0, 'max' => 0]]);
+
       $this->steps = new WeakMap;
       $this->Transaction = new RecordingTransaction;
    }
@@ -193,6 +198,15 @@ final class RecordingSchedulingResource extends Resource implements Scheduling
    }
 }
 
+#[Table('resource_orm_users')]
+final class ResourceUser
+{
+   #[Key]
+   public null|int $id = null;
+   #[Column]
+   public string $name = '';
+}
+
 
 return new Specification(
    description: 'HTTP_Server_CLI Response Database resource awaits SQL operations',
@@ -319,6 +333,18 @@ return new Specification(
             && $lazyBuilds === 2
             && $lazyContext === $Response,
          description: 'Response resource definitions are lazy and use a per-request SQL stickiness scope'
+      );
+
+      $ORMRepository = $LazyAfterReset instanceof Database
+         ? $LazyAfterReset->map(ResourceUser::class)
+         : null;
+      $ORMOperation = $ORMRepository?->find(1);
+
+      yield assert(
+         assertion: $ORMOperation instanceof Operation
+            && $ORMRepository?->Awaiting === $LazyAfterReset
+            && ($SQL->scopes[1] ?? null) === $RequestScope,
+         description: 'Database::map creates ORM repositories with the per-request SQL stickiness scope and await bridge'
       );
 
       $Deferred = clone $Response;
