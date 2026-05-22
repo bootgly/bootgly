@@ -165,6 +165,7 @@ class Select implements Events, Loops, Scheduler
 
             unset($this->connecting[$id]);
             unset($this->reads[$id]);
+            $this->release($this->awaitingReads, $this->awaitingReadDeadlines, $id);
 
             return true;
          // Package
@@ -173,6 +174,7 @@ class Select implements Events, Loops, Scheduler
 
             unset($this->reading[$id]);
             unset($this->reads[$id]);
+            $this->release($this->awaitingReads, $this->awaitingReadDeadlines, $id);
 
             return true;
          case self::EVENT_WRITE:
@@ -180,6 +182,7 @@ class Select implements Events, Loops, Scheduler
 
             unset($this->writing[$id]);
             unset($this->writes[$id]);
+            $this->release($this->awaitingWrites, $this->awaitingWriteDeadlines, $id);
 
             return true;
          case self::EVENT_EXCEPT:
@@ -266,6 +269,10 @@ class Select implements Events, Loops, Scheduler
             }
          }
          else {
+            if ($this->Fibers) {
+               continue;
+            }
+
             // @ Sleep for 1 second and continue (Used to pause the Server)
             sleep(1);
 
@@ -490,6 +497,26 @@ class Select implements Events, Loops, Scheduler
 
          foreach ($Queued as $Fiber) {
             $this->resume($Fiber);
+         }
+      }
+   }
+
+   /**
+    * Move Fibers awaiting a removed socket back to tick scheduling.
+    *
+    * @param array<int,array<int,Fiber<mixed,mixed,mixed,mixed>>> $Fibers
+    * @param array<int,float> $deadlines
+    */
+   private function release (array &$Fibers, array &$deadlines, int $id): void
+   {
+      $Queued = $Fibers[$id] ?? [];
+
+      unset($Fibers[$id]);
+      unset($deadlines[$id]);
+
+      foreach ($Queued as $Fiber) {
+         if ($Fiber->isSuspended()) {
+            $this->Fibers[] = $Fiber;
          }
       }
    }
