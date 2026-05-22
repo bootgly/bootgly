@@ -13,6 +13,7 @@ namespace projects\HTTP_Server_CLI\router;
 
 use function asort;
 use function count;
+use function ctype_digit;
 use function getenv;
 use function htmlspecialchars;
 use function implode;
@@ -22,7 +23,9 @@ use function json_encode;
 use function max;
 use function min;
 use function mt_rand;
+use function strpos;
 use function strtolower;
+use function substr;
 use Generator;
 use Throwable;
 
@@ -212,6 +215,36 @@ return static function
    // ---
 
    $QueryCount = static function (Request $Request): int {
+      $query = $Request->query;
+
+      if ($query === 'queries=20') {
+         return 20;
+      }
+
+      $start = false;
+
+      if (substr($query, 0, 8) === 'queries=') {
+         $start = 8;
+      }
+      else {
+         $offset = strpos($query, '&queries=');
+
+         if ($offset !== false) {
+            $start = $offset + 9;
+         }
+      }
+
+      if ($start !== false) {
+         $end = strpos($query, '&', $start);
+         $queries = $end === false
+            ? substr($query, $start)
+            : substr($query, $start, $end - $start);
+
+         if ($queries !== '' && ctype_digit($queries)) {
+            return max(1, min(500, (int) $queries));
+         }
+      }
+
       $queries = $Request->queries['queries'] ?? 1;
 
       if (is_array($queries)) {
