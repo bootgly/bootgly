@@ -81,6 +81,8 @@ class PostgreSQL extends Driver
    private array $pipeline = [];
    /** @var array<int,Operation> */
    private array $completed = [];
+   // @ Operation currently holding the socket write stream (co-located pipelining).
+   private null|Operation $writing = null;
    /** @var array<string,string> */
    private array $names = [];
    /** @var array<string,true> */
@@ -324,14 +326,26 @@ class PostgreSQL extends Driver
       }
 
       if ($Operation->state === OperationStates::Querying) {
+         // ? A co-located sibling holds the write stream — wait so the
+         //   pipelined wire messages are not interleaved on the socket.
+         if ($this->writing !== null && $this->writing !== $Operation && $this->writing->finished === false) {
+            return $this->await($Operation, Scheduler::SCHEDULE_WRITE);
+         }
+
          if ($Operation->write === '') {
             $this->prepare($Operation);
             $Operation->state = OperationStates::Querying;
          }
 
+         $this->writing = $Operation;
+
          if ($this->flush($Operation) === false) {
+            // @ A partial write keeps the stream held; on a hard failure the
+            //   operation is finished and the guard above treats it as free.
             return $Operation;
          }
+
+         $this->writing = null;
 
          if ($Operation->statement !== '' && $Operation->prepared === false) {
             $this->preparing[$Operation->statement] = true;

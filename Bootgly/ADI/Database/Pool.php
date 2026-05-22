@@ -13,6 +13,7 @@ namespace Bootgly\ADI\Database;
 
 use function array_key_first;
 use function array_shift;
+use function count;
 use function is_resource;
 use function microtime;
 use function mt_rand;
@@ -68,6 +69,8 @@ class Pool
    private array $counted = [];
    /** @var array<int,true> */
    private array $locked = [];
+   // @ Round-robin cursor for co-locating pipelined operations across connections.
+   private int $cursor = 0;
 
 
    /**
@@ -328,7 +331,7 @@ class Pool
    public function assign (Operation $Operation): Operation
    {
       $Operation->Pool = $this;
-      $Connection = $this->acquire($Operation->Connection);
+      $Connection = $this->acquire($Operation->Connection, $Operation->lock === false);
 
       if ($Connection === null) {
          $Operation->state = OperationStates::Pending;
@@ -418,7 +421,7 @@ class Pool
    /**
     * Acquire an idle connection or reserve capacity for a new one.
     */
-   private function acquire (null|Connection $Pinned = null): null|Connection
+   private function acquire (null|Connection $Pinned = null, bool $pipelineable = true): null|Connection
    {
       if ($Pinned !== null) {
          $id = spl_object_id($Pinned);
@@ -444,6 +447,16 @@ class Pool
       }
 
       if ($this->created >= $this->max) {
+         // @ Pool exhausted — co-locate this operation on a ready busy
+         //   connection so the driver pipelines it instead of queueing it
+         //   pending. Exclusive operations (transactions) never co-locate.
+         if ($pipelineable === false) {
+            return null;
+         }
+
+         /** @var array<int,Connection> $Eligible */
+         $Eligible = [];
+
          foreach ($this->busy as $id => $Connection) {
             if (isset($this->locked[$id])) {
                continue;
@@ -451,12 +464,24 @@ class Pool
 
             $Protocol = $Connection->Protocol;
 
-            if ($Protocol !== null && $Connection->connected && $Connection->state === ConnectionStates::Ready && is_resource($Connection->socket) && $Protocol->check()) {
-               return $Connection;
+            if (
+               $Protocol !== null
+               && $Connection->connected
+               && $Connection->state === ConnectionStates::Ready
+               && is_resource($Connection->socket)
+            ) {
+               $Eligible[] = $Connection;
             }
          }
 
-         return null;
+         if ($Eligible === []) {
+            return null;
+         }
+
+         $Connection = $Eligible[$this->cursor % count($Eligible)];
+         $this->cursor++;
+
+         return $Connection;
       }
 
       $Connection = $this->created === 0

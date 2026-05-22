@@ -12,7 +12,9 @@ namespace Bootgly\ADI\Databases;
 
 
 use function count;
+use function is_string;
 use function microtime;
+use function trim;
 use BackedEnum;
 use Fiber;
 use Stringable;
@@ -93,6 +95,17 @@ class SQL extends Database implements Awaiting, Querying
     */
    public function query (string|Builder|Query $query, array $parameters = [], null|object $Scope = null): Operation
    {
+      if (is_string($query) && $this->ReplicaPools === []) {
+         if (trim($query) === '') {
+            throw new \InvalidArgumentException('SQL cannot be empty.');
+         }
+
+         $Operation = new Operation(null, $query, $parameters, $this->Pool->Config->timeout);
+         $this->Pool->assign($Operation);
+
+         return $Operation;
+      }
+
       $Normalized = new Normalized($query, $parameters);
       $Scope = $this->resolve($Scope);
       $Pool = $this->route($Normalized, $Scope);

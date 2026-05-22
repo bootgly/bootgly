@@ -26,7 +26,7 @@ return new Suite(
       '3.4-postgresql_operation_stream',
       '3.5-connection-non_blocking_connect',
       '4.1-pool-reuses_connection',
-      '4.2-pool-max_pending',
+      '4.2-pool-max_colocation',
       '4.3-pool-created_bookkeeping',
       '5.1-postgresql_authentication_md5',
       '5.2-postgresql_authentication_scram',
