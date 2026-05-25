@@ -64,7 +64,9 @@ use function stream_socket_enable_crypto;
 use function stream_socket_server;
 use function time;
 use function usleep;
+use BackedEnum;
 use Closure;
+use InvalidArgumentException;
 use Throwable;
 
 use const Bootgly\CLI;
@@ -82,6 +84,7 @@ use Bootgly\API\Endpoints\Server\Status;
 use Bootgly\API\Environment;
 use Bootgly\API\Environments;
 use Bootgly\API\Workables\Server as SAPI;
+use Bootgly\WPI\Event;
 use Bootgly\WPI\Endpoints\Servers;
 use Bootgly\WPI\Endpoints\Servers\Decoder;
 use Bootgly\WPI\Endpoints\Servers\Encoder;
@@ -133,6 +136,8 @@ class TCP_Server_CLI implements Servers, Logging
    //   before the connection is closed deterministically. Replaces the
    //   previous synchronous `stream_select(..., 200_000)` retry loop.
    public static int $maxWriteWallTime = 30;
+   /** @var array<string,true> */
+   protected array $Events = [];
 
    // * Metadata
    // # State
@@ -330,20 +335,31 @@ class TCP_Server_CLI implements Servers, Logging
       return $this;
    }
    /**
-    * Register the data handler for the TCP Server.
+    * Register an event handler for the TCP Server.
     *
-    * @param Closure $dataReceive The data receive handler.
+    * @param Event&BackedEnum $Event The event to listen to.
+    * @param Closure $Callback The event callback.
     *
     * @return self
     */
    public function on (
-      // on Data
-      Closure $dataReceive
+      Event & BackedEnum $Event,
+      Closure $Callback
    ): self
    {
+      if ($Event instanceof TCP_Server_CLI\Events === false) {
+         throw new InvalidArgumentException('Invalid TCP Server event.');
+      }
+
+      if (isset($this->Events[$Event->value])) {
+         throw new InvalidArgumentException("The event '{$Event->value}' is already registered.");
+      }
+
+      $this->Events[$Event->value] = true;
+
       // @
       // on Data
-      SAPI::$Handler = $dataReceive;
+      SAPI::$Handler = $Callback;
 
       // :
       return $this;
@@ -486,7 +502,7 @@ class TCP_Server_CLI implements Servers, Logging
          self::$Application::boot(Environments::Production);
       }
       else if (isSet(SAPI::$Handler) === false) {
-         $this->log('@\;No handler defined. Call on(dataReceive:) before start().@\;', self::LOG_ERROR_LEVEL);
+         $this->log('@\;No handler defined. Call on(Events::DataReceive, ...) before start().@\;', self::LOG_ERROR_LEVEL);
          exit(1);
       }
 

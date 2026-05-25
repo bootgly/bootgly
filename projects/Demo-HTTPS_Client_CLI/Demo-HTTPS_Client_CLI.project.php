@@ -21,6 +21,7 @@ use function parse_url;
 use const Bootgly\CLI;
 use Bootgly\API\Projects\Project;
 use Bootgly\WPI\Nodes\HTTP_Client_CLI;
+use Bootgly\WPI\Nodes\HTTP_Client_CLI\Events;
 use Bootgly\WPI\Nodes\HTTP_Client_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Client_CLI\Request\Response;
 
@@ -86,9 +87,9 @@ return new Project(
       );
 
       // @ Register HTTP hooks
-      $Client->on(
+      $Client
          // on Worker instance
-         workerStarted: function ($Client) use ($uri) {
+         ->on(Events::WorkerStarted, function ($Client) use ($uri) {
             // @ Prepare a GET request
             $Client->request('GET', $uri);
 
@@ -96,17 +97,17 @@ return new Project(
             if ($Socket) {
                $Client::$Event->loop();
             }
-         },
+         })
          // on Connection connect
-         clientConnect: function ($Socket, $Connection) use ($Output) {
+         ->on(Events::ClientConnect, function ($Socket, $Connection) use ($Output) {
             $Output->render('@#green:✓ TLS connection established@;@.;');
-         },
+         })
          // on Connection disconnect
-         clientDisconnect: function ($Connection) use ($Output) {
+         ->on(Events::ClientDisconnect, function ($Connection) use ($Output) {
             $Output->render('@.;@#yellow:■ Connection closed@;@.;');
-         },
+         })
          // @ on HTTP Response received
-         responseReceive: function (Request $Request, Response $Response) use ($Output, $Client) {
+         ->on(Events::ResponseReceive, function (Request $Request, Response $Response) use ($Output, $Client) {
             $Output->render('@.;@#white:--- Response ---@;@.;');
             $Output->render('@#green:Protocol:@; ' . $Response->protocol . '@.;');
             $Output->render('@#green:Status:@;   ' . $Response->code . ' ' . $Response->status . '@.;');
@@ -135,8 +136,7 @@ return new Project(
 
             // @ Stop the event loop after first response (demo is one-shot)
             $Client::$Event->loop = false;
-         }
-      );
+         });
 
       // @ Start the client
       $Client->start();

@@ -18,7 +18,7 @@
  *
  * NOTE: This file uses the generator (yield) handler pattern.
  *       To use it, register it in HTTP_Server_CLI.project.php:
- *         $Server->on(request: require __DIR__ . '/router/routes/Core.routes.php');
+ *         $Server->on(Events::RequestReceived, require __DIR__ . '/router/routes/Core.routes.php');
  */
 
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router;

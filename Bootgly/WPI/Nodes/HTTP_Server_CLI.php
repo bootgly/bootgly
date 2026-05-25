@@ -52,9 +52,11 @@ use function strpos;
 use function substr;
 use function time;
 use function usleep;
+use BackedEnum;
 use Closure;
 use Exception;
 use Generator;
+use InvalidArgumentException;
 use ReflectionFunction;
 use ReflectionIntersectionType;
 use ReflectionNamedType;
@@ -75,7 +77,9 @@ use Bootgly\API\Endpoints\Server\Status;
 use Bootgly\API\Environments;
 use Bootgly\API\Workables\Server as SAPI;
 use Bootgly\API\Workables\Server\Middlewares;
+use Bootgly\WPI\Event;
 use Bootgly\WPI\Interfaces\TCP_Client_CLI;
+use Bootgly\WPI\Interfaces\TCP_Client_CLI\Events as TCP_Client_Events;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI;
 use Bootgly\WPI\Modules\HTTP;
 use Bootgly\WPI\Modules\HTTP\Server;
@@ -83,6 +87,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Decoder_;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Decoder_Downloading\Downloads;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders\Encoder_;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders\Encoder_Testing;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Events;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router;
@@ -213,34 +218,44 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
    }
 
    /**
-    * Register hooks for the HTTP Server.
+    * Register an event handler for the HTTP Server.
     *
-    * @param Closure(Request, Response, Router): mixed $requestReceived The request handler.
-    * @param null|Closure(static): void $serverStarted Called after workers are spawned (server is ready).
-    * @param null|Closure(static): void $serverStopped Called when the server is stopping.
+    * @param Event&BackedEnum $Event The event to listen to.
+    * @param Closure $Callback The event callback.
     *
     * @return self The HTTP Server instance, for chaining.
     */
    public function on (
-      // on HTTP
-      Closure $requestReceived,
-      // on Server
-      null|Closure $serverStarted = null,
-      null|Closure $serverStopped = null
+      Event & BackedEnum $Event,
+      Closure $Callback
    ): self
    {
-      // @ Request handler
-      if (isset(SAPI::$Middlewares) === false) {
-         SAPI::$Middlewares = new Middlewares;
+      if ($Event instanceof Events === false) {
+         throw new InvalidArgumentException('Invalid HTTP Server event.');
       }
-      SAPI::$Handler = $requestReceived;
 
-      // @ Lifecycle hooks
-      self::$onServerStarted = $serverStarted;
-      self::$onServerStopped = $serverStopped;
+      if (isset($this->Events[$Event->value])) {
+         throw new InvalidArgumentException("The event '{$Event->value}' is already registered.");
+      }
+      $this->Events[$Event->value] = true;
+
+      match ($Event) {
+         Events::RequestReceived => $this->listen($Callback),
+         Events::ServerStarted => self::$onServerStarted = $Callback,
+         Events::ServerStopped => self::$onServerStopped = $Callback,
+      };
 
       // :
       return $this;
+   }
+
+   private function listen (Closure $Callback): void
+   {
+      if (isset(SAPI::$Middlewares) === false) {
+         SAPI::$Middlewares = new Middlewares;
+      }
+
+      SAPI::$Handler = $Callback;
    }
 
    public function start (): bool
@@ -264,7 +279,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
          );
       }
       else if (isSet(SAPI::$Handler) === false) {
-         $this->log('@\;No request handler defined. Call on(request:) before start().@\;', self::LOG_ERROR_LEVEL);
+         $this->log('@\;No request handler defined. Call on(Events::RequestReceived, ...) before start().@\;', self::LOG_ERROR_LEVEL);
          exit(1);
       }
 
@@ -549,8 +564,8 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
          port: $TCP_Server_CLI->port ?? 80,
       );
       $TCP_Client_CLI->on(
-         // on Connection connect
-         clientConnect: static function ($Socket, $Connection)
+         TCP_Client_Events::ClientConnect,
+         static function ($Socket, $Connection)
          use ($TCP_Client_CLI) 
          {
             Logger::$display = Logger::DISPLAY_MESSAGE;

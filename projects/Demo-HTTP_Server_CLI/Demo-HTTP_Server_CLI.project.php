@@ -24,6 +24,7 @@ use Bootgly\API\Environment\Configs\Config;
 use Bootgly\API\Environment\Configs\DatabaseConfig;
 use Bootgly\API\Projects\Project;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Events;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\Database as DatabaseResource;
 
@@ -96,32 +97,29 @@ return new Project(
          // requestMaxMultipartFields: 1024,                // 1024 (default) — max number of text fields per request
          // requestMaxMultipartFiles: 1024,                 // 1024 (default) — max number of file parts per request
       );
-      $HTTP_Server_CLI->on(
-         // # Test (Benchmarking)
-         #requestReceived: require __DIR__ . '/router/HTTP_Server_CLI-benchmark-bootgly_router.SAPI.php',
-         #requestReceived: require __DIR__ . '/router/HTTP_Server_CLI-benchmark-static_router.SAPI.php',
+      // # Test (Benchmarking)
+      // $HTTP_Server_CLI->on(Events::RequestReceived, require __DIR__ . '/router/HTTP_Server_CLI-benchmark-bootgly_router.SAPI.php');
+      // $HTTP_Server_CLI->on(Events::RequestReceived, require __DIR__ . '/router/HTTP_Server_CLI-benchmark-static_router.SAPI.php');
+      // # Test Request - Download (streaming decoder writes directly to disk)
+      // $HTTP_Server_CLI->on(Events::RequestReceived, require __DIR__ . '/router/HTTP_Server_CLI-request-download.SAPI.php');
+      // # Test Request - Basic request tests
+      // $HTTP_Server_CLI->on(Events::RequestReceived, require __DIR__ . '/router/HTTP_Server_CLI-request.SAPI.php');
+      // # Test Request - Input validation examples
+      // $HTTP_Server_CLI->on(Events::RequestReceived, require __DIR__ . '/router/HTTP_Server_CLI-validation.SAPI.php');
+      // # Test Request - Authentication examples (Basic, Bearer, JWT)
+      // $HTTP_Server_CLI->on(Events::RequestReceived, require __DIR__ . '/router/HTTP_Server_CLI-authentication.SAPI.php');
+      // # Test Response - Basic response tests
+      // $HTTP_Server_CLI->on(Events::RequestReceived, require __DIR__ . '/router/HTTP_Server_CLI-response.SAPI.php');
+      // # Test Response - Scheduled (delayed/async) responses
+      // $HTTP_Server_CLI->on(Events::RequestReceived, require __DIR__ . '/router/HTTP_Server_CLI-response-scheduled.SAPI.php');
+      // # Test Router - all route cases from Testing.routes.php adapted to Generator pattern
+      // $HTTP_Server_CLI->on(Events::RequestReceived, require __DIR__ . '/router/HTTP_Server_CLI-router.SAPI.php');
+      // $HTTP_Server_CLI->on(Events::RequestReceived, fn ($Request, $Response) => $Response(body: 'Hello, World!'));
 
-         // # Test Request - Download (streaming decoder writes directly to disk)
-         #requestReceived: require __DIR__ . '/router/HTTP_Server_CLI-request-download.SAPI.php',
-         // # Test Request - Basic request tests
-         #requestReceived: require __DIR__ . '/router/HTTP_Server_CLI-request.SAPI.php',
-         // # Test Request - Input validation examples
-         #requestReceived: require __DIR__ . '/router/HTTP_Server_CLI-validation.SAPI.php',
-         // # Test Request - Authentication examples (Basic, Bearer, JWT)
-         #requestReceived: require __DIR__ . '/router/HTTP_Server_CLI-authentication.SAPI.php',
-
-         // # Test Response - Basic response tests
-         #requestReceived: require __DIR__ . '/router/HTTP_Server_CLI-response.SAPI.php',
-         // # Test Response - Scheduled (delayed/async) responses
-         #requestReceived: require __DIR__ . '/router/HTTP_Server_CLI-response-scheduled.SAPI.php',
+      $HTTP_Server_CLI
          // # Test Response - Database (native async PostgreSQL examples)
-         requestReceived: require __DIR__ . '/router/HTTP_Server_CLI-response-database.SAPI.php',
-         // # Test Router - all route cases from Testing.routes.php adapted to Generator pattern
-         #requestReceived: require __DIR__ . '/router/HTTP_Server_CLI-router.SAPI.php',
-
-         #requestReceived: fn ($Request, $Response) => $Response(body: 'Hello, World!'),
-
-         serverStarted: function ($HTTP_Server_CLI) {
+         ->on(Events::RequestReceived, require __DIR__ . '/router/HTTP_Server_CLI-response-database.SAPI.php')
+         ->on(Events::ServerStarted, function ($HTTP_Server_CLI) {
             $Output = CLI->Terminal->Output;
 
             $protocol = $HTTP_Server_CLI->socket ?? 'http://';
@@ -134,13 +132,12 @@ return new Project(
 
             $projectName = defined('BOOTGLY_PROJECT') ? BOOTGLY_PROJECT->folder : 'Demo-HTTP_Server_CLI';
             $Output->render('@#Green:Tip:@; Use @#Black:`bootgly project stop` ' . $projectName . '@; to stop the server.@..;');
-         },
-         serverStopped: function ($HTTP_Server_CLI) {
+         })
+         ->on(Events::ServerStopped, function ($HTTP_Server_CLI) {
             $Output = CLI->Terminal->Output;
 
             $Output->render('@.;@#yellow:■ Bootgly HTTP Server stopped@;@.;');
-         }
-      );
+         });
 
       $HTTP_Server_CLI->start();
    }

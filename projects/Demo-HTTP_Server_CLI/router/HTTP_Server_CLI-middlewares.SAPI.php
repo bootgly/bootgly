@@ -17,6 +17,7 @@ use function shell_exec;
 
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Events;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 // Middlewares
@@ -35,7 +36,8 @@ $Server->configure(
    workers: (int) round(((int) shell_exec('nproc')) * 0.6),
 );
 $Server->on(
-   request: function (Request $Request, Response $Response, Router $Router)
+   Events::RequestReceived,
+   function (Request $Request, Response $Response, Router $Router)
    {
       // @ Global middlewares (all routes)
       $Router->intercept(new SecureHeaders, new RequestId);

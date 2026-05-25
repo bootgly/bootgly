@@ -17,6 +17,7 @@ use Bootgly\API\Projects\Project;
 use Bootgly\API\Endpoints\Server\Modes;
 use const Bootgly\CLI;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Events;
 
 
 return new Project(
@@ -49,10 +50,9 @@ return new Project(
          // Drop privileges after binding to port 443
          user: 'www-data',
       );
-      $HTTP_Server_CLI->on(
-         requestReceived: fn ($Request, $Response) => $Response(body: 'Hello, Secure World!'),
-
-         serverStarted: function ($HTTP_Server_CLI) {
+      $HTTP_Server_CLI
+         ->on(Events::RequestReceived, fn ($Request, $Response) => $Response(body: 'Hello, Secure World!'))
+         ->on(Events::ServerStarted, function ($HTTP_Server_CLI) {
             $Output = CLI->Terminal->Output;
             $protocol = $HTTP_Server_CLI->socket ?? 'https://';
             $host = $HTTP_Server_CLI->host ?? '0.0.0.0';
@@ -64,13 +64,12 @@ return new Project(
 
             $projectName = defined('BOOTGLY_PROJECT') ? BOOTGLY_PROJECT->folder : 'Demo-HTTPS_Server_CLI';
             $Output->render('@#Green:Tip:@; Use @#Black:bootgly project stop ' . $projectName . '@; to stop the server.@..;');
-         },
-         serverStopped: function ($HTTP_Server_CLI) {
+         })
+         ->on(Events::ServerStopped, function ($HTTP_Server_CLI) {
             $Output = CLI->Terminal->Output;
 
             $Output->render('@.;@#yellow:■ Bootgly HTTPS Server stopped@;@.;');
-         }
-      );
+         });
 
       $HTTP_Server_CLI->start();
    }

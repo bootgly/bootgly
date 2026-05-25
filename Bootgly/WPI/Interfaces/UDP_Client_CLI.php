@@ -36,7 +36,9 @@ use function register_shutdown_function;
 use function stream_context_create;
 use function stream_socket_client;
 use function time;
+use BackedEnum;
 use Closure;
+use InvalidArgumentException;
 use Throwable;
 
 use Bootgly\ABI\Debugging\Data\Vars;
@@ -45,6 +47,7 @@ use Bootgly\ACI\Events\Timer;
 use Bootgly\ACI\Logs\LoggableEscaped;
 use Bootgly\ACI\Logs\Logger;
 use Bootgly\ACI\Process;
+use Bootgly\WPI\Event;
 use Bootgly\WPI\Events;
 use Bootgly\WPI\Events\Select;
 use Bootgly\WPI\Interfaces\UDP_Client_CLI\Commands;
@@ -80,6 +83,8 @@ class UDP_Client_CLI
    public const int MODE_TEST = 3;
 
    // * Data
+   /** @var array<string,true> */
+   protected array $Events = [];
    // ! On
    // on Worker
    public static null|Closure $onWorkerStarted = null;
@@ -193,38 +198,37 @@ class UDP_Client_CLI
       return $this;
    }
    /**
-     * Register hooks for the UDP Client (event-driven mode).
-     *
-     * @param null|Closure $workerStarted On worker instance callback.
-     * @param null|Closure $clientConnect On client connection established callback.
-     * @param null|Closure $clientDisconnect On client connection closed callback.
-     * @param null|Closure(resource, mixed): void $datagramRead On datagram read callback.
-     * @param null|Closure(resource, mixed): void $datagramWrite On datagram write callback.
-     *
-     * @return void
-     */
-   public function on
-   (
-      // on Worker
-      null|Closure $workerStarted = null,
-      // on Client
-      null|Closure $clientConnect = null,
-      null|Closure $clientDisconnect = null,
-      // on Datagram
-      null|Closure $datagramRead = null,
-      null|Closure $datagramWrite = null
-   ): void
+    * Register an event handler for the UDP Client.
+    *
+    * @param Event&BackedEnum $Event The event to listen to.
+    * @param Closure $Callback The event callback.
+    *
+    * @return self
+    */
+   public function on (
+      Event & BackedEnum $Event,
+      Closure $Callback
+   ): self
    {
-      // on Worker
-      self::$onWorkerStarted = $workerStarted;
-      // on Client
-      // TODO: onClientStarted
-      // TODO: onClientStopped
-      self::$onClientConnect = $clientConnect;
-      self::$onClientDisconnect = $clientDisconnect;
-      // on Datagram
-      self::$onDatagramRead = $datagramRead;
-      self::$onDatagramWrite = $datagramWrite;
+      if ($Event instanceof UDP_Client_CLI\Events === false) {
+         throw new InvalidArgumentException('Invalid UDP Client event.');
+      }
+
+      if (isset($this->Events[$Event->value])) {
+         throw new InvalidArgumentException("The event '{$Event->value}' is already registered.");
+      }
+
+      $this->Events[$Event->value] = true;
+
+      match ($Event) {
+         UDP_Client_CLI\Events::WorkerStarted => self::$onWorkerStarted = $Callback,
+         UDP_Client_CLI\Events::ClientConnect => self::$onClientConnect = $Callback,
+         UDP_Client_CLI\Events::ClientDisconnect => self::$onClientDisconnect = $Callback,
+         UDP_Client_CLI\Events::DatagramRead => self::$onDatagramRead = $Callback,
+         UDP_Client_CLI\Events::DatagramWrite => self::$onDatagramWrite = $Callback,
+      };
+
+      return $this;
    }
    public function handle (int $signal): void
    {

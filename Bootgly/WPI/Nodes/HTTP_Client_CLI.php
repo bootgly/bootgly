@@ -40,8 +40,10 @@ use function strrpos;
 use function strtoupper;
 use function substr;
 use function usleep;
+use BackedEnum;
 use Closure;
 use Generator;
+use InvalidArgumentException;
 use Throwable;
 
 use Bootgly\ABI\IO\FS\File;
@@ -50,10 +52,12 @@ use Bootgly\ACI\Logs\Logger;
 use Bootgly\ACI\Tests\Suite;
 use Bootgly\ACI\Tests\Suite\Test\Specification;
 use Bootgly\API\Workables\Client as CAPI;
+use Bootgly\WPI\Event;
 use Bootgly\WPI\Events\Select;
 use Bootgly\WPI\Interfaces\TCP_Client_CLI;
 use Bootgly\WPI\Interfaces\TCP_Client_CLI\Connections;
 use Bootgly\WPI\Modules\HTTP;
+use Bootgly\WPI\Nodes\HTTP_Client_CLI\Events;
 use Bootgly\WPI\Nodes\HTTP_Client_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Client_CLI\Request\Encoder;
 use Bootgly\WPI\Nodes\HTTP_Client_CLI\Request\Encoders\Encoder_;
@@ -88,6 +92,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
    // # Hooks
    protected static null|Closure $onResponse = null;
    protected static null|Closure $httpOnConnect = null;
+   protected static null|Closure $httpOnRead = null;
    protected static null|Closure $httpOnWrite = null;
 
    // * Metadata
@@ -159,44 +164,40 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
    }
 
    /**
-    * Register hooks for the HTTP Client (event-driven mode).
+    * Register an event handler for the HTTP Client.
     *
-    * @param null|Closure $workerStarted On worker instance callback.
-    * @param null|Closure $clientConnect On client connection established callback.
-    * @param null|Closure $clientDisconnect On client connection closed callback.
-    * @param null|Closure(Request, Response): mixed $responseReceive On HTTP response received callback.
+    * @param Event&BackedEnum $Event The event to listen to.
+    * @param Closure $Callback The event callback.
     *
-    * @return void
+    * @return self
     */
    public function on (
-      // on Worker
-      null|Closure $workerStarted = null,
-      // on Client
-      // TODO: clientStarted?
-      // TODO: clientStopped?
-      null|Closure $clientConnect = null,
-      null|Closure $clientDisconnect = null,
-      // on Data
-      #[\SensitiveParameter] null|Closure $dataRead = null,
-      #[\SensitiveParameter] null|Closure $dataWrite = null,
-      // on HTTP
-      null|Closure $responseReceive = null
-   ): void
+      Event & BackedEnum $Event,
+      Closure $Callback
+   ): self
    {
+      if ($Event instanceof Events === false) {
+         throw new InvalidArgumentException('Invalid HTTP Client event.');
+      }
+
+      if (isset($this->Events[$Event->value])) {
+         throw new InvalidArgumentException("The event '{$Event->value}' is already registered.");
+      }
+      $this->Events[$Event->value] = true;
+
       // @ Mark as event-driven mode
       self::$eventDriven = true;
 
-      // @ Store hooks
-      // # TCP Client context
-      // on Worker
-      self::$onWorkerStarted = $workerStarted;
-      // on Client
-      self::$onClientDisconnect = $clientDisconnect;
+      match ($Event) {
+         Events::WorkerStarted => self::$onWorkerStarted = $Callback,
+         Events::ClientConnect => self::$httpOnConnect = $Callback,
+         Events::ClientDisconnect => self::$onClientDisconnect = $Callback,
+         Events::DataRead => self::$httpOnRead = $Callback,
+         Events::DataWrite => self::$httpOnWrite = $Callback,
+         Events::ResponseReceive => self::$onResponse = $Callback,
+      };
 
-      // # HTTP Client context
-      self::$onResponse = $responseReceive;
-      self::$httpOnConnect = $clientConnect;
-      self::$httpOnWrite = $dataWrite;
+      return $this;
    }
 
    /**
@@ -214,7 +215,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
 
       $HTTP_Client_CLI = $this;
 
-      // @ On clientConnect: encode and queue the request for writing
+      // @ On client connection: encode and queue the request for writing
       parent::$onClientConnect = function ($Socket, $Connection) use ($HTTP_Client_CLI) {
          // @ Call user's connect hook if set
          if (self::$httpOnConnect !== null) {
@@ -293,6 +294,10 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
 
       // @ On read: decode response using per-request state
       self::$onDataRead = function ($Socket, $Connection) use ($HTTP_Client_CLI) {
+         if (self::$httpOnRead !== null) {
+            (self::$httpOnRead)($Socket, $Connection);
+         }
+
          $socketId = (int) $Socket;
          $Request = $HTTP_Client_CLI->pendingRequests[$socketId] ?? null;
          if ($Request === null) {

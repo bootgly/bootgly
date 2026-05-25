@@ -23,8 +23,11 @@ use Bootgly\ADI\Databases\SQL\Config;
 use Bootgly\API\Endpoints\Server\Modes;
 use Bootgly\API\Projects\Project;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI;
+use Bootgly\WPI\Interfaces\TCP_Server_CLI\Events as TCP_Server_Events;
 use Bootgly\WPI\Interfaces\UDP_Server_CLI;
+use Bootgly\WPI\Interfaces\UDP_Server_CLI\Events as UDP_Server_Events;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Events as HTTP_Server_Events;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\Database as DatabaseResource;
 
@@ -110,12 +113,10 @@ return new Project(
                // requestMaxFileSize: 500 * 1024 * 1024, // 500 MB (default)
                // requestMaxBodySize: 10 * 1024 * 1024,  // 10 MB (default)
             )
-            ->on(
-               // # Test (Benchmarking)
-               #request: require __DIR__ . '/HTTP_Server_CLI/router/basic.SAPI.php',
-               requestReceived: require __DIR__ . "/HTTP_Server_CLI/router/{$routerFile}",
-
-               serverStarted: function ($HTTP_Server_CLI) {
+            // # Test (Benchmarking)
+            // ->on(HTTP_Server_Events::RequestReceived, require __DIR__ . '/HTTP_Server_CLI/router/basic.SAPI.php')
+            ->on(HTTP_Server_Events::RequestReceived, require __DIR__ . "/HTTP_Server_CLI/router/{$routerFile}")
+            ->on(HTTP_Server_Events::ServerStarted, function ($HTTP_Server_CLI) {
                   $Output = CLI->Terminal->Output;
 
                   $protocol = $HTTP_Server_CLI->socket ?? 'http://';
@@ -128,13 +129,12 @@ return new Project(
 
                   $projectName = defined('BOOTGLY_PROJECT') ? BOOTGLY_PROJECT->folder : 'Benchmark-HTTP_Server_CLI';
                   $Output->render('@#Green:Tip:@; Use @#Black:`bootgly project stop` ' . $projectName . '@; to stop the server.@..;');
-               },
-               serverStopped: function ($HTTP_Server_CLI) {
+               })
+            ->on(HTTP_Server_Events::ServerStopped, function ($HTTP_Server_CLI) {
                   $Output = CLI->Terminal->Output;
 
                   $Output->render('@.;@#yellow:■ Bootgly HTTP Server stopped@;@.;');
-               }
-            )
+               })
             ->start();
       }
       else if ($options['TCP_Server_CLI'] ?? false) {
@@ -154,7 +154,8 @@ return new Project(
                workers: getenv('BOOTGLY_WORKERS') ? (int) getenv('BOOTGLY_WORKERS') : max(1, (int) ((int) (exec('nproc 2>/dev/null') ?: 1) / 2)),
             )
             ->on(
-               dataReceive: static function (string $input) use ($httpResponse): string {
+               TCP_Server_Events::DataReceive,
+               static function (string $input) use ($httpResponse): string {
                   // @ Dual-mode: HTTP or echo
                   if (str_starts_with($input, 'GET ')) {
                      return $httpResponse;
@@ -173,7 +174,8 @@ return new Project(
                workers: getenv(name: 'BOOTGLY_WORKERS') ? (int) getenv('BOOTGLY_WORKERS') : max(1, (int) ((int) (exec('nproc 2>/dev/null') ?: 1) / 2)),
             )
             ->on(
-               datagramReceive: static function (string $input): string {
+               UDP_Server_Events::DatagramReceive,
+               static function (string $input): string {
                   return $input; // echo
                }
             )

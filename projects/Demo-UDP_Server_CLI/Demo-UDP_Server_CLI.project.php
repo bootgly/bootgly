@@ -15,6 +15,7 @@ use function shell_exec;
 use Bootgly\API\Projects\Project;
 use Bootgly\API\Endpoints\Server\Modes;
 use Bootgly\WPI\Interfaces\UDP_Server_CLI;
+use Bootgly\WPI\Interfaces\UDP_Server_CLI\Events;
 
 
 return new Project(
@@ -37,7 +38,7 @@ return new Project(
          port: getenv('PORT') ? (int) getenv('PORT') : 9999,
          workers: max(1, (int) shell_exec('nproc') ?: 1),
       );
-      $UDP_Server_CLI->on(datagramReceive: fn ($data) => $data);
+      $UDP_Server_CLI->on(Events::DatagramReceive, fn ($data) => $data);
 
       $UDP_Server_CLI->start();
    }

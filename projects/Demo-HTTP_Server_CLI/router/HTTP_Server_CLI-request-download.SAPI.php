@@ -9,7 +9,7 @@
  *
  * Usage:
  *   1. In HTTP_Server_CLI.project.php, change the on line to:
- *      $Server->on(request: require __DIR__ . '/router/HTTP_Server_CLI-download.SAPI.php');
+ *      $Server->on(Events::RequestReceived, require __DIR__ . '/router/HTTP_Server_CLI-download.SAPI.php');
  *
  *   2. Start the server:
 *      bootgly project Demo-HTTP_Server_CLI start

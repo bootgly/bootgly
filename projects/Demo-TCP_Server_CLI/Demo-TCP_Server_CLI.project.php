@@ -16,6 +16,7 @@ use function getenv;
 use Bootgly\API\Projects\Project;
 use Bootgly\API\Endpoints\Server\Modes;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI;
+use Bootgly\WPI\Interfaces\TCP_Server_CLI\Events;
 
 
 return new Project(
@@ -39,7 +40,8 @@ return new Project(
          workers: 12
       );
       $TCP_Server_CLI->on(
-         dataReceive: require __DIR__ . '/../Demo/TCP_Server_CLI/TCP_Server_CLI.SAPI.php'
+         Events::DataReceive,
+         require __DIR__ . '/../Demo/TCP_Server_CLI/TCP_Server_CLI.SAPI.php'
       );
 
       $TCP_Server_CLI->start();

@@ -16,6 +16,7 @@ use function getenv;
 use Bootgly\ACI\Events\Timer;
 use Bootgly\API\Projects\Project;
 use Bootgly\WPI\Interfaces\TCP_Client_CLI;
+use Bootgly\WPI\Interfaces\TCP_Client_CLI\Events;
 
 
 return new Project(
@@ -37,18 +38,18 @@ return new Project(
 
       // This runs a Benchmark for 10 seconds with 1 Worker
       // type stats command in Server to get stats of writes
-      $TCP_Client_CLI->on(
+      $TCP_Client_CLI
          // on Worker start
-         workerStarted: function ($TCP_Client_CLI) {
+         ->on(Events::WorkerStarted, function ($TCP_Client_CLI) {
             // @ Connect to Server
             $Socket = $TCP_Client_CLI->connect();
 
             if ($Socket) {
                $TCP_Client_CLI::$Event->loop();
             }
-         },
+         })
          // on Client connect
-         clientConnect: function ($Socket, $Connection) {
+         ->on(Events::ClientConnect, function ($Socket, $Connection) {
             // @ Set Connection expiration
             Timer::add(
                interval: 10,
@@ -64,20 +65,18 @@ return new Project(
 
             // @ Add Package write to Event loop
             TCP_Client_CLI::$Event->add($Socket, TCP_Client_CLI::$Event::EVENT_WRITE, $Connection);
-         },
-         clientDisconnect: function ($Connection) use ($TCP_Client_CLI) {
+         })
+         ->on(Events::ClientDisconnect, function ($Connection) use ($TCP_Client_CLI) {
             $TCP_Client_CLI->log(
                'Connection #' . $Connection->id . ' (' . $Connection->address . ':' . $Connection->port . ')'
                . ' from Worker with PID @_:' . $TCP_Client_CLI->Process->id . '_@ was closed! @\;'
             );
-         },
+         })
          // on Data write / read
-         dataWrite: function ($Socket, $Connection, $Package) {
+         ->on(Events::DataWrite, function ($Socket, $Connection, $Package) {
             // @ Add Package read to Event loop
             TCP_Client_CLI::$Event->add($Socket, TCP_Client_CLI::$Event::EVENT_READ, $Connection);
-         },
-         dataRead: null,
-      );
+         });
 
       $TCP_Client_CLI->start();
    }

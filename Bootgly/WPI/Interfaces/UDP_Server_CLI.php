@@ -55,7 +55,9 @@ use function stream_context_create;
 use function stream_socket_server;
 use function time;
 use function usleep;
+use BackedEnum;
 use Closure;
+use InvalidArgumentException;
 use Throwable;
 
 use const Bootgly\CLI;
@@ -73,6 +75,7 @@ use Bootgly\API\Endpoints\Server\Status;
 use Bootgly\API\Environment;
 use Bootgly\API\Environments;
 use Bootgly\API\Workables\Server as SAPI;
+use Bootgly\WPI\Event;
 use Bootgly\WPI\Endpoints\Servers;
 use Bootgly\WPI\Endpoints\Servers\Decoder;
 use Bootgly\WPI\Endpoints\Servers\Encoder;
@@ -112,6 +115,8 @@ class UDP_Server_CLI implements Servers, Logging
    public static null|string $Application = null;
    public static null|Decoder $Decoder = null;
    public static null|Encoder $Encoder = null;
+   /** @var array<string,true> */
+   protected array $Events = [];
 
    // * Metadata
    // # State
@@ -302,20 +307,31 @@ class UDP_Server_CLI implements Servers, Logging
       return $this;
    }
    /**
-    * Register the datagram handler for the UDP Server.
+    * Register an event handler for the UDP Server.
     *
-    * @param Closure $datagramReceive The datagram receive handler.
+    * @param Event&BackedEnum $Event The event to listen to.
+    * @param Closure $Callback The event callback.
     *
     * @return self
     */
    public function on (
-      // on Datagram
-      Closure $datagramReceive
+      Event & BackedEnum $Event,
+      Closure $Callback
    ): self
    {
+      if ($Event instanceof UDP_Server_CLI\Events === false) {
+         throw new InvalidArgumentException('Invalid UDP Server event.');
+      }
+
+      if (isset($this->Events[$Event->value])) {
+         throw new InvalidArgumentException("The event '{$Event->value}' is already registered.");
+      }
+
+      $this->Events[$Event->value] = true;
+
       // @
       // on Datagram
-      SAPI::$Handler = $datagramReceive;
+      SAPI::$Handler = $Callback;
 
       // :
       return $this;
@@ -458,7 +474,7 @@ class UDP_Server_CLI implements Servers, Logging
          self::$Application::boot(Environments::Production);
       }
       else if (isSet(SAPI::$Handler) === false) {
-         $this->log('@\;No handler defined. Call on(datagramReceive:) before start().@\;', self::LOG_ERROR_LEVEL);
+         $this->log('@\;No handler defined. Call on(Events::DatagramReceive, ...) before start().@\;', self::LOG_ERROR_LEVEL);
          exit(1);
       }
 

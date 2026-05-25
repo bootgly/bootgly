@@ -12,6 +12,7 @@
 use Bootgly\ACI\Events\Timer;
 use Bootgly\API\Projects\Project;
 use Bootgly\WPI\Interfaces\UDP_Client_CLI;
+use Bootgly\WPI\Interfaces\UDP_Client_CLI\Events;
 
 
 return new Project(
@@ -30,14 +31,14 @@ return new Project(
          port: getenv('PORT') ? (int) getenv('PORT') : 9999,
          workers: 1
       );
-      $UDP_Client_CLI->on(
-         workerStarted: function ($UDP_Client_CLI) {
+      $UDP_Client_CLI
+         ->on(Events::WorkerStarted, function ($UDP_Client_CLI) {
             $Socket = $UDP_Client_CLI->connect();
             if ($Socket) {
                $UDP_Client_CLI::$Event->loop();
             }
-         },
-         clientConnect: function ($Socket, $Connection) {
+         })
+         ->on(Events::ClientConnect, function ($Socket, $Connection) {
             Timer::add(
                interval: 10,
                handler: function ($Connection) {
@@ -48,18 +49,16 @@ return new Project(
             );
             $Connection->output = 'Hello, Bootgly UDP!';
             UDP_Client_CLI::$Event->add($Socket, UDP_Client_CLI::$Event::EVENT_WRITE, $Connection);
-         },
-         clientDisconnect: function ($Connection) use ($UDP_Client_CLI) {
+         })
+         ->on(Events::ClientDisconnect, function ($Connection) use ($UDP_Client_CLI) {
             $UDP_Client_CLI->log(
                'Connection #' . $Connection->id . ' (' . $Connection->address . ':' . $Connection->port . ')'
                . ' from Worker with PID @_:' . $UDP_Client_CLI->Process->id . '_@ was closed! @\;'
             );
-         },
-         datagramWrite: function ($Socket, $Connection) {
+         })
+         ->on(Events::DatagramWrite, function ($Socket, $Connection) {
             UDP_Client_CLI::$Event->add($Socket, UDP_Client_CLI::$Event::EVENT_WRITE, $Connection);
-         },
-         datagramRead: null,
-      );
+         });
 
       $UDP_Client_CLI->start();
    }
