@@ -21,5 +21,7 @@ return new Suite(
       '1.5-jwt_claim_policies',
       '1.6-jwt_jwks_remote',
       '1.7-jwt_lifecycle',
+      '1.8-authorization',
+      '1.9-authorization_rbac',
    ]
 );

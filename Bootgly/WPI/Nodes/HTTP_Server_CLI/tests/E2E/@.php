@@ -259,6 +259,14 @@ return new Suite(
          '10.12-middleware-authentication_basic_missing_colon_failure',
          '10.13-middleware-authentication_authorization_fuzz_failure',
          '10.14-middleware-authentication_metadata_reset',
+         // Authorization
+         '11.1-middleware-authorization_scope_success',
+         '11.2-middleware-authorization_scope_failure',
+         '11.3-middleware-authorization_role_success',
+         '11.4-middleware-authorization_role_failure',
+         '11.5-middleware-authorization_policy_success',
+         '11.6-middleware-authorization_policy_failure',
+         '11.7-middleware-authorization_rbac_e2e',
       ],
       'Response/Sequential/' => [
          // Response state reset across sequential requests

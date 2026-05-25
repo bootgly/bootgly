@@ -1,0 +1,391 @@
+{
+  "info": {
+    "_postman_id": "d7f5c72b-8649-4d3d-9db7-0f61ed53f7d2",
+    "name": "Bootgly Demo HTTP_Server_CLI - Authorization",
+    "description": "Postman collection for the Bootgly Demo HTTP_Server_CLI Authorization routes.\n\nBefore running:\n1. In projects/Demo-HTTP_Server_CLI/Demo-HTTP_Server_CLI.project.php, enable HTTP_Server_CLI-authorization.SAPI.php.\n2. Start the Demo HTTP server on port 8082.\n3. Run requests in order. The Issue JWT request stores authz_token for the success requests.\n4. Denial requests generate valid JWTs in a collection pre-request script using the demo secret, then assert 403 responses.\n\nDefault base_url: http://127.0.0.1:8082",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://127.0.0.1:8082",
+      "type": "string"
+    },
+    {
+      "key": "jwt_secret",
+      "value": "bootgly-demo-authorization-secret",
+      "type": "string"
+    },
+    {
+      "key": "authz_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "authz_deny_scope_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "authz_deny_role_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "authz_deny_policy_token",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "function base64url(source) {",
+          "  return CryptoJS.enc.Base64.stringify(source)",
+          "    .replace(/=+$/, '')",
+          "    .replace(/\\+/g, '-')",
+          "    .replace(/\\//g, '_');",
+          "}",
+          "function sign(payload) {",
+          "  const header = { typ: 'JWT', alg: 'HS256' };",
+          "  const now = Math.floor(Date.now() / 1000);",
+          "  const body = Object.assign({ exp: now + 3600 }, payload);",
+          "  const head = base64url(CryptoJS.enc.Utf8.parse(JSON.stringify(header)));",
+          "  const data = base64url(CryptoJS.enc.Utf8.parse(JSON.stringify(body)));",
+          "  const unsigned = `${head}.${data}`;",
+          "  const signature = CryptoJS.HmacSHA256(unsigned, pm.collectionVariables.get('jwt_secret'));",
+          "  return `${unsigned}.${base64url(signature)}`;",
+          "}",
+          "pm.collectionVariables.set('authz_deny_scope_token', sign({",
+          "  sub: 'demo-user',",
+          "  scope: 'demo:write',",
+          "  roles: ['editor']",
+          "}));",
+          "pm.collectionVariables.set('authz_deny_role_token', sign({",
+          "  sub: 'demo-user',",
+          "  scope: 'demo:read demo:write',",
+          "  roles: ['viewer']",
+          "}));",
+          "pm.collectionVariables.set('authz_deny_policy_token', sign({",
+          "  sub: 'other-user',",
+          "  scope: 'demo:read demo:write',",
+          "  roles: ['editor']",
+          "}));"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "00 - Authorization index",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/authz",
+        "description": "Lists the Authorization demo routes exposed by HTTP_Server_CLI-authorization.SAPI.php."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "pm.test('JSON body', function () {",
+              "  pm.response.to.have.jsonBody();",
+              "});",
+              "const json = pm.response.json();",
+              "pm.test('authorization examples are listed', function () {",
+              "  pm.expect(json.examples.jwt_issue).to.include('/authz/jwt/issue');",
+              "  pm.expect(json.examples.scope).to.include('/authz/scope');",
+              "  pm.expect(json.examples.role).to.include('/authz/role');",
+              "  pm.expect(json.examples.policy).to.include('/authz/policy');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "01 - Issue JWT token",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/authz/jwt/issue",
+        "description": "Issues a demo JWT for demo-user with demo:read, demo:write and editor role. Stores the token as authz_token."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "pm.test('JSON body', function () {",
+              "  pm.response.to.have.jsonBody();",
+              "});",
+              "const json = pm.response.json();",
+              "pm.test('token is present', function () {",
+              "  pm.expect(json.token).to.be.a('string').and.not.empty;",
+              "  pm.expect(json.authorization).to.eql(`Bearer ${json.token}`);",
+              "});",
+              "pm.collectionVariables.set('authz_token', json.token);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 - Scope gate allows demo:read",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{authz_token}}"
+          }
+        ],
+        "url": "{{base_url}}/authz/scope",
+        "description": "Uses the issued token to pass the Scope('demo:read') gate."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "pm.test('JSON body', function () {",
+              "  pm.response.to.have.jsonBody();",
+              "});",
+              "const json = pm.response.json();",
+              "pm.test('scope gate passed', function () {",
+              "  pm.expect(json.authorized).to.eql(true);",
+              "  pm.expect(json.gate).to.eql('Scope');",
+              "  pm.expect(json.identity).to.eql('demo-user');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 - Role gate allows editor",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{authz_token}}"
+          }
+        ],
+        "url": "{{base_url}}/authz/role",
+        "description": "Uses the issued token to pass the Role('editor') gate."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "pm.test('JSON body', function () {",
+              "  pm.response.to.have.jsonBody();",
+              "});",
+              "const json = pm.response.json();",
+              "pm.test('role gate passed', function () {",
+              "  pm.expect(json.authorized).to.eql(true);",
+              "  pm.expect(json.gate).to.eql('Role');",
+              "  pm.expect(json.identity).to.eql('demo-user');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 - Policy gate allows owner",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{authz_token}}"
+          }
+        ],
+        "url": "{{base_url}}/authz/policy",
+        "description": "Uses the issued token to pass the resource ownership policy gate."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "pm.test('JSON body', function () {",
+              "  pm.response.to.have.jsonBody();",
+              "});",
+              "const json = pm.response.json();",
+              "pm.test('policy gate passed', function () {",
+              "  pm.expect(json.authorized).to.eql(true);",
+              "  pm.expect(json.gate).to.eql('Policy');",
+              "  pm.expect(json.identity).to.eql('demo-user');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "90 - Scope gate denies missing scope",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{authz_deny_scope_token}}"
+          }
+        ],
+        "url": "{{base_url}}/authz/scope",
+        "description": "Uses a valid JWT without demo:read to assert authorization failure after authentication succeeds."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 403', function () {",
+              "  pm.response.to.have.status(403);",
+              "});",
+              "pm.test('forbidden body', function () {",
+              "  pm.expect(pm.response.text()).to.include('Forbidden');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "91 - Role gate denies viewer",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{authz_deny_role_token}}"
+          }
+        ],
+        "url": "{{base_url}}/authz/role",
+        "description": "Uses a valid JWT with viewer role to assert Role('editor') denial."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 403', function () {",
+              "  pm.response.to.have.status(403);",
+              "});",
+              "pm.test('forbidden body', function () {",
+              "  pm.expect(pm.response.text()).to.include('Forbidden');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "92 - Policy gate denies non-owner",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{authz_deny_policy_token}}"
+          }
+        ],
+        "url": "{{base_url}}/authz/policy",
+        "description": "Uses a valid JWT for other-user to assert ownership policy denial."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 403', function () {",
+              "  pm.response.to.have.status(403);",
+              "});",
+              "pm.test('forbidden body', function () {",
+              "  pm.expect(pm.response.text()).to.include('Forbidden');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "99 - Unknown authz route",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{base_url}}/authz/missing",
+        "description": "Confirms the authorization demo catch-all returns 404."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 404', function () {",
+              "  pm.response.to.have.status(404);",
+              "});",
+              "pm.test('not found body', function () {",
+              "  pm.expect(pm.response.text()).to.include('Not Found');",
+              "});"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -108,6 +108,8 @@ return new Project(
       // $HTTP_Server_CLI->on(Events::RequestReceived, require __DIR__ . '/router/HTTP_Server_CLI-validation.SAPI.php');
       // # Test Request - Authentication examples (Basic, Bearer, JWT)
       // $HTTP_Server_CLI->on(Events::RequestReceived, require __DIR__ . '/router/HTTP_Server_CLI-authentication.SAPI.php');
+      // # Test Request - Authorization examples (Scope, Role, Policy)
+      // $HTTP_Server_CLI->on(Events::RequestReceived, require __DIR__ . '/router/HTTP_Server_CLI-authorization.SAPI.php');
       // # Test Response - Basic response tests
       // $HTTP_Server_CLI->on(Events::RequestReceived, require __DIR__ . '/router/HTTP_Server_CLI-response.SAPI.php');
       // # Test Response - Scheduled (delayed/async) responses

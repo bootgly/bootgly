@@ -24,6 +24,7 @@ return new Suite(
       '8.1-trusted_proxy',
       '9.1-csrf',
       '10.1-validator',
-      '11.1-authentication'
+      '11.1-authentication',
+      '12.1-authorization'
    ]
 );

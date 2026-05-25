@@ -11,6 +11,8 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Middlewares;
 
 
+use function array_values;
+
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Middlewares\Authenticating\Guard;
 
 
@@ -45,12 +47,7 @@ class Authenticating
    public function __construct (Guard ...$Guards)
    {
       // * Data
-      $Ordered = [];
-      foreach ($Guards as $Guard) {
-         $Ordered[] = $Guard;
-      }
-
-      $this->Guards = $Ordered;
+      $this->Guards = array_values($Guards);
    }
 
    /**
