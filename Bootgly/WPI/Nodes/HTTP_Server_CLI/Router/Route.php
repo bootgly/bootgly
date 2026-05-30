@@ -11,9 +11,6 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Router;
 
 
-use function strpos;
-use function strstr;
-
 use const Bootgly\WPI;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Route\Params;
 
@@ -39,48 +36,15 @@ class Route
       }
    }
 
-   // * Metadata
-   public bool $parameterized {
-      get {
-         return strpos($this->path, self::START_PARAM) !== false;
-      }
-   }
-   // # Parse
-   public string $parsed;
-   public string $catched; // Group of (.*) Catch-All Param
-   public string $catchParam; // Named catch-all param name
-   public string $node {
-      get {
-         return strstr($this->path, ':') ?: '';
-      }
-   }
-   public int $nodes; // Nodes parsed
-   // # Group
-   public bool $nested;
-   // # Log
-   public static int $level; // Route group level | after callback
-
 
    public function __construct ()
    {
       $this->Params = new Params;
-
 
       // * Config
       #$this->name = null;
 
       // * Data
       $this->path = '';
-
-      // * Metadata
-      // # Parse
-      $this->parsed = '';
-      $this->catched = '';
-      $this->catchParam = '';
-      $this->nodes = 0;
-      // # Group
-      $this->nested = false;
-      // # Log
-      self::$level = 0;
    }
 }

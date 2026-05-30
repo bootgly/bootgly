@@ -66,19 +66,18 @@ class Encoder_Testing extends Encoders
             function (object $Request, object $Res) use ($Router): mixed {
                $Result = (SAPI::$Handler)($Request, $Res, $Router);
 
-               // @ Resolve Generator-based routing inside the pipeline
-               if ($Result instanceof Generator) {
-                  foreach ($Router->routing($Result) as $Responses) {
-                     if ($Responses instanceof Response) {
-                        $Res = $Responses;
-                     }
-                  }
-
-                  return $Res;
-               }
-
+               // ?: Handler returned a Response directly — short-circuit
                if ($Result instanceof Response) {
                   return $Result;
+               }
+
+               // @ Resolve through the cache (handler may have yielded a Generator
+               //   of routes, or registered routes via direct $Router->route() calls)
+               $Routes = $Result instanceof Generator ? $Result : null;
+               foreach ($Router->routing($Routes) as $Responses) {
+                  if ($Responses instanceof Response) {
+                     $Res = $Responses;
+                  }
                }
 
                return $Res;
@@ -112,6 +111,11 @@ class Encoder_Testing extends Encoders
             // @ Skip actual connection close in test mode to preserve
             // the test runner's single persistent TCP connection.
             // closeAfterWrite is tested via compliance test 4.10/4.16.
+         }
+
+         // @ Per-request file cleanup (replaces Request::__destruct)
+         if ($Request->hasFiles) {
+            $Request->clean();
          }
 
          // : Encode HTTP Response

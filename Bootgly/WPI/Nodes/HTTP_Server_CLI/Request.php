@@ -27,7 +27,6 @@ use function explode;
 use function fwrite;
 use function is_array;
 use function is_file;
-use function is_scalar;
 use function is_string;
 use function json_decode;
 use function min;
@@ -104,12 +103,10 @@ class Request
     */
    public static array $allowedHosts = [];
 
-   public string $base {
-      get => $this->base;
-      set {
-         $this->base = $value;
-      }
-   }
+   /**
+    * The base URI of the Request.
+    */
+   public string $base = '';
 
    // * Data
    // \ TCP
@@ -120,21 +117,15 @@ class Request
     * To trust proxy headers (X-Forwarded-For, cf-connecting-ip, etc.),
     * use the TrustedProxy middleware with the proxy's IP in the trusted list.
     */
-   public string $address {
-      get => $this->address;
-   }
+   public string $address = '';
    /**
     * The port of the HTTP Client.
     */
-   public int $port {
-      get => $this->port;
-   }
+   public int $port = 0;
    /**
     * The scheme of the Request.
     */
-   public string $scheme {
-      get => $this->scheme;
-   }
+   public string $scheme = '';
    // | HTTP Request
    // / Header
    /**
@@ -147,15 +138,20 @@ class Request
    }
    /**
     * The Request method.
+    *
+    * Direct property (was trivial `get => $this->method` hook). Profiler showed
+    * the hook accounted for ~1.6% of CPU on the static-route hot path; reads
+    * dominate writes, so a hook frame per access is pure overhead.
     */
-   public string $method {
-      get => $this->method;
-   }
+   public string $method = '';
    /**
     * The Request URI (Uniform Resource Identifier).
+    *
+    * Set-only hook: invalidates cached URI derivations on write. Get is
+    * direct property read (no hook frame). Previously the trivial
+    * `get => $this->URI` hook cost ~4.7% of CPU.
     */
-   public string $URI {
-      get => $this->URI;
+   public string $URI = '' {
       set (string $value) {
          $this->URI = $value;
          // @ Invalidate cached derivations of URI
@@ -167,10 +163,10 @@ class Request
    }
    /**
     * The Request protocol.
+    *
+    * Direct property (was trivial `get => $this->protocol` hook).
     */
-   public string $protocol {
-      get => $this->protocol;
-   }
+   public string $protocol = '';
    // ^ Resource
    /**
     * The Request URL (Uniform Resource Locator).
@@ -437,8 +433,20 @@ class Request
     */
    public array $files {
       get { return $this->_files; }
-      set { $this->_files = $value; }
+      set {
+         $this->_files = $value;
+         // @ Track presence so Encoder can gate clean() without a per-request
+         //   destructor frame (was 7.94% of CPU on the static-route hot path).
+         $this->hasFiles = $value !== [];
+      }
    }
+   /**
+    * Set by the `files` setter when at least one uploaded file part lands in
+    * `$_files`. Reset by `clean()` and by `reboot()` / `__clone()` / the
+    * constructor. Lets the Encoder gate `$Request->clean()` to a single
+    * boolean check per request — most requests carry no uploads and pay zero.
+    */
+   public bool $hasFiles = false;
 
    // * Metadata
    public string $raw {
@@ -622,6 +630,7 @@ class Request
       // ... dynamically
       $this->_fields = [];
       $this->_files = [];
+      $this->hasFiles = false;
 
       // * Metadata
       $this->on = date("Y-m-d");
@@ -633,8 +642,22 @@ class Request
    public function __clone ()
    {
       // @ Per-request data: never bleed across cached connections.
+      //   Required by tests/Security/03.01 (cross-connection state leak) and
+      //   Router/Middlewares/tests/11.1 (auth metadata reset on clone).
+      //
+      // !! KEEP THESE RESETS UNCONDITIONAL. Wrapping them in `if (… !== …)`
+      //   guards to skip writes on the (common) clean-template clone path
+      //   measured a ~2.2x THROUGHPUT REGRESSION (717k → 320k req/s) on the
+      //   static-route benchmark. `__clone` is on the tracing-JIT hot trace
+      //   of the request loop; data-dependent branches here trigger trace
+      //   side-exits that blacklist the whole root trace (opcache.jit:
+      //   jit_hot_side_exit=8, jit_blacklist_root_trace=16) and deopt the
+      //   entire pipeline to the interpreter. Branchless straight-line writes
+      //   keep the trace JIT-compiled. See docs/reports/implementations/
+      //   Profile.WPI_HTTP_Server_CLI.HotPath.md §10.
       $this->_fields = [];
       $this->_files = [];
+      $this->hasFiles = false;
       $this->authUsername = '';
       $this->authPassword = '';
       $this->authParsed = false;
@@ -651,7 +674,7 @@ class Request
       //   this Request (e.g. `$Request->Body->raw = ...`) do NOT contaminate
       //   the Decoder_ L1 cache template and bleed into future connections
       //   that send byte-identical headers.
-      //   See tests/Security/7.01-decoder_cache_shallow_clone_subobject_bleed.test.php
+      //   See tests/Security/08.01-decoder_cache_shallow_clone_subobject_bleed.test.php
       $this->Body = clone $this->Body;
       $this->Header = clone $this->Header;
    }
@@ -660,6 +683,7 @@ class Request
       // @ Reset per-request data accumulators.
       $this->_fields = [];
       $this->_files = [];
+      $this->hasFiles = false;
       $this->authUsername = '';
       $this->authPassword = '';
       $this->authParsed = false;
@@ -1372,25 +1396,36 @@ class Request
       return $ranges;
    }
 
-   public function __destruct ()
+   /**
+    * Per-request cleanup of uploaded temp files.
+    *
+    * Replaces the previous `__destruct`. Called explicitly by the Encoder
+    * finally block when `$this->hasFiles` is true. Skipping the destructor
+    * removes a per-Request method frame on every shutdown (was 7.94% of CPU
+    * on the static-route hot path, where no files exist).
+    */
+   public function clean (): void
    {
-      // @ Delete files downloaded by server in temp folder
-      if (empty($this->_files) === false) {
-         // @ Clear cache
-         clearstatcache();
-
-         // @ Delete temp files + release aggregate-cap reservations
-         array_walk_recursive($this->_files, function ($value, $key) {
-            if ($key === 'tmp_name' && is_string($value) && $value !== '') {
-               if (is_file($value) === true) {
-                  unlink($value);
-               }
-
-               Downloads::discard($value);
-            }
-         });
-
-         $this->_files = [];
+      // ? No uploads — fast path (callers gate on $this->hasFiles)
+      if ($this->_files === []) {
+         return;
       }
+
+      // @ Clear cache
+      clearstatcache();
+
+      // @ Delete temp files + release aggregate-cap reservations
+      array_walk_recursive($this->_files, function ($value, $key) {
+         if ($key === 'tmp_name' && is_string($value) && $value !== '') {
+            if (is_file($value) === true) {
+               unlink($value);
+            }
+
+            Downloads::discard($value);
+         }
+      });
+
+      $this->_files = [];
+      $this->hasFiles = false;
    }
 }

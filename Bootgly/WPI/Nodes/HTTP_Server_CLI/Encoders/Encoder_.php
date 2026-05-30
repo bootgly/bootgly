@@ -52,21 +52,14 @@ class Encoder_ extends Encoders
 
       // @
       try {
-         $resolved = false;
-
          // @ Fast path: resolve from route cache (bypass Generator entirely)
-         if ($Router->cached) {
-            $Result = $Router->resolve();
-
-            if ($Result instanceof Response) {
-               $resolved = true;
-               if ($Result !== $Response) {
-                  $Response = $Result;
-               }
+         $Result = $Router->cached ? $Router->resolve() : null;
+         if ($Result instanceof Response) {
+            if ($Result !== $Response) {
+               $Response = $Result;
             }
          }
-
-         if ($resolved === false) {
+         else {
             // @ Defensive: Middlewares pipeline may not have been initialized yet
             //   (e.g. when trailing bytes from a previous test connection arrive
             //   after @test end but before SAPI::boot() has rebuilt the pipeline).
@@ -81,19 +74,18 @@ class Encoder_ extends Encoders
                   function (object $Request, object $Res) use ($Router): mixed {
                      $Result = (SAPI::$Handler)($Request, $Res, $Router);
 
-                     // @ Resolve Generator-based routing inside the pipeline
-                     if ($Result instanceof Generator) {
-                        foreach ($Router->routing($Result) as $Responses) {
-                           if ($Responses instanceof Response) {
-                              $Res = $Responses;
-                           }
-                        }
-
-                        return $Res;
-                     }
-
+                     // ?: Handler returned a Response directly — short-circuit
                      if ($Result instanceof Response) {
                         return $Result;
+                     }
+
+                     // @ Resolve through the cache (handler may have yielded a Generator
+                     //   of routes, or registered routes via direct $Router->route() calls)
+                     $Routes = $Result instanceof Generator ? $Result : null;
+                     foreach ($Router->routing($Routes) as $Responses) {
+                        if ($Responses instanceof Response) {
+                           $Res = $Responses;
+                        }
                      }
 
                      return $Res;
@@ -124,6 +116,12 @@ class Encoder_ extends Encoders
             }
 
             $Packages->closeAfterWrite = true;
+         }
+
+         // @ Per-request file cleanup (replaces Request::__destruct)
+         //   Gated to avoid a method frame when no uploads exist.
+         if ($Request->hasFiles) {
+            $Request->clean();
          }
 
          // : Encode HTTP Response

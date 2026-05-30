@@ -193,6 +193,7 @@ return new Suite(
          '2.2.1-route_condition-method-multiple',
          '2.2.2-route_condition-method-multiple',
          '2.2.3-route_condition-method-multiple',
+         '2.3-route_condition-method_agnostic',
          '3.0-route_route-specific',
          // Named params
          '3.1-route_route-single_param_id',
@@ -211,14 +212,22 @@ return new Suite(
          '3.4.8-route_route-param_constraint_slug_invalid',
          '3.4.9-route_route-param_constraint_uuid_valid',
          '3.4.10-route_route-param_constraint_uuid_invalid',
+         // In-URL inline regex
+         '3.5.1-route_route-inurl_regex_valid',
+         '3.5.2-route_route-inurl_regex_invalid',
          // Route group
          '4.1-route_group-unparameterized',
          '4.2-route_group-parameterized',
+         '4.3-route_group-middleware_intercept',
+         '4.4-route_group-nested_absolute_path_rejected',
          // Route Catch-All
          '5.1-route_catch_all-generic',
          // Route Catch-All parameterized
          '5.2-route_catch_all-parameterized_single',
          '5.3-route_catch_all-parameterized_multi',
+         // Route registration errors (warmup-time guards)
+         '6.1-route_error-catch_all_not_last',
+         '6.2-route_error-unknown_constraint_type',
       ],
       'Router/Middleware/' => [
          // CORS
