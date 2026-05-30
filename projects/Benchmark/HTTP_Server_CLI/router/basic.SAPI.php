@@ -15,6 +15,6 @@ return static function
 {
    // @ Static routes (10)
    yield $Router->route('/', function (Request $Request, Response $Response) {
-      return $Response(body: 'Home');
+      return $Response(body: 'Hello World!');
    }, GET);
 };
