@@ -37,7 +37,6 @@
   - [🔗 Social Networks](#-social-networks)
   - [💖 Sponsorship](#-sponsorship)
 - [🚀 Getting started](#-getting-started)
-- [🖼 Highlights](#-highlights)
 - [📃 License](#-license)
 
 ---
@@ -73,7 +72,7 @@ For the base CLI development, Bootgly already has the following UI Components:
 - Interface: [WPI][WPI_INTERFACE]
 - Platform: [Web][WEB_PLATFORM] (IN DEVELOPMENT)
 
-For the base Web development, Bootgly has a [HTTP Server CLI][WEB_HTTP_SERVER_CLI], a [TCP Client CLI][WEB_TCP_CLIENT_INTERFACE] and a [TCP Server CLI][WEB_TCP_SERVER_INTERFACE].
+For the base Web development, Bootgly has a [HTTP Server CLI][WEB_HTTP_SERVER_CLI], a [HTTP Client CLI][WEB_HTTP_CLIENT_CLI], a [TCP Client CLI][WEB_TCP_CLIENT_INTERFACE], a [TCP Server CLI][WEB_TCP_SERVER_INTERFACE], a [UDP Client CLI][WEB_UDP_CLIENT_INTERFACE], a [UDP Server CLI][WEB_UDP_SERVER_INTERFACE].
 
 More news may come until the release of v1.0. Stay tuned.
 
@@ -245,39 +244,6 @@ Check the documentation for more details and examples: [Bootgly Docs][PROJECT_DO
 
 </div>
 
-## 🖼 Highlights
-
-### \- Bootgly CLI 📟
-
-| ![](https://github.com/bootgly/.github/raw/main/screenshots/bootgly-php-framework/Bootgly-CLI.png "Bootgly CLI - initial output") |
-|:--:| 
-| *Bootgly CLI - initial output* |
----
-| ![](https://github.com/bootgly/.github/raw/main/screenshots/bootgly-php-framework/Bootgly-CLI-Terminal-components-Progress.png "Render 7x faster than Laravel / Symfony") |
-|:--:| 
-| *Progress component (with Bar) - [Render ≈7x faster than Laravel / Symfony][BENCHMARK_1]* |
-
-### \- Bootgly WPI 🌐
-
-| ![](https://github.com/bootgly/.github/raw/main/screenshots/bootgly-php-framework/Server-CLI-HTTP-Benchmark-Ryzen-9-3900X-WSL2.png "Bootgly HTTP Server CLI (wrk benchmark) - +7% faster than Workerman in the Plain Text test") |
-|:--:| 
-| *Bootgly HTTP Server CLI (wrk benchmark) - +7% faster than [Workerman](https://www.techempower.com/benchmarks/#section=data-r21&test=plaintext&l=zik073-6bj) in the [Plain Text test](https://github.com/TechEmpower/FrameworkBenchmarks/wiki/Project-Information-Framework-Tests-Overview#plaintext)* |
----
-| ![](https://github.com/bootgly/.github/raw/main/screenshots/bootgly-php-framework/Bootgly-WPI-Nodes-HTTP-Server-CLI.png "Bootgly HTTP Server CLI - started in Monitor mode") |
-|:--:| 
-| *HTTP Server CLI - started in `monitor` mode*
-
-
-More **Screenshots**, videos and details can be found in the home page of [Bootgly Docs][PROJECT_DOCS].
-
----
-
-<div align="right">
-
-[![][BACK_TO_TOP]](#readme-top)
-
-</div>
-
 ## 📃 License
 
 The Bootgly is open-sourced software licensed under the [MIT license][MIT_LICENSE].
@@ -302,11 +268,11 @@ The Bootgly is open-sourced software licensed under the [MIT license][MIT_LICENS
 [HTTP_SERVER_ROUTER_CLASS]: https://github.com/bootgly/bootgly/blob/main/Bootgly/WPI/Nodes/HTTP_Server_CLI/Router.php
 [WEB_TCP_CLIENT_INTERFACE]: https://github.com/bootgly/bootgly/blob/main/Bootgly/WPI/Interfaces/TCP_Client_CLI.php
 [WEB_TCP_SERVER_INTERFACE]: https://github.com/bootgly/bootgly/blob/main/Bootgly/WPI/Interfaces/TCP_Server_CLI.php
+[WEB_UDP_CLIENT_INTERFACE]: https://github.com/bootgly/bootgly/blob/main/Bootgly/WPI/Interfaces/UDP_Client_CLI.php
+[WEB_UDP_SERVER_INTERFACE]: https://github.com/bootgly/bootgly/blob/main/Bootgly/WPI/Interfaces/UDP_Server_CLI.php
 [WEB_HTTP_SERVER_CLI]: https://github.com/bootgly/bootgly/blob/main/Bootgly/WPI/Nodes/HTTP_Server_CLI.php
+[WEB_HTTP_CLIENT_CLI]: https://github.com/bootgly/bootgly/blob/main/Bootgly/WPI/Nodes/HTTP_Client_CLI.php
 [WEB_PLATFORM]: https://github.com/bootgly/bootgly-web
-
-
-[BENCHMARK_1]: https://github.com/bootgly/bootgly_benchmarks/tree/main/Progress_Bar
 
 [PROJECT_DOCS]: https://docs.bootgly.com/
 [GITHUB_REPOSITORY]: https://github.com/bootgly/bootgly/
