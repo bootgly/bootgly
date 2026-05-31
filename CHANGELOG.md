@@ -2,6 +2,101 @@
 
 Changelog for Bootgly framework. All notable changes to this project will be documented in this file. Imported from ROADMAP.md.
 
+## v0.16.0-beta ✅
+
+> Focus: **DBAL + ORM + Authorization**
+
+### ADI — Abstract Data Interface
+
+- ✅ Database abstraction layer (`ADI/Database`)
+  - ✅ Paradigm split (`Database` / `Databases`)
+    - ✅ `Database` is now the abstract transport core
+    - ✅ `Databases` registry/factory resolves paradigm facades
+    - ✅ SQL facade moved to `Databases\SQL`
+    - ✅ PostgreSQL driver moved to `Databases\SQL\Drivers\PostgreSQL`
+    - ✅ Generic `Connection` no longer carries PostgreSQL-only metadata
+    - ✅ Generic `Operation` no longer carries SQL-only fields
+    - ✅ Driver-level fake KV test proves non-SQL operation shapes can use the core lifecycle
+  - ✅ Event-loop-native DB client — non-blocking I/O integrated with the existing `HTTP_Server_CLI` event loop so a DB call inside an active HTTP worker yields cooperatively instead of stalling the worker
+    - ✅ PostgreSQL Protocol 3.0 native wire client (Startup, TLS, cleartext/MD5/SCRAM auth, Simple Query, Extended Query)
+    - ✅ Awaitable `Operation` + `Readiness` deadline integration for `Response::wait()`
+    - ✅ Recoverable error handling, timeout propagation and PostgreSQL CancelRequest side-channel
+    - ✅ PostgreSQL metadata messages (`BackendKeyData`, `ParameterStatus`, `NoticeResponse`, `NotificationResponse`)
+    - ✅ PostgreSQL result type conversion with NUMERIC precision preserved as string
+  - ✅ Connection pooling for async server (pool reused across in-flight requests on the same worker; back-pressure when pool is exhausted)
+    - ✅ Per-worker reusable connection cache
+    - ✅ Pending queue with operation deadlines
+    - ✅ Ordered MVP pipelining with per-operation release/drain
+  - ✅ Prepared statement cache (per-connection LRU)
+    - ✅ Statement-level Describe and cached server-confirmed parameter OIDs
+    - ✅ Binary Bind format selection only after server ParameterDescription
+  - ✅ Result convenience surface
+    - ✅ First row view (`Result->row`)
+    - ✅ First cell view (`Result->cell`)
+    - ✅ Empty-result/count views (`Result->empty`, `Result->count`)
+  - ✅ Transactions (begin / commit / rollback)
+  - ✅ Savepoints (nested transactions)
+  - ✅ Query Builder (fluent API)
+  - ✅ Schema Builder (migrations)
+    - ✅ `bootgly project <project> migrate` CLI subcommand
+    - ✅ Up / down migration runners, status table, lock file
+    - ✅ Migration sync against the current database schema snapshot
+  - ✅ Seeders (reuse `ACI/Faker` base — no duplicate faker stack)
+  - ✅ Read replicas / write-read splitting
+- ✅ ORM (Data Mapper)
+  - ✅ Model definition
+  - ✅ Scopes and query hooks
+  - ✅ Relationships (hasOne, hasMany, belongsTo, belongsToMany)
+  - ✅ Explicit / deferred batch relation loading (single-level, batched per relation, no N+1)
+  - ✅ Eager loading (auto-await + auto-attach)
+  - ✅ Lazy loading (lazy collection/reference, batched per hydration window)
+
+### API — Application Programming Interface
+
+- ✅ Native Configs integration for `ADI/Database`
+  - ✅ `DatabaseConfig` adapter for `database` scope materialization
+  - ✅ ADI-safe layering: API adapter depends on ADI; ADI does not depend on API Configs
+  - ✅ TLS/default fallback validation and multi-driver selection contract
+
+### WPI — Web Programming Interface
+
+- ✅ Async database demo route for `HTTP_Server_CLI`
+  - ✅ Scheduled response route waits on DB `Readiness` without blocking the worker
+  - ✅ Demo `database` config scope uses ADI defaults
+- ✅ Database developer experience for `HTTP_Server_CLI`
+  - ✅ WPI `Runner` helper to hide the low-level `advance()`/`Readiness` loop from app handlers
+  - ✅ Demo route: connection ping (`SELECT 1`)
+  - ✅ Demo route: parameterized select
+  - ✅ Demo route: scalar type conversion
+  - ✅ Demo route: setup/seed table (`bootgly_demo_users`)
+  - ✅ Demo route: users list from demo table
+  - ✅ Demo route: parameterized user lookup from demo table
+  - ✅ Demo route: recoverable error handling
+  - ✅ Demo route: pool/concurrent queries
+  - ✅ Demo route: slow query non-blocking check
+  - ✅ Demo route: Configs-driven connection
+  - ✅ Benchmark scenarios: native low-level async vs Response resource async
+  - ✅ Benchmark competitors: Database Swoole vs Bootgly DBAL
+- ✅ Authorization
+  - ✅ RBAC (Role-Based Access Control)
+  - ✅ Policies
+  - ✅ Gates
+
+#### Verifications
+
+- [x] `AI_AGENT=1 bootgly test 12` — ADI/Database suite (30 cases)
+- [x] `AI_AGENT=1 bootgly test 16` — ORM repository suite (explicit batch loading with optional real-I/O skips)
+- [x] `BOOTGLY_ORM_ASYNC_E2E=1 AI_AGENT=1 bootgly test 16` — ORM PostgreSQL real-I/O suite (CRUD + deferred/eager/lazy relation loading) — **required pre-commit gate; ORM 👍→✅ promotion needs this run green, not the stub-only run**
+- [x] `AI_AGENT=1 bootgly test 14` — API Configs suite (14 cases)
+- [x] `AI_AGENT=1 bootgly test 23 180` — HTTP scheduled readiness E2E (180 assertions)
+- [x] Focused PHPStan for ADI/Database + Configs adapter
+- [x] Database Resource Benchmark — native async vs Response resource async baseline collected with TCP_Client
+- [x] Phase 8 paradigm split — `Database` / `Databases\SQL` refactor with fake KV smoke test
+- [x] Schema Builder + migrations suite
+- [x] `git diff --check`
+
+---
+
 ## v0.15.0-beta ✅
 
 > Focus: **Testing improvements + Configuration + 2 new middlewares(Authentication + Input Validation)**
