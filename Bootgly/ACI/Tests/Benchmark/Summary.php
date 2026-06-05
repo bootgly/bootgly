@@ -21,7 +21,9 @@ use function date;
 use function file_put_contents;
 use function implode;
 use function in_array;
+use function is_array;
 use function is_dir;
+use function ksort;
 use function max;
 use function mkdir;
 use function number_format;
@@ -29,7 +31,6 @@ use function sprintf;
 use function str_pad;
 use function str_repeat;
 use function strlen;
-use function strtolower;
 use function uasort;
 
 use Bootgly\ABI\Data\__String\Bytes;
@@ -94,7 +95,7 @@ class Summary
    }
 
    /**
-    * Print competitors and scenarios summary.
+    * Print competitors and loads summary.
     *
     * @param Runner $Runner
     * @param Configs $Configs
@@ -125,29 +126,29 @@ class Summary
          $isFirst = false;
       }
 
-      // # Scenarios
-      if ($Runner->scenarios !== []) {
-         $scenarios = $Runner->scenarios;
+      // # Loads
+      if ($Runner->loads !== []) {
+         $loads = $Runner->loads;
 
-         // ? Apply scenario filter
+         // ? Apply load filter
          $filtered = [];
-         foreach ($scenarios as $index => $Scenario) {
-         if ($Configs->scenarios !== null && !in_array($index + 1, $Configs->scenarios)) {
+         foreach ($loads as $index => $Load) {
+         if ($Configs->loads !== null && !in_array($index + 1, $Configs->loads)) {
                continue;
             }
-            $filtered[$index] = $Scenario;
+            $filtered[$index] = $Load;
          }
 
-         echo "\n{$BOLD}  Scenarios (" . count($filtered) . "){$RESET}\n";
+         echo "\n{$BOLD}  Loads (" . count($filtered) . "){$RESET}\n";
 
          $prevGroup = '';
-         foreach ($filtered as $index => $Scenario) {
-            if ($Scenario->group !== '' && $Scenario->group !== $prevGroup) {
-               echo "    {$BOLD}{$Scenario->group}{$RESET}\n";
-               $prevGroup = $Scenario->group;
+         foreach ($filtered as $index => $Load) {
+            if ($Load->group !== '' && $Load->group !== $prevGroup) {
+               echo "    {$BOLD}{$Load->group}{$RESET}\n";
+               $prevGroup = $Load->group;
             }
 
-            echo "{$DIM}      " . ($index + 1) . ". {$Scenario->label}{$RESET}\n";
+            echo "{$DIM}      " . ($index + 1) . ". {$Load->label}{$RESET}\n";
          }
       }
 
@@ -183,8 +184,8 @@ class Summary
 
       // @ Detect type
       $isServer = false;
-      foreach ($results as $scenarios) {
-         foreach ($scenarios as $Result) {
+      foreach ($results as $loads) {
+         foreach ($loads as $Result) {
             if ($Result->rps !== null) {
                $isServer = true;
             }
@@ -199,20 +200,20 @@ class Summary
             return;
          }
 
-         // @ Collect all scenarios
-         $allScenarios = [];
-         foreach ($results as $scenarios) {
-            foreach (array_keys($scenarios) as $label) {
-               if (!in_array($label, $allScenarios)) {
-                  $allScenarios[] = $label;
+         // @ Collect all loads
+         $allLoads = [];
+         foreach ($results as $loads) {
+            foreach (array_keys($loads) as $label) {
+               if (!in_array($label, $allLoads)) {
+                  $allLoads[] = $label;
                }
             }
          }
 
          // # Column widths
-         $scenarioWidth = 20;
-         foreach ($allScenarios as $label) {
-            $scenarioWidth = max($scenarioWidth, strlen($label) + 2);
+         $loadWidth = 20;
+         foreach ($allLoads as $label) {
+            $loadWidth = max($loadWidth, strlen($label) + 2);
          }
 
          // ? Solo mode (single competitor)
@@ -222,7 +223,7 @@ class Summary
 
             echo "{$BOLD}  {$CYAN}{$name}{$RESET}\n";
 
-            $header = str_pad('Scenario', $scenarioWidth, ' ', STR_PAD_RIGHT)
+            $header = str_pad('Load', $loadWidth, ' ', STR_PAD_RIGHT)
                . str_pad('Metric', $rpsWidth, ' ', STR_PAD_RIGHT)
                . str_pad('Latency', 16, ' ', STR_PAD_RIGHT)
                . 'Transfer';
@@ -230,7 +231,7 @@ class Summary
             echo "{$BOLD}  {$header}{$RESET}\n";
             echo "  " . str_repeat('─', strlen($header) + 4) . "\n";
 
-            foreach ($allScenarios as $label) {
+            foreach ($allLoads as $label) {
                $Result = $results[$name][$label] ?? new Result;
 
                $rps = $Result->rps !== null
@@ -240,7 +241,7 @@ class Summary
                $transfer = $Result->transfer ?? 'N/A';
 
                echo "  "
-                  . str_pad($label, $scenarioWidth, ' ', STR_PAD_RIGHT)
+                  . str_pad($label, $loadWidth, ' ', STR_PAD_RIGHT)
                   . str_pad($rps, $rpsWidth, ' ', STR_PAD_RIGHT)
                   . str_pad($latency, 16, ' ', STR_PAD_RIGHT)
                   . $transfer . "\n";
@@ -253,7 +254,7 @@ class Summary
          // # Comparative mode (first competitor = baseline)
          $baseline = $competitors[0];
 
-         foreach ($allScenarios as $label) {
+         foreach ($allLoads as $label) {
             echo self::wrap(self::_MAGENTA_BOLD) . "  ── {$label} ──{$RESET}\n";
 
             $rpsWidth = max(20, strlen($metric) + 15);
@@ -321,8 +322,8 @@ class Summary
 
          // @ Sort by time (ascending)
          $sorted = [];
-         foreach ($results as $name => $scenarios) {
-            $sorted[$name] = $scenarios['default'] ?? new Result;
+         foreach ($results as $name => $loads) {
+            $sorted[$name] = $loads['default'] ?? new Result;
          }
          uasort($sorted, function (Result $a, Result $b) {
             return ((float) ($a->time ?? PHP_INT_MAX)) <=> ((float) ($b->time ?? PHP_INT_MAX));
@@ -362,8 +363,12 @@ class Summary
     *
     * @param string $caseName
     * @param array<string,array<string,Result>> $results
+    * @param array<string,scalar|array<int,scalar>> $config Run configuration metadata
+    *        (server-workers, client-workers, connections, duration, ...) emitted
+    *        in the file header so trend tooling can reconstruct the X axis from
+    *        a range of .marks files alone.
     */
-   public static function save (string $caseName, array $results): void
+   public static function save (string $caseName, array $results, array $config = []): void
    {
       $dir = BOOTGLY_WORKING_DIR . 'workdata/tests/benchmarks/' . $caseName;
 
@@ -376,10 +381,26 @@ class Summary
       $lines = [];
       $lines[] = "# Benchmark: {$caseName}";
       $lines[] = "# Date: " . date('Y-m-d H:i:s');
+
+      // @ Emit run configuration so charting tools can reconstruct the axis
+      //   without rerunning the benchmark.
+      if ($config !== []) {
+         ksort($config);
+         $lines[] = "# Config:";
+
+         foreach ($config as $key => $value) {
+            if (is_array($value)) {
+               $value = implode(',', array_map('strval', $value));
+            }
+
+            $lines[] = "#   {$key}: {$value}";
+         }
+      }
+
       $lines[] = "";
 
-      foreach ($results as $competitor => $scenarios) {
-         foreach ($scenarios as $label => $Result) {
+      foreach ($results as $competitor => $loads) {
+         foreach ($loads as $label => $Result) {
             $line = "[{$competitor}][{$label}]";
 
             if ($Result->rps !== null) {

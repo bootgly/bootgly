@@ -17,12 +17,19 @@ abstract class Runner
    public protected(set) string $name = '';
    /** @var array<Competitor> */
    public protected(set) array $competitors = [];
-   /** @var array<\Bootgly\ACI\Tests\Benchmark\Configs\Scenario> */
-   public protected(set) array $scenarios = [];
+   /** @var array<\Bootgly\ACI\Tests\Benchmark\Configs\Load> */
+   public protected(set) array $loads = [];
    /** @var string Throughput unit displayed in the results table (e.g. "req/s", "msg/s"). */
    public string $metric = 'req/s';
    /** @var string Post-run message (e.g. "HTTP server stopped..."). Empty = no message. */
    public string $postMessage = '';
+   /**
+    * Case-supplied metadata merged into the `.marks` Config header by TestCommand
+    * (e.g. `load-set`, `target-url`). Keep keys lowercase + kebab-cased.
+    *
+    * @var array<string,scalar>
+    */
+   public array $meta = [];
 
 
    public function add (Competitor $Competitor): void
@@ -38,13 +45,13 @@ abstract class Runner
    abstract public function configure (array $options): void;
 
    /**
-    * Load scenarios from a directory.
+    * Load loads from a directory.
     *
     * @param string $dir Absolute path.
     */
    public function load (string $dir): void
    {
-      // Default: no scenarios to load (e.g. Code runner)
+      // Default: no loads to load (e.g. Code runner)
    }
 
    /**
@@ -74,7 +81,7 @@ abstract class Runner
     *
     * @param Configs $Configs
     *
-    * @return array<string,array<string,Result>> Competitor name => Scenario label => Result.
+    * @return array<string,array<string,Result>> Competitor name => Load label => Result.
     */
    abstract public function run (Configs $Configs): array;
 }

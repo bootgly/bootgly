@@ -11,11 +11,11 @@
 namespace Bootgly\ACI\Tests\Benchmark\Configs;
 
 
-class Scenario
+class Load
 {
    // * Data
    /**
-    * Display label for the scenario.
+    * Display label for the load.
     */
    public readonly string $label;
 
@@ -25,7 +25,7 @@ class Scenario
    public readonly string $group;
 
    /**
-    * Absolute path to the scenario script file.
+    * Absolute path to the load script file.
     */
    public readonly string $file;
 

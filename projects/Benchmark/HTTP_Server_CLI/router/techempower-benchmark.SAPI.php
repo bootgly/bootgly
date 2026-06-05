@@ -12,7 +12,6 @@ namespace projects\HTTP_Server_CLI\router;
 
 
 use function asort;
-use function count;
 use function ctype_digit;
 use function getenv;
 use function htmlspecialchars;
@@ -36,6 +35,23 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router;
 
+
+/*
+ * TechEmpower benchmark SAPI — fair, cross-framework comparison surface.
+ *
+ * Serves the six canonical TechEmpower routes:
+ *   GET /plaintext  →  text/plain "Hello, World!"
+ *   GET /json       →  application/json {"message":"Hello, World!"}
+ *   GET /db         →  one random World row as JSON
+ *   GET /query      →  N random World rows as JSON (?queries=N, 1..500)
+ *   GET /fortunes   →  Fortune list rendered as HTML
+ *   GET /updates    →  N World rows fetched, updated, and returned (?queries=N)
+ *
+ * Bootgly-specific stress routes (catch-all, nested, middleware, the
+ * `/database/native/*` probes, etc.) live in `bootgly-benchmark.SAPI.php` —
+ * they are not part of TechEmpower and would skew a feature-to-feature
+ * comparison.
+ */
 
 return static function
 (Request $Request, Response $Response, Router $Router): Generator
@@ -141,28 +157,7 @@ return static function
       return $Operations;
    };
 
-   $Body = static function (Operation $Operation): string {
-      if ($Operation->error !== null) {
-         return $Operation->error;
-      }
-
-      $Result = $Operation->Result;
-
-      if ($Result === null) {
-         return '[]';
-      }
-
-      return json_encode($Result->rows) ?: '[]';
-   };
-
    // ---
-
-   $Send = static function (Response $Response, Operation $Operation) use ($Body): object {
-      return $Response(
-         code: $Operation->error === null ? 200 : 500,
-         body: $Body($Operation)
-      );
-   };
 
    $Json = static function (Response $Response, string $body, int $code = 200): object {
       return $Response(
@@ -178,34 +173,6 @@ return static function
          headers: ['Content-Type' => 'text/html; charset=utf-8'],
          body: $body
       );
-   };
-
-   $Pool = static function (Response $Response, SQL $Database, array $Operations): object {
-      $rows = [];
-      $errors = [];
-
-      foreach ($Operations as $Operation) {
-         if ($Operation->error !== null) {
-            $errors[] = $Operation->error;
-         }
-
-         if ($Operation->Result !== null) {
-            $rows[] = $Operation->Result->row;
-         }
-      }
-
-      $body = json_encode([
-         'rows' => $rows,
-         'errors' => $errors,
-         'pool' => [
-            'idle' => count($Database->Pool->idle),
-            'busy' => count($Database->Pool->busy),
-            'pending' => count($Database->Pool->pending),
-            'created' => $Database->Pool->created,
-         ],
-      ]) ?: '{}';
-
-      return $Response(code: $errors === [] ? 200 : 500, body: $body);
    };
 
    $Exception = static function (Response $Response, Throwable $Throwable): object {
@@ -326,6 +293,22 @@ return static function
 
    // ---
 
+   // # TechEmpower handlers
+
+   $Plaintext = function (Request $Request, Response $Response) {
+      return $Response(
+         headers: ['Content-Type' => 'text/plain'],
+         body: 'Hello, World!'
+      );
+   };
+
+   $JsonHello = function (Request $Request, Response $Response) {
+      return $Response(
+         headers: ['Content-Type' => 'application/json'],
+         body: '{"message":"Hello, World!"}'
+      );
+   };
+
    $TfbDb = function (Request $Request, Response $Response) use ($Connect, $Exception, $FetchWorld, $Json) {
       return $Response->defer(function (Response $Response) use ($Connect, $Exception, $FetchWorld, $Json): void {
          try {
@@ -434,158 +417,19 @@ return static function
       });
    };
 
-   $NativePing = function (Request $Request, Response $Response) use ($Connect, $Exception, $Native, $Send) {
-      return $Response->defer(function (Response $Response) use ($Connect, $Exception, $Native, $Send): void {
-         try {
-            $Database = $Connect();
-            $Operation = $Native($Database, $Response, $Database->query('SELECT 1 AS ok'));
-
-            $Send($Response, $Operation);
-         }
-         catch (Throwable $Throwable) {
-            $Exception($Response, $Throwable);
-         }
-      });
-   };
-
-   $ResourcePing = function (Request $Request, Response $Response) use ($Exception, $Send) {
-      return $Response->defer(function (Response $Response) use ($Exception, $Send): void {
-         try {
-            $Database = $Response->Database;
-            $Operation = $Database->query('SELECT 1 AS ok');
-
-            $Send($Response, $Operation);
-         }
-         catch (Throwable $Throwable) {
-            $Exception($Response, $Throwable);
-         }
-      });
-   };
-
-   $NativeParameters = function (Request $Request, Response $Response) use ($Connect, $Exception, $Native, $Send) {
-      return $Response->defer(function (Response $Response) use ($Connect, $Exception, $Native, $Send): void {
-         try {
-            $Database = $Connect();
-            $Operation = $Native($Database, $Response, $Database->query('SELECT $1::int AS value, $2::text AS label', [42, 'bootgly']));
-
-            $Send($Response, $Operation);
-         }
-         catch (Throwable $Throwable) {
-            $Exception($Response, $Throwable);
-         }
-      });
-   };
-
-   $ResourceParameters = function (Request $Request, Response $Response) use ($Exception, $Send) {
-      return $Response->defer(function (Response $Response) use ($Exception, $Send): void {
-         try {
-            $Database = $Response->Database;
-            $Operation = $Database->query('SELECT $1::int AS value, $2::text AS label', [42, 'bootgly']);
-
-            $Send($Response, $Operation);
-         }
-         catch (Throwable $Throwable) {
-            $Exception($Response, $Throwable);
-         }
-      });
-   };
-
-   $NativePool = function (Request $Request, Response $Response) use ($Connect, $Drain, $Exception, $Pool) {
-      return $Response->defer(function (Response $Response) use ($Connect, $Drain, $Exception, $Pool): void {
-         try {
-            $Database = $Connect();
-            $Operations = [
-               $Database->query('SELECT $1::int AS value', [1]),
-               $Database->query('SELECT $1::int AS value', [2]),
-               $Database->query('SELECT $1::int AS value', [3]),
-            ];
-            $Operations = $Drain($Database, $Response, $Operations);
-
-            $Pool($Response, $Database, $Operations);
-         }
-         catch (Throwable $Throwable) {
-            $Exception($Response, $Throwable);
-         }
-      });
-   };
-
-   $ResourcePool = function (Request $Request, Response $Response) use ($Exception, $Pool) {
-      return $Response->defer(function (Response $Response) use ($Exception, $Pool): void {
-         try {
-            $Database = $Response->Database;
-            $Connection = $Database->Database;
-            $Operations = [
-               $Connection->query('SELECT $1::int AS value', [1]),
-               $Connection->query('SELECT $1::int AS value', [2]),
-               $Connection->query('SELECT $1::int AS value', [3]),
-            ];
-            $Operations = $Database->drain($Operations);
-
-            $Pool($Response, $Connection, $Operations);
-         }
-         catch (Throwable $Throwable) {
-            $Exception($Response, $Throwable);
-         }
-      });
-   };
-
-   $NativeSleep = function (Request $Request, Response $Response) use ($Connect, $Exception, $Native, $Send) {
-      return $Response->defer(function (Response $Response) use ($Connect, $Exception, $Native, $Send): void {
-         try {
-            $Database = $Connect();
-            $Operation = $Native($Database, $Response, $Database->query('SELECT pg_sleep(0.05), $1::int AS value', [42]));
-
-            $Send($Response, $Operation);
-         }
-         catch (Throwable $Throwable) {
-            $Exception($Response, $Throwable);
-         }
-      });
-   };
-
-   $ResourceSleep = function (Request $Request, Response $Response) use ($Exception, $Send) {
-      return $Response->defer(function (Response $Response) use ($Exception, $Send): void {
-         try {
-            $Database = $Response->Database;
-            $Operation = $Database->query('SELECT pg_sleep(0.05), $1::int AS value', [42]);
-
-            $Send($Response, $Operation);
-         }
-         catch (Throwable $Throwable) {
-            $Exception($Response, $Throwable);
-         }
-      });
-   };
-
    // ---
 
    yield $Router->route('/', function (Request $Request, Response $Response) {
-      return $Response(body: 'Database Benchmark');
+      return $Response(body: 'TechEmpower Benchmark');
    }, GET);
 
-   // TechEmpower
+   yield $Router->route('/plaintext', $Plaintext, GET);
+   yield $Router->route('/json',      $JsonHello, GET);
 
-   yield $Router->route('/db', $TfbDb, GET);
-   yield $Router->route('/query', $TfbQuery, GET);
-   yield $Router->route('/fortunes', $TfbFortunes, GET);
-   yield $Router->route('/updates', $TfbUpdates, GET);
-
-   // Bootgly
-   yield $Router->route('/database/native/ping', $NativePing, GET);
-   yield $Router->route('/database/resource/ping', $ResourcePing, GET);
-   yield $Router->route('/database/runner/ping', $ResourcePing, GET);
-
-   yield $Router->route('/database/native/parameters', $NativeParameters, GET);
-   yield $Router->route('/database/resource/parameters', $ResourceParameters, GET);
-   yield $Router->route('/database/runner/parameters', $ResourceParameters, GET);
-
-   yield $Router->route('/database/native/pool', $NativePool, GET);
-   yield $Router->route('/database/resource/pool', $ResourcePool, GET);
-   yield $Router->route('/database/runner/pool', $ResourcePool, GET);
-
-   yield $Router->route('/database/native/sleep', $NativeSleep, GET);
-   yield $Router->route('/database/resource/sleep', $ResourceSleep, GET);
-   yield $Router->route('/database/runner/sleep', $ResourceSleep, GET);
+   yield $Router->route('/db',        $TfbDb,        GET);
+   yield $Router->route('/query',     $TfbQuery,     GET);
+   yield $Router->route('/fortunes',  $TfbFortunes,  GET);
+   yield $Router->route('/updates',   $TfbUpdates,   GET);
 
    yield $Router->route('/*', function (Request $Request, Response $Response) {
       return $Response(code: 404, body: 'Not Found');

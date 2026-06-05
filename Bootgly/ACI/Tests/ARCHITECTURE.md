@@ -125,8 +125,8 @@ Bootgly/ACI/Tests/
 │   │   ├── Wrk.php                        # class — HTTP server benchmark runner (wrk)
 │   │   ├── Reporter.php                   # class — ANSI tables + .marks file output
 │   │   └── SystemInfo.php                 # class — OS, CPU, RAM, PHP, wrk version
-│   ├── Scenario.php                       # class — scenario VO (label, group, luaFile)
-│   └── Scenario/
+│   ├── Load.php                       # class — load VO (label, group, luaFile)
+│   └── Load/
 │       └── Loader.php                     # class — loads .lua files with @label/@group metadata
 │
 ├── Coverage.php                           # class — start()/stop()/report(); auto-detect Driver
@@ -467,7 +467,7 @@ classDiagram
     class Wrk {
         +port / threads / connections: int
         +duration: string
-        +load(scenariosDir) void
+        +load(loadsDir) void
         +run(filter) array
     }
     Wrk --|> BenchmarkRunner : extends

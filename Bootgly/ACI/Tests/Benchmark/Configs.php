@@ -28,27 +28,27 @@ class Configs
    public protected(set) null|array $competitors;
    /** @var null|string Runner name (lowercase). */
    public protected(set) null|string $runner;
-   /** @var null|array<int> 1-based scenario indices to include (null = all). */
-   public protected(set) null|array $scenarios;
+   /** @var null|array<int> 1-based load indices to include (null = all). */
+   public protected(set) null|array $loads;
    /** @var array<string,int> Variation parameters (e.g. ['workers' => 2]). */
    public protected(set) array $vary;
 
 
    /**
     * @param null|array<string> $competitors
-    * @param null|array<int> $scenarios
+    * @param null|array<int> $loads
     * @param array<string,int> $vary
     */
    private function __construct (
       null|array $competitors = null,
       null|string $runner = null,
-      null|array $scenarios = null,
+      null|array $loads = null,
       array $vary = [],
    )
    {
       $this->competitors = $competitors;
       $this->runner = $runner;
-      $this->scenarios = $scenarios;
+      $this->loads = $loads;
       $this->vary = $vary;
    }
 
@@ -61,7 +61,7 @@ class Configs
    {
       $competitors = null;
       $runner = null;
-      $scenarios = null;
+      $loads = null;
       $vary = [];
 
       if (isset($options['competitors'])) {
@@ -81,8 +81,8 @@ class Configs
          $runner = strtolower((string) $options['runner']);
       }
 
-      if (isset($options['scenarios'])) {
-         $scenarios = array_map(intval(...), explode(',', (string) $options['scenarios']));
+      if (isset($options['loads'])) {
+         $loads = array_map(intval(...), explode(',', (string) $options['loads']));
       }
 
       if (isset($options['vary'])) {
@@ -94,7 +94,7 @@ class Configs
          }
       }
 
-      return new self($competitors, $runner, $scenarios, $vary);
+      return new self($competitors, $runner, $loads, $vary);
    }
 
    /**

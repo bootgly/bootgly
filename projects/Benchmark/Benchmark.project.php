@@ -40,16 +40,18 @@ return new Project(
 
    boot: function (array $arguments = [], array $options = []): void {
       if ($options['HTTP_Server_CLI'] ?? false) {
-         $router = getenv('BOOTGLY_HTTP_SERVER_CLI_ROUTER') ?: 'default';
+         $router = strtolower(getenv('BOOTGLY_HTTP_SERVER_CLI_ROUTER') ?: 'bootgly');
          $routerFile = match ($router) {
-            'basic' => 'basic.SAPI.php',
-            'database' => 'database.SAPI.php',
-            default => 'default.SAPI.php',
+            'techempower' => 'techempower-benchmark.SAPI.php',
+            default       => 'bootgly-benchmark.SAPI.php',
          };
 
          $responseResources = null;
 
-         if ($router === 'database') {
+         // # The Database response resource is needed by both routers:
+         //   - techempower:  /db, /query, /fortunes, /updates
+         //   - bootgly:      /database/resource/*, /database/runner/*
+         if ($router === 'techempower' || $router === 'bootgly') {
             $Env = static function (string $name, string $default): string {
                $value = getenv($name);
 
@@ -114,7 +116,6 @@ return new Project(
                // requestMaxBodySize: 10 * 1024 * 1024,  // 10 MB (default)
             )
             // # Test (Benchmarking)
-            //->on(HTTP_Server_Events::RequestReceived, require __DIR__ . '/HTTP_Server_CLI/router/basic.SAPI.php')
             ->on(HTTP_Server_Events::RequestReceived, require __DIR__ . "/HTTP_Server_CLI/router/{$routerFile}")
             ->on(HTTP_Server_Events::ServerStarted, function ($HTTP_Server_CLI) {
                   $Output = CLI->Terminal->Output;

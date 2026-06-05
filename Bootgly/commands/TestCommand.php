@@ -339,7 +339,7 @@ class TestCommand extends Command
    /**
     * Run a benchmark case.
     *
-    * Usage: bootgly test benchmark <CASE> [--competitors=name1,name2] [--scenarios=label1,label2]
+    * Usage: bootgly test benchmark <CASE> [--competitors=name1,name2] [--loads=label1,label2]
     *
     * @param array<string> $arguments
     * @param array<string, bool|int|string> $options
@@ -415,7 +415,7 @@ class TestCommand extends Command
          echo "  {$BOLD}Case options:{$RESET}\n";
          echo "    {$MAGENTA}--competitors{$RESET}=LIST  Comma-separated competitor names ({$MAGENTA}*{$RESET} required)\n";
          echo "    {$CYAN}--runner{$RESET}=TYPE       Runner (default: case-dependent)\n";
-         echo "    {$CYAN}--scenarios{$RESET}=LIST    Comma-separated scenario numbers (default: all)\n";
+         echo "    {$CYAN}--loads{$RESET}=LIST       Comma-separated load numbers (default: all)\n";
          echo "    {$CYAN}--vary{$RESET}=PARAMS       Vary parameters across rounds (e.g. server-workers:2)\n";
          echo "\n";
 
@@ -519,7 +519,29 @@ class TestCommand extends Command
 
       // @ Report
       Summary::report($results, $Runner->metric);
-      Summary::save($caseName, $results);
+
+      // @ Build run configuration metadata for the .marks header.
+      //   Runner subclasses surface their own keys via $Runner->meta; the case
+      //   file (e.g. HTTP_Server_CLI/@.php) adds case-level keys to the same
+      //   bag. TestCommand only contributes runner-agnostic fields here.
+      $config = [];
+
+      if ($Runner->name !== '') {
+         $config['runner'] = $Runner->name;
+      }
+
+      // # Server workers — applied uniformly to all competitors by --server-workers.
+      $Competitors = $Runner->competitors;
+      if (isset($Competitors[0]) && $Competitors[0]->workers !== null && $Competitors[0]->workers > 0) {
+         $config['server-workers'] = $Competitors[0]->workers;
+      }
+
+      // @ Merge runner + case metadata last so they can override defaults.
+      foreach ($Runner->meta as $metaKey => $metaValue) {
+         $config[$metaKey] = $metaValue;
+      }
+
+      Summary::save($caseName, $results, $config);
 
       // @ Post-run message
       if ($Runner->postMessage !== '') {

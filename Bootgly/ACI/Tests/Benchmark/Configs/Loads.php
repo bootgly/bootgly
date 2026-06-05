@@ -20,19 +20,19 @@ use function sort;
 use function trim;
 
 
-class Scenarios
+class Loads
 {
    /**
-    * Load Scenarios from .lua files in directory.
+    * Load Loads from .lua files in directory.
     *
     * Metadata is extracted from comments:
     *   -- @label: <label>
     *   -- @group: <group>
     *   -- @competitors: <all|name1,name2>
     *
-    * @param string $directory Absolute path to scenarios directory.
+    * @param string $directory Absolute path to loads directory.
     *
-    * @return array<Scenario>
+    * @return array<Load>
     */
    public static function load (string $directory): array
    {
@@ -42,7 +42,7 @@ class Scenarios
       }
       sort($files);
 
-      $scenarios = [];
+      $loads = [];
 
       foreach ($files as $file) {
          $content = file_get_contents($file);
@@ -72,7 +72,7 @@ class Scenarios
             $competitors = trim($matches[1]);
          }
 
-         $scenarios[] = new Scenario(
+         $loads[] = new Load(
             label: $label,
             group: $group,
             file: $file,
@@ -80,20 +80,20 @@ class Scenarios
          );
       }
 
-      return $scenarios;
+      return $loads;
    }
 
    /**
-    * Load Scenarios from .php files in directory.
+    * Load Loads from .php files in directory.
     *
     * Metadata is extracted from comments:
     *   // @label: <label>
     *   // @group: <group>
     *   // @competitors: <all|name1,name2>
     *
-    * @param string $directory Absolute path to scenarios directory.
+    * @param string $directory Absolute path to loads directory.
     *
-    * @return array<Scenario>
+    * @return array<Load>
     */
    public static function loadPhp (string $directory): array
    {
@@ -103,7 +103,7 @@ class Scenarios
       }
       sort($files);
 
-      $scenarios = [];
+      $loads = [];
 
       foreach ($files as $file) {
          $content = file_get_contents($file);
@@ -133,7 +133,7 @@ class Scenarios
             $competitors = trim($matches[1]);
          }
 
-         $scenarios[] = new Scenario(
+         $loads[] = new Load(
             label: $label,
             group: $group,
             file: $file,
@@ -141,6 +141,6 @@ class Scenarios
          );
       }
 
-      return $scenarios;
+      return $loads;
    }
 }
