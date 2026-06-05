@@ -95,7 +95,7 @@ class Summary
    }
 
    /**
-    * Print competitors and loads summary.
+    * Print opponents and loads summary.
     *
     * @param Runner $Runner
     * @param Configs $Configs
@@ -107,20 +107,20 @@ class Summary
       $CYAN  = self::wrap(self::_CYAN_FOREGROUND);
       $RESET = self::_RESET_FORMAT;
 
-      // # Competitors
-      echo "{$BOLD}  Competitors{$RESET}\n";
+      // # Opponents
+      echo "{$BOLD}  Opponents{$RESET}\n";
 
       $isFirst = true;
-      foreach ($Runner->competitors as $Competitor) {
-         if ($Configs->competitors !== null && !in_array(Configs::slug($Competitor->name), array_map(Configs::slug(...), $Configs->competitors))) {
+      foreach ($Runner->opponents as $Opponent) {
+         if ($Configs->opponents !== null && !in_array(Configs::slug($Opponent->name), array_map(Configs::slug(...), $Configs->opponents))) {
             continue;
          }
 
-         $version = $Competitor->version !== '' ? " {$Competitor->version}" : '';
+         $version = $Opponent->version !== '' ? " {$Opponent->version}" : '';
          $baseline = $isFirst ? "{$DIM}  [baseline]{$RESET}" : '';
 
          echo "{$CYAN}  ▸ {$RESET}"
-            . "{$BOLD}{$Competitor->name}{$RESET}"
+            . "{$BOLD}{$Opponent->name}{$RESET}"
             . $version . $baseline . "\n";
 
          $isFirst = false;
@@ -162,9 +162,9 @@ class Summary
     */
    public static function report (array $results, string $metric = 'req/s'): void
    {
-      $allCompetitors = array_keys($results);
+      $allOpponents = array_keys($results);
 
-      if (count($allCompetitors) === 0) {
+      if (count($allOpponents) === 0) {
          return;
       }
 
@@ -180,7 +180,7 @@ class Summary
 
       // @ Results header
       echo "{$BOLD}  Results\n{$RESET}\n";
-      echo "  {$CYAN}" . implode(' vs ', $allCompetitors) . "{$RESET}\n\n";
+      echo "  {$CYAN}" . implode(' vs ', $allOpponents) . "{$RESET}\n\n";
 
       // @ Detect type
       $isServer = false;
@@ -194,9 +194,9 @@ class Summary
       }
 
       if ($isServer) {
-         $competitors = array_keys($results);
+         $opponents = array_keys($results);
 
-         if (count($competitors) === 0) {
+         if (count($opponents) === 0) {
             return;
          }
 
@@ -216,9 +216,9 @@ class Summary
             $loadWidth = max($loadWidth, strlen($label) + 2);
          }
 
-         // ? Solo mode (single competitor)
-         if (count($competitors) === 1) {
-            $name = $competitors[0];
+         // ? Solo mode (single opponent)
+         if (count($opponents) === 1) {
+            $name = $opponents[0];
             $rpsWidth = max(20, strlen($metric) + 15);
 
             echo "{$BOLD}  {$CYAN}{$name}{$RESET}\n";
@@ -251,15 +251,15 @@ class Summary
             return;
          }
 
-         // # Comparative mode (first competitor = baseline)
-         $baseline = $competitors[0];
+         // # Comparative mode (first opponent = baseline)
+         $baseline = $opponents[0];
 
          foreach ($allLoads as $label) {
             echo self::wrap(self::_MAGENTA_BOLD) . "  ── {$label} ──{$RESET}\n";
 
             $rpsWidth = max(20, strlen($metric) + 15);
 
-            $header = str_pad('Competitor', 20, ' ', STR_PAD_RIGHT)
+            $header = str_pad('Opponent', 20, ' ', STR_PAD_RIGHT)
                . str_pad('Metric', $rpsWidth, ' ', STR_PAD_RIGHT)
                . str_pad('Latency', 16, ' ', STR_PAD_RIGHT)
                . str_pad('Transfer', 16, ' ', STR_PAD_RIGHT)
@@ -270,7 +270,7 @@ class Summary
 
             $baselineRps = $results[$baseline][$label]->rps ?? 0;
 
-            foreach ($competitors as $name) {
+            foreach ($opponents as $name) {
                $Result = $results[$name][$label] ?? new Result;
 
                $rps = $Result->rps !== null
@@ -286,7 +286,7 @@ class Summary
                } elseif ($baselineRps > 0 && $Result->rps !== null) {
                   $pct = (($Result->rps - $baselineRps) / $baselineRps) * 100;
                   $sign = $pct >= 0 ? '+' : '';
-                  // Positive = competitor faster than baseline = red (bad for baseline)
+                  // Positive = opponent faster than baseline = red (bad for baseline)
                   $diffColor = $pct >= 0 ? $RED : $GREEN;
                   $diff = $diffColor . sprintf('%s%.1f%%', $sign, $pct) . $RESET;
                }
@@ -303,16 +303,16 @@ class Summary
          }
       }
       else {
-         $competitors = array_keys($results);
+         $opponents = array_keys($results);
 
          // @ Column widths
          $nameWidth = 12;
-         foreach ($competitors as $name) {
+         foreach ($opponents as $name) {
             $nameWidth = max($nameWidth, strlen($name) + 2);
          }
 
          // @ Header
-         $header = str_pad('Competitor', $nameWidth, ' ', STR_PAD_RIGHT)
+         $header = str_pad('Opponent', $nameWidth, ' ', STR_PAD_RIGHT)
             . str_pad('Time', 16, ' ', STR_PAD_RIGHT)
             . str_pad('Memory', 16, ' ', STR_PAD_RIGHT)
             . 'Position';
@@ -399,9 +399,9 @@ class Summary
 
       $lines[] = "";
 
-      foreach ($results as $competitor => $loads) {
+      foreach ($results as $opponent => $loads) {
          foreach ($loads as $label => $Result) {
-            $line = "[{$competitor}][{$label}]";
+            $line = "[{$opponent}][{$label}]";
 
             if ($Result->rps !== null) {
                $line .= " rps=" . number_format((int) $Result->rps);

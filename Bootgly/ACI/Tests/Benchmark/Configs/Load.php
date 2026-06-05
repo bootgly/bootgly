@@ -31,21 +31,21 @@ class Load
 
    // * Config
    /**
-    * Comma-separated competitor names or "all".
+    * Comma-separated opponent names or "all".
     */
-   public readonly string $competitors;
+   public readonly string $opponents;
 
 
    public function __construct (
       string $label,
       string $group,
       string $file,
-      string $competitors = 'all',
+      string $opponents = 'all',
    )
    {
       $this->label = $label;
       $this->group = $group;
       $this->file = $file;
-      $this->competitors = $competitors;
+      $this->opponents = $opponents;
    }
 }

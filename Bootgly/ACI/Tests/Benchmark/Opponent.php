@@ -14,22 +14,22 @@ namespace Bootgly\ACI\Tests\Benchmark;
 use Closure;
 
 
-class Competitor
+class Opponent
 {
    // * Data
    /**
-    * Display name of the competitor.
+    * Display name of the opponent.
     */
    public readonly string $name;
 
    /**
-    * Path to the competitor entry-point script.
+    * Path to the opponent entry-point script.
     */
    public readonly string $script;
 
    // * Config
    /**
-    * Version string of the competitor.
+    * Version string of the opponent.
     */
    public readonly string $version;
 

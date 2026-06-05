@@ -15,8 +15,8 @@ abstract class Runner
 {
    // * Data
    public protected(set) string $name = '';
-   /** @var array<Competitor> */
-   public protected(set) array $competitors = [];
+   /** @var array<Opponent> */
+   public protected(set) array $opponents = [];
    /** @var array<\Bootgly\ACI\Tests\Benchmark\Configs\Load> */
    public protected(set) array $loads = [];
    /** @var string Throughput unit displayed in the results table (e.g. "req/s", "msg/s"). */
@@ -32,9 +32,9 @@ abstract class Runner
    public array $meta = [];
 
 
-   public function add (Competitor $Competitor): void
+   public function add (Opponent $Opponent): void
    {
-      $this->competitors[] = $Competitor;
+      $this->opponents[] = $Opponent;
    }
 
    /**
@@ -81,7 +81,7 @@ abstract class Runner
     *
     * @param Configs $Configs
     *
-    * @return array<string,array<string,Result>> Competitor name => Load label => Result.
+    * @return array<string,array<string,Result>> Opponent name => Load label => Result.
     */
    abstract public function run (Configs $Configs): array;
 }

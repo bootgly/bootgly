@@ -33,8 +33,8 @@ use projects\HTTP_Server_CLI\Profiler;
 /*
  * Bootgly internal benchmark SAPI — used for self-comparison during
  * Bootgly development. Not part of the TechEmpower cross-framework set; the
- * scenarios that exercise these routes are tagged `@competitors: Bootgly` so
- * other competitors are skipped automatically.
+ * scenarios that exercise these routes are tagged `@opponents: Bootgly` so
+ * other opponents are skipped automatically.
  *
  * Surface:
  *   - 100 static routes (`/`, `/about`, …, `/static/{11..100}`)

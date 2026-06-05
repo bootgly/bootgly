@@ -339,7 +339,7 @@ class TestCommand extends Command
    /**
     * Run a benchmark case.
     *
-    * Usage: bootgly test benchmark <CASE> [--competitors=name1,name2] [--loads=label1,label2]
+    * Usage: bootgly test benchmark <CASE> [--opponents=name1,name2] [--loads=label1,label2]
     *
     * @param array<string> $arguments
     * @param array<string, bool|int|string> $options
@@ -396,9 +396,9 @@ class TestCommand extends Command
          echo "\n";
          echo "  {$BOLD}Usage:{$RESET}\n";
          if ($caseName !== null) {
-            echo "    bootgly test benchmark {$MAGENTA}{$caseName} --competitors{$RESET}=bootgly\n";
+            echo "    bootgly test benchmark {$MAGENTA}{$caseName} --opponents{$RESET}=bootgly\n";
          } else {
-            echo "    bootgly test benchmark {$MAGENTA}<CASE> --competitors{$RESET}=bootgly\n";
+            echo "    bootgly test benchmark {$MAGENTA}<CASE> --opponents{$RESET}=bootgly\n";
          }
          echo "\n";
 
@@ -413,10 +413,10 @@ class TestCommand extends Command
 
          // @ Case options (common)
          echo "  {$BOLD}Case options:{$RESET}\n";
-         echo "    {$MAGENTA}--competitors{$RESET}=LIST  Comma-separated competitor names ({$MAGENTA}*{$RESET} required)\n";
-         echo "    {$CYAN}--runner{$RESET}=TYPE       Runner (default: case-dependent)\n";
-         echo "    {$CYAN}--loads{$RESET}=LIST       Comma-separated load numbers (default: all)\n";
-         echo "    {$CYAN}--vary{$RESET}=PARAMS       Vary parameters across rounds (e.g. server-workers:2)\n";
+         echo "    {$MAGENTA}--opponents{$RESET}=LIST  Comma-separated opponent names ({$MAGENTA}*{$RESET} required)\n";
+         echo "    {$CYAN}--runner{$RESET}=TYPE     Runner (default: case-dependent)\n";
+         echo "    {$CYAN}--loads{$RESET}=LIST      Comma-separated load numbers (default: all)\n";
+         echo "    {$CYAN}--vary{$RESET}=PARAMS     Vary parameters across rounds (e.g. server-workers:2)\n";
          echo "\n";
 
          // @ Case-local options + Runner options (only in contextual help)
@@ -458,7 +458,7 @@ class TestCommand extends Command
             }
          }
 
-         echo "  {$GREEN}--help{$RESET}, {$GREEN}-h{$RESET}            Show help\n";
+         echo "  {$GREEN}--help{$RESET}, {$GREEN}-h{$RESET}          Show help\n";
          echo "\n";
 
          return false;
@@ -530,10 +530,10 @@ class TestCommand extends Command
          $config['runner'] = $Runner->name;
       }
 
-      // # Server workers — applied uniformly to all competitors by --server-workers.
-      $Competitors = $Runner->competitors;
-      if (isset($Competitors[0]) && $Competitors[0]->workers !== null && $Competitors[0]->workers > 0) {
-         $config['server-workers'] = $Competitors[0]->workers;
+      // # Server workers — applied uniformly to all opponents by --server-workers.
+      $Opponents = $Runner->opponents;
+      if (isset($Opponents[0]) && $Opponents[0]->workers !== null && $Opponents[0]->workers > 0) {
+         $config['server-workers'] = $Opponents[0]->workers;
       }
 
       // @ Merge runner + case metadata last so they can override defaults.

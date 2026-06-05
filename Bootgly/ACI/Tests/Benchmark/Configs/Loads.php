@@ -28,7 +28,7 @@ class Loads
     * Metadata is extracted from comments:
     *   -- @label: <label>
     *   -- @group: <group>
-    *   -- @competitors: <all|name1,name2>
+    *   -- @opponents: <all|name1,name2>
     *
     * @param string $directory Absolute path to loads directory.
     *
@@ -66,17 +66,17 @@ class Loads
             $group = trim($matches[1]);
          }
 
-         // # competitors
-         $competitors = 'all';
-         if (preg_match('/^-- @competitors:\s*(.+)$/m', $content, $matches)) {
-            $competitors = trim($matches[1]);
+         // # opponents
+         $opponents = 'all';
+         if (preg_match('/^-- @opponents:\s*(.+)$/m', $content, $matches)) {
+            $opponents = trim($matches[1]);
          }
 
          $loads[] = new Load(
             label: $label,
             group: $group,
             file: $file,
-            competitors: $competitors,
+            opponents: $opponents,
          );
       }
 
@@ -89,7 +89,7 @@ class Loads
     * Metadata is extracted from comments:
     *   // @label: <label>
     *   // @group: <group>
-    *   // @competitors: <all|name1,name2>
+    *   // @opponents: <all|name1,name2>
     *
     * @param string $directory Absolute path to loads directory.
     *
@@ -127,17 +127,17 @@ class Loads
             $group = trim($matches[1]);
          }
 
-         // # competitors
-         $competitors = 'all';
-         if (preg_match('/^\/\/ @competitors:\s*(.+)$/m', $content, $matches)) {
-            $competitors = trim($matches[1]);
+         // # opponents
+         $opponents = 'all';
+         if (preg_match('/^\/\/ @opponents:\s*(.+)$/m', $content, $matches)) {
+            $opponents = trim($matches[1]);
          }
 
          $loads[] = new Load(
             label: $label,
             group: $group,
             file: $file,
-            competitors: $competitors,
+            opponents: $opponents,
          );
       }
 

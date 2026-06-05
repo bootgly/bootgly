@@ -24,8 +24,8 @@ use function trim;
 
 class Configs
 {
-   /** @var null|array<string> Competitor names to include (null = all). */
-   public protected(set) null|array $competitors;
+   /** @var null|array<string> Opponent names to include (null = all). */
+   public protected(set) null|array $opponents;
    /** @var null|string Runner name (lowercase). */
    public protected(set) null|string $runner;
    /** @var null|array<int> 1-based load indices to include (null = all). */
@@ -35,18 +35,18 @@ class Configs
 
 
    /**
-    * @param null|array<string> $competitors
+    * @param null|array<string> $opponents
     * @param null|array<int> $loads
     * @param array<string,int> $vary
     */
    private function __construct (
-      null|array $competitors = null,
+      null|array $opponents = null,
       null|string $runner = null,
       null|array $loads = null,
       array $vary = [],
    )
    {
-      $this->competitors = $competitors;
+      $this->opponents = $opponents;
       $this->runner = $runner;
       $this->loads = $loads;
       $this->vary = $vary;
@@ -59,22 +59,22 @@ class Configs
     */
    public static function parse (array $options): self
    {
-      $competitors = null;
+      $opponents = null;
       $runner = null;
       $loads = null;
       $vary = [];
 
-      if (isset($options['competitors'])) {
-         $competitors = [];
+      if (isset($options['opponents'])) {
+         $opponents = [];
 
-         foreach (explode(',', (string) $options['competitors']) as $competitor) {
-            $normalized = self::normalize($competitor);
+         foreach (explode(',', (string) $options['opponents']) as $opponent) {
+            $normalized = self::normalize($opponent);
             if ($normalized !== '') {
-               $competitors[] = $normalized;
+               $opponents[] = $normalized;
             }
          }
 
-         $competitors = $competitors !== [] ? array_values(array_unique($competitors)) : null;
+         $opponents = $opponents !== [] ? array_values(array_unique($opponents)) : null;
       }
 
       if (isset($options['runner'])) {
@@ -94,11 +94,11 @@ class Configs
          }
       }
 
-      return new self($competitors, $runner, $loads, $vary);
+      return new self($opponents, $runner, $loads, $vary);
    }
 
    /**
-    * Normalize a competitor name to a slug for comparison.
+    * Normalize a opponent name to a slug for comparison.
     * e.g. "Swoole (Base)" → "swoole-base", "Workerman" → "workerman"
     */
    public static function slug (string $name): string
@@ -120,12 +120,12 @@ class Configs
    }
 
    /**
-    * Normalize competitor filter values passed via CLI.
+    * Normalize opponent filter values passed via CLI.
     * Accepts known aliases/typos to avoid silent skips.
     */
-   public static function normalize (string $competitor): string
+   public static function normalize (string $opponent): string
    {
-      $slug = self::slug($competitor);
+      $slug = self::slug($opponent);
       if ($slug === '') {
          return '';
       }

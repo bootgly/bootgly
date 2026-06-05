@@ -117,9 +117,9 @@ Bootgly/ACI/Tests/
 │
 ├── Benchmark.php                          # class — micro-benchmark (start/stop/format/output)
 ├── Benchmark/                             # ── Benchmark framework ──
-│   ├── Competitor.php                     # class — competitor VO (name, script, version, workers)
+│   ├── Opponent.php                     # class — opponent VO (name, script, version, workers)
 │   ├── Result.php                         # class — result VO (time, memory, rps, latency, transfer)
-│   ├── Runner.php                         # abstract class — add(Competitor), abstract run()
+│   ├── Runner.php                         # abstract class — add(Opponent), abstract run()
 │   ├── Runner/
 │   │   ├── Code.php                       # class — code benchmark runner (proc_open → JSON)
 │   │   ├── Wrk.php                        # class — HTTP server benchmark runner (wrk)
@@ -451,8 +451,8 @@ classDiagram
 
     class BenchmarkRunner {
         <<abstract Runner>>
-        #competitors: array
-        +add(Competitor) void
+        #opponents: array
+        +add(Opponent) void
         +run(filter) array
     }
 
@@ -472,11 +472,11 @@ classDiagram
     }
     Wrk --|> BenchmarkRunner : extends
 
-    class Competitor {
+    class Opponent {
         +name / script / version: string
         +workers: int│null
     }
-    BenchmarkRunner --> Competitor : uses
+    BenchmarkRunner --> Opponent : uses
 
     class BenchmarkResult {
         <<Result>>
