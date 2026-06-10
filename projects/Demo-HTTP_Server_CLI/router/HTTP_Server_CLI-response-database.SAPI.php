@@ -157,6 +157,7 @@ return static function
    yield $Router->route('/deferred/kv', function (Request $Request, Response $Response) {
       return $Response->defer(function (Response $Response): void {
          try {
+            /** @var \Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\KV $KV */
             $KV = $Response->KV;
 
             $KV->fetch('SET', ['bootgly:demo', 'async-kv']);
@@ -179,6 +180,7 @@ return static function
    yield $Router->route('/deferred/kv/sequential', function (Request $Request, Response $Response) {
       return $Response->defer(function (Response $Response): void {
          try {
+            /** @var \Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\KV $KV */
             $KV = $Response->KV;
             $values = [];
 
