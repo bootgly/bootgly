@@ -58,6 +58,9 @@ class Header extends HeaderBase
    protected array $queued;
    protected int $built;
    protected bool $dirty;
+   // # Date header value, shared by every response and rebuilt once per second
+   private static int $stamped = 0;
+   private static string $stamp = '';
 
    public Cookies $Cookies;
 
@@ -334,6 +337,25 @@ class Header extends HeaderBase
       return true;
    }
 
+   /**
+    * Format the RFC 9110 `Date` header value, cached per second.
+    *
+    * Dirty responses rebuild their header block on every request, so the
+    * shared formatted string saves one gmdate() call per response.
+    */
+   private static function stamp (): string
+   {
+      $now = time();
+      // ?
+      if ($now !== self::$stamped) {
+         self::$stamped = $now;
+         self::$stamp = gmdate('D, d M Y H:i:s \G\M\T');
+      }
+
+      // :
+      return self::$stamp;
+   }
+
    public function build (): true // @ raw
    {
       // ?
@@ -350,7 +372,7 @@ class Header extends HeaderBase
          // Preset only
          foreach ($this->preset as $name => $value) {
             $value = ($value === true) ? match ($name) {
-               'Date' => gmdate('D, d M Y H:i:s \G\M\T'),
+               'Date' => self::stamp(),
                default => ''
             } : (string) $value;
 
@@ -376,7 +398,7 @@ class Header extends HeaderBase
       foreach ($fields as $name => $value) {
          // Dynamic fields
          $value = ($value === true) ? match ($name) {
-            'Date' => gmdate('D, d M Y H:i:s \G\M\T'),
+            'Date' => self::stamp(),
             default => ''
          } : (string) $value;
 
