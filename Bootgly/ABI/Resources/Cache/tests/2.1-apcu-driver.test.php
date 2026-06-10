@@ -8,7 +8,7 @@ use Bootgly\ACI\Tests\Suite\Test\Specification;
 
 return new Specification(
    description: 'Cache(APCu): store/fetch, check, increment and tag invalidation (requires ext-apcu)',
-   skip: extension_loaded('apcu') === false,
+   skip: extension_loaded('apcu') === false || apcu_enabled() === false,
    test: function () {
       $prefix = 'apcu-test-' . uniqid() . ':';
       $Cache = new Cache(['driver' => 'apcu', 'prefix' => $prefix]);
