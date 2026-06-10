@@ -175,21 +175,31 @@ abstract class Benchmark
 
    public static function output (null|string $tag = null): void
    {
-      // ?!
-      if (!$tag && !self::$tag) {
-         return;
-      }
-      $tag ??= self::$tag;
-
-      // @
       $data = [];
 
-      if (self::$time && isset(self::$results[$tag]['time'])) {
-         $data['time'] = self::$results[$tag]['time'];
-      }
+      // ?: No tag → write the full results map (one entry per benchmarked operation)
+      if ($tag === null) {
+         foreach (self::$results as $label => $result) {
+            $entry = [];
 
-      if (self::$memory && isset(self::$results[$tag]['memory'])) {
-         $data['memory'] = self::$results[$tag]['memory'];
+            if (self::$time) {
+               $entry['time'] = $result['time'];
+            }
+            if (self::$memory) {
+               $entry['memory'] = $result['memory'];
+            }
+
+            $data[$label] = $entry;
+         }
+      }
+      // @ Single tag → flat {time, memory}
+      else {
+         if (self::$time && isset(self::$results[$tag]['time'])) {
+            $data['time'] = self::$results[$tag]['time'];
+         }
+         if (self::$memory && isset(self::$results[$tag]['memory'])) {
+            $data['memory'] = self::$results[$tag]['memory'];
+         }
       }
 
       // @ Output result

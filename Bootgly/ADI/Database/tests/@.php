@@ -51,5 +51,6 @@ return new Suite(
       '8.1-databases-registry',
       '8.2-paradigm-abstract',
       '8.3-kv_driver_fake',
+      '8.5-kv_redis_async',
    ]
 );

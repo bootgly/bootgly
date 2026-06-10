@@ -22,7 +22,7 @@ return new Suites(
       'Bootgly/ABI/IO/FS/File/',
       'Bootgly/ABI/IO/IPC/Pipe/', // ! Testable only individually
       // ? 5
-      #'Bootgly/ABI/Resources/*', // ! Not testable (for now)
+      #'Bootgly/ABI/Resources/*', // ! Registered at the end to keep suite indices stable
       // ? 6
       #'Bootgly/ABI/Templates/Directives/', // ! Not testable directly (part of Template)
       #'Bootgly/ABI/Templates/Iterator/', // ! Not testable (for now)
@@ -70,5 +70,10 @@ return new Suites(
       #'Bootgly/WPI/Nodes/HTTP_Server_CLI/tests/Security/',
       // Fuzz (property-based / structure-aware fuzzing)
       #'Bootgly/WPI/Nodes/HTTP_Server_CLI/tests/Fuzz/',
+
+      // ! Appended last so earlier suite indices stay stable (coverage probes
+      // ! in Bootgly/ACI/Tests/tests hardcode indices 4, 8 and 14-21).
+      'Bootgly/ABI/Data/RESP/',
+      'Bootgly/ABI/Resources/Cache/',
    ]
 );

@@ -1,5 +1,9 @@
 <?php
 
+use function sys_get_temp_dir;
+use function uniqid;
+
+use Bootgly\ABI\Resources\Cache;
 use Bootgly\ACI\Tests\Assertion;
 use Bootgly\ACI\Tests\Assertions;
 use Bootgly\ACI\Tests\Doubles\Fake\Clock;
@@ -8,7 +12,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Middlewares\RateLimit;
 
 
 return new Specification(
-   description: 'It should enforce rate limits per IP with proper headers',
+   description: 'It should enforce rate limits per IP across a shared cache backend',
    test: new Assertions(Case: function (): Generator {
       // !
       $createMocks = require __DIR__ . '/0.mock.php';
@@ -18,16 +22,26 @@ return new Specification(
       $ip = 'test-rate-limit';
       $Clock = new Clock(100);
 
-      RateLimit::reset();
+      // ! Shared counter store driven by the same deterministic clock
+      $dir = sys_get_temp_dir() . '/bootgly-ratelimit-test-' . uniqid();
+      $Cache = new Cache([
+         'driver' => 'file',
+         'path' => $dir,
+         'prefix' => 'ratelimit:',
+         'clock' => static fn (): int => (int) $Clock->now,
+      ]);
+      $Cache->clear();
 
       try {
-         // @ Test 1: First request passes with correct headers
-         [$Request, $Response] = $createMocks(requestProps: ['address' => $ip]);
          $RateLimit = new RateLimit(
             limit: 3,
             window: 60,
-            clock: fn (): float => $Clock->now
+            clock: fn (): float => $Clock->now,
+            Cache: $Cache
          );
+
+         // @ Test 1: First request passes with correct headers
+         [$Request, $Response] = $createMocks(requestProps: ['address' => $ip]);
          $Result = $RateLimit->process($Request, $Response, $passthrough);
          yield new Assertion(
             description: 'First request should pass',
@@ -115,7 +129,7 @@ return new Specification(
             ->assert();
       }
       finally {
-         RateLimit::reset();
+         $Cache->clear();
       }
    })
 );

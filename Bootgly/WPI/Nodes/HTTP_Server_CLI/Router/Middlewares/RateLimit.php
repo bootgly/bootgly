@@ -11,27 +11,22 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Middlewares;
 
 
-use function file_get_contents;
-use function file_put_contents;
-use function is_array;
-use function is_file;
-use function json_decode;
-use function json_encode;
 use function max;
 use function time;
 use Closure;
 
+use Bootgly\ABI\Resources\Cache;
 use Bootgly\API\Workables\Server\Middleware;
 
 
 /**
- * In-memory rate limiter middleware.
+ * Fixed-window rate limiter middleware.
  *
- * ⚠️  MULTI-WORKER LIMITATION: Counters are stored in a static PHP array scoped
- * to each worker process. In a multi-worker deployment, each worker maintains
- * independent counters, effectively multiplying the configured limit by the number
- * of workers. For accurate rate limiting in multi-worker setups, replace this
- * middleware with a shared-backend implementation (Redis, Memcached, etc.).
+ * Counters live in a shared Cache backend (shared-memory by default, or Redis),
+ * so the limit is enforced across every worker process — fixing the historical
+ * per-worker static-array behavior that multiplied the limit by worker count.
+ * Each client's window opens on its first request (counter creation sets the
+ * TTL) and rolls over when that entry expires.
  */
 class RateLimit implements Middleware
 {
@@ -41,27 +36,27 @@ class RateLimit implements Middleware
    public private(set) null|Closure $clock;
 
    // * Data
-   /**
-    * In-memory storage: IP => [count, window_start]
-    *
-    * @var array<string, array{int, int}>
-    */
-   private static array $counters = [];
-
-   // * Metadata
-   private static int $lastPurge = 0;
+   protected Cache $Cache;
 
 
    public function __construct (
       int $limit = 60,
       int $window = 60,
-      null|Closure $clock = null
+      null|Closure $clock = null,
+      null|Cache $Cache = null
    )
    {
       // * Config
       $this->limit = $limit;
       $this->window = $window;
       $this->clock = $clock;
+
+      // * Data
+      $this->Cache = $Cache ?? new Cache([
+         'driver' => 'shared',
+         'prefix' => 'ratelimit:',
+         'clock' => $clock,
+      ]);
    }
 
    public function process (object $Request, object $Response, Closure $next): object
@@ -72,92 +67,29 @@ class RateLimit implements Middleware
          : (int) ($this->clock)();
       $ip = $Request->address; // @phpstan-ignore-line
 
-      // @ Purge expired entries periodically
-      if (($now - self::$lastPurge) >= $this->window) {
-         $this->purge($now);
-      }
+      // @ Consume a request token from the shared counter
+      $count = $this->Cache->increment($ip, 1, $this->window);
+      $remaining = $this->limit - $count;
 
-      // @ Consume a request token
-      $remaining = $this->consume($ip, $now);
+      // @ Window end = counter creation + window (derived from the entry TTL)
+      $TTL = $this->Cache->remain($ip);
+      $reset = $TTL > 0
+         ? $now + $TTL
+         : $now + $this->window;
 
       // @ Set rate limit headers
       $Response->Header->set('X-RateLimit-Limit', (string) $this->limit); // @phpstan-ignore-line
       $Response->Header->set('X-RateLimit-Remaining', (string) max(0, $remaining)); // @phpstan-ignore-line
-      $Response->Header->set('X-RateLimit-Reset', (string) ($this->windowStart($ip) + $this->window)); // @phpstan-ignore-line
+      $Response->Header->set('X-RateLimit-Reset', (string) $reset); // @phpstan-ignore-line
 
       // ? Rate limit exceeded
       if ($remaining < 0) {
-         $Response->Header->set('Retry-After', (string) $this->window); // @phpstan-ignore-line
+         $Response->Header->set('Retry-After', (string) max(1, $reset - $now)); // @phpstan-ignore-line
 
          return $Response(code: 429, body: 'Too Many Requests'); // @phpstan-ignore-line
       }
 
       // :
       return $next($Request, $Response);
-   }
-
-   private function consume (string $key, int $now): int
-   {
-      if (isset(self::$counters[$key]) === false || ($now - self::$counters[$key][1]) >= $this->window) {
-         // @ New window
-         self::$counters[$key] = [1, $now];
-
-         return $this->limit - 1;
-      }
-
-      // @ Increment counter
-      self::$counters[$key][0]++;
-
-      return $this->limit - self::$counters[$key][0];
-   }
-
-   private function windowStart (string $key): int
-   {
-      return self::$counters[$key][1] ?? 0;
-   }
-
-   private function purge (int $now): void
-   {
-      foreach (self::$counters as $key => $entry) {
-         if (($now - $entry[1]) >= $this->window) {
-            unset(self::$counters[$key]);
-         }
-      }
-
-      self::$lastPurge = $now;
-   }
-
-   /**
-    * Reset in-memory counters.
-    */
-   public static function reset (): void
-   {
-      self::$counters = [];
-      self::$lastPurge = 0;
-   }
-
-   /**
-    * Persist counters to file (call on server shutdown).
-    */
-   public static function persist (string $path): void
-   {
-      file_put_contents($path, json_encode(self::$counters));
-   }
-
-   /**
-    * Restore counters from file (call on worker boot).
-    */
-   public static function restore (string $path): void
-   {
-      if (is_file($path)) {
-         $data = file_get_contents($path);
-         if ($data !== false) {
-            $counters = json_decode($data, true);
-            if (is_array($counters)) {
-               /** @var array<string, array{int, int}> $counters */
-               self::$counters = $counters;
-            }
-         }
-      }
    }
 }

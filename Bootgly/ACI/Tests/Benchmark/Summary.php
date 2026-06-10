@@ -305,57 +305,92 @@ class Summary
       else {
          $opponents = array_keys($results);
 
-         // @ Column widths
+         // @ Collect all operation labels (insertion order)
+         $allLabels = [];
+         foreach ($results as $loads) {
+            foreach (array_keys($loads) as $label) {
+               if ( !in_array($label, $allLabels, true) ) {
+                  $allLabels[] = $label;
+               }
+            }
+         }
+
+         // @ Column width (opponent name)
          $nameWidth = 12;
          foreach ($opponents as $name) {
-            $nameWidth = max($nameWidth, strlen($name) + 2);
+            $nameWidth = max($nameWidth, strlen((string) $name) + 2);
          }
 
-         // @ Header
-         $header = str_pad('Opponent', $nameWidth, ' ', STR_PAD_RIGHT)
-            . str_pad('Time', 16, ' ', STR_PAD_RIGHT)
-            . str_pad('Memory', 16, ' ', STR_PAD_RIGHT)
-            . 'Position';
-
-         echo "{$BOLD}  {$header}{$RESET}\n";
-         echo "  " . str_repeat('─', strlen($header) + 4) . "\n";
-
-         // @ Sort by time (ascending)
-         $sorted = [];
-         foreach ($results as $name => $loads) {
-            $sorted[$name] = $loads['default'] ?? new Result;
+         // ?: Single-result table (one row per opponent) — back-compat (Template_Engine, Progress_Bar)
+         if ($allLabels === ['default']) {
+            self::rank($results, 'default', $nameWidth);
          }
-         uasort($sorted, function (Result $a, Result $b) {
-            return ((float) ($a->time ?? PHP_INT_MAX)) <=> ((float) ($b->time ?? PHP_INT_MAX));
-         });
-
-         // # Rows
-         $position = 1;
-         $medals = ['🥇', '🥈', '🥉'];
-
-         foreach ($sorted as $name => $Result) {
-            $time = $Result->time !== null ? $Result->time . 's' : 'N/A';
-            $memory = $Result->memory !== null ? Bytes::format((int) $Result->memory, 2) : 'N/A';
-            $medal = $medals[$position - 1] ?? sprintf('#%d', $position);
-
-            $color = match (true) {
-               $position === 1 => $GREEN,
-               $position === 2 => $YELLOW,
-               default => $RESET,
-            };
-
-            echo $color . "  "
-               . str_pad($name, $nameWidth, ' ', STR_PAD_RIGHT)
-               . str_pad($time, 16, ' ', STR_PAD_RIGHT)
-               . str_pad($memory, 16, ' ', STR_PAD_RIGHT)
-               . $medal
-               . $RESET . "\n";
-
-            $position++;
+         // @ Matrix: one table per operation label, opponents compared per operation
+         else {
+            foreach ($allLabels as $label) {
+               echo self::wrap(self::_MAGENTA_BOLD) . "  ── {$label} ──{$RESET}\n";
+               self::rank($results, $label, $nameWidth);
+            }
          }
-
-         echo "\n";
       }
+   }
+
+   /**
+    * Print a time/memory table for one operation label, opponents ranked fastest-first.
+    *
+    * @param array<string,array<string,Result>> $results
+    */
+   private static function rank (array $results, string $label, int $nameWidth): void
+   {
+      $BOLD   = self::wrap(self::_BOLD_STYLE);
+      $GREEN  = self::wrap(self::_GREEN_FOREGROUND);
+      $YELLOW = self::wrap(self::_YELLOW_FOREGROUND);
+      $RESET  = self::_RESET_FORMAT;
+
+      // @ Header
+      $header = str_pad('Opponent', $nameWidth, ' ', STR_PAD_RIGHT)
+         . str_pad('Time', 16, ' ', STR_PAD_RIGHT)
+         . str_pad('Memory', 16, ' ', STR_PAD_RIGHT)
+         . 'Position';
+
+      echo "{$BOLD}  {$header}{$RESET}\n";
+      echo "  " . str_repeat('─', strlen($header) + 4) . "\n";
+
+      // @ Sort by time (ascending)
+      $sorted = [];
+      foreach ($results as $name => $loads) {
+         $sorted[$name] = $loads[$label] ?? new Result;
+      }
+      uasort($sorted, function (Result $a, Result $b) {
+         return ((float) ($a->time ?? PHP_INT_MAX)) <=> ((float) ($b->time ?? PHP_INT_MAX));
+      });
+
+      // # Rows
+      $position = 1;
+      $medals = ['🥇', '🥈', '🥉'];
+
+      foreach ($sorted as $name => $Result) {
+         $time = $Result->time !== null ? $Result->time . 's' : 'N/A';
+         $memory = $Result->memory !== null ? Bytes::format((int) $Result->memory, 2) : 'N/A';
+         $medal = $medals[$position - 1] ?? sprintf('#%d', $position);
+
+         $color = match (true) {
+            $position === 1 => $GREEN,
+            $position === 2 => $YELLOW,
+            default => $RESET,
+         };
+
+         echo $color . "  "
+            . str_pad((string) $name, $nameWidth, ' ', STR_PAD_RIGHT)
+            . str_pad($time, 16, ' ', STR_PAD_RIGHT)
+            . str_pad($memory, 16, ' ', STR_PAD_RIGHT)
+            . $medal
+            . $RESET . "\n";
+
+         $position++;
+      }
+
+      echo "\n";
    }
 
    /**
