@@ -21,19 +21,15 @@ use const LOCK_UN;
 use function bin2hex;
 use function chmod;
 use function fclose;
-use function file_get_contents;
-use function file_put_contents;
 use function flock;
 use function fopen;
 use function ftruncate;
 use function fwrite;
-use function glob;
 use function hash;
 use function hash_equals;
 use function hash_hmac;
 use function is_array;
 use function is_dir;
-use function is_file;
 use function is_int;
 use function is_string;
 use function is_writable;
@@ -41,28 +37,38 @@ use function json_decode;
 use function json_encode;
 use function mkdir;
 use function random_bytes;
-use function rename;
 use function rewind;
 use function str_contains;
 use function stream_get_contents;
 use function strlen;
 use function substr;
 use function time;
-use function unlink;
 use Closure;
 use InvalidArgumentException;
 use JsonException;
 use RuntimeException;
 
+use Bootgly\ABI\Resources\Cache as Storage;
+
 
 /**
- * File-backed JWT cache shared by workers on the same filesystem.
+ * JWT cache backed by the Bootgly Cache facade.
+ *
+ * Records keep Vault's HMAC-SHA256 envelope (`mac . {"expires","value"}`), so
+ * the store never holds plain trusted state: a record altered in the storage
+ * backend fails MAC verification and reads as a miss. The default backend is
+ * the `file` driver rooted at the Vault path (same-host worker sharing, as
+ * before); passing a Redis-backed Cache enables fleet-wide token revocation —
+ * inject a shared `$secret` in that case, since the default secret is derived
+ * per host. Mutual exclusion (lock/claim/take) uses a local lock file, so
+ * compare-and-set sequences are serialized per host.
  */
 class Vault implements Cache
 {
    // * Config
    public private(set) string $path;
    public private(set) string $prefix;
+   public private(set) Storage $Storage;
 
    // * Data
    private string $secret = '';
@@ -78,20 +84,47 @@ class Vault implements Cache
 
 
    /**
-    * Create a file-backed JWT cache.
+    * Create a JWT cache on a storage backend.
+    *
+    * @param null|string|Storage $storage Directory for the default file
+    * backend, or a prepared Cache facade (any driver).
+    * @param string $prefix Storage key prefix.
+    * @param null|string $secret Shared HMAC secret (>= 32 bytes); null derives
+    * a per-host secret file.
     */
-   public function __construct (null|string $path = null, string $prefix = 'jwt_')
+   public function __construct (
+      null|string|Storage $storage = null,
+      string $prefix = 'jwt_',
+      null|string $secret = null
+   )
    {
+      // ?
       if ($prefix === '') {
          throw new InvalidArgumentException('JWT cache file prefix must not be empty.');
       }
       if (str_contains($prefix, DIRECTORY_SEPARATOR)) {
          throw new InvalidArgumentException('JWT cache file prefix must not contain directory separators.');
       }
+      if ($secret !== null && strlen($secret) < 32) {
+         throw new InvalidArgumentException('JWT cache secret must have at least 32 bytes.');
+      }
 
       // * Config
-      $this->path = $this->prepare($path ?? BOOTGLY_WORKING_DIR . 'workdata/security/jwt');
+      $this->path = $this->prepare(
+         is_string($storage)
+            ? $storage
+            : BOOTGLY_WORKING_DIR . 'workdata/security/jwt'
+      );
       $this->prefix = $prefix;
+      $this->Storage = $storage instanceof Storage
+         ? $storage
+         : new Storage([
+            'driver' => 'file',
+            'path' => $this->path
+         ]);
+
+      // * Data
+      $this->secret = $secret ?? '';
    }
 
    /**
@@ -121,7 +154,7 @@ class Vault implements Cache
    {
       $Lock = $this->share(LOCK_SH);
       try {
-         return $this->load($this->resolve($key));
+         return $this->load($key);
       }
       finally {
          $this->release($Lock);
@@ -137,7 +170,7 @@ class Vault implements Cache
 
       $Lock = $this->share(LOCK_EX);
       try {
-         return $this->put($this->resolve($key), $value, $ttl);
+         return $this->put($key, $value, $ttl);
       }
       finally {
          $this->release($Lock);
@@ -153,12 +186,11 @@ class Vault implements Cache
 
       $Lock = $this->share(LOCK_EX);
       try {
-         $file = $this->resolve($key);
-         if ($this->load($file) !== null) {
+         if ($this->load($key) !== null) {
             return false;
          }
 
-         return $this->put($file, $value, $ttl);
+         return $this->put($key, $value, $ttl);
       }
       finally {
          $this->release($Lock);
@@ -172,9 +204,8 @@ class Vault implements Cache
    {
       $Lock = $this->share(LOCK_EX);
       try {
-         $file = $this->resolve($key);
-         $value = $this->load($file);
-         if (is_file($file) && unlink($file) === false) {
+         $value = $this->load($key);
+         if ($this->Storage->delete($this->resolve($key)) === false) {
             return null;
          }
 
@@ -192,12 +223,7 @@ class Vault implements Cache
    {
       $Lock = $this->share(LOCK_EX);
       try {
-         $file = $this->resolve($key);
-         if (is_file($file)) {
-            return unlink($file);
-         }
-
-         return true;
+         return $this->Storage->delete($this->resolve($key));
       }
       finally {
          $this->release($Lock);
@@ -211,25 +237,7 @@ class Vault implements Cache
    {
       $Lock = $this->share(LOCK_EX);
       try {
-         $files = glob($this->path . $this->prefix . '[a-f0-9]*');
-         if ($files === false) {
-            return false;
-         }
-         foreach ($files as $file) {
-            if ($this->sweep($file) === false) {
-               return false;
-            }
-         }
-
-         $temps = glob($this->path . $this->prefix . '.tmp.*');
-         if ($temps === false) {
-            return false;
-         }
-         foreach ($temps as $file) {
-            if (is_file($file) && unlink($file) === false) {
-               return false;
-            }
-         }
+         $this->Storage->purge();
 
          return true;
       }
@@ -249,15 +257,11 @@ class Vault implements Cache
    }
 
    /**
-    * Read and validate a cache file.
+    * Read and validate a stored record.
     */
-   private function load (string $file): null|string
+   private function load (string $key): null|string
    {
-      if (is_file($file) === false) {
-         return null;
-      }
-
-      $data = file_get_contents($file);
+      $data = $this->Storage->fetch($this->resolve($key));
       if (is_string($data) === false || strlen($data) < self::MAC_LENGTH) {
          return null;
       }
@@ -292,21 +296,13 @@ class Vault implements Cache
    }
 
    /**
-    * Remove an invalid or expired cache file.
-    */
-   private function sweep (string $file): bool
-   {
-      if (is_file($file) === false || $this->load($file) !== null) {
-         return true;
-      }
-
-      return unlink($file);
-   }
-
-   /**
     * Persist a cache value.
+    *
+    * The expiry rides inside the HMAC-protected payload (the storage TTL alone
+    * is not tamper-protected) and is also handed to the storage backend so
+    * expired records are evicted natively.
     */
-   private function put (string $file, string $value, int $ttl): bool
+   private function put (string $key, string $value, int $ttl): bool
    {
       try {
          $payload = json_encode([
@@ -319,30 +315,18 @@ class Vault implements Cache
       }
 
       $mac = hash_hmac('sha256', $payload, $this->derive());
-      $temp = $this->path . $this->prefix . '.tmp.' . bin2hex(random_bytes(8));
 
-      if (file_put_contents($temp, $mac . $payload) === false) {
-         return false;
-      }
-      chmod($temp, 0600);
-
-      if (rename($temp, $file) === false) {
-         if (is_file($temp)) {
-            unlink($temp);
-         }
-
-         return false;
-      }
-
-      return true;
+      return $this->Storage->store($this->resolve($key), $mac . $payload, $ttl);
    }
 
    /**
-    * Build a safe filename for a cache key.
+    * Build a safe storage key for a cache key.
     */
    private function resolve (string $key): string
    {
-      return $this->path . $this->prefix . hash('sha256', $key);
+      $hash = hash('sha256', $key);
+
+      return "{$this->prefix}{$hash}";
    }
 
    /**
@@ -354,7 +338,7 @@ class Vault implements Cache
     */
    private function open (int $mode)
    {
-      $Lock = fopen($this->path . $this->prefix . '.lock', 'c');
+      $Lock = fopen("{$this->path}{$this->prefix}.lock", 'c');
       if ($Lock === false) {
          throw new RuntimeException('JWT cache lock could not be acquired.');
       }
@@ -440,7 +424,7 @@ class Vault implements Cache
          return $this->secret;
       }
 
-      $file = $this->path . $this->prefix . '.secret';
+      $file = "{$this->path}{$this->prefix}.secret";
       $Secret = fopen($file, 'c+');
       if ($Secret === false) {
          throw new RuntimeException('JWT cache secret could not be opened.');

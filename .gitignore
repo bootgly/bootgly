@@ -71,6 +71,7 @@ projects/**/configs/**/.env.*
 /workdata/cache/*
 /workdata/pids/*
 /workdata/logs/*
+/workdata/security/*
 /workdata/temp/*
 /workdata/tests/*
 /workdata/tests/snapshots/*

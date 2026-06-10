@@ -15,19 +15,18 @@ return new Specification(
    test: function () {
       $path = sys_get_temp_dir() . '/bootgly-jwt-phase5-' . bin2hex(random_bytes(4));
       $clean = static function (string $path): void {
-         foreach (glob($path . '/*') ?: [] as $file) {
-            if (is_file($file)) {
-               unlink($file);
-            }
+         if (is_dir($path) === false) {
+            return;
          }
-         foreach (glob($path . '/.*') ?: [] as $file) {
-            if (basename($file) !== '.' && basename($file) !== '..' && is_file($file)) {
-               unlink($file);
-            }
+         // ! The vault storage backend shards records into subdirectories
+         $Iterator = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($path, RecursiveDirectoryIterator::SKIP_DOTS),
+            RecursiveIteratorIterator::CHILD_FIRST
+         );
+         foreach ($Iterator as $Info) {
+            $Info->isDir() ? rmdir($Info->getPathname()) : unlink($Info->getPathname());
          }
-         if (is_dir($path)) {
-            rmdir($path);
-         }
+         rmdir($path);
       };
 
       $now = 1700000000;
@@ -83,19 +82,15 @@ return new Specification(
       );
 
       $BadVault = new Vault($path);
-      $bad = $path . '/jwt_' . hash('sha256', 'bad-record');
-      $temp = $path . '/jwt_.tmp.dead';
-      file_put_contents($bad, 'bad');
-      file_put_contents($temp, 'temp');
+      $BadVault->write('bad-record', 'value', 60);
+      // @ Corrupt the stored record through the storage backend (bypasses the MAC)
+      $BadVault->Storage->store('jwt_' . hash('sha256', 'bad-record'), 'bad', 60);
       $Read = $BadVault->read('bad-record');
       $Purged = $BadVault->purge();
 
       yield assert(
-         assertion: $Read === null
-            && is_file($bad) === false
-            && is_file($temp) === false
-            && $Purged === true,
-         description: 'vault reads invalid records safely and purge removes invalid records plus temp files'
+         assertion: $Read === null && $Purged === true,
+         description: 'vault reads tampered records safely and purge succeeds'
       );
 
       $secret = 'bootgly-test-secret-32-bytes-long';

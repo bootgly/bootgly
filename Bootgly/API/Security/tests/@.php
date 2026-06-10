@@ -24,5 +24,6 @@ return new Suite(
       '1.8-authorization',
       '1.9-authorization_rbac',
       '1.10-authorization_rbac_cache',
+      '1.11-jwt_vault_storage',
    ]
 );

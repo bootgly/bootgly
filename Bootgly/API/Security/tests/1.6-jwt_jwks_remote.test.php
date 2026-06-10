@@ -113,19 +113,18 @@ return new Specification(
 
       $path = sys_get_temp_dir() . '/bootgly-jwks-cache-' . bin2hex(random_bytes(4));
       $clean = static function (string $path): void {
-         foreach (glob($path . '/*') ?: [] as $file) {
-            if (is_file($file)) {
-               unlink($file);
-            }
+         if (is_dir($path) === false) {
+            return;
          }
-         foreach (glob($path . '/.*') ?: [] as $file) {
-            if (basename($file) !== '.' && basename($file) !== '..' && is_file($file)) {
-               unlink($file);
-            }
+         // ! The vault storage backend shards records into subdirectories
+         $Iterator = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($path, RecursiveDirectoryIterator::SKIP_DOTS),
+            RecursiveIteratorIterator::CHILD_FIRST
+         );
+         foreach ($Iterator as $Info) {
+            $Info->isDir() ? rmdir($Info->getPathname()) : unlink($Info->getPathname());
          }
-         if (is_dir($path)) {
-            rmdir($path);
-         }
+         rmdir($path);
       };
       $sharedCalls = 0;
       $SharedA = new Remote(
