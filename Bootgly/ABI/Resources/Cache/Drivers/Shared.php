@@ -86,12 +86,23 @@ class Shared extends Driver
       $this->attach();
 
       $id = crc32($key);
-      // ?
-      if (shm_has_var($this->Segment, $id) === false) {
-         return null;
+
+      // ! Reads must hold the semaphore: a concurrent shm_put_var /
+      //   shm_remove_var from another worker mutates the segment's variable
+      //   table mid-read, making shm_get_var fail with corrupted data.
+      sem_acquire($this->Semaphore);
+      try {
+         // ?
+         if (shm_has_var($this->Segment, $id) === false) {
+            return null;
+         }
+
+         $record = shm_get_var($this->Segment, $id);
+      }
+      finally {
+         sem_release($this->Semaphore);
       }
 
-      $record = shm_get_var($this->Segment, $id);
       // ? Missing, collided or expired (lazy — purge() reclaims space)
       if (is_array($record) === false || ($record['k'] ?? null) !== $key) {
          return null;
@@ -193,12 +204,21 @@ class Shared extends Driver
       $this->attach();
 
       $id = crc32($key);
-      // ?
-      if (shm_has_var($this->Segment, $id) === false) {
-         return false;
+
+      // ! Locked read — see fetch()
+      sem_acquire($this->Semaphore);
+      try {
+         // ?
+         if (shm_has_var($this->Segment, $id) === false) {
+            return false;
+         }
+
+         $record = shm_get_var($this->Segment, $id);
+      }
+      finally {
+         sem_release($this->Semaphore);
       }
 
-      $record = shm_get_var($this->Segment, $id);
       if (is_array($record) === false || ($record['k'] ?? null) !== $key) {
          return false;
       }
@@ -262,12 +282,20 @@ class Shared extends Driver
       $now = $this->now;
       $id = crc32($key);
 
-      // ?
-      if (shm_has_var($this->Segment, $id) === false) {
-         return -2;
+      // ! Locked read — see fetch()
+      sem_acquire($this->Semaphore);
+      try {
+         // ?
+         if (shm_has_var($this->Segment, $id) === false) {
+            return -2;
+         }
+
+         $record = shm_get_var($this->Segment, $id);
+      }
+      finally {
+         sem_release($this->Semaphore);
       }
 
-      $record = shm_get_var($this->Segment, $id);
       if (is_array($record) === false || ($record['k'] ?? null) !== $key) {
          return -2;
       }

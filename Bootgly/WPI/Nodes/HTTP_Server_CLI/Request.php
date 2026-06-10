@@ -334,6 +334,12 @@ class Request
    }
    // / Session
    /**
+    * True once the lazy `$Session` property has been built for this request.
+    * Lets the server test for an active session without triggering the
+    * lazy-construction get hook (which would create one on every request).
+    */
+   public private(set) bool $sessioned = false;
+   /**
     * The Request Session.
     */
    public private(set) null|Session $Session = null {
@@ -373,6 +379,7 @@ class Request
             }
 
             $this->Session = $Session;
+            $this->sessioned = true;
          }
 
          return $this->Session;
@@ -669,6 +676,7 @@ class Request
       $this->tokenHeaders = [];
 
       $this->Session = null;
+      $this->sessioned = false;
 
       // ! Deep-clone mutable sub-objects so handler/middleware mutations on
       //   this Request (e.g. `$Request->Body->raw = ...`) do NOT contaminate
@@ -695,6 +703,7 @@ class Request
       $this->tokenHeaders = [];
 
       $this->Session = null;
+      $this->sessioned = false;
 
       // @ Invalidate URI-derived caches (safe: URI is re-set on cache miss,
       // but on cache hit the cached Request keeps its URI so these stay valid).

@@ -94,6 +94,12 @@ class Encoder_Testing extends Encoders
          Throwables::debug($Throwable);
       }
       finally {
+         // @ Persist the session before the response leaves the server —
+         //   mirrors Encoder_ (deterministic save; __destruct is GC-bound).
+         if ($Request->sessioned) {
+            $Request->Session?->save();
+         }
+
          // ?: Check if Response is deferred (async Fiber)
          if ($Response->deferred) {
             return '';

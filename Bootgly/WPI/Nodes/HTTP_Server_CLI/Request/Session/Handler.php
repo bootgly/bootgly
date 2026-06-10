@@ -11,14 +11,14 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Session;
 
 
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Session\Handlers\File;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Session\Handlers\Cache;
 
 
 class Handler
 {
    // * Config
    /** @var class-string<Handling> */
-   public static string $class = File::class;
+   public static string $class = Cache::class;
    public static mixed $config = null;
 
    // * Data

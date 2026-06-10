@@ -104,6 +104,13 @@ class Encoder_ extends Encoders
          Throwables::debug($Throwable);
       }
       finally {
+         // @ Persist the session before the response leaves the server —
+         //   __destruct timing is GC-bound (reference cycles can defer it
+         //   past subsequent requests), so save explicitly per request.
+         if ($Request->sessioned) {
+            $Request->Session?->save();
+         }
+
          // ?: Check if Response is deferred (async Fiber)
          if ($Response->deferred) {
             return '';

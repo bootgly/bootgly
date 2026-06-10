@@ -11,10 +11,12 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Session;
 
 
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Session\Handlers\Cache;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Session\Handlers\File;
 
 
 enum Handlers : string
 {
+   case Cache = Cache::class;
    case File = File::class;
 }

@@ -260,7 +260,8 @@ class Session
       // @ Update Set-Cookie header on current response
       $name = static::$name;
       $Cookie = new Cookie($name, $newId);
-      $Cookie->expiration = static::$cookieLifetime;
+      // ? Lifetime 0 = browser-session cookie (omit Max-Age) — PHP setcookie semantics
+      $Cookie->expiration = static::$cookieLifetime > 0 ? static::$cookieLifetime : null;
       $Cookie->path = static::$cookiePath;
       $Cookie->domain = static::$domain;
       $Cookie->secure = static::$secure;
@@ -289,7 +290,8 @@ class Session
       }
 
       $Cookie = new Cookie(static::$name, $this->id);
-      $Cookie->expiration = static::$cookieLifetime;
+      // ? Lifetime 0 = browser-session cookie (omit Max-Age) — PHP setcookie semantics
+      $Cookie->expiration = static::$cookieLifetime > 0 ? static::$cookieLifetime : null;
       $Cookie->path = static::$cookiePath;
       $Cookie->domain = static::$domain;
       $Cookie->secure = static::$secure;
@@ -340,6 +342,34 @@ class Session
       return array_key_exists($name, $this->data);
    }
 
+   /**
+    * Persist the session to the handler (or destroy it when emptied).
+    *
+    * Called by the server right before the response is encoded so that
+    * persistence is deterministic — `__destruct` timing is GC-bound
+    * (reference cycles can defer it past subsequent requests) and remains
+    * only as a safety net.
+    *
+    * @return void
+    */
+   public function save (): void
+   {
+      // ?
+      if ($this->needSave === false || Handler::$instance === null) {
+         return;
+      }
+
+      // @
+      if (empty($this->data)) {
+         Handler::$instance->destroy($this->id);
+      }
+      else {
+         Handler::$instance->write($this->id, ($this->serializer[0])($this->data));
+      }
+
+      $this->needSave = false;
+   }
+
    // ---
 
    /**
@@ -388,13 +418,9 @@ class Session
          return;
       }
 
-      // @ save
+      // @ Safety net — the server normally persists via save() pre-response
       if ($this->needSave && Handler::$instance) {
-         if (empty($this->data)) {
-            Handler::$instance->destroy($this->id);
-         } else {
-            Handler::$instance->write($this->id, ($this->serializer[0])($this->data));
-         }
+         $this->save();
       } elseif (static::$autoUpdateTimestamp) {
          // ?
          if (Handler::$instance !== null) {

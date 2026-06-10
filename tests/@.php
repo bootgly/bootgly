@@ -75,5 +75,6 @@ return new Suites(
       // ! in Bootgly/ACI/Tests/tests hardcode indices 4, 8 and 14-21).
       'Bootgly/ABI/Data/RESP/',
       'Bootgly/ABI/Resources/Cache/',
+      'Bootgly/WPI/Nodes/HTTP_Server_CLI/Request/Session/',
    ]
 );
