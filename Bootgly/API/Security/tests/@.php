@@ -23,5 +23,6 @@ return new Suite(
       '1.7-jwt_lifecycle',
       '1.8-authorization',
       '1.9-authorization_rbac',
+      '1.10-authorization_rbac_cache',
    ]
 );
