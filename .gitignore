@@ -84,3 +84,4 @@ projects/**/configs/**/.env.*
 .github/hooks/*
 .github/context-mode/*
 .vscode/mcp.json
+graphify-out/*

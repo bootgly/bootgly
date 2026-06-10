@@ -163,8 +163,17 @@ class Connections implements WPI\Connections
       self::$Connections[(int) $Socket] = $Connection;
 
       // @ Add Connection Data read to Event loop
-      Server::$Event->add($Socket, Server::$Event::EVENT_READ, $Connection);
+      $added = Server::$Event->add($Socket, Server::$Event::EVENT_READ, $Connection);
       #Server::$Event->add($Socket, Server::$Event::EVENT_WRITE, $Connection);
+
+      // ? Event loop full (select FD ceiling): shed the connection — an accepted
+      //   socket that is never registered would stay ESTABLISHED and unread forever
+      if ($added === false) {
+         self::$errors['connection']++;
+         $this->close($Socket);
+
+         return false;
+      }
 
       return true;
    }
