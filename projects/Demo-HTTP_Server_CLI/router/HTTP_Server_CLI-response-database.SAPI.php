@@ -146,8 +146,88 @@ return static function
             '/deferred/database/error',
             '/deferred/database/pool',
             '/deferred/database/sleep',
+            '/deferred/kv',
+            '/deferred/kv/sequential',
+            '/deferred/kv/pipeline',
          ],
       ]);
+   }, GET);
+
+   // @ Async KV (Redis) — single command
+   yield $Router->route('/deferred/kv', function (Request $Request, Response $Response) {
+      return $Response->defer(function (Response $Response): void {
+         try {
+            $KV = $Response->KV;
+
+            $KV->fetch('SET', ['bootgly:demo', 'async-kv']);
+
+            $Response->code(200)->JSON->send([
+               'status' => 'ok',
+               'value' => $KV->fetch('GET', ['bootgly:demo']),
+            ]);
+         }
+         catch (Throwable $Throwable) {
+            $Response->code(500)->JSON->send([
+               'status' => 'exception',
+               'message' => $Throwable->getMessage(),
+            ]);
+         }
+      });
+   }, GET);
+
+   // @ Async KV — N sequential round-trips (one await per command)
+   yield $Router->route('/deferred/kv/sequential', function (Request $Request, Response $Response) {
+      return $Response->defer(function (Response $Response): void {
+         try {
+            $KV = $Response->KV;
+            $values = [];
+
+            for ($i = 0; $i < 8; $i++) {
+               $values[] = $KV->fetch('GET', ['bootgly:demo']);
+            }
+
+            $Response->code(200)->JSON->send([
+               'status' => 'ok',
+               'values' => $values,
+            ]);
+         }
+         catch (Throwable $Throwable) {
+            $Response->code(500)->JSON->send([
+               'status' => 'exception',
+               'message' => $Throwable->getMessage(),
+            ]);
+         }
+      });
+   }, GET);
+
+   // @ Async KV — N commands pipelined on one connection, drained together
+   yield $Router->route('/deferred/kv/pipeline', function (Request $Request, Response $Response) {
+      return $Response->defer(function (Response $Response): void {
+         try {
+            $KV = $Response->KV;
+            $Operations = [];
+
+            for ($i = 0; $i < 8; $i++) {
+               $Operations[] = $KV->command('GET', ['bootgly:demo']);
+            }
+
+            $values = [];
+            foreach ($KV->drain($Operations) as $Operation) {
+               $values[] = $Operation->error ?? $Operation->response;
+            }
+
+            $Response->code(200)->JSON->send([
+               'status' => 'ok',
+               'values' => $values,
+            ]);
+         }
+         catch (Throwable $Throwable) {
+            $Response->code(500)->JSON->send([
+               'status' => 'exception',
+               'message' => $Throwable->getMessage(),
+            ]);
+         }
+      });
    }, GET);
 
    // @ PostgreSQL effective config

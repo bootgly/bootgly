@@ -159,17 +159,22 @@ class Database extends Resource implements Awaiting, Scheduling
    public function drain (array $Operations): array
    {
       while (true) {
-         $waiting = null;
-         $pending = false;
-
          foreach ($Operations as $id => $Operation) {
             if ($Operation->finished) {
                continue;
             }
 
-            $Operation = $this->Database->advance($Operation);
-            $Operations[$id] = $Operation;
+            $Operations[$id] = $this->Database->advance($Operation);
+         }
 
+         // ! Re-scan AFTER all advances: co-located operations share a
+         //   connection, so advancing a later sibling may have finished
+         //   operations already counted as pending — parking on that stale
+         //   snapshot would suspend the Fiber with nothing left in flight.
+         $waiting = null;
+         $pending = false;
+
+         foreach ($Operations as $Operation) {
             if ($Operation->finished === false) {
                $pending = true;
                $waiting ??= $Operation->Readiness;

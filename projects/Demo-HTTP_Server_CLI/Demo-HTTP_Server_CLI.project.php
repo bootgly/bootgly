@@ -11,12 +11,14 @@
 namespace projects\Demo_HTTP_Server_CLI;
 
 
-use const Bootgly\CLI;
+use function defined;
 use function getenv;
 use function intdiv;
 use function shell_exec;
 use RuntimeException;
 
+use const Bootgly\CLI;
+use Bootgly\ADI\Databases\KV;
 use Bootgly\ADI\Databases\SQL;
 use Bootgly\API\Endpoints\Server\Modes;
 use Bootgly\API\Environment\Configs;
@@ -27,6 +29,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Events;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\Database as DatabaseResource;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\KV as KVResource;
 
 
 return new Project(
@@ -78,6 +81,26 @@ return new Project(
          return new DatabaseResource($Database);
       };
 
+      $KVResource = static function (object $Context): KVResource {
+         static $KV = null;
+
+         if ($Context instanceof Response === false) {
+            throw new RuntimeException('KV response resource expects a Response context.');
+         }
+
+         if ($KV instanceof KV === false) {
+            // ! Single connection per worker: pending commands pipeline on it
+            $KV = new KV([
+               'driver' => 'redis',
+               'host' => getenv('REDIS_HOST') ?: '127.0.0.1',
+               'port' => getenv('REDIS_PORT') ? (int) getenv('REDIS_PORT') : 6379,
+               'pool' => ['min' => 0, 'max' => 1],
+            ]);
+         }
+
+         return new KVResource($KV);
+      };
+
       $HTTP_Server_CLI = new HTTP_Server_CLI(Mode: match (true) {
          isset($options['i']) => Modes::Interactive,
          isset($options['m']) => Modes::Monitor,
@@ -89,6 +112,7 @@ return new Project(
          workers: 1,
          responseResources: [
             'Database' => $DatabaseResource,
+            'KV' => $KVResource,
          ],
          // requestMaxFileSize: 500 * 1024 * 1024,        // 500 MB (default) — max size per uploaded file part
          // requestMaxBodySize: 10 * 1024 * 1024,         // 10 MB (default) — max total non-multipart body

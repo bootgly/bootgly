@@ -17,5 +17,6 @@ return new Suite(
    suiteName: __NAMESPACE__,
    tests: [
       '1.1-database_resource',
+      '1.2-kv_resource',
    ]
 );
