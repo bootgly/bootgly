@@ -76,5 +76,6 @@ return new Suites(
       'Bootgly/ABI/Data/RESP/',
       'Bootgly/ABI/Resources/Cache/',
       'Bootgly/WPI/Nodes/HTTP_Server_CLI/Request/Session/',
+      'Bootgly/ABI/Events/',
    ]
 );
