@@ -15,12 +15,14 @@ use Generator;
 use Throwable;
 
 use Bootgly\ABI\Debugging\Data\Throwables;
+use Bootgly\ABI\Events\Emitter;
 use Bootgly\API\Workables\Server as SAPI;
 use Bootgly\API\Workables\Server\Middlewares;
 use Bootgly\WPI\Endpoints\Servers\Packages;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages as TCPPackages;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI as Server;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Events as RequestEvents;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 
 
@@ -46,6 +48,10 @@ class Encoder_ extends Encoders
       if ($Request->Body->waiting) {
          return '';
       }
+
+      // @ Events — request fully decoded (guarded: zero-alloc when no listeners)
+      $Emitter = Emitter::$Instance;
+      $Emitter->check(RequestEvents::Received) && $Emitter->emit(RequestEvents::Received, $Request);
 
       // @ Reset Response state and bind per-request context.
       $Response->reset($Packages, $Request);
@@ -130,6 +136,9 @@ class Encoder_ extends Encoders
          if ($Request->hasFiles) {
             $Request->clean();
          }
+
+         // @ Events — request handled, response ready (guarded: zero-alloc when no listeners)
+         $Emitter->check(RequestEvents::Handled) && $Emitter->emit(RequestEvents::Handled, $Request, $Response);
 
          // : Encode HTTP Response
          return $Response->encode($Packages, $length);

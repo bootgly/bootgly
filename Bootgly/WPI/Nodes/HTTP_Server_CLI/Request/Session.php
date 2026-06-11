@@ -21,8 +21,10 @@ use function random_bytes;
 use function random_int;
 use function session_get_cookie_params;
 
+use Bootgly\ABI\Events\Emitter;
 use Bootgly\WPI\Modules\HTTP\Server\Response\Raw\Header\Cookie;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Session\Events;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Session\Handler;
 
 
@@ -105,6 +107,10 @@ class Session
          $this->data = (array) ($this->serializer[1])($data);
          $this->loaded = true;
       }
+
+      // @ Events — session established (guarded: zero-alloc when no listeners)
+      $Emitter = Emitter::$Instance;
+      $Emitter->check(Events::Start) && $Emitter->emit(Events::Start, $id);
    }
 
    /**
@@ -270,6 +276,10 @@ class Session
 
       HTTP_Server_CLI::$Response->Header->Cookies->append($Cookie);
       $this->cookieEmitted = true;
+
+      // @ Events — session id rotated (guarded)
+      $Emitter = Emitter::$Instance;
+      $Emitter->check(Events::Regenerate) && $Emitter->emit(Events::Regenerate, $oldId, $newId);
    }
 
    /**
@@ -362,6 +372,10 @@ class Session
       // @
       if (empty($this->data)) {
          Handler::$instance->destroy($this->id);
+
+         // @ Events — session destroyed (emptied on save) (guarded)
+         $Emitter = Emitter::$Instance;
+         $Emitter->check(Events::Destroy) && $Emitter->emit(Events::Destroy, $this->id);
       }
       else {
          Handler::$instance->write($this->id, ($this->serializer[0])($this->data));

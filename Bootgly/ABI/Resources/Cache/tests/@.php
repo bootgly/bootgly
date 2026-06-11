@@ -28,5 +28,7 @@ return new Suite(
 
       '5.1-shared-driver',
       '5.2-shared-cross-worker',
+
+      '6.1-events',
    ]
 );

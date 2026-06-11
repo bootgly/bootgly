@@ -13,9 +13,11 @@ namespace Bootgly\ABI\Resources;
 
 use Closure;
 
+use Bootgly\ABI\Events\Emitter;
 use Bootgly\ABI\Resources\Cache\Config;
 use Bootgly\ABI\Resources\Cache\Driver;
 use Bootgly\ABI\Resources\Cache\Drivers;
+use Bootgly\ABI\Resources\Cache\Events;
 
 
 /**
@@ -58,7 +60,19 @@ class Cache
 
    public function fetch (string $key): mixed
    {
-      return $this->Driver->fetch("{$this->prefix}{$key}");
+      $value = $this->Driver->fetch("{$this->prefix}{$key}");
+
+      // @ Events — guarded so a no-listener fetch stays zero-allocation
+      $Emitter = Emitter::$Instance;
+      if ($value !== null) {
+         $Emitter->check(Events::Hit) && $Emitter->emit(Events::Hit, $key, $value);
+      }
+      else {
+         $Emitter->check(Events::Miss) && $Emitter->emit(Events::Miss, $key);
+      }
+
+      // :
+      return $value;
    }
 
    /**
@@ -75,7 +89,14 @@ class Cache
 
    public function delete (string $key): bool
    {
-      return $this->Driver->delete("{$this->prefix}{$key}");
+      $deleted = $this->Driver->delete("{$this->prefix}{$key}");
+
+      // @ Events — guarded so a no-listener delete stays zero-allocation
+      $Emitter = Emitter::$Instance;
+      $Emitter->check(Events::Evict) && $Emitter->emit(Events::Evict, $key, $deleted);
+
+      // :
+      return $deleted;
    }
 
    public function clear (): bool

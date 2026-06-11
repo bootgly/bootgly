@@ -1,6 +1,6 @@
 <?php
 
-namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Session;
+namespace Bootgly\ACI\Process;
 
 use Bootgly\ACI\Tests\Suite;
 
@@ -14,11 +14,6 @@ return new Suite(
    // * Data
    suiteName: __NAMESPACE__,
    tests: [
-      '1.1-cache-handler-roundtrip',
-      '1.2-cache-handler-expiry',
-
-      '2.1-cache-handler-shared',
-
-      '3.1-events',
+      '1.1-worker-events',
    ]
 );

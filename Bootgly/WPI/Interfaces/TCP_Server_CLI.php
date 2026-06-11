@@ -72,6 +72,7 @@ use Throwable;
 use const Bootgly\CLI;
 use Bootgly\ABI\Debugging\Data\Vars;
 use Bootgly\ABI\Debugging\Shutdown;
+use Bootgly\ABI\Events\Emitter;
 use Bootgly\ACI\Events\Loops;
 use Bootgly\ACI\Events\Scheduler;
 use Bootgly\ACI\Events\Timer;
@@ -79,6 +80,7 @@ use Bootgly\ACI\Logs\LoggableEscaped;
 use Bootgly\ACI\Logs\Logger;
 use Bootgly\ACI\Logs\Logging;
 use Bootgly\ACI\Process;
+use Bootgly\ACI\Process\Events as Worker;
 use Bootgly\API\Endpoints\Server\Modes;
 use Bootgly\API\Endpoints\Server\Status;
 use Bootgly\API\Environment;
@@ -418,11 +420,17 @@ class TCP_Server_CLI implements Servers, Logging
             if ($this->Process->level === 'master') {
                $this->Process->Signals->send(SIGUSR2, master: false);
             }
-            else if (self::$Application) {
-               self::$Application::boot(SAPI::$Environment);
-            }
             else {
-               SAPI::boot(reset: true);
+               // @ Events — worker reloading its application (guarded)
+               $Emitter = Emitter::$Instance;
+               $Emitter->check(Worker::Reload) && $Emitter->emit(Worker::Reload, Process::$index);
+
+               if (self::$Application) {
+                  self::$Application::boot(SAPI::$Environment);
+               }
+               else {
+                  SAPI::boot(reset: true);
+               }
             }
             break;
 
@@ -557,6 +565,10 @@ class TCP_Server_CLI implements Servers, Logging
          $Process->title = 'Bootgly_TCP_Server_CLI: child process (Worker #' . Process::$index . ')';
 
          Logger::$display = Logger::DISPLAY_MESSAGE_WHEN_ID;
+
+         // @ Events — worker booted (guarded: zero-alloc when no listeners)
+         $Emitter = Emitter::$Instance;
+         $Emitter->check(Worker::Boot) && $Emitter->emit(Worker::Boot, $index);
 
          // @ Create stream socket server
          $this->instance();
@@ -970,6 +982,10 @@ class TCP_Server_CLI implements Servers, Logging
    }
    public function stop (): void
    {
+      // @ Events — process shutting down (guarded: zero-alloc when no listeners)
+      $Emitter = Emitter::$Instance;
+      $Emitter->check(Worker::Shutdown) && $Emitter->emit(Worker::Shutdown, $this->Process->level);
+
       $this->Status = Status::Stopping;
       $this->Process->stopping = true;
 
