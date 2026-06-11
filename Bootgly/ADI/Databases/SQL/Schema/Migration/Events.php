@@ -8,21 +8,23 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\API\Projects\Project;
+namespace Bootgly\ADI\Databases\SQL\Schema\Migration;
 
 
 use Bootgly\ABI\Event;
 
 
 /**
- * Project lifecycle events, dispatched through `Emitter::$Instance`.
+ * SQL schema migration events, dispatched through `Emitter::$Instance`.
  *
- * - `Boot`     — the project was booted into the process. Payload: the `Project`.
- * - `Shutdown` — the booted project is being destroyed (process teardown / GC).
- *   Payload: the `Project`.
+ * Fired by the migration runner as each migration is applied/reverted.
+ * Payload: the `Migration`, the batch number (int).
+ *
+ * - `Up`   — a migration was applied.
+ * - `Down` — a migration was reverted.
  */
 enum Events implements Event
 {
-   case Boot;
-   case Shutdown;
+   case Up;
+   case Down;
 }

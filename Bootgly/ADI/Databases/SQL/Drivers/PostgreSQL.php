@@ -38,6 +38,7 @@ use function substr;
 use DateTimeImmutable;
 use Throwable;
 
+use Bootgly\ABI\Events\Emitter;
 use Bootgly\ACI\Events\Readiness;
 use Bootgly\ACI\Events\Scheduler;
 use Bootgly\ADI\Database\Connection;
@@ -51,6 +52,7 @@ use Bootgly\ADI\Databases\SQL\Drivers\PostgreSQL\Authentication;
 use Bootgly\ADI\Databases\SQL\Drivers\PostgreSQL\Decoder;
 use Bootgly\ADI\Databases\SQL\Drivers\PostgreSQL\Encoder;
 use Bootgly\ADI\Databases\SQL\Drivers\PostgreSQL\Message;
+use Bootgly\ADI\Databases\SQL\Events;
 use Bootgly\ADI\Databases\SQL\Operation;
 
 
@@ -902,6 +904,10 @@ class PostgreSQL extends Driver
 
          if ($code === 0) {
             $this->Authentication->authenticated = true;
+
+            // @ Events — SQL connection authenticated (guarded: zero-alloc when no listeners)
+            $Emitter = Emitter::$Instance;
+            $Emitter->check(Events::Connected) && $Emitter->emit(Events::Connected, $this->Connection);
 
             return $Operation;
          }

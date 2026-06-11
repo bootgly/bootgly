@@ -17,8 +17,10 @@ use InvalidArgumentException;
 use RuntimeException;
 use Throwable;
 
+use Bootgly\ABI\Events\Emitter;
 use Bootgly\ADI\Databases\SQL as SQLDatabase;
 use Bootgly\ADI\Databases\SQL\Schema\Auxiliaries\Directions;
+use Bootgly\ADI\Databases\SQL\Schema\Migration\Events;
 
 
 /**
@@ -257,6 +259,11 @@ class Runner
    private function apply (Migration $Migration, Directions $Direction, int $batch): void
    {
       $up = $Direction === Directions::Up;
+
+      // @ Events — migration applied/reverted (guarded: zero-alloc when no listeners)
+      $Emitter = Emitter::$Instance;
+      $Event = $up ? Events::Up : Events::Down;
+      $Emitter->check($Event) && $Emitter->emit($Event, $Migration, $batch);
 
       if ($this->Dialect->transactions) {
          $Transaction = $this->Database->begin();

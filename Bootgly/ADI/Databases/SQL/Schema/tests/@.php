@@ -20,5 +20,6 @@ return new Suite(
       '10.2-schema_migrations',
       '10.3-schema_repository_lock',
       '10.4-schema_sync',
+      '10.5-migration-events',
    ]
 );

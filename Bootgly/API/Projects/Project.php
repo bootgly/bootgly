@@ -53,6 +53,9 @@ class Project
    public Closure $boot;
    public null|Configs $Configs = null;
 
+   // * Metadata
+   protected bool $booted = false;
+
 
    public function __construct (
       // * Data (required)
@@ -112,8 +115,29 @@ class Project
       // @
       ($this->boot)($arguments, $options);
 
+      $this->booted = true;
+
       // @ Events — project booted (guarded: zero-alloc when no listeners)
       $Emitter = Emitter::$Instance;
       $Emitter->check(Events::Boot) && $Emitter->emit(Events::Boot, $this);
+   }
+
+   /**
+    * Emit `Project.Shutdown` when a booted project is destroyed.
+    *
+    * `__destruct` timing is GC-bound; for the booted project (held by the
+    * BOOTGLY_PROJECT constant + the Projects registry) this lands at process
+    * teardown. A constructed-but-never-booted project never emits.
+    */
+   public function __destruct ()
+   {
+      // ?
+      if ($this->booted === false) {
+         return;
+      }
+
+      // @ Events — project shutting down (guarded: zero-alloc when no listeners)
+      $Emitter = Emitter::$Instance;
+      $Emitter->check(Events::Shutdown) && $Emitter->emit(Events::Shutdown, $this);
    }
 }

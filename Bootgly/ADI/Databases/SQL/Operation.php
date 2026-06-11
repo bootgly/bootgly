@@ -11,6 +11,8 @@
 namespace Bootgly\ADI\Databases\SQL;
 
 
+use function microtime;
+
 use Bootgly\ABI\Events\Emitter;
 use Bootgly\ADI\Database\Connection;
 use Bootgly\ADI\Database\Operation as DatabaseOperation;
@@ -43,7 +45,9 @@ class Operation extends DatabaseOperation
    public int $affected = 0;
 
    // * Metadata
-   // ...
+   /** Slow-query threshold in seconds; `0.0` disables detection (zero overhead — no `microtime()`). */
+   public static float $slow = 0.0;
+   protected float $started = 0.0;
 
 
    /**
@@ -57,6 +61,11 @@ class Operation extends DatabaseOperation
 
       // * Config
       $this->sql = $sql;
+
+      // ? Slow-query timing — only pay the microtime() syscall when enabled
+      if (self::$slow > 0.0) {
+         $this->started = microtime(true);
+      }
    }
 
    /**
@@ -70,6 +79,14 @@ class Operation extends DatabaseOperation
       // @ Events — query executed (guarded: zero-alloc when no listeners)
       $Emitter = Emitter::$Instance;
       $Emitter->check(Events::Executed) && $Emitter->emit(Events::Executed, $this);
+
+      // ?: Slow query — only when detection is enabled (no microtime() otherwise)
+      if (self::$slow > 0.0) {
+         $elapsed = microtime(true) - $this->started;
+         if ($elapsed >= self::$slow) {
+            $Emitter->check(Events::Slow) && $Emitter->emit(Events::Slow, $this, $elapsed);
+         }
+      }
 
       return $this;
    }
