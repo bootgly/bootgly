@@ -79,5 +79,7 @@ return new Suites(
       'Bootgly/ABI/Events/',
       'Bootgly/ACI/Process/',
       'Bootgly/WPI/Nodes/HTTP_Server_CLI/Request/',
+      'Bootgly/ADI/Databases/SQL/',
+      'Bootgly/API/Projects/Project/',
    ]
 );

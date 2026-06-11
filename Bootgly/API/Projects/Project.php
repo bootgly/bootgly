@@ -21,8 +21,10 @@ use function is_dir;
 use Closure;
 use Error;
 
+use Bootgly\ABI\Events\Emitter;
 use Bootgly\API\Projects;
 use Bootgly\API\Projects\Configs;
+use Bootgly\API\Projects\Project\Events;
 
 
 /**
@@ -109,5 +111,9 @@ class Project
 
       // @
       ($this->boot)($arguments, $options);
+
+      // @ Events — project booted (guarded: zero-alloc when no listeners)
+      $Emitter = Emitter::$Instance;
+      $Emitter->check(Events::Boot) && $Emitter->emit(Events::Boot, $this);
    }
 }

@@ -16,11 +16,13 @@ use function array_search;
 use BackedEnum;
 use Stringable;
 
+use Bootgly\ABI\Events\Emitter;
 use Bootgly\ADI\Database\Connection;
 use Bootgly\ADI\Databases\SQL as SQLDatabase;
 use Bootgly\ADI\Databases\SQL\Builder;
 use Bootgly\ADI\Databases\SQL\Builder\Query;
 use Bootgly\ADI\Databases\SQL\Repository;
+use Bootgly\ADI\Databases\SQL\Transaction\Events;
 
 
 /**
@@ -63,6 +65,10 @@ class Transaction implements Awaiting, Querying
       if ($this->ready() === false) {
          return $this->fail('BEGIN', [], 'SQL transaction operation is still active.');
       }
+
+      // @ Events — transaction begin (guarded: zero-alloc when no listeners)
+      $Emitter = Emitter::$Instance;
+      $Emitter->check(Events::Begin) && $Emitter->emit(Events::Begin, $this);
 
       if ($this->depth <= 0) {
          $this->Operation = $this->create('BEGIN', lock: true);
@@ -149,6 +155,10 @@ class Transaction implements Awaiting, Querying
          return $this->fail('COMMIT', [], 'SQL transaction is not active.');
       }
 
+      // @ Events — transaction commit (guarded: zero-alloc when no listeners)
+      $Emitter = Emitter::$Instance;
+      $Emitter->check(Events::Commit) && $Emitter->emit(Events::Commit, $this);
+
       if ($this->depth > 1) {
          return $this->release();
       }
@@ -173,6 +183,10 @@ class Transaction implements Awaiting, Querying
       if ($this->active() === false) {
          return $this->fail('ROLLBACK', [], 'SQL transaction is not active.');
       }
+
+      // @ Events — transaction rollback (guarded: zero-alloc when no listeners)
+      $Emitter = Emitter::$Instance;
+      $Emitter->check(Events::Rollback) && $Emitter->emit(Events::Rollback, $this);
 
       if ($this->depth > 1 || $name !== null) {
          $name ??= (string) array_pop($this->savepoints);

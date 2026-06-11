@@ -11,9 +11,11 @@
 namespace Bootgly\ADI\Databases\SQL;
 
 
+use Bootgly\ABI\Events\Emitter;
 use Bootgly\ADI\Database\Connection;
 use Bootgly\ADI\Database\Operation as DatabaseOperation;
 use Bootgly\ADI\Database\Operation\Result;
+use Bootgly\ADI\Databases\SQL\Events;
 
 
 /**
@@ -64,6 +66,10 @@ class Operation extends DatabaseOperation
    {
       $this->write = '';
       parent::resolve($Result);
+
+      // @ Events — query executed (guarded: zero-alloc when no listeners)
+      $Emitter = Emitter::$Instance;
+      $Emitter->check(Events::Executed) && $Emitter->emit(Events::Executed, $this);
 
       return $this;
    }
