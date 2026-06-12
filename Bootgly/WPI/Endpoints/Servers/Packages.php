@@ -52,6 +52,12 @@ abstract class Packages
     * at the start of every read cycle.
     */
    public bool $rejected = false;
+   /**
+    * Protocol-layer decoded unit, owned by the registered Decoder.
+    * For HTTP_Server_CLI: the per-connection `Request` instance reused
+    * across keep-alive requests (see `Request::assume()`).
+    */
+   public null|object $decoded = null;
 
 
    public function __construct ()

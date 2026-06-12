@@ -15,5 +15,7 @@ return new Suite(
    suiteName: __NAMESPACE__,
    tests: [
       '1.1-events',
+      '1.2-attributes_bag',
+      '1.3-assume_scrub_parity',
    ]
 );

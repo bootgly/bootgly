@@ -40,10 +40,11 @@ return new Project(
 
    boot: function (array $arguments = [], array $options = []): void {
       if ($options['HTTP_Server_CLI'] ?? false) {
-         $router = strtolower(getenv('BOOTGLY_HTTP_SERVER_CLI_ROUTER') ?: 'bootgly');
+         $router = strtolower(getenv('BOOTGLY_HTTP_SERVER_CLI_ROUTER') ?: 'simple');
          $routerFile = match ($router) {
             'techempower' => 'techempower-benchmark.SAPI.php',
-            default       => 'bootgly-benchmark.SAPI.php',
+            'bootgly'     => 'bootgly-benchmark.SAPI.php',
+            default       => 'simple-benchmark.SAPI.php',
          };
 
          $responseResources = null;
@@ -51,7 +52,7 @@ return new Project(
          // # The Database response resource is needed by both routers:
          //   - techempower:  /db, /query, /fortunes, /updates
          //   - bootgly:      /database/resource/*, /database/runner/*
-         if ($router === 'techempower' || $router === 'bootgly') {
+         if ($router === 'techempower') {
             $Env = static function (string $name, string $default): string {
                $value = getenv($name);
 

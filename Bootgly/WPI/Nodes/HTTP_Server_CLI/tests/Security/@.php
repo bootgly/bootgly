@@ -2,8 +2,14 @@
 
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\tests\Security;
 
-use Bootgly\ACI\Tests\Suite;
+
+use const BOOTGLY_ROOT_DIR;
+use function define;
+use function defined;
+use function sleep;
+
 use Bootgly\ACI\Logs\Logger;
+use Bootgly\ACI\Tests\Suite;
 use Bootgly\API\Endpoints\Server\Modes;
 use Bootgly\API\Workables\Server as SAPI;
 use Bootgly\API\Workables\Server\Middlewares;
@@ -139,5 +145,10 @@ return new Suite(
       // disk-byte ceiling — per-file cap × N-workers exhaustion is
       // closed by `Downloads::reserve()` over a shared-memory counter
       '23.01-aggregate_downloads_disk_cap',
+      // # Decoder_ cache (per-connection Request reuse)
+      // `Request::assume()` must scrub ALL per-request state between
+      // subsequent requests on the SAME keep-alive connection — behind a
+      // keep-alive proxy, a same-connection leak is a cross-user leak.
+      '24.01-decoder_cache_same_connection_request_reuse',
    ],
 );

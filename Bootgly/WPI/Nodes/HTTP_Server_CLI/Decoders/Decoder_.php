@@ -56,20 +56,20 @@ class Decoder_ extends Decoders
          unset($inputs[$cacheKey]);
          $inputs[$cacheKey] = $cached;
 
-         // ! Security: clone on READ, not only on write. Otherwise handler /
-         //   middleware mutations (dynamic properties, Header writes, auth
-         //   decisions) persist on the cached Request and leak to every
-         //   future connection that sends byte-identical headers.
+         // ! Security: never serve the cached template directly. Handler /
+         //   middleware mutations (attributes, Header writes, auth decisions)
+         //   would persist on it and leak to every future connection that
+         //   sends byte-identical headers.
+         //   Instead of `clone $cached` (allocates Request + Header + Body per
+         //   hit), each connection owns one Request reused across keep-alive
+         //   requests: `assume()` overwrites every decode-derived member from
+         //   the template and scrubs all per-request state unconditionally —
+         //   no state survives between requests on the same connection.
          //   See tests/Security/2.01-decoder_cache_shared_request_across_connections.test.php
-         Server::$Request = clone $cached;
-
-         if ($Package->changed) {
-            Server::$Request->reboot();
-
-            Server::$Request->address = $Package->Connection->ip;
-            Server::$Request->port = $Package->Connection->port;
-            Server::$Request->scheme = $Package->Connection->encrypted ? 'https' : 'http';
-         }
+         /** @var Request $Request */
+         $Request = $Package->decoded ??= new Request;
+         $Request->assume($cached, $Package->Connection);
+         Server::$Request = $Request;
 
          $Package->consumed = $size;
          return States::Complete;

@@ -51,6 +51,28 @@ class Body
       $this->streaming = false;
    }
 
+   /**
+    * Assume the decoded body of a cached template Body.
+    *
+    * Used by `Request::assume()` on the per-connection cache-hit path:
+    * unconditional straight-line overwrite of every member, so no body state
+    * from the previous request on this connection can survive. String
+    * assignments are COW — the template stays untouched by later mutations.
+    */
+   public function assume (self $Template): void
+   {
+      // * Data
+      $this->raw = $Template->raw;
+      $this->input = $Template->input;
+
+      // * Metadata
+      $this->length = $Template->length;
+      $this->position = $Template->position;
+      $this->downloaded = $Template->downloaded;
+      $this->waiting = $Template->waiting;
+      $this->streaming = $Template->streaming;
+   }
+
    public function parse (string $content, ?string $type): bool|string
    {
       if ($type === null) {

@@ -26,7 +26,9 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Raw\Header\Cookies;
 
 class Header
 {
-   protected Cookies $Cookies;
+   // ! `final`: `Request::assume()` resets this via `unset()` on every reused
+   //   request — final guarantees no subclass hook can observe that unset.
+   protected final Cookies $Cookies;
 
    // * Config
    // ... inherited
@@ -42,10 +44,14 @@ class Header
          return $this->fields;
       }
    }
-   public readonly string $raw;
+   // ! `protected(set)` (not readonly): the per-connection Request reuse
+   //   (`Request::assume()`) re-populates these on every served request —
+   //   readonly would pin the first request's head forever. External
+   //   immutability is preserved by the asymmetric visibility.
+   public protected(set) string $raw;
 
    // * Metadata
-   public readonly null|int|false $length;
+   public protected(set) null|int|false $length;
    protected bool $built;
 
 
@@ -91,9 +97,32 @@ class Header
    public function define (string $raw): void
    {
       // * Data
-      $this->raw ??= $raw;
+      $this->raw = $raw;
       // * Metadata
-      $this->length ??= strlen($raw);
+      $this->length = strlen($raw);
+   }
+
+   /**
+    * Assume the decoded head of a cached template Header.
+    *
+    * Used by `Request::assume()` on the per-connection cache-hit path:
+    * overwrites every decode-derived member of this (reused) instance with the
+    * template's, so no state from the previous request on this connection can
+    * survive. Array/string assignments are COW — the template stays untouched
+    * by later mutations on this instance.
+    */
+   public function assume (self $Template): void
+   {
+      // * Data
+      $this->fields = $Template->fields;
+      $this->raw = $Template->raw;
+
+      // * Metadata
+      $this->length = $Template->length;
+      $this->built = true;
+      // Cookies parse lazily from `fields`; drop the previous request's
+      // instance so the next access re-binds to the assumed fields.
+      unset($this->Cookies);
    }
 
    /**
@@ -167,11 +196,17 @@ class Header
    {
       $key = strtolower($name);
 
-      if ( isSet($this->fields[$key]) ) {
+      // ! `$fields` has a get hook (by value): `$this->fields[$key] = …`
+      //   would be an indirect modification of the hook result. Read the
+      //   built map through the hook, then overwrite the backing store.
+      $fields = $this->fields;
+
+      if ( isSet($fields[$key]) ) {
          return false;
       }
 
-      $this->fields[$key] = $value;
+      $fields[$key] = $value;
+      $this->fields = $fields;
 
       return true;
    }

@@ -50,11 +50,11 @@ use function trim;
 use function uasort;
 use function unlink;
 use function usort;
-use AllowDynamicProperties;
 use JsonException;
 
 use const Bootgly\WPI;
 use Bootgly\WPI\Endpoints\Servers\Decoder\States;
+use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections\Connection;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Decoder_Chunked;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Decoder_Downloading;
@@ -68,7 +68,6 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Raw\Header\Cookies;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Session;
 
 
-#[AllowDynamicProperties]
 class Request
 {
    public protected(set) Header $Header;
@@ -609,6 +608,16 @@ class Request
     * @var array<string,mixed>
     */
    public array $tokenHeaders = [];
+   /**
+    * Per-request user attributes. Undeclared property writes
+    * (`$Request->foo = …`) land here via `__set` — the class no longer allows
+    * dynamic properties, so no hidden state can survive the per-request scrub
+    * (cross-connection AND same-connection contamination become structurally
+    * impossible: the scrub is a single `$this->attributes = []` write).
+    *
+    * @var array<string,mixed>
+    */
+   public array $attributes = [];
    // @ Connection management
    public bool $closeConnection = false;
 
@@ -646,6 +655,28 @@ class Request
 
    }
 
+   // @ Undeclared property access → per-request attribute bag. Dynamic
+   //   properties are intentionally disallowed on Request: they are the one
+   //   mutation surface a per-request scrub cannot enumerate. The bag keeps
+   //   the `$Request->foo = …` API working while making the scrub a single
+   //   array write (see tests/Security/03.01 / 08.01 leak probes).
+   public function __set (string $name, mixed $value): void
+   {
+      $this->attributes[$name] = $value;
+   }
+   public function __get (string $name): mixed
+   {
+      return $this->attributes[$name] ?? null;
+   }
+   public function __isset (string $name): bool
+   {
+      return isSet($this->attributes[$name]);
+   }
+   public function __unset (string $name): void
+   {
+      unset($this->attributes[$name]);
+   }
+
    public function __clone ()
    {
       // @ Per-request data: never bleed across cached connections.
@@ -674,6 +705,7 @@ class Request
       $this->identity = null;
       $this->claims = [];
       $this->tokenHeaders = [];
+      $this->attributes = [];
 
       $this->Session = null;
       $this->sessioned = false;
@@ -701,6 +733,7 @@ class Request
       $this->identity = null;
       $this->claims = [];
       $this->tokenHeaders = [];
+      $this->attributes = [];
 
       $this->Session = null;
       $this->sessioned = false;
@@ -709,6 +742,62 @@ class Request
       // but on cache hit the cached Request keeps its URI so these stay valid).
       // Reset here only when session-sensitive or cross-connection state may have changed.
       // NOTE: we keep $_URL et al. because the cached Request's URI is unchanged.
+   }
+
+   /**
+    * Assume a decoded template Request on this per-connection instance.
+    *
+    * Replaces the per-request `clone $template` of the Decoder_ L1 cache-hit
+    * path: every decode-derived member is overwritten from the template and
+    * every per-request member is scrubbed, so NOTHING from the previous
+    * request served on this connection can survive — including handler
+    * mutations on `Body`/`Header` (overwritten field-by-field; COW keeps the
+    * template untouched) and undeclared writes (confined to `$attributes` by
+    * `__set` and reset here in one write).
+    *
+    * !! KEEP THIS STRAIGHT-LINE AND UNCONDITIONAL — same tracing-JIT
+    *   constraint as `__clone` (see its comment: data-dependent branches here
+    *   deopt the whole request pipeline, 717k → 320k req/s).
+    *
+    * NOTE: `$on`/`$at`/`$time` are readonly and keep this instance's creation
+    *   timestamps — same staleness class as the clone path, which carried the
+    *   template's creation timestamps.
+    */
+   public function assume (self $Template, Connection $Connection): void
+   {
+      // @ Decode-derived state — overwrite from the template.
+      $this->base = $Template->base;
+      $this->method = $Template->method;
+      $this->URI = $Template->URI; // set-hook invalidates _URL/_URN/_query/_queries
+      $this->protocol = $Template->protocol;
+      $this->closeConnection = $Template->closeConnection;
+
+      $this->Header->assume($Template->Header);
+      $this->Body->assume($Template->Body);
+
+      // @ Connection truth — re-set every request: TrustedProxy may have
+      //   overwritten these on the previous request of this connection.
+      $this->address = $Connection->ip;
+      $this->port = $Connection->port;
+      $this->scheme = $Connection->encrypted ? 'https' : 'http';
+
+      // @ Per-request state — scrub (mirror of __clone / reboot lists).
+      $this->_fields = [];
+      $this->_files = [];
+      $this->hasFiles = false;
+      $this->authUsername = '';
+      $this->authPassword = '';
+      $this->authParsed = false;
+      $this->authCredentials = null;
+      $this->authToken = '';
+      $this->authTokenParsed = false;
+      $this->identity = null;
+      $this->claims = [];
+      $this->tokenHeaders = [];
+      $this->attributes = [];
+
+      $this->Session = null;
+      $this->sessioned = false;
    }
 
    /**
