@@ -89,7 +89,12 @@ class Connections implements WPI\Connections
       // @ Limiter
       self::$blacklist = [];   // Connections blacklist defined by limit methods
       // @ Stats
-      self::$stats = true;
+      // ! Off by default: 4 static increments per request, only consumed by
+      //   the `stats` command — which lazily enables collection when first
+      //   invoked. Connection idle expiration does NOT depend on this flag
+      //   (it is gated by `Connection->expiration` and fed by the always-on
+      //   `Connection->writes` counter).
+      self::$stats = false;
       // Connections
       $this->connections = 0;  // Connections count
       // Errors

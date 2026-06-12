@@ -58,7 +58,16 @@ return new class extends Command
             Connections::$errors['write'] = 0;
             return true;
          }
-   
+
+         // @ Lazy activation: collection is off by default (hot-path cost);
+         //   first invocation turns it on — counters start from now.
+         if (Connections::$stats === false) {
+            Connections::$stats = true;
+
+            Logger::$display = Logger::DISPLAY_MESSAGE;
+            $Server->log("@\\;Stats collection was disabled — enabled now. Counters start from this point.@\\;", 2);
+         }
+
          Logger::$display = Logger::DISPLAY_MESSAGE;
    
          $worker = sprintf("%02d", $Server->Process::$index);

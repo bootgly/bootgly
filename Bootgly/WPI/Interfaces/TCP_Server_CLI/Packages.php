@@ -404,7 +404,49 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
          return true;
       }
 
-      $written = 0;
+      // @ Fast lane (typical case): forward mode, whole buffer accepted by
+      //   the kernel on the first fwrite, no upload chain queued.
+      //   `pendingBuffer === ''` implies `writeRegistered === false`, so the
+      //   reset() walk, the loop frame and the substr bookkeeping are all
+      //   skipped on the hot path.
+      $fastWritten = 0;
+      if ($this->pendingBuffer === '' && $this->uploading === []) {
+         try {
+            $sent = @fwrite($Socket, $buffer, $length); // @phpstan-ignore-line
+         }
+         catch (Throwable) {
+            $sent = false;
+         }
+
+         if ($sent === $length) {
+            // ! Always-on: `expire()` activity signal (idle reaping)
+            $this->Connection->writes++;
+            if (Connections::$stats) {
+               Connections::$writes++;
+               Connections::$written += $length;
+            }
+
+            // @ Apply close-after-drain (deferred close intent from reading()).
+            if ($this->closeAfterDrain) {
+               $this->closeAfterDrain = false;
+               $this->Connection->close();
+            }
+
+            return true;
+         }
+
+         // @ Shortfall: advance past the accepted bytes and enter the
+         //   backpressure state machine below with the remainder.
+         //   (`$sent === 0|false` re-tries once in the machine, which then
+         //   stashes/fails — rare path, one redundant fwrite is acceptable.)
+         if ($sent !== false && $sent > 0) {
+            $fastWritten = $sent;
+            $buffer = substr($buffer, $sent);
+            $length -= $sent;
+         }
+      }
+
+      $written = $fastWritten;
       $failed = false;
       $sent = 0; // Bytes sent to client per write loop iteration
 
@@ -440,10 +482,13 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
                }
 
                // Stats for the partial write (if any).
-               if ($written > 0 && Connections::$stats) {
-                  Connections::$writes++;
-                  Connections::$written += $written;
+               if ($written > 0) {
+                  // ! Always-on: `expire()` activity signal (idle reaping)
                   $this->Connection->writes++;
+                  if (Connections::$stats) {
+                     Connections::$writes++;
+                     Connections::$written += $written;
+                  }
                }
                return true;
             }
@@ -460,10 +505,13 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
                $written += $this->uploading($Socket);
                // If uploading() stalled, it set pendingBuffer + EVENT_WRITE.
                if ($this->pendingBuffer !== '') {
-                  if ($written > 0 && Connections::$stats) {
-                     Connections::$writes++;
-                     Connections::$written += $written;
+                  if ($written > 0) {
+                     // ! Always-on: `expire()` activity signal (idle reaping)
                      $this->Connection->writes++;
+                     if (Connections::$stats) {
+                        Connections::$writes++;
+                        Connections::$written += $written;
+                     }
                   }
                   return true;
                }
@@ -490,14 +538,16 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
       }
 
       // @ Set Stats
+      // Per client — $this->Connection IS the registry entry for $Socket;
+      // direct access skips two hash lookups + cast per request. An
+      // increment on an already-closed Connection object is harmless.
+      // ! Always-on (not gated by $stats): this is the `expire()` activity
+      //   signal — idle reaping depends on it.
+      $this->Connection->writes++;
       if (Connections::$stats) {
          // Global
          Connections::$writes++;
          Connections::$written += $written;
-         // Per client — $this->Connection IS the registry entry for $Socket;
-         // direct access skips two hash lookups + cast per request. An
-         // increment on an already-closed Connection object is harmless.
-         $this->Connection->writes++;
       }
 
       // @ Apply close-after-drain (deferred close intent from reading()).

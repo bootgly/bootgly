@@ -50,6 +50,8 @@ class Connection extends Packages
    // @ Stats
    #public int $reads;
    public int $writes;
+   // Last `writes` value observed by `expire()` (activity detection)
+   protected int $expiredWrites;
 
 
    /**
@@ -76,6 +78,7 @@ class Connection extends Packages
       // @ Stats
       #$this->reads = 0;
       $this->writes = 0;
+      $this->expiredWrites = 0;
 
 
       // @ Set Remote Data if possible
@@ -96,7 +99,10 @@ class Connection extends Packages
          return;
       }
 
-      if (Connections::$stats) {
+      // ! Idle expiration is gated by its own config, NOT by the stats
+      //   flag: reaping idle connections is a resource-protection concern
+      //   and must work with stats collection disabled (the default).
+      if ($this->expiration > 0) {
          $timer = Timer::add(
             interval: $this->expiration,
             handler: [$this, 'expire'],
@@ -178,21 +184,17 @@ class Connection extends Packages
          return true;
       }
 
-      static $writes = 0;
-
-      if ($writes < $this->writes) {
-         $this->used = time();
-      }
-      if ($writes > $this->writes) {
-         $writes = $this->writes;
+      // ! Per-instance snapshot (was a per-method `static` shared by every
+      //   Connection in the worker — one busy connection masked the
+      //   idleness of all others).
+      if ($this->expiredWrites !== $this->writes) {
+         $this->expiredWrites = $this->writes;
          $this->used = time();
       }
 
       if ((time() - $this->used) >= $timeout) {
          return $this->close();
       }
-
-      $writes = $this->writes;
 
       return false;
    }

@@ -43,12 +43,13 @@ return new Project(
    author: 'Bootgly',
 
    boot: function (array $arguments = [], array $options = []): void {
-      // @ A/B: disable TCP-layer packet stats (5 guarded increments per
-      //   request + per-connection expire Timer) via `BOOTGLY_STATS=0`.
+      // @ A/B: TCP-layer packet stats are OFF by default (lazily enabled by
+      //   the `stats` command). `BOOTGLY_STATS=1` re-enables collection from
+      //   boot for A/B benchmarking.
       //   ! Must be applied AFTER the server is constructed (the Connections
-      //   constructor resets `$stats = true`) and BEFORE `start()` forks the
+      //   constructor resets the static) and BEFORE `start()` forks the
       //   workers (statics propagate by fork inheritance).
-      $statsOff = getenv('BOOTGLY_STATS') === '0';
+      $statsOn = getenv('BOOTGLY_STATS') === '1';
 
       if ($options['HTTP_Server_CLI'] ?? false) {
          $router = strtolower(getenv('BOOTGLY_HTTP_SERVER_CLI_ROUTER') ?: 'simple');
@@ -120,9 +121,9 @@ return new Project(
 
          $Server = new HTTP_Server_CLI(Modes::Daemon);
 
-         // ? After construct (Connections ctor resets $stats), before fork
-         if ($statsOff) {
-            \Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections::$stats = false;
+         // ? After construct (Connections ctor resets the static), before fork
+         if ($statsOn) {
+            \Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections::$stats = true;
          }
 
          $Server
@@ -169,9 +170,9 @@ return new Project(
 
          $Server = new TCP_Server_CLI(Modes::Daemon);
 
-         // ? After construct (Connections ctor resets $stats), before fork
-         if ($statsOff) {
-            \Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections::$stats = false;
+         // ? After construct (Connections ctor resets the static), before fork
+         if ($statsOn) {
+            \Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections::$stats = true;
          }
 
          $Server
