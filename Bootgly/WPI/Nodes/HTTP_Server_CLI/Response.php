@@ -87,6 +87,10 @@ class Response extends Server\Response
    public string|null $source;
    public string|null $type;
    private object $Scope;
+   // Whether $Scope was handed to a resource this request (see attach()).
+   // Lets reset() skip the per-request stdClass realloc on routes that
+   // never touch scoped resources (static routes: one less alloc/request).
+   private bool $scoped;
 
    // * Metadata
    // # State (sets)
@@ -136,6 +140,7 @@ class Response extends Server\Response
       $this->source = null;
       $this->type = null;
       $this->Scope = new stdClass;
+      $this->scoped = false;
 
       // * Metadata
       // # Status
@@ -297,7 +302,12 @@ class Response extends Server\Response
       // # Content
       $this->source = null;
       $this->type = null;
-      $this->Scope = new stdClass;
+      // ? Realloc Scope only when the previous request actually scoped a
+      //   resource into it — non-scoped routes skip the per-request alloc.
+      if ($this->scoped) {
+         $this->Scope = new stdClass;
+         $this->scoped = false;
+      }
       $this->content = '';
       $this->files = [];
 
@@ -333,6 +343,7 @@ class Response extends Server\Response
    {
       if ($Resource instanceof DatabaseResource) {
          $Resource->scope($this->Scope);
+         $this->scoped = true;
       }
 
       if ($Resource instanceof Scheduling) {

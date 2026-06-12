@@ -443,9 +443,7 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
                if ($written > 0 && Connections::$stats) {
                   Connections::$writes++;
                   Connections::$written += $written;
-                  if ( isSet(Connections::$Connections[(int) $Socket]) ) {
-                     Connections::$Connections[(int) $Socket]->writes++;
-                  }
+                  $this->Connection->writes++;
                }
                return true;
             }
@@ -465,9 +463,7 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
                   if ($written > 0 && Connections::$stats) {
                      Connections::$writes++;
                      Connections::$written += $written;
-                     if ( isSet(Connections::$Connections[(int) $Socket]) ) {
-                        Connections::$Connections[(int) $Socket]->writes++;
-                     }
+                     $this->Connection->writes++;
                   }
                   return true;
                }
@@ -498,10 +494,10 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
          // Global
          Connections::$writes++;
          Connections::$written += $written;
-         // Per client
-         if ( isSet(Connections::$Connections[(int) $Socket]) ) {
-            Connections::$Connections[(int) $Socket]->writes++;
-         }
+         // Per client — $this->Connection IS the registry entry for $Socket;
+         // direct access skips two hash lookups + cast per request. An
+         // increment on an already-closed Connection object is harmless.
+         $this->Connection->writes++;
       }
 
       // @ Apply close-after-drain (deferred close intent from reading()).

@@ -34,8 +34,10 @@ final class Emitter
    public static self $Instance;
 
    // * Metadata
+   // Readable directly by hot emit sites — isSet($Emitter->Listeners[$id])
+   // skips the check() call frame + intersection-type check per request.
    /** @var array<int,Listeners> */
-   protected array $Listeners = [];
+   public protected(set) array $Listeners = [];
 
 
    /**

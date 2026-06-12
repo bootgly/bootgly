@@ -11,6 +11,7 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders;
 
 
+use function spl_object_id;
 use Generator;
 use Throwable;
 
@@ -50,8 +51,15 @@ class Encoder_ extends Encoders
       }
 
       // @ Events — request fully decoded (guarded: zero-alloc when no listeners)
+      // ! Direct Listeners read instead of check(): the call frame +
+      //   Event&UnitEnum intersection-type check cost ~9% of worker CPU
+      //   at 600k req/s. Enum-case object ids are stable per process.
+      static $received = null, $handled = null;
+      $received ??= spl_object_id(RequestEvents::Received);
+      $handled ??= spl_object_id(RequestEvents::Handled);
+
       $Emitter = Emitter::$Instance;
-      $Emitter->check(RequestEvents::Received) && $Emitter->emit(RequestEvents::Received, $Request);
+      isSet($Emitter->Listeners[$received]) && $Emitter->emit(RequestEvents::Received, $Request);
 
       // @ Reset Response state and bind per-request context.
       $Response->reset($Packages, $Request);
@@ -138,7 +146,7 @@ class Encoder_ extends Encoders
          }
 
          // @ Events — request handled, response ready (guarded: zero-alloc when no listeners)
-         $Emitter->check(RequestEvents::Handled) && $Emitter->emit(RequestEvents::Handled, $Request, $Response);
+         isSet($Emitter->Listeners[$handled]) && $Emitter->emit(RequestEvents::Handled, $Request, $Response);
 
          // : Encode HTTP Response
          return $Response->encode($Packages, $length);

@@ -45,6 +45,7 @@ class Connection extends Packages
 
    // * Metadata
    public int $id;
+   public bool $encrypted;
    // # Status
    public const int STATUS_INITIAL = 0;
    public const int STATUS_CONNECTING = 1;
@@ -78,6 +79,7 @@ class Connection extends Packages
 
       // * Metadata
       $this->id = (int) $Socket;
+      $this->encrypted = false;
       // # Status
       $this->status = self::STATUS_ESTABLISHED;
       // # Handler
@@ -168,6 +170,8 @@ class Connection extends Packages
       else if ($negotiation === 0) {
          return 0;
       }
+
+      $this->encrypted = true;
 
       return true;
    }

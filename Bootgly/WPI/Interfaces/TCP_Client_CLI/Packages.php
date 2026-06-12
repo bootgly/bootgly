@@ -177,10 +177,9 @@ class Packages implements WPI\Connections\Packages
          // Global
          Connections::$writes++;
          Connections::$written += $written;
-         // Per client
-         if ( isSet(Connections::$Connections[(int) $Socket]) ) {
-            Connections::$Connections[(int) $Socket]->writes++;
-         }
+         // Per client — $this->Connection IS the registry entry for $Socket;
+         // direct access skips two hash lookups + cast per write.
+         $this->Connection->writes++;
       }
 
       // # Hook
@@ -241,10 +240,14 @@ class Packages implements WPI\Connections\Packages
 
             // @ TLS may buffer additional decrypted data that stream_select() cannot see.
             //   Try one more non-blocking read to drain any remaining SSL-layer bytes.
-            $extra = @fread($Socket, 65535);
-            if ($extra !== false && $extra !== '') {
-               $input .= $extra;
-               $received += strlen($extra);
+            //   Plain TCP has no hidden buffer layer — skip the extra syscall there
+            //   (this was one full wasted fread per read on unencrypted connections).
+            if ($this->Connection->encrypted) {
+               $extra = @fread($Socket, 65535);
+               if ($extra !== false && $extra !== '') {
+                  $input .= $extra;
+                  $received += strlen($extra);
+               }
             }
 
             break;
