@@ -11,13 +11,17 @@
 namespace projects\HTTP_Server_CLI;
 
 
-use const Bootgly\CLI;
 use function defined;
+use function exec;
 use function getenv;
 use function is_numeric;
+use function max;
+use function str_starts_with;
+use function strlen;
 use function strtolower;
 use RuntimeException;
 
+use const Bootgly\CLI;
 use Bootgly\ADI\Databases\SQL;
 use Bootgly\ADI\Databases\SQL\Config;
 use Bootgly\API\Endpoints\Server\Modes;
@@ -39,6 +43,13 @@ return new Project(
    author: 'Bootgly',
 
    boot: function (array $arguments = [], array $options = []): void {
+      // @ A/B: disable TCP-layer packet stats (5 guarded increments per
+      //   request + per-connection expire Timer) via `BOOTGLY_STATS=0`.
+      //   ! Must be applied AFTER the server is constructed (the Connections
+      //   constructor resets `$stats = true`) and BEFORE `start()` forks the
+      //   workers (statics propagate by fork inheritance).
+      $statsOff = getenv('BOOTGLY_STATS') === '0';
+
       if ($options['HTTP_Server_CLI'] ?? false) {
          $router = strtolower(getenv('BOOTGLY_HTTP_SERVER_CLI_ROUTER') ?: 'simple');
          $routerFile = match ($router) {
@@ -107,7 +118,14 @@ return new Project(
             ];
          }
 
-         new HTTP_Server_CLI(Modes::Daemon)
+         $Server = new HTTP_Server_CLI(Modes::Daemon);
+
+         // ? After construct (Connections ctor resets $stats), before fork
+         if ($statsOff) {
+            \Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections::$stats = false;
+         }
+
+         $Server
             ->configure(
                host: '0.0.0.0',
                port: getenv('PORT') ? (int) getenv('PORT') : 8082,
@@ -149,7 +167,14 @@ return new Project(
             . "\r\n"
             . $httpBody;
 
-         new TCP_Server_CLI(Modes::Daemon)
+         $Server = new TCP_Server_CLI(Modes::Daemon);
+
+         // ? After construct (Connections ctor resets $stats), before fork
+         if ($statsOff) {
+            \Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections::$stats = false;
+         }
+
+         $Server
             ->configure(
                host: '0.0.0.0',
                port: getenv('PORT') ? (int) getenv('PORT') : 8083,
@@ -158,6 +183,12 @@ return new Project(
             ->on(
                TCP_Server_Events::DataReceive,
                static function (string $input) use ($httpResponse): string {
+                  // @ Per-worker profiler bootstrap (env-gated; idempotent via internal PID guard)
+                  if (getenv('BOOTGLY_PROFILE') === '1') {
+                     require_once __DIR__ . '/HTTP_Server_CLI/Profiler.php';
+                     \projects\HTTP_Server_CLI\Profiler::start();
+                  }
+
                   // @ Dual-mode: HTTP or echo
                   if (str_starts_with($input, 'GET ')) {
                      return $httpResponse;
