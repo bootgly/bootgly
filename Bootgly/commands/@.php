@@ -10,4 +10,5 @@ return [
    new LintCommand,
 
    new ProjectCommand,
+   new ScheduleCommand,
 ];

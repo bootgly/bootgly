@@ -81,5 +81,6 @@ return new Suites(
       'Bootgly/WPI/Nodes/HTTP_Server_CLI/Request/',
       'Bootgly/ADI/Databases/SQL/',
       'Bootgly/API/Projects/Project/',
+      'Bootgly/ACI/Schedule/',
    ]
 );
