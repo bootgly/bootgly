@@ -34,16 +34,16 @@ class Header
    // ... inherited
 
    // * Data
-   /** @var array<string, string|array<int,string>> */
-   public array $fields {
-      get {
-         if ($this->built === false) {
-            $this->build();
-         }
-
-         return $this->fields;
-      }
-   }
+   /**
+    * Plain protected property (was a public get-hook): internal readers on
+    * the cache-hit path (`assume()`, `get()`, …) access the backing store
+    * directly — no hook frame per request (the hook cost ~2.2% of worker
+    * CPU). External reads (`$Header->fields`) fall back to `__get`, which
+    * keeps the lazy `build()` semantics.
+    *
+    * @var array<string, string|array<int,string>>
+    */
+   protected array $fields;
    // ! `protected(set)` (not readonly): the per-connection Request reuse
    //   (`Request::assume()`) re-populates these on every served request —
    //   readonly would pin the first request's head forever. External
@@ -114,6 +114,11 @@ class Header
    public function assume (self $Template): void
    {
       // * Data
+      // ? Decoder_ templates are always adopted at parse time (built=true);
+      //   this guard only fires for hand-made templates (tests, future uses).
+      if ($Template->built === false) {
+         $Template->build();
+      }
       $this->fields = $Template->fields;
       $this->raw = $Template->raw;
 
@@ -194,19 +199,17 @@ class Header
     */
    public function append (string $name, string $value): bool
    {
+      if ($this->built === false) {
+         $this->build();
+      }
+
       $key = strtolower($name);
 
-      // ! `$fields` has a get hook (by value): `$this->fields[$key] = …`
-      //   would be an indirect modification of the hook result. Read the
-      //   built map through the hook, then overwrite the backing store.
-      $fields = $this->fields;
-
-      if ( isSet($fields[$key]) ) {
+      if ( isSet($this->fields[$key]) ) {
          return false;
       }
 
-      $fields[$key] = $value;
-      $this->fields = $fields;
+      $this->fields[$key] = $value;
 
       return true;
    }

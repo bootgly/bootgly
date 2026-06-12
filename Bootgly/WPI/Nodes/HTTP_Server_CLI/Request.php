@@ -146,20 +146,15 @@ class Request
    /**
     * The Request URI (Uniform Resource Identifier).
     *
-    * Set-only hook: invalidates cached URI derivations on write. Get is
-    * direct property read (no hook frame). Previously the trivial
-    * `get => $this->URI` hook cost ~4.7% of CPU.
+    * Plain property (was a set-hook that invalidated the cached URI
+    * derivations — the hook frame fired on every cache-hit `assume()` and
+    * cost ~2.5% of worker CPU). The only writers are internal — `decode()`
+    * and `assume()` — and each keeps `_URL`/`_URN`/`_query`/`_queries`
+    * consistent itself. `protected(set)` makes external writes (which would
+    * leave those derivations stale) a compile-time error instead of a
+    * silent footgun.
     */
-   public string $URI = '' {
-      set (string $value) {
-         $this->URI = $value;
-         // @ Invalidate cached derivations of URI
-         $this->_URL = null;
-         $this->_URN = null;
-         $this->_query = null;
-         $this->_queries = null;
-      }
-   }
+   public protected(set) string $URI = '';
    /**
     * The Request protocol.
     *
@@ -768,7 +763,14 @@ class Request
       // @ Decode-derived state — overwrite from the template.
       $this->base = $Template->base;
       $this->method = $Template->method;
-      $this->URI = $Template->URI; // set-hook invalidates _URL/_URN/_query/_queries
+      $this->URI = $Template->URI;
+      // @ URI derivations: copy the template's — they are either null
+      //   (decode does not derive) or valid derivations of the IDENTICAL
+      //   URI bytes just assumed. Unconditional copy keeps this straight-line.
+      $this->_URL = $Template->_URL;
+      $this->_URN = $Template->_URN;
+      $this->_query = $Template->_query;
+      $this->_queries = $Template->_queries;
       $this->protocol = $Template->protocol;
       $this->closeConnection = $Template->closeConnection;
 
@@ -961,6 +963,14 @@ class Request
       $this->method = $Frame->method;
       // URI
       $this->URI = $Frame->URI;
+      // ! Invalidate URI derivations (URI is a plain property now — no
+      //   set-hook). decode() normally runs on a fresh instance where these
+      //   are already null; the explicit reset keeps re-decodes (unit tests,
+      //   future reuse) correct. Cold path — never on the L1 cache hit.
+      $this->_URL = null;
+      $this->_URN = null;
+      $this->_query = null;
+      $this->_queries = null;
       // protocol
       $this->protocol = $protocol;
 
