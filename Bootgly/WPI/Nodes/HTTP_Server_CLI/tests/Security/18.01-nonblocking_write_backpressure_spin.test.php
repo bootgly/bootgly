@@ -155,7 +155,13 @@ return new Specification(
       }
 
       try {
-         HTTPServerCLIBackpressureStream::reset(1);
+         // ! Two consecutive zero-writes model a genuine backpressure stall.
+         //   writing() has a happy-path fast lane that issues one fwrite up
+         //   front; a single zero is absorbed there and retried once by the
+         //   loop (a socket that accepts on retry is NOT a stall and must not
+         //   defer). A sustained stall (zero on BOTH the fast-lane fwrite and
+         //   the loop fwrite) is what must stash pendingBuffer and defer.
+         HTTPServerCLIBackpressureStream::reset(2);
 
          $writingSocket = fopen($scheme . '://writing', 'w+');
          if (! is_resource($writingSocket)) {
@@ -284,11 +290,11 @@ return new Specification(
          $probe['writingResult'] !== true
          || $probe['writingClosed'] !== false
          || $probe['writingPending'] !== true
-         || $probe['writingCalls'] !== 1
+         || $probe['writingCalls'] !== 2
       ) {
          Vars::$labels = ['Probe state'];
          dump(json_encode($probe));
-         return 'writing() did not defer cleanly on zero-byte backpressure (must return true, keep connection open, stash pendingBuffer).';
+         return 'writing() did not defer cleanly on sustained zero-byte backpressure (must return true, keep connection open, stash pendingBuffer after the fast-lane + loop fwrite both make no progress).';
       }
 
       $expectedW = "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nOK";

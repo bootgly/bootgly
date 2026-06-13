@@ -48,28 +48,16 @@ return new Specification(
    Separator: new Separator(line: true),
 
    requests: [
-      // Attack A — quote-injection inside the boundary value
-      function (string $hostPort): string {
-         $body = "hello";
-         return "POST /upload HTTP/1.1\r\n"
-            . "Host: localhost\r\n"
-            . "Content-Type: multipart/form-data; boundary=X\";foo=\"bar\r\n"
-            . "Content-Length: " . strlen($body) . "\r\n"
-            . "\r\n"
-            . $body;
-      },
-      // Attack B — 4 KiB boundary (algorithmic DoS surface)
-      function (string $hostPort): string {
-         $huge = str_repeat('A', 4096);
-         $body = "hello";
-         return "POST /upload HTTP/1.1\r\n"
-            . "Host: localhost\r\n"
-            . "Content-Type: multipart/form-data; boundary={$huge}\r\n"
-            . "Content-Length: " . strlen($body) . "\r\n"
-            . "\r\n"
-            . $body;
-      },
-      // Attack C — valid multipart with hidden-dot filename
+      // ! Order matters. Attacks A/B are rejected at decode time (400) and the
+      //   server closes the socket; the harness must then reconnect for the
+      //   next payload. Attack C is the only request that must reach a handler
+      //   and parse a full multipart body, so it needs the cleanest framing —
+      //   it runs FIRST, on the freshly-validated connection established at the
+      //   top of the test loop, before any reject-close/reconnect churn. A/B
+      //   follow: a corrupted-framing reconnect still yields the expected 400,
+      //   so they are robust to ordering effects. `Connection: close` on each
+      //   keeps the per-request connection teardown deterministic.
+      // Attack C — valid multipart with hidden-dot filename (must reach handler)
       function (string $hostPort): string {
          $boundary = '---------------------------735323031399963166993862150';
          $body = ''
@@ -84,6 +72,30 @@ return new Specification(
             . "Host: localhost\r\n"
             . "Content-Type: multipart/form-data; boundary={$boundary}\r\n"
             . "Content-Length: " . strlen($body) . "\r\n"
+            . "Connection: close\r\n"
+            . "\r\n"
+            . $body;
+      },
+      // Attack A — quote-injection inside the boundary value
+      function (string $hostPort): string {
+         $body = "hello";
+         return "POST /upload HTTP/1.1\r\n"
+            . "Host: localhost\r\n"
+            . "Content-Type: multipart/form-data; boundary=X\";foo=\"bar\r\n"
+            . "Content-Length: " . strlen($body) . "\r\n"
+            . "Connection: close\r\n"
+            . "\r\n"
+            . $body;
+      },
+      // Attack B — 4 KiB boundary (algorithmic DoS surface)
+      function (string $hostPort): string {
+         $huge = str_repeat('A', 4096);
+         $body = "hello";
+         return "POST /upload HTTP/1.1\r\n"
+            . "Host: localhost\r\n"
+            . "Content-Type: multipart/form-data; boundary={$huge}\r\n"
+            . "Content-Length: " . strlen($body) . "\r\n"
+            . "Connection: close\r\n"
             . "\r\n"
             . $body;
       },
@@ -138,33 +150,9 @@ return new Specification(
 
    test: function (array $responses): bool|string {
       foreach ($responses as $i => $response) {
-         if ($i === 0 || $i === 1) {
-            $label = $i === 0 ? 'Attack A (quote injection)' : 'Attack B (4KiB boundary)';
-
-            if ($response === '') {
-               return "{$label}: server returned no response.";
-            }
-
-            if (str_contains($response, 'UPLOAD-HANDLED')) {
-               Vars::$labels = ["{$label} — HTTP Response (truncated):"];
-               dump(json_encode(substr($response, 0, 300)));
-               return "{$label}: handler ran with a malformed multipart "
-                    . 'boundary. Server must reject with 400 Bad Request '
-                    . '(RFC 7578 §4.1 — bchars, 1-70 chars).';
-            }
-
-            if ( ! str_contains($response, '400 Bad Request')) {
-               Vars::$labels = ["{$label} — HTTP Response (truncated):"];
-               dump(json_encode(substr($response, 0, 300)));
-               return "{$label}: server must reject with 400 Bad Request.";
-            }
-
-            continue;
-         }
-
-         // Attack C assertions: upload should succeed but filename must not
-         // preserve a leading dot.
-         if ($i === 2) {
+         // Index 0 = Attack C (valid multipart) — must reach the handler and
+         //   succeed; sanitized filename must not preserve a leading dot.
+         if ($i === 0) {
             if ($response === '') {
                return 'Attack C (leading-dot filename): server returned no response.';
             }
@@ -195,7 +183,27 @@ return new Specification(
             continue;
          }
 
-         return 'Unexpected extra response in 07.01 test payloads.';
+         // Indices 1, 2 = Attacks A, B (malformed boundaries) — must be
+         //   rejected with 400 Bad Request at decode time.
+         $label = $i === 1 ? 'Attack A (quote injection)' : 'Attack B (4KiB boundary)';
+
+         if ($response === '') {
+            return "{$label}: server returned no response.";
+         }
+
+         if (str_contains($response, 'UPLOAD-HANDLED')) {
+            Vars::$labels = ["{$label} — HTTP Response (truncated):"];
+            dump(json_encode(substr($response, 0, 300)));
+            return "{$label}: handler ran with a malformed multipart "
+                 . 'boundary. Server must reject with 400 Bad Request '
+                 . '(RFC 7578 §4.1 — bchars, 1-70 chars).';
+         }
+
+         if ( ! str_contains($response, '400 Bad Request')) {
+            Vars::$labels = ["{$label} — HTTP Response (truncated):"];
+            dump(json_encode(substr($response, 0, 300)));
+            return "{$label}: server must reject with 400 Bad Request.";
+         }
       }
 
       if (count($responses) !== 3) {

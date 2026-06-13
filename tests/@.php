@@ -82,5 +82,9 @@ return new Suites(
       'Bootgly/ADI/Databases/SQL/',
       'Bootgly/API/Projects/Project/',
       'Bootgly/ACI/Schedule/',
+      // Security (re-enabled — appended LAST to keep coverage-probe indices
+      // 4, 8 and 14-21 stable; the original in-place slot above stays
+      // commented for documentation).
+      #'Bootgly/WPI/Nodes/HTTP_Server_CLI/tests/Security/',
    ]
 );
