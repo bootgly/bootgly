@@ -12,6 +12,7 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders;
 
 
 use function array_key_first;
+use function array_key_last;
 use function count;
 use function strpos;
 
@@ -38,10 +39,12 @@ class Decoder_ extends Decoders
          // @ Do not cache query-bearing targets. They are attacker-mutable and
          //   create one-shot key churn that evicts hot entries with no hit-rate
          //   benefit (DoS amplification vector).
-         $requestLineEnd = strpos($buffer, "\r\n");
-         if ($requestLineEnd !== false) {
-            $queryMark = strpos($buffer, '?');
-            if ($queryMark !== false && $queryMark < $requestLineEnd) {
+         // ?! Probe for '?' first: query-less requests (the hot case) cost a
+         //   single memchr scan and skip the CRLF scan entirely.
+         $queryMark = strpos($buffer, '?');
+         if ($queryMark !== false) {
+            $requestLineEnd = strpos($buffer, "\r\n");
+            if ($requestLineEnd === false || $queryMark < $requestLineEnd) {
                $cacheable = false;
             }
          }
@@ -52,9 +55,12 @@ class Decoder_ extends Decoders
       // ? Check local cache and return
       if ($cacheKey !== null && isSet($inputs[$cacheKey])) {
          $cached = $inputs[$cacheKey];
-         // @ LRU touch on hit (move to tail).
-         unset($inputs[$cacheKey]);
-         $inputs[$cacheKey] = $cached;
+         // @ LRU touch on hit (move to tail) — skipped when the key is
+         //   already the most recent (single-hot-key workloads).
+         if (array_key_last($inputs) !== $cacheKey) {
+            unset($inputs[$cacheKey]);
+            $inputs[$cacheKey] = $cached;
+         }
 
          // ! Security: never serve the cached template directly. Handler /
          //   middleware mutations (attributes, Header writes, auth decisions)

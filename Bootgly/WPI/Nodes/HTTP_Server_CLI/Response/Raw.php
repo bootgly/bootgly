@@ -24,6 +24,18 @@ trait Raw
    public Header $Header;
    public Body $Body;
 
+   // # Encode fast-lane cache: full wire bytes of the previous response,
+   //   valid while every input it was derived from is identical. Inputs
+   //   are pointer-stable on the hot path (status line untouched at 200,
+   //   `Header->raw` reused until the per-second Date rebuild, body set
+   //   from an interned string by the handler), so the three `===` guards
+   //   cost O(1); any real change (new header block, different body,
+   //   status transition) is a content mismatch and rebuilds.
+   private string $wire = '';
+   private string $wireStatus = '';
+   private string $wireHeader = '';
+   private string $wireBody = '';
+
    /**
     * Encode the Response raw for sending.
     *
@@ -41,8 +53,40 @@ trait Raw
       $Header  = &$this->Header;
       $Body = &$this->Body;
 
-      // HTTP/1.0 backward compatibility (RFC 9110 §2.5)
       $Request = $this->Request ?? Server::$Request;
+
+      // @ Fast lane (typical case): plain buffered HTTP/1.1 response, no
+      //   stream/chunked/pre-encoded body, not a HEAD request. Content-Length
+      //   is derived from the body, so the cached bytes stay correct whenever
+      //   status line + header block + body all match.
+      if (
+         $this->stream === false && $this->chunked === false && $this->encoded === false
+         && $Request->method !== 'HEAD' && $Request->protocol !== 'HTTP/1.0'
+      ) {
+         $Header->build();
+
+         if (
+            $this->wire !== ''
+            && $this->wireStatus === $this->response
+            && $this->wireHeader === $Header->raw
+            && $this->wireBody === $Body->raw
+         ) {
+            return $this->wire;
+         }
+
+         $raw = $Body->raw;
+         $wire = "{$this->response}\r\n{$Header->raw}\r\nContent-Length: "
+            . strlen($raw) . "\r\n\r\n{$raw}";
+
+         $this->wireStatus = $this->response;
+         $this->wireHeader = $Header->raw;
+         $this->wireBody = $raw;
+         $this->wire = $wire;
+
+         return $wire;
+      }
+
+      // HTTP/1.0 backward compatibility (RFC 9110 §2.5)
       if ($Request->protocol === 'HTTP/1.0') {
          // Respond with HTTP/1.0 status-line for 1.0 clients
          $response = "HTTP/1.0 {$this->status}";
