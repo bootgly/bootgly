@@ -20,11 +20,15 @@ use function strtolower;
 use function trim;
 use Closure;
 
+use Bootgly\ACI\Logs\LoggableEscaped;
 use Bootgly\API\Workables\Server\Middleware;
 
 
 class TrustedProxy implements Middleware
 {
+   use LoggableEscaped;
+
+
    // * Config
    /** @var array<string> */
    public private(set) array $proxies;
@@ -33,26 +37,58 @@ class TrustedProxy implements Middleware
    // ...
 
    // * Metadata
-   // ...
+   //   True when the constructor fell back to the localhost default trust list
+   //   (the caller passed no explicit `$proxies`); drives a one-time hardening
+   //   warning when such a default actually trusts a peer (audit F-3).
+   protected bool $localhostDefault;
 
 
    /**
-    * @param array<string> $proxies Trusted proxy IP addresses.
+    * @param null|array<string> $proxies Trusted proxy IP addresses. When null,
+    *   falls back to the localhost default (`127.0.0.1`, `::1`) and logs a
+    *   one-time warning the first time it trusts a forwarded header — set an
+    *   explicit list in production.
     */
    public function __construct (
-      array $proxies = ['127.0.0.1', '::1']
+      null|array $proxies = null
    )
    {
       // * Config
-      $this->proxies = $proxies;
+      if ($proxies === null) {
+         $this->proxies = ['127.0.0.1', '::1'];
+         $this->localhostDefault = true;
+      }
+      else {
+         $this->proxies = $proxies;
+         $this->localhostDefault = false;
+      }
    }
 
    public function process (object $Request, object $Response, Closure $next): object
    {
-      // ? Only resolve if request comes from trusted proxy
+      // ? Only resolve if request comes from trusted proxy.
       $clientIp = $Request->address; // @phpstan-ignore-line
       if (in_array($clientIp, $this->proxies, true) === false) {
          return $next($Request, $Response);
+      }
+
+      // ! One-time hardening warning (audit F-3): a peer is being trusted under
+      //   the DEFAULT localhost list. In production the trust list MUST be set
+      //   explicitly — otherwise anything able to reach the server from
+      //   127.0.0.1/::1 (sidecar, SSRF pivot, dev port-forward) can spoof
+      //   `$Request->address` via X-Forwarded-For.
+      if ($this->localhostDefault) {
+         static $warned = false;
+         if ($warned === false) {
+            $warned = true;
+            $this->log(
+               'TrustedProxy: trusting forwarded headers using the DEFAULT '
+               . 'localhost proxy list (127.0.0.1, ::1). Set an explicit '
+               . '`proxies` list in production to prevent X-Forwarded-For '
+               . 'spoofing from co-located/localhost clients.',
+               self::LOG_WARNING_LEVEL
+            );
+         }
       }
 
       // @ Try X-Forwarded-For first

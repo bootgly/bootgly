@@ -16,6 +16,7 @@ return new Suite(
    tests: [
       '1.1-cors',
       '2.1-rate_limit',
+      '2.2-rate_limit_immutable_peer',
       '3.1-body_parser',
       '4.1-compression',
       '5.1-etag',

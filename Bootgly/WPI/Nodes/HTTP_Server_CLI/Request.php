@@ -111,12 +111,26 @@ class Request
    // \ TCP
    // / Connection
    /**
-    * The IP address of the HTTP Client.
-    * Always reflects the TCP-level connection IP.
-    * To trust proxy headers (X-Forwarded-For, cf-connecting-ip, etc.),
-    * use the TrustedProxy middleware with the proxy's IP in the trusted list.
+    * The application-facing IP address of the HTTP Client.
+    *
+    * Initialized to the TCP-level connection IP, but MAY be overwritten by the
+    * `TrustedProxy` middleware from a client-supplied header (X-Forwarded-For /
+    * X-Real-IP) when the connection arrives from a trusted proxy. Therefore it
+    * is NOT a security-authoritative identity: a client behind (or co-located
+    * with) a trusted proxy can influence it. Security decisions that must not be
+    * spoofable (rate limiting, IP ACLs) should key on `$peer` instead.
     */
    public string $address = '';
+   /**
+    * The immutable TCP transport peer IP of the connection.
+    *
+    * Always the real socket peer; never altered by `TrustedProxy` or any other
+    * middleware (write access is restricted via `protected(set)`). This is the
+    * authoritative identity for anti-abuse controls — behind a reverse proxy it
+    * is the proxy's IP, so opt into header-derived keying explicitly when the
+    * forwarded chain is genuinely trusted.
+    */
+   public protected(set) string $peer = '';
    /**
     * The port of the HTTP Client.
     */
@@ -778,8 +792,10 @@ class Request
       $this->Body->assume($Template->Body);
 
       // @ Connection truth — re-set every request: TrustedProxy may have
-      //   overwritten these on the previous request of this connection.
+      //   overwritten `address`/`scheme` on the previous request of this
+      //   connection. `peer` is the immutable transport IP (never proxy-mutated).
       $this->address = $Connection->ip;
+      $this->peer = $Connection->ip;
       $this->port = $Connection->port;
       $this->scheme = $Connection->encrypted ? 'https' : 'http';
 
@@ -952,8 +968,10 @@ class Request
 
       // @ Set Request
       // # Request
-      // address
+      // address (application-facing; TrustedProxy may overwrite it)
       $this->address = $Package->Connection->ip;
+      // peer (immutable TCP transport IP; never proxy-mutated)
+      $this->peer = $Package->Connection->ip;
       // port
       $this->port = $Package->Connection->port;
       // scheme

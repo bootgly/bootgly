@@ -60,6 +60,7 @@ return function (
    // @ Default properties
    $Request->method = 'GET';
    $Request->address = '127.0.0.1';
+   $Request->peer = '127.0.0.1'; // immutable transport peer (audit F-3)
    $Request->input = '';
    $Request->scheme = 'http';
    // @ Override with provided values

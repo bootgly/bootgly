@@ -33,6 +33,7 @@ class RateLimit implements Middleware
    // * Config
    public private(set) int $limit;
    public private(set) int $window;
+   public private(set) bool $trustForwarded;
    public private(set) null|Closure $clock;
 
    // * Data
@@ -42,6 +43,7 @@ class RateLimit implements Middleware
    public function __construct (
       int $limit = 60,
       int $window = 60,
+      bool $trustForwarded = false,
       null|Closure $clock = null,
       null|Cache $Cache = null
    )
@@ -49,6 +51,12 @@ class RateLimit implements Middleware
       // * Config
       $this->limit = $limit;
       $this->window = $window;
+      // ? Key selection (audit F-3). Default keys on the immutable TCP transport
+      //   peer (`$Request->peer`), which a client cannot spoof — so an attacker
+      //   co-located with / behind a trusted proxy cannot evade the limit by
+      //   rotating X-Forwarded-For. Set true ONLY behind a genuinely trusted
+      //   proxy chain, to key on the proxy-derived `$Request->address` instead.
+      $this->trustForwarded = $trustForwarded;
       $this->clock = $clock;
 
       // * Data
@@ -65,7 +73,11 @@ class RateLimit implements Middleware
       $now = $this->clock === null
          ? time()
          : (int) ($this->clock)();
-      $ip = $Request->address; // @phpstan-ignore-line
+      // @ Spoof-proof key by default: the immutable transport peer. Opt into the
+      //   proxy-derived application IP only when the forwarded chain is trusted.
+      $ip = $this->trustForwarded
+         ? $Request->address // @phpstan-ignore-line
+         : $Request->peer;   // @phpstan-ignore-line
 
       // @ Consume a request token from the shared counter
       $count = $this->Cache->increment($ip, 1, $this->window);
