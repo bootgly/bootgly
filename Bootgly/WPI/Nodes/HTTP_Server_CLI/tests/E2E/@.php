@@ -3,10 +3,12 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\tests\E2E;
 
 
+use const BOOTGLY_ROOT_DIR;
+use function define;
 use function defined;
 
-use Bootgly\ACI\Tests\Suite;
 use Bootgly\ACI\Logs\Logger;
+use Bootgly\ACI\Tests\Suite;
 use Bootgly\API\Endpoints\Server\Modes;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI;
 
@@ -300,6 +302,9 @@ return new Suite(
          '1.8-scheduled_deferred_readiness_write',
          '1.9-scheduled_deferred_response_isolation',
          '1.10-scheduled_deferred_removed_readiness',
+      ],
+      'Queues/' => [
+         '1.1-http-enqueue',
       ]
    ]
 );
