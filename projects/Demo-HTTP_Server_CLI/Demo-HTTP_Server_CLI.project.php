@@ -53,30 +53,10 @@ return new Project(
          // requestMaxMultipartFields: 1024,                // 1024 (default) — max number of text fields per request
          // requestMaxMultipartFiles: 1024,                 // 1024 (default) — max number of file parts per request
       );
-      // # Test (Benchmarking)
-      // $HTTP_Server_CLI->on(Events::RequestReceived, require __DIR__ . '/router/HTTP_Server_CLI-benchmark-bootgly_router.SAPI.php');
-      // $HTTP_Server_CLI->on(Events::RequestReceived, require __DIR__ . '/router/HTTP_Server_CLI-benchmark-static_router.SAPI.php');
-      // # Test Request - Download (streaming decoder writes directly to disk)
-      // $HTTP_Server_CLI->on(Events::RequestReceived, require __DIR__ . '/router/HTTP_Server_CLI-request-download.SAPI.php');
-      // # Test Request - Basic request tests
-      // $HTTP_Server_CLI->on(Events::RequestReceived, require __DIR__ . '/router/HTTP_Server_CLI-request.SAPI.php');
-      // # Test Request - Input validation examples
-      // $HTTP_Server_CLI->on(Events::RequestReceived, require __DIR__ . '/router/HTTP_Server_CLI-validation.SAPI.php');
-      // # Test Request - Authentication examples (Basic, Bearer, JWT)
-      // $HTTP_Server_CLI->on(Events::RequestReceived, require __DIR__ . '/router/HTTP_Server_CLI-authentication.SAPI.php');
-      // # Test Request - Authorization examples (Scope, Role, Policy)
-      // $HTTP_Server_CLI->on(Events::RequestReceived, require __DIR__ . '/router/HTTP_Server_CLI-authorization.SAPI.php');
-      // # Test Response - Basic response tests
-      // $HTTP_Server_CLI->on(Events::RequestReceived, require __DIR__ . '/router/HTTP_Server_CLI-response.SAPI.php');
-      // # Test Response - Scheduled (delayed/async) responses
-      // $HTTP_Server_CLI->on(Events::RequestReceived, require __DIR__ . '/router/HTTP_Server_CLI-response-scheduled.SAPI.php');
-      // # Test Router - all route cases from Testing.routes.php adapted to Generator pattern
-      // $HTTP_Server_CLI->on(Events::RequestReceived, require __DIR__ . '/router/HTTP_Server_CLI-router.SAPI.php');
-      // $HTTP_Server_CLI->on(Events::RequestReceived, fn ($Request, $Response) => $Response(body: 'Hello, World!'));
-
       $HTTP_Server_CLI
-         // # Test Response - Database (native async PostgreSQL examples)
-         ->on(Events::RequestReceived, require __DIR__ . '/router/HTTP_Server_CLI-response-database.SAPI.php')
+         // # Routes — the active set is selected in router/router.index.php
+         //   (swap the require there to switch demos)
+         ->on(Events::RequestReceived, HTTP_Server_CLI::$Router->load(__DIR__ . '/router'))
          ->on(Events::ServerStarted, function ($HTTP_Server_CLI) {
             $Output = CLI->Terminal->Output;
 

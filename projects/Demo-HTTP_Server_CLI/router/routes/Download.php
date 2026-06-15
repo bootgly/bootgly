@@ -8,8 +8,7 @@
  * It accepts file uploads via POST and returns metadata about uploaded files.
  *
  * Usage:
- *   1. In HTTP_Server_CLI.project.php, change the on line to:
- *      $Server->on(Events::RequestReceived, require __DIR__ . '/router/HTTP_Server_CLI-download.SAPI.php');
+ *   1. Enable it in router/router.index.php: add 'Download' to the manifest.
  *
  *   2. Start the server:
 *      bootgly project Demo-HTTP_Server_CLI start

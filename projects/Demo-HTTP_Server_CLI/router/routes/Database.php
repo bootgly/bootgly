@@ -21,9 +21,9 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\Database as DatabaseRes
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router;
 
 
-require_once __DIR__ . '/../Models/DemoUser.php';
-require_once __DIR__ . '/../Models/DemoLazyUser.php';
-require_once __DIR__ . '/../Models/DemoPost.php';
+require_once __DIR__ . '/../../Models/DemoUser.php';
+require_once __DIR__ . '/../../Models/DemoLazyUser.php';
+require_once __DIR__ . '/../../Models/DemoPost.php';
 
 
 

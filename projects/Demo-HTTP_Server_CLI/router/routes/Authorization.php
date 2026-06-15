@@ -11,8 +11,7 @@
 /**
  * Authorization routes example.
  *
- * Enable it in Demo-HTTP_Server_CLI.project.php with:
- *   request: require __DIR__ . '/router/HTTP_Server_CLI-authorization.SAPI.php',
+ * Enable it in router/router.index.php: add 'Authorization' to the manifest.
  *
  * Try:
  *   curl http://localhost:8082/authz/jwt/issue

@@ -16,9 +16,7 @@
  *   - Dynamic: paths with parameters like /user/:id, /post/:slug
  *   - Catch-all: paths that match any route not previously defined
  *
- * NOTE: This file uses the generator (yield) handler pattern.
- *       To use it, register it in HTTP_Server_CLI.project.php:
- *         $Server->on(Events::RequestReceived, require __DIR__ . '/router/routes/Core.routes.php');
+ * Enable it in router/router.index.php: add 'Core' to the manifest.
  */
 
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router;

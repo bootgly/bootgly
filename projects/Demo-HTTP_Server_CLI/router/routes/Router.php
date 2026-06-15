@@ -1,6 +1,6 @@
 <?php
 /**
- * Testing SAPI — All route cases from Testing.routes.php adapted to Generator pattern.
+ * Router routes example — all route cases in the Generator (yield) pattern.
  * Tests: closures, functions, static methods, custom/multiple methods, params with/without regex,
  *        duplicate params, inline regex, nested groups, catch-all parameterized, catch-all 404.
  */

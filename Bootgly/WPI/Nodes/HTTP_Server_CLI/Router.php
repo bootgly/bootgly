@@ -97,46 +97,70 @@ class Router
    }
 
    /**
-    * Boot the router with the given instances routes.
+    * Load the router from its folder and return the request handler.
     *
-    * @param string $path The path to the router directory.
-    * @param string|array<string> $instances The instances to boot.
+    * Reads the router index (`router.index.php`) inside `$path` — a manifest of route set
+    * names. Each name resolves to `routes/<Name>.php`, a generator-closure
+    * `(Request, Response, Router): Generator`. A single set is returned directly; multiple
+    * sets are composed (`yield from` each) into one handler. Pass the result to
+    * `->on(Events::RequestReceived, ...)`.
+    *
+    * The folder is the router home — reserved for future `router.config.php` defaults.
+    *
+    * @param string $path The router folder path.
     */
-   public function boot (string $path, string|array $instances = ['routes']): void
+   public function load (string $path): Closure
    {
-      // @ Prepare import
-      $Request = WPI->Request;
-      $Route = &$this->Route;
-      $Router = &$this;
-      // @ Set import data
-      $data = [];
-      $data['Request'] = $Request;
-      $data['Route'] = $Route;
-      $data['Router'] = $Router;
+      // ? Normalize router folder path
+      $path = rtrim($path, '/');
 
-      // @ Instance file
-      // ? File path
-      $boot = "$path/router/";
-      $Index = new File("{$boot}index.php");
-      // @ Boot (include router index file)
-      if ($Index->file) {
-         (static function (string $__file__, array $__data__) {
-            extract($__data__);
-            include_once $__file__;
-         })($Index->file, $data);
+      // @ (future) router.config.php — customize Router defaults
+      //   $Config = new File("$path/router.config.php"); apply if present.
+
+      // @ Read router index (manifest of route set names)
+      $Index = new File("$path/router.index.php");
+      // ? Index must exist
+      if ($Index->exists === false) {
+         throw new InvalidArgumentException("Router index not found: $path/router.index.php");
+      }
+      $names = require $Index->file;
+      // ? Index must return a non-empty list of route set names
+      if (is_array($names) === false || $names === []) {
+         throw new InvalidArgumentException('router.index.php must return a non-empty array of route set names.');
       }
 
-      // @ Boot (include routes files)
-      $instances = (array) $instances;
-      foreach ($instances as $instance) {
-         $Instance = new File($boot . $instance . '.php');
-         if ($Instance->file) {
-            (static function (string $__file__, array $__data__) {
-               extract($__data__);
-               @include_once $__file__;
-            })($Instance->file, $data);
+      // @ Resolve each name to its route set closure
+      $Sets = [];
+      foreach ($names as $name) {
+         // ? Each name must be a string
+         if (is_string($name) === false) {
+            throw new InvalidArgumentException('router.index.php must return an array of route set name strings.');
          }
+
+         $Set = new File("$path/routes/$name.php");
+         // ? Set file must exist
+         if ($Set->exists === false) {
+            throw new InvalidArgumentException("Route set not found: $path/routes/$name.php");
+         }
+         $Handler = require $Set->file;
+         // ? Set must be a generator-closure
+         if ($Handler instanceof Closure === false) {
+            throw new InvalidArgumentException("Route set '$name' must return a Closure (Request, Response, Router): Generator.");
+         }
+         $Sets[] = $Handler;
       }
+
+      // ? Single set — return it directly (no compose overhead)
+      if (count($Sets) === 1) {
+         return $Sets[0];
+      }
+
+      // : Compose multiple sets into one handler
+      return static function (Request $Request, Response $Response, Router $Router) use ($Sets): Generator {
+         foreach ($Sets as $Set) {
+            yield from $Set($Request, $Response, $Router);
+         }
+      };
    }
 
    public function pause (): void

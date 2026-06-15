@@ -11,8 +11,7 @@
 /**
  * Authentication routes example.
  *
- * Enable it in Demo-HTTP_Server_CLI.project.php with:
- *   request: require __DIR__ . '/router/HTTP_Server_CLI-authentication.SAPI.php',
+ * Enable it in router/router.index.php: add 'Authentication' to the manifest.
  *
  * Try:
  *   curl http://localhost:8082/auth
