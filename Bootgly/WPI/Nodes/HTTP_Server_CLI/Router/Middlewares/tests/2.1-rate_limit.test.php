@@ -9,6 +9,7 @@ use Bootgly\ACI\Tests\Assertions;
 use Bootgly\ACI\Tests\Doubles\Fake\Clock;
 use Bootgly\ACI\Tests\Suite\Test\Specification;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Middlewares\RateLimit;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Middlewares\RateLimit\Algorithms;
 
 
 return new Specification(
@@ -36,6 +37,7 @@ return new Specification(
          $RateLimit = new RateLimit(
             limit: 3,
             window: 60,
+            algorithm: Algorithms::Fixed, // this suite asserts exact fixed-window counts
             clock: fn (): float => $Clock->now,
             Cache: $Cache
          );
