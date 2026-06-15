@@ -249,8 +249,19 @@ class Connection extends Packages
 
       $this->status = Connections::STATUS_CLOSED;
 
-      // @ Destroy itself
-      unset(Connections::$Connections[$this->id]);
+      // @ Destroy itself + release its per-IP slot (audit F-2). The decrement
+      //   is gated on membership so it stays balanced: a connection shed by the
+      //   per-IP ceiling (closed before it was ever established) is not counted
+      //   and therefore not decremented.
+      if ( isSet(Connections::$Connections[$this->id]) ) {
+         unset(Connections::$Connections[$this->id]);
+
+         if ( isSet(Connections::$ipConnections[$this->ip]) ) {
+            if ( --Connections::$ipConnections[$this->ip] <= 0 ) {
+               unset(Connections::$ipConnections[$this->ip]);
+            }
+         }
+      }
 
       return true;
    }

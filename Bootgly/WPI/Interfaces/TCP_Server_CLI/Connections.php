@@ -13,6 +13,7 @@ namespace Bootgly\WPI\Interfaces\TCP_Server_CLI;
 #use const PHP_EOL;
 
 
+use function count;
 use function explode;
 use function str_starts_with;
 use function stream_set_blocking;
@@ -51,6 +52,8 @@ class Connections implements WPI\Connections
    // @ Limiter
    /** @var array<string,bool> */
    public static array $blacklist;
+   /** @var array<string,int> Live established-connection count per peer IP (audit F-2). */
+   public static array $ipConnections;
    // @ Stats
    public static bool $stats;
    // Connections
@@ -88,6 +91,7 @@ class Connections implements WPI\Connections
       self::$Connections = []; // Connections peers
       // @ Limiter
       self::$blacklist = [];   // Connections blacklist defined by limit methods
+      self::$ipConnections = []; // Live established-connection count per peer IP
       // @ Stats
       // ! Off by default: 4 static increments per request, only consumed by
       //   the `stats` command — which lazily enables collection when first
@@ -123,6 +127,38 @@ class Connections implements WPI\Connections
       ], From: $this->Server);
 
       return null;
+   }
+
+   /**
+    * May a new connection from `$ip` be admitted under the configured
+    * concurrency ceilings? (audit F-2)
+    *
+    * Returns false when accepting it would reach the global ceiling
+    * (`Server::$maxConnections`) or this peer's per-IP ceiling
+    * (`Server::$maxConnectionsPerIP`, opt-in). Either ceiling is disabled by a
+    * 0 value. Mirrors `Connection::check()` (true = proceed) and is isolated so
+    * it is unit-testable without a live socket. Consulted once per accept —
+    * never on the per-request hot path.
+    */
+   public static function check (string $ip): bool
+   {
+      // ? Global ceiling.
+      if (
+         Server::$maxConnections > 0
+         && count(self::$Connections) >= Server::$maxConnections
+      ) {
+         return false;
+      }
+
+      // ? Per-IP ceiling (opt-in; 0 = unlimited, reverse-proxy-safe default).
+      if (
+         Server::$maxConnectionsPerIP > 0
+         && (self::$ipConnections[$ip] ?? 0) >= Server::$maxConnectionsPerIP
+      ) {
+         return false;
+      }
+
+      return true;
    }
 
    // Accept connection from client / Open connection with client / Connect with client
@@ -161,11 +197,23 @@ class Connections implements WPI\Connections
          return false;
       }
 
+      // ? Concurrency ceilings (audit F-2): shed when the global or this peer's
+      //   per-IP limit is reached, bounding FD/memory under a connection flood.
+      //   `check()` is once-per-accept; the per-request hot path is untouched.
+      if ( self::check($Connection->ip) === false ) {
+         self::$errors['connection']++;
+         $Connection->close();
+         return false;
+      }
+
       // @ Set stats
       $this->connections++;
 
       // @ Set Connection
       self::$Connections[(int) $Socket] = $Connection;
+      // @ Track live per-IP count (balanced by Connection::close()).
+      self::$ipConnections[$Connection->ip] =
+         (self::$ipConnections[$Connection->ip] ?? 0) + 1;
 
       // @ Add Connection Data read to Event loop
       $added = Server::$Event->add($Socket, Server::$Event::EVENT_READ, $Connection);

@@ -156,5 +156,9 @@ return new Suite(
       // `$allowedHosts` allowlist and is still dispatched; must be
       // rejected `505 HTTP Version Not Supported` before framing.
       '25.01-request_line_protocol_token_not_validated',
+      // # Connections (concurrency ceiling)
+      // connection-exhaustion DoS (audit F-2) — Connections::connect() must
+      // enforce a global (and opt-in per-IP) concurrent-connection ceiling.
+      '26.01-connection_concurrency_ceiling',
    ],
 );

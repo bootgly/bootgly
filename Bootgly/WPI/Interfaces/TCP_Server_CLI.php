@@ -138,6 +138,18 @@ class TCP_Server_CLI implements Servers, Logging
    //   before the connection is closed deterministically. Replaces the
    //   previous synchronous `stream_select(..., 200_000)` retry loop.
    public static int $maxWriteWallTime = 30;
+   // # Connection-exhaustion caps (audit F-2)
+   //   Maximum simultaneously-established connections per worker. New
+   //   connections accepted past this ceiling are immediately shed (accepted
+   //   then closed) to bound FD/memory under a connection-flood DoS. 0 =
+   //   unlimited. Evaluated once per accept — never on the per-request hot
+   //   path — so it does not affect throughput on established connections.
+   public static int $maxConnections = 10000;
+   //   Maximum simultaneously-established connections from a single peer IP.
+   //   Opt-in (0 = unlimited) because reverse-proxy deployments collapse every
+   //   client onto one source IP; enable it only when the peer IP is the real
+   //   client. When > 0, accepts past it are shed.
+   public static int $maxConnectionsPerIP = 0;
    /** @var array<string,true> */
    protected array $Events = [];
 

@@ -174,6 +174,8 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       null|int $requestMaxMultipartFields = null,
       null|int $requestMaxMultipartFiles = null,
       null|int $downloadsMaxBytesOnDisk = null,
+      null|int $maxConnections = null,
+      null|int $maxConnectionsPerIP = null,
       null|array $responseResources = null
    ): self
    {
@@ -209,6 +211,13 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       }
       if ($downloadsMaxBytesOnDisk !== null) {
          Downloads::$maxBytesOnDisk = $downloadsMaxBytesOnDisk;
+      }
+      // @ Connection-exhaustion caps (audit F-2)
+      if ($maxConnections !== null) {
+         self::$maxConnections = $maxConnections;
+      }
+      if ($maxConnectionsPerIP !== null) {
+         self::$maxConnectionsPerIP = $maxConnectionsPerIP;
       }
       if ($responseResources !== null) {
          self::$Response->Resources->load($responseResources);
