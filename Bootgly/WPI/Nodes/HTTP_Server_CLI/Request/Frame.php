@@ -23,6 +23,7 @@ use function strspn;
 use function strstr;
 use function strtolower;
 use function substr;
+use function substr_count;
 use function trim;
 
 use Bootgly\API\Environments;
@@ -95,6 +96,22 @@ final class Frame
          return null;
       }
 
+      // @ Reject bare-LF in the head (a `\n` not preceded by `\r`), BEFORE the
+      //   request line is parsed. The head is split on CRLF only, so a lone LF
+      //   lets a tolerant upstream proxy and Bootgly disagree on line
+      //   boundaries (request smuggling) and can fold a pseudo-header into the
+      //   request-line `protocol` token. A CRLF-terminated head has exactly as
+      //   many LFs as CRLFs; any surplus LF is bare. Two C-level scans over the
+      //   small head region — negligible on the hot path.
+      $head_length = $separator_position + 4;
+      if (
+         substr_count($buffer, "\n", 0, $head_length)
+         !== substr_count($buffer, "\r\n", 0, $head_length)
+      ) {
+         $Package->reject("HTTP/1.1 400 Bad Request\r\n\r\n");
+         return null;
+      }
+
       // @ Request line (first line of the head).
       $meta_raw = strstr($buffer, "\r\n", true);
       if ($meta_raw === false) {
@@ -104,6 +121,16 @@ final class Frame
       @[$method, $URI, $protocol] = explode(' ', $meta_raw, 3);
       if (! $method || ! $URI || ! $protocol) {
          $Package->reject("HTTP/1.1 400 Bad Request\r\n\r\n");
+         return null;
+      }
+      // @ Validate the request-line protocol token, BEFORE any framing
+      //   decision. It is otherwise consumed only via exact equality
+      //   (`=== 'HTTP/1.1'` / `=== 'HTTP/1.0'`), so an unconstrained version
+      //   (`HTTP/9.9`, `HTTP/1.1x`, ` HTTP/1.1`) silently turns off both the
+      //   mandatory-Host guard and the Host allowlist. Hot path is `HTTP/1.1`
+      //   → first compare short-circuits, second is skipped.
+      if ($protocol !== 'HTTP/1.1' && $protocol !== 'HTTP/1.0') {
+         $Package->reject("HTTP/1.1 505 HTTP Version Not Supported\r\n\r\n");
          return null;
       }
       switch ($method) {

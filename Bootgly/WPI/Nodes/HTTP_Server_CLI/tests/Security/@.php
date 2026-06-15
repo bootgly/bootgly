@@ -150,5 +150,11 @@ return new Suite(
       // subsequent requests on the SAME keep-alive connection — behind a
       // keep-alive proxy, a same-connection leak is a cross-user leak.
       '24.01-decoder_cache_same_connection_request_reuse',
+      // # Request line (protocol token)
+      // unvalidated `protocol` token (audit F-1) — a bogus version
+      // (`HTTP/9.9`) escapes BOTH the mandatory-Host guard and the
+      // `$allowedHosts` allowlist and is still dispatched; must be
+      // rejected `505 HTTP Version Not Supported` before framing.
+      '25.01-request_line_protocol_token_not_validated',
    ],
 );

@@ -11,11 +11,11 @@ return new Specification(
 
       return <<<HTTP
       GET / HTTP/1.1\r
-      Host: lab.bootgly.com
-      User-Agent: Bootgly/TCP-Server
+      Host: lab.bootgly.com\r
+      User-Agent: Bootgly/TCP-Server\r
       Accept-Language: en-US,en;q=0.9\r
       \r
-      
+
       HTTP;
    },
    response: function (Request $Request, Response $Response): Response {
@@ -28,9 +28,9 @@ return new Specification(
       HTTP/1.1 200 OK\r
       Server: Bootgly\r
       Content-Type: application/json\r
-      Content-Length: 92\r
+      Content-Length: 96\r
       \r
-      {"host":"lab.bootgly.com\\nUser-Agent: Bootgly\/TCP-Server\\nAccept-Language: en-US,en;q=0.9"}
+      {"host":"lab.bootgly.com","user-agent":"Bootgly\/TCP-Server","accept-language":"en-US,en;q=0.9"}
       HTML_RAW;
 
       // @ Assert

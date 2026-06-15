@@ -141,6 +141,9 @@ return new Suite(
          // HTTP/1.0 backward compatibility (RFC 9110 §2.5)
          '4.16-request_compliance-http10_status_line',
          '4.17-request_compliance-http10_chunked_disable',
+         // Request-line / framing strictness (audit F-1)
+         '4.18-request_compliance-bare_lf_rejected',
+         '4.19-request_compliance-unsupported_version_505',
          // Fixture injection
          '5.1-request_fixture-injection',
       ],
