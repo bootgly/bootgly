@@ -2,6 +2,39 @@
 
 Changelog for Bootgly framework. All notable changes to this project will be documented in this file. Imported from ROADMAP.md.
 
+## v0.17.0-beta ✅
+
+> Focus: **Caching + Queue + Events**
+
+### ABI — Abstract Bootable Interface
+
+- ✅ Cache abstraction (`ABI/Resources/Cache`): File / APCu / Shared-memory (System V `sysvshm`+`sysvsem`) / blocking Redis (native RESP codec `ABI/Data/RESP` + optional `ext-redis` fast-path) drivers; TTL, tags and invalidation
+- ✅ Events bus (`ABI/Events`): `Emitter` (`listen()` / `emit()`, shared `Emitter::$Instance`, propagation control), priority-ordered `Listener` / `Listeners`, `Event` marker interface + immutable `Emission` carrier
+
+### ACI — Abstract Common Interface
+
+- ✅ Canonical domain events wired across features (emitter-routed enums): `Cache.hit/miss/evict`, `Worker.boot/shutdown/reload`, `Project.boot/shutdown`, `Query.executed` / `DB.connected` / `Query.slow`, `Transaction.begin/commit/rollback`, `Migration.up/down`, `Request.received/handled`, `Session.start/regenerate/destroy`
+- ✅ Job Scheduler (`ACI/Schedule`): cron-style `->repeat()`, `bootgly schedule run` / `list` (`ScheduleCommand`), `->lock()` overlap prevention, `->recover()` catch-up policy, `Started/Finished/Failed/Skipped` lifecycle events
+- ✅ Queue contract (`ACI/Queues`): `Job` / `Handler` contract, `Worker` consume loop, retry / backoff (`Backoffs`: Fixed / Linear / Exponential) + dead-letter, File driver (atomic-rename claim under `workdata/queues/`) and blocking Redis driver, `Queue.dispatch/processed/failed` events, `bootgly queue run` / `list` (`QueueCommand`)
+
+### ADI — Abstract Data Interface
+
+- ✅ Async event-loop Redis driver (`ADI/Databases/KV/Drivers/Redis`) reusing `ABI/Data/RESP` on the async DBAL pool, with per-connection pipelining
+
+### API — Application Programming Interface
+
+- ✅ JWT Vault storage re-platformed onto the Cache facade (`API/Security`)
+- ✅ Opt-in RBAC permission-list caching (`API/Authorization`)
+
+### WPI — Web Programming Interface
+
+- ✅ Queue dispatch adapter (`WPI/Queues/Messenger`): HTTP-context job enqueue over the `ACI/Queues` contract; worker via `bootgly queue run`
+- ✅ Cache-backed session handler as the new default (`WPI/Session/Handlers/Cache`; File handler opt-in)
+- ✅ Async KV (Redis) response resource with pipelining (`WPI/Response`)
+- ✅ Hot-path performance: per-connection `Request` reuse via `assume()`, eliminated hot-path property hooks in `Request` / `Header`, fast-lane raw response encoding cache, per-second Date header cache, TCP stats off by default + `writing()` fast lane
+
+---
+
 ## v0.16.0-beta ✅
 
 > Focus: **DBAL + ORM + Authorization**
