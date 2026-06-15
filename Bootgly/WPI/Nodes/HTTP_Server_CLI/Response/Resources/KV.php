@@ -16,6 +16,10 @@ use RuntimeException;
 
 use Bootgly\ADI\Databases\KV as KVDatabase;
 use Bootgly\ADI\Databases\KV\Operation;
+use Bootgly\API\Environment\Configs;
+use Bootgly\API\Environment\Configs\Config;
+use Bootgly\API\Environment\Configs\KVConfig;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resource;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resource\Scheduling;
 
@@ -47,6 +51,53 @@ class KV extends Resource implements Scheduling
 
       // * Config
       $this->KV = $KV;
+   }
+
+   /**
+    * Provide a lazy factory that builds this resource from a `kv` scope.
+    *
+    * Encapsulates the per-worker connection singleton, the response context
+    * guard and the canonical config path (`Configs` → `KVConfig` → `KV`) so
+    * projects register the resource in a single line.
+    *
+    * @return Closure(object):self
+    */
+   public static function provide (string $configs): Closure
+   {
+      return static function (object $Context) use ($configs): self {
+         // ! Single connection per worker: pending commands pipeline on it
+         static $KV = null;
+
+         // ?
+         if ($Context instanceof Response === false) {
+            throw new RuntimeException('KV response resource expects a Response context.');
+         }
+
+         // @ Build once per worker
+         if ($KV instanceof KVDatabase === false) {
+            $Configs = new Configs($configs);
+            $Configs->allow('kv', [
+               'KV_DRIVER',
+               'KV_ENABLED',
+               'KV_HOST',
+               'KV_POOL_MAX',
+               'KV_POOL_MIN',
+               'KV_PORT',
+               'KV_TIMEOUT',
+            ]);
+            $Scope = $Configs->get('kv');
+
+            // @phpstan-ignore-next-line
+            if ($Scope instanceof Config === false || $Scope->Enabled->get() !== true) {
+               throw new RuntimeException('Enable KV_ENABLED=true in the kv config scope and set KV_HOST and KV_PORT as needed.');
+            }
+
+            $KV = new KVDatabase(new KVConfig($Scope)->configure());
+         }
+
+         // :
+         return new self($KV);
+      };
    }
 
    /**

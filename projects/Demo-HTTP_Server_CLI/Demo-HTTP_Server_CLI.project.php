@@ -13,21 +13,12 @@ namespace projects\Demo_HTTP_Server_CLI;
 
 use function defined;
 use function getenv;
-use function intdiv;
-use function shell_exec;
-use RuntimeException;
 
 use const Bootgly\CLI;
-use Bootgly\ADI\Databases\KV;
-use Bootgly\ADI\Databases\SQL;
 use Bootgly\API\Endpoints\Server\Modes;
-use Bootgly\API\Environment\Configs;
-use Bootgly\API\Environment\Configs\Config;
-use Bootgly\API\Environment\Configs\DatabaseConfig;
 use Bootgly\API\Projects\Project;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Events;
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\Database as DatabaseResource;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\KV as KVResource;
 
@@ -42,65 +33,6 @@ return new Project(
    // # Project Boot Function
    boot: function (array $arguments = [], array $options = []): void
    {
-      $DatabaseResource = static function (object $Context): DatabaseResource {
-         static $Database = null;
-
-         if ($Context instanceof Response === false) {
-            throw new RuntimeException('Database response resource expects a Response context.');
-         }
-
-         if ($Database instanceof SQL === false) {
-            $Configs = new Configs(__DIR__ . '/configs/');
-            $Configs->allow('database', [
-               'DB_CONNECTION',
-               'DB_ENABLED',
-               'DB_HOST',
-               'DB_NAME',
-               'DB_PASS',
-               'DB_POOL_MAX',
-               'DB_POOL_MIN',
-               'DB_PORT',
-               'DB_SSLCAFILE',
-               'DB_SSLMODE',
-               'DB_SSLPEER',
-               'DB_SSLVERIFY',
-               'DB_STATEMENTS',
-               'DB_TIMEOUT',
-               'DB_USER',
-            ]);
-            $Scope = $Configs->get('database');
-
-            // @phpstan-ignore-next-line
-            if ($Scope instanceof Config === false || $Scope->Enabled->get() !== true) {
-               throw new RuntimeException('Enable DB_ENABLED=true in the database config scope and set DB_HOST, DB_PORT, DB_NAME, DB_USER and DB_PASS as needed.');
-            }
-
-            $Database = new SQL((new DatabaseConfig($Scope))->configure());
-         }
-
-         return new DatabaseResource($Database);
-      };
-
-      $KVResource = static function (object $Context): KVResource {
-         static $KV = null;
-
-         if ($Context instanceof Response === false) {
-            throw new RuntimeException('KV response resource expects a Response context.');
-         }
-
-         if ($KV instanceof KV === false) {
-            // ! Single connection per worker: pending commands pipeline on it
-            $KV = new KV([
-               'driver' => 'redis',
-               'host' => getenv('REDIS_HOST') ?: '127.0.0.1',
-               'port' => getenv('REDIS_PORT') ? (int) getenv('REDIS_PORT') : 6379,
-               'pool' => ['min' => 0, 'max' => 1],
-            ]);
-         }
-
-         return new KVResource($KV);
-      };
-
       $HTTP_Server_CLI = new HTTP_Server_CLI(Mode: match (true) {
          isset($options['i']) => Modes::Interactive,
          isset($options['m']) => Modes::Monitor,
@@ -111,8 +43,8 @@ return new Project(
          port: getenv('PORT') ? (int) getenv('PORT') : 8082,
          workers: 1,
          responseResources: [
-            'Database' => $DatabaseResource,
-            'KV' => $KVResource,
+            'Database' => DatabaseResource::provide(__DIR__ . '/configs/'),
+            'KV' => KVResource::provide(__DIR__ . '/configs/'),
          ],
          // requestMaxFileSize: 500 * 1024 * 1024,        // 500 MB (default) — max size per uploaded file part
          // requestMaxBodySize: 10 * 1024 * 1024,         // 10 MB (default) — max total non-multipart body

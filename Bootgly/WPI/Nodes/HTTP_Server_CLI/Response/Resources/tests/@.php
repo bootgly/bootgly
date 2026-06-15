@@ -18,5 +18,7 @@ return new Suite(
    tests: [
       '1.1-database_resource',
       '1.2-kv_resource',
+      '1.3-database_resource_provide',
+      '1.4-kv_resource_provide',
    ]
 );

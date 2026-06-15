@@ -2,36 +2,68 @@
 
 Changelog for Bootgly framework. All notable changes to this project will be documented in this file. Imported from ROADMAP.md.
 
-## v0.17.0-beta ✅
+## v0.17.0-beta
 
 > Focus: **Caching + Queue + Events**
 
 ### ABI — Abstract Bootable Interface
 
-- ✅ Cache abstraction (`ABI/Resources/Cache`): File / APCu / Shared-memory (System V `sysvshm`+`sysvsem`) / blocking Redis (native RESP codec `ABI/Data/RESP` + optional `ext-redis` fast-path) drivers; TTL, tags and invalidation
-- ✅ Events bus (`ABI/Events`): `Emitter` (`listen()` / `emit()`, shared `Emitter::$Instance`, propagation control), priority-ordered `Listener` / `Listeners`, `Event` marker interface + immutable `Emission` carrier
+- ✅ Cache abstraction (`ABI/Resources/Cache`)
+  - ✅ File driver (via `ABI/IO/FS`)
+  - ✅ APCu driver (per-process, single-worker only)
+  - ✅ Shared-memory driver (per-host, cross-worker — System V `sysvshm` + `sysvsem`)
+  - ✅ Redis driver (blocking — native RESP codec `ABI/Data/RESP`, optional `ext-redis` fast-path) — native RESP kept as zero-dependency canonical: benchmarked vs ext-redis 6.3.0, only +2–4% on the RTT-bound Cache workload (codec is 0.46 µs/cmd ≈ 0.5% of a 95 µs round-trip)
+  - ✅ Async event-loop Redis driver (`ADI/Databases/KV/Drivers/Redis`, reuses `ABI/Data/RESP` on the async DBAL pool)
+  - ✅ Shared backend for the multi-worker rate limiter (shared-memory or Redis — **not** APCu)
+  - ✅ TTL, tags, invalidation
+  - ✅ Cache-backed session handler (WPI `Session/Handlers/Cache` — new default; File handler opt-in)
 
 ### ACI — Abstract Common Interface
 
-- ✅ Canonical domain events wired across features (emitter-routed enums): `Cache.hit/miss/evict`, `Worker.boot/shutdown/reload`, `Project.boot/shutdown`, `Query.executed` / `DB.connected` / `Query.slow`, `Transaction.begin/commit/rollback`, `Migration.up/down`, `Request.received/handled`, `Session.start/regenerate/destroy`
-- ✅ Job Scheduler (`ACI/Schedule`): cron-style `->repeat()`, `bootgly schedule run` / `list` (`ScheduleCommand`), `->lock()` overlap prevention, `->recover()` catch-up policy, `Started/Finished/Failed/Skipped` lifecycle events
-- ✅ Queue contract (`ACI/Queues`): `Job` / `Handler` contract, `Worker` consume loop, retry / backoff (`Backoffs`: Fixed / Linear / Exponential) + dead-letter, File driver (atomic-rename claim under `workdata/queues/`) and blocking Redis driver, `Queue.dispatch/processed/failed` events, `bootgly queue run` / `list` (`QueueCommand`)
+- ✅ Events system (`ABI/Events`)
+  - ✅ `Emitter` — register listeners (`listen()`), fire events synchronously (`emit()`), propagation control (`Emission->stop()`); shared instance via `Emitter::$Instance`; async deferred (single-word method naming)
+  - ✅ `Listener` interface + `Listeners` collection (`ABI/Events/Emitter/` — priority-ordered dispatch, single canonical contract)
+  - ✅ `Event` marker interface (`ABI/Event` — event-identity enums, keyed by `spl_object_id`) + `Emission` carrier — immutable pay
+  - ⭕️ WPI socket-loop constants (existing in `WPI\Events`, integer flags — **not** emitter-routed; consumed directly by the socket loop):
+    - `EVENT_CONNECT` — client/server connection opened
+    - `EVENT_READ` — package read from socket
+    - `EVENT_WRITE` — package written to socket
+    - `EVENT_EXCEPT` — socket exception path
+  - ✅ Canonical domain events (emitter-routed; each is an enum case implementing `Event`, grouped per feature and wired in that feature — **not** strings, not in the core task — initial list, extend as needed):
+    - ✅ `Request.received` — HTTP request fully decoded; `Request.handled` — request processed / response ready (`HTTP_Server_CLI\Request\Events`, both encoders)
+    - ⭕️ `Response.sent` — **deferred**: a response is only truly flushed when Packages writes the `encode()` result, so this belongs at the transport layer (TCP `Packages`), not the encoder — left unwired (was prototyped in the encoder and removed for clarity)
+    - `Auth.success` / `Auth.failure` — authentication guard outcome
+    - `Gate.allow` / `Gate.deny` / `Policy.*` — authorization decision (v0.16 RBAC / Policies / Gates)
+    - ✅ `Session.start` / `Session.regenerate` / `Session.destroy` (`…\Request\Session\Events`)
+    - ✅ `Query.executed` / `DB.connected` / `Query.slow` (`ADI\Databases\SQL\Events`): `Executed` in `SQL\Operation::resolve()`; `Connected` (SQL-only) at the PostgreSQL driver auth-OK; `Slow` gated by `Operation::$slow` (0 = off, zero overhead — no `microtime()`)
+    - ✅ `Transaction.begin` / `Transaction.commit` / `Transaction.rollback` (`…SQL\Transaction\Events`)
+    - ✅ `Migration.up` / `Migration.down` (`…SQL\Schema\Migration\Events`; `Runner::apply()`)
+    - ✅ `Cache.hit` / `Cache.miss` / `Cache.evict` (`ABI\Resources\Cache\Events`; `fetch()`/`delete()`)
+    - ✅ `Worker.boot` / `Worker.shutdown` / `Worker.reload` (`ACI\Process\Events`; fork / `stop()` / SIGUSR2)
+    - ✅ `Project.boot` / `Project.shutdown` (`API\Projects\Project\Events`; `Project::boot()` / `__destruct()`)
 
-### ADI — Abstract Data Interface
-
-- ✅ Async event-loop Redis driver (`ADI/Databases/KV/Drivers/Redis`) reusing `ABI/Data/RESP` on the async DBAL pool, with per-connection pipelining
-
-### API — Application Programming Interface
-
-- ✅ JWT Vault storage re-platformed onto the Cache facade (`API/Security`)
-- ✅ Opt-in RBAC permission-list caching (`API/Authorization`)
+- ✅ Job Scheduler (`ACI/Schedule` — greenfield cron feature, **distinct from** the I/O `ACI/Events/Scheduler`)
+  - ✅ Cron-style declarations via single verb `->repeat()` (`->repeat(Frequencies::Minutely)`, `->repeat(Frequencies::Daily, at: '03:00')`, `->repeat('*/5 * * * *')`)
+  - ✅ `bootgly schedule run` / `bootgly schedule list` worker command (`ScheduleCommand`)
+  - ✅ Overlap prevention via `->lock()` (file lock per job — `ACI\Schedule\Lock`)
+  - ✅ Missed-run catch-up policy via `->recover()` (`Catchups::Skip` / `Catchups::Once`)
+  - ✅ Lifecycle events `Started` / `Finished` / `Failed` / `Skipped` (`ACI\Schedule\Events`)
+- ✅ Queue contract (`ACI/Queues` — layer-shared abstraction so CLI workers and WPI dispatch share one contract; avoids ACI → WPI back-dependency)
+  - ✅ Job / Message contract + handler interface
+  - ✅ Dispatcher + worker-loop contract (`Queues\Worker`, consumed by `queue run`)
+  - ✅ Retry / failure / backoff policy (`Backoffs`: Fixed / Linear / Exponential; dead-letter)
+  - ✅ File-based queue driver (default — atomic-rename claim under `workdata/queues/`)
+  - ✅ Redis queue driver, blocking — native RESP codec (`ABI/Data/RESP`) + optional `ext-redis` fast-path
+    - 📋 Async event-loop Redis driver — **deferred** (resolution C: HTTP pushes only, blocking `reserve()` runs in the `queue run` worker; registerable later via `Drivers::register()` from ≥ADI)
+  - ✅ Events
+    - ✅ `Queue.dispatch` / `Queue.processed` / `Queue.failed`
 
 ### WPI — Web Programming Interface
 
-- ✅ Queue dispatch adapter (`WPI/Queues/Messenger`): HTTP-context job enqueue over the `ACI/Queues` contract; worker via `bootgly queue run`
-- ✅ Cache-backed session handler as the new default (`WPI/Session/Handlers/Cache`; File handler opt-in)
-- ✅ Async KV (Redis) response resource with pipelining (`WPI/Response`)
-- ✅ Hot-path performance: per-connection `Request` reuse via `assume()`, eliminated hot-path property hooks in `Request` / `Header`, fast-lane raw response encoding cache, per-second Date header cache, TCP stats off by default + `writing()` fast lane
+- ✅ Queue dispatch adapter (`WPI/Queues/Messenger` — HTTP-facing adapter over the `ACI/Queues` contract)
+  - ✅ HTTP-context job dispatching (enqueue from request handlers)
+  - ✅ Worker processes (`bootgly queue run`)
+  - ✅ Drivers, retry and failure policy inherited from the `ACI/Queues` contract
 
 ---
 

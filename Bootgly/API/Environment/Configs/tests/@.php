@@ -32,5 +32,6 @@ return new Suite(
       '4.x-project_configs_overlay',
 
       '5.x-database_config_adapter',
+      '5.x-kv_config_adapter',
    ]
 );

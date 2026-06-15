@@ -26,6 +26,10 @@ use Bootgly\ADI\Databases\SQL\Builder\Query;
 use Bootgly\ADI\Databases\SQL\Operation;
 use Bootgly\ADI\Databases\SQL\Repository;
 use Bootgly\ADI\Databases\SQL\Transaction;
+use Bootgly\API\Environment\Configs;
+use Bootgly\API\Environment\Configs\Config;
+use Bootgly\API\Environment\Configs\DatabaseConfig;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resource;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resource\Scheduling;
 
@@ -55,6 +59,92 @@ class Database extends Resource implements Awaiting, Scheduling
 
       // * Data
       $this->Scope = new stdClass;
+   }
+
+   /**
+    * Provide a lazy factory that builds this resource from a `database` scope.
+    *
+    * Encapsulates the per-worker connection singleton, the response context
+    * guard and the canonical config path (`Configs` → `DatabaseConfig` → `SQL`)
+    * so projects register the resource in a single line.
+    *
+    * @return Closure(object):self
+    */
+   public static function provide (string $configs): Closure
+   {
+      return static function (object $Context) use ($configs): self {
+         // ! Per-worker connection: pooled across requests on the same worker
+         static $Database = null;
+
+         // ?
+         if ($Context instanceof Response === false) {
+            throw new RuntimeException('Database response resource expects a Response context.');
+         }
+
+         // @ Build once per worker
+         if ($Database instanceof SQL === false) {
+            $Configs = new Configs($configs);
+            $Configs->allow('database', [
+               // # Connection
+               'DB_CONNECTION',
+               'DB_ENABLED',
+               'DB_HOST',
+               'DB_NAME',
+               'DB_PASS',
+               'DB_POOL_MAX',
+               'DB_POOL_MIN',
+               'DB_PORT',
+               'DB_SSLCAFILE',
+               'DB_SSLMODE',
+               'DB_SSLPEER',
+               'DB_SSLVERIFY',
+               'DB_STATEMENTS',
+               'DB_TIMEOUT',
+               'DB_USER',
+               // # Routing
+               'DB_ROUTING_STICKY',
+               // # Replica 1
+               'DB_REPLICA_1_HOST',
+               'DB_REPLICA_1_PORT',
+               'DB_REPLICA_1_NAME',
+               'DB_REPLICA_1_USER',
+               'DB_REPLICA_1_PASS',
+               'DB_REPLICA_1_TIMEOUT',
+               'DB_REPLICA_1_STATEMENTS',
+               'DB_REPLICA_1_SSLMODE',
+               'DB_REPLICA_1_SSLVERIFY',
+               'DB_REPLICA_1_SSLPEER',
+               'DB_REPLICA_1_SSLCAFILE',
+               'DB_REPLICA_1_POOL_MIN',
+               'DB_REPLICA_1_POOL_MAX',
+               // # Replica 2
+               'DB_REPLICA_2_HOST',
+               'DB_REPLICA_2_PORT',
+               'DB_REPLICA_2_NAME',
+               'DB_REPLICA_2_USER',
+               'DB_REPLICA_2_PASS',
+               'DB_REPLICA_2_TIMEOUT',
+               'DB_REPLICA_2_STATEMENTS',
+               'DB_REPLICA_2_SSLMODE',
+               'DB_REPLICA_2_SSLVERIFY',
+               'DB_REPLICA_2_SSLPEER',
+               'DB_REPLICA_2_SSLCAFILE',
+               'DB_REPLICA_2_POOL_MIN',
+               'DB_REPLICA_2_POOL_MAX',
+            ]);
+            $Scope = $Configs->get('database');
+
+            // @phpstan-ignore-next-line
+            if ($Scope instanceof Config === false || $Scope->Enabled->get() !== true) {
+               throw new RuntimeException('Enable DB_ENABLED=true in the database config scope and set DB_HOST, DB_PORT, DB_NAME, DB_USER and DB_PASS as needed.');
+            }
+
+            $Database = new SQL(new DatabaseConfig($Scope)->configure());
+         }
+
+         // :
+         return new self($Database);
+      };
    }
 
    /**
