@@ -52,6 +52,16 @@ return function (
       {
          $this->headers[$name] = $value;
       }
+      public function append (string $name, string $value = '', string|null $separator = ', '): void
+      {
+         $separator ??= ', ';
+
+         if (isSet($this->headers[$name])) {
+            $this->headers[$name] .= $separator . $value;
+         } else {
+            $this->headers[$name] = $value;
+         }
+      }
    };
 
    // ! Request mock

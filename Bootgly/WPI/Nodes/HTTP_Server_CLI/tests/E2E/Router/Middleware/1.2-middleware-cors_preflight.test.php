@@ -18,7 +18,9 @@ return new Specification(
       \r\n
       HTTP;
    },
-   middlewares: [new CORS],
+   // @ Explicit wildcard — the bare default is now a restrictive empty
+   //   allowlist (audit F-8), so the wildcard path is opted into here.
+   middlewares: [new CORS(origins: ['*'])],
    response: function (Request $Request, Response $Response): Response {
       return $Response(body: 'Should not reach here');
    },

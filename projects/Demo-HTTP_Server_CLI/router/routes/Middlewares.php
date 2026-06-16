@@ -57,7 +57,9 @@ return static function (Request $Request, Response $Response, Router $Router)
 
    // ---
    // # Level 2 — Group: append RateLimit + CORS to ALL subsequent routes
-   $Router->intercept(new RateLimit(limit: 100, window: 60), new CORS);
+   //   CORS defaults to a restrictive empty allowlist; this demo opts into a
+   //   wildcard explicitly. In production, pass an explicit origin allowlist.
+   $Router->intercept(new RateLimit(limit: 100, window: 60), new CORS(origins: ['*']));
 
    // # GET /api/users — inherits SecureHeaders + RequestId + RateLimit + CORS + per-route ETag
    yield $Router->route('/api/users', function (Request $Request, Response $Response) {

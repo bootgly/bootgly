@@ -17,9 +17,11 @@ return new Specification(
          return $Response;
       };
 
-      // @ Test 1: Wildcard origin (default) sets ACAO (Access-Control-Allow-Origin): *
+      // @ Test 1: Explicit wildcard origin sets ACAO (Access-Control-Allow-Origin): *
+      //   (the bare default is now a restrictive empty allowlist — audit F-8 —
+      //   so wildcard behaviour must be opted into with origins: ['*']).
       [$Request, $Response] = $createMocks();
-      $CORS = new CORS;
+      $CORS = new CORS(origins: ['*']);
       $Result = $CORS->process($Request, $Response, $passthrough);
       yield new Assertion(
          description: 'Wildcard origin should set Access-Control-Allow-Origin to *',
