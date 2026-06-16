@@ -20,5 +20,7 @@ return new Suite(
       '2.1-cache-handler-shared',
 
       '3.1-events',
+
+      '4.1-cookie_security_defaults_not_downgraded',
    ]
 );

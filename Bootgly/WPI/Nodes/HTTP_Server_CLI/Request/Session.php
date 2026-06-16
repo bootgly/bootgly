@@ -410,8 +410,12 @@ class Session
       static::$cookieLifetime = $sessionCookieParams['lifetime'];
       static::$cookiePath = $sessionCookieParams['path'];
       static::$domain = $sessionCookieParams['domain'];
-      static::$secure = $sessionCookieParams['secure'];
-      static::$httpOnly = $sessionCookieParams['httponly'];
+      // ! `secure`/`httpOnly`/`sameSite` are framework-owned (audit F-9): they
+      //   are NOT sourced from `php.ini`. Stock PHP ships
+      //   `session.cookie_secure` and `session.cookie_httponly` OFF, which
+      //   would silently downgrade the safe class defaults (`true`/`true`),
+      //   sending the session cookie over plain HTTP and exposing it to JS.
+      //   HTTP-only development relaxes explicitly via `Session::$secure = false`.
 
       // * Metadata
       self::$initialized = true;
