@@ -2,6 +2,28 @@
 
 Changelog for Bootgly framework. All notable changes to this project will be documented in this file. Imported from ROADMAP.md.
 
+## v0.17.1-beta ✅
+
+> Focus: **HTTP Server CLI security hardening**
+
+### WPI — Web Programming Interface
+
+- ✅ HTTP Server CLI security audit — 12 findings (F-1…F-12) fixed:
+  - ✅ `Request/Frame`: validate the request-line protocol token (`HTTP/1.0|1.1` only → `505`) and reject bare-`LF` line endings (`400`) — Host-allowlist / framing bypass closed (F-1)
+  - ✅ `Interfaces/TCP_Server_CLI`: global + opt-in per-IP concurrent-connection ceiling (`Connections::check()`) — connection-exhaustion DoS (F-2)
+  - ✅ `Router/Middlewares/RateLimit` + `TrustedProxy`: rate-limit on the immutable transport `Request::$peer`, not the proxy-mutable `address` (`trustForwarded` opt-in) (F-3)
+  - ✅ `Router/Middlewares/RateLimit`: IPv6 `/64` aggregation, sliding-window default, global ceiling, pluggable key (F-4)
+  - ✅ `Router/Middlewares/CSRF`: per-response masked token (`mask()`/`unmask()`) — closes the `Compression` BREACH oracle (F-5)
+  - ✅ `Decoders/Decoder_Chunked`: absolute decode deadline (`expire()`); chunked size cap honors `requestMaxBodySize` (F-6)
+  - ✅ `Response/Resources/JSONP`: serve as `text/javascript` + `X-Content-Type-Options: nosniff`; callback length capped (F-7)
+  - ✅ `Router/Middlewares/CORS`: emit `Vary: Origin` on reflect; restrictive default allowlist (`[]`); never fall back to `*` (F-8)
+  - ✅ `Request/Session`: cookie `Secure`/`HttpOnly` framework-owned (default `true`), no longer downgraded by `php.ini` (F-9)
+  - ✅ `Decoders/Decoder_Downloading/Downloads`: reconcile the cross-worker SHM byte counter against on-disk bytes + sweep crash-orphaned temp files per worker (re)spawn (F-10)
+  - ✅ `Router/Middlewares/ETag` + `Compression`: gate on `2xx`/`3xx` (skip error / auth bodies); `ETag` `If-None-Match` per RFC 7232 (`*` / list / weak comparison) (F-11)
+  - ✅ `Response/Resources/View`: validate the view name locally (`[A-Za-z0-9_/-]`, reject `..` / leading `/` / null) before include — defense-in-depth at the sink (F-12)
+
+---
+
 ## v0.17.0-beta
 
 > Focus: **Caching + Queue + Events**
