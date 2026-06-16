@@ -625,6 +625,9 @@ class TCP_Server_CLI implements Servers, Logging
          case Modes::Daemon:
             $this->daemonize();
             break;
+         case Modes::Foreground:
+            $this->serve();
+            break;
          case Modes::Interactive:
             $this->interacting();
             break;
@@ -818,6 +821,24 @@ class TCP_Server_CLI implements Servers, Logging
       ]);
 
       // @ Daemon master loop (Status changes via signal handlers)
+      while ($this->Status === Status::Running) { // @phpstan-ignore identical.alwaysTrue
+         pcntl_signal_dispatch();
+
+         // @ Reap any zombie children
+         pcntl_waitpid(-1, $status, WNOHANG);
+
+         usleep(500000); // 0.5s
+      }
+   }
+   protected function serve (): void
+   {
+      $this->Status = Status::Running;
+
+      $this->log('@\;Running in Foreground mode (no UI)...@\;@.;', self::LOG_INFO_LEVEL);
+
+      // @ Master loop (no fork): stay in the foreground as the container/service
+      //   process. Logs go to stdout and SIGTERM/SIGINT stop via signal handlers.
+      //   Master PID is already this process and was saved before the dispatch.
       while ($this->Status === Status::Running) { // @phpstan-ignore identical.alwaysTrue
          pcntl_signal_dispatch();
 

@@ -34,6 +34,7 @@ return new Project(
    boot: function (array $arguments = [], array $options = []): void
    {
       $HTTP_Server_CLI = new HTTP_Server_CLI(Mode: match (true) {
+         isset($options['f']) => Modes::Foreground,
          isset($options['i']) => Modes::Interactive,
          isset($options['m']) => Modes::Monitor,
          default => Modes::Daemon

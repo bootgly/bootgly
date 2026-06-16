@@ -409,6 +409,9 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
          case Modes::Daemon:
             $this->daemonize();
             break;
+         case Modes::Foreground:
+            $this->serve();
+            break;
          case Modes::Interactive:
             $this->interacting();
             break;

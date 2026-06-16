@@ -11,11 +11,13 @@
 namespace projects\Demo_HTTPS_Server_CLI;
 
 
+use const BOOTGLY_ROOT_DIR;
+use function defined;
 use function getenv;
 
-use Bootgly\API\Projects\Project;
-use Bootgly\API\Endpoints\Server\Modes;
 use const Bootgly\CLI;
+use Bootgly\API\Endpoints\Server\Modes;
+use Bootgly\API\Projects\Project;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Events;
 
@@ -31,6 +33,7 @@ return new Project(
    boot: function (array $arguments = [], array $options = []): void
    {
       $HTTP_Server_CLI = new HTTP_Server_CLI(Mode: match (true) {
+         isset($options['f']) => Modes::Foreground,
          isset($options['i']) => Modes::Interactive,
          isset($options['m']) => Modes::Monitor,
          default => Modes::Daemon

@@ -16,4 +16,5 @@ enum Modes : int {
    case Interactive = 2;
    case Monitor = 3;
    case Test = 4;
+   case Foreground = 5;
 }
