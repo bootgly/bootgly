@@ -15,11 +15,14 @@ use const BOOTGLY_PROJECT;
 use function defined;
 use function is_string;
 use function ob_start;
+use function preg_match;
+use function str_contains;
 use Closure;
 use Error;
 use Throwable;
 
 use const Bootgly\WPI;
+use Bootgly\ABI\Data\__String\Path;
 use Bootgly\ABI\Debugging\Data\Throwables;
 use Bootgly\ABI\IO\FS\File;
 use Bootgly\ABI\Templates\Template;
@@ -81,6 +84,26 @@ class View extends Resource
       }
 
       $Response = $this->Response;
+
+      // ? Normalize + whitelist the view name locally (audit F-12). `render()`
+      //   is include-based, so a traversal here is RCE, not mere LFI. The
+      //   downstream `File::guard()` (realpath + base containment) blocks it
+      //   today, but that is one default flip away from arbitrary inclusion —
+      //   keep the guard explicit at the sink, mirroring `Response::upload()`.
+      //   Reject empty, null bytes, absolute paths, `..`, and any character
+      //   outside `[A-Za-z0-9_/-]`; then collapse the path. Rejection precedes
+      //   normalization so a traversal attempt is denied, never resolved into
+      //   a different in-jail path.
+      if (
+         $view === ''
+         || str_contains($view, "\0")
+         || $view[0] === '/'
+         || preg_match('#^[\w/-]+$#', $view) !== 1
+      ) {
+         return $Response->code(403);
+      }
+      $view = Path::normalize($view);
+
       $File = new File(BOOTGLY_PROJECT->path . 'views/' . $view . '.template.php', base: BOOTGLY_PROJECT->path . 'views/');
 
       if ($File->exists === false) {
