@@ -29,7 +29,10 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders;
 class Decoder_Chunked extends Decoders
 {
    // * Config
-   private const int MAX_BODY_SIZE = 10485760; // 10 MB
+   //   Absolute decode deadline in seconds (audit F-6): anchored to `$decoded`
+   //   (set once in init()), never refreshed per packet — a slow-drip body
+   //   cannot extend it.
+   private const int BODY_DEADLINE = 30;
 
    // # States
    private const int READ_SIZE = 0;
@@ -40,6 +43,7 @@ class Decoder_Chunked extends Decoders
    private string $body = '';
 
    // * Metadata
+   // Absolute decode start time (set once in init(); NOT refreshed per packet).
    private int $decoded = 0;
    private int $state = self::READ_SIZE;
    private int $chunkSize = 0;
@@ -63,6 +67,18 @@ class Decoder_Chunked extends Decoders
       $this->buffer .= $data;
    }
 
+   /**
+    * Has the absolute decode deadline been reached? (audit F-6)
+    *
+    * Anchored to `$decoded` (set once in `init()`), so it is a hard cap from the
+    * start of the chunked body. Unlike a per-packet sliding window, a slow drip
+    * cannot push the deadline back.
+    */
+   public function expire (): bool
+   {
+      return (time() - $this->decoded) >= self::BODY_DEADLINE;
+   }
+
    public function decode (Packages $Package, string $buffer, int $size): States
    {
       /** @var TCP_Packages $Package */
@@ -79,9 +95,10 @@ class Decoder_Chunked extends Decoders
          return $Server::$Decoder->decode($Package, $buffer, $size); // @phpstan-ignore method.nonObject
       }
 
-      // * Metadata
-      $elapsed = time() - $this->decoded;
-      if ($elapsed >= 30) {
+      // ? Absolute decode deadline (audit F-6): anchored to the decode start,
+      //   NOT refreshed per packet, so a slow drip cannot hold the worker
+      //   buffer/connection indefinitely.
+      if ($this->expire()) {
          $Body->waiting = false;
 
          $this->body = '';
@@ -94,9 +111,6 @@ class Decoder_Chunked extends Decoders
 
       // @ Append incoming data
       $this->buffer .= $buffer;
-
-      // @ Update last decoded time
-      $this->decoded = time();
 
       // @ Process chunks
       while (true) {
@@ -153,8 +167,9 @@ class Decoder_Chunked extends Decoders
                   return States::Complete;
                }
 
-               // @ Validate total size
-               if ($this->totalSize + $chunkSize > self::MAX_BODY_SIZE) {
+               // @ Validate total size against the configurable cap (audit F-6:
+               //   honors `requestMaxBodySize`; was a hard-coded 10 MB constant).
+               if ($this->totalSize + $chunkSize > Server\Request::$maxBodySize) {
                   $Package->reject("HTTP/1.1 413 Request Entity Too Large\r\n\r\n");
                   $Body->waiting = false;
 

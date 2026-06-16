@@ -160,5 +160,10 @@ return new Suite(
       // connection-exhaustion DoS (audit F-2) — Connections::connect() must
       // enforce a global (and opt-in per-IP) concurrent-connection ceiling.
       '26.01-connection_concurrency_ceiling',
+      // # Decoder Chunked (slow-drip DoS + size cap)
+      // audit F-6 — absolute decode deadline (not a per-packet sliding window)
+      // and the chunked total-size cap must honor `Request::$maxBodySize`.
+      '27.01-chunked_body_oversize_rejected',
+      '27.02-chunked_absolute_deadline',
    ],
 );
