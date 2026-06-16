@@ -13,8 +13,8 @@ namespace projects\Demo_TCP_Server_CLI;
 
 use function getenv;
 
-use Bootgly\API\Projects\Project;
 use Bootgly\API\Endpoints\Server\Modes;
+use Bootgly\API\Projects\Project;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Events;
 
@@ -39,9 +39,11 @@ return new Project(
          port: getenv('PORT') ? (int) getenv('PORT') : 8080,
          workers: 12
       );
+      // @ Raw TCP responder: reply to any received data with a minimal HTTP/1.1
+      //   "Hello, World!" response (Content-Length: 13). Self-contained handler.
       $TCP_Server_CLI->on(
          Events::DataReceive,
-         require __DIR__ . '/../Demo/TCP_Server_CLI/TCP_Server_CLI.SAPI.php'
+         static fn ($input) => "HTTP/1.1 200 OK\r\nServer: Bootgly\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Length: 13\r\n\r\nHello, World!"
       );
 
       $TCP_Server_CLI->start();

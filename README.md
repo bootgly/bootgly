@@ -112,6 +112,8 @@ Operation System |
 
 Above is the native compatibility, of course it is possible to run on Windows and Unix using Docker containers.
 
+> 🐳 **Docker:** build a `slim` or `full` Bootgly image to run servers, test, benchmark and ship your own projects — see [`bootgly_docker/`](../bootgly_docker/) and the [Docker guide][DOCKER_GUIDE].
+
 ### ⚙️ Dependencies
 
 - PHP 8.4+ ⚠️
@@ -275,6 +277,7 @@ The Bootgly is open-sourced software licensed under the [MIT license][MIT_LICENS
 [WEB_PLATFORM]: https://github.com/bootgly/bootgly-web
 
 [PROJECT_DOCS]: https://docs.bootgly.com/
+[DOCKER_GUIDE]: https://docs.bootgly.com/guide/docker
 [GITHUB_REPOSITORY]: https://github.com/bootgly/bootgly/
 [GITHUB_SPONSOR]: https://github.com/sponsors/bootgly/
 
