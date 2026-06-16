@@ -2,7 +2,7 @@
 .idea/
 # Ignore AI folders
 .agents/
-.claude/
+.claude
 # Ignore files by extension...
 *.iso
 *.log
