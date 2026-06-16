@@ -15,11 +15,15 @@ use const PHP_URL_HOST;
 use function bin2hex;
 use function explode;
 use function hash_equals;
+use function hex2bin;
 use function in_array;
+use function intdiv;
 use function is_string;
 use function max;
 use function parse_url;
 use function random_bytes;
+use function strlen;
+use function substr;
 use Closure;
 
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
@@ -121,20 +125,71 @@ class CSRF implements Middleware
          return $Response(code: 403, body: 'Invalid CSRF origin');
       }
 
-      // @ Validate token
+      // @ Validate token. Accept a per-response MASKED token (BREACH mitigation,
+      //   audit F-5) or the raw token (migration / non-HTML clients). A masked
+      //   token carries a fresh nonce per render, so the on-wire value is never
+      //   a stable secret a compression-length oracle could recover.
       $expected = $Session->get($this->sessionKey, '');
       $submitted = $this->extract($Request);
+      $unmasked = self::unmask($submitted);
 
-      if (
-         is_string($expected) === false
-         || $expected === ''
-         || hash_equals($expected, $submitted) === false
-      ) {
+      $valid = is_string($expected)
+         && $expected !== ''
+         && (
+            ($unmasked !== '' && hash_equals($expected, $unmasked))
+            || hash_equals($expected, $submitted)
+         );
+
+      if ($valid === false) {
          return $Response(code: 403, body: 'Invalid CSRF token');
       }
 
       // :
       return $next($Request, $Response);
+   }
+
+   /**
+    * Mask a CSRF token for rendering (BREACH mitigation, audit F-5).
+    *
+    * Returns `hex(nonce ‖ (token XOR nonce))` with a fresh random nonce on every
+    * call, so the on-wire value differs each response and a compression-length
+    * (BREACH) oracle has no stable secret to recover. Reverse with `unmask()`.
+    *
+    * Render the masked value instead of the raw session token, e.g.:
+    *   CSRF::mask($Request->Session->get('_csrf_token'))
+    */
+   public static function mask (string $token): string
+   {
+      if ($token === '') {
+         return '';
+      }
+
+      $nonce = random_bytes(strlen($token));
+
+      // : nonce followed by the token XOR'd byte-wise with the nonce
+      return bin2hex($nonce . ($token ^ $nonce));
+   }
+
+   /**
+    * Recover the original token from a value produced by `mask()`.
+    *
+    * @return string The unmasked token, or '' when `$masked` is not a
+    *   well-formed masked value (so callers can fall back to a raw comparison).
+    */
+   public static function unmask (string $masked): string
+   {
+      $binary = @hex2bin($masked);
+      // ? Must be hex of (nonce ‖ cipher) — non-empty and even-length halves.
+      if ($binary === false || $binary === '' || strlen($binary) % 2 !== 0) {
+         return '';
+      }
+
+      $half = intdiv(strlen($binary), 2);
+      $nonce = substr($binary, 0, $half);
+      $cipher = substr($binary, $half);
+
+      // : XOR the cipher back against the nonce to recover the token
+      return $cipher ^ $nonce;
    }
 
    /**
