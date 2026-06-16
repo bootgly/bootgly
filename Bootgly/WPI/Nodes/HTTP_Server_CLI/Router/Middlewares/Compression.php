@@ -53,6 +53,15 @@ class Compression implements Middleware
       // @ Pass through to handler first
       $Response = $next($Request, $Response);
 
+      // ? Only compress cacheable responses (audit F-11): 2xx success / 3xx
+      //   redirect. Skip 4xx/5xx error and auth-challenge bodies — they should
+      //   not be re-encoded (keeps error representations out of the
+      //   compression/validator surface).
+      $code = (int) $Response->code; // @phpstan-ignore-line
+      if ($code < 200 || $code >= 400) {
+         return $Response;
+      }
+
       // ? Check body size meets minimum
       $body = $Response->Body->raw; // @phpstan-ignore-line
       if (strlen($body) < $this->minSize) {
