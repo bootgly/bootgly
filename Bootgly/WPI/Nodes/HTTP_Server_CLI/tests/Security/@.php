@@ -171,5 +171,10 @@ return new Suite(
       // callback name MUST be length-capped to bound the response prefix.
       '28.01-jsonp_javascript_content_type_and_nosniff',
       '28.02-jsonp_callback_length_capped',
+      // # Downloads (crash-leak reconciliation)
+      // audit F-10 — temp files + SHM reservations leak when a worker dies
+      // mid-request; reconcile() heals the counter from disk + sweep() removes
+      // crash-orphaned files (older than ORPHAN_TTL).
+      '29.01-downloads_reconcile_and_orphan_sweep',
    ],
 );

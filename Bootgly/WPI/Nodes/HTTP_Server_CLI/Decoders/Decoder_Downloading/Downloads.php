@@ -18,19 +18,24 @@ use function clearstatcache;
 use function dirname;
 use function extension_loaded;
 use function fclose;
+use function filemtime;
+use function filesize;
 use function flock;
 use function fopen;
 use function ftok;
 use function is_dir;
+use function is_file;
 use function is_resource;
 use function max;
 use function mkdir;
 use function pack;
+use function scandir;
 use function shmop_close;
 use function shmop_delete;
 use function shmop_open;
 use function shmop_read;
 use function shmop_write;
+use function time;
 use function touch;
 use function unlink;
 use function unpack;
@@ -62,6 +67,13 @@ final class Downloads
     *   downloads across every worker. Default 8 GiB.
     */
    public static int $maxBytesOnDisk = 8 * 1024 * 1024 * 1024;
+   /**
+    * Age (seconds) past which an on-disk temp file is treated as orphaned
+    *   by a crashed worker and swept (audit F-10). Must exceed the
+    *   `Decoder_Downloading` 60 s download deadline so a live in-flight
+    *   upload is never deleted; 2× that gives a safe margin.
+    */
+   public const int ORPHAN_TTL = 120;
 
    // * Data
    private static null|Shmop $Shmop = null;
@@ -306,6 +318,122 @@ final class Downloads
       $bytes = self::$tracked[$tmpName];
       unset(self::$tracked[$tmpName]);
       self::release($bytes);
+   }
+
+   /**
+    * Recompute the aggregate counter from the bytes actually on disk
+    *   (audit F-10). The SHM total is a *cache* of the download directory
+    *   size, not the source of truth: a worker that dies mid-request leaves
+    *   its reservation stranded on the counter (its in-memory `$tracked`
+    *   map dies with it), permanently shrinking the budget until the master
+    *   restarts. Re-running this from each (re)spawned worker heals that
+    *   drift. Lock-held so it serializes with `reserve()`/`release()`.
+    */
+   public static function reconcile (): void
+   {
+      $Shmop = self::$Shmop;
+      $lock = self::$lock;
+
+      // ?:
+      if ($Shmop === null || $lock === null) {
+         return;
+      }
+
+      // !?:
+      $locked = @flock($lock, LOCK_EX);
+      if ($locked === false) {
+         return;
+      }
+
+      // @
+      try {
+         @shmop_write($Shmop, pack('P', self::bytes()), 0);
+      }
+      finally {
+         @flock($lock, LOCK_UN);
+      }
+   }
+
+   /**
+    * Delete temp files orphaned by a crashed worker (audit F-10). A file
+    *   whose mtime is older than `$minAge` seconds cannot belong to a live
+    *   in-flight download — `Decoder_Downloading` aborts a stalled download
+    *   at its 60 s deadline — so a `$minAge` of `ORPHAN_TTL` (2× that)
+    *   never touches an active upload. `$minAge = 0` deletes everything and
+    *   is master-boot-only (no worker is in-flight before the first fork).
+    */
+   public static function sweep (int $minAge = 0): void
+   {
+      $dir = BOOTGLY_WORKING_BASE . '/workdata/temp/files/downloaded/';
+
+      // ?:
+      if (! is_dir($dir)) {
+         return;
+      }
+
+      clearstatcache();
+
+      $cutoff = time() - $minAge;
+      $entries = @scandir($dir);
+      if ($entries === false) {
+         return;
+      }
+
+      // @@
+      foreach ($entries as $entry) {
+         // ? Skip `.`/`..` and any dotfile placeholder (e.g. `.gitkeep`) —
+         //   temp uploads are `tempnam()`-named and never start with a dot.
+         if ($entry[0] === '.') {
+            continue;
+         }
+
+         $path = $dir . $entry;
+         if (! is_file($path)) {
+            continue;
+         }
+
+         if ((int) @filemtime($path) <= $cutoff) {
+            try { @unlink($path); } catch (Throwable) {}
+         }
+      }
+   }
+
+   /**
+    * Sum the bytes currently held in the download temp directory. Source of
+    *   truth for `reconcile()`.
+    */
+   private static function bytes (): int
+   {
+      $dir = BOOTGLY_WORKING_BASE . '/workdata/temp/files/downloaded/';
+
+      // ?:
+      if (! is_dir($dir)) {
+         return 0;
+      }
+
+      clearstatcache();
+
+      $entries = @scandir($dir);
+      if ($entries === false) {
+         return 0;
+      }
+
+      // @@
+      $total = 0;
+      foreach ($entries as $entry) {
+         // ? Skip `.`/`..` and any dotfile placeholder (e.g. `.gitkeep`) —
+         //   temp uploads are `tempnam()`-named and never start with a dot.
+         if ($entry[0] === '.') {
+            continue;
+         }
+
+         $path = $dir . $entry;
+         if (is_file($path)) {
+            $total += (int) @filesize($path);
+         }
+      }
+
+      return $total;
    }
 
    /**

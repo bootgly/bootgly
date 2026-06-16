@@ -324,6 +324,10 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       // @ Initialize cross-worker upload byte counter (master-side, before
       //   fork) so workers inherit the SHM segment + lockfile descriptor.
       Downloads::init();
+      // @ Purge temp files orphaned by a previous (crashed) run before the
+      //   first fork — no worker is in-flight yet, so a full sweep is safe
+      //   (audit F-10). The SHM counter is reset to 0 by init().
+      Downloads::sweep();
 
       // @ Install signal handlers for graceful shutdown
       $this->Process->Signals->install([
@@ -430,6 +434,23 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       }
 
       parent::stop();
+   }
+
+   public function instance ()
+   {
+      $Socket = parent::instance();
+
+      // @ Per-worker upload-counter hygiene (audit F-10). Runs in every
+      //   (re)spawned worker — both the initial fork and the SIGCHLD refork
+      //   reach the worker through `$this->instance()`. Sweep temp files
+      //   orphaned by a crashed worker (older than `ORPHAN_TTL`, so a live
+      //   in-flight upload is untouched) and reconcile the SHM counter
+      //   against the bytes actually on disk, healing any reservation a dead
+      //   worker stranded on the shared counter.
+      Downloads::sweep(Downloads::ORPHAN_TTL);
+      Downloads::reconcile();
+
+      return $Socket;
    }
 
    public static function boot (Environments $Environment, string $testsDir = 'E2E'): void
