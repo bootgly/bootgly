@@ -165,5 +165,11 @@ return new Suite(
       // and the chunked total-size cap must honor `Request::$maxBodySize`.
       '27.01-chunked_body_oversize_rejected',
       '27.02-chunked_absolute_deadline',
+      // # Response JSONP (cross-origin read hardening)
+      // audit F-7 — JSONP emits JavaScript and MUST be served as
+      // `text/javascript` (+ `nosniff`), never `application/json`; the
+      // callback name MUST be length-capped to bound the response prefix.
+      '28.01-jsonp_javascript_content_type_and_nosniff',
+      '28.02-jsonp_callback_length_capped',
    ],
 );
