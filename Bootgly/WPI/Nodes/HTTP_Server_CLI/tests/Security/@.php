@@ -176,5 +176,8 @@ return new Suite(
       // mid-request; reconcile() heals the counter from disk + sweep() removes
       // crash-orphaned files (older than ORPHAN_TTL).
       '29.01-downloads_reconcile_and_orphan_sweep',
+      // realistic: a SIGKILLed worker leaks its reservation; the per-respawn
+      // sweep()+reconcile() recovery heals the counter and removes the orphan.
+      '29.02-downloads_worker_crash_recovery',
    ],
 );
