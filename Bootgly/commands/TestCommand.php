@@ -40,7 +40,7 @@ use LogicException;
 
 use const Bootgly\CLI;
 use Bootgly\ABI\Data\__String\Escapeable\Text\Formattable;
-use Bootgly\ACI\Logs\Logger;
+use Bootgly\ACI\Logs\Data\Display;
 use Bootgly\ACI\Tests;
 use Bootgly\ACI\Tests\Benchmark\Configs;
 use Bootgly\ACI\Tests\Benchmark\Info;
@@ -91,7 +91,7 @@ class TestCommand extends Command
       //   - emit Results::toJSON() at the end
       $Agent = Agent::detect();
       if ($Agent->detected) {
-         Logger::$display = Logger::DISPLAY_NONE;
+         Display::$mode = Display::NONE;
          Results::$enabled = true;
          Results::$agent = $Agent->name;
       }

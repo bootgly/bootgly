@@ -49,7 +49,7 @@ use Throwable;
 use Bootgly\ABI\Debugging\Data\Vars;
 use Bootgly\ACI\Events\Loops;
 use Bootgly\ACI\Events\Timer;
-use Bootgly\ACI\Logs\LoggableEscaped;
+use Bootgly\ACI\Logs\Data\Display;
 use Bootgly\ACI\Logs\Logger;
 use Bootgly\ACI\Process;
 use Bootgly\WPI\Event;
@@ -61,7 +61,15 @@ use Bootgly\WPI\Interfaces\TCP_Client_CLI\Connections;
 
 class TCP_Client_CLI
 {
-   use LoggableEscaped;
+   public Logger $Logger {
+      get {
+         if ( isSet($this->Logger) === false ) {
+            $this->Logger = new Logger(channel: static::class);
+         }
+
+         return $this->Logger;
+      }
+   }
 
 
    /** @var resource */
@@ -283,7 +291,7 @@ class TCP_Client_CLI
       self::$status = self::STATUS_STARTING;
 
       if ($this->workers) {
-         $this->log('Starting Client... ', self::LOG_INFO_LEVEL);
+         $this->Logger->log(info: 'Starting Client... ');
 
          // ! Process
          // ? Signals
@@ -307,7 +315,7 @@ class TCP_Client_CLI
          $this->Process->fork($this->workers, instance: function (Process $Process, int $index): void {
             $Process->title = 'Bootgly_WPI_Client: child process (Worker #' . Process::$index . ')';
 
-            Logger::$display = Logger::DISPLAY_MESSAGE_WHEN_ID;
+            Display::$mode = Display::MESSAGE_WHEN_ID;
 
             // @ Call On Worker instance
             if (self::$onWorkerStarted) {
@@ -331,7 +339,7 @@ class TCP_Client_CLI
          ]);
       }
 
-      $this->log('@\;@\;');
+      $this->Logger->log(debug: '@\;@\;');
 
       // ... Continue to master process:
       switch ($this->mode) {
@@ -358,12 +366,12 @@ class TCP_Client_CLI
    {
       self::$status = self::STATUS_RUNNING;
 
-      if (Logger::$display !== Logger::DISPLAY_NONE) {
-         Logger::$display = Logger::DISPLAY_MESSAGE;
+      if (Display::$mode !== Display::NONE) {
+         Display::$mode = Display::MESSAGE;
       }
 
-      $this->log('Entering in Monitor mode...@\;', self::LOG_INFO_LEVEL);
-      $this->log('>_ Type `CTRL + C` to stop the Client.@\;');
+      $this->Logger->log(info: 'Entering in Monitor mode...@\;');
+      $this->Logger->log(debug: '>_ Type `CTRL + C` to stop the Client.@\;');
 
       // @ Loop
       while ($this->mode === self::MODE_MONITOR) {
@@ -381,7 +389,7 @@ class TCP_Client_CLI
             // ...
          }
          else if ($pid > 0) { // If a child has already exited?
-            $this->log('@\;Process child exited!@\;', self::LOG_ERROR_LEVEL);
+            $this->Logger->log(error: '@\;Process child exited!@\;');
             $this->Process->Signals->send(SIGINT);
             break;
          }
@@ -450,7 +458,7 @@ class TCP_Client_CLI
       }
 
       if ($Socket === false) {
-         $this->log('Unable to connect! Socket not created.@\\;', self::LOG_WARNING_LEVEL);
+         $this->Logger->log(warning: 'Unable to connect! Socket not created.@\\;');
 
          return false;
       }
@@ -458,7 +466,7 @@ class TCP_Client_CLI
       $this->Socket = $Socket;
 
       if ($error === true) {
-         $this->log('Unable to connect! Trying to connect in the future...@\\;', self::LOG_WARNING_LEVEL);
+         $this->Logger->log(warning: 'Unable to connect! Trying to connect in the future...@\\;');
 
          // @ Add to Event loop to future connection
          self::$Event->add($Socket, Select::EVENT_CONNECT, true);
@@ -475,11 +483,11 @@ class TCP_Client_CLI
    {
       self::$status = self::STATUS_STOPING;
 
-      Logger::$display = Logger::DISPLAY_MESSAGE;
+      Display::$mode = Display::MESSAGE;
 
       $children = (string) count($this->Process->Children->PIDs);
       match ($this->Process->level) {
-         'master' => $this->log("{$children} worker(s) stopped!@\\;", 3),
+         'master' => $this->Logger->log(critical: "{$children} worker(s) stopped!@\\;"),
          'child' => null,
          default => null
       };

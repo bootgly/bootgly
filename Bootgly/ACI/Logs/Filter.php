@@ -11,7 +11,16 @@
 namespace Bootgly\ACI\Logs;
 
 
-abstract class Levels
+use Bootgly\ACI\Logs\Data\Record;
+
+
+abstract class Filter
 {
-   public const LOG_NONE = 0;
+   /**
+    * Decide whether a record passes this filter.
+    *
+    * @param Record $Record The record under evaluation.
+    * @return bool True to let the record through, false to drop it.
+    */
+   abstract public function check (Record $Record): bool;
 }

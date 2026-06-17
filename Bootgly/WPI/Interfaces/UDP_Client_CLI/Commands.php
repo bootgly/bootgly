@@ -14,14 +14,22 @@ namespace Bootgly\WPI\Interfaces\UDP_Client_CLI;
 use const SIGINT;
 use function count;
 
-use Bootgly\ACI\Logs\LoggableEscaped;
+use Bootgly\ACI\Logs\Logger;
 use Bootgly\CLI;
 use Bootgly\WPI\Interfaces\UDP_Client_CLI as Client;
 
 
 class Commands extends CLI\Terminal
 {
-   use LoggableEscaped;
+   public Logger $Logger {
+      get {
+         if ( isSet($this->Logger) === false ) {
+            $this->Logger = new Logger(channel: static::class);
+         }
+
+         return $this->Logger;
+      }
+   }
 
 
    public Client $Client;
@@ -56,9 +64,8 @@ class Commands extends CLI\Terminal
       return match ($command) {
          // ! Client
          'quit' =>
-            $this->log(
-               "@\\;Stopping $children worker(s)... ",
-               self::LOG_WARNING_LEVEL
+            $this->Logger->log(
+               warning: "@\\;Stopping $children worker(s)... "
             )
             && $this->Client->Process->Signals->send(SIGINT)
             && false,
@@ -73,7 +80,7 @@ class Commands extends CLI\Terminal
    }
    public function help (): true
    {
-      $this->log(<<<'OUTPUT'
+      $this->Logger->log(debug: <<<'OUTPUT'
       @\;======================================================================
       @:i: `quit` @;        = Close the Client and Stop all workers;
 

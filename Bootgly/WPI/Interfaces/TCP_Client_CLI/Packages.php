@@ -22,7 +22,7 @@ use function strlen;
 use function substr;
 use Throwable;
 
-use Bootgly\ACI\Logs\LoggableEscaped;
+use Bootgly\ACI\Logs\Logger;
 use Bootgly\WPI;
 use Bootgly\WPI\Interfaces\TCP_Client_CLI as Client;
 use Bootgly\WPI\Interfaces\TCP_Client_CLI\Connections;
@@ -31,7 +31,15 @@ use Bootgly\WPI\Interfaces\TCP_Client_CLI\Connections\Connection;
 
 class Packages implements WPI\Connections\Packages
 {
-   use LoggableEscaped;
+   public Logger $Logger {
+      get {
+         if ( isSet($this->Logger) === false ) {
+            $this->Logger = new Logger(channel: static::class);
+         }
+
+         return $this->Logger;
+      }
+   }
 
    // * Config
    // ...
@@ -111,13 +119,12 @@ class Packages implements WPI\Connections\Packages
 
       // @ Check connection close intention?
       if ($result === 0) {
-         #$this->log('Failed to ' . $operation . ' package: 0 byte handled!' . PHP_EOL);
+         #$this->Logger->log(debug: 'Failed to ' . $operation . ' package: 0 byte handled!' . PHP_EOL);
       }
 
       if (is_resource($Socket) && get_resource_type($Socket) === 'stream') {
-         $this->log(
-            'Failed to ' . $operation . ' package: closing connection...' . PHP_EOL,
-            self::LOG_WARNING_LEVEL
+         $this->Logger->log(
+            warning: 'Failed to ' . $operation . ' package: closing connection...' . PHP_EOL
          );
 
          $this->Connection->close();

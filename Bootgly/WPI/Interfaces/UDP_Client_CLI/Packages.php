@@ -19,7 +19,7 @@ use function stream_socket_sendto;
 use function strlen;
 use Throwable;
 
-use Bootgly\ACI\Logs\LoggableEscaped;
+use Bootgly\ACI\Logs\Logger;
 use Bootgly\WPI;
 use Bootgly\WPI\Interfaces\UDP_Client_CLI as Client;
 use Bootgly\WPI\Interfaces\UDP_Client_CLI\Connections;
@@ -28,7 +28,15 @@ use Bootgly\WPI\Interfaces\UDP_Client_CLI\Connections\Connection;
 
 class Packages implements WPI\Connections\Packages
 {
-   use LoggableEscaped;
+   public Logger $Logger {
+      get {
+         if ( isSet($this->Logger) === false ) {
+            $this->Logger = new Logger(channel: static::class);
+         }
+
+         return $this->Logger;
+      }
+   }
 
    // * Config
    // ...
@@ -90,17 +98,15 @@ class Packages implements WPI\Connections\Packages
       // UDP has no end-of-stream — we only close if the socket itself
       // has vanished (e.g. explicit fclose from somewhere else).
       if (is_resource($Socket) === false || get_resource_type($Socket) !== 'stream') {
-         $this->log(
-            'Failed to ' . $operation . ' datagram: socket gone, closing connection...' . PHP_EOL,
-            self::LOG_WARNING_LEVEL
+         $this->Logger->log(
+            warning: 'Failed to ' . $operation . ' datagram: socket gone, closing connection...' . PHP_EOL
          );
 
          $this->Connection->close();
       }
       else {
-         $this->log(
-            'Failed to ' . $operation . ' datagram.' . PHP_EOL,
-            self::LOG_WARNING_LEVEL
+         $this->Logger->log(
+            warning: 'Failed to ' . $operation . ' datagram.' . PHP_EOL
          );
       }
 
@@ -139,9 +145,8 @@ class Packages implements WPI\Connections\Packages
 
       // @ UDP is lossy by design: short writes just get logged.
       if ($sent !== $expected) {
-         $this->log(
-            "Short datagram send: {$sent} of {$expected} bytes." . PHP_EOL,
-            self::LOG_WARNING_LEVEL
+         $this->Logger->log(
+            warning: "Short datagram send: {$sent} of {$expected} bytes." . PHP_EOL
          );
       }
 

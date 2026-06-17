@@ -16,7 +16,7 @@ use function str_starts_with;
 use function substr;
 
 use const Bootgly\CLI;
-use Bootgly\ACI\Logs\LoggableEscaped;
+use Bootgly\ACI\Logs\Logger;
 use Bootgly\WPI;
 use Bootgly\WPI\Interfaces\UDP_Server_CLI as Server;
 use Bootgly\WPI\Interfaces\UDP_Server_CLI\Connections\Connection;
@@ -24,7 +24,16 @@ use Bootgly\WPI\Interfaces\UDP_Server_CLI\Connections\Connection;
 
 class Connections implements WPI\Connections
 {
-   use LoggableEscaped;
+   // * Data
+   public Logger $Logger {
+      get {
+         if ( isSet($this->Logger) === false ) {
+            $this->Logger = new Logger(channel: static::class);
+         }
+
+         return $this->Logger;
+      }
+   }
 
 
    public Server $Server;

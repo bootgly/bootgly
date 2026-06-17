@@ -33,7 +33,6 @@ use function strlen;
 use function substr;
 use Throwable;
 
-use Bootgly\ACI\Logs\LoggableEscaped;
 use Bootgly\ACI\Logs\Logger;
 use Bootgly\API\Workables\Server as SAPI;
 use Bootgly\WPI;
@@ -46,7 +45,7 @@ use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections\Connection;
 
 abstract class Packages extends Server_Packages implements WPI\Connections\Packages
 {
-   use LoggableEscaped;
+   public Logger $Logger;
 
 
    // * Metadata
@@ -114,14 +113,14 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
 
       // @ Check connection reset (End-of-File)?
       if ($EOF) {
-         #$this->log('Failed to ' . $operation . ' package: End-of-File!' . PHP_EOL);
+         #$this->Logger->log(debug: 'Failed to ' . $operation . ' package: End-of-File!' . PHP_EOL);
          Connections::$errors[$operation]++;
          $this->Connection->close();
          return true;
       }
 
       if (is_resource($Socket) === false || get_resource_type($Socket) !== 'stream') {
-         #$this->log('Failed to ' . $operation . ' package: closing connection...' . PHP_EOL);
+         #$this->Logger->log(debug: 'Failed to ' . $operation . ' package: closing connection...' . PHP_EOL);
          Connections::$errors[$operation]++;
          $this->Connection->close();
          return true;
@@ -189,7 +188,7 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
       // @ Check connection close intention by peer?
       // Close connection if input data is empty to avoid unnecessary loop
       if ($buffer === '') {
-         #$this->log('Failed to read buffer: input data is empty!' . PHP_EOL, self::LOG_WARNING_LEVEL);
+         #$this->Logger->log(warning: 'Failed to read buffer: input data is empty!' . PHP_EOL);
          $this->Connection->close();
          return false;
       }

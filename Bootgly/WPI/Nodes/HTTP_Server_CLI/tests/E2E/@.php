@@ -7,7 +7,7 @@ use const BOOTGLY_ROOT_DIR;
 use function define;
 use function defined;
 
-use Bootgly\ACI\Logs\Logger;
+use Bootgly\ACI\Logs\Data\Display;
 use Bootgly\ACI\Tests\Suite;
 use Bootgly\API\Endpoints\Server\Modes;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI;
@@ -16,7 +16,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI;
 return new Suite(
    // * Config
    autoBoot: function (Suite|null $Suite = null): true {
-      Logger::$display = Logger::DISPLAY_NONE;
+      Display::$mode = Display::NONE;
 
       // @ Define BOOTGLY_PROJECT for upload tests (requires project path)
       if ( !defined('BOOTGLY_PROJECT') ) {

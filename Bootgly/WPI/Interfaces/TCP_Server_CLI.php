@@ -12,6 +12,7 @@ namespace Bootgly\WPI\Interfaces;
 
 
 use const PHP_SAPI;
+use const SIG_DFL;
 use const SIG_IGN;
 use const SIGALRM;
 use const SIGCHLD;
@@ -26,6 +27,7 @@ use const SIGTERM;
 use const SIGTSTP;
 use const SIGUSR1;
 use const SIGUSR2;
+use const SIGWINCH;
 use const SO_KEEPALIVE;
 use const SOL_SOCKET;
 use const SOL_TCP;
@@ -36,10 +38,12 @@ use const WNOHANG;
 use const WUNTRACED;
 use function count;
 use function defined;
+use function exec;
 use function explode;
 use function fclose;
 use function file;
 use function function_exists;
+use function is_numeric;
 use function method_exists;
 use function pcntl_fork;
 use function pcntl_signal;
@@ -73,12 +77,13 @@ use const Bootgly\CLI;
 use Bootgly\ABI\Debugging\Data\Vars;
 use Bootgly\ABI\Debugging\Shutdown;
 use Bootgly\ABI\Events\Emitter;
+use Bootgly\ABI\IO\IPC\Pipe as IPCPipe;
 use Bootgly\ACI\Events\Loops;
 use Bootgly\ACI\Events\Scheduler;
 use Bootgly\ACI\Events\Timer;
-use Bootgly\ACI\Logs\LoggableEscaped;
+use Bootgly\ACI\Logs\Data\Display;
+use Bootgly\ACI\Logs\Handlers\Pipe as PipeHandler;
 use Bootgly\ACI\Logs\Logger;
-use Bootgly\ACI\Logs\Logging;
 use Bootgly\ACI\Process;
 use Bootgly\ACI\Process\Events as Worker;
 use Bootgly\API\Endpoints\Server\Modes;
@@ -86,6 +91,8 @@ use Bootgly\API\Endpoints\Server\Status;
 use Bootgly\API\Environment;
 use Bootgly\API\Environments;
 use Bootgly\API\Workables\Server as SAPI;
+use Bootgly\CLI\Terminal;
+use Bootgly\CLI\UI\Components\Logs as LogsViewer;
 use Bootgly\WPI\Endpoints\Servers;
 use Bootgly\WPI\Endpoints\Servers\Decoder;
 use Bootgly\WPI\Endpoints\Servers\Encoder;
@@ -96,9 +103,17 @@ use Bootgly\WPI\Interfaces\TCP_Server_CLI\Commands;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections;
 
 
-class TCP_Server_CLI implements Servers, Logging
+class TCP_Server_CLI implements Servers
 {
-   use LoggableEscaped;
+   public Logger $Logger {
+      get {
+         if ( isSet($this->Logger) === false ) {
+            $this->Logger = new Logger(channel: static::class);
+         }
+
+         return $this->Logger;
+      }
+   }
 
 
    // !
@@ -166,6 +181,9 @@ class TCP_Server_CLI implements Servers, Logging
 
    // /
    protected Connections $Connections;
+
+   // @ Monitor live-log viewer pipe (workers → master), opened pre-fork.
+   protected null|IPCPipe $LogPipe = null;
 
 
    public function __construct (Modes $Mode = Modes::Monitor)
@@ -298,13 +316,13 @@ class TCP_Server_CLI implements Servers, Logging
             return true;
          case '@status':
             // @ Set log display none
-            $display = Logger::$display;
-            Logger::$display = Logger::DISPLAY_MESSAGE;
+            $display = Display::$mode;
+            Display::$mode = Display::MESSAGE;
 
             CLI->Commands->find('status', From: $this)?->run();
 
             // @ Restore log display
-            Logger::$display = $display;
+            Display::$mode = $display;
             return true;
       }
 
@@ -452,7 +470,7 @@ class TCP_Server_CLI implements Servers, Logging
                while ($dead = $this->Process->recover()) {
                   [$deadIndex, $deadPID] = $dead;
 
-                  $this->log("Worker #{$deadIndex} (PID: {$deadPID}) crashed, reforking...@.;", self::LOG_WARNING_LEVEL);
+                  $this->Logger->log(warning: "Worker #{$deadIndex} (PID: {$deadPID}) crashed, reforking...@.;");
 
                   $newPID = pcntl_fork();
 
@@ -463,7 +481,7 @@ class TCP_Server_CLI implements Servers, Logging
 
                      $this->Process->title = 'Bootgly_TCP_Server_CLI: child process (Worker #' . Process::$index . ')';
 
-                     Logger::$display = Logger::DISPLAY_MESSAGE_WHEN_ID;
+                     Display::$mode = Display::MESSAGE_WHEN_ID;
 
                      $this->instance();
 
@@ -482,7 +500,7 @@ class TCP_Server_CLI implements Servers, Logging
                   else if ($newPID > 0) {
                      $this->Process->Children->push($newPID, $deadIndex);
 
-                     $this->log("Worker #{$deadIndex} recovered (new PID: {$newPID})@.;", self::LOG_NOTICE_LEVEL);
+                     $this->Logger->log(notice: "Worker #{$deadIndex} recovered (new PID: {$newPID})@.;");
 
                      $this->Process->State->save([
                         'master'  => Process::$master,
@@ -513,16 +531,16 @@ class TCP_Server_CLI implements Servers, Logging
    {
       $this->Status = Status::Starting;
 
-      Logger::$display = Logger::$display === 0 ? 0 : Logger::DISPLAY_MESSAGE;
+      Display::$mode = Display::$mode === 0 ? 0 : Display::MESSAGE;
 
-      $this->log('@\;Starting Server...@.;', self::LOG_NOTICE_LEVEL);
+      $this->Logger->log(notice: '@\;Starting Server...@.;');
 
       // @ Boot TCP Application
       if (self::$Application) {
          self::$Application::boot(Environments::Production);
       }
       else if (isSet(SAPI::$Handler) === false) {
-         $this->log('@\;No handler defined. Call on(Events::DataReceive, ...) before start().@\;', self::LOG_ERROR_LEVEL);
+         $this->Logger->log(error: '@\;No handler defined. Call on(Events::DataReceive, ...) before start().@\;');
          exit(1);
       }
 
@@ -548,7 +566,7 @@ class TCP_Server_CLI implements Servers, Logging
          if ($probeCode === 13 || str_contains($probeMessage ?? '', 'Permission denied')) {
             $message .= '@\;Ports below 1024 require elevated privileges. Try running with `sudo`.@.;';
          }
-         $this->log($message, self::LOG_ERROR_LEVEL);
+         $this->Logger->log(error: $message);
          exit(1);
       }
       fclose($probeSocket);
@@ -572,11 +590,11 @@ class TCP_Server_CLI implements Servers, Logging
       pcntl_signal(SIGPIPE, SIG_IGN, false);
 
       // @ Fork process workers...
-      $this->log("Forking {$this->workers} workers... @.;", self::LOG_NOTICE_LEVEL);
+      $this->Logger->log(notice: "Forking {$this->workers} workers... @.;");
       $this->Process->fork($this->workers, instance: function (Process $Process, int $index): void {
          $Process->title = 'Bootgly_TCP_Server_CLI: child process (Worker #' . Process::$index . ')';
 
-         Logger::$display = Logger::DISPLAY_MESSAGE_WHEN_ID;
+         Display::$mode = Display::MESSAGE_WHEN_ID;
 
          // @ Events — worker booted (guarded: zero-alloc when no listeners)
          $Emitter = Emitter::$Instance;
@@ -685,7 +703,7 @@ class TCP_Server_CLI implements Servers, Logging
       }
 
       if ($Socket === false) {
-         $this->log('@\;Could not create socket: ' . $error_message, self::LOG_ERROR_LEVEL);
+         $this->Logger->log(error: '@\;Could not create socket: ' . $error_message);
          exit(1);
       }
       /** @var resource $Socket */
@@ -707,7 +725,7 @@ class TCP_Server_CLI implements Servers, Logging
          }
 
          if ($Socket === false) {
-            $this->log('@\;Failed to import stream socket!@\;', self::LOG_ERROR_LEVEL);
+            $this->Logger->log(error: '@\;Failed to import stream socket!@\;');
             exit(1);
          }
 
@@ -740,7 +758,7 @@ class TCP_Server_CLI implements Servers, Logging
 
       $userInfo = posix_getpwnam($this->user);
       if ($userInfo === false) {
-         $this->log('@\;User "' . $this->user . '" not found. Cannot drop privileges.@\;', self::LOG_ERROR_LEVEL);
+         $this->Logger->log(error: '@\;User "' . $this->user . '" not found. Cannot drop privileges.@\;');
          exit(1);
       }
 
@@ -751,7 +769,7 @@ class TCP_Server_CLI implements Servers, Logging
       if ($this->group !== null) {
          $groupInfo = posix_getgrnam($this->group);
          if ($groupInfo === false) {
-            $this->log('@\;Group "' . $this->group . '" not found. Cannot drop privileges.@\;', self::LOG_ERROR_LEVEL);
+            $this->Logger->log(error: '@\;Group "' . $this->group . '" not found. Cannot drop privileges.@\;');
             exit(1);
          }
          $gid = $groupInfo['gid'];
@@ -763,17 +781,17 @@ class TCP_Server_CLI implements Servers, Logging
 
       // @ Drop: group first, then user (order matters!)
       if (posix_setgid($gid) === false) {
-         $this->log('@\;Failed to set GID to ' . $gid . '.@\;', self::LOG_ERROR_LEVEL);
+         $this->Logger->log(error: '@\;Failed to set GID to ' . $gid . '.@\;');
          exit(1);
       }
 
       if (posix_initgroups($this->user, $gid) === false) {
-         $this->log('@\;Failed to init groups for user "' . $this->user . '".@\;', self::LOG_ERROR_LEVEL);
+         $this->Logger->log(error: '@\;Failed to init groups for user "' . $this->user . '".@\;');
          exit(1);
       }
 
       if (posix_setuid($uid) === false) {
-         $this->log('@\;Failed to set UID to ' . $uid . '.@\;', self::LOG_ERROR_LEVEL);
+         $this->Logger->log(error: '@\;Failed to set UID to ' . $uid . '.@\;');
          exit(1);
       }
 
@@ -784,13 +802,13 @@ class TCP_Server_CLI implements Servers, Logging
    {
       $this->Status = Status::Running;
 
-      $this->log('Running in Daemon mode (no UI)...@.;', self::LOG_INFO_LEVEL);
+      $this->Logger->log(info: 'Running in Daemon mode (no UI)...@.;');
 
       // @ Fork: parent returns to terminal, child becomes daemon master
       $pid = pcntl_fork();
 
       if ($pid === -1) {
-         $this->log('@\;Failed to fork daemon process!@\;', self::LOG_ERROR_LEVEL);
+         $this->Logger->log(error: '@\;Failed to fork daemon process!@\;');
          exit(1);
       }
 
@@ -802,7 +820,7 @@ class TCP_Server_CLI implements Servers, Logging
       //   `stop()`, which would wipe the freshly written PID file).
       if ($pid > 0) {
          $this->daemonized = true;
-         $this->log('@\;Daemon started (PID: ' . $pid . ')@\;@.;', self::LOG_NOTICE_LEVEL);
+         $this->Logger->log(notice: '@\;Daemon started (PID: ' . $pid . ')@\;@.;');
          exit(0);
       }
 
@@ -834,7 +852,7 @@ class TCP_Server_CLI implements Servers, Logging
    {
       $this->Status = Status::Running;
 
-      $this->log('@\;Running in Foreground mode (no UI)...@\;@.;', self::LOG_INFO_LEVEL);
+      $this->Logger->log(info: '@\;Running in Foreground mode (no UI)...@\;@.;');
 
       // @ Master loop (no fork): stay in the foreground as the container/service
       //   process. Logs go to stdout and SIGTERM/SIGINT stop via signal handlers.
@@ -852,12 +870,12 @@ class TCP_Server_CLI implements Servers, Logging
    {
       $this->Status = Status::Running;
 
-      Logger::$display = Logger::DISPLAY_MESSAGE;
+      Display::$mode = Display::MESSAGE;
 
-      $this->log('@\;Entering in Interactive mode...@\;', self::LOG_INFO_LEVEL);
-      $this->log('>_ Type `@#Green:stop@;` to stop the Server or `@#Green:help@;` to list commands.@\;');
-      $this->log('>_ Type `@#Green:monitor@;` to enter in Monitor mode.@\;');
-      $this->log('>_ Autocompletation and history enabled.@\\\;', self::LOG_NOTICE_LEVEL);
+      $this->Logger->log(info: '@\;Entering in Interactive mode...@\;');
+      $this->Logger->log(debug: '>_ Type `@#Green:stop@;` to stop the Server or `@#Green:help@;` to list commands.@\;');
+      $this->Logger->log(debug: '>_ Type `@#Green:monitor@;` to enter in Monitor mode.@\;');
+      $this->Logger->log(notice: '>_ Autocompletation and history enabled.@\\\;');
 
       while ($this->Mode === Modes::Interactive) {
          // @ Calls signal handlers for pending signals
@@ -870,7 +888,7 @@ class TCP_Server_CLI implements Servers, Logging
          if ($status === 0) {
             $interact = $this->Commands->interact();
 
-            $this->log('@\;');
+            $this->Logger->log(debug: '@\;');
 
             // @ Wait for command output before looping
             if ($interact === false) {
@@ -878,7 +896,7 @@ class TCP_Server_CLI implements Servers, Logging
             }
          }
          else if ($status > 0) { // If a child has already exited?
-            $this->log('@\;Process child exited!@\;', self::LOG_ERROR_LEVEL);
+            $this->Logger->log(error: '@\;Process child exited!@\;');
             $this->Process->Signals->send(SIGINT);
             break;
          }
@@ -891,62 +909,122 @@ class TCP_Server_CLI implements Servers, Logging
          $this->monitoring();
       }
    }
+   /**
+    * Open the live-log pipe before forking (Monitor mode only) so workers inherit it.
+    */
+   protected function pipe (): void
+   {
+      if ($this->Mode === Modes::Monitor) {
+         $this->LogPipe = new IPCPipe;
+         $this->LogPipe->open();
+      }
+   }
+   /**
+    * Route this process's logs into the Monitor pipe and silence stdout (Monitor mode only).
+    *
+    * Applied to both the master and every worker after fork, so all channels stream to the viewer.
+    */
+   protected function sink (): void
+   {
+      if ($this->Mode === Modes::Monitor && $this->LogPipe !== null) {
+         Display::$mode = Display::NONE;
+         Logger::$Sink = new PipeHandler($this->LogPipe);
+      }
+   }
+   /**
+    * Monitor mode: a full-screen, non-blocking live log viewer.
+    *
+    * Master + workers stream Records into a pipe; this loop drains them into a filterable viewer,
+    * reads keystrokes, and redraws — replacing the old blocking `pcntl_wait` status dashboard.
+    */
    protected function monitoring (): void
    {
       $this->Status = Status::Running;
 
-      $this->log('@\;Entering in Monitor mode...@\;', self::LOG_INFO_LEVEL);
-
-      // @ Set time to hot reloading
+      // @ Hot-reload check (every 2s)
       Timer::add(2, function () {
-         $modified = SAPI::check();
-
-         if ($modified) {
-            $this->Process->Signals->send(SIGUSR2, master: false); // @ Send signal to all children to reload
+         if (SAPI::check()) {
+            $this->Process->Signals->send(SIGUSR2, master: false);
          }
       });
 
-      // @ Set Logger to display messages, datetime and level
-      Logger::$display = Logger::DISPLAY_MESSAGE_WHEN_ID;
+      // @ Route master logs into the pipe + silence stdout
+      $this->sink();
 
       $Output = CLI->Terminal->Output;
+      $Input = CLI->Terminal->Input;
+
+      // @ Enter full-screen TUI (alternate screen buffer)
+      $Output->write("\e[?1049h\e[2J\e[H");
       $Output->Cursor->hide();
-      $Output->clear();
-      $this->__get('@status');
+      $Input->configure(blocking: false, canonical: false, echo: false);
+
+      // @ Always restore the terminal on exit — covers SIGINT/SIGTERM/`project stop` paths
+      //   that terminate from the signal handler and never reach the teardown below.
+      //   Without this the TTY stays in raw mode (no echo) after the server stops.
+      register_shutdown_function(static function () use ($Input, $Output): void {
+         $Input->configure(blocking: true, canonical: true, echo: true);
+         $Output->Cursor->show();
+         $Output->write("\e[?1049l");
+      });
+
+      // @ Refresh terminal size on resize (SIGWINCH)
+      pcntl_signal(SIGWINCH, static function (): void {
+         $columns = exec('tput cols 2>/dev/null');
+         $lines = exec('tput lines 2>/dev/null');
+         if (is_numeric($columns)) {
+            Terminal::$width = (int) $columns;
+         }
+         if (is_numeric($lines)) {
+            Terminal::$height = (int) $lines;
+         }
+      });
+
+      $Viewer = new LogsViewer($Input, $Output);
 
       // @ Loop
-      while ($this->Mode === Modes::Monitor) {
-         // @ Calls signal handlers for pending signals
+      while ($this->Mode === Modes::Monitor && $this->Status === Status::Running) {
+         // @ Dispatch pending signals (reforks, reload, shutdown, resize)
          pcntl_signal_dispatch();
 
-         // @ Suspends execution of the current process until a child has exited, or until a signal is delivered
-         pcntl_wait($status, WUNTRACED);
-
-         // @ Calls signal handlers for pending signals again
-         pcntl_signal_dispatch();
-
-         // If child is running?
-         if ($status === 0) {
-            // ...
-         }
-         else if ($status > 0) { // If a child has already exited?
-            $this->log('@\;Process child exited!@\;', self::LOG_ERROR_LEVEL);
-            $this->Process->Signals->send(SIGINT);
-            break;
-         }
-         else if ($status === -1) { // If error ignore
-            // ...
+         // @ Drain worker + master logs from the pipe
+         if ($this->LogPipe !== null) {
+            while (true) {
+               $chunk = $this->LogPipe->read(65536);
+               if ($chunk === false || $chunk === '') {
+                  break;
+               }
+               $Viewer->feed($chunk);
+            }
          }
 
-         $this->__get('@status');
+         // @ Handle one keystroke (non-blocking)
+         $key = $Input->read(8);
+         if ($key !== false && $key !== '') {
+            if ($Viewer->control($key) === false) {
+               $this->Mode = Modes::Interactive;
+               break;
+            }
+         }
+
+         // @ Redraw + throttle (~30 fps)
+         $Viewer->render();
+         usleep(30000);
       }
 
+      // @ Leave full-screen TUI + restore terminal
+      pcntl_signal(SIGWINCH, SIG_DFL);
+      $Input->configure(blocking: true, canonical: true, echo: true);
       $Output->Cursor->show();
+      $Output->write("\e[?1049l");
 
-      // @ Enter in CLI mode
+      // @ Restore normal logging
+      Logger::$Sink = null;
+      Display::$mode = Display::MESSAGE;
+
+      // @ Enter Interactive mode if requested
       if ($this->Mode === Modes::Interactive) {
-         Timer::del(0); // @ Delete all timers
-         $Output->clear();
+         Timer::del(0);
          $this->interacting();
       }
    }
@@ -961,7 +1039,7 @@ class TCP_Server_CLI implements Servers, Logging
       }
 
       if ($closed === false) {
-         $this->log('@\;Failed to close $this->Socket!');
+         $this->Logger->log(debug: '@\;Failed to close $this->Socket!');
       }
 
       return $closed;
@@ -971,7 +1049,7 @@ class TCP_Server_CLI implements Servers, Logging
    {
       if ($this->Status !== Status::Paused) {
          match ($this->Process->level) {
-            'master' => $this->log("Server needs to be paused to resume!@\\;", 4),
+            'master' => $this->Logger->log(error: "Server needs to be paused to resume!@\\;"),
             'child' => null,
             default => null
          };
@@ -981,7 +1059,7 @@ class TCP_Server_CLI implements Servers, Logging
 
       $children = (string) count($this->Process->Children->PIDs);
       match ($this->Process->level) {
-         'master' => $this->log("Resuming {$children} worker(s)... @\\;", 3),
+         'master' => $this->Logger->log(critical: "Resuming {$children} worker(s)... @\\;"),
          'child' => self::$Event->add($this->Socket, self::$Event::EVENT_CONNECT, true),
          default => null
       };
@@ -994,7 +1072,7 @@ class TCP_Server_CLI implements Servers, Logging
    {
       if ($this->Status !== Status::Running) {
          match ($this->Process->level) {
-            'master' => $this->log("Server needs to be running to pause!@\\;", 4),
+            'master' => $this->Logger->log(error: "Server needs to be running to pause!@\\;"),
             'child' => null,
             default => null
          };
@@ -1004,7 +1082,7 @@ class TCP_Server_CLI implements Servers, Logging
 
       $children = (string) count($this->Process->Children->PIDs);
       match ($this->Process->level) {
-         'master' => $this->log("Pausing {$children} worker(s)... @\\;", 3),
+         'master' => $this->Logger->log(critical: "Pausing {$children} worker(s)... @\\;"),
          'child' => self::$Event->del($this->Socket, self::$Event::EVENT_CONNECT),
          default => null
       };
@@ -1022,16 +1100,16 @@ class TCP_Server_CLI implements Servers, Logging
       $this->Status = Status::Stopping;
       $this->Process->stopping = true;
 
-      Logger::$display = Logger::DISPLAY_MESSAGE;
+      Display::$mode = Display::MESSAGE;
 
       switch ($this->Process->level) {
          case 'master':
             $children = (string) count($this->Process->Children->PIDs);
-            $this->log("Stopping {$children} worker(s)...@\\;", 3);
+            $this->Logger->log(critical: "Stopping {$children} worker(s)...@\\;");
 
             $this->Process->Children->terminate();
 
-            $this->log("{$children} worker(s) stopped!@\\;", 3);
+            $this->Logger->log(critical: "{$children} worker(s) stopped!@\\;");
 
             // @ Clean all per-project state files
             $this->Process->State->clean();

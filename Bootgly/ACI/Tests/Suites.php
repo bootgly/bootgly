@@ -16,14 +16,23 @@ use function microtime;
 use Throwable;
 
 use Bootgly\ABI\Debugging\Data\Throwables\Exceptions;
-use Bootgly\ACI\Logs\LoggableEscaped;
+use Bootgly\ACI\Logs\Logger;
 use Bootgly\ACI\Tests\Assertions;
 use Bootgly\ACI\Tests\Results;
 
 
 class Suites
 {
-   use LoggableEscaped;
+   // * Data
+   public Logger $Logger {
+      get {
+         if ( isSet($this->Logger) === false ) {
+            $this->Logger = new Logger(channel: static::class);
+         }
+
+         return $this->Logger;
+      }
+   }
 
    // * Config
    /**
@@ -133,7 +142,7 @@ class Suites
       $ran = '@#Black:' . 'Ran all test suites. @;';
 
       // TODO temp
-      $this->log(<<<TESTS
+      $this->Logger->log(debug: <<<TESTS
 
       @#white:============================================================ @;
       @#white:Test Suites: @; {$failed}, {$skipped}, {$passed}

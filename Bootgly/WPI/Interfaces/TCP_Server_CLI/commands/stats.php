@@ -16,7 +16,7 @@ use function sprintf;
 use Closure;
 
 use Bootgly\ABI\Data\__String\Bytes;
-use Bootgly\ACI\Logs\Logger;
+use Bootgly\ACI\Logs\Data\Display;
 use Bootgly\CLI\Command;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI as Server;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections;
@@ -64,11 +64,11 @@ return new class extends Command
          if (Connections::$stats === false) {
             Connections::$stats = true;
 
-            Logger::$display = Logger::DISPLAY_MESSAGE;
-            $Server->log("@\\;Stats collection was disabled — enabled now. Counters start from this point.@\\;", 2);
+            Display::$mode = Display::MESSAGE;
+            $Server->Logger->log(alert: "@\\;Stats collection was disabled — enabled now. Counters start from this point.@\\;");
          }
 
-         Logger::$display = Logger::DISPLAY_MESSAGE;
+         Display::$mode = Display::MESSAGE;
    
          $worker = sprintf("%02d", $Server->Process::$index);
    
@@ -86,9 +86,9 @@ return new class extends Command
          $errors[1] = Connections::$errors['read'];
          $errors[2] = Connections::$errors['write'];
    
-         $Server->log("@\;==================== @:info: Worker #{$worker} @; ====================@\;");
+         $Server->Logger->log(debug: "@\;==================== @:info: Worker #{$worker} @; ====================@\;");
          if ($connections > 0) {
-            $Server->log(<<<OUTPUT
+            $Server->Logger->log(debug: <<<OUTPUT
             Connections Accepted | @:notice: {$connections} connection(s) @;
             Connection Errors    | @:error: {$errors[0]} error(s) @;
              ---------------------------------------------------
@@ -102,9 +102,9 @@ return new class extends Command
             OUTPUT);
          }
          else {
-            $Server->log(' -------------------- No data. -------------------- @\;', 2);
+            $Server->Logger->log(alert: ' -------------------- No data. -------------------- @\;');
          }
-         $Server->log("====================================================@\\;");
+         $Server->Logger->log(debug: "====================================================@\\;");
       });
 
       return true;

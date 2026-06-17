@@ -2,14 +2,14 @@
 
 namespace Bootgly\WPI\Nodes\HTTP_Client_CLI\tests\E2E;
 
-use Bootgly\ACI\Logs\Logger;
+use Bootgly\ACI\Logs\Data\Display;
 use Bootgly\ACI\Tests\Suite;
 use Bootgly\WPI\Nodes\HTTP_Client_CLI;
 
 return new Suite(
    // * Config
    autoBoot: function (Suite|null $Suite = null): true {
-      Logger::$display = Logger::DISPLAY_NONE;
+      Display::$mode = Display::NONE;
 
       HTTP_Client_CLI::pretest($Suite);
       HTTP_Client_CLI::test(9999);

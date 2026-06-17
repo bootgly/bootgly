@@ -13,5 +13,11 @@ namespace Bootgly\ACI;
 
 abstract class Logs
 {
-   abstract public function log (string $message): bool;
+   /**
+    * Log one or more messages, each at its own named severity level.
+    *
+    * @param string|array<string,mixed> ...$args One or more `level: message` pairs, plus optional `context: [...]`.
+    * @return bool True once the records are handled.
+    */
+   abstract public function log (string|array ...$args): bool;
 }

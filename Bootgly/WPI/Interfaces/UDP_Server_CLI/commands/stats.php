@@ -16,7 +16,7 @@ use function sprintf;
 use Closure;
 
 use Bootgly\ABI\Data\__String\Bytes;
-use Bootgly\ACI\Logs\Logger;
+use Bootgly\ACI\Logs\Data\Display;
 use Bootgly\CLI\Command;
 use Bootgly\WPI\Interfaces\UDP_Server_CLI as Server;
 use Bootgly\WPI\Interfaces\UDP_Server_CLI\Connections;
@@ -59,7 +59,7 @@ return new class extends Command
             return true;
          }
 
-         Logger::$display = Logger::DISPLAY_MESSAGE;
+         Display::$mode = Display::MESSAGE;
 
          $worker = sprintf("%02d", $Server->Process::$index);
 
@@ -76,9 +76,9 @@ return new class extends Command
          $errors[1] = Connections::$errors['read'];
          $errors[2] = Connections::$errors['write'];
 
-         $Server->log("@\;==================== @:info: Worker #{$worker} @; ====================@\;");
+         $Server->Logger->log(debug: "@\;==================== @:info: Worker #{$worker} @; ====================@\;");
          if ($connections > 0) {
-            $Server->log(<<<OUTPUT
+            $Server->Logger->log(debug: <<<OUTPUT
             Peers Seen           | @:notice: {$connections} peer(s) @;
             Peer Errors          | @:error: {$errors[0]} error(s) @;
              ---------------------------------------------------
@@ -92,9 +92,9 @@ return new class extends Command
             OUTPUT);
          }
          else {
-            $Server->log(' -------------------- No data. -------------------- @\;', 2);
+            $Server->Logger->log(alert: ' -------------------- No data. -------------------- @\;');
          }
-         $Server->log("====================================================@\\;");
+         $Server->Logger->log(debug: "====================================================@\\;");
       });
 
       return true;

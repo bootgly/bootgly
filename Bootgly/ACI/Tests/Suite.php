@@ -28,7 +28,7 @@ use function strlen;
 use Closure;
 use Exception;
 
-use Bootgly\ACI\Logs\LoggableEscaped;
+use Bootgly\ACI\Logs\Logger;
 use Bootgly\ACI\Tests\Assertions;
 use Bootgly\ACI\Tests\Results;
 use Bootgly\ACI\Tests\Suite\Test;
@@ -39,7 +39,16 @@ use Bootgly\API\Environment;
 
 class Suite
 {
-   use LoggableEscaped;
+   // * Data
+   public Logger $Logger {
+      get {
+         if ( isSet($this->Logger) === false ) {
+            $this->Logger = new Logger(channel: static::class);
+         }
+
+         return $this->Logger;
+      }
+   }
 
 
    // * Config
@@ -278,7 +287,7 @@ class Suite
          );
 
          // @ Output header separator
-         $this->log("@#white:$header @;@\\;");
+         $this->Logger->log(debug: "@#white:$header @;@\\;");
       }
    }
 
@@ -359,7 +368,7 @@ class Suite
             $info = "\033[1;35m $info \033[0m";
          }
 
-         $this->log(
+         $this->Logger->log(debug: 
             "\e[30m\e[47m $case_index \e[0m\e[0;30;43m SKIP \e @; \e[90m$file\e[0m$info" . PHP_EOL
          );
       }
@@ -419,7 +428,7 @@ class Suite
       $ran = "@#Black:Ran all tests cases. @;";
 
       // TODO temp
-      $this->log(<<<TESTS
+      $this->Logger->log(debug: <<<TESTS
 
       @#white:------------------------------------------------------------ @;
       @#white:Test Cases: @; {$failed}, {$skipped}, {$passed}

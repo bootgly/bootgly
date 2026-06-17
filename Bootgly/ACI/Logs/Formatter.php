@@ -11,7 +11,16 @@
 namespace Bootgly\ACI\Logs;
 
 
-interface Logging
+use Bootgly\ACI\Logs\Data\Record;
+
+
+interface Formatter
 {
-   public function log (string $message): bool;
+   /**
+    * Render a record into its final string representation for a handler.
+    *
+    * @param Record $Record The record to format.
+    * @return string The formatted output.
+    */
+   public function format (Record $Record): string;
 }

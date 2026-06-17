@@ -67,6 +67,7 @@ use Throwable;
 use const Bootgly\WPI;
 use Bootgly\ABI\Debugging\Data\Throwables\Exceptions;
 use Bootgly\ABI\IO\FS\File;
+use Bootgly\ACI\Logs\Data\Display;
 use Bootgly\ACI\Logs\Logger;
 use Bootgly\ACI\Process;
 use Bootgly\ACI\Tests\Fixture;
@@ -271,8 +272,8 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
    {
       $this->Status = Status::Starting;
 
-      Logger::$display = Logger::$display === 0 ? 0 : Logger::DISPLAY_MESSAGE;
-      $this->log('@\;Starting Server...@.;', self::LOG_NOTICE_LEVEL);
+      Display::$mode = Display::$mode === 0 ? 0 : Display::MESSAGE;
+      $this->Logger->log(notice: '@\;Starting Server...@.;');
 
       // @ Boot Server API
       // ! Honor server Mode: under Modes::Test the constructor installs
@@ -288,7 +289,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
          );
       }
       else if (isSet(SAPI::$Handler) === false) {
-         $this->log('@\;No request handler defined. Call on(Events::RequestReceived, ...) before start().@\;', self::LOG_ERROR_LEVEL);
+         $this->Logger->log(error: '@\;No request handler defined. Call on(Events::RequestReceived, ...) before start().@\;');
          exit(1);
       }
 
@@ -314,12 +315,12 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
          if ($probeCode === 13 || str_contains($probeMessage ?? '', 'Permission denied')) {
             $message .= '@\;Ports below 1024 require elevated privileges. Try running with `sudo`.@.;';
          }
-         $this->log($message, self::LOG_ERROR_LEVEL);
+         $this->Logger->log(error: $message);
          exit(1);
       }
       fclose($probeSocket);
 
-      $this->log("Forking {$this->workers} workers... @..;", self::LOG_NOTICE_LEVEL);
+      $this->Logger->log(notice: "Forking {$this->workers} workers... @..;");
 
       // @ Initialize cross-worker upload byte counter (master-side, before
       //   fork) so workers inherit the SHM segment + lockfile descriptor.
@@ -346,11 +347,20 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       ]);
       pcntl_signal(SIGPIPE, SIG_IGN, false);
 
+      // @ Monitor mode: open the live-log pipe before forking so workers inherit it
+      $this->pipe();
+
       // @ Fork process workers...
       $this->Process->fork($this->workers, instance: function (Process $Process, int $index): void {
          $Process->title = 'Bootgly_HTTP_Server: child process (Worker #' . Process::$index . ')';
 
-         Logger::$display = Logger::DISPLAY_MESSAGE_WHEN_ID;
+         // @ Monitor mode routes worker logs to the master viewer pipe; otherwise per-worker stdout
+         if ($this->Mode === Modes::Monitor) {
+            $this->sink();
+         }
+         else {
+            Display::$mode = Display::MESSAGE_WHEN_ID;
+         }
 
          // @ Hot-path: restore default error handler in worker.
          // The global Errors::collect handler is a userland callback invoked on every
@@ -581,7 +591,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
    }
    protected static function test (TCP_Server_CLI $TCP_Server_CLI): bool
    {
-      Logger::$display = Logger::DISPLAY_NONE;
+      Display::$mode = Display::NONE;
 
       self::boot(Environments::Test);
 
@@ -601,7 +611,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
          static function ($Socket, $Connection)
          use ($TCP_Client_CLI) 
          {
-            Logger::$display = Logger::DISPLAY_MESSAGE;
+            Display::$mode = Display::MESSAGE;
 
             // ! Suite
             $Suite = SAPI::$Suite;
@@ -896,7 +906,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
             $Suite->summarize();
 
             // @ Reset CLI Logger
-            Logger::$display = Logger::DISPLAY_MESSAGE;
+            Display::$mode = Display::MESSAGE;
 
             // @ Destroy Client Event Loop
             $TCP_Client_CLI::$Event->destroy();

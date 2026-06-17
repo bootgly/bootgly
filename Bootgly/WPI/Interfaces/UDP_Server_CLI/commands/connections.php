@@ -17,6 +17,7 @@ use function date;
 use function is_array;
 use Closure;
 
+use Bootgly\ACI\Logs\Data\Display;
 use Bootgly\ACI\Logs\Logger;
 use Bootgly\CLI\Command;
 use Bootgly\WPI\Interfaces\UDP_Server_CLI as Server;
@@ -44,15 +45,15 @@ return new class extends Command
          /** @var Server $Server */
          $Server = $this; // @phpstan-ignore-line
 
-         Logger::$display = Logger::DISPLAY_MESSAGE;
+         Display::$mode = Display::MESSAGE;
 
          $worker = $Server->Process::$index;
 
-         $Server->log(PHP_EOL . "Worker #{$worker}:" . PHP_EOL);
+         $Server->Logger->log(debug: PHP_EOL . "Worker #{$worker}:" . PHP_EOL);
 
          /** @var Connections $Connection */
          foreach (Connections::$Connections as $peer => $Connection) {
-            $Server->log('Peer #' . $peer . ':' . PHP_EOL, $Server::LOG_INFO_LEVEL);
+            $Server->Logger->log(info: 'Peer #' . $peer . ':' . PHP_EOL);
 
             $Connection = (array) $Connection;
             foreach ($Connection as $key => $value) {
@@ -64,7 +65,7 @@ return new class extends Command
                      continue 2;
                }
 
-               $Server->log('@:notice: ' . $key . ': @; ');
+               $Server->Logger->log(debug: '@:notice: ' . $key . ': @; ');
 
                switch ($key) {
                   case 'status':
@@ -79,16 +80,16 @@ return new class extends Command
                         default                         => 'UNKNOWN'
                      };
 
-                     $Server->log($status . PHP_EOL);
+                     $Server->Logger->log(debug: $status . PHP_EOL);
                      break;
 
                   case 'expiration':
-                     $Server->log($value . ' second(s)' . PHP_EOL); // @phpstan-ignore-line
+                     $Server->Logger->log(debug: $value . ' second(s)' . PHP_EOL); // @phpstan-ignore-line
                      break;
 
                   case 'used':
                   case 'started':
-                     $Server->log(date('Y-m-d H:i:s', $value) . PHP_EOL); // @phpstan-ignore-line
+                     $Server->Logger->log(debug: date('Y-m-d H:i:s', $value) . PHP_EOL); // @phpstan-ignore-line
                      break;
 
                   default:
@@ -97,13 +98,13 @@ return new class extends Command
                         $value = count($value);
                      }
 
-                     $Server->log($value . PHP_EOL); // @phpstan-ignore-line
+                     $Server->Logger->log(debug: $value . PHP_EOL); // @phpstan-ignore-line
                }
             }
          }
 
          if ( empty(Connections::$Connections) ) {
-            $Server->log('No active peer.' . PHP_EOL, $Server::LOG_WARNING_LEVEL);
+            $Server->Logger->log(warning: 'No active peer.' . PHP_EOL);
          }
       });
 

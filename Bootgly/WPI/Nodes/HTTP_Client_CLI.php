@@ -48,6 +48,7 @@ use Throwable;
 
 use Bootgly\ABI\IO\FS\File;
 use Bootgly\ACI\Events\Timer;
+use Bootgly\ACI\Logs\Data\Display;
 use Bootgly\ACI\Logs\Logger;
 use Bootgly\ACI\Tests\Suite;
 use Bootgly\ACI\Tests\Suite\Test\Specification;
@@ -1029,7 +1030,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
     */
    public static function test (int $port = 9999, null|array $secure = null): bool
    {
-      Logger::$display = Logger::DISPLAY_NONE;
+      Display::$mode = Display::NONE;
 
       // @ Start mock TCP server in background (fork)
       $process_id = pcntl_fork();
@@ -1184,7 +1185,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
     */
    protected static function testing (int $port, null|array $secure = null): void
    {
-      Logger::$display = Logger::DISPLAY_MESSAGE;
+      Display::$mode = Display::MESSAGE;
 
       $Suite = CAPI::$Suite;
       $Suite->separate($Suite->name);
@@ -1256,6 +1257,6 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
 
       $Suite->summarize();
 
-      Logger::$display = Logger::DISPLAY_MESSAGE;
+      Display::$mode = Display::MESSAGE;
    }
 }

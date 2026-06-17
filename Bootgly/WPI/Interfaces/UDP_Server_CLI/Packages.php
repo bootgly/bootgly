@@ -17,7 +17,6 @@ use function stream_socket_sendto;
 use function strlen;
 use Throwable;
 
-use Bootgly\ACI\Logs\LoggableEscaped;
 use Bootgly\ACI\Logs\Logger;
 use Bootgly\API\Workables\Server as SAPI;
 use Bootgly\WPI;
@@ -29,7 +28,7 @@ use Bootgly\WPI\Interfaces\UDP_Server_CLI\Connections\Connection;
 
 abstract class Packages extends Server_Packages implements WPI\Connections\Packages
 {
-   use LoggableEscaped;
+   public Logger $Logger;
 
    public Connection $Connection;
 

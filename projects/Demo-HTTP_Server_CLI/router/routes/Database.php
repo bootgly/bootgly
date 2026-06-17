@@ -206,6 +206,7 @@ return static function
    yield $Router->route('/deferred/kv/pipeline', function (Request $Request, Response $Response) {
       return $Response->defer(function (Response $Response): void {
          try {
+            /** @var \Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\KV **/
             $KV = $Response->KV;
             $Operations = [];
 

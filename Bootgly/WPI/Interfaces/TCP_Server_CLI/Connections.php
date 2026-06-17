@@ -24,17 +24,24 @@ use function substr;
 use Throwable;
 
 use const Bootgly\CLI;
-use Bootgly\ACI\Logs\LoggableEscaped;
+use Bootgly\ACI\Logs\Logger;
 use Bootgly\WPI;
 use Bootgly\WPI\Connections\Packages;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI as Server;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections\Connection;
 
 
-// FIXME: extends Connections
 class Connections implements WPI\Connections
 {
-   use LoggableEscaped;
+   public Logger $Logger {
+      get {
+         if ( isSet($this->Logger) === false ) {
+            $this->Logger = new Logger(channel: static::class);
+         }
+
+         return $this->Logger;
+      }
+   }
 
 
    public Server $Server;
@@ -184,7 +191,7 @@ class Connections implements WPI\Connections
       }
 
       if ($Socket === false) {
-         #$this->log('Socket connection is false!' . PHP_EOL);
+         #$this->Logger->log(debug: 'Socket connection is false!' . PHP_EOL);
          self::$errors['connection']++;
          return false;
       }

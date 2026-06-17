@@ -20,13 +20,21 @@ use function strtolower;
 use function trim;
 use Closure;
 
-use Bootgly\ACI\Logs\LoggableEscaped;
+use Bootgly\ACI\Logs\Logger;
 use Bootgly\API\Workables\Server\Middleware;
 
 
 class TrustedProxy implements Middleware
 {
-   use LoggableEscaped;
+   public Logger $Logger {
+      get {
+         if ( isSet($this->Logger) === false ) {
+            $this->Logger = new Logger(channel: static::class);
+         }
+
+         return $this->Logger;
+      }
+   }
 
 
    // * Config
@@ -81,12 +89,11 @@ class TrustedProxy implements Middleware
          static $warned = false;
          if ($warned === false) {
             $warned = true;
-            $this->log(
-               'TrustedProxy: trusting forwarded headers using the DEFAULT '
+            $this->Logger->log(
+               warning: 'TrustedProxy: trusting forwarded headers using the DEFAULT '
                . 'localhost proxy list (127.0.0.1, ::1). Set an explicit '
                . '`proxies` list in production to prevent X-Forwarded-For '
-               . 'spoofing from co-located/localhost clients.',
-               self::LOG_WARNING_LEVEL
+               . 'spoofing from co-located/localhost clients.'
             );
          }
       }

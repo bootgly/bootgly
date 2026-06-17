@@ -84,6 +84,7 @@ return new Suites(
       'Bootgly/ACI/Schedule/',
       'Bootgly/ACI/Queues/',
       'Bootgly/WPI/Queues/',
+      'Bootgly/ACI/Logs/',
       // Security (re-enabled — appended LAST to keep coverage-probe indices
       // 4, 8 and 14-21 stable; the original in-place slot above stays
       // commented for documentation).

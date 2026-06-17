@@ -40,7 +40,7 @@ use ReflectionUnionType;
 use Throwable;
 use UnderflowException;
 
-use Bootgly\ACI\Logs\LoggableEscaped;
+use Bootgly\ACI\Logs\Logger;
 use Bootgly\ACI\Tests\Assertion;
 use Bootgly\ACI\Tests\Assertions;
 use Bootgly\ACI\Tests\Benchmark;
@@ -52,7 +52,16 @@ use Bootgly\ACI\Tests\Suite\Test\Specification;
 
 class Test
 {
-   use LoggableEscaped;
+   // * Data
+   public Logger $Logger {
+      get {
+         if ( isSet($this->Logger) === false ) {
+            $this->Logger = new Logger(channel: static::class);
+         }
+
+         return $this->Logger;
+      }
+   }
 
 
    public Suite $Suite;
@@ -168,7 +177,7 @@ class Test
 
       $description = "{$indicator}{$icon}{$description}{$breakline}";
 
-      $this->log($description);
+      $this->Logger->log(debug: $description);
    }
    private function describing (bool $status): void
    {
@@ -232,18 +241,18 @@ class Test
             $line = str_repeat('-', $width - 7);
          }
 
-         $this->log("{$line} @.;");
+         $this->Logger->log(debug: "{$line} @.;");
       }
 
       if ($left) {
-         $this->log("@.;            \033[3;90m{$left}:\033[0m @.;");
+         $this->Logger->log(debug: "@.;            \033[3;90m{$left}:\033[0m @.;");
       }
 
       if ($header) {
          $header = '\\' .str_pad($header, $separatorLength ?? 0, ' ', STR_PAD_BOTH) . '/';
          $header = str_pad($header, $width - 7, ' ', STR_PAD_BOTH);
 
-         $this->log("@#white:{$header} @;@.;");
+         $this->Logger->log(debug: "@#white:{$header} @;@.;");
       }
    }
 
@@ -524,7 +533,7 @@ class Test
       $help = $message ?? $this->AssertionError?->getMessage();
       if (Results::$enabled === false) {
          // header
-         $this->log(
+         $this->Logger->log(debug: 
             "\033[30m\033[47m " . $case . " \033[0m" .
             "\033[0;30;41m FAIL \033[0m " .
             "@@:" . $test . " @;" .
@@ -534,14 +543,14 @@ class Test
          $this->describing(status: false);
          // fallback
          if ($help) {
-            $this->log(
+            $this->Logger->log(debug: 
                " ↪️\033[91m" . $help . "\033[0m" .
                PHP_EOL . PHP_EOL
             );
          }
 
          // # Debugging
-         $this->log($this->debugged ?: '');
+         $this->Logger->log(debug: $this->debugged ?: '');
       }
 
       // @ Record result for AI agent output
@@ -576,7 +585,7 @@ class Test
       // @ output
       if (Results::$enabled === false) {
          // header
-         $this->log(
+         $this->Logger->log(debug: 
             "\033[47;30m " . $case . " \033[0m" .
             "\033[0;30;42m PASS \033[0m " .
             "\033[90m" . $test . "\033[0m" .

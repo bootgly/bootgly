@@ -29,7 +29,7 @@ use function ini_set;
 use function opcache_get_status;
 
 use const Bootgly\CLI;
-use Bootgly\ACI\Logs\LoggableEscaped;
+use Bootgly\ACI\Logs\Logger;
 use Bootgly\API\Endpoints\Server\Modes;
 use Bootgly\CLI;
 use Bootgly\WPI\Interfaces\UDP_Server_CLI as Server;
@@ -37,7 +37,16 @@ use Bootgly\WPI\Interfaces\UDP_Server_CLI as Server;
 
 class Commands extends CLI\Terminal
 {
-   use LoggableEscaped;
+   // * Data
+   public Logger $Logger {
+      get {
+         if ( isSet($this->Logger) === false ) {
+            $this->Logger = new Logger(channel: static::class);
+         }
+
+         return $this->Logger;
+      }
+   }
 
 
    public Server $Server;
@@ -102,9 +111,8 @@ class Commands extends CLI\Terminal
             CLI->Commands->find('status', From: $this->Server)?->run() && true,
          // @ control
          'stop' =>
-            $this->log(
-               '@\;Stopping ' . (string) count($this->Server->Process->Children->PIDs) . ' worker(s)... ',
-               self::LOG_WARNING_LEVEL
+            $this->Logger->log(
+               warning: '@\;Stopping ' . (string) count($this->Server->Process->Children->PIDs) . ' worker(s)... '
             )
             && $this->Server->Process->Signals->send(SIGINT)
             && false,
@@ -120,9 +128,9 @@ class Commands extends CLI\Terminal
             ($this->Server->Mode = Modes::Monitor) && true, // @phpstan-ignore-line
          // @ operations
          'check jit' =>
-            $this->log(
+            $this->Logger->log(
                // @phpstan-ignore-next-line
-               (function_exists('opcache_get_status') && @opcache_get_status()['jit']['enabled'])
+               debug: (function_exists('opcache_get_status') && @opcache_get_status()['jit']['enabled'])
                ? 'JIT enabled' : 'JIT disabled'
             ) && true,
          'error on' =>
@@ -171,7 +179,7 @@ class Commands extends CLI\Terminal
    }
    public function help (): true
    {
-      $this->log(<<<'OUTPUT'
+      $this->Logger->log(debug: <<<'OUTPUT'
       @\;======================================================================
       @:i: `status` @;      = Show info about status of server;
 

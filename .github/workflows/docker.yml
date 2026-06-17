@@ -73,10 +73,8 @@ jobs:
           build-args: |
             BOOTGLY_VERSION=${{ steps.version.outputs.value }}
           tags: |
-            bootgly/bootgly:${{ steps.version.outputs.value }}
             bootgly/bootgly:slim
             bootgly/bootgly:latest
-            ghcr.io/bootgly/bootgly:${{ steps.version.outputs.value }}
             ghcr.io/bootgly/bootgly:slim
             ghcr.io/bootgly/bootgly:latest
 
@@ -91,7 +89,5 @@ jobs:
           build-args: |
             BOOTGLY_VERSION=${{ steps.version.outputs.value }}
           tags: |
-            bootgly/bootgly:${{ steps.version.outputs.value }}-full
             bootgly/bootgly:full
-            ghcr.io/bootgly/bootgly:${{ steps.version.outputs.value }}-full
             ghcr.io/bootgly/bootgly:full

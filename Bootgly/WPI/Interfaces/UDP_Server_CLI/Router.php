@@ -15,7 +15,6 @@ use function stream_socket_recvfrom;
 use function strlen;
 use Throwable;
 
-use Bootgly\ACI\Logs\LoggableEscaped;
 use Bootgly\ACI\Logs\Logger;
 use Bootgly\WPI;
 use Bootgly\WPI\Endpoints\Servers\Decoder\States;
@@ -33,7 +32,7 @@ use Bootgly\WPI\Interfaces\UDP_Server_CLI as Server;
  */
 class Router implements WPI\Connections\Packages
 {
-   use LoggableEscaped;
+   public Logger $Logger;
 
 
    public Server $Server;

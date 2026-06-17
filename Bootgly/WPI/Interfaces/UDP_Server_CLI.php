@@ -66,9 +66,8 @@ use Bootgly\ABI\Debugging\Shutdown;
 use Bootgly\ACI\Events\Loops;
 use Bootgly\ACI\Events\Scheduler;
 use Bootgly\ACI\Events\Timer;
-use Bootgly\ACI\Logs\LoggableEscaped;
+use Bootgly\ACI\Logs\Data\Display;
 use Bootgly\ACI\Logs\Logger;
-use Bootgly\ACI\Logs\Logging;
 use Bootgly\ACI\Process;
 use Bootgly\API\Endpoints\Server\Modes;
 use Bootgly\API\Endpoints\Server\Status;
@@ -85,9 +84,17 @@ use Bootgly\WPI\Interfaces\UDP_Server_CLI\Commands;
 use Bootgly\WPI\Interfaces\UDP_Server_CLI\Connections;
 
 
-class UDP_Server_CLI implements Servers, Logging
+class UDP_Server_CLI implements Servers
 {
-   use LoggableEscaped;
+   public Logger $Logger {
+      get {
+         if ( isSet($this->Logger) === false ) {
+            $this->Logger = new Logger(channel: static::class);
+         }
+
+         return $this->Logger;
+      }
+   }
 
 
    // !
@@ -260,13 +267,13 @@ class UDP_Server_CLI implements Servers, Logging
             return true;
          case '@status':
             // @ Set log display none
-            $display = Logger::$display;
-            Logger::$display = Logger::DISPLAY_MESSAGE;
+            $display = Display::$mode;
+            Display::$mode = Display::MESSAGE;
 
             CLI->Commands->find('status', From: $this)?->run();
 
             // @ Restore log display
-            Logger::$display = $display;
+            Display::$mode = $display;
             return true;
       }
 
@@ -404,7 +411,7 @@ class UDP_Server_CLI implements Servers, Logging
                while ($dead = $this->Process->recover()) {
                   [$deadIndex, $deadPID] = $dead;
 
-                  $this->log("Worker #{$deadIndex} (PID: {$deadPID}) crashed, reforking...@.;", self::LOG_WARNING_LEVEL);
+                  $this->Logger->log(warning: "Worker #{$deadIndex} (PID: {$deadPID}) crashed, reforking...@.;");
 
                   $newPID = pcntl_fork();
 
@@ -415,7 +422,7 @@ class UDP_Server_CLI implements Servers, Logging
 
                      $this->Process->title = 'Bootgly_UDP_Server_CLI: child process (Worker #' . Process::$index . ')';
 
-                     Logger::$display = Logger::DISPLAY_MESSAGE_WHEN_ID;
+                     Display::$mode = Display::MESSAGE_WHEN_ID;
 
                      $this->instance();
 
@@ -434,7 +441,7 @@ class UDP_Server_CLI implements Servers, Logging
                   else if ($newPID > 0) {
                      $this->Process->Children->push($newPID, $deadIndex);
 
-                     $this->log("Worker #{$deadIndex} recovered (new PID: {$newPID})@.;", self::LOG_NOTICE_LEVEL);
+                     $this->Logger->log(notice: "Worker #{$deadIndex} recovered (new PID: {$newPID})@.;");
 
                      $this->Process->State->save([
                         'master'  => Process::$master,
@@ -465,16 +472,16 @@ class UDP_Server_CLI implements Servers, Logging
    {
       $this->Status = Status::Starting;
 
-      Logger::$display = Logger::$display === 0 ? 0 : Logger::DISPLAY_MESSAGE;
+      Display::$mode = Display::$mode === 0 ? 0 : Display::MESSAGE;
 
-      $this->log('@\;Starting Server...', self::LOG_NOTICE_LEVEL);
+      $this->Logger->log(notice: '@\;Starting Server...');
 
       // @ Boot Server API
       if (self::$Application) {
          self::$Application::boot(Environments::Production);
       }
       else if (isSet(SAPI::$Handler) === false) {
-         $this->log('@\;No handler defined. Call on(Events::DatagramReceive, ...) before start().@\;', self::LOG_ERROR_LEVEL);
+         $this->Logger->log(error: '@\;No handler defined. Call on(Events::DatagramReceive, ...) before start().@\;');
          exit(1);
       }
 
@@ -500,7 +507,7 @@ class UDP_Server_CLI implements Servers, Logging
          if ($probeCode === 13 || str_contains((string) $probeMessage, 'Permission denied')) {
             $message .= '@\;Ports below 1024 require elevated privileges. Try running with `sudo`.@.;';
          }
-         $this->log($message, self::LOG_ERROR_LEVEL);
+         $this->Logger->log(error: $message);
          exit(1);
       }
       fclose($probeSocket);
@@ -527,7 +534,7 @@ class UDP_Server_CLI implements Servers, Logging
       $this->Process->fork($this->workers, instance: function (Process $Process, int $index): void {
          $Process->title = 'Bootgly_UDP_Server_CLI: child process (Worker #' . Process::$index . ')';
 
-         Logger::$display = Logger::DISPLAY_MESSAGE_WHEN_ID;
+         Display::$mode = Display::MESSAGE_WHEN_ID;
 
          // @ Create stream socket server
          $this->instance();
@@ -616,7 +623,7 @@ class UDP_Server_CLI implements Servers, Logging
       }
 
       if ($Socket === false) {
-         $this->log('@\;Could not create socket: ' . $error_message, self::LOG_ERROR_LEVEL);
+         $this->Logger->log(error: '@\;Could not create socket: ' . $error_message);
          exit(1);
       }
       /** @var resource $Socket */
@@ -647,7 +654,7 @@ class UDP_Server_CLI implements Servers, Logging
 
       $userInfo = posix_getpwnam($this->user);
       if ($userInfo === false) {
-         $this->log('@\;User "' . $this->user . '" not found. Cannot drop privileges.@\;', self::LOG_ERROR_LEVEL);
+         $this->Logger->log(error: '@\;User "' . $this->user . '" not found. Cannot drop privileges.@\;');
          exit(1);
       }
 
@@ -658,7 +665,7 @@ class UDP_Server_CLI implements Servers, Logging
       if ($this->group !== null) {
          $groupInfo = posix_getgrnam($this->group);
          if ($groupInfo === false) {
-            $this->log('@\;Group "' . $this->group . '" not found. Cannot drop privileges.@\;', self::LOG_ERROR_LEVEL);
+            $this->Logger->log(error: '@\;Group "' . $this->group . '" not found. Cannot drop privileges.@\;');
             exit(1);
          }
          $gid = $groupInfo['gid'];
@@ -666,17 +673,17 @@ class UDP_Server_CLI implements Servers, Logging
 
       // @ Drop: group first, then user (order matters!)
       if (posix_setgid($gid) === false) {
-         $this->log('@\;Failed to set GID to ' . $gid . '.@\;', self::LOG_ERROR_LEVEL);
+         $this->Logger->log(error: '@\;Failed to set GID to ' . $gid . '.@\;');
          exit(1);
       }
 
       if (posix_initgroups($this->user, $gid) === false) {
-         $this->log('@\;Failed to init groups for user "' . $this->user . '".@\;', self::LOG_ERROR_LEVEL);
+         $this->Logger->log(error: '@\;Failed to init groups for user "' . $this->user . '".@\;');
          exit(1);
       }
 
       if (posix_setuid($uid) === false) {
-         $this->log('@\;Failed to set UID to ' . $uid . '.@\;', self::LOG_ERROR_LEVEL);
+         $this->Logger->log(error: '@\;Failed to set UID to ' . $uid . '.@\;');
          exit(1);
       }
    }
@@ -685,20 +692,20 @@ class UDP_Server_CLI implements Servers, Logging
    {
       $this->Status = Status::Running;
 
-      $this->log('Running in Daemon mode (no UI)...', self::LOG_INFO_LEVEL);
+      $this->Logger->log(info: 'Running in Daemon mode (no UI)...');
 
       // @ Fork: parent returns to terminal, child becomes daemon master
       $pid = pcntl_fork();
 
       if ($pid === -1) {
-         $this->log('@\;Failed to fork daemon process!@\;', self::LOG_ERROR_LEVEL);
+         $this->Logger->log(error: '@\;Failed to fork daemon process!@\;');
          exit(1);
       }
 
       // # Parent process (CLI caller): return control to terminal
       if ($pid > 0) {
          $this->daemonized = true;
-         $this->log('@\;Daemon started (PID: ' . $pid . ')@\;@.;', self::LOG_NOTICE_LEVEL);
+         $this->Logger->log(notice: '@\;Daemon started (PID: ' . $pid . ')@\;@.;');
          return;
       }
 
@@ -730,7 +737,7 @@ class UDP_Server_CLI implements Servers, Logging
    {
       $this->Status = Status::Running;
 
-      $this->log('@\;Running in Foreground mode (no UI)...@\;@.;', self::LOG_INFO_LEVEL);
+      $this->Logger->log(info: '@\;Running in Foreground mode (no UI)...@\;@.;');
 
       // @ Master loop (no fork): stay in the foreground as the container/service
       //   process. Logs go to stdout and SIGTERM/SIGINT stop via signal handlers.
@@ -748,12 +755,12 @@ class UDP_Server_CLI implements Servers, Logging
    {
       $this->Status = Status::Running;
 
-      Logger::$display = Logger::DISPLAY_MESSAGE;
+      Display::$mode = Display::MESSAGE;
 
-      $this->log('@\;Entering in Interactive mode...@\;', self::LOG_INFO_LEVEL);
-      $this->log('>_ Type `@#Green:stop@;` to stop the Server or `@#Green:help@;` to list commands.@\;');
-      $this->log('>_ Type `@#Green:monitor@;` to enter in Monitor mode.@\;');
-      $this->log('>_ Autocompletation and history enabled.@\\\;', self::LOG_NOTICE_LEVEL);
+      $this->Logger->log(info: '@\;Entering in Interactive mode...@\;');
+      $this->Logger->log(debug: '>_ Type `@#Green:stop@;` to stop the Server or `@#Green:help@;` to list commands.@\;');
+      $this->Logger->log(debug: '>_ Type `@#Green:monitor@;` to enter in Monitor mode.@\;');
+      $this->Logger->log(notice: '>_ Autocompletation and history enabled.@\\\;');
 
       while ($this->Mode === Modes::Interactive) {
          // @ Calls signal handlers for pending signals
@@ -766,7 +773,7 @@ class UDP_Server_CLI implements Servers, Logging
          if ($status === 0) {
             $interact = $this->Commands->interact();
 
-            $this->log('@\;');
+            $this->Logger->log(debug: '@\;');
 
             // @ Wait for command output before looping
             if ($interact === false) {
@@ -774,7 +781,7 @@ class UDP_Server_CLI implements Servers, Logging
             }
          }
          else if ($status > 0) { // If a child has already exited?
-            $this->log('@\;Process child exited!@\;', self::LOG_ERROR_LEVEL);
+            $this->Logger->log(error: '@\;Process child exited!@\;');
             $this->Process->Signals->send(SIGINT);
             break;
          }
@@ -791,7 +798,7 @@ class UDP_Server_CLI implements Servers, Logging
    {
       $this->Status = Status::Running;
 
-      $this->log('@\;Entering in Monitor mode...@\;', self::LOG_INFO_LEVEL);
+      $this->Logger->log(info: '@\;Entering in Monitor mode...@\;');
 
       // @ Set time to hot reloading
       Timer::add(2, function () {
@@ -803,7 +810,7 @@ class UDP_Server_CLI implements Servers, Logging
       });
 
       // @ Set Logger to display messages, datetime and level
-      Logger::$display = Logger::DISPLAY_MESSAGE_WHEN_ID;
+      Display::$mode = Display::MESSAGE_WHEN_ID;
 
       $Output = CLI->Terminal->Output;
       $Output->Cursor->hide();
@@ -826,7 +833,7 @@ class UDP_Server_CLI implements Servers, Logging
             // ...
          }
          else if ($status > 0) { // If a child has already exited?
-            $this->log('@\;Process child exited!@\;', self::LOG_ERROR_LEVEL);
+            $this->Logger->log(error: '@\;Process child exited!@\;');
             $this->Process->Signals->send(SIGINT);
             break;
          }
@@ -857,7 +864,7 @@ class UDP_Server_CLI implements Servers, Logging
       }
 
       if ($closed === false) {
-         $this->log('@\;Failed to close $this->Socket!');
+         $this->Logger->log(debug: '@\;Failed to close $this->Socket!');
       }
 
       return $closed;
@@ -867,7 +874,7 @@ class UDP_Server_CLI implements Servers, Logging
    {
       if ($this->Status !== Status::Paused) {
          match ($this->Process->level) {
-            'master' => $this->log("Server needs to be paused to resume!@\\;", 4),
+            'master' => $this->Logger->log(error: "Server needs to be paused to resume!@\\;"),
             'child' => null,
             default => null
          };
@@ -877,7 +884,7 @@ class UDP_Server_CLI implements Servers, Logging
 
       $children = (string) count($this->Process->Children->PIDs);
       match ($this->Process->level) {
-         'master' => $this->log("Resuming {$children} worker(s)... @\\;", 3),
+         'master' => $this->Logger->log(critical: "Resuming {$children} worker(s)... @\\;"),
          'child' => self::$Event->add($this->Socket, self::$Event::EVENT_READ, $this->Connections->Router),
          default => null
       };
@@ -890,7 +897,7 @@ class UDP_Server_CLI implements Servers, Logging
    {
       if ($this->Status !== Status::Running) {
          match ($this->Process->level) {
-            'master' => $this->log("Server needs to be running to pause!@\\;", 4),
+            'master' => $this->Logger->log(error: "Server needs to be running to pause!@\\;"),
             'child' => null,
             default => null
          };
@@ -900,7 +907,7 @@ class UDP_Server_CLI implements Servers, Logging
 
       $children = (string) count($this->Process->Children->PIDs);
       match ($this->Process->level) {
-         'master' => $this->log("Pausing {$children} worker(s)... @\\;", 3),
+         'master' => $this->Logger->log(critical: "Pausing {$children} worker(s)... @\\;"),
          'child' => self::$Event->del($this->Socket, self::$Event::EVENT_READ),
          default => null
       };
@@ -914,16 +921,16 @@ class UDP_Server_CLI implements Servers, Logging
       $this->Status = Status::Stopping;
       $this->Process->stopping = true;
 
-      Logger::$display = Logger::DISPLAY_MESSAGE;
+      Display::$mode = Display::MESSAGE;
 
       switch ($this->Process->level) {
          case 'master':
             $children = (string) count($this->Process->Children->PIDs);
-            $this->log("Stopping {$children} worker(s)...@\\;", 3);
+            $this->Logger->log(critical: "Stopping {$children} worker(s)...@\\;");
 
             $this->Process->Children->terminate();
 
-            $this->log("{$children} worker(s) stopped!@\\;", 3);
+            $this->Logger->log(critical: "{$children} worker(s) stopped!@\\;");
 
             // @ Clean all per-project state files
             $this->Process->State->clean();

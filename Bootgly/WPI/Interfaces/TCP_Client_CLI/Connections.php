@@ -17,7 +17,7 @@ use function stream_select;
 use function stream_set_blocking;
 use function stream_set_read_buffer;
 
-use Bootgly\ACI\Logs\LoggableEscaped;
+use Bootgly\ACI\Logs\Logger;
 use Bootgly\WPI;
 use Bootgly\WPI\Connections\Packages;
 use Bootgly\WPI\Interfaces\TCP_Client_CLI as Client;
@@ -26,7 +26,15 @@ use Bootgly\WPI\Interfaces\TCP_Client_CLI\Connections\Connection;
 
 class Connections implements WPI\Connections
 {
-   use LoggableEscaped;
+   public Logger $Logger {
+      get {
+         if ( isSet($this->Logger) === false ) {
+            $this->Logger = new Logger(channel: static::class);
+         }
+
+         return $this->Logger;
+      }
+   }
 
 
    public null|Client $Client;
@@ -129,7 +137,7 @@ class Connections implements WPI\Connections
       }
 
       if ($Socket === false || is_resource($Socket) === false) {
-         $this->log('Socket connection is false or invalid!' . PHP_EOL, self::LOG_ERROR_LEVEL);
+         $this->Logger->log(error: 'Socket connection is false or invalid!' . PHP_EOL);
          self::$errors['connection']++;
          return false;
       }

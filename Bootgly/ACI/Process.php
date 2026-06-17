@@ -20,7 +20,6 @@ use function pcntl_waitpid;
 use function posix_getpid;
 use Closure;
 
-use Bootgly\ACI\Logs\LoggableEscaped;
 use Bootgly\ACI\Process\Children;
 use Bootgly\ACI\Process\Group;
 use Bootgly\ACI\Process\Signals;
@@ -30,7 +29,6 @@ use Bootgly\ACI\Process\User;
 
 class Process
 {
-   use LoggableEscaped;
 
 
    public Children $Children;
