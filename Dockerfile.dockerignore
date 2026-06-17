@@ -1,0 +1,45 @@
+# ----------------------------------------------------------------------------
+# Bootgly Docker — build context ignore (BuildKit, per-Dockerfile)
+#
+# Build context is the PARENT directory (/home/rodrigo/bootgly) so the `full`
+# target can reach the sibling `bootgly_benchmarks/`. That parent holds many
+# unrelated repos (bootgly_docs, bootgly_website, tmp, …) and multi-GB working
+# data, so we ALLOWLIST: ignore everything, re-include only the paths the build
+# needs, then re-ignore their heavy / irrelevant subpaths.
+# Patterns are relative to the build context root (the parent directory).
+# ----------------------------------------------------------------------------
+
+# ? Ignore the entire context first
+*
+
+# ! Re-include only what the image is built from
+!bootgly
+!bootgly_benchmarks
+
+# @ Trim bootgly/ — workdata is ~5.4G, tmp ~789M, vendor is rebuilt in-image
+bootgly/.git
+bootgly/.github
+bootgly/.claude
+bootgly/workdata
+bootgly/tmp
+bootgly/vendor
+bootgly/public
+bootgly/docs
+
+# @ Trim bootgly_benchmarks/
+bootgly_benchmarks/.git
+bootgly_benchmarks/workdata
+bootgly_benchmarks/scripts/.venv
+# @ Keep competitor RUNTIMES out of the framework image (dependency-free).
+#   The bench scripts/composer manifests stay; vendor/ + downloaded binaries do
+#   not — the separate bootgly-bench image re-installs them per build ARG.
+bootgly_benchmarks/**/vendor
+bootgly_benchmarks/**/bootables/roadrunner/rr
+bootgly_benchmarks/**/bootables/*/frankenphp
+
+# @ Generic noise anywhere
+**/.DS_Store
+**/node_modules
+**/*.log
+**/.idea
+**/.vscode

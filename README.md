@@ -112,7 +112,7 @@ Operation System |
 
 Above is the native compatibility, of course it is possible to run on Windows and Unix using Docker containers.
 
-> 🐳 **Docker:** build a `slim` or `full` Bootgly image to run servers, test, benchmark and ship your own projects — see [`bootgly_docker/`](../bootgly_docker/) and the [Docker guide][DOCKER_GUIDE].
+> 🐳 **Docker:** build a `slim` or `full` Bootgly image to run servers, test, benchmark and ship your own projects — see the [`Dockerfile`](Dockerfile) and the [Docker guide][DOCKER_GUIDE].
 
 ### ⚙️ Dependencies
 

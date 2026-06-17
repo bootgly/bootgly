@@ -1,71 +1,97 @@
 name: Docker (build + push)
 
+# Publishes bootgly/bootgly (slim + full) to Docker Hub + ghcr.io on every
+# published release. The Dockerfile lives at the repo root but builds with the
+# WORKSPACE as context (the `full` target COPYs the sibling bootgly_benchmarks/),
+# so this job checks out both repos side by side and builds from their parent.
+
 on:
+  release:
+    types: [published]
   workflow_dispatch:
-  # Disabled: HTTP Server CLI script refactored, Docker images need update
-  # push:
-  #   branches:
-  #     - 'main'
-  #   paths:
-  #     - 'Bootgly/ABI/**'
+    inputs:
+      version:
+        description: 'Version to tag (e.g. 0.17.2-beta). Required on manual dispatch.'
+        required: false
+        default: ''
 
 jobs:
   build:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
 
     steps:
-      -
-        name: Checkout code
+      - name: Checkout bootgly (framework)
         uses: actions/checkout@v4
+        with:
+          path: bootgly
 
-      -
-        name: Setup QEMU
-        uses: docker/setup-qemu-action@v3
-      -
-        name: Setup Docker Buildx
+      - name: Checkout bootgly_benchmarks (full target needs the sibling)
+        uses: actions/checkout@v4
+        with:
+          repository: bootgly/bootgly_benchmarks
+          path: bootgly_benchmarks
+
+      - name: Resolve version
+        id: version
+        run: |
+          V="${{ github.event.release.tag_name || inputs.version }}"
+          V="${V#v}"
+          if [ -z "$V" ]; then
+            echo "::error::No version resolved (provide the 'version' input on manual dispatch)."
+            exit 1
+          fi
+          echo "value=$V" >> "$GITHUB_OUTPUT"
+          echo "Resolved version: $V"
+
+      - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      -
-        name: Login to DockerHub
+      - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
-      -
-        name: Login to GitHub Container Registry
+
+      - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GHCR_TOKEN }}
 
-      -
-        name: Build and push HTTP Server CLI image
-        uses: docker/build-push-action@v5
+      - name: Build and push slim
+        uses: docker/build-push-action@v6
         with:
           context: .
-          file: ./@/__docker__/http-server-cli.dockerfile
+          file: bootgly/Dockerfile
+          target: slim
+          platforms: linux/amd64
           push: true
+          build-args: |
+            BOOTGLY_VERSION=${{ steps.version.outputs.value }}
           tags: |
-            bootgly/http-server-cli:latest
-            ghcr.io/bootgly/http-server-cli:latest
-      -
-        name: Build and push TCP Server CLI image
-        uses: docker/build-push-action@v5
+            bootgly/bootgly:${{ steps.version.outputs.value }}
+            bootgly/bootgly:slim
+            bootgly/bootgly:latest
+            ghcr.io/bootgly/bootgly:${{ steps.version.outputs.value }}
+            ghcr.io/bootgly/bootgly:slim
+            ghcr.io/bootgly/bootgly:latest
+
+      - name: Build and push full
+        uses: docker/build-push-action@v6
         with:
           context: .
-          file: ./@/__docker__/tcp-server-cli.dockerfile
+          file: bootgly/Dockerfile
+          target: full
+          platforms: linux/amd64
           push: true
+          build-args: |
+            BOOTGLY_VERSION=${{ steps.version.outputs.value }}
           tags: |
-            bootgly/tcp-server-cli:latest
-            ghcr.io/bootgly/tcp-server-cli:latest
-      -
-        name: Build and push TCP Client CLI image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./@/__docker__/tcp-client-cli.dockerfile
-          push: true
-          tags: |
-            bootgly/tcp-client-cli:latest
-            ghcr.io/bootgly/tcp-client-cli:latest
+            bootgly/bootgly:${{ steps.version.outputs.value }}-full
+            bootgly/bootgly:full
+            ghcr.io/bootgly/bootgly:${{ steps.version.outputs.value }}-full
+            ghcr.io/bootgly/bootgly:full

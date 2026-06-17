@@ -1,0 +1,49 @@
+# ============================================================================
+# Bootgly — Docker Compose convenience stack
+#
+# One build (the `full` image), three use-cases selected by profile:
+#   docker compose --profile serve up        # run the demo HTTP server
+#   docker compose --profile test  up         # run the test suite
+#   docker compose --profile bench up         # run the internal benchmark
+#
+# All services share the same image/build via the `x-bootgly` anchor, so the
+# image is built once and reused. workdata (PIDs/state) persists in a volume.
+# ============================================================================
+
+x-bootgly: &bootgly
+  build:
+    context: ..
+    dockerfile: bootgly/Dockerfile
+    target: full
+  image: bootgly:full
+  volumes:
+    - workdata:/bootgly/workdata
+
+services:
+  # # Run the demo HTTP server (http://localhost:8082)
+  #   `-f` runs the server in the foreground/headless (container-friendly): logs to
+  #   stdout, stops cleanly on SIGTERM. Without it the server daemonizes and
+  #   the container would exit immediately.
+  server:
+    <<: *bootgly
+    profiles: ["serve"]
+    command: ["project", "Demo-HTTP_Server_CLI", "start", "-f"]
+    environment:
+      PORT: "8082"
+    ports:
+      - "8082:8082"
+
+  # # Run the full test suite
+  test:
+    <<: *bootgly
+    profiles: ["test"]
+    command: ["test"]
+
+  # # Run the internal (Bootgly-vs-Bootgly) HTTP benchmark
+  bench:
+    <<: *bootgly
+    profiles: ["bench"]
+    command: ["test", "benchmark", "HTTP_Server_CLI", "--opponents=bootgly", "--runner=tcp_client"]
+
+volumes:
+  workdata:
