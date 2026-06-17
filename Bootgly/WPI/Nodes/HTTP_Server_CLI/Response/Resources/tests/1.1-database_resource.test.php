@@ -266,7 +266,7 @@ return new Specification(
 
       $JSON->send(['status' => 'ok']);
       $jsonSent = $Response->Body->raw === '{"status":"ok"}'
-         && $Response->Header->fields['Content-Type'] === 'application/json';
+         && $Response->Header->type === 'application/json';
       $reset();
       $JSONAfterReset = $Response->JSON;
 

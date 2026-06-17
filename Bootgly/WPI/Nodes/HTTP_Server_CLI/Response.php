@@ -58,6 +58,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\Database as DatabaseResource;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\JSON as JSONResource;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\JSONP as JSONPResource;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\Plaintext as PlaintextResource;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\Pre as PreResource;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\View as ViewResource;
 
@@ -68,6 +69,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\View as ViewResource;
  * @property-read DatabaseResource $Database
  * @property-read JSONResource $JSON
  * @property-read JSONPResource $JSONP
+ * @property-read PlaintextResource $Plaintext
  * @property-read PreResource $Pre
  * @property-read ViewResource $View
  */
@@ -248,21 +250,6 @@ class Response extends Server\Response
    }
 
    /**
-    * Mount one response resource and bind it to this response scheduler.
-    *
-    * @template T of ResponseResource
-    * @param T $Resource
-    * @return T
-    */
-   public function mount (ResponseResource $Resource, null|string $name = null): ResponseResource
-   {
-      $parts = explode('\\', $Resource::class);
-      $name ??= (string) array_pop($parts);
-
-      return $this->Resources->set($name, $Resource);
-   }
-
-   /**
     * Prepare the response for sending.
     *
     * @param int $code The status code of the response.
@@ -282,6 +269,21 @@ class Response extends Server\Response
       $this->Body->raw = $body;
 
       return $this;
+   }
+
+   /**
+    * Mount one response resource and bind it to this response scheduler.
+    *
+    * @template T of ResponseResource
+    * @param T $Resource
+    * @return T
+    */
+   public function mount (ResponseResource $Resource, null|string $name = null): ResponseResource
+   {
+      $parts = explode('\\', $Resource::class);
+      $name ??= (string) array_pop($parts);
+
+      return $this->Resources->set($name, $Resource);
    }
 
    /**

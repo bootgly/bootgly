@@ -46,7 +46,10 @@ class JSON extends Resource
     */
    public function send (mixed $body = null, int $flags = 0): Response
    {
-      $this->Response->Header->set('Content-Type', 'application/json');
+      // ! Set the default media type instead of a header field — leaves fields/prepared
+      //   empty so build() keeps its fast path + the Raw wire-cache (no per-request
+      //   header array, no validation regex). An explicit Content-Type still wins.
+      $this->Response->Header->type = 'application/json';
 
       if (is_string($body) && $body !== '') {
          return $this->Response->send($body);

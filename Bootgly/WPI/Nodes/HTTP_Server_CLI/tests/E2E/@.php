@@ -161,6 +161,8 @@ return new Suite(
          // ! Content
          // @ send
          '1.5-send_content_in_json_using_resources',
+         '1.5.1-send_content_in_plaintext_using_resources',
+         '1.5.2-type_default_crlf_injection_stripped',
          // @ authenticate
          '1.6-authenticate_with_http_basic_authentication',
          '1.6.1-authenticate_with_unknown_authentication_method',
@@ -289,6 +291,12 @@ return new Suite(
          '1.3-response_header_reset_across_routes',
          // Idempotency
          '1.4-response_idempotent_same_route',
+         // Header content-cache isolation (no cross-request contamination)
+         '1.5-response_header_cache_content_length_isolation',
+         '1.6-response_header_cache_hit_repeated',
+         '1.7-response_header_cache_alternating_no_leak',
+         // Default media type (Header->type) reset + cache-key isolation
+         '1.8-response_type_default_no_leak',
          // Upload + normal request interleaving
          '2.1-response_upload_then_normal_request',
          '2.2-response_normal_then_upload_request',

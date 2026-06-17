@@ -19,6 +19,7 @@ use RuntimeException;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response as ServerResponse;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\JSON;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\JSONP;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\Plaintext;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\Pre;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\View;
 
@@ -58,6 +59,7 @@ class Resources
          // * Data
          $this->define('JSON', static fn (object $Context): JSON => new JSON(self::guard($Context)));
          $this->define('JSONP', static fn (object $Context): JSONP => new JSONP(self::guard($Context)));
+         $this->define('Plaintext', static fn (object $Context): Plaintext => new Plaintext(self::guard($Context)));
          $this->define('Pre', static fn (object $Context): Pre => new Pre(self::guard($Context)));
          $this->define('View', static fn (object $Context): View => new View(self::guard($Context)));
       }

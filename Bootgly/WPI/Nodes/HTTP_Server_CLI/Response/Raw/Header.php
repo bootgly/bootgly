@@ -27,6 +27,13 @@ class Header extends HeaderBase
 {
    // * Data
    public string $raw;
+   // # Default Content-Type emitted by build() when no explicit Content-Type header is
+   //   set (via set()/preset/prepare). A per-response value: reset every request by
+   //   clean(), so the persistent worker never leaks one route's media type into the
+   //   next response. A plain property (no hook): build() compares it against
+   //   `$builtType` in both fast-return guards, so a change is detected without a
+   //   `dirty` flag, and the value is CRLF-stripped where it is serialized.
+   public string $type = 'text/html; charset=UTF-8';
    // Fields
    /** @var array<string,string|true> */
    protected array $preset {
@@ -58,6 +65,28 @@ class Header extends HeaderBase
    protected array $queued;
    protected int $built;
    protected bool $dirty;
+   // # prepare() memo — last raw input and its sanitized result. A response that
+   //   re-sends the same constant header(s) (e.g. a fixed Content-Type on a hot
+   //   route) reuses the cached result and skips re-sanitizing every request.
+   //   Survives clean()/clone; deterministic, so reuse is security-equivalent.
+   /** @var array<string,string> */
+   private array $preparedRaw = [];
+   /** @var array<string,string> */
+   private array $preparedSanitized = [];
+   // # build() memo — the header inputs (fields/prepared/queued) captured at the last
+   //   serialization. When they are byte-identical on a later request within the same
+   //   second, build() reuses the cached `$raw` instead of re-serializing — so a route
+   //   that returns a stable header set (e.g. a fixed Content-Type) is as cheap as one
+   //   that returns none. Cross-second falls through to rebuild the per-second Date.
+   private string $builtType = '';
+   /** @var array<string,string|bool> */
+   private array $builtPreset = [];
+   /** @var array<string,string> */
+   private array $builtFields = [];
+   /** @var array<string,string> */
+   private array $builtPrepared = [];
+   /** @var array<int,string> */
+   private array $builtQueued = [];
    // # Date header value, shared by every response and rebuilt once per second
    private static int $stamped = 0;
    private static string $stamp = '';
@@ -164,6 +193,10 @@ class Header extends HeaderBase
          $this->prepared = [];
          $this->dirty = true;
       }
+      // # Restore the framework default media type so a per-response value set by a
+      //   resource (e.g. Plaintext → text/plain) never carries into the next response.
+      //   No dirty needed: build() compares $type against $builtType (see build()).
+      $this->type = 'text/html; charset=UTF-8';
       // * Metadata
       // Fields
       if ($this->queued !== []) {
@@ -210,6 +243,19 @@ class Header extends HeaderBase
     */
    public function prepare (array $fields): void // @ Prepare to build
    {
+      // ? Fast path — identical input to the last prepare(). Sanitizing is
+      //   deterministic, so reuse the cached result instead of re-validating and
+      //   re-stripping every request. clean() empties $prepared per request, so
+      //   re-apply the cached value here.
+      if ($fields === $this->preparedRaw) {
+         if ($this->prepared !== $this->preparedSanitized) {
+            $this->prepared = $this->preparedSanitized;
+            $this->dirty = true;
+         }
+
+         return;
+      }
+
       // ! Validate names against RFC 9110 token syntax and strip CRLF from
       //   values before they reach build() — prepare() is a bulk entry
       //   point that previously emitted attacker-controlled bytes verbatim.
@@ -224,6 +270,10 @@ class Header extends HeaderBase
 
          $sanitized[$name] = str_replace(["\r", "\n"], '', (string) $value);
       }
+
+      // : Memoize this raw input → sanitized output for the next identical call.
+      $this->preparedRaw = $fields;
+      $this->preparedSanitized = $sanitized;
 
       if ($sanitized !== $this->prepared) {
          $this->prepared = $sanitized;
@@ -358,14 +408,52 @@ class Header extends HeaderBase
 
    public function build (): true // @ raw
    {
-      // ?
-      if ($this->dirty === false && time() === $this->built) {
+      // ? Fast return — nothing the block depends on changed since the last build this
+      //   second. `dirty` covers fields/prepared/queued mutations; `type` is a plain
+      //   property (no dirty flag), so it is compared directly here and in the cache.
+      if (
+         $this->dirty === false
+         && time() === $this->built
+         && $this->type === $this->builtType
+      ) {
+         return true;
+      }
+
+      // ? Content-cache: even when `dirty` was set (clean()/prepare() churn the same
+      //   constant headers every request), the previously built `$raw` is still exact
+      //   when the header inputs are byte-identical and we are in the same second.
+      if (
+         time() === $this->built
+         && $this->type === $this->builtType
+         && $this->prepared === $this->builtPrepared
+         && $this->fields === $this->builtFields
+         && $this->queued === $this->builtQueued
+         && $this->preset === $this->builtPreset
+      ) {
+         $this->dirty = false;
+
          return true;
       }
 
       // @
       // @ Build headers
       $queued = $this->queued;
+
+      // ! Capture every input this build serializes (preset + fields + prepared +
+      //   queued; Date is gated by the same-second check). The next request reuses
+      //   `$raw` via the content-cache above only when ALL of them are byte-identical —
+      //   so a different header set, cookie, or preset on a later request never leaks
+      //   the cached block (no cross-request contamination on the persistent worker).
+      $this->builtType = $this->type;
+      $this->builtPreset = $this->preset;
+      $this->builtFields = $this->fields;
+      $this->builtPrepared = $this->prepared;
+      $this->builtQueued = $this->queued;
+
+      // ! Strip CRLF from the default media type at the single point it is serialized
+      //   (response-splitting guard). Done here — on real rebuild only, never on the
+      //   cached fast returns above — so a plain `$type` write stays allocation-free.
+      $type = str_replace(["\r", "\n"], '', $this->type);
 
       // ?! Hot path: most responses have no user fields/prepared — skip array merge.
       if ($this->fields === [] && $this->prepared === []) {
@@ -381,7 +469,7 @@ class Header extends HeaderBase
 
          // @ Default Content-Type (preset never carries it)
          if (! array_key_exists('Content-Type', $this->preset)) {
-            $queued[] = 'Content-Type: text/html; charset=UTF-8';
+            $queued[] = "Content-Type: {$type}";
          }
 
          $this->raw = implode("\r\n", $queued);
@@ -407,7 +495,7 @@ class Header extends HeaderBase
 
       // @ Set default Content-Type if not present
       if (! array_key_exists('Content-Type', $fields)) {
-         $queued[] = 'Content-Type: text/html; charset=UTF-8';
+         $queued[] = "Content-Type: {$type}";
       }
 
       $this->raw = implode("\r\n", $queued);
