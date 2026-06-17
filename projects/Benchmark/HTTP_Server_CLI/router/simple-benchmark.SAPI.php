@@ -31,6 +31,6 @@ return static function
    }
 
    yield $Router->route('/', function (Request $Request, Response $Response) {
-      return $Response(body: 'Home');
+      return $Response->send(body: 'Home');
    }, GET);
 };
