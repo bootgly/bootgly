@@ -2,6 +2,25 @@
 
 Changelog for Bootgly framework. All notable changes to this project will be documented in this file. Imported from ROADMAP.md.
 
+## v0.17.2-beta ✅
+
+> Focus: **Response header cache + Plaintext/JSON resources & container foreground mode**
+
+### WPI — Web Programming Interface
+
+- ✅ `Response/Raw/Header`: per-response `type` Content-Type primitive + serialized header-block content cache — the default media type is set without populating header fields, so `build()` keeps its empty-fields fast path and the Raw wire-cache stays valid (no CRLF regex, no header-array churn)
+- ✅ `Response/Resources/Plaintext`: new dedicated Plaintext resource (`$Response->Plaintext->send()`) — emits `text/plain` via `Header->type`
+- ✅ `Response/Resources/JSON`: emit `application/json` through `Header->type` instead of a per-request header field
+- ✅ Server: Foreground mode (`-f`) — run the HTTP server in the foreground (no daemonize) for containers
+- ✅ Router: correct the Response method call in the `simple-benchmark` SAPI router
+
+### Bootgly
+
+- ✅ `Demo-TCP_Server_CLI`: repair boot + reference the Docker guide
+- ✅ `.gitignore`: drop the trailing slash on the `.claude` entry
+
+---
+
 ## v0.17.1-beta ✅
 
 > Focus: **HTTP Server CLI security hardening**
