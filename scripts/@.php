@@ -2,7 +2,7 @@
 return [
    'scripts' => [
       'built-in' => [ # Relative to scripts/ (bootgly's root directory)
-         // Define your built-in scripts filenames here
+         'observability-ship.php',
       ],
       'imported' => [ # Relative to working directory (your root directory)
          'vendor/bin/phpstan'

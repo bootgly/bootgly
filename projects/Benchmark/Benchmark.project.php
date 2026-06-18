@@ -126,6 +126,14 @@ return new Project(
             \Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections::$stats = true;
          }
 
+         // ? A/B: request telemetry (H1) — BOOTGLY_OBSERVE=1 registers the per-request metric
+         //   listeners (Telemetry) to measure observability ON cost vs the OFF baseline. Registered
+         //   pre-fork so workers inherit the listeners.
+         if (getenv('BOOTGLY_OBSERVE') === '1') {
+            \Bootgly\ACI\Observability::$Instance = new \Bootgly\ACI\Observability(collectors: false);
+            new HTTP_Server_CLI\Telemetry(\Bootgly\ACI\Observability::$Instance)->boot();
+         }
+
          $Server
             ->configure(
                host: '0.0.0.0',
