@@ -316,13 +316,13 @@ class TCP_Server_CLI implements Servers
             return true;
          case '@status':
             // @ Set log display none
-            $display = Display::$mode;
-            Display::$mode = Display::MESSAGE;
+            $display = Display::$segments;
+            Display::show(Display::MESSAGE);
 
             CLI->Commands->find('status', From: $this)?->run();
 
             // @ Restore log display
-            Display::$mode = $display;
+            Display::show($display);
             return true;
       }
 
@@ -481,7 +481,7 @@ class TCP_Server_CLI implements Servers
 
                      $this->Process->title = 'Bootgly_TCP_Server_CLI: child process (Worker #' . Process::$index . ')';
 
-                     Display::$mode = Display::MESSAGE_WHEN_ID;
+                     Display::show(Display::MESSAGE, Display::TIMESTAMP, Display::CHANNEL, Display::SEVERITY);
 
                      $this->instance();
 
@@ -531,7 +531,10 @@ class TCP_Server_CLI implements Servers
    {
       $this->Status = Status::Starting;
 
-      Display::$mode = Display::$mode === 0 ? 0 : Display::MESSAGE;
+      // ? Drop to the compact message line unless output is fully muted
+      if (Display::$segments !== Display::NONE) {
+         Display::show(Display::MESSAGE);
+      }
 
       $this->Logger->log(notice: '@\;Starting Server...@.;');
 
@@ -594,7 +597,7 @@ class TCP_Server_CLI implements Servers
       $this->Process->fork($this->workers, instance: function (Process $Process, int $index): void {
          $Process->title = 'Bootgly_TCP_Server_CLI: child process (Worker #' . Process::$index . ')';
 
-         Display::$mode = Display::MESSAGE_WHEN_ID;
+         Display::show(Display::MESSAGE, Display::TIMESTAMP, Display::CHANNEL, Display::SEVERITY);
 
          // @ Events — worker booted (guarded: zero-alloc when no listeners)
          $Emitter = Emitter::$Instance;
@@ -870,7 +873,7 @@ class TCP_Server_CLI implements Servers
    {
       $this->Status = Status::Running;
 
-      Display::$mode = Display::MESSAGE;
+      Display::show(Display::MESSAGE);
 
       $this->Logger->log(info: '@\;Entering in Interactive mode...@\;');
       $this->Logger->log(debug: '>_ Type `@#Green:stop@;` to stop the Server or `@#Green:help@;` to list commands.@\;');
@@ -927,7 +930,7 @@ class TCP_Server_CLI implements Servers
    protected function sink (): void
    {
       if ($this->Mode === Modes::Monitor && $this->LogPipe !== null) {
-         Display::$mode = Display::NONE;
+         Display::show(Display::NONE);
          Logger::$Sink = new PipeHandler($this->LogPipe);
       }
    }
@@ -1020,7 +1023,7 @@ class TCP_Server_CLI implements Servers
 
       // @ Restore normal logging
       Logger::$Sink = null;
-      Display::$mode = Display::MESSAGE;
+      Display::show(Display::MESSAGE);
 
       // @ Enter Interactive mode if requested
       if ($this->Mode === Modes::Interactive) {
@@ -1100,7 +1103,7 @@ class TCP_Server_CLI implements Servers
       $this->Status = Status::Stopping;
       $this->Process->stopping = true;
 
-      Display::$mode = Display::MESSAGE;
+      Display::show(Display::MESSAGE);
 
       switch ($this->Process->level) {
          case 'master':

@@ -69,7 +69,7 @@ class Logger extends Logs
    public function log (string|array ...$args): bool
    {
       // ? Display suppressed and no global sink — nothing to do
-      if (Display::$mode === Display::NONE && self::$Sink === null) {
+      if (Display::$segments === Display::NONE && self::$Sink === null) {
          return true;
       }
 
@@ -112,7 +112,7 @@ class Logger extends Logs
          $Record = $this->Processors->process($Record);
 
          // @ Local handlers (skipped when display is suppressed, e.g. Monitor mode)
-         if (Display::$mode !== Display::NONE) {
+         if (Display::$segments !== Display::NONE) {
             $this->Handlers->handle($Record);
          }
          // @ Global sink (e.g. the Monitor live-viewer pipe)

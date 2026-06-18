@@ -272,7 +272,10 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
    {
       $this->Status = Status::Starting;
 
-      Display::$mode = Display::$mode === 0 ? 0 : Display::MESSAGE;
+      // ? Drop to the compact message line unless output is fully muted
+      if (Display::$segments !== Display::NONE) {
+         Display::show(Display::MESSAGE);
+      }
       $this->Logger->log(notice: '@\;Starting Server...@.;');
 
       // @ Boot Server API
@@ -359,7 +362,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
             $this->sink();
          }
          else {
-            Display::$mode = Display::MESSAGE_WHEN_ID;
+            Display::show(Display::MESSAGE, Display::TIMESTAMP, Display::CHANNEL, Display::SEVERITY);
          }
 
          // @ Hot-path: restore default error handler in worker.
@@ -591,7 +594,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
    }
    protected static function test (TCP_Server_CLI $TCP_Server_CLI): bool
    {
-      Display::$mode = Display::NONE;
+      Display::show(Display::NONE);
 
       self::boot(Environments::Test);
 
@@ -611,7 +614,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
          static function ($Socket, $Connection)
          use ($TCP_Client_CLI) 
          {
-            Display::$mode = Display::MESSAGE;
+            Display::show(Display::MESSAGE);
 
             // ! Suite
             $Suite = SAPI::$Suite;
@@ -906,7 +909,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
             $Suite->summarize();
 
             // @ Reset CLI Logger
-            Display::$mode = Display::MESSAGE;
+            Display::show(Display::MESSAGE);
 
             // @ Destroy Client Event Loop
             $TCP_Client_CLI::$Event->destroy();

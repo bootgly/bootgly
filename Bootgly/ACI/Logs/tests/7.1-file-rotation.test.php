@@ -11,8 +11,8 @@ use Bootgly\ACI\Tests\Suite\Test\Specification;
 return new Specification(
    description: 'File handler rotates on size cap and on day change, keeping at most N archives',
    test: function () {
-      $saved = Display::$mode;
-      Display::$mode = Display::MESSAGE;
+      $saved = Display::$segments;
+      Display::show(Display::MESSAGE);
 
       // # Size-based rotation, keep 3
       $sizeDir = sys_get_temp_dir() . '/bootgly-logtest-size-' . uniqid();
@@ -71,6 +71,6 @@ return new Specification(
          @rmdir($dir);
       }
 
-      Display::$mode = $saved;
+      Display::show($saved);
    }
 );

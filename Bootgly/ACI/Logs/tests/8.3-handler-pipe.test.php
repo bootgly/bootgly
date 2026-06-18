@@ -13,8 +13,8 @@ use Bootgly\ACI\Tests\Suite\Test\Specification;
 return new Specification(
    description: 'Pipe handler streams JSON records through an IPC pipe; the reader reconstructs them',
    test: function () {
-      $saved = Display::$mode;
-      Display::$mode = Display::MESSAGE;
+      $saved = Display::$segments;
+      Display::show(Display::MESSAGE);
 
       $Pipe = new IPCPipe;
 
@@ -43,6 +43,6 @@ return new Specification(
       );
 
       $Pipe->close();
-      Display::$mode = $saved;
+      Display::show($saved);
    }
 );

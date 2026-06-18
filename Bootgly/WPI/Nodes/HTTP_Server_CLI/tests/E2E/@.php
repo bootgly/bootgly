@@ -16,7 +16,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI;
 return new Suite(
    // * Config
    autoBoot: function (Suite|null $Suite = null): true {
-      Display::$mode = Display::NONE;
+      Display::show(Display::NONE);
 
       // @ Define BOOTGLY_PROJECT for upload tests (requires project path)
       if ( !defined('BOOTGLY_PROJECT') ) {

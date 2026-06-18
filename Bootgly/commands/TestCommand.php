@@ -91,7 +91,7 @@ class TestCommand extends Command
       //   - emit Results::toJSON() at the end
       $Agent = Agent::detect();
       if ($Agent->detected) {
-         Display::$mode = Display::NONE;
+         Display::show(Display::NONE);
          Results::$enabled = true;
          Results::$agent = $Agent->name;
       }

@@ -14,13 +14,13 @@ use Bootgly\ACI\Tests\Suite\Test\Specification;
 return new Specification(
    description: 'Live log viewer ingests piped records (via the global sink) and tracks filter state',
    test: function () {
-      $savedDisplay = Display::$mode;
+      $savedDisplay = Display::$segments;
       $savedSink = Logger::$Sink;
 
       // @ Route every logger into a pipe (as Monitor mode does)
       $Pipe = new Pipe;
       $Pipe->open();
-      Display::$mode = Display::NONE;
+      Display::show(Display::NONE);
       Logger::$Sink = new PipeHandler($Pipe);
 
       new Logger(channel: 'Demo.App')->log(info: 'server healthy');
@@ -119,7 +119,7 @@ return new Specification(
       );
 
       $Pipe->close();
-      Display::$mode = $savedDisplay;
+      Display::show($savedDisplay);
       Logger::$Sink = $savedSink;
    }
 );

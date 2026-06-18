@@ -59,7 +59,7 @@ return new class extends Command
             return true;
          }
 
-         Display::$mode = Display::MESSAGE;
+         Display::show(Display::MESSAGE);
 
          $worker = sprintf("%02d", $Server->Process::$index);
 

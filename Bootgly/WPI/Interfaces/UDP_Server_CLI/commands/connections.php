@@ -45,7 +45,7 @@ return new class extends Command
          /** @var Server $Server */
          $Server = $this; // @phpstan-ignore-line
 
-         Display::$mode = Display::MESSAGE;
+         Display::show(Display::MESSAGE);
 
          $worker = $Server->Process::$index;
 

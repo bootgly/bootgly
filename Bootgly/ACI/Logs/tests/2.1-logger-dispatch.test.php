@@ -12,8 +12,8 @@ use Bootgly\ACI\Tests\Suite\Test\Specification;
 return new Specification(
    description: 'Logger->log() resolves the named level, enriches via processors and dispatches to handlers',
    test: function () {
-      $saved = Display::$mode;
-      Display::$mode = Display::MESSAGE;
+      $saved = Display::$segments;
+      Display::show(Display::MESSAGE);
 
       // # Dispatch to a captured stream
       $stream = fopen('php://temp', 'rb+');
@@ -74,7 +74,7 @@ return new Specification(
       );
 
       // # DISPLAY_NONE suppresses output entirely
-      Display::$mode = Display::NONE;
+      Display::show(Display::NONE);
       $silent = fopen('php://temp', 'rb+');
       $Silent = new Logger('x');
       $Silent->Handlers = new Handlers;
@@ -89,6 +89,6 @@ return new Specification(
          description: 'DISPLAY_NONE suppresses all output'
       );
 
-      Display::$mode = $saved;
+      Display::show($saved);
    }
 );

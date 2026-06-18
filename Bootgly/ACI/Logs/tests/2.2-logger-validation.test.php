@@ -11,8 +11,8 @@ use InvalidArgumentException;
 return new Specification(
    description: 'Logger->log() forces named arguments and validates the single level + context',
    test: function () {
-      $saved = Display::$mode;
-      Display::$mode = Display::MESSAGE;
+      $saved = Display::$segments;
+      Display::show(Display::MESSAGE);
 
       $Logger = new Logger('x');
       $Logger->Handlers = new Handlers; // no output sink
@@ -77,6 +77,6 @@ return new Specification(
          description: 'a valid named-level call is accepted'
       );
 
-      Display::$mode = $saved;
+      Display::show($saved);
    }
 );

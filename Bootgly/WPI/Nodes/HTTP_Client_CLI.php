@@ -1030,7 +1030,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
     */
    public static function test (int $port = 9999, null|array $secure = null): bool
    {
-      Display::$mode = Display::NONE;
+      Display::show(Display::NONE);
 
       // @ Start mock TCP server in background (fork)
       $process_id = pcntl_fork();
@@ -1185,7 +1185,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
     */
    protected static function testing (int $port, null|array $secure = null): void
    {
-      Display::$mode = Display::MESSAGE;
+      Display::show(Display::MESSAGE);
 
       $Suite = CAPI::$Suite;
       $Suite->separate($Suite->name);
@@ -1257,6 +1257,6 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
 
       $Suite->summarize();
 
-      Display::$mode = Display::MESSAGE;
+      Display::show(Display::MESSAGE);
    }
 }

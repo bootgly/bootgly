@@ -9,7 +9,7 @@ use Bootgly\WPI\Nodes\HTTP_Client_CLI;
 return new Suite(
    // * Config
    autoBoot: function (Suite|null $Suite = null): true {
-      Display::$mode = Display::NONE;
+      Display::show(Display::NONE);
 
       HTTP_Client_CLI::pretest($Suite);
       HTTP_Client_CLI::test(9999);

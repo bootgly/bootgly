@@ -16,7 +16,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI;
 return new Suite(
    // * Config
    autoBoot: function (Suite|null $Suite = null): true {
-      Display::$mode = Display::NONE;
+      Display::show(Display::NONE);
 
       if ( !defined('BOOTGLY_PROJECT') ) {
          $projectFile = BOOTGLY_ROOT_DIR . 'projects/Demo-HTTP_Server_CLI/Demo-HTTP_Server_CLI.project.php';

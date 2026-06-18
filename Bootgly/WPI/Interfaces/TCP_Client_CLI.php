@@ -315,7 +315,7 @@ class TCP_Client_CLI
          $this->Process->fork($this->workers, instance: function (Process $Process, int $index): void {
             $Process->title = 'Bootgly_WPI_Client: child process (Worker #' . Process::$index . ')';
 
-            Display::$mode = Display::MESSAGE_WHEN_ID;
+            Display::show(Display::MESSAGE, Display::TIMESTAMP, Display::CHANNEL, Display::SEVERITY);
 
             // @ Call On Worker instance
             if (self::$onWorkerStarted) {
@@ -366,8 +366,8 @@ class TCP_Client_CLI
    {
       self::$status = self::STATUS_RUNNING;
 
-      if (Display::$mode !== Display::NONE) {
-         Display::$mode = Display::MESSAGE;
+      if (Display::$segments !== Display::NONE) {
+         Display::show(Display::MESSAGE);
       }
 
       $this->Logger->log(info: 'Entering in Monitor mode...@\;');
@@ -483,7 +483,7 @@ class TCP_Client_CLI
    {
       self::$status = self::STATUS_STOPING;
 
-      Display::$mode = Display::MESSAGE;
+      Display::show(Display::MESSAGE);
 
       $children = (string) count($this->Process->Children->PIDs);
       match ($this->Process->level) {

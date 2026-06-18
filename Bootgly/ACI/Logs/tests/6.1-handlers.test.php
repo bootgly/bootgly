@@ -13,8 +13,8 @@ use Bootgly\ACI\Tests\Suite\Test\Specification;
 return new Specification(
    description: 'Handler enforces severity threshold and filters; Handlers->push() sets level and dispatches',
    test: function () {
-      $saved = Display::$mode;
-      Display::$mode = Display::MESSAGE;
+      $saved = Display::$segments;
+      Display::show(Display::MESSAGE);
 
       // # Severity threshold
       $stream = fopen('php://temp', 'rb+');
@@ -60,6 +60,6 @@ return new Specification(
          description: 'handler filters gate which records are written'
       );
 
-      Display::$mode = $saved;
+      Display::show($saved);
    }
 );

@@ -64,11 +64,11 @@ return new class extends Command
          if (Connections::$stats === false) {
             Connections::$stats = true;
 
-            Display::$mode = Display::MESSAGE;
+            Display::show(Display::MESSAGE);
             $Server->Logger->log(alert: "@\\;Stats collection was disabled — enabled now. Counters start from this point.@\\;");
          }
 
-         Display::$mode = Display::MESSAGE;
+         Display::show(Display::MESSAGE);
    
          $worker = sprintf("%02d", $Server->Process::$index);
    

@@ -11,9 +11,12 @@
 namespace Bootgly\ACI\Logs\Formatters;
 
 
+use const JSON_UNESCAPED_SLASHES;
+use const JSON_UNESCAPED_UNICODE;
 use const PHP_EOL;
 use function date;
 use function floor;
+use function json_encode;
 use function sprintf;
 
 use Bootgly\ABI\Data\__String\Escapeable\Text\Formattable;
@@ -32,54 +35,67 @@ class Line implements Formatter
    /**
     * Render a record as a single human/terminal line with ANSI colors.
     *
-    * Honors the global `Display::$mode` mode for timestamp and channel/severity id.
+    * Each part is gated by its `Display` segment flag — the message is always the content,
+    * timestamp / channel / severity / context wrap around it when their flag is enabled.
     *
     * @param Record $Record The record to format.
     * @return string The formatted line.
     */
    public function format (Record $Record): string
    {
-      $display = Display::$mode;
+      $segments = Display::$segments;
 
-      // @ Render templating
-      $message = TemplateEscaped::render($Record->message);
-
-      // @ Translate level
       $color = $this->color($Record->Level);
-      $severity = $Record->Level->render();
 
-      // @ Display when
+      // @ [timestamp]
       $when = '';
-      if ($display >= Display::MESSAGE_WHEN) {
+      if (($segments & Display::TIMESTAMP) !== 0) {
          $seconds = (int) $Record->timestamp;
          $micro = sprintf('%06d', (int) (($Record->timestamp - floor($Record->timestamp)) * 1000000));
 
-         $when .= self::wrap(self::_BLACK_BRIGHT_FOREGROUND);
-         $when .= '[';
-         $when .= date('Y-m-d\TH:i:s', $seconds) . ".$micro" . date('P', $seconds);
-         $when .= '] ';
-         $when .= self::_RESET_FORMAT;
+         $when = self::wrap(self::_BLACK_BRIGHT_FOREGROUND)
+               . '[' . date('Y-m-d\TH:i:s', $seconds) . ".$micro" . date('P', $seconds) . '] '
+               . self::_RESET_FORMAT;
       }
 
-      // @ Display id
-      $id = '';
-      if ($display >= Display::MESSAGE_WHEN_ID) {
-         if ($Record->channel !== '') {
-            $id .= "$Record->channel.";
+      // @ Origin: channel and/or severity, each toggled on its own
+      $origin = '';
+      if (($segments & Display::CHANNEL) !== 0 && $Record->channel !== '') {
+         $origin = $Record->channel;
+      }
+      if (($segments & Display::SEVERITY) !== 0) {
+         if ($origin !== '') {
+            $origin .= '.';
          }
-
-         $id .= self::wrap($color);
-         $id .= $severity . self::_RESET_FORMAT . ': ';
+         $origin .= self::wrap($color) . $Record->Level->render() . self::_RESET_FORMAT;
+      }
+      if ($origin !== '') {
+         $origin .= ': ';
       }
 
-      // @ Display message (always)
-      $message = self::wrap($color) . $message . self::_RESET_FORMAT;
-      if ($display > Display::MESSAGE) {
-         $message .= PHP_EOL;
+      // @ Message
+      $message = '';
+      if (($segments & Display::MESSAGE) !== 0) {
+         $message = self::wrap($color)
+                  . TemplateEscaped::render($Record->message)
+                  . self::_RESET_FORMAT;
       }
+
+      // @ Inline context dump
+      $context = '';
+      if (($segments & Display::CONTEXT) !== 0 && $Record->context !== []) {
+         $encoded = json_encode($Record->context, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+         if ($encoded !== false) {
+            $context = ' '
+                     . self::wrap(self::_BLACK_BRIGHT_FOREGROUND) . $encoded . self::_RESET_FORMAT;
+         }
+      }
+
+      // @ Newline for every selection except the compact inline message
+      $eol = $segments === Display::MESSAGE ? '' : PHP_EOL;
 
       // :
-      return "$when$id$message";
+      return "$when$origin$message$context$eol";
    }
 
    // # Translating

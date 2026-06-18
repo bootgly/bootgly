@@ -267,13 +267,13 @@ class UDP_Server_CLI implements Servers
             return true;
          case '@status':
             // @ Set log display none
-            $display = Display::$mode;
-            Display::$mode = Display::MESSAGE;
+            $display = Display::$segments;
+            Display::show(Display::MESSAGE);
 
             CLI->Commands->find('status', From: $this)?->run();
 
             // @ Restore log display
-            Display::$mode = $display;
+            Display::show($display);
             return true;
       }
 
@@ -422,7 +422,7 @@ class UDP_Server_CLI implements Servers
 
                      $this->Process->title = 'Bootgly_UDP_Server_CLI: child process (Worker #' . Process::$index . ')';
 
-                     Display::$mode = Display::MESSAGE_WHEN_ID;
+                     Display::show(Display::MESSAGE, Display::TIMESTAMP, Display::CHANNEL, Display::SEVERITY);
 
                      $this->instance();
 
@@ -472,7 +472,10 @@ class UDP_Server_CLI implements Servers
    {
       $this->Status = Status::Starting;
 
-      Display::$mode = Display::$mode === 0 ? 0 : Display::MESSAGE;
+      // ? Drop to the compact message line unless output is fully muted
+      if (Display::$segments !== Display::NONE) {
+         Display::show(Display::MESSAGE);
+      }
 
       $this->Logger->log(notice: '@\;Starting Server...');
 
@@ -534,7 +537,7 @@ class UDP_Server_CLI implements Servers
       $this->Process->fork($this->workers, instance: function (Process $Process, int $index): void {
          $Process->title = 'Bootgly_UDP_Server_CLI: child process (Worker #' . Process::$index . ')';
 
-         Display::$mode = Display::MESSAGE_WHEN_ID;
+         Display::show(Display::MESSAGE, Display::TIMESTAMP, Display::CHANNEL, Display::SEVERITY);
 
          // @ Create stream socket server
          $this->instance();
@@ -755,7 +758,7 @@ class UDP_Server_CLI implements Servers
    {
       $this->Status = Status::Running;
 
-      Display::$mode = Display::MESSAGE;
+      Display::show(Display::MESSAGE);
 
       $this->Logger->log(info: '@\;Entering in Interactive mode...@\;');
       $this->Logger->log(debug: '>_ Type `@#Green:stop@;` to stop the Server or `@#Green:help@;` to list commands.@\;');
@@ -810,7 +813,7 @@ class UDP_Server_CLI implements Servers
       });
 
       // @ Set Logger to display messages, datetime and level
-      Display::$mode = Display::MESSAGE_WHEN_ID;
+      Display::show(Display::MESSAGE, Display::TIMESTAMP, Display::CHANNEL, Display::SEVERITY);
 
       $Output = CLI->Terminal->Output;
       $Output->Cursor->hide();
@@ -921,7 +924,7 @@ class UDP_Server_CLI implements Servers
       $this->Status = Status::Stopping;
       $this->Process->stopping = true;
 
-      Display::$mode = Display::MESSAGE;
+      Display::show(Display::MESSAGE);
 
       switch ($this->Process->level) {
          case 'master':
