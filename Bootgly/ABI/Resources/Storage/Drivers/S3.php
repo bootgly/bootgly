@@ -50,6 +50,7 @@ use function strpos;
 use function strtolower;
 use function strtotime;
 use function substr;
+use function time;
 use function trim;
 use InvalidArgumentException;
 
@@ -511,13 +512,15 @@ class S3 extends Driver
     *
     * @param array<string,string> $query
     * @param array<string,string> $extra Extra (signed when `x-amz-*`) headers.
+    * @param null|int $time Unix timestamp for the signature date (defaults to now; set for tests).
     *
     * @return array{0:string,1:array<string,string>}
     */
-   private function sign (string $method, string $path, array $query, string $body, array $extra): array
+   private function sign (string $method, string $path, array $query, string $body, array $extra, null|int $time = null): array
    {
-      $amzDate = gmdate('Ymd\THis\Z');
-      $dateStamp = gmdate('Ymd');
+      $now = $time ?? time();
+      $amzDate = gmdate('Ymd\THis\Z', $now);
+      $dateStamp = gmdate('Ymd', $now);
       $payloadHash = hash('sha256', $body);
 
       // @ Headers covered by the signature (sorted; host matches the wire Host)

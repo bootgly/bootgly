@@ -19,6 +19,7 @@ return new Suite(
       '1.3-local-copy-move',
       '1.4-local-make-clear',
       '1.5-local-jail',
+      '1.6-local-symlink-jail',
 
       '2.1-memory-driver',
 
@@ -30,5 +31,7 @@ return new Suite(
       '5.2-s3-list-clear',
       '5.3-s3-copy-move-inspect',
       '5.4-s3-multipart',
+
+      '6.1-s3-offline',
    ]
 );

@@ -38,6 +38,7 @@ use RecursiveIteratorIterator;
 use SplFileInfo;
 
 use Bootgly\ABI\Data\__String\Path;
+use Bootgly\ABI\IO\FS\File;
 use Bootgly\ABI\Resources\Storage\Driver;
 
 
@@ -45,12 +46,30 @@ use Bootgly\ABI\Resources\Storage\Driver;
  * Local filesystem storage driver (default).
  *
  * Always available — no extension required. Paths are normalized and jailed
- * inside the disk root (traversal cannot escape it), writes are atomic (temp
- * file + rename), and listings use a recursive SPL walk. Raw filesystem calls
- * are used throughout (the Efficiency principle).
+ * inside the disk root: `resolve()` collapses `..`/`.` textually, and every
+ * operation additionally runs a `realpath()` containment check (`File->guard()`)
+ * so a symlink planted inside the root cannot escape it. Writes are atomic (temp
+ * file + rename) and listings use a recursive SPL walk.
  */
 class Local extends Driver
 {
+   // * Data
+   protected File $Jail;
+
+
+   /**
+    * Build the local driver and bind a realpath jail guard to the disk root.
+    *
+    * @param array<string,mixed> $options
+    */
+   public function __construct (string $root, array $options = [])
+   {
+      parent::__construct($root, $options);
+
+      // * Data
+      $this->Jail = new File($this->root, $this->root);
+   }
+
    /**
     * Upload to a path from a readable stream, creating parent directories as needed.
     *
@@ -66,6 +85,10 @@ class Local extends Driver
       $dir = dirname($file);
       if (is_dir($dir) === false) {
          @mkdir($dir, 0775, true);
+      }
+      // ? Jail: the (now-existing) parent must resolve inside the root
+      if ($this->guard($dir) === true) {
+         return $this->fail("Local write {$file}: path escapes the disk root");
       }
 
       // @ Atomic write: stream into a temp file + rename
@@ -105,6 +128,10 @@ class Local extends Driver
       if (is_file($file) === false) {
          return $this->fail("Local read {$file}: not found");
       }
+      // ? Jail: refuse to read through a symlink that escapes the root
+      if ($this->guard($file) === true) {
+         return $this->fail("Local read {$file}: path escapes the disk root");
+      }
 
       $in = @fopen($file, 'rb');
       if ($in === false) {
@@ -124,15 +151,22 @@ class Local extends Driver
     */
    public function delete (string $path): bool
    {
+      $this->error = '';
       $file = $this->resolve($path);
 
-      // ?
+      // ?: Idempotent — nothing to delete
       if (is_file($file) === false) {
          return true;
       }
+      // ? Jail: refuse to unlink through a symlink that escapes the root
+      if ($this->guard($file) === true) {
+         return $this->fail("Local delete {$file}: path escapes the disk root");
+      }
 
       // :
-      return @unlink($file);
+      return @unlink($file) === true
+         ? true
+         : $this->fail("Local delete {$file}: unlink failed");
    }
 
    /**
@@ -140,7 +174,13 @@ class Local extends Driver
     */
    public function check (string $path): bool
    {
+      $this->error = '';
       $resolved = $this->resolve($path);
+
+      // ? Jail: a path that escapes the root is reported as absent
+      if ($this->guard($resolved) === true) {
+         return false;
+      }
 
       // :
       return is_file($resolved) === true || is_dir($resolved) === true;
@@ -153,9 +193,16 @@ class Local extends Driver
     */
    public function list (string $path = '', bool $recursive = false): array
    {
+      $this->error = '';
       $dir = $this->resolve($path);
       // ?
       if (is_dir($dir) === false) {
+         return [];
+      }
+      // ? Jail: never walk a directory that escapes the root
+      if ($this->guard($dir) === true) {
+         $this->error = "Local list {$dir}: path escapes the disk root";
+
          return [];
       }
 
@@ -194,10 +241,15 @@ class Local extends Driver
     */
    public function copy (string $from, string $to): bool
    {
+      $this->error = '';
       $source = $this->resolve($from);
       // ?
       if (is_file($source) === false) {
-         return false;
+         return $this->fail("Local copy {$source}: source not found");
+      }
+      // ? Jail: source must resolve inside the root
+      if ($this->guard($source) === true) {
+         return $this->fail("Local copy {$source}: path escapes the disk root");
       }
 
       $target = $this->resolve($to);
@@ -205,9 +257,15 @@ class Local extends Driver
       if (is_dir($dir) === false) {
          @mkdir($dir, 0775, true);
       }
+      // ? Jail: target parent must resolve inside the root
+      if ($this->guard($dir) === true) {
+         return $this->fail("Local copy {$target}: path escapes the disk root");
+      }
 
       // :
-      return @copy($source, $target);
+      return @copy($source, $target) === true
+         ? true
+         : $this->fail("Local copy {$target}: copy failed");
    }
 
    /**
@@ -215,10 +273,15 @@ class Local extends Driver
     */
    public function move (string $from, string $to): bool
    {
+      $this->error = '';
       $source = $this->resolve($from);
       // ?
       if (is_file($source) === false) {
-         return false;
+         return $this->fail("Local move {$source}: source not found");
+      }
+      // ? Jail: source must resolve inside the root
+      if ($this->guard($source) === true) {
+         return $this->fail("Local move {$source}: path escapes the disk root");
       }
 
       $target = $this->resolve($to);
@@ -226,9 +289,15 @@ class Local extends Driver
       if (is_dir($dir) === false) {
          @mkdir($dir, 0775, true);
       }
+      // ? Jail: target parent must resolve inside the root
+      if ($this->guard($dir) === true) {
+         return $this->fail("Local move {$target}: path escapes the disk root");
+      }
 
       // :
-      return @rename($source, $target);
+      return @rename($source, $target) === true
+         ? true
+         : $this->fail("Local move {$target}: rename failed");
    }
 
    /**
@@ -236,10 +305,15 @@ class Local extends Driver
     */
    public function measure (string $path): int|false
    {
+      $this->error = '';
       $file = $this->resolve($path);
       // ?
       if (is_file($file) === false) {
          return false;
+      }
+      // ? Jail: a path that escapes the root is reported as missing
+      if ($this->guard($file) === true) {
+         return $this->fail("Local measure {$file}: path escapes the disk root");
       }
 
       // :
@@ -253,10 +327,15 @@ class Local extends Driver
     */
    public function inspect (string $path): array|false
    {
+      $this->error = '';
       $resolved = $this->resolve($path);
       // ?
       if (file_exists($resolved) === false) {
          return false;
+      }
+      // ? Jail: a path that escapes the root is reported as missing
+      if ($this->guard($resolved) === true) {
+         return $this->fail("Local inspect {$resolved}: path escapes the disk root");
       }
 
       $size = @filesize($resolved);
@@ -275,14 +354,23 @@ class Local extends Driver
     */
    public function make (string $path): bool
    {
+      $this->error = '';
       $dir = $this->resolve($path);
       // ?
       if (is_dir($dir) === true) {
          return true;
       }
 
+      if (@mkdir($dir, 0775, true) === false) {
+         return $this->fail("Local make {$dir}: mkdir failed");
+      }
+      // ? Jail: a symlinked component could place the new directory outside the root
+      if ($this->guard($dir) === true) {
+         return $this->fail("Local make {$dir}: path escapes the disk root");
+      }
+
       // :
-      return @mkdir($dir, 0775, true);
+      return true;
    }
 
    /**
@@ -290,10 +378,15 @@ class Local extends Driver
     */
    public function clear (string $path = ''): bool
    {
+      $this->error = '';
       $dir = $this->resolve($path);
       // ?
       if (is_dir($dir) === false) {
          return true;
+      }
+      // ? Jail: never recurse-delete a directory that escapes the root
+      if ($this->guard($dir) === true) {
+         return $this->fail("Local clear {$dir}: path escapes the disk root");
       }
 
       // @ Depth-first so directories empty before they are removed
@@ -336,6 +429,22 @@ class Local extends Driver
 
       // :
       return $this->root . DIRECTORY_SEPARATOR . $relative;
+   }
+
+   /**
+    * Whether an absolute path breaches the disk root once symlinks are resolved
+    * (true = blocked). Defers to `File->guard()` (realpath containment,
+    * fail-closed); the root itself is trivially contained.
+    */
+   private function guard (string $absolute): bool
+   {
+      // ?
+      if ($absolute === $this->root) {
+         return false;
+      }
+
+      // :
+      return $this->Jail->guard($absolute);
    }
 
    /**
