@@ -62,21 +62,21 @@ projects/**/configs/**/.env.*
 # Ignore private scripts
 /scripts/_*.php
 
-#- /workdata
+#- /storage
 # Ignore all files here
-/workdata/*.*
+/storage/*.*
 # Ignore all folder starting with @ here
-/workdata/@*/
+/storage/@*/
 # Ignore known folders
-/workdata/cache/*
-/workdata/pids/*
-/workdata/logs/*
-/workdata/schedule/*
-/workdata/security/*
-/workdata/temp/*
-/workdata/tests/*
-/workdata/tests/snapshots/*
-/workdata/sessions/*
+/storage/cache/*
+/storage/pids/*
+/storage/logs/*
+/storage/schedule/*
+/storage/security/*
+/storage/temp/*
+/storage/tests/*
+/storage/tests/snapshots/*
+/storage/sessions/*
 # Ignore IA folders/files
 .agent/*
 .codex
