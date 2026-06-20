@@ -3,7 +3,7 @@
 namespace Bootgly\ADI\Databases\SQL\Schema\Tests\Migrations;
 
 
-use const BOOTGLY_WORKING_DIR;
+use const BOOTGLY_STORAGE_DIR;
 use function assert;
 use function basename;
 use function file_exists;
@@ -27,7 +27,7 @@ use Bootgly\ADI\Databases\SQL\Schema\Migrations;
 return new Specification(
    description: 'Database: SQL schema migrations discover create and load migration objects',
    test: function () {
-      $path = BOOTGLY_WORKING_DIR . 'workdata/tests/schema-migrations-' . uniqid() . '/';
+      $path = BOOTGLY_STORAGE_DIR . 'tests/schema-migrations-' . uniqid() . '/';
       if (is_dir($path) === false) {
          mkdir($path, 0775, true);
       }

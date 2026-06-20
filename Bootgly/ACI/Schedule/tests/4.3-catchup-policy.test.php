@@ -10,7 +10,7 @@ use Bootgly\ACI\Tests\Suite\Test\Specification;
 return new Specification(
    description: 'Schedule::recover() runs Catchups::Once exactly once for missed runs; Catchups::Skip just advances the baseline',
    test: function () {
-      @unlink(BOOTGLY_WORKING_DIR . '/workdata/schedule/state.json');
+      @unlink(BOOTGLY_STORAGE_DIR . 'schedule/state.json');
 
       // ! Seed a last-run in the past so a daily run is missed
       $Seed = new State();

@@ -53,7 +53,7 @@ return new Project(
 
             $Output->render('@.;@#green:✓ Queue demo server started@; on @#cyan:http://0.0.0.0:' . $port . '@;@.;');
             $Output->render('  @#Black:Enqueue:@; curl http://127.0.0.1:' . $port . '/email/alice@example.com@.;');
-            $Output->render('  @#Black:Process:@; bootgly queue run   (then tail workdata/queue-demo.log)@..;');
+            $Output->render('  @#Black:Process:@; bootgly queue run   (then tail storage/queue-demo.log)@..;');
          })
          ->on(Events::ServerStopped, function ($HTTP_Server_CLI) {
             CLI->Terminal->Output->render('@.;@#yellow:■ Queue demo server stopped@;@.;');

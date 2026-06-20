@@ -7,9 +7,9 @@ The request returns **instantly**; the slow work (here, "sending an email") runs
 ```
 HTTP request ──► route handler ──► Queues::dispatch(SendEmail, payload) ──► (responds now)
                                                 │
-                                          workdata/queues/emails
+                                          storage/queues/emails
                                                 │
-                              bootgly queue run ─┴─► SendEmail->handle()  ──► workdata/queue-demo.log
+                              bootgly queue run ─┴─► SendEmail->handle()  ──► storage/queue-demo.log
 ```
 
 ## Files
@@ -43,7 +43,7 @@ project's `queues.php` (which `require`s `SendEmail`):
 ```bash
 cd projects/Demo-Queue-HTTP_Server_CLI
 bootgly queue run emails                           # Ctrl+C to stop
-tail -f ../../workdata/queue-demo.log              # watch jobs being processed
+tail -f ../../storage/queue-demo.log              # watch jobs being processed
 ```
 
 **Stop the server:**

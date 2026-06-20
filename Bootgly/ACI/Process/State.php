@@ -11,7 +11,7 @@
 namespace Bootgly\ACI\Process;
 
 
-use const BOOTGLY_WORKING_DIR;
+use const BOOTGLY_STORAGE_DIR;
 use const LOCK_EX;
 use const LOCK_UN;
 use function chgrp;
@@ -52,7 +52,7 @@ class State
 
    public function __construct (string $id, null|string $instance = null)
    {
-      $this->pidsDir = BOOTGLY_WORKING_DIR . '/workdata/pids/';
+      $this->pidsDir = BOOTGLY_STORAGE_DIR . 'pids/';
 
       if (is_dir($this->pidsDir) === false) {
          @mkdir($this->pidsDir, 0755, true);

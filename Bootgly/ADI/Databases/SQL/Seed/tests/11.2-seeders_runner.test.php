@@ -3,6 +3,8 @@
 namespace Bootgly\ADI\Databases\SQL\Seed\Tests\Runner;
 
 
+use const BOOTGLY_STORAGE_DIR;
+use function array_column;
 use function assert;
 use function file_put_contents;
 use function glob;
@@ -77,7 +79,7 @@ function clean (string $path): void
 return new Specification(
    description: 'Database: SQL seed runner executes one or all rerunnable seeders',
    test: function () {
-      $path = BOOTGLY_WORKING_DIR . 'workdata/tests/seeders-runner-' . uniqid();
+      $path = BOOTGLY_STORAGE_DIR . 'tests/seeders-runner-' . uniqid();
       $Database = new RecordingSQL;
       $Runner = new Runner($Database, $path, "{$path}.lock");
 

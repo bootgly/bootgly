@@ -76,7 +76,7 @@ return new Specification(
             return $Response->JSON->send(['skip' => true]);
          }
 
-         $dir = BOOTGLY_WORKING_BASE . '/workdata/temp/files/downloaded/';
+         $dir = BOOTGLY_STORAGE_DIR . 'temp/files/downloaded/';
          if (! is_dir($dir)) {
             mkdir($dir, 0700, true);
          }

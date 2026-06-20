@@ -87,6 +87,7 @@ return new Suites(
       'Bootgly/ACI/Logs/',
       'Bootgly/ACI/Observability/',
       'Bootgly/WPI/Nodes/HTTP_Server_CLI/tests/Telemetry/',
+      'Bootgly/ABI/Resources/Storage/',
       // Security (re-enabled — appended LAST to keep coverage-probe indices
       // 4, 8 and 14-21 stable; the original in-place slot above stays
       // commented for documentation).

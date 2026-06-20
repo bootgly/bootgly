@@ -1,0 +1,30 @@
+<?php
+/*
+ * --------------------------------------------------------------------------
+ * Bootgly PHP Framework
+ * Developed by Rodrigo Vieira (@rodrigoslayertech)
+ * Copyright 2023-present
+ * Licensed under MIT
+ * --------------------------------------------------------------------------
+ */
+
+namespace Bootgly\ABI\Resources\Storage;
+
+
+use Bootgly\ABI\Event;
+
+
+/**
+ * Storage domain events, dispatched through `Emitter::$Instance`.
+ *
+ * Each case is an event-identity singleton (keyed by `spl_object_id`):
+ * - `Written` — `write()` stored bytes. Payload: `$path`, `$written` (bool).
+ * - `Read`    — `read()` was attempted. Payload: `$path`, `$found` (bool).
+ * - `Deleted` — `delete()` ran. Payload: `$path`, `$deleted` (bool).
+ */
+enum Events implements Event
+{
+   case Written;
+   case Read;
+   case Deleted;
+}

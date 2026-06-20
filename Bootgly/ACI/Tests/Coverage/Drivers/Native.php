@@ -81,7 +81,7 @@ final class Native extends Driver
    public static array $excludes = [
       '/Bootgly/ACI/Tests/Coverage/',
       '/vendor/',
-      '/workdata/',
+      '/storage/',
       '/tmp/',
    ];
 

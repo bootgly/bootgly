@@ -29,7 +29,7 @@ $top = isset($opts['top']) ? (int) $opts['top'] : 50;
 $include = isset($opts['include']) ? (string) $opts['include'] : '';
 $full = isset($opts['full']);
 
-$dir = __DIR__ . '/../workdata/temp/profile';
+$dir = __DIR__ . '/../storage/temp/profile';
 if (! is_dir($dir)) {
    fwrite(STDERR, "No profile dir at: $dir\n");
    exit(1);

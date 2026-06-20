@@ -11,6 +11,7 @@
 namespace projects\Demo_Queue_HTTP_Server_CLI;
 
 
+use const BOOTGLY_STORAGE_DIR;
 use const BOOTGLY_WORKING_DIR;
 use const FILE_APPEND;
 use function date;
@@ -24,7 +25,7 @@ use Bootgly\ACI\Queues\Job;
  * Demo job handler — runs in the `bootgly queue run` worker, not in the HTTP request.
  *
  * A real handler would send an email here; to keep the demo self-contained it just
- * appends a line to `workdata/queue-demo.log` so you can watch jobs being processed.
+ * appends a line to `storage/queue-demo.log` so you can watch jobs being processed.
  */
 final class SendEmail implements Handler
 {
@@ -40,6 +41,6 @@ final class SendEmail implements Handler
 
       $line = date('Y-m-d H:i:s') . "  sent '{$subject}' to {$to}  [job {$Job->id}]" . "\n";
 
-      file_put_contents(BOOTGLY_WORKING_DIR . 'workdata/queue-demo.log', $line, FILE_APPEND);
+      file_put_contents(BOOTGLY_STORAGE_DIR . 'queue-demo.log', $line, FILE_APPEND);
    }
 }

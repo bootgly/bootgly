@@ -12,6 +12,7 @@ namespace Bootgly\commands;
 
 
 use const BOOTGLY_ROOT_DIR;
+use const BOOTGLY_STORAGE_DIR;
 use const BOOTGLY_WORKING_DIR;
 use const PHP_EOL;
 use const SIGKILL;
@@ -375,7 +376,7 @@ class ProjectCommand extends Command
          if ($this->probe($PIDs['master']) === false) {
             // @ Clean stale PID file
             $suffix = $instance !== '' ? '.' . $instance : '';
-            $pidFile = BOOTGLY_WORKING_DIR . '/workdata/pids/' . $projectName . $suffix . '.json';
+            $pidFile = BOOTGLY_STORAGE_DIR . 'pids/' . $projectName . $suffix . '.json';
             if (is_file($pidFile)) {
                @unlink($pidFile);
             }
@@ -424,7 +425,7 @@ class ProjectCommand extends Command
 
          // @ Remove PID file
          $suffix = $instance !== '' ? '.' . $instance : '';
-         $pidFile = BOOTGLY_WORKING_DIR . '/workdata/pids/' . $projectName . $suffix . '.json';
+         $pidFile = BOOTGLY_STORAGE_DIR . 'pids/' . $projectName . $suffix . '.json';
          if (is_file($pidFile)) {
             @unlink($pidFile);
          }
@@ -667,7 +668,7 @@ class ProjectCommand extends Command
          return false;
       }
 
-      $lockFile = BOOTGLY_WORKING_DIR . 'workdata/locks/migrations/' . $projectName . '.lock';
+      $lockFile = BOOTGLY_STORAGE_DIR . 'locks/migrations/' . $projectName . '.lock';
       $Runner = new MigrationRunner($Database, $migrationsPath, $lockFile);
 
       try {
@@ -877,7 +878,7 @@ class ProjectCommand extends Command
                return false;
             }
 
-            $lockFile = BOOTGLY_WORKING_DIR . "workdata/locks/seeders/{$projectName}.lock";
+            $lockFile = BOOTGLY_STORAGE_DIR . "locks/seeders/{$projectName}.lock";
             $Runner = new SeedRunner($Database, $seedersPath, $lockFile);
             $name = $arguments[2] ?? null;
 
@@ -1075,7 +1076,7 @@ class ProjectCommand extends Command
    private function locate (string $projectName, null|string $instance = null): null|array
    {
       $suffix = $instance !== null ? '.' . $instance : '';
-      $pidFile = BOOTGLY_WORKING_DIR . '/workdata/pids/' . $projectName . $suffix . '.json';
+      $pidFile = BOOTGLY_STORAGE_DIR . 'pids/' . $projectName . $suffix . '.json';
 
       if (is_file($pidFile) === false) {
          return null;
@@ -1106,7 +1107,7 @@ class ProjectCommand extends Command
     */
    private function locateAll (string $projectName): array
    {
-      $pidsDir = BOOTGLY_WORKING_DIR . '/workdata/pids/';
+      $pidsDir = BOOTGLY_STORAGE_DIR . 'pids/';
       $instances = [];
 
       // @ Primary instance

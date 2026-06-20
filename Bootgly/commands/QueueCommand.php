@@ -150,7 +150,7 @@ class QueueCommand extends Command
          break;
       }
 
-      // : No usable config file — run with defaults (file driver, workdata/queues)
+      // : No usable config file — run with defaults (file driver, storage/queues)
       return new Queues();
    }
 

@@ -3,7 +3,7 @@
 namespace Bootgly\ADI\Databases\SQL\Schema\Tests\RepositoryLock;
 
 
-use const BOOTGLY_WORKING_DIR;
+use const BOOTGLY_STORAGE_DIR;
 use const LOCK_EX;
 use const LOCK_UN;
 use function assert;
@@ -91,7 +91,7 @@ return new Specification(
          description: 'Repository compiles SQLite migration repository queries with SQLite quoting and markers'
       );
 
-      $dir = BOOTGLY_WORKING_DIR . 'workdata/tests/schema-lock-' . uniqid() . '/';
+      $dir = BOOTGLY_STORAGE_DIR . 'tests/schema-lock-' . uniqid() . '/';
       if (is_dir($dir) === false) {
          mkdir($dir, 0775, true);
       }

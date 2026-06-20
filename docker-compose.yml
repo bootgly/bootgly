@@ -7,7 +7,7 @@
 #   docker compose --profile bench up         # run the internal benchmark
 #
 # All services share the same image/build via the `x-bootgly` anchor, so the
-# image is built once and reused. workdata (PIDs/state) persists in a volume.
+# image is built once and reused. storage (PIDs/state) persists in a volume.
 # ============================================================================
 
 x-bootgly: &bootgly
@@ -17,7 +17,7 @@ x-bootgly: &bootgly
     target: full
   image: bootgly:full
   volumes:
-    - workdata:/bootgly/workdata
+    - storage:/bootgly/storage
 
 services:
   # # Run the demo HTTP server (http://localhost:8082)
@@ -46,4 +46,4 @@ services:
     command: ["test", "benchmark", "HTTP_Server_CLI", "--opponents=bootgly", "--runner=tcp_client"]
 
 volumes:
-  workdata:
+  storage:

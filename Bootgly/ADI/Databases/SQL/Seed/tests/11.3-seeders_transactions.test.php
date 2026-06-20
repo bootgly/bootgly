@@ -3,6 +3,7 @@
 namespace Bootgly\ADI\Databases\SQL\Seed\Tests\Transactions;
 
 
+use const BOOTGLY_STORAGE_DIR;
 use function array_column;
 use function assert;
 use function file_put_contents;
@@ -140,7 +141,7 @@ function clean (string $path): void
 return new Specification(
    description: 'Database: SQL seed runner wraps transactional dialect seeders atomically',
    test: function () {
-      $path = BOOTGLY_WORKING_DIR . 'workdata/tests/seeders-transactions-' . uniqid();
+      $path = BOOTGLY_STORAGE_DIR . 'tests/seeders-transactions-' . uniqid();
       $Database = new RecordingSQL;
       $Runner = new Runner($Database, $path, "{$path}.lock");
 

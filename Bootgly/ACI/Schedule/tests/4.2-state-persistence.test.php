@@ -7,7 +7,7 @@ use Bootgly\ACI\Tests\Suite\Test\Specification;
 return new Specification(
    description: 'State: fetch() defaults to 0; update() round-trips and persists across instances',
    test: function () {
-      @unlink(BOOTGLY_WORKING_DIR . '/workdata/schedule/state.json');
+      @unlink(BOOTGLY_STORAGE_DIR . 'schedule/state.json');
 
       $State = new State();
 

@@ -11,6 +11,7 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Decoder_Downloading;
 
 
+use const BOOTGLY_STORAGE_DIR;
 use const BOOTGLY_WORKING_BASE;
 use const LOCK_EX;
 use const LOCK_UN;
@@ -45,7 +46,7 @@ use Throwable;
 
 /**
  * Cross-worker aggregate counter of bytes currently held in the
- *   download temp directory (`workdata/temp/files/downloaded/`).
+ *   download temp directory (`storage/temp/files/downloaded/`).
  *   Closes the per-file × N-workers blowup that lets a coordinated
  *   client fill the disk while every individual download still
  *   respects `$maxFileSize`.
@@ -98,7 +99,7 @@ final class Downloads
          return;
       }
 
-      $base = BOOTGLY_WORKING_BASE . '/workdata/temp/';
+      $base = BOOTGLY_STORAGE_DIR . 'temp/';
       if (! is_dir($base)) {
          mkdir($base, 0700, true);
       }
@@ -364,7 +365,7 @@ final class Downloads
     */
    public static function sweep (int $minAge = 0): void
    {
-      $dir = BOOTGLY_WORKING_BASE . '/workdata/temp/files/downloaded/';
+      $dir = BOOTGLY_STORAGE_DIR . 'temp/files/downloaded/';
 
       // ?:
       if (! is_dir($dir)) {
@@ -404,7 +405,7 @@ final class Downloads
     */
    private static function bytes (): int
    {
-      $dir = BOOTGLY_WORKING_BASE . '/workdata/temp/files/downloaded/';
+      $dir = BOOTGLY_STORAGE_DIR . 'temp/files/downloaded/';
 
       // ?:
       if (! is_dir($dir)) {
@@ -458,7 +459,7 @@ final class Downloads
       self::$owner = false;
       self::$tracked = [];
 
-      $base = BOOTGLY_WORKING_BASE . '/workdata/temp/';
+      $base = BOOTGLY_STORAGE_DIR . 'temp/';
       clearstatcache();
 
       // @@

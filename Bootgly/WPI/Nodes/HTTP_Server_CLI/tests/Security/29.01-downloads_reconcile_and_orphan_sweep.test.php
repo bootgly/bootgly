@@ -14,7 +14,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test\Specification;
  * PoC — per-request upload temp files and SHM reservations leak on worker
  *   crash (audit F-10).
  *
- * `Decoder_Downloading` streams parts to `workdata/temp/files/downloaded/`
+ * `Decoder_Downloading` streams parts to `storage/temp/files/downloaded/`
  *   and reserves bytes on the cross-worker `Downloads` SHM counter. Cleanup
  *   (`Request::clean()` → `unlink` + `Downloads::discard`) runs on the normal
  *   encode path. If a worker dies mid-request, the temp file is left on disk
@@ -52,7 +52,7 @@ return new Specification(
          return $Response(code: 200, body: 'SKIP-NO-SHMOP');
       }
 
-      $dir = BOOTGLY_WORKING_BASE . '/workdata/temp/files/downloaded/';
+      $dir = BOOTGLY_STORAGE_DIR . 'temp/files/downloaded/';
       if (! is_dir($dir)) {
          mkdir($dir, 0700, true);
       }

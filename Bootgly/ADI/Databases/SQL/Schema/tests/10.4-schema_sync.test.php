@@ -3,7 +3,7 @@
 namespace Bootgly\ADI\Databases\SQL\Schema\Tests\Sync;
 
 
-use const BOOTGLY_WORKING_DIR;
+use const BOOTGLY_STORAGE_DIR;
 use function assert;
 use function file_put_contents;
 use function glob;
@@ -167,7 +167,7 @@ class SyncFixture extends Fixture
    {
       parent::__construct();
 
-      $this->path = BOOTGLY_WORKING_DIR . 'workdata/tests/schema-sync-' . uniqid() . '/';
+      $this->path = BOOTGLY_STORAGE_DIR . 'tests/schema-sync-' . uniqid() . '/';
       $this->Database = new SyncDatabase(['migrations' => 'schema_history', 'pool' => ['min' => 0, 'max' => 0]]);
       // The fixture resolves operations synchronously and does not emulate pooled transactions.
       $this->Database->structure()->Dialect->transactions = false;

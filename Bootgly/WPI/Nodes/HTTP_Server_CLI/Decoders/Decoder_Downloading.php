@@ -11,6 +11,7 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders;
 
 
+use const BOOTGLY_STORAGE_DIR;
 use const BOOTGLY_WORKING_BASE;
 use const UPLOAD_ERR_CANT_WRITE;
 use const UPLOAD_ERR_FORM_SIZE;
@@ -325,7 +326,7 @@ class Decoder_Downloading extends Decoders
                   $this->filesCount++;
 
                   // @ Open temp file for streaming writes
-                  $tempUploadedDir = BOOTGLY_WORKING_BASE . '/workdata/temp/files/downloaded/';
+                  $tempUploadedDir = BOOTGLY_STORAGE_DIR . 'temp/files/downloaded/';
 
                   if (! is_dir($tempUploadedDir)) {
                      mkdir($tempUploadedDir, 0700, true);
@@ -601,7 +602,7 @@ class Decoder_Downloading extends Decoders
       $this->bytesSinceDiskCheck += $chunkLength;
       if ($this->bytesSinceDiskCheck >= 1048576) {
          try {
-            $freeSpace = disk_free_space(BOOTGLY_WORKING_BASE . '/workdata/temp/files/downloaded/');
+            $freeSpace = disk_free_space(BOOTGLY_STORAGE_DIR . 'temp/files/downloaded/');
             if ($freeSpace !== false && $freeSpace < 1048576) {
                $file['error'] = UPLOAD_ERR_CANT_WRITE;
                $this->close();

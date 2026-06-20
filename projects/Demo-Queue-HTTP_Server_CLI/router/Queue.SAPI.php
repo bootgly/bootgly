@@ -29,7 +29,7 @@ return static function
       return $Response->JSON->send([
          'demo' => 'Queue + HTTP_Server_CLI',
          'try'  => 'GET /email/:to  → enqueues a SendEmail job, responds instantly',
-         'then' => 'run `bootgly queue run`, then watch workdata/queue-demo.log',
+         'then' => 'run `bootgly queue run`, then watch storage/queue-demo.log',
       ]);
    }, GET);
 

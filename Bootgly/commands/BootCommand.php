@@ -53,7 +53,7 @@ class BootCommand extends Command
             'public/',
             'scripts/',
             'tests/',
-            'workdata/',
+            'storage/',
          ];
 
          // ?

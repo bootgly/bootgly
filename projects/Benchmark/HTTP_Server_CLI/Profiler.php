@@ -11,22 +11,25 @@
 namespace projects\HTTP_Server_CLI;
 
 
+use const EXCIMER_CPU;
+use const EXCIMER_REAL;
+use function array_slice;
 use function array_values;
 use function file_put_contents;
 use function getenv;
 use function is_dir;
+use function json_encode;
 use function mkdir;
 use function posix_getpid;
 use function register_shutdown_function;
 use function round;
 use function str_pad;
+use function str_repeat;
 use function strlen;
 use function substr;
+use function usort;
 use ExcimerLog;
 use ExcimerProfiler;
-
-use const EXCIMER_CPU;
-use const EXCIMER_REAL;
 
 
 /**
@@ -37,7 +40,7 @@ use const EXCIMER_REAL;
  * Lifecycle:
  *   - start(): idempotent per-worker init (no-op if same PID already started).
  *   - dump():  auto-invoked at worker shutdown via register_shutdown_function.
- *   - Dumps per-worker files into workdata/temp/profile/:
+ *   - Dumps per-worker files into storage/temp/profile/:
  *       worker-{PID}.collapsed     (Brendan Gregg collapsed format → flamegraph.pl)
  *       worker-{PID}.speedscope    (speedscope.app JSON)
  *       worker-{PID}.aggregated    (top-N self/inclusive table — human readable)
@@ -75,7 +78,7 @@ final class Profiler
 
       self::$Profiler = $Profiler;
       self::$workerPid = $pid;
-      self::$outputDir = __DIR__ . '/../../../workdata/temp/profile';
+      self::$outputDir = __DIR__ . '/../../../storage/temp/profile';
 
       register_shutdown_function([self::class, 'dump']);
    }

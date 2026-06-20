@@ -40,7 +40,7 @@ use Bootgly\ACI\Queues\Job;
  * Filesystem queue driver (default).
  *
  * Always available — no extension required. Per queue:
- * `workdata/queues/<name>/{ready,reserved,failed}/`. A job is one file named
+ * `storage/queues/<name>/{ready,reserved,failed}/`. A job is one file named
  * `<available-ts>-<id>.job` (zero-padded ts → lexical order == FIFO/due order).
  *
  * enqueue   = serialize + atomic temp+rename into `ready/`.

@@ -11,7 +11,7 @@
 namespace Bootgly\ACI\Tests\Benchmark;
 
 
-use const BOOTGLY_WORKING_DIR;
+use const BOOTGLY_STORAGE_DIR;
 use const PHP_INT_MAX;
 use const STR_PAD_RIGHT;
 use function array_keys;
@@ -405,7 +405,7 @@ class Summary
     */
    public static function save (string $caseName, array $results, array $config = []): void
    {
-      $dir = BOOTGLY_WORKING_DIR . 'workdata/tests/benchmarks/' . $caseName;
+      $dir = BOOTGLY_STORAGE_DIR . 'tests/benchmarks/' . $caseName;
 
       if ( !is_dir($dir) ) {
          mkdir($dir, 0775, true);
@@ -463,7 +463,7 @@ class Summary
       // @ Display save path (relative)
       $DIM   = self::wrap(self::_DIM_STYLE);
       $RESET = self::_RESET_FORMAT;
-      $relative = "workdata/tests/benchmarks/$caseName/" . date('Y-m-d_His') . '_bench.marks';
+      $relative = "storage/tests/benchmarks/$caseName/" . date('Y-m-d_His') . '_bench.marks';
       echo "\n{$DIM}  Results saved to: {$relative}{$RESET}\n\n";
    }
 }

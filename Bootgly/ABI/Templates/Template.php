@@ -11,7 +11,7 @@
 namespace Bootgly\ABI\Templates;
 
 
-use const BOOTGLY_WORKING_DIR;
+use const BOOTGLY_STORAGE_DIR;
 use const EXTR_SKIP;
 use function extract;
 use function is_string;
@@ -179,7 +179,7 @@ class Template implements Templates
       $raw = $this->raw;
       // * Metadata
       $Cache = $this->Cache = new File(
-         BOOTGLY_WORKING_DIR . 'workdata/cache/views/' . sha1($raw) . '.php'
+         BOOTGLY_STORAGE_DIR . 'cache/views/' . sha1($raw) . '.php'
       );
       $Cache->convert = false;
 

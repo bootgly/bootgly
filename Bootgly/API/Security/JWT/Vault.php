@@ -11,7 +11,7 @@
 namespace Bootgly\API\Security\JWT;
 
 
-use const BOOTGLY_WORKING_DIR;
+use const BOOTGLY_STORAGE_DIR;
 use const DIRECTORY_SEPARATOR;
 use const JSON_BIGINT_AS_STRING;
 use const JSON_THROW_ON_ERROR;
@@ -113,7 +113,7 @@ class Vault implements Cache
       $this->path = $this->prepare(
          is_string($storage)
             ? $storage
-            : BOOTGLY_WORKING_DIR . 'workdata/security/jwt'
+            : BOOTGLY_STORAGE_DIR . 'security/jwt'
       );
       $this->prefix = $prefix;
       $this->Storage = $storage instanceof Storage

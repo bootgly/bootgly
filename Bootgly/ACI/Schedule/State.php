@@ -11,7 +11,7 @@
 namespace Bootgly\ACI\Schedule;
 
 
-use const BOOTGLY_WORKING_DIR;
+use const BOOTGLY_STORAGE_DIR;
 use function file_get_contents;
 use function file_put_contents;
 use function is_array;
@@ -26,7 +26,7 @@ use function mkdir;
 /**
  * Last-run persistence for scheduled jobs.
  *
- * A JSON map `id => unix-timestamp` at `workdata/schedule/state.json`, used by
+ * A JSON map `id => unix-timestamp` at `storage/schedule/state.json`, used by
  * the catch-up policy to detect missed runs. Same JSON idiom as
  * `ACI/Process/State`.
  */
@@ -45,7 +45,7 @@ final class State
 
    public function __construct ()
    {
-      $dir = BOOTGLY_WORKING_DIR . '/workdata/schedule/';
+      $dir = BOOTGLY_STORAGE_DIR . 'schedule/';
 
       // ! Ensure the state directory exists
       if (is_dir($dir) === false) {

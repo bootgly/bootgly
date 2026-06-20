@@ -11,7 +11,7 @@
 namespace Bootgly\ABI\Resources\Cache;
 
 
-use const BOOTGLY_WORKING_DIR;
+use const BOOTGLY_STORAGE_DIR;
 use function defined;
 use function is_bool;
 use function is_scalar;
@@ -145,8 +145,8 @@ class Config
    private static function locate (): string
    {
       // ?: Inside a booted Bootgly working dir
-      if (defined('BOOTGLY_WORKING_DIR') === true) {
-         return BOOTGLY_WORKING_DIR . '/workdata/cache';
+      if (defined('BOOTGLY_STORAGE_DIR') === true) {
+         return BOOTGLY_STORAGE_DIR . 'cache';
       }
 
       // :

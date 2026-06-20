@@ -3,9 +3,12 @@
 namespace Bootgly\ADI\Databases\SQL\Seed\Tests\Files;
 
 
+use const BOOTGLY_STORAGE_DIR;
+use function array_keys;
 use function assert;
 use function basename;
 use function file_exists;
+use function file_get_contents;
 use function file_put_contents;
 use function glob;
 use function is_dir;
@@ -35,7 +38,7 @@ function clean (string $path): void
 return new Specification(
    description: 'Database: SQL seeders discover create and load seeder objects',
    test: function () {
-      $path = BOOTGLY_WORKING_DIR . 'workdata/tests/seeders-files-' . uniqid();
+      $path = BOOTGLY_STORAGE_DIR . 'tests/seeders-files-' . uniqid();
       $Seeders = new Seeders($path);
 
       $file = $Seeders->create('Demo Users');

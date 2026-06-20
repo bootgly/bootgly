@@ -1,6 +1,6 @@
 <?php
 
-use const BOOTGLY_WORKING_DIR;
+use const BOOTGLY_STORAGE_DIR;
 
 use Bootgly\ABI\Debugging\Data\Vars;
 use Bootgly\ACI\Tests\Suite\Test\Specification\Separator;
@@ -12,7 +12,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test\Specification;
 
 /**
  * PoC — Session file handler blindly unserialises any bytes at
- * `workdata/sessions/session_<hex>` (Audit finding #1, CRITICAL).
+ * `storage/sessions/session_<hex>` (Audit finding #1, CRITICAL).
  *
  * Attack:
  *   `File::read()` returns raw file contents; `Session::__construct` calls
@@ -26,7 +26,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test\Specification;
  *         deserialisation via any class in vendor/ → RCE.
  *
  *   The PoC demonstrates (a): drop a file containing
- *   `a:1:{s:4:"role";s:5:"admin";}` at `workdata/sessions/session_<hex>`
+ *   `a:1:{s:4:"role";s:5:"admin";}` at `storage/sessions/session_<hex>`
  *   then request with that `Cookie: PHPSID=<hex>`. Handler queries
  *   `$Session->get('role')` and, without an HMAC guard, reads the forged
  *   `admin`.
@@ -48,7 +48,7 @@ return new Specification(
       function (string $hostPort) use (&$forgedId, &$forgedFile): string {
          // ! Simulate an attacker write primitive into the sessions dir.
          $forgedId   = bin2hex(random_bytes(16));
-         $forgedFile = BOOTGLY_WORKING_DIR . 'workdata/sessions/session_' . $forgedId;
+         $forgedFile = BOOTGLY_STORAGE_DIR . 'sessions/session_' . $forgedId;
 
          // @ Plain PHP-serialised array — no HMAC, no signature.
          file_put_contents($forgedFile, serialize(['role' => 'admin']));

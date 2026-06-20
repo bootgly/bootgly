@@ -11,7 +11,7 @@
 namespace Bootgly\ACI\Schedule;
 
 
-use const BOOTGLY_WORKING_DIR;
+use const BOOTGLY_STORAGE_DIR;
 use const LOCK_EX;
 use const LOCK_NB;
 use const LOCK_UN;
@@ -28,7 +28,7 @@ use function unlink;
 /**
  * Per-job advisory file lock for overlap prevention.
  *
- * A non-blocking exclusive `flock` on `workdata/schedule/<id>.lock`; a second
+ * A non-blocking exclusive `flock` on `storage/schedule/<id>.lock`; a second
  * holder (e.g. an overlapping worker invocation) fails to acquire and the run
  * is skipped. Same idiom as `ACI/Process/State::lock()`.
  */
@@ -47,7 +47,7 @@ final class Lock
 
    public function __construct (string $id)
    {
-      $dir = BOOTGLY_WORKING_DIR . '/workdata/schedule/';
+      $dir = BOOTGLY_STORAGE_DIR . 'schedule/';
 
       // ! Ensure the state directory exists
       if (is_dir($dir) === false) {

@@ -11,7 +11,7 @@
 namespace Bootgly\ACI\Tests\Assertion\Snapshots;
 
 
-use const BOOTGLY_WORKING_DIR;
+use const BOOTGLY_STORAGE_DIR;
 use function serialize;
 use function unserialize;
 
@@ -21,7 +21,7 @@ use Bootgly\ACI\Tests\Assertion\Snapshot;
 
 class FileStorageSnapshot extends Snapshot
 {
-   private const SNAPSHOT_DIR = BOOTGLY_WORKING_DIR . 'workdata/tests/snapshots/';
+   private const SNAPSHOT_DIR = BOOTGLY_STORAGE_DIR . 'tests/snapshots/';
 
    // * Config
    // ..Snapshot

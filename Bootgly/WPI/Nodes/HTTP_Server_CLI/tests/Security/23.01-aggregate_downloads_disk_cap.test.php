@@ -13,7 +13,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test\Specification;
 /**
  * PoC — `Decoder_Downloading::writeFileChunk()` in isolation enforces
  *   the per-file cap (`Request::$maxFileSize`) but does not bound the
- *   *aggregate* bytes held in `workdata/temp/files/downloaded/` across
+ *   *aggregate* bytes held in `storage/temp/files/downloaded/` across
  *   workers. With N workers and per-file cap C, a coordinated client
  *   sustains an unbounded N×C × in-flight footprint until disk fills
  *   and every subsequent fwrite returns -ENOSPC.

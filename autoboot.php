@@ -20,6 +20,12 @@ if (defined('BOOTGLY_WORKING_BASE') === false) {
    define('BOOTGLY_WORKING_BASE', BOOTGLY_ROOT_BASE);
    define('BOOTGLY_WORKING_DIR', BOOTGLY_ROOT_DIR);
 }
+if (defined('BOOTGLY_STORAGE_BASE') === false) {
+   define('BOOTGLY_STORAGE_BASE', BOOTGLY_WORKING_DIR . 'storage');
+}
+if (defined('BOOTGLY_STORAGE_DIR') === false) {
+   define('BOOTGLY_STORAGE_DIR', BOOTGLY_STORAGE_BASE . DIRECTORY_SEPARATOR);
+}
 
 define('BOOTGLY_VERSION', '0.17.2-beta');
 

@@ -11,6 +11,7 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Session\Handlers;
 
 
+use const BOOTGLY_STORAGE_DIR;
 use const BOOTGLY_WORKING_DIR;
 use const DIRECTORY_SEPARATOR;
 use function bin2hex;
@@ -63,7 +64,7 @@ class File implements Handling
 
    public static function init (): void
    {
-      $savePath = BOOTGLY_WORKING_DIR . 'workdata/sessions'; // TODO: use workdata dir constant
+      $savePath = BOOTGLY_STORAGE_DIR . 'sessions';
       static::prepare($savePath);
    }
 

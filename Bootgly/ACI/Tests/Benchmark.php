@@ -11,6 +11,7 @@
 namespace Bootgly\ACI\Tests;
 
 
+use const BOOTGLY_STORAGE_DIR;
 use const BOOTGLY_WORKING_DIR;
 use const FILE_IGNORE_NEW_LINES;
 use const PHP_EOL;
@@ -136,7 +137,7 @@ abstract class Benchmark
          if ($relativePath === '') {
             throw new ErrorException('Relative path is empty!');
          }
-         $file = BOOTGLY_WORKING_DIR . 'workdata/logs/benchmarks.log';
+         $file = BOOTGLY_STORAGE_DIR . 'logs/benchmarks.log';
          touch($file);
 
          // @ Build data
