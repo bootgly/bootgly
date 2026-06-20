@@ -157,6 +157,12 @@ class S3 extends Driver
             }
          }
       }
+      // ? Reject CRLF in user-supplied options — never let them inject HTTP headers
+      foreach ($extra as $name => $value) {
+         if (preg_match('/[\r\n]/', "{$name}{$value}") === 1) {
+            return $this->fail("S3 write {$key}: illegal newline in write options");
+         }
+      }
 
       // @ Probe the stream: read one part, then a second to detect "more than one part"
       $part1 = $this->gather($source, self::PART);
