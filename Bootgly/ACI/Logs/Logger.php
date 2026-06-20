@@ -27,24 +27,32 @@ class Logger extends Logs
 {
    // * Config
    public string $channel;
+   // @ Opt-in: when true, this logger also fans its records out to the global sinks ($Sinks).
+   //   Default false — a module must explicitly choose to write to the global channel.
+   public bool $global;
 
    // * Data
    public Handlers $Handlers;
    public Processors $Processors;
-   // @ Global sink applied to every logger instance, in addition to its own handlers
-   //   (e.g. the Monitor live-viewer pipe). Null = no global sink.
-   public static null|Handler $Sink = null;
+   // @ Global sink handlers for persistent, framework-wide logging (e.g. a file). Records reach
+   //   them only from loggers that opted in via $global. Null = no global sinks configured.
+   public static null|Handlers $Sinks = null;
+   // @ Live tap fed by EVERY record regardless of $global — the Monitor live-viewer pipe.
+   //   Framework-managed and transient (set on entering Monitor, cleared on leaving). Null = none.
+   public static null|Handler $Tap = null;
 
 
    /**
     * Build a logger for a channel, wired with a default stdout stream handler.
     *
     * @param string $channel Channel name identifying the log source.
+    * @param bool $global Opt this logger into the global sinks ($Sinks) for framework-wide logging.
     */
-   public function __construct (string $channel = '')
+   public function __construct (string $channel = '', bool $global = false)
    {
       // * Config
       $this->channel = $channel;
+      $this->global = $global;
 
       // * Data
       $this->Handlers = new Handlers;
@@ -68,8 +76,12 @@ class Logger extends Logs
     */
    public function log (string|array ...$args): bool
    {
-      // ? Display suppressed and no global sink — nothing to do
-      if (Display::$segments === Display::NONE && self::$Sink === null) {
+      // ? Nothing to do — display off, this logger isn't global (or no sinks), and no live tap
+      if (
+         Display::$segments === Display::NONE
+         && self::$Tap === null
+         && ($this->global === false || self::$Sinks === null)
+      ) {
          return true;
       }
 
@@ -115,8 +127,12 @@ class Logger extends Logs
          if (Display::$segments !== Display::NONE) {
             $this->Handlers->handle($Record);
          }
-         // @ Global sink (e.g. the Monitor live-viewer pipe)
-         self::$Sink?->handle($Record);
+         // @ Global sinks — opt-in per logger (persistent, e.g. a file)
+         if ($this->global === true) {
+            self::$Sinks?->handle($Record);
+         }
+         // @ Live tap — every record, regardless of opt-in (the Monitor viewer)
+         self::$Tap?->handle($Record);
       }
 
       // :

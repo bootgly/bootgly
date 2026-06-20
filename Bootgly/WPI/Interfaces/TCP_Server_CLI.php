@@ -931,7 +931,7 @@ class TCP_Server_CLI implements Servers
    {
       if ($this->Mode === Modes::Monitor && $this->LogPipe !== null) {
          Display::show(Display::NONE);
-         Logger::$Sink = new PipeHandler($this->LogPipe);
+         Logger::$Tap = new PipeHandler($this->LogPipe);
       }
    }
    /**
@@ -1022,7 +1022,7 @@ class TCP_Server_CLI implements Servers
       $Output->write("\e[?1049l");
 
       // @ Restore normal logging
-      Logger::$Sink = null;
+      Logger::$Tap = null;
       Display::show(Display::MESSAGE);
 
       // @ Enter Interactive mode if requested

@@ -1,6 +1,8 @@
 <?php
 
 use Bootgly\ACI\Logs\Data\Display;
+use Bootgly\ACI\Logs\Data\Levels;
+use Bootgly\ACI\Logs\Data\Record;
 use Bootgly\ACI\Logs\Handlers\File;
 use Bootgly\ACI\Logs\Handlers\File\Rotation;
 use Bootgly\ACI\Logs\Handlers;
@@ -62,9 +64,28 @@ return new Specification(
          assertion: str_contains((string) file_get_contents($dayPath), 'day2'),
          description: 'the active file holds the new day'
       );
+      yield assert(
+         assertion: is_array(json_decode((string) file_get_contents($dayPath), true)),
+         description: 'File handler defaults to the JSON formatter (structured, ANSI-free)'
+      );
+
+      // # {channel} placeholder routes records to one file per channel
+      $chanDir = sys_get_temp_dir() . '/bootgly-logtest-chan-' . uniqid();
+      $Routed = new File("$chanDir/{channel}.log");
+      $Routed->handle(new Record(Levels::Info, 'Alpha', 'a-msg'));
+      $Routed->handle(new Record(Levels::Info, 'Beta', 'b-msg'));
+      yield assert(
+         assertion: is_file("$chanDir/Alpha.log") && is_file("$chanDir/Beta.log"),
+         description: '{channel} placeholder writes a separate file per channel'
+      );
+      yield assert(
+         assertion: str_contains((string) file_get_contents("$chanDir/Alpha.log"), 'a-msg')
+            && str_contains((string) file_get_contents("$chanDir/Alpha.log"), 'b-msg') === false,
+         description: 'each per-channel file holds only its own channel records'
+      );
 
       // @ Cleanup
-      foreach ([$sizeDir, $dayDir] as $dir) {
+      foreach ([$sizeDir, $dayDir, $chanDir] as $dir) {
          foreach ((array) glob("$dir/*") as $file) {
             @unlink((string) $file);
          }

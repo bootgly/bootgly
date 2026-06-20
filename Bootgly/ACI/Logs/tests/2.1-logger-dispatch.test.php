@@ -89,6 +89,33 @@ return new Specification(
          description: 'DISPLAY_NONE suppresses all output'
       );
 
+      // # Global sinks: opt-in per logger ($global), fan out to all sinks even under DISPLAY_NONE
+      $savedSinks = Logger::$Sinks;
+      $sinkA = fopen('php://temp', 'rb+');
+      $sinkB = fopen('php://temp', 'rb+');
+      Logger::$Sinks = new Handlers;
+      Logger::$Sinks->push(new Stream($sinkA, new JSON));
+      Logger::$Sinks->push(new Stream($sinkB, new JSON));
+
+      Display::show(Display::NONE);                                 // local handlers muted
+      new Logger('opted', global: true)->log(warning: 'fan out');  // opts in → reaches the sinks
+      new Logger('plain')->log(warning: 'not global');             // default → stays out
+
+      rewind($sinkA);
+      rewind($sinkB);
+      $sunkA = (string) stream_get_contents($sinkA);
+      $sunkB = (string) stream_get_contents($sinkB);
+      yield assert(
+         assertion: str_contains($sunkA, 'fan out') && str_contains($sunkB, 'fan out'),
+         description: 'an opted-in (global) logger fans out to every global sink, even under DISPLAY_NONE'
+      );
+      yield assert(
+         assertion: str_contains($sunkA, 'not global') === false,
+         description: 'a logger without opt-in does not reach the global sinks'
+      );
+
+      Logger::$Sinks = $savedSinks;
+
       Display::show($saved);
    }
 );

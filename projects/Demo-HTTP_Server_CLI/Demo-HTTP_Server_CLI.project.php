@@ -11,11 +11,14 @@
 namespace projects\Demo_HTTP_Server_CLI;
 
 
+use const BOOTGLY_STORAGE_DIR;
 use function defined;
 use function getenv;
 
 use const Bootgly\CLI;
 use Bootgly\ACI\Events\Timer;
+use Bootgly\ACI\Logs\Handlers;
+use Bootgly\ACI\Logs\Handlers\File;
 use Bootgly\ACI\Logs\Logger;
 use Bootgly\API\Endpoints\Server\Modes;
 use Bootgly\API\Projects\Project;
@@ -35,6 +38,11 @@ return new Project(
    // # Project Boot Function
    boot: function (array $arguments = [], array $options = []): void
    {
+      // @ Per-module logs — opted-in (global) loggers persist to storage/logs/<channel>.log in
+      //   every mode. Registered before fork so workers inherit it; JSON lines, daily + size rotation.
+      Logger::$Sinks ??= new Handlers;
+      Logger::$Sinks->push(new File(BOOTGLY_STORAGE_DIR . 'logs/{channel}.log'));
+
       $HTTP_Server_CLI = new HTTP_Server_CLI(Mode: match (true) {
          isset($options['f']) => Modes::Foreground,
          isset($options['i']) => Modes::Interactive,
@@ -74,46 +82,42 @@ return new Project(
             $projectName = defined('BOOTGLY_PROJECT') ? BOOTGLY_PROJECT->folder : 'Demo-HTTP_Server_CLI';
             $Output->render('@#Green:Tip:@; Use @#Black:`bootgly project stop` ' . $projectName . '@; to stop the server.@..;');
 
-            // @ Demo heartbeat — showcases the live log viewer (Monitor mode only).
-            //   Emits rotating-level logs from a few channels so the level threshold,
-            //   channel toggles and text search can be tried live. Every Logger routes
-            //   into the Monitor pipe automatically (Logger::$Sink), so these appear in
-            //   the viewer without any extra wiring.
-            if ($HTTP_Server_CLI->Mode === Modes::Monitor) {
-               $App = new Logger(channel: 'Demo.App');
-               $Auth = new Logger(channel: 'Demo.Auth');
-               $Database = new Logger(channel: 'Demo.Database');
+            // @ Demo heartbeat — rotating-level logs from a few channels.
+            //   `global: true` persists them to the unified app log (Logger::$Sinks) in every mode;
+            //   in Monitor they also stream live to the viewer (Logger::$Tap).
+            $App = new Logger(channel: 'Demo.App', global: true);
+            $Auth = new Logger(channel: 'Demo.Auth', global: true);
+            $Database = new Logger(channel: 'Demo.Database', global: true);
 
-               $tick = 0;
-               Timer::add(1, function () use ($App, $Auth, $Database, &$tick): void {
-                  $tick++;
+            $tick = 0;
+            Timer::add(1, function () use ($App, $Auth, $Database, &$tick): void {
+               $tick++;
 
-                  $App->log(info: "Heartbeat #{$tick} — server healthy.");
-                  if ($tick % 3 === 0) {
-                     $Auth->log(notice: "Session refreshed for user #{$tick}.");
-                  }
-                  if ($tick % 4 === 0) {
-                     $Database->log(warning: "Slow query: SELECT took 320ms (tick {$tick}).");
-                  }
-                  if ($tick % 7 === 0) {
-                     $App->log(error: "Simulated error at tick {$tick}.");
-                  }
-                  if ($tick % 6 === 0) {
-                     // @ Multiline message — collapsed to one line in the pane (with a ⏎N marker);
-                     //   select it (↑/↓) and press Enter to expand the full trace.
-                     $Database->log(critical:
-                        "RuntimeException: Payment gateway timeout (tick {$tick})\n"
-                        . "    at Gateway->charge() in /app/Payment/Gateway.php:88\n"
-                        . "    at Service->pay() in /app/Checkout/Service.php:42\n"
-                        . "    at CheckoutController->process() in /app/Http/Controllers/CheckoutController.php:19\n"
-                        . "    #0 {main}"
-                     );
-                  }
-                  if ($tick % 9 === 0) {
-                     $Database->log(debug: "Pool: 3 idle / 1 active (tick {$tick}).");
-                  }
-               });
-            }
+               $App->log(info: "Heartbeat #{$tick} — server healthy.");
+               if ($tick % 3 === 0) {
+                  $Auth->log(notice: "Session refreshed for user #{$tick}.");
+               }
+               if ($tick % 4 === 0) {
+                  $Database->log(warning: "Slow query: SELECT took 320ms (tick {$tick}).");
+               }
+               if ($tick % 7 === 0) {
+                  $App->log(error: "Simulated error at tick {$tick}.");
+               }
+               if ($tick % 6 === 0) {
+                  // @ Multiline message — collapsed to one line in the pane (with a ⏎N marker);
+                  //   select it (↑/↓) and press Enter to expand the full trace.
+                  $Database->log(critical:
+                     "RuntimeException: Payment gateway timeout (tick {$tick})\n"
+                     . "    at Gateway->charge() in /app/Payment/Gateway.php:88\n"
+                     . "    at Service->pay() in /app/Checkout/Service.php:42\n"
+                     . "    at CheckoutController->process() in /app/Http/Controllers/CheckoutController.php:19\n"
+                     . "    #0 {main}"
+                  );
+               }
+               if ($tick % 9 === 0) {
+                  $Database->log(debug: "Pool: 3 idle / 1 active (tick {$tick}).");
+               }
+            });
          })
          ->on(Events::ServerStopped, function ($HTTP_Server_CLI) {
             $Output = CLI->Terminal->Output;
