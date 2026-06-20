@@ -51,6 +51,7 @@ use function strtolower;
 use function strtotime;
 use function substr;
 use function trim;
+use InvalidArgumentException;
 
 use Bootgly\ABI\Data\__String\Path;
 use Bootgly\ABI\Resources\Storage\Driver;
@@ -132,6 +133,15 @@ class S3 extends Driver
       // # The `Host` value (includes a non-default port)
       $this->authority = $this->host
          . ($this->port !== 443 && $this->port !== 80 ? ":{$this->port}" : '');
+
+      // ? Fail closed on insecure transport unless explicitly opted in (prevents prod copying
+      //   local MinIO settings and leaking keys over http / accepting a MITM cert)
+      $insecure = is_bool($options['insecure'] ?? null) ? $options['insecure'] : false;
+      if (($this->scheme !== 'https' || $this->verify === false) && $insecure === false) {
+         throw new InvalidArgumentException(
+            "S3 insecure transport (http or verify => false) requires the 'insecure' => true option."
+         );
+      }
    }
 
    /**
@@ -193,14 +203,24 @@ class S3 extends Driver
     */
    public function read (string $path, $sink): bool
    {
-      $this->error = '';
       $key = $this->locate($this->resolve($path));
+      // ! Generic reason up front; drain() refines it (truncation), success clears it
+      $this->error = "S3 GET {$key}: read failed";
       [$code] = $this->call('GET', $key, [], '', [], $sink);
+      // ?: Success
+      if ($code === 200) {
+         $this->error = '';
+
+         return true;
+      }
+
+      // ? A real HTTP status wins; code 0 keeps drain()'s precise reason (e.g. truncation)
+      if ($code !== 0) {
+         $this->error = "S3 GET {$key}: HTTP {$code}";
+      }
 
       // :
-      return $code === 200
-         ? true
-         : $this->fail("S3 GET {$key}: HTTP {$code}");
+      return false;
    }
 
    /**
@@ -208,10 +228,13 @@ class S3 extends Driver
     */
    public function delete (string $path): bool
    {
+      $this->error = '';
       [$code] = $this->call('DELETE', $this->locate($this->resolve($path)), [], '', []);
 
       // :
-      return $code === 200 || $code === 204 || $code === 404;
+      return $code === 200 || $code === 204 || $code === 404
+         ? true
+         : $this->fail("S3 DELETE {$path}: HTTP {$code}");
    }
 
    /**
@@ -232,6 +255,7 @@ class S3 extends Driver
     */
    public function list (string $path = '', bool $recursive = false): array
    {
+      $this->error = '';
       $prefix = $this->resolve($path);
       if ($prefix !== '') {
          $prefix = rtrim($prefix, '/') . '/';
@@ -252,7 +276,10 @@ class S3 extends Driver
          }
 
          [$code, , $body] = $this->call('GET', $base, $query, '', []);
+         // ? A failed page must be observable (callers/clear() fail closed on $error)
          if ($code !== 200) {
+            $this->error = "S3 list {$prefix}: HTTP {$code}";
+
             return $keys;
          }
 
@@ -261,6 +288,8 @@ class S3 extends Driver
          $clean = preg_replace('/\sxmlns(:\w+)?="[^"]*"/', '', $body) ?? $body;
          $XML = simplexml_load_string($clean);
          if ($XML === false) {
+            $this->error = "S3 list {$prefix}: malformed XML response";
+
             break;
          }
 
@@ -361,9 +390,20 @@ class S3 extends Driver
     */
    public function clear (string $path = ''): bool
    {
+      $keys = $this->list($path, true);
+      // ? A failed/partial listing must not be reported as a successful clear
+      if ($this->error !== '') {
+         return false;
+      }
+
       $cleared = true;
-      foreach ($this->list($path, true) as $key) {
-         $cleared = $this->delete($key) && $cleared;
+      foreach ($keys as $key) {
+         if ($this->delete($key) === false) {
+            $cleared = false;
+         }
+      }
+      if ($cleared === false) {
+         $this->error = "S3 clear {$path}: one or more deletes failed";
       }
 
       // :
@@ -1015,23 +1055,26 @@ class S3 extends Driver
       $encoding = $headers['transfer-encoding'] ?? '';
       $encoding = is_array($encoding) ? implode(',', $encoding) : $encoding;
       if (stripos($encoding, 'chunked') !== false) {
-         $this->siphon($socket, $leftover, $sink);
+         $complete = $this->siphon($socket, $leftover, $sink);
       }
       else {
          $length = $headers['content-length'] ?? null;
          $length = is_array($length) ? ($length[0] ?? null) : $length;
          $remaining = $length !== null ? (int) $length : -1;
+         $complete = true;
 
          if ($leftover !== '') {
             if ($remaining > 0 && strlen($leftover) > $remaining) {
                $leftover = substr($leftover, 0, $remaining);
             }
-            fwrite($sink, $leftover);
+            if (fwrite($sink, $leftover) === false) {
+               $complete = false;
+            }
             if ($remaining > 0) {
                $remaining -= strlen($leftover);
             }
          }
-         while (($remaining === -1 || $remaining > 0) && feof($socket) === false) {
+         while ($complete === true && ($remaining === -1 || $remaining > 0) && feof($socket) === false) {
             $chunk = @fread($socket, 8192);
             if ($chunk === false || $chunk === '') {
                break;
@@ -1039,13 +1082,27 @@ class S3 extends Driver
             if ($remaining > 0 && strlen($chunk) > $remaining) {
                $chunk = substr($chunk, 0, $remaining);
             }
-            fwrite($sink, $chunk);
+            if (fwrite($sink, $chunk) === false) {
+               $complete = false;
+               break;
+            }
             if ($remaining > 0) {
                $remaining -= strlen($chunk);
             }
          }
+         // ? Connection closed before the declared Content-Length arrived
+         if ($remaining > 0) {
+            $complete = false;
+         }
       }
       @fclose($socket);
+
+      // ? A truncated body or a failed sink write must not look like success
+      if ($complete === false) {
+         $this->error = 'S3 GET: incomplete response body';
+
+         return [0, $headers, ''];
+      }
 
       // :
       return [$code, $headers, ''];
@@ -1053,11 +1110,12 @@ class S3 extends Driver
 
    /**
     * Stream-decode a chunked transfer-encoded body from the socket into the sink.
+    * Returns true only when the terminal zero-size chunk is reached (a complete body).
     *
     * @param resource $socket
     * @param resource $sink
     */
-   private function siphon ($socket, string $buffer, $sink): void
+   private function siphon ($socket, string $buffer, $sink): bool
    {
       while (true) {
          // ! Ensure a full chunk-size line is buffered
@@ -1069,15 +1127,17 @@ class S3 extends Driver
             $buffer .= $chunk;
          }
          $eol = strpos($buffer, "\r\n");
+         // ? No chunk-size line left → connection ended mid-body (truncated)
          if ($eol === false) {
-            break;
+            return false;
          }
 
          // @ Chunk size (hex), ignoring any extensions after ';'
          $size = (int) hexdec(trim(explode(';', substr($buffer, 0, $eol))[0]));
          $buffer = substr($buffer, $eol + 2);
+         // ?: Terminal zero-size chunk — the body is complete
          if ($size <= 0) {
-            break;
+            return true;
          }
 
          // ! Ensure the chunk data (+ trailing CRLF) is buffered
@@ -1088,8 +1148,15 @@ class S3 extends Driver
             }
             $buffer .= $chunk;
          }
+         // ? Socket closed before the full chunk arrived → truncated
+         if (strlen($buffer) < $size) {
+            fwrite($sink, $buffer);
 
-         fwrite($sink, substr($buffer, 0, $size));
+            return false;
+         }
+         if (fwrite($sink, substr($buffer, 0, $size)) === false) {
+            return false;
+         }
          $buffer = substr($buffer, $size + 2);
       }
    }

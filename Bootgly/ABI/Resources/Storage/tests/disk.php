@@ -54,6 +54,8 @@ function s3_storage (): Storage
             'secret' => (string) getenv('BOOTGLY_S3_SECRET'),
             'endpoint' => getenv('BOOTGLY_S3_ENDPOINT') !== false ? (string) getenv('BOOTGLY_S3_ENDPOINT') : '',
             'path_style' => getenv('BOOTGLY_S3_PATH_STYLE') === '1',
+            // MinIO E2E runs over http — opt in to insecure transport for the test endpoint
+            'insecure' => true,
          ],
       ],
    ]);
