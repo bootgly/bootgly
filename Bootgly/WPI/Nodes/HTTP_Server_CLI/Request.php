@@ -24,6 +24,8 @@ use function count;
 use function ctype_digit;
 use function date;
 use function explode;
+use function fclose;
+use function fopen;
 use function fwrite;
 use function is_array;
 use function is_file;
@@ -53,6 +55,7 @@ use function usort;
 use JsonException;
 
 use const Bootgly\WPI;
+use Bootgly\ABI\Resources\Storage\Driver;
 use Bootgly\WPI\Endpoints\Servers\Decoder\States;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections\Connection;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages;
@@ -1135,6 +1138,68 @@ class Request
       }
 
       return null;
+   }
+   /**
+    * Persist an uploaded file into a Storage disk, then drop its temp file.
+    *
+    * Opens the part's temp file as a readable stream and streams it into `$Disk`
+    * (Local stream-copy / S3 multipart — constant memory). On success the temp
+    * file is removed and its cross-worker reservation released, so `clean()` has
+    * nothing left to do for this part. The failure reason (on `false`) is on the
+    * driver: `$Disk->error`.
+    *
+    * @param array<string,mixed> $options Driver-specific write options (e.g. S3 `type`, `meta`).
+    * @return string|false The stored path on success, false otherwise.
+    */
+   public function store (string $key, string $path, Driver $Disk, array $options = []): string|false
+   {
+      // ? Single uploaded file part, decoded without error
+      $file = $this->_files[$key] ?? null;
+      if (
+         is_array($file) === false ||
+         isSet($file['tmp_name']) === false ||
+         is_string($file['tmp_name']) === false ||
+         ($file['error'] ?? 1) !== 0
+      ) {
+         return false;
+      }
+      // ? Temp file still on disk
+      $tmp = $file['tmp_name'];
+      if ($tmp === '' || is_file($tmp) === false) {
+         return false;
+      }
+
+      // ! Default destination to the uploaded name when omitted / directory-only
+      $name = is_string($file['name'] ?? null) ? $file['name'] : 'upload';
+      if ($path === '') {
+         $path = $name;
+      }
+      else if (str_ends_with($path, '/') === true) {
+         $path .= $name;
+      }
+
+      // ! Open the temp file as the upload source
+      $source = @fopen($tmp, 'rb');
+      if ($source === false) {
+         return false;
+      }
+
+      // @ Stream the temp file into the disk (Local copy / S3 multipart)
+      $stored = $Disk->write($path, $source, $options);
+      @fclose($source);
+      // ? Keep the temp on failure so clean() still reclaims it
+      if ($stored === false) {
+         return false;
+      }
+
+      // @ Consume the temp: remove it + release its aggregate-cap reservation,
+      //   then blank tmp_name so a later clean() skips this (now-persisted) part
+      @unlink($tmp);
+      Downloads::discard($tmp);
+      $this->_files[$key]['tmp_name'] = '';
+
+      // :
+      return $path;
    }
    /**
     * Receive the request body data.

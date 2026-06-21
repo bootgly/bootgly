@@ -20,7 +20,7 @@ return new Suite(
 
       // @ Define BOOTGLY_PROJECT for upload tests (requires project path)
       if ( !defined('BOOTGLY_PROJECT') ) {
-         $projectFile = BOOTGLY_ROOT_DIR . 'projects/Demo-HTTP_Server_CLI/Demo-HTTP_Server_CLI.project.php';
+         $projectFile = BOOTGLY_ROOT_DIR . 'projects/Demo/HTTP_Server_CLI/HTTP_Server_CLI.project.php';
          $TestProject = require $projectFile;
          define('BOOTGLY_PROJECT', $TestProject);
       }
@@ -88,6 +88,8 @@ return new Suite(
          '1.20.5-request_as_response-content-streaming-file',
          '1.20.6-request_as_response-content-streaming-file',
          '1.20.7-request_as_response-content-streaming-file',
+         // Streaming Decoder → Storage disk (upload persistence)
+         '1.20.8-request_store-persist',
          '1.21-request_as_response-on',
          '1.22-request_as_response-at',
          '1.23-request_as_response-time',
