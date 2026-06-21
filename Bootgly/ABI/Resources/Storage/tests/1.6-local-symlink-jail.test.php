@@ -34,7 +34,7 @@ return new Specification(
          description: 'read() through an escaping symlink is blocked'
       );
       yield assert(
-         assertion: $Storage->disk('local')->error !== '',
+         assertion: $Storage->open('local')->error !== '',
          description: 'a blocked read records the driver error'
       );
 

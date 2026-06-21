@@ -58,10 +58,11 @@ class Storage
    }
 
    /**
-    * Resolve a disk to its driver, building it once on first access.
+    * Open a disk by name, building its driver once on first access.
     */
-   public function disk (string $name = ''): Driver
+   public function open (string $name = ''): Driver
    {
+      // ? Default disk
       if ($name === '') {
          $name = $this->Config->default;
       }
@@ -98,7 +99,7 @@ class Storage
     */
    public function write (string $path, $source, array $options = []): bool
    {
-      $written = $this->disk()->write($path, $source, $options);
+      $written = $this->open()->write($path, $source, $options);
 
       // @ Events — guarded so a no-listener write stays zero-allocation
       $Emitter = Emitter::$Instance;
@@ -115,7 +116,7 @@ class Storage
     */
    public function read (string $path, $sink): bool
    {
-      $read = $this->disk()->read($path, $sink);
+      $read = $this->open()->read($path, $sink);
 
       // @ Events — guarded so a no-listener read stays zero-allocation
       $Emitter = Emitter::$Instance;
@@ -130,7 +131,7 @@ class Storage
     */
    public function delete (string $path): bool
    {
-      $deleted = $this->disk()->delete($path);
+      $deleted = $this->open()->delete($path);
 
       // @ Events — guarded so a no-listener delete stays zero-allocation
       $Emitter = Emitter::$Instance;
@@ -145,7 +146,7 @@ class Storage
     */
    public function check (string $path): bool
    {
-      return $this->disk()->check($path);
+      return $this->open()->check($path);
    }
 
    /**
@@ -155,7 +156,7 @@ class Storage
     */
    public function list (string $path = '', bool $recursive = false): array
    {
-      return $this->disk()->list($path, $recursive);
+      return $this->open()->list($path, $recursive);
    }
 
    /**
@@ -163,7 +164,7 @@ class Storage
     */
    public function copy (string $from, string $to): bool
    {
-      return $this->disk()->copy($from, $to);
+      return $this->open()->copy($from, $to);
    }
 
    /**
@@ -171,7 +172,7 @@ class Storage
     */
    public function move (string $from, string $to): bool
    {
-      return $this->disk()->move($from, $to);
+      return $this->open()->move($from, $to);
    }
 
    /**
@@ -179,7 +180,7 @@ class Storage
     */
    public function measure (string $path): int|false
    {
-      return $this->disk()->measure($path);
+      return $this->open()->measure($path);
    }
 
    /**
@@ -189,7 +190,7 @@ class Storage
     */
    public function inspect (string $path): array|false
    {
-      return $this->disk()->inspect($path);
+      return $this->open()->inspect($path);
    }
 
    /**
@@ -197,7 +198,7 @@ class Storage
     */
    public function make (string $path): bool
    {
-      return $this->disk()->make($path);
+      return $this->open()->make($path);
    }
 
    /**
@@ -205,6 +206,6 @@ class Storage
     */
    public function clear (string $path = ''): bool
    {
-      return $this->disk()->clear($path);
+      return $this->open()->clear($path);
    }
 }

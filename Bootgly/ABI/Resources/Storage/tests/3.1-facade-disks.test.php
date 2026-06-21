@@ -26,25 +26,25 @@ return new Specification(
       ]);
 
       yield assert(
-         assertion: $Storage->disk() === $Storage->disk('a'),
-         description: 'disk() returns the configured default disk'
+         assertion: $Storage->open() === $Storage->open('a'),
+         description: 'open() returns the configured default disk'
       );
       yield assert(
-         assertion: $Storage->disk('a') === $Storage->disk('a'),
-         description: 'disk() caches one driver instance per disk name'
+         assertion: $Storage->open('a') === $Storage->open('a'),
+         description: 'open() caches one driver instance per disk name'
       );
 
-      $Storage->disk('a')->write('x.txt', source('A'));
-      $Storage->disk('b')->write('x.txt', source('B'));
+      $Storage->open('a')->write('x.txt', source('A'));
+      $Storage->open('b')->write('x.txt', source('B'));
       yield assert(
-         assertion: grab($Storage->disk('a'), 'x.txt') === 'A'
-            && grab($Storage->disk('b'), 'x.txt') === 'B',
+         assertion: grab($Storage->open('a'), 'x.txt') === 'A'
+            && grab($Storage->open('b'), 'x.txt') === 'B',
          description: 'disks are isolated by their own root'
       );
 
       $threw = false;
       try {
-         $Storage->disk('ghost');
+         $Storage->open('ghost');
       } catch (InvalidArgumentException) {
          $threw = true;
       }
@@ -56,13 +56,13 @@ return new Specification(
       // ! Register a custom driver type and wire a disk to it
       $Storage->Drivers->register('mem2', Memory::class);
       $Storage->Config->disks['scratch'] = ['driver' => 'mem2'];
-      $Storage->disk('scratch')->write('k', source('v'));
+      $Storage->open('scratch')->write('k', source('v'));
       yield assert(
-         assertion: grab($Storage->disk('scratch'), 'k') === 'v',
+         assertion: grab($Storage->open('scratch'), 'k') === 'v',
          description: 'a registered driver powers a custom disk'
       );
 
-      $Storage->disk('a')->clear();
-      $Storage->disk('b')->clear();
+      $Storage->open('a')->clear();
+      $Storage->open('b')->clear();
    }
 );
