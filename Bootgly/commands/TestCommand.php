@@ -492,6 +492,25 @@ class TestCommand extends Command
       // @ Parse options
       $Configs = Configs::parse($options);
 
+      // ? Load selection is mandatory and must use the `<set>:<indexes>` form
+      //   (e.g. `techempower:1,2` or `benchmark:*`). Cases without multiple sets
+      //   use the explicit `default` set (`--loads=default:*`).
+      if ($Configs->loadSet === null) {
+         $Alert->Type::Failure->set();
+         $Alert->message = "Benchmark requires --loads=<set>:<indexes> (use <set>:* for all loads).";
+         $Alert->render();
+         return false;
+      }
+      if ($Configs->loads === []) {
+         $Alert->Type::Failure->set();
+         $Alert->message = "No load indexes in --loads. Use --loads={$Configs->loadSet}:* or --loads={$Configs->loadSet}:1,2.";
+         $Alert->render();
+         return false;
+      }
+
+      // @ Expose the load set to the case @.php + opponents (mirrors BENCHMARK_RUNNER)
+      putenv('BENCHMARK_LOAD_SET=' . $Configs->loadSet);
+
       // @ Set runner env var before loading @.php
       if ($Configs->runner !== null) {
          putenv('BENCHMARK_RUNNER=' . $Configs->runner);

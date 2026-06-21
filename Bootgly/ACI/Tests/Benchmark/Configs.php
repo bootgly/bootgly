@@ -18,7 +18,9 @@ use function count;
 use function explode;
 use function intval;
 use function preg_replace;
+use function strpos;
 use function strtolower;
+use function substr;
 use function trim;
 
 
@@ -28,7 +30,9 @@ class Configs
    public protected(set) null|array $opponents;
    /** @var null|string Runner name (lowercase). */
    public protected(set) null|string $runner;
-   /** @var null|array<int> 1-based load indices to include (null = all). */
+   /** @var null|string Load set name (e.g. 'techempower'); null = not specified. */
+   public protected(set) null|string $loadSet;
+   /** @var null|array<int> 1-based load indices to include (null = all in the set). */
    public protected(set) null|array $loads;
    /** @var array<string,int> Variation parameters (e.g. ['workers' => 2]). */
    public protected(set) array $vary;
@@ -42,12 +46,14 @@ class Configs
    private function __construct (
       null|array $opponents = null,
       null|string $runner = null,
+      null|string $loadSet = null,
       null|array $loads = null,
       array $vary = [],
    )
    {
       $this->opponents = $opponents;
       $this->runner = $runner;
+      $this->loadSet = $loadSet;
       $this->loads = $loads;
       $this->vary = $vary;
    }
@@ -61,6 +67,7 @@ class Configs
    {
       $opponents = null;
       $runner = null;
+      $loadSet = null;
       $loads = null;
       $vary = [];
 
@@ -81,8 +88,30 @@ class Configs
          $runner = strtolower((string) $options['runner']);
       }
 
+      // # Load selection — `--loads=<set>:<indexes>` (e.g. `techempower:1,2` or
+      //   `benchmark:*`). The set names the load group; `*` runs all of it, a
+      //   comma list filters to those 1-based indices. A bare `--loads=1,2`
+      //   (no set) leaves $loadSet null — the run path rejects it, since the
+      //   <set>:<indexes> form is required.
       if (isset($options['loads'])) {
-         $loads = array_map(intval(...), explode(',', (string) $options['loads']));
+         $raw = (string) $options['loads'];
+
+         $colon = strpos($raw, ':');
+         if ($colon !== false) {
+            $set = substr($raw, 0, $colon);
+            $loadSet = $set === '' ? null : strtolower($set);
+
+            $indexes = trim(substr($raw, $colon + 1));
+            if ($indexes === '*') {
+               $loads = null;             // all loads of the set
+            } else if ($indexes === '') {
+               $loads = [];               // set with no indexes → invalid (caller reports)
+            } else {
+               $loads = array_map(intval(...), explode(',', $indexes));
+            }
+         } else {
+            $loads = array_map(intval(...), explode(',', $raw));
+         }
       }
 
       if (isset($options['vary'])) {
@@ -94,7 +123,7 @@ class Configs
          }
       }
 
-      return new self($opponents, $runner, $loads, $vary);
+      return new self($opponents, $runner, $loadSet, $loads, $vary);
    }
 
    /**
