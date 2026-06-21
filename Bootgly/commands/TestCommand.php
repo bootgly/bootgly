@@ -396,9 +396,9 @@ class TestCommand extends Command
          echo "\n";
          echo "  {$BOLD}Usage:{$RESET}\n";
          if ($caseName !== null) {
-            echo "    bootgly test benchmark {$MAGENTA}{$caseName} --opponents{$RESET}=bootgly\n";
+            echo "    bootgly test benchmark {$MAGENTA}{$caseName} --opponents{$RESET}=bootgly {$MAGENTA}--loads{$RESET}=<set>:*\n";
          } else {
-            echo "    bootgly test benchmark {$MAGENTA}<CASE> --opponents{$RESET}=bootgly\n";
+            echo "    bootgly test benchmark {$MAGENTA}<CASE> --opponents{$RESET}=bootgly {$MAGENTA}--loads{$RESET}=<set>:*\n";
          }
          echo "\n";
 
@@ -415,7 +415,7 @@ class TestCommand extends Command
          echo "  {$BOLD}Case options:{$RESET}\n";
          echo "    {$MAGENTA}--opponents{$RESET}=LIST  Comma-separated opponent names ({$MAGENTA}*{$RESET} required)\n";
          echo "    {$CYAN}--runner{$RESET}=TYPE     Runner (default: case-dependent)\n";
-         echo "    {$CYAN}--loads{$RESET}=LIST      Comma-separated load numbers (default: all)\n";
+         echo "    {$MAGENTA}--loads{$RESET}=SET:IDX   Load set + 1-based indices ({$MAGENTA}*{$RESET} required), e.g. techempower:1,2 or default:*\n";
          echo "    {$CYAN}--vary{$RESET}=PARAMS     Vary parameters across rounds (e.g. server-workers:2)\n";
          echo "\n";
 
@@ -492,12 +492,20 @@ class TestCommand extends Command
       // @ Parse options
       $Configs = Configs::parse($options);
 
+      // ? Opponents are mandatory — at least one must be selected.
+      if ($Configs->opponents === null) {
+         $Alert->Type::Failure->set();
+         $Alert->message = "Benchmark requires --opponents=<name>[,<name>...] (e.g. --opponents=bootgly).@.;";
+         $Alert->render();
+         return false;
+      }
+
       // ? Load selection is mandatory and must use the `<set>:<indexes>` form
       //   (e.g. `techempower:1,2` or `benchmark:*`). Cases without multiple sets
       //   use the explicit `default` set (`--loads=default:*`).
       if ($Configs->loadSet === null) {
          $Alert->Type::Failure->set();
-         $Alert->message = "Benchmark requires --loads=<set>:<indexes> (use <set>:* for all loads).";
+         $Alert->message = "Benchmark requires --loads=<set>:<indexes> (use <set>:* for all loads).@.;";
          $Alert->render();
          return false;
       }
