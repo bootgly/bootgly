@@ -182,14 +182,17 @@ class Summary
       echo "{$BOLD}  Results\n{$RESET}\n";
       echo "  {$CYAN}" . implode(' vs ', $allOpponents) . "{$RESET}\n\n";
 
-      // @ Detect type
+      // @ Detect type — a server benchmark if ANY result carries throughput
+      //   (rps). Inspecting only the first opponent's first load misclassifies
+      //   the whole run when the baseline opponent failed preflight (rps null),
+      //   blanking every opponent's real numbers under the code-benchmark table.
       $isServer = false;
       foreach ($results as $loads) {
          foreach ($loads as $Result) {
             if ($Result->rps !== null) {
                $isServer = true;
+               break 2;
             }
-            break 2;
          }
       }
 
