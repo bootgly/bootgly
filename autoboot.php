@@ -27,7 +27,7 @@ if (defined('BOOTGLY_STORAGE_DIR') === false) {
    define('BOOTGLY_STORAGE_DIR', BOOTGLY_STORAGE_BASE . DIRECTORY_SEPARATOR);
 }
 
-define('BOOTGLY_VERSION', '0.17.2-beta');
+define('BOOTGLY_VERSION', '0.18.0-beta');
 
 @include(__DIR__ . '/vendor/autoload.php'); // composer
 

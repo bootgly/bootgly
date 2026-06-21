@@ -2,6 +2,40 @@
 
 Changelog for Bootgly framework. All notable changes to this project will be documented in this file. Imported from ROADMAP.md.
 
+## v0.18.0-beta ✅
+
+> Focus: **Logging + Observability + Storage**
+
+### ABI — Abstract Bootable Interface
+
+- ✅ `Resources/Storage`: streaming storage facade — named disks + pluggable drivers mirroring `Resources/Cache`; stream-based contract (`write(path, $source)` / `read(path, $sink)`, constant memory); Local (atomic temp+rename, path jailing), Memory, and S3-compatible drivers (native SigV4 over a blocking socket: single PUT + parallel Multipart Upload); runtime folder `workdata/` → `storage/` via the `BOOTGLY_STORAGE_DIR` constant
+- ✅ `Resources/Storage`: rename `Storage->disk()` → `open()`
+- ✅ `Resources/Storage`: realpath symlink jail (H1) + offline S3 SigV4 signer tests (M4)
+- ✅ `Resources/Storage/S3`: fail-closed `read`/`list`/`clear` and reject CRLF in write options (header-injection) — security hardening
+
+### ACI — Abstract Common Interface
+
+- ✅ `Logs`: canonical log pipeline (Logger → Record → Processors → Handler) — File/Stream/Syslog/Pipe handlers, JSON + Line formatters, level/channel/tag/search filters, RFC5424 level enum, always-on rotation; real-time Monitor-mode log viewer (`CLI/UI/Components/Logs`)
+- ✅ `Logs`: opt-in global sinks + per-module log files + JSON file default
+- ✅ `Logs/Data/Display`: segment flags (MESSAGE/TIMESTAMP/CHANNEL/SEVERITY/CONTEXT) replacing the single mode constant
+- ✅ `Observability`: native metrics stack — Counter/Gauge/Histogram instruments + registry + Snapshot DTO, Process/Runtime health collectors, cross-worker file-per-worker aggregation, JSON/Prometheus/OTLP exporters
+
+### API — Application Programming Interface
+
+- ✅ `Projects`: nested subprojects + unified security registry
+
+### WPI — Web Programming Interface
+
+- ✅ `HTTP_Server_CLI/Telemetry`: HTTP request telemetry instrument feeding `ACI/Observability`; demo `/health` + `/metrics` routes (Prometheus-default / JSON; OTLP push via `scripts/observability-ship.php`)
+- ✅ `HTTP_Server_CLI/Request`: `store(key, path, $Disk)` streams a finished `multipart/form-data` upload from its temp file straight into a Storage disk (Local/S3), reclaiming the temp
+
+### Bootgly
+
+- ✅ CI: release-triggered Docker build+push of `bootgly/bootgly`
+- ✅ `.gitignore`: update workdata paths to storage
+
+---
+
 ## v0.17.2-beta ✅
 
 > Focus: **Response header cache + Plaintext/JSON resources & container foreground mode**
