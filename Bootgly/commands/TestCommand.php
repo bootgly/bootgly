@@ -444,7 +444,11 @@ class TestCommand extends Command
             if ($Configs->runner !== null) {
                putenv('BENCHMARK_RUNNER=' . $Configs->runner);
             }
+            // ? Help only needs the Runner's options() — signal the case to skip
+            //   its mandatory load-set validation (which would otherwise exit).
+            putenv('BENCHMARK_HELP=1');
             $Runner = include $casePath;
+            putenv('BENCHMARK_HELP');
             if ($Runner instanceof Runner) {
                $runnerOptions = $Runner->options();
                if ($runnerOptions !== []) {
