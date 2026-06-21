@@ -11,7 +11,7 @@
  *   1. Enable it in router/router.index.php: add 'Download' to the manifest.
  *
  *   2. Start the server:
-*      bootgly project Demo-HTTP_Server_CLI start
+*      bootgly project Demo/HTTP_Server_CLI start
  *
  *   3. Upload files with curl:
  *      # Single file
@@ -40,18 +40,28 @@
 namespace projects\Bootgly\WPI;
 
 
+use const BOOTGLY_STORAGE_DIR;
+use const GET;
+use const POST;
 use function array_map;
 use function count;
 use function filesize;
+use function fopen;
 use function is_file;
 use function json_encode;
+use function log;
+use function md5;
 use function memory_get_peak_usage;
+use function min;
 use function number_format;
+use function rewind;
 use function round;
+use function stream_get_contents;
 
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router;
+use Bootgly\ABI\Resources\Storage;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router;
 
 
 return static function
@@ -123,6 +133,42 @@ return static function
       ];
 
       return $Response->JSON->send($result);
+   }, POST);
+
+   // @ Upload + persist endpoint: stream the temp upload straight into a disk
+   yield $Router->route('/request/store', function (Request $Request, Response $Response) {
+      // @ Process the upload (streaming decoder already wrote the temp file)
+      $Request->download();
+
+      // ! A disk to persist into — local 'scratch' here; swap driver for s3
+      $Storage = new Storage([
+         'disks' => [
+            'scratch' => ['driver' => 'local', 'root' => BOOTGLY_STORAGE_DIR . 'tests/store'],
+         ],
+      ]);
+      $Disk = $Storage->open('scratch');
+
+      // @ Move the uploaded file into the disk under persisted/<name>
+      $name = $Request->files['file1']['name'] ?? 'out';
+      $tmp = $Request->files['file1']['tmp_name'] ?? '';
+      $stored = $Request->store('file1', "persisted/{$name}", $Disk);
+
+      // @ Read it back through the disk to prove the bytes landed
+      $md5 = null;
+      if ($stored !== false) {
+         $sink = fopen('php://temp', 'r+');
+         if ($Disk->read($stored, $sink) === true) {
+            rewind($sink);
+            $md5 = md5((string) stream_get_contents($sink));
+         }
+      }
+
+      return $Response->JSON->send([
+         'stored'    => $stored,
+         'error'     => $Disk->error,
+         'md5'       => $md5,
+         'temp_gone' => $tmp !== '' && is_file($tmp) === false,
+      ]);
    }, POST);
 
    // @ 404

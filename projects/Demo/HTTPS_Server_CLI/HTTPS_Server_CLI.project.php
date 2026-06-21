@@ -65,7 +65,7 @@ return new Project(
             $Output->render('  Listening on @#cyan:' . $protocol . $host . ':' . $port . '@;@.;');
             $Output->render('  @#green:● Ready for connections@;@..;');
 
-            $projectName = defined('BOOTGLY_PROJECT') ? BOOTGLY_PROJECT->folder : 'Demo-HTTPS_Server_CLI';
+            $projectName = defined('BOOTGLY_PROJECT') ? BOOTGLY_PROJECT->folder : 'Demo/HTTPS_Server_CLI';
             $Output->render('@#Green:Tip:@; Use @#Black:bootgly project stop ' . $projectName . '@; to stop the server.@..;');
          })
          ->on(Events::ServerStopped, function ($HTTP_Server_CLI) {

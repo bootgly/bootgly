@@ -36,8 +36,10 @@ use function json_encode;
 use function posix_get_last_error;
 use function posix_kill;
 use function readline;
+use function realpath;
 use function rtrim;
 use function str_pad;
+use function str_starts_with;
 use function strlen;
 use function strtolower;
 use function substr;
@@ -54,6 +56,7 @@ use Bootgly\ADI\Databases\SQL\Schema\Runner as MigrationRunner;
 use Bootgly\ADI\Databases\SQL\Seed\Runner as SeedRunner;
 use Bootgly\ADI\Databases\SQL\Seed\Seeders;
 use Bootgly\API\Environment\Configs\DatabaseConfig;
+use Bootgly\API\Projects;
 use Bootgly\API\Projects\Configs;
 use Bootgly\API\Projects\Project;
 use Bootgly\CLI\Command;
@@ -208,32 +211,31 @@ class ProjectCommand extends Command
    {
       $Output = CLI->Terminal->Output;
 
-      // @ Discover CLI projects
+      // @ Discover per-interface metadata
       $projects_CLI = $this->discover('CLI');
-      // @ Discover WPI projects
       $projects_WPI = $this->discover('WPI');
 
-      // @ Merge all projects
+      // @ Merge in registry order (kept alphabetical by path)
       /** @var array<string, array{interfaces: list<string>, name: string, description: string}> $all */
       $all = [];
-      foreach ($projects_CLI as $folder => $meta) {
+      foreach (array_keys(Projects::read()) as $folder) {
+         $interfaces = [];
+         if (isSet($projects_CLI[$folder])) {
+            $interfaces[] = 'CLI';
+         }
+         if (isSet($projects_WPI[$folder])) {
+            $interfaces[] = 'WPI';
+         }
+         if ($interfaces === []) {
+            continue;
+         }
+
+         $meta = $projects_CLI[$folder] ?? $projects_WPI[$folder];
          $all[$folder] = [
-            'interfaces'  => ['CLI'],
+            'interfaces'  => $interfaces,
             'name'        => $meta['name'],
             'description' => $meta['description']
          ];
-      }
-      foreach ($projects_WPI as $folder => $meta) {
-         if (isSet($all[$folder])) {
-            $all[$folder]['interfaces'][] = 'WPI';
-         }
-         else {
-            $all[$folder] = [
-               'interfaces'  => ['WPI'],
-               'name'        => $meta['name'],
-               'description' => $meta['description']
-            ];
-         }
       }
 
       if (empty($all)) {
@@ -314,7 +316,7 @@ class ProjectCommand extends Command
          : $arguments;
 
       // @ Load and boot the project file
-      $projectFile = $projectDir . $projectName . '.project.php';
+      $projectFile = $projectDir . basename($projectName) . '.project.php';
       if (is_file($projectFile) === false) {
          $Alert = new Alert($Output);
          $Alert->Type::Failure->set();
@@ -376,7 +378,7 @@ class ProjectCommand extends Command
          if ($this->probe($PIDs['master']) === false) {
             // @ Clean stale PID file
             $suffix = $instance !== '' ? '.' . $instance : '';
-            $pidFile = BOOTGLY_STORAGE_DIR . 'pids/' . $projectName . $suffix . '.json';
+            $pidFile = BOOTGLY_STORAGE_DIR . 'pids/' . Projects::encode($projectName) . $suffix . '.json';
             if (is_file($pidFile)) {
                @unlink($pidFile);
             }
@@ -425,7 +427,7 @@ class ProjectCommand extends Command
 
          // @ Remove PID file
          $suffix = $instance !== '' ? '.' . $instance : '';
-         $pidFile = BOOTGLY_STORAGE_DIR . 'pids/' . $projectName . $suffix . '.json';
+         $pidFile = BOOTGLY_STORAGE_DIR . 'pids/' . Projects::encode($projectName) . $suffix . '.json';
          if (is_file($pidFile)) {
             @unlink($pidFile);
          }
@@ -668,7 +670,7 @@ class ProjectCommand extends Command
          return false;
       }
 
-      $lockFile = BOOTGLY_STORAGE_DIR . 'locks/migrations/' . $projectName . '.lock';
+      $lockFile = BOOTGLY_STORAGE_DIR . 'locks/migrations/' . Projects::encode($projectName) . '.lock';
       $Runner = new MigrationRunner($Database, $migrationsPath, $lockFile);
 
       try {
@@ -878,7 +880,7 @@ class ProjectCommand extends Command
                return false;
             }
 
-            $lockFile = BOOTGLY_STORAGE_DIR . "locks/seeders/{$projectName}.lock";
+            $lockFile = BOOTGLY_STORAGE_DIR . 'locks/seeders/' . Projects::encode($projectName) . '.lock';
             $Runner = new SeedRunner($Database, $seedersPath, $lockFile);
             $name = $arguments[2] ?? null;
 
@@ -974,7 +976,7 @@ class ProjectCommand extends Command
          return null;
       }
 
-      $projectFile = $projectDir . $projectName . '.project.php';
+      $projectFile = $projectDir . basename($projectName) . '.project.php';
       if (is_file($projectFile) === false) {
          $Alert = new Alert($Output);
          $Alert->Type::Failure->set();
@@ -1043,13 +1045,30 @@ class ProjectCommand extends Command
     */
    private function resolve (string $projectName): null|string
    {
-      $projectDir = BOOTGLY_WORKING_DIR . 'projects/' . $projectName . '/';
+      $Output = CLI->Terminal->Output;
+
+      // ? Security gate: path-safety + allow-list membership
+      if (Projects::validate($projectName) === false) {
+         $Alert = new Alert($Output);
+         $Alert->Type::Failure->set();
+         $Alert->message = "Project not registered: @#cyan:{$projectName}@;@.;";
+         $Alert->render();
+
+         $Output->render(
+            '@#Green:Tip:@; Register it in @#Black:projects/Bootgly.projects.php@; or use @#Black:bootgly project list@;.@..;'
+         );
+
+         return null;
+      }
+
+      // @ Resolve dir (consumer dir wins, framework fallback)
+      $projectsBase = BOOTGLY_WORKING_DIR . 'projects/';
+      $projectDir = $projectsBase . $projectName . '/';
       if (is_dir($projectDir) === false) {
-         $projectDir = BOOTGLY_ROOT_DIR . 'projects/' . $projectName . '/';
+         $projectsBase = BOOTGLY_ROOT_DIR . 'projects/';
+         $projectDir = $projectsBase . $projectName . '/';
       }
       if (is_dir($projectDir) === false) {
-         $Output = CLI->Terminal->Output;
-
          $Alert = new Alert($Output);
          $Alert->Type::Failure->set();
          $Alert->message = "Project not found: @#cyan:{$projectName}@;@.;";
@@ -1062,6 +1081,19 @@ class ProjectCommand extends Command
          return null;
       }
 
+      // ? Defense-in-depth: jail the resolved dir under the projects base
+      $real = realpath($projectDir);
+      $realBase = realpath($projectsBase);
+      if ($real === false || $realBase === false || str_starts_with($real, $realBase . '/') === false) {
+         $Alert = new Alert($Output);
+         $Alert->Type::Failure->set();
+         $Alert->message = "Project path escapes the projects directory: @#cyan:{$projectName}@;@.;";
+         $Alert->render();
+
+         return null;
+      }
+
+      // :
       return $projectDir;
    }
 
@@ -1076,7 +1108,7 @@ class ProjectCommand extends Command
    private function locate (string $projectName, null|string $instance = null): null|array
    {
       $suffix = $instance !== null ? '.' . $instance : '';
-      $pidFile = BOOTGLY_STORAGE_DIR . 'pids/' . $projectName . $suffix . '.json';
+      $pidFile = BOOTGLY_STORAGE_DIR . 'pids/' . Projects::encode($projectName) . $suffix . '.json';
 
       if (is_file($pidFile) === false) {
          return null;
@@ -1116,13 +1148,14 @@ class ProjectCommand extends Command
          $instances[''] = $primary;
       }
 
-      // @ Named instances (e.g. HTTP_Server_CLI.test.json)
-      $pattern = $pidsDir . $projectName . '.*.json';
+      // @ Named instances (e.g. Demo~HTTP_Server_CLI.test.json)
+      $encoded = Projects::encode($projectName);
+      $pattern = $pidsDir . $encoded . '.*.json';
       $files = glob($pattern);
       if ($files !== false) {
          foreach ($files as $file) {
-            $basename = basename($file, '.json'); // HTTP_Server_CLI.test
-            $instance = substr($basename, strlen($projectName) + 1); // test
+            $basename = basename($file, '.json'); // Demo~HTTP_Server_CLI.test
+            $instance = substr($basename, strlen($encoded) + 1); // test
             $data = $this->locate($projectName, $instance);
             if ($data !== null) {
                $instances[$instance] = $data;
@@ -1179,25 +1212,16 @@ class ProjectCommand extends Command
          ? BOOTGLY_WORKING_DIR . 'projects/'
          : BOOTGLY_ROOT_DIR . 'projects/';
 
-      // @ Load the interface index file
-      $indexFile = $projectsDir . $interface . '.projects.php';
-      if (is_file($indexFile) === false) {
-         return $projects;
-      }
-
-      /** @var array<string>|false $index */
-      $index = @include $indexFile;
-      if (is_array($index) === false) {
-         return $projects;
-      }
-
-      foreach ($index as $folder) {
-         $file = $projectsDir . $folder . '/' . $folder . '.project.php';
+      // @ Iterate the registered paths for this interface (leaf-named project files)
+      foreach (Projects::filter($interface) as $path) {
+         $leaf = basename($path);
+         $file = $projectsDir . $path . '/' . $leaf . '.project.php';
          if (is_file($file)) {
-            $projects[$folder] = $this->get($file, $folder);
+            $projects[$path] = $this->get($file, $path);
          }
       }
 
+      // :
       return $projects;
    }
 
@@ -1257,8 +1281,8 @@ class ProjectCommand extends Command
          return false;
       }
 
-      // @ Load metadata from project file
-      $projectFile = $projectDir . $folder . '.project.php';
+      // @ Load metadata from project file (leaf-named)
+      $projectFile = $projectDir . basename($folder) . '.project.php';
       $meta = is_file($projectFile)
          ? $this->get($projectFile, $folder)
          : ['name' => $folder, 'description' => '', 'version' => '', 'author' => ''];
@@ -1338,15 +1362,15 @@ class ProjectCommand extends Command
 
          // # Examples
          $exampleLines = '@#Black:bootgly project list@;' . PHP_EOL;
-         $exampleLines .= '@#Black:bootgly project Demo-HTTP_Server_CLI start@;' . PHP_EOL;
-         $exampleLines .= '@#Black:bootgly project Demo-HTTP_Server_CLI stop@;' . PHP_EOL;
-         $exampleLines .= '@#Black:bootgly project Demo-HTTP_Server_CLI show@;' . PHP_EOL;
-         $exampleLines .= '@#Black:bootgly project Demo-HTTP_Server_CLI restart@;' . PHP_EOL;
-         $exampleLines .= '@#Black:bootgly project Demo-HTTP_Server_CLI info@;' . PHP_EOL;
+         $exampleLines .= '@#Black:bootgly project Demo/HTTP_Server_CLI start@;' . PHP_EOL;
+         $exampleLines .= '@#Black:bootgly project Demo/HTTP_Server_CLI stop@;' . PHP_EOL;
+         $exampleLines .= '@#Black:bootgly project Demo/HTTP_Server_CLI show@;' . PHP_EOL;
+         $exampleLines .= '@#Black:bootgly project Demo/HTTP_Server_CLI restart@;' . PHP_EOL;
+         $exampleLines .= '@#Black:bootgly project Demo/HTTP_Server_CLI info@;' . PHP_EOL;
          $exampleLines .= PHP_EOL;
-         $exampleLines .= '@#Black:bootgly project start Demo-HTTP_Server_CLI@;' . PHP_EOL;
-         $exampleLines .= '@#Black:bootgly project stop Demo-HTTP_Server_CLI@;' . PHP_EOL;
-         $exampleLines .= '@#Black:bootgly project show Demo-HTTP_Server_CLI@;';
+         $exampleLines .= '@#Black:bootgly project start Demo/HTTP_Server_CLI@;' . PHP_EOL;
+         $exampleLines .= '@#Black:bootgly project stop Demo/HTTP_Server_CLI@;' . PHP_EOL;
+         $exampleLines .= '@#Black:bootgly project show Demo/HTTP_Server_CLI@;';
          $Fieldset = new Fieldset($Output);
          $Fieldset->title = '@#green: Project examples @;';
          $Fieldset->content = $exampleLines;
@@ -1394,8 +1418,8 @@ class ProjectCommand extends Command
          // # Example
          $Fieldset = new Fieldset($Output);
          $Fieldset->title = '@#Cyan: Project ' . $subcommand . ' example @;';
-         $Fieldset->content = '@#Black:bootgly project Demo-HTTP_Server_CLI ' . $subcommand . '@;' . PHP_EOL
-            . '@#Black:bootgly project ' . $subcommand . ' Demo-HTTP_Server_CLI@;';
+         $Fieldset->content = '@#Black:bootgly project Demo/HTTP_Server_CLI ' . $subcommand . '@;' . PHP_EOL
+            . '@#Black:bootgly project ' . $subcommand . ' Demo/HTTP_Server_CLI@;';
          $Fieldset->render();
 
          // # Hint

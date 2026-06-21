@@ -13,10 +13,10 @@ namespace projects\Demo_HTTPS_Client_CLI;
 
 use function implode;
 use function is_array;
-use function strlen;
-use function str_contains;
-use function substr;
 use function parse_url;
+use function str_contains;
+use function strlen;
+use function substr;
 
 use const Bootgly\CLI;
 use Bootgly\API\Projects\Project;
@@ -40,7 +40,7 @@ return new Project(
       $Output->render('@.;@#cyan:━━━ Bootgly HTTPS Client CLI Demo ━━━@;@..;');
 
       if (empty($arguments[0])) {
-         $Output->render('@#red:Error:@; A URL is required. Usage: bootgly project Demo-HTTPS_Client_CLI start <url>@..;');
+         $Output->render('@#red:Error:@; A URL is required. Usage: bootgly project Demo/HTTPS_Client_CLI start <url>@..;');
          return;
       }
 

@@ -52,6 +52,7 @@ use Bootgly\ACI\Events\Timer;
 use Bootgly\ACI\Logs\Data\Display;
 use Bootgly\ACI\Logs\Logger;
 use Bootgly\ACI\Process;
+use Bootgly\API\Projects;
 use Bootgly\WPI\Event;
 use Bootgly\WPI\Events;
 use Bootgly\WPI\Events\Select;
@@ -169,7 +170,7 @@ class TCP_Client_CLI
       }
 
       // ! @\Process
-      $processId = defined('BOOTGLY_PROJECT') ? BOOTGLY_PROJECT->folder : static::class;
+      $processId = defined('BOOTGLY_PROJECT') ? Projects::encode(BOOTGLY_PROJECT->folder) : static::class;
       $Process = $this->Process = new Process(id: $processId);
       $Process->State->lock();
       $Process->Signals->handler = fn (int $signal) => $this->handle($signal);

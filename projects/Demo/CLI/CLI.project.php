@@ -128,7 +128,7 @@ return new Project(
 
          $file = $example;
          $wait = 3;
-         $location = "projects/Demo-$file";
+         $location = "projects/Demo/CLI/$file";
 
          $demo = __DIR__ . '/' . $file;
 

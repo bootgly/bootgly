@@ -79,10 +79,10 @@ return new Project(
             $Output->render('  Listening on @#cyan:' . $protocol . $host . ':' . $port . '@;@.;');
             $Output->render('  @#green:● Ready for connections@;@..;');
 
-            $projectName = defined('BOOTGLY_PROJECT') ? BOOTGLY_PROJECT->folder : 'Demo-HTTP_Server_CLI';
+            $projectName = defined('BOOTGLY_PROJECT') ? BOOTGLY_PROJECT->folder : 'Demo/HTTP_Server_CLI';
             $Output->render('@#Green:Tip:@; Use @#Black:`bootgly project stop` ' . $projectName . '@; to stop the server.@..;');
 
-            // @ Demo heartbeat — rotating-level logs from a few channels.
+            // @ Demo log/heartbeat — rotating-level logs from a few channels.
             //   `global: true` persists them to the unified app log (Logger::$Sinks) in every mode;
             //   in Monitor they also stream live to the viewer (Logger::$Tap).
             $App = new Logger(channel: 'Demo.App', global: true);

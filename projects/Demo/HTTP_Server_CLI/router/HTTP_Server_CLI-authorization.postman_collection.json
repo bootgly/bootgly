@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "d7f5c72b-8649-4d3d-9db7-0f61ed53f7d2",
     "name": "Bootgly Demo HTTP_Server_CLI - Authorization",
-    "description": "Postman collection for the Bootgly Demo HTTP_Server_CLI Authorization routes.\n\nBefore running:\n1. In projects/Demo-HTTP_Server_CLI/Demo-HTTP_Server_CLI.project.php, enable HTTP_Server_CLI-authorization.SAPI.php.\n2. Start the Demo HTTP server on port 8082.\n3. Run requests in order. The Issue JWT request stores authz_token for the success requests.\n4. Denial requests generate valid JWTs in a collection pre-request script using the demo secret, then assert 403 responses.\n\nDefault base_url: http://127.0.0.1:8082",
+    "description": "Postman collection for the Bootgly Demo HTTP_Server_CLI Authorization routes.\n\nBefore running:\n1. In projects/Demo/HTTP_Server_CLI/HTTP_Server_CLI.project.php, enable HTTP_Server_CLI-authorization.SAPI.php.\n2. Start the Demo HTTP server on port 8082.\n3. Run requests in order. The Issue JWT request stores authz_token for the success requests.\n4. Denial requests generate valid JWTs in a collection pre-request script using the demo secret, then assert 403 responses.\n\nDefault base_url: http://127.0.0.1:8082",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [

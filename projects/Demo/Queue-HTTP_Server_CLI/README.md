@@ -16,7 +16,7 @@ HTTP request ──► route handler ──► Queues::dispatch(SendEmail, paylo
 
 | File | Role |
 |---|---|
-| `Demo-Queue-HTTP_Server_CLI.project.php` | boots `HTTP_Server_CLI`, registers the router, configures the queue (`Queues::boot`) |
+| `Queue-HTTP_Server_CLI.project.php` | boots `HTTP_Server_CLI`, registers the router, configures the queue (`Queues::boot`) |
 | `router/Queue.SAPI.php` | routes — `/email/:to` enqueues a job and responds immediately |
 | `SendEmail.php` | the `Queues\Handler` that runs in the worker (logs proof of work) |
 | `queues.php` | worker config + **handler loading** (the worker `require`s it) |
@@ -26,7 +26,7 @@ HTTP request ──► route handler ──► Queues::dispatch(SendEmail, paylo
 **1. Start the server** (daemon):
 
 ```bash
-bootgly project Demo-Queue-HTTP_Server_CLI        # add -i to run in the foreground
+bootgly project Demo/Queue-HTTP_Server_CLI start  # add -i to run in the foreground
 ```
 
 **2. Enqueue jobs** over HTTP — each returns at once with a job id:
@@ -41,7 +41,7 @@ curl http://127.0.0.1:8083/queue                  # → {"queue":"emails","ready
 project's `queues.php` (which `require`s `SendEmail`):
 
 ```bash
-cd projects/Demo-Queue-HTTP_Server_CLI
+cd projects/Demo/Queue-HTTP_Server_CLI
 bootgly queue run emails                           # Ctrl+C to stop
 tail -f ../../storage/queue-demo.log              # watch jobs being processed
 ```
@@ -49,7 +49,7 @@ tail -f ../../storage/queue-demo.log              # watch jobs being processed
 **Stop the server:**
 
 ```bash
-bootgly project Demo-Queue-HTTP_Server_CLI stop
+bootgly project Demo/Queue-HTTP_Server_CLI stop
 ```
 
 ## Notes

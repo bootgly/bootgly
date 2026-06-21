@@ -73,6 +73,7 @@ use Bootgly\API\Endpoints\Server\Modes;
 use Bootgly\API\Endpoints\Server\Status;
 use Bootgly\API\Environment;
 use Bootgly\API\Environments;
+use Bootgly\API\Projects;
 use Bootgly\API\Workables\Server as SAPI;
 use Bootgly\WPI\Endpoints\Servers;
 use Bootgly\WPI\Endpoints\Servers\Decoder;
@@ -188,7 +189,7 @@ class UDP_Server_CLI implements Servers
       static::$Event = new Select($this->Connections); // @phpstan-ignore-line
 
       // ! @\Process
-      $processId = defined('BOOTGLY_PROJECT') ? BOOTGLY_PROJECT->folder : static::class;
+      $processId = defined('BOOTGLY_PROJECT') ? Projects::encode(BOOTGLY_PROJECT->folder) : static::class;
       $instance = $this->Mode === Modes::Test ? 'test' : null;
       $Process = $this->Process = new Process(id: $processId, instance: $instance);
       $Process->State->lock();

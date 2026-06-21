@@ -12,7 +12,7 @@ namespace Bootgly;
 
 
 use const PHP_SAPI;
-use function is_array;
+use function basename;
 use function is_dir;
 use function is_file;
 use Exception;
@@ -59,27 +59,23 @@ class WPI extends Projects // Web Programming Interface
             // ---
 
             // @ Boot WPI for web SAPI
-            // @ Load WPI projects index
-            $indexFile = Projects::CONSUMER_DIR . 'WPI.projects.php';
-            if (is_file($indexFile) === false) {
-               $indexFile = Projects::AUTHOR_DIR . 'WPI.projects.php';
-            }
-
-            /** @var array<string>|false $index */
-            $index = @include $indexFile;
-            if (is_array($index) === false || empty($index)) {
+            // @ Pick the default WPI project (flagged `default`, not by file order)
+            $default = Projects::pick('WPI');
+            if ($default === null) {
                throw new Exception('No WPI projects configured.');
             }
+            // ? Jail the web SAPI entrypoint against the security boundary
+            if (Projects::validate($default) === false) {
+               throw new Exception('Invalid default WPI project.');
+            }
 
-            // @ Use the first WPI project as default
-            $default = $index[0];
-
+            $leaf = basename($default);
             $projectDir = Projects::CONSUMER_DIR . $default . '/';
             if (is_dir($projectDir) === false) {
                $projectDir = Projects::AUTHOR_DIR . $default . '/';
             }
 
-            $projectFile = $projectDir . $default . '.project.php';
+            $projectFile = $projectDir . $leaf . '.project.php';
 
             if (is_file($projectFile)) {
                $result = require $projectFile;

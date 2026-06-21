@@ -31,6 +31,7 @@ use Throwable;
 
 use Bootgly\ABI\IO\IPC\Pipe;
 use Bootgly\ACI\Process\State;
+use Bootgly\API\Projects;
 
 
 class Input
@@ -148,7 +149,7 @@ class Input
       $pid = pcntl_fork();
 
       // @ Save PID state for show/stop visibility
-      $stateId = defined('BOOTGLY_PROJECT') ? BOOTGLY_PROJECT->folder : self::class;
+      $stateId = defined('BOOTGLY_PROJECT') ? Projects::encode(BOOTGLY_PROJECT->folder) : self::class;
       $State = new State(id: $stateId);
 
       if ($pid === 0) { // @ Child (Client)

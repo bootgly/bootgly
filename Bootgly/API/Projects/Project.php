@@ -18,6 +18,11 @@ use function define;
 use function defined;
 use function dirname;
 use function is_dir;
+use function rtrim;
+use function str_starts_with;
+use function strlen;
+use function substr;
+use function trim;
 use Closure;
 use Error;
 
@@ -72,8 +77,17 @@ class Project
       // # Implicit
       /** @var string $callerFile */
       $callerFile = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 1)[0]['file'] ?? '';
-      $this->path = dirname($callerFile) . '/';
-      $this->folder = $folder !== '' ? $folder : basename(dirname($callerFile));
+      $dir = dirname($callerFile);
+      $this->path = $dir . '/';
+      // @ Derive the projects-root-relative path (e.g. Demo/HTTP_Server_CLI) — the canonical id
+      $base = rtrim(Projects::CONSUMER_DIR, '/');
+      if (str_starts_with($dir, $base) === false) {
+         $base = rtrim(Projects::AUTHOR_DIR, '/');
+      }
+      $relative = str_starts_with($dir, $base)
+         ? trim(substr($dir, strlen($base)), '/')
+         : basename($dir);
+      $this->folder = $folder !== '' ? $folder : $relative;
       // # Explicit
       $this->name = $name;
       $this->description = $description;

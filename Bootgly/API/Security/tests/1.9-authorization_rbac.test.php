@@ -3,6 +3,7 @@
 namespace Bootgly\API\Security\Tests\AuthorizationRBAC;
 
 
+use const BOOTGLY_WORKING_DIR;
 use function assert;
 use function count;
 use function is_array;
@@ -129,7 +130,7 @@ return new Specification(
          description: 'RBAC resolver fails closed on database errors'
       );
 
-      $migrations = BOOTGLY_WORKING_DIR . 'projects/Demo-HTTP_Server_CLI/database/migrations';
+      $migrations = BOOTGLY_WORKING_DIR . 'projects/Demo/HTTP_Server_CLI/database/migrations';
       $Schema = new Schema;
       $files = [
          'roles' => '20260520000000_create_roles.php',
@@ -154,7 +155,7 @@ return new Specification(
          );
       }
 
-      $Seeder = require BOOTGLY_WORKING_DIR . 'projects/Demo-HTTP_Server_CLI/database/seeders/authorization_rbac.php';
+      $Seeder = require BOOTGLY_WORKING_DIR . 'projects/Demo/HTTP_Server_CLI/database/seeders/authorization_rbac.php';
       $Queries = $Seeder->run(new RecordingSQL, new Seed);
       $sql = [];
 

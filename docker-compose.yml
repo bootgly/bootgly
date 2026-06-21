@@ -27,7 +27,7 @@ services:
   server:
     <<: *bootgly
     profiles: ["serve"]
-    command: ["project", "Demo-HTTP_Server_CLI", "start", "-f"]
+    command: ["project", "Demo/HTTP_Server_CLI", "start", "-f"]
     environment:
       PORT: "8082"
     ports:

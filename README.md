@@ -226,11 +226,11 @@ Your sponsorship will keep this project always **up to date** with **new feature
 <details>
    <summary><kbd>Running a HTTP Server</kbd></summary>
 
-  1) Configure the Bootgly HTTP Server CLI project in `projects/Demo-HTTP_Server_CLI/Demo-HTTP_Server_CLI.project.php` file;
+  1) Configure the Bootgly HTTP Server CLI project in `projects/Demo/HTTP_Server_CLI/HTTP_Server_CLI.project.php` file;
    3) Run the Bootgly HTTP Server CLI in the terminal:
 
    ```bash
-  bootgly project Demo-HTTP_Server_CLI start
+  bootgly project Demo/HTTP_Server_CLI start
    ```
 </details>
 
