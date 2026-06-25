@@ -16,13 +16,13 @@
 !bootgly
 !bootgly_benchmarks
 
-# @ Trim bootgly/ — workdata is ~5.4G, storage/temp ~421M, tmp ~789M, vendor is
+# @ Trim bootgly/ — storage is ~5.4G, storage/temp ~421M, tmp ~789M, vendor is
 #   rebuilt in-image. storage/ is runtime working data (temp/cache/sessions/pids/
 #   bench marks) — the framework re-creates whatever subdirs it needs on demand.
 bootgly/.git
 bootgly/.github
 bootgly/.claude
-bootgly/workdata
+bootgly/storage
 bootgly/storage
 bootgly/tmp
 bootgly/vendor
@@ -31,7 +31,7 @@ bootgly/docs
 
 # @ Trim bootgly_benchmarks/
 bootgly_benchmarks/.git
-bootgly_benchmarks/workdata
+bootgly_benchmarks/storage
 bootgly_benchmarks/scripts/.venv
 # @ Keep competitor RUNTIMES out of the framework image (dependency-free).
 #   The bench scripts/composer manifests stay; vendor/ + downloaded binaries do

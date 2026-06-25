@@ -70,7 +70,7 @@ LABEL org.opencontainers.image.title="Bootgly" \
       org.opencontainers.image.licenses="MIT" \
       org.opencontainers.image.source="https://github.com/bootgly/bootgly"
 
-# ! Framework source (vendor/workdata/tmp excluded by .dockerignore)
+# ! Framework source (vendor/storage/tmp excluded by .dockerignore)
 COPY bootgly/ /bootgly/
 
 # ! Make `bootgly` global. __DIR__ resolves the symlink → working base stays /bootgly.

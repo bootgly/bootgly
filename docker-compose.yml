@@ -43,7 +43,7 @@ services:
   bench:
     <<: *bootgly
     profiles: ["bench"]
-    command: ["test", "benchmark", "HTTP_Server_CLI", "--opponents=bootgly", "--runner=tcp_client"]
+    command: ["test", "benchmark", "HTTP_Server_CLI", "--loads=benchmark:1", "--opponents=bootgly", "--runner=tcp_client"]
 
 volumes:
   storage:
