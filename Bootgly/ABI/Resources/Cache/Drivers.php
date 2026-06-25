@@ -18,6 +18,7 @@ use Bootgly\ABI\Resources\Cache\Config;
 use Bootgly\ABI\Resources\Cache\Driver;
 use Bootgly\ABI\Resources\Cache\Drivers\APCu;
 use Bootgly\ABI\Resources\Cache\Drivers\File;
+use Bootgly\ABI\Resources\Cache\Drivers\Memory;
 use Bootgly\ABI\Resources\Cache\Drivers\Redis;
 use Bootgly\ABI\Resources\Cache\Drivers\Shared;
 
@@ -52,6 +53,7 @@ class Drivers extends Registry
       $this->map = [
          'apcu' => APCu::class,
          'file' => File::class,
+         'memory' => Memory::class,
          'redis' => Redis::class,
          'shared' => Shared::class,
       ];

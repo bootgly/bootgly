@@ -24,12 +24,14 @@ use function json_encode;
 use function max;
 use function min;
 use function mt_rand;
+use function strlen;
 use function strpos;
 use function strtolower;
 use function substr;
 use Generator;
 use Throwable;
 
+use Bootgly\ABI\Resources\Cache;
 use Bootgly\ADI\Databases\SQL;
 use Bootgly\ADI\Databases\SQL\Config;
 use Bootgly\ADI\Databases\SQL\Operation;
@@ -48,6 +50,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router;
  *   GET /query      →  N random World rows as JSON (?queries=N, 1..500)
  *   GET /fortunes   →  Fortune list rendered as HTML
  *   GET /updates    →  N World rows fetched, updated, and returned (?queries=N)
+ *   GET /cached-queries → N random CachedWorld rows from an in-memory cache (?count=N, 1..500)
  *
  * Bootgly-specific stress routes (catch-all, nested, middleware, the
  * `/database/native/*` probes, etc.) live in `bootgly-benchmark.SAPI.php` —
@@ -102,6 +105,19 @@ $Connect = static function () use ($Env, $Bool): SQL {
    ]);
 
    return $Database;
+};
+
+$Cached = static function (): Cache {
+   static $Cache = null;
+
+   // ?: One in-process Memory cache per worker — primed lazily from CachedWorld
+   if ($Cache instanceof Cache) {
+      return $Cache;
+   }
+
+   $Cache = new Cache(['driver' => 'memory', 'prefix' => 'tfb:']);
+
+   return $Cache;
 };
 
 $Native = static function (SQL $Database, Response $Response, Operation $Operation): Operation {
@@ -172,44 +188,45 @@ $Exception = static function (Response $Response, Throwable $Throwable): object 
 
 // ---
 
-$QueryCount = static function (Request $Request): int {
+$Count = static function (Request $Request, string $name): int {
+   // ! Raw query scan first — the benchmark hits the fixed `?<name>=N` form
    $query = $Request->query;
-
-   if ($query === 'queries=20') {
-      return 20;
-   }
+   $prefix = "{$name}=";
+   $length = strlen($prefix);
 
    $start = false;
 
-   if (substr($query, 0, 8) === 'queries=') {
-      $start = 8;
+   if (substr($query, 0, $length) === $prefix) {
+      $start = $length;
    }
    else {
-      $offset = strpos($query, '&queries=');
+      $offset = strpos($query, "&{$prefix}");
 
       if ($offset !== false) {
-         $start = $offset + 9;
+         $start = $offset + $length + 1;
       }
    }
 
    if ($start !== false) {
       $end = strpos($query, '&', $start);
-      $queries = $end === false
+      $value = $end === false
          ? substr($query, $start)
          : substr($query, $start, $end - $start);
 
-      if ($queries !== '' && ctype_digit($queries)) {
-         return max(1, min(500, (int) $queries));
+      if ($value !== '' && ctype_digit($value)) {
+         return max(1, min(500, (int) $value));
       }
    }
 
-   $queries = $Request->queries['queries'] ?? 1;
+   // ? Fallback to the parsed query map (arrays / odd encodings)
+   $value = $Request->queries[$name] ?? 1;
 
-   if (is_array($queries)) {
-      $queries = $queries[0] ?? 1;
+   if (is_array($value)) {
+      $value = $value[0] ?? 1;
    }
 
-   return max(1, min(500, (int) $queries));
+   // : Missing / non-integer / < 1 → 1; > 500 → 500 (TFB clamp)
+   return max(1, min(500, (int) $value));
 };
 
 $World = static function (array $row): array {
@@ -313,8 +330,8 @@ $TfbDb = function (Request $Request, Response $Response) use ($Connect, $Excepti
    });
 };
 
-$TfbQuery = function (Request $Request, Response $Response) use ($Connect, $Drain, $Exception, $Json, $QueryCount, $World) {
-   $queries = $QueryCount($Request);
+$TfbQuery = function (Request $Request, Response $Response) use ($Connect, $Count, $Drain, $Exception, $Json, $World) {
+   $queries = $Count($Request, 'queries');
 
    return $Response->defer(function (Response $Response) use ($Connect, $Drain, $Exception, $Json, $queries, $World): void {
       try {
@@ -367,8 +384,8 @@ $TfbFortunes = function (Request $Request, Response $Response) use ($Connect, $E
    });
 };
 
-$TfbUpdates = function (Request $Request, Response $Response) use ($Connect, $Drain, $Exception, $Json, $QueryCount, $UpdateWorlds, $World) {
-   $queries = $QueryCount($Request);
+$TfbUpdates = function (Request $Request, Response $Response) use ($Connect, $Count, $Drain, $Exception, $Json, $UpdateWorlds, $World) {
+   $queries = $Count($Request, 'queries');
 
    return $Response->defer(function (Response $Response) use ($Connect, $Drain, $Exception, $Json, $queries, $UpdateWorlds, $World): void {
       try {
@@ -407,10 +424,70 @@ $TfbUpdates = function (Request $Request, Response $Response) use ($Connect, $Dr
    });
 };
 
+$Pick = static function (Cache $Cache, int $count): string {
+   // @ One cache read returns the whole pool (TFB allows a single cache op);
+   //   pick N rows at random from it — in-process, no DB round-trip
+   $Pool = $Cache->fetch('worlds');
+   if (is_array($Pool) === false) {
+      $Pool = [];
+   }
+
+   $Worlds = [];
+   for ($query = 0; $query < $count; $query++) {
+      $Worlds[] = $Pool[mt_rand(1, 10000)] ?? null;
+   }
+
+   return json_encode($Worlds) ?: '[]';
+};
+
+$TfbCached = function (Request $Request, Response $Response) use ($Cached, $Connect, $Count, $Exception, $Native, $Pick, $World) {
+   $count = $Count($Request, 'count');
+   $Cache = $Cached();
+   $primed = $Cache->check('primed');
+
+   // ?: Fast path — cache already primed: respond synchronously, no event-loop defer.
+   //   JSON->send keeps build()'s fast path (media type, no per-request header array).
+   if ($primed === true) {
+      return $Response->JSON->send($Pick($Cache, $count));
+   }
+
+   // ? Cold worker — prime once from CachedWorld (async DB), then serve from memory
+   return $Response->defer(function (Response $Response) use ($Cache, $Connect, $Exception, $Native, $Pick, $World, $count): void {
+      try {
+         if ($Cache->check('primed') === false) {
+            $Database = $Connect();
+            $Operation = $Native(
+               $Database,
+               $Response,
+               $Database->query('SELECT id, randomNumber AS "randomNumber" FROM CachedWorld')
+            );
+
+            if ($Operation->error !== null) {
+               throw new \RuntimeException($Operation->error);
+            }
+
+            $Pool = [];
+            foreach ($Operation->Result->rows ?? [] as $row) {
+               $Entry = $World($row);
+               $Pool[$Entry['id']] = $Entry;
+            }
+
+            $Cache->store('worlds', $Pool);
+            $Cache->store('primed', true);
+         }
+
+         $Response->JSON->send($Pick($Cache, $count));
+      }
+      catch (Throwable $Throwable) {
+         $Exception($Response, $Throwable);
+      }
+   });
+};
+
 
 return static function
 (Request $Request, Response $Response, Router $Router)
-use ($Plaintext, $JsonHello, $TfbDb, $TfbQuery, $TfbFortunes, $TfbUpdates): Generator
+use ($Plaintext, $JsonHello, $TfbDb, $TfbQuery, $TfbFortunes, $TfbUpdates, $TfbCached): Generator
 {
    yield $Router->route('/', function (Request $Request, Response $Response) {
       return $Response(body: 'TechEmpower Benchmark');
@@ -419,10 +496,11 @@ use ($Plaintext, $JsonHello, $TfbDb, $TfbQuery, $TfbFortunes, $TfbUpdates): Gene
    yield $Router->route('/plaintext', $Plaintext, GET);
    yield $Router->route('/json',      $JsonHello, GET);
 
-   yield $Router->route('/db',        $TfbDb,        GET);
-   yield $Router->route('/query',     $TfbQuery,     GET);
-   yield $Router->route('/fortunes',  $TfbFortunes,  GET);
-   yield $Router->route('/updates',   $TfbUpdates,   GET);
+   yield $Router->route('/db',             $TfbDb,        GET);
+   yield $Router->route('/query',          $TfbQuery,     GET);
+   yield $Router->route('/fortunes',       $TfbFortunes,  GET);
+   yield $Router->route('/updates',        $TfbUpdates,   GET);
+   yield $Router->route('/cached-queries', $TfbCached,    GET);
 
    yield $Router->route('/*', function (Request $Request, Response $Response) {
       return $Response(code: 404, body: 'Not Found');

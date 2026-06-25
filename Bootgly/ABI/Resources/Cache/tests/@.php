@@ -24,6 +24,8 @@ return new Suite(
 
       '2.1-apcu-driver',
 
+      '3.1-memory-driver',
+
       '4.1-redis-driver',
 
       '5.1-shared-driver',

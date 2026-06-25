@@ -8,7 +8,7 @@ Changelog for Bootgly framework. All notable changes to this project will be doc
 
 ### ABI — Abstract Bootable Interface
 
-- ✅ `Resources/Storage`: streaming storage facade — named disks + pluggable drivers mirroring `Resources/Cache`; stream-based contract (`write(path, $source)` / `read(path, $sink)`, constant memory); Local (atomic temp+rename, path jailing), Memory, and S3-compatible drivers (native SigV4 over a blocking socket: single PUT + parallel Multipart Upload); runtime folder `workdata/` → `storage/` via the `BOOTGLY_STORAGE_DIR` constant
+- ✅ `Resources/Storage`: streaming storage facade — named disks + pluggable drivers mirroring `Resources/Cache`; stream-based contract (`write(path, $source)` / `read(path, $sink)`, constant memory); Local (atomic temp+rename, path jailing), Memory, and S3-compatible drivers (native SigV4 over a blocking socket: single PUT + parallel Multipart Upload); runtime folder `storage/` → `storage/` via the `BOOTGLY_STORAGE_DIR` constant
 - ✅ `Resources/Storage`: rename `Storage->disk()` → `open()`
 - ✅ `Resources/Storage`: realpath symlink jail (H1) + offline S3 SigV4 signer tests (M4)
 - ✅ `Resources/Storage/S3`: fail-closed `read`/`list`/`clear` and reject CRLF in write options (header-injection) — security hardening
@@ -32,7 +32,7 @@ Changelog for Bootgly framework. All notable changes to this project will be doc
 ### Bootgly
 
 - ✅ CI: release-triggered Docker build+push of `bootgly/bootgly`
-- ✅ `.gitignore`: update workdata paths to storage
+- ✅ `.gitignore`: update storage paths to storage
 
 ---
 
@@ -127,7 +127,7 @@ Changelog for Bootgly framework. All notable changes to this project will be doc
   - ✅ Job / Message contract + handler interface
   - ✅ Dispatcher + worker-loop contract (`Queues\Worker`, consumed by `queue run`)
   - ✅ Retry / failure / backoff policy (`Backoffs`: Fixed / Linear / Exponential; dead-letter)
-  - ✅ File-based queue driver (default — atomic-rename claim under `workdata/queues/`)
+  - ✅ File-based queue driver (default — atomic-rename claim under `storage/queues/`)
   - ✅ Redis queue driver, blocking — native RESP codec (`ABI/Data/RESP`) + optional `ext-redis` fast-path
     - 📋 Async event-loop Redis driver — **deferred** (resolution C: HTTP pushes only, blocking `reserve()` runs in the `queue run` worker; registerable later via `Drivers::register()` from ≥ADI)
   - ✅ Events
