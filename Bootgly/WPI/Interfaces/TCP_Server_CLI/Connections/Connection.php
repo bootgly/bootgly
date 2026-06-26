@@ -20,6 +20,7 @@ use Throwable;
 
 use Bootgly\ACI\Events\Timer;
 use Bootgly\WPI\Connections\Peer;
+use Bootgly\WPI\Endpoints\Servers\Disconnecting;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI as Server;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages;
@@ -220,6 +221,13 @@ class Connection extends Packages
    {
       if ($this->status > Connections::STATUS_ESTABLISHED) {
          return true;
+      }
+
+      // @ Protocol-unit cleanup: a decoded session (e.g. a WebSocket Session)
+      //   runs its teardown exactly once on any close path, including an abrupt
+      //   peer EOF that closes the connection directly at the transport layer.
+      if ($this->decoded instanceof Disconnecting) {
+         $this->decoded->disconnect();
       }
 
       $this->status = Connections::STATUS_CLOSING;

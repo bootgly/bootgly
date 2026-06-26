@@ -59,6 +59,7 @@ use function posix_setgid;
 use function posix_setsid;
 use function posix_setuid;
 use function register_shutdown_function;
+use function restore_error_handler;
 use function rtrim;
 use function socket_import_stream;
 use function socket_set_option;
@@ -168,6 +169,9 @@ class TCP_Server_CLI implements Servers
    public static int $maxConnectionsPerIP = 0;
    /** @var array<string,true> */
    protected array $Events = [];
+   // # Hooks — server lifecycle callbacks, set by the node `on()` overrides.
+   protected null|Closure $onServerStarted = null;
+   protected null|Closure $onServerStopped = null;
 
    // * Metadata
    // # State
@@ -177,6 +181,10 @@ class TCP_Server_CLI implements Servers
    protected null|string $socket;
    /** @var array<array<bool|int|string>|string> */
    public static array $context;
+   // # Process
+   //   Process-title prefix; nodes override it (e.g. `Bootgly_HTTP_Server`) so
+   //   the master and workers are identifiable in `ps`.
+   protected string $process = 'Bootgly_TCP_Server_CLI';
    // # Status
    protected Status $Status = Status::Booting;
 
@@ -480,20 +488,12 @@ class TCP_Server_CLI implements Servers
                      $this->Process->Children->push($this->Process->id, $deadIndex);
                      Process::$index = $deadIndex + 1;
 
-                     $this->Process->title = 'Bootgly_TCP_Server_CLI: child process (Worker #' . Process::$index . ')';
-
-                     Display::show(Display::MESSAGE, Display::TIMESTAMP, Display::CHANNEL, Display::SEVERITY);
-
-                     $this->instance();
-
-                     self::$Event->add(
-                        $this->Socket,
-                        Select::EVENT_CONNECT,
-                        true
-                     );
-                     self::$Event->loop();
-
-                     $this->stop();
+                     // @ Run the SAME boot body as the initial fork, so a
+                     //   recovered worker gets the node process title, the
+                     //   monitor sink, the `Worker::Boot` event and per-worker
+                     //   wiring (e.g. the WS cross-worker relay) — not a bare
+                     //   TCP loop with a stale title.
+                     $this->work($this->Process, $deadIndex);
 
                      exit(0);
                   }
@@ -539,14 +539,8 @@ class TCP_Server_CLI implements Servers
 
       $this->Logger->log(notice: '@\;Starting Server...@.;');
 
-      // @ Boot TCP Application
-      if (self::$Application) {
-         self::$Application::boot(Environments::Production);
-      }
-      else if (isSet(SAPI::$Handler) === false) {
-         $this->Logger->log(error: '@\;No handler defined. Call on(Events::DataReceive, ...) before start().@\;');
-         exit(1);
-      }
+      // @ Boot the application, or bail when no handler is wired (overridable).
+      $this->loading();
 
       // ! Process
       // ? Pre-flight: verify socket can be bound before forking workers
@@ -593,34 +587,20 @@ class TCP_Server_CLI implements Servers
       ]);
       pcntl_signal(SIGPIPE, SIG_IGN, false);
 
-      // @ Fork process workers...
+      // @ Pre-fork setup hook (e.g. HTTP upload counter, WS broadcast bus).
+      $this->booting();
+
+      // @ Monitor mode: open the live-log pipe before forking so workers inherit it.
+      $this->pipe();
+
+      // @ Fork process workers — each runs the overridable worker() boot body.
       $this->Logger->log(notice: "Forking {$this->workers} workers... @.;");
       $this->Process->fork($this->workers, instance: function (Process $Process, int $index): void {
-         $Process->title = 'Bootgly_TCP_Server_CLI: child process (Worker #' . Process::$index . ')';
-
-         Display::show(Display::MESSAGE, Display::TIMESTAMP, Display::CHANNEL, Display::SEVERITY);
-
-         // @ Events — worker booted (guarded: zero-alloc when no listeners)
-         $Emitter = Emitter::$Instance;
-         $Emitter->check(Worker::Boot) && $Emitter->emit(Worker::Boot, $index);
-
-         // @ Create stream socket server
-         $this->instance();
-
-         // Event Loop
-         self::$Event->add(
-            $this->Socket,
-            Select::EVENT_CONNECT,
-            true
-         );
-         self::$Event->loop();
-
-         // @ Close stream socket server
-         $this->stop();
+         $this->work($Process, $index);
       });
 
       // @ Set master process title
-      $this->Process->title = 'Bootgly_TCP_Server_CLI: master process';
+      $this->Process->title = $this->process . ': master process';
 
       // @ Save full process state (master + workers + host + port).
       //   Done while still privileged so the file exists before demote() can
@@ -642,6 +622,12 @@ class TCP_Server_CLI implements Servers
       //   demoted user can unlink them.
       $this->demote();
 
+      // # Hook — the server is up and ready for connections (master, post-fork,
+      //   post-demote). Set by the node `on(Events::ServerStarted, ...)`.
+      if ($this->onServerStarted !== null) {
+         ($this->onServerStarted)($this);
+      }
+
       // ... Continue to master process:
       switch ($this->Mode) {
          case Modes::Daemon:
@@ -659,6 +645,91 @@ class TCP_Server_CLI implements Servers
       }
 
       return true;
+   }
+
+   /**
+    * Boot the application before forking, or exit when no handler is wired.
+    *
+    * Overridable so nodes can honor `Modes::Test` and emit a node-specific
+    * "no handler" message; the base boots `Production`.
+    */
+   protected function loading (): void
+   {
+      if (self::$Application) {
+         self::$Application::boot(Environments::Production);
+      }
+      else if (isSet(SAPI::$Handler) === false) {
+         $this->Logger->log(error: '@\;No handler defined. Call on(Events::DataReceive, ...) before start().@\;');
+         exit(1);
+      }
+   }
+
+   /**
+    * Pre-fork setup hook, run on the master after signals are installed and
+    * before any worker is forked. Default: nothing. Nodes override it to set up
+    * inherited resources (HTTP upload counter, WS cross-worker broadcast bus).
+    */
+   protected function booting (): void
+   {
+      // ...
+   }
+
+   /**
+    * The per-worker boot body: process title, log routing, error handler,
+    * `Worker::Boot` event, socket instance, per-worker wiring and the event
+    * loop. Called by both the initial fork and the SIGCHLD recover path, so a
+    * recovered worker is indistinguishable from an originally-forked one.
+    */
+   protected function work (Process $Process, int $index): void
+   {
+      // @ Process title (node-specific prefix).
+      $Process->title = $this->process . ': child process (Worker #' . Process::$index . ')';
+
+      // @ Monitor mode routes worker logs to the master viewer pipe; otherwise
+      //   per-worker stdout.
+      if ($this->Mode === Modes::Monitor) {
+         $this->sink();
+      }
+      else {
+         Display::show(Display::MESSAGE, Display::TIMESTAMP, Display::CHANNEL, Display::SEVERITY);
+      }
+
+      // @ Hot-path: restore the default error handler in the worker. The global
+      //   Errors::collect handler is a userland callback hit on every suppressed
+      //   warning (@fwrite/@fread EAGAIN under backpressure); the CLI default is
+      //   a no-op for suppressed errors (zero cost).
+      restore_error_handler();
+
+      // @ Events — worker booted (guarded: zero-alloc when no listeners).
+      $Emitter = Emitter::$Instance;
+      $Emitter->check(Worker::Boot) && $Emitter->emit(Worker::Boot, $index);
+
+      // @ Create the stream socket server.
+      $this->instance();
+
+      // @ Per-worker wiring hook (e.g. WS cross-worker relay). Default: nothing.
+      $this->wire($index);
+
+      // @ Event loop.
+      self::$Event->add(
+         $this->Socket,
+         Select::EVENT_CONNECT,
+         true
+      );
+      self::$Event->loop();
+
+      // @ Close the stream socket server.
+      $this->stop();
+   }
+
+   /**
+    * Per-worker wiring hook, run inside each worker after `instance()` and
+    * before the event loop. Default: nothing. Nodes override it to attach
+    * per-worker event sources (e.g. the WS cross-worker relay socket).
+    */
+   protected function wire (int $index): void
+   {
+      // ...
    }
 
    /**
@@ -1097,6 +1168,12 @@ class TCP_Server_CLI implements Servers
    }
    public function stop (): void
    {
+      // # Hook — the server is stopping (master only, before teardown). Set by
+      //   the node `on(Events::ServerStopped, ...)`.
+      if ($this->onServerStopped !== null && $this->Process->level === 'master') {
+         ($this->onServerStopped)($this);
+      }
+
       // @ Events — process shutting down (guarded: zero-alloc when no listeners)
       $Emitter = Emitter::$Instance;
       $Emitter->check(Worker::Shutdown) && $Emitter->emit(Worker::Shutdown, $this->Process->level);

@@ -157,6 +157,14 @@ class Timer
       foreach (self::$tasks as $runtime => $tasks) {
          if ( array_key_exists($id, $tasks) ) {
             unset(self::$tasks[$runtime][$id]);
+
+            // @ Drop the runtime bucket once it empties — a stale empty bucket
+            //   keeps `self::$tasks` non-empty, so `add()` would skip arming
+            //   `pcntl_alarm()` after the task set fully drains (breaks any
+            //   timer added later in the same worker, e.g. WS heartbeats).
+            if (self::$tasks[$runtime] === []) {
+               unset(self::$tasks[$runtime]);
+            }
          }
       }
 

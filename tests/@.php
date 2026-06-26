@@ -89,6 +89,18 @@ return new Suites(
       'Bootgly/WPI/Nodes/HTTP_Server_CLI/tests/Telemetry/',
       'Bootgly/ABI/Resources/Storage/',
       'Bootgly/API/Projects/',
+      // # WS_Server_CLI (WebSocket) — handshake + frame-codec unit suites
+      'Bootgly/WPI/Nodes/WS_Server_CLI/tests/',
+      // E2E (live test-mode server driven by a raw WebSocket client)
+      'Bootgly/WPI/Nodes/WS_Server_CLI/tests/E2E/',
+      // E2E over TLS (wss://)
+      'Bootgly/WPI/Nodes/WS_Server_CLI/tests/E2E_TLS/',
+      // E2E handshake auth (Bearer + Basic guards, challenge, identity/claims)
+      'Bootgly/WPI/Nodes/WS_Server_CLI/tests/E2E_Auth/',
+      // E2E streaming (incremental UTF-8 fail-fast + outbound fragmentation)
+      'Bootgly/WPI/Nodes/WS_Server_CLI/tests/E2E_Streaming/',
+      // E2E handshake predicate (HandshakeRequested — Origin allowlist -> 403)
+      'Bootgly/WPI/Nodes/WS_Server_CLI/tests/E2E_Handshake/',
       // Security (re-enabled — appended LAST to keep coverage-probe indices
       // 4, 8 and 14-21 stable; the original in-place slot above stays
       // commented for documentation).

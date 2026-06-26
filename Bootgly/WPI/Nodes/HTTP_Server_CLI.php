@@ -12,45 +12,23 @@ namespace Bootgly\WPI\Nodes;
 
 
 use const BOOTGLY_ROOT_DIR;
-use const SIG_IGN;
-use const SIGALRM;
-use const SIGCHLD;
-use const SIGCONT;
-use const SIGHUP;
-use const SIGINT;
-use const SIGIO;
-use const SIGIOT;
-use const SIGPIPE;
-use const SIGQUIT;
-use const SIGTERM;
-use const SIGTSTP;
-use const SIGUSR1;
-use const SIGUSR2;
-use const STREAM_SERVER_BIND;
-use const STREAM_SERVER_LISTEN;
 use function array_values;
 use function clearstatcache;
 use function count;
-use function fclose;
 use function feof;
 use function fread;
 use function function_exists;
 use function is_a;
 use function opcache_invalidate;
-use function pcntl_signal;
 use function preg_match;
-use function restore_error_handler;
-use function str_contains;
 use function str_replace;
 use function stream_context_create;
 use function stream_select;
 use function stream_set_blocking;
 use function stream_socket_client;
-use function stream_socket_server;
 use function strlen;
 use function strpos;
 use function substr;
-use function time;
 use function usleep;
 use BackedEnum;
 use Closure;
@@ -69,12 +47,10 @@ use Bootgly\ABI\Debugging\Data\Throwables\Exceptions;
 use Bootgly\ABI\IO\FS\File;
 use Bootgly\ACI\Logs\Data\Display;
 use Bootgly\ACI\Logs\Logger;
-use Bootgly\ACI\Process;
 use Bootgly\ACI\Tests\Fixture;
 use Bootgly\ACI\Tests\Suite;
 use Bootgly\ACI\Tests\Suite\Test\Specification;
 use Bootgly\API\Endpoints\Server\Modes;
-use Bootgly\API\Endpoints\Server\Status;
 use Bootgly\API\Environments;
 use Bootgly\API\Workables\Server as SAPI;
 use Bootgly\API\Workables\Server\Middlewares;
@@ -101,12 +77,11 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
 
    // * Data
    // ...inherited from TCP_Server_CLI
-   // # Hooks
-   protected static null|Closure $onServerStarted = null;
-   protected static null|Closure $onServerStopped = null;
 
    // * Metadata
    // ...inherited from TCP_Server_CLI
+   // # Socket
+   protected string $process = 'Bootgly_HTTP_Server';
 
    public static Request $Request;
    public static Response $Response;
@@ -251,8 +226,8 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
 
       match ($Event) {
          Events::RequestReceived => $this->listen($Callback),
-         Events::ServerStarted => self::$onServerStarted = $Callback,
-         Events::ServerStopped => self::$onServerStopped = $Callback,
+         Events::ServerStarted => $this->onServerStarted = $Callback,
+         Events::ServerStopped => $this->onServerStopped = $Callback,
       };
 
       // :
@@ -268,22 +243,18 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       SAPI::$Handler = $Callback;
    }
 
-   public function start (): bool
+   /**
+    * Boot the Server API (honoring `Modes::Test`), or bail when no request
+    * handler is wired. Overrides the base for the HTTP-specific error message.
+    *
+    * ! Honor server Mode: under `Modes::Test` the constructor installs
+    *   `Encoder_Testing`; booting `Production` here would flip it back to
+    *   `Encoder_` right before fork, leaving workers racing SIGUSR1
+    *   (`@test init`) against the first request and serving 503 from `Encoder_`
+    *   before the handler is installed.
+    */
+   protected function loading (): void
    {
-      $this->Status = Status::Starting;
-
-      // ? Drop to the compact message line unless output is fully muted
-      if (Display::$segments !== Display::NONE) {
-         Display::show(Display::MESSAGE);
-      }
-      $this->Logger->log(notice: '@\;Starting Server...@.;');
-
-      // @ Boot Server API
-      // ! Honor server Mode: under Modes::Test the constructor installs
-      //   Encoder_Testing; booting Production here would flip it back to
-      //   Encoder_ right before fork, leaving workers racing SIGUSR1
-      //   (`@test init`) against the first incoming request and serving
-      //   503 from Encoder_ when the handler hasn't been installed yet.
       if (self::$Application) {
          self::$Application::boot(
             $this->Mode === Modes::Test
@@ -295,156 +266,27 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
          $this->Logger->log(error: '@\;No request handler defined. Call on(Events::RequestReceived, ...) before start().@\;');
          exit(1);
       }
+   }
 
-      // # Process
-      // ? Pre-flight: verify socket can be bound before forking workers
-      $probeCode = 0;
-      $probeMessage = '';
-      $probeContext = stream_context_create(['socket' => ['so_reuseport' => true, 'ipv6_v6only' => false]]);
-      try {
-         $probeSocket = @stream_socket_server(
-            'tcp://' . ($this->host ?? '0.0.0.0') . ':' . ($this->port ?? 0),
-            $probeCode,
-            $probeMessage,
-            STREAM_SERVER_BIND | STREAM_SERVER_LISTEN,
-            $probeContext
-         );
-      }
-      catch (Throwable) {
-         $probeSocket = false;
-      }
-      if ($probeSocket === false) {
-         $message = '@\;Could not bind to ' . ($this->host ?? '0.0.0.0') . ':' . ($this->port ?? 0) . ': ' . $probeMessage;
-         if ($probeCode === 13 || str_contains($probeMessage ?? '', 'Permission denied')) {
-            $message .= '@\;Ports below 1024 require elevated privileges. Try running with `sudo`.@.;';
-         }
-         $this->Logger->log(error: $message);
-         exit(1);
-      }
-      fclose($probeSocket);
-
-      $this->Logger->log(notice: "Forking {$this->workers} workers... @..;");
-
-      // @ Initialize cross-worker upload byte counter (master-side, before
-      //   fork) so workers inherit the SHM segment + lockfile descriptor.
+   /**
+    * Pre-fork setup: initialize the cross-worker upload byte counter (master-
+    * side, before fork) so workers inherit the SHM segment + lockfile, then
+    * purge temp files orphaned by a previous (crashed) run.
+    */
+   protected function booting (): void
+   {
+      // @ Inherited by workers via the SHM segment + lockfile descriptor.
       Downloads::init();
       // @ Purge temp files orphaned by a previous (crashed) run before the
       //   first fork — no worker is in-flight yet, so a full sweep is safe
       //   (audit F-10). The SHM counter is reset to 0 by init().
       Downloads::sweep();
-
-      // @ Install signal handlers for graceful shutdown
-      $this->Process->Signals->install([
-         SIGALRM,  // Timer
-         SIGUSR1,  // Custom command
-         SIGHUP,   // stop
-         SIGINT,   // stop (CTRL + C)
-         SIGQUIT,  // stop
-         SIGTERM,  // stop
-         SIGTSTP,  // pause (CTRL + Z)
-         SIGCONT,  // resume
-         SIGUSR2,  // reload
-         SIGCHLD,  // recover
-         SIGIOT,   // connection info
-         SIGIO,    // connection stats
-      ]);
-      pcntl_signal(SIGPIPE, SIG_IGN, false);
-
-      // @ Monitor mode: open the live-log pipe before forking so workers inherit it
-      $this->pipe();
-
-      // @ Fork process workers...
-      $this->Process->fork($this->workers, instance: function (Process $Process, int $index): void {
-         $Process->title = 'Bootgly_HTTP_Server: child process (Worker #' . Process::$index . ')';
-
-         // @ Monitor mode routes worker logs to the master viewer pipe; otherwise per-worker stdout
-         if ($this->Mode === Modes::Monitor) {
-            $this->sink();
-         }
-         else {
-            Display::show(Display::MESSAGE, Display::TIMESTAMP, Display::CHANNEL, Display::SEVERITY);
-         }
-
-         // @ Hot-path: restore default error handler in worker.
-         // The global Errors::collect handler is a userland callback invoked on every
-         // suppressed warning (@fwrite/@fread produce EAGAIN under backpressure).
-         // Userland dispatch dominates up to ~23% of CPU on high-throughput workloads.
-         // CLI default handler is a no-op for suppressed errors (zero cost).
-         restore_error_handler();
-
-         // @ Create stream socket server
-         $this->instance();
-
-         // Event Loop
-         self::$Event->add(
-            $this->Socket,
-            self::$Event::EVENT_CONNECT,
-            true
-         );
-         self::$Event->loop();
-
-         // @ Close stream socket server
-         $this->stop();
-      });
-
-      // @ Set master process title
-      $this->Process->title = 'Bootgly_HTTP_Server: master process';
-
-      // @ Save full process state (master + workers + host + port).
-      //   Done while still privileged so the file exists before demote() can
-      //   hand it off to the target user — the PID dir may not be writable
-      //   by the demoted user, but chown on the existing file lets subsequent
-      //   re-saves (e.g. in daemonize()) succeed as that user.
-      $this->Process->State->save([
-         'master'  => Process::$master,
-         'workers' => $this->Process->Children->PIDs,
-         'host'    => $this->host ?? '0.0.0.0',
-         'port'    => $this->port ?? 0,
-         'started' => time(),
-         'type'    => 'WPI'
-      ]);
-
-      // @ Drop privileges on master post-fork + post-save. Workers kept their
-      //   own bind as root (port <1024) and demote themselves in `instance()`.
-      //   `demote()` also chowns state files so `project stop` from the
-      //   demoted user can unlink them.
-      $this->demote();
-
-      // # Hook
-      // @ Invoke started hook (server is ready for connections)
-      if (self::$onServerStarted !== null) {
-         (self::$onServerStarted)($this);
-      }
-
-      // @
-      // ... Continue to master process:
-      switch ($this->Mode) {
-         case Modes::Daemon:
-            $this->daemonize();
-            break;
-         case Modes::Foreground:
-            $this->serve();
-            break;
-         case Modes::Interactive:
-            $this->interacting();
-            break;
-         case Modes::Monitor:
-            $this->monitoring();
-            break;
-      }
-
-      return true;
    }
 
    public function stop (): void
    {
-      // # Hook
-      // @ Invoke stopped hook before shutdown
-      if (self::$onServerStopped !== null && $this->Process->level === 'master') {
-         (self::$onServerStopped)($this);
-      }
-
-      // @ Tear down cross-worker upload counter (master only).
+      // @ Tear down cross-worker upload counter (master only). The
+      //   `ServerStopped` hook itself is fired by the base `stop()`.
       if (isset($this->Process) && $this->Process->level === 'master') {
          Downloads::destroy();
       }
