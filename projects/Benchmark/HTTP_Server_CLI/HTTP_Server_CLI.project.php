@@ -45,7 +45,14 @@ return new Project(
       //   workers (statics propagate by fork inheritance).
       $statsOn = getenv('BOOTGLY_STATS') === '1';
 
-      $router = strtolower(getenv('BOOTGLY_HTTP_SERVER_CLI_ROUTER') ?: 'simple');
+      // # Router — derived from the active benchmark load set (BENCHMARK_LOAD_SET,
+      //   set by `--loads=<set>:<indexes>`). A standalone run (no load set) falls
+      //   back to the simple router.
+      $router = match (strtolower(getenv('BENCHMARK_LOAD_SET') ?: '')) {
+         'techempower' => 'techempower',
+         'benchmark'   => 'bootgly',
+         default       => 'simple',
+      };
       $routerFile = match ($router) {
          'techempower' => 'techempower-benchmark.SAPI.php',
          'bootgly'     => 'bootgly-benchmark.SAPI.php',
