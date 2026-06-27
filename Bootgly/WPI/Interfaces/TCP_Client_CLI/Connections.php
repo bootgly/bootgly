@@ -153,7 +153,7 @@ class Connections implements WPI\Connections
          @stream_select($read, $write, $except, 5);
       }
 
-      $Connection = new Connection($Socket, $secure);
+      $Connection = new Connection($Socket, $secure, $this->Client);
 
       // @ Set stats
       $this->connections++;

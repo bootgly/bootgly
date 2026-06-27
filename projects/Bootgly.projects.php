@@ -34,5 +34,6 @@ return [
    'Demo/TCP_Server_CLI'         => ['interfaces' => ['WPI']],
    'Demo/UDP_Client_CLI'         => ['interfaces' => ['WPI']],
    'Demo/UDP_Server_CLI'         => ['interfaces' => ['WPI']],
+   'Demo/WS_Client_CLI'          => ['interfaces' => ['WPI']],
    'Demo/WS_Server_CLI'          => ['interfaces' => ['WPI']],
 ];

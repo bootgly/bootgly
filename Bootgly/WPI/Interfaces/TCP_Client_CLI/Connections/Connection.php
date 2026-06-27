@@ -39,6 +39,8 @@ class Connection extends Packages
    public int $expiration;
 
    // * Data
+   // # Owner (the TCP/WS client that opened this connection — dispatch back-ref).
+   public null|Client $Client = null;
    // # Remote
    public string $address;
    public int $port;
@@ -65,9 +67,10 @@ class Connection extends Packages
     * @param resource $Socket
    * @param bool $secure Whether secure SSL/TLS handshake is required
     */
-   public function __construct (&$Socket, bool $secure = false)
+   public function __construct (&$Socket, bool $secure = false, null|Client $Client = null)
    {
       $this->Socket = $Socket;
+      $this->Client = $Client;
 
 
       // * Config

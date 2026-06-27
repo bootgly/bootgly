@@ -101,6 +101,14 @@ return new Suites(
       'Bootgly/WPI/Nodes/WS_Server_CLI/tests/E2E_Streaming/',
       // E2E handshake predicate (HandshakeRequested — Origin allowlist -> 403)
       'Bootgly/WPI/Nodes/WS_Server_CLI/tests/E2E_Handshake/',
+      // # WS_Client_CLI (WebSocket client) — handshake + frame-codec unit suites
+      'Bootgly/WPI/Nodes/WS_Client_CLI/tests/',
+      // E2E (live test-mode WS_Server_CLI driven by the WS_Client_CLI)
+      'Bootgly/WPI/Nodes/WS_Client_CLI/tests/E2E/',
+      // E2E over TLS (wss://)
+      'Bootgly/WPI/Nodes/WS_Client_CLI/tests/E2E_TLS/',
+      // E2E adversarial (raw server sends malformed frames -> client rejects)
+      'Bootgly/WPI/Nodes/WS_Client_CLI/tests/E2E_Adversarial/',
       // Security (re-enabled — appended LAST to keep coverage-probe indices
       // 4, 8 and 14-21 stable; the original in-place slot above stays
       // commented for documentation).
