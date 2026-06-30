@@ -271,7 +271,7 @@ The Bootgly is open-sourced software licensed under the [MIT license][MIT_LICENS
 [DOCKER_GUIDE]: https://docs.bootgly.com/guide/docker
 [GITHUB_REPOSITORY]: https://github.com/bootgly/bootgly/
 [GITHUB_SPONSOR]: https://github.com/sponsors/bootgly/
-[VS_HTTP]: https://docs.bootgly.com/manual/WPI/HTTP/HTTP_Server_CLI.vs
+[VS_HTTP]: https://docs.bootgly.com/manual/WPI/HTTP/HTTP_Server_CLI/vs/
 [BENCHMARKS]: https://github.com/bootgly/bootgly_benchmarks/tree/main/HTTP_Server_CLI
 
 [TELEGRAM]: https://t.me/bootgly/
