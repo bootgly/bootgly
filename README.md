@@ -5,7 +5,8 @@
 </p>
 <h1 align="center">Bootgly</h1>
 <p align="center">
-  <i>Base PHP Framework for Multi Projects.</i>
+  <b>The native, zero-dependency PHP framework.</b><br/>
+  <i>One async core for Web 🌐 and CLI 📟 — built for performance and clarity.</i>
 </p>
 <p align="center">
   <a href="https://packagist.org/packages/bootgly/bootgly">
@@ -14,14 +15,49 @@
   </a>
 </p>
 
-> Bootgly is the first PHP framework to use the [I2P (Interface-to-Platform) architecture][I2P_ARQUITECTURE].
+Bootgly is a base framework for building **APIs and apps** on both the **Web (WPI)** and **Console (CLI)** platforms — powered by a native, event-loop HTTP server written in pure PHP. It is the first PHP framework built on the [I2P (Interface-to-Platform) architecture][I2P_ARQUITECTURE].
 
-> [!WARNING]
-> 🚧 DO NOT USE IT IN PRODUCTION ENVIRONMENTS. 🚧
+### 💡 Why Bootgly?
+
+- ⚡ **Native async HTTP server in pure PHP** — long-running and event-loop driven, with Fibers for non-blocking I/O. No Nginx, no PHP-FPM in front. A pure-PHP alternative to Swoole, Workerman and FrankenPHP — no C extension required.
+- 📦 **Zero third-party dependencies in the core** — every essential feature (HTTP server, router, config, testing, sessions, DBAL + ORM) is built in. A smaller `vendor/` and a smaller supply-chain surface.
+- 🎯 **One canonical way to do everything** — one HTTP server, one config schema, one test framework. Predictable, consistent code: fewer decisions, less to maintain, no bikeshedding.
+- 🧱 **Strict, enforceable architecture** — six layers (ABI → ACI → ADI → API → CLI → WPI) with one-way dependencies and no cross-layer skipping. One core, two platforms.
+
+### ⚡ Quickstart
+
+Define your routes — a complete HTTP server in a handful of lines:
+
+```php
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router;
+
+return static function (Request $Request, Response $Response, Router $Router): Generator
+{
+   yield $Router->route('/', function (Request $Request, Response $Response) {
+      return $Response(body: 'Hello World!');
+   }, GET);
+
+   // Catch-all 404
+   yield $Router->route('/*', fn (Request $Request, Response $Response) =>
+      $Response(code: 404, body: 'Not Found')
+   );
+};
+```
+
+Boot the demo server from the terminal:
+
+```bash
+bootgly project Demo/HTTP_Server_CLI start
+```
+
+> **⚡ Over 1,000,000 req/s — in pure PHP.** On the TechEmpower `/plaintext` route, the HTTP Server CLI peaks at **1,076,709 req/s** — ahead of **Swoole** (964,908) and roughly **150× a Laravel + PHP-FPM** stack — with **no C extension** and no third-party runtime in its core. It leads Swoole on `/plaintext`, `/json`, `/query` (+126%) and `/updates` (+60%), and beats every other PHP framework benchmarked on every route.
 >
-> Bootgly is in beta testing. A major version (1.0) is soon to release.
->
-> [Documentation is under construction][PROJECT_DOCS].
+> _Measured on 24 logical CPUs, PHP 8.4.22, 514 connections, 10 s per route, symmetric DB pool._ → **Full comparison & reproducible runs:** [Bootgly vs Swoole, Hyperf, ReactPHP, AMPHP & Laravel](https://docs.bootgly.com/manual/WPI/HTTP/HTTP_Server_CLI.vs) · [benchmark suite](https://github.com/bootgly/bootgly_benchmarks/tree/main/HTTP_Server_CLI)
+
+> [!NOTE]
+> **Beta — stabilizing toward 1.0.** Bootgly is under active development and the public API is still being finalized ahead of the 1.0 release. Pin a version and expect some changes before then; not yet recommended for production use. [Documentation is a work in progress.][PROJECT_DOCS]
 
 ## Table of Contents
 
@@ -38,51 +74,6 @@
   - [💖 Sponsorship](#-sponsorship)
 - [🚀 Getting started](#-getting-started)
 - [📃 License](#-license)
-
----
-
-## 🤔 About
-
-Bootgly is a base framework for developing APIs and Apps for both CLI (Console) 📟 and WPI (Web) 🌐.
-
-> "Bootgly is focused on **efficiency** and follows a minimum dependency policy. Thanks to this approach, its **unique I2P architecture**, along with some uncommon code conventions and design patterns, allows Bootgly to offer **superior performance** while providing an **easy-to-understand Code APIs**."
-
-### Core Principles
-
-| Principle | Description |
-|-----------|-------------|
-| 📦 **Minimum dependency** | No third-party packages in the framework core. Every feature is built-in and fully integrated, maximizing cohesion and reducing supply-chain risk. |
-| 🔒 **One-way policy** | There is exactly one canonical way to do each thing — one HTTP server, one config schema, one autoloader, one test framework. This avoids confusion, reduces maintenance burden and keeps efficiency high. |
-| 🧱 **Strict layer separation** | Six interfaces (ABI → ACI → ADI → API → CLI → WPI) with a strict dependency direction — no cross-layer skipping allowed. Each top-level interface creates a **Platform** through the I2P architecture: CLI creates the **Console** platform, WPI creates the **Web** platform. Future platforms: **Graphics** (from GUI) and Mobile. |
-
-### Bootgly CLI 📟
-
-> Command Line Interface
-
-- Interface: [CLI][CLI_INTERFACE]
-- Platform: [Console][CONSOLE_PLATFORM] (TODO)
-
-For the base CLI development, Bootgly already has the following UI Components:
-[Alert][CLI_TERMINAL_ALERT], [Fieldset][CLI_TERMINAL_FIELDSET], [Header][CLI_HEADER], [Menu][CLI_TERMINAL_MENU], [Progress][CLI_TERMINAL_PROGRESS], [Table][CLI_TERMINAL_TABLE].
-
-### Bootgly WPI 🌐
-
-> Web Programming Interface 
-
-- Interface: [WPI][WPI_INTERFACE]
-- Platform: [Web][WEB_PLATFORM] (IN DEVELOPMENT)
-
-For the base Web development, Bootgly has a [HTTP Server CLI][WEB_HTTP_SERVER_CLI], a [HTTP Client CLI][WEB_HTTP_CLIENT_CLI], a [TCP Client CLI][WEB_TCP_CLIENT_INTERFACE], a [TCP Server CLI][WEB_TCP_SERVER_INTERFACE], a [UDP Client CLI][WEB_UDP_CLIENT_INTERFACE], a [UDP Server CLI][WEB_UDP_SERVER_INTERFACE].
-
-More news may come until the release of v1.0. Stay tuned.
-
-### 💬 Commit Convention
-
-Bootgly uses [Conventional Commits v1.0.0][CONVENTIONAL_COMMITS].
-
-### 📑 Versioning System
-
-Bootgly uses [Semantic Versioning 2.0][SEMANTIC_VERSIONING].
 
 ---
 
@@ -280,6 +271,8 @@ The Bootgly is open-sourced software licensed under the [MIT license][MIT_LICENS
 [DOCKER_GUIDE]: https://docs.bootgly.com/guide/docker
 [GITHUB_REPOSITORY]: https://github.com/bootgly/bootgly/
 [GITHUB_SPONSOR]: https://github.com/sponsors/bootgly/
+[VS_HTTP]: https://docs.bootgly.com/manual/WPI/HTTP/HTTP_Server_CLI.vs
+[BENCHMARKS]: https://github.com/bootgly/bootgly_benchmarks/tree/main/HTTP_Server_CLI
 
 [TELEGRAM]: https://t.me/bootgly/
 [REDDIT]: https://www.reddit.com/r/bootgly/
