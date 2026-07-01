@@ -12,6 +12,7 @@ namespace Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections;
 
 
 use function fclose;
+use function stream_get_meta_data;
 use function stream_set_blocking;
 use function stream_socket_enable_crypto;
 use function stream_socket_get_name;
@@ -163,6 +164,18 @@ class Connection extends Packages
       }
       else {
          $this->encrypted = true;
+
+         // @ ALPN: hand the connection to the negotiated application
+         //   protocol's installer (e.g. 'h2' → HTTP/2 decoder). Registered
+         //   by nodes via `Server::$Protocols`; TLS-only cost.
+         if (Server::$Protocols !== []) {
+            $meta = stream_get_meta_data($this->Socket);
+            $protocol = $meta['crypto']['alpn_protocol'] ?? '';
+
+            if ($protocol !== '' && isSet(Server::$Protocols[$protocol])) {
+               (Server::$Protocols[$protocol])($this);
+            }
+         }
       }
 
       return true;

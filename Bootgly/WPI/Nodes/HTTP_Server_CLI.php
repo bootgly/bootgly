@@ -58,10 +58,12 @@ use Bootgly\WPI\Event;
 use Bootgly\WPI\Interfaces\TCP_Client_CLI;
 use Bootgly\WPI\Interfaces\TCP_Client_CLI\Events as TCP_Client_Events;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI;
+use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections\Connection;
 use Bootgly\WPI\Modules\HTTP;
 use Bootgly\WPI\Modules\HTTP\Server;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Decoder_;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Decoder_Downloading\Downloads;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Decoder_HTTP2;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders\Encoder_;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders\Encoder_Testing;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Events;
@@ -82,6 +84,14 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
    // ...inherited from TCP_Server_CLI
    // # Socket
    protected string $process = 'Bootgly_HTTP_Server';
+   // # HTTP/2
+   /**
+    * @var bool Whether HTTP/2 is served at all — gates both the TLS-ALPN
+    * advertisement and the cleartext prior-knowledge preface probe.
+    * Driven by `configure(enableHTTP2:)`; `false` makes the server
+    * HTTP/1.x-only.
+    */
+   public static bool $enableHTTP2 = true;
 
    public static Request $Request;
    public static Response $Response;
@@ -144,6 +154,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       string $host, int $port, int $workers,
       null|array $secure = null,
       null|string $user = null, null|string $group = null,
+      null|bool $enableHTTP2 = null,
       null|int $requestMaxFileSize = null, null|int $requestMaxBodySize = null,
       null|int $requestMaxMultipartFieldSize = null,
       null|int $requestMaxMultipartHeaderSize = null,
@@ -155,6 +166,31 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       null|array $responseResources = null
    ): self
    {
+      // @ HTTP/2 — on by default; `enableHTTP2: false` disables BOTH the
+      //   TLS-ALPN advertisement (RFC 9113 §3.2) and the cleartext
+      //   prior-knowledge preface probe (§3.3), making the server
+      //   HTTP/1.x-only.
+      self::$enableHTTP2 = ($enableHTTP2 !== false);
+
+      if ($secure !== null && self::$enableHTTP2) {
+         $secure['alpn_protocols'] ??= 'h2,http/1.1';
+
+         self::$Protocols['h2'] = static function (Connection $Connection): void {
+            // ! The input cache keys on repeated identical reads — useless
+            //   for multiplexed binary frames.
+            $Connection->cache = false;
+
+            $Decoder = new Decoder_HTTP2;
+            $Connection->Decoder = $Decoder;
+            $Connection->decoded = $Decoder;
+         };
+      }
+      else {
+         // ? Statics survive re-configuration in the same process — never
+         //   inherit a previous instance's installer.
+         unset(self::$Protocols['h2']);
+      }
+
       parent::configure($host, $port, $workers, $secure, $user, $group);
 
       if ($host === '0.0.0.0') {

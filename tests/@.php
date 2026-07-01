@@ -113,5 +113,11 @@ return new Suites(
       // 4, 8 and 14-21 stable; the original in-place slot above stays
       // commented for documentation).
       #'Bootgly/WPI/Nodes/HTTP_Server_CLI/tests/Security/',
+      // # HTTP/2 (RFC 9113) — protocol primitive unit suites
+      'Bootgly/WPI/Modules/HTTP2/tests/',
+      // E2E h2c prior-knowledge (live test-mode server driven by a raw HTTP/2 client)
+      'Bootgly/WPI/Nodes/HTTP_Server_CLI/tests/HTTP2/',
+      // E2E h2 over TLS-ALPN (negotiation, fallback, curl interop)
+      'Bootgly/WPI/Nodes/HTTP_Server_CLI/tests/HTTP2_TLS/',
    ]
 );

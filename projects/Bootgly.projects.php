@@ -26,6 +26,7 @@ return [
    'Benchmark/UDP_Server_CLI'    => ['interfaces' => ['WPI']],
    'Benchmark/WS_Server_CLI'     => ['interfaces' => ['WPI']],
    'Demo/CLI'                    => ['interfaces' => ['CLI']],
+   'Demo/HTTP2-HTTP_Server_CLI'  => ['interfaces' => ['WPI']],
    'Demo/HTTP_Client_CLI'        => ['interfaces' => ['WPI']],
    'Demo/HTTP_Server_CLI'        => ['interfaces' => ['WPI'], 'default' => true],
    'Demo/HTTPS_Client_CLI'       => ['interfaces' => ['WPI']],

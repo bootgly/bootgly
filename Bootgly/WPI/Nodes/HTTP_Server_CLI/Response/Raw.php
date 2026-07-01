@@ -15,6 +15,7 @@ use function strlen;
 
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI as Server;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders\Encoder_HTTP2;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Raw\Body;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Raw\Header;
 
@@ -54,6 +55,22 @@ trait Raw
       $Body = &$this->Body;
 
       $Request = $this->Request ?? Server::$Request;
+
+      // ? HTTP/2 stream — wire serialization is frame-based (RFC 9113 §8.2).
+      //   Single branch point: normal, testing and deferred (Fiber) responses
+      //   all funnel through encode(), so they all serialize correctly.
+      if ($Request->stream !== 0) {
+         // @ Upload queue: HTTP/2 materializes file parts into DATA payload —
+         //   the raw `uploading[]` file pump would bypass framing.
+         $files = [];
+         if ($this->stream) {
+            $files = $this->files;
+            $this->files = [];
+            $this->stream = false;
+         }
+
+         return Encoder_HTTP2::frame($this, $this->code, $Request, $files, $Package, $length);
+      }
 
       // @ Fast lane (typical case): plain buffered HTTP/1.1 response, no
       //   stream/chunked/pre-encoded body, not a HEAD request. Content-Length

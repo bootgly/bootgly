@@ -143,9 +143,16 @@ class TCP_Server_CLI implements Servers
 
    // * Data
    // # SAPI
-   public static null|string $Application = null; 
+   public static null|string $Application = null;
    public static null|Decoder $Decoder = null;
    public static null|Encoder $Encoder = null;
+   // # Application protocols (TLS-ALPN)
+   //   ALPN token → per-connection installer, invoked by
+   //   `Connection::handshake()` with the negotiated Connection. Registered
+   //   by nodes (e.g. HTTP_Server_CLI maps 'h2' to its HTTP/2 decoder) —
+   //   the transport layer never names higher-layer entities.
+   /** @var array<string, Closure> */
+   public static array $Protocols = [];
    // # Backpressure (async write state machine)
    //   Maximum bytes a single connection may keep in its in-memory write
    //   backlog while the socket is unwritable. Past this threshold the

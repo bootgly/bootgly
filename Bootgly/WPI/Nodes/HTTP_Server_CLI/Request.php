@@ -40,6 +40,7 @@ use function rtrim;
 use function str_ends_with;
 use function stripos;
 use function strlen;
+use function strncmp;
 use function strpos;
 use function strrpos;
 use function strstr;
@@ -59,9 +60,12 @@ use Bootgly\ABI\Resources\Storage\Driver;
 use Bootgly\WPI\Endpoints\Servers\Decoder\States;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections\Connection;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages;
+use Bootgly\WPI\Modules\HTTP2;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI as Server;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Decoder_Chunked;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Decoder_Downloading;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Decoder_Downloading\Downloads;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Decoder_HTTP2;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Decoder_Waiting;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Authentications\Basic;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Frame;
@@ -632,6 +636,10 @@ class Request
    public array $attributes = [];
    // @ Connection management
    public bool $closeConnection = false;
+   // @ HTTP/2 stream id carried by this Request (0 = HTTP/1.x). Written only
+   //   by the HTTP/2 dispatch path — never on the HTTP/1.1 hot path, so
+   //   `assume()` / `__clone()` stay byte-identical.
+   public int $stream = 0;
 
    private string $authUsername = '';
    private string $authPassword = '';
@@ -718,6 +726,7 @@ class Request
       $this->claims = [];
       $this->tokenHeaders = [];
       $this->attributes = [];
+      $this->stream = 0;
 
       $this->Session = null;
       $this->sessioned = false;
@@ -790,6 +799,9 @@ class Request
       $this->_queries = $Template->_queries;
       $this->protocol = $Template->protocol;
       $this->closeConnection = $Template->closeConnection;
+      // @ HTTP/2 stream id: templates are always HTTP/1.x (h2 Requests are
+      //   never pooled) — unconditional zero write keeps this straight-line.
+      $this->stream = 0;
 
       $this->Header->assume($Template->Header);
       $this->Body->assume($Template->Body);
@@ -819,6 +831,115 @@ class Request
 
       $this->Session = null;
       $this->sessioned = false;
+   }
+
+   /**
+    * Check a host value (`uri-host [":" port]`) against `$allowedHosts`.
+    *
+    * Case-insensitive, port-agnostic. Wildcard prefix `*.example.com`
+    * matches a single-label subdomain. An empty allowlist allows everything.
+    */
+   public static function allow (string $host): bool
+   {
+      // ? Enforcement disabled
+      if (static::$allowedHosts === []) {
+         return true;
+      }
+
+      // ! Strip port (RFC 9110 §7.2). IPv6 literals are bracketed;
+      //   for name hosts use the last colon.
+      $host = strtolower($host);
+      if ($host !== '' && $host[0] === '[') {
+         $rb = strpos($host, ']');
+         $name = $rb === false ? $host : substr($host, 0, $rb + 1);
+      }
+      else {
+         $colon = strrpos($host, ':');
+         $name = $colon === false ? $host : substr($host, 0, $colon);
+      }
+
+      // @@
+      foreach (static::$allowedHosts as $entry) {
+         if ($entry === $name) {
+            return true;
+         }
+         // Wildcard prefix `*.example.com` matches `a.example.com` only.
+         if (
+            strlen($entry) > 2
+            && $entry[0] === '*' && $entry[1] === '.'
+            && str_ends_with($name, substr($entry, 1))
+            && strpos($name, '.', 0) === strlen($name) - (strlen($entry) - 1)
+         ) {
+            return true;
+         }
+      }
+
+      // :
+      return false;
+   }
+
+   /**
+    * Adopt a decoded HTTP/2 stream head + body on this Request.
+    *
+    * The HTTP/2 decoder (`Decoders\Decoder_HTTP2`) builds one fresh Request
+    * per stream — never pooled through `assume()` — and fills every
+    * decode-derived member here, mirroring the HTTP/1.1 `decode()` block.
+    *
+    * @param array<string, string|array<int, string>> $fields lowercased field map
+    */
+   public function adopt (
+      Packages $Package,
+      string $method,
+      string $URI,
+      array $fields,
+      string $body,
+      int $stream
+   ): void
+   {
+      // # Request
+      // address (application-facing; TrustedProxy may overwrite it)
+      $this->address = $Package->Connection->ip;
+      // peer (immutable TCP transport IP; never proxy-mutated)
+      $this->peer = $Package->Connection->ip;
+      // port
+      $this->port = $Package->Connection->port;
+      // scheme (transport truth, like HTTP/1.1)
+      $this->scheme = $Package->Connection->encrypted ? 'https' : 'http';
+      // @@
+      $this->method = $method;
+      $this->URI = $URI;
+      $this->_URL = null;
+      $this->_URN = null;
+      $this->_query = null;
+      $this->_queries = null;
+      $this->protocol = 'HTTP/2';
+      $this->stream = $stream;
+
+      // @ Framing is stream-scoped in HTTP/2 — no connection-close decision here
+      $this->closeConnection = false;
+
+      // # Request Header
+      // raw — synthesized from the decoded fields ($Request->raw compat)
+      $raw = '';
+      foreach ($fields as $name => $value) {
+         if (is_array($value)) {
+            foreach ($value as $entry) {
+               $raw .= "$name: $entry\r\n";
+            }
+            continue;
+         }
+         $raw .= "$name: $value\r\n";
+      }
+      $this->Header->define(raw: $raw);
+      // fields — adopt the lowercased map produced by the HTTP/2 decoder
+      $this->Header->adopt($fields);
+
+      // # Request Body
+      $length = strlen($body);
+      $this->Body->raw = $body;
+      $this->Body->length = $length;
+      $this->Body->downloaded = $length;
+      $this->Body->position = 0;
    }
 
    /**
@@ -852,6 +973,31 @@ class Request
     */
    public function decode (Packages $Package, string &$buffer, int $size): States
    {
+      // ? HTTP/2 cleartext prior knowledge (RFC 9113 §3.3): the connection
+      //   commits to HTTP/2 as soon as the FIRST read starts with the
+      //   distinctive 14-byte preface signal `PRI * HTTP/2.0` (or a strict
+      //   prefix of it, when TCP segmentation splits the read) — no valid
+      //   HTTP/1.1 request line begins with it. The per-connection decoder
+      //   then buffers a partial preface until its 24 bytes complete, and
+      //   validates the full preface itself (a corrupt tail → GOAWAY),
+      //   instead of silently falling back to the HTTP/1.1 parser.
+      //   Hot-path cost: one char compare (only `POST`/`PUT`/`PATCH` reach
+      //   the strncmp, and it diverges on byte 1). `writes === 0` pins the
+      //   switch to the connection's first read — pipelined bytes can never
+      //   flip an HTTP/1.1 connection.
+      if (
+         $buffer[0] === 'P'
+         && $Package->Connection->writes === 0
+         && Server::$enableHTTP2
+         && strncmp($buffer, HTTP2::PREFACE, min($size, 14)) === 0
+      ) {
+         $Package->cache = false;
+         $Decoder = new Decoder_HTTP2;
+         $Package->Decoder = $Decoder;
+         $Package->decoded = $Decoder;
+         return $Decoder->decode($Package, $buffer, $size);
+      }
+
       // @ Centralized HTTP/1.1 framing parse (Recommendation #1).
       //   A SINGLE linear scan over the request head produces the canonical
       //   `Frame` value object: request line, lowercased fields map, and
@@ -1001,41 +1147,7 @@ class Request
       //   on a static config and is opt-in (default: empty list).
       //   Hot-path guard: `static::$allowedHosts === []` short-circuits.
       if (static::$allowedHosts !== [] && $Frame->hostValue !== '') {
-         $hostValue = strtolower($Frame->hostValue);
-         // Strip port (Host = uri-host [":" port] per RFC 9110 §7.2).
-         //   IPv6 literals are bracketed; for name hosts use the last colon.
-         if ($hostValue[0] === '[') {
-            $rb = strpos($hostValue, ']');
-            $hostName = $rb === false ? $hostValue : substr($hostValue, 0, $rb + 1);
-         }
-         else {
-            $colon = strrpos($hostValue, ':');
-            $hostName = $colon === false ? $hostValue : substr($hostValue, 0, $colon);
-         }
-
-         $allowed = false;
-         foreach (static::$allowedHosts as $entry) {
-            if ($entry === $hostName) {
-               $allowed = true;
-               break;
-            }
-            // Wildcard prefix `*.example.com` matches `a.example.com` only.
-            if (
-               strlen($entry) > 2
-               && $entry[0] === '*' && $entry[1] === '.'
-               && str_ends_with($hostName, substr($entry, 1))
-               && strpos(
-                  $hostName,
-                  '.',
-                  0
-               ) === strlen($hostName) - (strlen($entry) - 1)
-            ) {
-               $allowed = true;
-               break;
-            }
-         }
-
-         if (! $allowed) {
+         if (static::allow($Frame->hostValue) === false) {
             $Package->reject("HTTP/1.1 400 Bad Request\r\n\r\n");
             $Package->consumed = 0;
             return States::Rejected;
@@ -1219,6 +1331,11 @@ class Request
          content: 'raw',
          type: $content_type
       );
+      // ? Guarantee materialization: parse() bails on a missing/unknown
+      //   Content-Type WITHOUT setting input, and `input()` below re-reads
+      //   the `$this->input` hook — which would re-enter receive() forever.
+      //   The raw body is the input for unparsed media types.
+      $this->Body->input ??= $this->Body->raw;
 
       // @ Pure parser: returns parsed body as array (or [] for unknown CT).
       //   Stored on the Request to back $fields without populating $_POST.

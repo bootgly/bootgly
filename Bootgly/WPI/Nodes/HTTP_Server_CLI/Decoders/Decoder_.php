@@ -97,8 +97,12 @@ class Decoder_ extends Decoders
 
       // @ Write to local cache
       // Skip caching when Body is waiting for more data (chunked/streaming)
+      // or when this read installed a per-connection decoder (e.g. the
+      // HTTP/2 preface switch) — protocol-switch bytes must never be
+      // served as an HTTP/1.1 template.
       if ($state === States::Complete
          && $cacheKey !== null
+         && $Package->Decoder === null
          && $length > 0
          && $length <= 2048
          && ! $Request->Body->waiting

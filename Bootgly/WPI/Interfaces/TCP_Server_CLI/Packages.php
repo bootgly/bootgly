@@ -37,6 +37,7 @@ use Bootgly\ACI\Logs\Logger;
 use Bootgly\API\Workables\Server as SAPI;
 use Bootgly\WPI;
 use Bootgly\WPI\Endpoints\Servers\Decoder\States;
+use Bootgly\WPI\Endpoints\Servers\Feeding;
 use Bootgly\WPI\Endpoints\Servers\Packages as Server_Packages;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI as Server;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections;
@@ -240,7 +241,13 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
          //   pipeline (next request would race with the unflushed bytes)
          //   and do NOT close synchronously — `writing()` will close on
          //   drain via `closeAfterDrain`.
-         if ($this->pendingBuffer !== '') {
+         //   EXCEPT for framed protocols (`Feeding`, HTTP/2): the peer may
+         //   be waiting for the queued responses before sending any further
+         //   bytes, so stopping would deadlock the connection. Keep
+         //   pipelining — `writing()` in resume mode appends the next
+         //   responses to `pendingBuffer` in order, bounded by
+         //   `$maxPendingBytes` + the stall deadline.
+         if ($this->pendingBuffer !== '' && $this->Decoder instanceof Feeding === false) {
             if ($this->closeAfterWrite) {
                $this->closeAfterDrain = true;
                $this->closeAfterWrite = false;
@@ -280,7 +287,12 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
                // @ Pipeline write deferred — stop and let event loop drain.
                //   PHPStan cannot infer that `write()` mutates `$pendingBuffer`
                //   via `writing()`, so it narrows the property to `''` here.
-               if ($this->pendingBuffer !== '') { // @phpstan-ignore notIdentical.alwaysFalse
+               //   Framed protocols (`Feeding`) keep pipelining — see the
+               //   top-level twin.
+               if (
+                  $this->pendingBuffer !== '' // @phpstan-ignore notIdentical.alwaysFalse
+                  && $this->Decoder instanceof Feeding === false
+               ) {
                   if ($this->closeAfterWrite) { // @phpstan-ignore if.alwaysFalse
                      $this->closeAfterDrain = true;
                      $this->closeAfterWrite = false;
