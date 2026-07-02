@@ -4,18 +4,23 @@ namespace Bootgly\CLI;
 
 use const Bootgly\CLI;
 
+use Bootgly\CLI\Terminal\Input\Roles;
+
 
 $Input = CLI->Terminal->Input;
 $Output = CLI->Terminal->Output;
 
 
-$Output->render(<<<OUTPUT
+// ? Split Client/Server runs: the pre-fork output belongs to the Client role
+if ($Input->role !== Roles::Server) {
+   $Output->render(<<<OUTPUT
 /* @*: 
  * @#green: Bootgly CLI Terminal (<<) - reading method @;
  * @#yellow: @@: Demo - Example #1 @;
  * {$location}
  */\n\n
 OUTPUT);
+}
 
 
 $Input->reading(

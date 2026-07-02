@@ -52,7 +52,7 @@ class Input
    // # Terminal Client/Server API
    // Role and duplex channel for embedded runtimes (one role per process);
    // when both stay null and process control exists, reading() forks natively.
-   public null|Roles $role = null;
+   public null|Roles $role;
    /** @var array{0: resource, 1: resource}|null Duplex channel override (read, write) */
    public null|array $channel = null;
 
@@ -70,6 +70,8 @@ class Input
 
       // * Data
       $this->stream = $stream;
+      // # Terminal Client/Server API
+      $this->role = Roles::tryFrom((string) getenv('BOOTGLY_TERMINAL_ROLE'));
 
       // * Metadata
       // ...
@@ -152,9 +154,8 @@ class Input
    public function reading (Closure $CAPI, Closure $SAPI): void
    {
       // ? Embedded runtimes run a single role wired to an injected duplex channel
-      $Role = $this->role ?? Roles::tryFrom((string) getenv('BOOTGLY_TERMINAL_ROLE'));
-      if ($Role !== null) {
-         $this->relay($Role, $CAPI, $SAPI);
+      if ($this->role !== null) {
+         $this->relay($this->role, $CAPI, $SAPI);
 
          return;
       }
