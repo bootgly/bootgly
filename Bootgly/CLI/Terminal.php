@@ -15,6 +15,8 @@ use function array_filter;
 use function array_push;
 use function count;
 use function exec;
+use function function_exists;
+use function getenv;
 use function is_numeric;
 use function preg_match;
 use function preg_quote;
@@ -78,15 +80,21 @@ class Terminal // extends API/Project or API/Node
 
       // * Metadata
       // columns
-      // @ Get the terminal columns (width)
-      $columns = exec("tput cols 2>/dev/null");
+      // @ Get the terminal columns (width): environment first (ncurses convention), then tput
+      $columns = getenv('COLUMNS');
+      if (is_numeric($columns) === false && function_exists('exec') === true) {
+         $columns = exec("tput cols 2>/dev/null");
+      }
       if (is_numeric($columns) === false) {
          $columns = 80;
       }
       self::$columns = (int) $columns;
       // lines
-      // @ Get the terminal lines (height)
-      $lines = exec("tput lines 2>/dev/null");
+      // @ Get the terminal lines (height): environment first (ncurses convention), then tput
+      $lines = getenv('LINES');
+      if (is_numeric($lines) === false && function_exists('exec') === true) {
+         $lines = exec("tput lines 2>/dev/null");
+      }
       if (is_numeric($lines) === false) {
          $lines = 30;
       }

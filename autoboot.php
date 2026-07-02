@@ -29,6 +29,10 @@ if (defined('BOOTGLY_STORAGE_DIR') === false) {
 
 define('BOOTGLY_VERSION', '0.18.0-beta');
 
+// ? Platform interface override for embedded runtimes (e.g. WASM) that behave as a console.
+// BOOTGLY_SAPI answers "which platform interface"; PHP_SAPI stays for "what can this process actually do".
+define('BOOTGLY_SAPI', getenv('BOOTGLY_SAPI') ?: PHP_SAPI);
+
 @include(__DIR__ . '/vendor/autoload.php'); // composer
 
 // ! Bootables ([0-9]) || (-[a-z]) || ([0-9]-[a-z])
@@ -71,7 +75,7 @@ spl_autoload_register (function (string $class) {
 // @ Native coverage must start before CLI boot when the SUT is part of the
 // command bootstrap itself (e.g. Bootgly\CLI\Commands). TestCommand reuses
 // this session and only applies suite filters/reporting after execution.
-if (PHP_SAPI === 'cli') {
+if (BOOTGLY_SAPI === 'cli') {
    /** @var array<int, string> $argv */
    $argv = (array) ($_SERVER['argv'] ?? []);
 

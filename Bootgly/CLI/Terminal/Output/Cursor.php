@@ -12,12 +12,14 @@ namespace Bootgly\CLI\Terminal\Output;
 
 
 use const STDIN;
+use function defined;
 use function fread;
 use function function_exists;
 use function intval;
 use function preg_match;
 use function shell_exec;
 use function sprintf;
+use function stream_isatty;
 
 use Bootgly\ABI\Data\__String\Escapeable\Cursor\Positionable;
 use Bootgly\ABI\Data\__String\Escapeable\Cursor\Shapeable;
@@ -41,11 +43,27 @@ class Cursor
          return $this->hidden;
       }
    }
-   /** @var array<int|string,int> */
+   /** @var array{0: int, 1: int, row: int, column: int} */
    public private(set) array $position {
       get {
-         if (function_exists('shell_exec') === false) {
-            return [];
+         // ? Degrade gracefully when the cursor cannot be queried (no shell, no stdin, not a TTY)
+         if (
+            function_exists('shell_exec') === false
+            || defined('STDIN') === false
+            || stream_isatty(STDIN) === false
+         ) {
+            // ?: Last known position or the unknown-position shape (zeros)
+            if (isSet($this->position) === false) {
+               $this->position = [
+                  0,
+                  0,
+
+                  'row' => 0,
+                  'column' => 0
+               ];
+            }
+
+            return $this->position;
          }
 
          // @ Run stty command to get cursor position

@@ -110,6 +110,15 @@ namespace {
             return \strlen($string);
          }
 
+         // ? Runtimes without ext-iconv (e.g. WASM builds): count code points with PCRE
+         if (!\function_exists('iconv_strlen')) {
+            if ($encoding === 'UTF-8' && \preg_match_all('/./su', $string, $matches) !== false) {
+               return \count($matches[0]);
+            }
+
+            return \strlen($string);
+         }
+
          return @\iconv_strlen($string, $encoding);
       }
    }
@@ -127,11 +136,16 @@ namespace {
          if ($encoding === 'UTF-8') {
             $encoding = null;
             if (!\preg_match('//u', $string)) {
-               $string = @\iconv('UTF-8', 'UTF-8//IGNORE', $string);
+               $string = \function_exists('iconv')
+                  ? @\iconv('UTF-8', 'UTF-8//IGNORE', $string)
+                  : false;
             }
          }
          else {
-            $string = \iconv($encoding, 'UTF-8//IGNORE', $string);
+            // ? Non-UTF-8 conversion requires ext-iconv
+            $string = \function_exists('iconv')
+               ? \iconv($encoding, 'UTF-8//IGNORE', $string)
+               : false;
          }
 
          if ($string === false) {
@@ -215,7 +229,11 @@ namespace {
             return $string;
          }
 
-         // @ Encode
+         // @ Encode (requires ext-iconv; UTF-8 targets return above)
+         if (!\function_exists('iconv')) {
+            return $string;
+         }
+
          return \iconv(
             'UTF-8',
             "{$encoding}//IGNORE",
@@ -248,7 +266,18 @@ namespace {
          if ('CP850' === $encoding || 'ASCII' === $encoding) {
             return (string) \substr($string, $start, null === $length ? 2147483647 : $length);
          }
- 
+
+         // ? Runtimes without ext-iconv (e.g. WASM builds): slice code points with PCRE
+         if (!\function_exists('iconv_substr')) {
+            if ($encoding === 'UTF-8' && \preg_match_all('/./su', $string, $matches) !== false) {
+               $sliced = \array_slice($matches[0], $start, $length);
+
+               return \implode('', $sliced);
+            }
+
+            return (string) \substr($string, $start, $length ?? 2147483647);
+         }
+
          if ($start < 0) {
             $start = \iconv_strlen($string, $encoding) + $start;
 
@@ -256,7 +285,7 @@ namespace {
                $start = 0;
             }
          }
- 
+
          if ($length === null) {
             $length = 2147483647;
          }
@@ -267,7 +296,7 @@ namespace {
                return '';
             }
          }
- 
+
          return (string) \iconv_substr($string, $start, $length, $encoding);
       }
    }

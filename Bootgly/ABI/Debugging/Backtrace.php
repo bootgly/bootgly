@@ -11,9 +11,9 @@
 namespace Bootgly\ABI\Debugging;
 
 
+use const BOOTGLY_SAPI;
 use const BOOTGLY_WORKING_DIR;
 use const DEBUG_BACKTRACE_IGNORE_ARGS;
-use const PHP_SAPI;
 use function array_map;
 use function array_values;
 use function debug_backtrace;
@@ -95,7 +95,7 @@ class Backtrace
       // TODO use Theme
       $calls = $this->calls;
       if ($calls && $calls[0]->file && $calls[0]->line) {
-         $output .= match (PHP_SAPI) {
+         $output .= match (BOOTGLY_SAPI) {
             'cli'  => '',
             default => '<small>',
          };
@@ -112,30 +112,30 @@ class Backtrace
 
                // Trace counter
                if (self::$counter) {
-                  $trace .= match (PHP_SAPI) {
+                  $trace .= match (BOOTGLY_SAPI) {
                      'cli' => "\033[93m ",
                      default => ' '
                   };
                   $trace .= $n;
-                  $trace .= match (PHP_SAPI) {
+                  $trace .= match (BOOTGLY_SAPI) {
                      'cli' => "\033[0m ",
                      default => ''
                   };
                }
                // Trace file
-               $trace .= match (PHP_SAPI) {
+               $trace .= match (BOOTGLY_SAPI) {
                   'cli' => "\033[0m",
                   default => ''
                };
                $trace .= $file;
                // Trace line
                $trace .= ':';
-               $trace .= match (PHP_SAPI) {
+               $trace .= match (BOOTGLY_SAPI) {
                   'cli' => "\033[96m",
                   default => ''
                };
                $trace .= $line;
-               $trace .= match (PHP_SAPI) {
+               $trace .= match (BOOTGLY_SAPI) {
                   'cli' => "\033[0m",
                   default => ''
                };
@@ -150,7 +150,7 @@ class Backtrace
             $n++;
          }
 
-         $output .= match (PHP_SAPI) {
+         $output .= match (BOOTGLY_SAPI) {
             'cli'  => '',
             default => '</small>',
          };

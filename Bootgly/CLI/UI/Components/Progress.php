@@ -70,6 +70,7 @@ class Progress extends Component
    // @ render
    /** @var array<int> */
    public private(set) array $cursor;
+   public private(set) bool $anchored;
    // time
    public private(set) float $started;
    public private(set) float $rendered;
@@ -113,6 +114,7 @@ class Progress extends Component
       $this->tokens = ['@description;', '@current;', '@total;', '@bar;', '@percent;', '@elapsed;', '@eta;', '@rate;'];
       // @ render
       $this->cursor = [0, 1];
+      $this->anchored = false;
       // time
       $this->started = 0.0;
       $this->rendered = 0.0;
@@ -193,7 +195,12 @@ class Progress extends Component
             break;
          default:
             // @ Reset cursor position to initial line
-            $this->Output->Cursor->moveTo(line: $this->cursor[0], column: $this->cursor[1]);
+            if ($this->anchored) {
+               $this->Output->Cursor->restore();
+            }
+            else {
+               $this->Output->Cursor->moveTo(line: $this->cursor[0], column: $this->cursor[1]);
+            }
 
             // @ Write to output
             $this->Output->write($output);
@@ -224,7 +231,15 @@ class Progress extends Component
          $this->template .= "   \n\n";
 
          // @ Set the current Cursor position
-         $this->cursor = $this->Output->Cursor->position;
+         $position = $this->Output->Cursor->position;
+         // ? Anchor with cursor saving when the position cannot be queried (pipes, embedded runtimes)
+         if ($position['row'] < 1 || $position['column'] < 1) {
+            $this->anchored = true;
+            $this->Output->Cursor->save();
+         }
+         else {
+            $this->cursor = $position;
+         }
       }
 
       // @ Parse indetermined
@@ -268,8 +283,8 @@ class Progress extends Component
       else {
          $eta = 0.0;
       }
-      // rate
-      if ($current > 0) {
+      // rate (elapsed can be zero on coarse clocks — first advances, embedded runtimes)
+      if ($current > 0 && $elapsed > 0) {
          $rate = $current / $elapsed;
       }
       else {

@@ -12,6 +12,7 @@ namespace Bootgly\commands;
 
 
 use const BOOTGLY_ROOT_DIR;
+use function array_key_last;
 use function sleep;
 
 use const Bootgly\CLI;
@@ -102,6 +103,7 @@ class DemoCommand extends Command
          22 => 'UI/Fieldset-01.demo.php',
       ];
 
+      $last = array_key_last($examples);
       foreach ($examples as $index => $example) {
          if ($id && $index !== $id) {
             continue;
@@ -111,9 +113,12 @@ class DemoCommand extends Command
          $location = "projects/$file";
          require BOOTGLY_ROOT_DIR . $location;
 
-         sleep(3);
+         // ? Pause and clear only between chained demos: single runs keep their output
+         if ($id === null && $index !== $last) {
+            sleep(3);
 
-         CLI->Terminal->clear();
+            CLI->Terminal->clear();
+         }
       }
 
       return true;

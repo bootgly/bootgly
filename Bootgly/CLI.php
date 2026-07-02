@@ -12,8 +12,8 @@ namespace Bootgly;
 
 
 use const BOOTGLY_ROOT_DIR;
+use const BOOTGLY_SAPI;
 use const BOOTGLY_WORKING_DIR;
-use const PHP_SAPI;
 use function is_array;
 use Exception;
 
@@ -46,7 +46,7 @@ class CLI extends Projects // Command Line Interface
    public function autoboot (): void
    {
       // ?
-      if (PHP_SAPI !== 'cli')
+      if (BOOTGLY_SAPI !== 'cli')
          return;
 
       // @

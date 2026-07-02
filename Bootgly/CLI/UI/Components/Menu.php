@@ -12,6 +12,7 @@ namespace Bootgly\CLI\UI\Components;
 
 
 use function str_pad;
+use function stream_isatty;
 use function usleep;
 use Generator;
 
@@ -134,6 +135,16 @@ class Menu extends Component
 
    public function rendering (): Generator
    {
+      // ? Render once and finish when input is not interactive (pipes, embedded runtimes)
+      if (stream_isatty($this->Input->stream) === false) {
+         yield $this->render();
+
+         $this->selected = (array) $this->Items->Options::$selected[self::$level];
+
+         // :
+         return false;
+      }
+
       // Save Cursor position
       $this->Output->Cursor->save();
       // Set Input settings

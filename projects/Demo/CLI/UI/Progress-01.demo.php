@@ -17,8 +17,8 @@ OUTPUT);
 
 $Progress = new Progress($Output);
 // * Config
-// @
-$Progress->throttle = 0.0;
+// @ ~60 fps redraw cap: the loop throughput stays unthrottled
+$Progress->throttle = 0.016;
 
 // * Data
 // @

@@ -119,5 +119,7 @@ return new Suites(
       'Bootgly/WPI/Nodes/HTTP_Server_CLI/tests/HTTP2/',
       // E2E h2 over TLS-ALPN (negotiation, fallback, curl interop)
       'Bootgly/WPI/Nodes/HTTP_Server_CLI/tests/HTTP2_TLS/',
+      // # CLI Terminal — size resolution + cursor position contract + Progress anchoring
+      'Bootgly/CLI/Terminal/',
    ]
 );

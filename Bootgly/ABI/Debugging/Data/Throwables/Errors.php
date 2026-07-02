@@ -11,8 +11,8 @@
 namespace Bootgly\ABI\Debugging\Data\Throwables;
 
 
+use const BOOTGLY_SAPI;
 use const BOOTGLY_WORKING_DIR;
-use const PHP_SAPI;
 use function array_slice;
 use function count;
 use function error_reporting;
@@ -81,7 +81,7 @@ abstract class Errors extends Throwables
          
       $file = Path::relativize($file, BOOTGLY_WORKING_DIR);
 
-      switch (PHP_SAPI) {
+      switch (BOOTGLY_SAPI) {
          case 'cli':
             $theme = self::DEFAULT_THEME;
             // @ Init options

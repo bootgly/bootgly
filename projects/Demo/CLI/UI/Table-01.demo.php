@@ -1,8 +1,12 @@
 <?php
 namespace Bootgly\CLI;
 
+
+use function sleep;
+
 use const Bootgly\CLI;
 use Bootgly\CLI\UI\Components\Table;
+
 
 $Output = CLI->Terminal->Output;
 $Output->reset();
@@ -50,7 +54,13 @@ for ($i = 1; $i <= $loops; $i++) {
 
    sleep(1);
 
-   $Output->write("\n");
-   $Output->Cursor->up(16);
-   $Output->Text->clear(down: true);
+   // ? Erase only between frames: the last table stays on screen
+   if ($i < $loops) {
+      $Output->write("\n");
+      $Output->Cursor->up(16);
+      $Output->Text->clear(down: true);
+   }
+   else {
+      $Output->write("\n");
+   }
 }

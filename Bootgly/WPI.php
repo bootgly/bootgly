@@ -11,7 +11,7 @@
 namespace Bootgly;
 
 
-use const PHP_SAPI;
+use const BOOTGLY_SAPI;
 use function basename;
 use function is_dir;
 use function is_file;
@@ -48,7 +48,7 @@ class WPI extends Projects // Web Programming Interface
    public function autoboot (): void
    {
       // ?
-      switch (PHP_SAPI) {
+      switch (BOOTGLY_SAPI) {
          case 'cli':
             break;
          default:

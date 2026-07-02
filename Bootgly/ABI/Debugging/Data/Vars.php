@@ -11,7 +11,7 @@
 namespace Bootgly\ABI\Debugging\Data;
 
 
-use const PHP_SAPI;
+use const BOOTGLY_SAPI;
 use function count;
 use function get_class;
 use function get_resource_type;
@@ -382,7 +382,7 @@ class Vars implements Debugging
 
       // * Metadata
       // ! Templating
-      if (@PHP_SAPI === 'cli') {
+      if (BOOTGLY_SAPI === 'cli') {
          self::$CLI = true;
       }
       // >> Output

@@ -16,6 +16,7 @@ use const STDIN;
 use function cli_set_process_title;
 use function defined;
 use function fread;
+use function function_exists;
 use function pcntl_fork;
 use function pcntl_signal;
 use function pcntl_signal_dispatch;
@@ -23,6 +24,7 @@ use function pcntl_waitpid;
 use function posix_getpid;
 use function posix_kill;
 use function register_shutdown_function;
+use function stream_isatty;
 use function stream_set_blocking;
 use function system;
 use function time;
@@ -75,6 +77,12 @@ class Input
    {
       stream_set_blocking($this->stream, $blocking);
 
+      // ? Terminal modes require an interactive TTY (pipes and embedded runtimes cannot fork stty)
+      if (stream_isatty($this->stream) === false) {
+         // :
+         return $this;
+      }
+
       $canonical
          ? system('stty icanon')
          : system('stty -icanon');
@@ -101,7 +109,9 @@ class Input
       }
 
       // @
-      pcntl_signal_dispatch();
+      if (function_exists('pcntl_signal_dispatch') === true) {
+         pcntl_signal_dispatch();
+      }
 
       try {
          $read = @fread($this->stream, $length);

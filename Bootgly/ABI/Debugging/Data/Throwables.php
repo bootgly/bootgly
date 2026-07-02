@@ -11,8 +11,8 @@
 namespace Bootgly\ABI\Debugging\Data;
 
 
+use const BOOTGLY_SAPI;
 use const BOOTGLY_WORKING_DIR;
-use const PHP_SAPI;
 use function array_reverse;
 use function array_shift;
 use function array_slice;
@@ -93,7 +93,7 @@ abstract class Throwables implements Debugging
 
    public static function report (Throwable $Throwable): void
    {
-      switch (PHP_SAPI) {
+      switch (BOOTGLY_SAPI) {
          case 'cli':
             $theme = Highlighter::DEFAULT_THEME;
             break;
@@ -114,7 +114,7 @@ abstract class Throwables implements Debugging
       }
       $file = Path::relativize($file, BOOTGLY_WORKING_DIR);
 
-      switch (PHP_SAPI) {
+      switch (BOOTGLY_SAPI) {
          case 'cli':
             $theme = self::DEFAULT_THEME;
             // @ Init options
