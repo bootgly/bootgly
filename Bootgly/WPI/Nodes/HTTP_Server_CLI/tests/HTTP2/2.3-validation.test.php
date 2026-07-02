@@ -160,6 +160,188 @@ return new Specification(
          ->to->be('413')
          ->assert();
 
+      // @ TRACE mirrors HTTP/1.1 policy → 501 before routing
+      $Client->send(Frame::pack(
+         HTTP2::FRAME_HEADERS,
+         HTTP2::FLAG_END_HEADERS | HTTP2::FLAG_END_STREAM,
+         13,
+         HPACK::encode([
+            [':method', 'TRACE'],
+            [':scheme', 'http'],
+            [':path', '/trace'],
+            [':authority', 'localhost:8085']
+         ])
+      ));
+      $headers = $Client->expect(HTTP2::FRAME_HEADERS);
+      yield new Assertion(
+         description: 'TRACE over HTTP/2 → canned :status 501',
+      )
+         ->expect($status($headers))
+         ->to->be('501')
+         ->assert();
+
+      // @ CONNECT mirrors HTTP/1.1 unsupported-method policy → 501
+      $Client->send(Frame::pack(
+         HTTP2::FRAME_HEADERS,
+         HTTP2::FLAG_END_HEADERS | HTTP2::FLAG_END_STREAM,
+         15,
+         HPACK::encode([
+            [':method', 'CONNECT'],
+            [':scheme', 'http'],
+            [':path', '/connect'],
+            [':authority', 'localhost:8085']
+         ])
+      ));
+      $headers = $Client->expect(HTTP2::FRAME_HEADERS);
+      yield new Assertion(
+         description: 'CONNECT over HTTP/2 → canned :status 501',
+      )
+         ->expect($status($headers))
+         ->to->be('501')
+         ->assert();
+
+      // @ Unknown extension methods mirror HTTP/1.1 policy → 405
+      $Client->send(Frame::pack(
+         HTTP2::FRAME_HEADERS,
+         HTTP2::FLAG_END_HEADERS | HTTP2::FLAG_END_STREAM,
+         17,
+         HPACK::encode([
+            [':method', 'BREW'],
+            [':scheme', 'http'],
+            [':path', '/brew'],
+            [':authority', 'localhost:8085']
+         ])
+      ));
+      $headers = $Client->expect(HTTP2::FRAME_HEADERS);
+      yield new Assertion(
+         description: 'Unknown method over HTTP/2 → canned :status 405',
+      )
+         ->expect($status($headers))
+         ->to->be('405')
+         ->assert();
+
+      // @ HPACK-decoded field names remain HTTP tokens — CR is invalid
+      $Client->send(Frame::pack(
+         HTTP2::FRAME_HEADERS,
+         HTTP2::FLAG_END_HEADERS | HTTP2::FLAG_END_STREAM,
+         19,
+         HPACK::encode([
+            [':method', 'GET'],
+            [':scheme', 'http'],
+            [':path', '/'],
+            [':authority', 'localhost:8085'],
+            ["x\rbad", 'value']
+         ])
+      ));
+      $rst = $Client->expect(HTTP2::FRAME_RST_STREAM);
+      yield new Assertion(
+         description: 'CTL in HTTP/2 field name → RST_STREAM(PROTOCOL_ERROR)',
+      )
+         ->expect([$rst['stream'] ?? 0, $code($rst)])
+         ->to->be([19, Errors::Protocol->value])
+         ->assert();
+
+      // @ HPACK-decoded field values must not inject raw header lines
+      $Client->send(Frame::pack(
+         HTTP2::FRAME_HEADERS,
+         HTTP2::FLAG_END_HEADERS | HTTP2::FLAG_END_STREAM,
+         21,
+         HPACK::encode([
+            [':method', 'GET'],
+            [':scheme', 'http'],
+            [':path', '/'],
+            [':authority', 'localhost:8085'],
+            ['x-safe', "ok\r\nx-evil: yes"]
+         ])
+      ));
+      $rst = $Client->expect(HTTP2::FRAME_RST_STREAM);
+      yield new Assertion(
+         description: 'CRLF in HTTP/2 field value → RST_STREAM(PROTOCOL_ERROR)',
+      )
+         ->expect([$rst['stream'] ?? 0, $code($rst)])
+         ->to->be([21, Errors::Protocol->value])
+         ->assert();
+
+      // @ Pseudo-header values are validated before Request::adopt()
+      $Client->send(Frame::pack(
+         HTTP2::FRAME_HEADERS,
+         HTTP2::FLAG_END_HEADERS | HTTP2::FLAG_END_STREAM,
+         23,
+         HPACK::encode([
+            [':method', 'GET'],
+            [':scheme', 'http'],
+            [':path', "/ok\nx: y"],
+            [':authority', 'localhost:8085']
+         ])
+      ));
+      $rst = $Client->expect(HTTP2::FRAME_RST_STREAM);
+      yield new Assertion(
+         description: 'LF in HTTP/2 :path → RST_STREAM(PROTOCOL_ERROR)',
+      )
+         ->expect([$rst['stream'] ?? 0, $code($rst)])
+         ->to->be([23, Errors::Protocol->value])
+         ->assert();
+
+      // @ NUL in :authority cannot reach host/allowlist handling
+      $Client->send(Frame::pack(
+         HTTP2::FRAME_HEADERS,
+         HTTP2::FLAG_END_HEADERS | HTTP2::FLAG_END_STREAM,
+         25,
+         HPACK::encode([
+            [':method', 'GET'],
+            [':scheme', 'http'],
+            [':path', '/'],
+            [':authority', "local\0host:8085"]
+         ])
+      ));
+      $rst = $Client->expect(HTTP2::FRAME_RST_STREAM);
+      yield new Assertion(
+         description: 'NUL in HTTP/2 :authority → RST_STREAM(PROTOCOL_ERROR)',
+      )
+         ->expect([$rst['stream'] ?? 0, $code($rst)])
+         ->to->be([25, Errors::Protocol->value])
+         ->assert();
+
+      // @ HTTP/2 only accepts schemes served by this HTTP server
+      $Client->send(Frame::pack(
+         HTTP2::FRAME_HEADERS,
+         HTTP2::FLAG_END_HEADERS | HTTP2::FLAG_END_STREAM,
+         27,
+         HPACK::encode([
+            [':method', 'GET'],
+            [':scheme', 'ftp'],
+            [':path', '/invalid-scheme'],
+            [':authority', 'localhost:8085']
+         ])
+      ));
+      $rst = $Client->expect(HTTP2::FRAME_RST_STREAM);
+      yield new Assertion(
+         description: 'Invalid HTTP/2 :scheme → RST_STREAM(PROTOCOL_ERROR)',
+      )
+         ->expect([$rst['stream'] ?? 0, $code($rst)])
+         ->to->be([27, Errors::Protocol->value])
+         ->assert();
+
+      // @ HTTP/2 :path follows the same 8192-byte target cap as HTTP/1.1
+      $Client->send(Frame::pack(
+         HTTP2::FRAME_HEADERS,
+         HTTP2::FLAG_END_HEADERS | HTTP2::FLAG_END_STREAM,
+         29,
+         HPACK::encode([
+            [':method', 'GET'],
+            [':scheme', 'http'],
+            [':path', '/' . str_repeat('a', 8192)],
+            [':authority', 'localhost:8085']
+         ])
+      ));
+      $headers = $Client->expect(HTTP2::FRAME_HEADERS);
+      yield new Assertion(
+         description: 'Oversized HTTP/2 :path → canned :status 414',
+      )
+         ->expect($status($headers))
+         ->to->be('414')
+         ->assert();
+
       // @ Stream errors above never killed the connection
       $Client->send(Frame::pack(HTTP2::FRAME_PING, 0, 0, 'aliveyet'));
       $pong = $Client->expect(HTTP2::FRAME_PING);

@@ -6,6 +6,11 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\tests\HTTP2;
 use const BOOTGLY_ROOT_DIR;
 use function define;
 use function defined;
+use function fclose;
+use function fopen;
+use function ftruncate;
+use function is_file;
+use function unlink;
 use function usleep;
 
 use Bootgly\ACI\Logs\Data\Display;
@@ -28,6 +33,14 @@ return new Suite(
          $TestProject = require $projectFile;
          define('BOOTGLY_PROJECT', $TestProject);
       }
+      $largeFile = BOOTGLY_ROOT_DIR . 'projects/Demo/HTTP_Server_CLI/statics/h2-s4-large.bin';
+      if (is_file($largeFile) === false) {
+         $Handler = fopen($largeFile, 'wb');
+         if ($Handler !== false) {
+            ftruncate($Handler, 17 * 1024 * 1024);
+            fclose($Handler);
+         }
+      }
 
       // @ Boot the HTTP server in Test mode with a fixed echo handler —
       //   the HTTP/2 client specs speak raw frames (prior knowledge).
@@ -40,6 +53,10 @@ return new Suite(
       $HTTP_Server_CLI->on(
          Events::RequestReceived,
          function ($Request, Response $Response): Response {
+            if ($Request->URI === '/h2-s4-large') {
+               return $Response->upload('statics/h2-s4-large.bin', close: false);
+            }
+
             return $Response->send("method={$Request->method};uri={$Request->URI};protocol={$Request->protocol};body={$Request->input}");
          }
       );
@@ -64,6 +81,9 @@ return new Suite(
          $HTTP_Server_CLI->Process->stopping = true;
          $HTTP_Server_CLI->Process->Children->terminate();
          $HTTP_Server_CLI->Process->State->clean();
+         if (is_file($largeFile)) {
+            unlink($largeFile);
+         }
       }
 
       return true;
@@ -82,6 +102,8 @@ return new Suite(
       '3.1-curl',
       '4.1-hardening',
       '4.2-compliance',
+      '4.3-file_streaming',
+      '4.4-feeding_contract',
       '5.1-throughput',
       '5.2-h2spec'
    ]

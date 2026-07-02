@@ -973,23 +973,16 @@ class Request
     */
    public function decode (Packages $Package, string &$buffer, int $size): States
    {
-      // ? HTTP/2 cleartext prior knowledge (RFC 9113 §3.3): the connection
-      //   commits to HTTP/2 as soon as the FIRST read starts with the
-      //   distinctive 14-byte preface signal `PRI * HTTP/2.0` (or a strict
-      //   prefix of it, when TCP segmentation splits the read) — no valid
-      //   HTTP/1.1 request line begins with it. The per-connection decoder
-      //   then buffers a partial preface until its 24 bytes complete, and
-      //   validates the full preface itself (a corrupt tail → GOAWAY),
-      //   instead of silently falling back to the HTTP/1.1 parser.
-      //   Hot-path cost: one char compare (only `POST`/`PUT`/`PATCH` reach
-      //   the strncmp, and it diverges on byte 1). `writes === 0` pins the
-      //   switch to the connection's first read — pipelined bytes can never
-      //   flip an HTTP/1.1 connection.
+      // ? HTTP/2 cleartext prior knowledge (RFC 9113 §3.3): Decoder_ carries
+      //   short ambiguous first-read prefixes. Once the first request exposes
+      //   the 14-byte signal `PRI * HTTP/2.0`, this commits the connection to
+      //   HTTP/2; Decoder_HTTP2 then validates the full 24-byte preface.
       if (
          $buffer[0] === 'P'
          && $Package->Connection->writes === 0
          && Server::$enableHTTP2
-         && strncmp($buffer, HTTP2::PREFACE, min($size, 14)) === 0
+         && $size >= 14
+         && strncmp($buffer, HTTP2::PREFACE, 14) === 0
       ) {
          $Package->cache = false;
          $Decoder = new Decoder_HTTP2;

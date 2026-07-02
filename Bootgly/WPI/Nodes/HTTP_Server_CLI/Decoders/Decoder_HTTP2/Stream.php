@@ -11,6 +11,10 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Decoder_HTTP2;
 
 
+use function fclose;
+use function is_resource;
+
+
 /**
  * One HTTP/2 stream (RFC 9113 §5) on a `Decoder_HTTP2` connection.
  *
@@ -45,6 +49,10 @@ class Stream
    public int $pending;
    // @ Outbound DATA blocked by an exhausted window, waiting for credit.
    public string $backlog;
+   /** @var array<int, array<string, mixed>> Outbound file/pad segments. */
+   public array $chunks;
+   // @ Current outbound file/pad segment index.
+   public int $chunk;
    // # State
    // @ Declared `content-length` (mismatch at END_STREAM is a stream error)
    public null|int $length;
@@ -70,8 +78,24 @@ class Stream
       $this->supply = $supply;
       $this->pending = 0;
       $this->backlog = '';
+      $this->chunks = [];
+      $this->chunk = 0;
       $this->length = null;
       $this->ended = false;
       $this->responded = false;
+   }
+
+   public function close (): void
+   {
+      foreach ($this->chunks as $chunk) {
+         $Handler = $chunk['handler'] ?? null;
+         if (is_resource($Handler)) {
+            @fclose($Handler);
+         }
+      }
+
+      $this->chunks = [];
+      $this->chunk = 0;
+      $this->backlog = '';
    }
 }

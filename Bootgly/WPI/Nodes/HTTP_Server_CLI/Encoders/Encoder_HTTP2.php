@@ -14,18 +14,14 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders;
 use function explode;
 use function fclose;
 use function fopen;
-use function fread;
-use function fseek;
 use function is_array;
 use function is_int;
 use function is_string;
 use function ltrim;
-use function min;
 use function strlen;
 use function strpos;
 use function strtolower;
 use function substr;
-use Throwable;
 
 use Bootgly\WPI\Endpoints\Servers\Packages;
 use Bootgly\WPI\Modules\HTTP2;
@@ -52,10 +48,6 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
  */
 final class Encoder_HTTP2
 {
-   // @ Materialized upload ceiling — file parts above this respond 500
-   //   (window-respecting file streaming is follow-up work).
-   protected const int UPLOAD = 16 * 1024 * 1024;
-
    // * Metadata
    // # Context-free header-block cache (single slot, per worker)
    private static int $cachedCode = 0;
@@ -100,25 +92,28 @@ final class Encoder_HTTP2
          return $outbox;
       }
 
-      // ! Body: buffered raw + materialized upload parts (h2 has no raw
-      //   file pump — the HTTP/1.1 `uploading[]` writer bypasses framing)
+      // ! Body: buffered raw + queued upload segments. HTTP/2 must frame file
+      //   responses itself; the HTTP/1.1 `uploading[]` writer bypasses h2 DATA.
       $body = $Response->Body->raw;
+      $chunks = [];
+      $queued = 0;
       if ($files !== []) {
-         $parts = self::load($files);
-         if ($parts === null) {
+         $queue = self::queue($files);
+         if ($queue === null) {
             $code = 500;
             $body = '';
          }
          else {
-            $body .= $parts;
+            [$chunks, $queued] = $queue;
          }
       }
 
-      $size = strlen($body);
+      $size = strlen($body) + $queued;
 
       // ? HEAD: full header block (with content-length), no DATA
       if ($Request->method === 'HEAD') {
          $body = '';
+         $chunks = [];
       }
 
       // @ Header block — cache hit when status/header block/length repeat
@@ -143,7 +138,7 @@ final class Encoder_HTTP2
 
       // @ HEADERS (+CONTINUATION when the block exceeds the peer frame size)
       $limit = $H2->Remote->frame;
-      $closing = ($body === '') ? HTTP2::FLAG_END_STREAM : 0;
+      $closing = ($body === '' && $chunks === []) ? HTTP2::FLAG_END_STREAM : 0;
       $frames = '';
 
       if (strlen($block) <= $limit) {
@@ -169,31 +164,16 @@ final class Encoder_HTTP2
          }
       }
 
-      // @ DATA — bounded by the connection + stream send windows
-      if ($body !== '') {
-         $window = min($H2->window, $Stream->window);
-         $send = ($window > 0) ? min($window, strlen($body)) : 0;
+      // @ DATA — bounded by the connection + stream send windows.
+      if ($body !== '' || $chunks !== []) {
+         $Stream->backlog = $body;
+         $Stream->chunks = $chunks;
+         $Stream->chunk = 0;
 
-         if ($send > 0) {
-            $H2->window -= $send;
-            $Stream->window -= $send;
+         [$data, $done] = $H2->drain($Stream, $stream);
+         $frames .= $data;
 
-            $done = ($send === strlen($body));
-            for ($offset = 0; $offset < $send; $offset += $limit) {
-               $chunk = substr($body, $offset, min($limit, $send - $offset));
-               $frames .= Frame::pack(
-                  HTTP2::FRAME_DATA,
-                  ($done && $offset + $limit >= $send) ? HTTP2::FLAG_END_STREAM : 0,
-                  $stream,
-                  $chunk
-               );
-            }
-         }
-
-         // ?! Window exhausted — park the tail; `Decoder_HTTP2::pump()`
-         //   drains it when WINDOW_UPDATE / SETTINGS credit arrives.
-         if ($send < strlen($body)) {
-            $Stream->backlog = substr($body, $send);
+         if ($done === false) {
             $Stream->responded = true;
 
             $raw = "{$outbox}{$frames}";
@@ -203,6 +183,7 @@ final class Encoder_HTTP2
       }
 
       // @ Fully responded — release the stream
+      $Stream->close();
       unset($H2->Streams[$stream]);
       $H2->opened--;
 
@@ -260,17 +241,16 @@ final class Encoder_HTTP2
    }
 
    /**
-    * Materialize queued upload file parts (offset/length + pads) into a
-    * DATA payload, bounded by the `UPLOAD` ceiling.
+    * Normalize queued upload file parts into streamable DATA segments.
     *
     * @param array<int, array<string, mixed>> $files
     *
-    * @return null|string `null` when a part is unreadable or the ceiling is hit.
+    * @return null|array{0: array<int, array<string, mixed>>, 1: int}
     */
-   protected static function load (array $files): null|string
+   protected static function queue (array $files): null|array
    {
-      // !
-      $payload = '';
+      $chunks = [];
+      $size = 0;
 
       // @@
       foreach ($files as $queued) {
@@ -283,6 +263,7 @@ final class Encoder_HTTP2
          if ($Handler === false) {
             return null;
          }
+         @fclose($Handler);
 
          $parts = is_array($queued['parts'] ?? null) ? $queued['parts'] : [];
          $pads = is_array($queued['pads'] ?? null) ? $queued['pads'] : [];
@@ -300,38 +281,31 @@ final class Encoder_HTTP2
             $pad = $pads[$index] ?? null;
             if (is_array($pad)) {
                $prepend = $pad['prepend'] ?? '';
-               $payload .= is_string($prepend) ? $prepend : '';
+               if (is_string($prepend) && $prepend !== '') {
+                  $chunks[] = ['data' => $prepend, 'position' => 0];
+                  $size += strlen($prepend);
+               }
             }
 
-            // ? Ceiling guard before the read
-            if (strlen($payload) + $bytes > self::UPLOAD) {
-               @fclose($Handler);
-               return null;
-            }
-
-            try {
-               @fseek($Handler, $offset);
-               $data = @fread($Handler, $bytes);
-            }
-            catch (Throwable) {
-               $data = false;
-            }
-            if ($data === false || strlen($data) !== $bytes) {
-               @fclose($Handler);
-               return null;
-            }
-            $payload .= $data;
+            $chunks[] = [
+               'file' => $file,
+               'offset' => $offset,
+               'length' => $bytes,
+               'position' => 0
+            ];
+            $size += $bytes;
 
             if (is_array($pad)) {
                $append = $pad['append'] ?? '';
-               $payload .= is_string($append) ? $append : '';
+               if (is_string($append) && $append !== '') {
+                  $chunks[] = ['data' => $append, 'position' => 0];
+                  $size += strlen($append);
+               }
             }
          }
-
-         @fclose($Handler);
       }
 
       // :
-      return $payload;
+      return [$chunks, $size];
    }
 }

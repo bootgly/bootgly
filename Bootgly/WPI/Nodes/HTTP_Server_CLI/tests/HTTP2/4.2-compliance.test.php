@@ -1,11 +1,6 @@
 <?php
 
 
-use function strlen;
-use function substr;
-use function unpack;
-use function usleep;
-
 use Bootgly\ACI\Tests\Assertion;
 use Bootgly\ACI\Tests\Assertions;
 use Bootgly\ACI\Tests\Suite\Test\Specification;
@@ -28,10 +23,28 @@ return new Specification(
          $parts = unpack('Nlast/Nerror', $payload);
          return $parts['error'];
       };
+      $read = static function (Client $Client, string $needle): string {
+         $deadline = microtime(true) + 2.0;
+         $raw = '';
+
+         while (microtime(true) < $deadline) {
+            $chunk = @fread($Client->Socket, 65536);
+            if ($chunk !== false && $chunk !== '') {
+               $raw .= $chunk;
+               if (str_contains($raw, $needle)) {
+                  break;
+               }
+            }
+
+            usleep(10000);
+         }
+
+         return $raw;
+      };
 
       // @ Preface split across TCP writes (byte 10 boundary) — the probe
-      //   installs the h2 decoder on the prefix; the decoder completes the
-      //   preface from the second write.
+      //   stays neutral on the short prefix; the full signal on the second
+      //   write installs h2 and the decoder validates the complete preface.
       $Client = new Client;
       $Client->send(substr(HTTP2::PREFACE, 0, 10));
       usleep(60000);
@@ -64,6 +77,37 @@ return new Specification(
          ->to->be('method=GET;uri=/split-preface;protocol=HTTP/2;body=')
          ->assert();
       $Client->close();
+
+      // @ h2c sniffing must not steal segmented HTTP/1.1 methods that start
+      //   with "P". The first byte alone is ambiguous with the h2 preface.
+      foreach ([
+         'POST' => ['OST', '/sniff-post', 'sniff-post-body'],
+         'PUT' => ['UT', '/sniff-put', 'sniff-put-body'],
+         'PATCH' => ['ATCH', '/sniff-patch', 'sniff-patch-body']
+      ] as $method => [$tail, $uri, $body]) {
+         $Client = new Client;
+         $Client->send('P');
+         usleep(60000);
+         $Client->send(
+            "{$tail} {$uri} HTTP/1.1\r\n"
+            . "Host: localhost\r\n"
+            . 'Content-Length: ' . strlen($body) . "\r\n"
+            . "Content-Type: text/plain\r\n"
+            . "Connection: close\r\n\r\n"
+            . $body
+         );
+
+         $expected = "method={$method};uri={$uri};protocol=HTTP/1.1;body={$body}";
+         $response = $read($Client, $expected);
+         $Client->close();
+
+         yield new Assertion(
+            description: "Segmented {$method} first-byte P stays HTTP/1.1",
+         )
+            ->expect(str_contains($response, $expected))
+            ->to->be(true)
+            ->assert();
+      }
 
       // @ The preface must be followed by SETTINGS (RFC 9113 §3.4)
       $Client = new Client;

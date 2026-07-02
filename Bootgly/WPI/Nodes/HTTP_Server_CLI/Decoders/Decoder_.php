@@ -14,12 +14,16 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders;
 use function array_key_first;
 use function array_key_last;
 use function count;
+use function min;
+use function strlen;
+use function strncmp;
 use function strpos;
 
 use const Bootgly\WPI;
 use Bootgly\WPI\Endpoints\Servers\Decoder\States;
 use Bootgly\WPI\Endpoints\Servers\Packages;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages as TCP_Packages;
+use Bootgly\WPI\Modules\HTTP2;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI as Server;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
@@ -27,13 +31,50 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 
 class Decoder_ extends Decoders
 {
+   // @ Carried first-request bytes while h2c prior-knowledge sniffing is ambiguous.
+   public string $buffer = '';
+
+
    public function decode (Packages $Package, string $buffer, int $size): States
    {
       /** @var array<string,Request> $inputs */
       static $inputs = []; // @ L1 cache (stable/hot keys)
       /** @var TCP_Packages $Package */
 
-      $cacheable = ($size <= 2048);
+      $carried = 0;
+      if ($this->buffer !== '') {
+         $carried = strlen($this->buffer);
+         $buffer = "{$this->buffer}{$buffer}";
+         $size += $carried;
+         $this->buffer = '';
+      }
+
+      // ? h2c prior-knowledge neutral sniffing. A one-byte `P` can be a
+      //   segmented POST/PUT/PATCH, so short prefixes are carried by a
+      //   per-connection Decoder_ until the protocol can be distinguished.
+      if (
+         Server::$enableHTTP2
+         && $Package->Connection->writes === 0
+         && $buffer[0] === 'P'
+      ) {
+         $signal = min($size, 14);
+         if (strncmp($buffer, HTTP2::PREFACE, $signal) === 0 && $size < 14) {
+            if ($Package->Decoder === null) {
+               $Decoder = new self;
+               $Decoder->buffer = $buffer;
+               $Package->Decoder = $Decoder;
+            }
+            else {
+               $this->buffer = $buffer;
+            }
+
+            $Package->cache = false;
+            $Package->consumed = $size - $carried;
+            return States::Incomplete;
+         }
+      }
+
+      $cacheable = ($carried === 0 && $size <= 2048);
       $cacheKey = null;
       if ($cacheable) {
          // @ Do not cache query-bearing targets. They are attacker-mutable and
@@ -94,6 +135,18 @@ class Decoder_ extends Decoders
       // @
       $state = $Request->decode($Package, $buffer, $size);
       $length = $Package->consumed;
+
+      if ($carried > 0 && $Package->consumed > 0) {
+         $Package->consumed = $Package->consumed > $carried
+            ? $Package->consumed - $carried
+            : 0;
+         $length = $Package->consumed;
+      }
+
+      if ($state === States::Incomplete && $Package->Decoder === $this) {
+         $this->buffer = $buffer;
+         $Package->consumed = $size - $carried;
+      }
 
       // @ Write to local cache
       // Skip caching when Body is waiting for more data (chunked/streaming)

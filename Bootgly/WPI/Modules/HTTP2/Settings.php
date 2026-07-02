@@ -35,6 +35,7 @@ final class Settings
    // # SETTINGS_INITIAL_WINDOW_SIZE — per-stream flow-control window
    public int $window = 65535;
    // # SETTINGS_MAX_FRAME_SIZE — largest frame payload the sender accepts
+   /** @var int<16384, 16777215> `parse()` rejects values outside the RFC range */
    public int $frame = 16384;
    // # SETTINGS_MAX_HEADER_LIST_SIZE — decoded header list octet cap (advisory)
    public int $list = PHP_INT_MAX;

@@ -231,7 +231,11 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
       // @ `$this->consumed` is always written by every `decode()` outcome
       //   (Complete/Incomplete/Rejected); no pre-reset needed.
       if (Server::$Decoder) { // @ Decode Application Data if exists
-         $state = ($this->Decoder ?? Server::$Decoder)->decode($this, $input, $received);
+         $Decoder = $this->Decoder ?? Server::$Decoder;
+         $state = $Decoder->decode($this, $input, $received);
+      }
+      else {
+         $Decoder = null;
       }
 
       if ($state === States::Complete) {
@@ -247,7 +251,8 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
          //   pipelining — `writing()` in resume mode appends the next
          //   responses to `pendingBuffer` in order, bounded by
          //   `$maxPendingBytes` + the stall deadline.
-         if ($this->pendingBuffer !== '' && $this->Decoder instanceof Feeding === false) {
+         $Decoder = $this->Decoder ?? $Decoder;
+         if ($this->pendingBuffer !== '' && $Decoder instanceof Feeding === false) {
             if ($this->closeAfterWrite) {
                $this->closeAfterDrain = true;
                $this->closeAfterWrite = false;
@@ -276,9 +281,18 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
                $this->consumed = 0;
                $this->rejected = false;
 
-               $decoded = ($this->Decoder ?? Server::$Decoder)->decode($this, $remaining, $remainingLength);
+               $Decoder = $this->Decoder ?? Server::$Decoder;
+               $decoded = $Decoder->decode($this, $remaining, $remainingLength);
 
                if ($decoded !== States::Complete) {
+                  if (
+                     $decoded === States::Incomplete
+                     && $Decoder instanceof Feeding
+                     && $this->consumed < $remainingLength
+                  ) {
+                     $Decoder->feed(substr($remaining, $this->consumed));
+                     $this->consumed = $remainingLength;
+                  }
                   break; // Incomplete or rejected \u2014 stop pipelining
                }
 
@@ -291,7 +305,7 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
                //   top-level twin.
                if (
                   $this->pendingBuffer !== '' // @phpstan-ignore notIdentical.alwaysFalse
-                  && $this->Decoder instanceof Feeding === false
+                  && $Decoder instanceof Feeding === false
                ) {
                   if ($this->closeAfterWrite) { // @phpstan-ignore if.alwaysFalse
                      $this->closeAfterDrain = true;
@@ -310,8 +324,17 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
             }
          }
       }
+      else if ($state === States::Incomplete) {
+         $Decoder = $this->Decoder ?? $Decoder;
+         if ($Decoder instanceof Feeding && $this->consumed < $inputLength) {
+            $Decoder->feed(substr($input, $this->consumed));
+            $this->consumed = $inputLength;
+         }
+      }
       // @ Consume test handler on reject (decoder rejected, encoder never ran)
-      else if ($state === States::Rejected && isset(SAPI::$Suite)) {
+      // ?! The explicit enum check is kept for readability — after the
+      //   Complete/Incomplete branches only Rejected remains.
+      else if ($state === States::Rejected && isset(SAPI::$Suite)) { // @phpstan-ignore identical.alwaysTrue
          // @ Index-based dispatch installs the handler per-request from
          //   the `X-Bootgly-Test` header \u2014 there is no FIFO slot to pop.
          //   We only shift for legacy/no-header priming requests, but
