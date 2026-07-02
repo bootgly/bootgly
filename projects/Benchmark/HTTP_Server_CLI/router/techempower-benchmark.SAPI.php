@@ -251,28 +251,29 @@ $FetchWorld = static function (SQL $Database, Response $Response, int $id) use (
 };
 
 $UpdateWorlds = static function (SQL $Database, Response $Response, array $Worlds) use ($Native): void {
-   $cases = [];
+   // ! Batch as PostgreSQL array literals — one prepared statement for every
+   //   batch size N (the CASE/IN form emitted one statement text per N).
    $ids = [];
-   $parameters = [];
-   $placeholder = 1;
+   $values = [];
 
    foreach ($Worlds as $World) {
-      $cases[] = 'WHEN $' . $placeholder++ . '::integer THEN $' . $placeholder++ . '::integer';
-      $parameters[] = $World['id'];
-      $parameters[] = $World['randomNumber'];
+      $ids[] = $World['id'];
+      $values[] = $World['randomNumber'];
    }
 
-   foreach ($Worlds as $World) {
-      $ids[] = '$' . $placeholder++ . '::integer';
-      $parameters[] = $World['id'];
-   }
-
+   // @ Lock the target rows in ascending id order BEFORE updating: concurrent
+   //   batches then acquire their row locks in the same global order, which
+   //   removes the lock-order cycles (PostgreSQL deadlocks) the unordered
+   //   batched UPDATE hit at high worker counts.
    $Operation = $Native(
       $Database,
       $Response,
       $Database->query(
-         'UPDATE World SET randomNumber = CASE id ' . implode(' ', $cases) . ' END WHERE id IN (' . implode(',', $ids) . ')',
-         $parameters
+         'UPDATE World SET randomNumber = data.new'
+         . ' FROM (SELECT d.id, d.new FROM unnest($1::integer[], $2::integer[]) AS d(id, new)'
+         . ' JOIN World w ON w.id = d.id ORDER BY d.id FOR UPDATE OF w) AS data'
+         . ' WHERE World.id = data.id',
+         ['{' . implode(',', $ids) . '}', '{' . implode(',', $values) . '}']
       )
    );
 
