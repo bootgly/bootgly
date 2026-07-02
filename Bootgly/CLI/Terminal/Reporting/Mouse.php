@@ -12,6 +12,7 @@ namespace Bootgly\CLI\Terminal\Reporting;
 
 
 use function explode;
+use function function_exists;
 use function intval;
 use function pcntl_signal_dispatch;
 use function strlen;
@@ -78,7 +79,10 @@ class Mouse implements Reporting
       $Input->configure(blocking: false, canonical: false, echo: false);
 
       while ($continue = true) {
-         pcntl_signal_dispatch();
+         // ? Signal dispatching requires pcntl (absent on embedded runtimes)
+         if (function_exists('pcntl_signal_dispatch') === true) {
+            pcntl_signal_dispatch();
+         }
 
          $input = $Input->read(1);
 
@@ -88,13 +92,32 @@ class Mouse implements Reporting
 
             // @ Check if the code matches a mouse movement position
             if ($input === "\033[<") {
-               $input = $Input->read(10);
-               if ($input === false) {
-                  continue;
+               // @@ Accumulate the SGR payload until its M/m terminator
+               // A fixed-length read desyncs the parser when bursts deliver two
+               // sequences back-to-back (the next \e would be swallowed).
+               $input = '';
+               while (strlen($input) < 24) {
+                  $byte = $Input->read(1);
+                  if ($byte === false || $byte === '') {
+                     break;
+                  }
+
+                  $input .= $byte;
+
+                  if ($byte === 'M' || $byte === 'm') {
+                     break;
+                  }
                }
 
+               // ? Skip truncated payloads (no terminator)
                $characters = strlen($input);
+               if ($characters < 6) {
+                  continue;
+               }
                $last = $input[$characters - 1];
+               if ($last !== 'M' && $last !== 'm') {
+                  continue;
+               }
                $input = substr($input, 0, $characters - 1);
 
                $reports = explode(';', $input);
@@ -104,7 +127,12 @@ class Mouse implements Reporting
                $col = intval($reports[1]);
                $row = intval($reports[2]);
 
-               $action = Mousestrokes::from($reports[0]);
+               // ? Skip codes not mapped by the enum (terminal-specific modifiers)
+               $action = Mousestrokes::tryFrom($reports[0]);
+               if ($action === null) {
+                  continue;
+               }
+
                $clicking = match ($reports[3]) {
                   'M' => true,
                   'm' => false,

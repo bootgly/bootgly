@@ -101,6 +101,9 @@ class DemoCommand extends Command
 
          // UI - Fieldset component
          22 => 'UI/Fieldset-01.demo.php',
+
+         // Terminal Reporting - Mouse
+         23 => 'Terminal/Reporting/Mouse-01.demo.php',
       ];
 
       $last = array_key_last($examples);
