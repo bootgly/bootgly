@@ -21,7 +21,7 @@ namespace Bootgly\ABI {
    \restore_error_handler();
    \set_error_handler(
       callback: Errors::collect(...),
-      error_levels: E_ALL | E_STRICT
+      error_levels: E_ALL
    );
 
    // @ Debugging\Data\Exceptions

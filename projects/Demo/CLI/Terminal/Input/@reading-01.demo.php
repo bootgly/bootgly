@@ -65,8 +65,8 @@ $Input->reading(
             $char = '';
             continue;
          }
-         // EOL
-         if ($char === "\n") {
+         // EOL (raw terminals and terminal emulators deliver Enter as \r)
+         if ($char === "\n" || $char === "\r") {
             // @ Write user data to Terminal Input (Client => Server)
             $write(data: $line);
             $line = '';

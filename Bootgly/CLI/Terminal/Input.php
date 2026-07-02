@@ -15,8 +15,11 @@ use const SIGTERM;
 use const STDIN;
 use function cli_set_process_title;
 use function defined;
+use function fopen;
 use function fread;
 use function function_exists;
+use function fwrite;
+use function getenv;
 use function pcntl_fork;
 use function pcntl_signal;
 use function pcntl_signal_dispatch;
@@ -29,11 +32,13 @@ use function stream_set_blocking;
 use function system;
 use function time;
 use Closure;
+use Generator;
 use Throwable;
 
 use Bootgly\ABI\IO\IPC\Pipe;
 use Bootgly\ACI\Process\State;
 use Bootgly\API\Projects;
+use Bootgly\CLI\Terminal\Input\Roles;
 
 
 class Input
@@ -44,6 +49,12 @@ class Input
    // * Data
    /** @var resource */
    public $stream;
+   // # Terminal Client/Server API
+   // Role and duplex channel for embedded runtimes (one role per process);
+   // when both stay null and process control exists, reading() forks natively.
+   public null|Roles $role = null;
+   /** @var array{0: resource, 1: resource}|null Duplex channel override (read, write) */
+   public null|array $channel = null;
 
    // * Metadata
    // ...
@@ -140,6 +151,19 @@ class Input
     */
    public function reading (Closure $CAPI, Closure $SAPI): void
    {
+      // ? Embedded runtimes run a single role wired to an injected duplex channel
+      $Role = $this->role ?? Roles::tryFrom((string) getenv('BOOTGLY_TERMINAL_ROLE'));
+      if ($Role !== null) {
+         $this->relay($Role, $CAPI, $SAPI);
+
+         return;
+      }
+
+      // ? Forking the Client/Server pair requires process control
+      if (function_exists('pcntl_fork') === false) {
+         return;
+      }
+
       $Pipe = new Pipe;
       $Pipe->blocking = false;
       $Pipe->open();
@@ -224,6 +248,78 @@ class Input
       }
       else if ($pid === -1) {
          die('Could not fork process!');
+      }
+   }
+
+   /**
+    * Runs a single Terminal Client/Server API role wired to a duplex channel.
+    * Embedded runtimes (e.g. WASM workers) run one role per process and provide
+    * the channel as a pair of streams — natively reading() forks both roles.
+    *
+    * @param Roles $Role The role this process assumes (Client or Server).
+    * @param Closure $CAPI The Terminal Client API function.
+    * @param Closure $SAPI The Terminal Server API function.
+    *
+    * @return void
+    */
+   private function relay (Roles $Role, Closure $CAPI, Closure $SAPI): void
+   {
+      // ! Duplex channel (read, write) — injected or resolved from the environment
+      $channel = $this->channel;
+      if ($channel === null) {
+         // ?
+         $uri = getenv('BOOTGLY_TERMINAL_CHANNEL');
+         if ($uri === false || $uri === '') {
+            return;
+         }
+
+         $read = fopen($uri, 'r');
+         $write = fopen($uri, 'w');
+         // ?
+         if ($read === false || $write === false) {
+            return;
+         }
+
+         $channel = [$read, $write];
+      }
+
+      switch ($Role) {
+         case Roles::Client:
+            // @ Terminal Client API: reads this Input, writes to the channel
+            $CAPI(
+               [$this, 'read'],
+               static function (string $data) use ($channel): int|false {
+                  return fwrite($channel[1], $data);
+               }
+            );
+
+            break;
+         case Roles::Server:
+            // @ Terminal Server API: consumes data read from the channel
+            $SAPI(
+               static function (int $length = 1024, null|int $timeout = null) use ($channel): Generator {
+                  // ?
+                  if ($length < 1) {
+                     $length = 1024;
+                  }
+
+                  // @@ Read the channel until it closes or fails
+                  while (true) {
+                     $data = fread($channel[0], $length);
+
+                     // ?: Channel closed or failed
+                     if ($data === false || $data === '') {
+                        yield false;
+
+                        break;
+                     }
+
+                     yield $data;
+                  }
+               }
+            );
+
+            break;
       }
    }
 }
