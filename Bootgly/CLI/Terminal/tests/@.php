@@ -18,5 +18,6 @@ return new Suite(
       '1.2-terminal-size-fallback',
       '2.1-cursor-position-shape',
       '3.1-progress-anchored-render',
+      '4.1-menu-control-keys',
    ]
 );

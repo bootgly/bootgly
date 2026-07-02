@@ -196,6 +196,7 @@ final class Options extends Items
 
             break;
 
+         case "\r": // Enter Key (raw terminals without icrnl — e.g. terminal emulators feeding stdin directly)
          case PHP_EOL: // Enter Key
             return false;
 

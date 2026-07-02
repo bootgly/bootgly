@@ -50,7 +50,7 @@ $Items->Options->add(label: 'Option 3');
 foreach ($Menu->rendering() as $Output) {
    // ...
 }
-$selected = $Menu->$selected;
+$selected = $Menu->selected;
 
 
 echo "\n";

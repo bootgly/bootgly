@@ -11,8 +11,8 @@
 namespace Bootgly\CLI\UI\Components;
 
 
+use const BOOTGLY_TTY;
 use function str_pad;
-use function stream_isatty;
 use function usleep;
 use Generator;
 
@@ -122,7 +122,7 @@ class Menu extends Component
       // @phpstan-ignore-next-line
       if ($Orientation === Orientation::Horizontal) {
          // @phpstan-ignore-next-line
-         $rendered = str_pad($rendered, $this->width, ' ', $Aligment->value);
+         $rendered = str_pad($rendered, self::$width, ' ', $Aligment->value);
          $rendered .= "\n";
       }
 
@@ -135,8 +135,8 @@ class Menu extends Component
 
    public function rendering (): Generator
    {
-      // ? Render once and finish when input is not interactive (pipes, embedded runtimes)
-      if (stream_isatty($this->Input->stream) === false) {
+      // ? Render once and finish when no interactive terminal is attached (pipes, embedded runtimes)
+      if (BOOTGLY_TTY === false) {
          yield $this->render();
 
          $this->selected = (array) $this->Items->Options::$selected[self::$level];

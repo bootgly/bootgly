@@ -32,6 +32,13 @@ define('BOOTGLY_VERSION', '0.18.0-beta');
 // ? Platform interface override for embedded runtimes (e.g. WASM) that behave as a console.
 // BOOTGLY_SAPI answers "which platform interface"; PHP_SAPI stays for "what can this process actually do".
 define('BOOTGLY_SAPI', getenv('BOOTGLY_SAPI') ?: PHP_SAPI);
+// ? Interactivity override for emulated terminals (e.g. xterm.js feeding a WASM runtime).
+// BOOTGLY_TTY answers "is there an interactive terminal attached"; stream capabilities stay per stream.
+define('BOOTGLY_TTY', match (getenv('BOOTGLY_TTY')) {
+   '1' => true,
+   '0' => false,
+   default => defined('STDIN') && function_exists('stream_isatty') && stream_isatty(STDIN)
+});
 
 @include(__DIR__ . '/vendor/autoload.php'); // composer
 
