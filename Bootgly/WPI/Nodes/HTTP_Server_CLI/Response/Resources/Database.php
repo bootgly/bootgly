@@ -14,7 +14,6 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources;
 use BackedEnum;
 use Closure;
 use RuntimeException;
-use stdClass;
 use Stringable;
 use Throwable;
 
@@ -44,11 +43,10 @@ class Database extends Resource implements Awaiting, Scheduling
 
    // * Data
    private null|Closure $Wait = null;
-   // ! Lazy: attach() binds the response scope on mount (the common, per-request
-   //   HTTP path) — allocating an own stdClass here would be dead weight there
-   private object $Scope {
-      get => $this->Scope ??= new stdClass;
-   }
+   // ! Bound by attach() on mount (the per-request HTTP path). Plain nullable —
+   //   a get hook here costs ~2% CPU on 1-query routes (kills engine inlining),
+   //   and a null scope falls through to the SQL facade's default resolution
+   private null|object $Scope = null;
 
    // * Metadata
    // ...
