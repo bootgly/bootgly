@@ -27,7 +27,7 @@ $Progress->total = 0;
 $Progress->template = <<<'TEMPLATE'
 @description;
 @current;/@total; [@bar;] @percent;%
-⏱️ @elapsed;s - 🏁 @eta;s - 📈 @rate; loops/s
+⏱️  @elapsed;s - 🏁  @eta;s - 📈  @rate; loops/s
 TEMPLATE;
 
 // ! Bar
@@ -35,9 +35,9 @@ $Bar = $Progress->Bar;
 // * Config
 $Bar->units = 10;
 // * Data
-$Bar->Symbols->incomplete = '🖤';
+$Bar->Symbols->incomplete = '-';
 $Bar->Symbols->current = '';
-$Bar->Symbols->complete = '❤️';
+$Bar->Symbols->complete = '#';
 
 $Progress->start();
 

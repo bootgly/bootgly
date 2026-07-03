@@ -27,16 +27,16 @@ $Progress->total = 1000000;
 $Progress->template = <<<'TEMPLATE'
 @description;
 @current;/@total; [@bar;] @percent;%
-⏱️ @elapsed;s - 🏁 @eta;s - 📈 @rate; loops/s
+⏱️  @elapsed;s - 🏁  @eta;s - 📈  @rate; loops/s
 TEMPLATE;
 
 // ! Bar
 // * Config
 $Progress->Bar->units = 10;
 // * Data
-$Progress->Bar->Symbols->incomplete = '🖤';
+$Progress->Bar->Symbols->incomplete = '-';
 $Progress->Bar->Symbols->current = '';
-$Progress->Bar->Symbols->complete = '❤️';
+$Progress->Bar->Symbols->complete = '#';
 
 $Progress->start();
 
@@ -45,10 +45,10 @@ while ($i++ < 1000000) {
    if ($i === 1) {
       $Progress->describe('@#red: Performing progress! @;');
    }
-   if ($i === 125000) {
+   if ($i === 500000) {
       $Progress->describe('@#yellow: There\'s only half left... @;');
    }
-   if ($i === 249999) {
+   if ($i === 999999) {
       $Progress->describe('@#green: Finished!!! @;');
    }
 
