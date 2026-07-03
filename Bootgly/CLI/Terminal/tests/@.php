@@ -21,5 +21,6 @@ return new Suite(
       '4.1-menu-control-keys',
       '5.1-mouse-report-escapes',
       '6.1-input-reading-roles',
+      '7.1-logs-render-width',
    ]
 );

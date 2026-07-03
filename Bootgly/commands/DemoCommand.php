@@ -104,6 +104,12 @@ class DemoCommand extends Command
 
          // Terminal Reporting - Mouse
          23 => 'Terminal/Reporting/Mouse-01.demo.php',
+
+         // Terminal -> Output -> Viewport Panning
+         24 => 'Terminal/Output/Viewport-01.demo.php',
+
+         // UI - Logs component
+         25 => 'UI/Logs-01.demo.php',
       ];
 
       $last = array_key_last($examples);

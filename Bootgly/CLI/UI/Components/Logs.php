@@ -13,6 +13,8 @@ namespace Bootgly\CLI\UI\Components;
 
 use const JSON_UNESCAPED_SLASHES;
 use const JSON_UNESCAPED_UNICODE;
+use const PREG_SPLIT_DELIM_CAPTURE;
+use const PREG_SPLIT_NO_EMPTY;
 use function array_filter;
 use function array_keys;
 use function array_pop;
@@ -26,6 +28,8 @@ use function is_array;
 use function json_decode;
 use function json_encode;
 use function max;
+use function mb_strlen;
+use function mb_substr;
 use function min;
 use function ord;
 use function preg_replace;
@@ -200,6 +204,7 @@ class Logs
             break;
          // @ Expand the selected record (all lines)
          case Keystrokes::ENTER->value:
+         case "\r": // raw mode (-icrnl) delivers Enter as CR
             $this->expand();
             break;
          default:
@@ -249,20 +254,22 @@ class Logs
       $Window = array_slice($Visible, $this->top, $pane);
 
       // @ Build the frame (cursor home, per-line clear-to-EOL avoids flicker)
+      // Every line is fitted to the width: a wrapped line would add a row,
+      // scroll the frame and desync all the `\e[H`-anchored redraws
       $frame = "\e[H";
-      $frame .= $this->summarize($total) . "\e[K\n";
+      $frame .= $this->fit($this->summarize($total)) . "\e[K\n";
 
       $rows = 0;
       foreach ($Window as $Record) {
          $selected = $this->paused === true && ($this->top + $rows) === $this->cursor;
-         $frame .= $this->line($Record, $width, $selected) . "\e[K\n";
+         $frame .= $this->fit($this->line($Record, $width, $selected)) . "\e[K\n";
          $rows++;
       }
       for (; $rows < $pane; $rows++) {
          $frame .= "\e[K\n";
       }
 
-      $frame .= $this->assist() . "\e[K";
+      $frame .= $this->fit($this->assist()) . "\e[K";
 
       $this->Output->write($frame);
    }
@@ -355,6 +362,7 @@ class Logs
          case 'q':
          case Keystrokes::ESCAPE->value:
          case Keystrokes::ENTER->value:
+         case "\r": // raw mode (-icrnl) delivers Enter as CR
             $this->Detail = null;
             break;
          case Keystrokes::UP->value:
@@ -414,6 +422,7 @@ class Logs
       switch ($key) {
          case Keystrokes::ENTER->value:
          case Keystrokes::ESCAPE->value:
+         case "\r": // raw mode (-icrnl) delivers Enter as CR
             $this->searching = false;
             break;
          case Keystrokes::BACKSPACE->value:
@@ -451,6 +460,54 @@ class Logs
    }
 
    // # Rendering
+   /**
+    * Fit a styled line into the terminal width (escape-aware truncation).
+    *
+    * A line wider than the terminal wraps into an extra row, scrolls the frame and desyncs
+    * every `\e[H`-anchored redraw — narrow terminals (embedded runtimes, split panes) would
+    * corrupt the whole TUI. Escape sequences occupy no columns and pass through whole.
+    */
+   private function fit (string $line): string
+   {
+      // ?
+      $width = Terminal::$width;
+      $plain = (string) preg_replace(self::ANSI, '', $line);
+      if (mb_strlen($plain) <= $width) {
+         return $line;
+      }
+
+      // !
+      $tokens = preg_split(
+         '/(\x1b\[[0-9;?]*[ -\/]*[@-~])/',
+         $line,
+         -1,
+         PREG_SPLIT_DELIM_CAPTURE | PREG_SPLIT_NO_EMPTY
+      );
+      $output = '';
+      $visible = 0;
+
+      // @@
+      foreach ($tokens === false ? [$line] : $tokens as $token) {
+         // ? Escape sequences pass through whole — they occupy no columns
+         if ($token[0] === "\e") {
+            $output .= $token;
+            continue;
+         }
+
+         $remaining = $width - $visible;
+         if ($remaining <= 0) {
+            continue;
+         }
+
+         $chunk = mb_substr($token, 0, $remaining);
+         $output .= $chunk;
+         $visible += mb_strlen($chunk);
+      }
+
+      // :
+      return $output;
+   }
+
    private function line (Record $Record, int $width, bool $selected = false): string
    {
       $color = $this->color($Record->Level);
@@ -498,11 +555,11 @@ class Logs
          . '  ' . self::wrap(self::_BLACK_BRIGHT_FOREGROUND) . date('Y-m-d H:i:s', (int) $Record->timestamp) . self::_RESET_FORMAT;
       $lines[] = '';
 
-      // @ Full message (every line)
+      // @ Full message (every line; fitted to the width at frame build)
       $plain = (string) preg_replace(self::ANSI, '', TemplateEscaped::render($Record->message));
       $body = preg_split('/\r\n|\r|\n/', $plain);
       foreach ($body === false ? [$plain] : $body as $row) {
-         $lines[] = strlen($row) > $width ? substr($row, 0, $width) : $row;
+         $lines[] = $row;
       }
 
       // @ Context + extra
@@ -520,18 +577,18 @@ class Logs
       $Window = array_slice($lines, $this->scroll, $pane);
 
       $frame = "\e[H";
-      $frame .= self::wrap(self::_BLACK_BRIGHT_BACKGROUND) . ' Log detail  ▏ ' . $total . ' lines' . self::_RESET_FORMAT . "\e[K\n";
+      $frame .= $this->fit(self::wrap(self::_BLACK_BRIGHT_BACKGROUND) . ' Log detail  ▏ ' . $total . ' lines' . self::_RESET_FORMAT) . "\e[K\n";
 
       $rows = 0;
       foreach ($Window as $row) {
-         $frame .= $row . "\e[K\n";
+         $frame .= $this->fit($row) . "\e[K\n";
          $rows++;
       }
       for (; $rows < $pane; $rows++) {
          $frame .= "\e[K\n";
       }
 
-      $frame .= self::wrap(self::_BLACK_BRIGHT_FOREGROUND) . ' [↑↓ PgUp/Dn] scroll   [Esc/Enter/q] back' . self::_RESET_FORMAT . "\e[K";
+      $frame .= $this->fit(self::wrap(self::_BLACK_BRIGHT_FOREGROUND) . ' [↑↓ PgUp/Dn] scroll   [Esc/Enter/q] back' . self::_RESET_FORMAT) . "\e[K";
 
       return $frame;
    }
