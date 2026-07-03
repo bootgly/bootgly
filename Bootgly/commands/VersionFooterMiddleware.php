@@ -43,7 +43,7 @@ class VersionFooterMiddleware implements Middleware
          $Bootgly = BOOTGLY_VERSION;
 
          $Output->render(
-            "@#Black:Bootgly @_:v{$Bootgly} @; | @#Black:PHP @_:v{$PHP} @;@..;"
+            "@.;@#Black:Bootgly @_:v{$Bootgly} @; | @#Black:PHP @_:v{$PHP} @;@..;"
          );
       }
 
