@@ -14,19 +14,14 @@ namespace projects\HTTP_Server_CLI;
 use function defined;
 use function exec;
 use function getenv;
-use function is_numeric;
 use function max;
 use function strtolower;
-use RuntimeException;
 
 use const Bootgly\CLI;
-use Bootgly\ADI\Databases\SQL;
-use Bootgly\ADI\Databases\SQL\Config;
 use Bootgly\API\Endpoints\Server\Modes;
 use Bootgly\API\Projects\Project;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Events as HTTP_Server_Events;
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\Database as DatabaseResource;
 
 
@@ -64,58 +59,9 @@ return new Project(
       // # The Database response resource is needed by both routers:
       //   - techempower:  /db, /query, /fortunes, /updates
       //   - bootgly:      /database/resource/*, /database/runner/*
-      if ($router === 'techempower') {
-         $Env = static function (string $name, string $default): string {
-            $value = getenv($name);
-
-            return $value === false || $value === '' ? $default : $value;
-         };
-
-         $Bool = static function (string $name, bool $default) use ($Env): bool {
-            $value = strtolower($Env($name, $default ? 'true' : 'false'));
-
-            return $value === '1' || $value === 'true' || $value === 'yes' || $value === 'on';
-         };
-
+      if ($router === 'techempower' || $router === 'bootgly') {
          $responseResources = [
-            'Database' => static function (object $Context) use ($Env, $Bool): DatabaseResource {
-               static $Database = null;
-
-               if ($Context instanceof Response === false) {
-                  throw new RuntimeException('Database response resource expects a Response context.');
-               }
-
-               if ($Database instanceof SQL === false) {
-                  $port = $Env('DB_PORT', (string) Config::DEFAULT_PORT);
-                  $timeout = $Env('DB_TIMEOUT', (string) Config::DEFAULT_TIMEOUT);
-                  $poolMin = $Env('DB_POOL_MIN', (string) Config::DEFAULT_POOL_MIN);
-                  $poolMax = $Env('DB_POOL_MAX', (string) Config::DEFAULT_POOL_MAX);
-                  $statements = $Env('DB_STATEMENTS', (string) Config::DEFAULT_STATEMENTS);
-
-                  $Database = new SQL([
-                     'driver' => $Env('DB_CONNECTION', Config::DEFAULT_DRIVER),
-                     'host' => $Env('DB_HOST', Config::DEFAULT_HOST),
-                     'port' => is_numeric($port) ? (int) $port : Config::DEFAULT_PORT,
-                     'database' => $Env('DB_NAME', Config::DEFAULT_DATABASE),
-                     'username' => $Env('DB_USER', Config::DEFAULT_USERNAME),
-                     'password' => $Env('DB_PASS', Config::DEFAULT_PASSWORD),
-                     'timeout' => is_numeric($timeout) ? (float) $timeout : Config::DEFAULT_TIMEOUT,
-                     'statements' => is_numeric($statements) ? (int) $statements : Config::DEFAULT_STATEMENTS,
-                     'pool' => [
-                        'min' => is_numeric($poolMin) ? (int) $poolMin : Config::DEFAULT_POOL_MIN,
-                        'max' => is_numeric($poolMax) ? (int) $poolMax : Config::DEFAULT_POOL_MAX,
-                     ],
-                     'secure' => [
-                        'mode' => $Env('DB_SSLMODE', Config::SECURE_DISABLE),
-                        'verify' => $Bool('DB_SSLVERIFY', false),
-                        'peer' => $Env('DB_SSLPEER', ''),
-                        'cafile' => $Env('DB_SSLCAFILE', ''),
-                     ],
-                  ]);
-               }
-
-               return new DatabaseResource($Database);
-            },
+            'Database' => DatabaseResource::provide(__DIR__ . '/configs/'),
          ];
       }
 

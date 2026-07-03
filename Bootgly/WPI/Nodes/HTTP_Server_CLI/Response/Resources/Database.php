@@ -44,7 +44,11 @@ class Database extends Resource implements Awaiting, Scheduling
 
    // * Data
    private null|Closure $Wait = null;
-   private object $Scope;
+   // ! Lazy: attach() binds the response scope on mount (the common, per-request
+   //   HTTP path) — allocating an own stdClass here would be dead weight there
+   private object $Scope {
+      get => $this->Scope ??= new stdClass;
+   }
 
    // * Metadata
    // ...
@@ -56,9 +60,6 @@ class Database extends Resource implements Awaiting, Scheduling
 
       // * Config
       $this->Database = $Database;
-
-      // * Data
-      $this->Scope = new stdClass;
    }
 
    /**
@@ -73,12 +74,20 @@ class Database extends Resource implements Awaiting, Scheduling
    public static function provide (string $configs): Closure
    {
       return static function (object $Context) use ($configs): self {
-         // ! Per-worker connection: pooled across requests on the same worker
+         // ! Per-worker connection: pooled across requests on the same worker.
+         //   The prototype spares constructor + guards per request — each
+         //   request gets a cheap clone with fresh, unbound Wait/Scope.
          static $Database = null;
+         static $Prototype = null;
 
          // ?
          if ($Context instanceof Response === false) {
             throw new RuntimeException('Database response resource expects a Response context.');
+         }
+
+         // ?: Hot path — worker already connected: clone the prototype
+         if ($Prototype instanceof self) {
+            return clone $Prototype;
          }
 
          // @ Build once per worker
@@ -143,7 +152,9 @@ class Database extends Resource implements Awaiting, Scheduling
          }
 
          // :
-         return new self($Database);
+         $Prototype = new self($Database);
+
+         return clone $Prototype;
       };
    }
 
@@ -221,6 +232,9 @@ class Database extends Resource implements Awaiting, Scheduling
     */
    public function await (Operation $Operation): Operation
    {
+      // ! Hoisted out of the loop — the binding cannot change mid-await
+      $Wait = null;
+
       while ($Operation->finished === false) {
          $Operation = $this->Database->advance($Operation);
 
@@ -228,11 +242,8 @@ class Database extends Resource implements Awaiting, Scheduling
             break;
          }
 
-         $Wait = $this->Wait;
-
-         if ($Wait === null) {
-            throw new RuntimeException('Database response resource is not bound.');
-         }
+         $Wait ??= $this->Wait
+            ?? throw new RuntimeException('Database response resource is not bound.');
 
          $Wait($Operation->Readiness);
       }
@@ -248,6 +259,9 @@ class Database extends Resource implements Awaiting, Scheduling
     */
    public function drain (array $Operations): array
    {
+      // ! Hoisted out of the loop — the binding cannot change mid-drain
+      $Wait = null;
+
       while (true) {
          foreach ($Operations as $id => $Operation) {
             if ($Operation->finished) {
@@ -275,11 +289,8 @@ class Database extends Resource implements Awaiting, Scheduling
             break;
          }
 
-         $Wait = $this->Wait;
-
-         if ($Wait === null) {
-            throw new RuntimeException('Database response resource is not bound.');
-         }
+         $Wait ??= $this->Wait
+            ?? throw new RuntimeException('Database response resource is not bound.');
 
          $Wait($waiting);
       }

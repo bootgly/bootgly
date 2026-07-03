@@ -15,28 +15,24 @@ use const ENT_QUOTES;
 use const GET;
 use function asort;
 use function ctype_digit;
-use function getenv;
 use function htmlspecialchars;
 use function implode;
 use function is_array;
-use function is_numeric;
 use function json_encode;
 use function max;
 use function min;
 use function mt_rand;
 use function strlen;
 use function strpos;
-use function strtolower;
 use function substr;
 use Generator;
+use RuntimeException;
 use Throwable;
 
 use Bootgly\ABI\Resources\Cache;
-use Bootgly\ADI\Databases\SQL;
-use Bootgly\ADI\Databases\SQL\Config;
-use Bootgly\ADI\Databases\SQL\Operation;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\Database;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router;
 
 
@@ -52,60 +48,16 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router;
  *   GET /updates    →  N World rows fetched, updated, and returned (?queries=N)
  *   GET /cached-queries → N random CachedWorld rows from an in-memory cache (?count=N, 1..500)
  *
+ * Database access goes through the canonical `$Response->Database` response
+ * resource (registered in the project bootstrap with `Database::provide()`,
+ * configured by `configs/database/database.config.php` + `DB_*` env vars) —
+ * the same code API documented for users.
+ *
  * Bootgly-specific stress routes (catch-all, nested, middleware, the
  * `/database/native/*` probes, etc.) live in `bootgly-benchmark.SAPI.php` —
  * they are not part of TechEmpower and would skew a feature-to-feature
  * comparison.
  */
-
-$Env = static function (string $name, string $default): string {
-   $value = getenv($name);
-
-   return $value === false || $value === '' ? $default : $value;
-};
-
-$Bool = static function (string $name, bool $default) use ($Env): bool {
-   $value = strtolower($Env($name, $default ? 'true' : 'false'));
-
-   return $value === '1' || $value === 'true' || $value === 'yes' || $value === 'on';
-};
-
-$Connect = static function () use ($Env, $Bool): SQL {
-   static $Database = null;
-
-   if ($Database instanceof SQL) {
-      return $Database;
-   }
-
-   $port = $Env('DB_PORT', (string) Config::DEFAULT_PORT);
-   $timeout = $Env('DB_TIMEOUT', (string) Config::DEFAULT_TIMEOUT);
-   $poolMin = $Env('DB_POOL_MIN', (string) Config::DEFAULT_POOL_MIN);
-   $poolMax = $Env('DB_POOL_MAX', (string) Config::DEFAULT_POOL_MAX);
-   $statements = $Env('DB_STATEMENTS', (string) Config::DEFAULT_STATEMENTS);
-
-   $Database = new SQL([
-      'driver' => $Env('DB_CONNECTION', Config::DEFAULT_DRIVER),
-      'host' => $Env('DB_HOST', Config::DEFAULT_HOST),
-      'port' => is_numeric($port) ? (int) $port : Config::DEFAULT_PORT,
-      'database' => $Env('DB_NAME', Config::DEFAULT_DATABASE),
-      'username' => $Env('DB_USER', Config::DEFAULT_USERNAME),
-      'password' => $Env('DB_PASS', Config::DEFAULT_PASSWORD),
-      'timeout' => is_numeric($timeout) ? (float) $timeout : Config::DEFAULT_TIMEOUT,
-      'statements' => is_numeric($statements) ? (int) $statements : Config::DEFAULT_STATEMENTS,
-      'pool' => [
-         'min' => is_numeric($poolMin) ? (int) $poolMin : Config::DEFAULT_POOL_MIN,
-         'max' => is_numeric($poolMax) ? (int) $poolMax : Config::DEFAULT_POOL_MAX,
-      ],
-      'secure' => [
-         'mode' => $Env('DB_SSLMODE', Config::SECURE_DISABLE),
-         'verify' => $Bool('DB_SSLVERIFY', false),
-         'peer' => $Env('DB_SSLPEER', ''),
-         'cafile' => $Env('DB_SSLCAFILE', ''),
-      ],
-   ]);
-
-   return $Database;
-};
 
 $Cached = static function (): Cache {
    static $Cache = null;
@@ -120,67 +72,7 @@ $Cached = static function (): Cache {
    return $Cache;
 };
 
-$Native = static function (SQL $Database, Response $Response, Operation $Operation): Operation {
-   while ($Operation->finished === false) {
-      $Operation = $Database->advance($Operation);
-
-      if ($Operation->finished) {
-         break;
-      }
-
-      $Readiness = $Operation->Readiness;
-
-      if ($Readiness !== null) {
-         $Response->wait($Readiness);
-      }
-      else {
-         $Response->wait();
-      }
-   }
-
-   return $Operation;
-};
-
-$Drain = static function (SQL $Database, Response $Response, array $Operations): array {
-   while (true) {
-      $waiting = null;
-      $finished = true;
-
-      foreach ($Operations as $id => $Operation) {
-         if ($Operation->finished) {
-            continue;
-         }
-
-         $finished = false;
-         $Operation = $Database->advance($Operation);
-         $Operations[$id] = $Operation;
-         $waiting ??= $Operation->Readiness;
-      }
-
-      if ($finished) {
-         break;
-      }
-
-      if ($waiting !== null) {
-         $Response->wait($waiting);
-      }
-      else {
-         $Response->wait();
-      }
-   }
-
-   return $Operations;
-};
-
 // ---
-
-$Json = static function (Response $Response, string $body, int $code = 200): object {
-   return $Response(
-      code: $code,
-      headers: ['Content-Type' => 'application/json'],
-      body: $body
-   );
-};
 
 $Exception = static function (Response $Response, Throwable $Throwable): object {
    return $Response(code: 500, body: $Throwable->getMessage());
@@ -236,21 +128,7 @@ $World = static function (array $row): array {
    ];
 };
 
-$FetchWorld = static function (SQL $Database, Response $Response, int $id) use ($Native, $World): array {
-   $Operation = $Native(
-      $Database,
-      $Response,
-      $Database->query('SELECT id, randomNumber AS "randomNumber" FROM World WHERE id = $1', [$id])
-   );
-
-   if ($Operation->error !== null) {
-      throw new \RuntimeException($Operation->error);
-   }
-
-   return $World($Operation->Result->row ?? []);
-};
-
-$UpdateWorlds = static function (SQL $Database, Response $Response, array $Worlds) use ($Native): void {
+$UpdateWorlds = static function (Database $Database, array $Worlds): void {
    // ! Batch as PostgreSQL array literals — one prepared statement for every
    //   batch size N (the CASE/IN form emitted one statement text per N).
    $ids = [];
@@ -265,21 +143,13 @@ $UpdateWorlds = static function (SQL $Database, Response $Response, array $World
    //   batches then acquire their row locks in the same global order, which
    //   removes the lock-order cycles (PostgreSQL deadlocks) the unordered
    //   batched UPDATE hit at high worker counts.
-   $Operation = $Native(
-      $Database,
-      $Response,
-      $Database->query(
-         'UPDATE World SET randomNumber = data.new'
-         . ' FROM (SELECT d.id, d.new FROM unnest($1::integer[], $2::integer[]) AS d(id, new)'
-         . ' JOIN World w ON w.id = d.id ORDER BY d.id FOR UPDATE OF w) AS data'
-         . ' WHERE World.id = data.id',
-         ['{' . implode(',', $ids) . '}', '{' . implode(',', $values) . '}']
-      )
+   $Database->fetch(
+      'UPDATE World SET randomNumber = data.new'
+      . ' FROM (SELECT d.id, d.new FROM unnest($1::integer[], $2::integer[]) AS d(id, new)'
+      . ' JOIN World w ON w.id = d.id ORDER BY d.id FOR UPDATE OF w) AS data'
+      . ' WHERE World.id = data.id',
+      ['{' . implode(',', $ids) . '}', '{' . implode(',', $values) . '}']
    );
-
-   if ($Operation->error !== null) {
-      throw new \RuntimeException($Operation->error);
-   }
 };
 
 $FortunesHtml = static function (array $rows): string {
@@ -317,13 +187,17 @@ $JsonHello = function (Request $Request, Response $Response) {
    return $Response->JSON->send('{"message":"Hello, World!"}');
 };
 
-$TfbDb = function (Request $Request, Response $Response) use ($Connect, $Exception, $FetchWorld, $Json) {
-   return $Response->defer(function (Response $Response) use ($Connect, $Exception, $FetchWorld, $Json): void {
+$TfbDb = function (Request $Request, Response $Response) use ($Exception, $World) {
+   return $Response->defer(function (Response $Response) use ($Exception, $World): void {
       try {
-         $Database = $Connect();
-         $World = $FetchWorld($Database, $Response, mt_rand(1, 10000));
+         // @ fetch() awaits the operation on the response scheduler and throws on error
+         $Result = $Response->Database->fetch(
+            'SELECT id, randomNumber AS "randomNumber" FROM World WHERE id = $1',
+            [mt_rand(1, 10000)]
+         );
 
-         $Json($Response, json_encode($World) ?: '{}', 200);
+         // : JSON resource keeps build()'s fast path (media type, no header array)
+         $Response->JSON->send(json_encode($World($Result->row)) ?: '{}');
       }
       catch (Throwable $Throwable) {
          $Exception($Response, $Throwable);
@@ -331,35 +205,37 @@ $TfbDb = function (Request $Request, Response $Response) use ($Connect, $Excepti
    });
 };
 
-$TfbQuery = function (Request $Request, Response $Response) use ($Connect, $Count, $Drain, $Exception, $Json, $World) {
+$TfbQuery = function (Request $Request, Response $Response) use ($Count, $Exception, $World) {
    $queries = $Count($Request, 'queries');
 
-   return $Response->defer(function (Response $Response) use ($Connect, $Drain, $Exception, $Json, $queries, $World): void {
+   return $Response->defer(function (Response $Response) use ($Exception, $queries, $World): void {
       try {
-         $Database = $Connect();
+         $Database = $Response->Database;
 
-         // @ Issue every query first so the driver pipelines them on the pool
+         // @ Issue every query first — through the wrapped SQL, so nothing awaits
+         //   yet and the driver pipelines them on the pool
          $Operations = [];
          for ($query = 0; $query < $queries; $query++) {
-            $Operations[] = $Database->query(
+            $Operations[] = $Database->Database->query(
                'SELECT id, randomNumber AS "randomNumber" FROM World WHERE id = $1',
                [mt_rand(1, 10000)]
             );
          }
 
          // @ Drain the whole pipeline in one cooperative wait cycle
-         $Operations = $Drain($Database, $Response, $Operations);
+         $Operations = $Database->drain($Operations);
 
          $Worlds = [];
          foreach ($Operations as $Operation) {
             if ($Operation->error !== null) {
-               throw new \RuntimeException($Operation->error);
+               throw new RuntimeException($Operation->error);
             }
 
             $Worlds[] = $World($Operation->Result->row ?? []);
          }
 
-         $Json($Response, json_encode($Worlds) ?: '[]', 200);
+         // : JSON resource keeps build()'s fast path (media type, no header array)
+         $Response->JSON->send(json_encode($Worlds) ?: '[]');
       }
       catch (Throwable $Throwable) {
          $Exception($Response, $Throwable);
@@ -367,17 +243,12 @@ $TfbQuery = function (Request $Request, Response $Response) use ($Connect, $Coun
    });
 };
 
-$TfbFortunes = function (Request $Request, Response $Response) use ($Connect, $Exception, $FortunesHtml, $Native) {
-   return $Response->defer(function (Response $Response) use ($Connect, $Exception, $FortunesHtml, $Native): void {
+$TfbFortunes = function (Request $Request, Response $Response) use ($Exception, $FortunesHtml) {
+   return $Response->defer(function (Response $Response) use ($Exception, $FortunesHtml): void {
       try {
-         $Database = $Connect();
-         $Operation = $Native($Database, $Response, $Database->query('SELECT id, message FROM Fortune'));
+         $Result = $Response->Database->fetch('SELECT id, message FROM Fortune');
 
-         if ($Operation->error !== null) {
-            throw new \RuntimeException($Operation->error);
-         }
-
-         $Response(body: $FortunesHtml($Operation->Result->rows ?? []), code: 200);
+         $Response(body: $FortunesHtml($Result->rows), code: 200);
       }
       catch (Throwable $Throwable) {
          $Exception($Response, $Throwable);
@@ -385,29 +256,30 @@ $TfbFortunes = function (Request $Request, Response $Response) use ($Connect, $E
    });
 };
 
-$TfbUpdates = function (Request $Request, Response $Response) use ($Connect, $Count, $Drain, $Exception, $Json, $UpdateWorlds, $World) {
+$TfbUpdates = function (Request $Request, Response $Response) use ($Count, $Exception, $UpdateWorlds, $World) {
    $queries = $Count($Request, 'queries');
 
-   return $Response->defer(function (Response $Response) use ($Connect, $Drain, $Exception, $Json, $queries, $UpdateWorlds, $World): void {
+   return $Response->defer(function (Response $Response) use ($Exception, $queries, $UpdateWorlds, $World): void {
       try {
-         $Database = $Connect();
+         $Database = $Response->Database;
 
-         // @ Issue every read first so the driver pipelines them on the pool
+         // @ Issue every read first — through the wrapped SQL, so nothing awaits
+         //   yet and the driver pipelines them on the pool
          $Operations = [];
          for ($query = 0; $query < $queries; $query++) {
-            $Operations[] = $Database->query(
+            $Operations[] = $Database->Database->query(
                'SELECT id, randomNumber AS "randomNumber" FROM World WHERE id = $1',
                [mt_rand(1, 10000)]
             );
          }
 
          // @ Drain the whole pipeline in one cooperative wait cycle
-         $Operations = $Drain($Database, $Response, $Operations);
+         $Operations = $Database->drain($Operations);
 
          $Worlds = [];
          foreach ($Operations as $Operation) {
             if ($Operation->error !== null) {
-               throw new \RuntimeException($Operation->error);
+               throw new RuntimeException($Operation->error);
             }
 
             $Entry = $World($Operation->Result->row ?? []);
@@ -415,9 +287,10 @@ $TfbUpdates = function (Request $Request, Response $Response) use ($Connect, $Co
             $Worlds[] = $Entry;
          }
 
-         $UpdateWorlds($Database, $Response, $Worlds);
+         $UpdateWorlds($Database, $Worlds);
 
-         $Json($Response, json_encode($Worlds) ?: '[]', 200);
+         // : JSON resource keeps build()'s fast path (media type, no header array)
+         $Response->JSON->send(json_encode($Worlds) ?: '[]');
       }
       catch (Throwable $Throwable) {
          $Exception($Response, $Throwable);
@@ -441,7 +314,7 @@ $Pick = static function (Cache $Cache, int $count): string {
    return json_encode($Worlds) ?: '[]';
 };
 
-$TfbCached = function (Request $Request, Response $Response) use ($Cached, $Connect, $Count, $Exception, $Native, $Pick, $World) {
+$TfbCached = function (Request $Request, Response $Response) use ($Cached, $Count, $Exception, $Pick, $World) {
    $count = $Count($Request, 'count');
    $Cache = $Cached();
    $primed = $Cache->check('primed');
@@ -453,22 +326,15 @@ $TfbCached = function (Request $Request, Response $Response) use ($Cached, $Conn
    }
 
    // ? Cold worker — prime once from CachedWorld (async DB), then serve from memory
-   return $Response->defer(function (Response $Response) use ($Cache, $Connect, $Exception, $Native, $Pick, $World, $count): void {
+   return $Response->defer(function (Response $Response) use ($Cache, $Exception, $Pick, $World, $count): void {
       try {
          if ($Cache->check('primed') === false) {
-            $Database = $Connect();
-            $Operation = $Native(
-               $Database,
-               $Response,
-               $Database->query('SELECT id, randomNumber AS "randomNumber" FROM CachedWorld')
+            $Result = $Response->Database->fetch(
+               'SELECT id, randomNumber AS "randomNumber" FROM CachedWorld'
             );
 
-            if ($Operation->error !== null) {
-               throw new \RuntimeException($Operation->error);
-            }
-
             $Pool = [];
-            foreach ($Operation->Result->rows ?? [] as $row) {
+            foreach ($Result->rows as $row) {
                $Entry = $World($row);
                $Pool[$Entry['id']] = $Entry;
             }

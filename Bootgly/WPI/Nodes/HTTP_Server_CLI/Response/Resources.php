@@ -37,7 +37,10 @@ class Resources
    // * Data
    /** @var array<string,Resource> */
    public private(set) array $resources = [];
-   /** @var array<string,Closure(object):Resource> */
+   // ! Factories are documented as Closure(object):Resource, but the array
+   //   stays loosely typed: load() cannot verify closure return types, so
+   //   fetch() keeps a runtime instanceof guard on what factories return
+   /** @var array<string,Closure> */
    public private(set) array $definitions = [];
 
    // * Metadata
@@ -72,19 +75,27 @@ class Resources
     */
    public function fork (Closure $Attach, object $Context): self
    {
-      $Resources = new self($Attach, $Context);
-      $Resources->definitions = $this->definitions;
+      // ! Clone instead of construct — the constructor would re-define every
+      //   built-in factory (five closure allocations) only for the definitions
+      //   copy to replace them; cloning carries definitions by copy-on-write
+      //   (hot path: one fork per deferred request)
+      $Resources = clone $this;
+      $Resources->Attach = $Attach;
+      $Resources->Context = $Context;
 
       // @ Carry user-mounted instances (those without a definition) into the
       //   fork, re-attaching their scheduler bridge to the new context.
-      //   Definition-backed names (built-ins, configured resources) are left
-      //   to rebuild lazily so they bind to the forked response, not the old.
-      foreach ($this->resources as $name => $Resource) {
+      //   Definition-backed names (built-ins, configured resources) are
+      //   dropped to rebuild lazily so they bind to the forked response, not
+      //   the old.
+      foreach ($Resources->resources as $name => $Resource) {
          if (isset($Resources->definitions[$name])) {
+            unset($Resources->resources[$name]);
+
             continue;
          }
 
-         $Resources->set($name, $Resource);
+         $Resources->resources[$name] = $Resources->attach($Resource);
       }
 
       return $Resources;
@@ -161,7 +172,22 @@ class Resources
          return null;
       }
 
-      return $this->set($name, $this->create($Factory));
+      // ! Hot path: first resource read of a request — construct from the
+      //   factory and mount inline, without create()/set() call hops
+      $Context = $this->Context;
+
+      if ($Context === null) {
+         throw new RuntimeException('Response resource factory expects a context, but none was configured.');
+      }
+
+      $Resource = $Factory($Context);
+
+      if ($Resource instanceof Resource === false) {
+         throw new RuntimeException('Response resource factory must return a Resource.');
+      }
+
+      // :
+      return $this->resources[$name] = $this->attach($Resource);
    }
 
    /**
@@ -176,26 +202,6 @@ class Resources
 
          unset($this->resources[$name]);
       }
-   }
-
-   /**
-    * Create one resource from a lazy factory.
-    */
-   private function create (Closure $Factory): Resource
-   {
-      $Context = $this->Context;
-
-      if ($Context === null) {
-         throw new RuntimeException('Response resource factory expects a context, but none was configured.');
-      }
-
-      $Resource = $Factory($Context);
-
-      if ($Resource instanceof Resource === false) {
-         throw new RuntimeException('Response resource factory must return a Resource.');
-      }
-
-      return $Resource;
    }
 
    /**
