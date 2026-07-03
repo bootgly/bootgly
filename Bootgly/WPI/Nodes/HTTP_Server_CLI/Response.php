@@ -88,6 +88,12 @@ class Response extends Server\Response
    // # Content
    public string|null $source;
    public string|null $type;
+   /**
+    * Route response cache TTL (seconds) — stamped per request by the Router
+    * dispatcher wrapper when the matched route opted in via `cache:`;
+    * consumed by the encoder / defer() to store the built wire bytes.
+    */
+   public int $cache = 0;
    private object $Scope;
    // Whether $Scope was handed to a resource this request (see attach()).
    // Lets reset() skip the per-request stdClass realloc on routes that
@@ -304,6 +310,7 @@ class Response extends Server\Response
       // # Content
       $this->source = null;
       $this->type = null;
+      $this->cache = 0;
       // ? Realloc Scope only when the previous request actually scoped a
       //   resource into it — non-scoped routes skip the per-request alloc.
       if ($this->scoped) {
@@ -783,6 +790,50 @@ class Response extends Server\Response
     * 
     * @return Response The Response instance, for chaining
     */
+   /**
+    * Store this response's built wire bytes in the route response cache.
+    *
+    * Consumes the per-request `cache` TTL stamp (set by the Router dispatcher
+    * wrapper) and stores only when the exchange is safely cacheable: GET over
+    * HTTP/1.1, status 200, plain identity body, no credentials on the request
+    * and no cookies on the response.
+    */
+   public function stash (string $buffer): void
+   {
+      // ! Consume the per-request TTL stamp
+      $ttl = $this->cache;
+      $this->cache = 0;
+
+      // ?
+      $Request = $this->Request;
+
+      if (
+         $ttl <= 0
+         || $Request === null
+         || $Request->method !== 'GET'
+         || $Request->protocol !== 'HTTP/1.1'
+         || $this->code !== 200
+         || $this->stream || $this->chunked || $this->encoded
+      ) {
+         return;
+      }
+
+      // ? Credentialed exchanges and cookie-setting responses never cache
+      //   (request header fields are lowercase-normalized by the decoder)
+      $fields = $Request->headers;
+
+      if (isSet($fields['cookie']) || isSet($fields['authorization'])) {
+         return;
+      }
+
+      if (isSet($this->Header->fields['Set-Cookie'])) {
+         return;
+      }
+
+      // @
+      Cache::store("{$Request->method}\0{$Request->URI}", $buffer, $ttl);
+   }
+
    public function defer (Closure $work): self
    {
       // !
@@ -810,6 +861,11 @@ class Response extends Server\Response
 
             // @ Encode and send response after work completes
             $buffer = $Response->encode($Package, $length);
+
+            // ? Route response cache opt-in — store the built wire bytes
+            if ($Response->cache !== 0) {
+               $Response->stash($buffer);
+            }
 
             // @ Write response to socket
             $Package->writing($Package->Connection->Socket, length: $length, buffer: $buffer);

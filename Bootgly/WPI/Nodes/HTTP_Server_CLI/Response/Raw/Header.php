@@ -391,9 +391,11 @@ class Header extends HeaderBase
     * Format the RFC 9110 `Date` header value, cached per second.
     *
     * Dirty responses rebuild their header block on every request, so the
-    * shared formatted string saves one gmdate() call per response.
+    * shared formatted string saves one gmdate() call per response. Public:
+    * it is the canonical per-second Date source — the route cache patches
+    * stored wire bytes with it.
     */
-   private static function stamp (): string
+   public static function stamp (): string
    {
       $now = time();
       // ?

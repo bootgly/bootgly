@@ -11,6 +11,7 @@
 namespace projects\HTTP_Server_CLI\router;
 
 
+use const GET;
 use function count;
 use function getenv;
 use function is_numeric;
@@ -26,7 +27,6 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Middlewares\RequestId;
-
 use projects\HTTP_Server_CLI\Profiler;
 
 
@@ -986,6 +986,11 @@ return static function
    yield $Router->route('/database/native/ping', $NativePing, GET);
    yield $Router->route('/database/resource/ping', $ResourcePing, GET);
    yield $Router->route('/database/runner/ping', $ResourcePing, GET);
+
+   // @ Route response cache probe — same deferred DB handler, but the route
+   //   opts in with a 1s TTL: the DB round-trip runs at most once per second
+   //   per worker; every other request is served from stored wire bytes.
+   yield $Router->route('/database/resource/cached', $ResourcePing, GET, cache: ['TTL' => 1]);
 
    yield $Router->route('/database/native/parameters', $NativeParameters, GET);
    yield $Router->route('/database/resource/parameters', $ResourceParameters, GET);

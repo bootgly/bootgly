@@ -12,6 +12,7 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders;
 
 
 use function spl_object_id;
+use function strlen;
 use Generator;
 use Throwable;
 
@@ -22,6 +23,7 @@ use Bootgly\API\Workables\Server\Middlewares;
 use Bootgly\WPI\Endpoints\Servers\Packages;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages as TCPPackages;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI as Server;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Cache;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Events as RequestEvents;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
@@ -48,6 +50,26 @@ class Encoder_ extends Encoders
       //   incomplete-read path does the least possible work.
       if ($Request->Body->waiting) {
          return '';
+      }
+
+      // ?: Route response cache — serve stored wire bytes before routing,
+      //   middleware, handler and serialization (empty-store check keeps the
+      //   cost at one static array read for servers that never opt in).
+      //   Guards mirror stash(): plain keep-alive GET, no credentials.
+      if (Cache::$entries !== [] && $Request->closeConnection === false) {
+         $wire = Cache::fetch("{$Request->method}\0{$Request->URI}");
+
+         if ($wire !== null) {
+            // ! Request header fields are lowercase-normalized by the decoder
+            $fields = $Request->headers;
+
+            if (isSet($fields['cookie']) === false && isSet($fields['authorization']) === false) {
+               $length = strlen($wire);
+
+               // :
+               return $wire;
+            }
+         }
       }
 
       // @ Events — request fully decoded (guarded: zero-alloc when no listeners)
@@ -148,8 +170,16 @@ class Encoder_ extends Encoders
          // @ Events — request handled, response ready (guarded: zero-alloc when no listeners)
          isSet($Emitter->Listeners[$handled]) && $Emitter->emit(RequestEvents::Handled, $Request, $Response);
 
-         // : Encode HTTP Response
-         return $Response->encode($Packages, $length);
+         // @ Encode HTTP Response
+         $buffer = $Response->encode($Packages, $length);
+
+         // ? Route response cache opt-in — store the built wire bytes
+         if ($Response->cache !== 0) {
+            $Response->stash($buffer);
+         }
+
+         // :
+         return $buffer;
       }
    }
 }

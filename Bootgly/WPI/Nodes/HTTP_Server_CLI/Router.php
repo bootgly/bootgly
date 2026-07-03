@@ -14,10 +14,10 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_CLI;
 use function array_keys;
 use function count;
 use function explode;
-use function extract;
 use function implode;
 use function in_array;
 use function is_array;
+use function is_int;
 use function is_string;
 use function ltrim;
 use function preg_match;
@@ -455,12 +455,16 @@ class Router
     *
     * @param null|string|array<string> $methods
     * @param array<Middleware> $Middlewares
+    * @param null|array<array-key,mixed> $cacheConfig User-supplied cache
+    *        options — kept loosely typed so the registration-time guards
+    *        below stay meaningful (documented shape: `array{TTL: int}`).
     */
    private function cache (
       string $route,
       callable $handler,
       null|string|array $methods,
-      array $Middlewares
+      array $Middlewares,
+      null|array $cacheConfig = null
    ): void {
       $normalizedRoute = ($route === '/' ? '' : rtrim($route, '/'));
 
@@ -488,6 +492,37 @@ class Router
       $boundHandler = ($handler instanceof Closure)
          ? $handler->bindTo($this->Route, $this->Route) ?? $handler
          : $handler;
+
+      // @ Route response cache opt-in: stamp the TTL on the Response before
+      //   the handler runs — the encoder (or defer()) consumes it to store the
+      //   built wire bytes. Only cache-enabled routes pay the wrapper frame.
+      if ($cacheConfig !== null) {
+         // ? Fail loud at registration time — runtime pays nothing for it
+         foreach ($cacheConfig as $option => $_) {
+            if ($option !== 'TTL') {
+               throw new InvalidArgumentException(
+                  "Unknown route cache option '{$option}'. Valid options: TTL."
+               );
+            }
+         }
+
+         $cacheTTL = $cacheConfig['TTL'] ?? null;
+
+         if (is_int($cacheTTL) === false || $cacheTTL <= 0) {
+            throw new InvalidArgumentException(
+               "Route cache config requires a positive integer 'TTL' (seconds)."
+            );
+         }
+
+         $Inner = $boundHandler;
+         $boundHandler = static function (object $Request, object $Response) use ($Inner, $cacheTTL): mixed {
+            if ($Response instanceof Response) {
+               $Response->cache = $cacheTTL;
+            }
+
+            return $Inner($Request, $Response);
+         };
+      }
 
       // @ Catch-all route — store dispatcher closure directly (O(1) callable)
       if ($normalizedRoute === '/*') {
@@ -661,12 +696,17 @@ class Router
     *
     * @param null|string|array<string> $methods
     * @param array<Middleware> $middlewares
+    * @param null|array{TTL: int} $cache Route response cache options — the
+    *                                    route opts in to the per-worker route
+    *                                    response cache (GET only).
+    *                                    `TTL`: entry lifetime in seconds.
     */
    public function route (
       string $route,
       callable $handler,
       null|string|array $methods = null,
-      array $middlewares = []
+      array $middlewares = [],
+      null|array $cache = null
    ): false
    {
       // ? Router paused
@@ -675,7 +715,7 @@ class Router
       }
       // ? Cache already warmed — ignore further registrations on this Router
       if ($this->cached === false) {
-         $this->cache($route, $handler, $methods, $middlewares);
+         $this->cache($route, $handler, $methods, $middlewares, $cache);
       }
       return false;
    }

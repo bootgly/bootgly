@@ -15,6 +15,7 @@ use const ENT_QUOTES;
 use const GET;
 use function asort;
 use function ctype_digit;
+use function getenv;
 use function htmlspecialchars;
 use function implode;
 use function is_array;
@@ -34,6 +35,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\Database;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router;
+use projects\HTTP_Server_CLI\Profiler;
 
 
 /*
@@ -356,6 +358,12 @@ return static function
 (Request $Request, Response $Response, Router $Router)
 use ($Plaintext, $JsonHello, $TfbDb, $TfbQuery, $TfbFortunes, $TfbUpdates, $TfbCached): Generator
 {
+   // @ Per-worker profiler bootstrap (env-gated; idempotent via internal PID guard)
+   if (getenv('BOOTGLY_PROFILE') === '1') {
+      require_once __DIR__ . '/../Profiler.php';
+      Profiler::start();
+   }
+
    yield $Router->route('/', function (Request $Request, Response $Response) {
       return $Response(body: 'TechEmpower Benchmark');
    }, GET);

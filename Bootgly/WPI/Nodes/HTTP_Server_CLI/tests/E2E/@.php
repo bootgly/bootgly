@@ -237,6 +237,11 @@ return new Suite(
          // Route registration errors (warmup-time guards)
          '6.1-route_error-catch_all_not_last',
          '6.2-route_error-unknown_constraint_type',
+         // Route response cache (cache: TTL opt-in)
+         '7.1-route_cache-hit',
+         '7.2-route_cache-no_opt_in',
+         '7.3-route_cache-credentialed_bypass',
+         '7.4-route_cache-query_keys',
       ],
       'Router/Middleware/' => [
          // CORS
