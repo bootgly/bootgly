@@ -22,7 +22,7 @@ $Progress->throttle = 0.016;
 
 // * Data
 // @
-$Progress->total = 250000;
+$Progress->total = 1000000;
 // ! Templating
 $Progress->template = <<<'TEMPLATE'
 @description;
@@ -41,7 +41,7 @@ $Progress->Bar->Symbols->complete = '❤️';
 $Progress->start();
 
 $i = 0;
-while ($i++ < 250000) {
+while ($i++ < 1000000) {
    if ($i === 1) {
       $Progress->describe('@#red: Performing progress! @;');
    }

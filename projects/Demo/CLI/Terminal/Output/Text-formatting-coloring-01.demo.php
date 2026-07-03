@@ -23,7 +23,9 @@ $Output->write(<<<OUTPUT
 *\n\n
 OUTPUT);
 $Output->Text->colorize(foreground: 'cyan');
-$Output->writing("Writing with the color of the text in cyan on a `default` background...\n\n");
+$Output->writing("Writing with the color of the text in cyan on a `default` background...");
+$Output->Text->colorize(); // ? Reset before the newline: BCE would paint the rest of the line
+$Output->write("\n\n");
 
 
 // @ Testing Preset colors: foreground + background
@@ -35,28 +37,44 @@ $Output->write(<<<OUTPUT
 OUTPUT);
 
 $Output->Text->colorize(foreground: 'black', background: 'white');
-$Output->writing("Writing with the color of the text in `black` on a `white` background...\n");
+$Output->writing("Writing with the color of the text in `black` on a `white` background...");
+$Output->Text->colorize(); // ? Reset before the newline: BCE would paint the rest of the line
+$Output->write("\n");
 
 $Output->Text->colorize(foreground: 'white', background: 'red');
-$Output->writing("Writing with the color of the text in `white` on a `red` background...\n");
+$Output->writing("Writing with the color of the text in `white` on a `red` background...");
+$Output->Text->colorize(); // ? Reset before the newline: BCE would paint the rest of the line
+$Output->write("\n");
 
 $Output->Text->colorize(foreground: 'white', background: 'green');
-$Output->writing("Writing with the color of the text in `white` on a `green` background...\n");
+$Output->writing("Writing with the color of the text in `white` on a `green` background...");
+$Output->Text->colorize(); // ? Reset before the newline: BCE would paint the rest of the line
+$Output->write("\n");
 
 $Output->Text->colorize(foreground: 'white', background: 'blue');
-$Output->writing("Writing with the color of the text in `white` on a `blue` background...\n");
+$Output->writing("Writing with the color of the text in `white` on a `blue` background...");
+$Output->Text->colorize(); // ? Reset before the newline: BCE would paint the rest of the line
+$Output->write("\n");
 
 $Output->Text->colorize(foreground: 'black', background: 'yellow');
-$Output->writing("Writing with the color of the text in `black` on a `yellow` background...\n");
+$Output->writing("Writing with the color of the text in `black` on a `yellow` background...");
+$Output->Text->colorize(); // ? Reset before the newline: BCE would paint the rest of the line
+$Output->write("\n");
 
 $Output->Text->colorize(foreground: 'white', background: 'magenta');
-$Output->writing("Writing with the color of the text in `white` on a `magenta` background...\n");
+$Output->writing("Writing with the color of the text in `white` on a `magenta` background...");
+$Output->Text->colorize(); // ? Reset before the newline: BCE would paint the rest of the line
+$Output->write("\n");
 
 $Output->Text->colorize(foreground: 'black', background: 'cyan');
-$Output->writing("Writing with the color of the text in `black` on a `cyan` background...\n");
+$Output->writing("Writing with the color of the text in `black` on a `cyan` background...");
+$Output->Text->colorize(); // ? Reset before the newline: BCE would paint the rest of the line
+$Output->write("\n");
 
 $Output->Text->colorize(foreground: 'white', background: 'black');
-$Output->writing("Writing with the color of the text in `white` on a `black` background...\n\n");
+$Output->writing("Writing with the color of the text in `white` on a `black` background...");
+$Output->Text->colorize(); // ? Reset before the newline: BCE would paint the rest of the line
+$Output->write("\n\n");
 
 // @ Testing Preset colors: foreground + background
 $Output->Text->colorize(); // @ Reset colors
@@ -69,28 +87,44 @@ OUTPUT);
 $Output->Text->Colors::Bright->set(); // @ Config the set of colors using enums 🤯
 
 $Output->Text->colorize(foreground: 'black', background: 'white');
-$Output->writing("Writing with the color of the text in `black` on a `white` background...\n");
+$Output->writing("Writing with the color of the text in `black` on a `white` background...");
+$Output->Text->colorize(); // ? Reset before the newline: BCE would paint the rest of the line
+$Output->write("\n");
 
 $Output->Text->colorize(foreground: 'white', background: 'red');
-$Output->writing("Writing with the color of the text in `white` on a `red` background...\n");
+$Output->writing("Writing with the color of the text in `white` on a `red` background...");
+$Output->Text->colorize(); // ? Reset before the newline: BCE would paint the rest of the line
+$Output->write("\n");
 
 $Output->Text->colorize(foreground: 'white', background: 'green');
-$Output->writing("Writing with the color of the text in `white` on a `green` background...\n");
+$Output->writing("Writing with the color of the text in `white` on a `green` background...");
+$Output->Text->colorize(); // ? Reset before the newline: BCE would paint the rest of the line
+$Output->write("\n");
 
 $Output->Text->colorize(foreground: 'white', background: 'blue');
-$Output->writing("Writing with the color of the text in `white` on a `blue` background...\n");
+$Output->writing("Writing with the color of the text in `white` on a `blue` background...");
+$Output->Text->colorize(); // ? Reset before the newline: BCE would paint the rest of the line
+$Output->write("\n");
 
 $Output->Text->colorize(foreground: 'black', background: 'yellow');
-$Output->writing("Writing with the color of the text in `black` on a `yellow` background...\n");
+$Output->writing("Writing with the color of the text in `black` on a `yellow` background...");
+$Output->Text->colorize(); // ? Reset before the newline: BCE would paint the rest of the line
+$Output->write("\n");
 
 $Output->Text->colorize(foreground: 'white', background: 'magenta');
-$Output->writing("Writing with the color of the text in `white` on a `magenta` background...\n");
+$Output->writing("Writing with the color of the text in `white` on a `magenta` background...");
+$Output->Text->colorize(); // ? Reset before the newline: BCE would paint the rest of the line
+$Output->write("\n");
 
 $Output->Text->colorize(foreground: 'black', background: 'cyan');
-$Output->writing("Writing with the color of the text in `black` on a `cyan` background...\n");
+$Output->writing("Writing with the color of the text in `black` on a `cyan` background...");
+$Output->Text->colorize(); // ? Reset before the newline: BCE would paint the rest of the line
+$Output->write("\n");
 
 $Output->Text->colorize(foreground: 'white', background: 'black');
-$Output->writing("Writing with the color of the text in `white` on a `black` background...\n\n");
+$Output->writing("Writing with the color of the text in `white` on a `black` background...");
+$Output->Text->colorize(); // ? Reset before the newline: BCE would paint the rest of the line
+$Output->write("\n\n");
 
 // @ Testing extended colors (0-255)
 $Output->Text->colorize(); // @ Reset colors
@@ -100,7 +134,9 @@ $Output->write(<<<OUTPUT
 *\n
 OUTPUT);
 $Output->Text->colorize(foreground: 209, background: 18);
-$Output->writing("Writing a text with color index '209' on a background with color index '18'!\n\n");
+$Output->writing("Writing a text with color index '209' on a background with color index '18'!");
+$Output->Text->colorize(); // ? Reset before the newline: BCE would paint the rest of the line
+$Output->write("\n\n");
 
 
 // !!! If you have photosensitive epilepsy, please avoid looking at the screen when running this code below.

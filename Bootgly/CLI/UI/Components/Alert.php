@@ -77,7 +77,7 @@ class Alert extends Component
             // @ Colorize
             match ($type) {
                Type::Success => $Text->colorize('white', 'green'),
-               Type::Attention => $Text->colorize(0, 'yellow'),
+               Type::Attention => $Text->colorize(0, 11), // black on bright yellow (dark `yellow` preset lacks contrast)
                Type::Failure => $Text->colorize('white', 'red'),
                default => $Text->colorize(0, 7)
             };
@@ -102,7 +102,7 @@ class Alert extends Component
             // @ Colorize alert type
             match ($type) {
                Type::Success => $Text->colorize('white', 'green'),
-               Type::Attention => $Text->colorize(0, 'yellow'),
+               Type::Attention => $Text->colorize(0, 11), // black on bright yellow (dark `yellow` preset lacks contrast)
                Type::Failure => $Text->colorize('white', 'red'),
                default => $Text->colorize('white', 'blue')
             };
