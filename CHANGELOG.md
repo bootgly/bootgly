@@ -2,6 +2,45 @@
 
 Changelog for Bootgly framework. All notable changes to this project will be documented in this file. Imported from ROADMAP.md.
 
+## v0.19.0-beta ✅
+
+> Focus: **WebSocket Server + WebSocket Client + HTTP/2 Server**
+
+### WPI — Web Programming Interface
+
+- ✅ WebSocket Server CLI (`WPI/Nodes/WS_Server_CLI`)
+  - ✅ Handshake, frames, opcodes
+  - ✅ Channels / rooms
+  - ✅ Broadcasting (same-worker + cross-worker via per-worker datagram relay)
+  - ✅ Ping/pong heartbeat
+  - ✅ Auth handshake middleware (reuses v0.15 Authentication guards) + Origin gate (`HandshakeRequested`)
+  - ✅ permessage-deflate (RFC 7692, ext-zlib)
+  - ✅ Streaming UTF-8 validation + outbound fragmentation
+  - ✅ wss:// (TLS)
+- ✅ WebSocket Client CLI (`WPI/Nodes/WS_Client_CLI`) — wire-compatible with `WS_Server_CLI` (verified via live E2E + Autobahn 1-7/12/13 = 0 FAILED) — committed + pushed to main (137f54c6)
+  - ✅ Self-contained codec duplicated in the client (own `Message/Frame` +masking, `Message/UTF8`, `Handshake`, `Message` DTO, inline permessage-deflate) — `WS_Server_CLI` NOT modified; the alpha-order rule (Client < Server) forbids importing the Server subtree, so the codec is duplicated by design
+  - ✅ `WS_Client_CLI extends TCP_Client_CLI implements WS, WS\Client` (mirrors `HTTP_Client_CLI`) + `WS/Client.php` marker
+  - ✅ Client handshake — generate `Sec-WebSocket-Key`, send upgrade GET, verify `101` + `Sec-WebSocket-Accept`
+  - ✅ Frames, opcodes — outbound frames masked (RFC 6455 §5.1); inbound unmasked
+  - ✅ Fragmentation (inbound reassembly + outbound `send(fragment:)`)
+  - ✅ Ping/pong heartbeat (auto-pong to server ping + client-initiated ping)
+  - ✅ permessage-deflate (RFC 7692, ext-zlib) — client offer / negotiate
+  - ✅ Streaming UTF-8 validation (JIT-safe PCRE validator)
+  - ✅ wss:// (TLS)
+  - ✅ Auth — send Bearer/Basic + `Origin` header on upgrade
+  - ✅ Unit + E2E test suites (live `WS_Server_CLI` driven by the client) + Demo project + docs (en-US + pt-BR)
+  - ✅ Auto-reconnect with backoff (client-only)
+  - ✅ Autobahn client conformance — 462 cases / 0 FAILED (sections 1-7, 12, 13)
+  - ✅ Multi-client — instance-scoped callbacks + concurrent live clients on one shared loop (non-blocking `open()` + static `run()`)
+- ✅ HTTP/2 (over the existing `HTTP_Server_CLI`)
+  - ✅ HPACK header compression
+  - ✅ Binary framing layer
+  - ✅ Stream multiplexing (concurrent requests on one connection)
+  - ✅ Server push (optional — feature-flag)
+  - ✅ ALPN negotiation on the existing TLS-capable HTTPS server
+
+---
+
 ## v0.18.0-beta ✅
 
 > Focus: **Logging + Observability + Storage**
