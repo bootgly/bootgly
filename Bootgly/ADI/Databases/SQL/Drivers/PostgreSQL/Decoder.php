@@ -91,10 +91,34 @@ class Decoder
             break;
          }
 
-         $payload = substr($buffer, $offset + 5, $length - 4);
+         $base = $offset + 5;
          $offset += $total;
 
-         $Messages[] = $this->parse($type, $payload);
+         // @@ Hot backend types decode straight from the shared buffer —
+         //    no payload substr, no parse()/read() frames, integers inlined.
+         //    The driver only consumes Message->fields, so hot messages skip
+         //    retaining the payload string entirely.
+         $Messages[] = match ($type) {
+            'D' => new Message($type, '', [
+               'values' => $this->fetch($buffer, $base, $base + $length - 4),
+            ]),
+            'Z' => new Message($type, '', [
+               'status' => $buffer[$base] ?? '',
+            ]),
+            'C' => new Message($type, '', [
+               'command' => substr($buffer, $base, $length - 5),
+            ]),
+            'T' => new Message($type, '', [
+               'columns' => $this->describe($buffer, $base, $base + $length - 4),
+            ]),
+            '1' => new Message($type, '', [
+               'status' => 'parse',
+            ]),
+            '2' => new Message($type, '', [
+               'status' => 'bind',
+            ]),
+            default => $this->parse($type, substr($buffer, $base, $length - 4)),
+         };
       }
 
       // @ Compact the buffer only when the consumed prefix grows large.
@@ -110,7 +134,10 @@ class Decoder
    }
 
    /**
-    * Parse a complete backend message payload.
+    * Parse a complete (cold-path) backend message payload.
+    *
+    * Hot types (D, Z, C, T, 1, 2) never reach here — decode() reads them
+    * straight from the shared buffer.
     */
    private function parse (string $type, string $payload): Message
    {
@@ -126,24 +153,6 @@ class Decoder
             'secret' => $this->unpack('N', $payload, 4),
          ]),
          'A' => new Message($type, $payload, $this->read($payload, 'notification')),
-         'Z' => new Message($type, $payload, [
-            'status' => $payload[0] ?? '',
-         ]),
-         'C' => new Message($type, $payload, [
-            'command' => substr($payload, 0, -1),
-         ]),
-         'T' => new Message($type, $payload, [
-            'columns' => $this->read($payload, 'columns'),
-         ]),
-         'D' => new Message($type, $payload, [
-            'values' => $this->read($payload, 'values'),
-         ]),
-         '1' => new Message($type, $payload, [
-            'status' => 'parse',
-         ]),
-         '2' => new Message($type, $payload, [
-            'status' => 'bind',
-         ]),
          't' => new Message($type, $payload, [
             'parameters' => $this->read($payload, 'oids'),
          ]),
@@ -155,6 +164,102 @@ class Decoder
          ]),
          default => new Message($type, $payload),
       };
+   }
+
+   /**
+    * Read one DataRow (D) field list straight from the stream buffer.
+    *
+    * Integers are inlined ord() shifts — one method frame per row instead of
+    * one unpack() frame per cell; cell strings are the only allocations.
+    *
+    * @return array<int,null|string>
+    */
+   private function fetch (string $buffer, int $base, int $end): array
+   {
+      // ?
+      if ($base + 2 > $end) {
+         return [];
+      }
+
+      $Fields = [];
+      $count = (ord($buffer[$base]) << 8) | ord($buffer[$base + 1]);
+      $cursor = $base + 2;
+
+      // @@
+      for ($index = 0; $index < $count; $index++) {
+         if ($cursor + 4 > $end) {
+            break;
+         }
+
+         $length = (ord($buffer[$cursor]) << 24)
+                 | (ord($buffer[$cursor + 1]) << 16)
+                 | (ord($buffer[$cursor + 2]) << 8)
+                 | ord($buffer[$cursor + 3]);
+         $cursor += 4;
+
+         // ? PostgreSQL encodes NULL field values as unsigned -1 (0xFFFFFFFF)
+         if ($length === 0xFFFFFFFF) {
+            $Fields[] = null;
+
+            continue;
+         }
+
+         if ($cursor + $length > $end) {
+            break;
+         }
+
+         $Fields[] = substr($buffer, $cursor, $length);
+         $cursor += $length;
+      }
+
+      // :
+      return $Fields;
+   }
+
+   /**
+    * Read one RowDescription (T) column list straight from the stream buffer.
+    *
+    * @return array<int,array<string,int|string>>
+    */
+   private function describe (string $buffer, int $base, int $end): array
+   {
+      // ?
+      if ($base + 2 > $end) {
+         return [];
+      }
+
+      $Fields = [];
+      $count = (ord($buffer[$base]) << 8) | ord($buffer[$base + 1]);
+      $cursor = $base + 2;
+
+      // @@
+      for ($index = 0; $index < $count; $index++) {
+         $stop = strpos($buffer, "\0", $cursor);
+
+         if ($stop === false || $stop + 19 > $end) {
+            break;
+         }
+
+         $name = substr($buffer, $cursor, $stop - $cursor);
+         $cursor = $stop + 1;
+
+         $Fields[] = [
+            'name' => $name,
+            'table' => (ord($buffer[$cursor]) << 24) | (ord($buffer[$cursor + 1]) << 16)
+                     | (ord($buffer[$cursor + 2]) << 8) | ord($buffer[$cursor + 3]),
+            'attribute' => (ord($buffer[$cursor + 4]) << 8) | ord($buffer[$cursor + 5]),
+            'type' => (ord($buffer[$cursor + 6]) << 24) | (ord($buffer[$cursor + 7]) << 16)
+                    | (ord($buffer[$cursor + 8]) << 8) | ord($buffer[$cursor + 9]),
+            'size' => (ord($buffer[$cursor + 10]) << 8) | ord($buffer[$cursor + 11]),
+            'modifier' => (ord($buffer[$cursor + 12]) << 24) | (ord($buffer[$cursor + 13]) << 16)
+                        | (ord($buffer[$cursor + 14]) << 8) | ord($buffer[$cursor + 15]),
+            'format' => (ord($buffer[$cursor + 16]) << 8) | ord($buffer[$cursor + 17]),
+         ];
+         $cursor += 18;
+      }
+
+      // :
+      return $Fields;
    }
 
    /**
@@ -263,71 +368,6 @@ class Decoder
          }
 
          return $Fields;
-      }
-
-      if ($mode === 'columns') {
-         if ($size < 2) {
-            return $Fields;
-         }
-
-         $count = $this->unpack('n', $payload, 0);
-         $offset = 2;
-
-         for ($index = 0; $index < $count; $index++) {
-            $end = strpos($payload, "\0", $offset);
-
-            if ($end === false || $end + 19 > $size) {
-               break;
-            }
-
-            $name = substr($payload, $offset, $end - $offset);
-            $offset = $end + 1;
-
-            $Fields[] = [
-               'name' => $name,
-               'table' => $this->unpack('N', $payload, $offset),
-               'attribute' => $this->unpack('n', $payload, $offset + 4),
-               'type' => $this->unpack('N', $payload, $offset + 6),
-               'size' => $this->unpack('n', $payload, $offset + 10),
-               'modifier' => $this->unpack('N', $payload, $offset + 12),
-               'format' => $this->unpack('n', $payload, $offset + 16),
-            ];
-            $offset += 18;
-         }
-
-         return $Fields;
-      }
-
-      if ($mode === 'values') {
-         if ($size < 2) {
-            return $Fields;
-         }
-
-         $count = $this->unpack('n', $payload, 0);
-         $offset = 2;
-
-         for ($index = 0; $index < $count; $index++) {
-            if ($offset + 4 > $size) {
-               break;
-            }
-
-            $length = $this->unpack('N', $payload, $offset);
-            $offset += 4;
-
-            // PostgreSQL encodes NULL field values as unsigned -1 (0xFFFFFFFF).
-            if ($length === 0xFFFFFFFF) {
-               $Fields[] = null;
-
-               continue;
-            }
-
-            if ($offset + $length > $size) {
-               break;
-            }
-
-            $Fields[] = substr($payload, $offset, $length);
-            $offset += $length;
-         }
       }
 
       return $Fields;
