@@ -1468,7 +1468,7 @@ class ProjectCommand extends Command
             if (BOOTGLY_TTY === true) {
                $choice = $this->choose('Which platform do you want to use?', [
                   'Console — CLI / TUI apps',
-                  'Web — HTTP / WebSocket servers (includes Console)'
+                  'Web (includes Console)'
                ]);
                $platform = $choice === 1 ? 'web' : 'console';
             }

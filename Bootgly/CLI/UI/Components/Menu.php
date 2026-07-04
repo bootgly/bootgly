@@ -12,7 +12,10 @@ namespace Bootgly\CLI\UI\Components;
 
 
 use const BOOTGLY_TTY;
+use function feof;
+use function is_string;
 use function str_pad;
+use function substr_count;
 use function usleep;
 use Generator;
 
@@ -145,8 +148,6 @@ class Menu extends Component
          return false;
       }
 
-      // Save Cursor position
-      $this->Output->Cursor->save();
       // Set Input settings
       $this->Input->configure(
          blocking: false,
@@ -156,27 +157,59 @@ class Menu extends Component
       // Hide Cursor
       $this->Output->Cursor->hide();
 
+      // ! Render frames as strings: repositioning is relative to the frame height
+      $this->render = self::RETURN_OUTPUT;
+      // ! Height (lines) of the last rendered frame
+      $height = 0;
+
       // > Items
       $Items = $this->Items;
 
       while (true) {
-         $this->Output->Cursor->restore();
+         // ? Reposition to the first line of the previous frame and erase it — relative
+         //   movement: absolute save/restore drifts when rendering scrolls the screen
+         if ($height > 0) {
+            $this->Output->Cursor->up($height, column: 1);
+            $this->Output->Text->clear(down: true);
+         }
 
          // @ Render Menu
-         yield $this->render();
+         $frame = $this->render();
+         $frame = is_string($frame) === true ? $frame : '';
+         $height = substr_count($frame, "\n");
 
-         // @ Read 3 characters from Input
-         $char = $this->Input->read(3);
+         yield $this->Output->render($frame);
+
+         // @@ Wait for input without re-rendering (non-blocking reads keep signals dispatched)
+         while (true) {
+            $char = $this->Input->read(1);
+
+            // ? Input available — read one key at a time (bursts and pipes never desync)
+            if ($char !== false && $char !== '') {
+               // ? Escape sequences arrive as up to 3 bytes (e.g. arrows: ESC [ A)
+               if ($char === "\e") {
+                  $char .= (string) $this->Input->read(2);
+               }
+
+               break;
+            }
+            // ? EOF: interactive input will never arrive — finish with the current selection
+            if (feof($this->Input->stream) === true) {
+               break 2;
+            }
+
+            usleep(50000);
+         }
+
+         // ? The wait loop only breaks here with a non-empty key
          if ($char === false) {
-            continue;
+            break;
          }
 
          // @ Control Menu Items
          $continue = $Items->Options->control($char);
 
          if ($continue) {
-            usleep(100000);
-
             // @ Return selected in real time
             yield $Items->Options::$selected[self::$level];
 
@@ -188,6 +221,8 @@ class Menu extends Component
 
       $this->selected = (array) $Items->Options::$selected[self::$level];
 
+      // Restore render mode
+      $this->render = self::WRITE_OUTPUT;
       // Restore Input settings
       $this->Input->configure(
          blocking: true,
