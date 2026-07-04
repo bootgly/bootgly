@@ -23,5 +23,6 @@ return new Suite(
       '6.1-input-reading-roles',
       '7.1-logs-render-width',
       '8.1-input-scan-line',
+      '8.2-input-scan-echo',
    ]
 );

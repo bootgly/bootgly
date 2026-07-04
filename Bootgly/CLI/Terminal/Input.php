@@ -13,6 +13,7 @@ namespace Bootgly\CLI\Terminal;
 
 use const SIGTERM;
 use const STDIN;
+use const STDOUT;
 use function cli_set_process_title;
 use function defined;
 use function fopen;
@@ -20,6 +21,7 @@ use function fread;
 use function function_exists;
 use function fwrite;
 use function getenv;
+use function ord;
 use function pcntl_fork;
 use function pcntl_signal;
 use function pcntl_signal_dispatch;
@@ -29,6 +31,8 @@ use function posix_kill;
 use function register_shutdown_function;
 use function stream_isatty;
 use function stream_set_blocking;
+use function strlen;
+use function substr;
 use function system;
 use function time;
 use Closure;
@@ -44,11 +48,17 @@ use Bootgly\CLI\Terminal\Input\Roles;
 class Input
 {
    // * Config
-   // ...
+   /**
+    * Self-echo bytes consumed by scan() back to the terminal — the line
+    * discipline of emulated TTYs (real TTYs echo in the kernel; pipes never echo).
+    */
+   public bool $echo;
 
    // * Data
    /** @var resource */
    public $stream;
+   /** @var resource Echo target — the terminal write side used when $echo is enabled */
+   public $output;
    // # Terminal Client/Server API
    // Role and duplex channel for embedded runtimes (one role per process);
    // when both stay null and process control exists, reading() forks natively.
@@ -66,10 +76,12 @@ class Input
    public function __construct ($stream = STDIN)
    {
       // * Config
-      // ...
+      // ? Emulated TTYs (BOOTGLY_TTY forced by env) have no kernel line discipline
+      $this->echo = getenv('BOOTGLY_TTY') === '1' && stream_isatty($stream) === false;
 
       // * Data
       $this->stream = $stream;
+      $this->output = STDOUT;
       // # Terminal Client/Server API
       $this->role = Roles::tryFrom((string) getenv('BOOTGLY_TERMINAL_ROLE'));
 
@@ -143,6 +155,8 @@ class Input
    /**
     * Reads a single line from the input stream.
     * Bytes are consumed until a line terminator (`\n` or `\r`) or EOF is reached.
+    * Acts as the line discipline of the stream: erase keys (Backspace / Delete)
+    * edit the buffer and, when self-echo is enabled, input is echoed back as typed.
     *
     * @return string|false Returns the line without the terminator, or false on immediate EOF.
     */
@@ -150,6 +164,8 @@ class Input
    {
       // ! Line buffer
       $line = '';
+      // ! Echo buffer — echo whole UTF-8 characters only, never partial byte sequences
+      $pending = '';
 
       // @@ Consume bytes until a line terminator or EOF
       while (true) {
@@ -161,11 +177,53 @@ class Input
          }
          // ? Line terminator
          if ($byte === "\n" || $byte === "\r") {
+            if ($this->echo === true) {
+               fwrite($this->output, "\n");
+            }
+
             // :
             return $line;
          }
+         // ? Erase (Backspace / Delete)
+         if ($byte === "\x08" || $byte === "\x7F") {
+            if ($line === '') {
+               continue;
+            }
+
+            // @ Chop the last UTF-8 character from the buffer
+            $offset = strlen($line) - 1;
+            while ($offset > 0 && (ord($line[$offset]) & 0xC0) === 0x80) {
+               $offset--;
+            }
+            $line = substr($line, 0, $offset);
+
+            if ($this->echo === true) {
+               fwrite($this->output, "\x08 \x08");
+            }
+
+            continue;
+         }
 
          $line .= $byte;
+
+         // ? Self-echo characters as their byte sequences complete
+         if ($this->echo === true) {
+            $pending .= $byte;
+
+            $lead = ord($pending[0]);
+            $length = match (true) {
+               $lead < 0x80 => 1,
+               $lead >= 0xF0 => 4,
+               $lead >= 0xE0 => 3,
+               $lead >= 0xC0 => 2,
+               default => 1
+            };
+
+            if (strlen($pending) >= $length) {
+               fwrite($this->output, $pending);
+               $pending = '';
+            }
+         }
       }
 
       // ?: EOF with no buffered bytes
