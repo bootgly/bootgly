@@ -23,15 +23,18 @@ use function implode;
 use function in_array;
 use function is_array;
 use function is_dir;
+use function json_encode;
 use function ksort;
 use function max;
 use function mkdir;
 use function number_format;
 use function sprintf;
+use function str_ends_with;
 use function str_pad;
 use function str_repeat;
 use function strlen;
 use function uasort;
+use stdClass;
 
 use Bootgly\ABI\Data\__String\Bytes;
 use Bootgly\ABI\Data\__String\Escapeable\Text\Formattable;
@@ -159,8 +162,9 @@ class Summary
     * Print results table (auto-detects code vs server).
     *
     * @param array<string,array<string,Result>> $results
+    * @param bool $compact Skip the leading separator and headline (sweep rounds).
     */
-   public static function report (array $results, string $metric = 'req/s'): void
+   public static function report (array $results, string $metric = 'req/s', bool $compact = false): void
    {
       $allOpponents = array_keys($results);
 
@@ -176,11 +180,14 @@ class Summary
       $CYAN    = self::wrap(self::_CYAN_FOREGROUND);
       $RESET   = self::_RESET_FORMAT;
 
-      self::separate();
+      // ? Compact style (sweep rounds) skips the separator + headline
+      if ($compact === false) {
+         self::separate();
 
-      // @ Results header
-      echo "{$BOLD}  Results\n{$RESET}\n";
-      echo "  {$CYAN}" . implode(' vs ', $allOpponents) . "{$RESET}\n\n";
+         // @ Results header
+         echo "{$BOLD}  Results\n{$RESET}\n";
+         echo "  {$CYAN}" . implode(' vs ', $allOpponents) . "{$RESET}\n\n";
+      }
 
       // @ Detect type — a server benchmark if ANY result carries throughput
       //   (rps). Inspecting only the first opponent's first load misclassifies
@@ -405,8 +412,12 @@ class Summary
     *        (server-workers, client-workers, connections, duration, ...) emitted
     *        in the file header so trend tooling can reconstruct the X axis from
     *        a range of .marks files alone.
+    * @param string $suffix Filename disambiguator inserted before `_bench.marks`
+    *        (e.g. `r01` per sweep round — save() timestamps are per-second).
+    *
+    * @return string The saved file path, relative to the working directory.
     */
-   public static function save (string $caseName, array $results, array $config = []): void
+   public static function save (string $caseName, array $results, array $config = [], string $suffix = ''): string
    {
       $dir = BOOTGLY_STORAGE_DIR . 'tests/benchmarks/' . $caseName;
 
@@ -414,7 +425,11 @@ class Summary
          mkdir($dir, 0775, true);
       }
 
-      $file = "$dir/" . date('Y-m-d_His') . '_bench.marks';
+      // ! Build the filename once — a second date() call could cross a
+      //   second boundary and display a path that does not exist.
+      $stamp = date('Y-m-d_His');
+      $name = $suffix !== '' ? "{$stamp}-{$suffix}" : $stamp;
+      $file = "$dir/{$name}_bench.marks";
 
       $lines = [];
       $lines[] = "# Benchmark: {$caseName}";
@@ -463,10 +478,141 @@ class Summary
 
       file_put_contents($file, implode("\n", $lines) . "\n");
 
-      // @ Display save path (relative)
+      // : Saved file path (relative) — the run footer (artifacts) displays it
+      return "storage/tests/benchmarks/{$caseName}/{$name}_bench.marks";
+   }
+
+   /**
+    * Print the sweep announcement once (after the run summary).
+    *
+    * @param array<string,array<int,int>> $sweeps Swept option name => expanded values.
+    * @param int $rounds Total execution rounds.
+    */
+   public static function sweep (array $sweeps, int $rounds): void
+   {
+      $BOLD  = self::wrap(self::_BOLD_STYLE);
       $DIM   = self::wrap(self::_DIM_STYLE);
       $RESET = self::_RESET_FORMAT;
-      $relative = "storage/tests/benchmarks/$caseName/" . date('Y-m-d_His') . '_bench.marks';
-      echo "\n{$DIM}  Results saved to: {$relative}{$RESET}\n\n";
+
+      echo "{$BOLD}  Sweep{$RESET}\n";
+
+      foreach ($sweeps as $name => $values) {
+         echo "{$DIM}  " . str_pad($name, 16) . implode(', ', $values) . "{$RESET}\n";
+      }
+
+      echo "{$DIM}  " . str_pad('rounds', 16) . $rounds . "{$RESET}\n";
+
+      self::separate();
+   }
+
+   /**
+    * Open a sweep round in the output — print its short header.
+    *
+    * @param array<string,scalar> $values Swept option values of this round.
+    * @param int $index 1-based round index.
+    * @param int $total Total rounds.
+    */
+   public static function open (array $values, int $index, int $total): void
+   {
+      $DIM   = self::wrap(self::_DIM_STYLE);
+      $RESET = self::_RESET_FORMAT;
+
+      $pairs = [];
+      foreach ($values as $name => $value) {
+         $pairs[] = "{$name}={$value}";
+      }
+      $header = implode(' ', $pairs);
+
+      echo self::wrap(self::_CYAN_BOLD) . "  ── {$header} ──{$RESET}"
+         . "{$DIM}  ({$index}/{$total}){$RESET}\n\n";
+   }
+
+   /**
+    * Locate every generated artifact — print the run footer with the paths.
+    *
+    * Always printed for `--format=text` — in both `full` and `compact`
+    * output styles — so the `.marks` location is never lost in the noise.
+    *
+    * @param array<int,string> $marks Saved `.marks` paths (one per round).
+    * @param array<int,string> $generated Report/chart paths (when `--results` > marks).
+    */
+   public static function locate (array $marks, array $generated = []): void
+   {
+      $BOLD  = self::wrap(self::_BOLD_STYLE);
+      $DIM   = self::wrap(self::_DIM_STYLE);
+      $RESET = self::_RESET_FORMAT;
+
+      echo "\n{$BOLD}  Artifacts{$RESET}\n";
+
+      // # Marks — one file per round
+      foreach ($marks as $file) {
+         echo "{$DIM}  Marks   {$file}{$RESET}\n";
+      }
+
+      // # Report + charts
+      foreach ($generated as $file) {
+         $label = str_ends_with($file, '.svg') ? 'Chart' : 'Report';
+         echo "{$DIM}  " . str_pad($label, 8) . "{$file}{$RESET}\n";
+      }
+
+      echo "\n";
+   }
+
+   /**
+    * Serialize a full run (all rounds) to a JSON document.
+    *
+    * Emitted as the LAST stdout document in `--format=json` mode, so
+    * machine consumers can `tail -n 1` the output.
+    *
+    * @param string $caseName
+    * @param string $metric
+    * @param array<string,scalar|array<int,scalar>> $config Non-swept run configuration.
+    * @param array<string,array<int,int>> $sweeps Swept option name => expanded values.
+    * @param array<int,array{options:array<string,scalar>,results:array<string,array<string,Result>>,marks:string}> $rounds
+    * @param array<int,string> $artifacts Report/chart paths (when generated).
+    */
+   public static function export (
+      string $caseName,
+      string $metric,
+      array $config,
+      array $sweeps,
+      array $rounds,
+      array $artifacts = []
+   ): string
+   {
+      $document = [
+         'case' => $caseName,
+         'date' => date('Y-m-d H:i:s'),
+         'metric' => $metric,
+         'config' => $config === [] ? new stdClass : $config,
+         'sweep' => $sweeps === [] ? new stdClass : $sweeps,
+         'rounds' => [],
+         'artifacts' => $artifacts,
+      ];
+
+      // @@ Serialize each round
+      foreach ($rounds as $round) {
+         $results = [];
+         foreach ($round['results'] as $opponent => $loads) {
+            foreach ($loads as $label => $Result) {
+               $results[$opponent][$label] = [
+                  'rps' => $Result->rps,
+                  'latency' => $Result->latency,
+                  'transfer' => $Result->transfer,
+                  'time' => $Result->time,
+                  'memory' => $Result->memory,
+               ];
+            }
+         }
+
+         $document['rounds'][] = [
+            'options' => $round['options'] === [] ? new stdClass : $round['options'],
+            'results' => $results,
+            'marks' => $round['marks'],
+         ];
+      }
+
+      // : Single-line JSON document + trailing newline
+      return json_encode($document) . "\n";
    }
 }

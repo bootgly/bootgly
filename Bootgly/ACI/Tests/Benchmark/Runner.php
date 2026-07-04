@@ -38,6 +38,24 @@ abstract class Runner
    }
 
    /**
+    * Apply resolved case option values (one sweep round) to the Runner.
+    *
+    * Framework-known keys:
+    * - `server-workers` — uniform worker count for every Opponent.
+    *
+    * @param array<string,scalar> $values
+    */
+   public function apply (array $values): void
+   {
+      // # server-workers
+      if (isset($values['server-workers'])) {
+         foreach ($this->opponents as $Opponent) {
+            $Opponent->workers = (int) $values['server-workers'];
+         }
+      }
+   }
+
+   /**
     * Configure runner from CLI options.
     *
     * @param array<string, bool|int|string> $options

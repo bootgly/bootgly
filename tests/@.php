@@ -121,5 +121,7 @@ return new Suites(
       'Bootgly/WPI/Nodes/HTTP_Server_CLI/tests/HTTP2_TLS/',
       // # CLI Terminal — size resolution + cursor position contract + Progress anchoring
       'Bootgly/CLI/Terminal/',
+      // # Benchmark harness — case options schema + sweep expansion
+      'Bootgly/ACI/Tests/Benchmark/',
    ]
 );

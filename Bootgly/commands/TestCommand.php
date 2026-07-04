@@ -12,20 +12,28 @@ namespace Bootgly\commands;
 
 
 use const BOOTGLY_ROOT_DIR;
+use const BOOTGLY_STORAGE_DIR;
 use const BOOTGLY_WORKING_DIR;
 use const PHP_EOL;
 use const STDERR;
+use const STR_PAD_LEFT;
+use function array_intersect_key;
+use function array_keys;
+use function array_map;
 use function array_slice;
 use function array_unique;
 use function array_values;
+use function count;
+use function dirname;
 use function explode;
 use function file_put_contents;
 use function fwrite;
+use function in_array;
 use function is_array;
 use function is_dir;
 use function is_file;
-use function is_string;
 use function ltrim;
+use function preg_match;
 use function preg_replace;
 use function putenv;
 use function realpath;
@@ -34,18 +42,22 @@ use function scandir;
 use function sort;
 use function str_contains;
 use function str_ends_with;
+use function str_pad;
 use function str_replace;
 use function strtolower;
 use function substr;
 use Closure;
 use LogicException;
+use Throwable;
 
 use const Bootgly\CLI;
 use Bootgly\ABI\Data\__String\Escapeable\Text\Formattable;
 use Bootgly\ACI\Logs\Data\Display;
 use Bootgly\ACI\Tests;
 use Bootgly\ACI\Tests\Benchmark\Configs;
+use Bootgly\ACI\Tests\Benchmark\Configs\Options;
 use Bootgly\ACI\Tests\Benchmark\Info;
+use Bootgly\ACI\Tests\Benchmark\Report;
 use Bootgly\ACI\Tests\Benchmark\Runner;
 use Bootgly\ACI\Tests\Benchmark\Summary;
 use Bootgly\ACI\Tests\Coverage;
@@ -435,26 +447,28 @@ class TestCommand extends Command
          echo "    {$MAGENTA}--opponents{$RESET}=LIST  Comma-separated opponent names ({$MAGENTA}*{$RESET} required)\n";
          echo "    {$CYAN}--runner{$RESET}=TYPE     Runner (default: case-dependent)\n";
          echo "    {$MAGENTA}--loads{$RESET}=SET:IDX   Load set + 1-based indices ({$MAGENTA}*{$RESET} required), e.g. techempower:1,2 or default:*\n";
-         echo "    {$CYAN}--vary{$RESET}=PARAMS     Vary parameters across rounds (e.g. server-workers:2)\n";
+         echo "    {$CYAN}--output{$RESET}=STYLE    Output style: full | compact (default: auto — compact when sweeping)\n";
+         echo "    {$CYAN}--format{$RESET}=FORMAT   Results serialization: text | json (default: text)\n";
+         echo "    {$CYAN}--results{$RESET}=LEVEL   Generated artifacts: marks | report | charts (default: marks)\n";
          echo "\n";
 
          // @ Case-local options + Runner options (only in contextual help)
          if ($caseName !== null && $caseDir !== null) {
-            // # Case-local options from options.php
-            $optionsFile = "$caseDir/options.php";
-            if (is_file($optionsFile)) {
-               $caseOptions = include $optionsFile;
-               if (is_array($caseOptions) && $caseOptions !== []) {
+            // # Case-local options from the options.php schema
+            try {
+               $caseOptions = Options::load("$caseDir/options.php")->render();
+
+               if ($caseOptions !== []) {
                   echo "  {$BOLD}{$caseName} options:{$RESET}\n";
                   foreach ($caseOptions as $flag => $desc) {
-                     if ( ! is_string($desc) ) {
-                        continue;
-                     }
-
                      echo "    {$CYAN}{$flag}{$RESET}  {$desc}\n";
                   }
                   echo "\n";
                }
+            }
+            catch (Throwable $Throwable) {
+               $DIM = self::wrap(self::_DIM_STYLE);
+               echo "  {$DIM}Invalid {$caseName} options schema: {$Throwable->getMessage()}{$RESET}\n\n";
             }
 
             // # Runner options (load @.php to get Runner instance)
@@ -515,6 +529,33 @@ class TestCommand extends Command
       // @ Parse options
       $Configs = Configs::parse($options);
 
+      // ? --vary was replaced by sweep values on the case options themselves
+      if (isset($options['vary'])) {
+         $Alert->Type::Failure->set();
+         $Alert->message = "--vary was removed — pass sweep values directly, e.g. --server-workers=1..24:4.";
+         $Alert->render();
+         return false;
+      }
+      // ? Global output/format/results enums
+      if ($Configs->output !== null && in_array($Configs->output, ['full', 'compact'], true) === false) {
+         $Alert->Type::Failure->set();
+         $Alert->message = "Invalid --output '{$Configs->output}'. Use: full | compact.";
+         $Alert->render();
+         return false;
+      }
+      if (in_array($Configs->format, ['text', 'json'], true) === false) {
+         $Alert->Type::Failure->set();
+         $Alert->message = "Invalid --format '{$Configs->format}'. Use: text | json.";
+         $Alert->render();
+         return false;
+      }
+      if (in_array($Configs->results, ['marks', 'report', 'charts'], true) === false) {
+         $Alert->Type::Failure->set();
+         $Alert->message = "Invalid --results '{$Configs->results}'. Use: marks | report | charts.";
+         $Alert->render();
+         return false;
+      }
+
       // ? Opponents are mandatory — at least one must be selected.
       if ($Configs->opponents === null) {
          $Alert->Type::Failure->set();
@@ -539,6 +580,18 @@ class TestCommand extends Command
          return false;
       }
 
+      // @ Resolve case options against the options.php schema (sweep expansion)
+      try {
+         $Options = Options::load(dirname($casePath) . '/options.php');
+         $Options->parse($options);
+      }
+      catch (Throwable $Throwable) {
+         $Alert->Type::Failure->set();
+         $Alert->message = $Throwable->getMessage();
+         $Alert->render();
+         return false;
+      }
+
       // @ Expose the load set to the case @.php + opponents (mirrors BENCHMARK_RUNNER)
       putenv('BENCHMARK_LOAD_SET=' . $Configs->loadSet);
 
@@ -558,40 +611,90 @@ class TestCommand extends Command
       // @ Apply runner-specific CLI options
       $Runner->configure($options);
 
-      // @ Banner
+      // ! Sweep state
+      $rounds = $Options->rounds;
+      $total = count($rounds);
+      $sweeping = $total > 1;
+      $style = $Configs->output ?? ($sweeping ? 'compact' : 'full');
+
+      // @ Banner + summary — once per run, regardless of rounds
       $Info = Info::collect();
       Summary::banner($Info, $Runner, $Configs, $caseName);
-      // @ Summary
       Summary::summary($Runner, $Configs);
-
-      // @ Run benchmark
-      $results = $Runner->run($Configs);
-
-      // @ Report
-      Summary::report($results, $Runner->metric);
-
-      // @ Build run configuration metadata for the .marks header.
-      //   Runner subclasses surface their own keys via $Runner->meta; the case
-      //   file (e.g. HTTP_Server_CLI/@.php) adds case-level keys to the same
-      //   bag. TestCommand only contributes runner-agnostic fields here.
-      $config = [];
-
-      if ($Runner->name !== '') {
-         $config['runner'] = $Runner->name;
+      if ($sweeping) {
+         Summary::sweep($Options->sweeps, $total);
       }
 
-      // # Server workers — applied uniformly to all opponents by --server-workers.
-      $Opponents = $Runner->opponents;
-      if (isset($Opponents[0]) && $Opponents[0]->workers !== null && $Opponents[0]->workers > 0) {
-         $config['server-workers'] = $Opponents[0]->workers;
+      // @@ Execution rounds — one benchmark run per resolved value map
+      $exports = [];
+      foreach ($rounds as $index => $round) {
+         // @ Apply case option values (framework-known keys, e.g. server-workers)
+         $Runner->apply($round);
+
+         if ($sweeping) {
+            Summary::open(array_intersect_key($round, $Options->sweeps), $index + 1, $total);
+         }
+
+         $results = $Runner->run($Configs);
+
+         Summary::report($results, $Runner->metric, compact: $style === 'compact');
+
+         // # Build run configuration metadata for the .marks header.
+         //   Runner subclasses surface their own keys via $Runner->meta; the case
+         //   file (e.g. HTTP_Server_CLI/@.php) adds case-level keys to the same
+         //   bag. TestCommand only contributes runner-agnostic fields here.
+         $config = [];
+
+         if ($Runner->name !== '') {
+            $config['runner'] = $Runner->name;
+         }
+
+         $Opponents = $Runner->opponents;
+         if (isset($Opponents[0]) && $Opponents[0]->workers !== null && $Opponents[0]->workers > 0) {
+            $config['server-workers'] = $Opponents[0]->workers;
+         }
+
+         foreach ($Runner->meta as $metaKey => $metaValue) {
+            $config[$metaKey] = $metaValue;
+         }
+
+         // # One .marks per round — the rNN suffix disambiguates same-second saves
+         $suffix = $sweeping ? 'r' . str_pad((string) ($index + 1), 2, '0', STR_PAD_LEFT) : '';
+         $marks = Summary::save($caseName, $results, $config, $suffix);
+
+         $exports[] = ['options' => $round, 'results' => $results, 'marks' => $marks, 'config' => $config];
       }
 
-      // @ Merge runner + case metadata last so they can override defaults.
-      foreach ($Runner->meta as $metaKey => $metaValue) {
-         $config[$metaKey] = $metaValue;
+      // @ --results=report|charts — generate the Markdown report (+ SVG charts)
+      $generated = [];
+      if ($Configs->results !== 'marks') {
+         $run = self::extract($caseName, $Info, $Runner, $Configs, $Options, $exports, $options);
+         $resultsDir = BOOTGLY_STORAGE_DIR . "tests/benchmarks/{$caseName}/results";
+
+         $Report = new Report(charts: $Configs->results === 'charts');
+         foreach ($Report->save($resultsDir, $run) as $file) {
+            $generated[] = "storage/tests/benchmarks/{$caseName}/results/{$file}";
+         }
       }
 
-      Summary::save($caseName, $results, $config);
+      // @ Serialize the whole run as the LAST stdout document (machine mode)
+      if ($Configs->format === 'json') {
+         // ! Swept keys live in `sweep`/per-round `options` — not in the shared config
+         $config = $exports !== [] ? $exports[0]['config'] : [];
+         foreach (array_keys($Options->sweeps) as $swept) {
+            unset($config[$swept]);
+         }
+
+         echo Summary::export($caseName, $Runner->metric, $config, $Options->sweeps, $exports, $generated);
+         return true;
+      }
+
+      // @ Artifacts footer — full AND compact styles always point at the files
+      $marks = [];
+      foreach ($exports as $export) {
+         $marks[] = $export['marks'];
+      }
+      Summary::locate($marks, $generated);
 
       // @ Post-run message
       if ($Runner->postMessage !== '') {
@@ -601,5 +704,108 @@ class TestCommand extends Command
       }
 
       return true;
+   }
+
+   /**
+    * Extract the scalar run structure consumed by Report from the round exports.
+    *
+    * @param array<int,array{options:array<string,scalar>,results:array<string,array<string,\Bootgly\ACI\Tests\Benchmark\Result>>,marks:string,config:array<string,scalar|array<int,scalar>>}> $exports
+    * @param array<string,bool|int|string> $options
+    *
+    * @return array{
+    *    case: string, loadSet: string, metric: string, command: string,
+    *    env: array<string,string>, config: array<string,scalar>,
+    *    sweep: array<string,array<int,int>>, loads: array<int,string>,
+    *    opponents: array<int,string>,
+    *    data: array<string,array<string,array<int,null|float>>>,
+    *    latencies: array<string,array<string,array<int,null|float>>>,
+    *    marks: array<int,string>
+    * }
+    */
+   private static function extract (
+      string $caseName,
+      Info $Info,
+      Runner $Runner,
+      Configs $Configs,
+      Options $Options,
+      array $exports,
+      array $options
+   ): array
+   {
+      // ! Opponent + load label unions (insertion order across rounds)
+      $opponents = [];
+      $loads = [];
+      foreach ($exports as $export) {
+         foreach ($export['results'] as $opponent => $labels) {
+            if (in_array($opponent, $opponents, true) === false) {
+               $opponents[] = $opponent;
+            }
+            foreach (array_keys($labels) as $label) {
+               if (in_array($label, $loads, true) === false) {
+                  $loads[] = $label;
+               }
+            }
+         }
+      }
+
+      // ! Series — load => opponent => value per round
+      $data = [];
+      $latencies = [];
+      foreach ($exports as $index => $export) {
+         foreach ($loads as $label) {
+            foreach ($opponents as $opponent) {
+               $Result = $export['results'][$opponent][$label] ?? null;
+
+               $data[$label][$opponent][$index] = $Result?->rps;
+
+               // # Latency strings ("458.55us", "2.97ms", "1.2s") → milliseconds
+               $latency = null;
+               if ($Result?->latency !== null && preg_match('/^([\d.,]+)(µs|us|ms|s)$/', $Result->latency, $matches) === 1) {
+                  $value = (float) str_replace(',', '', $matches[1]);
+                  $latency = match ($matches[2]) {
+                     'us', 'µs' => $value / 1000,
+                     's' => $value * 1000,
+                     default => $value,
+                  };
+               }
+               $latencies[$label][$opponent][$index] = $latency;
+            }
+         }
+      }
+
+      // ! Reproduction command (from the received CLI options)
+      $command = "bootgly test benchmark {$caseName}";
+      foreach ($options as $name => $value) {
+         $command .= $value === true ? " --{$name}" : " --{$name}={$value}";
+      }
+
+      // ! Non-swept config from the first round's .marks metadata
+      $config = [];
+      foreach ($exports !== [] ? $exports[0]['config'] : [] as $key => $value) {
+         if (isset($Options->sweeps[$key]) || is_array($value)) {
+            continue;
+         }
+         $config[$key] = $value;
+      }
+
+      // : Scalar run structure
+      return [
+         'case' => $caseName,
+         'loadSet' => (string) $Configs->loadSet,
+         'metric' => $Runner->metric,
+         'command' => $command,
+         'env' => [
+            'OS' => $Info->os,
+            'CPU' => "{$Info->cpuModel} ({$Info->cpuCount} cores)",
+            'RAM' => $Info->ram,
+         ],
+         'config' => $config,
+         'sweep' => $Options->sweeps,
+         'loads' => $loads,
+         'opponents' => $opponents,
+         'data' => $data,
+         'latencies' => $latencies,
+         'marks' => array_values(array_map(static fn (array $export): string => $export['marks'], $exports)),
+      ];
    }
 }

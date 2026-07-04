@@ -14,7 +14,6 @@ namespace Bootgly\ACI\Tests\Benchmark;
 use function array_map;
 use function array_unique;
 use function array_values;
-use function count;
 use function explode;
 use function intval;
 use function preg_replace;
@@ -34,28 +33,35 @@ class Configs
    public protected(set) null|string $loadSet;
    /** @var null|array<int> 1-based load indices to include (null = all in the set). */
    public protected(set) null|array $loads;
-   /** @var array<string,int> Variation parameters (e.g. ['workers' => 2]). */
-   public protected(set) array $vary;
+   /** @var null|string Output style: 'full' | 'compact' (null = auto). */
+   public protected(set) null|string $output;
+   /** @var string Results serialization: 'text' | 'json'. */
+   public protected(set) string $format;
+   /** @var string Generated artifacts: 'marks' | 'report' | 'charts'. */
+   public protected(set) string $results;
 
 
    /**
     * @param null|array<string> $opponents
     * @param null|array<int> $loads
-    * @param array<string,int> $vary
     */
    private function __construct (
       null|array $opponents = null,
       null|string $runner = null,
       null|string $loadSet = null,
       null|array $loads = null,
-      array $vary = [],
+      null|string $output = null,
+      string $format = 'text',
+      string $results = 'marks',
    )
    {
       $this->opponents = $opponents;
       $this->runner = $runner;
       $this->loadSet = $loadSet;
       $this->loads = $loads;
-      $this->vary = $vary;
+      $this->output = $output;
+      $this->format = $format;
+      $this->results = $results;
    }
 
    /**
@@ -69,7 +75,6 @@ class Configs
       $runner = null;
       $loadSet = null;
       $loads = null;
-      $vary = [];
 
       if (isset($options['opponents'])) {
          $opponents = [];
@@ -114,16 +119,20 @@ class Configs
          }
       }
 
-      if (isset($options['vary'])) {
-         foreach (explode(',', (string) $options['vary']) as $part) {
-            $kv = explode(':', $part, 2);
-            if (count($kv) === 2) {
-               $vary[$kv[0]] = (int) $kv[1];
-            }
-         }
-      }
+      // # Output style — 'full' | 'compact' (null = auto: compact when sweeping)
+      $output = isset($options['output'])
+         ? strtolower((string) $options['output'])
+         : null;
+      // # Results serialization — 'text' | 'json'
+      $format = isset($options['format'])
+         ? strtolower((string) $options['format'])
+         : 'text';
+      // # Generated artifacts — 'marks' | 'report' | 'charts' (inclusive levels)
+      $results = isset($options['results'])
+         ? strtolower((string) $options['results'])
+         : 'marks';
 
-      return new self($opponents, $runner, $loadSet, $loads, $vary);
+      return new self($opponents, $runner, $loadSet, $loads, $output, $format, $results);
    }
 
    /**
