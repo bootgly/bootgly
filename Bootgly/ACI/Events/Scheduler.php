@@ -21,6 +21,15 @@ interface Scheduler
    public const int SCHEDULE_WRITE = 2;
 
    /**
+    * Suspend sentinel: the Fiber detached itself from the scheduler.
+    *
+    * A pooled worker Fiber suspends with this value after finishing its job
+    * (it already parked itself back into its pool) — the event loop must
+    * drop it instead of queueing it for resumption.
+    */
+   public const string DETACH = "\x00bootgly.fiber.detach\x00";
+
+   /**
     * Schedule a suspended Fiber for resumption in the event loop.
     *
     * When $value is a stream resource, the Fiber becomes read I/O-bound:

@@ -222,6 +222,14 @@ class Select implements Events, Loops, Scheduler
                if ($Fiber->isSuspended()) {
                   $value = $Fiber->resume();
 
+                  // ? Pooled Fiber parked itself (job finished) — drop it
+                  //   from the tick queue, never resume it without a job
+                  if ($value === self::DETACH) {
+                     unset($this->Fibers[$id]);
+
+                     continue;
+                  }
+
                   // @ Convert to I/O-awaiting if Fiber suspended with readiness
                   if ( !$Fiber->isTerminated() && $this->queue($Fiber, $value)) {
                      unset($this->Fibers[$id]);
@@ -373,6 +381,11 @@ class Select implements Events, Loops, Scheduler
    {
       // ?
       if ($Fiber->isTerminated()) {
+         return false;
+      }
+
+      // ? Pooled Fiber parked itself (job finished) — nothing to schedule
+      if ($value === self::DETACH) {
          return false;
       }
 
@@ -553,6 +566,11 @@ class Select implements Events, Loops, Scheduler
       $value = $Fiber->resume();
 
       if ($Fiber->isTerminated()) {
+         return;
+      }
+
+      // ? Pooled Fiber parked itself (job finished) — drop, do not requeue
+      if ($value === self::DETACH) {
          return;
       }
 
