@@ -52,7 +52,9 @@ RUN set -eux; \
     rm -rf /var/lib/apt/lists/*
 
 # ? Only the manifests are needed to resolve+install dependencies
-COPY bootgly/composer.json bootgly/composer.lock ./
+# ? composer.lock is gitignored — the `*` glob keeps the COPY valid when it is
+# ? absent (CI checkout), while still pinning versions when it exists (local)
+COPY bootgly/composer.json bootgly/composer.lock* ./
 RUN set -eux; \
     composer install --no-interaction --no-progress --no-scripts --prefer-dist; \
     rm -rf /root/.composer/cache
