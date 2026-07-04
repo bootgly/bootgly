@@ -15,7 +15,7 @@ return new Specification(
       // @ Build a client that greets with its tag and records exactly the echo it gets.
       $make = function (string $tag) use (&$received): WS_Client_CLI {
          $Client = new WS_Client_CLI(WS_Client_CLI::MODE_TEST);
-         $Client->configure(host: '127.0.0.1', port: 8085, compression: false);
+         $Client->configure(host: '127.0.0.1', port: 8094, compression: false);
          $Client->on(Events::Connected, function ($Session) use ($tag) {
             $Session->send("hello-{$tag}");
          });

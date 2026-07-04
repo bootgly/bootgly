@@ -34,7 +34,7 @@ return new Suite(
       $WS_Server_CLI = new WS_Server_CLI(Mode: Modes::Test);
       $WS_Server_CLI->configure(
          host: '0.0.0.0',
-         port: 8085,
+         port: 8094,
          workers: 1,
          heartbeatInterval: 0
       );
@@ -49,7 +49,7 @@ return new Suite(
       // @ Readiness probe — poll until the forked worker accepts a TCP connection,
       //   instead of a fixed sleep (de-flakes under slow / parallel CI).
       for ($i = 0; $i < 200; $i++) {
-         $probe = @stream_socket_client('tcp://127.0.0.1:8085', $errno, $errstr, 0.05);
+         $probe = @stream_socket_client('tcp://127.0.0.1:8094', $errno, $errstr, 0.05);
          if ($probe !== false) {
             fclose($probe);
             break;

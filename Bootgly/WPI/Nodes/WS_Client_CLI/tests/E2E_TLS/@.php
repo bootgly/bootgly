@@ -35,7 +35,7 @@ return new Suite(
       $WS_Server_CLI = new WS_Server_CLI(Mode: Modes::Test);
       $WS_Server_CLI->configure(
          host: '0.0.0.0',
-         port: 8087,
+         port: 8095,
          workers: 1,
          secure: [
             'local_cert' => BOOTGLY_ROOT_DIR . '@/certificates/localhost.cert.pem',
@@ -58,7 +58,7 @@ return new Suite(
       //   listener accepts, instead of a fixed sleep.
       $probeContext = stream_context_create(['ssl' => ['verify_peer' => false, 'verify_peer_name' => false]]);
       for ($i = 0; $i < 200; $i++) {
-         $probe = @stream_socket_client('tls://127.0.0.1:8087', $errno, $errstr, 0.2, STREAM_CLIENT_CONNECT, $probeContext);
+         $probe = @stream_socket_client('tls://127.0.0.1:8095', $errno, $errstr, 0.2, STREAM_CLIENT_CONNECT, $probeContext);
          if ($probe !== false) {
             fclose($probe);
             break;

@@ -16,7 +16,7 @@ return new Specification(
       // @ MODE_TEST skips the Process/state-lock setup (the live server already
       //   holds the project lock in this same process).
       $Client = new WS_Client_CLI(WS_Client_CLI::MODE_TEST);
-      $Client->configure(host: '127.0.0.1', port: 8085);
+      $Client->configure(host: '127.0.0.1', port: 8094);
       $Client->on(Events::Connected, function ($Session) use ($payload) {
          // @ Split the (post-compression) payload into <=16-byte frames: a lead
          //   text frame (FIN=0) followed by continuation frames.

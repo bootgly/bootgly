@@ -34,7 +34,7 @@ return new Suite(
       $WS_Server_CLI = new WS_Server_CLI(Mode: Modes::Test);
       $WS_Server_CLI->configure(
          host: '0.0.0.0',
-         port: 8085,
+         port: 8089,
          workers: 1,
          secure: [
             'local_cert' => BOOTGLY_ROOT_DIR . '@/certificates/localhost.cert.pem',
@@ -53,7 +53,7 @@ return new Suite(
 
       // @ Point the shared client at the TLS server for these specs.
       Client::$tls = true;
-      Client::$port = 8085;
+      Client::$port = 8089;
 
       try {
          $Suite->autoboot(__DIR__);

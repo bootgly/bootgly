@@ -288,22 +288,32 @@ class TestCommand extends Command
          $Suite->target = $index;
       }
 
+      // ! Display
+      // Suites (e.g. live-server E2E boots) mute the global Display for their
+      // own run; restore the caller's mask so later suites stay visible.
+      $segments = Display::$segments;
+
       // @
-      $autoBoot = $Suite->autoBoot ?? false;
-      if ($autoBoot instanceof Closure) {
-         return $autoBoot($Suite);
+      try {
+         $autoBoot = $Suite->autoBoot ?? false;
+         if ($autoBoot instanceof Closure) {
+            return $autoBoot($Suite);
+         }
+         else if ($autoBoot) {
+            $Suite->autoboot($autoBoot);
+
+            if ($Suite->autoInstance) {
+               $Suite->autoinstance($Suite->autoInstance);
+            }
+            if ($Suite->autoSummarize) {
+               $Suite->summarize();
+            }
+
+            return $Suite;
+         }
       }
-      else if ($autoBoot) {
-         $Suite->autoboot($autoBoot);
-
-         if ($Suite->autoInstance) {
-            $Suite->autoinstance($Suite->autoInstance);
-         }
-         if ($Suite->autoSummarize) {
-            $Suite->summarize();
-         }
-
-         return $Suite;
+      finally {
+         Display::$segments = $segments;
       }
 
       $Output = CLI->Terminal->Output;

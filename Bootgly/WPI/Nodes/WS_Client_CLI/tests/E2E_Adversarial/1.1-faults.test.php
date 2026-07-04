@@ -14,7 +14,7 @@ return new Specification(
       $run = function (string $selector): array {
          $result = ['connected' => false, 'message' => false, 'closing' => false];
          $Client = new WS_Client_CLI(WS_Client_CLI::MODE_TEST);
-         $Client->configure(host: '127.0.0.1', port: 8088, compression: false);
+         $Client->configure(host: '127.0.0.1', port: 8096, compression: false);
          $Client->on(Events::Connected, function ($Session) use ($selector, &$result) {
             $result['connected'] = true;
             $Session->send($selector);

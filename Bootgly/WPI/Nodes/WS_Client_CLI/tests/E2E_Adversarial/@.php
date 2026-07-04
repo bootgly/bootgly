@@ -4,6 +4,7 @@ namespace Bootgly\WPI\Nodes\WS_Client_CLI\tests\E2E_Adversarial;
 
 
 use const SIGKILL;
+use const WNOHANG;
 use function base64_encode;
 use function fclose;
 use function fread;
@@ -12,6 +13,8 @@ use function ord;
 use function pack;
 use function pcntl_fork;
 use function pcntl_waitpid;
+use function posix_getpid;
+use function posix_getppid;
 use function posix_kill;
 use function preg_match;
 use function sha1;
@@ -23,6 +26,7 @@ use function strlen;
 use function substr;
 use function trim;
 use function usleep;
+use RuntimeException;
 
 use Bootgly\ACI\Logs\Data\Display;
 use Bootgly\ACI\Tests\Suite;
@@ -33,11 +37,12 @@ return new Suite(
    autoBoot: function (Suite|null $Suite = null): true {
       Display::show(Display::NONE);
 
-      $port = 8088;
+      $port = 8096;
 
       // @ Fork a raw, deliberately-malformed WS server. For each connection it
       //   reads the client's selector and replies with one bad frame; the client
       //   must reject it (close the connection) instead of surfacing it.
+      $parent = posix_getpid();
       $pid = pcntl_fork();
       if ($pid === 0) {
          $server = @stream_socket_server("tcp://127.0.0.1:{$port}", $errno, $errstr);
@@ -54,8 +59,15 @@ return new Suite(
          ];
 
          while (true) {
-            $conn = @stream_socket_accept($server, 30);
+            $conn = @stream_socket_accept($server, 1);
             if ($conn === false) {
+               // ? Self-reap when the suite master is gone (e.g. a failing test
+               //   exited the run before the `finally` teardown could kill us) —
+               //   an orphaned accept loop would hold the CI step's pipes open.
+               if (posix_getppid() !== $parent) {
+                  exit(0);
+               }
+
                continue;
             }
             // @ Read the upgrade (tolerates readiness probes that send nothing).
@@ -99,6 +111,14 @@ return new Suite(
             break;
          }
          usleep(25000);
+      }
+
+      // ? Fail loudly if the raw server died (e.g. it could not bind the port) —
+      //   otherwise the specs would run against whatever else answered the probe.
+      if (pcntl_waitpid($pid, $status, WNOHANG) === $pid) {
+         throw new RuntimeException(
+            "E2E_Adversarial raw server exited before the specs ran (port {$port} not bindable?)."
+         );
       }
 
       try {

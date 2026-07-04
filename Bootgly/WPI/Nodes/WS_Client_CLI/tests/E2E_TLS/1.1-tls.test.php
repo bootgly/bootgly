@@ -17,7 +17,7 @@ return new Specification(
       $Client = new WS_Client_CLI(WS_Client_CLI::MODE_TEST);
       $Client->configure(
          host: '127.0.0.1',
-         port: 8087,
+         port: 8095,
          secure: ['verify_peer' => false, 'verify_peer_name' => false]
       );
       $Client->on(Events::Connected, function ($Session) use (&$connected) {

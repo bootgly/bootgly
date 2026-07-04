@@ -33,7 +33,7 @@ return new Suite(
       $WS_Server_CLI = new WS_Server_CLI(Mode: Modes::Test);
       $WS_Server_CLI->configure(
          host: '0.0.0.0',
-         port: 8087,
+         port: 8092,
          workers: 1,
          heartbeatInterval: 0
       );
@@ -52,7 +52,7 @@ return new Suite(
       $WS_Server_CLI->start();
       usleep(400000);
 
-      Client::$port = 8087;
+      Client::$port = 8092;
 
       try {
          $Suite->autoboot(__DIR__);
