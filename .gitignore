@@ -25,6 +25,7 @@ skills-lock.json
 # Metafolder (@)
 @/*
 # Additional folders
+!@/certificates/
 !@/phpstan/
 # Adittional files
 !@/phpstan.neon
