@@ -18,6 +18,7 @@ return new Suite(
       '2.1-frame',
       '2.2-utf8',
       '3.1-request',
-      '4.1-multiclient'
+      '4.1-multiclient',
+      '5.1-handshake_timeout'
    ]
 );

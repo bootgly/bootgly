@@ -27,6 +27,17 @@ jobs:
           extensions: mbstring, pcntl
       -
         name: Run Bootgly Test command
+        env:
+          BOOTGLY_TEST_TRACE: 1
         run: |
           php bootgly
-          php bootgly test --bootgly
+          set +e
+          timeout --signal=TERM --kill-after=30 300 php bootgly test --bootgly
+          code=$?
+          set -e
+          if [ "$code" -eq 124 ] || [ "$code" -eq 137 ]; then
+            echo '::error::bootgly test stalled (300s timeout) — dumping processes and listeners'
+            ps auxf || true
+            ss -tlnp || true
+          fi
+          exit "$code"

@@ -12,6 +12,7 @@ namespace Bootgly\WPI\Nodes;
 
 
 use function implode;
+use function min;
 use function preg_match;
 use function strpos;
 use function substr;
@@ -65,6 +66,8 @@ class WS_Client_CLI extends TCP_Client_CLI implements WS, Client
    public private(set) null|Closure $onConnected = null;
    public private(set) null|Closure $onMessageReceived = null;
    public private(set) null|Closure $onDisconnected = null;
+   // # Handshake policy
+   protected int $handshakeTimeout = 10;    // seconds to receive + verify the 101 (0 = unbounded)
    // # Reconnect policy
    protected bool $reconnect = false;
    protected int $reconnectAttempts = 0;    // 0 = unlimited
@@ -114,6 +117,7 @@ class WS_Client_CLI extends TCP_Client_CLI implements WS, Client
     * @param int $reconnectAttempts Max reconnect attempts before giving up (0 = unlimited).
     * @param int $reconnectDelay Base backoff in seconds (doubles each attempt, capped).
     * @param int $reconnectMaxDelay Backoff cap in seconds.
+    * @param int $handshakeTimeout Seconds to receive + verify the 101 after dialing (0 = unbounded).
     *
     * @return self The WebSocket Client instance, for chaining.
     */
@@ -127,7 +131,8 @@ class WS_Client_CLI extends TCP_Client_CLI implements WS, Client
       bool $reconnect = false,
       int $reconnectAttempts = 0,
       int $reconnectDelay = 1,
-      int $reconnectMaxDelay = 30
+      int $reconnectMaxDelay = 30,
+      int $handshakeTimeout = 10
    ): self
    {
       // @ Auto-set peer_name for hostname verification if secure transport is enabled.
@@ -139,6 +144,9 @@ class WS_Client_CLI extends TCP_Client_CLI implements WS, Client
 
       // @ permessage-deflate offer toggle.
       $this->compression = $compression;
+      // @ Handshake policy — bound the wait for the server's 101 so a peer that
+      //   accepts TCP but never answers the upgrade cannot stall the loop forever.
+      $this->handshakeTimeout = $handshakeTimeout;
       // @ Reconnect policy — auto re-dial with capped exponential backoff after an
       //   abrupt drop. Graceful closes (user/server close, fault) never reconnect.
       $this->reconnect = $reconnect;
@@ -302,7 +310,30 @@ class WS_Client_CLI extends TCP_Client_CLI implements WS, Client
 
       // @ parent::connect() creates the Connection, which fires onClientConnect
       //   (queues the upgrade GET) inside its constructor.
-      return parent::connect();
+      $Socket = parent::connect();
+
+      // @ Arm the handshake deadline — a peer that accepts TCP but never answers
+      //   the upgrade must not stall the event loop forever. Expiring counts as a
+      //   handshake reject (graceful close), so it never triggers a reconnect.
+      if ($Socket !== false && $this->handshakeTimeout > 0) {
+         $Session = $this->Session;
+         Timer::add(
+            interval: $this->handshakeTimeout,
+            handler: function () use ($Session) {
+               if ($Session === null || $Session->established || $Session->disconnected) {
+                  return;
+               }
+
+               $Session->closing = true;
+               $Session->disconnect();
+               $Session->Connection->close();
+            },
+            persistent: false
+         );
+      }
+
+      // :
+      return $Socket;
    }
 
    /**

@@ -14,11 +14,13 @@ namespace Bootgly\commands;
 use const BOOTGLY_ROOT_DIR;
 use const BOOTGLY_WORKING_DIR;
 use const PHP_EOL;
+use const STDERR;
 use function array_slice;
 use function array_unique;
 use function array_values;
 use function explode;
 use function file_put_contents;
+use function fwrite;
 use function is_array;
 use function is_dir;
 use function is_file;
@@ -53,6 +55,7 @@ use Bootgly\ACI\Tests\Coverage\Drivers\PCOV;
 use Bootgly\ACI\Tests\Coverage\Drivers\XDebug;
 use Bootgly\ACI\Tests\Results;
 use Bootgly\ACI\Tests\Suite;
+use Bootgly\API\Environment;
 use Bootgly\API\Environment\Agent;
 use Bootgly\CLI\Command;
 use Bootgly\CLI\UI\Components\Alert;
@@ -273,6 +276,12 @@ class TestCommand extends Command
       if (is_file($bootstrap) === false) {
          $suite ??= 0;
          throw new LogicException("Test suite index {$suite} was not loaded or does not exist: {$suite_dir}");
+      }
+
+      // ? Trace each suite boundary to STDERR (immune to Display muting) — set
+      //   BOOTGLY_TEST_TRACE=1 to locate a stall in otherwise-silent suites.
+      if (Environment::get('BOOTGLY_TEST_TRACE')) {
+         fwrite(STDERR, "[test-trace] suite {$suite}: {$suite_dir}" . PHP_EOL);
       }
 
       $Suite = include $bootstrap;
