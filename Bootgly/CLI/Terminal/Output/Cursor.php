@@ -16,6 +16,7 @@ use function defined;
 use function fread;
 use function function_exists;
 use function intval;
+use function is_resource;
 use function preg_match;
 use function shell_exec;
 use function sprintf;
@@ -216,6 +217,13 @@ class Cursor
 
    public function __destruct()
    {
+      // ? Cursor restore escapes only make sense on an interactive terminal:
+      //   never trail them into pipes or files (e.g. `--format=json | jq`)
+      $stream = $this->Output->stream;
+      if (is_resource($stream) === false || stream_isatty($stream) === false) {
+         return;
+      }
+
       $this->shape();
       $this->show();
    }

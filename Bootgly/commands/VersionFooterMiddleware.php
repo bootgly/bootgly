@@ -13,7 +13,9 @@ namespace Bootgly\commands;
 
 use const BOOTGLY_VERSION;
 use const PHP_VERSION;
+use function is_string;
 use function str_starts_with;
+use function strtolower;
 use Closure;
 
 use const Bootgly\CLI;
@@ -32,6 +34,12 @@ class VersionFooterMiddleware implements Middleware
       // @ Skip footer for AI agents
       $Agent = Agent::detect();
       if ($Agent->detected) {
+         return $result;
+      }
+
+      // @ Skip footer in machine-readable output mode (e.g. --format=json)
+      $format = $options['format'] ?? null;
+      if (is_string($format) && strtolower($format) === 'json') {
          return $result;
       }
 

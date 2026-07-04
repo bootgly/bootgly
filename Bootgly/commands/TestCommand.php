@@ -33,6 +33,8 @@ use function is_array;
 use function is_dir;
 use function is_file;
 use function ltrim;
+use function ob_end_clean;
+use function ob_start;
 use function preg_match;
 use function preg_replace;
 use function putenv;
@@ -442,13 +444,14 @@ class TestCommand extends Command
             echo "\n";
          }
 
-         // @ Case options (common)
-         echo "  {$BOLD}Case options:{$RESET}\n";
+         // @ Global options (common to every case) — required first, then optional
+         echo "  {$BOLD}Global options:{$RESET}\n";
          echo "    {$MAGENTA}--opponents{$RESET}=LIST  Comma-separated opponent names ({$MAGENTA}*{$RESET} required)\n";
-         echo "    {$CYAN}--runner{$RESET}=TYPE     Runner (default: case-dependent)\n";
          echo "    {$MAGENTA}--loads{$RESET}=SET:IDX   Load set + 1-based indices ({$MAGENTA}*{$RESET} required), e.g. techempower:1,2 or default:*\n";
+         echo "    {$CYAN}--runner{$RESET}=TYPE     Runner (default: case-dependent)\n";
          echo "    {$CYAN}--output{$RESET}=STYLE    Output style: full | compact (default: auto — compact when sweeping)\n";
          echo "    {$CYAN}--format{$RESET}=FORMAT   Results serialization: text | json (default: text)\n";
+         echo "                      json: prints only the JSON document (human output suppressed)\n";
          echo "    {$CYAN}--results{$RESET}=LEVEL   Generated artifacts: marks | report | charts (default: marks)\n";
          echo "\n";
 
@@ -459,7 +462,7 @@ class TestCommand extends Command
                $caseOptions = Options::load("$caseDir/options.php")->render();
 
                if ($caseOptions !== []) {
-                  echo "  {$BOLD}{$caseName} options:{$RESET}\n";
+                  echo "  {$BOLD}Case options - {$caseName}:{$RESET}\n";
                   foreach ($caseOptions as $flag => $desc) {
                      echo "    {$CYAN}{$flag}{$RESET}  {$desc}\n";
                   }
@@ -486,7 +489,7 @@ class TestCommand extends Command
                $runnerOptions = $Runner->options();
                if ($runnerOptions !== []) {
                   $runnerName = $Runner->name ?: 'unknown';
-                  echo "  {$BOLD}Runner options ({$runnerName}):{$RESET}\n";
+                  echo "  {$BOLD}Runner options - {$runnerName}:{$RESET}\n";
                   foreach ($runnerOptions as $flag => $desc) {
                      echo "    {$CYAN}{$flag}{$RESET}  {$desc}\n";
                   }
@@ -556,6 +559,13 @@ class TestCommand extends Command
          return false;
       }
 
+      // # Machine mode — STDOUT carries only the JSON document; every
+      //   human-readable byte from here on (banner, progress, tables) is
+      //   discarded so terminals, pipes and AI agents get pure JSON
+      if ($Configs->format === 'json') {
+         ob_start(static fn (string $chunk): string => '', 1);
+      }
+
       // ? Opponents are mandatory — at least one must be selected.
       if ($Configs->opponents === null) {
          $Alert->Type::Failure->set();
@@ -594,6 +604,9 @@ class TestCommand extends Command
 
       // @ Expose the load set to the case @.php + opponents (mirrors BENCHMARK_RUNNER)
       putenv('BENCHMARK_LOAD_SET=' . $Configs->loadSet);
+
+      // @ Surface the serialization format so case files can silence diagnostics
+      putenv('BENCHMARK_FORMAT=' . $Configs->format);
 
       // @ Set runner env var before loading @.php
       if ($Configs->runner !== null) {
@@ -677,7 +690,7 @@ class TestCommand extends Command
          }
       }
 
-      // @ Serialize the whole run as the LAST stdout document (machine mode)
+      // @ Serialize the whole run as the ONLY stdout document (machine mode)
       if ($Configs->format === 'json') {
          // ! Swept keys live in `sweep`/per-round `options` — not in the shared config
          $config = $exports !== [] ? $exports[0]['config'] : [];
@@ -685,7 +698,15 @@ class TestCommand extends Command
             unset($config[$swept]);
          }
 
+         // ? Release the suppression — the JSON document must reach STDOUT
+         ob_end_clean();
+
          echo Summary::export($caseName, $Runner->metric, $config, $Options->sweeps, $exports, $generated);
+
+         // ! Re-arm the suppression: late shutdown output must not trail the
+         //   JSON document on STDOUT
+         ob_start(static fn (string $chunk): string => '', 1);
+
          return true;
       }
 
