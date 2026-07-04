@@ -22,5 +22,6 @@ return new Suite(
       '5.1-mouse-report-escapes',
       '6.1-input-reading-roles',
       '7.1-logs-render-width',
+      '8.1-input-scan-line',
    ]
 );

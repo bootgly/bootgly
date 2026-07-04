@@ -1,6 +1,6 @@
 <?php
 
-namespace Bootgly\API\Projects;
+namespace Bootgly\CLI\UI\Components;
 
 use Bootgly\ACI\Tests\Suite;
 
@@ -14,11 +14,10 @@ return new Suite(
    // * Data
    suiteName: __NAMESPACE__,
    tests: [
-      '1.1-validate',
-      '1.2-encode',
-      '1.3-filter',
-      '2.1-register',
-      '2.2-generate',
-      '2.3-import',
+      '1.1-dialog-confirm',
+      '1.2-dialog-alert',
+      '1.3-dialog-prompt',
+      '2.1-question-ask',
+      '2.2-question-validation',
    ]
 );

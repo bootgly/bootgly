@@ -110,6 +110,12 @@ class DemoCommand extends Command
 
          // UI - Logs component
          25 => 'UI/Logs-01.demo.php',
+
+         // UI - Dialog component
+         26 => 'UI/Dialog-01.demo.php',
+
+         // UI - Question component
+         27 => 'UI/Question-01.demo.php',
       ];
 
       $last = array_key_last($examples);

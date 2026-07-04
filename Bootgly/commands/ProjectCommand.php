@@ -13,16 +13,21 @@ namespace Bootgly\commands;
 
 use const BOOTGLY_ROOT_DIR;
 use const BOOTGLY_STORAGE_DIR;
+use const BOOTGLY_TTY;
 use const BOOTGLY_WORKING_DIR;
+use const GLOB_ONLYDIR;
 use const PHP_EOL;
 use const SIGKILL;
 use const SIGTERM;
 use const SIGUSR2;
+use function array_key_exists;
 use function array_keys;
 use function array_slice;
 use function basename;
 use function count;
+use function escapeshellarg;
 use function file_get_contents;
+use function getmypid;
 use function glob;
 use function implode;
 use function in_array;
@@ -30,19 +35,26 @@ use function intdiv;
 use function is_array;
 use function is_dir;
 use function is_file;
+use function is_link;
 use function is_numeric;
+use function is_string;
 use function json_decode;
 use function json_encode;
+use function passthru;
 use function posix_get_last_error;
 use function posix_kill;
-use function readline;
+use function preg_match;
 use function realpath;
+use function rmdir;
 use function rtrim;
+use function scandir;
 use function str_pad;
 use function str_starts_with;
 use function strlen;
 use function strtolower;
+use function strtoupper;
 use function substr;
+use function sys_get_temp_dir;
 use function time;
 use function trim;
 use function unlink;
@@ -61,7 +73,11 @@ use Bootgly\API\Projects\Configs;
 use Bootgly\API\Projects\Project;
 use Bootgly\CLI\Command;
 use Bootgly\CLI\UI\Components\Alert;
+use Bootgly\CLI\UI\Components\Dialog;
 use Bootgly\CLI\UI\Components\Fieldset;
+use Bootgly\CLI\UI\Components\Menu;
+use Bootgly\CLI\UI\Components\Question;
+use Bootgly\commands\BootCommand;
 
 
 /**
@@ -83,6 +99,19 @@ class ProjectCommand extends Command
    /** @phpstan-ignore property.phpDocType */
    /** @var array<string,array<string,array<string,string>|string>> */
    public array $arguments = [ // @phpstan-ignore property.phpDocType
+      'create' => [
+         'description' => 'Create a new project (wizard on interactive terminals)',
+         'arguments'   => [
+            '[name]' => 'Project path to create (e.g. App or App/API)'
+         ]
+      ],
+      'import' => [
+         'description' => 'Import a project from a git repository URL',
+         'arguments'   => [
+            '<url>'  => 'Repository URL with a *.project.php signature at its root',
+            '[name]' => 'Project path to import as (defaults to the repository name)'
+         ]
+      ],
       'list' => [
          'description' => 'List all registered projects',
          'arguments'   => []
@@ -144,6 +173,12 @@ class ProjectCommand extends Command
    public array $options = [
       'Increase the verbosity of the command' => ['-v', '-vv', '-vvv'],
       'Preview seed run without executing SQL' => ['--dry-run'],
+      'Platform to set up on first run (create/import)' => ['--platform=console', '--platform=web'],
+      'Creation source: from scratch or a platform project' => ['--from=scratch', '--from=<source>'],
+      'Interface bound to the new project (create/import)' => ['--interfaces=CLI', '--interfaces=WPI'],
+      'New project metadata (create)' => ['--description=', '--version=', '--author=', '--port='],
+      'Flag the new project as the web default (create/import)' => ['--default'],
+      'Skip confirmations (create/import)' => ['--yes'],
    ];
 
 
@@ -175,6 +210,14 @@ class ProjectCommand extends Command
       }
 
       return match ($arguments[0] ?? null) {
+         'create'  => $this->create(
+            array_slice($arguments, 1),
+            $options
+         ),
+         'import'  => $this->import(
+            array_slice($arguments, 1),
+            $options
+         ),
          'list'    => $this->list(),
          'start'   => $this->start(
             array_slice($arguments, 1),
@@ -202,6 +245,235 @@ class ProjectCommand extends Command
    }
 
    // # Subcommands
+   /**
+    * Create a new project — the canonical (one-way) project creation entry.
+    *
+    * On interactive terminals a wizard fills the missing inputs (platform
+    * setup, from-scratch or platform-project import, path, metadata). On
+    * non-interactive terminals (or with `--yes`) everything comes from the
+    * arguments and options.
+    *
+    * @param array<string> $arguments
+    * @param array<string, bool|int|string> $options
+    *
+    * @return bool
+    */
+   public function create (array $arguments = [], array $options = []): bool
+   {
+      $Output = CLI->Terminal->Output;
+
+      // @ Kit setup (platform submodules + resource dirs) when needed
+      if ($this->prepare($options) === false) {
+         return false;
+      }
+
+      // ! Inputs
+      $path = $arguments[0] ?? null;
+      $from = isSet($options['from']) && is_string($options['from']) ? $options['from'] : null;
+
+      // @ Wizard on interactive terminals (unless --yes)
+      if (BOOTGLY_TTY === true && isSet($options['yes']) === false) {
+         return $this->wizard($path, $from, $options);
+      }
+
+      // @ Non-interactive
+      // ? Project path required
+      if ($path === null || $path === '') {
+         $Alert = new Alert($Output);
+         $Alert->Type::Failure->set();
+         $Alert->message = 'Missing project path. Usage: @#cyan:bootgly project create <Name> '
+            . '[--from=scratch|<source>] [--interfaces=CLI|WPI] [--port=] [--description=] '
+            . '[--version=] [--author=] [--default] [--yes]@;';
+         $Alert->render();
+
+         return false;
+      }
+      // ? Project path validity
+      $result = $this->assess($path);
+      if ($result !== true) {
+         $Alert = new Alert($Output);
+         $Alert->Type::Failure->set();
+         $Alert->message = $result;
+         $Alert->render();
+
+         return false;
+      }
+
+      $from ??= 'scratch';
+
+      // @ From scratch
+      if ($from === 'scratch') {
+         $interface = strtoupper((string) ($options['interfaces'] ?? 'CLI'));
+         // ?
+         if ($interface !== 'CLI' && $interface !== 'WPI') {
+            $Alert = new Alert($Output);
+            $Alert->Type::Failure->set();
+            $Alert->message = "Invalid interface: @#cyan:{$interface}@;. Use CLI or WPI.";
+            $Alert->render();
+
+            return false;
+         }
+
+         $done = Projects::generate(
+            BOOTGLY_ROOT_DIR . "Bootgly/commands/stubs/{$interface}",
+            $path,
+            [
+               'interfaces'  => [$interface],
+               'default'     => isSet($options['default']),
+               'name'        => basename($path),
+               'description' => (string) ($options['description'] ?? ''),
+               'version'     => (string) ($options['version'] ?? '1.0.0'),
+               'author'      => (string) ($options['author'] ?? ''),
+               'port'        => (string) ($options['port'] ?? '8080'),
+            ]
+         );
+
+         return $this->report($done, $path);
+      }
+
+      // @ From a platform project
+      $source = $this->trace($from);
+      // ?
+      if ($source === null) {
+         $Alert = new Alert($Output);
+         $Alert->Type::Failure->set();
+         $Alert->message = "Source project @#cyan:{$from}@; not found in the platform folders.";
+         $Alert->render();
+
+         return false;
+      }
+
+      $interfaces = $this->detect($from)
+         ?? [strtoupper((string) ($options['interfaces'] ?? 'WPI'))];
+
+      $done = Projects::import($source, $path, [
+         'interfaces' => $interfaces,
+         'default'    => isSet($options['default']),
+      ]);
+
+      return $this->report($done, $path);
+   }
+
+   /**
+    * Import a project from a git repository URL.
+    *
+    * The repository must carry the Bootgly project signature — a
+    * `*.project.php` file at its root.
+    *
+    * @param array<string> $arguments
+    * @param array<string, bool|int|string> $options
+    *
+    * @return bool
+    */
+   public function import (array $arguments = [], array $options = []): bool
+   {
+      $Output = CLI->Terminal->Output;
+
+      // ? Repository URL required
+      $url = $arguments[0] ?? null;
+      if ($url === null || $url === '') {
+         $Alert = new Alert($Output);
+         $Alert->Type::Failure->set();
+         $Alert->message = 'Missing repository URL. Usage: @#cyan:bootgly project import <url> [Name]@;';
+         $Alert->render();
+
+         return false;
+      }
+
+      // @ Kit setup (platform submodules + resource dirs) when needed
+      if ($this->prepare($options) === false) {
+         return false;
+      }
+
+      // ! Target project path
+      $path = $arguments[1] ?? basename($url, '.git');
+      // ?
+      $result = $this->assess($path);
+      if ($result !== true) {
+         $Alert = new Alert($Output);
+         $Alert->Type::Failure->set();
+         $Alert->message = "{$result} Pass the target path explicitly: "
+            . "@#cyan:bootgly project import {$url} <Name>@;";
+         $Alert->render();
+
+         return false;
+      }
+
+      // @ Fetch with the system git
+      $tmp = sys_get_temp_dir() . '/bootgly-import-' . getmypid();
+      $this->erase($tmp);
+
+      $Output->render("@#green:Fetching@; @#cyan:{$url}@;@.;");
+      passthru('git clone --depth 1 ' . escapeshellarg($url) . ' ' . escapeshellarg($tmp), $status);
+      // ?
+      if ($status !== 0 || is_dir($tmp) === false) {
+         $Alert = new Alert($Output);
+         $Alert->Type::Failure->set();
+         $Alert->message = "Could not clone @#cyan:{$url}@;.";
+         $Alert->render();
+
+         $this->erase($tmp);
+
+         return false;
+      }
+
+      // ? Bootgly project signature
+      if ((glob("{$tmp}/*.project.php") ?: []) === []) {
+         $Alert = new Alert($Output);
+         $Alert->Type::Failure->set();
+         $Alert->message = 'Not a Bootgly project: no @#cyan:*.project.php@; signature file at the repository root.';
+         $Alert->render();
+
+         $this->erase($tmp);
+
+         return false;
+      }
+
+      // ? Imported projects execute third-party code when started
+      if (isSet($options['yes']) === false) {
+         $confirmed = $this->confirm(
+            "Importing will run third-party code when the project starts. Import as `{$path}`?"
+         );
+
+         if ($confirmed === false) {
+            $Alert = new Alert($Output);
+            $Alert->Type::Attention->set();
+            $Alert->message = 'Import aborted.';
+            $Alert->render();
+
+            $this->erase($tmp);
+
+            return false;
+         }
+      }
+
+      // @ Strip VCS metadata + import
+      $this->erase("{$tmp}/.git");
+
+      $interface = strtoupper((string) ($options['interfaces'] ?? 'WPI'));
+      // ?
+      if ($interface !== 'CLI' && $interface !== 'WPI') {
+         $Alert = new Alert($Output);
+         $Alert->Type::Failure->set();
+         $Alert->message = "Invalid interface: @#cyan:{$interface}@;. Use CLI or WPI.";
+         $Alert->render();
+
+         $this->erase($tmp);
+
+         return false;
+      }
+
+      $done = Projects::import($tmp, $path, [
+         'interfaces' => [$interface],
+         'default'    => isSet($options['default']),
+      ]);
+
+      $this->erase($tmp);
+
+      // :
+      return $this->report($done, $path);
+   }
+
    /**
     * List all discovered projects with their interfaces and default marker.
     *
@@ -957,12 +1229,551 @@ class ProjectCommand extends Command
     */
    private function confirm (string $question): bool
    {
-      $answer = readline($question . ' ');
-      if ($answer === false) {
+      $Terminal = CLI->Terminal;
+
+      $Dialog = new Dialog($Terminal->Input, $Terminal->Output);
+
+      return $Dialog->confirm($question);
+   }
+
+   /**
+    * Interactive project creation wizard.
+    *
+    * @param null|string $path
+    * @param null|string $from
+    * @param array<string, bool|int|string> $options
+    *
+    * @return bool
+    */
+   private function wizard (null|string $path, null|string $from, array $options): bool
+   {
+      $Terminal = CLI->Terminal;
+      $Output = $Terminal->Output;
+      $Input = $Terminal->Input;
+
+      $Output->render('@.;@#Cyan: Bootgly — New project wizard @;@..;');
+
+      // ! Mode + import source
+      $source = null;
+      $sourcePath = null;
+      if ($from !== null && $from !== 'scratch') {
+         $source = $this->trace($from);
+         $sourcePath = $from;
+
+         // ?
+         if ($source === null) {
+            $Alert = new Alert($Output);
+            $Alert->Type::Failure->set();
+            $Alert->message = "Source project @#cyan:{$from}@; not found in the platform folders.";
+            $Alert->render();
+
+            return false;
+         }
+      }
+      else if ($from === null) {
+         $sources = $this->survey();
+
+         if ($sources !== []) {
+            $mode = $this->choose('How do you want to start?', [
+               'Create from scratch',
+               'Import a platform project'
+            ]);
+
+            if ($mode === 1) {
+               $labels = array_keys($sources);
+               $picked = $this->choose('Pick a project to import:', $labels);
+               $sourcePath = (string) $labels[$picked];
+               $source = $sources[$sourcePath];
+            }
+         }
+      }
+
+      // ! Project path
+      $Question = new Question($Input, $Output);
+      $Question->prompt = 'Project path (e.g. `App` or `App/API`)';
+      $Question->required = true;
+      $Question->default = $path ?? '';
+      $Question->Validator = fn (string $answer): true|string => $this->assess($answer);
+      $path = $Question->ask();
+      // ? EOF or invalid prefilled path
+      if ($this->assess($path) !== true) {
+         $Alert = new Alert($Output);
+         $Alert->Type::Failure->set();
+         $Alert->message = 'A valid project path is required.';
+         $Alert->render();
+
          return false;
       }
 
-      return in_array(strtolower(trim($answer)), ['y', 'yes'], true);
+      // ! Metadata
+      $meta = ['default' => isSet($options['default'])];
+
+      if ($source === null) {
+         // # Interface (a valid --interfaces option skips the question)
+         $interface = strtoupper((string) ($options['interfaces'] ?? ''));
+         if ($interface !== 'CLI' && $interface !== 'WPI') {
+            $web = BOOTGLY_ROOT_DIR === BOOTGLY_WORKING_DIR
+               || is_file(BOOTGLY_WORKING_DIR . 'Web/autoboot.php');
+
+            $interface = 'CLI';
+            if ($web === true) {
+               $choice = $this->choose('Which interface?', [
+                  'CLI — Console app',
+                  'WPI — Web (HTTP) server'
+               ]);
+               $interface = $choice === 1 ? 'WPI' : 'CLI';
+            }
+         }
+         $meta['interfaces'] = [$interface];
+
+         // # Port (WPI)
+         if ($interface === 'WPI') {
+            $Question = new Question($Input, $Output);
+            $Question->prompt = 'Server port';
+            $Question->default = (string) ($options['port'] ?? '8080');
+            $Question->Validator = static function (string $answer): true|string {
+               // ?:
+               if (preg_match('#^\d{1,5}$#', $answer) !== 1) {
+                  return 'Invalid port: use a number between 1 and 65535.';
+               }
+
+               // :
+               return true;
+            };
+            $meta['port'] = $Question->ask();
+         }
+
+         // # Description / Version / Author (options prefill the defaults)
+         $Question = new Question($Input, $Output);
+         $Question->prompt = 'Description';
+         $Question->default = (string) ($options['description'] ?? '');
+         $meta['description'] = $Question->ask();
+
+         $Question = new Question($Input, $Output);
+         $Question->prompt = 'Version';
+         $Question->default = (string) ($options['version'] ?? '1.0.0');
+         $meta['version'] = $Question->ask();
+
+         $Question = new Question($Input, $Output);
+         $Question->prompt = 'Author';
+         $Question->default = (string) ($options['author'] ?? '');
+         $meta['author'] = $Question->ask();
+
+         $meta['name'] = basename($path);
+      }
+      else {
+         // # Interfaces from the platform registry, the option, or asked
+         $interfaces = $this->detect($sourcePath);
+         if ($interfaces === null) {
+            $interface = strtoupper((string) ($options['interfaces'] ?? ''));
+
+            if ($interface === 'CLI' || $interface === 'WPI') {
+               $interfaces = [$interface];
+            }
+            else {
+               $choice = $this->choose('Which interface does this project bind to?', [
+                  'WPI — Web platform',
+                  'CLI — Console platform'
+               ]);
+               $interfaces = $choice === 1 ? ['CLI'] : ['WPI'];
+            }
+         }
+         $meta['interfaces'] = $interfaces;
+      }
+
+      // ! Summary
+      $content  = '@#Green:' . str_pad('Path', 12) . ' @; ' . $path . PHP_EOL;
+      $content .= '@#Green:' . str_pad('Mode', 12) . ' @; '
+         . ($source === null ? 'From scratch' : "Import: {$sourcePath}") . PHP_EOL;
+      $content .= '@#Green:' . str_pad('Interfaces', 12) . ' @; ' . implode(', ', $meta['interfaces']);
+      if ($source === null) {
+         if (isSet($meta['port'])) {
+            $content .= PHP_EOL . '@#Green:' . str_pad('Port', 12) . ' @; ' . $meta['port'];
+         }
+         $content .= PHP_EOL . '@#Green:' . str_pad('Description', 12) . ' @; ' . (($meta['description'] ?? '') ?: '(none)');
+         $content .= PHP_EOL . '@#Green:' . str_pad('Version', 12) . ' @; ' . ($meta['version'] ?? '1.0.0');
+         $content .= PHP_EOL . '@#Green:' . str_pad('Author', 12) . ' @; ' . (($meta['author'] ?? '') ?: '(none)');
+      }
+
+      $Output->write(PHP_EOL);
+      $Fieldset = new Fieldset($Output);
+      $Fieldset->title = '@#Cyan: New project @;';
+      $Fieldset->content = $content;
+      $Fieldset->render();
+      $Output->write(PHP_EOL);
+
+      // ? Confirm
+      if (isSet($options['yes']) === false) {
+         $Dialog = new Dialog($Input, $Output);
+
+         if ($Dialog->confirm('Create the project?', default: true) === false) {
+            $Alert = new Alert($Output);
+            $Alert->Type::Attention->set();
+            $Alert->message = 'Aborted.';
+            $Alert->render();
+
+            return false;
+         }
+      }
+
+      // @ Execute
+      $stub = ($meta['interfaces'][0] ?? 'CLI') === 'WPI' ? 'WPI' : 'CLI';
+      $done = $source === null
+         ? Projects::generate(BOOTGLY_ROOT_DIR . "Bootgly/commands/stubs/{$stub}", $path, $meta)
+         : Projects::import($source, $path, $meta);
+
+      // :
+      return $this->report($done, $path);
+   }
+
+   /**
+    * Prepare the working directory (kit) on first run: platform submodules
+    * (system git) and resource directories (`boot --resources`).
+    *
+    * @param array<string, bool|int|string> $options
+    *
+    * @return bool
+    */
+   private function prepare (array $options): bool
+   {
+      // ? Framework repo: nothing to prepare
+      if (BOOTGLY_ROOT_DIR === BOOTGLY_WORKING_DIR) {
+         return true;
+      }
+
+      $Output = CLI->Terminal->Output;
+
+      // # Platform submodules (kit)
+      $gitmodules = is_file(BOOTGLY_WORKING_DIR . '.gitmodules');
+      $console = is_file(BOOTGLY_WORKING_DIR . 'Console/autoboot.php');
+      $web = is_file(BOOTGLY_WORKING_DIR . 'Web/autoboot.php');
+
+      if ($gitmodules === true) {
+         // ! Requested platform
+         $platform = isSet($options['platform']) && is_string($options['platform'])
+            ? strtolower($options['platform'])
+            : null;
+         // ?
+         if ($platform !== null && $platform !== 'console' && $platform !== 'web') {
+            $Alert = new Alert($Output);
+            $Alert->Type::Failure->set();
+            $Alert->message = "Invalid platform: @#cyan:{$platform}@;. Use console or web.";
+            $Alert->render();
+
+            return false;
+         }
+
+         // ? Fresh kit (no platform yet): choose interactively
+         if ($console === false && $platform === null) {
+            if (BOOTGLY_TTY === true) {
+               $choice = $this->choose('Which platform do you want to use?', [
+                  'Console — CLI / TUI apps',
+                  'Web — HTTP / WebSocket servers (includes Console)'
+               ]);
+               $platform = $choice === 1 ? 'web' : 'console';
+            }
+            else {
+               $platform = 'web';
+            }
+         }
+
+         // ! Missing submodules for the requested platform
+         $targets = [];
+         if ($console === false) {
+            $targets[] = 'Console';
+         }
+         if ($web === false && $platform === 'web') {
+            $targets[] = 'Web';
+         }
+
+         if ($targets !== []) {
+            $modules = implode(' ', $targets);
+
+            $Output->render("@#green:Initializing platform submodules:@; @#cyan:{$modules}@;@.;");
+
+            passthru(
+               'git -C ' . escapeshellarg(BOOTGLY_WORKING_DIR) . " submodule update --init {$modules}",
+               $status
+            );
+
+            // ?
+            if ($status !== 0) {
+               $Alert = new Alert($Output);
+               $Alert->Type::Failure->set();
+               $Alert->message = 'Could not initialize the platform submodules. Run manually: '
+                  . "@#cyan:git submodule update --init {$modules}@;";
+               $Alert->render();
+
+               return false;
+            }
+         }
+      }
+
+      // # Resource directories
+      if (is_file(BOOTGLY_WORKING_DIR . 'projects/Bootgly.projects.php') === false) {
+         $Boot = new BootCommand;
+
+         if ($Boot->run([], ['resources' => true]) === false) {
+            return false;
+         }
+      }
+
+      // :
+      return true;
+   }
+
+   /**
+    * Assess a new project path: naming pattern, registry and directory collisions.
+    *
+    * @param string $path
+    *
+    * @return true|string True when usable; an error message otherwise.
+    */
+   private function assess (string $path): true|string
+   {
+      // ? Naming pattern
+      if (preg_match('#^[A-Z][A-Za-z0-9_-]*(?:/[A-Z][A-Za-z0-9_-]*)*$#', $path) !== 1) {
+         return "Invalid project path: `{$path}`. Segments must start uppercase and use "
+            . 'only letters, numbers, `_` or `-` (e.g. `App` or `App/API`).';
+      }
+      // ? Registry collision
+      if (array_key_exists($path, Projects::read()) === true) {
+         return "Project `{$path}` is already registered.";
+      }
+      // ? Directory collision
+      if (
+         is_dir(Projects::CONSUMER_DIR . $path) === true
+         || is_dir(Projects::AUTHOR_DIR . $path) === true
+      ) {
+         return "Project directory `projects/{$path}` already exists.";
+      }
+
+      // :
+      return true;
+   }
+
+   /**
+    * Survey the platform folders for importable projects (Bootgly signature).
+    *
+    * Scans `projects/` inside each platform folder — `Bootgly/` (the framework),
+    * `Console/` and `Web/` — up to two levels deep.
+    *
+    * @return array<string,string> Map of source label to source directory.
+    */
+   private function survey (): array
+   {
+      // !
+      $sources = [];
+
+      $bases = [
+         'Bootgly' => Projects::AUTHOR_DIR,
+         'Console' => BOOTGLY_WORKING_DIR . 'Console/projects/',
+         'Web'     => BOOTGLY_WORKING_DIR . 'Web/projects/',
+      ];
+
+      // @@
+      foreach ($bases as $platform => $base) {
+         if (is_dir($base) === false) {
+            continue;
+         }
+
+         $dirs = glob("{$base}*", GLOB_ONLYDIR) ?: [];
+         foreach ($dirs as $dir) {
+            $prefix = $platform === 'Bootgly' ? '' : "{$platform}: ";
+
+            // ? Direct project (signature at depth 1)
+            if ((glob("{$dir}/*.project.php") ?: []) !== []) {
+               $sources[$prefix . substr($dir, strlen($base))] = $dir;
+
+               continue;
+            }
+
+            // ? Subprojects (signature at depth 2)
+            $subs = glob("{$dir}/*", GLOB_ONLYDIR) ?: [];
+            foreach ($subs as $sub) {
+               if ((glob("{$sub}/*.project.php") ?: []) !== []) {
+                  $sources[$prefix . substr($sub, strlen($base))] = $sub;
+               }
+            }
+         }
+      }
+
+      // :
+      return $sources;
+   }
+
+   /**
+    * Trace a creation source against the platform folders.
+    *
+    * @param string $from Platform project path (e.g. `Demo/HTTP_Server_CLI`).
+    *
+    * @return null|string The source directory, or null when not found.
+    */
+   private function trace (string $from): null|string
+   {
+      // ?
+      if (Projects::check($from) === false) {
+         return null;
+      }
+
+      $bases = [
+         Projects::AUTHOR_DIR,
+         BOOTGLY_WORKING_DIR . 'Console/projects/',
+         BOOTGLY_WORKING_DIR . 'Web/projects/',
+      ];
+
+      // @
+      foreach ($bases as $base) {
+         $dir = "{$base}{$from}";
+
+         if (is_dir($dir) === true && (glob("{$dir}/*.project.php") ?: []) !== []) {
+            // :
+            return $dir;
+         }
+      }
+
+      // :
+      return null;
+   }
+
+   /**
+    * Detect the interfaces bound to a platform project in the author registry.
+    *
+    * @param null|string $sourcePath
+    *
+    * @return null|array<string>
+    */
+   private function detect (null|string $sourcePath): null|array
+   {
+      // ?
+      if ($sourcePath === null) {
+         return null;
+      }
+
+      $file = Projects::AUTHOR_DIR . 'Bootgly.projects.php';
+      if (is_file($file) === false) {
+         return null;
+      }
+
+      $registry = include $file;
+      if (is_array($registry) === false) {
+         return null;
+      }
+
+      $meta = $registry[$sourcePath] ?? null;
+      if (is_array($meta) === false) {
+         return null;
+      }
+
+      $interfaces = $meta['interfaces'] ?? null;
+      if (is_array($interfaces) === false) {
+         return null;
+      }
+
+      // ! String-only interface list
+      $list = [];
+      foreach ($interfaces as $interface) {
+         if (is_string($interface) === true) {
+            $list[] = $interface;
+         }
+      }
+
+      // :
+      return $list === [] ? null : $list;
+   }
+
+   /**
+    * Choose one option from a vertical, unique-selection Menu.
+    *
+    * @param string $prompt
+    * @param array<string> $labels
+    * @param int $default Index assumed when nothing is selected.
+    *
+    * @return int The selected option index.
+    */
+   private function choose (string $prompt, array $labels, int $default = 0): int
+   {
+      $Terminal = CLI->Terminal;
+
+      $Menu = new Menu($Terminal->Input, $Terminal->Output);
+      $Menu->prompt = "{$prompt}\n(↑/↓ to move, Space to select, Enter to confirm)\n";
+
+      $Options = $Menu->Items->Options;
+      $Options->Selection::Unique->set();
+
+      foreach ($labels as $label) {
+         $Options->add(label: (string) $label);
+      }
+
+      // @@ Render until Enter
+      foreach ($Menu->rendering() as $ignored);
+
+      // :
+      return (int) ($Menu->selected[0] ?? $default);
+   }
+
+   /**
+    * Report the create/import outcome.
+    *
+    * @param bool $done
+    * @param string $path
+    *
+    * @return bool
+    */
+   private function report (bool $done, string $path): bool
+   {
+      $Output = CLI->Terminal->Output;
+
+      $Alert = new Alert($Output);
+
+      if ($done === true) {
+         $Alert->Type::Success->set();
+         $Alert->message = "Project @#cyan:{$path}@; created!";
+         $Alert->render();
+
+         $Output->render("@.;@#Green:Tip:@; Use @#Black:bootgly project {$path} start@; to boot it.@..;");
+      }
+      else {
+         $Alert->Type::Failure->set();
+         $Alert->message = "Could not create project @#cyan:{$path}@;. "
+            . 'Check the target directory and the registry file (projects/Bootgly.projects.php) permissions.';
+         $Alert->render();
+      }
+
+      // :
+      return $done;
+   }
+
+   /**
+    * Erase a file or directory recursively.
+    *
+    * @param string $target
+    *
+    * @return void
+    */
+   private function erase (string $target): void
+   {
+      // ?
+      if (is_link($target) === true || is_file($target) === true) {
+         unlink($target);
+
+         return;
+      }
+      if (is_dir($target) === false) {
+         return;
+      }
+
+      // @@
+      $paths = scandir($target) ?: [];
+      foreach ($paths as $entry) {
+         if ($entry === '.' || $entry === '..') {
+            continue;
+         }
+
+         $this->erase("{$target}/{$entry}");
+      }
+
+      rmdir($target);
    }
 
    /**
@@ -1361,7 +2172,10 @@ class ProjectCommand extends Command
          $Fieldset->render();
 
          // # Examples
-         $exampleLines = '@#Black:bootgly project list@;' . PHP_EOL;
+         $exampleLines = '@#Black:bootgly project create@;' . PHP_EOL;
+         $exampleLines .= '@#Black:bootgly project create App/API --from=scratch --interfaces=WPI --yes@;' . PHP_EOL;
+         $exampleLines .= '@#Black:bootgly project import https://github.com/foo/project1 Project1@;' . PHP_EOL;
+         $exampleLines .= '@#Black:bootgly project list@;' . PHP_EOL;
          $exampleLines .= '@#Black:bootgly project Demo/HTTP_Server_CLI start@;' . PHP_EOL;
          $exampleLines .= '@#Black:bootgly project Demo/HTTP_Server_CLI stop@;' . PHP_EOL;
          $exampleLines .= '@#Black:bootgly project Demo/HTTP_Server_CLI show@;' . PHP_EOL;

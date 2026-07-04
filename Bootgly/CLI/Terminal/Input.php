@@ -141,6 +141,43 @@ class Input
    }
 
    /**
+    * Reads a single line from the input stream.
+    * Bytes are consumed until a line terminator (`\n` or `\r`) or EOF is reached.
+    *
+    * @return string|false Returns the line without the terminator, or false on immediate EOF.
+    */
+   public function scan (): string|false
+   {
+      // ! Line buffer
+      $line = '';
+
+      // @@ Consume bytes until a line terminator or EOF
+      while (true) {
+         $byte = $this->read(1);
+
+         // ? EOF or read failure
+         if ($byte === false || $byte === '') {
+            break;
+         }
+         // ? Line terminator
+         if ($byte === "\n" || $byte === "\r") {
+            // :
+            return $line;
+         }
+
+         $line .= $byte;
+      }
+
+      // ?: EOF with no buffered bytes
+      if ($line === '') {
+         return false;
+      }
+
+      // : Last line without terminator
+      return $line;
+   }
+
+   /**
     * Initiates a bidirectional communication between a Terminal Client API and a Terminal Server API.
     * The function forks a child process to handle the Terminal Client API and communicates with the parent process using a Pipe.
     *

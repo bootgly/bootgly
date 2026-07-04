@@ -123,5 +123,7 @@ return new Suites(
       'Bootgly/CLI/Terminal/',
       // # Benchmark harness — case options schema + sweep expansion
       'Bootgly/ACI/Tests/Benchmark/',
+      // # CLI UI Components — Dialog (confirm/alert/prompt) + Question (validated input)
+      'Bootgly/CLI/UI/Components/',
    ]
 );

@@ -54,7 +54,8 @@ namespace Bootgly\ABI {
                }
             }
          }
-         else if (\file_exists($source) === true) {
+         else if (\is_file($source) === true) {
+            // regular files only — sockets, FIFOs and devices are not copyable
             \copy($source, $destination);
          }
       }

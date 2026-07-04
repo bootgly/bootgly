@@ -29,6 +29,10 @@
       "php": "^8.4",
       "ext-openssl": "*"
    },
+   "suggest": {
+      "ext-pcntl": "Required by the Console platform on Linux (workers, forks and signals)",
+      "ext-posix": "Required by the Console platform on Linux (process control and privileges)"
+   },
    "autoload-dev": {
       "psr-4": {
          "Bootgly\\PHPStan\\": "@/phpstan/"

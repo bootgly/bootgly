@@ -21,6 +21,7 @@ use function explode;
 use function getcwd;
 use function implode;
 use function in_array;
+use function is_file;
 use function str_replace;
 
 use Bootgly\ABI\IO\FS\File;
@@ -87,6 +88,11 @@ class Scripts
          $resource_dirs[] = self::WORKING_DIR;
       }
       foreach ($resource_dirs as $dir) {
+         // ? Consumer dirs may not have booted their resources yet (fresh kit)
+         if (is_file("{$dir}@.php") === false) {
+            continue;
+         }
+
          $bootstrap = (include $dir . '@.php');
          if ($bootstrap !== false) {
             $this->includes['filenames'] += $bootstrap['scripts'];
