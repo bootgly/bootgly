@@ -2,6 +2,23 @@
 
 Changelog for Bootgly framework. All notable changes to this project will be documented in this file. Imported from ROADMAP.md.
 
+## v0.19.1-beta ✅
+
+> Focus: **HTTP Server CLI performance — persistent Fiber pool, route response cache, DBAL hot path**
+
+### WPI — Web Programming Interface
+
+- ✅ HTTP Server CLI: persistent Fiber pool for deferred responses — `defer()` reuses parked worker Fibers instead of constructing one per request (`/db` +84%, `/fortunes` +73% in TechEmpower loads)
+- ✅ HTTP Server CLI: route response cache — `route(..., cache: ['TTL' => seconds])` serves cached wire responses with per-second `Date` patching (up to 10× on cacheable routes)
+- ✅ HTTP Server CLI: Database response resource hot path — prototype clone in `provide()`, `fork()` via `clone`, dropped lazy `Scope` get hook
+- ✅ HTTP Server CLI: fix stray break line in `VersionFooterMiddleware`
+
+### ADI — Abstract Data Interface
+
+- ✅ PostgreSQL Decoder: hot-type fast path for `DataRow`/`RowDescription` messages (fewer allocations per row)
+
+---
+
 ## v0.19.0-beta ✅
 
 > Focus: **WebSocket Server + WebSocket Client + HTTP/2 Server**
