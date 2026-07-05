@@ -7,6 +7,7 @@ use const BOOTGLY_TTY;
 use const PHP_EOL;
 use function assert;
 use function fopen;
+use function in_array;
 use function is_bool;
 
 use Bootgly\ACI\Tests\Suite\Test\Specification;
@@ -44,6 +45,38 @@ return new Specification(
       yield assert(
          assertion: $Options->control('x') === true,
          description: 'Unmapped key keeps the Menu control loop running'
+      );
+
+      // ! Locked options (display-only: never aimed, never selected)
+      $Menu = new Menu($Input, $Output);
+      $Options = $Menu->Items->Options;
+      $Options->Selection::Multiple->set();
+
+      $Options->add(label: 'Pinned', locked: true);
+      $Options->add(label: 'Real A');
+      $Options->add(label: 'Real B');
+
+      // @ Space on the initial aim: the locked option never holds the aim
+      $Options->control(' ');
+
+      // @ Valid
+      yield assert(
+         assertion: in_array(1, $Options::$selected[0]) === true,
+         description: 'Initial aim skips the locked option — Space selects the first unlocked one'
+      );
+
+      // @ Aiming up from the first unlocked option wraps over the locked one
+      $Options->control("\e[A");
+      $Options->control(' ');
+
+      // @ Valid
+      yield assert(
+         assertion: in_array(2, $Options::$selected[0]) === true,
+         description: 'Aim movement skips locked options (wraps to the last unlocked one)'
+      );
+      yield assert(
+         assertion: in_array(0, $Options::$selected[0]) === false,
+         description: 'Locked options never enter the selection'
       );
    }
 );

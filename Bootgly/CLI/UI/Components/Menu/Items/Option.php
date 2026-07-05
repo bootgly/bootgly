@@ -28,6 +28,9 @@ final class Option extends Item
    public array $marked;
    /** @var array<int> */
    public array $unmarked;
+   // @ Selecting
+   /** Display-only option: always marked, never aimed nor selectable */
+   public bool $locked;
 
    // * Data
    public string $label;
@@ -69,6 +72,8 @@ final class Option extends Item
       // Marker
       $this->marked = $marked;
       $this->unmarked = $unmarked;
+      // @ Selecting
+      $this->locked = false;
 
       // * Data
       $this->label = $label;

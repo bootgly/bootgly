@@ -77,6 +77,7 @@ final class Options extends Items
     * @param string $label
     * @param string $prepend
     * @param string $append
+    * @param bool $locked
     * @return Option
     */
    public function add (
@@ -87,6 +88,7 @@ final class Options extends Items
       string $label = '',
       string $prepend = '',
       string $append = '',
+      bool $locked = false,
    ): Option
    {
       $Option = new Option;
@@ -98,6 +100,8 @@ final class Options extends Items
       // Marker
       $Option->marked = $marked;
       $Option->unmarked = $unmarked;
+      // @ Selecting
+      $Option->locked = $locked;
 
       // * Data
       $Option->label = $label;
@@ -106,28 +110,61 @@ final class Options extends Items
 
       Items::push($Option);
 
+      // ? Locked options never hold the aim — push the initial aim forward
+      if ($locked === true && $this->aimed === $Option->index) {
+         $this->aimed = $Option->index + 1;
+      }
+
       return $Option;
+   }
+
+   /**
+    * Check whether an option is locked (display-only).
+    *
+    * @param int $index
+    *
+    * @return bool
+    */
+   private function check (int $index): bool
+   {
+      $Item = Items::$data[Menu::$level][$index] ?? null;
+
+      return $Item instanceof Option && $Item->locked === true;
    }
 
    // @ Aiming
    public function regress (): self
    {
-      if ($this->aimed > 0) {
-         $this->aimed--;
-      }
-      else {
-         $this->aimed = self::$indexes - 1;
+      // @@ Skip locked options (guard: all-locked lists stop after a full cycle)
+      for ($moves = 0; $moves < self::$indexes; $moves++) {
+         if ($this->aimed > 0) {
+            $this->aimed--;
+         }
+         else {
+            $this->aimed = self::$indexes - 1;
+         }
+
+         if ($this->check($this->aimed) === false) {
+            break;
+         }
       }
 
       return $this;
    }
    public function advance (): self
    {
-      if ($this->aimed < self::$indexes - 1) {
-         $this->aimed++;
-      }
-      else {
-         $this->aimed = 0;
+      // @@ Skip locked options (guard: all-locked lists stop after a full cycle)
+      for ($moves = 0; $moves < self::$indexes; $moves++) {
+         if ($this->aimed < self::$indexes - 1) {
+            $this->aimed++;
+         }
+         else {
+            $this->aimed = 0;
+         }
+
+         if ($this->check($this->aimed) === false) {
+            break;
+         }
       }
 
       return $this;
@@ -136,12 +173,22 @@ final class Options extends Items
    // @ Selecting
    private function select (int $index): void
    {
+      // ? Locked options are display-only — never enter the selection
+      if ($this->check($index) === true) {
+         return;
+      }
+
       if ($this->selectable) {
          self::$selected[Menu::$level][] = $index;
       }
    }
    private function deselect (int $index): void
    {
+      // ? Locked options are display-only — nothing to deselect
+      if ($this->check($index) === true) {
+         return;
+      }
+
       if ($this->deselectable) {
          self::$selected[Menu::$level] = array_diff(
             self::$selected[Menu::$level],
@@ -246,7 +293,7 @@ final class Options extends Items
       }
 
       $marker = [];
-      if ( in_array($index, $selected) ) {
+      if ($Option->locked === true || in_array($index, $selected) ) {
          $marker[0] = $Option->marked[0] ?? '[X]';
          $marker[1] = $Option->marked[1] ?? '';
       }
@@ -255,9 +302,17 @@ final class Options extends Items
          $marker[1] = $Option->unmarked[1] ?? '';
       }
 
-      $compiled = <<<OUTPUT
-      {$aim[0]} {$marker[0]} {$prepend}$label{$append} {$marker[1]} {$aim[1]}
-      OUTPUT;
+      // ? Locked options render dimmed — always marked, deselection blocked
+      if ($Option->locked === true) {
+         $compiled = <<<OUTPUT
+         {$aim[0]} @#Black:{$marker[0]} {$prepend}$label{$append}@; {$marker[1]} {$aim[1]}
+         OUTPUT;
+      }
+      else {
+         $compiled = <<<OUTPUT
+         {$aim[0]} {$marker[0]} {$prepend}$label{$append} {$marker[1]} {$aim[1]}
+         OUTPUT;
+      }
 
       // @ Displaying
       // Aligment

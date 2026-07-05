@@ -14,7 +14,9 @@ namespace Bootgly\commands;
 use const BOOTGLY_ROOT_DIR;
 use const BOOTGLY_WORKING_DIR;
 use const PHP_EOL;
+use function copy;
 use function is_dir;
+use function mkdir;
 
 use const Bootgly\CLI;
 use function Bootgly\ABI\copy_recursively;
@@ -47,9 +49,25 @@ class BootCommand extends Command
             return false;
          }
 
+         $Alert->spaced = false;
+
+         // # projects/ — seeded with an EMPTY registry: the framework projects
+         // (Demos, Benchmarks) are never listed in a kit; the wizard fills the
+         // registry on create/import
+         if (is_dir(BOOTGLY_WORKING_DIR . 'projects') === false) {
+            mkdir(BOOTGLY_WORKING_DIR . 'projects', 0755, true);
+            copy(
+               BOOTGLY_ROOT_DIR . 'Bootgly/commands/stubs/Bootgly.projects.php',
+               BOOTGLY_WORKING_DIR . 'projects/Bootgly.projects.php'
+            );
+
+            $Alert->Type::Success->set();
+            $Alert->message = 'Resource dir created: @#cyan:projects/@;';
+            $Alert->render();
+         }
+
          // TODO get resources dirs dynamically
          $resource_dirs = [
-            'projects/',
             'public/',
             'scripts/',
             'tests/',
@@ -64,7 +82,6 @@ class BootCommand extends Command
          }
 
          // @
-         $Alert->spaced = false;
          foreach ($resource_dirs as $dir) {
             copy_recursively(BOOTGLY_ROOT_DIR . $dir, BOOTGLY_WORKING_DIR . $dir);
 

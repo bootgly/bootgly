@@ -1600,14 +1600,18 @@ class ProjectCommand extends Command
          if ($console === false && $platform === null) {
             if (BOOTGLY_TTY === true) {
                $Output->render(
-                  '@.;The @#Cyan:Bootgly@; platform is always included — it ships the '
-                  . '@#Cyan:CLI@; and @#Cyan:WPI@; interfaces.@..;'
+                  '@.;The @#Cyan:Bootgly@; base platform is always included — unopinionated, '
+                  . 'it ships the @#Cyan:CLI@; and @#Cyan:WPI@; interfaces.@..;'
                );
 
-               $choice = $this->choose('Which extra platform do you want to set up?', [
-                  'Console — CLI interface (TUI apps)',
-                  'Web — WPI interface (HTTP apps; includes Console)'
-               ]);
+               $choice = $this->choose(
+                  'Which extra platform do you want to set up?',
+                  [
+                     'Console — opinionated CLI extras (TUI apps)',
+                     'Web — opinionated WPI extras (includes Console)'
+                  ],
+                  pinned: ['Bootgly — base platform (always included)']
+               );
                $platform = $choice === 1 ? 'web' : 'console';
             }
             else {
@@ -1855,19 +1859,24 @@ class ProjectCommand extends Command
     * @param string $prompt
     * @param array<string> $labels
     * @param int $default Index assumed when nothing is selected.
+    * @param array<string> $pinned Display-only labels rendered first — always marked, locked.
     *
-    * @return int The selected option index.
+    * @return int The selected option index, relative to $labels.
     */
-   private function choose (string $prompt, array $labels, int $default = 0): int
+   private function choose (string $prompt, array $labels, int $default = 0, array $pinned = []): int
    {
       $Terminal = CLI->Terminal;
 
       $Menu = new Menu($Terminal->Input, $Terminal->Output);
-      $Menu->prompt = "{$prompt}\n(↑/↓ to move, Space to select, Enter to confirm)\n";
+      $Menu->prompt = "@#Blue:{$prompt}@;\n@#Black:(↑/↓ to move, Space to select, Enter to confirm)@;\n";
 
       $Options = $Menu->Items->Options;
       $Options->Selection::Unique->set();
 
+      // ! Pinned labels render first — always marked, locked out of the selection
+      foreach ($pinned as $label) {
+         $Options->add(label: (string) $label, locked: true);
+      }
       foreach ($labels as $label) {
          $Options->add(label: (string) $label);
       }
@@ -1875,8 +1884,10 @@ class ProjectCommand extends Command
       // @@ Render until Enter
       foreach ($Menu->rendering() as $ignored);
 
-      // :
-      return (int) ($Menu->selected[0] ?? $default);
+      // : Index relative to $labels (pinned options never enter the selection)
+      $offset = count($pinned);
+
+      return (int) ($Menu->selected[0] ?? $default + $offset) - $offset;
    }
 
    /**
@@ -1892,7 +1903,7 @@ class ProjectCommand extends Command
       $Terminal = CLI->Terminal;
 
       $Menu = new Menu($Terminal->Input, $Terminal->Output);
-      $Menu->prompt = "{$prompt}\n(↑/↓ to move, Space to select, Enter to confirm)\n";
+      $Menu->prompt = "@#Blue:{$prompt}@;\n@#Black:(↑/↓ to move, Space to select, Enter to confirm)@;\n";
 
       $Options = $Menu->Items->Options;
       // ? Selection mode is static per enum — always set it explicitly
