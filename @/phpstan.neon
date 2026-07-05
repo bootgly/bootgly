@@ -24,6 +24,11 @@ parameters:
       -
          message: '#Property Bootgly\\WPI\\Interfaces\\TCP_Client_CLI::\$Connections.*does not accept#'
          path: ../Bootgly/WPI/Nodes/HTTP_Client_CLI.php
+      -
+         # mb_str_split polyfill shadows the ext-mbstring stub — PHPStan reads
+         # the stub signature and skips the polyfill's @return docblock
+         message: '#Function mb_str_split\(\) return type has no value type#'
+         path: ../Bootgly/ABI/autoload.php
 
 services:
    -

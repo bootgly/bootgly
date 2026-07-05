@@ -26,12 +26,18 @@ class Bar
 
    // * Data
    public Symbols $Symbols;
+   // # Track (multi-bar): total > 0 makes this Bar an independent track
+   public float $current;
+   public float $total;
+   public string $description;
 
    // * Metadata
    // @ State
    // indetermined
    public bool $completing;
    public bool $emptying;
+   // # Track
+   public private(set) float $percent;
 
 
    public function __construct (Progress $Progress)
@@ -44,24 +50,59 @@ class Bar
 
       // * Data
       $this->Symbols = new Symbols;
+      // # Track
+      $this->current = 0.0;
+      $this->total = 0.0;
+      $this->description = '';
 
       // * Metadata
       // @ State
       // indetermined
       $this->completing = true;
       $this->emptying = false;
+      // # Track
+      $this->percent = 0.0;
    }
    public function __get (string $name): mixed
    {
       return $this->Progress->$name;
    }
 
+   /**
+    * Advances this track (multi-bar mode — requires `total` > 0).
+    *
+    * @param float $amount The amount to advance.
+    *
+    * @return self
+    */
+   public function advance (float $amount = 1.0): self
+   {
+      // ?
+      if ($this->total <= 0.0) {
+         return $this;
+      }
+
+      $this->current += $amount;
+
+      if ($this->current > $this->total) {
+         $this->current = $this->total;
+      }
+
+      $this->percent = ($this->current / $this->total) * 100;
+
+      // :
+      return $this;
+   }
+
    public function render (): string
    {
       $units = $this->units;
 
+      // ? Independent tracks derive the fill from their own percent
+      $percent = $this->total > 0.0 ? $this->percent : $this->Progress->percent;
+
       // done
-      $done = (int)($units * ($this->Progress->percent / 100));
+      $done = (int)($units * ($percent / 100));
       if ($done > $units) {
          $done = $units;
       }

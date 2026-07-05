@@ -11,17 +11,21 @@
 namespace Bootgly\CLI\Terminal;
 
 
+use const SIGINT;
 use const SIGTERM;
 use const STDIN;
 use const STDOUT;
 use function cli_set_process_title;
 use function defined;
+use function feof;
 use function fopen;
 use function fread;
 use function function_exists;
 use function fwrite;
 use function getenv;
+use function intdiv;
 use function ord;
+use function pcntl_async_signals;
 use function pcntl_fork;
 use function pcntl_signal;
 use function pcntl_signal_dispatch;
@@ -29,8 +33,10 @@ use function pcntl_waitpid;
 use function posix_getpid;
 use function posix_kill;
 use function register_shutdown_function;
+use function stream_get_meta_data;
 use function stream_isatty;
 use function stream_set_blocking;
+use function stream_set_timeout;
 use function strlen;
 use function substr;
 use function system;
@@ -67,7 +73,8 @@ class Input
    public null|array $channel = null;
 
    // * Metadata
-   // ...
+   /** Terminal restore net armed? */
+   private bool $armed;
 
 
    /**
@@ -86,7 +93,7 @@ class Input
       $this->role = Roles::tryFrom((string) getenv('BOOTGLY_TERMINAL_ROLE'));
 
       // * Metadata
-      // ...
+      $this->armed = false;
    }
 
    /**
@@ -95,10 +102,14 @@ class Input
     * @param bool $blocking Whether to set the stream to blocking or non-blocking mode. Default is true (blocking).
     * @param bool $canonical Whether to enable or disable canonical input processing mode. Default is true (enabled).
     * @param bool $echo Whether to enable or disable echoing of input characters. Default is true (enabled).
+    * @param bool $signals Whether the terminal generates signals (Ctrl+C = SIGINT, ...). When disabled,
+    *                      those keys arrive as raw bytes (`\x03`, ...) readable by the consumer. Default is true.
     *
     * @return self Returns the current instance for method chaining.
     */
-   public function configure (bool $blocking = true, bool $canonical = true, bool $echo = true): self
+   public function configure (
+      bool $blocking = true, bool $canonical = true, bool $echo = true, bool $signals = true
+   ): self
    {
       stream_set_blocking($this->stream, $blocking);
 
@@ -106,6 +117,11 @@ class Input
       if (stream_isatty($this->stream) === false) {
          // :
          return $this;
+      }
+
+      // ? Entering raw mode arms the terminal restore net (once)
+      if ($canonical === false) {
+         $this->arm();
       }
 
       $canonical
@@ -116,7 +132,54 @@ class Input
          ? system('stty echo')
          : system('stty -echo');
 
+      $signals
+         ? system('stty isig')
+         : system('stty -isig');
+
       return $this;
+   }
+
+   /**
+    * Arms the terminal restore net (once): a shutdown restore of the terminal modes
+    * and the cursor, plus INT/TERM handlers that exit through the normal shutdown
+    * sequence — so component destructors and `finish()` paths run on Ctrl+C.
+    *
+    * @return void
+    */
+   private function arm (): void
+   {
+      // ?
+      if ($this->armed === true) {
+         return;
+      }
+
+      $this->armed = true;
+
+      // @ Restore the terminal modes, the mouse reporting and the cursor on any exit
+      $output = $this->output;
+      $stream = $this->stream;
+      register_shutdown_function(static function () use ($output, $stream): void {
+         stream_set_blocking($stream, true);
+         system('stty icanon echo isig 2>/dev/null');
+
+         // Disable mouse reporting (a leaked tracking floods the shell with escapes)
+         // and show the cursor — components may die between hide() and show()
+         fwrite($output, "\e[?1003l\e[?1002l\e[?1000l\e[?1006l\e[?25h");
+      });
+
+      // ? Signal handling requires process control
+      if (function_exists('pcntl_signal') === false) {
+         return;
+      }
+
+      // @ Exit through the shutdown sequence — destructors restore the terminal state
+      pcntl_async_signals(true);
+      pcntl_signal(SIGINT, static function (): void {
+         exit(130);
+      });
+      pcntl_signal(SIGTERM, static function (): void {
+         exit(143);
+      });
    }
 
    /**
@@ -158,9 +221,12 @@ class Input
     * Acts as the line discipline of the stream: erase keys (Backspace / Delete)
     * edit the buffer and, when self-echo is enabled, input is echoed back as typed.
     *
+    * @param null|string $mask When set, self-echo writes this mask once per completed
+    *                          character instead of the typed character (secret input).
+    *
     * @return string|false Returns the line without the terminator, or false on immediate EOF.
     */
-   public function scan (): string|false
+   public function scan (null|string $mask = null): string|false
    {
       // ! Line buffer
       $line = '';
@@ -220,7 +286,7 @@ class Input
             };
 
             if (strlen($pending) >= $length) {
-               fwrite($this->output, $pending);
+               fwrite($this->output, $mask ?? $pending);
                $pending = '';
             }
          }
@@ -264,16 +330,8 @@ class Input
       $Pipe->blocking = false;
       $Pipe->open();
 
-      $stream = $this->stream;
-
-      // @ Register shutdown function
-      register_shutdown_function(function ()
-      use ($stream) {
-         // Set blocking for data stream
-         stream_set_blocking($stream, true);
-         // Restore terminal settings
-         system('stty icanon echo');
-      });
+      // @ Arm the terminal restore net (stty + blocking + mouse + cursor on any exit)
+      $this->arm();
 
       // @ Fork process
       $pid = pcntl_fork();
@@ -399,18 +457,45 @@ class Input
                      $length = 1024;
                   }
 
+                  // @ Arm the read timeout — paced reads yield null on expiry,
+                  // mirroring Pipe::reading (the timeout is the frame pacing)
+                  if ($timeout !== null) {
+                     stream_set_timeout(
+                        $channel[0],
+                        intdiv($timeout, 1000000),
+                        $timeout % 1000000
+                     );
+                  }
+
                   // @@ Read the channel until it closes or fails
                   while (true) {
                      $data = fread($channel[0], $length);
 
-                     // ?: Channel closed or failed
-                     if ($data === false || $data === '') {
-                        yield false;
+                     // ?: Data
+                     if ($data !== false && $data !== '') {
+                        yield $data;
 
-                        break;
+                        continue;
+                     }
+                     // ?: Read timeout — tick time (sockets report false + timed_out
+                     // metadata; userland wrappers report an empty read)
+                     if (
+                        $timeout !== null
+                        && feof($channel[0]) === false
+                        && (
+                           $data === ''
+                           || stream_get_meta_data($channel[0])['timed_out'] === true
+                        )
+                     ) {
+                        yield null;
+
+                        continue;
                      }
 
-                     yield $data;
+                     // ?: Channel closed or failed
+                     yield false;
+
+                     break;
                   }
                }
             );

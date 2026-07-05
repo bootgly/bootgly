@@ -77,10 +77,10 @@ use Bootgly\API\Projects\Configs;
 use Bootgly\API\Projects\Project;
 use Bootgly\CLI\Command;
 use Bootgly\CLI\UI\Components\Alert;
-use Bootgly\CLI\UI\Components\Dialog;
 use Bootgly\CLI\UI\Components\Fieldset;
 use Bootgly\CLI\UI\Components\Menu;
 use Bootgly\CLI\UI\Components\Question;
+use Bootgly\CLI\UI\Components\Timeline;
 use Bootgly\commands\BootCommand;
 
 
@@ -1270,9 +1270,9 @@ class ProjectCommand extends Command
    {
       $Terminal = CLI->Terminal;
 
-      $Dialog = new Dialog($Terminal->Input, $Terminal->Output);
+      $Question = new Question($Terminal->Input, $Terminal->Output);
 
-      return $Dialog->confirm($question);
+      return $Question->confirm($question);
    }
 
    /**
@@ -1393,6 +1393,16 @@ class ProjectCommand extends Command
          return $this->transfer($imports, $options);
       }
 
+      // ! Timeline — from-scratch phases (append mode: prompts write between steps)
+      $Timeline = new Timeline($Output);
+      $Timeline->append = true;
+      $Timeline->add('Path');
+      $Timeline->add('Interface');
+      $Timeline->add('Metadata');
+      $Timeline->add('Confirm');
+      $Timeline->add('Scaffold');
+      $Timeline->start();
+
       // ! Project path
       $Question = new Question($Input, $Output);
       $Question->prompt = 'Project path (e.g. `App` or `App/API`)';
@@ -1402,6 +1412,8 @@ class ProjectCommand extends Command
       $path = $Question->ask();
       // ? EOF or invalid prefilled path
       if ($this->assess($path) !== true) {
+         $Timeline->fail('invalid path');
+
          $Alert = new Alert($Output);
          $Alert->Type::Failure->set();
          $Alert->message = 'A valid project path is required.';
@@ -1409,6 +1421,8 @@ class ProjectCommand extends Command
 
          return false;
       }
+
+      $Timeline->advance($path);
 
       // ! Metadata
       $meta = ['default' => isSet($options['default'])];
@@ -1429,6 +1443,8 @@ class ProjectCommand extends Command
          }
       }
       $meta['interfaces'] = [$interface];
+
+      $Timeline->advance($interface);
 
       // # Port (WPI)
       if ($interface === 'WPI') {
@@ -1465,6 +1481,8 @@ class ProjectCommand extends Command
 
       $meta['name'] = basename($path);
 
+      $Timeline->advance();
+
       // ! Summary
       $content  = '@#Green:' . str_pad('Path', 12) . ' @; ' . $path . PHP_EOL;
       $content .= '@#Green:' . str_pad('Mode', 12) . ' @; From scratch' . PHP_EOL;
@@ -1485,9 +1503,11 @@ class ProjectCommand extends Command
 
       // ? Confirm
       if (isSet($options['yes']) === false) {
-         $Dialog = new Dialog($Input, $Output);
+         $Question = new Question($Input, $Output);
 
-         if ($Dialog->confirm('Create the project?', default: true) === false) {
+         if ($Question->confirm('Create the project?', default: true) === false) {
+            $Timeline->fail('aborted');
+
             $Alert = new Alert($Output);
             $Alert->Type::Attention->set();
             $Alert->message = 'Aborted.';
@@ -1497,9 +1517,16 @@ class ProjectCommand extends Command
          }
       }
 
+      $Timeline->advance();
+
       // @ Execute
       $stub = $interface === 'WPI' ? 'WPI' : 'CLI';
       $done = Projects::generate(BOOTGLY_ROOT_DIR . "Bootgly/commands/stubs/{$stub}", $path, $meta);
+
+      // @ Close the Timeline flow
+      $done === true
+         ? $Timeline->advance('generated')
+         : $Timeline->fail('generation failed');
 
       // :
       return $this->report($done, $path);
@@ -1556,9 +1583,9 @@ class ProjectCommand extends Command
 
       // ? Confirm
       if (isSet($options['yes']) === false) {
-         $Dialog = new Dialog($Input, $Output);
+         $Question = new Question($Input, $Output);
 
-         if ($Dialog->confirm('Import the selected projects?', default: true) === false) {
+         if ($Question->confirm('Import the selected projects?', default: true) === false) {
             $Alert = new Alert($Output);
             $Alert->Type::Attention->set();
             $Alert->message = 'Aborted.';

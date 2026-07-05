@@ -18,6 +18,7 @@ use const PHP_EOL;
 use const STDERR;
 use const STR_PAD_LEFT;
 use function array_intersect_key;
+use function array_key_last;
 use function array_keys;
 use function array_map;
 use function array_slice;
@@ -73,6 +74,8 @@ use Bootgly\API\Environment;
 use Bootgly\API\Environment\Agent;
 use Bootgly\CLI\Command;
 use Bootgly\CLI\UI\Components\Alert;
+use Bootgly\CLI\UI\Components\Chart as ANSIChart;
+use Bootgly\CLI\UI\Components\Chart\Plots;
 
 
 class TestCommand extends Command
@@ -716,6 +719,35 @@ class TestCommand extends Command
          $marks[] = $export['marks'];
       }
       Summary::locate($marks, $generated);
+
+      // @ ANSI chart — opponents × mean throughput of the last round (server runs)
+      if ($exports !== []) {
+         $series = [];
+         foreach ($exports[array_key_last($exports)]['results'] as $opponent => $loads) {
+            $sum = 0.0;
+            $counted = 0;
+            foreach ($loads as $Result) {
+               if ($Result->rps !== null) {
+                  $sum += $Result->rps;
+                  $counted++;
+               }
+            }
+
+            if ($counted > 0) {
+               $series[(string) $opponent] = $sum / $counted;
+            }
+         }
+
+         if (count($series) > 1) {
+            echo "\n";
+
+            $ANSIChart = new ANSIChart(CLI->Terminal->Output);
+            $ANSIChart->Plots = Plots::Bars;
+            $ANSIChart->precision = 0;
+            $ANSIChart->series = $series;
+            $ANSIChart->render();
+         }
+      }
 
       // @ Post-run message
       if ($Runner->postMessage !== '') {

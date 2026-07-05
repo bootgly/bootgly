@@ -13,10 +13,15 @@ namespace Bootgly\CLI\UI\Components\Menu\Items;
 
 use function array_diff;
 use function in_array;
+use function intdiv;
+use function ord;
 use function str_pad;
 use function str_repeat;
+use function stripos;
 use function strlen;
+use function substr;
 
+use Bootgly\CLI\Terminal\Output\Window;
 use Bootgly\CLI\UI\Components\Menu;
 use Bootgly\CLI\UI\Components\Menu\Items;
 use Bootgly\CLI\UI\Components\Menu\Orientation;
@@ -27,6 +32,11 @@ final class Options extends Items
    // * Config
    // @ Selecting
    public Selection $Selection;
+   // @ Displaying
+   /** Max visible options — vertical lists only (null renders all) */
+   public null|int $viewport;
+   /** Options per visual line — vertical grid layout (null = one per line) */
+   public null|int $columns;
    // @ Styling
    public string $divisors;
 
@@ -38,6 +48,11 @@ final class Options extends Items
    // @ Selecting
    /** @var array<int,array<int>> */
    public static array $selected;
+   // @ Displaying
+   public private(set) Window $Window;
+   // @ Filtering
+   /** Incremental type-ahead filter (printable keys; Backspace pops; `Esc` clears) */
+   public private(set) string $filter;
 
 
    public function __construct (Menu $Menu)
@@ -55,6 +70,9 @@ final class Options extends Items
       // @ Selecting
       // @phpstan-ignore-next-line
       $this->Selection = Selection::Multiple->set();
+      // @ Displaying
+      $this->viewport = null;
+      $this->columns = null;
       // @ Styling
       $this->divisors = '';
 
@@ -65,6 +83,10 @@ final class Options extends Items
       self::$indexes = 0;
       // @ Selecting
       self::$selected[0] = [];
+      // @ Displaying
+      $this->Window = new Window;
+      // @ Filtering
+      $this->filter = '';
    }
 
    /**
@@ -133,6 +155,24 @@ final class Options extends Items
    }
 
    // @ Aiming
+   /**
+    * Aim an option by index (initial aim / default option).
+    *
+    * @param int $index
+    *
+    * @return self
+    */
+   public function aim (int $index): self
+   {
+      // ? Locked options never hold the aim; out-of-range indexes keep the current aim
+      if ($index >= 0 && $index < self::$indexes && $this->check($index) === false) {
+         $this->aimed = $index;
+
+         $this->slide();
+      }
+
+      return $this;
+   }
    public function regress (): self
    {
       // @@ Skip locked options (guard: all-locked lists stop after a full cycle)
@@ -148,6 +188,8 @@ final class Options extends Items
             break;
          }
       }
+
+      $this->slide();
 
       return $this;
    }
@@ -167,7 +209,77 @@ final class Options extends Items
          }
       }
 
+      $this->slide();
+
       return $this;
+   }
+   /**
+    * Jumps the aim by a row delta (vertical grids: ↑/↓ move one visual line).
+    *
+    * @param int $delta The aim delta (± columns).
+    *
+    * @return self
+    */
+   private function jump (int $delta): self
+   {
+      // ! Clamped target (grids never wrap vertically)
+      $target = $this->aimed + $delta;
+      if ($target < 0) {
+         $target = 0;
+      }
+      if ($target > self::$indexes - 1) {
+         $target = self::$indexes - 1;
+      }
+
+      $this->aimed = $target;
+
+      // ? Locked landing nudges to the nearest unlocked option
+      if ($this->check($this->aimed) === true) {
+         $delta > 0 ? $this->advance() : $this->regress();
+      }
+
+      $this->slide();
+
+      return $this;
+   }
+   /**
+    * Slides the visible window to keep the aimed option visible (viewport only).
+    */
+   public function slide (): void
+   {
+      // ? No viewport — no windowing
+      if ($this->viewport === null) {
+         return;
+      }
+
+      $this->Window->size = $this->viewport;
+      $this->Window->total = self::$indexes;
+      $this->Window->slide($this->aimed);
+   }
+   /**
+    * Seeks the aim to the first unlocked option matching the type-ahead filter.
+    */
+   private function seek (): void
+   {
+      // ?
+      if ($this->filter === '') {
+         return;
+      }
+
+      // @@
+      foreach (Items::$data[Menu::$level] as $Item) {
+         if (
+            $Item instanceof Option
+            && $Item->locked === false
+            && stripos($Item->label, $this->filter) !== false
+         ) {
+            $this->aimed = $Item->index;
+
+            $this->slide();
+
+            return;
+         }
+      }
    }
 
    // @ Selecting
@@ -229,12 +341,22 @@ final class Options extends Items
          // \x1b \e \033
          // @ Aiming
          case "\e[D": // Left Key
-         case "\e[A": // Up Key
             $this->regress();
             break;
+         case "\e[A": // Up Key
+            // ? Vertical grids move one visual line up
+            $this->columns !== null
+               ? $this->jump(-$this->columns)
+               : $this->regress();
+            break;
          case "\e[C": // Right Key
-         case "\e[B": // Down Key
             $this->advance();
+            break;
+         case "\e[B": // Down Key
+            // ? Vertical grids move one visual line down
+            $this->columns !== null
+               ? $this->jump($this->columns)
+               : $this->advance();
             break;
 
          // @ Selecting
@@ -245,9 +367,41 @@ final class Options extends Items
 
          case "\r": // Enter Key (raw terminals without icrnl — e.g. terminal emulators feeding stdin directly)
          case PHP_EOL: // Enter Key
+            // ? Enter with an empty selection confirms the aimed option
+            if (self::$selected[Menu::$level] === []) {
+               // @@ Match by Option index — Items data positions include headers/divisors
+               foreach (Items::$data[Menu::$level] as $Item) {
+                  if ($Item instanceof Option && $Item->index === $this->aimed) {
+                     $this->select($this->aimed);
+
+                     break;
+                  }
+               }
+            }
+
             return false;
 
+         // @ Filtering (incremental type-ahead)
+         case "\x7F": // Backspace Key
+         case "\x08": // Backspace Key (Ctrl+H)
+            // ? Backspace pops the last filter byte
+            if ($this->filter !== '') {
+               $this->filter = substr($this->filter, 0, -1);
+
+               $this->seek();
+            }
+            break;
+         case "\e": // Escape Key (bare — no trailing sequence bytes)
+            $this->filter = '';
+            break;
+
          default:
+            // ? Printable bytes accumulate in the filter (Space stays selection)
+            if (strlen($char) === 1 && ord($char) >= 33 && ord($char) !== 127) {
+               $this->filter .= $char;
+
+               $this->seek();
+            }
             break;
       }
 
@@ -315,6 +469,20 @@ final class Options extends Items
       }
 
       // @ Displaying
+      // ? Vertical grid: cells padded to the column width; line break every N options
+      // @phpstan-ignore-next-line
+      if ($this->columns !== null && $Orientation === Orientation::Vertical) {
+         // @phpstan-ignore-next-line
+         $compiled = str_pad($compiled, intdiv(Menu::$width, $this->columns), ' ', $Aligment->value);
+
+         if (($index + 1) % $this->columns === 0 || $index === self::$indexes - 1) {
+            $compiled .= "\n";
+         }
+
+         // :
+         return $compiled;
+      }
+
       // Aligment
       // @phpstan-ignore-next-line
       if ($Orientation === Orientation::Vertical) {

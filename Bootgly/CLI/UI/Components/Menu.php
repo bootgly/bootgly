@@ -15,6 +15,7 @@ use const BOOTGLY_TTY;
 use function feof;
 use function is_string;
 use function str_pad;
+use function stripos;
 use function substr_count;
 use function usleep;
 use Generator;
@@ -85,6 +86,20 @@ class Menu extends Component
       // ---
       $Options = $Items->Options;
 
+      // ? Type-ahead filter hint
+      if ($Options->filter !== '') {
+         $rendered .= "@#Black:/{$Options->filter}@;\n";
+      }
+
+      // ! Viewport window (vertical lists only)
+      $Options->slide();
+      $Window = $Options->Window;
+      $windowed = $Options->viewport !== null;
+      // ! Body (items) — horizontal alignment pads the body, never the prompt
+      $body = '';
+      // ! Viewport `↑ N more` indicator — emitted once, before the first visible option
+      $above = false;
+
       foreach (Items::$data[self::$level] as $key => $Item) {
          $compiled = '';
 
@@ -102,8 +117,32 @@ class Menu extends Component
 
                break;
             case Option::class:
+               // ! Runtime narrowing (Items data mixes Items and Options)
+               if ($Item instanceof Option === false) {
+                  break;
+               }
+               // ? Type-ahead: non-matching, unlocked options are hidden
+               if (
+                  $Options->filter !== ''
+                  && $Item->locked === false
+                  && stripos($Item->label, $Options->filter) === false
+               ) {
+                  continue 2;
+               }
+               // ? Viewport: options outside the window are hidden
+               if ($windowed === true) {
+                  if ($Item->index < $Window->first || $Item->index > $Window->last) {
+                     continue 2;
+                  }
+
+                  if ($above === false && $Window->first > 0) {
+                     $body .= "@#Black:↑ {$Window->first} more@;\n";
+                     $above = true;
+                  }
+               }
+
                // @ Compile Option
-               $compiled = $Options->compile($Item); // @phpstan-ignore-line
+               $compiled = $Options->compile($Item);
 
                break;
          }
@@ -115,19 +154,25 @@ class Menu extends Component
             $compiled .= $Options->Orientation->get() === Orientation::Horizontal ? ' ' : "\n";
          }
 
-         $rendered .= $compiled;
+         $body .= $compiled;
       }
 
-      // TODO calculate the numbers of items rendered in the screen and render only items visible in viewport
+      // ? Viewport `↓ N more` indicator — after the last visible option
+      if ($windowed === true && $Window->last < $Window->total - 1) {
+         $below = $Window->total - 1 - $Window->last;
+         $body .= "@#Black:↓ {$below} more@;\n";
+      }
 
       // @ Post compile Items
       // @ Align items horizontally
       // @phpstan-ignore-next-line
       if ($Orientation === Orientation::Horizontal) {
          // @phpstan-ignore-next-line
-         $rendered = str_pad($rendered, self::$width, ' ', $Aligment->value);
-         $rendered .= "\n";
+         $body = str_pad($body, self::$width, ' ', $Aligment->value);
+         $body .= "\n";
       }
+
+      $rendered .= $body;
 
       return match ($this->render) {
          self::WRITE_OUTPUT => $this->Output->render($rendered),

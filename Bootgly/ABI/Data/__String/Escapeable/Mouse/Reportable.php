@@ -28,13 +28,13 @@ trait Reportable
    /**
     * [?1001x] (Mouse Highlight Reporting)
     */
-   public const _MOUSE_ENABLE_HIGHLIGHT_REPORTING = '?1001l';
+   public const _MOUSE_ENABLE_HIGHLIGHT_REPORTING = '?1001h';
    public const _MOUSE_DISABLE_HIGHLIGHT_REPORTING = '?1001l';
 
    /**
     * [?1002x] (Mouse Button Event Reporting)
     */
-   public const _MOUSE_ENABLE_BUTTON_REPORTING = '?1002l';
+   public const _MOUSE_ENABLE_BUTTON_REPORTING = '?1002h';
    public const _MOUSE_DISABLE_BUTTON_REPORTING = '?1002l';
 
    /**

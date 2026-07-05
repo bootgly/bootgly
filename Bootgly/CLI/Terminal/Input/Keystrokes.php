@@ -105,4 +105,9 @@ enum Keystrokes : string
    case ALT_END       = "\e[1;3F"; // Alt + End
    case ALT_PAGEUP    = "\e[5;3~"; // Alt + Page Up
    case ALT_PAGEDOWN  = "\e[6;3~"; // Alt + Page Down
+
+   case ALT_ENTER     = "\e\r";    // Alt + Enter
+   case ALT_BACKSPACE = "\e\x7F";  // Alt + Backspace
+   case ALT_B         = "\eb";     // Alt + B (word backward)
+   case ALT_F         = "\ef";     // Alt + F (word forward)
 }

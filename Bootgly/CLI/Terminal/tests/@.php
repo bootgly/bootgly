@@ -21,8 +21,16 @@ return new Suite(
       '4.1-menu-control-keys',
       '5.1-mouse-report-escapes',
       '6.1-input-reading-roles',
+      '6.2-input-reading-timeout',
       '7.1-logs-render-width',
       '8.1-input-scan-line',
       '8.2-input-scan-echo',
+      '8.3-input-scan-mask',
+      '9.1-input-line-editing',
+      '9.2-input-line-render',
+      '10.1-viewport-clip',
+      '11.1-screen-buffer-escapes',
+      '11.2-screen-measure',
+      '11.3-screen-watch',
    ]
 );

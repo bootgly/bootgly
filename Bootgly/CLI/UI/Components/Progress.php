@@ -12,6 +12,8 @@ namespace Bootgly\CLI\UI\Components;
 
 
 use const STR_PAD_RIGHT;
+use function ceil;
+use function intdiv;
 use function microtime;
 use function number_format;
 use function str_pad;
@@ -27,8 +29,10 @@ use Bootgly\ABI\Data\__String\Escapeable\Cursor\Visualizable;
 use Bootgly\ABI\Data\__String\Escapeable\Text\Modifiable;
 use Bootgly\ABI\Templates\Template\Escaped as TemplateEscaped;
 use Bootgly\API\Component;
+use Bootgly\CLI\Terminal;
 use Bootgly\CLI\Terminal\Output;
 use Bootgly\CLI\UI\Components\Progress\Bar;
+use Bootgly\CLI\UI\Components\Progress\Bars;
 use Bootgly\CLI\UI\Components\Progress\Precision;
 
 
@@ -44,6 +48,8 @@ class Progress extends Component
 
    // * Config
    public float $throttle;
+   /** Tracks per visual line — multi-bar grid layout (null = one per line) */
+   public null|int $columns;
    // ---
    public Precision $Precision;
 
@@ -53,6 +59,8 @@ class Progress extends Component
    public float $percent;
    // # Templating
    public string $template;
+   /** Per-track template — multi-bar mode */
+   public string $track;
 
    // * Metadata
    public private(set) string $output;
@@ -77,6 +85,18 @@ class Progress extends Component
    public private(set) bool $finished;
 
    public Bar $Bar;
+   /** Multi-bar track collection (lazy) */
+   public private(set) Bars $Bars {
+      get {
+         if (isSet($this->Bars) === false) {
+            $this->Bars = new Bars($this);
+         }
+
+         return $this->Bars;
+      }
+   }
+   /** Lines of the last painted multi-bar frame */
+   private int $height;
 
 
    public function __construct (Output &$Output)
@@ -86,6 +106,7 @@ class Progress extends Component
 
       // * Config
       $this->throttle = 0.1;
+      $this->columns = null;
       // ---
       $this->Precision = new Precision;
 
@@ -98,6 +119,7 @@ class Progress extends Component
       @current;/@total; [@bar;] @percent;%
       ⏱️ @elapsed;s - 🏁 @eta;s - 📈 @rate; loops/s
       TEMPLATE;
+      $this->track = '@description; [@bar;] @percent;%';
 
       // * Metadata
       $this->output = '';
@@ -119,6 +141,8 @@ class Progress extends Component
       $this->started = 0.0;
       $this->rendered = 0.0;
       $this->finished = false;
+      // multi-bar
+      $this->height = 0;
 
 
       $this->Bar = new Bar($this);
@@ -147,6 +171,50 @@ class Progress extends Component
    protected function render (int $mode = self::WRITE_OUTPUT): void
    {
       $this->rendered = microtime(true);
+
+      // ? Multi-bar grid frame
+      if (isSet($this->Bars) === true && $this->Bars->count > 0) {
+         $columns = $this->columns ?? 1;
+         $cell = intdiv((int) Terminal::$width, $columns);
+
+         // @ Compose the grid — N tracks per visual line, cells padded
+         $frame = '';
+         foreach ($this->Bars->Bars as $index => $Bar) {
+            $Precision = $this->Precision;
+
+            $compiled = strtr($this->track, [
+               '@description;' => $Bar->description,
+               '@bar;' => $Bar->render(),
+               '@percent;' => number_format($Bar->percent, $Precision->percent, '.', ''),
+               '@current;' => $Bar->current,
+               '@total;' => (int) $Bar->total
+            ]);
+
+            $frame .= str_pad($compiled, $cell, ' ', STR_PAD_RIGHT);
+
+            if (($index + 1) % $columns === 0 || $index === $this->Bars->count - 1) {
+               $frame .= "\n";
+            }
+         }
+
+         if ($this->render === self::RETURN_OUTPUT || $mode === self::RETURN_OUTPUT) {
+            $this->output = $frame;
+
+            return;
+         }
+
+         // @ Repaint relatively over the previous frame (pipe-safe)
+         if ($this->height > 0) {
+            $this->Output->Cursor->up($this->height, column: 1);
+            $this->Output->Text->clear(down: true);
+         }
+
+         $this->height = substr_count($frame, "\n");
+
+         $this->Output->write($frame);
+
+         return;
+      }
 
       // ! Templating
       // @ Prepare values
@@ -214,6 +282,21 @@ class Progress extends Component
       }
 
       $this->started = microtime(true);
+
+      // ? Multi-bar grid frame
+      if (isSet($this->Bars) === true && $this->Bars->count > 0) {
+         if ($this->render === self::WRITE_OUTPUT) {
+            $columns = $this->columns ?? 1;
+            $rows = (int) ceil($this->Bars->count / $columns);
+
+            $this->Output->expand($rows + 1);
+            $this->Output->Cursor->hide();
+         }
+
+         $this->render();
+
+         return;
+      }
 
       // ---
       if ($this->render === self::WRITE_OUTPUT) {
@@ -299,6 +382,26 @@ class Progress extends Component
       $this->render();
    }
 
+   /**
+    * Repaints the multi-bar frame (throttled) — call it after advancing the track Bars.
+    *
+    * @return void
+    */
+   public function tick (): void
+   {
+      // ?
+      if ($this->started === 0.0 || $this->finished === true) {
+         return;
+      }
+
+      // ? Throttle
+      if (microtime(true) - $this->rendered < $this->throttle) {
+         return;
+      }
+
+      $this->render();
+   }
+
    public function describe (string $description): void
    {
       if ($this->description === $description) {
@@ -321,6 +424,21 @@ class Progress extends Component
       }
 
       $this->finished = true;
+
+      // ? Multi-bar grid frame: force every track to 100% and paint the final frame
+      if (isSet($this->Bars) === true && $this->Bars->count > 0) {
+         foreach ($this->Bars->Bars as $Bar) {
+            if ($Bar->total > 0.0 && $Bar->current < $Bar->total) {
+               $Bar->advance($Bar->total - $Bar->current);
+            }
+         }
+
+         $this->render();
+
+         $this->Output->Cursor->show();
+
+         return;
+      }
 
       // @ Complete progress (when using throttle and the progress can be determined)
       if ($this->throttle > 0.0 && $this->percent < 100 && $this->determined) {

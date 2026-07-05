@@ -106,6 +106,14 @@ class Scripts
                         $filename = self::ROOT_DIR . $filename;
                         break;
                      case 'imported':
+                        // ? Consumers (platform repos, packages) run imported scripts
+                        // from their own working directory — the Bootgly working
+                        // directory falls back to the root when booted via Composer
+                        $cwd = getcwd();
+                        if ($cwd !== false && "$cwd/" !== BOOTGLY_WORKING_DIR) {
+                           $this->scripts[] = "$cwd/$filename";
+                        }
+
                         $filename = BOOTGLY_WORKING_DIR . $filename;
                         break;
                      case 'user':

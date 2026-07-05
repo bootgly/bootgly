@@ -111,11 +111,53 @@ class DemoCommand extends Command
          // UI - Logs component
          25 => 'UI/Logs-01.demo.php',
 
-         // UI - Dialog component
-         26 => 'UI/Dialog-01.demo.php',
+         // UI - Question component (yes/no confirmation)
+         26 => 'UI/Question-04.demo.php',
 
          // UI - Question component
          27 => 'UI/Question-01.demo.php',
+
+         // UX - Form component
+         28 => 'UX/Form-01.demo.php',
+
+         // UI - Question component (masked input)
+         29 => 'UI/Question-02.demo.php',
+
+         // UI - Menu component (viewport + type-ahead)
+         30 => 'UI/Menu-07.demo.php',
+
+         // UI - Menu component (grid columns)
+         31 => 'UI/Menu-08.demo.php',
+
+         // UI - Spinner component
+         32 => 'UI/Spinner-01.demo.php',
+
+         // UI - Timer component
+         33 => 'UI/Timer-01.demo.php',
+
+         // UI - Timeline component
+         34 => 'UI/Timeline-01.demo.php',
+
+         // UI - Progress component (multi-bar grid)
+         35 => 'UI/Progress-03.demo.php',
+
+         // UI - Chart component
+         36 => 'UI/Chart-01.demo.php',
+
+         // UI - Text component
+         37 => 'UI/Text-01.demo.php',
+
+         // UI - Question component (autocomplete suggestions)
+         38 => 'UI/Question-03.demo.php',
+
+         // UI - Textarea component
+         39 => 'UI/Textarea-01.demo.php',
+
+         // UX - Prompt component
+         40 => 'UX/Prompt-01.demo.php',
+
+         // UI - Scrollarea component
+         41 => 'UI/Scrollarea-01.demo.php',
       ];
 
       $last = array_key_last($examples);

@@ -14,10 +14,6 @@ namespace Bootgly\CLI;
 use function array_filter;
 use function array_push;
 use function count;
-use function exec;
-use function function_exists;
-use function getenv;
-use function is_numeric;
 use function preg_match;
 use function preg_quote;
 use function readline;
@@ -31,6 +27,7 @@ use Bootgly\ABI\Data\__String\Escapeable\Text\Modifiable;
 use Bootgly\CLI\Terminal\Input;
 use Bootgly\CLI\Terminal\Output;
 use Bootgly\CLI\Terminal\Reporting\Mouse;
+use Bootgly\CLI\Terminal\Screen;
 
 
 class Terminal // extends API/Project or API/Node
@@ -66,6 +63,8 @@ class Terminal // extends API/Project or API/Node
    public Input $Input;
    // ? Output
    public Output $Output;
+   // ? Screen
+   public Screen $Screen;
    // ! Reporting
    public Mouse $Mouse;
 
@@ -79,26 +78,12 @@ class Terminal // extends API/Project or API/Node
       // ...
 
       // * Metadata
+      // @ Measure the terminal size (canonical probe: environment → tput → fallback)
+      [$columns, $lines] = Screen::measure();
       // columns
-      // @ Get the terminal columns (width): environment first (ncurses convention), then tput
-      $columns = getenv('COLUMNS');
-      if (is_numeric($columns) === false && function_exists('exec') === true) {
-         $columns = exec("tput cols 2>/dev/null");
-      }
-      if (is_numeric($columns) === false) {
-         $columns = 80;
-      }
-      self::$columns = (int) $columns;
+      self::$columns = $columns;
       // lines
-      // @ Get the terminal lines (height): environment first (ncurses convention), then tput
-      $lines = getenv('LINES');
-      if (is_numeric($lines) === false && function_exists('exec') === true) {
-         $lines = exec("tput lines 2>/dev/null");
-      }
-      if (is_numeric($lines) === false) {
-         $lines = 30;
-      }
-      self::$lines = (int) $lines;
+      self::$lines = $lines;
       // width
       self::$width = self::$columns;
       // height
@@ -110,6 +95,8 @@ class Terminal // extends API/Project or API/Node
       $this->Input = new Input;
       // ? Output
       $this->Output = new Output;
+      // ? Screen
+      $this->Screen = new Screen($this->Output);
       // ! Reporting
       $this->Mouse = new Mouse($this->Input, $this->Output);
    }

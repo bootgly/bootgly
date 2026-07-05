@@ -30,4 +30,11 @@ trait Scrollable
    * [\<n\>T] (Scroll Down) "Scroll down by <n>. Also known as pan up, new lines fill in from the top of the screen"
    */
    public const _VIEWPORT_SCROLL_DOWN = 'T';
+   /**
+   * [\<top\>;\<bottom\>r] (DECSTBM — Set Scrolling Region)
+   * "Set the scrolling region between <top> and <bottom> rows (1-based, inclusive).
+   * Text scrolls inside the region only. Bare `r` resets to the full screen.
+   * Side effect: the cursor homes to (1,1) — callers must reposition after."
+   */
+   public const _VIEWPORT_SCROLL_REGION = 'r';
 }

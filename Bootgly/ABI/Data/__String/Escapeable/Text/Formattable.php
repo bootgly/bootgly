@@ -94,6 +94,7 @@ trait Formattable
    public const string _ITALIC_STYLE    = '3';
    public const string _UNDERLINE_STYLE = '4';
    public const string _BLINK_STYLE     = '5';
+   public const string _INVERSE_STYLE   = '7';
    public const string _STRIKE_STYLE    = '9';
 
    // * Combined

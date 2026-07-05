@@ -289,6 +289,11 @@ class Connection extends Packages
 
    public function __destruct ()
    {
+      // ? Half-constructed instances (constructor threw) have no timers yet
+      if (isSet($this->timers) === false) { // @phpstan-ignore isset.initializedProperty
+         return;
+      }
+
       foreach ($this->timers as $id) {
          Timer::del($id);
       }

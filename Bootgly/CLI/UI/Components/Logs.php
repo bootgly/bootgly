@@ -72,6 +72,11 @@ class Logs
 
    // * Config
    public int $max;
+   // @ Geometry
+   /** Frame anchor row (1-based); 1 = top of the screen */
+   public int $row = 1;
+   /** Frame height in rows; 0 = full terminal height */
+   public int $rows = 0;
 
    // * Data
    public Input $Input;
@@ -188,10 +193,10 @@ class Logs
             $this->move(1);
             break;
          case Keystrokes::PAGEUP->value:
-            $this->move(- $this->pane());
+            $this->move(- $this->measure());
             break;
          case Keystrokes::PAGEDOWN->value:
-            $this->move($this->pane());
+            $this->move($this->measure());
             break;
          case Keystrokes::HOME->value:
          case "\e[1~":
@@ -230,7 +235,7 @@ class Logs
       }
 
       $width = Terminal::$width;
-      $pane = $this->pane();
+      $pane = $this->measure();
 
       // @ Apply filters
       $Visible = $this->filter();
@@ -253,16 +258,16 @@ class Logs
 
       $Window = array_slice($Visible, $this->top, $pane);
 
-      // @ Build the frame (cursor home, per-line clear-to-EOL avoids flicker)
+      // @ Build the frame (cursor to the anchor, per-line clear-to-EOL avoids flicker)
       // Every line is fitted to the width: a wrapped line would add a row,
-      // scroll the frame and desync all the `\e[H`-anchored redraws
-      $frame = "\e[H";
+      // scroll the frame and desync all the anchored redraws
+      $frame = $this->anchor();
       $frame .= $this->fit($this->summarize($total)) . "\e[K\n";
 
       $rows = 0;
       foreach ($Window as $Record) {
          $selected = $this->paused === true && ($this->top + $rows) === $this->cursor;
-         $frame .= $this->fit($this->line($Record, $width, $selected)) . "\e[K\n";
+         $frame .= $this->fit($this->format($Record, $width, $selected)) . "\e[K\n";
          $rows++;
       }
       for (; $rows < $pane; $rows++) {
@@ -282,7 +287,7 @@ class Logs
    {
       $Visible = [];
 
-      foreach ($this->records() as $Record) {
+      foreach ($this->fetch() as $Record) {
          if ($this->check($Record) === true) {
             $Visible[] = $Record;
          }
@@ -294,7 +299,7 @@ class Logs
    /**
     * @return array<int,Record> The records to render — the frozen snapshot while paused, else live.
     */
-   private function records (): array
+   private function fetch (): array
    {
       return $this->paused === true ? $this->Frozen : $this->Records;
    }
@@ -372,10 +377,10 @@ class Logs
             $this->scroll++;
             break;
          case Keystrokes::PAGEUP->value:
-            $this->scroll = max(0, $this->scroll - $this->pane());
+            $this->scroll = max(0, $this->scroll - $this->measure());
             break;
          case Keystrokes::PAGEDOWN->value:
-            $this->scroll += $this->pane();
+            $this->scroll += $this->measure();
             break;
       }
 
@@ -394,9 +399,19 @@ class Logs
       }
    }
 
-   private function pane (): int
+   private function measure (): int
    {
-      return max(1, Terminal::$height - 2);
+      $height = $this->rows > 0 ? $this->rows : Terminal::$height;
+
+      return max(1, $height - 2);
+   }
+
+   /**
+    * Cursor move to the frame anchor (the pane origin).
+    */
+   private function anchor (): string
+   {
+      return $this->row > 1 ? "\e[{$this->row};1H" : "\e[H";
    }
 
    private function cycle (): void
@@ -508,7 +523,7 @@ class Logs
       return $output;
    }
 
-   private function line (Record $Record, int $width, bool $selected = false): string
+   private function format (Record $Record, int $width, bool $selected = false): string
    {
       $color = $this->color($Record->Level);
 
@@ -545,7 +560,7 @@ class Logs
    private function present (Record $Record): string
    {
       $width = Terminal::$width;
-      $pane = $this->pane();
+      $pane = $this->measure();
       $color = $this->color($Record->Level);
 
       // @ Header
@@ -576,7 +591,7 @@ class Logs
       $this->scroll = max(0, min($this->scroll, max(0, $total - $pane)));
       $Window = array_slice($lines, $this->scroll, $pane);
 
-      $frame = "\e[H";
+      $frame = $this->anchor();
       $frame .= $this->fit(self::wrap(self::_BLACK_BRIGHT_BACKGROUND) . ' Log detail  ▏ ' . $total . ' lines' . self::_RESET_FORMAT) . "\e[K\n";
 
       $rows = 0;
