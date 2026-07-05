@@ -11,42 +11,41 @@
 namespace Bootgly\CLI\UI\Components;
 
 
-use function count;
-use function max;
-use function mb_strlen;
-use function min;
-use function number_format;
 use function rewind;
 use function round;
-use function str_pad;
-use function str_repeat;
 use function stream_get_contents;
 
 use Bootgly\API\Component;
-use Bootgly\CLI\Terminal;
 use Bootgly\CLI\Terminal\Output;
-use Bootgly\CLI\UI\Components\Chart\Plots;
+use Bootgly\CLI\UI\Components\Chart\Gradient;
 
 
 /**
- * ANSI chart — one-shot, cursor-free string render (identical on TTYs and pipes).
- * Sparkline plots the series as one `▁▂▃▄▅▆▇█` line; Bars plots one labeled
- * `█`-run per entry, scaled to the widest value.
+ * ANSI chart base — shared definitions for the concrete chart types in `Charts/`:
+ * series storage, bounds measuring, level scaling, gradient coloring and the
+ * write/return output pipeline. Types render cursor-free frames unless stated.
  */
-class Chart extends Component
+abstract class Chart extends Component
 {
-   /** Sparkline glyph ramp (8 levels) */
-   protected const array LEVELS = ['▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
-
-
-   private Output $Output;
+   protected Output $Output;
 
    // * Config
-   public Plots $Plots;
-   /** Plot width in columns (Bars) — null derives from the terminal width */
+   /** Frame columns — `null` derives from the terminal or the series */
    public null|int $width;
-   public string $color;
+   /** Decimal places for formatted values */
    public int $precision;
+   /** Fixed scale top — `null` scales to the measured series maximum */
+   public null|float $ceiling;
+   /** Color gradient sampled by the types — defaults to solid cyan */
+   public Gradient $Gradient {
+      get {
+         if (isSet($this->Gradient) === false) {
+            $this->Gradient = new Gradient(['#00ffff']);
+         }
+
+         return $this->Gradient;
+      }
+   }
 
    // * Data
    /** @var array<string,float> label ⇒ value */
@@ -62,10 +61,9 @@ class Chart extends Component
       $this->Output = $Output;
 
       // * Config
-      $this->Plots = Plots::Sparkline;
       $this->width = null;
-      $this->color = '@#Cyan:';
       $this->precision = 1;
+      $this->ceiling = null;
 
       // * Data
       $this->series = [];
@@ -77,105 +75,90 @@ class Chart extends Component
 
 
    /**
-    * Renders the chart.
+    * Measures value bounds into the `max` / `min` metadata.
     *
-    * @param int $mode self::WRITE_OUTPUT to write, self::RETURN_OUTPUT to return the output.
-    *
-    * @return mixed
+    * @param null|array<int|string,float> $values The values to measure — `null` measures the series.
     */
-   public function render (int $mode = self::WRITE_OUTPUT): mixed
+   protected function measure (null|array $values = null): void
    {
-      // ?
-      if ($this->series === []) {
-         return null;
-      }
+      // !
+      $max = null;
+      $min = null;
 
-      // ! Series bounds
-      $this->max = max($this->series);
-      $this->min = min($this->series);
-
-      $frame = match ($this->Plots) {
-         Plots::Sparkline => $this->sparkle(),
-         Plots::Bars => $this->plot()
-      };
-
-      // ?: Frame as string
-      if ($mode === self::RETURN_OUTPUT || $this->render === self::RETURN_OUTPUT) {
-         // ! php://memory resolves the markup — the returned string is final output
-         $Memory = new Output('php://memory');
-         $Memory->render($frame);
-         rewind($Memory->stream);
-
-         return (string) stream_get_contents($Memory->stream);
-      }
-
-      $this->Output->render($frame);
-
-      return null;
-   }
-
-   /**
-    * Plots the series as a one-line sparkline.
-    *
-    * @return string
-    */
-   private function sparkle (): string
-   {
-      $range = $this->max - $this->min;
-      $top = count(self::LEVELS) - 1;
-
-      $line = '';
-      foreach ($this->series as $value) {
-         // ? Flat series render mid-level
-         $level = $range > 0.0
-            ? (int) round((($value - $this->min) / $range) * $top)
-            : (int) ($top / 2);
-
-         $line .= self::LEVELS[$level];
-      }
-
-      // :
-      return "{$this->color}{$line}@;\n";
-   }
-
-   /**
-    * Plots the series as labeled horizontal bars.
-    *
-    * @return string
-    */
-   private function plot (): string
-   {
-      // ! Layout — label column, bar area, formatted values
-      $label_width = 0;
-      foreach ($this->series as $label => $value) {
-         $length = mb_strlen((string) $label);
-
-         if ($length > $label_width) {
-            $label_width = $length;
+      // @@
+      foreach ($values ?? $this->series as $value) {
+         if ($max === null || $value > $max) {
+            $max = $value;
+         }
+         if ($min === null || $value < $min) {
+            $min = $value;
          }
       }
 
-      $value_width = mb_strlen(number_format($this->max, $this->precision, '.', ''));
-      $width = $this->width ?? ((int) Terminal::$width - $label_width - $value_width - 6);
-      if ($width < 8) {
-         $width = 8;
+      // * Metadata
+      $this->max = (float) ($max ?? 0.0);
+      $this->min = (float) ($min ?? 0.0);
+   }
+
+   /**
+    * Scales a value to a discrete level.
+    *
+    * @param float $value The value to scale.
+    * @param int $steps The top level (levels go 0..$steps).
+    * @param float $floor The scale bottom (0.0 = absolute scale).
+    *
+    * @return int The level, clamped to 0..$steps — 0 when the range is empty.
+    */
+   protected function scale (float $value, int $steps, float $floor = 0.0): int
+   {
+      // ! Effective top (a fixed ceiling wins over the measured maximum)
+      $top = $this->ceiling ?? $this->max;
+      $range = $top - $floor;
+
+      // ?
+      if ($range <= 0) {
+         return 0;
       }
 
-      // @ One row per entry — `█`-run scaled to the widest value
-      $frame = '';
-      foreach ($this->series as $label => $value) {
-         $units = $this->max > 0.0
-            ? (int) round(($value / $this->max) * $width)
-            : 0;
+      $level = (int) round(($value - $floor) / $range * $steps);
 
-         $bar = str_repeat('█', $units);
-         $padded = str_pad((string) $label, $label_width);
-         $formatted = number_format($value, $this->precision, '.', '');
-
-         $frame .= "{$padded} {$this->color}{$bar}@; {$formatted}\n";
+      // ? Clamp
+      if ($level < 0) {
+         $level = 0;
+      }
+      else if ($level > $steps) {
+         $level = $steps;
       }
 
       // :
-      return $frame;
+      return $level;
+   }
+
+   /**
+    * Flushes a frame through the component output pipeline.
+    *
+    * @param string $frame The frame to flush.
+    * @param int $mode WRITE_OUTPUT writes to the Output; RETURN_OUTPUT returns the
+    *  resolved string (an in-memory Output resolves any markup).
+    *
+    * @return mixed The resolved string on RETURN_OUTPUT; `null` otherwise.
+    */
+   protected function flush (string $frame, int $mode): mixed
+   {
+      // ?: Resolved string
+      if ($mode === self::RETURN_OUTPUT || $this->render === self::RETURN_OUTPUT) {
+         $Memory = new Output('php://memory');
+         $Memory->render($frame);
+
+         rewind($Memory->stream);
+
+         return stream_get_contents($Memory->stream);
+      }
+
+      // @
+      $this->Output->render($frame);
+
+      // :
+      return null;
    }
 }

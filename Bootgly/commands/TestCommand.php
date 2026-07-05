@@ -74,8 +74,7 @@ use Bootgly\API\Environment;
 use Bootgly\API\Environment\Agent;
 use Bootgly\CLI\Command;
 use Bootgly\CLI\UI\Components\Alert;
-use Bootgly\CLI\UI\Components\Chart as ANSIChart;
-use Bootgly\CLI\UI\Components\Chart\Plots;
+use Bootgly\CLI\UI\Components\Charts\Bars;
 
 
 class TestCommand extends Command
@@ -741,11 +740,10 @@ class TestCommand extends Command
          if (count($series) > 1) {
             echo "\n";
 
-            $ANSIChart = new ANSIChart(CLI->Terminal->Output);
-            $ANSIChart->Plots = Plots::Bars;
-            $ANSIChart->precision = 0;
-            $ANSIChart->series = $series;
-            $ANSIChart->render();
+            $Bars = new Bars(CLI->Terminal->Output);
+            $Bars->precision = 0;
+            $Bars->series = $series;
+            $Bars->render();
          }
       }
 

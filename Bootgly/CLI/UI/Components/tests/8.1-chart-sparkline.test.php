@@ -9,7 +9,7 @@ use function trim;
 
 use Bootgly\ACI\Tests\Suite\Test\Specification;
 use Bootgly\CLI\Terminal\Output;
-use Bootgly\CLI\UI\Components\Chart\Plots;
+use Bootgly\CLI\UI\Components\Charts\Sparkline;
 
 
 return new Specification(
@@ -18,11 +18,11 @@ return new Specification(
       // ! Chart with an in-memory stream
       $Output = new Output('php://memory');
 
-      $Chart = new Chart($Output);
+      $Chart = new Sparkline($Output);
       $Chart->series = ['a' => 1.0, 'b' => 4.0, 'c' => 8.0, 'd' => 2.0];
 
       // @ Render as string
-      $frame = (string) $Chart->render(Chart::RETURN_OUTPUT);
+      $frame = (string) $Chart->render(Sparkline::RETURN_OUTPUT);
 
       // @ Valid
       yield assert(
@@ -37,7 +37,7 @@ return new Specification(
       // @ Flat series render mid-level glyphs (no division by zero)
       $Chart->series = ['a' => 5.0, 'b' => 5.0];
 
-      $frame = (string) $Chart->render(Chart::RETURN_OUTPUT);
+      $frame = (string) $Chart->render(Sparkline::RETURN_OUTPUT);
 
       yield assert(
          assertion: trim($frame) !== '' && str_contains($frame, '█') === false,
@@ -48,7 +48,7 @@ return new Specification(
       $Chart->series = [];
 
       yield assert(
-         assertion: $Chart->render(Chart::RETURN_OUTPUT) === null,
+         assertion: $Chart->render(Sparkline::RETURN_OUTPUT) === null,
          description: 'An empty series is a no-op'
       );
    }

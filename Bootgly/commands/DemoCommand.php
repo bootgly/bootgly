@@ -158,6 +158,15 @@ class DemoCommand extends Command
 
          // UI - Scrollarea component
          41 => 'UI/Scrollarea-01.demo.php',
+
+         // UI - Chart components (Bars)
+         42 => 'UI/Chart-02.demo.php',
+
+         // UI - Chart components (Meter)
+         43 => 'UI/Chart-03.demo.php',
+
+         // UI - Chart components (live Graph)
+         44 => 'UI/Chart-04.demo.php',
       ];
 
       $last = array_key_last($examples);

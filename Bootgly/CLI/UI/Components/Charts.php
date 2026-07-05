@@ -8,11 +8,10 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\CLI\UI\Components\Chart;
+namespace Bootgly\CLI\UI\Components;
 
 
-enum Plots
+interface Charts
 {
-   case Sparkline;
-   case Bars;
+   // ...Used to define and indentify subclasses (instance of).
 }

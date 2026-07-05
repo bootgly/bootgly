@@ -12,7 +12,7 @@ use function trim;
 
 use Bootgly\ACI\Tests\Suite\Test\Specification;
 use Bootgly\CLI\Terminal\Output;
-use Bootgly\CLI\UI\Components\Chart\Plots;
+use Bootgly\CLI\UI\Components\Charts\Bars;
 
 
 return new Specification(
@@ -21,14 +21,13 @@ return new Specification(
       // ! Chart with an in-memory stream
       $Output = new Output('php://memory');
 
-      $Chart = new Chart($Output);
-      $Chart->Plots = Plots::Bars;
+      $Chart = new Bars($Output);
       $Chart->width = 20;
       $Chart->precision = 0;
       $Chart->series = ['bootgly' => 166700.0, 'swoole' => 150000.0, 'workerman' => 83350.0];
 
       // @ Render as string
-      $frame = (string) $Chart->render(Chart::RETURN_OUTPUT);
+      $frame = (string) $Chart->render(Bars::RETURN_OUTPUT);
       $lines = explode("\n", trim($frame));
 
       // @ Valid

@@ -36,5 +36,8 @@ return new Suite(
       '11.1-textarea-edit',
       '13.1-scrollarea-scroll',
       '13.2-scrollarea-pointer',
+      '14.1-chart-gradient',
+      '14.2-charts-meter',
+      '14.3-charts-graph',
    ]
 );
