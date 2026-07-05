@@ -1314,7 +1314,7 @@ class ProjectCommand extends Command
          if ($sources !== []) {
             $mode = $this->choose('How do you want to start?', [
                'Create from scratch',
-               'Import platform projects'
+               'Import from Platform projects'
             ]);
 
             if ($mode === 1) {
@@ -1475,7 +1475,7 @@ class ProjectCommand extends Command
       $Input = $Terminal->Input;
 
       // ! Summary (existing user-level copies are flagged as overwrite)
-      $content = '@#Green:' . str_pad('Mode', 12) . ' @; Import platform projects';
+      $content = '@#Green:' . str_pad('Mode', 12) . ' @; Import from Platform projects';
       $overwrites = [];
       foreach ($imports as $index => $import) {
          $path = $import['path'];
@@ -1868,7 +1868,7 @@ class ProjectCommand extends Command
       $Terminal = CLI->Terminal;
 
       $Menu = new Menu($Terminal->Input, $Terminal->Output);
-      $Menu->prompt = "@#Blue:{$prompt}@;\n@#Black:(↑/↓ to move, Space to select, Enter to confirm)@;\n";
+      $Menu->prompt = "@#Cyan:{$prompt}@;\n@#Black:(↑/↓ to move, Space to select, Enter to confirm)@;\n";
 
       $Options = $Menu->Items->Options;
       $Options->Selection::Unique->set();
@@ -1903,7 +1903,7 @@ class ProjectCommand extends Command
       $Terminal = CLI->Terminal;
 
       $Menu = new Menu($Terminal->Input, $Terminal->Output);
-      $Menu->prompt = "@#Blue:{$prompt}@;\n@#Black:(↑/↓ to move, Space to select, Enter to confirm)@;\n";
+      $Menu->prompt = "@#Cyan:{$prompt}@;\n@#Black:(↑/↓ to move, Space to select, Enter to confirm)@;\n";
 
       $Options = $Menu->Items->Options;
       // ? Selection mode is static per enum — always set it explicitly
