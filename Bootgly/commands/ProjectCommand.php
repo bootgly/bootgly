@@ -20,6 +20,7 @@ use const PHP_EOL;
 use const SIGKILL;
 use const SIGTERM;
 use const SIGUSR2;
+use function array_filter;
 use function array_key_exists;
 use function array_key_first;
 use function array_keys;
@@ -27,6 +28,7 @@ use function array_slice;
 use function basename;
 use function count;
 use function escapeshellarg;
+use function explode;
 use function file_get_contents;
 use function getmypid;
 use function glob;
@@ -175,7 +177,7 @@ class ProjectCommand extends Command
    public array $options = [
       'Increase the verbosity of the command' => ['-v', '-vv', '-vvv'],
       'Preview seed run without executing SQL' => ['--dry-run'],
-      'Platform to set up on first run (create/import)' => ['--platform=console', '--platform=web'],
+      'Platforms to set up on first run (create/import)' => ['--platform=console', '--platform=web', '--platform=console,web'],
       'Creation source: from scratch or a platform project' => ['--from=scratch', '--from=<source>'],
       'Interface bound to the new project (create/import)' => ['--interfaces=CLI', '--interfaces=WPI'],
       'New project metadata (create)' => ['--description=', '--version=', '--author=', '--port='],
@@ -1311,30 +1313,78 @@ class ProjectCommand extends Command
       else if ($from === null) {
          $sources = $this->survey();
 
+         // ! Start modes (platform import only when exportable sources exist)
+         $modes = ['Create project from scratch'];
          if ($sources !== []) {
-            $mode = $this->choose('How do you want to start?', [
-               'Create from scratch',
-               'Import from Platform projects'
-            ]);
+            $modes[] = 'Import projects from Platforms (Demos, Example)';
+         }
+         $modes[] = 'Import project from Git remote';
 
-            if ($mode === 1) {
-               $labels = array_keys($sources);
-               $picked = $this->select('Pick the projects to import:', $labels);
+         $mode = $modes[$this->choose('How do you want to start?', $modes)] ?? $modes[0];
 
-               // ? Nothing selected
-               if ($picked === []) {
-                  $Alert = new Alert($Output);
-                  $Alert->Type::Attention->set();
-                  $Alert->message = 'No projects selected.';
-                  $Alert->render();
+         if ($mode === 'Import projects from Platforms (Demos, Example)') {
+            $labels = array_keys($sources);
+            $picked = $this->select('Pick the projects to import:', $labels);
 
-                  return false;
-               }
+            // ? Nothing selected
+            if ($picked === []) {
+               $Alert = new Alert($Output);
+               $Alert->Type::Attention->set();
+               $Alert->message = 'No projects selected.';
+               $Alert->render();
 
-               foreach ($picked as $index) {
-                  $imports[] = $sources[(string) $labels[$index]];
-               }
+               return false;
             }
+
+            foreach ($picked as $index) {
+               $imports[] = $sources[(string) $labels[$index]];
+            }
+         }
+         else if ($mode === 'Import project from Git remote') {
+            // ! Repository URL
+            $Question = new Question($Input, $Output);
+            $Question->prompt = 'Repository URL (git)';
+            $Question->required = true;
+            $url = $Question->ask();
+            // ?
+            if ($url === '') {
+               $Alert = new Alert($Output);
+               $Alert->Type::Failure->set();
+               $Alert->message = 'A repository URL is required.';
+               $Alert->render();
+
+               return false;
+            }
+
+            // ! Target project path
+            $default = basename($url, '.git');
+            $Question = new Question($Input, $Output);
+            $Question->prompt = 'Project path (e.g. `App` or `App/API`)';
+            $Question->required = true;
+            $Question->default = $this->assess($default) === true ? $default : '';
+            $Question->Validator = fn (string $answer): true|string => $this->assess($answer);
+            $target = $Question->ask();
+            // ?
+            if ($this->assess($target) !== true) {
+               $Alert = new Alert($Output);
+               $Alert->Type::Failure->set();
+               $Alert->message = 'A valid project path is required.';
+               $Alert->render();
+
+               return false;
+            }
+
+            // ! Interface
+            if (isSet($options['interfaces']) === false) {
+               $choice = $this->choose('Which interface?', [
+                  'CLI — Console app',
+                  'WPI — Web (HTTP) server'
+               ]);
+               $options['interfaces'] = $choice === 1 ? 'WPI' : 'CLI';
+            }
+
+            // : Delegated to the import subcommand (clone, validate, confirm, register)
+            return $this->import([$url, $target], $options);
          }
       }
 
@@ -1475,7 +1525,7 @@ class ProjectCommand extends Command
       $Input = $Terminal->Input;
 
       // ! Summary (existing user-level copies are flagged as overwrite)
-      $content = '@#Green:' . str_pad('Mode', 12) . ' @; Import from Platform projects';
+      $content = '@#Green:' . str_pad('Mode', 12) . ' @; Import projects from Platforms';
       $overwrites = [];
       foreach ($imports as $index => $import) {
          $path = $import['path'];
@@ -1582,49 +1632,64 @@ class ProjectCommand extends Command
       $web = is_file(BOOTGLY_WORKING_DIR . 'Web/autoboot.php');
 
       if ($gitmodules === true) {
-         // ! Requested platform
-         $platform = isSet($options['platform']) && is_string($options['platform'])
-            ? strtolower($options['platform'])
-            : null;
-         // ?
-         if ($platform !== null && $platform !== 'console' && $platform !== 'web') {
-            $Alert = new Alert($Output);
-            $Alert->Type::Failure->set();
-            $Alert->message = "Invalid platform: @#cyan:{$platform}@;. Use console or web.";
-            $Alert->render();
+         // ! Requested platforms (comma-separated: --platform=console,web)
+         $platforms = null;
+         if (isSet($options['platform']) && is_string($options['platform'])) {
+            $platforms = array_filter(explode(',', strtolower($options['platform'])));
 
-            return false;
+            // ?
+            foreach ($platforms as $platform) {
+               if ($platform !== 'console' && $platform !== 'web') {
+                  $Alert = new Alert($Output);
+                  $Alert->Type::Failure->set();
+                  $Alert->message = "Invalid platform: @#cyan:{$platform}@;. "
+                     . 'Use console, web or console,web.';
+                  $Alert->render();
+
+                  return false;
+               }
+            }
          }
 
-         // ? Fresh kit (no platform yet): choose interactively
-         if ($console === false && $platform === null) {
+         // ? Fresh kit (no resources booted yet): select interactively
+         $fresh = is_file(BOOTGLY_WORKING_DIR . 'projects/Bootgly.projects.php') === false;
+         if ($fresh === true && $platforms === null) {
             if (BOOTGLY_TTY === true) {
                $Output->render(
                   '@.;The @#Cyan:Bootgly@; base platform is always included — unopinionated, '
                   . 'it ships the @#Cyan:CLI@; and @#Cyan:WPI@; interfaces.@..;'
                );
 
-               $choice = $this->choose(
-                  'Which extra platform do you want to set up?',
+               $picked = $this->select(
+                  'Which extra platforms do you want to set up?',
                   [
                      'Console — opinionated CLI extras (TUI apps)',
-                     'Web — opinionated WPI extras (includes Console)'
+                     'Web — opinionated WPI extras'
                   ],
                   pinned: ['Bootgly — base platform (always included)']
                );
-               $platform = $choice === 1 ? 'web' : 'console';
+
+               $platforms = [];
+               if (in_array(0, $picked, true) === true) {
+                  $platforms[] = 'console';
+               }
+               if (in_array(1, $picked, true) === true) {
+                  $platforms[] = 'web';
+               }
             }
             else {
-               $platform = 'web';
+               $platforms = ['console', 'web'];
             }
          }
 
-         // ! Missing submodules for the requested platform
+         // ! Missing submodules for the requested platforms
+         $platforms ??= [];
+
          $targets = [];
-         if ($console === false) {
+         if ($console === false && in_array('console', $platforms, true) === true) {
             $targets[] = 'Console';
          }
-         if ($web === false && $platform === 'web') {
+         if ($web === false && in_array('web', $platforms, true) === true) {
             $targets[] = 'Web';
          }
 
@@ -1868,7 +1933,7 @@ class ProjectCommand extends Command
       $Terminal = CLI->Terminal;
 
       $Menu = new Menu($Terminal->Input, $Terminal->Output);
-      $Menu->prompt = "@#Cyan:{$prompt}@;\n@#Black:(↑/↓ to move, Space to select, Enter to confirm)@;\n";
+      $Menu->prompt = "@#Cyan:{$prompt}@;\n@#Black:(↑/↓ to move, Space to select one, Enter to confirm)@;\n";
 
       $Options = $Menu->Items->Options;
       $Options->Selection::Unique->set();
@@ -1895,20 +1960,25 @@ class ProjectCommand extends Command
     *
     * @param string $prompt
     * @param array<string> $labels
+    * @param array<string> $pinned Display-only labels rendered first — always marked, locked.
     *
-    * @return array<int> The selected option indexes (empty when none).
+    * @return array<int> The selected option indexes, relative to $labels (empty when none).
     */
-   private function select (string $prompt, array $labels): array
+   private function select (string $prompt, array $labels, array $pinned = []): array
    {
       $Terminal = CLI->Terminal;
 
       $Menu = new Menu($Terminal->Input, $Terminal->Output);
-      $Menu->prompt = "@#Cyan:{$prompt}@;\n@#Black:(↑/↓ to move, Space to select, Enter to confirm)@;\n";
+      $Menu->prompt = "@#Cyan:{$prompt}@;\n@#Black:(↑/↓ to move, Space to select multiple, Enter to confirm)@;\n";
 
       $Options = $Menu->Items->Options;
       // ? Selection mode is static per enum — always set it explicitly
       $Options->Selection::Multiple->set();
 
+      // ! Pinned labels render first — always marked, locked out of the selection
+      foreach ($pinned as $label) {
+         $Options->add(label: (string) $label, locked: true);
+      }
       foreach ($labels as $label) {
          $Options->add(label: (string) $label);
       }
@@ -1916,10 +1986,12 @@ class ProjectCommand extends Command
       // @@ Render until Enter
       foreach ($Menu->rendering() as $ignored);
 
-      // ! Integer-only index list
+      // ! Integer-only index list, relative to $labels (pinned options never enter the selection)
+      $offset = count($pinned);
+
       $indexes = [];
       foreach ($Menu->selected as $index) {
-         $indexes[] = (int) $index;
+         $indexes[] = (int) $index - $offset;
       }
 
       // :
