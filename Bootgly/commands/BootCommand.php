@@ -36,7 +36,7 @@ class BootCommand extends Command
       $Output = CLI->Terminal->Output;
 
       if (($options['resources'] ?? false) || $options === []) {
-         $Output->render('@#green:Booting resource directories...@;');
+         $Output->render('@.;@#green:Booting resource directories...@;@.;');
 
          $Alert = new Alert($Output);
 
@@ -64,11 +64,12 @@ class BootCommand extends Command
          }
 
          // @
+         $Alert->spaced = false;
          foreach ($resource_dirs as $dir) {
             copy_recursively(BOOTGLY_ROOT_DIR . $dir, BOOTGLY_WORKING_DIR . $dir);
 
             $Alert->Type::Success->set();
-            $Alert->message = 'Resource dir copied: @#cyan:' . $dir . '@;';
+            $Alert->message = "Resource dir copied: @#cyan:{$dir}@;";
             $Alert->render();
          }
 

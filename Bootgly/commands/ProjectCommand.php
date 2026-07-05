@@ -21,6 +21,7 @@ use const SIGKILL;
 use const SIGTERM;
 use const SIGUSR2;
 use function array_key_exists;
+use function array_key_first;
 use function array_keys;
 use function array_slice;
 use function basename;
@@ -48,6 +49,7 @@ use function realpath;
 use function rmdir;
 use function rtrim;
 use function scandir;
+use function shell_exec;
 use function str_pad;
 use function str_starts_with;
 use function strlen;
@@ -450,6 +452,33 @@ class ProjectCommand extends Command
          return false;
       }
 
+      // ! Interface
+      $interface = strtoupper((string) ($options['interfaces'] ?? 'WPI'));
+      // ?
+      if ($interface !== 'CLI' && $interface !== 'WPI') {
+         $Alert = new Alert($Output);
+         $Alert->Type::Failure->set();
+         $Alert->message = "Invalid interface: @#cyan:{$interface}@;. Use CLI or WPI.";
+         $Alert->render();
+
+         $this->erase($tmp);
+
+         return false;
+      }
+
+      // ! Summary
+      $content  = '@#Green:' . str_pad('Mode', 12) . ' @; Import external repository' . PHP_EOL;
+      $content .= '@#Green:' . str_pad('Source', 12) . ' @; ' . $url . PHP_EOL;
+      $content .= '@#Green:' . str_pad('Path', 12) . ' @; ' . $path . PHP_EOL;
+      $content .= '@#Green:' . str_pad('Interfaces', 12) . ' @; ' . $interface;
+
+      $Output->write(PHP_EOL);
+      $Fieldset = new Fieldset($Output);
+      $Fieldset->title = '@#Cyan: Import project @;';
+      $Fieldset->content = $content;
+      $Fieldset->render();
+      $Output->write(PHP_EOL);
+
       // ? Imported projects execute third-party code when started
       if (isSet($options['yes']) === false) {
          $confirmed = $this->confirm(
@@ -470,19 +499,6 @@ class ProjectCommand extends Command
 
       // @ Strip VCS metadata + import
       $this->erase("{$tmp}/.git");
-
-      $interface = strtoupper((string) ($options['interfaces'] ?? 'WPI'));
-      // ?
-      if ($interface !== 'CLI' && $interface !== 'WPI') {
-         $Alert = new Alert($Output);
-         $Alert->Type::Failure->set();
-         $Alert->message = "Invalid interface: @#cyan:{$interface}@;. Use CLI or WPI.";
-         $Alert->render();
-
-         $this->erase($tmp);
-
-         return false;
-      }
 
       $done = Projects::import($tmp, $path, [
          'interfaces' => [$interface],
@@ -1459,7 +1475,7 @@ class ProjectCommand extends Command
       $Input = $Terminal->Input;
 
       // ! Summary (existing user-level copies are flagged as overwrite)
-      $content = '';
+      $content = '@#Green:' . str_pad('Mode', 12) . ' @; Import platform projects';
       $overwrites = [];
       foreach ($imports as $index => $import) {
          $path = $import['path'];
@@ -1468,8 +1484,16 @@ class ProjectCommand extends Command
             $overwrites[$index] = true;
          }
 
-         $content .= ($content === '' ? '' : PHP_EOL)
+         // ! Platform of origin (traced from the source directory)
+         $platform = match (true) {
+            str_starts_with($import['source'], BOOTGLY_WORKING_DIR . 'Console/') => 'Console',
+            str_starts_with($import['source'], BOOTGLY_WORKING_DIR . 'Web/') => 'Web',
+            default => 'Bootgly'
+         };
+
+         $content .= PHP_EOL
             . '@#Green:' . str_pad('Import', 12) . ' @; ' . $path
+            . " @#Cyan:(from {$platform})@;"
             . (isSet($overwrites[$index]) ? ' @#Yellow:(overwrite)@;' : '');
       }
 
@@ -1511,6 +1535,7 @@ class ProjectCommand extends Command
          ]);
 
          $Alert = new Alert($Output);
+         $Alert->spaced = $index === array_key_first($imports);
          if ($imported === true) {
             $Alert->Type::Success->set();
             $Alert->message = "Project @#cyan:{$path}@; imported!";
@@ -1526,7 +1551,8 @@ class ProjectCommand extends Command
 
       // ?: Tip with the first imported project
       if ($paths !== []) {
-         $Output->render("@.;@#Green:Tip:@; Use @#Black:bootgly project {$paths[0]} start@; to boot it.@..;");
+         $prefix = shell_exec('command -v bootgly 2>/dev/null') ? '' : 'php ';
+         $Output->render("@.;@#Green:Tip:@; Use @#Black:{$prefix}bootgly project {$paths[0]} start@; to boot it.@..;");
       }
 
       // :
@@ -1573,9 +1599,14 @@ class ProjectCommand extends Command
          // ? Fresh kit (no platform yet): choose interactively
          if ($console === false && $platform === null) {
             if (BOOTGLY_TTY === true) {
-               $choice = $this->choose('Which platform do you want to use?', [
-                  'Console — CLI / TUI apps',
-                  'Web (includes Console)'
+               $Output->render(
+                  '@.;The @#Cyan:Bootgly@; platform is always included — it ships the '
+                  . '@#Cyan:CLI@; and @#Cyan:WPI@; interfaces.@..;'
+               );
+
+               $choice = $this->choose('Which extra platform do you want to set up?', [
+                  'Console — CLI interface (TUI apps)',
+                  'Web — WPI interface (HTTP apps; includes Console)'
                ]);
                $platform = $choice === 1 ? 'web' : 'console';
             }
@@ -1596,7 +1627,7 @@ class ProjectCommand extends Command
          if ($targets !== []) {
             $modules = implode(' ', $targets);
 
-            $Output->render("@#green:Initializing platform submodules:@; @#cyan:{$modules}@;@.;");
+            $Output->render("@.;@#green:Initializing platform submodules:@; @#cyan:{$modules}@;@.;");
 
             passthru(
                'git -C ' . escapeshellarg(BOOTGLY_WORKING_DIR) . " submodule update --init {$modules}",
@@ -1903,7 +1934,8 @@ class ProjectCommand extends Command
          $Alert->message = "Project @#cyan:{$path}@; created!";
          $Alert->render();
 
-         $Output->render("@.;@#Green:Tip:@; Use @#Black:bootgly project {$path} start@; to boot it.@..;");
+         $prefix = shell_exec('command -v bootgly 2>/dev/null') ? '' : 'php ';
+         $Output->render("@.;@#Green:Tip:@; Use @#Black:{$prefix}bootgly project {$path} start@; to boot it.@..;");
       }
       else {
          $Alert->Type::Failure->set();

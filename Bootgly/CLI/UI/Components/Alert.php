@@ -29,6 +29,8 @@ class Alert extends Component
    public Type $Type;
    public Style $Style;
    public int $width;
+   /** Render a blank line above the alert (disable to glue consecutive alerts) */
+   public bool $spaced;
 
    // * Data
    public string $message;
@@ -45,6 +47,7 @@ class Alert extends Component
       $this->Type = Type::Default;
       $this->Style = Style::Default;
       $this->width = 80;
+      $this->spaced = true;
 
       // * Data
       $this->message = '';
@@ -69,7 +72,9 @@ class Alert extends Component
       $Output ??= $this->Output;
       $Text = $Output->Text;
       // ---
-      $Output->write(PHP_EOL);
+      if ($this->spaced === true) {
+         $Output->write(PHP_EOL);
+      }
       $Text->stylize('bold');
 
       switch ($style) {
