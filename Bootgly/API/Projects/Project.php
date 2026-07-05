@@ -39,6 +39,9 @@ use Bootgly\API\Projects\Project\Events;
  * Registration (defining the BOOTGLY_PROJECT constant and adding to Projects)
  * happens only when boot() is called.
  *
+ * Every project MUST declare whether it is exportable: exportable projects
+ * appear in the `bootgly project create` import picker; private ones do not.
+ *
  * Only one Project can be booted per process. Attempting to boot a second
  * Project throws a fatal Error.
  */
@@ -46,6 +49,7 @@ class Project
 {
    // * Config
    // # Explicit
+   public bool $exportable;
    public string $name;
    public string $description;
    public string $version;
@@ -62,9 +66,23 @@ class Project
    protected bool $booted = false;
 
 
+   /**
+    * @param Closure $boot Boot function executed by `bootgly project <Name> start` —
+    *                      receives the command `$arguments` and `$options`.
+    * @param bool $exportable Whether the project appears in the `bootgly project create`
+    *                         import picker to be copied into user workspaces.
+    * @param string $name Human-readable project name (e.g. `My App`).
+    * @param string $folder Projects-root-relative folder override (e.g. `App/API`).
+    *                       Derived from the signature file location when omitted.
+    * @param string $description Short description shown by `bootgly project list`.
+    * @param string $version Project version — plain semver (e.g. `1.0.0`).
+    * @param string $author Project author (person or organization).
+    */
    public function __construct (
       // * Data (required)
       Closure $boot,
+      // * Config (required)
+      bool $exportable,
       // * Config (optional)
       string $name = '',
       string $folder = '',
@@ -89,6 +107,7 @@ class Project
          : basename($dir);
       $this->folder = $folder !== '' ? $folder : $relative;
       // # Explicit
+      $this->exportable = $exportable;
       $this->name = $name;
       $this->description = $description;
       $this->version = $version;

@@ -20,5 +20,6 @@ return new Suite(
       '2.1-register',
       '2.2-generate',
       '2.3-import',
+      '2.4-project-exportable',
    ]
 );

@@ -24,6 +24,7 @@ return new Project(
    description: '__DESCRIPTION__',
    version: '__VERSION__',
    author: '__AUTHOR__',
+   exportable: true,
 
    // # Project Boot Function
    boot: function (array $arguments = [], array $options = []): void

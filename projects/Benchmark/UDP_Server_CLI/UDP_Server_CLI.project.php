@@ -26,6 +26,7 @@ return new Project(
    description: 'Raw UDP echo server benchmark for Bootgly',
    version: '1.0.0',
    author: 'Bootgly',
+   exportable: false,
 
    boot: function (array $arguments = [], array $options = []): void {
       new UDP_Server_CLI(Modes::Daemon)

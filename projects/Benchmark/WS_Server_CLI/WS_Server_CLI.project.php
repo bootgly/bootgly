@@ -26,6 +26,7 @@ return new Project(
    description: 'WebSocket server benchmark for Bootgly (echo or broadcast fan-out)',
    version: '1.0.0',
    author: 'Bootgly',
+   exportable: false,
 
    boot: function (array $arguments = [], array $options = []): void {
       // ? Mode — `echo` (default) replies each frame to its sender; `broadcast`

@@ -27,6 +27,7 @@ return new Project(
    description: 'HTTP/2 (RFC 9113) demonstration + compliance target (h2spec) for Bootgly HTTP Server CLI',
    version: '1.0.0',
    author: 'Bootgly',
+   exportable: true,
 
    // # Project Boot Function
    boot: function (array $arguments = [], array $options = []): void

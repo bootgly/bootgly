@@ -19,6 +19,7 @@ return new Project(
    description: 'Demonstration project for Bootgly CLI features',
    version: '1.0.0',
    author: 'Bootgly',
+   exportable: true,
    boot: function (array $arguments = [], array $options = []): void
    {
       $id = $arguments[0] ?? null;

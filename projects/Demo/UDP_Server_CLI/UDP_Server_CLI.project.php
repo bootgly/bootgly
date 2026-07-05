@@ -24,6 +24,7 @@ return new Project(
    description: 'Demonstration project for Bootgly UDP Server CLI',
    version: '1.0.0',
    author: 'Bootgly',
+   exportable: true,
 
    // # Project Boot Function
    boot: function (array $arguments = [], array $options = []): void

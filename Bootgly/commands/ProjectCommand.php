@@ -277,32 +277,38 @@ class ProjectCommand extends Command
       }
 
       // @ Non-interactive
-      // ? Project path required
-      if ($path === null || $path === '') {
-         $Alert = new Alert($Output);
-         $Alert->Type::Failure->set();
-         $Alert->message = 'Missing project path. Usage: @#cyan:bootgly project create <Name> '
-            . '[--from=scratch|<source>] [--interfaces=CLI|WPI] [--port=] [--description=] '
-            . '[--version=] [--author=] [--default] [--yes]@;';
-         $Alert->render();
-
-         return false;
-      }
-      // ? Project path validity
-      $result = $this->assess($path);
-      if ($result !== true) {
-         $Alert = new Alert($Output);
-         $Alert->Type::Failure->set();
-         $Alert->message = $result;
-         $Alert->render();
-
-         return false;
-      }
-
       $from ??= 'scratch';
+
+      // ? Project path required (imports default to the platform path)
+      if ($path === null || $path === '') {
+         if ($from !== 'scratch') {
+            $path = $from;
+         }
+         else {
+            $Alert = new Alert($Output);
+            $Alert->Type::Failure->set();
+            $Alert->message = 'Missing project path. Usage: @#cyan:bootgly project create <Name> '
+               . '[--from=scratch|<source>] [--interfaces=CLI|WPI] [--port=] [--description=] '
+               . '[--version=] [--author=] [--default] [--yes]@;';
+            $Alert->render();
+
+            return false;
+         }
+      }
 
       // @ From scratch
       if ($from === 'scratch') {
+         // ? Project path validity
+         $result = $this->assess($path);
+         if ($result !== true) {
+            $Alert = new Alert($Output);
+            $Alert->Type::Failure->set();
+            $Alert->message = $result;
+            $Alert->render();
+
+            return false;
+         }
+
          $interface = strtoupper((string) ($options['interfaces'] ?? 'CLI'));
          // ?
          if ($interface !== 'CLI' && $interface !== 'WPI') {
@@ -332,6 +338,16 @@ class ProjectCommand extends Command
       }
 
       // @ From a platform project
+      // ? Target path-safety
+      if (Projects::check($path) === false) {
+         $Alert = new Alert($Output);
+         $Alert->Type::Failure->set();
+         $Alert->message = "Invalid project path: @#cyan:{$path}@;.";
+         $Alert->render();
+
+         return false;
+      }
+
       $source = $this->trace($from);
       // ?
       if ($source === null) {
@@ -341,6 +357,11 @@ class ProjectCommand extends Command
          $Alert->render();
 
          return false;
+      }
+
+      // ? User-level copies overwrite the platform ones on load — refresh them
+      if (is_dir(Projects::CONSUMER_DIR . $path) === true) {
+         $this->erase(Projects::CONSUMER_DIR . $path);
       }
 
       $interfaces = $this->detect($from)
@@ -1253,12 +1274,11 @@ class ProjectCommand extends Command
 
       $Output->render('@.;@#Cyan: Bootgly — New project wizard @;@..;');
 
-      // ! Mode + import source
-      $source = null;
-      $sourcePath = null;
+      // ! Mode + import sources
+      /** @var array<array{path: string, source: string}> $imports */
+      $imports = [];
       if ($from !== null && $from !== 'scratch') {
          $source = $this->trace($from);
-         $sourcePath = $from;
 
          // ?
          if ($source === null) {
@@ -1269,6 +1289,8 @@ class ProjectCommand extends Command
 
             return false;
          }
+
+         $imports[] = ['path' => $from, 'source' => $source];
       }
       else if ($from === null) {
          $sources = $this->survey();
@@ -1276,16 +1298,33 @@ class ProjectCommand extends Command
          if ($sources !== []) {
             $mode = $this->choose('How do you want to start?', [
                'Create from scratch',
-               'Import a platform project'
+               'Import platform projects'
             ]);
 
             if ($mode === 1) {
                $labels = array_keys($sources);
-               $picked = $this->choose('Pick a project to import:', $labels);
-               $sourcePath = (string) $labels[$picked];
-               $source = $sources[$sourcePath];
+               $picked = $this->select('Pick the projects to import:', $labels);
+
+               // ? Nothing selected
+               if ($picked === []) {
+                  $Alert = new Alert($Output);
+                  $Alert->Type::Attention->set();
+                  $Alert->message = 'No projects selected.';
+                  $Alert->render();
+
+                  return false;
+               }
+
+               foreach ($picked as $index) {
+                  $imports[] = $sources[(string) $labels[$index]];
+               }
             }
          }
+      }
+
+      // @ Import — platform projects keep their paths: straight recursive copy
+      if ($imports !== []) {
+         return $this->transfer($imports, $options);
       }
 
       // ! Project path
@@ -1308,92 +1347,68 @@ class ProjectCommand extends Command
       // ! Metadata
       $meta = ['default' => isSet($options['default'])];
 
-      if ($source === null) {
-         // # Interface (a valid --interfaces option skips the question)
-         $interface = strtoupper((string) ($options['interfaces'] ?? ''));
-         if ($interface !== 'CLI' && $interface !== 'WPI') {
-            $web = BOOTGLY_ROOT_DIR === BOOTGLY_WORKING_DIR
-               || is_file(BOOTGLY_WORKING_DIR . 'Web/autoboot.php');
+      // # Interface (a valid --interfaces option skips the question)
+      $interface = strtoupper((string) ($options['interfaces'] ?? ''));
+      if ($interface !== 'CLI' && $interface !== 'WPI') {
+         $web = BOOTGLY_ROOT_DIR === BOOTGLY_WORKING_DIR
+            || is_file(BOOTGLY_WORKING_DIR . 'Web/autoboot.php');
 
-            $interface = 'CLI';
-            if ($web === true) {
-               $choice = $this->choose('Which interface?', [
-                  'CLI — Console app',
-                  'WPI — Web (HTTP) server'
-               ]);
-               $interface = $choice === 1 ? 'WPI' : 'CLI';
-            }
+         $interface = 'CLI';
+         if ($web === true) {
+            $choice = $this->choose('Which interface?', [
+               'CLI — Console app',
+               'WPI — Web (HTTP) server'
+            ]);
+            $interface = $choice === 1 ? 'WPI' : 'CLI';
          }
-         $meta['interfaces'] = [$interface];
-
-         // # Port (WPI)
-         if ($interface === 'WPI') {
-            $Question = new Question($Input, $Output);
-            $Question->prompt = 'Server port';
-            $Question->default = (string) ($options['port'] ?? '8080');
-            $Question->Validator = static function (string $answer): true|string {
-               // ?:
-               if (preg_match('#^\d{1,5}$#', $answer) !== 1) {
-                  return 'Invalid port: use a number between 1 and 65535.';
-               }
-
-               // :
-               return true;
-            };
-            $meta['port'] = $Question->ask();
-         }
-
-         // # Description / Version / Author (options prefill the defaults)
-         $Question = new Question($Input, $Output);
-         $Question->prompt = 'Description';
-         $Question->default = (string) ($options['description'] ?? '');
-         $meta['description'] = $Question->ask();
-
-         $Question = new Question($Input, $Output);
-         $Question->prompt = 'Version';
-         $Question->default = (string) ($options['version'] ?? '1.0.0');
-         $meta['version'] = $Question->ask();
-
-         $Question = new Question($Input, $Output);
-         $Question->prompt = 'Author';
-         $Question->default = (string) ($options['author'] ?? '');
-         $meta['author'] = $Question->ask();
-
-         $meta['name'] = basename($path);
       }
-      else {
-         // # Interfaces from the platform registry, the option, or asked
-         $interfaces = $this->detect($sourcePath);
-         if ($interfaces === null) {
-            $interface = strtoupper((string) ($options['interfaces'] ?? ''));
+      $meta['interfaces'] = [$interface];
 
-            if ($interface === 'CLI' || $interface === 'WPI') {
-               $interfaces = [$interface];
+      // # Port (WPI)
+      if ($interface === 'WPI') {
+         $Question = new Question($Input, $Output);
+         $Question->prompt = 'Server port';
+         $Question->default = (string) ($options['port'] ?? '8080');
+         $Question->Validator = static function (string $answer): true|string {
+            // ?:
+            if (preg_match('#^\d{1,5}$#', $answer) !== 1) {
+               return 'Invalid port: use a number between 1 and 65535.';
             }
-            else {
-               $choice = $this->choose('Which interface does this project bind to?', [
-                  'WPI — Web platform',
-                  'CLI — Console platform'
-               ]);
-               $interfaces = $choice === 1 ? ['CLI'] : ['WPI'];
-            }
-         }
-         $meta['interfaces'] = $interfaces;
+
+            // :
+            return true;
+         };
+         $meta['port'] = $Question->ask();
       }
+
+      // # Description / Version / Author (options prefill the defaults)
+      $Question = new Question($Input, $Output);
+      $Question->prompt = 'Description';
+      $Question->default = (string) ($options['description'] ?? '');
+      $meta['description'] = $Question->ask();
+
+      $Question = new Question($Input, $Output);
+      $Question->prompt = 'Version';
+      $Question->default = (string) ($options['version'] ?? '1.0.0');
+      $meta['version'] = $Question->ask();
+
+      $Question = new Question($Input, $Output);
+      $Question->prompt = 'Author';
+      $Question->default = (string) ($options['author'] ?? '');
+      $meta['author'] = $Question->ask();
+
+      $meta['name'] = basename($path);
 
       // ! Summary
       $content  = '@#Green:' . str_pad('Path', 12) . ' @; ' . $path . PHP_EOL;
-      $content .= '@#Green:' . str_pad('Mode', 12) . ' @; '
-         . ($source === null ? 'From scratch' : "Import: {$sourcePath}") . PHP_EOL;
+      $content .= '@#Green:' . str_pad('Mode', 12) . ' @; From scratch' . PHP_EOL;
       $content .= '@#Green:' . str_pad('Interfaces', 12) . ' @; ' . implode(', ', $meta['interfaces']);
-      if ($source === null) {
-         if (isSet($meta['port'])) {
-            $content .= PHP_EOL . '@#Green:' . str_pad('Port', 12) . ' @; ' . $meta['port'];
-         }
-         $content .= PHP_EOL . '@#Green:' . str_pad('Description', 12) . ' @; ' . (($meta['description'] ?? '') ?: '(none)');
-         $content .= PHP_EOL . '@#Green:' . str_pad('Version', 12) . ' @; ' . ($meta['version'] ?? '1.0.0');
-         $content .= PHP_EOL . '@#Green:' . str_pad('Author', 12) . ' @; ' . (($meta['author'] ?? '') ?: '(none)');
+      if (isSet($meta['port'])) {
+         $content .= PHP_EOL . '@#Green:' . str_pad('Port', 12) . ' @; ' . $meta['port'];
       }
+      $content .= PHP_EOL . '@#Green:' . str_pad('Description', 12) . ' @; ' . ($meta['description'] ?: '(none)');
+      $content .= PHP_EOL . '@#Green:' . str_pad('Version', 12) . ' @; ' . $meta['version'];
+      $content .= PHP_EOL . '@#Green:' . str_pad('Author', 12) . ' @; ' . ($meta['author'] ?: '(none)');
 
       $Output->write(PHP_EOL);
       $Fieldset = new Fieldset($Output);
@@ -1417,13 +1432,105 @@ class ProjectCommand extends Command
       }
 
       // @ Execute
-      $stub = ($meta['interfaces'][0] ?? 'CLI') === 'WPI' ? 'WPI' : 'CLI';
-      $done = $source === null
-         ? Projects::generate(BOOTGLY_ROOT_DIR . "Bootgly/commands/stubs/{$stub}", $path, $meta)
-         : Projects::import($source, $path, $meta);
+      $stub = $interface === 'WPI' ? 'WPI' : 'CLI';
+      $done = Projects::generate(BOOTGLY_ROOT_DIR . "Bootgly/commands/stubs/{$stub}", $path, $meta);
 
       // :
       return $this->report($done, $path);
+   }
+
+   /**
+    * Import platform projects into the working directory, keeping their paths.
+    *
+    * No questions are asked per project: each source is recursively copied to
+    * `projects/<path>` at the working directory. Existing user-level copies —
+    * which overwrite the platform ones on load — are refreshed after the
+    * confirmation.
+    *
+    * @param array<array{path: string, source: string}> $imports
+    * @param array<string, bool|int|string> $options
+    *
+    * @return bool
+    */
+   private function transfer (array $imports, array $options): bool
+   {
+      $Terminal = CLI->Terminal;
+      $Output = $Terminal->Output;
+      $Input = $Terminal->Input;
+
+      // ! Summary (existing user-level copies are flagged as overwrite)
+      $content = '';
+      $overwrites = [];
+      foreach ($imports as $index => $import) {
+         $path = $import['path'];
+
+         if (is_dir(Projects::CONSUMER_DIR . $path) === true) {
+            $overwrites[$index] = true;
+         }
+
+         $content .= ($content === '' ? '' : PHP_EOL)
+            . '@#Green:' . str_pad('Import', 12) . ' @; ' . $path
+            . (isSet($overwrites[$index]) ? ' @#Yellow:(overwrite)@;' : '');
+      }
+
+      $Output->write(PHP_EOL);
+      $Fieldset = new Fieldset($Output);
+      $Fieldset->title = '@#Cyan: Import projects @;';
+      $Fieldset->content = $content;
+      $Fieldset->render();
+      $Output->write(PHP_EOL);
+
+      // ? Confirm
+      if (isSet($options['yes']) === false) {
+         $Dialog = new Dialog($Input, $Output);
+
+         if ($Dialog->confirm('Import the selected projects?', default: true) === false) {
+            $Alert = new Alert($Output);
+            $Alert->Type::Attention->set();
+            $Alert->message = 'Aborted.';
+            $Alert->render();
+
+            return false;
+         }
+      }
+
+      // @ Execute
+      $done = true;
+      $paths = [];
+      foreach ($imports as $index => $import) {
+         $path = $import['path'];
+
+         // ? User-level copies overwrite the platform ones on load — refresh them
+         if (isSet($overwrites[$index]) === true) {
+            $this->erase(Projects::CONSUMER_DIR . $path);
+         }
+
+         $imported = Projects::import($import['source'], $path, [
+            'interfaces' => $this->detect($path) ?? ['CLI'],
+            'default'    => false,
+         ]);
+
+         $Alert = new Alert($Output);
+         if ($imported === true) {
+            $Alert->Type::Success->set();
+            $Alert->message = "Project @#cyan:{$path}@; imported!";
+            $paths[] = $path;
+         }
+         else {
+            $Alert->Type::Failure->set();
+            $Alert->message = "Could not import project @#cyan:{$path}@;.";
+            $done = false;
+         }
+         $Alert->render();
+      }
+
+      // ?: Tip with the first imported project
+      if ($paths !== []) {
+         $Output->render("@.;@#Green:Tip:@; Use @#Black:bootgly project {$paths[0]} start@; to boot it.@..;");
+      }
+
+      // :
+      return $done;
    }
 
    /**
@@ -1553,12 +1660,13 @@ class ProjectCommand extends Command
    }
 
    /**
-    * Survey the platform folders for importable projects (Bootgly signature).
+    * Survey the platform folders for exportable projects (Bootgly signature).
     *
     * Scans `projects/` inside each platform folder — `Bootgly/` (the framework),
-    * `Console/` and `Web/` — up to two levels deep.
+    * `Console/` and `Web/` — up to two levels deep. Only projects declared
+    * exportable (`new Project(exportable: true, ...)`) are listed.
     *
-    * @return array<string,string> Map of source label to source directory.
+    * @return array<string, array{path: string, source: string}> Map of label to import info.
     */
    private function survey (): array
    {
@@ -1582,8 +1690,9 @@ class ProjectCommand extends Command
             $prefix = $platform === 'Bootgly' ? '' : "{$platform}: ";
 
             // ? Direct project (signature at depth 1)
-            if ((glob("{$dir}/*.project.php") ?: []) !== []) {
-               $sources[$prefix . substr($dir, strlen($base))] = $dir;
+            if ($this->inspect($dir) === true) {
+               $path = substr($dir, strlen($base));
+               $sources[$prefix . $path] = ['path' => $path, 'source' => $dir];
 
                continue;
             }
@@ -1591,8 +1700,9 @@ class ProjectCommand extends Command
             // ? Subprojects (signature at depth 2)
             $subs = glob("{$dir}/*", GLOB_ONLYDIR) ?: [];
             foreach ($subs as $sub) {
-               if ((glob("{$sub}/*.project.php") ?: []) !== []) {
-                  $sources[$prefix . substr($sub, strlen($base))] = $sub;
+               if ($this->inspect($sub) === true) {
+                  $path = substr($sub, strlen($base));
+                  $sources[$prefix . $path] = ['path' => $path, 'source' => $sub];
                }
             }
          }
@@ -1600,6 +1710,32 @@ class ProjectCommand extends Command
 
       // :
       return $sources;
+   }
+
+   /**
+    * Inspect a directory signature for an exportable Bootgly project.
+    *
+    * @param string $dir
+    *
+    * @return bool True when the signature file returns an exportable Project.
+    */
+   private function inspect (string $dir): bool
+   {
+      // ? Bootgly project signature
+      $signatures = glob("{$dir}/*.project.php") ?: [];
+      if ($signatures === []) {
+         return false;
+      }
+
+      try {
+         $Project = include $signatures[0];
+      }
+      catch (Throwable) {
+         return false;
+      }
+
+      // :
+      return $Project instanceof Project && $Project->exportable === true;
    }
 
    /**
@@ -1710,6 +1846,42 @@ class ProjectCommand extends Command
 
       // :
       return (int) ($Menu->selected[0] ?? $default);
+   }
+
+   /**
+    * Select options from a vertical, multiple-selection Menu.
+    *
+    * @param string $prompt
+    * @param array<string> $labels
+    *
+    * @return array<int> The selected option indexes (empty when none).
+    */
+   private function select (string $prompt, array $labels): array
+   {
+      $Terminal = CLI->Terminal;
+
+      $Menu = new Menu($Terminal->Input, $Terminal->Output);
+      $Menu->prompt = "{$prompt}\n(↑/↓ to move, Space to select, Enter to confirm)\n";
+
+      $Options = $Menu->Items->Options;
+      // ? Selection mode is static per enum — always set it explicitly
+      $Options->Selection::Multiple->set();
+
+      foreach ($labels as $label) {
+         $Options->add(label: (string) $label);
+      }
+
+      // @@ Render until Enter
+      foreach ($Menu->rendering() as $ignored);
+
+      // ! Integer-only index list
+      $indexes = [];
+      foreach ($Menu->selected as $index) {
+         $indexes[] = (int) $index;
+      }
+
+      // :
+      return $indexes;
    }
 
    /**

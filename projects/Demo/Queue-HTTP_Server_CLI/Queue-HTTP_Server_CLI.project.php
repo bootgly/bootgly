@@ -27,6 +27,7 @@ return new Project(
    description: 'Enqueue background jobs from HTTP routes and process them with a queue worker',
    version: '1.0.0',
    author: 'Bootgly',
+   exportable: true,
 
    // # Project Boot Function
    boot: function (array $arguments = [], array $options = []): void

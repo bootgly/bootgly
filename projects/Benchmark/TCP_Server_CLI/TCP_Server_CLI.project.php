@@ -28,6 +28,7 @@ return new Project(
    description: 'Raw TCP server benchmark for Bootgly (HTTP or echo)',
    version: '1.0.0',
    author: 'Bootgly',
+   exportable: false,
 
    boot: function (array $arguments = [], array $options = []): void {
       // @ A/B: TCP-layer packet stats are OFF by default; `BOOTGLY_STATS=1`

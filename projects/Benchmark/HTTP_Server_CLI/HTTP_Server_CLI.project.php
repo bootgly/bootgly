@@ -30,6 +30,7 @@ return new Project(
    description: 'HTTP server benchmark for Bootgly',
    version: '1.0.0',
    author: 'Bootgly',
+   exportable: false,
 
    boot: function (array $arguments = [], array $options = []): void {
       // @ A/B: TCP-layer packet stats are OFF by default (lazily enabled by
