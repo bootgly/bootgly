@@ -127,5 +127,9 @@ return new Suites(
       'Bootgly/CLI/UI/Components/',
       // # CLI UX — Form (sequential multi-field input) + Prompt (bottom-fixed REPL)
       'Bootgly/CLI/UX/',
+      // # ACI/Mail — SMTP client unit suites (config, protocol codec, auth strings)
+      'Bootgly/ACI/Mail/',
+      // E2E (forked scripted mock SMTP server on 9994-9998; TLS certs generated at boot)
+      'Bootgly/ACI/Mail/tests/E2E/',
    ]
 );
