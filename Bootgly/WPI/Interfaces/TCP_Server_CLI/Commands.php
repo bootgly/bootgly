@@ -126,7 +126,9 @@ class Commands extends CLI\Terminal
          'resume' =>
             $this->Server->Process->Signals->send(SIGCONT) && false,
          'reload' =>
-            $this->Server->Process->Signals->send(SIGUSR2, master: false)
+            // @ Signal the MASTER (children: false) — it orchestrates the graceful
+            //   re-exec in reload(); workers are driven from there via SIGQUIT.
+            $this->Server->Process->Signals->send(SIGUSR2, children: false)
             && true,
          // TODO restart command
          // @ mode

@@ -73,6 +73,7 @@ class Process
    public static int $master;
    // # Lifecycle
    public bool $stopping = false;
+   public bool $reloading = false;
 
 
    public function __construct (string $id, null|string $instance = null)
@@ -124,7 +125,9 @@ class Process
     */
    public function recover (): null|array
    {
-      if ($this->stopping) {
+      // ? Do not refork workers we are intentionally stopping or draining for a
+      //   reload — the master reaps those itself; reforking would fight the drain.
+      if ($this->stopping || $this->reloading) {
          return null;
       }
 

@@ -11,6 +11,7 @@
 namespace Bootgly\WPI\Interfaces;
 
 
+use const PHP_BINARY;
 use const PHP_SAPI;
 use const SIG_IGN;
 use const SIGALRM;
@@ -29,12 +30,20 @@ use const SIGUSR2;
 use const STREAM_SERVER_BIND;
 use const WNOHANG;
 use const WUNTRACED;
+use function array_merge;
+use function array_slice;
+use function chdir;
 use function count;
 use function defined;
 use function explode;
 use function fclose;
 use function file;
+use function get_included_files;
+use function getcwd;
+use function getenv;
+use function is_file;
 use function method_exists;
+use function pcntl_exec;
 use function pcntl_fork;
 use function pcntl_signal;
 use function pcntl_signal_dispatch;
@@ -130,6 +139,13 @@ class UDP_Server_CLI implements Servers
    // # State
    protected int $started = 0;
    protected bool $daemonized = false;
+   // # Reload — launch command captured at start(), replayed by reload() via
+   //   pcntl_exec so the master re-execs into a fresh image (same PID). UDP is
+   //   connectionless, so reload has no in-flight connections to drain.
+   protected static string $binary = '';
+   /** @var array<int,string> */
+   protected static array $argv = [];
+   protected static string $directory = '';
    // # Socket
    protected null|string $socket;
    /** @var array<array<bool|int|string>|string> */
@@ -393,16 +409,12 @@ class UDP_Server_CLI implements Servers
          case SIGCONT: // 18
             $this->resume();
             break;
-         // @ reload()
+         // @ reload() — master-only: graceful re-exec (replace the master image so
+         //   all code reloads, same PID). UDP is connectionless, so there is no
+         //   in-flight drain; workers are stopped and the master re-execs.
          case SIGUSR2: // 12
             if ($this->Process->level === 'master') {
-               $this->Process->Signals->send(SIGUSR2, master: false);
-            }
-            else if (self::$Application) {
-               self::$Application::boot(SAPI::$Environment);
-            }
-            else {
-               SAPI::boot(reset: true);
+               $this->reload();
             }
             break;
 
@@ -472,6 +484,19 @@ class UDP_Server_CLI implements Servers
    public function start (): bool
    {
       $this->Status = Status::Starting;
+
+      // ! Capture the launch command NOW — before any daemon chdir — so reload()
+      //   can re-exec a faithful copy of this master later (fresh PHP image =
+      //   reloaded code, same PID). get_included_files()[0] is the absolute entry.
+      $Included = get_included_files();
+      self::$binary = PHP_BINARY;
+      /** @var array<int,string> $argv */
+      $argv = $_SERVER['argv'] ?? [];
+      self::$argv = array_merge(
+         [$Included[0] ?? ($argv[0] ?? '')],
+         array_slice($argv, 1)
+      );
+      self::$directory = getcwd() ?: '';
 
       // ? Drop to the compact message line unless output is fully muted
       if (Display::$segments !== Display::NONE) {
@@ -804,14 +829,10 @@ class UDP_Server_CLI implements Servers
 
       $this->Logger->log(info: '@\;Entering in Monitor mode...@\;');
 
-      // @ Set time to hot reloading
-      Timer::add(2, function () {
-         $modified = SAPI::check();
-
-         if ($modified) {
-            $this->Process->Signals->send(SIGUSR2, master: false); // @ Send signal to all children to reload
-         }
-      });
+      // NOTE: file-change auto-reload (watch the project on disk → reload()) is a
+      //   follow-up; the previous SAPI::check() watcher was a dead no-op (it watched
+      //   SAPI::$production, which no project ever sets). `project reload` (SIGUSR2)
+      //   is the working, canonical trigger — see reload().
 
       // @ Set Logger to display messages, datetime and level
       Display::show(Display::MESSAGE, Display::TIMESTAMP, Display::CHANNEL, Display::SEVERITY);
@@ -952,6 +973,51 @@ class UDP_Server_CLI implements Servers
          case 'child':
             exit(0);
       }
+   }
+
+   /**
+    * Graceful hot-reload (master-only): stop the workers, then re-exec this
+    * master into a fresh PHP image so the whole application reloads from disk.
+    * The master PID is preserved. UDP is connectionless, so there is no in-flight
+    * request drain — workers are stopped and the fresh master re-binds under
+    * SO_REUSEPORT. Files loaded before fork reload because the process image is
+    * replaced (PHP cannot redefine already-loaded classes/closures in place).
+    */
+   protected function reload (): void
+   {
+      // ? Only the master reloads.
+      if ($this->Process->level !== 'master') {
+         return;
+      }
+
+      // ? Validate the captured launch command BEFORE tearing down workers.
+      $entry = self::$argv[0] ?? '';
+      if ($entry === '' || is_file($entry) === false) {
+         $this->Logger->log(error: "Reload aborted: entry script '{$entry}' not found.@\\;");
+         return;
+      }
+
+      $this->Logger->log(notice: '@\;Reloading (graceful re-exec)...@.;');
+
+      // ! Mark reloading so recover() does not refork the workers we stop.
+      $this->Process->reloading = true;
+
+      // @ Stop the workers (connectionless — no drain), then reap.
+      $this->Process->Children->terminate();
+
+      // @ Clear per-project state files; the fresh master rewrites them on start.
+      $this->Process->State->clean();
+
+      // @ Restore the launch directory (a daemon may have chdir'd to /), then
+      //   replace this process image with a fresh one. pcntl_exec keeps the PID.
+      if (self::$directory !== '') {
+         @chdir(self::$directory);
+      }
+      pcntl_exec(self::$binary, self::$argv, getenv());
+
+      // ? exec only returns on failure.
+      $this->Logger->log(error: 'Reload failed: could not re-exec the master.@\;');
+      exit(1);
    }
 
    public function __destruct ()

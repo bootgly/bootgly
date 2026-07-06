@@ -11,6 +11,7 @@
 namespace Bootgly\WPI\Interfaces;
 
 
+use const PHP_BINARY;
 use const PHP_SAPI;
 use const SIG_DFL;
 use const SIG_IGN;
@@ -36,6 +37,9 @@ use const STREAM_SERVER_LISTEN;
 use const TCP_NODELAY;
 use const WNOHANG;
 use const WUNTRACED;
+use function array_merge;
+use function array_slice;
+use function chdir;
 use function count;
 use function defined;
 use function exec;
@@ -43,8 +47,13 @@ use function explode;
 use function fclose;
 use function file;
 use function function_exists;
+use function get_included_files;
+use function getcwd;
+use function getenv;
+use function is_file;
 use function is_numeric;
 use function method_exists;
+use function pcntl_exec;
 use function pcntl_fork;
 use function pcntl_signal;
 use function pcntl_signal_dispatch;
@@ -174,6 +183,9 @@ class TCP_Server_CLI implements Servers
    //   client onto one source IP; enable it only when the peer IP is the real
    //   client. When > 0, accepts past it are shed.
    public static int $maxConnectionsPerIP = 0;
+   // # Reload — graceful drain budget (seconds) each worker gets to finish its
+   //   in-flight connections before the master force-kills it during a reload.
+   public static int $drainTimeout = 30;
    /** @var array<string,true> */
    protected array $Events = [];
    // # Hooks — server lifecycle callbacks, set by the node `on()` overrides.
@@ -184,6 +196,14 @@ class TCP_Server_CLI implements Servers
    // # State
    protected int $started = 0;
    protected bool $daemonized = false;
+   // # Reload — the launch command captured at start(), replayed verbatim by
+   //   reload() via pcntl_exec so the master re-execs into a fresh PHP image
+   //   (reloading all code) while keeping its PID. Absolute script path + saved
+   //   cwd survive a daemon chdir.
+   protected static string $binary = '';
+   /** @var array<int,string> */
+   protected static array $argv = [];
+   protected static string $directory = '';
    // # Socket
    protected null|string $socket;
    /** @var array<array<bool|int|string>|string> */
@@ -442,12 +462,22 @@ class TCP_Server_CLI implements Servers
             break;
 
          // ! Server
-         // @ stop()
+         // @ stop() — fast shutdown (in-flight connections dropped immediately)
          case SIGHUP:  // 1
          case SIGINT:  // 2 (CTRL + C)
-         case SIGQUIT: // 3
          case SIGTERM: // 15
             $this->stop();
+            break;
+         // @ drain() — graceful worker shutdown: stop accepting, finish in-flight
+         //   connections, then exit. The master has no in-flight work of its own,
+         //   so it falls back to a fast stop(); reload() drives workers here.
+         case SIGQUIT: // 3
+            if ($this->Process->level === 'child') {
+               $this->drain();
+            }
+            else {
+               $this->stop();
+            }
             break;
          // @ pause()
          case SIGTSTP: // 20 (CTRL + Z)
@@ -461,22 +491,13 @@ class TCP_Server_CLI implements Servers
          case SIGCONT: // 18
             $this->resume();
             break;
-         // @ reload()
+         // @ reload() — master-only: graceful re-exec (drain workers, then replace
+         //   the master image with a fresh one so ALL code reloads, same PID). A
+         //   worker that somehow receives it does nothing; the master drives the
+         //   worker drain via SIGQUIT from inside reload().
          case SIGUSR2: // 12
             if ($this->Process->level === 'master') {
-               $this->Process->Signals->send(SIGUSR2, master: false);
-            }
-            else {
-               // @ Events — worker reloading its application (guarded)
-               $Emitter = Emitter::$Instance;
-               $Emitter->check(Worker::Reload) && $Emitter->emit(Worker::Reload, Process::$index);
-
-               if (self::$Application) {
-                  self::$Application::boot(SAPI::$Environment);
-               }
-               else {
-                  SAPI::boot(reset: true);
-               }
+               $this->reload();
             }
             break;
 
@@ -538,6 +559,20 @@ class TCP_Server_CLI implements Servers
    public function start (): bool
    {
       $this->Status = Status::Starting;
+
+      // ! Capture the launch command NOW — before any daemon chdir — so reload()
+      //   can re-exec a faithful copy of this master later (fresh PHP image =
+      //   reloaded code, same PID). get_included_files()[0] is the absolute entry
+      //   script, so it survives a working-directory change.
+      $Included = get_included_files();
+      self::$binary = PHP_BINARY;
+      /** @var array<int,string> $argv */
+      $argv = $_SERVER['argv'] ?? [];
+      self::$argv = array_merge(
+         [$Included[0] ?? ($argv[0] ?? '')],
+         array_slice($argv, 1)
+      );
+      self::$directory = getcwd() ?: '';
 
       // ? Drop to the compact message line unless output is fully muted
       if (Display::$segments !== Display::NONE) {
@@ -1023,14 +1058,11 @@ class TCP_Server_CLI implements Servers
    {
       $this->Status = Status::Running;
 
-      // @ Hot-reload check (every 2s)
-      Timer::add(2, function () {
-         if (SAPI::check()) {
-            $this->Process->Signals->send(SIGUSR2, master: false);
-         }
-      });
-
       // @ Route master logs into the pipe + silence stdout
+      //   NOTE: file-change auto-reload (watch the project on disk → reload()) is a
+      //   follow-up; the previous SAPI::check() watcher was a dead no-op (it watched
+      //   SAPI::$production, which no project ever sets). `project reload` (SIGUSR2)
+      //   is the working, canonical trigger — see reload().
       $this->sink();
 
       $Output = CLI->Terminal->Output;
@@ -1215,6 +1247,99 @@ class TCP_Server_CLI implements Servers
          case 'child':
             exit(0);
       }
+   }
+
+   /**
+    * Gracefully drain a worker for reload: stop accepting new connections (leave
+    * the SO_REUSEPORT group so nothing new is routed here), let the in-flight
+    * connections finish, then break the event loop so the worker exits cleanly
+    * via work() → stop(). Bounded by `self::$drainTimeout` so a stuck peer can
+    * never pin the reload open.
+    */
+   protected function drain (): void
+   {
+      // ? Only a worker drains; the master orchestrates via reload().
+      if ($this->Process->level !== 'child') {
+         return;
+      }
+
+      $this->Status = Status::Stopping;
+
+      // @ Leave the accept set + the SO_REUSEPORT group: no new connection is
+      //   routed to a draining worker; established ones keep their own sockets.
+      self::$Event->del($this->Socket, self::$Event::EVENT_CONNECT);
+      @fclose($this->Socket);
+
+      // ? Already idle — break the loop at once (the common lightly-loaded case).
+      if (count(Connections::$Connections) === 0) {
+         self::$Event->loop = false; // @phpstan-ignore-line (property on the Select impl)
+         return;
+      }
+
+      // @@ Otherwise poll once a second (SIGALRM-driven Timer): break the loop once
+      //    the in-flight connections have drained or the budget expires. Breaking
+      //    the loop returns from work() → stop() → the forked child exit(0)s.
+      $deadline = time() + self::$drainTimeout;
+      Timer::add(
+         interval: 1,
+         handler: function () use ($deadline): void {
+            if (count(Connections::$Connections) === 0 || time() >= $deadline) {
+               self::$Event->loop = false; // @phpstan-ignore-line (property on the Select impl)
+            }
+         },
+         persistent: true
+      );
+   }
+
+   /**
+    * Graceful hot-reload (master-only): drain every worker, then re-exec this
+    * master into a fresh PHP image so the whole application — closures AND
+    * autoloaded classes — is reloaded from disk. The master PID is preserved.
+    *
+    * In-flight connections are drained first (no dropped requests); there is a
+    * brief window between the last old worker exiting and the fresh workers
+    * binding where new connections are refused. Files loaded before fork reload
+    * because the process image itself is replaced — unlike an in-place reboot,
+    * which PHP cannot do for already-defined classes/closures.
+    */
+   protected function reload (): void
+   {
+      // ? Only the master reloads.
+      if ($this->Process->level !== 'master') {
+         return;
+      }
+
+      // ? Validate the captured launch command BEFORE tearing down workers, so a
+      //   bad capture can never leave the service running without any worker.
+      $entry = self::$argv[0] ?? '';
+      if ($entry === '' || is_file($entry) === false) {
+         $this->Logger->log(error: "Reload aborted: entry script '{$entry}' not found.@\\;");
+         return;
+      }
+
+      $this->Logger->log(notice: '@\;Reloading (graceful re-exec)...@.;');
+
+      // ! Mark reloading so recover() does not refork the workers we drain.
+      $this->Process->reloading = true;
+
+      // @ Drain every worker gracefully (SIGQUIT → worker drain()), then reap.
+      //   Stragglers past the budget are force-killed by terminate()'s SIGKILL.
+      $this->Process->Children->terminate(timeout: self::$drainTimeout + 5, signal: SIGQUIT);
+
+      // @ Clear per-project state files; the fresh master rewrites them on start.
+      $this->Process->State->clean();
+
+      // @ Restore the launch directory (a daemon may have chdir'd to /), then
+      //   replace this process image with a fresh one. pcntl_exec keeps the PID.
+      if (self::$directory !== '') {
+         @chdir(self::$directory);
+      }
+      pcntl_exec(self::$binary, self::$argv, getenv());
+
+      // ? exec only returns on failure — workers are already gone, so surface the
+      //   error and exit rather than linger as a workerless master.
+      $this->Logger->log(error: 'Reload failed: could not re-exec the master.@\;');
+      exit(1);
    }
 
    public function __destruct ()

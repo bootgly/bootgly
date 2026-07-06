@@ -11,9 +11,6 @@
 namespace Bootgly\API\Workables;
 
 
-use function clearstatcache;
-use function file_exists;
-use function filemtime;
 use function function_exists;
 use function opcache_invalidate;
 use Closure;
@@ -157,37 +154,5 @@ class Server
       }
 
       return true;
-   }
-
-   // @ Hot reload
-   public static function check (): bool
-   {
-      static $modified = 0;
-
-      // ? No production file to watch
-      if (self::$production === '') {
-         return false;
-      }
-
-      if (file_exists(self::$production) === true) {
-         // @ Clear production file cache
-         clearstatcache(false, self::$production);
-
-         // @ Get last modified timestamp of file
-         $last_modified = filemtime(self::$production);
-
-         // @ Set initial value to $modified
-         if ($last_modified && $modified === 0) {
-            $modified = $last_modified;
-         }
-
-         // @ Check if production is modified and reboot
-         if ($last_modified && $last_modified > $modified) {
-            $modified = $last_modified;
-            return true;
-         }
-      }
-
-      return false;
    }
 }

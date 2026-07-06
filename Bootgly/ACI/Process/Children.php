@@ -50,11 +50,11 @@ class Children
    {
       return count($this->PIDs);
    }
-   public function terminate (int $timeout = 5): void
+   public function terminate (int $timeout = 5, int $signal = SIGTERM): void
    {
-      // @ Send SIGTERM to all children
+      // @ Send the stop signal to all children (SIGTERM = fast; SIGQUIT = graceful drain)
       foreach ($this->PIDs as $PID) {
-         posix_kill($PID, SIGTERM);
+         posix_kill($PID, $signal);
       }
 
       // @ Wait for children to exit gracefully
