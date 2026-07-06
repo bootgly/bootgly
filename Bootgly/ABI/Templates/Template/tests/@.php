@@ -44,6 +44,7 @@ return new Suite(
       '4.1.2-render-inheritance-nested',
       '4.1.3-render-inheritance-yield_default',
       '4.1.4-render-inheritance-cycle',
+      '4.2.1-render-layout-default',
       '5.1.1-render-includes',
       '5.1.2-render-includes-with_data',
       '5.2.1-render-components-slots',

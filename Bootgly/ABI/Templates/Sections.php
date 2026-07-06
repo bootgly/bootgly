@@ -192,6 +192,24 @@ class Sections
       return [$frame['component'], $frame['variables']];
    }
 
+   /**
+    * Fill a section from a raw string — first writer wins, so an explicit
+    * `@section` already captured in this frame is never overwritten. Used by
+    * the default-layout composition to feed a template's loose output into the
+    * layout's `content` section.
+    */
+   public static function fill (string $section, string $content): void
+   {
+      // ?
+      $index = array_key_last(self::$frames);
+      if ($index === null) {
+         return;
+      }
+
+      // @
+      self::$frames[$index]['sections'][$section] ??= $content;
+   }
+
    public static function check (string $section): bool
    {
       $index = array_key_last(self::$frames);

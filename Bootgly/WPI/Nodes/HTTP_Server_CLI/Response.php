@@ -59,9 +59,11 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\Database as DatabaseResource;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\JSON as JSONResource;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\JSONP as JSONPResource;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\Negotiation as NegotiationResource;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\Plaintext as PlaintextResource;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\Pre as PreResource;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\View as ViewResource;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\XML as XMLResource;
 
 
 /**
@@ -70,9 +72,11 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\View as ViewResource;
  * @property-read DatabaseResource $Database
  * @property-read JSONResource $JSON
  * @property-read JSONPResource $JSONP
+ * @property-read NegotiationResource $Negotiation
  * @property-read PlaintextResource $Plaintext
  * @property-read PreResource $Pre
  * @property-read ViewResource $View
+ * @property-read XMLResource $XML
  */
 class Response extends Server\Response
 {

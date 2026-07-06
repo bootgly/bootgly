@@ -1436,8 +1436,12 @@ class Request
             break;
          case self::ACCEPTS_LANGUAGES:
             // @ Accept-Language
+            // ! Subtag + quality groups MUST be non-capturing/aligned so the
+            //   quality lands in $match[2] like the other headers — with the
+            //   old capturing subtag, `pt-BR` got quality (float) '-BR' = 0.0
+            //   and sorted last (or was dropped by the q=0 filter below).
             $header = $this->Header->get('Accept-Language');
-            $pattern = '/([a-z]{1,8}(-[a-z]{1,8})?)\s*(;\s*q\s*=\s*(\d*(?:\.\d+)?))?/i';
+            $pattern = '/([a-z]{1,8}(?:-[a-z]{1,8})?)\s*(?:;\s*q\s*=\s*(\d*(?:\.\d+)?))?/i';
 
             break;
          case self::ACCEPTS_ENCODINGS:
@@ -1473,6 +1477,11 @@ class Request
       foreach ($matches as $match) {
          $item = $match[1];
          $quality = (float) ($match[2] ?? 1.0);
+
+         // ? RFC 9110: q=0 means "not acceptable" — drop refused items
+         if ($quality <= 0.0) {
+            continue;
+         }
 
          $results[$item] = $quality;
       }

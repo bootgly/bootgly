@@ -72,6 +72,7 @@ return new Suite(
          '1.14.4-request_as_response-header-host',
          '1.14.5-request_as_response-header-ips',
          '1.15.1-request_as_response-header-accept_language',
+         '1.15.2-request_as_response-header-accept_language-quality',
          '1.16.1-request_as_response-header-cookies',
          '1.17.1-request_as_response-content-contents',
          '1.17.2-request_as_response-content-contents',
@@ -176,6 +177,16 @@ return new Suite(
          '1.7.2-redirect_with_302_to_bootgly_docs',
          // @ View
          '1.8-render_view_with_inheritance',
+         // @ negotiate (JSON/XML/HTML content negotiation + F-12 guard)
+         '1.9-negotiate_json',
+         '1.9.1-negotiate_xml',
+         '1.9.2-negotiate_html',
+         '1.9.3-negotiate_not_acceptable',
+         '1.9.4-negotiate_default_json',
+         '1.9.5-view_traversal_forbidden',
+         '1.9.6-view_default_layout',
+         '1.9.7-negotiate_quality_order',
+         '1.9.8-negotiate_refused_all',
          // @ upload
          // .1 - Small Files
          '1.z.1-upload_a_small_file',

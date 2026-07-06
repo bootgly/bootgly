@@ -35,7 +35,11 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resource;
 class View extends Resource
 {
    // * Config
-   // ...
+   /**
+    * Default layout wrapping every rendered view that declares no `@extends`.
+    * Empty disables it; a per-render `layout:` argument overrides it.
+    */
+   public string $layout = '';
 
    // * Data
    protected Response $Response;
@@ -75,8 +79,10 @@ class View extends Resource
     * Render one project view without sending it yet.
     *
     * @param array<string,mixed>|null $data
+    * @param null|string|false $layout Layout override: null uses the configured
+    *   default, false/'' renders bare, a name selects that layout.
     */
-   public function render (string $view, null|array $data = null, null|Closure $callback = null): Response
+   public function render (string $view, null|array $data = null, null|Closure $callback = null, null|string|false $layout = null): Response
    {
       if ( !defined('BOOTGLY_PROJECT') ) {
          throw new Error('HTTP_Server_CLI must be started through a Project. BOOTGLY_PROJECT is not defined.');
@@ -123,9 +129,16 @@ class View extends Resource
       // @ Render Template (the engine buffers its own output)
       $Template = new Template($File);
       // ! Named templates (@extends, @include, @component) resolve inside the
-      //   views jail — scoped to this render, restoring the previous base path
+      //   views jail, and the default layout wraps this render — both scoped
+      //   here, restoring the previous base path + layout afterwards.
       $path = Template::$path;
+      $default = Template::$layout;
       Template::$path = $views;
+      Template::$layout = match (true) {
+         $layout === false => '',
+         $layout === null => $this->layout,
+         default => $layout
+      };
       try {
          $content = $Template->render($data);
       }
@@ -135,6 +148,7 @@ class View extends Resource
       }
       finally {
          Template::$path = $path;
+         Template::$layout = $default;
       }
 
       $Response->Body->raw = $content;

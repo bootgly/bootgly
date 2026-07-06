@@ -60,6 +60,12 @@ class Template implements Templates
     * Base directory used to resolve named templates (@extends, @include, @component).
     */
    public static string $path = '';
+   /**
+    * Default layout applied to a top-level render whose template declares no
+    * `@extends`: its loose output becomes the layout's `content` section.
+    * Empty disables it. An explicit `@extends` in the template always wins.
+    */
+   public static string $layout = '';
 
    // * Data
    public static Directives $Directives;
@@ -423,8 +429,20 @@ class Template implements Templates
          $output = $this->execute($parameters);
 
          // @@ Compose the inheritance chain (same frame, same parameters)
+         $extend = Sections::pull();
+
+         // ? Default layout — a top-level template with no explicit @extends is
+         //   wrapped in the configured layout, its loose output becoming the
+         //   `content` section (fill() is set-if-absent, so an explicit
+         //   `@section content` still wins). Injected once, before the loop, so
+         //   the layout itself is never re-wrapped.
+         if ($extend === null && self::$layout !== '') {
+            Sections::fill('content', $output);
+            $extend = [self::$layout, null, null];
+         }
+
          $chain = [];
-         while (($extend = Sections::pull()) !== null) {
+         while ($extend !== null) {
             [$parent, $origin, $line] = $extend;
             // The @extends source location (origin = compiled cache path)
             $template = ($origin !== null)
@@ -459,6 +477,9 @@ class Template implements Templates
 
             // The parent replaces the child loose output
             $output = new Template($File)->execute($parameters);
+
+            // Re-pull for the next level (the parent may itself @extends)
+            $extend = Sections::pull();
          }
 
          // :
