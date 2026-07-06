@@ -39,7 +39,7 @@ class Alert extends Component
    // ...
 
 
-   public function __construct (Output &$Output)
+   public function __construct (Output $Output)
    {
       $this->Output = $Output;
 

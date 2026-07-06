@@ -66,7 +66,7 @@ class Textarea extends Component
    public private(set) string $answer;
 
 
-   public function __construct (Input &$Input, Output &$Output)
+   public function __construct (Input $Input, Output $Output)
    {
       $this->Input = $Input;
       $this->Output = $Output;

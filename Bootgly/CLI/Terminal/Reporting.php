@@ -13,7 +13,7 @@ namespace Bootgly\CLI\Terminal;
 
 interface Reporting
 {
-   public function __construct (Input &$Input, Output &$Output);
+   public function __construct (Input $Input, Output $Output);
 
    public function report (bool $enabled): void;
 }

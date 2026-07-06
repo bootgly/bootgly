@@ -60,7 +60,7 @@ class Timer extends Component
    public private(set) bool $finished;
 
 
-   public function __construct (Output &$Output)
+   public function __construct (Output $Output)
    {
       $this->Output = $Output;
 

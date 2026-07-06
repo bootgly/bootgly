@@ -24,7 +24,7 @@ class Viewport
    private Output $Output;
 
 
-   public function __construct (Output &$Output)
+   public function __construct (Output $Output)
    {
       $this->Output = $Output;
    }

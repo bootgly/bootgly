@@ -41,7 +41,7 @@ class Header extends Component
    private string $output;
 
 
-   public function __construct (Output &$Output)
+   public function __construct (Output $Output)
    {
       $this->Output = $Output;
 

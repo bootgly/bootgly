@@ -35,7 +35,7 @@ class Bars
    }
 
 
-   public function __construct (Progress &$Progress)
+   public function __construct (Progress $Progress)
    {
       $this->Progress = $Progress;
 

@@ -107,7 +107,7 @@ class Logs
     * @param Output $Output Terminal output sink.
     * @param int $max Ring-buffer capacity (records).
     */
-   public function __construct (Input &$Input, Output &$Output, int $max = 5000)
+   public function __construct (Input $Input, Output $Output, int $max = 5000)
    {
       // * Config
       $this->max = $max;

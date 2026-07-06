@@ -64,7 +64,7 @@ class Question extends Component
    public private(set) null|bool $confirmed;
 
 
-   public function __construct (Input &$Input, Output &$Output)
+   public function __construct (Input $Input, Output $Output)
    {
       $this->Input = $Input;
       $this->Output = $Output;

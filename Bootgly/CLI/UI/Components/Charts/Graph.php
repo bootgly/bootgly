@@ -61,7 +61,7 @@ class Graph extends Chart
    private bool $finished;
 
 
-   public function __construct (Output &$Output)
+   public function __construct (Output $Output)
    {
       parent::__construct($Output);
 

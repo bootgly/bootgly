@@ -73,7 +73,7 @@ class Scrollarea extends Component
    public private(set) bool $hovered;
 
 
-   public function __construct (Output &$Output)
+   public function __construct (Output $Output)
    {
       $this->Output = $Output;
 

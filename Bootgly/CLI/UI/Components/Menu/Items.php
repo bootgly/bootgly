@@ -47,7 +47,7 @@ class Items
    protected int $aimed;
 
 
-   public function __construct (Menu &$Menu)
+   public function __construct (Menu $Menu)
    {
       $this->Menu = $Menu;
 

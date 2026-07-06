@@ -49,7 +49,7 @@ class Menu extends Component
    public array $selected;
 
 
-   public function __construct (Input &$Input, Output &$Output)
+   public function __construct (Input $Input, Output $Output)
    {
       $this->Input = $Input;
       $this->Output = $Output;

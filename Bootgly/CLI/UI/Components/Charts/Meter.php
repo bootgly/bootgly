@@ -38,7 +38,7 @@ class Meter extends Chart
    public float $value;
 
 
-   public function __construct (Output &$Output)
+   public function __construct (Output $Output)
    {
       parent::__construct($Output);
 

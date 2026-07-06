@@ -56,7 +56,7 @@ abstract class Chart extends Component
    public private(set) float $min;
 
 
-   public function __construct (Output &$Output)
+   public function __construct (Output $Output)
    {
       $this->Output = $Output;
 

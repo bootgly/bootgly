@@ -54,7 +54,7 @@ class Screen
    private bool $registered;
 
 
-   public function __construct (Output &$Output)
+   public function __construct (Output $Output)
    {
       // * Data
       $this->Output = $Output;
