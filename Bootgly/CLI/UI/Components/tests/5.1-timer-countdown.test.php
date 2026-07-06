@@ -16,32 +16,35 @@ use Bootgly\CLI\Terminal\Output;
 return new Specification(
    description: 'It should count down on the wall clock and finish at zero',
    test: function () {
-      // ! Timer with an in-memory stream (40ms countdown)
+      // ! Timer with an in-memory stream (200ms countdown)
+      //   A wide budget with an early checkpoint keeps this deterministic under
+      //   load: `usleep` can overshoot heavily on a busy host, so the first tick
+      //   sleeps only 1/4 of the budget — even a 3x overshoot stays before zero.
       $Output = new Output('php://memory');
 
       $Timer = new Timer($Output);
-      $Timer->seconds = 0.04;
+      $Timer->seconds = 0.2;
       $Timer->throttle = 0.0;
 
       $Timer->start('Deploying');
 
       // @ Valid
       yield assert(
-         assertion: $Timer->remaining === 0.04 && $Timer->finished === false,
+         assertion: $Timer->remaining === 0.2 && $Timer->finished === false,
          description: 'start() arms the countdown with the configured seconds'
       );
 
       // @ Tick before zero keeps counting
-      usleep(10_000);
+      usleep(50_000);
       $Timer->tick();
 
       yield assert(
-         assertion: $Timer->remaining > 0.0 && $Timer->remaining < 0.04 && $Timer->finished === false,
+         assertion: $Timer->remaining > 0.0 && $Timer->remaining < 0.2 && $Timer->finished === false,
          description: 'tick() derives the remaining time from the wall clock'
       );
 
       // @ Tick past zero finishes
-      usleep(40_000);
+      usleep(200_000);
       $Timer->tick();
 
       // @ Valid

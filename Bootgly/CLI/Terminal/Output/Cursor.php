@@ -47,11 +47,16 @@ class Cursor
    /** @var array{0: int, 1: int, row: int, column: int} */
    public private(set) array $position {
       get {
-         // ? Degrade gracefully when the cursor cannot be queried (no shell, no stdin, not a TTY)
+         // ? Degrade gracefully when the cursor cannot be queried (no shell, no
+         //   stdin, not a TTY) — the Output stream must be a TTY too: the DSR
+         //   query is written to it, so a non-TTY target (memory/pipe) can never
+         //   produce a response on STDIN and the read would only block.
          if (
             function_exists('shell_exec') === false
             || defined('STDIN') === false
             || stream_isatty(STDIN) === false
+            || is_resource($this->Output->stream) === false
+            || stream_isatty($this->Output->stream) === false
          ) {
             // ?: Last known position or the unknown-position shape (zeros)
             if (isSet($this->position) === false) {
