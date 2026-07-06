@@ -16,6 +16,7 @@ use function min;
 use function preg_match;
 use function strpos;
 use function substr;
+use function time;
 use BackedEnum;
 use Closure;
 use InvalidArgumentException;
@@ -73,6 +74,7 @@ class WS_Client_CLI extends TCP_Client_CLI implements WS, Client
    protected int $reconnectAttempts = 0;    // 0 = unlimited
    protected int $reconnectDelay = 1;       // base backoff (seconds)
    protected int $reconnectMaxDelay = 30;   // backoff cap (seconds)
+   protected int $reconnectTimeout = 60;    // total wall-clock budget for the whole campaign (0 = unbounded)
    public null|Session $Session = null;
    protected Decoder_ $Decoder;
    protected Decoder_Framing $Framing;
@@ -87,6 +89,7 @@ class WS_Client_CLI extends TCP_Client_CLI implements WS, Client
 
    // * Metadata
    protected int $attempt = 0;              // consecutive reconnect attempts (reset on connect)
+   protected int $reconnectStartedAt = 0;   // unix time the current reconnect campaign began (0 = idle)
    protected bool $wired = false;
    // # Concurrency (open()/run() — many clients on one shared loop)
    protected static bool $multi = false;    // concurrent mode active (set by open(), cleared by connect()/run())
@@ -117,6 +120,9 @@ class WS_Client_CLI extends TCP_Client_CLI implements WS, Client
     * @param int $reconnectAttempts Max reconnect attempts before giving up (0 = unlimited).
     * @param int $reconnectDelay Base backoff in seconds (doubles each attempt, capped).
     * @param int $reconnectMaxDelay Backoff cap in seconds.
+    * @param int $reconnectTimeout Total wall-clock budget in seconds for the whole reconnect
+    *   campaign (0 = unbounded). Guarantees the loop terminates even with unlimited attempts,
+    *   so a permanently dead port cannot re-dial forever.
     * @param int $handshakeTimeout Seconds to receive + verify the 101 after dialing (0 = unbounded).
     *
     * @return self The WebSocket Client instance, for chaining.
@@ -132,6 +138,7 @@ class WS_Client_CLI extends TCP_Client_CLI implements WS, Client
       int $reconnectAttempts = 0,
       int $reconnectDelay = 1,
       int $reconnectMaxDelay = 30,
+      int $reconnectTimeout = 60,
       int $handshakeTimeout = 10
    ): self
    {
@@ -153,6 +160,7 @@ class WS_Client_CLI extends TCP_Client_CLI implements WS, Client
       $this->reconnectAttempts = $reconnectAttempts;
       $this->reconnectDelay = $reconnectDelay;
       $this->reconnectMaxDelay = $reconnectMaxDelay;
+      $this->reconnectTimeout = $reconnectTimeout;
 
       // @ Session policy (instance-scoped)
       $this->heartbeatInterval = $heartbeatInterval;
@@ -342,8 +350,23 @@ class WS_Client_CLI extends TCP_Client_CLI implements WS, Client
     */
    protected function retry (): void
    {
-      // ? Budget exhausted — give up and end the loop.
+      // ! Stamp the campaign start on its first attempt, so the wall-clock budget
+      //   below measures the whole reconnect campaign (not a single backoff).
+      //   $attempt is reset to 0 on every successful (re)connection, so each new
+      //   campaign re-stamps here.
+      if ($this->attempt === 0) {
+         $this->reconnectStartedAt = time();
+      }
+
+      // ? Budget exhausted (attempt cap) — give up and end the loop.
       if ($this->reconnectAttempts > 0 && $this->attempt >= $this->reconnectAttempts) {
+         self::$Event->destroy();
+         return;
+      }
+
+      // ? Budget exhausted (wall-clock) — give up even under unlimited attempts, so a
+      //   permanently dead port (connection refused forever) cannot re-dial endlessly.
+      if ($this->reconnectTimeout > 0 && (time() - $this->reconnectStartedAt) >= $this->reconnectTimeout) {
          self::$Event->destroy();
          return;
       }
