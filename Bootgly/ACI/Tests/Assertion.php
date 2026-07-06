@@ -12,6 +12,7 @@ namespace Bootgly\ACI\Tests;
 
 
 use AssertionError;
+use Throwable;
 
 use Bootgly\ABI\Argument;
 use Bootgly\ABI\Debugging\Backtrace;
@@ -22,7 +23,6 @@ use Bootgly\ACI\Tests\Asserting\Fallback;
 use Bootgly\ACI\Tests\Asserting\Modifier;
 use Bootgly\ACI\Tests\Asserting\Subassertion;
 use Bootgly\ACI\Tests\Assertion\Comparators\Identical;
-use Bootgly\ACI\Tests\Assertion\Expectation;
 use Bootgly\ACI\Tests\Assertion\Expectations;
 use Bootgly\ACI\Tests\Assertion\Snapshot;
 use Bootgly\ACI\Tests\Assertion\Snapshots;
@@ -210,10 +210,19 @@ class Assertion extends Expectations
       // ?! Expectations
       if ($expectations === []) {
          $this->to->be(
-            $using instanceof Snapshot
-               ? $using
-               : $expected
+            match (true) {
+               $using instanceof Snapshot => $using,
+               // A custom comparator becomes the expectation itself
+               // (assert() below hands it both actual and expected)
+               $using instanceof Identical === false => $using,
+               default => $expected
+            }
          );
+
+         // ! Re-sync the local copy: be() pushes into $this->expectations,
+         //   and the loop below iterates $expectations — without this the
+         //   default (actual, expected) form never evaluates anything.
+         $expectations = $this->expectations;
       }
 
       // # Assertion
@@ -351,11 +360,17 @@ class Assertion extends Expectations
 
          MESSAGE;
 
-         $additional .= new Template(<<<'MESSAGE'
-         @> $fallback;
-         MESSAGE)->render(
-            ['fallback' => self::$fallback]
-         ) ?: '';
+         // ! A template failure must never mask the AssertionError being built
+         try {
+            $additional .= new Template(<<<'MESSAGE'
+            @> $fallback;
+            MESSAGE)->render(
+               ['fallback' => self::$fallback]
+            );
+         }
+         catch (Throwable) {
+            $additional .= (string) self::$fallback;
+         }
       }
 
       self::$fallback = <<<MESSAGE

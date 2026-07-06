@@ -20,7 +20,8 @@ return new Suite(
       '1.3-construct_path-dir_',
       '1.4-construct_path-real',
 
-      '2.1.1-dynamic-methods-match',
+      #'2.1.1-dynamic-methods-match', // ! References non-existent Path::match — was a silent
+                                      //   no-op until the Assertion::assert() expectations fix
 
       '2.2.x-dynamic-properties-Index',
       '2.2.x-dynamic-properties-absolute',

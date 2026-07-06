@@ -1,6 +1,9 @@
 <?php
 return [
-   '/(@)?@>\s*(.+?)\s*;(\r?\n)?/s' => function ($matches) {
+   // (?!>) keeps `@>>` (escaped output) out of this pattern's reach.
+   // The expression is scanned quote-aware so a `;` inside a string literal
+   // does not terminate the directive (e.g. `@> "a;b";`).
+   '/(@)?@>(?!>)\s*((?:[^;\'"]++|\'(?:[^\'\\\\]|\\\\.)*+\'|"(?:[^"\\\\]|\\\\.)*+")+?)\s*;(\r?\n)?/s' => function ($matches) {
       if (@$matches[1]) {
          return substr($matches[0], 1);
       }

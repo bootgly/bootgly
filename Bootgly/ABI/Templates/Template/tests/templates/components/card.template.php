@@ -1,0 +1,1 @@
+<div>@yield header;|@yield slot;</div>

@@ -57,4 +57,12 @@ class Iterators
 
       return static::class;
    }
+   /**
+    * Discard the loop stack — used when a render fails mid-loop.
+    */
+   public static function reset (): void
+   {
+      self::$Iterators = [];
+      self::$depth = 0;
+   }
 }

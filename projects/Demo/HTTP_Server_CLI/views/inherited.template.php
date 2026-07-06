@@ -1,0 +1,1 @@
+@extends layouts/main;@section content:C@section;

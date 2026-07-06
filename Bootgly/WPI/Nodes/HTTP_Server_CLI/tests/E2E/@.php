@@ -174,6 +174,8 @@ return new Suite(
          // @ redirect
          '1.7-redirect_to_bootgly_docs',
          '1.7.2-redirect_with_302_to_bootgly_docs',
+         // @ View
+         '1.8-render_view_with_inheritance',
          // @ upload
          // .1 - Small Files
          '1.z.1-upload_a_small_file',

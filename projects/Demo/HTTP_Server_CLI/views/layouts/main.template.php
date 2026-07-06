@@ -1,0 +1,1 @@
+<l>@yield content;|@include partials/footer;|@>> $unsafe;</l>

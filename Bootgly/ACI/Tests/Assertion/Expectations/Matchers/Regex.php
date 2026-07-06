@@ -22,8 +22,13 @@ class Regex extends Matcher
 {
    public function assert (mixed &$actual, mixed &$expected): bool
    {
+      // * Config
+      // ($expected is the Matcher itself when passed as `expected:` — the
+      //  pattern set at construction takes precedence)
+      $pattern = $this->pattern ?? $expected;
+
       // ?
-      if (is_string($expected) === false) {
+      if (is_string($pattern) === false) {
          return false;
       }
       if (is_string($actual) === false) {
@@ -31,8 +36,6 @@ class Regex extends Matcher
       }
 
       // @
-      // * Config
-      $pattern = $this->pattern ?? $expected;
       $matches = fn (): array => $this->matches;
 
       $result = preg_match(

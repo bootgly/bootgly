@@ -14,7 +14,6 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources;
 use const BOOTGLY_PROJECT;
 use function defined;
 use function is_string;
-use function ob_start;
 use function preg_match;
 use function str_contains;
 use Closure;
@@ -104,7 +103,9 @@ class View extends Resource
       }
       $view = Path::normalize($view);
 
-      $File = new File(BOOTGLY_PROJECT->path . 'views/' . $view . '.template.php', base: BOOTGLY_PROJECT->path . 'views/');
+      $views = BOOTGLY_PROJECT->path . 'views/';
+
+      $File = new File("{$views}{$view}" . Template::EXTENSION, base: $views);
 
       if ($File->exists === false) {
          return $Response->code(403);
@@ -119,21 +120,23 @@ class View extends Resource
       // @ Extend variables
       $data = $data + $this->uses;
 
-      // @ Output/Buffer start()
-      ob_start();
-
-      // @ Render Template
+      // @ Render Template (the engine buffers its own output)
       $Template = new Template($File);
+      // ! Named templates (@extends, @include, @component) resolve inside the
+      //   views jail — scoped to this render, restoring the previous base path
+      $path = Template::$path;
+      Template::$path = $views;
       try {
-         $rendered = $Template->render($data);
+         $content = $Template->render($data);
       }
       catch (Throwable $Throwable) {
-         $rendered = '';
+         $content = '';
          Throwables::report($Throwable);
       }
+      finally {
+         Template::$path = $path;
+      }
 
-      // @ Output/Buffer clean()->get()
-      $content = is_string($rendered) ? $rendered : '';
       $Response->Body->raw = $content;
 
       // @ Set $Response properties

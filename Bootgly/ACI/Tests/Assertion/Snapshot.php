@@ -40,8 +40,10 @@ abstract class Snapshot implements Asserting
     */
    protected static array $indexes = [];
    // ---
-   public readonly bool $captured;
-   public readonly bool $restored;
+   // (protected(set): concrete Snapshots — subclasses — flip these flags,
+   //  which readonly forbids outside the declaring class)
+   public protected(set) bool $captured = false;
+   public protected(set) bool $restored = false;
 
 
    public function __construct (null|string $name = null)

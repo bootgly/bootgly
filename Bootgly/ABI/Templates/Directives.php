@@ -88,7 +88,7 @@ class Directives
       }
    }
 
-   public function extend (string $pattern, Closure $Callback, ? string $name = null): void
+   public function extend (string $pattern, Closure $Callback, null|string $name = null): void
    {
       if ($name) {
          $this->names[] = $name;
