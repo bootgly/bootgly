@@ -2,6 +2,161 @@
 
 Changelog for Bootgly framework. All notable changes to this project will be documented in this file. Imported from ROADMAP.md.
 
+## v0.20.0-beta ✅
+
+> Focus: **Project creation + CLI input components + Console Platform**
+
+### CLI — Command Line Interface
+
+- ✅ Canonical project creation
+  - ✅ `bootgly project create` — wizard + non-interactive flags
+    - ✅ Platform step (independent Console/Web multiselect, pinned base platform, `--platform=console,web`)
+    - ✅ Modes: create from scratch / import from Platforms (`exportable` flag) / import from Git remote
+  - ✅ `bootgly project import <url>` — import by the Bootgly signature (`*.project.php`)
+  - ✅ `bootgly.kit` — unified starter template (merges `bootgly.console` + `bootgly.web` templates, now deprecated)
+  - ✅ One-command installer (`curl -fsSL https://bootgly.com/install | bash`)
+- ✅ UI/UX components (interactive and non-interactive)
+  - ✅ Question (single input with validation + yes/no `confirm()` — Dialog component
+    removed: `prompt()` duplicated Question and `confirm()` merged into it, freeing the
+    Dialog name for a future modal component)
+  - ✅ UI/UX layer split — `CLI/UI` = indivisible base components; `CLI/UX` = composite
+    experiences built on 1+ UI components (fits the alphabetical dependency rule: UI < UX).
+    Form and Prompt moved to `CLI/UX`; `UX.php` + `UI/Components.php` marker interfaces added
+  - ✅ Terminal restore net — entering raw mode arms a shutdown restore (stty + cursor) and
+    INT/TERM handlers that exit through the shutdown sequence, so component `finish()`/destructors
+    run on Ctrl+C (no more broken terminal after interrupted demos); `Input->configure(signals:)`
+    controls ISIG (Prompt disables it for the two-stage Ctrl+C)
+  - ✅ Form (multi-field input) — `CLI/UX/Form.php` (sequential summary-loop model)
+    - ✅ Declarative field list (label, Control, default, required, Validator) reusing
+      Question/Menu as field editors — `&/Form.php`/`&/Wizard.php` stubs deleted
+    - ✅ Revert (`↑` + Enter goes back one field; previous answer becomes the default)
+    - ✅ Integrated summary + confirm loop (Fieldset + Menu `[Confirm / Edit <field>]`)
+    - ✅ Non-TTY mode: line-by-line stdin (deterministic in pipes/CI)
+    - ✅ Secret input — Question `mask` config + `Input->scan(mask)` (no new component)
+  - ✅ Timer (countdown with callback) — rewritten modeled on Progress
+    (staged `&/Timer.php` draft deleted); wall-clock remaining, one-shot Handler
+  - ✅ Timeline (multi-step guided flow)
+    - ✅ Steps with state (pending/active/done/failed), vertical render
+      (+ `append` mode for flows that write between steps)
+    - ✅ Adopted in the project wizard (from-scratch phases: Path/Interface/
+      Metadata/Confirm/Scaffold)
+  - ✅ Prompt (bottom fixed with content scroll above — like Claude Code, Codex, OpenCode...)
+    — `CLI/UX/Prompt.php` (composes Scrollarea + Line)
+    - ✅ Fixed input line (Line engine); history (↑/↓ with draft preservation) and
+      multiline input (Alt+Enter)
+    - ✅ Two-stage Ctrl+C (first press = notice on the bottom border with a 2s timeout;
+      second press ends) — `interruption` config
+    - ✅ Buffered band (default, `buffered` config): DECSTBM region + Scrollarea with
+      independent scrolling (`PgUp`/`PgDn` + right-edge scrollbar; submits stick the
+      view back to the bottom); the input frame never moves
+    - ✅ Band mouse support (`mouse` config, SGR all-events reporting): wheel scrolls
+      the band (3 rows/notch); the scrollbar thumb accepts hover highlight, click and drag
+      (track click jumps)
+    - ✅ Selection mode toggle (`Ctrl+T`, `selection` notice on the bottom border):
+      releases the mouse reporting so native text selection/copy works — typing and
+      `PgUp`/`PgDn` keep working; `Ctrl+T` resumes the mouse (`Shift` always bypasses)
+    - ✅ Native flow opt-in (`buffered = false`): bottom-fixed frame while `feed()` output
+      scrolls into the terminal scrollback (screen scrolls through its last row; the frame
+      clears itself first so its rows never enter the scrollback) — wheel scrolling and
+      text selection stay fully native, no internal scrollbar (Claude Code-style)
+  - ✅ Scrollarea — buffered content band as a UI component (`bounded buffer + ANSI-aware
+    wrap + scroll/stick + scrollbar`); the Prompt content engine, reusable by pagers/viewers
+    - ✅ Pointer primitives for mouse-interactive scrollbars: `hit()` (thumb/track/content
+      hit-test), `aim()` (drag / track-click jump) and `hover()` (thumb highlight)
+  - ✅ Menu component improvements
+    - ✅ Locked/pinned options + stable Multiple selection (relative-reposition render fix)
+    - ✅ Viewport/scroll for long lists (`viewport` + `↑/↓ N more` indicators; Window infra)
+    - ✅ Enter without Space confirms the aimed option (plus `aim()` for initial aim/default)
+    - ✅ Incremental type-ahead filter (printable keys; Backspace pops; `Esc` clears)
+    - ✅ Vertical grid columns (`columns`: ←/→ = ±1 cell, ↑/↓ = ±1 line) + horizontal body padding fix
+  - ✅ Progress multi-bar support (multiple simultaneous Bars per frame — `Bars` collection
+    + `columns` grid layout + `tick()`; groundwork for parallel `test`)
+  - ✅ Text component — animated text effects (`Effects`: Typewriter | Fade | Shimmer;
+    non-TTY renders final frame only)
+  - ✅ Charts — btop-inspired `Chart`/`Charts` family: abstract `Chart` base (series,
+    scaling, truecolor `Gradient` with 256-color fallback) + concrete `Charts\` types —
+    Sparkline, Bars, Meter (percentage gauge) and the multi-row streaming `Graph`
+    (braille/block/tty `Symbols`, 2 values per braille cell, `feed()` live history);
+    `Plots` enum removed (one-way: type = class); first consumer wired: native
+    `bench` results (`bootgly test benchmark` prints opponents × req/s after the marks)
+  - ✅ Suggest/autocomplete — Question `suggestions` config (`Line` editor + filtered
+    dropdown + `Tab` completion on TTY; plain `scan()` + `strict` re-ask on pipes —
+    no new component)
+  - ✅ Textarea (multiline editor; Ctrl+D submits; stdin lines until EOF on pipes)
+  - ✅ Spinner (indeterminate activity indicator — tick-driven, no fork;
+    `Progress/&/Circular` staging dir deleted)
+- ✅ Console Platform completion (`Console/` submodule → repo `bootgly/bootgly-console`)
+  - ✅ App shell — alternate screen + SIGWINCH resize (promoted to core `CLI\Terminal\Screen`),
+    focus via overlay dispatch (Palette → help → screen → global); terminal restore deduped into
+    the core net (`Input::arm()` + `Screen::open()` self-restore); pane layout (h/v splits) deferred
+  - ✅ Screens + Router — declarative navigation between screens (mirrors the WPI Router)
+  - ✅ Keymaps — shortcut registry with chords + auto-generated help overlay
+  - ✅ Data-bound widgets — Statusbar, LogViewer (`Tail` over core Logs), CommandPalette (`Palette`
+    with the core `Line` editor: cursor, Home/End, Ctrl-U/W), Toasts shipped; chrome uses theme-safe
+    256-color styling (bright-black bg renders light in some themes); Table (sort/filter/virtual
+    scroll) and TreeView deferred
+  - ✅ `Games` module — TUI game development
+    - ✅ Loop (fixed timestep; tick/update/render; channel read timeout paces frames — no busy wait),
+      Scenes (state machine)
+    - ✅ Canvas (cell framebuffer, double buffering + diff render; block/half-block/braille modes;
+      Block `aspect` for square pixels — 1 pixel = N cells; `center()` text runs; unknown-front
+      sentinel: reset/resize repaints the whole region — scene switches actually clear the board)
+    - ✅ Terminal Client pump — chunked longest-match escape tokenizer (split sequences reassembled,
+      CR normalized to ENTER, `q` ends the pump for embedded runtimes)
+    - ✅ Board fitting — `columns`/`rows` act as caps: board fitted to the real terminal
+      (status bar keeps the last row) and centered; Statusbar rewritten only on change
+    - ✅ Keyboard state (pressed/held heuristics); mouse wiring into games deferred (core tracking exists)
+    - ✅ Sprites (Unicode sprite sheets: `.sprites.php` files of WYSIWYG multiline frames — 1 char =
+      1 logical pixel, alpha transparency, per-sprite ANSI style; shared instances animate in
+      lockstep via a single `$frame` write, `clone` for per-entity state, `FPS`-driven `tick()`)
+    - ✅ 2D math (`Vector` — mutating chainable `add`/`scale` + computed `length`; `Zone` — AABB
+      strict-edge `check`, inclusive `contain`, `clamp`; `Timer` — repeating with remainder carry
+      and a mutable interval, one-shot cooldowns with `expired` state)
+    - ✅ Exportable `Invaders` demo — sprite-sheet formation marching in lockstep (march accelerates
+      through the mutable Timer interval as it shrinks), one-shot fire cooldown, Vector-integrated
+      projectiles, Zone collisions, endless waves; wired into the browser showcase
+  - ⭕️ ACI dashboards — Process supervisor, Queues monitor, Schedule viewer (data exists in core)
+  - ✅ Exportable `Console/projects/` — `Snake` and `Pong` (1P vs AI: keystroke-impulse paddle —
+    tap = one precise step, hold streams auto-repeats —, deflection by hit offset, board-scaled
+    physics, AI chases only approaching balls) shipped, both on square-pixel terminal-fitted
+    boards (wizard picker already surveys them); TUI app skeleton deferred
+  - ✅ Browser showcase — games playable in the docs via PHP WASM (dual-worker Client/Server over
+    MessageChannel; bundler ships the Console platform + projects; core `Input::relay()` timeout +
+    `mb_str_split`/`mb_chr` polyfills unblock embedded runtimes)
+  - ✅ Platform docs (Manual/Console + guide page + Games live showcase, en-US/pt-BR; canonical
+    installer leads the setup sections) + launcher/autoboot (kit boots platforms first)
+
+### Bonus
+
+- ✅ Hardening — known debts from this series
+  - ✅ TCP_Client async: infinite retry when re-dialing a dead port (CI-fix follow-up)
+    (fixed 2026-07-05: `reconnectTimeout` wall-clock budget in `WS_Client_CLI::retry()` — a
+    second give-up guard that bounds the whole reconnect campaign even with unlimited attempts;
+    default 60s, 0 = unbounded; regression test `5.2-reconnect_budget` proves termination)
+  - ✅ E2E: orphan worker on port 8080 (fiber pool) causes flakes — deterministic teardown
+    (fixed: port moved 8080→8097 `2eb9d970`; PID-reap teardown `Children->terminate()`;
+    verified 2026-07-05: suite 28 ×5 green, 210 cases each, 8080/8097 clear between runs)
+  - ✅ Graceful reload — real hot-reload via master **re-exec** (chosen over refork, which the
+    copy-on-write master closure defeats; re-exec reloads ALL code — closures AND classes)
+    - ✅ SIGUSR2 plumbing — `project reload` / interactive `reload` → **master** (interactive
+      previously mis-signalled workers); master orchestrates the reload
+    - ✅ Graceful drain — `SIGQUIT` → worker `drain()`: stop accepting, finish in-flight, exit;
+      bounded by `TCP_Server_CLI::$drainTimeout` (30s). SIGTERM/SIGINT stay fast-stop
+    - ✅ Real reload — master drains workers then `pcntl_exec` re-execs its own image (same PID,
+      SO_REUSEPORT re-bind); `Process::$reloading` guards `recover()` from reforking mid-drain.
+      Verified 2026-07-05: v1→v2 code reload, master PID stable across 2 reloads, in-flight
+      request drained (not dropped), UDP re-exec confirmed
+    - ✅ Removed the dead in-place-reboot path + orphan `SAPI::check()` mtime watcher (both
+      no-ops — `SAPI::$production` was never set); `project reload` no longer a false success
+    - ✅ Document the reload semantics — `bootgly_docs` guide page `/reload` (en-US + pt-BR)
+    - ⭕️ Follow-ups: (a) auto-reload on project-file change (watch disk → `reload()`); (b) delete
+      the remaining vestigial `SAPI::$production` field + `boot($reset)` re-require block/param
+      (dead but entangled with the test-harness dispatch — pure cleanup, no functional effect);
+      (c) automated subprocess reload E2E (deferred — subprocess+signal+timing flake risk runs
+      counter to this series' anti-flake goal; feature is manually verified end-to-end)
+
+---
+
 ## v0.19.1-beta ✅
 
 > Focus: **HTTP Server CLI performance — persistent Fiber pool, route response cache, DBAL hot path**
