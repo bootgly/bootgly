@@ -24,8 +24,12 @@ use Bootgly\ACI\Queues\Job;
 /**
  * Demo job handler — runs in the `bootgly queue run` worker, not in the HTTP request.
  *
- * A real handler would send an email here; to keep the demo self-contained it just
- * appends a line to `storage/queue-demo.log` so you can watch jobs being processed.
+ * A real application does not need this stub: the framework ships
+ * `Bootgly\WPI\Services\Mail\Courier`, the handler behind
+ * `WPI\Services\Mail::dispatch($Message)`
+ * that delivers a queued `Mail\Message` over SMTP. To keep the demo
+ * self-contained (no SMTP server required) this handler just appends a line to
+ * `storage/queue-demo.log` so you can watch jobs being processed.
  */
 final class SendEmail implements Handler
 {

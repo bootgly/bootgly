@@ -11,7 +11,6 @@
 namespace Bootgly\ACI\Queues;
 
 
-use function class_exists;
 use function is_subclass_of;
 use function microtime;
 use RuntimeException;

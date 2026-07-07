@@ -131,5 +131,7 @@ return new Suites(
       'Bootgly/ACI/Mail/',
       // E2E (forked scripted mock SMTP server on 9994-9998; TLS certs generated at boot)
       'Bootgly/ACI/Mail/tests/E2E/',
+      // # WPI/Services/Mail — web mail service (queued dispatch via the Courier handler)
+      'Bootgly/WPI/Services/Mail/',
    ]
 );

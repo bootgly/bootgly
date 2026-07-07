@@ -65,7 +65,8 @@ return new Suite(
       };
       if ($missing !== '') {
          // @@ Record every spec as skipped
-         foreach ($Suite->tests as $test) {
+         $specs = count($Suite->tests);
+         for ($index = 0; $index < $specs; $index++) {
             $Suite->skip("(missing {$missing})");
          }
          $Suite->summarize();
@@ -394,6 +395,7 @@ return new Suite(
       '4.3-size',
       '4.4-encoding',
       '5.1-timeout',
-      '6.1-message'
+      '6.1-message',
+      '7.1-queue'
    ]
 );

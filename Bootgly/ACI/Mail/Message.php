@@ -18,6 +18,7 @@ use function date;
 use function explode;
 use function implode;
 use function in_array;
+use function is_array;
 use function is_string;
 use function preg_match;
 use function preg_replace;
@@ -31,6 +32,7 @@ use function substr;
 use InvalidArgumentException;
 
 use Bootgly\ABI\IO\FS\File;
+use Bootgly\ABI\Templates\Template;
 use Bootgly\ACI\Mail\Message\Address;
 use Bootgly\ACI\Mail\Message\Attachment;
 use Bootgly\ACI\Mail\Message\Encoder;
@@ -45,6 +47,11 @@ use Bootgly\ACI\Mail\Message\Encoder;
  * The rendered output is always 7-bit safe: non-ASCII headers become
  * RFC 2047 encoded-words, non-ASCII text bodies quoted-printable and
  * binary parts wrapped base64.
+ *
+ * The HTML body can come from a named template (`template` + `data`,
+ * rendered by the ABI template engine inside `Message::$path`), and a
+ * message crosses process boundaries through `export()`/`import()`
+ * (scalars-only payload — how queued mail travels inside a Job).
  */
 class Message
 {
@@ -58,6 +65,11 @@ class Message
    ];
 
    // * Config
+   /**
+    * Base directory used to resolve mail templates ('' falls back to the
+    * current `Template::$path`).
+    */
+   public static string $path = '';
    /**
     * Author — `a@b` or `Name <a@b>`.
     */
@@ -85,9 +97,20 @@ class Message
     */
    public string $text = '';
    /**
-    * HTML body.
+    * HTML body. When `template` is set, render() overwrites it with the
+    * template output.
     */
    public string $html = '';
+   /**
+    * Mail template name resolved inside `Message::$path` ('' disables) —
+    * rendered into `html` at render().
+    */
+   public string $template = '';
+   /**
+    * Template variables (must stay serializable for queued messages).
+    * @var array<string,mixed>
+    */
+   public array $data = [];
    /**
     * Message-ID without angle brackets ('' = generated at render()
     * and persisted).
@@ -183,6 +206,152 @@ class Message
    }
 
    /**
+    * Export the message as a scalars-only array — the shape a queued Job
+    * payload carries across processes. `import()` restores it.
+    *
+    * @return array<string,mixed>
+    */
+   public function export (): array
+   {
+      // ! Attachments/embeds as plain arrays (binary contents included)
+      $attachments = [];
+      foreach ($this->Attachments as $Attachment) {
+         $attachments[] = [
+            'name' => $Attachment->name,
+            'type' => $Attachment->type,
+            'contents' => $Attachment->contents
+         ];
+      }
+      $embeds = [];
+      foreach ($this->Embeds as $Embed) {
+         $embeds[] = [
+            'name' => $Embed->name,
+            'type' => $Embed->type,
+            'contents' => $Embed->contents,
+            'cid' => $Embed->cid
+         ];
+      }
+
+      // :
+      return [
+         'from' => $this->from,
+         'reply' => $this->reply,
+         'to' => $this->to,
+         'cc' => $this->cc,
+         'bcc' => $this->bcc,
+         'subject' => $this->subject,
+         'text' => $this->text,
+         'html' => $this->html,
+         'template' => $this->template,
+         'data' => $this->data,
+         'id' => $this->id,
+         'date' => $this->date,
+         'boundary' => $this->boundary,
+         'headers' => $this->headers,
+         'attachments' => $attachments,
+         'embeds' => $embeds
+      ];
+   }
+
+   /**
+    * Import a message from an `export()` array (e.g. a queued Job payload).
+    * Unknown keys are ignored; malformed values fall back to the defaults.
+    *
+    * @param array<string,mixed> $data
+    */
+   public static function import (array $data): self
+   {
+      $Message = new self();
+
+      // ! Scalar string properties
+      foreach (
+         ['from', 'reply', 'subject', 'text', 'html', 'template', 'id', 'date', 'boundary']
+         as $property
+      ) {
+         $value = $data[$property] ?? '';
+         if (is_string($value) === true) {
+            $Message->$property = $value;
+         }
+      }
+
+      // ! Address lists (string or list of strings)
+      foreach (['to', 'cc', 'bcc'] as $property) {
+         $value = $data[$property] ?? [];
+         if (is_string($value) === true) {
+            $Message->$property = $value;
+
+            continue;
+         }
+         if (is_array($value) === true) {
+            $addresses = [];
+            foreach ($value as $address) {
+               if (is_string($address) === true) {
+                  $addresses[] = $address;
+               }
+            }
+
+            $Message->$property = $addresses;
+         }
+      }
+
+      // ! Template variables
+      $variables = $data['data'] ?? [];
+      if (is_array($variables) === true) {
+         foreach ($variables as $name => $variable) {
+            if (is_string($name) === true) {
+               $Message->data[$name] = $variable;
+            }
+         }
+      }
+
+      // ! Custom headers
+      $headers = $data['headers'] ?? [];
+      if (is_array($headers) === true) {
+         foreach ($headers as $name => $value) {
+            if (is_string($name) === true && is_string($value) === true) {
+               $Message->headers[$name] = $value;
+            }
+         }
+      }
+
+      // ! Attachments and embeds
+      $attachments = $data['attachments'] ?? [];
+      if (is_array($attachments) === true) {
+         foreach ($attachments as $attachment) {
+            if (
+               is_array($attachment) === false
+               || is_string($attachment['contents'] ?? null) === false
+               || is_string($attachment['name'] ?? null) === false
+               || is_string($attachment['type'] ?? null) === false
+            ) {
+               continue;
+            }
+
+            $Message->attach($attachment['contents'], $attachment['name'], $attachment['type']);
+         }
+      }
+      $embeds = $data['embeds'] ?? [];
+      if (is_array($embeds) === true) {
+         foreach ($embeds as $embed) {
+            if (
+               is_array($embed) === false
+               || is_string($embed['contents'] ?? null) === false
+               || is_string($embed['name'] ?? null) === false
+               || is_string($embed['type'] ?? null) === false
+               || is_string($embed['cid'] ?? null) === false
+            ) {
+               continue;
+            }
+
+            $Message->embed($embed['contents'], $embed['name'], $embed['type'], $embed['cid']);
+         }
+      }
+
+      // :
+      return $Message;
+   }
+
+   /**
     * Render the full raw RFC 5322 message (CRLF line endings, 7-bit safe).
     * Unset `id`/`date`/`boundary` are generated once and persisted —
     * rendering is idempotent.
@@ -192,6 +361,25 @@ class Message
       // ? Guard
       if ($this->from === '') {
          throw new InvalidArgumentException('Mail message requires `from`.');
+      }
+
+      // @ Template-based HTML body (rendered by the ABI template engine)
+      if ($this->template !== '') {
+         // ! Named templates resolve inside the mail jail and the web
+         //   default layout never wraps an email — both scoped here,
+         //   restoring the previous base path + layout afterwards
+         $path = Template::$path;
+         $layout = Template::$layout;
+         Template::$path = self::$path !== '' ? self::$path : $path;
+         Template::$layout = '';
+         try {
+            $this->html = new Template(Template::resolve($this->template))
+               ->render($this->data);
+         }
+         finally {
+            Template::$path = $path;
+            Template::$layout = $layout;
+         }
       }
 
       $Encoder = $this->Encoder;

@@ -32,5 +32,7 @@ return new Suite(
       '8.3-message-tree',
       '8.4-message-render',
       '8.5-message-union',
+      '9.1-message-template',
+      '9.2-message-transfer',
    ]
 );
