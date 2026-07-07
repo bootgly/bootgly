@@ -2,6 +2,41 @@
 
 Changelog for Bootgly framework. All notable changes to this project will be documented in this file. Imported from ROADMAP.md.
 
+## v0.21.0-beta ✅
+
+> Focus: **Templates + Views + Mail**
+
+### ABI — Abstract Bootable Interface
+
+- ✅ Template engine improvements
+  - ✅ Custom exception handling (`TemplateException` — errors point at the template line, not the compiled PHP)
+  - ✅ Template inheritance (`@extends`, `@section`, `@yield` with default blocks)
+  - ✅ Component includes (`@include [with]`, `@component`/`@slot` with default + named slots)
+  - ✅ Raw PHP block improvements (`@!: ... @!;` verbatim; `@>>` HTML-escaped output)
+  - ✅ Compilation cache (`storage/cache/templates`) with mtime invalidation (path-keyed, version-salted, atomic writes)
+
+### WPI — Web Programming Interface
+
+- ✅ View rendering engine (today: per-node `Response/Resources/View.php`)
+  - ✅ Layout system (layouts + sections on top of the ABI template engine)
+  - ✅ JSON/XML/HTML content negotiation (same payload, `Accept`-driven)
+  - ✅ Keep the F-12 view whitelist/`Path::normalize` hardening through the expansion
+- ✅ Mail system (net-new)
+  - ✅ SMTP client (built-in, TLS via openssl — no dependency; `ACI/Mail`)
+  - ✅ Attachments + multipart MIME (`Mail/Message` builder — alternative/related/mixed, RFC 2047, QP/base64, inline `cid:`)
+  - ✅ Template-based emails (`Message->template` + `data` over the ABI engine, jailed in `Message::$path`)
+  - ✅ Queue integration (`WPI\Services\Mail::dispatch()` → `Courier` handler over the shared `WPI\Queues`; retry/backoff)
+
+### Bonus
+
+- ✅ Theme system — `ABI/Data/__String/Theme.php` public API polished
+  (`open`/`close`/`apply`, multi-`add`, `check`/`list`, `null|string`, `ThemeException`,
+  `apply()` appending bug fixed)
+  - ✅ Builtin themes `dark`/`light`/`mono` + `Theme::$Current` active UI theme; `mono` honors
+    `NO_COLOR`
+
+---
+
 ## v0.20.0-beta ✅
 
 > Focus: **Project creation + CLI input components + Console Platform**
