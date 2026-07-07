@@ -23,12 +23,12 @@ jobs:
 
     steps:
       - name: Checkout bootgly (framework)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           path: bootgly
 
       - name: Checkout bootgly_benchmarks (full target needs the sibling)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: bootgly/bootgly_benchmarks
           path: bootgly_benchmarks
@@ -46,16 +46,16 @@ jobs:
           echo "Resolved version: $V"
 
       - name: Setup Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Login to Docker Hub
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Build and push slim
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: bootgly/Dockerfile
@@ -69,7 +69,7 @@ jobs:
             bootgly/bootgly:latest
 
       - name: Build and push full
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: bootgly/Dockerfile
