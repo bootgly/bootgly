@@ -24,6 +24,7 @@ use Bootgly\ABI\Data\__String\Escapeable\Cursor\Visualizable;
 use Bootgly\ABI\Data\__String\Escapeable\Text\Formattable;
 use Bootgly\ABI\Data\__String\Escapeable\Text\Modifiable;
 use Bootgly\ABI\Data\__String\Escapeable\Viewport\Scrollable;
+use Bootgly\ABI\Data\__String\Theme;
 use Bootgly\ABI\Resources;
 
 
@@ -91,18 +92,24 @@ class Escaped
          },
    
          '/@(:[a-z]+):/m' => function ($matches) {
-            $color = match ($matches[1]) {
-               ':d', ':s', ':debug', ':success' => self::_GREEN_BRIGHT_FOREGROUND,
-      
-               ':i', ':info' => self::_CYAN_BRIGHT_FOREGROUND,
-               ':n', ':notice' => self::_YELLOW_BRIGHT_FOREGROUND,
-               ':w', ':warning' => self::_MAGENTA_BRIGHT_FOREGROUND,
-               ':e', ':error' => self::_RED_BRIGHT_FOREGROUND,
-      
-               default => self::_DEFAULT_FOREGROUND
+            // # Semantic color — resolved through the active UI Theme (dark/light/mono).
+            $key = match ($matches[1]) {
+               ':s', ':success' => 'success',
+               ':d', ':debug'   => 'debug',
+               ':i', ':info'    => 'info',
+               ':n', ':notice'  => 'notice',
+               ':w', ':warning' => 'warning',
+               ':e', ':error'   => 'error',
+
+               default => null
             };
-      
-            return self::wrap($color);
+
+            // ?: Unknown semantic token — keep the default foreground
+            if ($key === null) {
+               return self::wrap(self::_DEFAULT_FOREGROUND);
+            }
+
+            return Theme::$Current->open($key);
          },
    
          '/@([@*~_-]):[\s]?/m' => function ($matches) {

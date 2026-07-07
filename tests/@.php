@@ -133,5 +133,7 @@ return new Suites(
       'Bootgly/ACI/Mail/tests/E2E/',
       // # WPI/Services/Mail — web mail service (queued dispatch via the Courier handler)
       'Bootgly/WPI/Services/Mail/',
+      // # ABI/Data/__String/Theme — theme system (public API, builtins, Escaped seam)
+      'Bootgly/ABI/Data/__String/Theme/',
    ]
 );
