@@ -440,6 +440,49 @@ class PostgreSQL extends Driver
       return $Completed;
    }
 
+   /**
+    * Abort the session after a transport failure.
+    *
+    * A dead socket can never deliver the responses the pipeline is waiting
+    * for: every pipelined operation fails, the session state (server-side
+    * prepared statements, packet buffer, write holder) dies with the socket
+    * and the connection is disconnected so the pool drops it instead of
+    * keeping it busy forever.
+    */
+   private function abort (Operation $Operation, string $error): Operation
+   {
+      // ! Session state — packets and named statements die with the socket
+      $this->statements = [];
+      $this->preparing = [];
+      $this->writing = null;
+      $this->Decoder = new Decoder;
+
+      $Pipeline = $this->pipeline;
+      $this->pipeline = [];
+
+      // @@ Pipelined operations — completed[] hands the siblings to Pool::drain()
+      foreach ($Pipeline as $Queued) {
+         if ($Queued->finished === false) {
+            $Queued->quarantine = true;
+            $Queued->fail($error);
+         }
+
+         if ($Queued !== $Operation) {
+            $this->completed[] = $Queued;
+         }
+      }
+
+      if ($Operation->finished === false) {
+         $Operation->quarantine = true;
+         $Operation->fail($error);
+      }
+
+      // @ Drop the transport — the pool releases the connection as dead.
+      $this->Connection->disconnect();
+
+      // :
+      return $Operation;
+   }
 
    /**
     * Cache prepared statement metadata.
@@ -532,10 +575,7 @@ class PostgreSQL extends Driver
       $socket = $this->Connection->socket;
 
       if (is_resource($socket) === false) {
-         $Operation->quarantine = $this->Connection->state !== ConnectionStates::Ready;
-         $Operation->fail('PostgreSQL socket is not available.');
-
-         return $Operation;
+         return $this->abort($Operation, 'PostgreSQL socket is not available.');
       }
 
       // @ Invalidate Readiness cache when the socket changes.
@@ -573,8 +613,7 @@ class PostgreSQL extends Driver
       $socket = $this->Connection->socket;
 
       if (is_resource($socket) === false) {
-         $Operation->quarantine = $this->Connection->state !== ConnectionStates::Ready;
-         $Operation->fail('PostgreSQL socket is not available.');
+         $this->abort($Operation, 'PostgreSQL socket is not available.');
 
          return false;
       }
@@ -582,16 +621,14 @@ class PostgreSQL extends Driver
       $written = @fwrite($socket, $Operation->write);
 
       if ($written === false) {
-         $Operation->quarantine = $this->Connection->state !== ConnectionStates::Ready;
-         $Operation->fail('PostgreSQL socket write failed.');
+         $this->abort($Operation, 'PostgreSQL socket write failed.');
 
          return false;
       }
 
       if ($written === 0) {
          if (feof($socket)) {
-            $Operation->quarantine = $this->Connection->state !== ConnectionStates::Ready;
-            $Operation->fail('PostgreSQL socket closed during write.');
+            $this->abort($Operation, 'PostgreSQL socket closed during write.');
 
             return false;
          }
@@ -620,27 +657,18 @@ class PostgreSQL extends Driver
       $socket = $this->Connection->socket;
 
       if (is_resource($socket) === false) {
-         $Operation->quarantine = true;
-         $Operation->fail('PostgreSQL socket is not available.');
-
-         return $Operation;
+         return $this->abort($Operation, 'PostgreSQL socket is not available.');
       }
 
       $response = @fread($socket, 1);
 
       if ($response === false) {
-         $Operation->quarantine = true;
-         $Operation->fail('PostgreSQL SSL response read failed.');
-
-         return $Operation;
+         return $this->abort($Operation, 'PostgreSQL SSL response read failed.');
       }
 
       if ($response === '') {
          if (feof($socket)) {
-            $Operation->quarantine = true;
-            $Operation->fail('PostgreSQL socket closed during SSL negotiation.');
-
-            return $Operation;
+            return $this->abort($Operation, 'PostgreSQL socket closed during SSL negotiation.');
          }
 
          return $this->await($Operation, Scheduler::SCHEDULE_READ);
@@ -686,8 +714,7 @@ class PostgreSQL extends Driver
       $socket = $this->Connection->socket;
 
       if (is_resource($socket) === false) {
-         $Operation->quarantine = $this->Connection->state !== ConnectionStates::Ready;
-         $Operation->fail('PostgreSQL socket is not available.');
+         $this->abort($Operation, 'PostgreSQL socket is not available.');
 
          return $Operation->state;
       }
@@ -695,16 +722,14 @@ class PostgreSQL extends Driver
       $bytes = @fread($socket, 8192);
 
       if ($bytes === false) {
-         $Operation->quarantine = $this->Connection->state !== ConnectionStates::Ready;
-         $Operation->fail('PostgreSQL socket read failed.');
+         $this->abort($Operation, 'PostgreSQL socket read failed.');
 
          return $Operation->state;
       }
 
       if ($bytes === '') {
          if (feof($socket)) {
-            $Operation->quarantine = $this->Connection->state !== ConnectionStates::Ready;
-            $Operation->fail('PostgreSQL socket closed.');
+            $this->abort($Operation, 'PostgreSQL socket closed.');
 
             return $Operation->state;
          }
@@ -716,7 +741,8 @@ class PostgreSQL extends Driver
          $Messages = $this->Decoder->decode($bytes);
       }
       catch (Throwable $Throwable) {
-         $Operation->fail($Throwable->getMessage());
+         // ? Framing corruption cannot be resynchronized — kill the session.
+         $this->abort($Operation, $Throwable->getMessage());
 
          return $Operation->state;
       }
