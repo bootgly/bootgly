@@ -656,6 +656,16 @@ class MySQL extends Driver
          }
       }
 
+      // ? A sibling pump may have re-armed the head (prepare-OK re-queues the
+      //   command as COM_STMT_EXECUTE). Push it to the wire now: event-driven
+      //   callers only wake on socket reads, and this request-response socket
+      //   stays silent until the head writes.
+      $Head = $this->pipeline[0] ?? null;
+
+      if ($Head !== null && $Head !== $Operation && $Head->finished === false && $Head->state === OperationStates::Querying) {
+         $this->advance($Head);
+      }
+
       return $Operation->state;
    }
 

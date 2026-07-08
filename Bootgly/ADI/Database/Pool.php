@@ -343,6 +343,11 @@ class Pool
          return $Operation;
       }
 
+      // ? A pending operation may be assigned through Pool::advance() before
+      //   promote() shifts it — forget it so it is never assigned twice
+      //   (a second assign() re-prepares and re-sends the wire command).
+      $this->forget($Operation);
+
       $Protocol = $this->create($Connection);
       $Operation->Connection = $Connection;
       $Operation->Protocol = $Protocol;

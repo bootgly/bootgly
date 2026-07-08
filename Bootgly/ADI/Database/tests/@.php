@@ -28,6 +28,7 @@ return new Suite(
       '4.1-pool-reuses_connection',
       '4.2-pool-max_colocation',
       '4.3-pool-created_bookkeeping',
+      '4.4-pool-pending_forget',
       '5.1-postgresql_authentication_md5',
       '5.2-postgresql_authentication_scram',
       '5.3-postgresql_scram_state_machine',
@@ -78,5 +79,6 @@ return new Suite(
       '10.14-mysql_transactions',
       '10.15-mysql_e2e_live',
       '10.16-mysql_transport_failures',
+      '10.17-mysql_event_head_flush',
    ]
 );
