@@ -21,6 +21,14 @@ use Bootgly\ADI\Databases\SQL\Builder\Query;
 interface Querying
 {
    /**
+    * Whether this surface accepts a new operation while another is pending.
+    *
+    * Pooled connections pipeline; transaction surfaces are serial and reject
+    * a second operation until the previous one finishes.
+    */
+   public bool $pipelining { get; }
+
+   /**
     * Create an async SQL query operation.
     *
     * @param string|Builder|Query $query

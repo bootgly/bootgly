@@ -32,6 +32,8 @@ class Transaction implements Awaiting, Querying
 {
    // * Config
    public SQLDatabase $Database;
+   // ! Serial surface: one pending operation at a time.
+   public protected(set) bool $pipelining = false;
 
    // * Data
    public private(set) null|Connection $Connection = null;

@@ -11,12 +11,21 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources;
 
 
+use function array_key_exists;
+use function http_build_query;
+use function implode;
+use function is_string;
+use function max;
+use function min;
+use function strtok;
 use BackedEnum;
 use Closure;
+use InvalidArgumentException;
 use RuntimeException;
 use Stringable;
 use Throwable;
 
+use const Bootgly\WPI;
 use Bootgly\ADI\Database\Operation\Result;
 use Bootgly\ADI\Databases\SQL;
 use Bootgly\ADI\Databases\SQL\Awaiting;
@@ -24,10 +33,14 @@ use Bootgly\ADI\Databases\SQL\Builder;
 use Bootgly\ADI\Databases\SQL\Builder\Query;
 use Bootgly\ADI\Databases\SQL\Operation;
 use Bootgly\ADI\Databases\SQL\Repository;
+use Bootgly\ADI\Databases\SQL\Repository\Pagination;
+use Bootgly\ADI\Databases\SQL\Repository\Pagination\Modes;
+use Bootgly\ADI\Databases\SQL\Repository\Selection;
 use Bootgly\ADI\Databases\SQL\Transaction;
 use Bootgly\API\Environment\Configs;
 use Bootgly\API\Environment\Configs\Config;
 use Bootgly\API\Environment\Configs\DatabaseConfig;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resource;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resource\Scheduling;
@@ -40,6 +53,10 @@ class Database extends Resource implements Awaiting, Scheduling
 {
    // * Config
    public SQL $Database;
+   /** Default page size when the request omits `limit`. */
+   public static int $limit = 10;
+   /** Maximum accepted request `limit` (client input clamp). */
+   public static int $cap = 100;
 
    // * Data
    private null|Closure $Wait = null;
@@ -47,6 +64,7 @@ class Database extends Resource implements Awaiting, Scheduling
    //   a get hook here costs ~2% CPU on 1-query routes (kills engine inlining),
    //   and a null scope falls through to the SQL facade's default resolution
    private null|object $Scope = null;
+   private null|Response $Response = null;
 
    // * Metadata
    // ...
@@ -157,6 +175,16 @@ class Database extends Resource implements Awaiting, Scheduling
    }
 
    /**
+    * Bind the response context for request-driven helpers.
+    */
+   public function bind (Response $Response): static
+   {
+      $this->Response = $Response;
+
+      return $this;
+   }
+
+   /**
     * Bind the logical read-after-write scope.
     */
    public function scope (object $Scope): static
@@ -192,6 +220,85 @@ class Database extends Resource implements Awaiting, Scheduling
    public function map (string $Entity): Repository
    {
       return $this->Database->map($Entity, $this->Scope, $this);
+   }
+
+   /**
+    * Paginate one mapped entity through the request query parameters.
+    *
+    * Reads `page`, `limit` and `cursor` from the request query string
+    * (a present `cursor` key selects keyset mode), emits the `X-Total-Count`
+    * and `Link` REST headers and returns the negotiable body.
+    *
+    * Client-input contract: malformed cursors throw before any query is
+    * dispatched — catch `InvalidArgumentException` in the route to answer
+    * with a 400-class response.
+    *
+    * @param class-string|Repository $Entity
+    * @return array<string,mixed>
+    * @throws InvalidArgumentException When the request cursor is malformed.
+    */
+   public function paginate (string|Repository $Entity, null|Selection $Selection = null): array
+   {
+      // ?
+      $Response = $this->Response
+         ?? throw new RuntimeException('Database response resource is not bound.');
+      $Request = WPI->Request;
+
+      // ! Client input: clamped limit and page, cursor presence wins.
+      $limit = (int) $Request->query('limit', (string) static::$limit);
+      $limit = $limit < 1 ? static::$limit : min($limit, static::$cap);
+      $page = max(1, (int) $Request->query('page', '1'));
+      $cursor = $Request->query('cursor');
+
+      $Pagination = array_key_exists('cursor', $Request->queries)
+         ? new Pagination(limit: $limit, cursor: $cursor === '' ? null : $cursor, Mode: Modes::Cursor)
+         : new Pagination(limit: $limit, page: $page);
+
+      // @ Paginated fetch awaited through this resource bridge.
+      $Repository = is_string($Entity) ? $this->map($Entity) : $Entity;
+      $Operation = $this->await($Repository->paginate($Selection, $Pagination, $this->Scope));
+      $this->check($Operation);
+      $Mapped = $Repository->hydrate($Operation);
+
+      // @ REST pagination headers and negotiable body.
+      $links = [];
+
+      if ($Pagination->Mode === Modes::Cursor) {
+         if ($Pagination->next !== null) {
+            $links[] = $this->link($Request, ['cursor' => $Pagination->next, 'limit' => $limit], 'next');
+         }
+
+         $body = [
+            'items' => $Mapped->entities,
+            'limit' => $limit,
+            'next' => $Pagination->next,
+         ];
+      }
+      else {
+         $Response->Header->set('X-Total-Count', (string) $Pagination->total);
+
+         if ($page < ($Pagination->pages ?? 0)) {
+            $links[] = $this->link($Request, ['page' => $page + 1, 'limit' => $limit], 'next');
+         }
+         if ($page > 1) {
+            $links[] = $this->link($Request, ['page' => $page - 1, 'limit' => $limit], 'prev');
+         }
+
+         $body = [
+            'items' => $Mapped->entities,
+            'page' => $page,
+            'pages' => $Pagination->pages,
+            'limit' => $limit,
+            'total' => $Pagination->total,
+         ];
+      }
+
+      if ($links !== []) {
+         $Response->Header->set('Link', implode(', ', $links));
+      }
+
+      // : Negotiable pagination body.
+      return $body;
    }
 
    /**
@@ -329,6 +436,25 @@ class Database extends Resource implements Awaiting, Scheduling
 
          throw $Throwable;
       }
+   }
+
+   /**
+    * Render one Link header entry preserving foreign query parameters.
+    *
+    * @param array<string,int|string> $overrides
+    */
+   private function link (Request $Request, array $overrides, string $relation): string
+   {
+      $path = strtok($Request->URI, '?');
+      $path = $path === false ? '/' : $path;
+
+      // ! Mode keys are replaced, foreign query parameters are preserved.
+      $queries = $Request->queries;
+      unset($queries['page'], $queries['cursor']);
+      $query = http_build_query([...$queries, ...$overrides]);
+
+      // : Link header entry.
+      return "<{$path}?{$query}>; rel=\"{$relation}\"";
    }
 
    /**

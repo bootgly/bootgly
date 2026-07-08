@@ -12,15 +12,20 @@ namespace Bootgly\ADI\Databases\SQL;
 
 
 use function array_key_exists;
+use function array_slice;
 use function array_values;
+use function ceil;
+use function count;
 use function in_array;
 use function is_array;
 use function is_bool;
 use function is_float;
 use function is_int;
+use function is_numeric;
 use function is_object;
 use function is_string;
 use function serialize;
+use BackedEnum;
 use Closure;
 use InvalidArgumentException;
 use ReflectionNamedType;
@@ -34,8 +39,10 @@ use Bootgly\ADI\Databases\SQL\Awaiting;
 use Bootgly\ADI\Databases\SQL\Builder;
 use Bootgly\ADI\Databases\SQL\Builder\Auxiliaries\Capabilities;
 use Bootgly\ADI\Databases\SQL\Builder\Auxiliaries\Operators;
+use Bootgly\ADI\Databases\SQL\Builder\Auxiliaries\Orders;
 use Bootgly\ADI\Databases\SQL\Builder\Dialect;
 use Bootgly\ADI\Databases\SQL\Builder\Identifier;
+use Bootgly\ADI\Databases\SQL\Builder\Query;
 use Bootgly\ADI\Databases\SQL\Model\Auxiliaries\Relations;
 use Bootgly\ADI\Databases\SQL\Model\Relation;
 use Bootgly\ADI\Databases\SQL\Models;
@@ -47,6 +54,8 @@ use Bootgly\ADI\Databases\SQL\Repository\Identity;
 use Bootgly\ADI\Databases\SQL\Repository\LazyBatch;
 use Bootgly\ADI\Databases\SQL\Repository\LazyCollection;
 use Bootgly\ADI\Databases\SQL\Repository\LazyReference;
+use Bootgly\ADI\Databases\SQL\Repository\Pagination;
+use Bootgly\ADI\Databases\SQL\Repository\Pagination\Modes;
 use Bootgly\ADI\Databases\SQL\Repository\Result as MappedResult;
 use Bootgly\ADI\Databases\SQL\Repository\Selection;
 
@@ -66,7 +75,7 @@ class Repository
    // * Data
    public private(set) Identity $Identity;
    private null|object $Scope;
-   /** @var WeakMap<Operation,array{loads:array<int,string>,lazies:array<int,string>,Scope:null|object,Entity?:object}> */
+   /** @var WeakMap<Operation,array{loads:array<int,string>,lazies:array<int,string>,Scope:null|object,Entity?:object,Pagination?:Pagination,Count?:null|Operation,Query?:null|Query,orders?:array<int,array{column:string,order:Orders}>}> */
    private WeakMap $contexts;
    /** @var array<string,Closure> */
    private array $scopes = [];
@@ -231,6 +240,10 @@ class Repository
       $lazies = $this->detect($loads);
       $Scope = $this->Scope;
       $Saved = null;
+      $Pagination = null;
+      $Count = null;
+      $CountQuery = null;
+      $orders = [];
 
       if ($Source instanceof Operation && isset($this->contexts[$Source])) {
          $context = $this->contexts[$Source];
@@ -238,6 +251,10 @@ class Repository
          $lazies = $context['lazies'];
          $Scope = $context['Scope'];
          $Saved = $context['Entity'] ?? null;
+         $Pagination = $context['Pagination'] ?? null;
+         $Count = $context['Count'] ?? null;
+         $CountQuery = $context['Query'] ?? null;
+         $orders = $context['orders'] ?? [];
          unset($this->contexts[$Source]);
       }
 
@@ -258,12 +275,18 @@ class Repository
          $entities = [$Saved];
       }
 
+      // ? Pagination outcome — totals are awaited and the keyset probe row is
+      //   trimmed before relation batches, so the probe entity never joins them.
+      if ($Pagination !== null) {
+         $this->settle($Pagination, $Count, $CountQuery, $orders, $Scope, $Result, $entities);
+      }
+
       if ($lazies !== []) {
          $this->install($entities, $lazies, $Scope);
       }
 
       $operations = $loads === [] || $this->Awaiting !== null ? [] : $this->load($entities, $loads, $Scope);
-      $Mapped = new MappedResult($Result, $entities, $operations);
+      $Mapped = new MappedResult($Result, $entities, $operations, $Pagination);
 
       if ($loads !== [] && $this->Awaiting !== null) {
          $this->pull($Mapped, $loads, $Scope);
@@ -346,6 +369,109 @@ class Repository
 
       // : Operations by relation name.
       return $operations;
+   }
+
+   /**
+    * Paginate entities through one ORM selection.
+    *
+    * Page mode dispatches the items query plus one COUNT(*) query — pipelined
+    * on pooled connections, deferred to hydration on serial surfaces such as
+    * transactions; cursor mode dispatches a keyset-restricted items query
+    * probing one row beyond the limit. Hydrate the returned operation to
+    * obtain the mapped result carrying the resolved pagination outcome.
+    *
+    * Contract: page mode on an asynchronous connection requires an await
+    * bridge at hydration time — the COUNT(*) operation is repository-managed
+    * and cannot be awaited by the caller. Cursor mode requires non-nullable,
+    * plainly-ordered (no NULLS FIRST/LAST) order columns.
+    */
+   public function paginate (null|Selection $Selection = null, null|Pagination $Pagination = null, null|object $Scope = null): Operation
+   {
+      // ! Cloned selection — pagination mutates limits and predicates.
+      $Selection = $Selection === null ? $this->select() : clone $Selection;
+      $Pagination ??= new Pagination;
+      $Scope ??= $this->Scope;
+      $this->apply($Selection);
+      $this->emit(Hooks::Selecting, $Selection);
+
+      // ! Effective orders with the primary key as final tiebreak.
+      $cursored = $Pagination->Mode === Modes::Cursor;
+      $orders = [];
+      $tiebroken = false;
+
+      foreach ($Selection->orders as $Order) {
+         $Column = $Order['column'];
+         $name = $Column instanceof BackedEnum ? $Column->value : (string) $Column;
+
+         if (is_string($name) === false) {
+            throw new InvalidArgumentException('ORM selection enum identifiers must be string-backed.');
+         }
+
+         $column = $this->Model->identify($name);
+
+         // ? Cursor keysets compare strictly — NULLS ordering and nullable
+         //   order columns cannot produce a total, comparable order.
+         if ($cursored) {
+            if ($Order['nulls'] !== null) {
+               throw new InvalidArgumentException('ORM cursor pagination does not support NULLS ordering.');
+            }
+            if (($this->Model->definitions[$column] ?? null)?->nullable === true) {
+               throw new InvalidArgumentException("ORM cursor pagination requires non-nullable order columns: {$column}");
+            }
+         }
+
+         $orders[] = ['column' => $column, 'order' => $Order['order']];
+         $tiebroken = $tiebroken || $column === $this->Model->key;
+      }
+
+      if ($tiebroken === false) {
+         $Selection->order(Orders::Asc, new Identifier($this->Model->key));
+         $orders[] = ['column' => $this->Model->key, 'order' => Orders::Asc];
+      }
+
+      // # Cursor mode: keyset restriction + one-row probe.
+      if ($cursored) {
+         if ($Pagination->cursor !== null) {
+            $Selection->seek($orders, $Pagination->decode(count($orders)));
+         }
+
+         $Selection->limit($Pagination->limit + 1);
+
+         $Items = $this->Querying->query($Selection->compile(), Scope: $Scope);
+         $Count = null;
+         $CountQuery = null;
+      }
+      // # Page mode: LIMIT/OFFSET slice + COUNT(*) total.
+      else {
+         $page = $Pagination->page ?? 1;
+         $Selection->limit($Pagination->limit, ($page - 1) * $Pagination->limit);
+
+         $Items = $this->Querying->query($Selection->compile(), Scope: $Scope);
+         $CountQuery = $Selection->count();
+
+         // ? Serial surfaces (transactions) reject a second operation while
+         //   the first is pending — defer the COUNT(*) dispatch to hydration.
+         $Count = $this->Querying->pipelining || $Items->finished
+            ? $this->Querying->query($CountQuery, Scope: $Scope)
+            : null;
+      }
+
+      // ! Pagination context resolved at hydrate().
+      $loads = $Selection->loads;
+      $this->contexts[$Items] = [
+         'loads' => $loads,
+         'lazies' => $this->detect($loads),
+         'Scope' => $Scope,
+         'Pagination' => $Pagination,
+         'Count' => $Count,
+         'Query' => $CountQuery,
+         'orders' => $orders,
+      ];
+
+      $this->emit(Hooks::Selected, $Items, $Selection);
+
+      // : Items operation.
+      return $Items;
    }
 
    /**
@@ -641,6 +767,73 @@ class Repository
          $Operation = $Awaiting->await($Operation);
          $this->attach($Mapped->entities, $relation, $Operation);
       }
+   }
+
+   /**
+    * Settle one pagination outcome after hydration.
+    *
+    * @param array<int,array{column:string,order:Orders}> $orders
+    * @param array<int,object> $entities
+    */
+   private function settle (Pagination $Pagination, null|Operation $Count, null|Query $CountQuery, array $orders, null|object $Scope, DatabaseResult $Result, array &$entities): void
+   {
+      // # Cursor mode: limit+1 probe resolves `more` and the next token.
+      if ($Pagination->Mode === Modes::Cursor) {
+         $more = $Result->count > $Pagination->limit;
+         $next = null;
+
+         if ($more) {
+            // ! Next token from the raw values of the last kept row.
+            $row = $Result->rows[$Pagination->limit - 1];
+            $values = [];
+
+            foreach ($orders as $Order) {
+               $values[] = $row[$Order['column']] ?? null;
+            }
+
+            $next = Pagination::encode($values);
+
+            // ! Probe trimmed from entities AND raw rows — every mapped-result
+            //   view exposes the same public slice; the probe entity remains
+            //   only in the identity map.
+            $entities = array_slice($entities, 0, $Pagination->limit);
+            $Result->rows = array_slice($Result->rows, 0, $Pagination->limit);
+         }
+
+         $Pagination->resolve(more: $more, next: $next);
+
+         return;
+      }
+
+      // # Page mode: resolve the COUNT(*) total.
+      // ? Serial surfaces deferred the COUNT(*) dispatch — the items
+      //   operation is finished here, so the surface accepts it now.
+      if ($Count === null) {
+         if ($CountQuery === null) {
+            return;
+         }
+
+         $Count = $this->Querying->query($CountQuery, Scope: $Scope);
+      }
+
+      if ($Count->finished === false) {
+         if ($this->Awaiting === null) {
+            throw new RuntimeException('ORM pagination count requires an await bridge.');
+         }
+
+         $Count = $this->Awaiting->await($Count);
+      }
+
+      if ($Count->error !== null) {
+         throw new RuntimeException($Count->error);
+      }
+
+      $value = $Count->Result?->rows[0]['total'] ?? 0;
+      $total = is_numeric($value) ? (int) $value : 0;
+      $pages = (int) ceil($total / $Pagination->limit);
+      $page = $Pagination->page ?? 1;
+
+      $Pagination->resolve(total: $total, pages: $pages, more: $page < $pages);
    }
 
    /**

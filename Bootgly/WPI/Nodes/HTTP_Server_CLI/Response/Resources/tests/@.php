@@ -22,5 +22,6 @@ return new Suite(
       '1.4-kv_resource_provide',
       '1.5-xml_resource',
       '1.6-negotiation_resource',
+      '1.7-database_resource_paginate',
    ]
 );

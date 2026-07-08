@@ -38,6 +38,11 @@ class Result
     */
    public private(set) array $loads;
 
+   /**
+    * Pagination outcome attached by `Repository::paginate()`.
+    */
+   public private(set) null|Pagination $Pagination;
+
    // # Views
    public null|object $entity {
       get => $this->entities[0] ?? null;
@@ -59,7 +64,7 @@ class Result
     * @param array<int,object> $entities
     * @param array<string,Operation> $loads
     */
-   public function __construct (DatabaseResult $Result, array $entities, array $loads = [])
+   public function __construct (DatabaseResult $Result, array $entities, array $loads = [], null|Pagination $Pagination = null)
    {
       // * Config
       $this->Result = $Result;
@@ -67,5 +72,6 @@ class Result
       // * Data
       $this->entities = $entities;
       $this->loads = $loads;
+      $this->Pagination = $Pagination;
    }
 }

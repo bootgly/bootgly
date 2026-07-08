@@ -11,8 +11,10 @@
 namespace Bootgly\ADI\Databases\SQL\Repository;
 
 
+use function count;
 use function is_string;
 use BackedEnum;
+use Closure;
 use InvalidArgumentException;
 use Stringable;
 
@@ -43,14 +45,14 @@ class Selection
    public private(set) array $loads = [];
    /** @var array<int,string> */
    public private(set) array $scopes = [];
+   /** @var array<int,array{order:Orders,column:BackedEnum|Stringable,nulls:null|Nulls}> */
+   public private(set) array $orders = [];
 
    // * Metadata
-   /** @var array<int,array{column:BackedEnum|Stringable,operator:Operators,value:mixed,junction:Junctions}> */
+   /** @var array<int,array{column:BackedEnum|Stringable,operator:Operators,value:mixed,junction:Junctions}|array{nest:Closure,junction:Junctions}> */
    private array $filters = [];
    /** @var array<int,array{column:BackedEnum|Stringable,value:mixed,match:Matches,junction:Junctions}> */
    private array $matches = [];
-   /** @var array<int,array{order:Orders,column:BackedEnum|Stringable,nulls:null|Nulls}> */
-   private array $orders = [];
    private null|int $limited = null;
    private int $offset = 0;
    private null|Locks $Lock = null;
@@ -75,23 +77,7 @@ class Selection
          $Builder->select(new Identifier($column));
       }
 
-      foreach ($this->filters as $Filter) {
-         $Builder->filter(
-            $this->identify($Filter['column']),
-            $Filter['operator'],
-            $Filter['value'],
-            $Filter['junction']
-         );
-      }
-
-      foreach ($this->matches as $Match) {
-         $Builder->match(
-            $this->identify($Match['column']),
-            $Match['value'],
-            $Match['match'],
-            $Match['junction']
-         );
-      }
+      $this->restrict($Builder);
 
       foreach ($this->orders as $Order) {
          $Builder->order(
@@ -112,6 +98,24 @@ class Selection
          $Builder->lock($this->Lock);
       }
 
+      return $Builder->compile();
+   }
+
+   /**
+    * Compile this ORM selection to a SQL total count query.
+    *
+    * Only restriction predicates (filters, matches) are replayed — order,
+    * limit, offset and locks do not affect the total.
+    */
+   public function count (): Query
+   {
+      $Builder = new Builder($this->Dialect);
+      $Builder->table(new Identifier($this->Model->table));
+      $Builder->count(new Identifier('total'));
+
+      $this->restrict($Builder);
+
+      // : Total count query.
       return $Builder->compile();
    }
 
@@ -203,6 +207,46 @@ class Selection
    }
 
    /**
+    * Restrict this selection to rows strictly after one keyset position.
+    *
+    * Orders and values are positional pairs — the last pair is the unique
+    * tiebreak. Column names must be resolved SQL columns; the repository
+    * resolves mapped properties before seeking.
+    *
+    * @param array<int,array{column:string,order:Orders}> $orders
+    * @param array<int,bool|float|int|string> $values
+    */
+   public function seek (array $orders, array $values): static
+   {
+      // ?
+      if ($orders === [] || count($orders) !== count($values)) {
+         throw new InvalidArgumentException('ORM keyset seek requires matching order columns and values.');
+      }
+
+      // ! Keyset OR-chain: row i = equality on all preceding order columns
+      //   plus one strict comparison on column i. Replay-safe for dialects.
+      $this->filters[] = [
+         'nest' => static function (Builder $Group) use ($orders, $values): void {
+            foreach ($orders as $index => $Order) {
+               $Group->nest(static function (Builder $Inner) use ($orders, $values, $index): void {
+                  for ($previous = 0; $previous < $index; $previous++) {
+                     $Inner->filter(new Identifier($orders[$previous]['column']), Operators::Equal, $values[$previous]);
+                  }
+
+                  $Operator = $orders[$index]['order'] === Orders::Asc
+                     ? Operators::Greater
+                     : Operators::Less;
+                  $Inner->filter(new Identifier($orders[$index]['column']), $Operator, $values[$index]);
+               }, Junctions::Or);
+            }
+         },
+         'junction' => Junctions::And,
+      ];
+
+      return $this;
+   }
+
+   /**
     * Skip a number of selected rows.
     */
    public function skip (int $offset): static
@@ -228,5 +272,36 @@ class Selection
       }
 
       return new Identifier($this->Model->identify((string) $Column));
+   }
+
+   /**
+    * Replay restriction predicates into one SQL builder.
+    */
+   private function restrict (Builder $Builder): void
+   {
+      foreach ($this->filters as $Filter) {
+         // ?: Grouped predicate scope.
+         if (isSet($Filter['nest'])) {
+            $Builder->nest($Filter['nest'], $Filter['junction']);
+
+            continue;
+         }
+
+         $Builder->filter(
+            $this->identify($Filter['column']),
+            $Filter['operator'],
+            $Filter['value'],
+            $Filter['junction']
+         );
+      }
+
+      foreach ($this->matches as $Match) {
+         $Builder->match(
+            $this->identify($Match['column']),
+            $Match['value'],
+            $Match['match'],
+            $Match['junction']
+         );
+      }
    }
 }

@@ -48,6 +48,8 @@ class SQL extends Database implements Awaiting, Querying
    public Config $SQLConfig;
    public private(set) Dialect $Dialect;
    public private(set) Models $Models;
+   // ! Pooled connections accept pipelined operations.
+   public protected(set) bool $pipelining = true;
 
    // * Data
    /** @var array<int,Pool> */

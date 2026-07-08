@@ -370,6 +370,7 @@ class Response extends Server\Response
    private function attach (ResponseResource $Resource): ResponseResource
    {
       if ($Resource instanceof DatabaseResource) {
+         $Resource->bind($this);
          $Resource->scope($this->Scope);
          $this->scoped = true;
       }
