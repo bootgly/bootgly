@@ -27,6 +27,7 @@ return new Specification(
       $Secure->Verify->bind(default: true);
       $Secure->Peer->bind(default: 'postgres.internal');
       $Secure->CAFile->bind(default: '/tmp/ca.pem');
+      $Secure->Key->bind(default: '/tmp/server-key.pem');
 
       $Pool = $PostgreSQL->Pool;
       $Pool->Min->bind(default: 1);
@@ -77,6 +78,7 @@ return new Specification(
             'name' => true,
             'peer' => 'postgres.internal',
             'cafile' => '/tmp/ca.pem',
+            'key' => '/tmp/server-key.pem',
          ],
          description: 'Adapter maps TLS fields'
       );
@@ -106,6 +108,7 @@ return new Specification(
                'name' => true,
                'peer' => 'replica.internal',
                'cafile' => '/tmp/replica-ca.pem',
+               'key' => '/tmp/server-key.pem',
             ] && $Config->replicas[0]['pool'] === [
                'min' => 0,
                'max' => 2,
@@ -136,6 +139,7 @@ return new Specification(
             'name' => true,
             'peer' => 'fallback.local',
             'cafile' => ADIConfig::DEFAULT_SECURE_CAFILE,
+            'key' => ADIConfig::DEFAULT_SECURE_KEY,
          ] && $FallbackConfig->pool === [
             'min' => ADIConfig::DEFAULT_POOL_MIN,
             'max' => ADIConfig::DEFAULT_POOL_MAX,
@@ -197,6 +201,102 @@ return new Specification(
       yield assert(
          assertion: $wrongScopeRejected,
          description: 'Adapter rejects non-database scopes'
+      );
+
+      // # SQLite
+      $SQLiteScope = new Config(scope: 'database');
+      $SQLiteScope->Default->bind(default: 'sqlite');
+
+      $SQLite = $SQLiteScope->Connections->SQLite;
+      $SQLite->Driver->bind(default: 'sqlite');
+      $SQLite->Database->bind(default: ':memory:');
+      $SQLite->Timeout->bind(default: 5.0);
+      $SQLite->Statements->bind(default: 8);
+      $SQLite->Pool->Min->bind(default: 0);
+      $SQLite->Pool->Max->bind(default: 1);
+
+      $SQLiteConfig = (new DatabaseConfig($SQLiteScope))->configure();
+
+      yield assert(
+         assertion: $SQLiteConfig->driver === 'sqlite'
+            && $SQLiteConfig->database === ':memory:'
+            && $SQLiteConfig->timeout === 5.0
+            && $SQLiteConfig->statements === 8
+            && $SQLiteConfig->pool === [
+               'min' => 0,
+               'max' => 1,
+            ],
+         description: 'Adapter maps the SQLite connection scope'
+      );
+
+      $AliasScope = new Config(scope: 'database');
+      $AliasScope->Default->bind(default: 'sqlite3');
+      $AliasScope->Connections->SQLite->Database->bind(default: '/tmp/bootgly-alias.db');
+      $AliasConfig = (new DatabaseConfig($AliasScope))->configure();
+
+      yield assert(
+         assertion: $AliasConfig->driver === 'sqlite'
+            && $AliasConfig->database === '/tmp/bootgly-alias.db',
+         description: 'Adapter normalizes the sqlite3 driver alias to sqlite'
+      );
+
+      $UnsupportedScope = new Config(scope: 'database');
+      $UnsupportedScope->Default->bind(default: 'oracle');
+      $unsupportedRejected = false;
+
+      try {
+         (new DatabaseConfig($UnsupportedScope))->configure();
+      }
+      catch (InvalidArgumentException) {
+         $unsupportedRejected = true;
+      }
+
+      yield assert(
+         assertion: $unsupportedRejected,
+         description: 'Adapter still rejects unsupported drivers'
+      );
+
+      // # MySQL
+      $MySQLScope = new Config(scope: 'database');
+      $MySQLScope->Default->bind(default: 'mysql');
+
+      $MySQL = $MySQLScope->Connections->MySQL;
+      $MySQL->Driver->bind(default: 'mysql');
+      $MySQL->Host->bind(default: 'mysql.local');
+      $MySQL->Port->bind(default: 3306);
+      $MySQL->Database->bind(default: 'bootgly_app');
+      $MySQL->Username->bind(default: 'root');
+      $MySQL->Password->bind(default: 'secret');
+      $MySQL->Secure->Mode->bind(default: 'require');
+      $MySQL->Pool->Min->bind(default: 1);
+      $MySQL->Pool->Max->bind(default: 4);
+
+      $MySQLConfig = (new DatabaseConfig($MySQLScope))->configure();
+
+      yield assert(
+         assertion: $MySQLConfig->driver === 'mysql'
+            && $MySQLConfig->host === 'mysql.local'
+            && $MySQLConfig->port === 3306
+            && $MySQLConfig->database === 'bootgly_app'
+            && $MySQLConfig->username === 'root'
+            && $MySQLConfig->password === 'secret'
+            && $MySQLConfig->secure['mode'] === 'require'
+            && $MySQLConfig->pool === [
+               'min' => 1,
+               'max' => 4,
+            ],
+         description: 'Adapter maps the MySQL connection scope'
+      );
+
+      $MariaDBScope = new Config(scope: 'database');
+      $MariaDBScope->Default->bind(default: 'mariadb');
+      $MariaDBScope->Connections->MySQL->Host->bind(default: 'mariadb.local');
+      $MariaDBConfig = (new DatabaseConfig($MariaDBScope))->configure();
+
+      yield assert(
+         assertion: $MariaDBConfig->driver === 'mysql'
+            && $MariaDBConfig->host === 'mariadb.local',
+         description: 'Adapter normalizes the mariadb driver alias to mysql'
       );
    }
 );

@@ -104,6 +104,7 @@ class DatabaseConfig
          'verify' => 'Verify',
          'peer' => 'Peer',
          'cafile' => 'CAFile',
+         'key' => 'Key',
       ] as $key => $name) {
          $value = $this->resolve($Secure, $name);
 
@@ -199,6 +200,7 @@ class DatabaseConfig
             'verify' => 'Verify',
             'peer' => 'Peer',
             'cafile' => 'CAFile',
+            'key' => 'Key',
          ] as $key => $name) {
             $value = $this->resolve($Secure, $name);
 
@@ -254,20 +256,24 @@ class DatabaseConfig
 
       return match ((string) $driver) {
          'pgsql', 'postgres', 'postgresql' => ADIConfig::DEFAULT_DRIVER,
+         'mysql', 'mariadb' => 'mysql',
+         'sqlite', 'sqlite3' => 'sqlite',
          default => throw new InvalidArgumentException("Unsupported database driver: {$driver}."),
       };
    }
 
    /**
     * Select one driver connection subtree.
-      *
-      * New drivers must add their `Connections->{Driver}` scope here and in the
-      * project `database` config file; PostgreSQL is the only Phase 7 driver.
+    *
+    * New drivers must add their `Connections->{Driver}` scope here and in the
+    * project `database` config file.
     */
    private function select (string $driver): Config
    {
       return match ($driver) {
          ADIConfig::DEFAULT_DRIVER => $this->Config->Connections->PostgreSQL,
+         'mysql' => $this->Config->Connections->MySQL,
+         'sqlite' => $this->Config->Connections->SQLite,
          default => throw new InvalidArgumentException("Unsupported database driver: {$driver}."),
       };
    }

@@ -82,9 +82,9 @@ class RecordingSQL extends SQL
    public function query (string|Builder|Query $query, array $parameters = [], null|object $Scope = null): Operation
    {
       $Normalized = new Normalized($query, $parameters);
-      $Operation = new Operation(null, $Normalized->sql, $Normalized->parameters);
+      $Operation = new Operation(null, $Normalized->SQL, $Normalized->parameters);
       $this->queries[] = [
-         'sql' => $Operation->sql,
+         'sql' => $Operation->SQL,
          'parameters' => $Operation->parameters,
       ];
       $this->scopes[] = $Scope;
@@ -110,7 +110,7 @@ return new Specification(
       $Operation = $Repository->find(5);
 
       yield assert(
-         assertion: $Operation->sql === 'SELECT "id", "name", "email", "active" FROM "orm_users" WHERE "id" = ?1 LIMIT 1'
+         assertion: $Operation->SQL === 'SELECT "id", "name", "email", "active" FROM "orm_users" WHERE "id" = ?1 LIMIT 1'
             && $Operation->parameters === [5]
             && $Database->scopes[0] === $Scope,
          description: 'Repository::find compiles a scoped primary-key lookup operation'
@@ -123,7 +123,7 @@ return new Specification(
       $Operation = $Repository->fetch($Selection);
 
       yield assert(
-         assertion: $Operation->sql === 'SELECT "id", "name", "email", "active" FROM "orm_users" WHERE "active" = ?1 ORDER BY "name" ASC'
+         assertion: $Operation->SQL === 'SELECT "id", "name", "email", "active" FROM "orm_users" WHERE "active" = ?1 ORDER BY "name" ASC'
             && $Operation->parameters === [true],
          description: 'Repository::fetch compiles explicit ORM selections through the SQL builder'
       );
@@ -135,7 +135,7 @@ return new Specification(
       $Operation = $Repository->save($User);
 
       yield assert(
-         assertion: $Operation->sql === 'INSERT INTO "orm_users" ("name", "email", "active") VALUES (?1, ?2, ?3) RETURNING "id", "name", "email", "active"'
+         assertion: $Operation->SQL === 'INSERT INTO "orm_users" ("name", "email", "active") VALUES (?1, ?2, ?3) RETURNING "id", "name", "email", "active"'
             && $Operation->parameters === ['Ada', 'ada@example.test', true],
          description: 'Repository::save compiles INSERT for generated-key entities'
       );
@@ -160,7 +160,7 @@ return new Specification(
       $Operation = $ManualRepository->save($ManualUser);
 
       yield assert(
-         assertion: $Operation->sql === 'INSERT INTO "orm_manual_users" ("id", "name") VALUES (?1, ?2) RETURNING "id", "name"'
+         assertion: $Operation->SQL === 'INSERT INTO "orm_manual_users" ("id", "name") VALUES (?1, ?2) RETURNING "id", "name"'
             && $Operation->parameters === ['manual-1', 'Manual Ada'],
          description: 'Repository::save compiles INSERT for new non-generated primary-key entities'
       );
@@ -178,7 +178,7 @@ return new Specification(
       $Operation = $ManualRepository->save($Tracked);
 
       yield assert(
-         assertion: $Operation->sql === 'UPDATE "orm_manual_users" SET "name" = ?1 WHERE "id" = ?2 RETURNING "id", "name"'
+         assertion: $Operation->SQL === 'UPDATE "orm_manual_users" SET "name" = ?1 WHERE "id" = ?2 RETURNING "id", "name"'
             && $Operation->parameters === ['Tracked Ada Updated', 'manual-2'],
          description: 'Repository::save compiles UPDATE for tracked non-generated primary-key entities'
       );
@@ -187,7 +187,7 @@ return new Specification(
       $Operation = $Repository->save($User);
 
       yield assert(
-         assertion: $Operation->sql === 'UPDATE "orm_users" SET "name" = ?1, "email" = ?2, "active" = ?3 WHERE "id" = ?4 RETURNING "id", "name", "email", "active"'
+         assertion: $Operation->SQL === 'UPDATE "orm_users" SET "name" = ?1, "email" = ?2, "active" = ?3 WHERE "id" = ?4 RETURNING "id", "name", "email", "active"'
             && $Operation->parameters === ['Ada', 'ada@example.test', true, 7],
          description: 'Repository::save compiles UPDATE when the primary key is present'
       );
@@ -195,7 +195,7 @@ return new Specification(
       $Operation = $Repository->delete($User);
 
       yield assert(
-         assertion: $Operation->sql === 'DELETE FROM "orm_users" WHERE "id" = ?1'
+         assertion: $Operation->SQL === 'DELETE FROM "orm_users" WHERE "id" = ?1'
             && $Operation->parameters === [7],
          description: 'Repository::delete compiles DELETE from entity primary key'
       );
@@ -203,7 +203,7 @@ return new Specification(
       $Operation = $Repository->delete(8);
 
       yield assert(
-         assertion: $Operation->sql === 'DELETE FROM "orm_users" WHERE "id" = ?1'
+         assertion: $Operation->SQL === 'DELETE FROM "orm_users" WHERE "id" = ?1'
             && $Operation->parameters === [8],
          description: 'Repository::delete compiles DELETE from a raw primary-key value'
       );

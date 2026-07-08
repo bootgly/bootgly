@@ -15,7 +15,9 @@ use Bootgly\ADI\Database\Config as DatabaseConfig;
 use Bootgly\ADI\Database\Connection;
 use Bootgly\ADI\Database\Drivers as DatabaseDrivers;
 use Bootgly\ADI\Databases\SQL\Config;
+use Bootgly\ADI\Databases\SQL\Drivers\MySQL;
 use Bootgly\ADI\Databases\SQL\Drivers\PostgreSQL;
+use Bootgly\ADI\Databases\SQL\Drivers\SQLite;
 
 
 /**
@@ -28,7 +30,9 @@ class Drivers extends DatabaseDrivers
       parent::__construct($Config, $Connection);
 
       if ($Config instanceof Config) {
+         $this->register('mysql', new MySQL($Config, $Connection));
          $this->register('pgsql', new PostgreSQL($Config, $Connection));
+         $this->register('sqlite', new SQLite($Config, $Connection));
       }
    }
 }

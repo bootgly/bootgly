@@ -109,7 +109,7 @@ class SQL extends Database implements Awaiting, Querying
       $Normalized = new Normalized($query, $parameters);
       $Scope = $this->resolve($Scope);
       $Pool = $this->route($Normalized, $Scope);
-      $Operation = new Operation(null, $Normalized->sql, $Normalized->parameters, $Pool->Config->timeout);
+      $Operation = new Operation(null, $Normalized->SQL, $Normalized->parameters, $Pool->Config->timeout);
 
       if ($Pool !== $this->Pool && $Normalized->reading) {
          $Operation->FallbackPool = $this->Pool;

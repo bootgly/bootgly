@@ -96,9 +96,9 @@ class RecordingSQL extends SQL
    public function query (string|Builder|Query $query, array $parameters = [], null|object $Scope = null): Operation
    {
       $Normalized = new Normalized($query, $parameters);
-      $Operation = new Operation(null, $Normalized->sql, $Normalized->parameters);
+      $Operation = new Operation(null, $Normalized->SQL, $Normalized->parameters);
       $this->queries[] = [
-         'sql' => $Operation->sql,
+         'sql' => $Operation->SQL,
          'parameters' => $Operation->parameters,
       ];
       $this->scopes[] = $Scope;
@@ -117,7 +117,7 @@ class RecordingAwaiting implements Awaiting
    {
       $this->operations[] = $Operation;
 
-      if (str_contains($Operation->sql, 'FROM "orm_posts"')) {
+      if (str_contains($Operation->SQL, 'FROM "orm_posts"')) {
          return $Operation->resolve(new Result(
             rows: [[
                'id' => 13,
@@ -128,7 +128,7 @@ class RecordingAwaiting implements Awaiting
          ));
       }
 
-      if (str_contains($Operation->sql, 'FROM "orm_profiles"')) {
+      if (str_contains($Operation->SQL, 'FROM "orm_profiles"')) {
          return $Operation->resolve(new Result(
             rows: [[
                'id' => 32,
@@ -155,7 +155,7 @@ return new Specification(
 
       yield assert(
          assertion: isset($Operations['posts'], $Operations['groups'])
-            && $Operations['posts']->sql === 'SELECT "id", "user_id", "title" FROM "orm_posts" WHERE "user_id" IN (?1)'
+            && $Operations['posts']->SQL === 'SELECT "id", "user_id", "title" FROM "orm_posts" WHERE "user_id" IN (?1)'
             && $Operations['posts']->parameters === [1],
          description: 'Repository::load compiles hasMany batch queries with an IN filter'
       );
@@ -170,7 +170,7 @@ return new Specification(
       );
 
       yield assert(
-         assertion: $Operations['groups']->sql === 'SELECT "orm_groups"."id", "orm_groups"."name", "orm_memberships"."user_id" AS "__orm_local" FROM "orm_groups" JOIN "orm_memberships" ON "orm_groups"."id" = "orm_memberships"."group_id" WHERE "orm_memberships"."user_id" IN (?1)'
+         assertion: $Operations['groups']->SQL === 'SELECT "orm_groups"."id", "orm_groups"."name", "orm_memberships"."user_id" AS "__orm_local" FROM "orm_groups" JOIN "orm_memberships" ON "orm_groups"."id" = "orm_memberships"."group_id" WHERE "orm_memberships"."user_id" IN (?1)'
             && $Operations['groups']->parameters === [1],
          description: 'Repository::load compiles belongsToMany batch queries through a pivot table'
       );
@@ -201,7 +201,7 @@ return new Specification(
       $ProfileOperations = $Repository->load($User, ['profile']);
 
       yield assert(
-         assertion: $ProfileOperations['profile']->sql === 'SELECT "id", "user_id", "bio" FROM "orm_profiles" WHERE "user_id" IN (?1)'
+         assertion: $ProfileOperations['profile']->SQL === 'SELECT "id", "user_id", "bio" FROM "orm_profiles" WHERE "user_id" IN (?1)'
             && $ProfileOperations['profile']->parameters === [1],
          description: 'Repository::load compiles hasOne batch queries from parent local keys'
       );
@@ -253,9 +253,9 @@ return new Specification(
       yield assert(
          assertion: $Loaded instanceof User
             && isset($Mapped->loads['posts'], $Mapped->loads['profile'])
-            && $Mapped->loads['posts']->sql === 'SELECT "id", "user_id", "title" FROM "orm_posts" WHERE "user_id" IN (?1)'
+            && $Mapped->loads['posts']->SQL === 'SELECT "id", "user_id", "title" FROM "orm_posts" WHERE "user_id" IN (?1)'
             && $Mapped->loads['posts']->parameters === [2]
-            && $Mapped->loads['profile']->sql === 'SELECT "id", "user_id", "bio" FROM "orm_profiles" WHERE "user_id" IN (?1)'
+            && $Mapped->loads['profile']->SQL === 'SELECT "id", "user_id", "bio" FROM "orm_profiles" WHERE "user_id" IN (?1)'
             && $Mapped->loads['profile']->parameters === [2],
          description: 'Selection::load is wired into hydration as deferred relation operations'
       );
@@ -322,7 +322,7 @@ return new Specification(
       $Operations = $PostRepository->load($Post, ['author']);
 
       yield assert(
-         assertion: $Operations['author']->sql === 'SELECT "id", "name" FROM "orm_users" WHERE "id" IN (?1)'
+         assertion: $Operations['author']->SQL === 'SELECT "id", "name" FROM "orm_users" WHERE "id" IN (?1)'
             && $Operations['author']->parameters === [1],
          description: 'Repository::load compiles belongsTo batch queries from local foreign keys'
       );
@@ -345,7 +345,7 @@ return new Specification(
       $columnOperations = $PostRepository->load($Post, ['authorByColumn']);
 
       yield assert(
-         assertion: $columnOperations['authorByColumn']->sql === 'SELECT "id", "name" FROM "orm_users" WHERE "id" IN (?1)'
+         assertion: $columnOperations['authorByColumn']->SQL === 'SELECT "id", "name" FROM "orm_users" WHERE "id" IN (?1)'
             && $columnOperations['authorByColumn']->parameters === [1],
          description: 'Repository resolves relation local keys provided as mapped column names'
       );

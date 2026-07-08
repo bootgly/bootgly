@@ -92,7 +92,7 @@ class PostgreSQL extends Dialect
 
             if ($Change->expression !== null) {
                $expression = $Change->expression instanceof Expression
-                  ? $Change->expression->sql
+                  ? $Change->expression->SQL
                   : $Change->expression;
                $action = "{$action} USING {$expression}";
             }
@@ -265,7 +265,7 @@ class PostgreSQL extends Dialect
       }
 
       foreach ($Column->checks as $check) {
-         $expression = $check instanceof Expression ? $check->sql : $check;
+         $expression = $check instanceof Expression ? $check->SQL : $check;
          $segments[] = "CHECK ({$expression})";
       }
 

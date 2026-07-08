@@ -20,7 +20,7 @@ use Stringable;
 class Query implements Stringable
 {
    // * Config
-   public private(set) string $sql;
+   public private(set) string $SQL;
    /** @var array<int,mixed> */
    public private(set) array $parameters;
    public private(set) bool $reading;
@@ -38,7 +38,7 @@ class Query implements Stringable
    public function __construct (string $sql, array $parameters = [], bool $reading = false)
    {
       // * Config
-      $this->sql = $sql;
+      $this->SQL = $sql;
       $this->parameters = $parameters;
       $this->reading = $reading;
    }
@@ -48,6 +48,6 @@ class Query implements Stringable
     */
    public function __toString (): string
    {
-      return $this->sql;
+      return $this->SQL;
    }
 }

@@ -40,7 +40,7 @@ return new Specification(
          ->compile();
 
       yield assert(
-         assertion: $Query->sql === 'SELECT "users"."id" FROM "users" LEFT JOIN "profiles" ON "users"."id" = "profiles"."user_id" WHERE "users"."name" ILIKE $1 AND to_tsvector(\'simple\', "profiles"."bio") @@ plainto_tsquery(\'simple\', $2) OFFSET 20',
+         assertion: $Query->SQL === 'SELECT "users"."id" FROM "users" LEFT JOIN "profiles" ON "users"."id" = "profiles"."user_id" WHERE "users"."name" ILIKE $1 AND to_tsvector(\'simple\', "profiles"."bio") @@ plainto_tsquery(\'simple\', $2) OFFSET 20',
          description: 'Builder compiles JOIN, ILIKE, full-text match and OFFSET without orderBy/where syntax'
       );
 
@@ -56,7 +56,7 @@ return new Specification(
          ->compile();
 
       yield assert(
-         assertion: $Query->sql === 'SELECT "users"."id" FROM "users" WHERE "users"."name" LIKE $1',
+         assertion: $Query->SQL === 'SELECT "users"."id" FROM "users" WHERE "users"."name" LIKE $1',
          description: 'Builder defaults match() to LIKE'
       );
    }

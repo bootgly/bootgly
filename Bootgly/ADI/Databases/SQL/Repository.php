@@ -66,7 +66,7 @@ class Repository
    // * Data
    public private(set) Identity $Identity;
    private null|object $Scope;
-   /** @var WeakMap<Operation,array{loads:array<int,string>,lazies:array<int,string>,Scope:null|object}> */
+   /** @var WeakMap<Operation,array{loads:array<int,string>,lazies:array<int,string>,Scope:null|object,Entity?:object}> */
    private WeakMap $contexts;
    /** @var array<string,Closure> */
    private array $scopes = [];
@@ -230,12 +230,14 @@ class Repository
       $loads = [];
       $lazies = $this->detect($loads);
       $Scope = $this->Scope;
+      $Saved = null;
 
       if ($Source instanceof Operation && isset($this->contexts[$Source])) {
          $context = $this->contexts[$Source];
          $loads = $context['loads'];
          $lazies = $context['lazies'];
          $Scope = $context['Scope'];
+         $Saved = $context['Entity'] ?? null;
          unset($this->contexts[$Source]);
       }
 
@@ -247,6 +249,14 @@ class Repository
       // @ Hydration and deferred/eager relation operations.
       $this->emit(Hooks::Hydrating, $Result);
       $entities = $this->Hydrator->hydrate($Result);
+
+      // ? Generated-key backfill — dialects without RETURNING report the
+      //   generated id in Result->inserted instead of returning rows.
+      if ($entities === [] && $Saved !== null && $Result->inserted > 0) {
+         $this->Model->write($Saved, $this->Model->keyProperty, $Result->inserted);
+         $this->Identity->store($this->Model->class, $Result->inserted, $Saved);
+         $entities = [$Saved];
+      }
 
       if ($lazies !== []) {
          $this->install($entities, $lazies, $Scope);
@@ -372,6 +382,17 @@ class Repository
          ? $this->insert($Entity)
          : $this->update($Entity, $id);
       $Operation = $this->Querying->query($Builder, Scope: $Scope ?? $this->Scope);
+
+      // ? Dialects without RETURNING backfill the generated key at hydrate()
+      //   from Result->inserted — keep the saved entity on the operation context.
+      if ($insert && $this->Model->generated && $this->Dialect->check(Capabilities::Output) === false) {
+         $this->contexts[$Operation] = [
+            'loads' => [],
+            'lazies' => [],
+            'Scope' => $Scope ?? $this->Scope,
+            'Entity' => $Entity,
+         ];
+      }
 
       $this->emit(Hooks::Saved, $Operation, $Entity);
 

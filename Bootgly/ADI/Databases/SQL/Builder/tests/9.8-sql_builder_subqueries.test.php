@@ -44,7 +44,7 @@ return new Specification(
          ->compile();
 
       yield assert(
-         assertion: $Query->sql === 'SELECT "id" FROM "users" WHERE "active" = $1 AND "id" IN (SELECT "id" FROM "users" WHERE "name" = $2)'
+         assertion: $Query->SQL === 'SELECT "id" FROM "users" WHERE "active" = $1 AND "id" IN (SELECT "id" FROM "users" WHERE "name" = $2)'
             && $Query->parameters === [true, 'Ada'],
          description: 'Builder compiles IN subqueries and rebases nested placeholders'
       );
@@ -60,7 +60,7 @@ return new Specification(
          ->compile();
 
       yield assert(
-         assertion: $Query->sql === 'SELECT "u"."id" FROM (SELECT "id", "name" FROM "users" WHERE "active" = $1) AS "u" WHERE "u"."name" = $2'
+         assertion: $Query->SQL === 'SELECT "u"."id" FROM (SELECT "id", "name" FROM "users" WHERE "active" = $1) AS "u" WHERE "u"."name" = $2'
             && $Query->parameters === [true, 'Ada'],
          description: 'Builder compiles derived FROM subqueries with aliases and rebased placeholders'
       );

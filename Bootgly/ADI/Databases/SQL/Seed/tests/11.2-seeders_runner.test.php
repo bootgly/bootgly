@@ -10,6 +10,7 @@ use function file_put_contents;
 use function glob;
 use function is_dir;
 use function rmdir;
+use function str_contains;
 use function uniqid;
 use function unlink;
 use InvalidArgumentException;
@@ -37,7 +38,9 @@ class RecordingSQL extends SQL
 
    public function __construct ()
    {
-      parent::__construct(['driver' => 'sqlite', 'pool' => ['min' => 0, 'max' => 0]]);
+      // ! MySQL — a dialect without transactional DDL keeps the runner on the
+      //   direct (non-transactional) path this recording double expects.
+      parent::__construct(['driver' => 'mysql', 'pool' => ['min' => 0, 'max' => 0]]);
    }
 
    /**
@@ -47,10 +50,17 @@ class RecordingSQL extends SQL
    public function query (string|Builder|SQLQuery $query, array $parameters = [], null|object $Scope = null): SQLOperation
    {
       $Normalized = new Normalized($query, $parameters);
-      $Operation = new SQLOperation(null, $Normalized->sql, $Normalized->parameters, $this->Config->timeout);
+      $Operation = new SQLOperation(null, $Normalized->SQL, $Normalized->parameters, $this->Config->timeout);
+
+      // ? Advisory lock queries resolve granted and stay out of the recording
+      if (str_contains($Operation->SQL, '_LOCK(')) {
+         $Operation->resolve(new Result('OK', [['locked' => 1]]));
+
+         return $Operation;
+      }
 
       $this->queries[] = [
-         'sql'        => $Operation->sql,
+         'sql'        => $Operation->SQL,
          'parameters' => $Operation->parameters,
       ];
 
@@ -120,7 +130,7 @@ PHP);
       yield assert(
          assertion: $preview === [
             'first' => [[
-               'sql'        => 'INSERT INTO "users" ("email") VALUES (?1)',
+               'sql'        => 'INSERT INTO `users` (`email`) VALUES (?)',
                'parameters' => [$expectedEmail],
             ]],
             'second' => [[
@@ -139,7 +149,7 @@ PHP);
 
       yield assert(
          assertion: $ran === ['first', 'second']
-            && $Database->queries[0]['sql'] === 'INSERT INTO "users" ("email") VALUES (?1)'
+            && $Database->queries[0]['sql'] === 'INSERT INTO `users` (`email`) VALUES (?)'
             && $Database->queries[0]['parameters'] === [$expectedEmail]
             && $Database->queries[1]['sql'] === 'SELECT 1'
             && $Database->queries[2]['sql'] === 'SELECT 2',

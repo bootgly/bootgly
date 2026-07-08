@@ -71,7 +71,7 @@ return new Specification(
 
       yield assert(
          assertion: $Operation->Connection === $Begin->Connection
-            && $Operation->sql === 'SELECT "id" FROM "users" WHERE "id" = $1'
+            && $Operation->SQL === 'SELECT "id" FROM "users" WHERE "id" = $1'
             && $Operation->parameters === [42],
          description: 'Transaction::query accepts Builder and keeps the transaction connection pinned'
       );
@@ -80,7 +80,7 @@ return new Specification(
       $wire = fread($server, 8192);
 
       yield assert(
-         assertion: str_contains($wire, $Operation->sql),
+         assertion: str_contains($wire, $Operation->SQL),
          description: 'Compiled transaction builder SQL reaches the PostgreSQL wire path'
       );
 
@@ -98,7 +98,7 @@ return new Specification(
          ->compile();
 
       yield assert(
-         assertion: $Query->sql === 'SELECT `id` FROM `users` WHERE `id` = ?'
+         assertion: $Query->SQL === 'SELECT `id` FROM `users` WHERE `id` = ?'
             && $Query->parameters === [42],
          description: 'SQL::table selects the builder dialect from the configured SQL driver'
       );
@@ -111,7 +111,7 @@ return new Specification(
          ->compile();
 
       yield assert(
-         assertion: $Query->sql === 'SELECT `id` FROM `users` WHERE `id` = ?'
+         assertion: $Query->SQL === 'SELECT `id` FROM `users` WHERE `id` = ?'
             && $Query->parameters === [42],
          description: 'Transaction::table selects the builder dialect from the configured SQL driver'
       );

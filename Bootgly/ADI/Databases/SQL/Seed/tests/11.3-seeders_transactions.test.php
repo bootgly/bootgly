@@ -55,13 +55,13 @@ class RecordingPool extends Pool
    {
       if ($Operation instanceof SQLOperation) {
          $this->Database->queries[] = [
-            'sql'        => $Operation->sql,
+            'sql'        => $Operation->SQL,
             'parameters' => $Operation->parameters,
          ];
 
          $Operation->Connection ??= $this->Connection;
 
-         if ($this->fail !== null && str_contains($Operation->sql, $this->fail)) {
+         if ($this->fail !== null && str_contains($Operation->SQL, $this->fail)) {
             return $Operation->fail('forced failure');
          }
       }
@@ -106,14 +106,14 @@ class RecordingSQL extends SQL
    public function query (string|Builder|SQLQuery $query, array $parameters = [], null|object $Scope = null): SQLOperation
    {
       $Normalized = new Normalized($query, $parameters);
-      $Operation = new SQLOperation(null, $Normalized->sql, $Normalized->parameters, $this->Config->timeout);
+      $Operation = new SQLOperation(null, $Normalized->SQL, $Normalized->parameters, $this->Config->timeout);
 
       $this->queries[] = [
-         'sql'        => $Operation->sql,
+         'sql'        => $Operation->SQL,
          'parameters' => $Operation->parameters,
       ];
 
-      $rows = str_contains($Operation->sql, 'pg_try_advisory_lock')
+      $rows = str_contains($Operation->SQL, 'pg_try_advisory_lock')
          ? [['locked' => $this->advisory]]
          : [];
       $Operation->resolve(new Result('OK', $rows));

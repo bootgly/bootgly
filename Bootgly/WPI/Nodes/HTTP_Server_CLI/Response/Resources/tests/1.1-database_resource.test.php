@@ -67,7 +67,7 @@ final class RecordingSQL extends SQL
          $query = $query->compile();
       }
 
-      $sql = is_string($query) ? $query : $query->sql;
+      $sql = is_string($query) ? $query : $query->SQL;
       $parameters = $query instanceof Query ? $query->parameters : $parameters;
 
       return new Operation(null, $sql, $parameters);
@@ -91,17 +91,17 @@ final class RecordingSQL extends SQL
    {
       $step = ($this->steps[$Operation] ?? 0) + 1;
       $this->steps[$Operation] = $step;
-      $this->advanced[] = $Operation->sql;
+      $this->advanced[] = $Operation->SQL;
 
-      if ($Operation->sql === 'WAIT' && $step === 1) {
+      if ($Operation->SQL === 'WAIT' && $step === 1) {
          return $Operation;
       }
 
-      if ($Operation->sql === 'FAIL') {
+      if ($Operation->SQL === 'FAIL') {
          return $Operation->fail('expected failure');
       }
 
-      if ($Operation->sql === 'NO_RESULT') {
+      if ($Operation->SQL === 'NO_RESULT') {
          return $this->finish($Operation);
       }
 

@@ -35,7 +35,7 @@ return new Specification(
       );
 
       yield assert(
-         assertion: $Repository->create()->sql === 'CREATE TABLE IF NOT EXISTS "_bootgly_migrations" ("migration" VARCHAR(191) NOT NULL PRIMARY KEY, "batch" INTEGER NOT NULL, "created_at" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP)',
+         assertion: $Repository->create()->SQL === 'CREATE TABLE IF NOT EXISTS "_bootgly_migrations" ("migration" VARCHAR(191) NOT NULL PRIMARY KEY, "batch" INTEGER NOT NULL, "created_at" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP)',
          description: 'Repository compiles PostgreSQL migration status table creation through the Schema Builder'
       );
 
@@ -47,15 +47,15 @@ return new Specification(
       $Query = $Repository->insert('20260514000000_create_accounts', 3);
 
       yield assert(
-         assertion: $Query->sql === 'INSERT INTO "_bootgly_migrations" ("migration", "batch") VALUES ($1, $2)'
+         assertion: $Query->SQL === 'INSERT INTO "_bootgly_migrations" ("migration", "batch") VALUES ($1, $2)'
             && $Query->parameters === ['20260514000000_create_accounts', 3],
          description: 'Repository compiles migration insert with parameters'
       );
 
       yield assert(
-         assertion: $Repository->peek()->sql === 'SELECT COALESCE(MAX("batch"), 0) AS "batch" FROM "_bootgly_migrations"'
-            && $Repository->delete('x')->sql === 'DELETE FROM "_bootgly_migrations" WHERE "migration" = $1'
-            && $Repository->fetch()->sql === 'SELECT "migration", "batch", "created_at" FROM "_bootgly_migrations" ORDER BY "batch" DESC, "migration" DESC',
+         assertion: $Repository->peek()->SQL === 'SELECT COALESCE(MAX("batch"), 0) AS "batch" FROM "_bootgly_migrations"'
+            && $Repository->delete('x')->SQL === 'DELETE FROM "_bootgly_migrations" WHERE "migration" = $1'
+            && $Repository->fetch()->SQL === 'SELECT "migration", "batch", "created_at" FROM "_bootgly_migrations" ORDER BY "batch" DESC, "migration" DESC',
          description: 'Repository compiles PostgreSQL lookup fetch and delete queries'
       );
 
@@ -64,12 +64,12 @@ return new Specification(
       $MySQLInsert = $MySQLRepository->insert('20260514000000_create_accounts', 3);
 
       yield assert(
-         assertion: $MySQLRepository->create()->sql === 'CREATE TABLE IF NOT EXISTS `_bootgly_migrations` (`migration` VARCHAR(191) NOT NULL PRIMARY KEY, `batch` INT NOT NULL, `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP)'
-            && $MySQLRepository->fetch()->sql === 'SELECT `migration`, `batch`, `created_at` FROM `_bootgly_migrations` ORDER BY `batch` DESC, `migration` DESC'
-            && $MySQLRepository->peek()->sql === 'SELECT COALESCE(MAX(`batch`), 0) AS `batch` FROM `_bootgly_migrations`'
-            && $MySQLInsert->sql === 'INSERT INTO `_bootgly_migrations` (`migration`, `batch`) VALUES (?, ?)'
+         assertion: $MySQLRepository->create()->SQL === 'CREATE TABLE IF NOT EXISTS `_bootgly_migrations` (`migration` VARCHAR(191) NOT NULL PRIMARY KEY, `batch` INT NOT NULL, `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP)'
+            && $MySQLRepository->fetch()->SQL === 'SELECT `migration`, `batch`, `created_at` FROM `_bootgly_migrations` ORDER BY `batch` DESC, `migration` DESC'
+            && $MySQLRepository->peek()->SQL === 'SELECT COALESCE(MAX(`batch`), 0) AS `batch` FROM `_bootgly_migrations`'
+            && $MySQLInsert->SQL === 'INSERT INTO `_bootgly_migrations` (`migration`, `batch`) VALUES (?, ?)'
             && $MySQLInsert->parameters === ['20260514000000_create_accounts', 3]
-            && $MySQLRepository->delete('x')->sql === 'DELETE FROM `_bootgly_migrations` WHERE `migration` = ?',
+            && $MySQLRepository->delete('x')->SQL === 'DELETE FROM `_bootgly_migrations` WHERE `migration` = ?',
          description: 'Repository compiles MySQL migration repository queries with MySQL quoting and markers'
       );
 
@@ -82,12 +82,12 @@ return new Specification(
       $SQLiteInsert = $SQLiteRepository->insert('20260514000000_create_accounts', 3);
 
       yield assert(
-         assertion: $SQLiteRepository->create()->sql === 'CREATE TABLE IF NOT EXISTS "_bootgly_migrations" ("migration" TEXT NOT NULL PRIMARY KEY, "batch" INTEGER NOT NULL, "created_at" TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)'
-            && $SQLiteRepository->fetch()->sql === 'SELECT "migration", "batch", "created_at" FROM "_bootgly_migrations" ORDER BY "batch" DESC, "migration" DESC'
-            && $SQLiteRepository->peek()->sql === 'SELECT COALESCE(MAX("batch"), 0) AS "batch" FROM "_bootgly_migrations"'
-            && $SQLiteInsert->sql === 'INSERT INTO "_bootgly_migrations" ("migration", "batch") VALUES (?1, ?2)'
+         assertion: $SQLiteRepository->create()->SQL === 'CREATE TABLE IF NOT EXISTS "_bootgly_migrations" ("migration" TEXT NOT NULL PRIMARY KEY, "batch" INTEGER NOT NULL, "created_at" TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)'
+            && $SQLiteRepository->fetch()->SQL === 'SELECT "migration", "batch", "created_at" FROM "_bootgly_migrations" ORDER BY "batch" DESC, "migration" DESC'
+            && $SQLiteRepository->peek()->SQL === 'SELECT COALESCE(MAX("batch"), 0) AS "batch" FROM "_bootgly_migrations"'
+            && $SQLiteInsert->SQL === 'INSERT INTO "_bootgly_migrations" ("migration", "batch") VALUES (?1, ?2)'
             && $SQLiteInsert->parameters === ['20260514000000_create_accounts', 3]
-            && $SQLiteRepository->delete('x')->sql === 'DELETE FROM "_bootgly_migrations" WHERE "migration" = ?1',
+            && $SQLiteRepository->delete('x')->SQL === 'DELETE FROM "_bootgly_migrations" WHERE "migration" = ?1',
          description: 'Repository compiles SQLite migration repository queries with SQLite quoting and markers'
       );
 

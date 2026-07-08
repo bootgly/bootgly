@@ -109,7 +109,7 @@ class Runner
 
          foreach ($this->Guard->normalize($queries) as $Query) {
             $preview[$seeder][] = [
-               'sql'        => $Query->sql,
+               'sql'        => $Query->SQL,
                'parameters' => $Query->parameters,
             ];
          }

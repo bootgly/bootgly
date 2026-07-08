@@ -26,6 +26,8 @@ class Result
    /** @var array<int,string> */
    public array $columns;
    public int $affected;
+   /** Last generated row id reported by the server for INSERT commands; `0` when unavailable. */
+   public int $inserted;
 
    // # Views
    /** @var array<string,mixed> */
@@ -61,12 +63,13 @@ class Result
     * @param array<int,array<string,mixed>> $rows
     * @param array<int,string> $columns
     */
-   public function __construct (string $status = '', array $rows = [], array $columns = [], int $affected = 0)
+   public function __construct (string $status = '', array $rows = [], array $columns = [], int $affected = 0, int $inserted = 0)
    {
       // * Data
       $this->status = $status;
       $this->rows = $rows;
       $this->columns = $columns;
       $this->affected = $affected;
+      $this->inserted = $inserted;
    }
 }

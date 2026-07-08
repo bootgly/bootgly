@@ -40,7 +40,7 @@ return new Specification(
          ->compile();
 
       yield assert(
-         assertion: $Query->sql === 'WITH "recent" AS (SELECT "id", "name" FROM "users" WHERE "active" = $1) SELECT "id" FROM "recent" WHERE "name" = $2'
+         assertion: $Query->SQL === 'WITH "recent" AS (SELECT "id", "name" FROM "users" WHERE "active" = $1) SELECT "id" FROM "recent" WHERE "name" = $2'
             && $Query->parameters === [true, 'Ada'],
          description: 'Builder compiles common table expressions before the main query'
       );
@@ -53,7 +53,7 @@ return new Specification(
          ->compile();
 
       yield assert(
-         assertion: $Query->sql === 'WITH RECURSIVE "numbers" AS (SELECT 1 AS n UNION ALL SELECT n + 1 FROM "numbers" WHERE n < $1) SELECT "n" FROM "numbers"'
+         assertion: $Query->SQL === 'WITH RECURSIVE "numbers" AS (SELECT 1 AS n UNION ALL SELECT n + 1 FROM "numbers" WHERE n < $1) SELECT "n" FROM "numbers"'
             && $Query->parameters === [3],
          description: 'Builder compiles recursive common table expressions'
       );

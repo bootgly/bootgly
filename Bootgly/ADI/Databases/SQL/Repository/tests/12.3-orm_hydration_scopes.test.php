@@ -73,9 +73,9 @@ class RecordingSQL extends SQL
    public function query (string|Builder|Query $query, array $parameters = [], null|object $Scope = null): Operation
    {
       $Normalized = new Normalized($query, $parameters);
-      $Operation = new Operation(null, $Normalized->sql, $Normalized->parameters);
+      $Operation = new Operation(null, $Normalized->SQL, $Normalized->parameters);
       $this->queries[] = [
-         'sql' => $Operation->sql,
+         'sql' => $Operation->SQL,
          'parameters' => $Operation->parameters,
       ];
 

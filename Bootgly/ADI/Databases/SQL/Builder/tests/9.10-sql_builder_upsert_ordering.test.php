@@ -36,7 +36,7 @@ return new Specification(
          ->compile();
 
       yield assert(
-         assertion: $Query->sql === 'INSERT INTO "users" ("id", "name") VALUES ($1, $2), ($3, $4) RETURNING "id"'
+         assertion: $Query->SQL === 'INSERT INTO "users" ("id", "name") VALUES ($1, $2), ($3, $4) RETURNING "id"'
             && $Query->parameters === [1, 'Ada', 2, 'Bob'],
          description: 'Builder compiles multi-row INSERT values through variadic set()'
       );
@@ -51,7 +51,7 @@ return new Specification(
          ->compile();
 
       yield assert(
-         assertion: $Query->sql === 'INSERT INTO "users" ("id", "name") VALUES ($1, $2), ($3, $4) ON CONFLICT ("id") DO UPDATE SET "name" = EXCLUDED."name" RETURNING "id", "name"'
+         assertion: $Query->SQL === 'INSERT INTO "users" ("id", "name") VALUES ($1, $2), ($3, $4) ON CONFLICT ("id") DO UPDATE SET "name" = EXCLUDED."name" RETURNING "id", "name"'
             && $Query->parameters === [1, 'Ada', 2, 'Bob'],
          description: 'Builder compiles PostgreSQL ON CONFLICT upserts'
       );
@@ -63,7 +63,7 @@ return new Specification(
          ->compile();
 
       yield assert(
-         assertion: $Query->sql === 'SELECT "id" FROM "users" ORDER BY "name" ASC NULLS LAST',
+         assertion: $Query->SQL === 'SELECT "id" FROM "users" ORDER BY "name" ASC NULLS LAST',
          description: 'Builder compiles NULLS FIRST/LAST ordering modifiers'
       );
 
@@ -75,7 +75,7 @@ return new Specification(
          ->compile();
 
       yield assert(
-         assertion: $Query->sql === 'SELECT "id" FROM "users" ORDER BY "name" ASC NULLS FIRST, "id" DESC NULLS LAST',
+         assertion: $Query->SQL === 'SELECT "id" FROM "users" ORDER BY "name" ASC NULLS FIRST, "id" DESC NULLS LAST',
          description: 'Builder applies NULLS modifiers per ordered column'
       );
 
@@ -87,7 +87,7 @@ return new Specification(
          ->compile();
 
       yield assert(
-         assertion: $Query->sql === 'INSERT INTO "users" ("id") VALUES ($1) ON CONFLICT ("id") DO NOTHING'
+         assertion: $Query->SQL === 'INSERT INTO "users" ("id") VALUES ($1) ON CONFLICT ("id") DO NOTHING'
             && $Query->parameters === [1],
          description: 'Builder compiles ON CONFLICT DO NOTHING when no update columns remain'
       );

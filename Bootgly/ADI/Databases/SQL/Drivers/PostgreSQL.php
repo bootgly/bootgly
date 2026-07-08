@@ -137,17 +137,17 @@ class PostgreSQL extends Driver
          $Encoder = $this->Encoder;
 
          if ($Operation->parameters === []) {
-            $Operation->write = $Encoder->query($Operation->sql);
+            $Operation->write = $Encoder->query($Operation->SQL);
 
             return $Operation;
          }
 
-         $statement = $this->names[$Operation->sql] ?? '';
+         $statement = $this->names[$Operation->SQL] ?? '';
 
          if ($statement === '') {
-            $hash = sha1($Operation->sql);
+            $hash = sha1($Operation->SQL);
             $statement = "bootgly_{$hash}";
-            $this->names[$Operation->sql] = $statement;
+            $this->names[$Operation->SQL] = $statement;
          }
 
          $Operation->statement = $statement;
@@ -197,7 +197,7 @@ class PostgreSQL extends Driver
 
          $parse = $Encoder->parse([
             'statement' => $Operation->statement,
-            'sql' => $Operation->sql,
+            'sql' => $Operation->SQL,
             'types' => $types,
          ]);
          $describeStatement = $Encoder->describe([
@@ -1097,7 +1097,7 @@ class PostgreSQL extends Driver
       $position = $index + 1;
       $pattern = '/\\$' . $position . '\\s*::\\s*([a-zA-Z_][a-zA-Z0-9_]*)(?:\\s+([a-zA-Z_][a-zA-Z0-9_]*))?/i';
 
-      if (preg_match($pattern, $Operation->sql, $matches) !== 1) {
+      if (preg_match($pattern, $Operation->SQL, $matches) !== 1) {
          return 0;
       }
 

@@ -96,27 +96,27 @@ class SyncDatabase extends SQL
    public function query (string|Builder|SQLQuery $query, array $parameters = [], null|object $Scope = null): Operation
    {
       $Normalized = new Normalized($query, $parameters);
-      $Operation = new Operation(null, $Normalized->sql, $Normalized->parameters);
+      $Operation = new Operation(null, $Normalized->SQL, $Normalized->parameters);
       $rows = [];
       $affected = 0;
 
-      if ($Operation->sql === SyncRepository::CREATE) {
+      if ($Operation->SQL === SyncRepository::CREATE) {
          $this->creates++;
       }
-      else if (str_starts_with($Operation->sql, 'SELECT pg_try_advisory_lock')) {
+      else if (str_starts_with($Operation->SQL, 'SELECT pg_try_advisory_lock')) {
          $this->advisoryLocks++;
          $this->advisoryKeys[] = (int) ($Operation->parameters[0] ?? 0);
          $rows = [['locked' => true]];
       }
-      else if (str_starts_with($Operation->sql, 'SELECT pg_advisory_unlock')) {
+      else if (str_starts_with($Operation->SQL, 'SELECT pg_advisory_unlock')) {
          $this->advisoryUnlocks++;
          $this->advisoryKeys[] = (int) ($Operation->parameters[0] ?? 0);
          $rows = [['unlocked' => true]];
       }
-      else if ($Operation->sql === SyncRepository::FETCH) {
+      else if ($Operation->SQL === SyncRepository::FETCH) {
          $rows = $this->history;
       }
-      else if ($Operation->sql === SyncRepository::PEEK) {
+      else if ($Operation->SQL === SyncRepository::PEEK) {
          $batch = 0;
          foreach ($this->history as $row) {
             $value = $row['batch'] ?? 0;
@@ -125,7 +125,7 @@ class SyncDatabase extends SQL
 
          $rows = [['batch' => $batch]];
       }
-      else if ($Operation->sql === SyncRepository::INSERT) {
+      else if ($Operation->SQL === SyncRepository::INSERT) {
          $this->history[] = [
             'migration'  => (string) ($Operation->parameters[0] ?? ''),
             'batch'      => (int) ($Operation->parameters[1] ?? 0),
@@ -133,7 +133,7 @@ class SyncDatabase extends SQL
          ];
          $affected = 1;
       }
-      else if ($Operation->sql === SyncRepository::DELETE) {
+      else if ($Operation->SQL === SyncRepository::DELETE) {
          $migration = (string) ($Operation->parameters[0] ?? '');
          $history = [];
 

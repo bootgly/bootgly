@@ -30,7 +30,7 @@ return new Specification(
       );
 
       yield assert(
-         assertion: $Operation->sql === 'SELECT $1::int AS value',
+         assertion: $Operation->SQL === 'SELECT $1::int AS value',
          description: 'Operation stores SQL'
       );
 

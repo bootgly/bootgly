@@ -30,7 +30,7 @@ use Bootgly\ADI\Databases\SQL\Builder\Query;
 class Normalized
 {
    // * Config
-   public private(set) string $sql;
+   public private(set) string $SQL;
    /** @var array<int|string,mixed> */
    public private(set) array $parameters;
    public private(set) bool $reading;
@@ -55,13 +55,13 @@ class Normalized
       if ($query instanceof Builder) {
          $Query = $query->compile();
          $reading = $Query->reading;
-         $query = $Query->sql;
+         $query = $Query->SQL;
          $parameters = $Query->parameters;
       }
       else if ($query instanceof Query) {
          $reading = $query->reading;
          $parameters = $query->parameters;
-         $query = $query->sql;
+         $query = $query->SQL;
       }
       else {
          $reading = $this->check($query);
@@ -72,7 +72,7 @@ class Normalized
       }
 
       // * Config
-      $this->sql = $query;
+      $this->SQL = $query;
       $this->parameters = $parameters;
       $this->reading = $reading;
    }

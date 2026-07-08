@@ -26,7 +26,7 @@ use Bootgly\ADI\Databases\SQL\Events;
 class Operation extends DatabaseOperation
 {
    // * Config
-   public string $sql;
+   public string $SQL;
 
    // * Data
    public string $statement = '';
@@ -60,7 +60,7 @@ class Operation extends DatabaseOperation
       parent::__construct($Connection, $parameters, $timeout);
 
       // * Config
-      $this->sql = $sql;
+      $this->SQL = $sql;
 
       // ? Slow-query timing — only pay the microtime() syscall when enabled
       if (self::$slow > 0.0) {

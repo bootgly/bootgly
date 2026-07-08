@@ -40,7 +40,7 @@ return new Specification(
          ->compile();
 
       yield assert(
-         assertion: $Query->sql === 'SELECT "id", "name" FROM "users" WHERE "active" = $1 AND "id" > $2 GROUP BY "id", "name" ORDER BY "name" ASC LIMIT 10 OFFSET 5',
+         assertion: $Query->SQL === 'SELECT "id", "name" FROM "users" WHERE "active" = $1 AND "id" > $2 GROUP BY "id", "name" ORDER BY "name" ASC LIMIT 10 OFFSET 5',
          description: 'Builder compiles SELECT with filter, group, order and limit clauses'
       );
 
@@ -57,7 +57,7 @@ return new Specification(
          ->compile();
 
       yield assert(
-         assertion: $Query->sql === 'SELECT * FROM "public"."users" WHERE "id" IN ($1, $2, $3)',
+         assertion: $Query->SQL === 'SELECT * FROM "public"."users" WHERE "id" IN ($1, $2, $3)',
          description: 'Builder compiles wildcard SELECT and IN filters with quoted identifier objects'
       );
 

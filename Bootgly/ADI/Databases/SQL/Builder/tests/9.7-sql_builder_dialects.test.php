@@ -52,7 +52,7 @@ return new Specification(
          ->compile();
 
       yield assert(
-         assertion: $Query->sql === 'SELECT `id` FROM `users` WHERE `id` = ?1'
+         assertion: $Query->SQL === 'SELECT `id` FROM `users` WHERE `id` = ?1'
             && $Query->parameters === [1],
          description: 'Builder delegates quoting and placeholders to the injected dialect strategy'
       );
@@ -64,7 +64,7 @@ return new Specification(
          ->compile($Dialect);
 
       yield assert(
-         assertion: $Query->sql === 'SELECT `id` FROM `users` WHERE `id` = ?1'
+         assertion: $Query->SQL === 'SELECT `id` FROM `users` WHERE `id` = ?1'
             && $Query->parameters === [1],
          description: 'Builder replays fluent actions for compile-time dialect selection'
       );
@@ -78,7 +78,7 @@ return new Specification(
          ->compile($Dialect);
 
       yield assert(
-         assertion: $Query->sql === 'SELECT `id` FROM `users` WHERE `name` = ?1 OR `id` = ?2'
+         assertion: $Query->SQL === 'SELECT `id` FROM `users` WHERE `name` = ?1 OR `id` = ?2'
             && $Query->parameters === ['Ada', 1],
          description: 'Builder replays fluent conjunction predicates through compile-time dialect selection'
       );
@@ -90,7 +90,7 @@ return new Specification(
          ->compile(new SQLite);
 
       yield assert(
-         assertion: $Query->sql === 'SELECT "id" FROM "users" WHERE "id" = ?1'
+         assertion: $Query->SQL === 'SELECT "id" FROM "users" WHERE "id" = ?1'
             && $Query->parameters === [1],
          description: 'Builder compiles SQLite SQL through a concrete dialect'
       );
@@ -104,7 +104,7 @@ return new Specification(
          ->compile(new MySQL);
 
       yield assert(
-         assertion: $Query->sql === 'INSERT INTO `users` (`id`, `name`) VALUES (?, ?) ON DUPLICATE KEY UPDATE `name` = VALUES(`name`)'
+         assertion: $Query->SQL === 'INSERT INTO `users` (`id`, `name`) VALUES (?, ?) ON DUPLICATE KEY UPDATE `name` = VALUES(`name`)'
             && $Query->parameters === [1, 'Ada'],
          description: 'Builder compiles MySQL SQL through a concrete dialect'
       );

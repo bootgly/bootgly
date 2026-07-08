@@ -21,7 +21,7 @@ use Stringable;
 class Expression implements Stringable
 {
    // * Config
-   public private(set) string $sql;
+   public private(set) string $SQL;
 
    // * Data
    // ...
@@ -37,7 +37,7 @@ class Expression implements Stringable
       }
 
       // * Config
-      $this->sql = $sql;
+      $this->SQL = $sql;
    }
 
    /**
@@ -45,6 +45,6 @@ class Expression implements Stringable
     */
    public function __toString (): string
    {
-      return $this->sql;
+      return $this->SQL;
    }
 }

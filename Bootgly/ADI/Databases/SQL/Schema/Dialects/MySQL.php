@@ -196,6 +196,29 @@ class MySQL extends Dialect
    }
 
    /**
+    * Compile MySQL advisory lock acquisition.
+    *
+    * GET_LOCK names are session-scoped strings capped at 64 characters —
+    * the integer key is namespaced under a `bootgly_` prefix.
+    */
+   public function lock (int $key): Query
+   {
+      $marker = $this->Dialect->mark(1);
+
+      return new Query("SELECT GET_LOCK({$marker}, 0) AS `locked`", ["bootgly_{$key}"]);
+   }
+
+   /**
+    * Compile MySQL advisory lock release.
+    */
+   public function unlock (int $key): Query
+   {
+      $marker = $this->Dialect->mark(1);
+
+      return new Query("SELECT RELEASE_LOCK({$marker}) AS `unlocked`", ["bootgly_{$key}"]);
+   }
+
+   /**
     * Compile DROP INDEX.
     */
    public function unindex (
@@ -259,7 +282,7 @@ class MySQL extends Dialect
       }
 
       foreach ($Column->checks as $check) {
-         $expression = $check instanceof Expression ? $check->sql : $check;
+         $expression = $check instanceof Expression ? $check->SQL : $check;
          $segments[] = "CHECK ({$expression})";
       }
 

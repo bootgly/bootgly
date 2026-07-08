@@ -89,7 +89,7 @@ class Transaction implements Awaiting, Querying
    public function query (string|Builder|Query $query, array $parameters = [], null|object $Scope = null): Operation
    {
       $Normalized = new Normalized($query, $parameters);
-      $sql = $Normalized->sql;
+      $sql = $Normalized->SQL;
       $parameters = $Normalized->parameters;
 
       if ($this->ready() === false) {

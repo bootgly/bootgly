@@ -55,10 +55,10 @@ class RecordingSQL extends SQL
    public function query (string|Builder|SQLQuery $query, array $parameters = [], null|object $Scope = null): SQLOperation
    {
       $Normalized = new Normalized($query, $parameters);
-      $Operation = new SQLOperation(null, $Normalized->sql, $Normalized->parameters, $this->Config->timeout);
+      $Operation = new SQLOperation(null, $Normalized->SQL, $Normalized->parameters, $this->Config->timeout);
 
       $this->queries[] = [
-         'sql'        => $Operation->sql,
+         'sql'        => $Operation->SQL,
          'parameters' => $Operation->parameters,
       ];
 
@@ -150,7 +150,7 @@ return new Specification(
          yield assert(
             assertion: $Up !== []
                && $Down !== []
-               && str_contains($Up[0]->sql, "\"{$table}\""),
+               && str_contains($Up[0]->SQL, "\"{$table}\""),
             description: "demo RBAC migration compiles {$table} DDL"
          );
       }
@@ -161,7 +161,7 @@ return new Specification(
 
       foreach ($Queries as $Query) {
          $Normalized = new Normalized($Query);
-         $sql[] = $Normalized->sql;
+         $sql[] = $Normalized->SQL;
       }
 
       yield assert(

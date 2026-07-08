@@ -157,7 +157,7 @@ abstract class Dialect
    protected function escape (mixed $value): string
    {
       if ($value instanceof Expression) {
-         return $value->sql;
+         return $value->SQL;
       }
 
       if ($value === null) {

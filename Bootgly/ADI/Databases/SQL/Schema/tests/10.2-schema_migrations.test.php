@@ -90,8 +90,8 @@ PHP);
       yield assert(
          assertion: $Migration instanceof Migration
             && $Migration->name === '20260514000000_create_accounts'
-            && $Up->sql === 'DROP TABLE IF EXISTS "up_table"'
-            && $Down->sql === 'DROP TABLE IF EXISTS "down_table"',
+            && $Up->SQL === 'DROP TABLE IF EXISTS "up_table"'
+            && $Down->SQL === 'DROP TABLE IF EXISTS "down_table"',
          description: 'Migrations loads configured Migration objects and derives names'
       );
 

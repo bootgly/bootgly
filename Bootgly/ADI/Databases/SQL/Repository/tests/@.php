@@ -23,5 +23,6 @@ return new Suite(
       '12.5-orm_async_execution',
       '12.6-orm_async_relationship_load',
       '12.7-orm_lazy_relationship_load',
+      '12.8-orm_insert_backfill',
    ]
 );

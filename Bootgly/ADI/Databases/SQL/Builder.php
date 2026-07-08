@@ -805,7 +805,7 @@ class Builder
    private function bind (array &$parameters, mixed $value): string
    {
       if ($value instanceof Expression) {
-         return $value->sql;
+         return $value->SQL;
       }
 
       $parameters[] = $value;
@@ -889,7 +889,7 @@ class Builder
    {
       $Query = $query instanceof self ? $query->compile($this->Dialect) : $query;
       $offset = count($parameters);
-      $sql = $this->Dialect->rebase($Query->sql, $offset);
+      $sql = $this->Dialect->rebase($Query->SQL, $offset);
 
       foreach ($Query->parameters as $parameter) {
          $parameters[] = $parameter;

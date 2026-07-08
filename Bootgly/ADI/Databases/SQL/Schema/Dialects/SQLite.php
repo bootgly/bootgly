@@ -35,7 +35,7 @@ use Bootgly\ADI\Databases\SQL\Schema\Dialect;
 class SQLite extends Dialect
 {
    // * Config
-   // ...
+   public bool $transactions = true;
 
    // * Data
    // ...
@@ -245,7 +245,7 @@ class SQLite extends Dialect
       }
 
       foreach ($Column->checks as $check) {
-         $expression = $check instanceof Expression ? $check->sql : $check;
+         $expression = $check instanceof Expression ? $check->SQL : $check;
          $segments[] = "CHECK ({$expression})";
       }
 

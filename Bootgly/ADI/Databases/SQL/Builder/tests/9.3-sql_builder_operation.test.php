@@ -47,7 +47,7 @@ return new Specification(
       $Normalized = new Normalized($Builder);
 
       yield assert(
-         assertion: $Normalized->sql === 'SELECT "id" FROM "users" WHERE "id" = $1'
+         assertion: $Normalized->SQL === 'SELECT "id" FROM "users" WHERE "id" = $1'
             && $Normalized->parameters === [42],
          description: 'Normalized normalizes Builder instances into SQL and parameters'
       );
@@ -55,7 +55,7 @@ return new Specification(
       $Normalized = new Normalized($Builder->compile());
 
       yield assert(
-         assertion: $Normalized->sql === 'SELECT "id" FROM "users" WHERE "id" = $1'
+         assertion: $Normalized->SQL === 'SELECT "id" FROM "users" WHERE "id" = $1'
             && $Normalized->parameters === [42],
          description: 'Normalized normalizes compiled Query instances into SQL and parameters'
       );
@@ -85,7 +85,7 @@ return new Specification(
       $Operation = $Database->query($Builder);
 
       yield assert(
-         assertion: $Operation->sql === 'SELECT "id" FROM "users" WHERE "id" = $1'
+         assertion: $Operation->SQL === 'SELECT "id" FROM "users" WHERE "id" = $1'
             && $Operation->parameters === [42],
          description: 'SQL::query accepts Builder and creates an operation from compiled SQL'
       );
@@ -94,7 +94,7 @@ return new Specification(
       $wire = fread($server, 8192);
 
       yield assert(
-         assertion: str_contains($wire, $Operation->sql),
+         assertion: str_contains($wire, $Operation->SQL),
          description: 'Compiled builder SQL reaches the PostgreSQL wire path'
       );
 

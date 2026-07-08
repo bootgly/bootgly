@@ -58,7 +58,7 @@ return new Specification(
          ->compile();
 
       yield assert(
-         assertion: $Query->sql === 'SELECT "id", "name" AS "username" FROM "users" AS "u" WHERE "id" BETWEEN $1 AND $2 FOR UPDATE',
+         assertion: $Query->SQL === 'SELECT "id", "name" AS "username" FROM "users" AS "u" WHERE "id" BETWEEN $1 AND $2 FOR UPDATE',
          description: 'Builder compiles aliases, BETWEEN filters and row locks'
       );
 
@@ -73,7 +73,7 @@ return new Specification(
          ->compile();
 
       yield assert(
-         assertion: $Query->sql === 'SELECT COUNT(*) AS "total" FROM "users"',
+         assertion: $Query->SQL === 'SELECT COUNT(*) AS "total" FROM "users"',
          description: 'Builder compiles COUNT with alias'
       );
 
@@ -83,7 +83,7 @@ return new Specification(
          ->compile();
 
       yield assert(
-         assertion: $Query->sql === 'SELECT MAX("id") AS "total" FROM "users"',
+         assertion: $Query->SQL === 'SELECT MAX("id") AS "total" FROM "users"',
          description: 'Builder compiles generic aggregate with alias'
       );
 
@@ -94,7 +94,7 @@ return new Specification(
          ->compile();
 
       yield assert(
-         assertion: $Query->sql === 'SELECT MAX("id") AS "total", "name" FROM "users"',
+         assertion: $Query->SQL === 'SELECT MAX("id") AS "total", "name" FROM "users"',
          description: 'Builder preserves aggregate projections before select() additions'
       );
 
@@ -105,7 +105,7 @@ return new Specification(
          ->compile();
 
       yield assert(
-         assertion: $Query->sql === 'SELECT "name", COUNT(*) AS "total" FROM "users"',
+         assertion: $Query->SQL === 'SELECT "name", COUNT(*) AS "total" FROM "users"',
          description: 'Builder accumulates select() and count() projections in call order'
       );
 
@@ -119,7 +119,7 @@ return new Specification(
          ->compile();
 
       yield assert(
-         assertion: $Query->sql === 'INSERT INTO "users" ("id", "name") VALUES ($1, $2) RETURNING "id", "name"',
+         assertion: $Query->SQL === 'INSERT INTO "users" ("id", "name") VALUES ($1, $2) RETURNING "id", "name"',
          description: 'Builder compiles INSERT RETURNING through output()'
       );
 
@@ -140,7 +140,7 @@ return new Specification(
          ->compile();
 
       yield assert(
-         assertion: $Query->sql === 'SELECT "name" AS "username" FROM "users" AS "u" LEFT JOIN "profiles" AS "p" ON "u"."id" = "p"."user_id" GROUP BY "username" ORDER BY "username" ASC',
+         assertion: $Query->SQL === 'SELECT "name" AS "username" FROM "users" AS "u" LEFT JOIN "profiles" AS "p" ON "u"."id" = "p"."user_id" GROUP BY "username" ORDER BY "username" ASC',
          description: 'Builder applies aliases across FROM, JOIN, GROUP and ORDER contexts'
       );
 
@@ -151,7 +151,7 @@ return new Specification(
          ->compile();
 
       yield assert(
-         assertion: $Query->sql === 'SELECT "u"."id" FROM "users" AS "u"',
+         assertion: $Query->SQL === 'SELECT "u"."id" FROM "users" AS "u"',
          description: 'Builder promotes table aliases registered before table()'
       );
 
@@ -164,7 +164,7 @@ return new Specification(
          ->compile();
 
       yield assert(
-         assertion: $Query->sql === 'SELECT "users"."id" FROM "users" LEFT JOIN "profiles" AS "p" ON "users"."id" = "p"."user_id" WHERE "p"."user_id" IS NOT NULL',
+         assertion: $Query->SQL === 'SELECT "users"."id" FROM "users" LEFT JOIN "profiles" AS "p" ON "users"."id" = "p"."user_id" WHERE "p"."user_id" IS NOT NULL',
          description: 'Builder promotes join aliases registered before join()'
       );
 
@@ -203,7 +203,7 @@ return new Specification(
          ->compile();
 
       yield assert(
-         assertion: $Query->sql === 'SELECT "id" FROM "users" WHERE "active" IS TRUE AND "name" IS NOT NULL'
+         assertion: $Query->SQL === 'SELECT "id" FROM "users" WHERE "active" IS TRUE AND "name" IS NOT NULL'
             && $Query->parameters === [],
          description: 'Builder compiles explicit SQL literal filters without values'
       );
@@ -217,7 +217,7 @@ return new Specification(
          ->compile();
 
       yield assert(
-         assertion: $Query->sql === 'SELECT "id" FROM "users" WHERE "active" IS TRUE OR "name" IS NOT NULL'
+         assertion: $Query->SQL === 'SELECT "id" FROM "users" WHERE "active" IS TRUE OR "name" IS NOT NULL'
             && $Query->parameters === [],
          description: 'Builder combines fluent filters with OR property hooks'
       );
@@ -233,7 +233,7 @@ return new Specification(
 
       yield assert(
          assertion: $Conjunction instanceof Conjunction
-            && $Query->sql === 'SELECT "id" FROM "users" WHERE "active" IS TRUE AND "name" IS NOT NULL'
+            && $Query->SQL === 'SELECT "id" FROM "users" WHERE "active" IS TRUE AND "name" IS NOT NULL'
             && $Query->parameters === [],
          description: 'Builder keeps fluent conjunction property reads side-effect free'
       );
@@ -251,7 +251,7 @@ return new Specification(
       /** @var array<int,array{junction:Junctions}> $Filters */
       /** @var array<int,array{method:string,arguments:array<int|string,mixed>}> $Actions */
       yield assert(
-         assertion: $Query->sql === 'SELECT "id" FROM "users" WHERE "name" IS NOT NULL'
+         assertion: $Query->SQL === 'SELECT "id" FROM "users" WHERE "name" IS NOT NULL'
             && $Filters[0]['junction'] === Junctions::And
             && $Actions[2]['arguments'][3] === Junctions::And,
          description: 'Builder normalizes first fluent conjunction predicates before storing state'
@@ -290,7 +290,7 @@ return new Specification(
          ->compile();
 
       yield assert(
-         assertion: $Query->sql === 'SELECT "u"."id" FROM "users" AS "u" LEFT JOIN "profiles" AS "p" ON "u"."id" = "p"."user_id" WHERE "u"."id" = $1 AND "p"."user_id" IS NOT NULL'
+         assertion: $Query->SQL === 'SELECT "u"."id" FROM "users" AS "u" LEFT JOIN "profiles" AS "p" ON "u"."id" = "p"."user_id" WHERE "u"."id" = $1 AND "p"."user_id" IS NOT NULL'
             && $Query->parameters === [1],
          description: 'Builder rewrites qualified references through table aliases in SELECT, JOIN and WHERE'
       );
@@ -304,7 +304,7 @@ return new Specification(
          ->compile();
 
       yield assert(
-         assertion: $Query->sql === 'SELECT DISTINCT "name" FROM "users" GROUP BY "name" HAVING "name" IS NOT NULL'
+         assertion: $Query->SQL === 'SELECT DISTINCT "name" FROM "users" GROUP BY "name" HAVING "name" IS NOT NULL'
             && $Query->parameters === [],
          description: 'Builder compiles DISTINCT and HAVING clauses'
       );
@@ -321,7 +321,7 @@ return new Specification(
          ->compile();
 
       yield assert(
-         assertion: $Query->sql === 'SELECT "id" FROM "users" WHERE "active" IS TRUE OR "id" > $1 GROUP BY "id" HAVING "name" IS NOT NULL AND "active" IS TRUE'
+         assertion: $Query->SQL === 'SELECT "id" FROM "users" WHERE "active" IS TRUE OR "id" > $1 GROUP BY "id" HAVING "name" IS NOT NULL AND "active" IS TRUE'
             && $Query->parameters === [10],
          description: 'Builder keeps fluent conjunctions bound to the next predicate without cross-clause leakage'
       );
@@ -339,7 +339,7 @@ return new Specification(
          ->compile();
 
       yield assert(
-         assertion: $Query->sql === 'SELECT "id" FROM "users" WHERE ("active" IS TRUE OR "name" = $1) AND "id" > $2'
+         assertion: $Query->SQL === 'SELECT "id" FROM "users" WHERE ("active" IS TRUE OR "name" = $1) AND "id" > $2'
             && $Query->parameters === ['Ada', 10],
          description: 'Builder preserves nested filter precedence with grouped predicates'
       );
@@ -355,7 +355,7 @@ return new Specification(
          ->compile();
 
       yield assert(
-         assertion: $Query->sql === 'SELECT "id" FROM "users" WHERE ("active" IS TRUE) OR "id" > $1'
+         assertion: $Query->SQL === 'SELECT "id" FROM "users" WHERE ("active" IS TRUE) OR "id" > $1'
             && $Query->parameters === [10],
          description: 'Builder applies fluent OR between grouped and top-level predicates'
       );
@@ -370,7 +370,7 @@ return new Specification(
          ->compile();
 
       yield assert(
-         assertion: $Query->sql === 'SELECT NOW() AS "current" FROM "users" WHERE LOWER("name") = $1'
+         assertion: $Query->SQL === 'SELECT NOW() AS "current" FROM "users" WHERE LOWER("name") = $1'
             && $Query->parameters === ['ada'],
          description: 'Builder compiles trusted SQL expressions without identifier quoting'
       );
@@ -383,7 +383,7 @@ return new Specification(
          ->compile();
 
       yield assert(
-         assertion: $Query->sql === 'UPDATE "users" SET "name" = LOWER("name") WHERE "id" = $1'
+         assertion: $Query->SQL === 'UPDATE "users" SET "name" = LOWER("name") WHERE "id" = $1'
             && $Query->parameters === [1],
          description: 'Builder compiles trusted SQL expressions as mutation values without binding'
       );

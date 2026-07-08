@@ -21,5 +21,7 @@ return new Suite(
       '10.3-schema_repository_lock',
       '10.4-schema_sync',
       '10.5-migration-events',
+      '10.6-schema_sqlite_transactions',
+      '10.7-schema_mysql_lock',
    ]
 );

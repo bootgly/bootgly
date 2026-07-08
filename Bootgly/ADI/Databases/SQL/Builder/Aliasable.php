@@ -31,7 +31,7 @@ trait Aliasable
    private function identify (BackedEnum|Stringable $Identifier): string
    {
       if ($Identifier instanceof Expression) {
-         return $Identifier->sql;
+         return $Identifier->SQL;
       }
 
       return Identifier::quote($Identifier, $this->Dialect);

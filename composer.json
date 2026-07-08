@@ -31,7 +31,8 @@
    },
    "suggest": {
       "ext-pcntl": "Required by the Console platform on Linux (workers, forks and signals)",
-      "ext-posix": "Required by the Console platform on Linux (process control and privileges)"
+      "ext-posix": "Required by the Console platform on Linux (process control and privileges)",
+      "ext-sqlite3": "Required by the SQLite database driver (ADI/Databases/SQL/Drivers/SQLite)"
    },
    "autoload-dev": {
       "psr-4": {

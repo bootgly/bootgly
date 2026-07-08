@@ -109,9 +109,9 @@ class RecordingSQL extends SQL
    public function query (string|Builder|Query $query, array $parameters = [], null|object $Scope = null): Operation
    {
       $Normalized = new Normalized($query, $parameters);
-      $Operation = new Operation(null, $Normalized->sql, $Normalized->parameters);
+      $Operation = new Operation(null, $Normalized->SQL, $Normalized->parameters);
       $this->queries[] = [
-         'sql' => $Operation->sql,
+         'sql' => $Operation->SQL,
          'parameters' => $Operation->parameters,
       ];
       $this->scopes[] = $Scope;
@@ -135,7 +135,7 @@ class LazyAwaiting implements Awaiting
          return $Operation->fail('lazy failed');
       }
 
-      if (str_contains($Operation->sql, 'FROM "orm_lazy_posts"')) {
+      if (str_contains($Operation->SQL, 'FROM "orm_lazy_posts"')) {
          return $Operation->resolve(new Result(
             rows: [[
                'id' => 10,
@@ -154,7 +154,7 @@ class LazyAwaiting implements Awaiting
          ));
       }
 
-      if (str_contains($Operation->sql, 'FROM "orm_lazy_profiles"')) {
+      if (str_contains($Operation->SQL, 'FROM "orm_lazy_profiles"')) {
          return $Operation->resolve(new Result(
             rows: [[
                'id' => 20,
@@ -165,7 +165,7 @@ class LazyAwaiting implements Awaiting
          ));
       }
 
-      if (str_contains($Operation->sql, 'FROM "orm_lazy_groups"')) {
+      if (str_contains($Operation->SQL, 'FROM "orm_lazy_groups"')) {
          return $Operation->resolve(new Result(
             rows: [[
                'id' => 30,
@@ -184,7 +184,7 @@ class LazyAwaiting implements Awaiting
          ));
       }
 
-      if (str_contains($Operation->sql, 'FROM "orm_lazy_users"')) {
+      if (str_contains($Operation->SQL, 'FROM "orm_lazy_users"')) {
          return $Operation->resolve(new Result(
             rows: [[
                'id' => 1,

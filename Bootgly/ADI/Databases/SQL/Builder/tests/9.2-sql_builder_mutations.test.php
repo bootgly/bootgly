@@ -35,7 +35,7 @@ return new Specification(
          ->compile();
 
       yield assert(
-         assertion: $Query->sql === 'INSERT INTO "users" ("name", "active") VALUES ($1, $2)',
+         assertion: $Query->SQL === 'INSERT INTO "users" ("name", "active") VALUES ($1, $2)',
          description: 'Builder compiles INSERT with assigned columns'
       );
 
@@ -52,7 +52,7 @@ return new Specification(
          ->compile();
 
       yield assert(
-         assertion: $Query->sql === 'UPDATE "users" SET "active" = $1 WHERE "id" = $2',
+         assertion: $Query->SQL === 'UPDATE "users" SET "active" = $1 WHERE "id" = $2',
          description: 'Builder compiles guarded UPDATE with filters'
       );
 
@@ -68,7 +68,7 @@ return new Specification(
          ->compile();
 
       yield assert(
-         assertion: $Query->sql === 'DELETE FROM "users" WHERE "id" = $1',
+         assertion: $Query->SQL === 'DELETE FROM "users" WHERE "id" = $1',
          description: 'Builder compiles guarded DELETE with filters'
       );
 

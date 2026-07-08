@@ -20,7 +20,7 @@ use Bootgly\ABI\Event;
  * - `Connected` — a SQL connection finished authenticating (driver-level,
  *   SQL only). Payload: the `Connection`.
  * - `Executed`  — a SQL operation resolved successfully (one async query
- *   completed). Payload: the `Operation` (carries `->sql` and `->Result`).
+ *   completed). Payload: the `Operation` (carries `->SQL` and `->Result`).
  * - `Slow`      — a resolved query exceeded `Operation::$slow` seconds.
  *   Off by default (`$slow = 0.0` → zero overhead). Payload: the `Operation`,
  *   the elapsed seconds (float).

@@ -119,7 +119,7 @@ class Guard
       $Querying ??= $this->Database;
 
       foreach ($this->normalize($queries) as $Query) {
-         $Operation = $Querying->query($Query->sql, $Query->parameters);
+         $Operation = $Querying->query($Query->SQL, $Query->parameters);
          $this->Pool->wait($Operation);
       }
    }

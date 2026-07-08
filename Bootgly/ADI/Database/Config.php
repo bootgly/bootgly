@@ -43,6 +43,7 @@ class Config
    public const string DEFAULT_SECURE_MODE = self::SECURE_PREFER;
    public const string DEFAULT_SECURE_PEER = '';
    public const string DEFAULT_SECURE_CAFILE = '';
+   public const string DEFAULT_SECURE_KEY = '';
    public const array SECURE_MODES = [
       self::SECURE_DISABLE,
       self::SECURE_PREFER,
@@ -59,7 +60,12 @@ class Config
    public string $username;
    public string $password;
    public float $timeout;
-   /** @var array{mode:string,verify:bool,name:bool,peer:string,cafile:string} */
+   /**
+    * TLS settings plus `key`: a pinned server RSA public key (inline PEM or
+    * file path) required by the MySQL password exchange over plaintext.
+    *
+    * @var array{mode:string,verify:bool,name:bool,peer:string,cafile:string,key:string}
+    */
    public array $secure;
    /** @var array{min:int,max:int} */
    public array $pool;
@@ -102,6 +108,7 @@ class Config
       $secureMode = $secure['mode'] ?? self::DEFAULT_SECURE_MODE;
       $securePeer = $secure['peer'] ?? self::DEFAULT_SECURE_PEER;
       $secureCA = $secure['cafile'] ?? self::DEFAULT_SECURE_CAFILE;
+      $secureKey = $secure['key'] ?? self::DEFAULT_SECURE_KEY;
 
       // * Config
       $this->driver = is_scalar($driver) ? (string) $driver : self::DEFAULT_DRIVER;
@@ -138,6 +145,7 @@ class Config
          'name' => is_bool($secureName) ? $secureName : true,
          'peer' => is_scalar($securePeer) && (string) $securePeer !== '' ? (string) $securePeer : $this->host,
          'cafile' => is_scalar($secureCA) ? (string) $secureCA : self::DEFAULT_SECURE_CAFILE,
+         'key' => is_scalar($secureKey) ? (string) $secureKey : self::DEFAULT_SECURE_KEY,
       ];
       $this->pool = [
          'min' => is_scalar($poolMin) ? (int) $poolMin : self::DEFAULT_POOL_MIN,
@@ -181,6 +189,7 @@ class Config
          $secureMode = $secure['mode'] ?? $this->secure['mode'];
          $securePeer = $secure['peer'] ?? self::DEFAULT_SECURE_PEER;
          $secureCA = $secure['cafile'] ?? $this->secure['cafile'];
+         $secureKey = $secure['key'] ?? $this->secure['key'];
          $secureMode = $this->validate(is_scalar($secureMode) ? (string) $secureMode : $this->secure['mode']);
          $secureVerify = $secure['verify'] ?? $this->secure['verify'];
          $secureVerify = is_bool($secureVerify) ? $secureVerify : $this->secure['verify'];
@@ -215,6 +224,7 @@ class Config
                'name' => is_bool($secureName) ? $secureName : true,
                'peer' => is_scalar($securePeer) && (string) $securePeer !== '' ? (string) $securePeer : (string) $host,
                'cafile' => is_scalar($secureCA) ? (string) $secureCA : self::DEFAULT_SECURE_CAFILE,
+               'key' => is_scalar($secureKey) ? (string) $secureKey : self::DEFAULT_SECURE_KEY,
             ],
             'pool' => [
                'min' => is_scalar($pool['min'] ?? null) ? (int) $pool['min'] : $this->pool['min'],

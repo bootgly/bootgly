@@ -38,6 +38,7 @@ return new Specification(
             'name' => true,
             'peer' => Config::DEFAULT_HOST,
             'cafile' => Config::DEFAULT_SECURE_CAFILE,
+            'key' => Config::DEFAULT_SECURE_KEY,
          ] && $Database->Config->statements === Config::DEFAULT_STATEMENTS
             && $Database->Config->replicas === []
             && $Database->Config->routing === [

@@ -50,7 +50,7 @@ class CountingSQL extends SQL
    public function query (string|Builder|SQLQuery $query, array $parameters = [], null|object $Scope = null): SQLOperation
    {
       $Normalized = new Normalized($query, $parameters);
-      $Operation = new SQLOperation(null, $Normalized->sql, $Normalized->parameters, $this->Config->timeout);
+      $Operation = new SQLOperation(null, $Normalized->SQL, $Normalized->parameters, $this->Config->timeout);
 
       $this->queries++;
 
