@@ -1,7 +1,6 @@
 <?php
 
 use function extension_loaded;
-use SQLite3;
 
 use Bootgly\ACI\Tests\Suite\Test\Specification;
 use Bootgly\ADI\Databases\SQL;
@@ -29,25 +28,28 @@ return new Specification(
          description: 'Result->inserted tracks the last generated row id'
       );
 
-      // ? RETURNING requires libsqlite ≥ 3.35
-      $returning = SQLite3::version()['versionNumber'] >= 3035000;
-
-      if ($returning) {
-         $Returned = $Database->query("INSERT INTO tasks (title) VALUES ('ship v0.22') RETURNING id, title");
-
-         yield assert(
-            assertion: $Returned->Result?->rows === [['id' => 3, 'title' => 'ship v0.22']]
-               && $Returned->Result->inserted === 3,
-            description: 'INSERT ... RETURNING hydrates rows and the generated id'
-         );
-      }
-
-      $Update = $Database->query('UPDATE tasks SET done = 1');
-      $expected = $returning ? 3 : 2;
+      // ? RETURNING is blocked — the sqlite3 extension steps the statement
+      //   twice (internal step + reset before the fetch), duplicating writes.
+      $Returned = $Database->query("INSERT INTO tasks (title) VALUES ('ship v0.22') RETURNING id, title");
 
       yield assert(
-         assertion: $Update->Result?->affected === $expected
-            && $Update->Result->status === "UPDATE {$expected}"
+         assertion: $Returned->finished
+            && $Returned->error === 'SQLite RETURNING is not supported: the sqlite3 extension executes the statement twice, duplicating the write. Read generated ids from Result->inserted.',
+         description: 'INSERT ... RETURNING fails fast instead of duplicating the write'
+      );
+
+      $Literal = $Database->query("INSERT INTO tasks (title) VALUES ('RETURNING soon')");
+
+      yield assert(
+         assertion: $Literal->error === null && $Literal->Result?->inserted === 3,
+         description: 'RETURNING inside string literals is not blocked'
+      );
+
+      $Update = $Database->query('UPDATE tasks SET done = 1');
+
+      yield assert(
+         assertion: $Update->Result?->affected === 3
+            && $Update->Result->status === 'UPDATE 3'
             && $Update->Result->inserted === 0,
          description: 'UPDATE reports affected rows and no generated id'
       );
@@ -55,7 +57,7 @@ return new Specification(
       $Delete = $Database->query('DELETE FROM tasks WHERE done = 1');
 
       yield assert(
-         assertion: $Delete->Result?->affected === $expected && $Delete->Result->status === "DELETE {$expected}",
+         assertion: $Delete->Result?->affected === 3 && $Delete->Result->status === 'DELETE 3',
          description: 'DELETE reports affected rows in the status tag'
       );
    }

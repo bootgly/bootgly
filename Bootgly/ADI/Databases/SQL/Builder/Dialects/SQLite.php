@@ -15,6 +15,7 @@ use function implode;
 use function preg_replace_callback;
 use InvalidArgumentException;
 
+use Bootgly\ADI\Databases\SQL\Builder\Auxiliaries\Capabilities;
 use Bootgly\ADI\Databases\SQL\Builder\Auxiliaries\Matches;
 use Bootgly\ADI\Databases\SQL\Builder\Auxiliaries\Nulls;
 use Bootgly\ADI\Databases\SQL\Builder\Auxiliaries\Orders;
@@ -35,6 +36,20 @@ class SQLite extends Dialect
    // * Metadata
    // ...
 
+
+   /**
+    * Check if SQLite supports one feature capability.
+    *
+    * `RETURNING` stays disabled even on libsqlite ≥ 3.35: the `sqlite3`
+    * extension steps such statements twice (an internal step + reset happens
+    * inside `SQLite3::query()`/`SQLite3Stmt::execute()` before the fetch),
+    * which would duplicate every write. Generated keys arrive through
+    * `Result->inserted` instead.
+    */
+   public function check (Capabilities $Capability): bool
+   {
+      return $Capability !== Capabilities::Output;
+   }
 
    /**
     * Quote one SQLite identifier name.

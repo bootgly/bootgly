@@ -25,6 +25,7 @@ use function is_float;
 use function is_int;
 use function is_scalar;
 use function preg_match;
+use function preg_replace;
 use function str_starts_with;
 use function strtoupper;
 use DateTimeInterface;
@@ -176,6 +177,20 @@ class SQLite extends Driver
       // ?
       if ($Handle === null) {
          $Operation->fail('SQLite database handle is not open.');
+
+         return;
+      }
+
+      // ? The sqlite3 extension steps RETURNING statements twice (internal
+      //   step + reset before the fetch), duplicating the write — fail fast.
+      $stripped = preg_replace(
+         '/\'(?:[^\']|\'\')*\'|"(?:[^"]|"")*"|\[[^\]]*\]|--[^\n]*|\/\*.*?\*\//s',
+         '',
+         $Operation->SQL
+      );
+
+      if ($stripped !== null && preg_match('/\bRETURNING\b/i', $stripped) === 1) {
+         $Operation->fail('SQLite RETURNING is not supported: the sqlite3 extension executes the statement twice, duplicating the write. Read generated ids from Result->inserted.');
 
          return;
       }

@@ -4,6 +4,7 @@ namespace Bootgly\ADI\Databases\SQL\Repository\Tests\Backfill;
 
 
 use function assert;
+use function extension_loaded;
 use function str_starts_with;
 
 use Bootgly\ACI\Tests\Suite\Test\Specification;
@@ -115,5 +116,23 @@ return new Specification(
          assertion: $Mapped->entity instanceof User && $Mapped->entity->id === 9,
          description: 'Dialects with RETURNING keep hydrating entities from rows'
       );
+
+      // # SQLite E2E — the real driver backfills through Result->inserted
+      if (extension_loaded('sqlite3')) {
+         $SQLite = new SQL(['driver' => 'sqlite', 'database' => ':memory:']);
+         $SQLite->query('CREATE TABLE backfill_users (id INTEGER PRIMARY KEY, name TEXT)');
+         $SQLiteRepository = $SQLite->map(User::class);
+
+         $Real = new User;
+         $Real->name = 'Edsger';
+
+         $Mapped = $SQLiteRepository->hydrate($SQLiteRepository->save($Real));
+
+         yield assert(
+            assertion: $Mapped->entity === $Real && $Real->id === 1
+               && $SQLite->query('SELECT count(*) AS total FROM backfill_users')->Result?->cell === 1,
+            description: 'The SQLite driver inserts exactly once and backfills the generated key'
+         );
+      }
    }
 );

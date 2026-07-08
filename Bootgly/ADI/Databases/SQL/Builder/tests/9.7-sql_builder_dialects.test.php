@@ -160,5 +160,25 @@ return new Specification(
          assertion: $blocked,
          description: 'Builder rejects unsupported output columns when the dialect is configured'
       );
+
+      // ? SQLite also blocks RETURNING — the sqlite3 extension would step
+      //   the statement twice, duplicating the write.
+      $blocked = false;
+
+      try {
+         (new Builder(new SQLite))
+            ->table(Tables::Users)
+            ->insert()
+            ->set(Columns::Id, 1)
+            ->output(Columns::Id);
+      }
+      catch (InvalidArgumentException) {
+         $blocked = true;
+      }
+
+      yield assert(
+         assertion: $blocked,
+         description: 'SQLite dialect keeps RETURNING output disabled'
+      );
    }
 );
