@@ -2,6 +2,38 @@
 
 Changelog for Bootgly framework. All notable changes to this project will be documented in this file. Imported from ROADMAP.md.
 
+## v0.22.0-beta ✅
+
+> Focus: **Data parity**
+
+### ADI — Abstract Data Interface
+
+- ✅ MySQL/MariaDB native driver (`ADI/Databases/SQL/Drivers/MySQL`) — the #1 adoption gap:
+  the Builder/Schema MySQL dialect exists, but nothing can execute it
+  - ✅ Wire protocol: handshake + auth (`mysql_native_password`, `caching_sha2_password` with
+    full auth via TLS or pinned server RSA key), TLS
+  - ✅ Query / prepared statements (binary protocol + LRU cache) + result hydration wired to
+    the existing MySQL dialects; `Result->inserted` + ORM generated-key backfill
+  - ✅ Transactions + connection Pool integration (request-response FIFO with
+    transport-failure abort), `KILL QUERY` cancellation, `GET_LOCK` advisory locks;
+    ORM/migrations/seeders parity with PostgreSQL
+- ✅ SQLite native driver (`ADI/Databases/SQL/Drivers/SQLite`) — dialect already exists
+  - ✅ Driver over the `sqlite3` extension (file + `:memory:`), transactional DDL, enforced
+    foreign keys
+  - ✅ Unlocks zero-setup tests and prototypes (real E2E migrations on `:memory:`)
+- ✅ Pagination in the ORM Repository — page/cursor pagination + total counting;
+  mandatory REST DX (consumed by the WPI content negotiation shipped in v0.21)
+  - ✅ Page mode: `Repository::paginate()` with LIMIT/OFFSET slice + pipelined `COUNT(*)` total
+  - ✅ Cursor mode: full keyset (opaque base64url token, PK tiebreak, limit+1 probe, nested OR-chain — no raw SQL)
+  - ✅ WPI REST DX: `$Response->Database->paginate()` reads `?page/?limit/?cursor`, emits `X-Total-Count` (page mode) + `Link` headers, body ready for `Negotiation->send()`
+
+### Bonus
+
+- ✅ `SECURITY.md` (on .github/SECURITY.md) + disclosure policy — the F-1..F-12 (HTTP) and S1–S6 (HTTP/2) audits
+  already ran;
+
+---
+
 ## v0.21.0-beta ✅
 
 > Focus: **Templates + Views + Mail**
