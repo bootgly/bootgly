@@ -6,6 +6,7 @@ parameters:
          - */vs/*
          - */tests/*
          - */examples/*
+         - */pages/*
          - */stubs/*
    reportUnmatchedIgnoredErrors: false
 

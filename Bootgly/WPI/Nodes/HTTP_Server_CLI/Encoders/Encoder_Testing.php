@@ -15,7 +15,6 @@ use function strlen;
 use Generator;
 use Throwable;
 
-use Bootgly\ABI\Debugging\Data\Throwables;
 use Bootgly\ABI\Events\Emitter;
 use Bootgly\API\Workables\Server as SAPI;
 use Bootgly\WPI\Endpoints\Servers\Packages;
@@ -23,6 +22,7 @@ use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages as TCPPackages;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI as Server;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Cache;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders\Catcher;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Events as RequestEvents;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router;
@@ -116,9 +116,7 @@ class Encoder_Testing extends Encoders
          }
       }
       catch (Throwable $Throwable) {
-         $Response = new Response(code: 500, body: ' ');
-
-         Throwables::debug($Throwable);
+         $Response = Catcher::respond($Request, $Response, $Throwable);
       }
       finally {
          // @ Persist the session before the response leaves the server —

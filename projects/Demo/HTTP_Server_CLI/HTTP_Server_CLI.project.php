@@ -84,41 +84,48 @@ return new Project(
             $Output->render('@#Green:Tip:@; Use @#Black:`bootgly project stop` ' . $projectName . '@; to stop the server.@..;');
 
             // @ Demo log/heartbeat — rotating-level logs from a few channels.
-            //   `global: true` persists them to the unified app log (Logger::$Sinks) in every mode;
-            //   in Monitor they also stream live to the viewer (Logger::$Tap).
-            $App = new Logger(channel: 'Demo.App', global: true);
-            $Auth = new Logger(channel: 'Demo.Auth', global: true);
-            $Database = new Logger(channel: 'Demo.Database', global: true);
+            //   Generated only where they belong: Monitor (streamed live to the
+            //   viewer via Logger::$Tap) and Daemon (persisted to the unified app
+            //   log via Logger::$Sinks). Foreground/Interactive keep the terminal
+            //   clean for real server output.
+            if (
+               $HTTP_Server_CLI->Mode === Modes::Monitor
+               || $HTTP_Server_CLI->Mode === Modes::Daemon
+            ) {
+               $App = new Logger(channel: 'Demo.App', global: true);
+               $Auth = new Logger(channel: 'Demo.Auth', global: true);
+               $Database = new Logger(channel: 'Demo.Database', global: true);
 
-            $tick = 0;
-            Timer::add(1, function () use ($App, $Auth, $Database, &$tick): void {
-               $tick++;
+               $tick = 0;
+               Timer::add(1, function () use ($App, $Auth, $Database, &$tick): void {
+                  $tick++;
 
-               $App->log(info: "Heartbeat #{$tick} — server healthy.");
-               if ($tick % 3 === 0) {
-                  $Auth->log(notice: "Session refreshed for user #{$tick}.");
-               }
-               if ($tick % 4 === 0) {
-                  $Database->log(warning: "Slow query: SELECT took 320ms (tick {$tick}).");
-               }
-               if ($tick % 7 === 0) {
-                  $App->log(error: "Simulated error at tick {$tick}.");
-               }
-               if ($tick % 6 === 0) {
-                  // @ Multiline message — collapsed to one line in the pane (with a ⏎N marker);
-                  //   select it (↑/↓) and press Enter to expand the full trace.
-                  $Database->log(critical:
-                     "RuntimeException: Payment gateway timeout (tick {$tick})\n"
-                     . "    at Gateway->charge() in /app/Payment/Gateway.php:88\n"
-                     . "    at Service->pay() in /app/Checkout/Service.php:42\n"
-                     . "    at CheckoutController->process() in /app/Http/Controllers/CheckoutController.php:19\n"
-                     . "    #0 {main}"
-                  );
-               }
-               if ($tick % 9 === 0) {
-                  $Database->log(debug: "Pool: 3 idle / 1 active (tick {$tick}).");
-               }
-            });
+                  $App->log(info: "Heartbeat #{$tick} — server healthy.");
+                  if ($tick % 3 === 0) {
+                     $Auth->log(notice: "Session refreshed for user #{$tick}.");
+                  }
+                  if ($tick % 4 === 0) {
+                     $Database->log(warning: "Slow query: SELECT took 320ms (tick {$tick}).");
+                  }
+                  if ($tick % 7 === 0) {
+                     $App->log(error: "Simulated error at tick {$tick}.");
+                  }
+                  if ($tick % 6 === 0) {
+                     // @ Multiline message — collapsed to one line in the pane (with a ⏎N marker);
+                     //   select it (↑/↓) and press Enter to expand the full trace.
+                     $Database->log(critical:
+                        "RuntimeException: Payment gateway timeout (tick {$tick})\n"
+                        . "    at Gateway->charge() in /app/Payment/Gateway.php:88\n"
+                        . "    at Service->pay() in /app/Checkout/Service.php:42\n"
+                        . "    at CheckoutController->process() in /app/Http/Controllers/CheckoutController.php:19\n"
+                        . "    #0 {main}"
+                     );
+                  }
+                  if ($tick % 9 === 0) {
+                     $Database->log(debug: "Pool: 3 idle / 1 active (tick {$tick}).");
+                  }
+               });
+            }
          })
          ->on(Events::ServerStopped, function ($HTTP_Server_CLI) {
             $Output = CLI->Terminal->Output;

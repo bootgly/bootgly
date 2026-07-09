@@ -39,6 +39,14 @@ define('BOOTGLY_TTY', match (getenv('BOOTGLY_TTY')) {
    '0' => false,
    default => defined('STDIN') && function_exists('stream_isatty') && stream_isatty(STDIN)
 });
+// ? Deployment environment for failure exposure (error pages, debugging surfaces).
+// BOOTGLY_ENVIRONMENT answers "how should failures be exposed"; unrecognized or unset values fail safe to 'production'.
+define('BOOTGLY_ENVIRONMENT', match (getenv('BOOTGLY_ENVIRONMENT')) {
+   'development' => 'development',
+   'staging' => 'staging',
+   'test' => 'test',
+   default => 'production'
+});
 
 @include(__DIR__ . '/vendor/autoload.php'); // composer
 

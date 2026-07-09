@@ -7,6 +7,11 @@
  * Licensed under MIT
  * --------------------------------------------------------------------------
  */
+
+use Bootgly\ABI\Debugging\Data\Throwables;
+use Bootgly\ACI\Observability;
+use Bootgly\ACI\Observability\Metrics\Counter;
+
 // @ Agent-mode stdout redirection for `bootgly test`
 // When an AI agent drives `bootgly test`, the consumer expects a single JSON
 // document on stdout — nothing else. We can't reliably silence every
@@ -98,4 +103,28 @@ if (
          exit($exit);
       }
    }
+}
+
+// @ Debugging reporters — ACI Observability hook
+// Skipped when this file runs standalone as the agent-stdout child above
+// (no autoloader is registered in that mode).
+if (defined('BOOTGLY_VERSION') === true) {
+   Throwables::$reporters[] = static function (Throwable $Throwable, array $context): void {
+      // ? No registry configured — zero cost
+      $Observability = Observability::$Instance;
+      if ($Observability === null) {
+         return;
+      }
+
+      static $Counter = null;
+      if ($Counter === null) {
+         $Counter = new Counter(
+            name: 'exceptions_total',
+            help: 'Throwables reported by the Bootgly exception handler'
+         );
+         $Observability->Metrics->push($Counter);
+      }
+
+      $Counter->increment();
+   };
 }

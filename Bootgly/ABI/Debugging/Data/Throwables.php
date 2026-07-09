@@ -13,6 +13,7 @@ namespace Bootgly\ABI\Debugging\Data;
 
 use const BOOTGLY_SAPI;
 use const BOOTGLY_WORKING_DIR;
+use const STR_PAD_LEFT;
 use function array_reverse;
 use function array_shift;
 use function array_slice;
@@ -20,13 +21,19 @@ use function count;
 use function explode;
 use function file_get_contents;
 use function get_class;
+use function htmlspecialchars;
+use function max;
+use function min;
+use function str_pad;
 use function str_repeat;
+use function str_replace;
 use function strlen;
 use function strpos;
 use function strrpos;
 use function substr;
-use RuntimeException;
+use Closure;
 use Throwable;
+use WeakMap;
 
 use Bootgly\ABI\Data\__String\Escapeable\Text\Formattable;
 use Bootgly\ABI\Data\__String\Path;
@@ -42,10 +49,17 @@ abstract class Throwables implements Debugging
 
    // * Config
    #public static bool $debug = true;
-   #public static bool $exit = true;
+   // Terminate with a failure exit status (255) after an uncaught throwable
+   public static bool $exit = true;
    #public static bool $output = true;
    #public static bool $return = false;
    public static int $verbosity = 3;
+   /**
+    * Reporter seam — higher layers push closures here at boot to route
+    * throwables into their sinks (log channels, metrics, event buses).
+    * @var array<int,Closure(Throwable,array<string,mixed>):void>
+    */
+   public static array $reporters = [];
 
    // * Data
    // @ Theme
@@ -56,6 +70,7 @@ abstract class Throwables implements Debugging
 
             '@double_break_line' => "\n\n",
             'class_name' => [self::_BLACK_FOREGROUND, self::_RED_BACKGROUND],
+            'error_code' => [self::_WHITE_BACKGROUND, self::_BLACK_FOREGROUND],
             'message' => self::_WHITE_BRIGHT_FOREGROUND,
             'file' => self::_GREEN_BRIGHT_FOREGROUND,
             'file_line' => self::_CYAN_BRIGHT_FOREGROUND,
@@ -69,53 +84,55 @@ abstract class Throwables implements Debugging
          ]
       ]
    ];
+   // Values starting with `<` are literal markup; the others are CSS class names.
    protected const DEFAULT_THEME_HTML = [
       'HTML' => [
          'values' => [
-            '@start' => '<pre>',
+            '@start' => '<pre class="bootgly-throwable">',
 
-            '@double_break_line' => "<br><br>",
-            'class_name' => '',
-            'message' => '',
-            'file' => '',
-            'file_line' => '',
-            'trace_calls' => '',
-            'trace_index' => '',
-            'trace_file' => '',
-            'trace_line' => '',
-            'trace_call' => '',
+            '@double_break_line' => '<br><br>',
+            'class_name' => 'class-name',
+            'error_code' => 'error-code',
+            'message' => 'message',
+            'file' => 'file',
+            'file_line' => 'file-line',
+            'trace_calls' => 'trace-calls',
+            'trace_index' => 'trace-index',
+            'trace_file' => 'trace-file',
+            'trace_line' => 'trace-line',
+            'trace_call' => 'trace-call',
 
             '@finish' => '</pre>'
          ]
       ]
    ];
 
+   // * Metadata
+   /** @var WeakMap<Throwable,bool> */
+   protected static WeakMap $reported;
 
-   public static function report (Throwable $Throwable): void
+
+   public static function render (Throwable $Throwable, null|int $target = null): string
    {
-      switch (BOOTGLY_SAPI) {
-         case 'cli':
-            $theme = Highlighter::DEFAULT_THEME;
-            break;
-         default:
-            $theme = Highlighter::HTML_THEME;
-      }
-      $Highligher = new Highlighter($theme);
+      // !
+      $target ??= BOOTGLY_SAPI === 'cli'
+         ? self::TARGET_CLI
+         : self::TARGET_HTML;
 
       // * Data
       $class = get_class($Throwable);
+      $code = $Throwable->getCode();
       $message = $Throwable->getMessage();
       // @ file
       $file = $Throwable->getFile();
       $line = $Throwable->getLine();
-      $contents = file_get_contents($file);
-      if ($contents === false) {
-         throw new RuntimeException("Throwables: could not read file: $file");
-      }
+      // ? Degrade when the source is unreadable — the renderer must never throw
+      $contents = @file_get_contents($file);
       $file = Path::relativize($file, BOOTGLY_WORKING_DIR);
 
-      switch (BOOTGLY_SAPI) {
-         case 'cli':
+      // # Theme
+      switch ($target) {
+         case self::TARGET_CLI:
             $theme = self::DEFAULT_THEME;
             // @ Init options
             $theme['CLI']['options'] = [
@@ -131,17 +148,33 @@ abstract class Throwables implements Debugging
             break;
          default:
             $theme = self::DEFAULT_THEME_HTML;
-            // TODO
+            // @ Init options
             $theme['HTML']['options'] = [
                'prepending' => [
                   'type'  => 'callback',
-                  'value' => function ($value) {
-                     return $value;
+                  'value' => static function (string ...$values): string {
+                     $value = $values[0] ?? '';
+                     // ? Literal markup markers pass through untouched
+                     if ($value === '' || $value[0] === '<') {
+                        return $value;
+                     }
+                     // : Styled segment opening
+                     return "<span class=\"$value\">";
                   }
                ],
                'appending' => [
-                  'type' => 'string',
-                  'value' => ''
+                  'type' => 'callback',
+                  'value' => static function (string ...$values): string {
+                     $value = $values[0] ?? '';
+                     if ($value === '' || $value[0] === '<') {
+                        return '';
+                     }
+                     return '</span>';
+                  }
+               ],
+               'escaping' => [
+                  'type' => 'callback',
+                  'value' => htmlspecialchars(...)
                ]
             ];
       }
@@ -153,6 +186,10 @@ abstract class Throwables implements Debugging
 
       // class name
       $output .= $Theme->apply('class_name', " $class ");
+      // ? Code chip — only when the throwable carries a meaningful code
+      if ($code !== 0) {
+         $output .= $Theme->apply('error_code', " #$code ");
+      }
       $output .= $Theme->apply('@double_break_line');
       // message
       $output .= $Theme->apply('message', " $message ");
@@ -168,9 +205,17 @@ abstract class Throwables implements Debugging
          $output .= $Theme->apply('file_line', (string) $line);
          $output .= "\n";
          // file content
-         // TODO file content filters
-         $output .= $Highligher->highlight($contents, $line);
-         $output .= "\n";
+         if ($contents !== false) {
+            // TODO file content filters
+            if ($target === self::TARGET_CLI) {
+               $Highlighter = new Highlighter(Highlighter::DEFAULT_THEME);
+               $output .= $Highlighter->highlight($contents, $line);
+            }
+            else {
+               $output .= self::excerpt($contents, $line);
+            }
+            $output .= "\n";
+         }
       }
 
       if (self::$verbosity >= 3) {
@@ -195,7 +240,9 @@ abstract class Throwables implements Debugging
             // index
             $output .= $Theme->apply('trace_index', " {$trace['index']} ");
             // file
-            $output .= $trace['file'];
+            $output .= $target === self::TARGET_HTML
+               ? htmlspecialchars($trace['file'])
+               : $trace['file'];
             // line
             $output .= ':';
             $output .= $Theme->apply('trace_line', $trace['line']);
@@ -211,7 +258,70 @@ abstract class Throwables implements Debugging
 
       $output .= $Theme->apply('@finish');
 
-      echo $output;
+      // :
+      return $output;
+   }
+
+   public static function report (Throwable $Throwable): void
+   {
+      echo self::render($Throwable);
+   }
+
+   /**
+    * Dispatch a throwable to the registered reporters — once per instance,
+    * no matter how many handlers see it (request catch, uncaught, shutdown).
+    *
+    * @param array<string,mixed> $context
+    */
+   public static function notify (Throwable $Throwable, array $context = []): void
+   {
+      // !
+      if (isSet(self::$reported) === false) {
+         self::$reported = new WeakMap;
+      }
+
+      // ? Deduplicate per throwable instance (WeakMap: auto-GC, worker-safe)
+      if (isSet(self::$reported[$Throwable])) {
+         return;
+      }
+      self::$reported[$Throwable] = true;
+
+      // @
+      foreach (self::$reporters as $Reporter) {
+         try {
+            $Reporter($Throwable, $context);
+         }
+         catch (Throwable) {
+            // ? A broken reporter must never cascade into the error path
+         }
+      }
+   }
+
+   /**
+    * Plain, HTML-escaped source excerpt (±4 lines around the marked line).
+    */
+   protected static function excerpt (string $contents, int $line): string
+   {
+      // !
+      $lines = explode("\n", str_replace(["\r\n", "\r"], "\n", $contents));
+      $start = max($line - 4, 1);
+      $end = min($line + 4, count($lines));
+      $width = max(strlen((string) $end), 3);
+
+      // @
+      $output = '';
+      for ($number = $start; $number <= $end; $number++) {
+         $mark = $number === $line ? ' ▶ ' : '   ';
+         $padded = str_pad((string) $number, $width, ' ', STR_PAD_LEFT);
+         $content = htmlspecialchars($lines[$number - 1] ?? '');
+
+         $output .= $number === $line
+            ? "<span class=\"marked-line\">{$mark}{$padded}▕ {$content}</span>\n"
+            : "{$mark}{$padded}▕ {$content}\n";
+      }
+
+      // :
+      return $output;
    }
 
    /**

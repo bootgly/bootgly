@@ -35,6 +35,22 @@ abstract class Exceptions extends Throwables
       self::$exceptions[] = $E;
    }
 
+   /**
+    * Uncaught exception handler entry: buffer, report, terminate.
+    */
+   public static function handle (Throwable $E): void
+   {
+      self::collect($E);
+
+      self::notify($E, ['origin' => 'exception']);
+
+      // ? Uncaught throwables must terminate with a failure exit status —
+      // shutdown functions still run (the buffered report renders there)
+      if (self::$exit === true) {
+         exit(255);
+      }
+   }
+
    public static function debug (mixed ...$Throwables): void
    {
       $exceptions = $Throwables ?: self::$exceptions;

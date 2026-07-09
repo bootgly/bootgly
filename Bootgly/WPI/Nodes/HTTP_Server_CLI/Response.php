@@ -41,7 +41,6 @@ use Throwable;
 
 use const Bootgly\WPI;
 use Bootgly\ABI\Data\__String\Path;
-use Bootgly\ABI\Debugging\Data\Throwables;
 use Bootgly\ABI\IO\FS\File;
 use Bootgly\ACI\Events\Readiness;
 use Bootgly\ACI\Events\Scheduler;
@@ -50,6 +49,7 @@ use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages;
 use Bootgly\WPI\Modules\HTTP;
 use Bootgly\WPI\Modules\HTTP\Server;
 use Bootgly\WPI\Modules\HTTP\Server\Response\Authentication;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders\Catcher;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Raw;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Raw\Body;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Raw\Header;
@@ -893,16 +893,13 @@ class Response extends Server\Response
             }
          }
          catch (Throwable $Throwable) {
-            Throwables::report($Throwable);
+            // @ Environment-aware error response (also reports the throwable)
+            $Errored = Catcher::respond($Response->Request, $Response, $Throwable);
 
             // ? Guard: socket may have been closed
             if (is_resource($Package->Connection->Socket)) {
-               // @ Prepare 500 on failure
-               $Response->code(500);
-               $Response->Body->raw = ' ';
-
                // @ Encode and send response after work fails
-               $buffer = $Response->encode($Package, $length);
+               $buffer = $Errored->encode($Package, $length);
 
                // @ Write response to socket
                $Package->writing($Package->Connection->Socket, length: $length, buffer: $buffer);

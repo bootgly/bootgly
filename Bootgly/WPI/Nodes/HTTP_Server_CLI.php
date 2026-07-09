@@ -27,6 +27,7 @@ use function stream_select;
 use function stream_set_blocking;
 use function stream_socket_client;
 use function strlen;
+use function strncmp;
 use function strpos;
 use function substr;
 use function usleep;
@@ -43,6 +44,7 @@ use ReflectionUnionType;
 use Throwable;
 
 use const Bootgly\WPI;
+use Bootgly\ABI\Debugging\Data\Throwables;
 use Bootgly\ABI\Debugging\Data\Throwables\Exceptions;
 use Bootgly\ABI\IO\FS\File;
 use Bootgly\ACI\Logs\Data\Display;
@@ -402,6 +404,26 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
             break;
          default:
             self::$Encoder = new Encoder_;
+
+            // @ Exception reporting — `exceptions` log channel (registered once,
+            //   pre-fork, so every worker inherits it; Test env skips it to keep
+            //   E2E output byte-stable)
+            static $reporting = false;
+            if ($reporting === false) {
+               $reporting = true;
+
+               Throwables::$reporters[] = static function (Throwable $Throwable, array $context): void {
+                  static $Logger = null;
+                  $Logger ??= new Logger(channel: 'exceptions', global: true);
+
+                  $Logger->log(error: $Throwable->getMessage(), context: [
+                     'class' => $Throwable::class,
+                     'file' => $Throwable->getFile(),
+                     'line' => $Throwable->getLine(),
+                     ...$context
+                  ]);
+               };
+            }
       }
    }
 
@@ -536,6 +558,41 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
                return substr($bytes, 0, $eol + 2)
                   . "X-Bootgly-Test: {$testIndex}\r\n"
                   . substr($bytes, $eol + 2);
+            };
+            // @ Complete a response whose body exceeded one socket read: when
+            //   the headers advertise a Content-Length bigger than the bytes
+            //   already received, keep reading exactly the missing remainder
+            //   (large bodies — e.g. the built-in debug page — span several
+            //   TCP reads).
+            $completeBody = static function (string $input, string $request = '') use ($Connection, &$Socket): string {
+               // ? HEAD responses carry Content-Length without a body (RFC 9110 §9.3.2)
+               if (strncmp($request, 'HEAD ', 5) === 0) {
+                  return $input;
+               }
+               // ? Only whole-header responses with a known body length
+               $headerEnd = strpos($input, "\r\n\r\n");
+               if ($headerEnd === false) {
+                  return $input;
+               }
+               // ? Bodiless statuses (1xx/204/304) may still advertise a length
+               if (preg_match('#^HTTP/\d\.\d (?:1\d\d|204|304) #', $input) === 1) {
+                  return $input;
+               }
+               if (preg_match('#\r\nContent-Length: (\d+)\r\n#', substr($input, 0, $headerEnd + 2), $matches) !== 1) {
+                  return $input;
+               }
+
+               $missing = ((int) $matches[1]) - (strlen($input) - $headerEnd - 4);
+               if ($missing <= 0) {
+                  return $input;
+               }
+
+               // @ Read exactly the missing remainder
+               if ($Connection->reading($Socket, $missing, 2)) {
+                  $input .= $Connection->input;
+               }
+
+               return $input;
             };
 
             // @@ Iterate Test Cases
@@ -719,7 +776,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
                   $timeout = 2;
                   $input = '';
                   if ( $Connection->reading($Socket, $responseLength, $timeout) ) {
-                     $input = $Connection->input;
+                     $input = $completeBody($Connection->input);
                   }
 
                   // @ Execute Test
@@ -758,7 +815,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
                $input = '';
                // @ Get Response from Server
                if ( $Connection->reading($Socket, $responseLength, $timeout) ) {
-                  $input = $Connection->input;
+                  $input = $completeBody($Connection->input, $requestData);
                }
                // @ Reconnect and retry if response is empty (half-closed connection)
                if ($input === '' && $Connection->expired) { // @phpstan-ignore identical.alwaysTrue, booleanAnd.rightAlwaysFalse
@@ -767,7 +824,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
                   $Connection->output = $requestData;
                   if ($Connection->writing($Socket, $requestLength)) {
                      if ($Connection->reading($Socket, $responseLength, $timeout)) {
-                        $input = $Connection->input;
+                        $input = $completeBody($Connection->input, $requestData);
                      }
                   }
                }

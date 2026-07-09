@@ -11,6 +11,7 @@
 namespace Bootgly\WPI\Interfaces;
 
 
+use const BOOTGLY_ENVIRONMENT;
 use const PHP_BINARY;
 use const PHP_SAPI;
 use const SIG_DFL;
@@ -340,10 +341,11 @@ class TCP_Server_CLI implements Servers
 
             return true;
          case '@test end':
-            SAPI::$Environment = Environments::Production;
+            $Environment = Environments::fetch(BOOTGLY_ENVIRONMENT);
+            SAPI::$Environment = $Environment;
 
             if (self::$Application) {
-               self::$Application::boot(Environments::Production);
+               self::$Application::boot($Environment);
                return true;
             }
 
@@ -698,7 +700,7 @@ class TCP_Server_CLI implements Servers
    protected function loading (): void
    {
       if (self::$Application) {
-         self::$Application::boot(Environments::Production);
+         self::$Application::boot(Environments::fetch(BOOTGLY_ENVIRONMENT));
       }
       else if (isSet(SAPI::$Handler) === false) {
          $this->Logger->log(error: '@\;No handler defined. Call on(Events::DataReceive, ...) before start().@\;');

@@ -209,6 +209,13 @@ return new Suite(
          '1.z.2.4.1-upload_file_with_multi_range-requests_1',
          // .3 - Large Files
          '1.z.3-upload_large_file',
+         // @ catch (environment-aware error responses — appended last to keep
+         //   the X-Bootgly-Test indices of the specs above stable)
+         '1.13.1-catch_test_env_legacy_500',
+         '1.13.2-catch_development_debug_page',
+         '1.13.3-catch_development_negotiate_json',
+         '1.13.4-catch_production_clean_page',
+         '1.13.5-catch_production_custom_view',
       ],
       'Router/' => [
          '1.1-route_callback-closure',

@@ -144,7 +144,7 @@ class View extends Resource
       }
       catch (Throwable $Throwable) {
          $content = '';
-         Throwables::report($Throwable);
+         Throwables::notify($Throwable, ['origin' => 'view']);
       }
       finally {
          Template::$path = $path;

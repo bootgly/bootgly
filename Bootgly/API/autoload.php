@@ -9,3 +9,14 @@
  */
 
 namespace Bootgly\API;
+
+
+use const BOOTGLY_ENVIRONMENT;
+
+use Bootgly\API\Environments;
+use Bootgly\API\Workables\Server;
+
+
+// @ Workables\Server
+// Deployment environment (BOOTGLY_ENVIRONMENT constant) -> typed enum on the Server SAPI.
+Server::$Environment = Environments::fetch(BOOTGLY_ENVIRONMENT);

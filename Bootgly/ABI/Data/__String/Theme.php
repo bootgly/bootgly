@@ -169,6 +169,14 @@ class Theme
     */
    public function apply (string $key, string $content = ''): string
    {
+      // ? Optional content escaper (e.g. HTML entities in HTML themes)
+      if ($content !== '') {
+         $escaping = $this->options['escaping']['value'] ?? null;
+         if ($escaping !== null && is_callable($escaping)) {
+            $content = (string) $escaping($content);
+         }
+      }
+
       return $this->open($key) . $content . $this->close($key);
    }
 

@@ -18,6 +18,7 @@
 
 return [
    'Database',             // Native async PostgreSQL examples (default)
+   'Errors',               // /error — throws on purpose (environment-aware error pages)
    'Observability',        // /health + /metrics (ACI Observability collector)
    // 'Authentication',    // Basic, Bearer, JWT authentication
    // 'Authorization',     // Scope, Role, Policy authorization

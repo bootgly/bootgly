@@ -27,7 +27,7 @@ namespace Bootgly\ABI {
    // @ Debugging\Data\Exceptions
    \restore_exception_handler();
    \set_exception_handler(
-      callback: Exceptions::collect(...) // @phpstan-ignore-line
+      callback: Exceptions::handle(...) // @phpstan-ignore-line
    );
 
    // @ Debugging\Shutdown

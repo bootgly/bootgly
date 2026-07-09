@@ -13,6 +13,11 @@ namespace Bootgly\ABI;
 
 interface Debugging
 {
+   // # Render targets
+   public const int TARGET_CLI = 1;
+   public const int TARGET_HTML = 2;
+
+
    // ...Used to define and indentify subclasses (instance of).
    public static function debug (mixed ...$data): void;
 }

@@ -81,6 +81,8 @@ class Server
       // @
       $bootstrap = '';
       switch (self::$Environment) {
+         case Environments::Development:
+         case Environments::Staging:
          case Environments::Production:
             // ? No production file when handler set via handle()
             if (self::$production === '') {

@@ -135,5 +135,7 @@ return new Suites(
       'Bootgly/WPI/Services/Mail/',
       // # ABI/Data/__String/Theme — theme system (public API, builtins, Escaped seam)
       'Bootgly/ABI/Data/__String/Theme/',
+      // # ABI/Debugging — throwable rendering (CLI/HTML targets), reporter seam, debug page
+      'Bootgly/ABI/Debugging/',
    ]
 );
