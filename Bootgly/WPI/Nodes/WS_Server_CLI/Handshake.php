@@ -45,6 +45,15 @@ class Handshake
    public static array $Guards = [];
    // @ Custom upgrade predicate (Events::HandshakeRequested) — e.g. Origin allowlist.
    public static null|Closure $predicate = null;
+   /**
+    * HTTP fallback for plain (non-upgrade) requests — lets the server hand
+    * out its own client page next to the WebSocket endpoint.
+    * Return `[mediaType, body]` to serve, or null to answer 404.
+    * When unset, non-upgrade requests are rejected with 400 (as before).
+    *
+    * @var null|Closure(string $target, array<string,mixed> $fields): (null|array{string,string})
+    */
+   public static null|Closure $fallback = null;
 
 
    /**
@@ -339,8 +348,26 @@ class Handshake
          401 => "HTTP/1.1 401 Unauthorized\r\n"
             . ($challenge !== '' ? "WWW-Authenticate: {$challenge}\r\n" : '')
             . "Connection: close\r\n\r\n",
+         404 => "HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n",
          default => "HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n",
       };
+   }
+
+   /**
+    * Build a plain HTTP 200 response for a non-upgrade request — the
+    * `$fallback` path (e.g. serving the WebSocket client page).
+    */
+   public static function serve (string $type, string $body): string
+   {
+      $length = strlen($body);
+
+      return "HTTP/1.1 200 OK\r\n"
+         . "Content-Type: {$type}\r\n"
+         . "Content-Length: {$length}\r\n"
+         . "Cache-Control: no-cache\r\n"
+         . "Connection: close\r\n"
+         . "\r\n"
+         . $body;
    }
 
    /**
@@ -364,7 +391,7 @@ class Handshake
    /**
     * Check a comma-separated header for a case-insensitive token.
     */
-   private static function check (string $header, string $token): bool
+   public static function check (string $header, string $token): bool
    {
       foreach (explode(',', $header) as $part) {
          if (strcasecmp(trim($part), $token) === 0) {

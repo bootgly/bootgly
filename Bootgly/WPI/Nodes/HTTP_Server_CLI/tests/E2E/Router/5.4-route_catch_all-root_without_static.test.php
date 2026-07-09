@@ -1,0 +1,48 @@
+<?php
+
+use Bootgly\ABI\Debugging\Data\Vars;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test\Specification;
+
+
+return new Specification(
+   description: 'GET / with no static root route falls through to the catch-all (no empty-haystack crash)',
+
+   request: function () {
+      return "GET / HTTP/1.1\r\nHost: localhost\r\n\r\n";
+   },
+   response: function (Request $Request, Response $Response, Router $Router)
+   {
+      // ! A dynamic route makes hasDynamic true — the regression was
+      //   strpos('', '/', 1) throwing when '/' had no static match
+      yield $Router->route('/posts/:id<int>', function ($Request, $Response) {
+         return $Response(body: 'post');
+      }, GET);
+
+      yield $Router->route('/*', function ($Request, $Response) {
+         return $Response(code: 404, body: 'Catch-All!');
+      }, GET);
+   },
+
+   test: function ($response) {
+      $expected = <<<HTML_RAW
+      HTTP/1.1 404 Not Found\r
+      Server: Bootgly\r
+      Content-Type: text/html; charset=UTF-8\r
+      Content-Length: 10\r
+      \r
+      Catch-All!
+      HTML_RAW;
+
+      // @ Assert
+      if ($response !== $expected) {
+         Vars::$labels = ['HTTP Response:', 'Expected:'];
+         dump(json_encode($response), json_encode($expected));
+         return 'Root request did not reach the catch-all';
+      }
+
+      return true;
+   }
+);

@@ -116,7 +116,13 @@ class Encoder_Testing extends Encoders
          }
       }
       catch (Throwable $Throwable) {
-         $Response = Catcher::respond($Request, $Response, $Throwable);
+         // ! Break the static-Response alias: the Catcher builds a fresh,
+         //   resource-less Response for THIS request only — writing it
+         //   through the reference would strip the persistent test worker's
+         //   bound Response of its loaded resources (mirrors Encoder_)
+         $Errored = Catcher::respond($Request, Server::$Response, $Throwable);
+         unset($Response);
+         $Response = $Errored;
       }
       finally {
          // @ Persist the session before the response leaves the server —

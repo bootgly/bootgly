@@ -107,7 +107,8 @@ class WS_Server_CLI extends TCP_Server_CLI implements WS, Server
       bool $compression = true,
       array $guards = [],
       null|int $maxConnections = null,
-      null|int $maxConnectionsPerIP = null
+      null|int $maxConnectionsPerIP = null,
+      null|Closure $fallback = null
    ): self
    {
       parent::configure($host, $port, $workers, $secure, $user, $group);
@@ -132,6 +133,8 @@ class WS_Server_CLI extends TCP_Server_CLI implements WS, Server
       Handshake::$Guards = $guards;
       // @ Clear any prior custom upgrade predicate; on(HandshakeRequested) re-sets it.
       Handshake::$predicate = null;
+      // @ HTTP fallback for plain (non-upgrade) requests — e.g. the client page
+      Handshake::$fallback = $fallback;
       // @ Connection-exhaustion caps
       if ($maxConnections !== null) {
          self::$maxConnections = $maxConnections;

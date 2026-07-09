@@ -103,7 +103,13 @@ class Encoder_ extends Encoders
                SAPI::$Middlewares = new Middlewares;
             }
             if ( ! isset(SAPI::$Handler)) {
-               $Response = Catcher::respond($Request, $Response, code: 503);
+               // ! Break the static-Response alias: the Catcher builds a fresh,
+               //   resource-less Response for THIS request only — writing it
+               //   through the reference would strip the worker's bound
+               //   Response of its loaded resources for every later request
+               $Errored = Catcher::respond($Request, Server::$Response, code: 503);
+               unset($Response);
+               $Response = $Errored;
             }
             else {
                $Result = SAPI::$Middlewares->process($Request, $Response,
@@ -135,7 +141,10 @@ class Encoder_ extends Encoders
          }
       }
       catch (Throwable $Throwable) {
-         $Response = Catcher::respond($Request, $Response, $Throwable);
+         // ! Break the static-Response alias (see the 503 path above)
+         $Errored = Catcher::respond($Request, Server::$Response, $Throwable);
+         unset($Response);
+         $Response = $Errored;
       }
       finally {
          // @ Persist the session before the response leaves the server —

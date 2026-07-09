@@ -37,6 +37,21 @@ class Decoder_ extends Decoders
             : States::Incomplete;
       }
 
+      // ? Plain HTTP request (no upgrade token) — serve the configured
+      //   fallback (e.g. the WebSocket client page) instead of rejecting.
+      if (
+         Handshake::$fallback !== null
+         && Handshake::check(Handshake::read($Frame->fields, 'upgrade'), 'websocket') === false
+      ) {
+         $result = (Handshake::$fallback)($Frame->URI, $Frame->fields);
+         $Package->reject(
+            $result === null
+               ? Handshake::deny(404)
+               : Handshake::serve($result[0], $result[1])
+         );
+         return States::Rejected;
+      }
+
       // ? Validate the WebSocket upgrade.
       $code = Handshake::validate($Frame->method, $Frame->protocol, $Frame->fields);
       if ($code !== null) {

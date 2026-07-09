@@ -15,6 +15,7 @@ return new Suite(
    // * Data
    tests: [
       '1.1-handshake',
+      '1.2-handshake-fallback',
       '2.1-frame'
    ]
 );

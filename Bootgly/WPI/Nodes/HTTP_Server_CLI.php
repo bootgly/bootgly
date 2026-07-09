@@ -427,7 +427,12 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       }
    }
 
-   public static function pretest (null|Suite $Suite, string $testsDir = 'E2E'): void
+   /**
+    * @param null|string $specs Absolute spec-directory override — lets a
+    *                           platform (e.g. Web) run its own E2E specs
+    *                           through this server's Test mode.
+    */
+   public static function pretest (null|Suite $Suite, string $testsDir = 'E2E', null|string $specs = null): void
    {
       if ($Suite === null) {
          return;
@@ -455,10 +460,11 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
 
       // @ Convert namespace to path (backslash -> forward slash)
       $classPath = str_replace('\\', '/', __CLASS__);
+      $specs ??= BOOTGLY_ROOT_DIR . $classPath . '/tests/' . $testsDir;
 
       foreach ($selected as $index => $case) {
          $Test_Case_File = new File(
-            BOOTGLY_ROOT_DIR . $classPath . '/tests/' . $testsDir . '/' . $case . '.test.php'
+            "{$specs}/{$case}.test.php"
          );
          if ($Test_Case_File->exists === false) {
             continue;

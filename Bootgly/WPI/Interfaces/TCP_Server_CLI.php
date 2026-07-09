@@ -729,10 +729,15 @@ class TCP_Server_CLI implements Servers
       // @ Process title (node-specific prefix).
       $Process->title = $this->process . ': child process (Worker #' . Process::$index . ')';
 
-      // @ Monitor mode routes worker logs to the master viewer pipe; otherwise
-      //   per-worker stdout.
+      // @ Monitor mode routes worker logs to the master viewer pipe; Daemon
+      //   detaches from the terminal — workers keep the inherited tty fd, so
+      //   console display must be off (global sinks still persist records);
+      //   otherwise per-worker stdout.
       if ($this->Mode === Modes::Monitor) {
          $this->sink();
+      }
+      else if ($this->Mode === Modes::Daemon) {
+         Display::show(Display::NONE);
       }
       else {
          Display::show(Display::MESSAGE, Display::TIMESTAMP, Display::CHANNEL, Display::SEVERITY);

@@ -257,6 +257,8 @@ return new Suite(
          // Route Catch-All parameterized
          '5.2-route_catch_all-parameterized_single',
          '5.3-route_catch_all-parameterized_multi',
+         // Root without a static match falls through to the catch-all
+         '5.4-route_catch_all-root_without_static',
          // Route registration errors (warmup-time guards)
          '6.1-route_error-catch_all_not_last',
          '6.2-route_error-unknown_constraint_type',
@@ -327,6 +329,11 @@ return new Suite(
          '1.7-response_header_cache_alternating_no_leak',
          // Default media type (Header->type) reset + cache-key isolation
          '1.8-response_type_default_no_leak',
+         // Worker-bound Response survives a thrown route (Catcher alias break)
+         '1.9-response_error_bound_response_recovery',
+         // Route params reset per request (static after dynamic; duplicates)
+         '1.10-route_params_reset_static_after_dynamic',
+         '1.11-route_duplicate_params_reset_across_requests',
          // Upload + normal request interleaving
          '2.1-response_upload_then_normal_request',
          '2.2-response_normal_then_upload_request',

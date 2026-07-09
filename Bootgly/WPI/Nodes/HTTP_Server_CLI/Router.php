@@ -294,6 +294,14 @@ class Router
       $method = $Request->method;
       $Response = $WPI->Response;
 
+      // ! Per-request Route state — static and catch-all matches dispatch
+      //   straight from the cache without touching the Route, so params from
+      //   a previous dynamic match must never leak into this request; the
+      //   regex path also appends duplicate params onto whatever is stored
+      $Route = $this->Route;
+      $Route->path = $URI === '/' ? '/' : $Request->URL;
+      $Route->Params->set([]);
+
       // 1. Static route lookup — O(1)
       if ($URI === '/') {
          $Dispatcher = $this->staticCache[$method][''] ?? null;
@@ -338,7 +346,9 @@ class Router
       }
 
       // 2. Dynamic route lookup — skip entirely when no dynamic routes registered
-      if ($this->hasDynamic) {
+      //    ($url is '' when '/' had no static match — no dynamic route can match
+      //    the root, and strpos() with offset 1 would throw on an empty haystack)
+      if ($this->hasDynamic && $url !== '') {
          $slashPos = strpos($url, '/', 1);
          $firstSegment = $slashPos !== false ? substr($url, 1, $slashPos - 1) : substr($url, 1);
          $segCount = substr_count($url, '/');
