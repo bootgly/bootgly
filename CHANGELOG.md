@@ -16,14 +16,6 @@ Changelog for Bootgly framework. All notable changes to this project will be doc
   - ✅ Exception reporting (log channels; ACI observability hook)
   - ✅ Exception rendering per interface (CLI vs WPI) with correct HTTP status (500/503)
 
-### CLI — Command Line Interface
-
-- ✅ Resumable installation — the project wizard's platform multiselect offers only the
-  platforms not initialized yet (already-installed ones appear pinned as "already set up"),
-  pairing with the resumable canonical installer: re-running
-  `curl -fsSL https://bootgly.com/install | bash` resumes an interrupted installation
-  (checklist, missing submodules/resources, wizard skipped when a project is registered)
-
 ### Web — Web Programming Interface
 
 - ✅ Web Platform completion (`Web/` submodule → repo `bootgly/bootgly-web`)
