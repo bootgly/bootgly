@@ -25,5 +25,11 @@ return new Suite(
       '1.9-authorization_rbac',
       '1.10-authorization_rbac_cache',
       '1.11-jwt_vault_storage',
+      '1.12-encrypter_roundtrip',
+      '1.13-encrypter_tamper',
+      '1.14-encrypter_aad',
+      '1.15-encrypter_keyring',
+      '1.16-password_hash',
+      '1.17-password_policy',
    ]
 );
