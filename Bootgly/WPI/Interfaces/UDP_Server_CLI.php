@@ -30,6 +30,9 @@ use const SIGTERM;
 use const SIGTSTP;
 use const SIGUSR1;
 use const SIGUSR2;
+use const STDERR;
+use const STDIN;
+use const STDOUT;
 use const STREAM_SERVER_BIND;
 use const WNOHANG;
 use const WUNTRACED;
@@ -41,6 +44,7 @@ use function defined;
 use function explode;
 use function fclose;
 use function file;
+use function fopen;
 use function get_included_files;
 use function getcwd;
 use function getenv;
@@ -756,6 +760,20 @@ class UDP_Server_CLI implements Servers
 
       // # Child process (new daemon master): become session leader
       posix_setsid();
+
+      // @ Detach the standard descriptors from the launching terminal: pin fds
+      //   0-2 on /dev/null so nothing in the daemon lineage — including the
+      //   fresh image reload() re-execs, which inherits these descriptors —
+      //   ever writes to the caller's TTY. The locals hold the streams open for
+      //   the daemon's lifetime (this method only returns when Status leaves
+      //   Running); console display is muted like the daemonized workers.
+      Display::show(Display::NONE);
+      fclose(STDIN);
+      fclose(STDOUT);
+      fclose(STDERR);
+      $stdin = fopen('/dev/null', 'r');
+      $stdout = fopen('/dev/null', 'w');
+      $stderr = fopen('/dev/null', 'w');
 
       // @ Update master PID to daemon child and re-save PID file
       Process::$master = posix_getpid();

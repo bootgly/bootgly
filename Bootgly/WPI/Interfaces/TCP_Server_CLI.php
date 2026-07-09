@@ -35,6 +35,9 @@ use const SIGWINCH;
 use const SO_KEEPALIVE;
 use const SOL_SOCKET;
 use const SOL_TCP;
+use const STDERR;
+use const STDIN;
+use const STDOUT;
 use const STREAM_SERVER_BIND;
 use const STREAM_SERVER_LISTEN;
 use const TCP_NODELAY;
@@ -49,6 +52,7 @@ use function exec;
 use function explode;
 use function fclose;
 use function file;
+use function fopen;
 use function function_exists;
 use function get_included_files;
 use function getcwd;
@@ -964,6 +968,20 @@ class TCP_Server_CLI implements Servers
 
       // # Child process (new daemon master): become session leader
       posix_setsid();
+
+      // @ Detach the standard descriptors from the launching terminal: pin fds
+      //   0-2 on /dev/null so nothing in the daemon lineage — including the
+      //   fresh image reload() re-execs, which inherits these descriptors —
+      //   ever writes to the caller's TTY. The locals hold the streams open for
+      //   the daemon's lifetime (this method only returns when Status leaves
+      //   Running); console display is muted like the daemonized workers.
+      Display::show(Display::NONE);
+      fclose(STDIN);
+      fclose(STDOUT);
+      fclose(STDERR);
+      $stdin = fopen('/dev/null', 'r');
+      $stdout = fopen('/dev/null', 'w');
+      $stderr = fopen('/dev/null', 'w');
 
       // @ Update master PID to daemon child and re-save PID file
       Process::$master = posix_getpid();
