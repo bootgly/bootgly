@@ -34,6 +34,7 @@ use function defined;
 use function pcntl_signal;
 use function pcntl_signal_dispatch;
 use function pcntl_wait;
+use function posix_getpid;
 use function register_shutdown_function;
 use function stream_context_create;
 use function stream_socket_client;
@@ -166,12 +167,9 @@ class UDP_Client_CLI
 
       // ! @\Process
       $processId = defined('BOOTGLY_PROJECT') ? Projects::encode(BOOTGLY_PROJECT->folder) : static::class;
-      $Process = $this->Process = new Process(id: $processId);
-      // ? Clients have no port to qualify instances: single instance per name
-      if ($Process->State->lock(LOCK_EX | LOCK_NB) === false) {
-         $this->Logger->log(error: '@\;Another instance of this client is already running.@.;');
-         exit(1);
-      }
+      // ? Clients have no port to qualify instances: qualify by process PID (multi-instance)
+      $Process = $this->Process = new Process(id: $processId, instance: (string) posix_getpid());
+      $Process->State->lock(LOCK_EX | LOCK_NB);
       $Process->Signals->handler = fn (int $signal) => $this->handle($signal);
       // ! @\Commands
       $this->Commands = new Commands($this);
