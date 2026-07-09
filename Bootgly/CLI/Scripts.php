@@ -69,9 +69,10 @@ class Scripts
          ],
          'filenames' => [
             'bootstrap' => [
-               BOOTGLY_ROOT_DIR . 'bootgly', // absolute
-               '/usr/local/bin/bootgly',      // global
-               'bootgly'                      // relative
+               BOOTGLY_ROOT_DIR . 'bootgly',    // absolute (framework)
+               BOOTGLY_WORKING_DIR . 'bootgly', // absolute (consumer wrapper — re-exec / reload)
+               '/usr/local/bin/bootgly',        // global
+               'bootgly'                        // relative
             ]
          ]
       ];
