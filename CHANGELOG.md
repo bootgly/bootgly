@@ -2,6 +2,47 @@
 
 Changelog for Bootgly framework. All notable changes to this project will be documented in this file. Imported from ROADMAP.md.
 
+## v0.23.0-beta ✅
+
+> Focus: **Error Handling + Exception Handler + Web Platform**
+
+### ABI — Abstract Bootable Interface
+
+- ✅ Error Handler (today: `ABI/Debugging` Backtrace/Vars/Shutdown/Throwables render CLI only)
+  - ✅ Custom error pages per environment (production = clean page; development = debug)
+  - ✅ Stack trace rendering for HTML (CLI rendering already exists)
+  - ✅ Whoops-style debug page, built-in (navigable frames, args, request context)
+- ✅ Exception Handler
+  - ✅ Exception reporting (log channels; ACI observability hook)
+  - ✅ Exception rendering per interface (CLI vs WPI) with correct HTTP status (500/503)
+
+### Web — Web Programming Interface
+
+- ✅ Web Platform completion (`Web/` submodule → repo `bootgly/bootgly-web`)
+  - ✅ Define the opinionated WPI extras (scope decision) — `Web\App` (MVC shell:
+    Controller dispatch, `Controllers::map()` resource routing, `Statics`, `Views`)
+    + `Web\API` (REST shell: `Action`, `Routes::map()`, RFC 9457 `Problem`/`Problems`,
+    `Resource` transformers)
+  - ✅ Exportable `Web/projects/` — Blog (MVC + SQLite), Tasks (REST + JWT +
+    problem+json), Chat (WS rooms, client page on the same port), Site (landing)
+  - ✅ Platform docs (Manual/Platforms) + launcher/autoboot
+  - ✅ Multi-instance project runtime — port as the instance qualifier
+    (`<project>.<port>.json` state files qualified post-`configure()`; `project start`
+    stops blocking by name — same-port duplicates rejected by a non-blocking lock on
+    the port-qualified lock file (the bind uses `SO_REUSEPORT`, so the lock is the
+    real guard); `stop`/`reload`/`restart <name> [port]`, `show` lists all instances;
+    TUI projects qualify by master PID)
+
+### Bonus
+
+- ✅ Standalone Validation — validator decoupled from the HTTP Request: engine + rules
+  relocated to `ADI\Validation`/`ADI\Validators` so the same rules validate arbitrary data
+  (CLI commands, queue jobs, seeders); HTTP-only `Sources` enum moved next to the WPI
+  `Validator` middleware; +5 new rules (`In`, `URL`, `Boolean`, `Date`, `Confirmed`) —
+  14 total; old WPI namespace deleted
+
+---
+
 ## v0.22.0-beta ✅
 
 > Focus: **Data parity**
