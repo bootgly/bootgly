@@ -3,9 +3,9 @@
 use Bootgly\ACI\Tests\Assertion;
 use Bootgly\ACI\Tests\Assertions;
 use Bootgly\ACI\Tests\Suite\Test\Specification;
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Validation;
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Validation\Condition;
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Validators\Required;
+use Bootgly\ADI\Validation;
+use Bootgly\ADI\Validation\Condition;
+use Bootgly\ADI\Validators\Required;
 
 
 return new Specification(

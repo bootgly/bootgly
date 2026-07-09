@@ -337,8 +337,10 @@ class Input
       $pid = pcntl_fork();
 
       // @ Save PID state for show/stop visibility
+      // ? Non-server instances are qualified by master PID (servers use the
+      //   bound port) — multiple TUI instances stay individually stoppable.
       $stateId = defined('BOOTGLY_PROJECT') ? Projects::encode(BOOTGLY_PROJECT->folder) : self::class;
-      $State = new State(id: $stateId);
+      $State = new State(id: $stateId, instance: (string) posix_getpid());
 
       if ($pid === 0) { // @ Child (Client)
          cli_set_process_title("BootglyCLI: Client");

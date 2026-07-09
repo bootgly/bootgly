@@ -40,6 +40,7 @@ class State
    // ...
 
    // * Data
+   private string $id;
    public string $pidFile;
    public string $pidLockFile;
    public string $commandFile;
@@ -64,7 +65,26 @@ class State
          $id = substr($id, $pos + 1);
       }
 
-      // @ Append instance qualifier (e.g. HTTP_Server_CLI.test)
+      $this->id = $id;
+
+      $this->qualify($instance);
+   }
+
+   /**
+    * Qualify the state file names with an instance qualifier.
+    * Rebuilds the PID, lock and command file paths from the base id
+    * (e.g. instance `8080` → `<id>.8080.json`). Servers call this once the
+    * bound port is known — before any lock or save.
+    *
+    * @param null|string $instance The instance qualifier (null = unqualified).
+    *
+    * @return void
+    */
+   public function qualify (null|string $instance): void
+   {
+      $id = $this->id;
+
+      // @ Append instance qualifier (e.g. HTTP_Server_CLI.8080)
       if ($instance !== null) {
          $id .= ".$instance";
       }
@@ -79,29 +99,44 @@ class State
     *
     * @param int<0,7> $flag The lock flag (default: LOCK_EX).
     *
-    * @return void
+    * @return bool false when the lock is held by another process (LOCK_NB).
     */
-   public function lock (int $flag = LOCK_EX): void
+   public function lock (int $flag = LOCK_EX): bool
    {
       $lock_file = $this->pidLockFile;
 
       $this->lockHandle = $this->lockHandle ?: (fopen($lock_file, 'a+') ?: null);
 
-      if ($this->lockHandle) {
-         flock($this->lockHandle, $flag);
-
-         if ($flag === LOCK_UN) {
-            fclose($this->lockHandle);
-
-            $this->lockHandle = null;
-
-            clearstatcache();
-
-            if ( is_file($lock_file) ) {
-               unlink($lock_file);
-            }
-         }
+      // ? Lock file unavailable (FS issue): proceed unguarded
+      if ($this->lockHandle === null) {
+         return true;
       }
+
+      $locked = flock($this->lockHandle, $flag);
+
+      if ($flag === LOCK_UN) {
+         fclose($this->lockHandle);
+
+         $this->lockHandle = null;
+
+         clearstatcache();
+
+         if ( is_file($lock_file) ) {
+            unlink($lock_file);
+         }
+
+         return true;
+      }
+
+      // ? Lock held by another process (LOCK_NB): release the handle
+      if ($locked === false) {
+         fclose($this->lockHandle);
+
+         $this->lockHandle = null;
+      }
+
+      // :
+      return $locked;
    }
 
    /**

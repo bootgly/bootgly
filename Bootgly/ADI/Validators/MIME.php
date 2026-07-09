@@ -8,14 +8,14 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Validators;
+namespace Bootgly\ADI\Validators;
 
 
 use function in_array;
 use function is_array;
 use function is_string;
 
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Validation\Condition;
+use Bootgly\ADI\Validation\Condition;
 
 
 class MIME extends Condition

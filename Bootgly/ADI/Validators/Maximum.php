@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Validators;
+namespace Bootgly\ADI\Validators;
 
 
 use function count;
@@ -19,7 +19,7 @@ use function is_string;
 use function preg_match;
 use function strlen;
 
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Validation\Condition;
+use Bootgly\ADI\Validation\Condition;
 
 
 class Maximum extends Condition

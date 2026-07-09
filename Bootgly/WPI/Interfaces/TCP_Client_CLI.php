@@ -12,6 +12,8 @@ namespace Bootgly\WPI\Interfaces;
 
 
 use const E_WARNING;
+use const LOCK_EX;
+use const LOCK_NB;
 use const PHP_SAPI;
 use const SIG_IGN;
 use const SIGALRM;
@@ -172,7 +174,11 @@ class TCP_Client_CLI
       // ! @\Process
       $processId = defined('BOOTGLY_PROJECT') ? Projects::encode(BOOTGLY_PROJECT->folder) : static::class;
       $Process = $this->Process = new Process(id: $processId);
-      $Process->State->lock();
+      // ? Clients have no port to qualify instances: single instance per name
+      if ($Process->State->lock(LOCK_EX | LOCK_NB) === false) {
+         $this->Logger->log(error: '@\;Another instance of this client is already running.@.;');
+         exit(1);
+      }
       $Process->Signals->handler = fn (int $signal) => $this->handle($signal);
       // ! @\Commands
       $this->Commands = new Commands($this);

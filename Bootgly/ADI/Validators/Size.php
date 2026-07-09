@@ -8,24 +8,45 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Validators;
+namespace Bootgly\ADI\Validators;
 
 
+use function is_array;
 use function is_int;
-use function is_string;
-use function preg_match;
 
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Validation\Condition;
+use Bootgly\ADI\Validation\Condition;
 
 
-class Integer extends Condition
+class Size extends Condition
 {
+   // * Config
+   public private(set) int $limit;
+
+
+   public function __construct (int $limit, string $message = '')
+   {
+      parent::__construct($message);
+
+      // * Config
+      $this->limit = $limit;
+   }
+
    /**
     * @param array<string,mixed> $data
     */
    public function validate (string $field, mixed $value, array $data): bool
    {
-      return is_int($value) || (is_string($value) && preg_match('/\A[-+]?\d+\z/', $value) === 1);
+      if (is_array($value) === false) {
+         return false;
+      }
+
+      if (($value['error'] ?? null) !== 0) {
+         return false;
+      }
+
+      $size = $value['size'] ?? null;
+
+      return is_int($size) && $size <= $this->limit;
    }
 
    public function format (string $field): string
@@ -34,6 +55,6 @@ class Integer extends Condition
          return $this->message;
       }
 
-      return "{$field} must be an integer.";
+      return "{$field} must be at most {$this->limit} bytes.";
    }
 }

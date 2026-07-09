@@ -3,16 +3,16 @@
 use Bootgly\ACI\Tests\Assertion;
 use Bootgly\ACI\Tests\Assertions;
 use Bootgly\ACI\Tests\Suite\Test\Specification;
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Validation;
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Validators\Email;
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Validators\Extension;
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Validators\Integer;
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Validators\Maximum;
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Validators\MIME;
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Validators\Minimum;
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Validators\Regex;
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Validators\Required;
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Validators\Size;
+use Bootgly\ADI\Validation;
+use Bootgly\ADI\Validators\Email;
+use Bootgly\ADI\Validators\Extension;
+use Bootgly\ADI\Validators\Integer;
+use Bootgly\ADI\Validators\Maximum;
+use Bootgly\ADI\Validators\MIME;
+use Bootgly\ADI\Validators\Minimum;
+use Bootgly\ADI\Validators\Regex;
+use Bootgly\ADI\Validators\Required;
+use Bootgly\ADI\Validators\Size;
 
 
 return new Specification(

@@ -15,5 +15,7 @@ return new Suite(
    suiteName: __NAMESPACE__,
    tests: [
       '1.1-worker-events',
+      '1.2-state-qualify',
+      '1.3-state-lock',
    ]
 );

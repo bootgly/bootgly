@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Validators;
+namespace Bootgly\ADI\Validators;
 
 
 use const PATHINFO_EXTENSION;
@@ -20,7 +20,7 @@ use function ltrim;
 use function pathinfo;
 use function strtolower;
 
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Validation\Condition;
+use Bootgly\ADI\Validation\Condition;
 
 
 class Extension extends Condition

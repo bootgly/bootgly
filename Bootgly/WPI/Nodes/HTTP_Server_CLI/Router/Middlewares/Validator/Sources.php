@@ -8,12 +8,16 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
+namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Middlewares\Validator;
 
 
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Validation\Condition;
-
-
-abstract class Validators extends Condition
+enum Sources
 {
+   case Queries;
+   // Header
+   case Headers;
+   case Cookies;
+   // Body
+   case Fields;
+   case Files;
 }

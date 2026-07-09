@@ -8,27 +8,29 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Validators;
+namespace Bootgly\ADI\Validators;
 
 
-use function is_array;
-use function is_int;
+use function array_key_exists;
 
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Validation\Condition;
+use Bootgly\ADI\Validation\Condition;
 
 
-class Size extends Condition
+class Confirmed extends Condition
 {
    // * Config
-   public private(set) int $limit;
+   /**
+    * The confirming field name (defaults to `<field>_confirmation`).
+    */
+   public private(set) null|string $field;
 
 
-   public function __construct (int $limit, string $message = '')
+   public function __construct (null|string $field = null, string $message = '')
    {
       parent::__construct($message);
 
       // * Config
-      $this->limit = $limit;
+      $this->field = $field;
    }
 
    /**
@@ -36,17 +38,9 @@ class Size extends Condition
     */
    public function validate (string $field, mixed $value, array $data): bool
    {
-      if (is_array($value) === false) {
-         return false;
-      }
+      $confirming = $this->field ?? "{$field}_confirmation";
 
-      if (($value['error'] ?? null) !== 0) {
-         return false;
-      }
-
-      $size = $value['size'] ?? null;
-
-      return is_int($size) && $size <= $this->limit;
+      return array_key_exists($confirming, $data) && $data[$confirming] === $value;
    }
 
    public function format (string $field): string
@@ -55,6 +49,6 @@ class Size extends Condition
          return $this->message;
       }
 
-      return "{$field} must be at most {$this->limit} bytes.";
+      return "{$field} confirmation does not match.";
    }
 }

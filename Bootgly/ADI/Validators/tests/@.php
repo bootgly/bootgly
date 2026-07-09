@@ -1,6 +1,6 @@
 <?php
 
-namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Validation\Tests;
+namespace Bootgly\ADI\Validators\Tests;
 
 use Bootgly\ACI\Tests\Suite;
 
@@ -14,6 +14,7 @@ return new Suite(
    // * Data
    suiteName: __NAMESPACE__,
    tests: [
-      '1.2-validation_custom_rule',
+      '1.1-validators',
+      '1.2-validators_extra',
    ]
 );

@@ -1,11 +1,11 @@
 <?php
 
+use Bootgly\ADI\Validators\Email;
+use Bootgly\ADI\Validators\Required;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Validators\Email;
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Validators\Required;
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Validation\Sources;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Middlewares\Validator;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Middlewares\Validator\Sources;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test\Specification;
 
 

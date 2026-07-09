@@ -8,44 +8,24 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Validators;
+namespace Bootgly\ADI\Validators;
 
 
-use function is_array;
+use const FILTER_VALIDATE_URL;
+use function filter_var;
 use function is_string;
-use function trim;
 
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Validation\Condition;
+use Bootgly\ADI\Validation\Condition;
 
 
-class Required extends Condition
+class URL extends Condition
 {
-   public function __construct (string $message = '')
-   {
-      parent::__construct($message);
-
-      // * Config
-      $this->implicit = true;
-   }
-
    /**
     * @param array<string,mixed> $data
     */
    public function validate (string $field, mixed $value, array $data): bool
    {
-      if ($value === null) {
-         return false;
-      }
-
-      if (is_string($value)) {
-         return trim($value) !== '';
-      }
-
-      if (is_array($value)) {
-         return $value !== [];
-      }
-
-      return true;
+      return is_string($value) && filter_var($value, FILTER_VALIDATE_URL) !== false;
    }
 
    public function format (string $field): string
@@ -54,6 +34,6 @@ class Required extends Condition
          return $this->message;
       }
 
-      return "{$field} is required.";
+      return "{$field} must be a valid URL.";
    }
 }

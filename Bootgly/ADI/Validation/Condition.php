@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Validation;
+namespace Bootgly\ADI\Validation;
 
 
 abstract class Condition

@@ -40,6 +40,8 @@ return new Suites(
       'Bootgly/ADI/Databases/SQL/Seed/',
       'Bootgly/ADI/Databases/SQL/Repository/',
       'Bootgly/ADI/Table/',
+      'Bootgly/ADI/Validation/',
+      'Bootgly/ADI/Validators/',
 
       // ! Application Programming Interface (API)
       'Bootgly/API/Environment/Configs/',
@@ -63,9 +65,6 @@ return new Suites(
       'Bootgly/WPI/Nodes/HTTP_Server_CLI/Response/Resources/',
       // E2E (use Bootgly's TCP_Client_CLI)
       'Bootgly/WPI/Nodes/HTTP_Server_CLI/tests/E2E/',
-      // Request validation
-      'Bootgly/WPI/Nodes/HTTP_Server_CLI/Request/Validation/',
-      'Bootgly/WPI/Nodes/HTTP_Server_CLI/Request/Validators/',
       // Security
       #'Bootgly/WPI/Nodes/HTTP_Server_CLI/tests/Security/',
       // Fuzz (property-based / structure-aware fuzzing)

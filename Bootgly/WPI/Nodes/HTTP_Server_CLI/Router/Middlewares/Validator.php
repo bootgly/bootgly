@@ -15,19 +15,19 @@ use const JSON_UNESCAPED_SLASHES;
 use function json_encode;
 use Closure;
 
+use Bootgly\ADI\Validation;
+use Bootgly\ADI\Validation\Condition;
 use Bootgly\API\Workables\Server\Middleware;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Validation;
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Validation\Sources;
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Validators;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Middlewares\Validator\Sources;
 
 
 class Validator implements Middleware
 {
    // * Config
    /**
-    * @var array<string,Validators|array<int,Validators>>
+    * @var array<string,Condition|array<int,Condition>>
     */
    public private(set) array $rules;
    public private(set) Sources $Source;
@@ -45,7 +45,7 @@ class Validator implements Middleware
 
 
    /**
-    * @param array<string,Validators|array<int,Validators>> $rules
+    * @param array<string,Condition|array<int,Condition>> $rules
     * @param null|Closure(Request,Response,Validation):object $fallback
     */
    public function __construct (

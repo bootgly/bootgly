@@ -8,16 +8,12 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Validation;
+namespace Bootgly\ADI;
 
 
-enum Sources
+use Bootgly\ADI\Validation\Condition;
+
+
+abstract class Validators extends Condition
 {
-   case Queries;
-   // Header
-   case Headers;
-   case Cookies;
-   // Body
-   case Fields;
-   case Files;
 }

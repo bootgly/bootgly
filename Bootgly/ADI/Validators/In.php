@@ -8,24 +8,42 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Validators;
+namespace Bootgly\ADI\Validators;
 
 
-use const FILTER_VALIDATE_EMAIL;
-use function filter_var;
-use function is_string;
+use function in_array;
 
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Validation\Condition;
+use Bootgly\ADI\Validation\Condition;
 
 
-class Email extends Condition
+class In extends Condition
 {
+   // * Config
+   /**
+    * @var array<int,mixed>
+    */
+   public private(set) array $values;
+   public private(set) bool $strict;
+
+
+   /**
+    * @param array<int,mixed> $values
+    */
+   public function __construct (array $values, bool $strict = true, string $message = '')
+   {
+      parent::__construct($message);
+
+      // * Config
+      $this->values = $values;
+      $this->strict = $strict;
+   }
+
    /**
     * @param array<string,mixed> $data
     */
    public function validate (string $field, mixed $value, array $data): bool
    {
-      return is_string($value) && filter_var($value, FILTER_VALIDATE_EMAIL) !== false;
+      return in_array($value, $this->values, $this->strict);
    }
 
    public function format (string $field): string
@@ -34,6 +52,6 @@ class Email extends Condition
          return $this->message;
       }
 
-      return "{$field} must be a valid email address.";
+      return "{$field} must be one of the allowed values.";
    }
 }

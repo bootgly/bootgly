@@ -11,6 +11,7 @@
 namespace Bootgly\commands;
 
 
+use const ARRAY_FILTER_USE_KEY;
 use const BOOTGLY_ROOT_DIR;
 use const BOOTGLY_STORAGE_DIR;
 use const BOOTGLY_TTY;
@@ -24,6 +25,7 @@ use function array_filter;
 use function array_key_exists;
 use function array_key_first;
 use function array_keys;
+use function array_map;
 use function array_slice;
 use function basename;
 use function count;
@@ -47,6 +49,7 @@ use function passthru;
 use function posix_get_last_error;
 use function posix_kill;
 use function preg_match;
+use function putenv;
 use function realpath;
 use function rmdir;
 use function rtrim;
@@ -127,27 +130,30 @@ class ProjectCommand extends Command
          ]
       ],
       'stop' => [
-         'description' => 'Stop a running project',
+         'description' => 'Stop a running project (all instances, or one by port)',
          'arguments'   => [
-            '<name>' => 'Project name to stop'
+            '<name>' => 'Project name to stop',
+            '[port]' => 'Stop only one instance — bound port (servers) or master PID (TUI)'
          ]
       ],
       'show' => [
-         'description' => 'Show status of a running project',
+         'description' => 'Show status of a running project (all instances)',
          'arguments'   => [
             '<name>' => 'Project name'
          ]
       ],
       'reload' => [
-         'description' => 'Hot-reload a running project',
+         'description' => 'Hot-reload a running project (all instances, or one by port)',
          'arguments'   => [
-            '<name>' => 'Project name to reload'
+            '<name>' => 'Project name to reload',
+            '[port]' => 'Reload only the instance bound to this port'
          ]
       ],
       'restart' => [
          'description' => 'Restart a running project by name',
          'arguments'   => [
-            '<name>' => 'Project name to restart'
+            '<name>' => 'Project name to restart',
+            '[port]' => 'Restart the instance bound to this port'
          ]
       ],
       'info' => [
@@ -610,16 +616,9 @@ class ProjectCommand extends Command
          return false;
       }
 
-      // ? Check if project is already running
-      $PIDs = $this->locate($projectName);
-      if ($PIDs !== null && $this->probe($PIDs['master'])) {
-         $Alert = new Alert($Output);
-         $Alert->Type::Failure->set();
-         $Alert->message = "Project @#cyan:{$projectName}@; is already running (PID: {$PIDs['master']}). Use `project restart` instead.@.;";
-         $Alert->render();
-
-         return false;
-      }
+      // ? No preventive by-name guard here: the port is only known after the
+      //   project boot closure runs — the server takes a non-blocking lock on
+      //   the port-qualified state files and aborts on a same-port duplicate.
 
       // @ Slice out the project name from arguments for boot
       $bootArguments = $projectName === $arguments[0] // @phpstan-ignore identical.alwaysTrue
@@ -675,11 +674,24 @@ class ProjectCommand extends Command
       }
 
       // @ Collect all instances to stop
-      $instances = $this->locateAll($projectName);
+      $instances = $this->scan($projectName);
+
+      // ? Filter by port when given (instance qualifier = port)
+      $port = $arguments[1] ?? null;
+      if ($port !== null && $port !== '') {
+         $instances = array_filter(
+            $instances,
+            fn (string $instance): bool => $instance === $port,
+            ARRAY_FILTER_USE_KEY
+         );
+      }
+
       if (count($instances) === 0) {
          $Alert = new Alert($Output);
          $Alert->Type::Failure->set();
-         $Alert->message = "Project @#cyan:{$projectName}@; is not running.@.;";
+         $Alert->message = $port !== null && $port !== ''
+            ? "Project @#cyan:{$projectName}@; is not running on port @#cyan:{$port}@;.@.;"
+            : "Project @#cyan:{$projectName}@; is not running.@.;";
          $Alert->render();
          return false;
       }
@@ -784,7 +796,7 @@ class ProjectCommand extends Command
          return false;
       }
 
-      $instances = $this->locateAll($projectName);
+      $instances = $this->scan($projectName);
       if (count($instances) === 0) {
          $Alert = new Alert($Output);
          $Alert->Type::Failure->set();
@@ -874,22 +886,45 @@ class ProjectCommand extends Command
          return false;
       }
 
-      $PIDs = $this->locate($projectName);
-      if ($PIDs === null || $this->probe($PIDs['master']) === false) {
+      // @ Collect running instances (optionally filtered by port)
+      $instances = $this->scan($projectName);
+
+      // ? Filter by port when given (instance qualifier = port)
+      $port = $arguments[1] ?? null;
+      if ($port !== null && $port !== '') {
+         $instances = array_filter(
+            $instances,
+            fn (string $instance): bool => $instance === $port,
+            ARRAY_FILTER_USE_KEY
+         );
+      }
+
+      $reloaded = 0;
+      foreach ($instances as $PIDs) {
+         if ($this->probe($PIDs['master']) === false) {
+            continue;
+         }
+
+         // @ Send SIGUSR2 to master
+         posix_kill($PIDs['master'], SIGUSR2);
+
+         $reloaded++;
+      }
+
+      if ($reloaded === 0) {
          $Alert = new Alert($Output);
          $Alert->Type::Failure->set();
-         $Alert->message = "Project @#cyan:{$projectName}@; is not running.@.;";
+         $Alert->message = $port !== null && $port !== ''
+            ? "Project @#cyan:{$projectName}@; is not running on port @#cyan:{$port}@;.@.;"
+            : "Project @#cyan:{$projectName}@; is not running.@.;";
          $Alert->render();
 
          return false;
       }
 
-      // @ Send SIGUSR2 to master
-      posix_kill($PIDs['master'], SIGUSR2);
-
       $Alert = new Alert($Output);
       $Alert->Type::Success->set();
-      $Alert->message = "Reload signal sent to project @#cyan:{$projectName}@;.@.;";
+      $Alert->message = "Reload signal sent to @#cyan:{$reloaded}@; instance(s) of project @#cyan:{$projectName}@;.@.;";
       $Alert->render();
 
       return true;
@@ -918,15 +953,55 @@ class ProjectCommand extends Command
          return false;
       }
 
-      // @ Stop if running
-      $PIDs = $this->locate($projectName);
-      if ($PIDs !== null && $this->probe($PIDs['master'])) {
+      // @ Collect live instances
+      $port = $arguments[1] ?? null;
+      if ($port === '') {
+         $port = null;
+      }
+      $live = [];
+      foreach ($this->scan($projectName) as $instance => $PIDs) {
+         if ($this->probe($PIDs['master'])) {
+            $live[$instance] = $PIDs;
+         }
+      }
+
+      // ? Ambiguous target: multiple instances and no port
+      if ($port === null && count($live) > 1) {
+         $ports = implode(', ', array_map(
+            fn (array $PIDs): string => (string) $PIDs['port'],
+            $live
+         ));
+         $Alert = new Alert($Output);
+         $Alert->Type::Failure->set();
+         $Alert->message = "Project @#cyan:{$projectName}@; has multiple running instances (ports: {$ports}). Use `project restart {$projectName} <port>`.@.;";
+         $Alert->render();
+
+         return false;
+      }
+
+      // ! Resolve the target instance to stop and the port to re-bind
+      $stopKey = null;
+      if ($port !== null) {
+         $stopKey = isSet($live[$port]) ? $port : null;
+      }
+      else if (count($live) === 1) {
+         $stopKey = (string) array_key_first($live);
+         $port = (string) $live[$stopKey]['port'];
+      }
+
+      // @ Stop the running target instance
+      if ($stopKey !== null) {
          $Output->render('@.;@#yellow:Stopping project...@;@.;');
-         $this->stop($arguments);
+         $this->stop($stopKey === '' ? [$projectName] : [$projectName, $stopKey]);
+      }
+
+      // @ Preserve the instance port on the new start
+      if ($port !== null) {
+         putenv("PORT={$port}");
       }
 
       // @ Start
-      return $this->start($arguments, $options);
+      return $this->start([$projectName], $options);
    }
 
    /**
@@ -2226,7 +2301,7 @@ class ProjectCommand extends Command
     * Locate a running project's PID data from its state file.
     *
     * @param string $projectName
-    * @param null|string $instance Optional instance qualifier (e.g. 'test').
+    * @param null|string $instance Optional instance qualifier — the bound port (e.g. '8080').
     *
     * @return null|array{master: int, workers: array<int>, host: string, port: int, started: int, type: string}
     */
@@ -2260,9 +2335,9 @@ class ProjectCommand extends Command
     * @param string $projectName
     *
     * @return array<string, array{master: int, workers: array<int>, host: string, port: int, started: int, type: string}>
-    *         Keys are instance names ('' for primary, 'test' for test, etc.)
+    *         Keys are instance qualifiers ('' for legacy unqualified files, the bound port otherwise)
     */
-   private function locateAll (string $projectName): array
+   private function scan (string $projectName): array
    {
       $pidsDir = BOOTGLY_STORAGE_DIR . 'pids/';
       $instances = [];
@@ -2273,14 +2348,14 @@ class ProjectCommand extends Command
          $instances[''] = $primary;
       }
 
-      // @ Named instances (e.g. Demo~HTTP_Server_CLI.test.json)
+      // @ Qualified instances (e.g. Demo~HTTP_Server_CLI.8082.json)
       $encoded = Projects::encode($projectName);
       $pattern = $pidsDir . $encoded . '.*.json';
       $files = glob($pattern);
       if ($files !== false) {
          foreach ($files as $file) {
-            $basename = basename($file, '.json'); // Demo~HTTP_Server_CLI.test
-            $instance = substr($basename, strlen($encoded) + 1); // test
+            $basename = basename($file, '.json'); // Demo~HTTP_Server_CLI.8082
+            $instance = substr($basename, strlen($encoded) + 1); // 8082
             $data = $this->locate($projectName, $instance);
             if ($data !== null) {
                $instances[$instance] = $data;

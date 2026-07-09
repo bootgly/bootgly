@@ -8,14 +8,14 @@
  * --------------------------------------------------------------------------
  */
 
-namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
+namespace Bootgly\ADI;
 
 
 use function array_key_exists;
 use function is_array;
 use InvalidArgumentException;
 
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Validation\Condition;
+use Bootgly\ADI\Validation\Condition;
 
 
 class Validation

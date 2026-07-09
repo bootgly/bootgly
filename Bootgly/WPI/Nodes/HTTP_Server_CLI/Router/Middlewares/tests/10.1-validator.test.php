@@ -3,11 +3,11 @@
 use Bootgly\ACI\Tests\Assertion;
 use Bootgly\ACI\Tests\Assertions;
 use Bootgly\ACI\Tests\Suite\Test\Specification;
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Validation;
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Validators\Email;
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Validators\Required;
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Validation\Sources;
+use Bootgly\ADI\Validation;
+use Bootgly\ADI\Validators\Email;
+use Bootgly\ADI\Validators\Required;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Middlewares\Validator;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Middlewares\Validator\Sources;
 
 
 return new Specification(

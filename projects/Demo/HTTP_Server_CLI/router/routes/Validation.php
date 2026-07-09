@@ -13,23 +13,23 @@ namespace projects\Bootgly\WPI;
 
 use function is_string;
 
+use Bootgly\ADI\Validation;
+use Bootgly\ADI\Validators;
+use Bootgly\ADI\Validators\Email;
+use Bootgly\ADI\Validators\Extension;
+use Bootgly\ADI\Validators\Integer;
+use Bootgly\ADI\Validators\Maximum;
+use Bootgly\ADI\Validators\MIME;
+use Bootgly\ADI\Validators\Minimum;
+use Bootgly\ADI\Validators\Regex;
+use Bootgly\ADI\Validators\Required;
+use Bootgly\ADI\Validators\Size;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Validation;
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Validators;
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Validators\Email;
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Validators\Extension;
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Validators\Integer;
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Validators\Maximum;
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Validators\MIME;
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Validators\Minimum;
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Validators\Regex;
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Validators\Required;
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Validators\Size;
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Validation\Sources;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Middlewares\BodyParser;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Middlewares\Validator;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Middlewares\Validator\Sources;
 
 
 return static function (Request $Request, Response $Response, Router $Router)

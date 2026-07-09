@@ -12,6 +12,8 @@ namespace Bootgly\WPI\Interfaces;
 
 
 use const BOOTGLY_ENVIRONMENT;
+use const LOCK_EX;
+use const LOCK_NB;
 use const PHP_BINARY;
 use const PHP_SAPI;
 use const SIG_IGN;
@@ -206,10 +208,10 @@ class UDP_Server_CLI implements Servers
       static::$Event = new Select($this->Connections); // @phpstan-ignore-line
 
       // ! @\Process
+      // ? State stays unqualified (and unlocked) until start() knows the bound
+      //   port — the port is the instance qualifier of the PID/lock files.
       $processId = defined('BOOTGLY_PROJECT') ? Projects::encode(BOOTGLY_PROJECT->folder) : static::class;
-      $instance = $this->Mode === Modes::Test ? 'test' : null;
-      $Process = $this->Process = new Process(id: $processId, instance: $instance);
-      $Process->State->lock();
+      $Process = $this->Process = new Process(id: $processId);
       $Process->Signals->handler = fn (int $signal) => $this->handle($signal);
       // ! @\Commands
       $this->Commands = new Commands($this);
@@ -517,6 +519,18 @@ class UDP_Server_CLI implements Servers
       }
 
       // ! Process
+      // ? Late instance guard: qualify the state files with the bound port and
+      //   take a non-blocking lock — the bind itself uses SO_REUSEPORT, so two
+      //   Bootgly servers CAN share a port; this lock is what rejects the second.
+      $State = $this->Process->State;
+      $State->qualify((string) ($this->port ?? 0));
+      if ($State->lock(LOCK_EX | LOCK_NB) === false) {
+         $this->Logger->log(
+            error: '@\;Another instance is already running on port ' . ($this->port ?? 0) . '.@\;Use `project stop <name> <port>` to stop it or start this one on another port (PORT env).@.;'
+         );
+         exit(1);
+      }
+
       // ? Pre-flight: verify socket can be bound before forking workers
       $probeCode = 0;
       $probeMessage = '';
