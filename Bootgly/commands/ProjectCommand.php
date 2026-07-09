@@ -27,6 +27,7 @@ use function array_key_first;
 use function array_keys;
 use function array_map;
 use function array_slice;
+use function array_values;
 use function basename;
 use function count;
 use function escapeshellarg;
@@ -1756,31 +1757,46 @@ class ProjectCommand extends Command
          // ? Fresh kit (no resources booted yet): select interactively
          $fresh = is_file(BOOTGLY_WORKING_DIR . 'projects/Bootgly.projects.php') === false;
          if ($fresh === true && $platforms === null) {
-            if (BOOTGLY_TTY === true) {
+            // ! Offer only platforms not initialized yet — a resumed install
+            //   pre-marks the ones already present instead of re-asking
+            $available = [];
+            if ($console === false) {
+               $available['console'] = 'Console — opinionated CLI extras (TUI apps)';
+            }
+            if ($web === false) {
+               $available['web'] = 'Web — opinionated WPI extras';
+            }
+
+            if (BOOTGLY_TTY === true && $available !== []) {
                $Output->render(
                   '@.;The @#Cyan:Bootgly@; base platform is always included — unopinionated, '
                   . 'it ships the @#Cyan:CLI@; and @#Cyan:WPI@; interfaces.@..;'
                );
 
+               $pinned = ['Bootgly — base platform (always included)'];
+               if ($console === true) {
+                  $pinned[] = 'Console — already set up';
+               }
+               if ($web === true) {
+                  $pinned[] = 'Web — already set up';
+               }
+
                $picked = $this->select(
                   'Which extra platforms do you want to set up?',
-                  [
-                     'Console — opinionated CLI extras (TUI apps)',
-                     'Web — opinionated WPI extras'
-                  ],
-                  pinned: ['Bootgly — base platform (always included)']
+                  array_values($available),
+                  pinned: $pinned
                );
 
                $platforms = [];
-               if (in_array(0, $picked, true) === true) {
-                  $platforms[] = 'console';
-               }
-               if (in_array(1, $picked, true) === true) {
-                  $platforms[] = 'web';
+               $keys = array_keys($available);
+               foreach ($picked as $index) {
+                  if (isSet($keys[$index]) === true) {
+                     $platforms[] = $keys[$index];
+                  }
                }
             }
             else {
-               $platforms = ['console', 'web'];
+               $platforms = array_keys($available);
             }
          }
 
