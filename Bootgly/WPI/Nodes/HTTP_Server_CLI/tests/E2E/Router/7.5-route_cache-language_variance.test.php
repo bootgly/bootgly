@@ -32,6 +32,9 @@ return new Specification(
       function () {
          return "GET /cached/i18n HTTP/1.1\r\nHost: localhost\r\n\r\n";
       },
+      function () {
+         return "GET /cached/i18n-reset HTTP/1.1\r\nHost: localhost\r\n\r\n";
+      },
    ],
    response: function (Request $Request, Response $Response, Router $Router)
    {
@@ -46,10 +49,18 @@ return new Specification(
 
          return $Response(body: "{$greeting} at=" . hrtime(true));
       }, GET, cache: ['TTL' => 60]);
+
+      // ! Cleanup route — drops the worker-global catalog roots so later
+      //   specs run without i18n state (and without the automatic Vary)
+      yield $Router->route('/cached/i18n-reset', function ($Request, $Response) {
+         Language::reset();
+
+         return $Response(body: 'reset');
+      }, GET);
    },
 
    test: function (array $responses) {
-      [$r1, $r2, $r3, $r4] = $responses;
+      [$r1, $r2, $r3, $r4, $r5] = $responses;
 
       // @ Assert localized bodies per client language
       if (! str_contains($r1, 'Olá at=')) {
@@ -73,6 +84,23 @@ return new Specification(
          Vars::$labels = ['Response 2:', 'Response 4:'];
          dump(json_encode($r2), json_encode($r4));
          return 'No-header request did not hit the source-locale cache entry';
+      }
+
+      // @ Assert external cache variance — localized responses (cold AND
+      //   cached wire) must declare Vary: Accept-Language
+      foreach ([$r1, $r2, $r3, $r4] as $index => $response) {
+         if (! str_contains($response, 'Accept-Language')) {
+            Vars::$labels = ['Response ' . ($index + 1) . ':'];
+            dump(json_encode($response));
+            return 'Localized response did not emit Vary: Accept-Language';
+         }
+      }
+
+      // @ Cleanup ran — later specs see zero catalog roots
+      if (! str_contains($r5, 'reset')) {
+         Vars::$labels = ['Response 5:'];
+         dump(json_encode($r5));
+         return 'i18n cleanup route did not run';
       }
 
       return true;

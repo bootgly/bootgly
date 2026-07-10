@@ -18,5 +18,7 @@ return new Suite(
       '1.2-translate',
       '1.3-catalogs',
       '1.4-catalogs_malformed',
+      '1.5-contexts',
+      '1.6-catalogs_noncanonical',
    ]
 );

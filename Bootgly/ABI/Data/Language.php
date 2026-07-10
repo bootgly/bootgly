@@ -23,7 +23,9 @@ use function preg_match;
 use function rtrim;
 use function scandir;
 use function strtr;
+use Fiber;
 use Throwable;
+use WeakMap;
 
 use Bootgly\ABI\Data\Language\Locales;
 
@@ -70,12 +72,28 @@ class Language
     */
    private static array $catalogs = [];
    /**
-    * Available locales — the roots' locale directory names, cached until
-    * the next `load()`.
+    * Available locales — the roots' locale directory names (normalized),
+    * cached until the next `load()`.
     *
     * @var null|array<int,string>
     */
    private static null|array $locales = null;
+   /**
+    * Locale directory names keyed `"{root}\0{normalizedTag}"` — lets a
+    * non-canonical directory (`pt_BR/`, `PT-br/`) load for its normalized
+    * tag.
+    *
+    * @var array<string,string>
+    */
+   private static array $directories = [];
+   /**
+    * Per-Fiber locale contexts — deferred work translates under the locale
+    * of the request that scheduled it, immune to interleaved requests
+    * reassigning `Language::$locale` while the Fiber is suspended.
+    *
+    * @var null|WeakMap<object,string> Keys are the bound Fibers.
+    */
+   private static null|WeakMap $Contexts = null;
 
 
    /**
@@ -93,6 +111,56 @@ class Language
       // @
       self::$roots[] = $root;
       self::$locales = null;
+   }
+
+   /**
+    * Bind a locale to the current Fiber. Deferred/asynchronous work calls
+    * this when a job starts so its translations resolve under the locale
+    * of the request that scheduled it. No-op outside a Fiber.
+    */
+   public static function bind (string $locale): void
+   {
+      // ?
+      $Fiber = Fiber::getCurrent();
+      if ($Fiber === null) {
+         return;
+      }
+
+      // @
+      self::$Contexts ??= new WeakMap;
+      self::$Contexts[$Fiber] = $locale;
+   }
+
+   /**
+    * Drop the current Fiber's locale binding (job finished or the Fiber
+    * returned to its pool). No-op outside a Fiber or without a binding.
+    */
+   public static function unbind (): void
+   {
+      // ?
+      $Fiber = Fiber::getCurrent();
+      if ($Fiber === null || self::$Contexts === null) {
+         return;
+      }
+
+      // @
+      unset(self::$Contexts[$Fiber]);
+   }
+
+   /**
+    * Resolve the effective locale: the current Fiber's binding when one
+    * exists, else `Language::$locale`.
+    */
+   public static function resolve (): string
+   {
+      // ?:
+      $Fiber = Fiber::getCurrent();
+      if ($Fiber !== null && self::$Contexts !== null && isSet(self::$Contexts[$Fiber]) === true) {
+         return self::$Contexts[$Fiber];
+      }
+
+      // :
+      return self::$locale;
    }
 
    /**
@@ -121,7 +189,7 @@ class Language
 
       // @ Lookup — only with registered catalogs and a non-source target
       if (self::$roots !== [] && $message !== '') {
-         $target = Locales::normalize($locale ?? self::$locale);
+         $target = Locales::normalize($locale ?? self::resolve());
 
          if (
             $target !== ''
@@ -154,7 +222,15 @@ class Language
       if ($substitutions !== []) {
          $replacements = [];
          foreach ($substitutions as $token => $value) {
-            $replacements["{{$token}}"] = (string) $value;
+            // ? A throwing Stringable leaves its token untouched — the
+            //   never-throws promise covers user-supplied casts too
+            //   (PHPStan cannot model a throwing __toString behind a cast)
+            try {
+               $replacements["{{$token}}"] = (string) $value;
+            }
+            catch (Throwable) { // @phpstan-ignore catch.neverThrown
+               continue;
+            }
          }
 
          $line = strtr($line, $replacements);
@@ -175,8 +251,13 @@ class Language
     */
    public static function negotiate (array $preferred): string
    {
+      // ! The source language is always servable (natural-source keys) —
+      //   it participates as the first implicit offer, so `['en', 'pt-BR']`
+      //   picks `en` and `*` resolves to the source
+      $offers = [self::$source, ...self::locales()];
+
       // :
-      return Locales::choose($preferred, self::locales()) ?? self::$source;
+      return Locales::choose($preferred, $offers) ?? self::$source;
    }
 
    /**
@@ -191,6 +272,8 @@ class Language
       self::$roots = [];
       self::$catalogs = [];
       self::$locales = null;
+      self::$directories = [];
+      self::$Contexts = null;
    }
 
    /**
@@ -213,7 +296,12 @@ class Language
       }
 
       // @
-      $file = "{$root}/{$tag}/{$domain}.php";
+      // ! Resolve non-canonical directory names (`pt_BR/` serves `pt-BR`);
+      //   the map is built by the lazy locales() scan — force it once
+      self::$locales === null && self::locales();
+      $directory = self::$directories["{$root}\0{$tag}"] ?? $tag;
+
+      $file = "{$root}/{$directory}/{$domain}.php";
       try {
          $entries = is_file($file) === true ? require $file : [];
       }
@@ -236,8 +324,9 @@ class Language
 
    /**
     * Scan the registered roots for locale directories, cached until the
-    * next `load()`. Directory names are kept as given (they are the
-    * negotiable/available locales).
+    * next `load()`. Returns normalized tags (the negotiable locales) and
+    * maps each one to its real directory name per root, so non-canonical
+    * names (`pt_BR/`) still load.
     *
     * @return array<int,string>
     */
@@ -265,11 +354,16 @@ class Language
             if (is_dir("{$root}/{$entry}") === false) {
                continue;
             }
-            if (Locales::normalize($entry) === '') {
+
+            $normalized = Locales::normalize($entry);
+            if ($normalized === '') {
                continue;
             }
 
-            $found[$entry] = true;
+            // # Normalized tags negotiate; the real directory name loads
+            //   (first directory wins per root — scandir is alphabetical)
+            $found[$normalized] = true;
+            self::$directories["{$root}\0{$normalized}"] ??= $entry;
          }
       }
 

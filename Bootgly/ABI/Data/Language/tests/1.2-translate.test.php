@@ -69,6 +69,24 @@ return new Specification(
          ->to->be('a|b')
          ->assert();
 
+      // @ Never-throws — a throwing Stringable leaves its token untouched
+      $Throwing = new class implements Stringable {
+         public function __toString (): string
+         {
+            throw new RuntimeException('cast failed');
+         }
+      };
+
+      yield new Assertion(description: 'Throwing Stringable should leave the token untouched')
+         ->expect(Language::translate('Hello, {name}!', ['name' => $Throwing]))
+         ->to->be('Hello, {name}!')
+         ->assert();
+
+      yield new Assertion(description: 'Other substitutions should survive a throwing Stringable')
+         ->expect(Language::translate('{a} and {b}', ['a' => $Throwing, 'b' => 'ok']))
+         ->to->be('{a} and ok')
+         ->assert();
+
       // @ Per-call locale override — never mutates the active locale
       yield new Assertion(description: 'Locale override should not change the message with zero catalogs')
          ->expect(Language::translate('Sign in', locale: 'pt-BR'))

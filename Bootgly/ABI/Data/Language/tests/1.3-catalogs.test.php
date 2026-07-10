@@ -82,6 +82,21 @@ return new Specification(
          ->to->be('pt')
          ->assert();
 
+      yield new Assertion(description: 'The source language should win as the implicit first offer')
+         ->expect(Language::negotiate(['en', 'pt-BR']))
+         ->to->be('en')
+         ->assert();
+
+      yield new Assertion(description: 'Regionalized source preference should still pick the source')
+         ->expect(Language::negotiate(['en-US', 'pt-BR']))
+         ->to->be('en')
+         ->assert();
+
+      yield new Assertion(description: 'Wildcard should resolve to the source language')
+         ->expect(Language::negotiate(['*']))
+         ->to->be('en')
+         ->assert();
+
       yield new Assertion(description: 'Unsatisfiable preferences should fall back to the source')
          ->expect(Language::negotiate(['de', 'ja']))
          ->to->be('en')

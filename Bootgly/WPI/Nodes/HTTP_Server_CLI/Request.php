@@ -1440,11 +1440,12 @@ class Request
             //   quality lands in $match[2] like the other headers — with the
             //   old capturing subtag, `pt-BR` got quality (float) '-BR' = 0.0
             //   and sorted last (or was dropped by the q=0 filter below).
-            // ! Full RFC 4647 language-range grammar: `*` wildcard and up to
-            //   four alphanumeric subtags (`zh-Hant-TW`, `es-419`) — narrower
-            //   parsing would drop information before Language::negotiate().
+            // ! Full RFC 4647 language-range grammar: `*` wildcard and any
+            //   number of alphanumeric subtags (`zh-Hant-TW`, `es-419`,
+            //   `de-Latn-DE-1996-x-private`) — narrower parsing would split
+            //   or drop information before Language::negotiate().
             $header = $this->Header->get('Accept-Language');
-            $pattern = '/(\*|[a-z]{1,8}(?:-[a-z0-9]{1,8}){0,3})\s*(?:;\s*q\s*=\s*(\d*(?:\.\d+)?))?/i';
+            $pattern = '/(\*|[a-z]{1,8}(?:-[a-z0-9]{1,8})*)\s*(?:;\s*q\s*=\s*(\d*(?:\.\d+)?))?/i';
 
             break;
          case self::ACCEPTS_ENCODINGS:
@@ -1484,6 +1485,11 @@ class Request
          // ? RFC 9110: q=0 means "not acceptable" — drop refused items
          if ($quality <= 0.0) {
             continue;
+         }
+
+         // ? RFC 9110 §12.4.2: quality ranges 0..1 — clamp invalid excess
+         if ($quality > 1.0) {
+            $quality = 1.0;
          }
 
          $results[$item] = $quality;

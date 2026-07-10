@@ -155,6 +155,7 @@ return new Suite(
          '5.1-request_fixture-injection',
          // Accept-Language full language-ranges (appended last — index stability)
          '1.15.3-request_as_response-header-accept_language-ranges',
+         '1.15.4-request_as_response-header-accept_language-long_range',
       ],
       'Response/' => [
          '1.1-respond_with_a_simple_hello_world',
@@ -221,6 +222,10 @@ return new Suite(
          '1.13.5-catch_production_custom_view',
          '1.13.6-catch_production_localized_page',
          '1.13.7-catch_production_locale_reset',
+         // @ i18n worker-state cleanup — MUST run right after 1.13.6/1.13.7:
+         //   drops the catalog roots they registered so the byte-exact specs
+         //   below run without the automatic Vary: Accept-Language
+         '1.13.8-i18n_state_cleanup',
          // @ SSE (Server-Sent Events — appended last to keep the
          //   X-Bootgly-Test indices of the specs above stable)
          '3.1-sse_head_and_events',

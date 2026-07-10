@@ -34,6 +34,9 @@ return new Specification(
       if (str_contains($response, 'Erro interno do servidor</p>') === false) {
          return 'Localized status message not found in the clean page';
       }
+      if (str_contains($response, 'Vary: Accept, Accept-Language') === false) {
+         return 'Localized error page did not declare Vary: Accept, Accept-Language';
+      }
       if (str_contains($response, 'localized secret probe')) {
          return 'Throwable message leaked in production';
       }

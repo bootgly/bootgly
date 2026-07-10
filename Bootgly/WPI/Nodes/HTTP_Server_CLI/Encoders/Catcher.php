@@ -170,9 +170,9 @@ abstract class Catcher
       if ($chosen === 'application/json') {
          $Errored = new Response(code: $code, body: (string) json_encode(['error' => $message]));
          $Errored->Header->set('Content-Type', 'application/json');
-         if (Language::$roots !== []) {
-            $Errored->Header->set('Vary', 'Accept-Language');
-         }
+         // ! Representation is negotiated from Accept; encode() appends
+         //   Accept-Language while catalogs are registered
+         $Errored->Header->set('Vary', 'Accept');
 
          return $Errored;
       }
@@ -185,9 +185,7 @@ abstract class Catcher
          if (is_file($file) === true) {
             $Errored = new Response;
             $Errored->View->render($view);
-            if (Language::$roots !== []) {
-               $Errored->Header->set('Vary', 'Accept-Language');
-            }
+            $Errored->Header->set('Vary', 'Accept');
 
             return $Errored->code($code);
          }
@@ -196,7 +194,7 @@ abstract class Catcher
       // # Built-in clean page
       // ! Escaped — catalog translations (project-supplied) flow into HTML
       $escaped = htmlspecialchars($message, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-      $locale = htmlspecialchars(Language::$locale, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+      $locale = htmlspecialchars(Language::resolve(), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
       $body = str_replace(
          ['{locale}', '{status}', '{code}', '{message}'],
          [$locale, "$code $escaped", (string) $code, $escaped],
@@ -205,9 +203,7 @@ abstract class Catcher
 
       // :
       $Errored = new Response(code: $code, body: $body);
-      if (Language::$roots !== []) {
-         $Errored->Header->set('Vary', 'Accept-Language');
-      }
+      $Errored->Header->set('Vary', 'Accept');
 
       return $Errored;
    }

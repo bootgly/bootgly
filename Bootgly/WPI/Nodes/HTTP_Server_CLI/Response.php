@@ -946,9 +946,10 @@ class Response extends Server\Response
          $buffer = "{$this->hints}{$buffer}";
       }
 
-      // ! Language-vary segment mirrors the encoders' fetch key — the active
-      //   locale is the one that produced this body
-      $vary = Language::$roots !== [] ? "\0" . Language::$locale : '';
+      // ! Language-vary segment mirrors the encoders' fetch key — resolve()
+      //   returns the locale that produced this body even when stash runs
+      //   inside a deferred Fiber whose request is no longer the active one
+      $vary = Language::$roots !== [] ? "\0" . Language::resolve() : '';
       Cache::store("{$Request->method}\0{$Request->URI}{$vary}", $buffer, $ttl);
    }
 
@@ -959,13 +960,18 @@ class Response extends Server\Response
     * into the pool and suspends with `Scheduler::DETACH` — the next defer()
     * resumes it with a fresh job instead of constructing a new Fiber.
     *
-    * @param array{0:Closure,1:self,2:Packages} $job
+    * @param array{0:Closure,1:self,2:Packages,3:string} $job
     */
    private static function loop (array $job): void
    {
       // @@
       while (true) {
-         [$work, $Response, $Package] = $job;
+         [$work, $Response, $Package, $locale] = $job;
+
+         // ! Bind the scheduling request's locale to this Fiber — deferred
+         //   work must not translate (or stash) under a locale negotiated by
+         //   a request that interleaved while this one was suspended
+         Language::bind($locale);
 
          // ! Drop the job container — only the locals hold the request now
          $job = null;
@@ -1004,6 +1010,9 @@ class Response extends Server\Response
             }
          }
          finally {
+            // @ Drop this job's locale binding before the Fiber is pooled
+            Language::unbind();
+
             // @ Unregister Fiber from wait() guard
             $Self = Fiber::getCurrent();
 
@@ -1026,7 +1035,7 @@ class Response extends Server\Response
          // @ Park and wait for the next job (the scheduler drops DETACH)
          self::$Pool[] = $Self;
 
-         /** @var array{0:Closure,1:self,2:Packages} $job */
+         /** @var array{0:Closure,1:self,2:Packages,3:string} $job */
          $job = Fiber::suspend(Scheduler::DETACH);
       }
    }
@@ -1055,15 +1064,16 @@ class Response extends Server\Response
          // @ Register Fiber for wait() guard (must be set before start)
          $Response->Fibers->attach($Fiber);
 
-         // @ Start Fiber with its first job
-         $suspendedValue = $Fiber->start([$work, $Response, $Package]);
+         // @ Start Fiber with its first job (resolve() also covers nested
+         //   defers — the child job inherits the parent Fiber's locale)
+         $suspendedValue = $Fiber->start([$work, $Response, $Package, Language::resolve()]);
       }
       else {
          // @ Register Fiber for wait() guard (must be set before resume)
          $Response->Fibers->attach($Fiber);
 
          // @ Resume the parked job loop with the new job
-         $suspendedValue = $Fiber->resume([$work, $Response, $Package]);
+         $suspendedValue = $Fiber->resume([$work, $Response, $Package, Language::resolve()]);
       }
 
       // @ Schedule suspended Fiber in event loop — forwards the suspended
