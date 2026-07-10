@@ -92,6 +92,41 @@ return new Specification(
          description: 'blob shorter than IV + tag yields null'
       );
 
+      // ! Canonical encoding only: alternate textual forms of the same bytes
+      yield assert(
+         assertion: $Encrypter->decrypt("{$envelope}=") === null,
+         description: 'padded variant of a valid envelope yields null'
+      );
+
+      $standard = "{$version}.{$id}." . base64_encode($raw);
+
+      yield assert(
+         assertion: $standard !== $envelope && $Encrypter->decrypt($standard) === null,
+         description: 'standard padded base64 of the same bytes yields null'
+      );
+
+      $mod = "{$version}.{$id}." . substr($blob, 0, strlen($blob) - (strlen($blob) % 4 + 3));
+
+      yield assert(
+         assertion: strlen(explode('.', $mod)[2]) % 4 === 1
+            && $Encrypter->decrypt($mod) === null,
+         description: 'blob with length % 4 === 1 yields null'
+      );
+
+      // ! Non-zero trailing bits in the last character decode to the same
+      // ! bytes but fail the canonical re-encode check
+      $bitty = $Encrypter->encrypt(str_repeat('a', 16)); // raw = 44 bytes → 2 trailing bits
+      [, , $tail] = explode('.', $bitty);
+      $alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+      $variant = substr($tail, 0, -1) . $alphabet[strpos($alphabet, substr($tail, -1)) ^ 1];
+
+      yield assert(
+         assertion: $Encrypter->decrypt($bitty) === str_repeat('a', 16)
+            && $variant !== $tail
+            && $Encrypter->decrypt("{$version}.{$id}.{$variant}") === null,
+         description: 'non-zero trailing bits in the last blob character yield null'
+      );
+
       yield assert(
          assertion: $Encrypter->decrypt($envelope) === $plaintext,
          description: 'untampered envelope still decrypts after every rejection'

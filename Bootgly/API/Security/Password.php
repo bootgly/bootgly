@@ -63,6 +63,8 @@ class Password
     * iterations, 1 thread).
     *
     * @throws RuntimeException When the PHP build lacks Argon2 support.
+    *    This branch cannot run under a CI whose PHP ships Argon2 (the
+    *    suite skips instead) — it is smoke-tested manually on such builds.
     * @throws InvalidArgumentException When a cost parameter is below the safe floor.
     */
    public function __construct (int $memory = 65536, int $time = 4, int $threads = 1)

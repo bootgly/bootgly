@@ -9,12 +9,16 @@ use Bootgly\API\Security\Encrypter\Keyring;
 return new Specification(
    description: 'Encrypter: key guards, keyring resolution and rotation',
    test: function () {
-      // ! Key material and id guards
+      // ! Key material and id guards — ids follow [A-Za-z0-9_-]{1,64}
       $guards = [
          '16-byte material' => static fn () => new Key(random_bytes(16)),
          '33-byte material' => static fn () => new Key(random_bytes(33)),
          'empty id' => static fn () => new Key(random_bytes(32), ''),
          'dotted id' => static fn () => new Key(random_bytes(32), 'a.b'),
+         'id with space' => static fn () => new Key(random_bytes(32), 'k 1'),
+         'id with newline' => static fn () => new Key(random_bytes(32), "k1\n"),
+         'id with control character' => static fn () => new Key(random_bytes(32), "k\x01"),
+         '65-character id' => static fn () => new Key(random_bytes(32), str_repeat('k', 65)),
          'invalid base64 import' => static fn () => Key::import('not-base64!!!'),
          'short material import' => static fn () => Key::import(base64_encode(random_bytes(16))),
       ];
@@ -33,18 +37,56 @@ return new Specification(
          );
       }
 
-      $Generated = Key::generate('k1');
-
       yield assert(
-         assertion: strlen($Generated->material) === 32 && $Generated->id === 'k1',
-         description: 'generate mints 32 bytes of material with the given id'
+         assertion: new Key(random_bytes(32), 'k2026_07-A')->id === 'k2026_07-A'
+            && new Key(random_bytes(32), str_repeat('k', 64))->id === str_repeat('k', 64),
+         description: 'key guard accepts conservative ids up to 64 characters'
       );
 
-      $encoded = base64_encode($Generated->material);
+      $Generated = Key::generate('k1');
+      $Probe = new Encrypter($Generated);
 
       yield assert(
-         assertion: Key::import($encoded, 'k1')->material === $Generated->material,
+         assertion: $Generated->id === 'k1'
+            && $Probe->decrypt($Probe->encrypt('probe')) === 'probe',
+         description: 'generate mints a working key with the given id'
+      );
+
+      $material = random_bytes(32);
+      $Imported = new Encrypter(Key::import(base64_encode($material)));
+      $cross = new Encrypter(new Key($material))->encrypt('probe');
+
+      yield assert(
+         assertion: $Imported->decrypt($cross) === 'probe',
          description: 'import restores base64-encoded material'
+      );
+
+      // ! Secrecy: raw material never leaks through public surfaces
+      $secret = random_bytes(32);
+      $Secret = new Key($secret, 'k9');
+
+      ob_start();
+      var_dump($Secret);
+      $dumped = (string) ob_get_clean();
+
+      yield assert(
+         assertion: str_contains($dumped, '[redacted]')
+            && str_contains($dumped, $secret) === false
+            && json_encode($Secret) === '{"id":"k9"}',
+         description: 'key material is redacted from var_dump and absent from JSON'
+      );
+
+      $refused = false;
+      try {
+         serialize($Secret);
+      }
+      catch (LogicException) {
+         $refused = true;
+      }
+
+      yield assert(
+         assertion: $refused === true,
+         description: 'keys refuse serialization'
       );
 
       // ! Keyring uniqueness guards
