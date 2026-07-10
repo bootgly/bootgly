@@ -2,6 +2,51 @@
 
 Changelog for Bootgly framework. All notable changes to this project will be documented in this file. Imported from ROADMAP.md.
 
+## v0.24.0-beta ✅
+
+> Focus: **i18n + Crypto essentials + Streaming**
+
+### ABI — Abstract Bootable Interface
+
+- ✅ i18n minimal contract — `translate()` + message catalogs + locale negotiation
+  (`Bootgly\ABI\Data\Language` + `Language\Locales`), consumed by validation messages,
+  templates (`@translate`) and error pages (Catcher body + per-request Accept-Language
+  negotiation in the encoders); natural-source keys (zero catalogs = English works),
+  `{token}` placeholders, `|` plurals via `count`; moved from post-1.0 because the
+  translation API contaminates public signatures (adding it after the freeze = breaking
+  change); full catalogs can come later
+
+### API — Application Programming Interface
+
+- ✅ Crypto essentials (`API/Security`, next to the existing JWT/Authorization)
+  - ✅ Password hashing helper (argon2id, rehash-on-verify policy)
+  - ✅ Encrypter (AES-256-GCM via openssl) with key management + rotation — hardened (canonical envelopes, private key material via `Key::seal/open`,
+    kid contract `[A-Za-z0-9_-]{1,64}`)
+  - ✅ Complements the existing JWT/CSRF
+
+### WPI — Web Programming Interface
+
+- ✅ SSE (Server-Sent Events) — `text/event-stream` encoder + heartbeat/retry over the
+  existing streaming stack; small effort, high competitive value
+  - ✅ Wire encoder (`Modules/HTTP/Server/SSE`) — event/id/retry serialization,
+    CRLF/NUL injection guards, keep-alive comments
+  - ✅ `$Response->SSE` resource — `open()`/`send()`/`ping()`/`close()`, Timer-driven
+    heartbeat (default 15s) + `Tick` cadence, `Last-Event-ID` resume, `Close` hook
+  - ✅ HTTP/1.1 chunked hijack (`Decoder_Streaming` pipelining guard) + HTTP/2
+    sustained streams (no END_STREAM until close; RFC 9113 flow control reused)
+  - ✅ E2E + HTTP/2 specs, demo route set (`/events` + `/sse`)
+
+### Bonus
+
+- ✅ HTTP niceties — 103 Early Hints (cheap with the in-house encoder) + Default health-check endpoint (K8s readiness/liveness)
+  - ✅ `Response->hint()` — interim 103 with Link values on HTTP/1.1 + HTTP/2
+    (+ `103`/`308` added to the status map — fixes `redirect(308)` undefined-key)
+  - ✅ Built-in health endpoint (`Encoders/Check`) — `configure(health: '/health')`
+    opt-in at the node, default-ON in `Web\App`; dispatched before middlewares
+    (probe-proof), minimal JSON status with `Cache-Control: no-store`
+
+---
+
 ## v0.23.0-beta ✅
 
 > Focus: **Error Handling + Exception Handler + Web Platform**
