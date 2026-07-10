@@ -67,12 +67,17 @@ class Encoder_ extends Encoders
       // ?: Route response cache — serve stored wire bytes before routing,
       //   middleware, handler and serialization (empty-store check keeps the
       //   cost at one static array read for servers that never opt in).
-      //   Guards mirror stash(): plain keep-alive GET, no credentials,
-      //   language-vary segment when catalogs are registered. The built-in
-      //   health path never reads the cache — the probe guard must win over
-      //   any stale application-cached entry on the same path.
+      //   Guards mirror stash(): plain keep-alive HTTP/1.1 GET, no
+      //   credentials, language-vary segment when catalogs are registered.
+      //   Only HTTP/1.1 reads entries — stash() only stores HTTP/1.1 wire,
+      //   and an HTTP/1.0 keep-alive hit would replay another protocol's
+      //   bytes (including interim 103 heads hint() promises it never
+      //   sends to HTTP/1.0). The built-in health path never reads the
+      //   cache — the probe guard must win over any stale application-
+      //   cached entry on the same path.
       if (
          Cache::$entries !== [] && $Request->closeConnection === false
+         && $Request->protocol === 'HTTP/1.1'
          && $Request->URI !== Server::$health
       ) {
          $vary = Language::$roots !== [] ? "\0" . Language::$locale : '';

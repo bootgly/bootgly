@@ -15,6 +15,7 @@ return new Suite(
    // * Data
    tests: [
       '1.1-sse_open_dead_connection',
-      '1.2-timer_fork_hygiene'
+      '1.2-timer_fork_hygiene',
+      '1.3-response_code_contract'
    ]
 );

@@ -54,7 +54,7 @@ class ETag implements Middleware
       //   redirect. Error and auth-challenge bodies (4xx/5xx) must never be
       //   ETagged or 304-revalidated — caching them risks serving a stale
       //   error or challenge as if it were the resource.
-      $code = (int) $Response->code; // @phpstan-ignore-line
+      $code = $Response->code;
       if ($code < 200 || $code >= 400) {
          return $Response;
       }

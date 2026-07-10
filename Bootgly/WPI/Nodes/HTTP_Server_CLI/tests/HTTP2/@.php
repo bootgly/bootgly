@@ -13,6 +13,7 @@ use function is_file;
 use function str_repeat;
 use function unlink;
 use function usleep;
+use InvalidArgumentException;
 use RuntimeException;
 
 use Bootgly\ACI\Logs\Data\Display;
@@ -69,6 +70,19 @@ return new Suite(
 
             if ($Request->URI === '/hints') {
                $Response->hint('</app.css>; rel=preload; as=style');
+            }
+
+            // @ 1xx as a final status must FAIL LOUD — after the throw the
+            //   exchange still terminates as a normal 200 with END_STREAM
+            if ($Request->URI === '/code-1xx') {
+               try {
+                  $Response->code(103);
+               }
+               catch (InvalidArgumentException) {
+                  // ! Expected: informational codes never become final
+               }
+
+               return $Response->send('final');
             }
 
             if ($Request->URI === '/sse') {
@@ -235,6 +249,7 @@ return new Suite(
       '6.6-sse_aggregate_backlog_cap',
       '6.7-sse_head_method',
       '6.8-sse_drain_deadline',
-      '6.9-sse_stall_progress'
+      '6.9-sse_stall_progress',
+      '6.10-code_1xx_rejected'
    ]
 );

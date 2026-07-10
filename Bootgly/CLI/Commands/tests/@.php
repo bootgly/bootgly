@@ -13,5 +13,6 @@ return new Suite(
    suiteName: 'Command class test',
    tests: [
       '_Commands-register-01',
+      'Commands-route-01',
    ]
 );

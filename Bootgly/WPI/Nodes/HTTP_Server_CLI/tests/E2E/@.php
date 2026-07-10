@@ -249,6 +249,9 @@ return new Suite(
          // @ SSE hardening
          '3.9-sse_cache_control_exact',
          '3.10-sse_cache_control_quoted',
+         // @ HTTP niceties hardening
+         '2.15-hint_route_cache_http10_guard',
+         '2.16-code_1xx_rejected',
       ],
       'Router/' => [
          '1.1-route_callback-closure',

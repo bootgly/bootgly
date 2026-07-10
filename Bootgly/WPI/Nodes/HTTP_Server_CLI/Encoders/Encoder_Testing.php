@@ -57,10 +57,12 @@ class Encoder_Testing extends Encoders
 
       // ?: Route response cache — serve stored wire bytes before routing,
       //   middleware, handler and serialization (mirrors Encoder_ so E2E
-      //   specs exercise the same hit path as production). The built-in
-      //   health path never reads the cache (mirrors Encoder_).
+      //   specs exercise the same hit path as production). Only HTTP/1.1
+      //   reads entries and the built-in health path never reads the cache
+      //   (mirrors Encoder_).
       if (
          Cache::$entries !== [] && $Request->closeConnection === false
+         && $Request->protocol === 'HTTP/1.1'
          && $Request->URI !== Server::$health
       ) {
          $vary = Language::$roots !== [] ? "\0" . Language::$locale : '';

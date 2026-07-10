@@ -57,7 +57,7 @@ class Compression implements Middleware
       //   redirect. Skip 4xx/5xx error and auth-challenge bodies — they should
       //   not be re-encoded (keeps error representations out of the
       //   compression/validator surface).
-      $code = (int) $Response->code; // @phpstan-ignore-line
+      $code = $Response->code;
       if ($code < 200 || $code >= 400) {
          return $Response;
       }

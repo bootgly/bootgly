@@ -12,6 +12,8 @@ namespace Bootgly\CLI;
 
 
 use const BOOTGLY_ROOT_DIR;
+use function array_merge;
+use function array_values;
 use function count;
 use function is_array;
 use function preg_replace;
@@ -183,8 +185,15 @@ class Commands
          return null;
       }
 
+      // ! `From: null` searches every registered namespace — list(null)
+      //   returns the namespace-keyed map (the HelpCommand contract), so
+      //   flatten the groups before matching
+      $commands = $From === null
+         ? array_merge(...array_values($this->commands))
+         : $this->list($From);
+
       /** @var Command $Command */
-      foreach ($this->list($From) as $Command) {
+      foreach ($commands as $Command) {
          if ($Command->name === $command) {
             $Command->input = $input;
 
@@ -225,20 +234,27 @@ class Commands
       );
 
       // @ Get the command | help command
-      /** @var Command $Command */
       $Command = $this->find(
          $command,
          $command === 'help'
             ? $this
             : $From
-      ) ?? $this->find(
+      );
+
+      // ? Unknown command — show help, but the route itself FAILED: the
+      //   exit code must reflect the miss (tooling that shells out to the
+      //   binary relies on a non-zero status, not on parsing the output)
+      $unknown = $Command === null && $command !== '';
+
+      $Command ??= $this->find(
          command: 'help',
          From: $this,
-         input: $command !== ''
+         input: $unknown
             ? "Unknown command: @#Yellow:$command@;"
             : null
       );
 
+      /** @var Command $Command */
       $Command->script = $this->script;
 
       // @ Prerun the command
@@ -254,7 +270,7 @@ class Commands
       }
 
       // @ Run the command
-      return $this->Middlewares->process(
+      $routed = $this->Middlewares->process(
          $Command,
          $arguments,
          $options,
@@ -262,5 +278,9 @@ class Commands
             return $Command->run($arguments, $options);
          }
       );
+
+      // ?: An unknown command never routes successfully — even though the
+      //   help fallback rendered fine
+      return $unknown ? false : $routed;
    }
 }

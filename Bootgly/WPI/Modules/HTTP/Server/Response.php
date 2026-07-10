@@ -29,7 +29,10 @@ abstract class Response
    /** @var array<mixed> */
    protected array $files = [];
    // # status
-   protected int $code = 200;
+   // ! Asymmetric visibility: public read (encoders, middlewares and
+   //   templates consume it directly — no magic-getter dispatch on the
+   //   hot path); writes stay internal — code() is the single write path
+   public protected(set) int $code = 200;
 
    // * Metadata
    // # status

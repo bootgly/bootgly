@@ -73,7 +73,6 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\XML as XMLResource;
 
 /**
  * * Config
- * @property int $code
  * @property-read DatabaseResource $Database
  * @property-read JSONResource $JSON
  * @property-read JSONPResource $JSONP
@@ -245,43 +244,17 @@ class Response extends Server\Response
     */
    public function __get (string $name): bool|string|int|array|ResponseResource
    {
-      switch ($name) {
-         // TODO: move to property hooks
-         // # Response Metadata
-         case 'code':
-            return $this->code;
-         // # Response Headers
-         case 'headers':
-            return $this->Header->fields;
-         // # Response Body
-         case 'chunked':
-            if ($this->chunked === false) {
-               $this->chunked = true;
-               $this->Header->append('Transfer-Encoding', 'chunked');
-            }
+      // @ Construct Resource on demand — the single magic surface left:
+      //   resource names are registry-defined (built-ins + user-defined),
+      //   so they cannot become declared properties. Everything static
+      //   ($code, ...) is a real property with asymmetric visibility.
+      $Resource = $this->Resources->fetch($name);
 
-            return $this->Body->chunked;
-
-         default: // @ Construct Resource on demand
-            $Resource = $this->Resources->fetch($name);
-
-            if ($Resource !== null) {
-               return $Resource;
-            }
-
-            throw new InvalidArgumentException("Unknown response property or resource: {$name}");
+      if ($Resource !== null) {
+         return $Resource;
       }
-   }
-   public function __set (string $name, mixed $value): void
-   {
-      switch ($name) {
-         // @ Response Metadata
-         case 'code':
-            if (is_int($value) && $value > 99 && $value < 600) {
-               $this->code($value);
-            }
-            break;
-      }
+
+      throw new InvalidArgumentException("Unknown response property or resource: {$name}");
    }
 
    /**
@@ -656,11 +629,34 @@ class Response extends Server\Response
     */
    public function code (int $code): self
    {
+      // ? Informational statuses (1xx) are interim by definition (RFC 9110
+      //   §15.2) — they can never terminate an exchange as the final
+      //   status: HTTP/1.1 would serialize a lone 1xx head with
+      //   Content-Length/body and HTTP/2 would END_STREAM it; clients keep
+      //   waiting for the missing final response either way. 101 is not
+      //   even interim-then-final: it hands the connection to another
+      //   protocol, which is owned by dedicated servers (e.g. the WS
+      //   stack), never by this response API.
+      if ($code >= 100 && $code < 200) {
+         throw new InvalidArgumentException(
+            "Informational status {$code} cannot be a final response status — use hint() for 103 Early Hints; protocol switches (101) belong to a dedicated protocol server."
+         );
+      }
+
+      $message = HTTP::RESPONSE_STATUS[$code] ?? null;
+
+      // ? Fail loud on every other unsupported value — one stable
+      //   exception for below-100 garbage and unmapped codes alike,
+      //   instead of a silent fallback or an undefined-key error
+      if ($message === null) {
+         throw new InvalidArgumentException(
+            "Invalid HTTP response status code: {$code}."
+         );
+      }
+
       // * Data
       // @ status
       $this->code = $code;
-
-      $message = HTTP::RESPONSE_STATUS[$code];
 
       // * Metadata
       // @ status
