@@ -26,36 +26,10 @@ Bootgly is a base framework for building **APIs and apps** on both the **Web (WP
 
 ### ⚡ Quickstart
 
-Define your routes — a complete HTTP server in a handful of lines:
-
-```php
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router;
-
-return static function (Request $Request, Response $Response, Router $Router): Generator
-{
-   yield $Router->route('/', function (Request $Request, Response $Response) {
-      return $Response(body: 'Hello World!');
-   }, GET);
-
-   // Catch-all 404
-   yield $Router->route('/*', fn (Request $Request, Response $Response) =>
-      $Response(code: 404, body: 'Not Found')
-   );
-};
-```
-
 Install Bootgly and create your first project with one command — the installer opens the project wizard:
 
 ```bash
 curl -fsSL https://bootgly.com/install | bash
-```
-
-Then boot it from the terminal:
-
-```bash
-php bootgly project MyApp start
 ```
 
 > **⚡ Over 1,000,000 req/s — in pure PHP.** On the TechEmpower `/plaintext` route, the HTTP Server CLI peaks at **1,076,709 req/s** — ahead of **Swoole** (964,908) and roughly **150× a Laravel + PHP-FPM** stack — with **no C extension** and no third-party runtime in its core. It leads Swoole on `/plaintext`, `/json`, `/query` (+126%) and `/updates` (+60%), and beats every other PHP framework benchmarked on every route.
@@ -199,7 +173,7 @@ php bootgly project import https://github.com/foo/project1 Project1
 ### 📟 Bootgly CLI
 
 <details>
-   <summary><kbd>Run Bootgly CLI demo</kbd></summary><br>
+   <summary><kbd>Import `Demo/CLI` project and run Bootgly CLI demo</kbd></summary><br>
 
    1) Run the Bootgly CLI demo in terminal:
 
@@ -243,9 +217,9 @@ php bootgly project import https://github.com/foo/project1 Project1
 ### 🌐 Bootgly WPI
 
 <details>
-   <summary><kbd>Running a HTTP Server</kbd></summary>
+   <summary><kbd>Import `Demo/HTTP_Server_CLI` project and run the demo of HTTP Server</kbd></summary>
 
-   1) Create a Web project with the wizard (`php bootgly project create`) — or configure the demo in `projects/Demo/HTTP_Server_CLI/HTTP_Server_CLI.project.php`;
+   1) Import a Web project with the wizard (`php bootgly project import`);
    2) Run it in the terminal:
 
    ```bash
