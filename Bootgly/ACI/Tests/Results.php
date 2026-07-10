@@ -111,8 +111,11 @@ class Results
          }
       }
 
+      // ! A suite may fail without any failed CASE recorded (an Error thrown
+      //   inside a test body aborts the suite before its cases register) —
+      //   the aggregate must not report "passed" over a failed suite
       $result = [
-         'result'     => $casesFailed > 0 ? 'failed' : 'passed',
+         'result'     => ($casesFailed > 0 || self::$suitesFailed > 0) ? 'failed' : 'passed',
          'agent'      => self::$agent,
          'suites'     => [
             'total'   => self::$suitesTotal,

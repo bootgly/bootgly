@@ -62,6 +62,27 @@ return function (
             $this->headers[$name] = $value;
          }
       }
+      // Mirrors Response\Raw\Header::vary() — token-aware Vary merge
+      public function vary (string $name): void
+      {
+         $current = $this->headers['Vary'] ?? '';
+
+         if (\trim($current) === '') {
+            $this->headers['Vary'] = $name;
+
+            return;
+         }
+
+         foreach (\explode(',', $current) as $token) {
+            $token = \trim($token);
+
+            if ($token === '*' || \strcasecmp($token, $name) === 0) {
+               return;
+            }
+         }
+
+         $this->headers['Vary'] = "{$current}, {$name}";
+      }
    };
 
    // ! Request mock
