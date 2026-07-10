@@ -98,10 +98,16 @@ return new Specification(
          description: 'padded variant of a valid envelope yields null'
       );
 
-      $standard = "{$version}.{$id}." . base64_encode($raw);
+      // ! Raw length 44 (¬≡ 0 mod 3) forces '=' padding in the standard form,
+      // ! so the non-canonical variant always differs from the envelope blob
+      $padded = $Encrypter->encrypt(str_repeat('b', 16)); // raw = 12 + 16 + 16 = 44 bytes
+      [, , $pblob] = explode('.', $padded);
+      $standard = "{$version}.{$id}." . base64_encode($unpack($pblob));
 
       yield assert(
-         assertion: $standard !== $envelope && $Encrypter->decrypt($standard) === null,
+         assertion: str_ends_with($standard, '=')
+            && $Encrypter->decrypt($standard) === null
+            && $Encrypter->decrypt($padded) === str_repeat('b', 16),
          description: 'standard padded base64 of the same bytes yields null'
       );
 
