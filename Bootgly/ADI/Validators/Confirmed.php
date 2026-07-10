@@ -24,6 +24,9 @@ class Confirmed extends Condition
     */
    public private(set) null|string $field;
 
+   // * Metadata
+   protected string $template = '{field} confirmation does not match.';
+
 
    public function __construct (null|string $field = null, string $message = '')
    {
@@ -41,14 +44,5 @@ class Confirmed extends Condition
       $confirming = $this->field ?? "{$field}_confirmation";
 
       return array_key_exists($confirming, $data) && $data[$confirming] === $value;
-   }
-
-   public function format (string $field): string
-   {
-      if ($this->message !== '') {
-         return $this->message;
-      }
-
-      return "{$field} confirmation does not match.";
    }
 }

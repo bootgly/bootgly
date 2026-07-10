@@ -22,6 +22,9 @@ class Size extends Condition
    // * Config
    public private(set) int $limit;
 
+   // * Metadata
+   protected string $template = '{field} must be at most {limit} bytes.';
+
 
    public function __construct (int $limit, string $message = '')
    {
@@ -29,6 +32,9 @@ class Size extends Condition
 
       // * Config
       $this->limit = $limit;
+
+      // * Metadata
+      $this->substitutions = ['limit' => (string) $limit];
    }
 
    /**
@@ -47,14 +53,5 @@ class Size extends Condition
       $size = $value['size'] ?? null;
 
       return is_int($size) && $size <= $this->limit;
-   }
-
-   public function format (string $field): string
-   {
-      if ($this->message !== '') {
-         return $this->message;
-      }
-
-      return "{$field} must be at most {$this->limit} bytes.";
    }
 }

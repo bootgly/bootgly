@@ -20,20 +20,15 @@ use Bootgly\ADI\Validation\Condition;
 
 class URL extends Condition
 {
+   // * Metadata
+   protected string $template = '{field} must be a valid URL.';
+
+
    /**
     * @param array<string,mixed> $data
     */
    public function validate (string $field, mixed $value, array $data): bool
    {
       return is_string($value) && filter_var($value, FILTER_VALIDATE_URL) !== false;
-   }
-
-   public function format (string $field): string
-   {
-      if ($this->message !== '') {
-         return $this->message;
-      }
-
-      return "{$field} must be a valid URL.";
    }
 }

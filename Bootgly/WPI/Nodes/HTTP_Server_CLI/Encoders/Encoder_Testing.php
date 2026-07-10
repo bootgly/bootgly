@@ -15,6 +15,7 @@ use function strlen;
 use Generator;
 use Throwable;
 
+use Bootgly\ABI\Data\Language;
 use Bootgly\ABI\Events\Emitter;
 use Bootgly\API\Workables\Server as SAPI;
 use Bootgly\WPI\Endpoints\Servers\Packages;
@@ -44,11 +45,21 @@ class Encoder_Testing extends Encoders
          return '';
       }
 
+      // @ Locale — negotiated BEFORE the route-cache fetch so cached wire
+      //   bytes vary by language; the unconditional assign doubles as the
+      //   per-request reset (mirrors Encoder_)
+      if (Language::$roots !== []) {
+         Language::$locale = isSet($Request->headers['accept-language'])
+            ? Language::negotiate($Request->languages)
+            : Language::$source;
+      }
+
       // ?: Route response cache — serve stored wire bytes before routing,
       //   middleware, handler and serialization (mirrors Encoder_ so E2E
       //   specs exercise the same hit path as production).
       if (Cache::$entries !== [] && $Request->closeConnection === false) {
-         $wire = Cache::fetch("{$Request->method}\0{$Request->URI}");
+         $vary = Language::$roots !== [] ? "\0" . Language::$locale : '';
+         $wire = Cache::fetch("{$Request->method}\0{$Request->URI}{$vary}");
 
          if ($wire !== null) {
             // ! Request header fields are lowercase-normalized by the decoder

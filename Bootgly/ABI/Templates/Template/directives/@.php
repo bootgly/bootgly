@@ -23,6 +23,7 @@ return [
       '.>' => '3.2-output.breakline_before',
       '>.' => '3.3-output.breakline_after',
       '>' => '3.z-output',
+      'translate' => '3.4-output.translate',
 
       // 4 - Inheritance
       'extends' => '4.1-extends',

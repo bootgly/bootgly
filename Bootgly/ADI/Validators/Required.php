@@ -20,6 +20,10 @@ use Bootgly\ADI\Validation\Condition;
 
 class Required extends Condition
 {
+   // * Metadata
+   protected string $template = '{field} is required.';
+
+
    public function __construct (string $message = '')
    {
       parent::__construct($message);
@@ -46,14 +50,5 @@ class Required extends Condition
       }
 
       return true;
-   }
-
-   public function format (string $field): string
-   {
-      if ($this->message !== '') {
-         return $this->message;
-      }
-
-      return "{$field} is required.";
    }
 }

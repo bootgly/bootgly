@@ -8,6 +8,7 @@
 *.log
 *.md
 *.sh
+*.bin
 !docs/reports/implementations/.template.critique.md
 # Ignore locks, bin, envs...
 composer

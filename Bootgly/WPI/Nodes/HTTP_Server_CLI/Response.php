@@ -41,6 +41,7 @@ use Throwable;
 
 use const Bootgly\WPI;
 use Bootgly\ABI\Data\__String\Path;
+use Bootgly\ABI\Data\Language;
 use Bootgly\ABI\IO\FS\File;
 use Bootgly\ACI\Events\Readiness;
 use Bootgly\ACI\Events\Scheduler;
@@ -851,7 +852,10 @@ class Response extends Server\Response
       }
 
       // @
-      Cache::store("{$Request->method}\0{$Request->URI}", $buffer, $ttl);
+      // ! Language-vary segment mirrors the encoders' fetch key — the active
+      //   locale is the one that produced this body
+      $vary = Language::$roots !== [] ? "\0" . Language::$locale : '';
+      Cache::store("{$Request->method}\0{$Request->URI}{$vary}", $buffer, $ttl);
    }
 
    /**

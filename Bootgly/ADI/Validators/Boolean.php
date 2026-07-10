@@ -21,6 +21,10 @@ use Bootgly\ADI\Validation\Condition;
 
 class Boolean extends Condition
 {
+   // * Metadata
+   protected string $template = '{field} must be a boolean.';
+
+
    /**
     * @param array<string,mixed> $data
     */
@@ -39,14 +43,5 @@ class Boolean extends Condition
       }
 
       return false;
-   }
-
-   public function format (string $field): string
-   {
-      if ($this->message !== '') {
-         return $this->message;
-      }
-
-      return "{$field} must be a boolean.";
    }
 }

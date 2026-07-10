@@ -26,6 +26,9 @@ class MIME extends Condition
     */
    public private(set) array $types;
 
+   // * Metadata
+   protected string $template = '{field} must have an allowed MIME type.';
+
 
    /**
     * @param string|array<int,string> $types
@@ -54,14 +57,5 @@ class MIME extends Condition
       $type = $value['type'] ?? null;
 
       return is_string($type) && in_array($type, $this->types, true);
-   }
-
-   public function format (string $field): string
-   {
-      if ($this->message !== '') {
-         return $this->message;
-      }
-
-      return "{$field} must have an allowed MIME type.";
    }
 }

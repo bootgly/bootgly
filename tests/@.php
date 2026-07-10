@@ -136,5 +136,7 @@ return new Suites(
       'Bootgly/ABI/Data/__String/Theme/',
       // # ABI/Debugging — throwable rendering (CLI/HTML targets), reporter seam, debug page
       'Bootgly/ABI/Debugging/',
+      // # ABI/Data/Language — i18n minimal contract (translate, catalogs, locale negotiation)
+      'Bootgly/ABI/Data/Language/',
    ]
 );

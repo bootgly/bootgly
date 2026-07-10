@@ -152,6 +152,8 @@ return new Suite(
          '4.19-request_compliance-unsupported_version_505',
          // Fixture injection
          '5.1-request_fixture-injection',
+         // Accept-Language full language-ranges (appended last — index stability)
+         '1.15.3-request_as_response-header-accept_language-ranges',
       ],
       'Response/' => [
          '1.1-respond_with_a_simple_hello_world',
@@ -216,6 +218,8 @@ return new Suite(
          '1.13.3-catch_development_negotiate_json',
          '1.13.4-catch_production_clean_page',
          '1.13.5-catch_production_custom_view',
+         '1.13.6-catch_production_localized_page',
+         '1.13.7-catch_production_locale_reset',
       ],
       'Router/' => [
          '1.1-route_callback-closure',
@@ -267,6 +271,7 @@ return new Suite(
          '7.2-route_cache-no_opt_in',
          '7.3-route_cache-credentialed_bypass',
          '7.4-route_cache-query_keys',
+         '7.5-route_cache-language_variance',
       ],
       'Router/Middleware/' => [
          // CORS

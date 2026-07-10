@@ -11,6 +11,9 @@
 namespace Bootgly\ADI\Validation;
 
 
+use Bootgly\ABI\Data\Language;
+
+
 abstract class Condition
 {
    // * Config
@@ -21,7 +24,16 @@ abstract class Condition
    // ...
 
    // * Metadata
-   // ...
+   /**
+    * Natural-source message template — the key looked up in the `validation` domain catalogs.
+    */
+   protected string $template = '{field} is invalid.';
+   /**
+    * Extra `{token}` replacements merged with `{field}` before translation.
+    *
+    * @var array<string,string>
+    */
+   protected array $substitutions = [];
 
 
    public function __construct (string $message = '')
@@ -37,10 +49,14 @@ abstract class Condition
 
    public function format (string $field): string
    {
-      if ($this->message !== '') {
-         return $this->message;
-      }
+      // ! User override (kept translatable) or the rule's default template
+      $message = $this->message !== '' ? $this->message : $this->template;
 
-      return "{$field} is invalid.";
+      // :
+      return Language::translate(
+         $message,
+         ['field' => $field] + $this->substitutions,
+         domain: 'validation'
+      );
    }
 }

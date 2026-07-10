@@ -16,5 +16,6 @@ return new Suite(
    tests: [
       '1.1-validators',
       '1.2-validators_extra',
+      '1.3-validators_i18n',
    ]
 );

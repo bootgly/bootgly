@@ -13,13 +13,17 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders;
 
 use const BOOTGLY_PROJECT;
 use const BOOTGLY_WORKING_DIR;
+use const ENT_QUOTES;
+use const ENT_SUBSTITUTE;
 use function defined;
+use function htmlspecialchars;
 use function is_file;
 use function json_encode;
 use function str_replace;
 use Throwable;
 
 use Bootgly\ABI\Data\__String\Path;
+use Bootgly\ABI\Data\Language;
 use Bootgly\ABI\Debugging\Data\Throwables;
 use Bootgly\ABI\Debugging\Page;
 use Bootgly\ABI\Templates\Template;
@@ -52,7 +56,7 @@ abstract class Catcher
    // * Data
    private const string CLEAN_PAGE = <<<'HTML'
    <!DOCTYPE html>
-   <html lang="en">
+   <html lang="{locale}">
    <head>
    <meta charset="utf-8">
    <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -159,12 +163,16 @@ abstract class Catcher
       }
 
       // ?: Production / Staging — never leak internals
-      $message = HTTP::RESPONSE_STATUS[$code] ?? 'Error';
+      // ! Body message only — the wire status line keeps the English phrase
+      $message = Language::translate(HTTP::RESPONSE_STATUS[$code] ?? 'Error', domain: 'errors');
 
       // # JSON
       if ($chosen === 'application/json') {
          $Errored = new Response(code: $code, body: (string) json_encode(['error' => $message]));
          $Errored->Header->set('Content-Type', 'application/json');
+         if (Language::$roots !== []) {
+            $Errored->Header->set('Vary', 'Accept-Language');
+         }
 
          return $Errored;
       }
@@ -177,19 +185,30 @@ abstract class Catcher
          if (is_file($file) === true) {
             $Errored = new Response;
             $Errored->View->render($view);
+            if (Language::$roots !== []) {
+               $Errored->Header->set('Vary', 'Accept-Language');
+            }
 
             return $Errored->code($code);
          }
       }
 
       // # Built-in clean page
+      // ! Escaped — catalog translations (project-supplied) flow into HTML
+      $escaped = htmlspecialchars($message, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+      $locale = htmlspecialchars(Language::$locale, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
       $body = str_replace(
-         ['{status}', '{code}', '{message}'],
-         ["$code $message", (string) $code, $message],
+         ['{locale}', '{status}', '{code}', '{message}'],
+         [$locale, "$code $escaped", (string) $code, $escaped],
          self::CLEAN_PAGE
       );
 
       // :
-      return new Response(code: $code, body: $body);
+      $Errored = new Response(code: $code, body: $body);
+      if (Language::$roots !== []) {
+         $Errored->Header->set('Vary', 'Accept-Language');
+      }
+
+      return $Errored;
    }
 }

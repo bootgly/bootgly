@@ -25,6 +25,9 @@ class In extends Condition
    public private(set) array $values;
    public private(set) bool $strict;
 
+   // * Metadata
+   protected string $template = '{field} must be one of the allowed values.';
+
 
    /**
     * @param array<int,mixed> $values
@@ -44,14 +47,5 @@ class In extends Condition
    public function validate (string $field, mixed $value, array $data): bool
    {
       return in_array($value, $this->values, $this->strict);
-   }
-
-   public function format (string $field): string
-   {
-      if ($this->message !== '') {
-         return $this->message;
-      }
-
-      return "{$field} must be one of the allowed values.";
    }
 }

@@ -31,6 +31,9 @@ class Extension extends Condition
     */
    public private(set) array $extensions;
 
+   // * Metadata
+   protected string $template = '{field} must have an allowed extension.';
+
 
    /**
     * @param string|array<int,string> $extensions
@@ -68,14 +71,5 @@ class Extension extends Condition
       $extension = strtolower(pathinfo($name, PATHINFO_EXTENSION));
 
       return in_array($extension, $this->extensions, true);
-   }
-
-   public function format (string $field): string
-   {
-      if ($this->message !== '') {
-         return $this->message;
-      }
-
-      return "{$field} must have an allowed extension.";
    }
 }

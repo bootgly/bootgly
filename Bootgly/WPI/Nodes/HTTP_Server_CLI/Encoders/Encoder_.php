@@ -16,6 +16,7 @@ use function strlen;
 use Generator;
 use Throwable;
 
+use Bootgly\ABI\Data\Language;
 use Bootgly\ABI\Events\Emitter;
 use Bootgly\API\Workables\Server as SAPI;
 use Bootgly\API\Workables\Server\Middlewares;
@@ -52,12 +53,24 @@ class Encoder_ extends Encoders
          return '';
       }
 
+      // @ Locale — negotiated BEFORE the route-cache fetch so cached wire
+      //   bytes vary by language; the unconditional assign doubles as the
+      //   per-request reset (nothing leaks forward); the guards keep the
+      //   cost at one static read when no catalogs are registered
+      if (Language::$roots !== []) {
+         Language::$locale = isSet($Request->headers['accept-language'])
+            ? Language::negotiate($Request->languages)
+            : Language::$source;
+      }
+
       // ?: Route response cache — serve stored wire bytes before routing,
       //   middleware, handler and serialization (empty-store check keeps the
       //   cost at one static array read for servers that never opt in).
-      //   Guards mirror stash(): plain keep-alive GET, no credentials.
+      //   Guards mirror stash(): plain keep-alive GET, no credentials,
+      //   language-vary segment when catalogs are registered.
       if (Cache::$entries !== [] && $Request->closeConnection === false) {
-         $wire = Cache::fetch("{$Request->method}\0{$Request->URI}");
+         $vary = Language::$roots !== [] ? "\0" . Language::$locale : '';
+         $wire = Cache::fetch("{$Request->method}\0{$Request->URI}{$vary}");
 
          if ($wire !== null) {
             // ! Request header fields are lowercase-normalized by the decoder

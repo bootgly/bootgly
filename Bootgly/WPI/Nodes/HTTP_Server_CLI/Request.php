@@ -1440,8 +1440,11 @@ class Request
             //   quality lands in $match[2] like the other headers — with the
             //   old capturing subtag, `pt-BR` got quality (float) '-BR' = 0.0
             //   and sorted last (or was dropped by the q=0 filter below).
+            // ! Full RFC 4647 language-range grammar: `*` wildcard and up to
+            //   four alphanumeric subtags (`zh-Hant-TW`, `es-419`) — narrower
+            //   parsing would drop information before Language::negotiate().
             $header = $this->Header->get('Accept-Language');
-            $pattern = '/([a-z]{1,8}(?:-[a-z]{1,8})?)\s*(?:;\s*q\s*=\s*(\d*(?:\.\d+)?))?/i';
+            $pattern = '/(\*|[a-z]{1,8}(?:-[a-z0-9]{1,8}){0,3})\s*(?:;\s*q\s*=\s*(\d*(?:\.\d+)?))?/i';
 
             break;
          case self::ACCEPTS_ENCODINGS:

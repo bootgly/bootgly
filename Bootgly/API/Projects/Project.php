@@ -26,6 +26,7 @@ use function trim;
 use Closure;
 use Error;
 
+use Bootgly\ABI\Data\Language;
 use Bootgly\ABI\Events\Emitter;
 use Bootgly\API\Projects;
 use Bootgly\API\Projects\Configs;
@@ -143,6 +144,12 @@ class Project
       $configsDir = "{$this->path}configs/";
       if (is_dir($configsDir)) {
          $this->Configs = new Configs($configsDir);
+      }
+
+      // @ Catalogs (i18n) — convention: {project}/catalogs/{locale}/{domain}.php
+      $catalogsDir = "{$this->path}catalogs";
+      if (is_dir($catalogsDir)) {
+         Language::load($catalogsDir);
       }
 
       // @

@@ -51,5 +51,6 @@ return new Suite(
       '5.2.2-render-components-default_slot',
       '9.1.3-render-exceptions-nested_line',
       '9.1.4-render-exceptions-engine_location',
+      '1.1.4-render-outputs-translate',
    ]
 );

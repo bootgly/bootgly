@@ -20,20 +20,15 @@ use Bootgly\ADI\Validation\Condition;
 
 class Integer extends Condition
 {
+   // * Metadata
+   protected string $template = '{field} must be an integer.';
+
+
    /**
     * @param array<string,mixed> $data
     */
    public function validate (string $field, mixed $value, array $data): bool
    {
       return is_int($value) || (is_string($value) && preg_match('/\A[-+]?\d+\z/', $value) === 1);
-   }
-
-   public function format (string $field): string
-   {
-      if ($this->message !== '') {
-         return $this->message;
-      }
-
-      return "{$field} must be an integer.";
    }
 }

@@ -26,6 +26,9 @@ class Date extends Condition
     */
    public private(set) null|string $format;
 
+   // * Metadata
+   protected string $template = '{field} must be a valid date.';
+
 
    public function __construct (null|string $format = null, string $message = '')
    {
@@ -33,6 +36,12 @@ class Date extends Condition
 
       // * Config
       $this->format = $format;
+
+      // * Metadata
+      if ($format !== null) {
+         $this->template = '{field} must be a valid date in the format {format}.';
+         $this->substitutions = ['format' => $format];
+      }
    }
 
    /**
@@ -53,18 +62,5 @@ class Date extends Condition
 
       // :
       return strtotime($value) !== false;
-   }
-
-   public function format (string $field): string
-   {
-      if ($this->message !== '') {
-         return $this->message;
-      }
-
-      if ($this->format !== null) {
-         return "{$field} must be a valid date in the format {$this->format}.";
-      }
-
-      return "{$field} must be a valid date.";
    }
 }

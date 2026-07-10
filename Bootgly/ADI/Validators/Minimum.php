@@ -27,6 +27,9 @@ class Minimum extends Condition
    // * Config
    public private(set) int|float $limit;
 
+   // * Metadata
+   protected string $template = '{field} must be at least {limit}.';
+
 
    public function __construct (int|float $limit, string $message = '')
    {
@@ -34,6 +37,9 @@ class Minimum extends Condition
 
       // * Config
       $this->limit = $limit;
+
+      // * Metadata
+      $this->substitutions = ['limit' => (string) $limit];
    }
 
    /**
@@ -58,14 +64,5 @@ class Minimum extends Condition
       }
 
       return false;
-   }
-
-   public function format (string $field): string
-   {
-      if ($this->message !== '') {
-         return $this->message;
-      }
-
-      return "{$field} must be at least {$this->limit}.";
    }
 }

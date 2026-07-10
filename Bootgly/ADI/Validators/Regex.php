@@ -23,6 +23,9 @@ class Regex extends Condition
    // * Config
    public private(set) string $pattern;
 
+   // * Metadata
+   protected string $template = '{field} has an invalid format.';
+
 
    public function __construct (string $pattern, string $message = '')
    {
@@ -42,14 +45,5 @@ class Regex extends Condition
    public function validate (string $field, mixed $value, array $data): bool
    {
       return is_scalar($value) && preg_match($this->pattern, (string) $value) === 1;
-   }
-
-   public function format (string $field): string
-   {
-      if ($this->message !== '') {
-         return $this->message;
-      }
-
-      return "{$field} has an invalid format.";
    }
 }
