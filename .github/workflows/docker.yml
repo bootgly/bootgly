@@ -80,3 +80,20 @@ jobs:
             BOOTGLY_VERSION=${{ steps.version.outputs.value }}
           tags: |
             bootgly/bootgly:full
+
+      # The bootgly_benchmarks images bake FROM bootgly/bootgly:full — now that
+      # it is on Hub, tell that repo to rebuild every opponent against it. No
+      # token configured yet → warn and stay green (set BENCHMARKS_DISPATCH_TOKEN
+      # to a fine-grained PAT with "contents:read" + "metadata:read" and the
+      # bootgly_benchmarks "Actions: write" permission to enable auto-rebuild).
+      - name: Trigger bootgly_benchmarks rebuild
+        env:
+          GH_TOKEN: ${{ secrets.BENCHMARKS_DISPATCH_TOKEN }}
+          VERSION: ${{ steps.version.outputs.value }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::warning::BENCHMARKS_DISPATCH_TOKEN not set — skipping bootgly_benchmarks dispatch."
+            exit 0
+          fi
+          printf '{"event_type":"framework-release","client_payload":{"version":"%s","base":"bootgly/bootgly:full"}}' "$VERSION" > payload.json
+          gh api repos/bootgly/bootgly_benchmarks/dispatches --method POST --input payload.json
