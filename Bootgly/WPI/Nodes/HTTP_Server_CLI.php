@@ -94,6 +94,15 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
     * HTTP/1.x-only.
     */
    public static bool $enableHTTP2 = true;
+   // # Health
+   /**
+    * @var null|string Built-in health-check endpoint path (K8s
+    * liveness/readiness probes). Driven by `configure(health:)`; when set
+    * (e.g. `'/health'`), GET/HEAD requests to this exact path are answered
+    * by `Encoders\Check` BEFORE the middleware pipeline — user middlewares
+    * can never break a probe. `null` (default) disables it.
+    */
+   public static null|string $health = null;
 
    public static Request $Request;
    public static Response $Response;
@@ -165,7 +174,8 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       null|int $downloadsMaxBytesOnDisk = null,
       null|int $maxConnections = null,
       null|int $maxConnectionsPerIP = null,
-      null|array $responseResources = null
+      null|array $responseResources = null,
+      null|string $health = null
    ): self
    {
       // @ HTTP/2 — on by default; `enableHTTP2: false` disables BOTH the
@@ -173,6 +183,10 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       //   prior-knowledge preface probe (§3.3), making the server
       //   HTTP/1.x-only.
       self::$enableHTTP2 = ($enableHTTP2 !== false);
+
+      // @ Health endpoint — opt-in; unconditional assign so statics never
+      //   inherit a previous configuration in the same process
+      self::$health = $health;
 
       if ($secure !== null && self::$enableHTTP2) {
          $secure['alpn_protocols'] ??= 'h2,http/1.1';

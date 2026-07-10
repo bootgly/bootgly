@@ -22,6 +22,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\JSONP;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\Negotiation;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\Plaintext;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\Pre;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\SSE;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\View;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\XML;
 
@@ -67,6 +68,7 @@ class Resources
          $this->define('Negotiation', static fn (object $Context): Negotiation => new Negotiation(self::guard($Context)));
          $this->define('Plaintext', static fn (object $Context): Plaintext => new Plaintext(self::guard($Context)));
          $this->define('Pre', static fn (object $Context): Pre => new Pre(self::guard($Context)));
+         $this->define('SSE', static fn (object $Context): SSE => new SSE(self::guard($Context)));
          $this->define('View', static fn (object $Context): View => new View(self::guard($Context)));
          $this->define('XML', static fn (object $Context): XML => new XML(self::guard($Context)));
       }

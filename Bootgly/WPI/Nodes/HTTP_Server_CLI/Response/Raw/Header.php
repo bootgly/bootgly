@@ -16,6 +16,8 @@ use function gmdate;
 use function implode;
 use function preg_match;
 use function str_replace;
+use function strlen;
+use function strncasecmp;
 use function strtolower;
 use function time;
 
@@ -73,6 +75,11 @@ class Header extends HeaderBase
    private array $preparedRaw = [];
    /** @var array<string,string> */
    private array $preparedSanitized = [];
+   // # Per-response preset mask — lowercased names remove()d for THIS response
+   //   only. preset is worker-persistent config: it must never be mutated by a
+   //   single response; clean() lifts the mask.
+   /** @var array<string,true> */
+   private array $masked = [];
    // # build() memo — the header inputs (fields/prepared/queued) captured at the last
    //   serialization. When they are byte-identical on a later request within the same
    //   second, build() reuses the cached `$raw` instead of re-serializing — so a route
@@ -87,6 +94,8 @@ class Header extends HeaderBase
    private array $builtPrepared = [];
    /** @var array<int,string> */
    private array $builtQueued = [];
+   /** @var array<string,true> */
+   private array $builtMasked = [];
    // # Date header value, shared by every response and rebuilt once per second
    private static int $stamped = 0;
    private static string $stamp = '';
@@ -197,6 +206,11 @@ class Header extends HeaderBase
       //   resource (e.g. Plaintext → text/plain) never carries into the next response.
       //   No dirty needed: build() compares $type against $builtType (see build()).
       $this->type = 'text/html; charset=UTF-8';
+      // # Lift the per-response preset mask (see remove())
+      if ($this->masked !== []) {
+         $this->masked = [];
+         $this->dirty = true;
+      }
       // * Metadata
       // Fields
       if ($this->queued !== []) {
@@ -342,13 +356,51 @@ class Header extends HeaderBase
    }
    public function remove (string $field): bool
    {
-      if ( isSet($this->fields[$field]) ) {
-         unset($this->fields[$field]);
-         $this->dirty = true;
-         return true;
+      $removed = false;
+      $lower = strtolower($field);
+
+      // ! Header identity is case-insensitive (RFC 9110 §5.1): a removal must
+      //   cover every case variant in every serialization source, or a stale
+      //   field survives on the wire (e.g. a `content-length` next to chunked
+      //   framing — a request-smuggling class of bug).
+      foreach ($this->fields as $name => $value) {
+         if (strtolower($name) === $lower) {
+            unset($this->fields[$name]);
+            $removed = true;
+         }
+      }
+      // ? prepare()d fields serialize like set() ones — removing a field
+      //   must cover both sources (per-request only: the prepare() cache
+      //   restores the full sanitized set on the next request)
+      foreach ($this->prepared as $name => $value) {
+         if (strtolower($name) === $lower) {
+            unset($this->prepared[$name]);
+            $removed = true;
+         }
+      }
+      // ? queue()d lines serialize verbatim — match on the field-name prefix
+      $prefix = "$lower:";
+      $length = strlen($prefix);
+      foreach ($this->queued as $index => $line) {
+         if (strncasecmp($line, $prefix, $length) === 0) {
+            unset($this->queued[$index]);
+            $removed = true;
+         }
+      }
+      // ? preset is worker-persistent config — mask it for this response
+      //   instead of mutating it (clean() lifts the mask)
+      foreach ($this->preset as $name => $value) {
+         if (strtolower($name) === $lower) {
+            $this->masked[$lower] = true;
+            $removed = true;
+         }
       }
 
-      return false;
+      if ($removed) {
+         $this->dirty = true;
+      }
+
+      return $removed;
    }
    public function append (string $field, string $value = '', ? string $separator = ', '): void
    {
@@ -431,6 +483,7 @@ class Header extends HeaderBase
          && $this->fields === $this->builtFields
          && $this->queued === $this->builtQueued
          && $this->preset === $this->builtPreset
+         && $this->masked === $this->builtMasked
       ) {
          $this->dirty = false;
 
@@ -451,6 +504,18 @@ class Header extends HeaderBase
       $this->builtFields = $this->fields;
       $this->builtPrepared = $this->prepared;
       $this->builtQueued = $this->queued;
+      $this->builtMasked = $this->masked;
+
+      // ? Apply the per-response preset mask (see remove()) — a copy-on-write
+      //   local: the persistent preset itself is never mutated
+      $preset = $this->preset;
+      if ($this->masked !== []) {
+         foreach ($preset as $name => $value) {
+            if ( isSet($this->masked[strtolower($name)]) ) {
+               unset($preset[$name]);
+            }
+         }
+      }
 
       // ! Strip CRLF from the default media type at the single point it is serialized
       //   (response-splitting guard). Done here — on real rebuild only, never on the
@@ -460,7 +525,7 @@ class Header extends HeaderBase
       // ?! Hot path: most responses have no user fields/prepared — skip array merge.
       if ($this->fields === [] && $this->prepared === []) {
          // Preset only
-         foreach ($this->preset as $name => $value) {
+         foreach ($preset as $name => $value) {
             $value = ($value === true) ? match ($name) {
                'Date' => self::stamp(),
                default => ''
@@ -470,7 +535,7 @@ class Header extends HeaderBase
          }
 
          // @ Default Content-Type (preset never carries it)
-         if (! array_key_exists('Content-Type', $this->preset)) {
+         if (! array_key_exists('Content-Type', $preset)) {
             $queued[] = "Content-Type: {$type}";
          }
 
@@ -482,7 +547,7 @@ class Header extends HeaderBase
          return true;
       }
 
-      $fields = $this->preset + $this->fields + $this->prepared;
+      $fields = $preset + $this->fields + $this->prepared;
 
       // Fields
       foreach ($fields as $name => $value) {

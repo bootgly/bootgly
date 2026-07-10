@@ -38,7 +38,8 @@ return new Project(
       $Server->configure(
          host: '0.0.0.0',
          port: getenv('PORT') ? (int) getenv('PORT') : (int) '__PORT__',
-         workers: 2
+         workers: 2,
+         // health: '/health', // built-in K8s probe endpoint (answers before middlewares)
       );
       $Server
          ->on(Events::RequestReceived, HTTP_Server_CLI::$Router->load(__DIR__ . '/router'))

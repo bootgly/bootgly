@@ -138,5 +138,10 @@ return new Suites(
       'Bootgly/ABI/Debugging/',
       // # ABI/Data/Language — i18n minimal contract (translate, catalogs, locale negotiation)
       'Bootgly/ABI/Data/Language/',
+      // # WPI/Modules/HTTP/Server — SSE `text/event-stream` wire encoder
+      'Bootgly/WPI/Modules/HTTP/Server/tests/',
+      // # HTTP_Server_CLI unit doubles — transport-failure paths no live
+      //   server spec can reach (appended last: indices stay stable)
+      'Bootgly/WPI/Nodes/HTTP_Server_CLI/tests/Unit/',
    ]
 );

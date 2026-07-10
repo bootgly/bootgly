@@ -24,6 +24,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI as Server;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Cache;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders\Catcher;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders\Check;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Events as RequestEvents;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router;
@@ -56,8 +57,12 @@ class Encoder_Testing extends Encoders
 
       // ?: Route response cache — serve stored wire bytes before routing,
       //   middleware, handler and serialization (mirrors Encoder_ so E2E
-      //   specs exercise the same hit path as production).
-      if (Cache::$entries !== [] && $Request->closeConnection === false) {
+      //   specs exercise the same hit path as production). The built-in
+      //   health path never reads the cache (mirrors Encoder_).
+      if (
+         Cache::$entries !== [] && $Request->closeConnection === false
+         && $Request->URI !== Server::$health
+      ) {
          $vary = Language::$roots !== [] ? "\0" . Language::$locale : '';
          $wire = Cache::fetch("{$Request->method}\0{$Request->URI}{$vary}");
 
@@ -100,30 +105,41 @@ class Encoder_Testing extends Encoders
       // ! Response
       // @
       try {
-         $Result = SAPI::$Middlewares->process($Request, $Response,
-            function (object $Request, object $Res) use ($Router): mixed {
-               $Result = (SAPI::$Handler)($Request, $Res, $Router);
+         // ?: Built-in health endpoint (K8s probes) — dispatched before the
+         //   middleware pipeline (mirrors Encoder_)
+         if (
+            Server::$health !== null
+            && $Request->URI === Server::$health
+            && ($Request->method === 'GET' || $Request->method === 'HEAD')
+         ) {
+            Check::respond($Request, $Response);
+         }
+         else {
+            $Result = SAPI::$Middlewares->process($Request, $Response,
+               function (object $Request, object $Res) use ($Router): mixed {
+                  $Result = (SAPI::$Handler)($Request, $Res, $Router);
 
-               // ?: Handler returned a Response directly — short-circuit
-               if ($Result instanceof Response) {
-                  return $Result;
-               }
-
-               // @ Resolve through the cache (handler may have yielded a Generator
-               //   of routes, or registered routes via direct $Router->route() calls)
-               $Routes = $Result instanceof Generator ? $Result : null;
-               foreach ($Router->routing($Routes) as $Responses) {
-                  if ($Responses instanceof Response) {
-                     $Res = $Responses;
+                  // ?: Handler returned a Response directly — short-circuit
+                  if ($Result instanceof Response) {
+                     return $Result;
                   }
+
+                  // @ Resolve through the cache (handler may have yielded a Generator
+                  //   of routes, or registered routes via direct $Router->route() calls)
+                  $Routes = $Result instanceof Generator ? $Result : null;
+                  foreach ($Router->routing($Routes) as $Responses) {
+                     if ($Responses instanceof Response) {
+                        $Res = $Responses;
+                     }
+                  }
+
+                  return $Res;
                }
+            );
 
-               return $Res;
+            if ($Result instanceof Response && $Result !== $Response) {
+               $Response = $Result;
             }
-         );
-
-         if ($Result instanceof Response && $Result !== $Response) {
-            $Response = $Result;
          }
       }
       catch (Throwable $Throwable) {

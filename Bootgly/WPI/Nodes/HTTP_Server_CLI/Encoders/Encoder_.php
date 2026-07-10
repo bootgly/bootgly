@@ -26,6 +26,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI as Server;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Cache;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders\Catcher;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders\Check;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Events as RequestEvents;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 
@@ -67,8 +68,13 @@ class Encoder_ extends Encoders
       //   middleware, handler and serialization (empty-store check keeps the
       //   cost at one static array read for servers that never opt in).
       //   Guards mirror stash(): plain keep-alive GET, no credentials,
-      //   language-vary segment when catalogs are registered.
-      if (Cache::$entries !== [] && $Request->closeConnection === false) {
+      //   language-vary segment when catalogs are registered. The built-in
+      //   health path never reads the cache — the probe guard must win over
+      //   any stale application-cached entry on the same path.
+      if (
+         Cache::$entries !== [] && $Request->closeConnection === false
+         && $Request->URI !== Server::$health
+      ) {
          $vary = Language::$roots !== [] ? "\0" . Language::$locale : '';
          $wire = Cache::fetch("{$Request->method}\0{$Request->URI}{$vary}");
 
@@ -101,9 +107,18 @@ class Encoder_ extends Encoders
 
       // @
       try {
+         // ?: Built-in health endpoint (K8s probes) — dispatched before the
+         //   middleware pipeline, so RateLimit/Authentication or any user
+         //   middleware can never break a liveness/readiness check
+         if (
+            Server::$health !== null
+            && $Request->URI === Server::$health
+            && ($Request->method === 'GET' || $Request->method === 'HEAD')
+         ) {
+            Check::respond($Request, $Response);
+         }
          // @ Fast path: resolve from route cache (bypass Generator entirely)
-         $Result = $Router->cached ? $Router->resolve() : null;
-         if ($Result instanceof Response) {
+         else if (($Result = $Router->cached ? $Router->resolve() : null) instanceof Response) {
             if ($Result !== $Response) {
                $Response = $Result;
             }

@@ -17,6 +17,7 @@ interface HTTP
       100 => 'Continue',
       101 => 'Switching Protocols',
       102 => 'Processing',
+      103 => 'Early Hints',
 
       200 => 'OK',
       201 => 'Created',
@@ -36,6 +37,7 @@ interface HTTP
       305 => 'Use Proxy',
       306 => 'Switch Proxy',
       307 => 'Temporary Redirect',
+      308 => 'Permanent Redirect',
 
       400 => 'Bad Request',
       401 => 'Unauthorized',

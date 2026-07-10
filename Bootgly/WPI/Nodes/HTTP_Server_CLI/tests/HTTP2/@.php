@@ -10,12 +10,15 @@ use function fclose;
 use function fopen;
 use function ftruncate;
 use function is_file;
+use function str_repeat;
 use function unlink;
 use function usleep;
+use RuntimeException;
 
 use Bootgly\ACI\Logs\Data\Display;
 use Bootgly\ACI\Tests\Suite;
 use Bootgly\API\Endpoints\Server\Modes;
+use Bootgly\WPI\Interfaces\TCP_Server_CLI;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders\Encoder_;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Events;
@@ -48,13 +51,131 @@ return new Suite(
       $HTTP_Server_CLI->configure(
          host: '0.0.0.0',
          port: 8085,
-         workers: 1
+         workers: 1,
+         health: '/health'
       );
+      // ! SSE teardown observability — Close hooks stamp these flags; the
+      //   report routes read them (same worker: workers = 1)
+      $hooked = 'pending';
+      $holdHooks = 0;
+      $capSent = 'pending';
+      $capHooks = 0;
       $HTTP_Server_CLI->on(
          Events::RequestReceived,
-         function ($Request, Response $Response): Response {
+         function ($Request, Response $Response) use (&$hooked, &$holdHooks, &$capSent, &$capHooks): Response {
             if ($Request->URI === '/h2-s4-large') {
                return $Response->upload('statics/h2-s4-large.bin', close: false);
+            }
+
+            if ($Request->URI === '/hints') {
+               $Response->hint('</app.css>; rel=preload; as=style');
+            }
+
+            if ($Request->URI === '/sse') {
+               $SSE = $Response->SSE;
+               $SSE->heartbeat = 0;
+
+               $SSE->open();
+               $SSE->send('h2', event: 'tick', id: '1');
+               $SSE->close();
+
+               return $Response;
+            }
+
+            // @ Backlog cap: a window-starved stream must be RST, not grow —
+            //   the breached send() must report false and run Close once
+            if ($Request->URI === '/sse-cap') {
+               $SSE = $Response->SSE;
+               $SSE->heartbeat = 0;
+
+               $SSE->open(Close: static function () use (&$capHooks): void {
+                  $capHooks++;
+               });
+               $capSent = $SSE->send(str_repeat('x', 5 * 1024 * 1024)) ? 'true' : 'false';
+
+               return $Response;
+            }
+
+            if ($Request->URI === '/sse-cap-report') {
+               return $Response->send("sent={$capSent};hooks={$capHooks}");
+            }
+
+            // @ Aggregate backlog: each event fits the per-connection budget
+            //   alone, but parked siblings count against it
+            if ($Request->URI === '/sse-agg') {
+               $SSE = $Response->SSE;
+               $SSE->heartbeat = 0;
+
+               $SSE->open();
+               $SSE->send(str_repeat('a', 3 * 1024 * 1024));
+
+               return $Response;
+            }
+
+            // @ Drain watchdog: a graceful close() with parked bytes must
+            //   still be bounded in time — shrink the stall deadline so the
+            //   spec observes the reset without the production 30s wait
+            if ($Request->URI === '/sse-drain') {
+               TCP_Server_CLI::$maxWriteWallTime = 1;
+
+               $SSE = $Response->SSE;
+               $SSE->heartbeat = 1; // 1s supervisor cadence
+
+               $SSE->open();
+               $SSE->send(str_repeat('d', 65536));
+               $SSE->close(); // parked backlog → draining watchdog
+
+               return $Response;
+            }
+
+            if ($Request->URI === '/sse-drain-restore') {
+               TCP_Server_CLI::$maxWriteWallTime = 30;
+
+               return $Response->send('restored');
+            }
+
+            // @ Stall-clock progress: a producer that keeps parking while
+            //   the peer keeps draining must NOT be reset — and a fully
+            //   drained backlog must never poison the next one with a
+            //   stale stall timestamp. Heartbeat off: the spec counts
+            //   exact event bytes per drain generation.
+            if ($Request->URI === '/sse-repark') {
+               TCP_Server_CLI::$maxWriteWallTime = 2;
+
+               $SSE = $Response->SSE;
+               $SSE->heartbeat = 0;
+
+               $SSE->open(Tick: static function ($SSE): void {
+                  $SSE->send(str_repeat('r', 32768));
+               }, interval: 1);
+
+               return $Response;
+            }
+
+            if ($Request->URI === '/sse-repark-restore') {
+               TCP_Server_CLI::$maxWriteWallTime = 30;
+
+               return $Response->send('restored');
+            }
+
+            // @ Teardown hook: stream stays open until the client resets it.
+            //   The hook THROWS after stamping — protocol cleanup must
+            //   complete anyway (contained at the SSE boundary)
+            if ($Request->URI === '/sse-hold') {
+               $SSE = $Response->SSE;
+               $SSE->heartbeat = 0;
+
+               $SSE->open(Close: static function () use (&$hooked, &$holdHooks): void {
+                  $holdHooks++;
+                  $hooked = 'closed';
+                  throw new RuntimeException('close-hook-failure');
+               });
+
+               return $Response;
+            }
+
+            if ($Request->URI === '/sse-hook') {
+               return $Response->send("{$hooked};count={$holdHooks}");
             }
 
             return $Response->send("method={$Request->method};uri={$Request->URI};protocol={$Request->protocol};body={$Request->input}");
@@ -105,6 +226,15 @@ return new Suite(
       '4.3-file_streaming',
       '4.4-feeding_contract',
       '5.1-throughput',
-      '5.2-h2spec'
+      '5.2-h2spec',
+      '6.1-sse_stream',
+      '6.2-early_hints',
+      '6.3-health',
+      '6.4-sse_backpressure_cap',
+      '6.5-sse_rst_close_hook',
+      '6.6-sse_aggregate_backlog_cap',
+      '6.7-sse_head_method',
+      '6.8-sse_drain_deadline',
+      '6.9-sse_stall_progress'
    ]
 );

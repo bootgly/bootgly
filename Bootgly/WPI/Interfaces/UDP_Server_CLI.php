@@ -438,6 +438,13 @@ class UDP_Server_CLI implements Servers
 
                   // # Child process (new worker)
                   if ($newPID === 0) {
+                     // @ Fork hygiene — drop Timer tasks inherited from the parent: POSIX
+                     //   clears pending alarms on fork, so inherited tasks can never
+                     //   fire here, yet a non-empty inherited task map would stop the
+                     //   next `Timer::add()` from arming its alarm — leaving every
+                     //   timer this worker installs silently dead.
+                     Timer::del();
+
                      $this->Process->Children->push($this->Process->id, $deadIndex);
                      Process::$index = $deadIndex + 1;
 
@@ -581,6 +588,11 @@ class UDP_Server_CLI implements Servers
 
       // @ Fork process workers...
       $this->Process->fork($this->workers, instance: function (Process $Process, int $index): void {
+         // @ Fork hygiene — drop Timer tasks inherited from the parent (see the
+         //   SIGCHLD recovery fork): inherited tasks can never fire in the child
+         //   and would stop the next `Timer::add()` from arming its alarm.
+         Timer::del();
+
          $Process->title = 'Bootgly_UDP_Server_CLI: child process (Worker #' . Process::$index . ')';
 
          Display::show(Display::MESSAGE, Display::TIMESTAMP, Display::CHANNEL, Display::SEVERITY);

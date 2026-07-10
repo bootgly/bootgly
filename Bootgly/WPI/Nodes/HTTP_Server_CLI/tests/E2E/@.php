@@ -34,7 +34,8 @@ return new Suite(
          //   commonly bind it on the host) and outside the 8081-8096 range
          //   already claimed by the other E2E suites.
          port: 8097,
-         workers: 1
+         workers: 1,
+         health: '/health'
       );
 
       $HTTP_Server_CLI->start();
@@ -220,6 +221,34 @@ return new Suite(
          '1.13.5-catch_production_custom_view',
          '1.13.6-catch_production_localized_page',
          '1.13.7-catch_production_locale_reset',
+         // @ SSE (Server-Sent Events — appended last to keep the
+         //   X-Bootgly-Test indices of the specs above stable)
+         '3.1-sse_head_and_events',
+         '3.2-sse_last_event_id_and_retry',
+         '3.3-sse_heartbeat_ping',
+         '3.4-sse_pipelining_guard',
+         // @ 103 Early Hints + 308 status-map regression (appended last)
+         '2.10-hint_early_hints',
+         '2.11-hint_http10_noop',
+         '2.12-redirect_permanent_308',
+         // @ Built-in health endpoint (appended last)
+         '4.1-health_endpoint',
+         '4.2-health_bypasses_middlewares',
+         // @ SSE hardening
+         '3.5-sse_content_length_conflict',
+         // @ HTTP niceties
+         '2.13-hint_noop_edges',
+         '2.14-hint_route_cache_replay',
+         '4.3-health_head_request',
+         '4.4-health_beats_route_cache',
+         // @ SSE hardening
+         '3.6-sse_head_method',
+         '3.7-sse_tick_throw',
+         // @ SSE hardening
+         '3.8-sse_cache_control_merge',
+         // @ SSE hardening
+         '3.9-sse_cache_control_exact',
+         '3.10-sse_cache_control_quoted',
       ],
       'Router/' => [
          '1.1-route_callback-closure',

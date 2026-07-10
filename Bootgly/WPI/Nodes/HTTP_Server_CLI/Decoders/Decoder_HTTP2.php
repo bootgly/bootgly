@@ -652,7 +652,11 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding
          }
       }
 
-      // @ Release connection state
+      // @ Release connection state — close every stream individually so
+      //   sustained-stream owners (SSE) get their teardown notification
+      foreach ($this->Streams as $Stream) {
+         $Stream->close();
+      }
       $this->closing = true;
       $this->outbox = '';
       $this->buffer = '';
@@ -1049,10 +1053,13 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding
             $send = min($this->window, $Stream->window, strlen($Stream->backlog));
             $payload = substr($Stream->backlog, 0, $send);
             $Stream->backlog = substr($Stream->backlog, $send);
+            // ! Real consumption — advance the flow-control progress clock
+            $Stream->drained = time();
             $this->window -= $send;
             $Stream->window -= $send;
 
-            $done = $Stream->backlog === '' && $Stream->chunk >= count($Stream->chunks);
+            $done = $Stream->backlog === '' && $Stream->chunk >= count($Stream->chunks)
+               && $Stream->sustained === false;
             for ($offset = 0; $offset < $send; $offset += $limit) {
                $chunk = substr($payload, $offset, min($limit, $send - $offset));
                $frames .= Frame::pack(
@@ -1091,7 +1098,8 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding
 
             $this->window -= $send;
             $Stream->window -= $send;
-            $done = $Stream->chunk >= count($Stream->chunks);
+            $done = $Stream->chunk >= count($Stream->chunks)
+               && $Stream->sustained === false;
 
             for ($offset = 0; $offset < $send; $offset += $limit) {
                $chunk = substr($payload, $offset, min($limit, $send - $offset));
@@ -1180,7 +1188,8 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding
                $Stream->chunk++;
             }
 
-            $done = $Stream->chunk >= count($Stream->chunks);
+            $done = $Stream->chunk >= count($Stream->chunks)
+               && $Stream->sustained === false;
             $frames .= Frame::pack(
                HTTP2::FRAME_DATA,
                $done ? HTTP2::FLAG_END_STREAM : 0,
@@ -1194,6 +1203,7 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding
       return [
          $frames,
          $Stream->backlog === '' && $Stream->chunk >= count($Stream->chunks)
+            && $Stream->sustained === false
       ];
    }
 
@@ -1228,6 +1238,11 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding
          HTTP2::FRAME_GOAWAY, 0, 0, pack('NN', $this->last, $error->value) . $debug
       );
 
+      // @ Close every stream individually — sustained-stream owners (SSE)
+      //   get their teardown notification before the transport dies
+      foreach ($this->Streams as $Stream) {
+         $Stream->close();
+      }
       $this->closing = true;
       $raw = "{$this->outbox}{$goaway}";
       $this->outbox = '';

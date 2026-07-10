@@ -744,6 +744,13 @@ class TCP_Server_CLI implements Servers
     */
    protected function work (Process $Process, int $index): void
    {
+      // @ Fork hygiene — drop Timer tasks inherited from the parent: POSIX
+      //   clears pending alarms on fork, so inherited tasks can never fire
+      //   here, yet a non-empty inherited task map would stop the next
+      //   `Timer::add()` from arming its alarm — leaving every timer this
+      //   worker installs (e.g. the SSE supervisor) silently dead.
+      Timer::del();
+
       // @ Process title (node-specific prefix).
       $Process->title = $this->process . ': child process (Worker #' . Process::$index . ')';
 

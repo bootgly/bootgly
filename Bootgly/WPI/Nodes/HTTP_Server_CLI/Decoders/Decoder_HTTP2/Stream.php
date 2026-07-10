@@ -14,6 +14,8 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Decoder_HTTP2;
 use function fclose;
 use function is_resource;
 
+use Bootgly\WPI\Endpoints\Servers\Disconnecting;
+
 
 /**
  * One HTTP/2 stream (RFC 9113 §5) on a `Decoder_HTTP2` connection.
@@ -49,6 +51,12 @@ class Stream
    public int $pending;
    // @ Outbound DATA blocked by an exhausted window, waiting for credit.
    public string $backlog;
+   // @ Flow-control progress clock: stamped when backlog bytes are actually
+   //   CONSUMED by drain() and when a write first parks bytes into an empty
+   //   backlog. A non-empty backlog whose clock stops advancing is a real
+   //   stall — net-size sampling alone cannot tell progress from
+   //   replenishment (SSE stall deadline reads this).
+   public int $drained;
    /** @var array<int, array<string, mixed>> Outbound file/pad segments. */
    public array $chunks;
    // @ Current outbound file/pad segment index.
@@ -60,6 +68,13 @@ class Stream
    public bool $ended;
    // @ Local side responded (response frames fully emitted)
    public bool $responded;
+   // @ Long-lived local stream (e.g. SSE) — `drain()`/`pump()` never emit
+   //   END_STREAM nor release the stream while set
+   public bool $sustained;
+   // @ Teardown owner of a sustained stream (e.g. the SSE resource) —
+   //   notified exactly once by close(), on every release path (RST_STREAM,
+   //   GOAWAY, connection teardown, graceful end)
+   public null|Disconnecting $Owner;
 
 
    public function __construct (int $id, int $window, int $supply)
@@ -78,11 +93,14 @@ class Stream
       $this->supply = $supply;
       $this->pending = 0;
       $this->backlog = '';
+      $this->drained = 0;
       $this->chunks = [];
       $this->chunk = 0;
       $this->length = null;
       $this->ended = false;
       $this->responded = false;
+      $this->sustained = false;
+      $this->Owner = null;
    }
 
    public function close (): void
@@ -97,5 +115,10 @@ class Stream
       $this->chunks = [];
       $this->chunk = 0;
       $this->backlog = '';
+
+      // # Notify the owning unit exactly once (disconnect() is idempotent)
+      $Owner = $this->Owner;
+      $this->Owner = null;
+      $Owner?->disconnect();
    }
 }

@@ -30,6 +30,7 @@ use function is_resource;
 use function is_string;
 use function preg_match;
 use function str_pad;
+use function str_replace;
 use function strlen;
 use Closure;
 use Error;
@@ -50,7 +51,9 @@ use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages;
 use Bootgly\WPI\Modules\HTTP;
 use Bootgly\WPI\Modules\HTTP\Server;
 use Bootgly\WPI\Modules\HTTP\Server\Response\Authentication;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Decoder_HTTP2;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders\Catcher;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders\Encoder_HTTP2;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Raw;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Raw\Body;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Raw\Header;
@@ -63,6 +66,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\JSONP as JSONPResource;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\Negotiation as NegotiationResource;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\Plaintext as PlaintextResource;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\Pre as PreResource;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\SSE as SSEResource;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\View as ViewResource;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\XML as XMLResource;
 
@@ -76,6 +80,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\XML as XMLResource;
  * @property-read NegotiationResource $Negotiation
  * @property-read PlaintextResource $Plaintext
  * @property-read PreResource $Pre
+ * @property-read SSEResource $SSE
  * @property-read ViewResource $View
  * @property-read XMLResource $XML
  */
@@ -110,6 +115,9 @@ class Response extends Server\Response
    // # State (sets)
    public bool $chunked;
    public bool $encoded;
+   // @ Interim 103 bytes emitted by hint() this request (HTTP/1.1 only) —
+   //   prepended to the route-cache entry so warm hits replay Early Hints
+   private string $hints;
    // # Type (set)
    #public bool $dynamic;
    #public bool $static;
@@ -182,6 +190,7 @@ class Response extends Server\Response
       // # State
       $this->chunked = false;
       $this->encoded = false;
+      $this->hints = '';
       // # Type
       #$this->dynamic = false;
       #$this->static = false;
@@ -344,6 +353,7 @@ class Response extends Server\Response
       // # State (sets)
       $this->chunked = false;
       $this->encoded = false;
+      $this->hints = '';
       // # Type (set)
       $this->stream = false;
       // # Status (sets ...)
@@ -374,6 +384,10 @@ class Response extends Server\Response
          $Resource->bind($this);
          $Resource->scope($this->Scope);
          $this->scoped = true;
+      }
+
+      if ($Resource instanceof SSEResource) {
+         $Resource->bind($this->Package, $this->Request);
       }
 
       if ($Resource instanceof Scheduling) {
@@ -478,6 +492,83 @@ class Response extends Server\Response
       }
 
       return false;
+   }
+
+   /**
+    * Send an interim `103 Early Hints` response (RFC 8297) carrying `Link`
+    * header values, so clients preload assets while the final response is
+    * still being produced. Repeatable — each call emits one interim
+    * response directly on the transport; the final response is unaffected.
+    *
+    * @param string|array<string> $links One or more `Link` header values
+    *                                    (e.g. `'</app.css>; rel=preload; as=style'`).
+    *
+    * @return self The Response instance, for chaining
+    */
+   public function hint (string|array $links = []): self
+   {
+      // ? No transport bound (detached contexts) or final response already sent
+      $Package = $this->Package;
+      $Request = $this->Request;
+      if ($Package === null || $Request === null || $this->sent) {
+         return $this;
+      }
+      // ? Interim responses are HTTP/1.1+ (RFC 8297)
+      if ($Request->protocol === 'HTTP/1.0') {
+         return $this;
+      }
+
+      // ! Link header lines (CRLF-stripped — response-splitting guard)
+      $lines = '';
+      foreach ((array) $links as $link) {
+         $link = str_replace(["\r", "\n"], '', (string) $link);
+
+         if ($link === '') {
+            continue;
+         }
+
+         $lines .= "Link: {$link}\r\n";
+      }
+
+      // ? Nothing to hint — a Link-less 103 is useless wire chatter
+      if ($lines === '') {
+         return $this;
+      }
+
+      // # HTTP/2 — interim HEADERS frame(s) without END_STREAM (§8.1)
+      if ($Request->stream !== 0) {
+         $H2 = $Package->decoded;
+
+         // ? Stream already reset — the hint has no destination
+         if (
+            $H2 instanceof Decoder_HTTP2 === false
+            || isSet($H2->Streams[$Request->stream]) === false
+         ) {
+            return $this;
+         }
+
+         // ! Flush pending control frames in the same write — the outbox
+         //   piggybacks on the next response write, which would defeat "early"
+         $block = Encoder_HTTP2::compress(103, $lines, null);
+         $buffer = $H2->outbox
+            . Encoder_HTTP2::pack($Request->stream, $block, $H2->Remote->frame);
+         $H2->outbox = '';
+
+         $Package->writing($Package->Connection->Socket, strlen($buffer), $buffer);
+
+         return $this;
+      }
+
+      // # HTTP/1.1 — literal interim head, written before the final response
+      //   bytes (never routed through code()/the wire cache)
+      $head = "HTTP/1.1 103 Early Hints\r\n{$lines}\r\n";
+      $Package->writing($Package->Connection->Socket, strlen($head), $head);
+
+      // ! Remember the interim bytes — stash() prepends them to the route
+      //   cache entry, so warm hits replay the exact cold-request wire
+      $this->hints .= $head;
+
+      return $this;
    }
 
    /**
@@ -852,6 +943,13 @@ class Response extends Server\Response
       }
 
       // @
+      // ! Interim 103 bytes ride at the front of the entry — a cache hit
+      //   replays Early Hints exactly like the cold request (the entry's
+      //   Date offset is unaffected: interim heads carry no Date field)
+      if ($this->hints !== '') {
+         $buffer = "{$this->hints}{$buffer}";
+      }
+
       // ! Language-vary segment mirrors the encoders' fetch key — the active
       //   locale is the one that produced this body
       $vary = Language::$roots !== [] ? "\0" . Language::$locale : '';

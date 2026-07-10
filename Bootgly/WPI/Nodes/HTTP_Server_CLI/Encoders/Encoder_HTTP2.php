@@ -139,30 +139,7 @@ final class Encoder_HTTP2
       // @ HEADERS (+CONTINUATION when the block exceeds the peer frame size)
       $limit = $H2->Remote->frame;
       $closing = ($body === '' && $chunks === []) ? HTTP2::FLAG_END_STREAM : 0;
-      $frames = '';
-
-      if (strlen($block) <= $limit) {
-         $frames .= Frame::pack(
-            HTTP2::FRAME_HEADERS, HTTP2::FLAG_END_HEADERS | $closing, $stream, $block
-         );
-      }
-      else {
-         $frames .= Frame::pack(
-            HTTP2::FRAME_HEADERS, $closing, $stream, substr($block, 0, $limit)
-         );
-         $offset = $limit;
-         $total = strlen($block);
-         while ($offset < $total) {
-            $chunk = substr($block, $offset, $limit);
-            $offset += $limit;
-            $frames .= Frame::pack(
-               HTTP2::FRAME_CONTINUATION,
-               $offset >= $total ? HTTP2::FLAG_END_HEADERS : 0,
-               $stream,
-               $chunk
-            );
-         }
-      }
+      $frames = self::pack($stream, $block, $limit, $closing);
 
       // @ DATA — bounded by the connection + stream send windows.
       if ($body !== '' || $chunks !== []) {
@@ -191,6 +168,42 @@ final class Encoder_HTTP2
       $raw = "{$outbox}{$frames}";
       $length = strlen($raw);
       return $raw;
+   }
+
+   /**
+    * Pack one header block into HEADERS (+CONTINUATION when the block
+    * exceeds `$limit`, the peer frame size). `$flags` (e.g. END_STREAM)
+    * rides on the HEADERS frame; END_HEADERS lands on the last frame of
+    * the sequence. Interim (1xx) and sustained-stream heads pass `0`.
+    */
+   public static function pack (int $stream, string $block, int $limit, int $flags = 0): string
+   {
+      // ?: Single HEADERS frame
+      if (strlen($block) <= $limit) {
+         return Frame::pack(
+            HTTP2::FRAME_HEADERS, HTTP2::FLAG_END_HEADERS | $flags, $stream, $block
+         );
+      }
+
+      // @ HEADERS + CONTINUATION tail
+      $frames = Frame::pack(
+         HTTP2::FRAME_HEADERS, $flags, $stream, substr($block, 0, $limit)
+      );
+      $offset = $limit;
+      $total = strlen($block);
+      while ($offset < $total) {
+         $chunk = substr($block, $offset, $limit);
+         $offset += $limit;
+         $frames .= Frame::pack(
+            HTTP2::FRAME_CONTINUATION,
+            $offset >= $total ? HTTP2::FLAG_END_HEADERS : 0,
+            $stream,
+            $chunk
+         );
+      }
+
+      // :
+      return $frames;
    }
 
    /**
