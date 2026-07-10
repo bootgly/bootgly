@@ -16,12 +16,10 @@ use function base64_encode;
 use function count;
 use function explode;
 use function is_string;
-use function random_bytes;
 use function rtrim;
 use function str_repeat;
 use function strlen;
 use function strtr;
-use function substr;
 
 use Bootgly\API\Security\Encrypter\Key;
 use Bootgly\API\Security\Encrypter\Keyring;
@@ -33,7 +31,8 @@ use Bootgly\API\Security\Encrypter\Keyring;
  * Payloads are sealed into portable `v1.<kid>.<blob>` envelopes whose
  * version and key id segments are authenticated together with the
  * caller-provided Additional Authenticated Data. Envelopes are canonical:
- * a given sealed payload has exactly one accepted textual form.
+ * a given sealed payload has exactly one accepted textual form. The GCM
+ * invariants (fresh 12-byte IV, full 16-byte tag) are owned by `Key`.
  */
 class Encrypter
 {
@@ -77,17 +76,16 @@ class Encrypter
     */
    public function encrypt (#[\SensitiveParameter] string $plaintext, string $AAD = ''): string
    {
-      // ! Primary key, fresh IV per call and authenticated envelope prefix.
+      // ! Primary key and authenticated envelope prefix.
       $Key = $this->Keyring->Primary;
       $id = $Key->id ?? '';
-      $IV = random_bytes(Key::IV_LENGTH);
       $prefix = self::VERSION . ".{$id}.";
 
       // @ Seal — the envelope prefix is authenticated alongside the caller AAD.
-      $sealed = $Key->seal($plaintext, $IV, "{$prefix}{$AAD}");
+      $sealed = $Key->seal($plaintext, "{$prefix}{$AAD}");
 
       // : Versioned envelope: v1.<kid>.<base64url(IV ∥ ciphertext ∥ tag)>.
-      return $prefix . $this->pack("{$IV}{$sealed}");
+      return $prefix . $this->pack($sealed);
    }
 
    /**
@@ -108,22 +106,17 @@ class Encrypter
          return null;
       }
 
-      // ? Blob must decode canonically and carry at least an IV and a tag
-      $raw = $this->unpack($segments[2]);
-      if ($raw === null || strlen($raw) < Key::IV_LENGTH + Key::TAG_LENGTH) {
+      // ? Blob must decode canonically
+      $sealed = $this->unpack($segments[2]);
+      if ($sealed === null) {
          return null;
       }
-
-      // ! Split the raw blob into IV, ciphertext and authentication tag.
-      $IV = substr($raw, 0, Key::IV_LENGTH);
-      $tag = substr($raw, -Key::TAG_LENGTH);
-      $sealed = substr($raw, Key::IV_LENGTH, -Key::TAG_LENGTH);
 
       // @ Open — the envelope prefix is authenticated alongside the caller AAD.
       $prefix = self::VERSION . ".{$segments[1]}.";
 
-      // ?: Authentication failures yield null
-      return $Key->open($sealed, $IV, $tag, "{$prefix}{$AAD}");
+      // ?: Framing and authentication failures yield null
+      return $Key->open($sealed, "{$prefix}{$AAD}");
    }
 
    /**

@@ -46,6 +46,8 @@ class Keyring
 
    /**
     * Create a keyring. The first key becomes the primary.
+    *
+    * @throws InvalidArgumentException When a key id is duplicated or a second id-less key is supplied.
     */
    public function __construct (Key $Key, Key ...$Keys)
    {
@@ -90,10 +92,20 @@ class Keyring
    /**
     * Promote a new primary key, keeping the previous ones for decryption.
     *
-    * @throws InvalidArgumentException When the key id conflicts with a registered key.
+    * Rotation requires an explicit key id — envelopes sealed by rotated
+    * keys must select their key deterministically. An id-less key is
+    * accepted only at construction or through `add()`, for single-key
+    * and legacy-decryption setups.
+    *
+    * @throws InvalidArgumentException When the key has no id or the id conflicts with a registered key.
     */
    public function rotate (Key $Key): self
    {
+      // ? Anonymous keys cannot be promoted
+      if ($Key->id === null) {
+         throw new InvalidArgumentException('Encrypter key rotation requires a key id.');
+      }
+
       // @ Register first — conflicts throw before the primary changes.
       $this->add($Key);
 

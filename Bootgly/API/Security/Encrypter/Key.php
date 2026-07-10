@@ -20,6 +20,7 @@ use function openssl_encrypt;
 use function preg_match;
 use function random_bytes;
 use function strlen;
+use function substr;
 use InvalidArgumentException;
 use LogicException;
 use RuntimeException;
@@ -28,11 +29,17 @@ use RuntimeException;
 /**
  * Symmetric AES-256-GCM key with an optional identifier.
  *
- * The raw key material is private: the key performs the cryptographic
- * operations itself and never exposes its secret through public state,
- * debug dumps or serialization.
+ * The key owns the GCM security invariants: it generates a fresh 12-byte
+ * IV on every seal and always authenticates a full 16-byte tag on open —
+ * callers cannot supply either. The class is final so accepted keys can
+ * never weaken those invariants through overrides.
+ *
+ * The raw key material is private. It is redacted from `var_dump`, absent
+ * from JSON and both serialization directions are refused. Same-process
+ * reflection (e.g. `var_export`, `get_mangled_object_vars`) cannot be
+ * prevented in PHP and is outside this boundary.
  */
-class Key
+final class Key
 {
    // * Config
    /**
@@ -43,7 +50,8 @@ class Key
 
    // * Data
    /**
-    * Sensitive raw key material (exactly 32 bytes). Never exposed.
+    * Sensitive raw key material (exactly 32 bytes). Not exposed by any
+    * supported API.
     */
    private string $material;
 
@@ -55,11 +63,11 @@ class Key
    /**
     * GCM initialization vector length in bytes.
     */
-   public const int IV_LENGTH = 12;
+   private const int IV_LENGTH = 12;
    /**
     * GCM authentication tag length in bytes.
     */
-   public const int TAG_LENGTH = 16;
+   private const int TAG_LENGTH = 16;
 
 
    /**
@@ -86,7 +94,15 @@ class Key
    /**
     * Generate a key with fresh random material.
     *
+    * The material is **ephemeral by design**: there is no supported
+    * export API for it, so data encrypted with a generated key is
+    * undecryptable after the process ends. For persisted data, provision
+    * the material first (`base64_encode(random_bytes(32))`) and use
+    * `import()`.
+    *
     * @throws \Random\RandomException When the randomness source fails.
+    * @throws InvalidArgumentException When the id is unsafe.
+    * @throws RuntimeException When OpenSSL symmetric encryption is unavailable.
     */
    public static function generate (null|string $id = null): self
    {
@@ -97,7 +113,8 @@ class Key
    /**
     * Import base64-encoded key material.
     *
-    * @throws InvalidArgumentException When the encoding or the decoded material is invalid.
+    * @throws InvalidArgumentException When the encoding, the decoded material or the id is invalid.
+    * @throws RuntimeException When OpenSSL symmetric encryption is unavailable.
     */
    public static function import (
       #[\SensitiveParameter] string $encoded,
@@ -117,12 +134,22 @@ class Key
    /**
     * Seal a payload with this key (AES-256-GCM).
     *
+    * A fresh random 12-byte IV is generated internally per call — callers
+    * cannot choose or intentionally reuse one. Random IVs follow the NIST
+    * SP 800-38D budget: at most 2^32 seals per raw key, aggregated across
+    * every process, host and key id sharing the same 32-byte material —
+    * rotate the key well before that bound.
+    *
+    * @throws \Random\RandomException When the randomness source fails.
     * @throws RuntimeException When the OpenSSL encryption fails.
     *
-    * @return string The raw ciphertext with the authentication tag appended.
+    * @return string The raw `IV ∥ ciphertext ∥ tag` bytes.
     */
-   public function seal (#[\SensitiveParameter] string $plaintext, string $IV, string $AAD): string
+   public function seal (#[\SensitiveParameter] string $plaintext, string $AAD): string
    {
+      // ! Fresh nonce per seal.
+      $IV = random_bytes(self::IV_LENGTH);
+
       // @ Encrypt and authenticate.
       $tag = '';
       $sealed = openssl_encrypt(
@@ -141,19 +168,33 @@ class Key
          throw new RuntimeException('Encrypter key failed to seal the payload.');
       }
 
-      // : Ciphertext ∥ tag.
-      return "{$sealed}{$tag}";
+      // : IV ∥ ciphertext ∥ tag.
+      return "{$IV}{$sealed}{$tag}";
    }
 
    /**
     * Open a sealed payload with this key (AES-256-GCM).
-    * Returns null on any authentication failure.
+    *
+    * The full 16-byte tag is always authenticated — truncated tags are
+    * structurally impossible, not merely rejected.
+    *
+    * Returns null on any failure.
     */
-   public function open (string $sealed, string $IV, string $tag, string $AAD): null|string
+   public function open (string $sealed, string $AAD): null|string
    {
+      // ? Sealed payload must carry at least an IV and a full tag
+      if (strlen($sealed) < self::IV_LENGTH + self::TAG_LENGTH) {
+         return null;
+      }
+
+      // ! Split the raw bytes into IV, ciphertext and authentication tag.
+      $IV = substr($sealed, 0, self::IV_LENGTH);
+      $tag = substr($sealed, -self::TAG_LENGTH);
+      $ciphertext = substr($sealed, self::IV_LENGTH, -self::TAG_LENGTH);
+
       // @ Decrypt and verify the authentication tag.
       $plaintext = openssl_decrypt(
-         $sealed,
+         $ciphertext,
          self::CIPHER,
          $this->material,
          OPENSSL_RAW_DATA,
@@ -191,6 +232,17 @@ class Key
    public function __serialize (): array
    {
       throw new LogicException('Encrypter keys must not be serialized.');
+   }
+
+   /**
+    * Keys must never be unserialized — hydration would bypass the
+    * constructor guards.
+    *
+    * @param array<string,mixed> $data
+    */
+   public function __unserialize (array $data): void
+   {
+      throw new LogicException('Encrypter keys must not be unserialized.');
    }
 
    /**

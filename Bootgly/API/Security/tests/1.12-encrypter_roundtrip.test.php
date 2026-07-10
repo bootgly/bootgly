@@ -78,5 +78,16 @@ return new Specification(
             && $FromKeyring->decrypt($envelope) === $plaintext,
          description: 'raw material, Key and Keyring constructions interoperate'
       );
+
+      // ! Frozen v1 fixture — protects envelopes already persisted by earlier
+      // ! writers. NEVER regenerate: if this fails, the reader broke v1 data;
+      // ! an incompatible change requires a new envelope version instead.
+      $Frozen = new Encrypter(Key::import('Qm9vdGdseS12MS1maXh0dXJlLWtleS0zMi1ieXRlcyE=', 'kfix'));
+      $vector = 'v1.kfix.PbLv72AvQ3t4BcyQjQY7VGeVgBcnRJhU8wsOiUaMJZj8CDnl9T2nfj9UtfVHlGMpPeTMljC1z1_03pe4zg';
+
+      yield assert(
+         assertion: $Frozen->decrypt($vector, AAD: 'fixture-context') === 'Bootgly crypto v1 fixture payload',
+         description: 'frozen v1 envelope from an earlier writer still decrypts'
+      );
    }
 );

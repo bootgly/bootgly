@@ -89,6 +89,43 @@ return new Specification(
          description: 'keys refuse serialization'
       );
 
+      // ! Inbound hydration must not bypass the constructor guards
+      $class = Key::class;
+      $payload = 'O:' . strlen($class) . ':"' . $class . '":1:{s:2:"id";s:2:"k1";}';
+
+      $hydrated = false;
+      try {
+         unserialize($payload);
+      }
+      catch (LogicException) {
+         $hydrated = true;
+      }
+
+      yield assert(
+         assertion: $hydrated === true,
+         description: 'keys refuse unserialization (crafted payload rejected)'
+      );
+
+      // ! Key owns the GCM invariants: internal fresh IV, full-tag open
+      $Direct = Key::generate('kd');
+      $one = $Direct->seal('payload', 'ctx');
+      $two = $Direct->seal('payload', 'ctx');
+
+      yield assert(
+         assertion: $one !== $two
+            && strlen($one) >= 28
+            && $Direct->open($one, 'ctx') === 'payload'
+            && $Direct->open($two, 'ctx') === 'payload',
+         description: 'seal generates a fresh internal IV — independent seals differ'
+      );
+
+      yield assert(
+         assertion: $Direct->open($one, 'other') === null
+            && $Direct->open(substr($one, 0, 27), 'ctx') === null
+            && $Direct->open('', 'ctx') === null,
+         description: 'open rejects wrong AAD and undersized sealed payloads'
+      );
+
       // ! Keyring uniqueness guards
       $duplicated = false;
       try {
@@ -161,6 +198,19 @@ return new Specification(
       yield assert(
          assertion: $conflicted === true && $Encrypter->Keyring->Primary === $K2,
          description: 'rotation conflicts throw before the primary changes'
+      );
+
+      $anonymous = false;
+      try {
+         $Encrypter->Keyring->rotate(Key::generate());
+      }
+      catch (InvalidArgumentException) {
+         $anonymous = true;
+      }
+
+      yield assert(
+         assertion: $anonymous === true && $Encrypter->Keyring->Primary === $K2,
+         description: 'anonymous rotation throws before the primary changes'
       );
 
       $Retired = new Encrypter(new Keyring($K2));
