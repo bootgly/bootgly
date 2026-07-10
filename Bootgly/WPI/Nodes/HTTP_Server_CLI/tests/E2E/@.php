@@ -156,6 +156,7 @@ return new Suite(
          // Accept-Language full language-ranges (appended last — index stability)
          '1.15.3-request_as_response-header-accept_language-ranges',
          '1.15.4-request_as_response-header-accept_language-long_range',
+         '1.15.5-request_as_response-header-accept_language-exclusions',
       ],
       'Response/' => [
          '1.1-respond_with_a_simple_hello_world',
@@ -222,10 +223,14 @@ return new Suite(
          '1.13.5-catch_production_custom_view',
          '1.13.6-catch_production_localized_page',
          '1.13.7-catch_production_locale_reset',
-         // @ i18n worker-state cleanup — MUST run right after 1.13.6/1.13.7:
+         // @ i18n Vary token-awareness + q=0 exclusions — run while the
+         //   catalog roots registered by 1.13.6 are still loaded
+         '1.13.8-i18n_vary_tokens',
+         '1.13.9-i18n_negotiation_exclusions',
+         // @ i18n worker-state cleanup — MUST run right after the i18n specs:
          //   drops the catalog roots they registered so the byte-exact specs
          //   below run without the automatic Vary: Accept-Language
-         '1.13.8-i18n_state_cleanup',
+         '1.13.10-i18n_state_cleanup',
          // @ SSE (Server-Sent Events — appended last to keep the
          //   X-Bootgly-Test indices of the specs above stable)
          '3.1-sse_head_and_events',
@@ -392,6 +397,7 @@ return new Suite(
          '1.8-scheduled_deferred_readiness_write',
          '1.9-scheduled_deferred_response_isolation',
          '1.10-scheduled_deferred_removed_readiness',
+         '1.11-scheduled_deferred_i18n',
       ],
       'Queues/' => [
          '1.1-http-enqueue',

@@ -6,9 +6,9 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test\Specification;
 
 
-// Drops the worker-global catalog roots registered by 1.13.6 so every later
-// spec (byte-exact Router/Sequential assertions) runs without i18n state —
-// and therefore without the automatic Vary: Accept-Language field.
+// Drops the worker-global catalog roots registered by 1.13.6-1.13.9 so every
+// later spec (byte-exact Router/Sequential assertions) runs without i18n
+// state — and therefore without the automatic Vary: Accept-Language field.
 
 return new Specification(
    request: function () {

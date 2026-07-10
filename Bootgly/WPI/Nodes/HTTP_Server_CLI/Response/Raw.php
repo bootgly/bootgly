@@ -11,7 +11,6 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 
 
-use function str_contains;
 use function strlen;
 
 use Bootgly\ABI\Data\Language;
@@ -63,8 +62,8 @@ trait Raw
       //   catalogs are registered); one static read when i18n is off.
       //   encode() is the single funnel: normal, testing, deferred and
       //   HTTP/2 responses all pass here before header serialization.
-      if (Language::$roots !== [] && str_contains($Header->get('Vary'), 'Accept-Language') === false) {
-         $Header->append('Vary', 'Accept-Language');
+      if (Language::$roots !== []) {
+         $Header->vary('Accept-Language');
       }
 
       // ? HTTP/2 stream — wire serialization is frame-based (RFC 9113 §8.2).

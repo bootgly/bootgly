@@ -87,9 +87,10 @@ return new Specification(
       }
 
       // @ Assert external cache variance — localized responses (cold AND
-      //   cached wire) must declare Vary: Accept-Language
+      //   cached wire) must declare the exact Vary token (substring matches
+      //   like X-Accept-Language-Experiment must not satisfy this)
       foreach ([$r1, $r2, $r3, $r4] as $index => $response) {
-         if (! str_contains($response, 'Accept-Language')) {
+         if (! str_contains($response, "Vary: Accept-Language\r\n")) {
             Vars::$labels = ['Response ' . ($index + 1) . ':'];
             dump(json_encode($response));
             return 'Localized response did not emit Vary: Accept-Language';

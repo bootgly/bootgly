@@ -172,7 +172,7 @@ abstract class Catcher
          $Errored->Header->set('Content-Type', 'application/json');
          // ! Representation is negotiated from Accept; encode() appends
          //   Accept-Language while catalogs are registered
-         $Errored->Header->set('Vary', 'Accept');
+         $Errored->Header->vary('Accept');
 
          return $Errored;
       }
@@ -185,7 +185,7 @@ abstract class Catcher
          if (is_file($file) === true) {
             $Errored = new Response;
             $Errored->View->render($view);
-            $Errored->Header->set('Vary', 'Accept');
+            $Errored->Header->vary('Accept');
 
             return $Errored->code($code);
          }
@@ -203,7 +203,7 @@ abstract class Catcher
 
       // :
       $Errored = new Response(code: $code, body: $body);
-      $Errored->Header->set('Vary', 'Accept');
+      $Errored->Header->vary('Accept');
 
       return $Errored;
    }

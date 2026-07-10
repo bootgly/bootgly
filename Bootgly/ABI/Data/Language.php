@@ -48,8 +48,11 @@ class Language
     */
    public static string $source = 'en';
    /**
-    * The active locale. Plain public static — per-request code assigns it
-    * directly (the Web platform re-negotiates it on every request).
+    * The default (synchronous) locale. Plain public static — per-request
+    * code assigns it directly (the Web platform re-negotiates it on every
+    * request). A Fiber binding takes precedence over it: inside a bound
+    * Fiber the effective locale is `resolve()`, not this property — use
+    * `bind()` to change a bound Fiber's locale intentionally.
     */
    public static string $locale = 'en';
 
@@ -117,6 +120,11 @@ class Language
     * Bind a locale to the current Fiber. Deferred/asynchronous work calls
     * this when a job starts so its translations resolve under the locale
     * of the request that scheduled it. No-op outside a Fiber.
+    *
+    * The tag is stored as given — the framework's automatic paths always
+    * pass an already-normalized tag (`negotiate()` output); a manual
+    * non-canonical tag still translates (`translate()` normalizes per
+    * call) but fragments cache-key partitions and `lang` attributes.
     */
    public static function bind (string $locale): void
    {
@@ -243,13 +251,20 @@ class Language
    /**
     * Choose the best available locale for the ordered preferences.
     *
-    * Available = the locale directories of the registered roots. Pure —
-    * returns the choice (falling back to `$source`), never mutates state:
-    * assignment stays explicit at the call site.
+    * Available = the source language (always servable — natural-source
+    * keys need no catalog) as the first implicit offer, followed by the
+    * locale directories of the registered roots. Pure — returns the
+    * choice (falling back to `$source`), never mutates state: assignment
+    * stays explicit at the call site.
+    *
+    * Excluded ranges (client `q=0`) are honored through wildcard and
+    * expansion matching; when every offer is refused, the header is
+    * disregarded (RFC 9110 §12.5.1 option) and the source is served.
     *
     * @param array<int,string> $preferred Locale tags, most preferred first (e.g. `$Request->languages`).
+    * @param array<int,string> $excluded Refused ranges (`q=0`, e.g. `$Request->exclusions`).
     */
-   public static function negotiate (array $preferred): string
+   public static function negotiate (array $preferred, array $excluded = []): string
    {
       // ! The source language is always servable (natural-source keys) —
       //   it participates as the first implicit offer, so `['en', 'pt-BR']`
@@ -257,7 +272,7 @@ class Language
       $offers = [self::$source, ...self::locales()];
 
       // :
-      return Locales::choose($preferred, $offers) ?? self::$source;
+      return Locales::choose($preferred, $offers, $excluded) ?? self::$source;
    }
 
    /**

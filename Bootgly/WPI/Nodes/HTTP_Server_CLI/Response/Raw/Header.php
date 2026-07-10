@@ -12,14 +12,17 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Raw;
 
 
 use function array_key_exists;
+use function explode;
 use function gmdate;
 use function implode;
 use function preg_match;
 use function str_replace;
+use function strcasecmp;
 use function strlen;
 use function strncasecmp;
 use function strtolower;
 use function time;
+use function trim;
 
 use Bootgly\WPI\Modules\HTTP\Server\Response\Raw\Header as HeaderBase;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Raw\Header\Cookies;
@@ -423,6 +426,69 @@ class Header extends HeaderBase
 
       $this->dirty = true;
    }
+   /**
+    * Declare a request field name in the `Vary` response header.
+    *
+    * Token-aware (RFC 9110 §12.5.5): the current value is treated as a
+    * comma-delimited, case-insensitive field-name list — a superstring
+    * token (`X-Accept-Language-Experiment`) does not satisfy
+    * `Accept-Language`, an already-listed token (any case) is never
+    * duplicated and a `*` wildcard already covers every request field.
+    * The canonical entry point for every Vary writer.
+    */
+   public function vary (string $field): void
+   {
+      // ! Strip CRLF + validate against RFC 9110 token syntax (response-
+      //   splitting guard, same policy as set()/append())
+      $field = str_replace(["\r", "\n"], '', $field);
+
+      if (! self::validate($field)) {
+         return;
+      }
+
+      // ? Locate the current Vary field under any case variant — writing a
+      //   second case variant would serialize two Vary lines
+      $key = null;
+      foreach ($this->fields as $name => $value) {
+         if (strcasecmp((string) $name, 'Vary') === 0) {
+            $key = $name;
+            break;
+         }
+      }
+
+      // ? No Vary yet — start the list
+      if ($key === null) {
+         $this->fields['Vary'] = $field;
+         $this->dirty = true;
+
+         return;
+      }
+
+      $current = (string) $this->fields[$key];
+
+      // ? Empty value — replace instead of leading with a separator
+      if (trim($current) === '') {
+         $this->fields[$key] = $field;
+         $this->dirty = true;
+
+         return;
+      }
+
+      // @@ Token scan — `*` covers all request fields; an existing token
+      //    (case-insensitive) is kept as-is
+      foreach (explode(',', $current) as $token) {
+         $token = trim($token);
+
+         if ($token === '*' || strcasecmp($token, $field) === 0) {
+            return;
+         }
+      }
+
+      // :
+      $this->fields[$key] = "{$current}, {$field}";
+      $this->dirty = true;
+   }
+
    public function queue (string $field, string $value = ''): bool
    {
       // ! Strip CRLF from header values to prevent HTTP response splitting

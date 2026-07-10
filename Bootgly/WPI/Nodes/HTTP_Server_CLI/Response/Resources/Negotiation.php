@@ -64,7 +64,7 @@ class Negotiation extends Resource
 
       // ! The representation varies by Accept — shared caches must store each
       //   one separately (RFC 9110 §12.5.5); emitted on every branch, 406 too.
-      $Response->Header->append('Vary', 'Accept');
+      $Response->Header->vary('Accept');
 
       // ! Offers — HTML only when a view is available to render it
       $offers = ['application/json', 'application/xml'];

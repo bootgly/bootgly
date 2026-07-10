@@ -100,7 +100,7 @@ class CORS implements Middleware
       }
       else if ($origin !== null) {
          $Response->Header->set('Access-Control-Allow-Origin', $origin); // @phpstan-ignore-line
-         $Response->Header->append('Vary', 'Origin'); // @phpstan-ignore-line
+         $Response->Header->vary('Origin'); // @phpstan-ignore-line
       }
 
       $Response->Header->set('Access-Control-Allow-Methods', implode(', ', $this->methods)); // @phpstan-ignore-line

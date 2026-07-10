@@ -572,6 +572,15 @@ class Request
    public string $language {
       get => $this->languages[0] ?? '';
    }
+   /**
+    * Language ranges the client refused with `q=0` (RFC 9110 §12.4.2:
+    * "not acceptable") in the last parsed `Accept-Language` header —
+    * refreshed by every `$languages` read. Wildcard negotiation honors
+    * them (`Language::negotiate($Request->languages, $Request->exclusions)`).
+    *
+    * @var array<string>
+    */
+   public private(set) array $exclusions = [];
 
    /** @var array<string> */
    public array $charsets {
@@ -725,6 +734,7 @@ class Request
       $this->identity = null;
       $this->claims = [];
       $this->tokenHeaders = [];
+      $this->exclusions = [];
       $this->attributes = [];
       $this->stream = 0;
 
@@ -754,6 +764,7 @@ class Request
       $this->identity = null;
       $this->claims = [];
       $this->tokenHeaders = [];
+      $this->exclusions = [];
       $this->attributes = [];
 
       $this->Session = null;
@@ -827,6 +838,7 @@ class Request
       $this->identity = null;
       $this->claims = [];
       $this->tokenHeaders = [];
+      $this->exclusions = [];
       $this->attributes = [];
 
       $this->Session = null;
@@ -1447,6 +1459,10 @@ class Request
             $header = $this->Header->get('Accept-Language');
             $pattern = '/(\*|[a-z]{1,8}(?:-[a-z0-9]{1,8})*)\s*(?:;\s*q\s*=\s*(\d*(?:\.\d+)?))?/i';
 
+            // ! Per-parse reset — a headerless (or all-accepting) request
+            //   must not inherit the previous parse's refusals
+            $this->exclusions = [];
+
             break;
          case self::ACCEPTS_ENCODINGS:
             // @ Accept-Encoding
@@ -1478,14 +1494,22 @@ class Request
       );
 
       $results = [];
+      $refused = [];
       foreach ($matches as $match) {
          $item = $match[1];
          $quality = (float) ($match[2] ?? 1.0);
 
-         // ? RFC 9110: q=0 means "not acceptable" — drop refused items
+         // ? RFC 9110: q=0 means "not acceptable" — refused items are kept
+         //   apart instead of silently dropped, so language negotiation can
+         //   still honor the exclusion through wildcard/expansion matching.
+         //   Duplicate ranges with different qualities: the last one wins.
          if ($quality <= 0.0) {
+            unset($results[$item]);
+            $refused[$item] = true;
+
             continue;
          }
+         unset($refused[$item]);
 
          // ? RFC 9110 §12.4.2: quality ranges 0..1 — clamp invalid excess
          if ($quality > 1.0) {
@@ -1493,6 +1517,12 @@ class Request
          }
 
          $results[$item] = $quality;
+      }
+
+      // ! Exclusions surface only for Accept-Language — the other Accept-*
+      //   negotiations keep their accepted-only contract
+      if ($with === self::ACCEPTS_LANGUAGES && $refused !== []) {
+         $this->exclusions = array_keys($refused);
       }
 
       uasort($results, function ($a, $b) {

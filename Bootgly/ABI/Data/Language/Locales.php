@@ -111,10 +111,18 @@ class Locales
     * matches available `pt`); regional expansion (`pt` matches the first
     * available `pt-*`). Returns the available entry as given.
     *
+    * Excluded ranges (client `q=0`) remove the offers they cover before
+    * any matching — including the `*` wildcard pass — unless a more
+    * specific preferred range re-includes the offer (RFC 9110 §12.5.4:
+    * the quality of the most specific matching range applies).
+    *
     * @param array<int,string> $preferred Locale tags, most preferred first.
     * @param array<int,string> $available Server/catalog locales.
+    * @param array<int,string> $excluded Refused ranges (`q=0`); `*` refuses every offer not explicitly preferred.
     */
-   public static function choose (array $preferred, array $available): null|string
+   public static function choose (
+      array $preferred, array $available, array $excluded = []
+   ): null|string
    {
       // ? Nothing offered
       if ($available === []) {
@@ -133,6 +141,15 @@ class Locales
       }
       if ($offers === []) {
          return null;
+      }
+
+      // ? Client exclusions — drop covered offers before matching
+      if ($excluded !== []) {
+         $offers = self::filter($offers, $preferred, $excluded);
+
+         if ($offers === []) {
+            return null;
+         }
       }
 
       // @@
@@ -167,5 +184,82 @@ class Locales
 
       // :
       return null;
+   }
+
+   /**
+    * Filter offers against refused ranges (`q=0`), keeping an offer when
+    * a strictly more specific preferred range re-includes it — RFC 9110
+    * §12.5.4: the quality of the most specific matching range applies
+    * (`pt;q=0, pt-BR;q=0.5` refuses `pt` but keeps `pt-BR`).
+    *
+    * A range covers an offer when it equals the offer or is a subtag
+    * prefix of it (`pt` covers `pt-BR`); `*` covers every offer at the
+    * lowest specificity. Specificity = range length.
+    *
+    * @param array<string,string> $offers Normalized tag → original offer.
+    * @param array<int,string> $preferred Accepted ranges (`q>0`).
+    * @param array<int,string> $excluded Refused ranges (`q=0`).
+    *
+    * @return array<string,string> The surviving offers.
+    */
+   private static function filter (array $offers, array $preferred, array $excluded): array
+   {
+      // ! Normalized refused ranges with their specificity
+      $refusals = [];
+      $wildcard = false;
+      foreach ($excluded as $range) {
+         if (trim($range) === '*') {
+            $wildcard = true;
+            continue;
+         }
+
+         $range = self::normalize($range);
+         if ($range !== '') {
+            $refusals[$range] = strlen($range);
+         }
+      }
+
+      // ? Nothing parseable to refuse
+      if ($wildcard === false && $refusals === []) {
+         return $offers;
+      }
+
+      // ! Normalized accepted ranges (a preferred `*` normalizes to `''`
+      //   and is skipped — only specific ranges re-include an offer)
+      $accepts = [];
+      foreach ($preferred as $tag) {
+         $tag = self::normalize($tag);
+         if ($tag !== '') {
+            $accepts[$tag] = strlen($tag);
+         }
+      }
+
+      // @@ Most specific matching range decides each offer
+      foreach ($offers as $normalized => $offer) {
+         // # A `*` refusal matches everything at specificity 1
+         $refusal = $wildcard === true ? 1 : 0;
+         foreach ($refusals as $range => $length) {
+            if ($normalized === $range || str_starts_with($normalized, "{$range}-")) {
+               $refusal = $length > $refusal ? $length : $refusal;
+            }
+         }
+         if ($refusal === 0) {
+            continue;
+         }
+
+         $accepted = 0;
+         foreach ($accepts as $range => $length) {
+            if ($normalized === $range || str_starts_with($normalized, "{$range}-")) {
+               $accepted = $length > $accepted ? $length : $accepted;
+            }
+         }
+
+         if ($refusal > $accepted) {
+            unset($offers[$normalized]);
+         }
+      }
+
+      // :
+      return $offers;
    }
 }

@@ -77,7 +77,7 @@ class Compression implements Middleware
          if ($compressed !== false) {
             $Response->Body->raw = $compressed; // @phpstan-ignore-line
             $Response->Header->set('Content-Encoding', 'gzip'); // @phpstan-ignore-line
-            $Response->Header->set('Vary', 'Accept-Encoding'); // @phpstan-ignore-line
+            $Response->Header->vary('Accept-Encoding'); // @phpstan-ignore-line
          }
       }
       else if (str_contains($acceptEncoding, 'deflate') && function_exists('gzdeflate')) {
@@ -85,7 +85,7 @@ class Compression implements Middleware
          if ($compressed !== false) {
             $Response->Body->raw = $compressed; // @phpstan-ignore-line
             $Response->Header->set('Content-Encoding', 'deflate'); // @phpstan-ignore-line
-            $Response->Header->set('Vary', 'Accept-Encoding'); // @phpstan-ignore-line
+            $Response->Header->vary('Accept-Encoding'); // @phpstan-ignore-line
          }
       }
 

@@ -51,7 +51,7 @@ class Encoder_Testing extends Encoders
       //   per-request reset (mirrors Encoder_)
       if (Language::$roots !== []) {
          Language::$locale = isSet($Request->headers['accept-language'])
-            ? Language::negotiate($Request->languages)
+            ? Language::negotiate($Request->languages, $Request->exclusions)
             : Language::$source;
       }
 

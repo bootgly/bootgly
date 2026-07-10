@@ -60,7 +60,7 @@ class Encoder_ extends Encoders
       //   cost at one static read when no catalogs are registered
       if (Language::$roots !== []) {
          Language::$locale = isSet($Request->headers['accept-language'])
-            ? Language::negotiate($Request->languages)
+            ? Language::negotiate($Request->languages, $Request->exclusions)
             : Language::$source;
       }
 

@@ -20,5 +20,6 @@ return new Suite(
       '1.4-catalogs_malformed',
       '1.5-contexts',
       '1.6-catalogs_noncanonical',
+      '1.7-negotiate_exclusions',
    ]
 );
