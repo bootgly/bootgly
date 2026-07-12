@@ -17,5 +17,6 @@ return new Suite(
       '1.1-worker-events',
       '1.2-state-qualify',
       '1.3-state-lock',
+      '1.4-state-safety',
    ]
 );

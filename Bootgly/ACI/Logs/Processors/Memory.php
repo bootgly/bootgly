@@ -14,8 +14,8 @@ namespace Bootgly\ACI\Logs\Processors;
 use function memory_get_peak_usage;
 use function memory_get_usage;
 
-use Bootgly\ACI\Logs\Processor;
 use Bootgly\ACI\Logs\Data\Record;
+use Bootgly\ACI\Logs\Processor;
 
 
 class Memory extends Processor

@@ -11,9 +11,9 @@
 namespace Bootgly\ACI\Logs\Filters;
 
 
-use Bootgly\ACI\Logs\Filter;
 use Bootgly\ACI\Logs\Data\Levels;
 use Bootgly\ACI\Logs\Data\Record;
+use Bootgly\ACI\Logs\Filter;
 
 
 class Level extends Filter

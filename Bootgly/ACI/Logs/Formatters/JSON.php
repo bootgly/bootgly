@@ -18,8 +18,8 @@ use function json_encode;
 use function preg_replace;
 
 use Bootgly\ABI\Templates\Template\Escaped as TemplateEscaped;
-use Bootgly\ACI\Logs\Formatter;
 use Bootgly\ACI\Logs\Data\Record;
+use Bootgly\ACI\Logs\Formatter;
 
 
 class JSON implements Formatter

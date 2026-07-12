@@ -12,10 +12,13 @@ namespace Bootgly\WPI\Interfaces\TCP_Client_CLI;
 
 
 use const PHP_EOL;
+use function fclose;
 use function is_resource;
+use function microtime;
 use function stream_select;
 use function stream_set_blocking;
 use function stream_set_read_buffer;
+use function stream_socket_get_name;
 
 use Bootgly\ACI\Logs\Logger;
 use Bootgly\WPI;
@@ -109,7 +112,12 @@ class Connections implements WPI\Connections
    // Open connection with server / Connect with server
    public function connect (): bool
    {
-      $Socket = &$this->Client->Socket;
+      $Client = $this->Client;
+      if ($Client === null) {
+         self::$errors['connection']++;
+         return false;
+      }
+      $Socket = &$Client->Socket;
 
       Client::$Event->del($Socket, Client::$Event::EVENT_CONNECT);
 
@@ -142,18 +150,51 @@ class Connections implements WPI\Connections
          return false;
       }
 
-      // @ Instance new connection
-      $secure = $this->Client !== null && $this->Client->secure !== null;
-
-      // @ Wait for TCP connection to be fully established before TLS handshake
-      if ($secure) {
-         $read = [];
-         $write = [$Socket];
-         $except = [];
-         @stream_select($read, $write, $except, 5);
+      // ! ASYNC_CONNECT only creates the socket. Do not construct a logical
+      // connection (or begin TLS) until TCP is writable and the peer name is
+      // available. One absolute deadline covers this wait and the handshake.
+      $deadline = $Client->deadline;
+      if ($deadline === null && $Client->connectTimeout > 0) {
+         $deadline = microtime(true) + $Client->connectTimeout;
+      }
+      if ($deadline !== null && $deadline <= microtime(true)) {
+         fclose($Socket);
+         self::$errors['connection']++;
+         return false;
       }
 
-      $Connection = new Connection($Socket, $secure, $this->Client);
+      do {
+         $read = [];
+         $write = [$Socket];
+         $except = null;
+         if ($deadline === null) {
+            $selected = @stream_select($read, $write, $except, null);
+         }
+         else {
+            $remaining = max(0.0, $deadline - microtime(true));
+            $seconds = (int) $remaining;
+            $microseconds = (int) (($remaining - $seconds) * 1_000_000);
+            $selected = @stream_select($read, $write, $except, $seconds, $microseconds);
+         }
+         // SIGALRM parent watchdogs legitimately interrupt select. Retry only
+         // while a finite caller deadline still bounds a persistent failure.
+      } while ($selected === false && $deadline !== null && microtime(true) < $deadline);
+      if (
+         $selected !== 1
+         || @stream_socket_get_name($Socket, true) === false
+      ) {
+         fclose($Socket);
+         self::$errors['connection']++;
+         return false;
+      }
+
+      // @ Instance new connection
+      $secure = $Client->secure !== null;
+      $Connection = new Connection($Socket, $secure, $Client, $deadline);
+      if ($Connection->status !== Connection::STATUS_ESTABLISHED || ($secure && $Connection->encrypted === false)) {
+         self::$errors['connection']++;
+         return false;
+      }
 
       // @ Set stats
       $this->connections++;

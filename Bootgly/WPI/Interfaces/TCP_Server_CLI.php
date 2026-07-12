@@ -25,10 +25,12 @@ use const SIGHUP;
 use const SIGINT;
 use const SIGIO;
 use const SIGIOT;
+use const SIGKILL;
 use const SIGPIPE;
 use const SIGQUIT;
 use const SIGTERM;
 use const SIGTSTP;
+use const SIGURG;
 use const SIGUSR1;
 use const SIGUSR2;
 use const SIGWINCH;
@@ -38,56 +40,106 @@ use const SOL_TCP;
 use const STDERR;
 use const STDIN;
 use const STDOUT;
+use const STREAM_CLIENT_CONNECT;
+use const STREAM_CRYPTO_METHOD_TLS_CLIENT;
+use const STREAM_CRYPTO_METHOD_TLS_SERVER;
+use const STREAM_IPPROTO_IP;
+use const STREAM_PF_UNIX;
 use const STREAM_SERVER_BIND;
 use const STREAM_SERVER_LISTEN;
+use const STREAM_SOCK_STREAM;
 use const TCP_NODELAY;
 use const WNOHANG;
-use const WUNTRACED;
+use function array_key_exists;
 use function array_merge;
+use function array_pad;
 use function array_slice;
+use function basename;
+use function bin2hex;
 use function chdir;
+use function chmod;
 use function count;
 use function defined;
 use function exec;
 use function explode;
 use function fclose;
-use function file;
+use function feof;
+use function fflush;
+use function file_get_contents;
 use function fopen;
+use function fread;
+use function fsync;
 use function function_exists;
+use function fwrite;
 use function get_included_files;
 use function getcwd;
 use function getenv;
+use function glob;
+use function hash;
+use function in_array;
+use function is_array;
+use function is_dir;
 use function is_file;
+use function is_link;
 use function is_numeric;
+use function is_resource;
+use function is_string;
+use function lstat;
 use function method_exists;
+use function microtime;
+use function mkdir;
+use function openssl_x509_check_private_key;
+use function openssl_x509_fingerprint;
 use function pcntl_exec;
 use function pcntl_fork;
 use function pcntl_signal;
 use function pcntl_signal_dispatch;
-use function pcntl_wait;
 use function pcntl_waitpid;
 use function posix_getgrnam;
 use function posix_getpid;
+use function posix_getppid;
 use function posix_getpwnam;
 use function posix_getuid;
 use function posix_initgroups;
+use function posix_kill;
 use function posix_setgid;
 use function posix_setsid;
 use function posix_setuid;
+use function preg_match;
+use function random_bytes;
+use function readline_callback_handler_install;
+use function readline_callback_handler_remove;
+use function readline_callback_read_char;
 use function register_shutdown_function;
 use function restore_error_handler;
+use function rmdir;
 use function rtrim;
+use function scandir;
 use function socket_import_stream;
 use function socket_set_option;
 use function str_contains;
 use function stream_context_create;
+use function stream_context_get_options;
+use function stream_context_set_options;
+use function stream_select;
+use function stream_set_blocking;
+use function stream_socket_accept;
+use function stream_socket_client;
 use function stream_socket_enable_crypto;
+use function stream_socket_get_name;
+use function stream_socket_pair;
 use function stream_socket_server;
+use function strlen;
+use function substr;
+use function sys_get_temp_dir;
 use function time;
+use function umask;
+use function unlink;
 use function usleep;
 use BackedEnum;
 use Closure;
 use InvalidArgumentException;
+use RuntimeException;
 use Throwable;
 
 use const Bootgly\CLI;
@@ -148,7 +200,7 @@ class TCP_Server_CLI implements Servers
    protected null|string $host;
    protected null|int $port;
    protected int $workers;
-   /** @var array<string> */
+   /** @var array<string,mixed> */
    protected null|array $secure; // Secure SSL/TLS Stream Context
    protected null|string $user = null;
    protected null|string $group = null;
@@ -203,6 +255,23 @@ class TCP_Server_CLI implements Servers
    // # State
    protected int $started = 0;
    protected bool $daemonized = false;
+   /** @var array<int,resource> Keep /dev/null descriptors alive after detach(). */
+   protected array $daemonStreams = [];
+   /**
+    * Per-process credential artifact retained for the active SSL context.
+    *
+    * @var null|array{directory:string,files:array<int,string>,handles:array<int,resource>}
+    */
+   protected null|array $credential = null;
+   /** @var resource|null Launcher readiness channel, daemon child only. */
+   protected $daemonReady = null;
+   /**
+    * Inside the startup readiness barrier. A worker lost here is a definitive
+    * startup failure: it is reaped but never reforked (reforking would rebuild
+    * the same failing boot), and node fallbacks stay inert — the launcher
+    * reports the failure instead.
+    */
+   protected bool $starting = false;
    // # Reload — the launch command captured at start(), replayed verbatim by
    //   reload() via pcntl_exec so the master re-execs into a fresh PHP image
    //   (reloading all code) while keeping its PID. Absolute script path + saved
@@ -213,7 +282,7 @@ class TCP_Server_CLI implements Servers
    protected static string $directory = '';
    // # Socket
    protected null|string $socket;
-   /** @var array<array<bool|int|string>|string> */
+   /** @var array<array<mixed>|string> */
    public static array $context;
    // # Process
    //   Process-title prefix; nodes override it (e.g. `Bootgly_HTTP_Server`) so
@@ -378,7 +447,7 @@ class TCP_Server_CLI implements Servers
     * @param string $host Domain name or IP address
     * @param int $port Port number
     * @param int $workers Number of workers
-   * @param array<string>|null $secure Secure SSL/TLS Stream Context
+   * @param array<string,mixed>|null $secure Secure SSL/TLS Stream Context
     * @param string|null $user User to drop privileges to after socket binding
     * @param string|null $group Group to drop privileges to after socket binding
     * 
@@ -450,12 +519,10 @@ class TCP_Server_CLI implements Servers
 
          // * Custom command
          case SIGUSR1:  // 10
-            $lines = @file($this->Process->State->commandFile);
+            $line = $this->Commands->read();
 
-            if ($lines) {
-               $line = $lines[count($lines) - 1];
-
-               [$command, $context] = explode(':', rtrim($line));
+            if ($line !== null) {
+               [$command, $context] = array_pad(explode(':', $line, 2), 2, '');
 
                // @ Prepend command
                $command = '@' . $command;
@@ -515,6 +582,22 @@ class TCP_Server_CLI implements Servers
                while ($dead = $this->Process->recover()) {
                   [$deadIndex, $deadPID] = $dead;
 
+                  // @ The reaped worker can no longer release its own private
+                  //   credential artifact — a hard kill never runs its exit
+                  //   path. The reaper owns that cleanup.
+                  $this->sweep();
+
+                  // ? A worker lost inside the startup barrier is reaped, not
+                  //   reforked: the replacement would rebuild the same failing
+                  //   boot. `ready()` sees the lost worker and fails startup.
+                  if ($this->starting) {
+                     $this->Logger->log(
+                        warning: "Worker #{$deadIndex} (PID: {$deadPID}) died before startup completed.@.;"
+                     );
+
+                     continue;
+                  }
+
                   $this->Logger->log(warning: "Worker #{$deadIndex} (PID: {$deadPID}) crashed, reforking...@.;");
 
                   $newPID = pcntl_fork();
@@ -539,14 +622,7 @@ class TCP_Server_CLI implements Servers
 
                      $this->Logger->log(notice: "Worker #{$deadIndex} recovered (new PID: {$newPID})@.;");
 
-                     $this->Process->State->save([
-                        'master'  => Process::$master,
-                        'workers' => $this->Process->Children->PIDs,
-                        'host'    => $this->host ?? '0.0.0.0',
-                        'port'    => $this->port ?? 0,
-                        'started' => $this->started,
-                        'type'    => 'WPI'
-                     ]);
+                     $this->Process->State->save($this->describe());
                   }
                }
             }
@@ -604,6 +680,10 @@ class TCP_Server_CLI implements Servers
          );
          exit(1);
       }
+      if ($this->Commands->erase() === false) {
+         $this->Logger->log(error: '@\;The process command channel could not be initialized safely.@.;');
+         exit(1);
+      }
 
       // ? Pre-flight: verify socket can be bound before forking workers
       $probeCode = 0;
@@ -631,11 +711,19 @@ class TCP_Server_CLI implements Servers
       }
       fclose($probeSocket);
 
+      // ! Daemonize BEFORE any worker or auxiliary fork. The child that
+      //   continues from here is the final master and therefore the real
+      //   parent/reaper of every process created below.
+      if ($this->Mode === Modes::Daemon) {
+         $this->detach();
+      }
+
       // ? Signals
       // @ Install process signals
       $this->Process->Signals->install([
          SIGALRM,  // Timer
          SIGUSR1,  // Custom command
+         SIGURG,   // Node-specific out-of-band wake-up (Auto-TLS)
          SIGHUP,   // stop
          SIGINT,   // stop (CTRL + C)
          SIGQUIT,  // stop
@@ -664,19 +752,10 @@ class TCP_Server_CLI implements Servers
       // @ Set master process title
       $this->Process->title = $this->process . ': master process';
 
-      // @ Save full process state (master + workers + host + port).
-      //   Done while still privileged so the file exists before demote() can
-      //   hand it off to the target user — the PID dir may not be writable
-      //   by the demoted user, but chown on the existing file lets subsequent
-      //   re-saves (e.g. in daemonize()) succeed as that user.
-      $this->Process->State->save([
-         'master'  => Process::$master,
-         'workers' => $this->Process->Children->PIDs,
-         'host'    => $this->host ?? '0.0.0.0',
-         'port'    => $this->port ?? 0,
-         'started' => time(),
-         'type'    => 'WPI'
-      ]);
+      // @ Save full process state (master + workers + host + port). In Daemon
+      //   mode detach() already installed the final master PID before workers
+      //   were created, so every listed PID is its actual child.
+      $this->Process->State->save($this->describe());
 
       // @ Drop privileges on master post-fork + post-save. Workers kept their
       //   own bind as root (port <1024) and demote themselves in `instance()`.
@@ -684,11 +763,34 @@ class TCP_Server_CLI implements Servers
       //   demoted user can unlink them.
       $this->demote();
 
+      // ! Node-specific readiness is a barrier, not a notification. A node
+      //   may require every worker to prove local initialization (for example
+      //   an Auto-TLS credential activation) before startup can be advertised.
+      $this->starting = true;
+      $crossed = $this->ready();
+      $this->starting = false;
+
+      if ($crossed === false) {
+         $this->Process->stopping = true;
+         $this->Process->Children->terminate();
+         $this->Process->State->clean();
+         if (is_resource($this->daemonReady)) {
+            fclose($this->daemonReady);
+            $this->daemonReady = null;
+         }
+
+         throw new RuntimeException('Server workers did not cross the startup readiness barrier.');
+      }
+
       // # Hook — the server is up and ready for connections (master, post-fork,
       //   post-demote). Set by the node `on(Events::ServerStarted, ...)`.
       if ($this->onServerStarted !== null) {
          ($this->onServerStarted)($this);
       }
+
+      // @ A daemon launcher reports success only after state, workers,
+      //   privilege drop and the node-specific startup hook all completed.
+      $this->announce();
 
       // ... Continue to master process:
       switch ($this->Mode) {
@@ -707,6 +809,19 @@ class TCP_Server_CLI implements Servers
       }
 
       return true;
+   }
+
+   /** @return array<string,mixed> Persisted master/worker topology. */
+   protected function describe (): array
+   {
+      return [
+         'master'  => Process::$master,
+         'workers' => $this->Process->Children->PIDs,
+         'host'    => $this->host ?? '0.0.0.0',
+         'port'    => $this->port ?? 0,
+         'started' => $this->started,
+         'type'    => 'WPI'
+      ];
    }
 
    /**
@@ -737,6 +852,15 @@ class TCP_Server_CLI implements Servers
    }
 
    /**
+    * Node-specific post-fork startup barrier. The default TCP server has no
+    * extra worker proof beyond a successful fork; nodes may override it.
+    */
+   protected function ready (): bool
+   {
+      return true;
+   }
+
+   /**
     * The per-worker boot body: process title, log routing, error handler,
     * `Worker::Boot` event, socket instance, per-worker wiring and the event
     * loop. Called by both the initial fork and the SIGCHLD recover path, so a
@@ -744,12 +868,33 @@ class TCP_Server_CLI implements Servers
     */
    protected function work (Process $Process, int $index): void
    {
+      // The launcher handshake belongs only to the final daemon master. A
+      // worker retaining the inherited descriptor would hide master failure.
+      if (is_resource($this->daemonReady)) {
+         fclose($this->daemonReady);
+         $this->daemonReady = null;
+      }
+
       // @ Fork hygiene — drop Timer tasks inherited from the parent: POSIX
       //   clears pending alarms on fork, so inherited tasks can never fire
       //   here, yet a non-empty inherited task map would stop the next
       //   `Timer::add()` from arming its alarm — leaving every timer this
       //   worker installs (e.g. the SSE supervisor) silently dead.
       Timer::del();
+
+      // ! A hard-killed daemon master cannot signal its workers. Detect
+      //   reparenting and stop locally so stale workers never outlive their
+      //   supervisor or retain its inherited process-state lock forever.
+      $master = Process::$master;
+      Timer::add(
+         interval: 1,
+         handler: function () use ($master): void {
+            if (posix_getppid() !== $master) {
+               $this->stop();
+            }
+         },
+         persistent: true
+      );
 
       // @ Process title (node-specific prefix).
       $Process->title = $this->process . ': child process (Worker #' . Process::$index . ')';
@@ -911,8 +1056,8 @@ class TCP_Server_CLI implements Servers
          exit(1);
       }
 
-      $uid = $userInfo['uid'];
-      $gid = $userInfo['gid'];
+      $UID = $userInfo['uid'];
+      $GID = $userInfo['gid'];
 
       // @ Resolve group
       if ($this->group !== null) {
@@ -921,30 +1066,171 @@ class TCP_Server_CLI implements Servers
             $this->Logger->log(error: '@\;Group "' . $this->group . '" not found. Cannot drop privileges.@\;');
             exit(1);
          }
-         $gid = $groupInfo['gid'];
+         $GID = $groupInfo['gid'];
       }
 
       // @ Hand over ownership of state files (pid/lock/command) to the
       //   demoted user, so `project stop` from that user can rewrite/unlink.
-      $this->Process->State->own($uid, $gid);
-
-      // @ Drop: group first, then user (order matters!)
-      if (posix_setgid($gid) === false) {
-         $this->Logger->log(error: '@\;Failed to set GID to ' . $gid . '.@\;');
+      if ($this->Process->State->own($UID, $GID) === false) {
+         $this->Logger->log(error: '@\;Failed to hand process state to the configured runtime identity.@\;');
          exit(1);
       }
 
-      if (posix_initgroups($this->user, $gid) === false) {
+      // @ Drop: group first, then user (order matters!)
+      if (posix_setgid($GID) === false) {
+         $this->Logger->log(error: '@\;Failed to set GID to ' . $GID . '.@\;');
+         exit(1);
+      }
+
+      if (posix_initgroups($this->user, $GID) === false) {
          $this->Logger->log(error: '@\;Failed to init groups for user "' . $this->user . '".@\;');
          exit(1);
       }
 
-      if (posix_setuid($uid) === false) {
-         $this->Logger->log(error: '@\;Failed to set UID to ' . $uid . '.@\;');
+      if (posix_setuid($UID) === false) {
+         $this->Logger->log(error: '@\;Failed to set UID to ' . $UID . '.@\;');
          exit(1);
       }
 
       $this->demoted = true;
+   }
+
+   /**
+    * Master supervision tick — run once per master-loop iteration in every
+    * mode (Daemon, Foreground, Interactive, Monitor). Default: nothing.
+    * Nodes override it for periodic master-side duties (e.g. the HTTP
+    * Auto-TLS renewal pump). Deliberately not Timer-based: Monitor mode
+    * wipes the master timers (`Timer::del(0)`) when dropping to
+    * Interactive, which would silently kill a Timer-driven check.
+    */
+   protected function tick (): void
+   {
+      // ...
+   }
+
+   /**
+    * Fork the final daemon master before any server child exists.
+    * The launcher exits; only the session-leading child returns.
+    */
+   protected function detach (): void
+   {
+      $Pair = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+      if ($Pair === false) {
+         $this->Logger->log(error: '@\;Failed to create the daemon readiness channel!@\;');
+         exit(1);
+      }
+
+      $PID = pcntl_fork();
+      if ($PID === -1) {
+         fclose($Pair[0]);
+         fclose($Pair[1]);
+         $this->Logger->log(error: '@\;Failed to fork daemon process!@\;');
+         exit(1);
+      }
+
+      if ($PID > 0) {
+         $this->daemonized = true;
+         fclose($Pair[1]);
+         stream_set_blocking($Pair[0], false);
+
+         $ready = '';
+         $deadline = microtime(true) + 30.0;
+         while (strlen($ready) < 5 && microtime(true) < $deadline) {
+            $remaining = $deadline - microtime(true);
+            if ($remaining <= 0) {
+               break;
+            }
+            $seconds = (int) $remaining;
+            $microseconds = (int) (($remaining - $seconds) * 1_000_000);
+            $read = [$Pair[0]];
+            $write = null;
+            $except = null;
+            $selected = @stream_select($read, $write, $except, $seconds, $microseconds);
+            if ($selected === false) {
+               continue;
+            }
+            if ($selected === 0) {
+               break;
+            }
+            $chunk = fread($Pair[0], 5 - strlen($ready));
+            if ($chunk === false || ($chunk === '' && feof($Pair[0]))) {
+               break;
+            }
+            $ready .= $chunk;
+         }
+         fclose($Pair[0]);
+
+         if ($ready === 'ready') {
+            $this->Logger->log(notice: '@\;Daemon started (PID: ' . $PID . ')@\;@.;');
+            exit(0);
+         }
+
+         $groupAlive = posix_kill(-$PID, 0);
+         $masterAlive = posix_kill($PID, 0);
+         if ($groupAlive) {
+            posix_kill(-$PID, SIGTERM);
+         }
+         else if ($masterAlive) {
+            posix_kill($PID, SIGTERM);
+         }
+         $reaped = pcntl_waitpid($PID, $status, WNOHANG);
+         $stopDeadline = microtime(true) + 2.0;
+         while ($reaped === 0 && microtime(true) < $stopDeadline) {
+            usleep(50000);
+            $reaped = pcntl_waitpid($PID, $status, WNOHANG);
+         }
+         if (posix_kill(-$PID, 0)) {
+            posix_kill(-$PID, SIGKILL);
+         }
+         else if ($reaped === 0 && posix_kill($PID, 0)) {
+            posix_kill($PID, SIGKILL);
+         }
+         if ($reaped === 0) {
+            pcntl_waitpid($PID, $status);
+         }
+         $this->Process->State->clean();
+         $this->Logger->log(error: '@\;Daemon startup failed before readiness was acknowledged.@\;');
+         exit(1);
+      }
+
+      fclose($Pair[0]);
+      $this->daemonReady = $Pair[1];
+
+      if (posix_setsid() === -1) {
+         $this->Logger->log(error: '@\;Failed to create daemon session!@\;');
+         exit(1);
+      }
+
+      Process::$master = posix_getpid();
+      Display::show(Display::NONE);
+
+      fclose(STDIN);
+      fclose(STDOUT);
+      fclose(STDERR);
+      $stdin = fopen('/dev/null', 'r');
+      $stdout = fopen('/dev/null', 'w');
+      $stderr = fopen('/dev/null', 'w');
+      foreach ([$stdin, $stdout, $stderr] as $Stream) {
+         if (is_resource($Stream)) {
+            $this->daemonStreams[] = $Stream;
+         }
+      }
+   }
+
+   /** Acknowledge complete daemon startup to the waiting launcher. */
+   protected function announce (): void
+   {
+      if (is_resource($this->daemonReady) === false) {
+         return;
+      }
+
+      $written = fwrite($this->daemonReady, 'ready');
+      fclose($this->daemonReady);
+      $this->daemonReady = null;
+      if ($written !== 5) {
+         $this->Logger->log(error: '@\;Daemon readiness acknowledgement failed.@\;');
+         $this->stop();
+      }
    }
 
    protected function daemonize (): void
@@ -953,60 +1239,15 @@ class TCP_Server_CLI implements Servers
 
       $this->Logger->log(info: 'Running in Daemon mode (no UI)...@.;');
 
-      // @ Fork: parent returns to terminal, child becomes daemon master
-      $pid = pcntl_fork();
-
-      if ($pid === -1) {
-         $this->Logger->log(error: '@\;Failed to fork daemon process!@\;');
-         exit(1);
-      }
-
-      // # Parent process (CLI caller): return control to terminal.
-      //   The parent owns the worker children but transfers ownership to the
-      //   daemon child by exiting — workers reparent to init (PID 1), which
-      //   keeps the daemon lineage clean and avoids the parent staying alive
-      //   waiting on workers (or catching SIGINT/SIGTERM and invoking
-      //   `stop()`, which would wipe the freshly written PID file).
-      if ($pid > 0) {
-         $this->daemonized = true;
-         $this->Logger->log(notice: '@\;Daemon started (PID: ' . $pid . ')@\;@.;');
-         exit(0);
-      }
-
-      // # Child process (new daemon master): become session leader
-      posix_setsid();
-
-      // @ Detach the standard descriptors from the launching terminal: pin fds
-      //   0-2 on /dev/null so nothing in the daemon lineage — including the
-      //   fresh image reload() re-execs, which inherits these descriptors —
-      //   ever writes to the caller's TTY. The locals hold the streams open for
-      //   the daemon's lifetime (this method only returns when Status leaves
-      //   Running); console display is muted like the daemonized workers.
-      Display::show(Display::NONE);
-      fclose(STDIN);
-      fclose(STDOUT);
-      fclose(STDERR);
-      $stdin = fopen('/dev/null', 'r');
-      $stdout = fopen('/dev/null', 'w');
-      $stderr = fopen('/dev/null', 'w');
-
-      // @ Update master PID to daemon child and re-save PID file
-      Process::$master = posix_getpid();
-      $this->Process->State->save([
-         'master'  => Process::$master,
-         'workers' => $this->Process->Children->PIDs,
-         'host'    => $this->host ?? '0.0.0.0',
-         'port'    => $this->port ?? 0,
-         'started' => $this->started,
-         'type'    => 'WPI'
-      ]);
-
-      // @ Daemon master loop (Status changes via signal handlers)
+      // @ Daemon master loop (Status changes via signal handlers).
+      //   Child exits are reaped exclusively by the SIGCHLD handler
+      //   (`recover()` drains every reapable child) — a raw waitpid here
+      //   would RACE it and could steal a worker exit, losing the refork.
       while ($this->Status === Status::Running) { // @phpstan-ignore identical.alwaysTrue
          pcntl_signal_dispatch();
 
-         // @ Reap any zombie children
-         pcntl_waitpid(-1, $status, WNOHANG);
+         // @ Master supervision tick (node overrides)
+         $this->tick();
 
          usleep(500000); // 0.5s
       }
@@ -1020,11 +1261,14 @@ class TCP_Server_CLI implements Servers
       // @ Master loop (no fork): stay in the foreground as the container/service
       //   process. Logs go to stdout and SIGTERM/SIGINT stop via signal handlers.
       //   Master PID is already this process and was saved before the dispatch.
+      //   Child exits are reaped exclusively by the SIGCHLD handler
+      //   (`recover()` drains every reapable child) — a raw waitpid here
+      //   would RACE it and could steal a worker exit, losing the refork.
       while ($this->Status === Status::Running) { // @phpstan-ignore identical.alwaysTrue
          pcntl_signal_dispatch();
 
-         // @ Reap any zombie children
-         pcntl_waitpid(-1, $status, WNOHANG);
+         // @ Master supervision tick (node overrides)
+         $this->tick();
 
          usleep(500000); // 0.5s
       }
@@ -1040,31 +1284,67 @@ class TCP_Server_CLI implements Servers
       $this->Logger->log(debug: '>_ Type `@#Green:monitor@;` to enter in Monitor mode.@\;');
       $this->Logger->log(notice: '>_ Autocompletation and history enabled.@\\\;');
 
-      while ($this->Mode === Modes::Interactive) {
-         // @ Calls signal handlers for pending signals
-         pcntl_signal_dispatch();
+      // ! readline() blocks the master and used to suspend Auto-TLS renewal
+      //   indefinitely while the operator was idle. Its callback API keeps
+      //   line editing/history while letting this loop dispatch signals and
+      //   run tick() every 500ms.
+      $this->Commands->prepare();
+      $input = null;
+      $available = false;
+      $installed = false;
+      $Install = static function () use (&$input, &$available, &$installed): void {
+         readline_callback_handler_install(
+            '>_: ',
+            static function (null|string $line) use (&$input, &$available): void {
+               $input = $line;
+               $available = true;
+            }
+         );
+         $installed = true;
+      };
+      $Install();
 
-         // @ Suspends execution of the current process until a child has exited, or until a signal is delivered
-         pcntl_wait($status, WNOHANG | WUNTRACED);
+      try {
+         while ($this->Mode === Modes::Interactive && $this->Status === Status::Running) {
+            pcntl_signal_dispatch();
+            $this->tick();
 
-         // If child is running?
-         if ($status === 0) {
-            $interact = $this->Commands->interact();
+            $read = [STDIN];
+            $write = null;
+            $except = null;
+            $selected = @stream_select($read, $write, $except, 0, 500000);
+            if ($selected > 0) {
+               readline_callback_read_char();
+            }
+            if ($available === false) {
+               continue;
+            }
 
+            readline_callback_handler_remove();
+            $installed = false;
+            $available = false;
+
+            // Ctrl-D/EOF means stop, rather than spinning forever on EOF.
+            if ($input === null) {
+               $this->stop();
+               break;
+            }
+
+            $interact = $this->Commands->execute($input);
+            $input = null;
             $this->Logger->log(debug: '@\;');
-
-            // @ Wait for command output before looping
             if ($interact === false) {
-               usleep(100000 * $this->workers); // @ wait 0.1 s * qt workers
+               usleep(100000 * $this->workers);
+            }
+
+            if ($this->Mode === Modes::Interactive && $this->Status === Status::Running) {
+               $Install();
             }
          }
-         else if ($status > 0) { // If a child has already exited?
-            $this->Logger->log(error: '@\;Process child exited!@\;');
-            $this->Process->Signals->send(SIGINT);
-            break;
-         }
-         else if ($status === -1) { // If error
-            break;
+      }
+      finally {
+         if ($installed) {
+            readline_callback_handler_remove();
          }
       }
 
@@ -1147,6 +1427,9 @@ class TCP_Server_CLI implements Servers
          // @ Dispatch pending signals (reforks, reload, shutdown, resize)
          pcntl_signal_dispatch();
 
+         // @ Master supervision tick (node overrides)
+         $this->tick();
+
          // @ Drain worker + master logs from the pipe
          if ($this->LogPipe !== null) {
             while (true) {
@@ -1186,6 +1469,419 @@ class TCP_Server_CLI implements Servers
       if ($this->Mode === Modes::Interactive) {
          Timer::del(0);
          $this->interacting();
+      }
+   }
+
+   /**
+    * Replace the SSL context options of the live listening socket
+    * (hot certificate swap).
+    *
+    * `stream_socket_enable_crypto()` reads the listening socket's context
+    * at every handshake, so subsequent accepted connections present the new
+    * credentials; established connections keep the old ones until they
+    * reconnect. In the master (no bound socket) only the stored
+    * configuration is synchronized.
+    *
+    * @param array<string,mixed> $secure New SSL stream-context options.
+    * @param null|array<string,mixed> $hashes Expected
+    *        SHA-256 digests from a fully validated credential generation.
+    */
+   public function swap (array $secure, null|array $hashes = null): bool
+   {
+      if (
+         $hashes !== null
+         && (
+            is_string($hashes['certificate'] ?? null) === false
+            || array_key_exists('key', $hashes) === false
+            || (($hashes['key'] ?? null) !== null && is_string($hashes['key']) === false)
+         )
+      ) {
+         return false;
+      }
+      /** @var null|array{certificate:string,key:null|string} $hashes */
+
+      // ! The validated store path is never installed directly. PHP retains
+      //   `local_cert`/`local_pk` as pathnames and opens them again for future
+      //   handshakes, so replacing a store file after ACK would otherwise
+      //   replace the live identity without another swap. Seal exact bounded
+      //   bytes into a private, generation-local artifact and keep its
+      //   read-only descriptors alive for the complete local generation.
+      $sealed = null;
+      if (is_string($secure['local_cert'] ?? null)) {
+         $sealed = $this->seal($secure, $hashes);
+         if ($sealed === null) {
+            return false;
+         }
+         $secure = $sealed['secure'];
+      }
+
+      // ? Master / unbound socket: synchronize only after validating the
+      //   exact bytes selected by the generation snapshot above.
+      if (is_resource($this->Socket ?? null) === false) { // @phpstan-ignore nullCoalesce.property
+         $this->secure = $secure;
+         if (isset(self::$context) === false) {
+            self::$context = [];
+         }
+         self::$context['ssl'] = $secure;
+         $previous = $this->credential;
+         $this->credential = $sealed['credential'] ?? null;
+         $this->release($previous);
+
+         return true;
+      }
+
+      // @ Apply on the live listening socket in ONE call — the stored
+      //   configuration only advances when the application landed
+      $previousOptions = stream_context_get_options($this->Socket)['ssl'] ?? [];
+      if (stream_context_set_options($this->Socket, ['ssl' => $secure]) === false) { // @phpstan-ignore identical.alwaysFalse (defensive: the stub pins `true`, the engine may still refuse)
+         $this->release($sealed['credential'] ?? null);
+         return false;
+      }
+      $applied = stream_context_get_options($this->Socket)['ssl'] ?? null;
+      if (
+         is_array($applied) === false
+         || ($applied['local_cert'] ?? null) !== ($secure['local_cert'] ?? null)
+         || ($applied['local_pk'] ?? null) !== ($secure['local_pk'] ?? null)
+      ) {
+         stream_context_set_options($this->Socket, ['ssl' => $previousOptions]);
+         $this->release($sealed['credential'] ?? null);
+         return false;
+      }
+
+      // @ Synchronize the stored configuration
+      $this->secure = $secure;
+      self::$context['ssl'] = $secure;
+      $previous = $this->credential;
+      $this->credential = $sealed['credential'] ?? null;
+      $this->release($previous);
+
+      // :
+      return true;
+   }
+
+   /**
+    * Copy, verify and probe one credential into a private per-process
+    * artifact. Reads use the same caps as the certificate store.
+    *
+    * @param array<string,mixed> $secure
+    * @param null|array{certificate:string,key:null|string} $hashes
+    * @return null|array{
+    *    secure:array<string,mixed>,
+    *    credential:array{directory:string,files:array<int,string>,handles:array<int,resource>}
+    * }
+    */
+   private function seal (array $secure, null|array $hashes): null|array
+   {
+      $certificate = $secure['local_cert'] ?? null;
+      if (is_string($certificate) === false) {
+         return null;
+      }
+      $leaf = @file_get_contents($certificate, false, null, 0, 1048577);
+      if (is_string($leaf) === false || strlen($leaf) > 1048576) {
+         return null;
+      }
+
+      $key = $secure['local_pk'] ?? null;
+      if ($key !== null && is_string($key) === false) {
+         return null;
+      }
+      $private = is_string($key)
+         ? @file_get_contents($key, false, null, 0, 65537)
+         : $leaf;
+      if (
+         is_string($private) === false
+         || (is_string($key) && strlen($private) > 65536)
+      ) {
+         return null;
+      }
+      if (
+         $hashes !== null
+         && (
+            hash('sha256', $leaf) !== $hashes['certificate']
+            || (is_string($key) && hash('sha256', $private) !== $hashes['key'])
+            || (is_string($key) === false && $hashes['key'] !== null)
+         )
+      ) {
+         return null;
+      }
+
+      $passphrase = $secure['passphrase'] ?? null;
+      $pair = is_string($passphrase) && $passphrase !== ''
+         ? [$private, $passphrase]
+         : $private;
+      if (openssl_x509_check_private_key($leaf, $pair) === false) {
+         return null;
+      }
+
+      try {
+         $this->sweep();
+         $directory = rtrim(sys_get_temp_dir(), '/')
+            . '/bootgly-tls-' . posix_getpid() . '-' . bin2hex(random_bytes(16));
+      }
+      catch (Throwable) {
+         return null;
+      }
+      if (mkdir($directory, 0700) === false) {
+         return null;
+      }
+
+      $files = ["{$directory}/certificate.pem"];
+      $Handles = [];
+      $CertificateHandle = $this->persist($files[0], $leaf);
+      if (is_resource($CertificateHandle) === false) {
+         $this->release(['directory' => $directory, 'files' => $files, 'handles' => []]);
+         return null;
+      }
+      $Handles[] = $CertificateHandle;
+      $sealed = $secure;
+      $sealed['local_cert'] = $files[0];
+
+      if (is_string($key)) {
+         $files[] = "{$directory}/private-key.pem";
+         $KeyHandle = $this->persist($files[1], $private);
+         if (is_resource($KeyHandle) === false) {
+            $this->release(['directory' => $directory, 'files' => $files, 'handles' => $Handles]);
+            return null;
+         }
+         $Handles[] = $KeyHandle;
+         $sealed['local_pk'] = $files[1];
+      }
+
+      if (chmod($directory, 0500) === false || $this->probe($sealed, $leaf) === false) {
+         $this->release(['directory' => $directory, 'files' => $files, 'handles' => $Handles]);
+         return null;
+      }
+
+      return [
+         'secure' => $sealed,
+         'credential' => [
+            'directory' => $directory,
+            'files' => $files,
+            'handles' => $Handles
+         ]
+      ];
+   }
+
+   /** Remove private credential artifacts left by dead local processes. */
+   private function sweep (): void
+   {
+      $base = rtrim(sys_get_temp_dir(), '/') . '/';
+      foreach (glob("{$base}bootgly-tls-*") ?: [] as $directory) {
+         $name = basename($directory);
+         if (
+            preg_match('/^bootgly-tls-(\d+)-[a-f0-9]{32}$/', $name, $matches) !== 1
+            || is_link($directory)
+            || is_dir($directory) === false
+         ) {
+            continue;
+         }
+         $metadata = @lstat($directory);
+         if (is_array($metadata) === false || $metadata['uid'] !== posix_getuid()) {
+            continue;
+         }
+
+         $PID = (int) $matches[1];
+         $status = @file_get_contents("/proc/{$PID}/status", false, null, 0, 4097);
+         if (
+            (is_string($status) && preg_match('/^State:\s+Z/m', $status) !== 1)
+            || (is_string($status) === false && posix_kill($PID, 0))
+         ) {
+            continue;
+         }
+
+         $entries = @scandir($directory);
+         if ($entries === false) {
+            continue;
+         }
+         $files = [];
+         $safe = true;
+         foreach ($entries as $entry) {
+            if ($entry === '.' || $entry === '..') {
+               continue;
+            }
+            if ($entry !== 'certificate.pem' && $entry !== 'private-key.pem') {
+               $safe = false;
+               break;
+            }
+            $files[] = "{$directory}/{$entry}";
+         }
+         if ($safe === false) {
+            continue;
+         }
+
+         @chmod($directory, 0700);
+         foreach ($files as $file) {
+            @unlink($file);
+         }
+         @rmdir($directory);
+      }
+   }
+
+   /**
+    * Create one complete read-only artifact and retain a read descriptor.
+    *
+    * @return resource|false
+    */
+   private function persist (string $file, string $contents)
+   {
+      // 0666 & ~0266 = 0400. The writable descriptor can still receive the
+      // verified bytes, while no pathname-based chmod race is introduced.
+      $previousMask = umask(0266);
+      try {
+         $Handle = @fopen($file, 'x+b');
+      }
+      finally {
+         umask($previousMask);
+      }
+      if ($Handle === false) {
+         return false;
+      }
+
+      $complete = false;
+      try {
+         $length = strlen($contents);
+         $offset = 0;
+         while ($offset < $length) {
+            $written = fwrite($Handle, substr($contents, $offset));
+            if ($written === false || $written === 0) {
+               break;
+            }
+            $offset += $written;
+         }
+         $complete = $offset === $length
+            && fflush($Handle)
+            && (!function_exists('fsync') || fsync($Handle));
+      }
+      finally {
+         fclose($Handle);
+      }
+
+      if ($complete === false) {
+         @unlink($file);
+         return false;
+      }
+
+      return @fopen($file, 'rb');
+   }
+
+   /**
+    * Release one superseded per-process credential artifact.
+    *
+    * @param null|array{directory:string,files:array<int,string>,handles:array<int,resource>} $credential
+    */
+   private function release (null|array $credential): void
+   {
+      if ($credential === null) {
+         return;
+      }
+      foreach ($credential['handles'] as $Handle) {
+         is_resource($Handle) && fclose($Handle);
+      }
+      @chmod($credential['directory'], 0700);
+      foreach ($credential['files'] as $file) {
+         @chmod($file, 0600);
+         @unlink($file);
+      }
+      @rmdir($credential['directory']);
+   }
+
+   /**
+    * Complete a local loopback TLS handshake with the candidate context.
+    * This proves OpenSSL can load and present the selected credentials; a
+    * successful context mutation alone does not prove the next handshake.
+    *
+    * @param array<string,mixed> $secure
+    */
+   private function probe (array $secure, string $certificate): bool
+   {
+      $ServerContext = stream_context_create(['ssl' => $secure]);
+      $ClientContext = stream_context_create([
+         'ssl' => [
+            'verify_peer' => false,
+            'verify_peer_name' => false,
+            'allow_self_signed' => true,
+            'capture_peer_cert' => true
+         ]
+      ]);
+      $Listener = @stream_socket_server(
+         'tcp://127.0.0.1:0',
+         $code,
+         $message,
+         STREAM_SERVER_BIND | STREAM_SERVER_LISTEN,
+         $ServerContext
+      );
+      if ($Listener === false) {
+         return false;
+      }
+
+      $Server = false;
+      $Client = false;
+      try {
+         $address = stream_socket_get_name($Listener, false);
+         if (is_string($address) === false || $address === '') {
+            return false;
+         }
+         $Client = @stream_socket_client(
+            "tcp://{$address}",
+            $code,
+            $message,
+            2.0,
+            STREAM_CLIENT_CONNECT,
+            $ClientContext
+         );
+         $Server = @stream_socket_accept($Listener, 2.0);
+         if ($Client === false || $Server === false) {
+            return false;
+         }
+
+         stream_set_blocking($Server, false);
+         stream_set_blocking($Client, false);
+
+         $served = 0;
+         $connected = 0;
+         $deadline = microtime(true) + 2.0;
+         while (microtime(true) < $deadline) {
+            if ($served !== true) {
+               $served = @stream_socket_enable_crypto(
+                  $Server,
+                  true,
+                  STREAM_CRYPTO_METHOD_TLS_SERVER
+               );
+               if ($served === false) {
+                  return false;
+               }
+            }
+            if ($connected !== true) {
+               $connected = @stream_socket_enable_crypto(
+                  $Client,
+                  true,
+                  STREAM_CRYPTO_METHOD_TLS_CLIENT
+               );
+               if ($connected === false) {
+                  return false;
+               }
+            }
+            if ($served === true && $connected === true) {
+               break;
+            }
+            usleep(1000);
+         }
+         if ($served !== true || $connected !== true) {
+            return false;
+         }
+
+         $Peer = stream_context_get_options($Client)['ssl']['peer_certificate'] ?? null;
+         $expected = openssl_x509_fingerprint($certificate, 'sha256');
+         $actual = $Peer !== null
+            ? openssl_x509_fingerprint($Peer, 'sha256')
+            : false;
+
+         return is_string($expected) && $expected !== '' && $actual === $expected;
+      }
+      finally {
+         fclose($Listener);
+         is_resource($Server) && fclose($Server);
+         is_resource($Client) && fclose($Client);
       }
    }
 
@@ -1390,6 +2086,9 @@ class TCP_Server_CLI implements Servers
 
    public function __destruct ()
    {
+      $this->release($this->credential);
+      $this->credential = null;
+
       // @ Reset Opcache?
       /*
       if (function_exists('opcache_reset') && $this->Process->level === 'master') {

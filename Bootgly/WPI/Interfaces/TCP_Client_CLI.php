@@ -51,6 +51,7 @@ use Throwable;
 
 use Bootgly\ABI\Debugging\Data\Vars;
 use Bootgly\ACI\Events\Loops;
+use Bootgly\ACI\Events\Scheduler;
 use Bootgly\ACI\Events\Timer;
 use Bootgly\ACI\Logs\Data\Display;
 use Bootgly\ACI\Logs\Logger;
@@ -80,7 +81,7 @@ class TCP_Client_CLI
    public $Socket;
 
    // ! Event
-   public static Events & Loops $Event;
+   public static Events & Loops & Scheduler $Event;
 
    // ! Process
    protected Process $Process;
@@ -95,6 +96,10 @@ class TCP_Client_CLI
    protected int $workers;
    /** @var array<string,mixed>|null Secure SSL/TLS Stream Context */
    protected null|array $secure = null;
+   /** TCP + TLS establishment budget in seconds (0 = unbounded). */
+   public int|float $connectTimeout = 5;
+   /** Optional absolute monotonic request deadline (`microtime(true)`). */
+   public null|float $deadline = null;
    // # Mode
    protected int $mode;
    public const int MODE_DEFAULT = 1;
@@ -479,7 +484,10 @@ class TCP_Client_CLI
          return $Socket;
       }
 
-      $this->Connections->connect();
+      if ($this->Connections->connect() === false) {
+         $this->Logger->log(warning: 'Unable to establish the TCP/TLS connection before its deadline.@\\;');
+         return false;
+      }
 
       return $Socket;
    }

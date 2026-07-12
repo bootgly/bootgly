@@ -11,6 +11,7 @@
 namespace Bootgly\ACI\Events;
 
 
+use Closure;
 use Fiber;
 
 
@@ -45,4 +46,10 @@ interface Scheduler
     * @return bool
     */
    public function schedule (Fiber $Fiber, mixed $value = null, int $flag = self::SCHEDULE_READ): bool;
+
+   /** Register a one-shot monotonic wall-clock callback. */
+   public function defer (float $deadline, Closure $Callback): int;
+
+   /** Cancel a one-shot callback before it fires. */
+   public function cancel (int $ID): bool;
 }

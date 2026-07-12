@@ -14,6 +14,8 @@ namespace Bootgly\WPI\Interfaces\TCP_Client_CLI\Connections;
 use const STREAM_CRYPTO_METHOD_TLSv1_2_CLIENT;
 use const STREAM_CRYPTO_METHOD_TLSv1_3_CLIENT;
 use function fclose;
+use function microtime;
+use function stream_select;
 use function stream_set_blocking;
 use function stream_socket_enable_crypto;
 use function stream_socket_get_name;
@@ -67,7 +69,12 @@ class Connection extends Packages
     * @param resource $Socket
    * @param bool $secure Whether secure SSL/TLS handshake is required
     */
-   public function __construct (&$Socket, bool $secure = false, null|Client $Client = null)
+   public function __construct (
+      &$Socket,
+      bool $secure = false,
+      null|Client $Client = null,
+      null|float $deadline = null
+   )
    {
       $this->Socket = $Socket;
       $this->Client = $Client;
@@ -108,7 +115,7 @@ class Connection extends Packages
       parent::__construct($this);
 
       // @ Call handshake if secure transport is enabled
-      if ($secure && $this->handshake() === false) {
+      if ($secure && $this->handshake($deadline) === false) {
          return;
       }
 
@@ -148,18 +155,44 @@ class Connection extends Packages
       return true;
    }
 
-   public function handshake (): bool|int
+   public function handshake (null|float $deadline = null): bool|int
    {
       try {
-         stream_set_blocking($this->Socket, true);
-
-         $negotiation = @stream_socket_enable_crypto(
-            $this->Socket,
-            true,
-            STREAM_CRYPTO_METHOD_TLSv1_2_CLIENT | STREAM_CRYPTO_METHOD_TLSv1_3_CLIENT
-         );
-
          stream_set_blocking($this->Socket, false);
+         do {
+            if ($deadline !== null && microtime(true) >= $deadline) {
+               $negotiation = false;
+               break;
+            }
+
+            $negotiation = @stream_socket_enable_crypto(
+               $this->Socket,
+               true,
+               STREAM_CRYPTO_METHOD_TLSv1_2_CLIENT | STREAM_CRYPTO_METHOD_TLSv1_3_CLIENT
+            );
+            if ($negotiation === true || $negotiation === false) {
+               break;
+            }
+
+            do {
+               $read = [$this->Socket];
+               $write = [];
+               $except = null;
+               if ($deadline === null) {
+                  $selected = @stream_select($read, $write, $except, null);
+               }
+               else {
+                  $remaining = max(0.0, $deadline - microtime(true));
+                  $seconds = (int) $remaining;
+                  $microseconds = (int) (($remaining - $seconds) * 1_000_000);
+                  $selected = @stream_select($read, $write, $except, $seconds, $microseconds);
+               }
+            } while ($selected === false && $deadline !== null && microtime(true) < $deadline);
+            if ($selected !== 1) {
+               $negotiation = false;
+               break;
+            }
+         } while (true);
       }
       catch (Throwable) {
          $negotiation = false;

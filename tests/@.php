@@ -143,5 +143,14 @@ return new Suites(
       // # HTTP_Server_CLI unit doubles — transport-failure paths no live
       //   server spec can reach (appended last: indices stay stable)
       'Bootgly/WPI/Nodes/HTTP_Server_CLI/tests/Unit/',
+      // # HTTP_Server_CLI/ACME_Client — Auto-TLS protocol primitives
+      //   (config validation, JWK/JWS/CSR/nonces — no network)
+      'Bootgly/WPI/Nodes/HTTP_Server_CLI/ACME_Client/tests/',
+      // E2E built-in HTTP-01 responder (port 8098; hook wins over user handler)
+      'Bootgly/WPI/Nodes/HTTP_Server_CLI/tests/ACME_Challenge/',
+      // E2E Auto-TLS bootstrap + port helper + hot cert swap (ports 8099/8078, Docker-free)
+      'Bootgly/WPI/Nodes/HTTP_Server_CLI/tests/ACME_Swap/',
+      // E2E full ACME issuance against Pebble (opt-in: BOOTGLY_ACME_E2E=1 + Pebble on :14000)
+      'Bootgly/WPI/Nodes/HTTP_Server_CLI/tests/ACME_E2E/',
    ]
 );

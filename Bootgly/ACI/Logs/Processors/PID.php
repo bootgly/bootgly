@@ -13,8 +13,8 @@ namespace Bootgly\ACI\Logs\Processors;
 
 use function getmypid;
 
-use Bootgly\ACI\Logs\Processor;
 use Bootgly\ACI\Logs\Data\Record;
+use Bootgly\ACI\Logs\Processor;
 
 
 class PID extends Processor

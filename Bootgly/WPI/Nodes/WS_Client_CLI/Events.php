@@ -18,5 +18,10 @@ enum Events : string implements Event
 {
    case Connected = 'connected';
    case MessageReceived = 'messageReceived';
+   /**
+    * An established connection closed. A dial that never connected (refused
+    * peer, unreachable host, establishment deadline) opens no session and
+    * therefore fires no `Disconnected` — `connect()` returns `false` instead.
+    */
    case Disconnected = 'disconnected';
 }

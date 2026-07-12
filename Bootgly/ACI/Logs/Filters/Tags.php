@@ -16,8 +16,8 @@ use function count;
 use function in_array;
 use function is_array;
 
-use Bootgly\ACI\Logs\Filter;
 use Bootgly\ACI\Logs\Data\Record;
+use Bootgly\ACI\Logs\Filter;
 
 
 class Tags extends Filter

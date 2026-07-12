@@ -11,8 +11,8 @@
 namespace Bootgly\ACI\Logs\Processors;
 
 
-use Bootgly\ACI\Logs\Processor;
 use Bootgly\ACI\Logs\Data\Record;
+use Bootgly\ACI\Logs\Processor;
 
 
 class RequestID extends Processor

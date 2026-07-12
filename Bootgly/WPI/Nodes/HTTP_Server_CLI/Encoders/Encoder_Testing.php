@@ -12,6 +12,7 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders;
 
 
 use function strlen;
+use function strncmp;
 use Generator;
 use Throwable;
 
@@ -21,9 +22,11 @@ use Bootgly\API\Workables\Server as SAPI;
 use Bootgly\WPI\Endpoints\Servers\Packages;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages as TCPPackages;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI as Server;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\ACME_Client\Challenges;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Cache;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders\Catcher;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders\Challenge;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders\Check;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Events as RequestEvents;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
@@ -115,6 +118,14 @@ class Encoder_Testing extends Encoders
             && ($Request->method === 'GET' || $Request->method === 'HEAD')
          ) {
             Check::respond($Request, $Response);
+         }
+         // ?: Built-in ACME HTTP-01 responder (Auto-TLS) — mirrors Encoder_
+         else if (
+            strncmp($Request->URI, Challenge::PREFIX, 28) === 0
+            && Challenges::collect() !== []
+            && ($Request->method === 'GET' || $Request->method === 'HEAD')
+         ) {
+            Challenge::respond($Request, $Response);
          }
          else {
             $Result = SAPI::$Middlewares->process($Request, $Response,

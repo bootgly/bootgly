@@ -13,8 +13,8 @@ namespace Bootgly\ACI\Logs\Filters;
 
 use function stripos;
 
-use Bootgly\ACI\Logs\Filter;
 use Bootgly\ACI\Logs\Data\Record;
+use Bootgly\ACI\Logs\Filter;
 
 
 class Search extends Filter

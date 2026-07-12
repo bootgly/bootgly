@@ -90,7 +90,7 @@ class Suite
    public float $finished;
    public float $elapsed;
    // # Output
-   public int $case;
+   public int $case = 0;
    public int $target;
    public static int $width = 0;
 

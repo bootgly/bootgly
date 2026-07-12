@@ -17,6 +17,7 @@ use function microtime;
 use function pcntl_signal_dispatch;
 use function sleep;
 use function stream_select;
+use Closure;
 use Fiber;
 use Throwable;
 
@@ -68,6 +69,9 @@ class Select implements Events, Loops, Scheduler
    private array $awaitingReadDeadlines = [];
    /** @var array<int,float> */
    private array $awaitingWriteDeadlines = [];
+   /** @var array<int,array{deadline:float,Callback:Closure}> */
+   private array $Timers = [];
+   private int $timer = 0;
    // # Loop
    public readonly float $started;
    public readonly float $finished;
@@ -197,6 +201,29 @@ class Select implements Events, Loops, Scheduler
       return false;
    }
 
+   /** Register a one-shot monotonic wall-clock callback. */
+   public function defer (float $deadline, Closure $Callback): int
+   {
+      $ID = ++$this->timer;
+      $this->Timers[$ID] = [
+         'deadline' => $deadline,
+         'Callback' => $Callback
+      ];
+
+      return $ID;
+   }
+
+   /** Cancel a one-shot callback before it fires. */
+   public function cancel (int $ID): bool
+   {
+      if (isset($this->Timers[$ID]) === false) {
+         return false;
+      }
+      unset($this->Timers[$ID]);
+
+      return true;
+   }
+
    /**
     * Start the event loop (Fiber-scheduled).
     *
@@ -215,6 +242,10 @@ class Select implements Events, Loops, Scheduler
 
          pcntl_signal_dispatch();
          $deadline = $this->tick();
+         // ? A timer callback dispatched by tick() may have stopped the loop
+         if ($this->loop === false) { // @phpstan-ignore identical.alwaysFalse
+            break;
+         }
 
          // @ Resume tick-based Fibers (no I/O association)
          if ($this->Fibers) {
@@ -476,6 +507,23 @@ class Select implements Events, Loops, Scheduler
       $now = microtime(true);
       $deadline = null;
 
+      foreach ($this->Timers as $ID => $Timer) {
+         if ($Timer['deadline'] > $now) {
+            if ($deadline === null || $Timer['deadline'] < $deadline) {
+               $deadline = $Timer['deadline'];
+            }
+            continue;
+         }
+
+         unset($this->Timers[$ID]);
+         try {
+            ($Timer['Callback'])();
+         }
+         catch (Throwable) {
+            // One failed timeout callback must not tear down the event loop.
+         }
+      }
+
       $this->expire($this->awaitingReads, $this->reads, $this->awaitingReadDeadlines, $now);
       $this->expire($this->awaitingWrites, $this->writes, $this->awaitingWriteDeadlines, $now);
       $this->limit($this->awaitingReadDeadlines, $deadline);
@@ -596,6 +644,7 @@ class Select implements Events, Loops, Scheduler
       $this->awaitingReadDeadlines = [];
       $this->awaitingWriteDeadlines = [];
       $this->Fibers = [];
+      $this->Timers = [];
 
       // # Loop
       $this->loop = false;

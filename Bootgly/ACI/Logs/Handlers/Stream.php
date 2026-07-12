@@ -17,10 +17,10 @@ use function fwrite;
 use function is_resource;
 use function is_string;
 
-use Bootgly\ACI\Logs\Formatter;
-use Bootgly\ACI\Logs\Handler;
 use Bootgly\ACI\Logs\Data\Levels;
 use Bootgly\ACI\Logs\Data\Record;
+use Bootgly\ACI\Logs\Formatter;
+use Bootgly\ACI\Logs\Handler;
 
 
 class Stream extends Handler

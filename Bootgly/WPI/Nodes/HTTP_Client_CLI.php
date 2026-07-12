@@ -47,7 +47,6 @@ use InvalidArgumentException;
 use Throwable;
 
 use Bootgly\ABI\IO\FS\File;
-use Bootgly\ACI\Events\Timer;
 use Bootgly\ACI\Logs\Data\Display;
 use Bootgly\ACI\Logs\Logger;
 use Bootgly\ACI\Tests\Suite;
@@ -81,6 +80,8 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
    public int|float $connectTimeout = 30;
    /** Response timeout in seconds (0 = no timeout). */
    public int|float $timeout = 30;
+   /** Maximum raw response bytes (headers + body); 0 keeps compatibility/unbounded. */
+   public int $maxResponseBytes = 0;
    // | Retry
    /** Maximum number of retries on connection/timeout failure (0 = disabled). */
    public int $maxRetries = 0;
@@ -312,6 +313,22 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
          if ($newSize > 0) {
             self::$bytesReceived += $newSize;
             $Request->bytesReceived += $newSize;
+
+            if (
+               $HTTP_Client_CLI->maxResponseBytes > 0
+               && $Request->bytesReceived > $HTTP_Client_CLI->maxResponseBytes
+            ) {
+               $Request->Response->code = 0;
+               $Request->Response->status = 'Response Too Large';
+               $Request->completed = true;
+               $Request->connectionState = 'idle';
+               unset($HTTP_Client_CLI->pendingRequests[$socketId]);
+               $Connection->close();
+               if ($HTTP_Client_CLI->pendingRequests === []) {
+                  self::$Event->destroy();
+               }
+               return;
+            }
 
             // @ Avoid string concat when buffer is empty (direct assignment)
             if ($Request->pendingBuffer === '') {
@@ -821,17 +838,18 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
       }
 
       // @ Register response timeout timer (sync/batch mode)
-      $timeoutTimerId = null;
+      $timeoutTimerID = null;
+      $timeoutDeadline = $this->deadline;
       if ($this->timeout > 0) {
-         Timer::init(function () { Timer::tick(); });
+         $responseDeadline = microtime(true) + $this->timeout;
+         $timeoutDeadline = $timeoutDeadline === null
+            ? $responseDeadline
+            : min($timeoutDeadline, $responseDeadline);
+      }
+      if ($timeoutDeadline !== null) {
          $HTTP_Client_CLI = $this;
-         $timeoutTimerId = Timer::add(1, function () use ($HTTP_Client_CLI, $Request, &$timeoutTimerId) {
-            if ($Request->completed || $Request->sentAt <= 0) {
-               return;
-            }
-
-            $elapsed = microtime(true) - $Request->sentAt;
-            if ($elapsed < $HTTP_Client_CLI->timeout) {
+         $timeoutTimerID = self::$Event->defer($timeoutDeadline, function () use ($HTTP_Client_CLI, $Request, &$timeoutTimerID) {
+            if ($Request->completed) {
                return;
             }
 
@@ -842,9 +860,11 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
             $Request->connectionState = 'idle';
 
             // @ Close all pending connections
-            foreach ($HTTP_Client_CLI->pendingRequests as $sid => $pendingReq) {
-               if ($pendingReq === $Request) {
-                  unset($HTTP_Client_CLI->pendingRequests[$sid]);
+            foreach ($HTTP_Client_CLI->pendingRequests as $socketID => $PendingRequest) {
+               if ($PendingRequest === $Request) {
+                  unset($HTTP_Client_CLI->pendingRequests[$socketID]);
+                  $Connection = Connections::$Connections[$socketID] ?? null;
+                  $Connection?->close();
                }
             }
 
@@ -853,11 +873,8 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
                self::$Event->destroy();
             }
 
-            if (is_int($timeoutTimerId)) {
-               Timer::del($timeoutTimerId);
-               $timeoutTimerId = null;
-            }
-         }, persistent: true);
+            $timeoutTimerID = null;
+         });
       }
 
       // @ Batch mode: return Response reference (filled later by drain())
@@ -869,9 +886,9 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
       $this->drain();
 
       // @ Clean up timeout timer
-      if (is_int($timeoutTimerId)) {
-         Timer::del($timeoutTimerId);
-         $timeoutTimerId = null;
+      if (is_int($timeoutTimerID)) {
+         self::$Event->cancel($timeoutTimerID);
+         $timeoutTimerID = null;
       }
 
       // @ Follow redirects (sync mode only)

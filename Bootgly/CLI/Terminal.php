@@ -105,9 +105,7 @@ class Terminal // extends API/Project or API/Node
    // If return true -> interact imediatily in the next loop otherwise wait for output...
    public function interact (): bool
    {
-      // @ Register CLI autocomplete function
-      // Use TAB key as trigger
-      readline_completion_function([$this, 'autocomplete']);
+      $this->prepare();
 
       // @ Get user input (read line)
       $input = readline('>_: ');
@@ -115,6 +113,18 @@ class Terminal // extends API/Project or API/Node
          return false;
       }
 
+      return $this->execute($input);
+   }
+
+   /** Register the readline completion callback. */
+   public function prepare (): void
+   {
+      readline_completion_function([$this, 'autocomplete']);
+   }
+
+   /** Execute one complete interactive input line. */
+   public function execute (string $input): bool
+   {
       // @ Sanitize user input
       $command = trim($input);
       if ($command === '') {

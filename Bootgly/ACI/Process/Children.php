@@ -66,7 +66,13 @@ class Children
          foreach ($this->PIDs as $index => $PID) {
             $result = pcntl_waitpid($PID, $status, WNOHANG);
 
-            if ($result > 0 || $result === -1) {
+            if ($result > 0) {
+               unset($this->PIDs[$index]);
+            }
+            else if ($result === -1 && posix_kill($PID, 0) === false) {
+               // ECHILD is not itself proof of death; remove only when the
+               // process no longer exists. With the corrected topology every
+               // live tracked worker remains a real child of this master.
                unset($this->PIDs[$index]);
             }
          }
@@ -75,6 +81,7 @@ class Children
       // @ Force kill remaining children
       foreach ($this->PIDs as $index => $PID) {
          posix_kill($PID, SIGKILL);
+         pcntl_waitpid($PID, $status);
 
          unset($this->PIDs[$index]);
       }

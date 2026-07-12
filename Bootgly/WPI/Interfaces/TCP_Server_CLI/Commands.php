@@ -12,7 +12,9 @@ namespace Bootgly\WPI\Interfaces\TCP_Server_CLI;
 
 
 use const E_ALL;
-use const FILE_APPEND;
+use const LOCK_EX;
+use const LOCK_SH;
+use const LOCK_UN;
 use const PHP_EOL;
 use const SIGCONT;
 use const SIGINT;
@@ -21,12 +23,33 @@ use const SIGIOT;
 use const SIGTSTP;
 use const SIGUSR1;
 use const SIGUSR2;
+use function array_pad;
+use function bin2hex;
+use function chmod;
 use function count;
 use function error_reporting;
-use function file_put_contents;
+use function explode;
+use function fclose;
+use function fflush;
+use function flock;
+use function fopen;
+use function fstat;
+use function ftruncate;
 use function function_exists;
+use function fwrite;
 use function ini_set;
+use function is_array;
+use function is_link;
+use function is_resource;
+use function is_string;
+use function lstat;
 use function opcache_get_status;
+use function random_bytes;
+use function rewind;
+use function rtrim;
+use function stream_get_contents;
+use function strlen;
+use function umask;
 
 use const Bootgly\CLI;
 use Bootgly\ACI\Logs\Logger;
@@ -49,6 +72,8 @@ class Commands extends CLI\Terminal
 
 
    public Server $Server;
+   /** Last command sequence consumed by this process. */
+   private string $sequence = '';
 
    // ! Command
    // * Data
@@ -148,20 +173,20 @@ class Commands extends CLI\Terminal
             error_reporting(0) && ini_set('display_errors', 'Off') && true,
          // TODO 'log'
          'test' => // TODO use CLI wizard to choose the tests
-            $this->saveCommand('test init')
+            $this->save('test init')
             && $this->Server->Process->Signals->send(SIGUSR1, master: false, children: true)
 
-            && $this->saveCommand('test')
+            && $this->save('test')
             && $this->Server->Process->Signals->send(SIGUSR1, master: true, children: false)
 
-            && $this->saveCommand('test end')
+            && $this->save('test end')
             && $this->Server->Process->Signals->send(SIGUSR1, master: false, children: true) && true, // @phpstan-ignore-line
 
          // ! \ Connection
          'stats' =>
             $this->Server->Process->Signals->send(SIGIO, master: false) && false,
          'stats reset' =>
-            $this->saveCommand($command, 'Connections')
+            $this->save($command, 'Connections')
             && $this->Server->Process->Signals->send(SIGUSR1, master: false) && true,
 
          'connections' =>
@@ -175,17 +200,149 @@ class Commands extends CLI\Terminal
          default => true
       };
    }
-   public function saveCommand (string $command, string $context = ''): bool
+   public function save (string $command, string $context = ''): bool
    {
-      $file = $this->Server->Process->State->commandFile;
-
-      $line = $command . ':' . $context . PHP_EOL;
-
-      if (file_put_contents($file, $line, FILE_APPEND) === false) {
+      $line = bin2hex(random_bytes(8)) . "\t" . $command . ':' . $context . PHP_EOL;
+      if (strlen($line) > 8192) {
+         return false;
+      }
+      $Handle = $this->open();
+      if ($Handle === false || flock($Handle, LOCK_EX) === false) {
+         is_resource($Handle) && fclose($Handle);
          return false;
       }
 
+      try {
+         if (
+            ftruncate($Handle, 0) === false
+            || rewind($Handle) === false
+            || fwrite($Handle, $line) !== strlen($line)
+            || fflush($Handle) === false
+         ) {
+            return false;
+         }
+      }
+      finally {
+         flock($Handle, LOCK_UN);
+         fclose($Handle);
+      }
+
       return true;
+   }
+
+   /** Read one complete command under the same advisory lock as writers. */
+   public function read (): null|string
+   {
+      $Handle = $this->open();
+      if ($Handle === false || flock($Handle, LOCK_SH) === false) {
+         is_resource($Handle) && fclose($Handle);
+         return null;
+      }
+
+      try {
+         $line = stream_get_contents($Handle, 8193);
+      }
+      finally {
+         flock($Handle, LOCK_UN);
+         fclose($Handle);
+      }
+
+      if (is_string($line) === false || $line === '' || strlen($line) > 8192) {
+         return null;
+      }
+      [$sequence, $command] = array_pad(explode("\t", rtrim($line), 2), 2, '');
+      if ($sequence === '' || $command === '' || $sequence === $this->sequence) {
+         return null;
+      }
+      $this->sequence = $sequence;
+
+      return $command;
+   }
+
+   /** Clear a stale command before workers inherit the channel. */
+   public function erase (): bool
+   {
+      $Handle = $this->open();
+      if ($Handle === false || flock($Handle, LOCK_EX) === false) {
+         is_resource($Handle) && fclose($Handle);
+         return false;
+      }
+
+      try {
+         $erased = ftruncate($Handle, 0) && fflush($Handle);
+      }
+      finally {
+         flock($Handle, LOCK_UN);
+         fclose($Handle);
+      }
+      if ($erased) {
+         $this->sequence = '';
+      }
+
+      return $erased;
+   }
+
+   /** @return resource|false Open the command inode without following links. */
+   private function open (): mixed
+   {
+      $file = $this->Server->Process->State->commandFile;
+      if (is_link($file)) {
+         return false;
+      }
+      $before = @lstat($file);
+      $previousMask = umask(0077);
+      try {
+         $Handle = $before === false
+            ? @fopen($file, 'x+b')
+            : @fopen($file, 'c+b');
+         // @phpstan-ignore identical.alwaysTrue (intentional final-link race recheck)
+         if ($Handle === false && $before === false && is_link($file) === false) {
+            $before = @lstat($file);
+            $Handle = @fopen($file, 'c+b');
+         }
+      }
+      finally {
+         umask($previousMask);
+      }
+      if ($Handle === false) {
+         return false;
+      }
+
+      $opened = fstat($Handle);
+      $after = @lstat($file);
+      if (is_array($opened) === false || is_array($after) === false) {
+         fclose($Handle);
+         return false;
+      }
+      $same = $opened['dev'] === $after['dev']
+         && $opened['ino'] === $after['ino']
+         && ((int) $opened['mode'] & 0170000) === 0100000;
+      if (is_array($before)) {
+         $same = $same
+            && $before['dev'] === $opened['dev']
+            && $before['ino'] === $opened['ino'];
+      }
+      if ($same === false) {
+         fclose($Handle);
+         return false;
+      }
+      if (chmod($file, 0600) === false) {
+         fclose($Handle);
+         return false;
+      }
+      $secured = @lstat($file);
+      $opened = fstat($Handle);
+      if (
+         is_array($secured) === false || is_array($opened) === false
+         || $secured['dev'] !== $opened['dev']
+         || $secured['ino'] !== $opened['ino']
+         || ((int) $opened['mode'] & 0777) !== 0600
+      ) {
+         fclose($Handle);
+         return false;
+      }
+
+      return $Handle;
    }
    public function help (): true
    {

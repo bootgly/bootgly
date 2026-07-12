@@ -18,10 +18,10 @@ use function openlog;
 use function preg_replace;
 use function syslog;
 
-use Bootgly\ACI\Logs\Formatter;
-use Bootgly\ACI\Logs\Handler;
 use Bootgly\ACI\Logs\Data\Levels;
 use Bootgly\ACI\Logs\Data\Record;
+use Bootgly\ACI\Logs\Formatter;
+use Bootgly\ACI\Logs\Handler;
 
 
 class Syslog extends Handler

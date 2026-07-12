@@ -33,7 +33,7 @@ return new Specification(
       });
 
       $started = microtime(true);
-      $Client->connect('/');
+      $Socket = $Client->connect('/');
       $elapsed = microtime(true) - $started;
 
       yield new Assertion(description: 'connect() returned — the reconnect loop did not hang')
@@ -46,9 +46,17 @@ return new Specification(
          ->to->be(true)
          ->assert();
 
-      yield new Assertion(description: 'the client did attempt to reconnect (abrupt drop fired)')
-         ->expect($disconnected >= 1)
-         ->to->be(true)
+      // ! A refused dial never establishes a connection, so it never opens a
+      //   Session: connect() reports the failure by returning false, and no
+      //   Disconnected hook fires for a peer that was never connected.
+      yield new Assertion(description: 'the campaign gave up and reported the failure to the caller')
+         ->expect($Socket)
+         ->to->be(false)
+         ->assert();
+
+      yield new Assertion(description: 'a dial that never connected fires no Disconnected hook')
+         ->expect($disconnected)
+         ->to->be(0)
          ->assert();
    })
 );

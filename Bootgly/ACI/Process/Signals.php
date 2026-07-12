@@ -52,12 +52,21 @@ class Signals
          pcntl_signal($signal, $callback, false);
       }
    }
+   /**
+    * Send a signal to the master and/or every child. Returns true only when
+    * EVERY `posix_kill` succeeded — a dead/forbidden target makes the whole
+    * dispatch report failure (callers relying on delivery must know).
+    */
    public function send (
       int $signal, bool $master = true, bool $children = true
    ): bool
    {
+      $sent = true;
+
       if ($master) {
-         posix_kill(Process::$master, $signal);
+         if (posix_kill(Process::$master, $signal) === false) {
+            $sent = false;
+         }
 
          if ($children === false) {
             pcntl_signal_dispatch();
@@ -66,12 +75,14 @@ class Signals
 
       if ($children) {
          foreach ($this->Process->Children->PIDs as $id) {
-            posix_kill($id, $signal);
+            if (posix_kill($id, $signal) === false) {
+               $sent = false;
+            }
             usleep(100000); // 0.1s
          }
       }
 
-      return true;
+      return $sent;
    }
    public function dispatch (): void
    {

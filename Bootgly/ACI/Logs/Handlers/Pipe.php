@@ -12,11 +12,11 @@ namespace Bootgly\ACI\Logs\Handlers;
 
 
 use Bootgly\ABI\IO\IPC\Pipe as IPCPipe;
+use Bootgly\ACI\Logs\Data\Levels;
+use Bootgly\ACI\Logs\Data\Record;
 use Bootgly\ACI\Logs\Formatter;
 use Bootgly\ACI\Logs\Formatters\JSON;
 use Bootgly\ACI\Logs\Handler;
-use Bootgly\ACI\Logs\Data\Levels;
-use Bootgly\ACI\Logs\Data\Record;
 
 
 class Pipe extends Handler

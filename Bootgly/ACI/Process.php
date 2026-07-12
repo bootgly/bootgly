@@ -131,20 +131,27 @@ class Process
          return null;
       }
 
-      $pid = pcntl_waitpid(-1, $status, WNOHANG);
+      // @@ Drain every reapable TRACKED child, one per call: SIGCHLD coalesces,
+      //   so a single delivery can cover several deaths — the caller keeps
+      //   calling until this returns null.
+      //
+      //   Reaping is per known PID, never `waitpid(-1)`: this process must not
+      //   consume the exit status of a child it does not own. The auxiliary
+      //   children (Auto-TLS helper and certifier) are reaped by their own
+      //   supervisors, and an application's `proc_open()` handles must stay
+      //   reapable by PHP — stealing their status leaves `proc_get_status()`
+      //   reporting a running process forever.
+      foreach ($this->Children->PIDs as $index => $PID) {
+         if (pcntl_waitpid($PID, $status, WNOHANG) !== $PID) {
+            continue;
+         }
 
-      if ($pid <= 0) {
-         return null;
+         $this->Children->remove($PID);
+
+         return [(int) $index, $PID];
       }
 
-      $deadIndex = array_search($pid, $this->Children->PIDs, true);
-
-      if ($deadIndex === false) {
-         return null;
-      }
-
-      $this->Children->remove($pid);
-
-      return [(int) $deadIndex, $pid];
+      // :
+      return null;
    }
 }
