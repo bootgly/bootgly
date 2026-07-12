@@ -11,9 +11,9 @@
 namespace Bootgly\CLI\UI\Components\Table;
 
 
+use function array_key_last;
 use function count;
 
-use Bootgly\ADI\Table\Section;
 use Bootgly\CLI\UI\Components\Table;
 
 
@@ -51,37 +51,35 @@ class Rows
 
    public function render (): void
    {
-      $data = $this->Table->Data->rows;
+      // ? Sections without rows never draw (no stray borders)
+      $sections = [];
+      foreach ($this->Table->Data->rows as $section => $rows) {
+         if (count($rows) > 0) {
+            $sections[$section] = $rows;
+         }
+      }
 
-      if (count($data) === 0) {
+      // ?
+      if ($sections === []) {
          return;
       }
 
-      foreach ($data as $section => $rows) {
-         // @ Pre
-         match ($section) {
-            Section::Header->name =>
-               $this->Table->border(position: 'top', section: $section),
-            Section::Body->name =>
-               $this->Table->border(position: 'top', section: $section),
-            Section::Footer->name =>
-               $this->Table->border(position: 'bottom', section: $section),
-            default => null
-         };
+      // @@ The first section opens the table; the following ones separate
+      $opened = false;
+      foreach ($sections as $section => $rows) {
+         $this->Table->border(
+            position: $opened ? 'mid' : 'top',
+            section: $section
+         );
+         $opened = true;
 
          foreach ($rows as $metadata => $row) {
             // TODO use $metadata to set configurations per row
             $this->Row->render($row, $section);
          }
-
-         // @ Post
-         match ($section) {
-            #'header' => $this->Table->border(position: 'top', section: $section),
-            #'body' => $this->Table->border(position: 'bottom', section: $section),
-            Section::Footer->name =>
-               $this->Table->border(position: 'bottom', section: $section),
-            default => null
-         };
       }
+
+      // @ The last section closes the table
+      $this->Table->border(position: 'bottom', section: (string) array_key_last($sections));
    }
 }

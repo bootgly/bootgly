@@ -44,5 +44,8 @@ return new Suite(
       '15.3-frame-diff',
       '16.1-grid-arrange',
       '16.2-grid-resize',
+      '15.4-frame-drain',
+      '16.3-grid-boxing',
+      '17.1-table-hosted',
    ]
 );

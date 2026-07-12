@@ -173,6 +173,9 @@ class DemoCommand extends Command
 
          // UI - Grid component (btop-like dashboard)
          46 => 'UI/Grid-01.demo.php',
+
+         // UX - Tabs component (btop-like tabbed dashboard)
+         47 => 'UX/Tabs-01.demo.php',
       ];
 
       $last = array_key_last($examples);

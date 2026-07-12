@@ -24,6 +24,7 @@ use function min;
 use Bootgly\API\Component;
 use Bootgly\CLI\Terminal;
 use Bootgly\CLI\Terminal\Output;
+use Bootgly\CLI\UI\Components\Boxing;
 use Bootgly\CLI\UI\Components\Grid\Cell;
 
 
@@ -81,11 +82,12 @@ class Grid extends Component
 
 
    /**
-    * Places a Frame over the grid tracks — the Frame geometry is computed and
-    * assigned immediately, so its inner metrics can be read right after (to
-    * size hosted components). Overlaps are allowed and paint in place order.
+    * Places a box (Frame, Tabs, ...) over the grid tracks — its geometry is
+    * computed and assigned immediately, so inner metrics can be read right
+    * after (to size hosted components). Overlaps are allowed and paint in
+    * place order.
     *
-    * @param Frame $Frame The Frame to place.
+    * @param Boxing $Box The box to place.
     * @param int $row The anchor row track (1-based).
     * @param int $column The anchor column track (1-based).
     * @param int $rowspan The row tracks to span.
@@ -94,7 +96,7 @@ class Grid extends Component
     * @return self
     */
    public function place (
-      Frame $Frame,
+      Boxing $Box,
       int $row,
       int $column,
       int $rowspan = 1,
@@ -102,7 +104,7 @@ class Grid extends Component
    ): self
    {
       // * Data
-      $this->Cells[] = new Cell($Frame, $row, $column, $rowspan, $colspan);
+      $this->Cells[] = new Cell($Box, $row, $column, $rowspan, $colspan);
 
       // @
       $this->arrange();
@@ -136,20 +138,20 @@ class Grid extends Component
          $rowspan = min(max(1, $Cell->rowspan), count($heights) - $row + 1);
          $colspan = min(max(1, $Cell->colspan), count($widths) - $column + 1);
 
-         $Frame = $Cell->Frame;
+         $Box = $Cell->Box;
 
-         $Frame->row = $this->row + (int) array_sum(array_slice($heights, 0, $row - 1));
-         $Frame->column = $this->column + (int) array_sum(array_slice($widths, 0, $column - 1));
-         $Frame->height = (int) array_sum(array_slice($heights, $row - 1, $rowspan));
-         $Frame->width = (int) array_sum(array_slice($widths, $column - 1, $colspan));
+         $Box->row = $this->row + (int) array_sum(array_slice($heights, 0, $row - 1));
+         $Box->column = $this->column + (int) array_sum(array_slice($widths, 0, $column - 1));
+         $Box->height = (int) array_sum(array_slice($heights, $row - 1, $rowspan));
+         $Box->width = (int) array_sum(array_slice($widths, $column - 1, $colspan));
 
          // ? Gap — trimmed off the sides that face another cell
          if ($this->gap > 0) {
             if ($column - 1 + $colspan < count($widths)) {
-               $Frame->width = max(0, $Frame->width - $this->gap);
+               $Box->width = max(0, $Box->width - $this->gap);
             }
             if ($row - 1 + $rowspan < count($heights)) {
-               $Frame->height = max(0, $Frame->height - $this->gap);
+               $Box->height = max(0, $Box->height - $this->gap);
             }
          }
       }
@@ -174,7 +176,7 @@ class Grid extends Component
       // @ Wipe the screen and force full repaints
       $this->Output->clear();
       foreach ($this->Cells as $Cell) {
-         $Cell->Frame->invalidate();
+         $Cell->Box->invalidate();
       }
 
       $this->render();
@@ -196,16 +198,16 @@ class Grid extends Component
       if ($mode === self::RETURN_OUTPUT || $this->render === self::RETURN_OUTPUT) {
          $output = '';
          foreach ($this->Cells as $Cell) {
-            $output .= $Cell->Frame->render(self::RETURN_OUTPUT);
+            $output .= $Cell->Box->render(self::RETURN_OUTPUT);
          }
 
          // :
          return $output;
       }
 
-      // @@ Paint every placed Frame
+      // @@ Paint every placed box
       foreach ($this->Cells as $Cell) {
-         $Cell->Frame->render($mode);
+         $Cell->Box->render($mode);
       }
 
       return null;

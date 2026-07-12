@@ -13,7 +13,6 @@ namespace Bootgly\CLI\UI\Components\Table;
 
 use function count;
 
-use const Bootgly\CLI;
 use Bootgly\ABI\Data\__String;
 use Bootgly\CLI\UI\Components\Table;
 
@@ -93,8 +92,6 @@ class Row
       $output .= $borders['right'];
       $output .= "\n";
 
-      // TODO use Output as trait?
-      $Terminal = CLI->Terminal;
-      $Terminal->Output->write($output);
+      $this->Table->Output->write($output);
    }
 }

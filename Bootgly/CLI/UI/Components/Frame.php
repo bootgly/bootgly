@@ -39,6 +39,7 @@ use Bootgly\ABI\Data\__String\Escapeable\Text\Formattable;
 use Bootgly\ABI\Templates\Template\Escaped as TemplateEscaped;
 use Bootgly\API\Component;
 use Bootgly\CLI\Terminal\Output;
+use Bootgly\CLI\UI\Components\Boxing;
 use Bootgly\CLI\UI\Components\Frame\Borders;
 
 
@@ -49,7 +50,7 @@ use Bootgly\CLI\UI\Components\Frame\Borders;
  * sibling frames. Only text and SGR styling enter the buffer — cursor, erase
  * and OSC escapes are stripped, so content can never leak outside the frame.
  */
-class Frame extends Component
+class Frame extends Component implements Boxing
 {
    use Formattable;
 
@@ -98,9 +99,11 @@ class Frame extends Component
          return $this->title;
       }
       set {
+         // ? Titles are single-line: control characters (\n, \r, \t, ... —
+         //   Template `@.;` even injects PHP_EOL) never break the border row
          $this->title = ($value
             ? (string) preg_replace(
-               self::UNSUPPORTED_ESCAPES_REGEX,
+               ['/[\x00-\x1A\x1C-\x1F\x7F]/', self::UNSUPPORTED_ESCAPES_REGEX],
                '',
                TemplateEscaped::render(" $value ")
             )
@@ -251,11 +254,13 @@ class Frame extends Component
     * Drains the isolated Output stream into the line buffer — bytes are
     * sanitized (only SGR escapes survive), split into logical lines and capped
     * to the capacity. A carriage return overwrites the pending line (the
-    * latest state wins) and an unterminated tail carries over.
+    * latest state wins) and an unterminated tail carries over. Coordinators
+    * (like Tabs) drain inactive frames to keep their streams and buffers
+    * bounded without painting.
     *
     * @return void
     */
-   private function drain (): void
+   public function drain (): void
    {
       // ! New bytes pulled out of the isolated stream
       rewind($this->Output->stream);
@@ -270,7 +275,7 @@ class Frame extends Component
 
       // ! Carried tail + normalized line breaks (after the carry — a CRLF split
       //   across two drains still normalizes)
-      $bytes = $this->partial . $bytes;
+      $bytes = "{$this->partial}{$bytes}";
       $bytes = str_replace("\r\n", "\n", $bytes);
 
       // @ Sanitize — only SGR escapes may enter the buffer

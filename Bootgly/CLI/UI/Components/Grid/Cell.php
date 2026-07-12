@@ -11,19 +11,19 @@
 namespace Bootgly\CLI\UI\Components\Grid;
 
 
-use Bootgly\CLI\UI\Components\Frame;
+use Bootgly\CLI\UI\Components\Boxing;
 
 
 /**
- * Cell — a Frame placement over the Grid tracks: the anchor track (1-based)
- * and the spanned track counts. The Frame is writable, so stacked designs
- * (tabs, overlays) can retarget the cell later.
+ * Cell — a box placement over the Grid tracks: the anchor track (1-based)
+ * and the spanned track counts. The box is writable, so overlay designs can
+ * retarget the cell later.
  */
 class Cell
 {
    // * Config
-   /** The placed Frame */
-   public Frame $Frame;
+   /** The placed box (Frame, Tabs, ...) */
+   public Boxing $Box;
    /** Anchor row track (1-based) */
    public int $row;
    /** Anchor column track (1-based) */
@@ -35,7 +35,7 @@ class Cell
 
 
    public function __construct (
-      Frame $Frame,
+      Boxing $Box,
       int $row,
       int $column,
       int $rowspan = 1,
@@ -43,7 +43,7 @@ class Cell
    )
    {
       // * Config
-      $this->Frame = $Frame;
+      $this->Box = $Box;
       $this->row = $row;
       $this->column = $column;
       $this->rowspan = $rowspan;

@@ -83,7 +83,7 @@ return new Specification(
 
       // @ Cells — placements are exposed in paint order
       yield assert(
-         assertion: count($Grid->Cells) === 4 && $Grid->Cells[0]->Frame === $A
+         assertion: count($Grid->Cells) === 4 && $Grid->Cells[0]->Box === $A
             && $Grid->Cells[3]->colspan === 9,
          description: 'The cells expose the placements in paint order'
       );

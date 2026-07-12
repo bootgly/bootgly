@@ -26,7 +26,7 @@ class Table extends Component
 {
    public DataTable $Data;
 
-   private Output $Output;
+   public private(set) Output $Output;
 
    // * Config
    // @ Style
