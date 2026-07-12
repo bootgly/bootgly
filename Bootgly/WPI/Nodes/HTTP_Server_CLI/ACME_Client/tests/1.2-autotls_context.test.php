@@ -482,6 +482,33 @@ return new Specification(
                && $Symlinked->check() === false,
             description: 'an existing symlinked store is never read through'
          );
+
+         // @ Backoff diagnostics are HOSTILE input — an oversized, non-UTF-8
+         //   CA/proxy body can neither erase the persisted schedule nor make
+         //   the recorder throw and mask the original ACME error
+         $Hostile = new AutoTLS(
+            domains: ['localhost'],
+            email: 'admin@example.com',
+            path: "{$path}backoff/"
+         );
+         $Record = new ReflectionMethod($Hostile, 'record');
+         $Recall = new ReflectionMethod($Hostile, 'recall');
+
+         $Record->invoke($Hostile, 3, str_repeat('A', 1200 * 1024) . "\xB1\xB1 not UTF-8", null);
+         $state = $Recall->invoke($Hostile);
+
+         yield assert(
+            assertion: $state['attempts'] === 3 && $state['retry'] > time(),
+            description: 'an oversized, invalid-UTF-8 ACME diagnostic cannot erase the persisted backoff'
+         );
+
+         $Record->invoke($Hostile, 1, 'rateLimited', 7200);
+         $state = $Recall->invoke($Hostile);
+
+         yield assert(
+            assertion: $state['attempts'] === 1 && $state['retry'] >= time() + 7100,
+            description: 'a CA Retry-After larger than the ladder still extends the persisted schedule'
+         );
       }
       finally {
          Challenges::configure(null);

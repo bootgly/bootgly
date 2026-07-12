@@ -23,8 +23,10 @@ return new Specification(
          ['localhost']
       );
 
+      $instance = 'aaaaaaaaaaaaaaaa';
+
       try {
-         $Swaps = new Swaps($path);
+         $Swaps = new Swaps($path, $instance);
          $requested = $Swaps->request($Snapshot);
          $desired = $Swaps->fetch();
          yield assert(
@@ -62,8 +64,8 @@ return new Specification(
          if (is_string($replacement)) {
             $Swaps->acknowledge($replacement, $generation, 103, true, $certificateHash, $keyHash);
             rename(
-               "{$path}{$generation}/{$replacement}/103.json",
-               "{$path}{$generation}/{$replacement}/999.json"
+               "{$path}{$instance}/{$generation}/{$replacement}/103.json",
+               "{$path}{$instance}/{$generation}/{$replacement}/999.json"
             );
          }
          yield assert(
@@ -79,10 +81,70 @@ return new Specification(
             description: 'the applied marker advances only for the current generation attempt'
          );
 
-         $mode = fileperms("{$path}request.json") & 0777;
+         $mode = fileperms("{$path}{$instance}/request.json") & 0777;
          yield assert(
             assertion: $mode === 0600,
             description: 'generation rendezvous files are private at creation'
+         );
+
+         // @ Two servers on ONE storage base (H2) — the rendezvous is
+         //   namespaced per instance, so a second server can never clobber
+         //   the first one's desired attempt, ACKs or applied marker,
+         //   whether it serves the SAME identity or a different one
+         $Other = new Swaps($path, 'bbbbbbbbbbbbbbbb');
+
+         yield assert(
+            assertion: $Other->fetch() === null && $Other->resolve() === null,
+            description: 'a second server instance starts with an empty rendezvous despite the shared base'
+         );
+
+         $foreign = new CertificateSnapshot(
+            str_repeat('d', 32),
+            '/tmp/certificate.pem',
+            '/tmp/key.pem',
+            str_repeat('e', 64),
+            str_repeat('f', 64),
+            time() - 1,
+            time() + 3600,
+            false,
+            ['other.localhost']
+         );
+         $concurrent = $Other->request($foreign);
+         $desired = $Swaps->fetch();
+
+         yield assert(
+            assertion: is_string($concurrent)
+               && $desired !== null
+               && $desired['attempt'] === $replacement
+               && $desired['generation'] === $generation
+               && $Swaps->resolve() === $generation
+               && $Other->collect($generation, (string) $replacement) === [],
+            description: 'a concurrent publication by another instance never clobbers this instance attempt, applied marker or ACKs'
+         );
+
+         // @ Sweep — a sibling namespace whose owning master is DEAD is
+         //   reaped on the next publication; legacy base-level rendezvous
+         //   files from the pre-namespace layout are removed too
+         $orphan = "{$path}cccccccccccccccc/";
+         mkdir($orphan, 0700, true);
+         $dead = pcntl_fork();
+         if ($dead === 0) {
+            exit(0);
+         }
+         pcntl_waitpid($dead, $status);
+         file_put_contents("{$orphan}owner.json", json_encode(['pid' => $dead, 'claimed' => time()]));
+         file_put_contents("{$orphan}request.json", '{}');
+         file_put_contents("{$path}request.json", '{}');
+         file_put_contents("{$path}applied.json", '{}');
+
+         $Swaps->request($Snapshot);
+
+         yield assert(
+            assertion: is_dir($orphan) === false
+               && is_file("{$path}request.json") === false
+               && is_file("{$path}applied.json") === false
+               && is_dir("{$path}bbbbbbbbbbbbbbbb"),
+            description: 'publication sweeps dead-owner namespaces and legacy base files, never a live sibling'
          );
       }
       finally {

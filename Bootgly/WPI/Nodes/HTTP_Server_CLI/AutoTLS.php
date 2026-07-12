@@ -13,6 +13,7 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_CLI;
 
 use const BOOTGLY_STORAGE_DIR;
 use const FILTER_VALIDATE_EMAIL;
+use const JSON_INVALID_UTF8_SUBSTITUTE;
 use const JSON_THROW_ON_ERROR;
 use const LOCK_EX;
 use const LOCK_NB;
@@ -24,13 +25,13 @@ use function bin2hex;
 use function chmod;
 use function explode;
 use function fclose;
+use function fflush;
 use function file_get_contents;
 use function filter_var;
-use function fflush;
 use function flock;
 use function fopen;
-use function fsync;
 use function fstat;
+use function fsync;
 use function function_exists;
 use function fwrite;
 use function hash;
@@ -59,8 +60,8 @@ use function substr;
 use function substr_count;
 use function time;
 use function trim;
-use function unlink;
 use function umask;
+use function unlink;
 use InvalidArgumentException;
 use RuntimeException;
 use Throwable;
@@ -168,6 +169,14 @@ class AutoTLS
     */
    public private(set) string $identity;
    /**
+    * Per-INSTANCE swap-rendezvous namespace — random at construction and
+    * fork-inherited, so one running server (master + its workers/certifier)
+    * shares it while unrelated servers on the same storage base can never
+    * clobber each other's desired/applied attempts. Identity scoping is not
+    * enough: two masters may legitimately serve the same SAN set.
+    */
+   public private(set) string $instance;
+   /**
     * The ACME account — one per Certificate Authority SERVICE (the full
     * directory URL, not only its host): two ACME services under different
     * paths of the same authority never share a key or `kid`.
@@ -212,11 +221,15 @@ class AutoTLS
          return $this->Certificates;
       }
    }
-   /** Generation-aware swap rendezvous shared by master and workers. */
+   /**
+    * Generation-aware swap rendezvous shared by THIS server's master and
+    * workers (fork-inherited `$instance` namespace) — never by another
+    * server on the same storage base.
+    */
    public private(set) Swaps $Swaps {
       get {
          if (isSet($this->Swaps) === false) {
-            $this->Swaps = new Swaps("{$this->path}swaps/");
+            $this->Swaps = new Swaps("{$this->path}swaps/", $this->instance);
          }
 
          return $this->Swaps;
@@ -382,8 +395,11 @@ class AutoTLS
       // ? Reserve the managed credential keys — a partial override could
       //   pair an unrelated certificate with the managed private key, and a
       //   null-valued key would suppress the managed credential entirely
-      //   (`array_key_exists`, never `isset`: null must also be rejected)
-      foreach (['local_cert', 'local_pk', 'passphrase'] as $managed) {
+      //   (`array_key_exists`, never `isset`: null must also be rejected).
+      //   `SNI_server_certs` is a second credential SELECTOR: PHP serves its
+      //   pathname-based entries to matching SNI clients INSTEAD of the
+      //   sealed managed leaf, bypassing every validation/ACK — reserved too.
+      foreach (['SNI_server_certs', 'local_cert', 'local_pk', 'passphrase'] as $managed) {
          if (array_key_exists($managed, $options)) {
             throw new InvalidArgumentException(
                "Invalid AutoTLS `options`: `{$managed}` is managed by Auto-TLS and cannot be overridden."
@@ -409,6 +425,7 @@ class AutoTLS
       $sorted = $names;
       sort($sorted);
       $this->identity = hash('sha256', json_encode([$sorted, $this->directory], JSON_THROW_ON_ERROR));
+      $this->instance = bin2hex(random_bytes(8));
    }
 
    /**
@@ -715,14 +732,23 @@ class AutoTLS
          mkdir($this->Certificates->path, 0700, true);
       }
 
-      $JSON = json_encode(
-         [
-            'attempts' => $attempts,
-            'retry' => time() + $delay,
-            'error' => $error
-         ],
-         JSON_THROW_ON_ERROR
-      );
+      // ! The diagnostic is hostile input (a CA/proxy body can reach ~1 MiB
+      //   and need not be UTF-8): cap it far below the 64 KiB recall() limit
+      //   and substitute invalid sequences — persisting the BACKOFF must
+      //   never fail because its diagnostic is unstorable
+      $record = [
+         'attempts' => $attempts,
+         'retry' => time() + $delay,
+         'error' => substr($error, 0, 2048)
+      ];
+      $JSON = json_encode($record, JSON_INVALID_UTF8_SUBSTITUTE);
+      if (is_string($JSON) === false) {
+         $record['error'] = '(diagnostic dropped: unstorable bytes)';
+         $JSON = json_encode($record, JSON_INVALID_UTF8_SUBSTITUTE);
+      }
+      if (is_string($JSON) === false) {
+         return;
+      }
       $temporary = "{$file}." . bin2hex(random_bytes(8)) . '.tmp';
       $previousMask = umask(0077);
       try {

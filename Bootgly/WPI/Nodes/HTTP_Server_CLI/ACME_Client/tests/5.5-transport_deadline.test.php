@@ -98,5 +98,93 @@ return new Specification(
             description: "the absolute deadline interrupts a stalled {$phase} phase"
          );
       }
+
+      // @ Byte-exact delivery under backpressure — the peer STALLS its reads
+      //   long enough for the kernel buffers to fill (forcing short/zero
+      //   client writes), then drains everything and reports EXACTLY how many
+      //   body bytes arrived. A truncating writer cannot pass this: the count
+      //   must equal the full payload, not merely "the response timed out".
+      $counter = tempnam(sys_get_temp_dir(), 'bootgly-acme-write-count-');
+      $payload = 4 * 1024 * 1024;
+
+      $Listener = stream_socket_server(
+         'tcp://127.0.0.1:0',
+         $code,
+         $message,
+         STREAM_SERVER_BIND | STREAM_SERVER_LISTEN
+      );
+      $address = $Listener !== false ? stream_socket_get_name($Listener, false) : false;
+      $separator = is_string($address) ? strrpos($address, ':') : false;
+      $port = $separator === false ? 0 : (int) substr($address, $separator + 1);
+
+      $Response = null;
+      $received = -1;
+      $PID = $Listener !== false && $port > 0 ? pcntl_fork() : -1;
+      if ($PID === 0) {
+         $Peer = @stream_socket_accept($Listener, 5.0);
+         if ($Peer !== false) {
+            // ! Let the client hit a full kernel buffer before draining
+            usleep(300000);
+
+            $head = '';
+            while (! str_contains($head, "\r\n\r\n")) {
+               $chunk = @fread($Peer, 8192);
+               if ($chunk === false || $chunk === '') {
+                  usleep(1000);
+                  continue;
+               }
+               $head .= $chunk;
+            }
+            preg_match('/Content-Length: (\d+)/i', $head, $matches);
+            $expected = (int) ($matches[1] ?? 0);
+            $body = strlen(substr($head, (int) strpos($head, "\r\n\r\n") + 4));
+            $deadline = microtime(true) + 5.0;
+            while ($body < $expected && microtime(true) < $deadline) {
+               $chunk = @fread($Peer, 65536);
+               if ($chunk === false) {
+                  break;
+               }
+               if ($chunk === '') {
+                  if (feof($Peer)) {
+                     break;
+                  }
+                  usleep(1000);
+                  continue;
+               }
+               $body += strlen($chunk);
+            }
+            file_put_contents((string) $counter, (string) $body);
+            @fwrite($Peer, "HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok");
+            usleep(100000);
+            fclose($Peer);
+         }
+         fclose($Listener);
+         exit(0);
+      }
+      if ($Listener !== false) {
+         fclose($Listener);
+      }
+      if ($PID > 0) {
+         $Client = new HTTP_Client_CLI(HTTP_Client_CLI::MODE_TEST);
+         $Client->configure('127.0.0.1', $port);
+         $Client->connectTimeout = 5;
+         $Client->timeout = 5;
+         $Client->deadline = microtime(true) + 8.0;
+
+         $Response = $Client->request('POST', '/', body: str_repeat('x', $payload));
+
+         pcntl_waitpid($PID, $status);
+         $received = (int) file_get_contents((string) $counter);
+      }
+      @unlink((string) $counter);
+
+      yield assert(
+         assertion: $Response !== null && $Response->code === 200,
+         description: 'a backpressured request still completes once the peer drains'
+      );
+      yield assert(
+         assertion: $received === $payload,
+         description: "the peer observes the request body byte-exact under forced short writes ({$received} of {$payload})"
+      );
    }
 );

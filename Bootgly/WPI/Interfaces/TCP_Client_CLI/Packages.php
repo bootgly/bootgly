@@ -136,7 +136,12 @@ class Packages implements WPI\Connections\Packages
    }
    /**
     * Write data to server.
-    * 
+    *
+    * The output buffer is authoritative: every call consumes exactly the
+    * bytes the kernel accepted, and an unsent suffix STAYS buffered for the
+    * next write-ready event — a short `fwrite()` is progress, never
+    * completion. The completion hook fires only when the buffer drains.
+    *
     * @param resource $Socket
     * @param null|int<0, max> $length
     *
@@ -146,47 +151,59 @@ class Packages implements WPI\Connections\Packages
    {
       // !
       $buffer = $this->output;
+      $pending = strlen($buffer);
+      $target = $length !== null && $length < $pending ? $length : $pending;
       $written = 0;
-      $sent = 0; // Bytes sent to server per write loop iteration
+
+      // ? Nothing queued — a spurious write-ready event completes nothing
+      if ($target === 0) {
+         return true;
+      }
 
       // @
       try {
-         while ($buffer) {
-            // @phpstan-ignore-next-line
-            $sent = @fwrite($Socket, $buffer, $length);
-            #$sent = @stream_socket_sendto($Socket, $buffer, $length???);
+         while ($written < $target) {
+            $sent = @fwrite($Socket, substr($buffer, $written, $target - $written));
 
-            if ($sent === false) break;
-            if ($sent === 0) continue; // TODO check EOF?
-
-            $written += $sent;
-
-            if ($sent < $length) {
-               $buffer = substr($buffer, $sent);
-               $length -= $sent;
-               continue;
+            if ($sent === false) {
+               return $this->fail($Socket, 'write', $written);
+            }
+            // ? Zero progress — the kernel buffer is full. Yield back to the
+            //   readiness loop instead of spinning; the caller's absolute
+            //   deadline bounds a peer that never drains.
+            if ($sent === 0) {
+               $deadline = $this->Connection->Client?->deadline;
+               if ($deadline !== null && microtime(true) >= $deadline) {
+                  return $this->fail($Socket, 'write', $written);
+               }
+               break;
             }
 
-            break;
+            $written += $sent;
          }
       }
       catch (Throwable) {
-         $sent = false;
-      }
-
-      // @ Check issues
-      if (! $written || ! $sent) {
          return $this->fail($Socket, 'write', $written);
       }
 
+      // @ Consume exactly the accepted bytes — the suffix stays queued for
+      //   the next write-ready event
+      $this->output = substr($buffer, $written);
+
       // @ Set Stats
-      if (Connections::$stats) {
+      if (Connections::$stats && $written > 0) {
          // Global
          Connections::$writes++;
          Connections::$written += $written;
          // Per client — $this->Connection IS the registry entry for $Socket;
          // direct access skips two hash lookups + cast per write.
          $this->Connection->writes++;
+      }
+
+      // ?: Unfinished — stay armed for the next write-ready event; the
+      //    completion hook must never fire on a partial write
+      if ($this->output !== '') {
+         return true;
       }
 
       // # Hook

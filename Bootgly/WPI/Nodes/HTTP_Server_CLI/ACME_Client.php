@@ -60,9 +60,11 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\ACME_Client\Nonces;
 class ACME_Client
 {
    /**
-    * Total wall-clock budget for one issuance (`order()` — placement,
-    * authorizations, finalize and download), in seconds. Every poll loop
-    * and every TCP/TLS/write/read phase draws from this same monotonic budget.
+    * Total budget for one issuance (`order()` — placement, authorizations,
+    * finalize and download), in seconds. The order-level budget is
+    * `hrtime()`-based (monotonic); each transport phase under it is bounded
+    * by the client's wall-clock deadline (see `TCP_Client_CLI::$deadline`
+    * for that documented contract).
     */
    public const int PATIENCE = 300;
    /** Maximum server-directed retry retained locally (one year). */
@@ -398,9 +400,11 @@ class ACME_Client
 
       // ? RFC 8555 §7.1.1 — the directory is a 200 `application/json`
       //   object; anything else (proxy page, error body) is never parsed
-      //   into an endpoint map
+      //   into an endpoint map. A problem document keeps its type/detail
+      //   and `Retry-After` instead of degrading to a generic error.
       if ($Response->code !== 200) {
-         throw new ProtocolException(
+         $this->raise(
+            $Response,
             "ACME directory at `{$this->directory}` answered HTTP {$Response->code} — expected 200."
          );
       }
@@ -435,9 +439,11 @@ class ACME_Client
       // ! request() harvests the Replay-Nonce into the pool
       $Response = $this->request('HEAD', $Directory->newNonce);
 
-      // ? RFC 8555 §7.2 — HEAD on newNonce answers 200 (some CAs 204)
+      // ? RFC 8555 §7.2 — HEAD on newNonce answers 200 (some CAs 204). A
+      //   problem document keeps its type/detail and `Retry-After`.
       if ($Response->code !== 200 && $Response->code !== 204) {
-         throw new ProtocolException(
+         $this->raise(
+            $Response,
             "ACME newNonce at `{$Directory->newNonce}` answered HTTP {$Response->code} — expected 200/204."
          );
       }
@@ -727,6 +733,30 @@ class ACME_Client
    /**
     * Parse a response `Retry-After` into seconds from now.
     */
+   /**
+    * Raise the typed error for an unexpected UNSIGNED endpoint response
+    * (directory/newNonce): an RFC 7807 problem document keeps its
+    * `type`/`detail` and the response `Retry-After` as a `ServerException`
+    * — exactly like signed POST errors — anything else stays a
+    * `ProtocolException` with the caller's context message.
+    */
+   private function raise (Response $Response, string $message): never
+   {
+      $media = strtolower((string) $Response->Header->get('content-type'));
+      $decoded = str_starts_with($media, 'application/problem+json')
+         ? json_decode($Response->body, true)
+         : null;
+
+      if (is_array($decoded)) {
+         $type = is_string($decoded['type'] ?? null) ? $decoded['type'] : 'about:blank';
+         $detail = is_string($decoded['detail'] ?? null) ? $decoded['detail'] : $Response->body;
+
+         throw new ServerException($type, $detail, $Response->code, $this->delay($Response));
+      }
+
+      throw new ProtocolException($message);
+   }
+
    private function delay (Response $Response): null|int
    {
       $value = $Response->Header->get('retry-after');

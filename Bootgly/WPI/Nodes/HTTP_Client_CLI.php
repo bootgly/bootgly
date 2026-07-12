@@ -24,6 +24,7 @@ use function fwrite;
 use function in_array;
 use function is_int;
 use function microtime;
+use function min;
 use function parse_url;
 use function pcntl_fork;
 use function pcntl_waitpid;
@@ -633,6 +634,38 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
 
          if (self::$httpOnWrite !== null) {
             (self::$httpOnWrite)($Socket, $Connection);
+         }
+      };
+
+      // @ On transport EOF: a LEGAL close-delimited body (RFC 7230 §3.3.3 —
+      //   no Content-Length, no chunked framing) is terminated by the
+      //   connection close itself, so the response is finalized here instead
+      //   of dying in the waiting decoder until the deadline. A chunked or
+      //   Content-Length body cut short by EOF is TRUNCATED, not legal — it
+      //   stays incomplete and the request deadline reports the failure.
+      parent::$onClientDisconnect = function ($Connection) use ($HTTP_Client_CLI) {
+         $Request = $HTTP_Client_CLI->pendingRequests[$Connection->id] ?? null;
+         if ($Request !== null) {
+            $Response = $Request->Response;
+            if (
+               $Response->code > 0
+               && $Response->Body->waiting
+               && $Request->Decoder instanceof Decoder_Chunked === false
+               && $Response->Body->length === $Response->Body->downloaded
+            ) {
+               $Response->Body->waiting = false;
+               $Request->completed = true;
+               $Request->connectionState = 'idle';
+               unset($HTTP_Client_CLI->pendingRequests[$Connection->id]);
+
+               if ($Request->onComplete !== null) {
+                  ($Request->onComplete)($Request);
+               }
+            }
+         }
+
+         if ($HTTP_Client_CLI->pendingRequests === []) {
+            self::$Event->destroy();
          }
       };
    }

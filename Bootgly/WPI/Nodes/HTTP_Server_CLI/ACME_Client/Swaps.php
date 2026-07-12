@@ -35,6 +35,8 @@ use function is_string;
 use function json_decode;
 use function json_encode;
 use function mkdir;
+use function posix_getpid;
+use function posix_kill;
 use function preg_match;
 use function random_bytes;
 use function rename;
@@ -46,39 +48,59 @@ use function strlen;
 use function substr;
 use function time;
 use function trim;
-use function unlink;
 use function umask;
+use function unlink;
 use InvalidArgumentException;
 use JsonException;
 
 
 /**
- * Generation-aware hot-swap rendezvous.
+ * Generation-aware hot-swap rendezvous, namespaced per running server.
  *
  * The certifier/master atomically publishes one desired generation. Each worker
  * atomically acknowledges the exact generation and hashes it validated/applied.
+ *
+ * The rendezvous lives under `<base>/<instance>/` — a random, fork-inherited
+ * namespace generated when the server is configured. Unrelated servers sharing
+ * one storage base (even for the same SAN set) can therefore never clobber each
+ * other's desired/applied attempts or acknowledgements.
  */
 final class Swaps
 {
+   public private(set) string $base;
+   public private(set) string $instance;
    public private(set) string $path;
 
 
-   public function __construct (string $path)
+   public function __construct (string $base, string $instance)
    {
-      $path = rtrim($path, '/') . '/';
+      $base = rtrim($base, '/') . '/';
       if (
-         $path === '/'
-         || str_starts_with($path, '/') === false
-         || str_contains($path, '/../')
-         || str_contains($path, '/./')
+         $base === '/'
+         || str_starts_with($base, '/') === false
+         || str_contains($base, '/../')
+         || str_contains($base, '/./')
       ) {
          throw new InvalidArgumentException('Auto-TLS swap path must be a dedicated absolute directory.');
       }
-      $this->path = $path;
+      if (preg_match('/^[a-f0-9]{16}$/', $instance) !== 1) {
+         throw new InvalidArgumentException('Auto-TLS swap instance must be a 16-hex namespace.');
+      }
+      $this->base = $base;
+      $this->instance = $instance;
+      $this->path = "{$base}{$instance}/";
    }
 
    public function request (CertificateSnapshot $Snapshot): null|string
    {
+      // @ Publication is master-only and rare — claim the namespace with the
+      //   publisher PID and sweep dead siblings while we are here
+      $this->write("{$this->path}owner.json", [
+         'pid' => posix_getpid(),
+         'claimed' => time()
+      ]);
+      $this->sweep();
+
       $attempt = bin2hex(random_bytes(16));
 
       return $this->write("{$this->path}request.json", [
@@ -88,6 +110,90 @@ final class Swaps
          'keyHash' => $Snapshot->keyHash,
          'requested' => time()
       ]) ? $attempt : null;
+   }
+
+   /**
+    * Remove sibling namespaces whose owning master is gone, plus any
+    * pre-namespace (legacy) rendezvous files left directly on the base.
+    * Best-effort: a locked or racing entry is simply skipped.
+    */
+   private function sweep (): void
+   {
+      foreach (glob("{$this->base}*") ?: [] as $entry) {
+         $name = basename($entry);
+         if ($name === $this->instance || is_link($entry)) {
+            continue;
+         }
+
+         // ? Legacy layout — request/applied and generation directories
+         //   lived directly on the base before instance namespaces
+         if (is_file($entry)) {
+            if ($name === 'request.json' || $name === 'applied.json') {
+               @unlink($entry);
+            }
+            continue;
+         }
+         if (is_dir($entry) === false) {
+            continue;
+         }
+         if (preg_match('/^[a-f0-9]{32}$/', $name) === 1) {
+            $this->remove($entry);
+            continue;
+         }
+
+         // ? Sibling namespaces: only reap a namespace whose claimed owner
+         //   is provably dead — an unclaimed one may belong to a server
+         //   still inside its startup window
+         if (preg_match('/^[a-f0-9]{16}$/', $name) !== 1) {
+            continue;
+         }
+         // ! Sibling state lives OUTSIDE this instance's namespace, so the
+         //   namespace-prefixed read() guard cannot be used here
+         $owner = "{$entry}/owner.json";
+         $JSON = is_link($owner) === false && is_file($owner)
+            ? file_get_contents($owner, false, null, 0, 4096)
+            : false;
+         $record = is_string($JSON) ? json_decode($JSON, true) : null;
+         $PID = is_array($record) ? ($record['pid'] ?? null) : null;
+         if (is_int($PID) === false || $PID < 2) {
+            continue;
+         }
+         $status = @file_get_contents("/proc/{$PID}/status", false, null, 0, 4097);
+         $alive = is_string($status)
+            ? preg_match('/^State:\s+Z/m', $status) !== 1
+            : posix_kill($PID, 0);
+         if ($alive) {
+            continue;
+         }
+
+         $this->remove($entry);
+      }
+   }
+
+   /** Recursively remove one bounded rendezvous tree (2 levels of dirs). */
+   private function remove (string $directory): void
+   {
+      foreach (glob("{$directory}/*") ?: [] as $child) {
+         if (is_link($child)) {
+            continue;
+         }
+         if (is_dir($child)) {
+            foreach (glob("{$child}/*") ?: [] as $grandchild) {
+               if (is_dir($grandchild) && is_link($grandchild) === false) {
+                  foreach (glob("{$grandchild}/*") ?: [] as $file) {
+                     @unlink($file);
+                  }
+                  @rmdir($grandchild);
+                  continue;
+               }
+               @unlink($grandchild);
+            }
+            @rmdir($child);
+            continue;
+         }
+         @unlink($child);
+      }
+      @rmdir($directory);
    }
 
    /** @return null|array{attempt:string,generation:string,certificateHash:string,keyHash:null|string,requested:int} */

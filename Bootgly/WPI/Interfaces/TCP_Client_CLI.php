@@ -98,7 +98,13 @@ class TCP_Client_CLI
    protected null|array $secure = null;
    /** TCP + TLS establishment budget in seconds (0 = unbounded). */
    public int|float $connectTimeout = 5;
-   /** Optional absolute monotonic request deadline (`microtime(true)`). */
+   /**
+    * Optional absolute request deadline (`microtime(true)` epoch seconds).
+    * Wall-clock BY CONTRACT: PHP exposes no monotonic clock usable with
+    * `stream_select()`, so a system clock adjustment can stretch or shorten
+    * this bound. The ACME whole-order issuance budget layered above it is
+    * `hrtime()`-based and unaffected.
+    */
    public null|float $deadline = null;
    // # Mode
    protected int $mode;

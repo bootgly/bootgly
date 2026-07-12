@@ -20,8 +20,8 @@ use function fclose;
 use function fflush;
 use function flock;
 use function fopen;
-use function fsync;
 use function fstat;
+use function fsync;
 use function ftruncate;
 use function function_exists;
 use function fwrite;
@@ -29,6 +29,7 @@ use function is_array;
 use function is_dir;
 use function is_file;
 use function is_link;
+use function is_resource;
 use function is_string;
 use function json_decode;
 use function json_encode;
@@ -39,12 +40,12 @@ use function mkdir;
 use function random_bytes;
 use function rename;
 use function rewind;
-use function strlen;
 use function stream_get_contents;
+use function strlen;
 use function strrpos;
 use function substr;
-use function unlink;
 use function umask;
+use function unlink;
 use RuntimeException;
 
 
@@ -298,6 +299,11 @@ class State
     * Must be called while the process still has privileges (e.g. root)
     * before demoting, so the demoted user can later rewrite/unlink them.
     *
+    * The `pids/` DIRECTORY is handed off too: `unlink()` requires write
+    * permission on the parent directory, not ownership of the file — a
+    * root-created 0755 `pids/` would otherwise leave stale PID/command
+    * state behind every demoted stop or reload.
+    *
     * @param int $UID
     * @param int $GID
     *
@@ -305,6 +311,15 @@ class State
     */
    public function own (int $UID, int $GID): bool
    {
+      if (is_link($this->pidsDir)) {
+         return false;
+      }
+      if (is_dir($this->pidsDir)) {
+         if (@lchown($this->pidsDir, $UID) === false || @lchgrp($this->pidsDir, $GID) === false) {
+            return false;
+         }
+      }
+
       foreach ([$this->pidFile, $this->pidLockFile, $this->commandFile] as $file) {
          if (is_link($file)) {
             return false;

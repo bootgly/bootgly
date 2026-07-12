@@ -205,6 +205,11 @@ return new Specification(
             email: 'admin@example.com',
             options: ['passphrase' => null]
          ),
+         'SNI certificate map (second credential selector)' => fn () => new AutoTLS(
+            domains: ['example.com'],
+            email: 'admin@example.com',
+            options: ['SNI_server_certs' => ['example.com' => '/other/cert.pem']]
+         ),
       ];
 
       foreach ($failures as $case => $construct) {
