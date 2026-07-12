@@ -39,5 +39,10 @@ return new Suite(
       '14.1-chart-gradient',
       '14.2-charts-meter',
       '14.3-charts-graph',
+      '15.1-frame-buffer',
+      '15.2-frame-render',
+      '15.3-frame-diff',
+      '16.1-grid-arrange',
+      '16.2-grid-resize',
    ]
 );

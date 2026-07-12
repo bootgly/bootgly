@@ -167,6 +167,12 @@ class DemoCommand extends Command
 
          // UI - Chart components (live Graph)
          44 => 'UI/Chart-04.demo.php',
+
+         // UI - Frame component
+         45 => 'UI/Frame-01.demo.php',
+
+         // UI - Grid component (btop-like dashboard)
+         46 => 'UI/Grid-01.demo.php',
       ];
 
       $last = array_key_last($examples);
