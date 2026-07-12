@@ -100,12 +100,12 @@ class TCP_Client_CLI
    public int|float $connectTimeout = 5;
    /**
     * Optional absolute request deadline (`microtime(true)` epoch seconds).
-    * Wall-clock BY CONTRACT: PHP exposes no monotonic clock usable with
-    * `stream_select()`, so a system clock adjustment can stretch or shorten
-    * this bound. The ACME whole-order issuance budget layered above it is
-    * `hrtime()`-based and unaffected.
+    * This compatibility bound follows the system wall clock. Callers needing
+    * a hard elapsed-time bound should also set `$monotonicDeadline`.
     */
    public null|float $deadline = null;
+   /** Optional absolute `hrtime(true)` deadline in nanoseconds. */
+   public null|int $monotonicDeadline = null;
    // # Mode
    protected int $mode;
    public const int MODE_DEFAULT = 1;

@@ -47,8 +47,12 @@ interface Scheduler
     */
    public function schedule (Fiber $Fiber, mixed $value = null, int $flag = self::SCHEDULE_READ): bool;
 
-   /** Register a one-shot monotonic wall-clock callback. */
-   public function defer (float $deadline, Closure $Callback): int;
+   /**
+    * Register a one-shot callback. The clock domain is selected by type:
+    * a float is a wall-clock `microtime(true)` deadline in seconds; an int
+    * is a monotonic `hrtime(true)` deadline in nanoseconds.
+    */
+   public function defer (float|int $deadline, Closure $Callback): int;
 
    /** Cancel a one-shot callback before it fires. */
    public function cancel (int $ID): bool;

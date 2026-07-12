@@ -35,8 +35,6 @@ use function is_string;
 use function json_decode;
 use function json_encode;
 use function mkdir;
-use function posix_getpid;
-use function posix_kill;
 use function preg_match;
 use function random_bytes;
 use function rename;
@@ -63,7 +61,9 @@ use JsonException;
  * The rendezvous lives under `<base>/<instance>/` — a random, fork-inherited
  * namespace generated when the server is configured. Unrelated servers sharing
  * one storage base (even for the same SAN set) can therefore never clobber each
- * other's desired/applied attempts or acknowledgements.
+ * other's desired/applied attempts or acknowledgements. A namespace is never
+ * reaped by a sibling: publishers may be short-lived forked children, so their
+ * process lifetime cannot prove that the inherited server namespace is stale.
  */
 final class Swaps
 {
@@ -93,12 +93,11 @@ final class Swaps
 
    public function request (CertificateSnapshot $Snapshot): null|string
    {
-      // @ Publication is master-only and rare — claim the namespace with the
-      //   publisher PID and sweep dead siblings while we are here
-      $this->write("{$this->path}owner.json", [
-         'pid' => posix_getpid(),
-         'claimed' => time()
-      ]);
+      // @ A publisher can be a short-lived bootstrap/certifier child while
+      //   the inherited namespace remains owned by the live server master.
+      //   Consequently no process PID can safely lease a namespace. Keep
+      //   publication strictly instance-local and only remove artifacts from
+      //   the pre-namespace layout whose names cannot belong to a live server.
       $this->sweep();
 
       $attempt = bin2hex(random_bytes(16));
@@ -112,16 +111,12 @@ final class Swaps
       ]) ? $attempt : null;
    }
 
-   /**
-    * Remove sibling namespaces whose owning master is gone, plus any
-    * pre-namespace (legacy) rendezvous files left directly on the base.
-    * Best-effort: a locked or racing entry is simply skipped.
-    */
+   /** Remove only pre-namespace rendezvous artifacts from the shared base. */
    private function sweep (): void
    {
       foreach (glob("{$this->base}*") ?: [] as $entry) {
          $name = basename($entry);
-         if ($name === $this->instance || is_link($entry)) {
+         if (is_link($entry)) {
             continue;
          }
 
@@ -138,35 +133,7 @@ final class Swaps
          }
          if (preg_match('/^[a-f0-9]{32}$/', $name) === 1) {
             $this->remove($entry);
-            continue;
          }
-
-         // ? Sibling namespaces: only reap a namespace whose claimed owner
-         //   is provably dead — an unclaimed one may belong to a server
-         //   still inside its startup window
-         if (preg_match('/^[a-f0-9]{16}$/', $name) !== 1) {
-            continue;
-         }
-         // ! Sibling state lives OUTSIDE this instance's namespace, so the
-         //   namespace-prefixed read() guard cannot be used here
-         $owner = "{$entry}/owner.json";
-         $JSON = is_link($owner) === false && is_file($owner)
-            ? file_get_contents($owner, false, null, 0, 4096)
-            : false;
-         $record = is_string($JSON) ? json_decode($JSON, true) : null;
-         $PID = is_array($record) ? ($record['pid'] ?? null) : null;
-         if (is_int($PID) === false || $PID < 2) {
-            continue;
-         }
-         $status = @file_get_contents("/proc/{$PID}/status", false, null, 0, 4097);
-         $alive = is_string($status)
-            ? preg_match('/^State:\s+Z/m', $status) !== 1
-            : posix_kill($PID, 0);
-         if ($alive) {
-            continue;
-         }
-
-         $this->remove($entry);
       }
    }
 

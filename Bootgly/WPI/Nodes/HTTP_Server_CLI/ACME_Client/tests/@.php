@@ -28,5 +28,6 @@ return new Suite(
       '5.3-swaps',
       '5.4-client',
       '5.5-transport_deadline',
+      '5.6-protocol_faults',
    ]
 );

@@ -14,7 +14,10 @@ namespace Bootgly\WPI\Interfaces\TCP_Client_CLI\Connections;
 use const STREAM_CRYPTO_METHOD_TLSv1_2_CLIENT;
 use const STREAM_CRYPTO_METHOD_TLSv1_3_CLIENT;
 use function fclose;
+use function hrtime;
+use function max;
 use function microtime;
+use function min;
 use function stream_select;
 use function stream_set_blocking;
 use function stream_socket_enable_crypto;
@@ -50,6 +53,8 @@ class Connection extends Packages
    // * Metadata
    public int $id;
    public bool $encrypted;
+   /** True only when the remote peer, rather than a local abort, ended the stream. */
+   public bool $peerEOF;
    // # Status
    public const int STATUS_INITIAL = 0;
    public const int STATUS_CONNECTING = 1;
@@ -73,7 +78,8 @@ class Connection extends Packages
       &$Socket,
       bool $secure = false,
       null|Client $Client = null,
-      null|float $deadline = null
+      null|float $deadline = null,
+      null|int $monotonicDeadline = null
    )
    {
       $this->Socket = $Socket;
@@ -90,6 +96,7 @@ class Connection extends Packages
       // * Metadata
       $this->id = (int) $Socket;
       $this->encrypted = false;
+      $this->peerEOF = false;
       // # Status
       $this->status = self::STATUS_ESTABLISHED;
       // # Handler
@@ -115,7 +122,7 @@ class Connection extends Packages
       parent::__construct($this);
 
       // @ Call handshake if secure transport is enabled
-      if ($secure && $this->handshake($deadline) === false) {
+      if ($secure && $this->handshake($deadline, $monotonicDeadline) === false) {
          return;
       }
 
@@ -155,12 +162,18 @@ class Connection extends Packages
       return true;
    }
 
-   public function handshake (null|float $deadline = null): bool|int
+   public function handshake (
+      null|float $deadline = null,
+      null|int $monotonicDeadline = null
+   ): bool|int
    {
       try {
          stream_set_blocking($this->Socket, false);
          do {
-            if ($deadline !== null && microtime(true) >= $deadline) {
+            if (
+               ($deadline !== null && microtime(true) >= $deadline)
+               || ($monotonicDeadline !== null && (int) hrtime(true) >= $monotonicDeadline)
+            ) {
                $negotiation = false;
                break;
             }
@@ -178,16 +191,28 @@ class Connection extends Packages
                $read = [$this->Socket];
                $write = [];
                $except = null;
-               if ($deadline === null) {
+               if ($deadline === null && $monotonicDeadline === null) {
                   $selected = @stream_select($read, $write, $except, null);
                }
                else {
-                  $remaining = max(0.0, $deadline - microtime(true));
+                  $remaining = $deadline === null
+                     ? INF
+                     : max(0.0, $deadline - microtime(true));
+                  if ($monotonicDeadline !== null) {
+                     $remaining = min(
+                        $remaining,
+                        max(0.0, ($monotonicDeadline - (int) hrtime(true)) / 1_000_000_000)
+                     );
+                  }
                   $seconds = (int) $remaining;
                   $microseconds = (int) (($remaining - $seconds) * 1_000_000);
                   $selected = @stream_select($read, $write, $except, $seconds, $microseconds);
                }
-            } while ($selected === false && $deadline !== null && microtime(true) < $deadline);
+            } while (
+               $selected === false
+               && ($deadline === null || microtime(true) < $deadline)
+               && ($monotonicDeadline === null || (int) hrtime(true) < $monotonicDeadline)
+            );
             if ($selected !== 1) {
                $negotiation = false;
                break;

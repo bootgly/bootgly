@@ -16,6 +16,7 @@ use function feof;
 use function fread;
 use function fwrite;
 use function get_resource_type;
+use function hrtime;
 use function is_resource;
 use function microtime;
 use function strlen;
@@ -112,6 +113,7 @@ class Packages implements WPI\Connections\Packages
          //    self::LOG_WARNING_LEVEL
          // );
 
+         $this->Connection->peerEOF = true;
          $this->Connection->close();
 
          return true;
@@ -172,8 +174,16 @@ class Packages implements WPI\Connections\Packages
             //   readiness loop instead of spinning; the caller's absolute
             //   deadline bounds a peer that never drains.
             if ($sent === 0) {
-               $deadline = $this->Connection->Client?->deadline;
-               if ($deadline !== null && microtime(true) >= $deadline) {
+               $Client = $this->Connection->Client;
+               $deadline = $Client?->deadline;
+               $monotonicDeadline = $Client?->monotonicDeadline;
+               if (
+                  ($deadline !== null && microtime(true) >= $deadline)
+                  || (
+                     $monotonicDeadline !== null
+                     && (int) hrtime(true) >= $monotonicDeadline
+                  )
+               ) {
                   return $this->fail($Socket, 'write', $written);
                }
                break;
@@ -286,6 +296,10 @@ class Packages implements WPI\Connections\Packages
       // Close connection if input data is empty to avoid unnecessary loop?
       // TODO remove?
       if ($buffer === '') {
+         if (@feof($Socket)) {
+            $this->Connection->peerEOF = true;
+            $this->Connection->close();
+         }
          return false;
       }
 

@@ -13,8 +13,11 @@ namespace Bootgly\WPI\Interfaces\TCP_Client_CLI;
 
 use const PHP_EOL;
 use function fclose;
+use function hrtime;
 use function is_resource;
+use function max;
 use function microtime;
+use function min;
 use function stream_select;
 use function stream_set_blocking;
 use function stream_set_read_buffer;
@@ -153,11 +156,25 @@ class Connections implements WPI\Connections
       // ! ASYNC_CONNECT only creates the socket. Do not construct a logical
       // connection (or begin TLS) until TCP is writable and the peer name is
       // available. One absolute deadline covers this wait and the handshake.
+      $now = microtime(true);
+      $nowMonotonic = (int) hrtime(true);
       $deadline = $Client->deadline;
-      if ($deadline === null && $Client->connectTimeout > 0) {
-         $deadline = microtime(true) + $Client->connectTimeout;
+      $monotonicDeadline = $Client->monotonicDeadline;
+      if ($Client->connectTimeout > 0) {
+         $connectDeadline = $now + $Client->connectTimeout;
+         $connectMonotonicDeadline = $nowMonotonic
+            + (int) ($Client->connectTimeout * 1_000_000_000);
+         $deadline = $deadline === null
+            ? $connectDeadline
+            : min($deadline, $connectDeadline);
+         $monotonicDeadline = $monotonicDeadline === null
+            ? $connectMonotonicDeadline
+            : min($monotonicDeadline, $connectMonotonicDeadline);
       }
-      if ($deadline !== null && $deadline <= microtime(true)) {
+      if (
+         ($deadline !== null && $deadline <= $now)
+         || ($monotonicDeadline !== null && $monotonicDeadline <= $nowMonotonic)
+      ) {
          fclose($Socket);
          self::$errors['connection']++;
          return false;
@@ -167,18 +184,30 @@ class Connections implements WPI\Connections
          $read = [];
          $write = [$Socket];
          $except = null;
-         if ($deadline === null) {
+         if ($deadline === null && $monotonicDeadline === null) {
             $selected = @stream_select($read, $write, $except, null);
          }
          else {
-            $remaining = max(0.0, $deadline - microtime(true));
+            $remaining = $deadline === null
+               ? INF
+               : max(0.0, $deadline - microtime(true));
+            if ($monotonicDeadline !== null) {
+               $remaining = min(
+                  $remaining,
+                  max(0.0, ($monotonicDeadline - (int) hrtime(true)) / 1_000_000_000)
+               );
+            }
             $seconds = (int) $remaining;
             $microseconds = (int) (($remaining - $seconds) * 1_000_000);
             $selected = @stream_select($read, $write, $except, $seconds, $microseconds);
          }
          // SIGALRM parent watchdogs legitimately interrupt select. Retry only
          // while a finite caller deadline still bounds a persistent failure.
-      } while ($selected === false && $deadline !== null && microtime(true) < $deadline);
+      } while (
+         $selected === false
+         && ($deadline === null || microtime(true) < $deadline)
+         && ($monotonicDeadline === null || (int) hrtime(true) < $monotonicDeadline)
+      );
       if (
          $selected !== 1
          || @stream_socket_get_name($Socket, true) === false
@@ -190,7 +219,13 @@ class Connections implements WPI\Connections
 
       // @ Instance new connection
       $secure = $Client->secure !== null;
-      $Connection = new Connection($Socket, $secure, $Client, $deadline);
+      $Connection = new Connection(
+         $Socket,
+         $secure,
+         $Client,
+         $deadline,
+         $monotonicDeadline
+      );
       if ($Connection->status !== Connection::STATUS_ESTABLISHED || ($secure && $Connection->encrypted === false)) {
          self::$errors['connection']++;
          return false;

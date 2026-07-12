@@ -122,29 +122,48 @@ return new Specification(
             description: 'a concurrent publication by another instance never clobbers this instance attempt, applied marker or ACKs'
          );
 
-         // @ Sweep — a sibling namespace whose owning master is DEAD is
-         //   reaped on the next publication; legacy base-level rendezvous
-         //   files from the pre-namespace layout are removed too
-         $orphan = "{$path}cccccccccccccccc/";
-         mkdir($orphan, 0700, true);
-         $dead = pcntl_fork();
-         if ($dead === 0) {
-            exit(0);
+         // @ A certifier/bootstrap publisher is intentionally short-lived.
+         //   Its PID must never become a lease for the fork-inherited server
+         //   namespace: another instance publishing after that child exits
+         //   must leave the first server's request untouched.
+         $publisher = pcntl_fork();
+         if ($publisher === 0) {
+            exit($Swaps->request($Snapshot) === null ? 1 : 0);
          }
-         pcntl_waitpid($dead, $status);
-         file_put_contents("{$orphan}owner.json", json_encode(['pid' => $dead, 'claimed' => time()]));
-         file_put_contents("{$orphan}request.json", '{}');
+         pcntl_waitpid($publisher, $status);
+         $publishedByChild = $Swaps->fetch();
+
+         $Third = new Swaps($path, 'cccccccccccccccc');
+         $thirdAttempt = $Third->request($foreign);
+         $afterForeignPublication = $Swaps->fetch();
+
+         yield assert(
+            assertion: pcntl_wifexited($status)
+               && pcntl_wexitstatus($status) === 0
+               && $publishedByChild !== null
+               && is_string($thirdAttempt)
+               && $afterForeignPublication === $publishedByChild
+               && is_dir("{$path}{$instance}"),
+            description: 'a forked publisher exit cannot make its live server namespace reapable by another instance'
+         );
+
+         // @ Upgrade cleanup is deliberately limited to the old base-level
+         //   layout; it never traverses a 16-hex live instance namespace.
+         $legacyGeneration = "{$path}" . str_repeat('9', 32) . '/';
+         mkdir($legacyGeneration, 0700, true);
+         file_put_contents("{$legacyGeneration}101.json", '{}');
          file_put_contents("{$path}request.json", '{}');
          file_put_contents("{$path}applied.json", '{}');
 
          $Swaps->request($Snapshot);
 
          yield assert(
-            assertion: is_dir($orphan) === false
+            assertion: is_dir($legacyGeneration) === false
                && is_file("{$path}request.json") === false
                && is_file("{$path}applied.json") === false
-               && is_dir("{$path}bbbbbbbbbbbbbbbb"),
-            description: 'publication sweeps dead-owner namespaces and legacy base files, never a live sibling'
+               && is_dir("{$path}bbbbbbbbbbbbbbbb")
+               && is_dir("{$path}cccccccccccccccc"),
+            description: 'publication cleans only legacy base artifacts and preserves every sibling instance'
          );
       }
       finally {

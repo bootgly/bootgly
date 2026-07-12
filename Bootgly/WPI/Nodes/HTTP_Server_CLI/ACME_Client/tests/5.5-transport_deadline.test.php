@@ -4,9 +4,13 @@ use Bootgly\ACI\Tests\Suite\Test\Specification;
 use Bootgly\WPI\Nodes\HTTP_Client_CLI;
 
 return new Specification(
-   description: 'ACME transport: one absolute deadline bounds TLS, request writes, headers and bodies',
+   description: 'ACME transport: one monotonic deadline bounds TLS, request writes, headers and bodies',
    test: function () {
-      $Run = static function (string $phase): array {
+      $Run = static function (
+         string $phase,
+         float $connectTimeout = 0.25,
+         float $monotonicTimeout = 0.25
+      ): array {
          $Listener = stream_socket_server(
             'tcp://127.0.0.1:0',
             $code,
@@ -60,7 +64,7 @@ return new Specification(
          }
 
          $Client = new HTTP_Client_CLI(HTTP_Client_CLI::MODE_TEST);
-         $secure = $phase === 'tls'
+         $secure = str_starts_with($phase, 'tls')
             ? [
                'verify_peer' => false,
                'verify_peer_name' => false,
@@ -68,9 +72,13 @@ return new Specification(
             ]
             : null;
          $Client->configure('127.0.0.1', $port, secure: $secure);
-         $Client->connectTimeout = 0.25;
-         $Client->timeout = 0.25;
-         $Client->deadline = microtime(true) + 0.25;
+         $Client->connectTimeout = $connectTimeout;
+         $Client->timeout = 5.0;
+         // ! Keep the compatibility wall clock deliberately loose: these
+         //   probes pass only if the hrtime deadline reaches every phase.
+         $Client->deadline = microtime(true) + 5.0;
+         $Client->monotonicDeadline = (int) hrtime(true)
+            + (int) ($monotonicTimeout * 1_000_000_000);
          $Client->maxResponseBytes = $phase === 'oversize' ? 65536 : 0;
 
          $started = microtime(true);
@@ -94,10 +102,21 @@ return new Specification(
             assertion: $Response !== null
                && $Response->code === 0
                && ($phase !== 'oversize' || $Response->status === 'Response Too Large')
+               && ($phase !== 'body' || $Response->status === 'Timeout')
                && $elapsed < 0.8,
             description: "the absolute deadline interrupts a stalled {$phase} phase"
          );
       }
+
+      // @ The per-connect cap composes with (and is shorter than) an absolute
+      //   request deadline instead of being ignored whenever one is present.
+      [$ConnectResponse, $connectElapsed] = $Run('tls-connect-cap', 0.1, 0.7);
+      yield assert(
+         assertion: $ConnectResponse !== null
+            && $ConnectResponse->code === 0
+            && $connectElapsed < 0.4,
+         description: 'connectTimeout remains an independent cap beside an absolute deadline'
+      );
 
       // @ Byte-exact delivery under backpressure — the peer STALLS its reads
       //   long enough for the kernel buffers to fill (forcing short/zero
@@ -170,6 +189,7 @@ return new Specification(
          $Client->connectTimeout = 5;
          $Client->timeout = 5;
          $Client->deadline = microtime(true) + 8.0;
+         $Client->monotonicDeadline = (int) hrtime(true) + 8_000_000_000;
 
          $Response = $Client->request('POST', '/', body: str_repeat('x', $payload));
 

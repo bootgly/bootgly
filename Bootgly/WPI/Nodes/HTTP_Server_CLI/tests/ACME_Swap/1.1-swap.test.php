@@ -254,9 +254,14 @@ return new Specification(
             $dead = reset($PIDsBefore);
             if (is_int($dead) && $dead > 1) {
                posix_kill($dead, SIGKILL);
+               // ! In test mode this harness IS the master loop: the SIGCHLD
+               //   dispatch only queues the casualty (forking inside a pcntl
+               //   dispatch breeds a signal-deaf child) and tick() reforks it.
+               $Tick = new ReflectionMethod($Server, 'tick');
                $deadline = microtime(true) + 4.0;
                do {
                   pcntl_signal_dispatch();
+                  $Tick->invoke($Server);
                   $PIDsAfter = $Server->Process->Children->PIDs;
                   $new = array_values(array_diff($PIDsAfter, $PIDsBefore));
                   if (count($PIDsAfter) === count($PIDsBefore) && $new !== []) {

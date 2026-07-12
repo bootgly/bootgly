@@ -16,9 +16,11 @@ use const ZLIB_SYNC_FLUSH;
 use function deflate_add;
 use function deflate_init;
 use function feof;
+use function hrtime;
 use function inflate_add;
 use function inflate_init;
 use function is_int;
+use function max;
 use function pack;
 use function str_ends_with;
 use function strlen;
@@ -28,6 +30,7 @@ use DeflateContext;
 use InflateContext;
 
 use Bootgly\ACI\Events\Timer;
+use Bootgly\WPI\Interfaces\TCP_Client_CLI;
 use Bootgly\WPI\Interfaces\TCP_Client_CLI\Connections\Connection;
 use Bootgly\WPI\Modules\WS;
 use Bootgly\WPI\Nodes\WS_Client_CLI;
@@ -69,6 +72,8 @@ class Session
    public bool $established = false;
    public bool $disconnected = false;
    public bool $closing = false;        // a graceful close was initiated (suppresses client reconnect)
+   public bool $closeAfterWrite = false; // close transport only after the queued close frame drains
+   public int $closeTimer = 0;           // one-shot monotonic close-drain deadline
    // @ Framing
    public string $carry = '';                       // trailing partial-frame bytes between reads
    public string $reassembly = '';                  // concatenated fragment payloads
@@ -131,6 +136,9 @@ class Session
     */
    public function disconnect (): void
    {
+      // @ A completed/aborted transport no longer needs the close-drain guard.
+      $this->disarm();
+
       // ?
       if ($this->disconnected) {
          return;
@@ -198,9 +206,12 @@ class Session
     */
    public function ping (string $payload = ''): bool
    {
-      $this->awaitingPong = true;
+      $sent = $this->deliver(Frame::encode(WS::OPCODE_PING, $payload));
+      if ($sent) {
+         $this->awaitingPong = true;
+      }
 
-      return $this->deliver(Frame::encode(WS::OPCODE_PING, $payload));
+      return $sent;
    }
 
    /**
@@ -208,21 +219,163 @@ class Session
     */
    public function close (int $code = 1000, string $reason = ''): bool
    {
-      $this->closing = true;
-      $this->deliver(Frame::encode(WS::OPCODE_CLOSE, pack('n', $code) . $reason));
-      $this->disconnect();
+      // ? Idempotent while a close is draining; never enqueue a second close
+      //   frame. Once disconnected there is no close left to initiate.
+      if ($this->closing) {
+         return $this->disconnected === false
+            && $this->Connection->status === Connection::STATUS_ESTABLISHED;
+      }
 
-      return $this->Connection->close();
+      $this->closing = true;
+      $this->closeAfterWrite = true;
+      if ($this->queue(
+         Frame::encode(WS::OPCODE_CLOSE, pack('n', $code) . $reason),
+         allowClosing: true
+      ) === false) {
+         $this->closeAfterWrite = false;
+         $this->disconnect();
+         $this->Connection->close();
+
+         return false;
+      }
+
+      // ? A normal WS client has a write-completion router which performs the
+      //   close. Keep standalone Session use deterministic when the frame was
+      //   accepted immediately but no router is installed.
+      if (
+         $this->Connection->output === ''
+         && $this->Connection->status === Connection::STATUS_ESTABLISHED
+      ) {
+         $this->closeAfterWrite = false;
+         $this->disconnect();
+         $this->Connection->close();
+      }
+      else if ($this->Connection->output !== '') {
+         // ! Read dispatch precedes write dispatch in Select. Stop reading so
+         //   a simultaneous peer EOF cannot discard the queued close frame.
+         TCP_Client_CLI::$Event->del(
+            $this->Connection->Socket,
+            TCP_Client_CLI::$Event::EVENT_READ
+         );
+         $this->arm();
+      }
+
+      return true;
    }
 
    /**
-    * Write an already-encoded frame to the server's socket.
+    * Bound a backpressured close-frame drain with the monotonic event clock.
+    */
+   private function arm (): void
+   {
+      $timeout = $this->Client->closeTimeout;
+      if ($timeout <= 0.0) {
+         $this->expire();
+
+         return;
+      }
+
+      $nanoseconds = (int) max(1.0, $timeout * 1_000_000_000);
+      $this->closeTimer = TCP_Client_CLI::$Event->defer(
+         (int) hrtime(true) + $nanoseconds,
+         function (): void {
+            // ! Select removes a one-shot before dispatching it.
+            $this->closeTimer = 0;
+            $this->expire();
+         }
+      );
+   }
+
+   /**
+    * Force transport teardown when the peer never drains the close frame.
+    */
+   private function expire (): void
+   {
+      if ($this->closeAfterWrite === false || $this->disconnected) {
+         return;
+      }
+
+      $this->closeAfterWrite = false;
+      $this->disconnect();
+      $this->Connection->close();
+   }
+
+   /** Cancel the one-shot close deadline after drain or disconnect. */
+   private function disarm (): void
+   {
+      if ($this->closeTimer === 0) {
+         return;
+      }
+
+      TCP_Client_CLI::$Event->cancel($this->closeTimer);
+      $this->closeTimer = 0;
+   }
+
+   /**
+    * Queue an already-encoded frame and opportunistically flush it.
+    *
+    * A successful return means the complete frame was accepted by the local
+    * output queue, not necessarily by the kernel. A short/zero socket write
+    * retains the suffix and arms write readiness until every queued byte has
+    * drained. Later frames append in order and can never replace that suffix.
     */
    public function deliver (string $frame): bool
    {
-      $this->Connection->output = $frame;
+      return $this->queue($frame);
+   }
 
-      return $this->Connection->writing($this->Connection->Socket, strlen($frame));
+   /**
+    * Internal queue path; only close() may enqueue while closing is already
+    * true, which preserves reconnect suppression if the synchronous write fails.
+    */
+   private function queue (string $frame, bool $allowClosing = false): bool
+   {
+      $Connection = $this->Connection;
+      if (
+         $this->disconnected
+         || ($this->closing && $allowClosing === false)
+         || $Connection->status !== Connection::STATUS_ESTABLISHED
+      ) {
+         return false;
+      }
+
+      // ? Preserve the authoritative suffix from an earlier short write.
+      if ($Connection->output !== '') {
+         $Connection->output .= $frame;
+         if (TCP_Client_CLI::$Event->add(
+            $Connection->Socket,
+            TCP_Client_CLI::$Event::EVENT_WRITE,
+            $Connection
+         ) === false) {
+            $Connection->close();
+
+            return false;
+         }
+
+         return true;
+      }
+
+      $Connection->output = $frame;
+      $accepted = $Connection->writing($Connection->Socket, strlen($frame));
+      if ($accepted === false) {
+         return false;
+      }
+
+      // ? Zero/short progress yields from writing(); keep the connection in
+      //   the readiness loop. The completion hook removes this registration.
+      if ($Connection->output !== '') {
+         if (TCP_Client_CLI::$Event->add(
+            $Connection->Socket,
+            TCP_Client_CLI::$Event::EVENT_WRITE,
+            $Connection
+         ) === false) {
+            $Connection->close();
+
+            return false;
+         }
+      }
+
+      return true;
    }
 
    /**
@@ -327,7 +480,7 @@ class Session
       $Connection = $this->Connection;
 
       // ? Already closing/closed.
-      if ($this->disconnected) {
+      if ($this->disconnected || $this->closing) {
          return;
       }
 

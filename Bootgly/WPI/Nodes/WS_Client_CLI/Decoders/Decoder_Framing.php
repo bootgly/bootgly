@@ -11,7 +11,6 @@
 namespace Bootgly\WPI\Nodes\WS_Client_CLI\Decoders;
 
 
-use function pack;
 use function preg_match;
 use function strlen;
 use function substr;
@@ -30,7 +29,7 @@ use Bootgly\WPI\Nodes\WS_Client_CLI\Session;
  * RFC 6455 frame decoder (client side). Mirrors the server's state machine —
  * reassembly, streaming UTF-8, size caps, control handling — with two client
  * deltas: server frames MUST NOT be masked (the guard is flipped), and control
- * echoes (auto-pong, close) are written immediately via `Session::deliver()`.
+ * replies are queued through `Session::deliver()` / `Session::close()`.
  */
 class Decoder_Framing extends Decoders
 {
@@ -216,11 +215,9 @@ class Decoder_Framing extends Decoders
                   return $this->fail($Session, 1007);
                }
             }
-            // @ Echo the close code (§5.5.1) then tear the connection down — a
-            //   graceful server close, so the client does not reconnect.
-            $Session->closing = true;
-            $Session->deliver(Frame::encode(WS::OPCODE_CLOSE, pack('n', $code)));
-            $Session->disconnect();
+            // @ Echo the close code (§5.5.1). Session::close() keeps the
+            //   transport alive until a backpressured close frame drains.
+            $Session->close($code);
             return ['consumed' => $Frame->consumed, 'stop' => true];
       }
 
@@ -235,10 +232,9 @@ class Decoder_Framing extends Decoders
     */
    private function fail (Session $Session, int $code): array
    {
-      // @ A protocol fault is a won't-fix close — suppress client reconnect.
-      $Session->closing = true;
-      $Session->deliver(Frame::encode(WS::OPCODE_CLOSE, pack('n', $code)));
-      $Session->disconnect();
+      // @ A protocol fault is a won't-fix close — Session::close() suppresses
+      //   reconnect and preserves the close frame through backpressure.
+      $Session->close($code);
 
       // : `consumed` is irrelevant — `stop` ends the node's decode loop.
       return ['consumed' => 0, 'stop' => true];

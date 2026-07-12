@@ -65,7 +65,9 @@ return new Specification(
             proc_terminate($Process, SIGTERM);
             $stopped = $Wait(static function () use ($Process, $Alive, $PIDs, $state): bool {
                $status = proc_get_status($Process);
-               if (($status['running'] ?? true) !== false || is_file($state)) {
+               $JSON = @file_get_contents($state);
+               $topology = is_string($JSON) ? json_decode($JSON, true) : null;
+               if (($status['running'] ?? true) !== false || is_array($topology)) {
                   return false;
                }
                foreach ($PIDs as $PID) {

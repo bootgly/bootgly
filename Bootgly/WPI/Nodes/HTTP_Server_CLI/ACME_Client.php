@@ -62,9 +62,8 @@ class ACME_Client
    /**
     * Total budget for one issuance (`order()` — placement, authorizations,
     * finalize and download), in seconds. The order-level budget is
-    * `hrtime()`-based (monotonic); each transport phase under it is bounded
-    * by the client's wall-clock deadline (see `TCP_Client_CLI::$deadline`
-    * for that documented contract).
+    * `hrtime()`-based (monotonic); each transport phase inherits that same
+    * hard deadline in addition to a compatibility wall-clock deadline.
     */
    public const int PATIENCE = 300;
    /** Maximum server-directed retry retained locally (one year). */
@@ -662,6 +661,7 @@ class ACME_Client
          $Client->connectTimeout = $timeout;
          $Client->timeout = $timeout;
          $Client->deadline = microtime(true) + $remaining;
+         $Client->monotonicDeadline = $this->deadline;
       }
 
       // ! No transparent redirects — a 3xx would either convert the signed
@@ -743,13 +743,14 @@ class ACME_Client
    private function raise (Response $Response, string $message): never
    {
       $media = strtolower((string) $Response->Header->get('content-type'));
-      $decoded = str_starts_with($media, 'application/problem+json')
-         ? json_decode($Response->body, true)
-         : null;
-
-      if (is_array($decoded)) {
-         $type = is_string($decoded['type'] ?? null) ? $decoded['type'] : 'about:blank';
-         $detail = is_string($decoded['detail'] ?? null) ? $decoded['detail'] : $Response->body;
+      if (str_starts_with($media, 'application/problem+json')) {
+         $decoded = json_decode($Response->body, true);
+         $type = is_array($decoded) && is_string($decoded['type'] ?? null)
+            ? $decoded['type']
+            : 'about:blank';
+         $detail = is_array($decoded) && is_string($decoded['detail'] ?? null)
+            ? $decoded['detail']
+            : ($Response->body !== '' ? $Response->body : $message);
 
          throw new ServerException($type, $detail, $Response->code, $this->delay($Response));
       }

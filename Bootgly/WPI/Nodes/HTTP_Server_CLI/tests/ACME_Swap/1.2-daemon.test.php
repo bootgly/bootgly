@@ -8,13 +8,21 @@ return new Specification(
       $storage = sys_get_temp_dir() . '/bootgly-daemon-topology-' . getmypid();
       $port = 18109;
       $state = "{$storage}/pids/HTTP_Server_CLI.{$port}.json";
+      $lock = "{$storage}/pids/HTTP_Server_CLI.{$port}.lock";
+      $raceReady = "{$storage}/lock-race.ready";
+      $raceDone = "{$storage}/lock-race.done";
+      $raceBreach = "{$storage}/lock-race.breach";
       $master = 0;
       $PIDs = [];
       $replacement = 0;
+      $reloadPIDs = [];
+      $racer = 0;
       $launcher = null;
       $started = false;
       $owned = false;
       $recovered = false;
+      $reloaded = false;
+      $lockContinuous = false;
       $stopped = false;
       $failed = false;
 
@@ -85,7 +93,7 @@ return new Specification(
          $launcher = is_resource($Launcher) ? $Launcher : null;
          if ($launcher !== null) {
             $started = proc_close($Launcher) === 0 && $Wait(
-               static fn (): bool => is_file($state)
+               static fn (): bool => $Read() !== null
             );
             $launcher = null;
          }
@@ -120,8 +128,94 @@ return new Specification(
                   && $Parent($replacement) === $master;
             });
          }
+         if ($recovered) {
+            $before = $Read();
+            $beforeWorkers = is_array($before['workers'] ?? null)
+               ? array_values(array_filter($before['workers'], 'is_int'))
+               : [];
+            $racer = pcntl_fork();
+            if ($racer === 0) {
+               $Lock = @fopen($lock, 'c+b');
+               if ($Lock === false || file_put_contents($raceReady, 'ready') === false) {
+                  exit(2);
+               }
+               $deadline = microtime(true) + 18.0;
+               while (is_file($raceDone) === false && microtime(true) < $deadline) {
+                  if (flock($Lock, LOCK_EX | LOCK_NB)) {
+                     file_put_contents($raceBreach, 'acquired');
+                     flock($Lock, LOCK_UN);
+                     fclose($Lock);
+                     exit(1);
+                  }
+                  usleep(500);
+               }
+               fclose($Lock);
+               exit(is_file($raceDone) ? 0 : 3);
+            }
+
+            $racing = $racer > 0 && $Wait(static fn (): bool => is_file($raceReady), 2.0);
+            if ($racing) {
+               posix_kill($master, SIGUSR2);
+               $reloaded = $Wait(function () use (
+                  $Read,
+                  $Parent,
+                  $master,
+                  $beforeWorkers,
+                  $port,
+                  &$reloadPIDs
+               ): bool {
+                  $current = $Read();
+                  $reloadPIDs = is_array($current['workers'] ?? null)
+                     ? array_values(array_filter($current['workers'], 'is_int'))
+                     : [];
+                  if (
+                     ($current['master'] ?? null) !== $master
+                     || count($reloadPIDs) !== 2
+                     || array_intersect($beforeWorkers, $reloadPIDs) !== []
+                  ) {
+                     return false;
+                  }
+                  foreach ($reloadPIDs as $PID) {
+                     if ($Parent($PID) !== $master) {
+                        return false;
+                     }
+                  }
+                  $Client = @stream_socket_client("tcp://127.0.0.1:{$port}", $code, $message, 0.5);
+                  if ($Client === false) {
+                     return false;
+                  }
+                  stream_set_timeout($Client, 1);
+                  fwrite($Client, "GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
+                  $response = stream_get_contents($Client);
+                  fclose($Client);
+
+                  return is_string($response) && str_contains($response, 'daemon');
+               }, 15.0);
+            }
+
+            file_put_contents($raceDone, 'done');
+            if ($racer > 0) {
+               $waited = pcntl_waitpid($racer, $raceStatus);
+               $lockContinuous = $racing
+                  && $waited === $racer
+                  && pcntl_wifexited($raceStatus)
+                  && pcntl_wexitstatus($raceStatus) === 0
+                  && is_file($raceBreach) === false;
+               $racer = 0;
+            }
+            else {
+               $lockContinuous = false;
+            }
+         }
       }
       finally {
+         file_put_contents($raceDone, 'done');
+         if ($racer > 0) {
+            if ($Alive($racer)) {
+               posix_kill($racer, SIGKILL);
+            }
+            pcntl_waitpid($racer, $raceStatus);
+         }
          if (is_resource($launcher)) {
             proc_terminate($launcher, SIGKILL);
             proc_close($launcher);
@@ -130,11 +224,13 @@ return new Specification(
             posix_kill($master, SIGTERM);
          }
          $stopped = $master < 2 || $Wait(
-            static function () use ($Alive, $master, $PIDs, &$replacement, $state): bool {
-               if ($Alive($master) || is_file($state)) {
+            static function () use ($Alive, $Read, $master, $PIDs, &$replacement, &$reloadPIDs): bool {
+               // State cleanup is an inode-stable empty tombstone; only a
+               // decodable topology denotes a live process now.
+               if ($Alive($master) || $Read() !== null) {
                   return false;
                }
-               foreach (array_unique([...$PIDs, $replacement]) as $PID) {
+               foreach (array_unique([...$PIDs, $replacement, ...$reloadPIDs]) as $PID) {
                   if ($PID > 1 && $Alive($PID)) {
                      return false;
                   }
@@ -150,7 +246,7 @@ return new Specification(
          if ($master > 1 && $Alive($master)) {
             posix_kill($master, SIGKILL);
          }
-         foreach (array_unique([...$PIDs, $replacement]) as $PID) {
+         foreach (array_unique([...$PIDs, $replacement, ...$reloadPIDs]) as $PID) {
             if ($PID > 1 && $Alive($PID)) {
                posix_kill($PID, SIGKILL);
             }
@@ -186,6 +282,10 @@ return new Specification(
       yield assert(
          assertion: $recovered,
          description: 'the daemon master reaps and reforks a crashed worker under itself'
+      );
+      yield assert(
+         assertion: $reloaded && $lockContinuous,
+         description: 'SIGUSR2 keeps the daemon master PID, continuously owns its stable lock and serves through freshly re-execed workers'
       );
       yield assert(
          assertion: $stopped,

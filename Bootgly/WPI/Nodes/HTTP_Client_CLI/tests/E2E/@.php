@@ -30,6 +30,9 @@ return new Suite(
       'Decoding/' => [
          '6.1-chunked_response',
          '6.2-content_length',
+         '6.3-close_delimited',
+         '6.4-truncated_content_length',
+         '6.5-truncated_chunked',
       ],
       'Headers/' => [
          '8.1-ows_parsing',

@@ -12,11 +12,15 @@ namespace Bootgly\WPI\Events;
 
 
 use function count;
+use function hrtime;
+use function is_int;
 use function is_resource;
+use function max;
 use function microtime;
 use function pcntl_signal_dispatch;
 use function sleep;
 use function stream_select;
+use function usleep;
 use Closure;
 use Fiber;
 use Throwable;
@@ -71,6 +75,8 @@ class Select implements Events, Loops, Scheduler
    private array $awaitingWriteDeadlines = [];
    /** @var array<int,array{deadline:float,Callback:Closure}> */
    private array $Timers = [];
+   /** @var array<int,array{deadline:int,Callback:Closure}> */
+   private array $MonotonicTimers = [];
    private int $timer = 0;
    // # Loop
    public readonly float $started;
@@ -96,12 +102,12 @@ class Select implements Events, Loops, Scheduler
       switch ($flag) {
          // Client/Server
          case self::EVENT_CONNECT:
+            $id = (int) $Socket;
+
             // System call select exceeded the maximum number of connections 1024.
-            if (count($this->reads) >= 1000) {
+            if (count($this->reads) >= 1000 && isset($this->reads[$id]) === false) {
                return false;
             }
-
-            $id = (int) $Socket;
 
             $this->reads[$id] = $Socket;
 
@@ -110,12 +116,12 @@ class Select implements Events, Loops, Scheduler
             return true;
          // Package
          case self::EVENT_READ:
+            $id = (int) $Socket;
+
             // System call select exceeded the maximum number of connections 1024.
-            if (count($this->reads) >= 1000) {
+            if (count($this->reads) >= 1000 && isset($this->reads[$id]) === false) {
                return false;
             }
-
-            $id = (int) $Socket;
 
             $this->reads[$id] = $Socket;
 
@@ -123,12 +129,12 @@ class Select implements Events, Loops, Scheduler
 
             return true;
          case self::EVENT_WRITE:
+            $id = (int) $Socket;
+
             // System call select exceeded the maximum number of connections 1024.
-            if (count($this->writes) >= 1000) {
+            if (count($this->writes) >= 1000 && isset($this->writes[$id]) === false) {
                return false;
             }
-
-            $id = (int) $Socket;
 
             $this->writes[$id] = $Socket;
 
@@ -136,12 +142,12 @@ class Select implements Events, Loops, Scheduler
 
             return true;
          case self::EVENT_EXCEPT:
+            $id = (int) $Socket;
+
             // System call select exceeded the maximum number of connections 1024.
-            if (count($this->excepts) >= 1000) {
+            if (count($this->excepts) >= 1000 && isset($this->excepts[$id]) === false) {
                return false;
             }
-
-            $id = (int) $Socket;
 
             $this->excepts[$id] = $Socket;
 
@@ -201,10 +207,25 @@ class Select implements Events, Loops, Scheduler
       return false;
    }
 
-   /** Register a one-shot monotonic wall-clock callback. */
-   public function defer (float $deadline, Closure $Callback): int
+   /**
+    * Register a one-shot callback. The clock domain is selected by type:
+    * a float is a wall-clock `microtime(true)` deadline in seconds; an int
+    * is a monotonic `hrtime(true)` deadline in nanoseconds.
+    */
+   public function defer (float|int $deadline, Closure $Callback): int
    {
       $ID = ++$this->timer;
+
+      // ?: Monotonic deadlines are integer nanoseconds; wall-clock are float seconds.
+      if (is_int($deadline)) {
+         $this->MonotonicTimers[$ID] = [
+            'deadline' => $deadline,
+            'Callback' => $Callback
+         ];
+
+         return $ID;
+      }
+
       $this->Timers[$ID] = [
          'deadline' => $deadline,
          'Callback' => $Callback
@@ -216,10 +237,14 @@ class Select implements Events, Loops, Scheduler
    /** Cancel a one-shot callback before it fires. */
    public function cancel (int $ID): bool
    {
-      if (isset($this->Timers[$ID]) === false) {
+      if (
+         isset($this->Timers[$ID]) === false
+         && isset($this->MonotonicTimers[$ID]) === false
+      ) {
          return false;
       }
       unset($this->Timers[$ID]);
+      unset($this->MonotonicTimers[$ID]);
 
       return true;
    }
@@ -241,7 +266,7 @@ class Select implements Events, Loops, Scheduler
          }
 
          pcntl_signal_dispatch();
-         $deadline = $this->tick();
+         $wait = $this->tick();
          // ? A timer callback dispatched by tick() may have stopped the loop
          if ($this->loop === false) { // @phpstan-ignore identical.alwaysFalse
             break;
@@ -274,7 +299,7 @@ class Select implements Events, Loops, Scheduler
                }
             }
 
-            $deadline = $this->tick();
+            $wait = $this->tick();
          }
 
          $read   = $this->reads;
@@ -287,13 +312,8 @@ class Select implements Events, Loops, Scheduler
                $timeout = $this->Fibers ? 0 : null;
                $microseconds = null;
 
-               if ($timeout === null && $deadline !== null) {
-                  $remaining = $deadline - microtime(true);
-
-                  if ($remaining < 0) {
-                     $remaining = 0.0;
-                  }
-
+               if ($timeout === null && $wait !== null) {
+                  $remaining = max(0.0, $wait);
                   $timeout = (int) $remaining;
                   $microseconds = (int) (($remaining - $timeout) * 1_000_000);
                }
@@ -312,8 +332,14 @@ class Select implements Events, Loops, Scheduler
                continue;
             }
 
-            // @ Sleep for 1 second and continue (Used to pause the Server)
-            sleep(1);
+            // @ Keep timer precision even when no sockets are registered.
+            //   The historical one-second idle sleep remains the upper bound.
+            if ($wait !== null && $wait < 1.0) {
+               usleep((int) (max(0.0, $wait) * 1_000_000));
+            }
+            else {
+               sleep(1);
+            }
 
             if ($this->loop === false) { // @phpstan-ignore identical.alwaysFalse
                break;
@@ -505,13 +531,11 @@ class Select implements Events, Loops, Scheduler
    private function tick (): null|float
    {
       $now = microtime(true);
-      $deadline = null;
+      $nowMonotonic = (int) hrtime(true);
+      $wait = null;
 
       foreach ($this->Timers as $ID => $Timer) {
          if ($Timer['deadline'] > $now) {
-            if ($deadline === null || $Timer['deadline'] < $deadline) {
-               $deadline = $Timer['deadline'];
-            }
             continue;
          }
 
@@ -524,12 +548,40 @@ class Select implements Events, Loops, Scheduler
          }
       }
 
+      foreach ($this->MonotonicTimers as $ID => $Timer) {
+         if ($Timer['deadline'] > $nowMonotonic) {
+            continue;
+         }
+
+         unset($this->MonotonicTimers[$ID]);
+         try {
+            ($Timer['Callback'])();
+         }
+         catch (Throwable) {
+            // One failed timeout callback must not tear down the event loop.
+         }
+      }
+
+      // @ Callbacks may cancel or register timers. Compute the next wait from
+      //   the post-callback sets so a newly-nearest timer is never overslept.
+      $now = microtime(true);
+      $nowMonotonic = (int) hrtime(true);
+      foreach ($this->Timers as $Timer) {
+         $this->bound(max(0.0, $Timer['deadline'] - $now), $wait);
+      }
+      foreach ($this->MonotonicTimers as $Timer) {
+         $this->bound(
+            max(0.0, ($Timer['deadline'] - $nowMonotonic) / 1_000_000_000),
+            $wait
+         );
+      }
+
       $this->expire($this->awaitingReads, $this->reads, $this->awaitingReadDeadlines, $now);
       $this->expire($this->awaitingWrites, $this->writes, $this->awaitingWriteDeadlines, $now);
-      $this->limit($this->awaitingReadDeadlines, $deadline);
-      $this->limit($this->awaitingWriteDeadlines, $deadline);
+      $this->limit($this->awaitingReadDeadlines, $now, $wait);
+      $this->limit($this->awaitingWriteDeadlines, $now, $wait);
 
-      return $deadline;
+      return $wait;
    }
 
    /**
@@ -587,16 +639,26 @@ class Select implements Events, Loops, Scheduler
     *
     * @param array<int,float> $deadlines
     */
-   private function limit (array $deadlines, null|float &$next): void
+   private function limit (array $deadlines, float $now, null|float &$next): void
    {
       foreach ($deadlines as $deadline) {
          if ($deadline <= 0.0) {
             continue;
          }
 
-         if ($next === null || $deadline < $next) {
-            $next = $deadline;
-         }
+         $this->bound(max(0.0, $deadline - $now), $next);
+      }
+   }
+
+   /**
+    * Keep the nearest relative wait in seconds.
+    *
+    * @param-out float $next
+    */
+   private function bound (float $wait, null|float &$next): void
+   {
+      if ($next === null || $wait < $next) {
+         $next = $wait;
       }
    }
 
@@ -645,6 +707,7 @@ class Select implements Events, Loops, Scheduler
       $this->awaitingWriteDeadlines = [];
       $this->Fibers = [];
       $this->Timers = [];
+      $this->MonotonicTimers = [];
 
       // # Loop
       $this->loop = false;

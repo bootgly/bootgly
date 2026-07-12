@@ -18,5 +18,8 @@ return new Suite(
       '1.2-state-qualify',
       '1.3-state-lock',
       '1.4-state-safety',
+      '1.5-state-demoted-cleanup',
+      '1.6-state-root-handoff',
+      '1.7-state-lock-handoff',
    ]
 );

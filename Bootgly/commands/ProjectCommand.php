@@ -70,6 +70,7 @@ use function usleep;
 use Throwable;
 
 use const Bootgly\CLI;
+use Bootgly\ACI\Process\State;
 use Bootgly\ADI\Databases\SQL;
 use Bootgly\ADI\Databases\SQL\Schema\Migrations;
 use Bootgly\ADI\Databases\SQL\Schema\Runner as MigrationRunner;
@@ -700,12 +701,9 @@ class ProjectCommand extends Command
       $stopped = 0;
       foreach ($instances as $instance => $PIDs) {
          if ($this->probe($PIDs['master']) === false) {
-            // @ Clean stale PID file
-            $suffix = $instance !== '' ? '.' . $instance : '';
-            $pidFile = BOOTGLY_STORAGE_DIR . 'pids/' . Projects::encode($projectName) . $suffix . '.json';
-            if (is_file($pidFile)) {
-               @unlink($pidFile);
-            }
+            // @ Tombstone stale per-instance state without requiring the
+            //   runtime UID to own the shared parent directory.
+            $this->scrub($projectName, $instance);
             continue;
          }
 
@@ -749,12 +747,9 @@ class ProjectCommand extends Command
             }
          }
 
-         // @ Remove PID file
-         $suffix = $instance !== '' ? '.' . $instance : '';
-         $pidFile = BOOTGLY_STORAGE_DIR . 'pids/' . Projects::encode($projectName) . $suffix . '.json';
-         if (is_file($pidFile)) {
-            @unlink($pidFile);
-         }
+         // @ Tombstone PID/command state. The lock inode is preserved so a
+         //   concurrent restart cannot split flock exclusivity across inodes.
+         $this->scrub($projectName, $instance);
 
          $stopped++;
       }
@@ -2343,6 +2338,22 @@ class ProjectCommand extends Command
       }
 
       return $data;
+   }
+
+   /** Best-effort cleanup through the same safe state protocol as the server. */
+   private function scrub (string $projectName, string $instance): void
+   {
+      try {
+         $State = new State(
+            Projects::encode($projectName),
+            $instance !== '' ? $instance : null
+         );
+         $State->clean();
+      }
+      catch (Throwable) {
+         // ? State cleanup has always been best-effort here. An unsafe storage
+         //   directory fails closed instead of falling back to raw pathname IO.
+      }
    }
 
    /**

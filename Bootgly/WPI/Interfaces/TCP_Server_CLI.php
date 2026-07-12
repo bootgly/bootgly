@@ -16,8 +16,10 @@ use const LOCK_EX;
 use const LOCK_NB;
 use const PHP_BINARY;
 use const PHP_SAPI;
+use const SCM_RIGHTS;
 use const SIG_DFL;
 use const SIG_IGN;
+use const SIG_SETMASK;
 use const SIGALRM;
 use const SIGCHLD;
 use const SIGCONT;
@@ -35,6 +37,8 @@ use const SIGUSR1;
 use const SIGUSR2;
 use const SIGWINCH;
 use const SO_KEEPALIVE;
+use const SO_TYPE;
+use const SOCK_STREAM;
 use const SOL_SOCKET;
 use const SOL_TCP;
 use const STDERR;
@@ -51,9 +55,11 @@ use const STREAM_SOCK_STREAM;
 use const TCP_NODELAY;
 use const WNOHANG;
 use function array_key_exists;
+use function array_keys;
 use function array_merge;
 use function array_pad;
 use function array_slice;
+use function array_values;
 use function basename;
 use function bin2hex;
 use function chdir;
@@ -76,17 +82,23 @@ use function getcwd;
 use function getenv;
 use function glob;
 use function hash;
-use function in_array;
+use function implode;
 use function is_array;
 use function is_dir;
 use function is_file;
+use function is_int;
 use function is_link;
 use function is_numeric;
 use function is_resource;
 use function is_string;
+use function json_decode;
+use function json_encode;
+use function ksort;
 use function lstat;
+use function max;
 use function method_exists;
 use function microtime;
+use function min;
 use function mkdir;
 use function openssl_x509_check_private_key;
 use function openssl_x509_fingerprint;
@@ -94,6 +106,7 @@ use function pcntl_exec;
 use function pcntl_fork;
 use function pcntl_signal;
 use function pcntl_signal_dispatch;
+use function pcntl_sigprocmask;
 use function pcntl_waitpid;
 use function posix_getgrnam;
 use function posix_getpid;
@@ -106,7 +119,9 @@ use function posix_setgid;
 use function posix_setsid;
 use function posix_setuid;
 use function preg_match;
+use function putenv;
 use function random_bytes;
+use function range;
 use function readline_callback_handler_install;
 use function readline_callback_handler_remove;
 use function readline_callback_read_char;
@@ -115,7 +130,12 @@ use function restore_error_handler;
 use function rmdir;
 use function rtrim;
 use function scandir;
+use function socket_cmsg_space;
+use function socket_export_stream;
+use function socket_get_option;
 use function socket_import_stream;
+use function socket_recvmsg;
+use function socket_sendmsg;
 use function socket_set_option;
 use function str_contains;
 use function stream_context_create;
@@ -123,6 +143,7 @@ use function stream_context_get_options;
 use function stream_context_set_options;
 use function stream_select;
 use function stream_set_blocking;
+use function stream_set_timeout;
 use function stream_socket_accept;
 use function stream_socket_client;
 use function stream_socket_enable_crypto;
@@ -130,6 +151,7 @@ use function stream_socket_get_name;
 use function stream_socket_pair;
 use function stream_socket_server;
 use function strlen;
+use function strrpos;
 use function substr;
 use function sys_get_temp_dir;
 use function time;
@@ -140,6 +162,7 @@ use BackedEnum;
 use Closure;
 use InvalidArgumentException;
 use RuntimeException;
+use Socket;
 use Throwable;
 
 use const Bootgly\CLI;
@@ -175,6 +198,13 @@ use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections;
 
 class TCP_Server_CLI implements Servers
 {
+   private const string RELOAD_HANDOFF_PATH = 'BOOTGLY_RELOAD_HANDOFF_PATH';
+   private const string RELOAD_HANDOFF_TOKEN = 'BOOTGLY_RELOAD_HANDOFF_TOKEN';
+   private const string RELOAD_HANDOFF_PID = 'BOOTGLY_RELOAD_HANDOFF_PID';
+   // Linux caps one SCM_RIGHTS control message at 253 descriptors. Keep room
+   // for node-owned listeners (for example Auto-TLS' HTTP-01 gate).
+   private const int RELOAD_HANDOFF_MAX_RESOURCES = 240;
+
    public Logger $Logger {
       get {
          if ( isSet($this->Logger) === false ) {
@@ -189,6 +219,10 @@ class TCP_Server_CLI implements Servers
    // !
    /** @var resource */
    protected $Socket;
+   /** @var array<int,resource> Master-owned SO_REUSEPORT listener pool. */
+   protected array $Listeners = [];
+   /** @var array<int,int> Worker indexes reaped by the SIGCHLD dispatch, awaiting refork. */
+   private array $casualties = [];
 
    public static Events & Loops & Scheduler $Event;
 
@@ -600,30 +634,12 @@ class TCP_Server_CLI implements Servers
 
                   $this->Logger->log(warning: "Worker #{$deadIndex} (PID: {$deadPID}) crashed, reforking...@.;");
 
-                  $newPID = pcntl_fork();
-
-                  // # Child process (new worker)
-                  if ($newPID === 0) {
-                     $this->Process->Children->push($this->Process->id, $deadIndex);
-                     Process::$index = $deadIndex + 1;
-
-                     // @ Run the SAME boot body as the initial fork, so a
-                     //   recovered worker gets the node process title, the
-                     //   monitor sink, the `Worker::Boot` event and per-worker
-                     //   wiring (e.g. the WS cross-worker relay) — not a bare
-                     //   TCP loop with a stale title.
-                     $this->work($this->Process, $deadIndex);
-
-                     exit(0);
-                  }
-                  // # Master process
-                  else if ($newPID > 0) {
-                     $this->Process->Children->push($newPID, $deadIndex);
-
-                     $this->Logger->log(notice: "Worker #{$deadIndex} recovered (new PID: {$newPID})@.;");
-
-                     $this->Process->State->save($this->describe());
-                  }
+                  // ! Never fork inside this dispatch: pcntl flags its
+                  //   dispatcher busy while a user handler runs, and a child
+                  //   forked in that window inherits the flag — its own
+                  //   signal handlers would never fire again. tick() reforks
+                  //   from plain loop context via revive().
+                  $this->casualties[] = $deadIndex;
                }
             }
             break;
@@ -668,12 +684,25 @@ class TCP_Server_CLI implements Servers
       // @ Boot the application, or bail when no handler is wired (overridable).
       $this->loading();
 
-      // ! Process
-      // ? Late instance guard: qualify the state files with the bound port and
-      //   take a non-blocking lock — the bind itself uses SO_REUSEPORT, so two
-      //   Bootgly servers CAN share a port; this lock is what rejects the second.
+      // ! The state identity must be final before a reload descriptor is
+      //   inspected: State::adopt() validates the received regular file
+      //   against this exact qualified pathname and inode.
       $State = $this->Process->State;
       $State->qualify((string) ($this->port ?? 0));
+
+      // @ A reload never attempts to regain root. The old, already-demoted
+      //   master hands its bound listeners and acquired instance lock to this
+      //   fresh image through a short-lived same-UID SCM_RIGHTS relay.
+      $handoff = $this->receive();
+      if ($handoff === false) {
+         $this->Logger->log(error: '@\;Reload aborted: the inherited listener handoff was invalid.@\;');
+         exit(1);
+      }
+
+      // ! Process
+      // ? Instance guard: take a non-blocking lock — the bind itself uses
+      //   SO_REUSEPORT, so two Bootgly servers CAN share a port; this lock is
+      //   what rejects the second.
       if ($State->lock(LOCK_EX | LOCK_NB) === false) {
          $this->Logger->log(
             error: '@\;Another instance is already running on port ' . ($this->port ?? 0) . '.@\;Use `project stop <name> <port>` to stop it or start this one on another port (PORT env).@.;'
@@ -685,36 +714,39 @@ class TCP_Server_CLI implements Servers
          exit(1);
       }
 
-      // ? Pre-flight: verify socket can be bound before forking workers
-      $probeCode = 0;
-      $probeMessage = '';
-      $probeContext = stream_context_create(['socket' => ['so_reuseport' => true, 'ipv6_v6only' => false]]);
-      try {
-         $probeSocket = @stream_socket_server(
-            'tcp://' . ($this->host ?? '0.0.0.0') . ':' . ($this->port ?? 0),
-            $probeCode,
-            $probeMessage,
-            STREAM_SERVER_BIND | STREAM_SERVER_LISTEN,
-            $probeContext
-         );
-      }
-      catch (Throwable) {
-         $probeSocket = false;
-      }
-      if ($probeSocket === false) {
-         $message = '@\;Could not bind to ' . ($this->host ?? '0.0.0.0') . ':' . ($this->port ?? 0) . ': ' . $probeMessage;
-         if ($probeCode === 13 || str_contains($probeMessage ?? '', 'Permission denied')) {
-            $message .= '@\;Ports below 1024 require elevated privileges. Try running with `sudo`.@.;';
+      // ? On an ordinary launch there is no handoff, so retain the early bind
+      //   probe and its useful permission diagnostic.
+      if ($this->Listeners === []) {
+         $probeCode = 0;
+         $probeMessage = '';
+         $probeContext = stream_context_create(['socket' => ['so_reuseport' => true, 'ipv6_v6only' => false]]);
+         try {
+            $probeSocket = @stream_socket_server(
+               'tcp://' . ($this->host ?? '0.0.0.0') . ':' . ($this->port ?? 0),
+               $probeCode,
+               $probeMessage,
+               STREAM_SERVER_BIND | STREAM_SERVER_LISTEN,
+               $probeContext
+            );
          }
-         $this->Logger->log(error: $message);
-         exit(1);
+         catch (Throwable) {
+            $probeSocket = false;
+         }
+         if ($probeSocket === false) {
+            $message = '@\;Could not bind to ' . ($this->host ?? '0.0.0.0') . ':' . ($this->port ?? 0) . ': ' . $probeMessage;
+            if ($probeCode === 13 || str_contains($probeMessage ?? '', 'Permission denied')) {
+               $message .= '@\;Ports below 1024 require elevated privileges. Try running with `sudo`.@.;';
+            }
+            $this->Logger->log(error: $message);
+            exit(1);
+         }
+         fclose($probeSocket);
       }
-      fclose($probeSocket);
 
       // ! Daemonize BEFORE any worker or auxiliary fork. The child that
       //   continues from here is the final master and therefore the real
       //   parent/reaper of every process created below.
-      if ($this->Mode === Modes::Daemon) {
+      if ($this->Mode === Modes::Daemon && $handoff !== true) {
          $this->detach();
       }
 
@@ -740,6 +772,14 @@ class TCP_Server_CLI implements Servers
       // @ Pre-fork setup hook (e.g. HTTP upload counter, WS broadcast bus).
       $this->booting();
 
+      // ! Pre-bind one SO_REUSEPORT listener per worker in the master while it
+      //   still has the launch privileges. Each worker inherits only its own
+      //   accept queue; the demoted master retains the pool for crash recovery
+      //   and a privilege-safe reload handoff.
+      if ($this->Listeners === [] && $this->listen() === false) {
+         exit(1);
+      }
+
       // @ Monitor mode: open the live-log pipe before forking so workers inherit it.
       $this->pipe();
 
@@ -749,6 +789,17 @@ class TCP_Server_CLI implements Servers
          $this->work($Process, $index);
       });
 
+      // ? Test mode keeps the master inside the shared test-runner process and
+      //   never hot-reloads. Retaining the pre-bound pool there would pin the
+      //   port for every later suite in the same process; a respawned worker
+      //   falls back to a fresh SO_REUSEPORT bind in instance().
+      if ($this->Mode === Modes::Test) {
+         foreach ($this->Listeners as $Listener) {
+            fclose($Listener);
+         }
+         $this->Listeners = [];
+      }
+
       // @ Set master process title
       $this->Process->title = $this->process . ': master process';
 
@@ -757,10 +808,10 @@ class TCP_Server_CLI implements Servers
       //   were created, so every listed PID is its actual child.
       $this->Process->State->save($this->describe());
 
-      // @ Drop privileges on master post-fork + post-save. Workers kept their
-      //   own bind as root (port <1024) and demote themselves in `instance()`.
-      //   `demote()` also chowns state files so `project stop` from the
-      //   demoted user can unlink them.
+      // @ Drop privileges on master post-fork + post-save. Each worker already
+      //   inherited one listener that the privileged master pre-bound, then
+      //   demoted itself in `instance()`. The master now demotes permanently;
+      //   reload transfers those descriptors instead of regaining privilege.
       $this->demote();
 
       // ! Node-specific readiness is a barrier, not a notification. A node
@@ -773,6 +824,10 @@ class TCP_Server_CLI implements Servers
       if ($crossed === false) {
          $this->Process->stopping = true;
          $this->Process->Children->terminate();
+         foreach ($this->Listeners as $Listener) {
+            fclose($Listener);
+         }
+         $this->Listeners = [];
          $this->Process->State->clean();
          if (is_resource($this->daemonReady)) {
             fclose($this->daemonReady);
@@ -868,6 +923,11 @@ class TCP_Server_CLI implements Servers
     */
    protected function work (Process $Process, int $index): void
    {
+      // ! A worker reforked from the master's SIGCHLD dispatch inherits the
+      //   dispatcher's full signal block mask across pcntl_fork(); a serving
+      //   worker must field its own SIGQUIT/SIGTERM lifecycle signals.
+      pcntl_sigprocmask(SIG_SETMASK, []);
+
       // The launcher handshake belongs only to the final daemon master. A
       // worker retaining the inherited descriptor would hide master failure.
       if (is_resource($this->daemonReady)) {
@@ -923,7 +983,7 @@ class TCP_Server_CLI implements Servers
       $Emitter = Emitter::$Instance;
       $Emitter->check(Worker::Boot) && $Emitter->emit(Worker::Boot, $index);
 
-      // @ Create the stream socket server.
+      // @ Adopt this worker's pre-bound SO_REUSEPORT listener.
       $this->instance();
 
       // @ Per-worker wiring hook (e.g. WS cross-worker relay). Default: nothing.
@@ -958,73 +1018,24 @@ class TCP_Server_CLI implements Servers
     */
    public function instance ()
    {
-      $error_code = 0;
-      $error_message = '';
-
-      // @ Set context options
-      self::$context = [];
-      // Socket
-      self::$context['socket'] = [
-         // Used to limit the number of outstanding connections in the socket's listen queue.
-         'backlog' => 102400,
-
-         // Allows multiple bindings to a same ip:port pair, even from separate processes.
-         'so_reuseport' => true,
-
-         // Overrides the OS default regarding mapping IPv4 into IPv6.
-         'ipv6_v6only' => false
-      ];
-      // SSL
-      if ( ! empty($this->secure) ) {
-         self::$context['ssl'] = $this->secure;
+      if ($this->Listeners !== []) {
+         $index = max(0, Process::$index - 1);
+         $selected = $this->Listeners[$index % count($this->Listeners)];
+         foreach ($this->Listeners as $Listener) {
+            if ($Listener !== $selected) {
+               fclose($Listener);
+            }
+         }
+         $this->Listeners = [];
+         $this->Socket = $selected;
       }
-
-      // @ Create context
-      $Context = stream_context_create(self::$context);
-
-      // @ Create server socket
-      try {
-         $Socket = @stream_socket_server(
-            'tcp://' . $this->host . ':' . $this->port,
-            $error_code,
-            $error_message,
-            STREAM_SERVER_BIND | STREAM_SERVER_LISTEN,
-            $Context
-         );
-      }
-      catch (Throwable) {
-         $Socket = false;
-      }
-
-      if ($Socket === false) {
-         $this->Logger->log(error: '@\;Could not create socket: ' . $error_message);
+      else if ($this->open() === false) {
          exit(1);
       }
-      /** @var resource $Socket */
-      $this->Socket = $Socket;
 
-      // @ On success
-
-      // @ Disable Crypto in Main Socket
-      if ( ! empty($this->secure) ) {
-         stream_socket_enable_crypto($this->Socket, false);
-      }
-      // @ Enable Keep Alive if possible
-      if (function_exists('socket_import_stream')) {
-         try {
-            $Socket = socket_import_stream($this->Socket);
-         }
-         catch (Throwable) {
-            $Socket = false;
-         }
-
-         if ($Socket === false) {
-            $this->Logger->log(error: '@\;Failed to import stream socket!@\;');
-            exit(1);
-         }
-
-         socket_set_option($Socket, SOL_SOCKET, SO_KEEPALIVE, 1);
-         socket_set_option($Socket, SOL_TCP, TCP_NODELAY, 1);
+      if ($this->prepare($this->Socket) === false) {
+         $this->Logger->log(error: '@\;Failed to prepare the inherited listener.@\;');
+         exit(1);
       }
 
       // @ Drop privileges if configured
@@ -1033,6 +1044,114 @@ class TCP_Server_CLI implements Servers
       $this->Status = Status::Running;
 
       return $this->Socket;
+   }
+
+   /** Bind the master-owned SO_REUSEPORT pool used by workers and reload. */
+   private function listen (): bool
+   {
+      $this->Listeners = [];
+      for ($index = 0; $index < max(1, $this->workers); $index++) {
+         $Listener = $this->open(assign: false);
+         if ($Listener === false) {
+            foreach ($this->Listeners as $Bound) {
+               fclose($Bound);
+            }
+            $this->Listeners = [];
+
+            return false;
+         }
+         $this->Listeners[] = $Listener;
+      }
+
+      return true;
+   }
+
+   /** @return resource|false */
+   private function open (bool $assign = true)
+   {
+      self::$context = [
+         'socket' => [
+            'backlog' => 102400,
+            'so_reuseport' => true,
+            'ipv6_v6only' => false
+         ]
+      ];
+      if ( ! empty($this->secure) ) {
+         self::$context['ssl'] = $this->secure;
+      }
+
+      $errorCode = 0;
+      $errorMessage = '';
+      try {
+         $Listener = @stream_socket_server(
+            'tcp://' . $this->host . ':' . $this->port,
+            $errorCode,
+            $errorMessage,
+            STREAM_SERVER_BIND | STREAM_SERVER_LISTEN,
+            stream_context_create(self::$context)
+         );
+      }
+      catch (Throwable) {
+         $Listener = false;
+      }
+      if ($Listener === false) {
+         $this->Logger->log(error: '@\;Could not create socket: ' . $errorMessage);
+
+         return false;
+      }
+      if ($this->prepare($Listener) === false) {
+         fclose($Listener);
+         $this->Logger->log(error: '@\;Failed to prepare stream socket!@\;');
+
+         return false;
+      }
+      if ($assign) {
+         $this->Socket = $Listener;
+      }
+
+      return $Listener;
+   }
+
+   /** @param resource $Listener */
+   private function prepare ($Listener): bool
+   {
+      if (self::$context === []) {
+         self::$context = [
+            'socket' => [
+               'backlog' => 102400,
+               'so_reuseport' => true,
+               'ipv6_v6only' => false
+            ]
+         ];
+         if ( ! empty($this->secure) ) {
+            self::$context['ssl'] = $this->secure;
+         }
+      }
+      if (stream_context_set_options($Listener, self::$context) === false) { // @phpstan-ignore identical.alwaysFalse
+         return false;
+      }
+      if ( ! empty($this->secure) ) {
+         stream_socket_enable_crypto($Listener, false);
+      }
+      if (function_exists('socket_import_stream')) {
+         try {
+            $Socket = socket_import_stream($Listener);
+         }
+         catch (Throwable) {
+            return false;
+         }
+         if ($Socket === false) {
+            return false;
+         }
+         if (
+            socket_set_option($Socket, SOL_SOCKET, SO_KEEPALIVE, 1) === false
+            || socket_set_option($Socket, SOL_TCP, TCP_NODELAY, 1) === false
+         ) {
+            return false;
+         }
+      }
+
+      return true;
    }
 
    /**
@@ -1069,9 +1188,15 @@ class TCP_Server_CLI implements Servers
          $GID = $groupInfo['gid'];
       }
 
-      // @ Hand over ownership of state files (pid/lock/command) to the
-      //   demoted user, so `project stop` from that user can rewrite/unlink.
-      if ($this->Process->State->own($UID, $GID) === false) {
+      // @ Only the final master publishes process state. Workers can reach
+      //   demote() while the root master is atomically replacing its PID file;
+      //   letting every child chown/post-check that pathname creates a real
+      //   save-vs-own inode race. Helpers and workers still drop privileges,
+      //   while the master performs the one ownership handoff after save().
+      if (
+         $this->Process->level === 'master'
+         && $this->Process->State->own($UID, $GID) === false
+      ) {
          $this->Logger->log(error: '@\;Failed to hand process state to the configured runtime identity.@\;');
          exit(1);
       }
@@ -1105,7 +1230,43 @@ class TCP_Server_CLI implements Servers
     */
    protected function tick (): void
    {
-      // ...
+      $this->revive();
+   }
+
+   /**
+    * Refork the workers reaped by the SIGCHLD dispatch. Runs from the master
+    * loops' tick() — plain execution context — because a child forked inside
+    * `pcntl_signal_dispatch()` inherits its busy flag and goes signal-deaf.
+    */
+   protected function revive (): void
+   {
+      while ($this->casualties !== []) {
+         $deadIndex = array_shift($this->casualties);
+
+         $newPID = pcntl_fork();
+
+         // # Child process (new worker)
+         if ($newPID === 0) {
+            $this->Process->Children->push($this->Process->id, $deadIndex);
+            Process::$index = $deadIndex + 1;
+
+            // @ Run the SAME boot body as the initial fork, so a recovered
+            //   worker gets the node process title, the monitor sink, the
+            //   `Worker::Boot` event and per-worker wiring (e.g. the WS
+            //   cross-worker relay) — not a bare TCP loop with a stale title.
+            $this->work($this->Process, $deadIndex);
+
+            exit(0);
+         }
+         // # Master process
+         else if ($newPID > 0) {
+            $this->Process->Children->push($newPID, $deadIndex);
+
+            $this->Logger->log(notice: "Worker #{$deadIndex} recovered (new PID: {$newPID})@.;");
+
+            $this->Process->State->save($this->describe());
+         }
+      }
    }
 
    /**
@@ -1973,6 +2134,11 @@ class TCP_Server_CLI implements Servers
 
             $this->Logger->log(critical: "{$children} worker(s) stopped!@\\;");
 
+            foreach ($this->Listeners as $Listener) {
+               fclose($Listener);
+            }
+            $this->Listeners = [];
+
             // @ Clean all per-project state files
             $this->Process->State->clean();
 
@@ -2007,8 +2173,8 @@ class TCP_Server_CLI implements Servers
 
       $this->Status = Status::Stopping;
 
-      // @ Leave the accept set + the SO_REUSEPORT group: no new connection is
-      //   routed to a draining worker; established ones keep their own sockets.
+      // @ Leave the accept set and close this worker's SO_REUSEPORT descriptor:
+      //   no new connection is routed here; established sockets remain open.
       self::$Event->del($this->Socket, self::$Event::EVENT_CONNECT);
       @fclose($this->Socket);
 
@@ -2031,6 +2197,497 @@ class TCP_Server_CLI implements Servers
          },
          persistent: true
       );
+   }
+
+   /**
+    * Node-owned listeners transferred together with the TCP listener pool.
+    * Keys are authenticated metadata; values must be listening stream sockets.
+    *
+    * @return array<string,resource>
+    */
+   protected function export (): array
+   {
+      return [];
+   }
+
+   /**
+    * Validate and adopt node-owned descriptors received by SCM_RIGHTS.
+    *
+    * @param array<string,resource> $Resources
+    */
+   protected function import (array $Resources): bool
+   {
+      return $Resources === [];
+   }
+
+   /** Validate that a transferred descriptor is a listener on the exact port. */
+   protected function validate (mixed $Listener, int $port): bool
+   {
+      if (is_resource($Listener) === false) {
+         return false;
+      }
+      $address = @stream_socket_get_name($Listener, false);
+      $separator = is_string($address) ? strrpos($address, ':') : false;
+      if (
+         $separator === false
+         || is_numeric(substr($address, $separator + 1)) === false
+         || (int) substr($address, $separator + 1) !== $port
+      ) {
+         return false;
+      }
+      try {
+         $Socket = socket_import_stream($Listener);
+      }
+      catch (Throwable) {
+         return false;
+      }
+      if ($Socket === false) {
+         return false;
+      }
+
+      return @stream_socket_get_name($Listener, true) === false
+         && socket_get_option($Socket, SOL_SOCKET, SO_TYPE) === SOCK_STREAM;
+   }
+
+   /**
+    * Start a bounded same-UID relay that owns the listeners across pcntl_exec.
+    * The relay has no elevated privilege: it only retains already-bound FDs.
+    */
+   private function relay (): bool
+   {
+      $Lock = $this->Process->State->export();
+      if (is_resource($Lock) === false) {
+         return false;
+      }
+
+      // ! `state.lock` is transport-owned and reserved before node hooks are
+      //   consulted. A node cannot replace/collide with the instance lock.
+      $Resources = ['state.lock' => $Lock];
+      foreach ($this->Listeners as $index => $Listener) {
+         if (is_resource($Listener) === false) {
+            return false;
+         }
+         $Resources["listener.{$index}"] = $Listener;
+      }
+      foreach ($this->export() as $name => $Resource) {
+         if (
+            preg_match('/^[a-z][a-z0-9_.-]{0,63}$/D', $name) !== 1
+            || isset($Resources[$name])
+            || is_resource($Resource) === false
+         ) {
+            return false;
+         }
+         $Resources[$name] = $Resource;
+      }
+      if (count($Resources) > self::RELOAD_HANDOFF_MAX_RESOURCES) {
+         return false;
+      }
+
+      try {
+         $token = bin2hex(random_bytes(32));
+      }
+      catch (Throwable) {
+         return false;
+      }
+      $master = posix_getpid();
+      $prefix = substr($token, 0, 16);
+      $directory = sys_get_temp_dir() . "/bootgly-reload-{$master}-{$prefix}";
+      if (mkdir($directory, 0700) === false) {
+         return false;
+      }
+      if (chmod($directory, 0700) === false) {
+         @rmdir($directory);
+         return false;
+      }
+      $path = "{$directory}/handoff.sock";
+      $code = 0;
+      $message = '';
+      $Relay = @stream_socket_server(
+         "unix://{$path}",
+         $code,
+         $message,
+         STREAM_SERVER_BIND | STREAM_SERVER_LISTEN
+      );
+      if ($Relay === false || chmod($path, 0600) === false) {
+         is_resource($Relay) && fclose($Relay);
+         @unlink($path);
+         @rmdir($directory);
+
+         return false;
+      }
+
+      $PID = pcntl_fork();
+      if ($PID < 0) {
+         fclose($Relay);
+         @unlink($path);
+         @rmdir($directory);
+
+         return false;
+      }
+      if ($PID > 0) {
+         fclose($Relay);
+         putenv(self::RELOAD_HANDOFF_PATH . '=' . $path);
+         putenv(self::RELOAD_HANDOFF_TOKEN . '=' . $token);
+         putenv(self::RELOAD_HANDOFF_PID . '=' . $PID);
+
+         return true;
+      }
+
+      // # Relay child — retain the inherited State descriptor: it is the sole
+      //   continuous lock bridge after the old master detaches before exec.
+      //   Reset inherited handlers and unrelated launcher state only.
+      if (is_resource($this->daemonReady)) {
+         fclose($this->daemonReady);
+         $this->daemonReady = null;
+      }
+      foreach ([
+         SIGALRM, SIGUSR1, SIGURG, SIGHUP, SIGINT, SIGQUIT, SIGTERM,
+         SIGTSTP, SIGCONT, SIGUSR2, SIGCHLD, SIGIOT, SIGIO
+      ] as $signal) {
+         pcntl_signal($signal, SIG_DFL);
+      }
+      // ! Forked from the SIGUSR2 dispatch: drop its inherited block mask.
+      pcntl_sigprocmask(SIG_SETMASK, []);
+
+      // ! Do not let an orphaned relay pin the stable instance lock/listeners
+      //   for the full reload timeout. Poll readiness at one-second maximum
+      //   intervals and verify the exact execing parent on every iteration.
+      stream_set_blocking($Relay, false);
+      $Client = false;
+      $deadline = microtime(true) + self::$drainTimeout + 15.0;
+      do {
+         if (posix_getppid() !== $master) {
+            break;
+         }
+         $remaining = $deadline - microtime(true);
+         if ($remaining <= 0) {
+            break;
+         }
+         $wait = min(1.0, $remaining);
+         $seconds = (int) $wait;
+         $microseconds = (int) (($wait - $seconds) * 1_000_000);
+         $read = [$Relay];
+         $write = null;
+         $except = null;
+         $selected = @stream_select($read, $write, $except, $seconds, $microseconds);
+         if ($selected === false) {
+            usleep(10000);
+            continue;
+         }
+         if ($selected === 1) {
+            $Client = @stream_socket_accept($Relay, 0);
+         }
+      } while ($Client === false);
+      fclose($Relay);
+      if ($Client === false || posix_getppid() !== $master) {
+         is_resource($Client) && fclose($Client);
+         @unlink($path);
+         @rmdir($directory);
+         exit(1);
+      }
+      stream_set_blocking($Client, true);
+      stream_set_timeout($Client, 5);
+      $received = '';
+      while (strlen($received) < 65 && str_contains($received, "\n") === false) {
+         $chunk = fread($Client, 65 - strlen($received));
+         if ($chunk === false || $chunk === '') {
+            break;
+         }
+         $received .= $chunk;
+      }
+      if ($received !== "{$token}\n") {
+         fclose($Client);
+         @unlink($path);
+         @rmdir($directory);
+         exit(1);
+      }
+      try {
+         $Control = socket_import_stream($Client);
+      }
+      catch (Throwable) {
+         fclose($Client);
+         @unlink($path);
+         @rmdir($directory);
+         exit(1);
+      }
+      if ($Control === false) {
+         fclose($Client);
+         @unlink($path);
+         @rmdir($directory);
+         exit(1);
+      }
+      $payload = json_encode([
+         'resources' => array_keys($Resources),
+         // Bound endpoint and demotion identity are immutable across a hot
+         // reload. Changing either requires a full stop/start so the new
+         // privileged bind and ownership transition can be performed.
+         'contract' => [
+            'host' => $this->host,
+            'port' => $this->port,
+            'user' => $this->user,
+            'group' => $this->group,
+            'mode' => $this->Mode->value
+         ]
+      ]);
+      $sent = is_string($payload) ? @socket_sendmsg($Control, [
+         'iov' => [$payload],
+         'control' => [[
+            'level' => SOL_SOCKET,
+            'type' => SCM_RIGHTS,
+            'data' => array_values($Resources)
+         ]]
+      ], 0) : false;
+      $ack = $sent === strlen((string) $payload) ? fread($Client, 2) : false;
+      fclose($Client);
+      @unlink($path);
+      @rmdir($directory);
+      exit($ack === 'ok' ? 0 : 1);
+   }
+
+   /**
+    * Receive a reload relay when present: null = ordinary launch, true =
+    * validated reload, false = advertised handoff failed closed.
+    */
+   private function receive (): null|bool
+   {
+      $path = getenv(self::RELOAD_HANDOFF_PATH);
+      $token = getenv(self::RELOAD_HANDOFF_TOKEN);
+      $relayPID = getenv(self::RELOAD_HANDOFF_PID);
+      foreach ([
+         self::RELOAD_HANDOFF_PATH,
+         self::RELOAD_HANDOFF_TOKEN,
+         self::RELOAD_HANDOFF_PID
+      ] as $name) {
+         putenv($name);
+      }
+      if ($path === false && $token === false && $relayPID === false) {
+         return null;
+      }
+      if (
+         is_string($path) === false || $path === ''
+         || is_string($token) === false || preg_match('/^[a-f0-9]{64}$/D', $token) !== 1
+         || is_string($relayPID) === false
+         || preg_match('/^[1-9][0-9]*$/D', $relayPID) !== 1
+         || (int) $relayPID < 2
+      ) {
+         return false;
+      }
+
+      $Client = @stream_socket_client("unix://{$path}", $code, $message, 5.0);
+      if ($Client === false) {
+         return false;
+      }
+      stream_set_blocking($Client, true);
+      stream_set_timeout($Client, 5);
+      if (fwrite($Client, "{$token}\n") !== 65) {
+         fclose($Client);
+         return false;
+      }
+      try {
+         $Control = socket_import_stream($Client);
+      }
+      catch (Throwable) {
+         fclose($Client);
+         return false;
+      }
+      if ($Control === false) {
+         fclose($Client);
+         return false;
+      }
+      $Message = [
+         'name' => [],
+         'buffer_size' => 16384,
+         'controllen' => socket_cmsg_space(
+            SOL_SOCKET,
+            SCM_RIGHTS,
+            self::RELOAD_HANDOFF_MAX_RESOURCES
+         )
+      ];
+      $received = @socket_recvmsg($Control, $Message, 0);
+      if (is_int($received) === false || $received < 2) {
+         fclose($Client);
+         return false;
+      }
+      $payload = implode('', is_array($Message['iov'] ?? null) ? $Message['iov'] : []);
+      $decoded = json_decode($payload, true);
+      $names = is_array($decoded) ? ($decoded['resources'] ?? null) : null;
+      $contract = is_array($decoded) ? ($decoded['contract'] ?? null) : null;
+      $Descriptors = [];
+      foreach (is_array($Message['control'] ?? null) ? $Message['control'] : [] as $control) {
+         if (
+            is_array($control)
+            && ($control['level'] ?? null) === SOL_SOCKET
+            && ($control['type'] ?? null) === SCM_RIGHTS
+            && is_array($control['data'] ?? null)
+         ) {
+            foreach ($control['data'] as $Descriptor) {
+               // ! The sockets extension maps a received socket fd to a Socket
+               //   object while a non-socket fd (the lock) arrives as a plain
+               //   stream. Normalize to streams for the validations below.
+               if ($Descriptor instanceof Socket) {
+                  $Descriptor = socket_export_stream($Descriptor);
+               }
+               $Descriptors[] = $Descriptor;
+            }
+         }
+      }
+      if (
+         is_array($names) === false
+         || $contract !== [
+            'host' => $this->host,
+            'port' => $this->port,
+            'user' => $this->user,
+            'group' => $this->group,
+            'mode' => $this->Mode->value
+         ]
+         || count($names) !== count($Descriptors)
+         || count($names) < 1
+         || count($names) > self::RELOAD_HANDOFF_MAX_RESOURCES
+      ) {
+         fclose($Client);
+         foreach ($Descriptors as $Descriptor) {
+            is_resource($Descriptor) && fclose($Descriptor);
+         }
+         return false;
+      }
+      $Resources = [];
+      foreach ($names as $index => $name) {
+         if (
+            is_string($name) === false
+            || preg_match('/^[a-z][a-z0-9_.-]{0,63}$/D', $name) !== 1
+            || isset($Resources[$name])
+            || is_resource($Descriptors[$index]) === false
+         ) {
+            fclose($Client);
+            foreach ($Descriptors as $Descriptor) {
+               is_resource($Descriptor) && fclose($Descriptor);
+            }
+            return false;
+         }
+         $Resources[$name] = $Descriptors[$index];
+      }
+
+      $Listeners = [];
+      foreach ($Resources as $name => $Resource) {
+         if (preg_match('/^listener\.(\d+)$/D', $name, $matches) === 1) {
+            $Listeners[(int) $matches[1]] = $Resource;
+            unset($Resources[$name]);
+         }
+      }
+      $StateLock = $Resources['state.lock'] ?? null;
+      unset($Resources['state.lock']);
+      if (is_resource($StateLock) === false) {
+         fclose($Client);
+         foreach ([...$Listeners, ...$Resources] as $Descriptor) {
+            is_resource($Descriptor) && fclose($Descriptor);
+         }
+         return false;
+      }
+      ksort($Listeners);
+      if (
+         $Listeners === []
+         || array_keys($Listeners) !== range(0, count($Listeners) - 1)
+      ) {
+         fclose($Client);
+         foreach ([$StateLock, ...$Listeners, ...$Resources] as $Descriptor) {
+            is_resource($Descriptor) && fclose($Descriptor);
+         }
+         return false;
+      }
+      foreach ($Listeners as $Listener) {
+         if ($this->validate($Listener, $this->port ?? 0) === false) {
+            fclose($Client);
+            foreach ([$StateLock, ...$Listeners, ...$Resources] as $Descriptor) {
+               is_resource($Descriptor) && fclose($Descriptor);
+            }
+            return false;
+         }
+      }
+      // A reload may lower the worker count. Descriptors with no consumer
+      // must be closed before the fork; retaining an unused SO_REUSEPORT
+      // queue in the master would black-hole a share of incoming connections.
+      $needed = max(1, $this->workers);
+      if (count($Listeners) > $needed) {
+         foreach (array_slice($Listeners, $needed) as $Unused) {
+            fclose($Unused);
+         }
+         $Listeners = array_slice($Listeners, 0, $needed);
+      }
+
+      self::$context = [
+         'socket' => [
+            'backlog' => 102400,
+            'so_reuseport' => true,
+            'ipv6_v6only' => false
+         ]
+      ];
+      if ( ! empty($this->secure) ) {
+         self::$context['ssl'] = $this->secure;
+      }
+      foreach ($Listeners as $Listener) {
+         if ($this->prepare($Listener) === false) {
+            fclose($Client);
+            foreach ([$StateLock, ...$Listeners, ...$Resources] as $Descriptor) {
+               is_resource($Descriptor) && fclose($Descriptor);
+            }
+            return false;
+         }
+      }
+      if ($this->Process->State->adopt($StateLock) === false) {
+         fclose($Client);
+         foreach ([$StateLock, ...$Listeners, ...$Resources] as $Descriptor) {
+            is_resource($Descriptor) && fclose($Descriptor);
+         }
+         return false;
+      }
+      if ($this->import($Resources) === false) {
+         $this->Process->State->detach();
+         fclose($Client);
+         foreach ([...$Listeners, ...$Resources] as $Descriptor) {
+            is_resource($Descriptor) && fclose($Descriptor);
+         }
+         return false;
+      }
+
+      $this->Listeners = array_values($Listeners);
+      $acknowledged = fwrite($Client, 'ok') === 2;
+      fclose($Client);
+      if ($acknowledged === false) {
+         $this->Process->State->detach();
+         foreach ($this->Listeners as $Listener) {
+            fclose($Listener);
+         }
+         $this->Listeners = [];
+         foreach ($Resources as $Resource) {
+            is_resource($Resource) && fclose($Resource);
+         }
+         return false;
+      }
+
+      // The relay exits immediately after ACK; reap it before signal handlers
+      // are installed so the fresh master never begins with a zombie child.
+      $PID = (int) $relayPID;
+      $deadline = microtime(true) + 2.0;
+      do {
+         $reaped = pcntl_waitpid($PID, $status, WNOHANG);
+         if ($reaped === $PID || $reaped === -1) {
+            break;
+         }
+         usleep(10000);
+      } while (microtime(true) < $deadline);
+      if ($reaped === 0) {
+         $process = @file_get_contents("/proc/{$PID}/status");
+         if (
+            is_string($process)
+            && preg_match('/^PPid:\t(\d+)$/m', $process, $matches) === 1
+            && (int) $matches[1] === posix_getpid()
+         ) {
+            posix_kill($PID, SIGKILL);
+            pcntl_waitpid($PID, $status);
+         }
+      }
+
+      return true;
    }
 
    /**
@@ -2061,6 +2718,13 @@ class TCP_Server_CLI implements Servers
 
       $this->Logger->log(notice: '@\;Reloading (graceful re-exec)...@.;');
 
+      // ! Establish the authenticated descriptor relay BEFORE draining a
+      //   single worker. Failure leaves the current service fully intact.
+      if ($this->relay() === false) {
+         $this->Logger->log(error: '@\;Reload aborted: could not establish the listener handoff relay.@\;');
+         return;
+      }
+
       // ! Mark reloading so recover() does not refork the workers we drain.
       $this->Process->reloading = true;
 
@@ -2068,24 +2732,48 @@ class TCP_Server_CLI implements Servers
       //   Stragglers past the budget are force-killed by terminate()'s SIGKILL.
       $this->Process->Children->terminate(timeout: self::$drainTimeout + 5, signal: SIGQUIT);
 
-      // @ Clear per-project state files; the fresh master rewrites them on start.
-      $this->Process->State->clean();
+      // The relay is now the sole bridge across exec. Close the old master's
+      // copies so no inaccessible descriptor leaks into the fresh PHP image.
+      foreach ($this->Listeners as $Listener) {
+         fclose($Listener);
+      }
+      $this->Listeners = [];
+      foreach ($this->export() as $Resource) {
+         fclose($Resource);
+      }
+
+      // ! Close only the old master's duplicate. LOCK_UN would affect the
+      //   relay's shared open-file description and recreate the very startup
+      //   race this handoff prevents. The fresh image adopts the descriptor;
+      //   Commands::erase() and State::save() supersede old state in place.
+      $this->Process->State->detach();
 
       // @ Restore the launch directory (a daemon may have chdir'd to /), then
       //   replace this process image with a fresh one. pcntl_exec keeps the PID.
       if (self::$directory !== '') {
          @chdir(self::$directory);
       }
+      // ! reload() runs inside the SIGUSR2 dispatch, whose full block mask
+      //   SURVIVES execve — without a reset the fresh master would be born
+      //   deaf to every lifecycle signal (SIGTERM/SIGCHLD/SIGUSR2).
+      pcntl_sigprocmask(SIG_SETMASK, []);
       pcntl_exec(self::$binary, self::$argv, getenv());
 
       // ? exec only returns on failure — workers are already gone, so surface the
-      //   error and exit rather than linger as a workerless master.
+      //   error, tombstone the stale topology and exit rather than linger as a
+      //   workerless master. detach() made clean() a no-unlock operation here.
+      $this->Process->State->clean();
       $this->Logger->log(error: 'Reload failed: could not re-exec the master.@\;');
       exit(1);
    }
 
    public function __destruct ()
    {
+      foreach ($this->Listeners as $Listener) {
+         is_resource($Listener) && fclose($Listener);
+      }
+      $this->Listeners = [];
+
       $this->release($this->credential);
       $this->credential = null;
 

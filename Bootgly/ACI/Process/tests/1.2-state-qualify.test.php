@@ -1,9 +1,5 @@
 <?php
 
-use const BOOTGLY_STORAGE_DIR;
-use function str_ends_with;
-use function unlink;
-
 use Bootgly\ACI\Process\State;
 use Bootgly\ACI\Tests\Suite\Test\Specification;
 
@@ -57,15 +53,17 @@ return new Specification(
          description: 'save()/read()/check() operate on the qualified PID file'
       );
 
-      // @ clean() removes the qualified files
+      // @ clean() tombstones the qualified process state
       $State->clean();
 
       yield assert(
          assertion: $State->check() === false,
-         description: 'clean() unlinks the qualified PID file'
+         description: 'clean() makes the qualified PID state non-live'
       );
 
       // ! Cleanup
+      @unlink($State->pidFile);
+      @unlink($State->commandFile);
       @unlink("{$pidsDir}StateQualifyTest.8082.lock");
    }
 );

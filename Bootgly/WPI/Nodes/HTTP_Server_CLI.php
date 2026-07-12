@@ -599,6 +599,34 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       }
    }
 
+   /** @return array<string,resource> */
+   protected function export (): array
+   {
+      return is_resource($this->Gate)
+         ? ['http01.gate' => $this->Gate]
+         : [];
+   }
+
+   /** @param array<string,resource> $Resources */
+   protected function import (array $Resources): bool
+   {
+      if ($Resources === []) {
+         return true;
+      }
+      $Gate = $Resources['http01.gate'] ?? null;
+      if (
+         count($Resources) !== 1
+         || $this->AutoTLS === null
+         || $this->validate($Gate, $this->AutoTLS->port) === false
+      ) {
+         return false;
+      }
+      /** @var resource $Gate */
+      $this->Gate = $Gate;
+
+      return true;
+   }
+
    /**
     * Do not advertise startup until every current worker has bound its socket,
     * sealed/probed the startup credential and persisted an ACK for the exact
@@ -658,6 +686,8 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
     */
    protected function tick (): void
    {
+      parent::tick();
+
       if ($this->AutoTLS === null) {
          return;
       }
@@ -722,10 +752,10 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
    }
 
    /**
-    * Reload (SIGUSR2 re-exec): terminate the Auto-TLS auxiliary children
-    * and close the gate BEFORE the fresh image replaces this one —
-    * otherwise the old helper would survive the exec unmanaged and the new
-    * image could not rebind the validation port.
+    * Reload (SIGUSR2 re-exec): terminate the Auto-TLS auxiliary children but
+    * retain the bound gate for the base class' same-UID descriptor handoff.
+    * The fresh image adopts it and forks a newly-managed helper without ever
+    * regaining root or leaving an orphan responder behind.
     */
    protected function reload (): void
    {
@@ -742,9 +772,23 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
          return;
       }
 
-      $this->halt();
+      // Keep the already-bound gate descriptor for the same-UID SCM_RIGHTS
+      // relay; only its helper/certifier children are torn down here.
+      $this->halt(preserveGate: true);
 
       parent::reload();
+
+      // parent::reload() returns only when feasibility/handoff failed before
+      // worker drain. Restore HTTP-01 availability on the still-running image.
+      if ($this->AutoTLS !== null) {
+         $this->chartered = Challenges::charter(
+            $this->challengeOwner,
+            $this->AutoTLS->challenges
+         );
+         if (is_resource($this->Gate) && $this->helper === 0) {
+            $this->guard();
+         }
+      }
    }
 
    /**
@@ -754,7 +798,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
     * signaled children are reaped (bounded) so no zombie survives a
     * stop/reload/reconfigure.
     */
-   private function halt (): void
+   private function halt (bool $preserveGate = false): void
    {
       $terminated = [];
 
@@ -802,7 +846,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
          }
       }
 
-      if (is_resource($this->Gate)) {
+      if ($preserveGate === false && is_resource($this->Gate)) {
          fclose($this->Gate);
          $this->Gate = null;
       }
@@ -853,6 +897,9 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       }
 
       $this->bind();
+      if (is_resource($this->Gate) && $this->helper === 0) {
+         $this->guard();
+      }
    }
 
    /**
@@ -1100,6 +1147,14 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       ] as $signal) {
          pcntl_signal($signal, SIG_DFL);
       }
+
+      // The helper owns only the HTTP-01 gate. On a re-exec boot it also
+      // inherits the transferred HTTPS listener pool; retaining those copies
+      // would keep the service port bound after its master/workers stop.
+      foreach ($this->Listeners as $Listener) {
+         fclose($Listener);
+      }
+      $this->Listeners = [];
 
       $this->demote();
 
@@ -1439,6 +1494,12 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
          exit(1);
       }
       pcntl_alarm(1);
+
+      // The certifier never accepts application traffic.
+      foreach ($this->Listeners as $Listener) {
+         fclose($Listener);
+      }
+      $this->Listeners = [];
 
       // ! The inherited HTTP-01 gate belongs to the master/helper — the
       //   certifier must not hold the descriptor open

@@ -12,6 +12,7 @@ namespace Bootgly\WPI\Nodes;
 
 
 use function implode;
+use function max;
 use function min;
 use function preg_match;
 use function strpos;
@@ -62,6 +63,9 @@ class WS_Client_CLI extends TCP_Client_CLI implements WS, Client
    public protected(set) int $heartbeatInterval = 0;
    public protected(set) int $maxFrameSize = 1048576;
    public protected(set) int $maxMessageSize = 8388608;
+   // # Graceful close: maximum monotonic drain wait for the close frame.
+   //   Zero means do not wait (force-close if the frame backpressures).
+   public protected(set) float $closeTimeout = 5.0;
    // # Hooks (set by on(); fired by Session + the read loop). Instance-scoped so
    //   registering a handler on one client never clobbers another's.
    public private(set) null|Closure $onConnected = null;
@@ -124,6 +128,8 @@ class WS_Client_CLI extends TCP_Client_CLI implements WS, Client
     *   campaign (0 = unbounded). Guarantees the loop terminates even with unlimited attempts,
     *   so a permanently dead port cannot re-dial forever.
     * @param int $handshakeTimeout Seconds to receive + verify the 101 after dialing (0 = unbounded).
+    * @param float $closeTimeout Maximum seconds to drain a queued close frame. Zero
+    *   force-closes immediately when the frame cannot be written synchronously.
     *
     * @return self The WebSocket Client instance, for chaining.
     */
@@ -139,7 +145,8 @@ class WS_Client_CLI extends TCP_Client_CLI implements WS, Client
       int $reconnectDelay = 1,
       int $reconnectMaxDelay = 30,
       int $reconnectTimeout = 60,
-      int $handshakeTimeout = 10
+      int $handshakeTimeout = 10,
+      float $closeTimeout = 5.0
    ): self
    {
       // @ Auto-set peer_name for hostname verification if secure transport is enabled.
@@ -154,6 +161,7 @@ class WS_Client_CLI extends TCP_Client_CLI implements WS, Client
       // @ Handshake policy — bound the wait for the server's 101 so a peer that
       //   accepts TCP but never answers the upgrade cannot stall the loop forever.
       $this->handshakeTimeout = $handshakeTimeout;
+      $this->closeTimeout = max(0.0, $closeTimeout);
       // @ Reconnect policy — auto re-dial with capped exponential backoff after an
       //   abrupt drop. Graceful closes (user/server close, fault) never reconnect.
       $this->reconnect = $reconnect;
@@ -491,6 +499,18 @@ class WS_Client_CLI extends TCP_Client_CLI implements WS, Client
       // @ After the request flushes, switch the socket to reading the response.
       self::$onDataWrite = function ($Socket, $Connection) {
          self::$Event->del($Socket, self::$Event::EVENT_WRITE);
+
+         if ($Connection->Client instanceof self) {
+            $Session = $Connection->Client->Session;
+            if ($Session !== null && $Session->closeAfterWrite) {
+               $Session->closeAfterWrite = false;
+               $Session->disconnect();
+               $Connection->close();
+
+               return;
+            }
+         }
+
          self::$Event->add($Socket, self::$Event::EVENT_READ, $Connection);
       };
 
@@ -534,7 +554,11 @@ class WS_Client_CLI extends TCP_Client_CLI implements WS, Client
 
             // ? Close received/sent or protocol fault — tear down.
             if (isSet($result['stop'])) {
-               $Connection->close();
+               // Session::close() may be waiting for a backpressured close
+               // frame to drain; its write-completion router owns teardown.
+               if ($Session->closeAfterWrite === false) {
+                  $Connection->close();
+               }
                return;
             }
 

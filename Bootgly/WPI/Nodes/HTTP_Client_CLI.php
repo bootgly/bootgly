@@ -21,8 +21,8 @@ use function count;
 use function fclose;
 use function fread;
 use function fwrite;
+use function hrtime;
 use function in_array;
-use function is_int;
 use function microtime;
 use function min;
 use function parse_url;
@@ -642,23 +642,46 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
       //   connection close itself, so the response is finalized here instead
       //   of dying in the waiting decoder until the deadline. A chunked or
       //   Content-Length body cut short by EOF is TRUNCATED, not legal — it
-      //   stays incomplete and the request deadline reports the failure.
+      //   fails immediately while retaining its incomplete-body metadata.
       parent::$onClientDisconnect = function ($Connection) use ($HTTP_Client_CLI) {
          $Request = $HTTP_Client_CLI->pendingRequests[$Connection->id] ?? null;
-         if ($Request !== null) {
+         if ($Request !== null && $Connection->peerEOF) {
             $Response = $Request->Response;
-            if (
+            $closeDelimited =
                $Response->code > 0
                && $Response->Body->waiting
                && $Request->Decoder instanceof Decoder_Chunked === false
-               && $Response->Body->length === $Response->Body->downloaded
-            ) {
+               && $Response->Body->length === $Response->Body->downloaded;
+
+            if ($closeDelimited) {
                $Response->Body->waiting = false;
                $Request->completed = true;
                $Request->connectionState = 'idle';
                unset($HTTP_Client_CLI->pendingRequests[$Connection->id]);
 
-               if ($Request->onComplete !== null) {
+               if (self::$eventDriven && self::$onResponse !== null) {
+                  (self::$onResponse)($Request, $Response);
+               }
+               else if ($Request->onComplete !== null) {
+                  ($Request->onComplete)($Request);
+               }
+            }
+            else {
+               // ! EOF before a declared Content-Length/chunk terminator (or
+               //   before complete headers) is a transport failure, never a
+               //   successful close-delimited response.
+               $Response->code = 0;
+               $Response->status = $Response->status === ''
+                  ? 'Connection Closed'
+                  : 'Truncated Response';
+               $Request->completed = true;
+               $Request->connectionState = 'idle';
+               unset($HTTP_Client_CLI->pendingRequests[$Connection->id]);
+
+               if (self::$eventDriven && self::$onResponse !== null) {
+                  (self::$onResponse)($Request, $Response);
+               }
+               else if ($Request->onComplete !== null) {
                   ($Request->onComplete)($Request);
                }
             }
@@ -871,17 +894,31 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
       }
 
       // @ Register response timeout timer (sync/batch mode)
-      $timeoutTimerID = null;
+      /** @var array<int,int> $timeoutTimerIDs */
+      $timeoutTimerIDs = [];
       $timeoutDeadline = $this->deadline;
+      $timeoutMonotonicDeadline = $this->monotonicDeadline;
       if ($this->timeout > 0) {
          $responseDeadline = microtime(true) + $this->timeout;
+         $responseMonotonicDeadline = (int) hrtime(true)
+            + (int) ($this->timeout * 1_000_000_000);
          $timeoutDeadline = $timeoutDeadline === null
             ? $responseDeadline
             : min($timeoutDeadline, $responseDeadline);
+         $timeoutMonotonicDeadline = $timeoutMonotonicDeadline === null
+            ? $responseMonotonicDeadline
+            : min($timeoutMonotonicDeadline, $responseMonotonicDeadline);
       }
-      if ($timeoutDeadline !== null) {
+      if ($timeoutDeadline !== null || $timeoutMonotonicDeadline !== null) {
          $HTTP_Client_CLI = $this;
-         $timeoutTimerID = self::$Event->defer($timeoutDeadline, function () use ($HTTP_Client_CLI, $Request, &$timeoutTimerID) {
+         $Timeout = function () use ($HTTP_Client_CLI, $Request, &$timeoutTimerIDs) {
+            // @ This callback may be registered against both clocks. Cancel
+            //   its sibling before mutating transport state.
+            foreach ($timeoutTimerIDs as $timerID) {
+               self::$Event->cancel($timerID);
+            }
+            $timeoutTimerIDs = [];
+
             if ($Request->completed) {
                return;
             }
@@ -906,8 +943,17 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
                self::$Event->destroy();
             }
 
-            $timeoutTimerID = null;
-         });
+         };
+
+         if ($timeoutDeadline !== null) {
+            $timeoutTimerIDs[] = self::$Event->defer($timeoutDeadline, $Timeout);
+         }
+         if ($timeoutMonotonicDeadline !== null) {
+            $timeoutTimerIDs[] = self::$Event->defer(
+               $timeoutMonotonicDeadline,
+               $Timeout
+            );
+         }
       }
 
       // @ Batch mode: return Response reference (filled later by drain())
@@ -919,10 +965,10 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
       $this->drain();
 
       // @ Clean up timeout timer
-      if (is_int($timeoutTimerID)) {
-         self::$Event->cancel($timeoutTimerID);
-         $timeoutTimerID = null;
+      foreach ($timeoutTimerIDs as $timerID) {
+         self::$Event->cancel($timerID);
       }
+      $timeoutTimerIDs = [];
 
       // @ Follow redirects (sync mode only)
       /** @phpstan-ignore identical.alwaysFalse, booleanAnd.alwaysFalse */

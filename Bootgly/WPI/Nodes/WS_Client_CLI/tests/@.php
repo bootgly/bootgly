@@ -20,6 +20,9 @@ return new Suite(
       '3.1-request',
       '4.1-multiclient',
       '5.1-handshake_timeout',
-      '5.2-reconnect_budget'
+      '5.2-reconnect_budget',
+      '5.3-backpressured_send',
+      '5.4-monotonic_timer',
+      '5.5-close_drain_timeout'
    ]
 );
