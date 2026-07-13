@@ -2,7 +2,7 @@
 
 use Bootgly\ACI\Tests\Suite\Test\Specification;
 
-// ? Live context — set by @.php only when BOOTGLY_ACME_E2E=1 and Pebble is
+// ? Live context — set by autoboot.php only when BOOTGLY_ACME_E2E=1 and Pebble is
 //   reachable on :14000; absent → this spec skips itself
 $context = $GLOBALS['BOOTGLY_ACME_PEBBLE'] ?? null;
 

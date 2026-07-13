@@ -115,6 +115,7 @@ use ReflectionUnionType;
 use RuntimeException;
 use Throwable;
 
+use const Bootgly\ABI\BOOTSTRAP_FILENAME;
 use const Bootgly\WPI;
 use Bootgly\ABI\Debugging\Data\Throwables;
 use Bootgly\ABI\Debugging\Data\Throwables\Exceptions;
@@ -1948,7 +1949,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
 
                // * Data
                // !
-               $bootstrap = BOOTGLY_ROOT_DIR . $classPath . '/tests/' . $testsDir . '/@.php';
+               $bootstrap = BOOTGLY_ROOT_DIR . $classPath . '/tests/' . $testsDir . '/' . BOOTSTRAP_FILENAME;
                $Bootstrap = new File($bootstrap);
                // ?
                if ($Bootstrap->exists === false) {

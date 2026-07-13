@@ -8,7 +8,7 @@
 
 ### Responsibilities
 
-- **Discover & load** test files via `@.php` registry pattern
+- **Discover & load** test files via `autoboot.php` registry pattern
 - **Orchestrate** test suites (`Suites`) → individual suite (`Suite`) → test cases (`Test`)
 - **Assert** values using a composable expectation pipeline (`Assertion` + `Expectations`)
 - **Report** pass/fail/skip results with colored CLI output
@@ -175,7 +175,7 @@ Bootgly/ACI/Tests/
 │   └── Spy.php                            # class — $Wrapped property; verify()/reset() on real instance
 │
 ├── templates/                             # test file templates
-├── tests/                                 # self-tests (@.php + *.test.php)
+├── tests/                                 # self-tests (autoboot.php + *.test.php)
 └── docs/
     └─ ROADMAP.md
 ```
@@ -493,22 +493,22 @@ classDiagram
 
 ## Execution Flow
 
-### 1. Bootstrap (`tests/@.php` → `Suites` → `Suite`)
+### 1. Bootstrap (`tests/autoboot.php` → `Suites` → `Suite`)
 
 ```mermaid
 sequenceDiagram
     participant CLI as CLI (bootgly test)
-    participant Root as tests/@.php
+    participant Root as tests/autoboot.php
     participant Suites as Suites
-    participant SuiteBootstrap as {module}/tests/@.php
+    participant SuiteBootstrap as {module}/tests/autoboot.php
     participant Suite as Suite
 
-    CLI->>Root: require 'tests/@.php'
+    CLI->>Root: require 'tests/autoboot.php'
     Root-->>CLI: Suites(directories)
     CLI->>Suites: iterate(suite, case, iterator)
 
     loop for each directory
-        Suites->>SuiteBootstrap: require '{dir}/tests/@.php'
+        Suites->>SuiteBootstrap: require '{dir}/tests/autoboot.php'
         SuiteBootstrap-->>Suites: Suite(tests, autoBoot, ...)
         Suites->>Suite: autoboot(pathbase)
         Suite->>Suite: load all .test.php files → $this->Tests[]

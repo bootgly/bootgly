@@ -18,8 +18,6 @@ use function strtolower;
 
 trait Resources
 {
-   public const string BOOTSTRAP_FILENAME = '@.php';
-
    protected string $resource {
       get {
          // ?:

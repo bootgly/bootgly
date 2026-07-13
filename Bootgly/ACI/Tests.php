@@ -15,6 +15,7 @@ use const BOOTGLY_ROOT_DIR;
 use const BOOTGLY_WORKING_DIR;
 use RuntimeException;
 
+use const Bootgly\ABI\BOOTSTRAP_FILENAME;
 use Bootgly\ABI\Resources;
 use Bootgly\ACI\Tests\Suites;
 
@@ -33,9 +34,9 @@ class Tests
       /** @var Suites|false $Suites */
       $Suites = BOOTGLY_ROOT_DIR === BOOTGLY_WORKING_DIR
          // Author (Bootgly) Test Suites
-         ? include BOOTGLY_ROOT_DIR . '/tests/' . self::BOOTSTRAP_FILENAME
+         ? include BOOTGLY_ROOT_DIR . '/tests/' . BOOTSTRAP_FILENAME
          // Consumer (User) Test Suites
-         : include BOOTGLY_WORKING_DIR . '/tests/' . self::BOOTSTRAP_FILENAME;
+         : include BOOTGLY_WORKING_DIR . '/tests/' . BOOTSTRAP_FILENAME;
 
       // ?
       if ($Suites instanceof Suites === false) {

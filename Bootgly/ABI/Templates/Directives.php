@@ -16,6 +16,7 @@ use function is_array;
 use function is_string;
 use Closure;
 
+use const Bootgly\ABI\BOOTSTRAP_FILENAME;
 use Bootgly\ABI\Data\__String\Path;
 use Bootgly\ABI\Resources;
 
@@ -42,7 +43,7 @@ class Directives
    public function __construct ()
    {
       $resource = __DIR__ . '/Template/directives/';
-      $bootstrap = require($resource . '@.php');
+      $bootstrap = require($resource . BOOTSTRAP_FILENAME);
 
       $directives = $bootstrap['directives'];
       foreach ($directives as $name => $value) {

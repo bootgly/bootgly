@@ -17,6 +17,7 @@ use const BOOTGLY_WORKING_DIR;
 use function is_array;
 use Exception;
 
+use const Bootgly\ABI\BOOTSTRAP_FILENAME;
 use Bootgly\ABI\Debugging\Data\Vars;
 use Bootgly\API\Projects;
 use Bootgly\CLI\Command;
@@ -72,7 +73,7 @@ class CLI extends Projects // Command Line Interface
             // TODO custom bootgly exception
             throw new Exception(<<<MESSAGE
                Invalid script: script `{$Scripts->filename}` not registered in bootstrap file!
-               Please, register it in `scripts/@.php`.
+               Please, register it in `scripts/autoboot.php`.
                MESSAGE
             );
          case 0: // @ Running external script
@@ -83,7 +84,7 @@ class CLI extends Projects // Command Line Interface
 
             // @ Register framework commands
             /** @var array<Command> $commands */
-            $commands = require(__DIR__ . '/commands/@.php');
+            $commands = require(__DIR__ . '/commands/' . BOOTSTRAP_FILENAME);
             foreach ($commands as $Command) {
                $Commands->register($Command, Script: $this);
             }
@@ -93,7 +94,7 @@ class CLI extends Projects // Command Line Interface
 
             // @ Register consumer commands
             if (BOOTGLY_ROOT_DIR !== BOOTGLY_WORKING_DIR) {
-               $consumer_commands = @include(Projects::CONSUMER_DIR . 'Bootgly/commands/@.php');
+               $consumer_commands = @include(Projects::CONSUMER_DIR . 'Bootgly/commands/' . BOOTSTRAP_FILENAME);
                if (is_array($consumer_commands)) {
                   /** @var array<Command> $consumer_commands */
                   foreach ($consumer_commands as $Command) {

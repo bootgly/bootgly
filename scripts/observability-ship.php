@@ -26,7 +26,7 @@
  *   BOOTGLY_OBSERVABILITY_MAXAGE  skip files older than (s)   (default 60)
  */
 
-// ! Bootstrap the framework (registered as a built-in script in scripts/@.php)
+// ! Bootstrap the framework (registered as a built-in script in scripts/autoboot.php)
 define('BOOTGLY_WORKING_BASE', dirname(__DIR__));
 define('BOOTGLY_WORKING_DIR', BOOTGLY_WORKING_BASE . DIRECTORY_SEPARATOR);
 (@include dirname(__DIR__) . '/autoboot.php') || exit(1);

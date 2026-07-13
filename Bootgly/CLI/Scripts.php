@@ -24,6 +24,7 @@ use function in_array;
 use function is_file;
 use function str_replace;
 
+use const Bootgly\ABI\BOOTSTRAP_FILENAME;
 use Bootgly\ABI\IO\FS\File;
 
 
@@ -90,11 +91,11 @@ class Scripts
       }
       foreach ($resource_dirs as $dir) {
          // ? Consumer dirs may not have booted their resources yet (fresh kit)
-         if (is_file("{$dir}@.php") === false) {
+         if (is_file("{$dir}" . BOOTSTRAP_FILENAME) === false) {
             continue;
          }
 
-         $bootstrap = (include $dir . '@.php');
+         $bootstrap = (include $dir . BOOTSTRAP_FILENAME);
          if ($bootstrap !== false) {
             $this->includes['filenames'] += $bootstrap['scripts'];
 

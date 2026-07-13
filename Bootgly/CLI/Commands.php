@@ -21,6 +21,7 @@ use function str_replace;
 use Closure;
 use Error;
 
+use const Bootgly\ABI\BOOTSTRAP_FILENAME;
 use Bootgly\CLI\Command;
 use Bootgly\CLI\Commands\Arguments;
 use Bootgly\CLI\Commands\Middlewares;
@@ -81,7 +82,7 @@ class Commands
       // !?
       // Keep command bootstrap path normalization local so the Path SUT
       // remains autoloadable under Native coverage.
-      $file = str_replace('\\', '/', BOOTGLY_ROOT_DIR . $location . '/commands/@.php');
+      $file = str_replace('\\', '/', BOOTGLY_ROOT_DIR . $location . '/commands/' . BOOTSTRAP_FILENAME);
       $file = preg_replace('#(?<!:)/{2,}#', '/', $file) ?? $file;
       $commands = require $file;
       if (

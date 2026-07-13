@@ -195,7 +195,7 @@ php bootgly project import https://github.com/foo/project1 Project1
 <details>
    <summary><kbd>Perform Bootgly tests</kbd></summary><br>
 
-   1) Check the global bootstrap tests file `tests/@.php`;
+   1) Check the global bootstrap tests file `tests/autoboot.php`;
    2) Run the Bootgly CLI test command in terminal:
 
    ```bash

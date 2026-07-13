@@ -32,7 +32,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test\Specification;
 
 // ! Configure allowlist ONCE for the suite. Must survive worker fork
 //   (suite bootstrap runs BEFORE HTTP_Server_CLI::start() forks). The
-//   suite-wide `@.php` currently does not set this — so on first arrival
+//   suite-wide `autoboot.php` currently does not set this — so on first arrival
 //   it's empty and the vuln is visible. We set it HERE, at test include
 //   time (still pre-fork), so the workers inherit the populated list.
 Request::$allowedHosts = ['localhost'];

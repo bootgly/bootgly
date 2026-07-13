@@ -21,7 +21,7 @@ return new Specification(
          description: 'Invalid Real Dir #1.1 (absolute real dir to real dir): ' . $Dir11
       );
       // absolute real file to real dir
-      $Dir12 = new Dir(__DIR__ . '/@.php');
+      $Dir12 = new Dir(__DIR__ . '/autoboot.php');
       yield assert(
          assertion: (string) $Dir12 === __DIR__ . DIRECTORY_SEPARATOR,
          description: 'Invalid Real Dir #1.2 (absolute real file to real dir): ' . $Dir12

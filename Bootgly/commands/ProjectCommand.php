@@ -69,6 +69,7 @@ use function usleep;
 use Exception;
 use Throwable;
 
+use const Bootgly\ABI\BOOTSTRAP_FILENAME;
 use const Bootgly\CLI;
 use Bootgly\ACI\Process\State;
 use Bootgly\ADI\Databases\SQL;
@@ -1409,7 +1410,7 @@ class ProjectCommand extends Command
             $interface = strtoupper((string) ($options['interfaces'] ?? ''));
             if ($interface !== 'CLI' && $interface !== 'WPI') {
                $web = BOOTGLY_ROOT_DIR === BOOTGLY_WORKING_DIR
-                  || is_file(BOOTGLY_WORKING_DIR . 'Web/autoboot.php');
+                  || is_file(BOOTGLY_WORKING_DIR . 'Web/' . BOOTSTRAP_FILENAME);
 
                $interface = 'CLI';
                if ($web === true) {
@@ -1851,8 +1852,8 @@ class ProjectCommand extends Command
 
       // # Platform submodules (kit)
       $gitmodules = is_file(BOOTGLY_WORKING_DIR . '.gitmodules');
-      $console = is_file(BOOTGLY_WORKING_DIR . 'Console/autoboot.php');
-      $web = is_file(BOOTGLY_WORKING_DIR . 'Web/autoboot.php');
+      $console = is_file(BOOTGLY_WORKING_DIR . 'Console/' . BOOTSTRAP_FILENAME);
+      $web = is_file(BOOTGLY_WORKING_DIR . 'Web/' . BOOTSTRAP_FILENAME);
 
       if ($gitmodules === true) {
          // ! Requested platforms (comma-separated: --platform=console,web)

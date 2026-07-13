@@ -29,7 +29,7 @@ parameters:
          # mb_str_split polyfill shadows the ext-mbstring stub — PHPStan reads
          # the stub signature and skips the polyfill's @return docblock
          message: '#Function mb_str_split\(\) return type has no value type#'
-         path: ../Bootgly/ABI/autoload.php
+         path: ../Bootgly/ABI/autoboot.php
 
 services:
    -

@@ -54,6 +54,7 @@ use Closure;
 use LogicException;
 use Throwable;
 
+use const Bootgly\ABI\BOOTSTRAP_FILENAME;
 use const Bootgly\CLI;
 use Bootgly\ABI\Data\__String\Escapeable\Text\Formattable;
 use Bootgly\ACI\Logs\Data\Display;
@@ -285,7 +286,7 @@ class TestCommand extends Command
    {
       // !
       $hasTests = str_contains($suite_dir, '/tests/') || str_ends_with($suite_dir, '/tests');
-      $bootstrap_file = str_replace('\\', '/', $suite_dir . ($hasTests ? '' : '/tests') . '/@.php');
+      $bootstrap_file = str_replace('\\', '/', $suite_dir . ($hasTests ? '' : '/tests') . '/' . BOOTSTRAP_FILENAME);
       $bootstrap_file = preg_replace('#/{2,}#', '/', $bootstrap_file) ?? $bootstrap_file;
       $bootstrap = BOOTGLY_ROOT_DIR !== BOOTGLY_WORKING_DIR
          ? BOOTGLY_WORKING_DIR . $bootstrap_file
@@ -404,7 +405,7 @@ class TestCommand extends Command
                foreach (scandir($dir) as $entry) {
                   if ($entry === '.' || $entry === '..')
                      continue;
-                  if (is_dir("$dir$entry") && is_file("$dir$entry/@.php")) {
+                  if (is_dir("$dir$entry") && is_file("$dir$entry/" . BOOTSTRAP_FILENAME)) {
                      $cases[] = $entry;
                      if ($entry === $caseName) {
                         $caseDir = "$dir$entry";
@@ -478,8 +479,8 @@ class TestCommand extends Command
                echo "  {$DIM}Invalid {$caseName} options schema: {$Throwable->getMessage()}{$RESET}\n\n";
             }
 
-            // # Runner options (load @.php to get Runner instance)
-            $casePath = "$caseDir/@.php";
+            // # Runner options (load autoboot.php to get Runner instance)
+            $casePath = "$caseDir/" . BOOTSTRAP_FILENAME;
             $Configs = Configs::parse($options);
             if ($Configs->runner !== null) {
                putenv('BENCHMARK_RUNNER=' . $Configs->runner);
@@ -518,11 +519,11 @@ class TestCommand extends Command
          return $help($caseName);
       }
 
-      // @ Resolve @.php path
-      $casePath = BOOTGLY_WORKING_DIR . 'benchmarks/' . $caseName . '/@.php';
+      // @ Resolve autoboot.php path
+      $casePath = BOOTGLY_WORKING_DIR . 'benchmarks/' . $caseName . '/' . BOOTSTRAP_FILENAME;
       // ? Fallback: check parent directory (bootgly_benchmarks/ sibling repo)
       if (!is_file($casePath)) {
-         $parentPath = BOOTGLY_WORKING_DIR . '../bootgly_benchmarks/' . $caseName . '/@.php';
+         $parentPath = BOOTGLY_WORKING_DIR . '../bootgly_benchmarks/' . $caseName . '/' . BOOTSTRAP_FILENAME;
          if (is_file($parentPath)) {
             $casePath = $parentPath;
          }
@@ -615,21 +616,21 @@ class TestCommand extends Command
          return false;
       }
 
-      // @ Expose the load set to the case @.php + opponents (mirrors BENCHMARK_RUNNER)
+      // @ Expose the load set to the case autoboot.php + opponents (mirrors BENCHMARK_RUNNER)
       putenv('BENCHMARK_LOAD_SET=' . $Configs->loadSet);
 
       // @ Surface the serialization format so case files can silence diagnostics
       putenv('BENCHMARK_FORMAT=' . $Configs->format);
 
-      // @ Set runner env var before loading @.php
+      // @ Set runner env var before loading autoboot.php
       if ($Configs->runner !== null) {
          putenv('BENCHMARK_RUNNER=' . $Configs->runner);
       }
-      // @ Load Runner from @.php
+      // @ Load Runner from autoboot.php
       $Runner = include $casePath;
       if ( !($Runner instanceof Runner) ) {
          $Alert->Type::Failure->set();
-         $Alert->message = "Benchmark @.php must return a Runner instance.";
+         $Alert->message = "Benchmark autoboot.php must return a Runner instance.";
          $Alert->render();
          return false;
       }
@@ -667,7 +668,7 @@ class TestCommand extends Command
 
          // # Build run configuration metadata for the .marks header.
          //   Runner subclasses surface their own keys via $Runner->meta; the case
-         //   file (e.g. HTTP_Server_CLI/@.php) adds case-level keys to the same
+         //   file (e.g. HTTP_Server_CLI/autoboot.php) adds case-level keys to the same
          //   bag. TestCommand only contributes runner-agnostic fields here.
          $config = [];
 

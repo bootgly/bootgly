@@ -10,7 +10,7 @@ return new Specification(
       // @ Valid
       $File1 = new File(__DIR__ . '/1.1-construct-real_file.test.php');
       yield assert(
-         assertion: $File1->size === 502,
+         assertion: $File1->size === 516,
          description: 'File #1 size: ' . $File1->size
       );
 

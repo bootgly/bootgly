@@ -47,7 +47,7 @@ class Bootgly
       [
          $CLI,
          $WPI
-      ] = require(__DIR__ . '/Bootgly/autoload.php');
+      ] = require(__DIR__ . '/Bootgly/autoboot.php');
 
       // @
       $CLI->autoboot();

@@ -17,6 +17,9 @@ namespace Bootgly\ABI {
    use Bootgly\ABI\Debugging\Shutdown;
 
 
+   // ! Bootstrap filename (canonical directory-entry file — see Bootgly One-Way)
+   const BOOTSTRAP_FILENAME = 'autoboot.php';
+
    // @ Debugging\Data\Errors
    \restore_error_handler();
    \set_error_handler(

@@ -16,7 +16,7 @@ return new Specification(
          description: 'Scanned dir paths[0]: ' . $pathnames[0]
       );
       yield assert(
-         assertion: (string) $pathnames[$paths] === __DIR__ . '/@.php',
+         assertion: (string) $pathnames[$paths] === __DIR__ . '/autoboot.php',
          description: 'Scanned dir paths[-1]: ' . $pathnames[$paths]
       );      
    }

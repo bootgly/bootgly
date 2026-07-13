@@ -37,7 +37,7 @@
 - Template: `bootgly.web` (dot)
 - Extension: `bootgly_docs` (underscore)
 
-**Bootstrap**: `autoboot.php` → `Bootgly/autoload.php` (loads ABI→ACI→ADI→API→CLI→WPI) → `CLI->autoboot()` + `WPI->autoboot()` → project boot files in `projects/Bootgly/`.
+**Bootstrap**: `autoboot.php` → `Bootgly/autoboot.php` (loads ABI→ACI→ADI→API→CLI→WPI) → `CLI->autoboot()` + `WPI->autoboot()` → project boot files in `projects/Bootgly/`.
 
 ## PHP 8.4 Features (actively used)
 
@@ -60,13 +60,13 @@ Virtual/computed properties: `public null|string $format { get => $this->MIME?->
 
 **Other**: backed enums, `match` expressions (100+), typed constants, `#[AllowDynamicProperties]`, first-class callable syntax.
 
-## Registry Pattern (`@.php` files)
+## Registry Pattern (`autoboot.php` files)
 
 Bootstrap files for dynamic discovery:
 
-- `projects/@.php` — project definitions and default project
-- `scripts/@.php` — whitelisted scripts (`built-in`, `imported`, `user`)
-- `tests/@.php` — test suite directories
-- `**/commands/@.php` — CLI command instances
+- `projects/autoboot.php` — project definitions and default project
+- `scripts/autoboot.php` — whitelisted scripts (`built-in`, `imported`, `user`)
+- `tests/autoboot.php` — test suite directories
+- `**/commands/autoboot.php` — CLI command instances
 
 Unregistered scripts fail validation. Follow this pattern when adding new registries.

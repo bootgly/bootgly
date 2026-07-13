@@ -19,12 +19,12 @@ if ( ($this ?? null) && $this instanceof Bootgly === false )
    return;
 
 // ! Resources ([a-z])
-require(__DIR__ . '/ABI/autoload.php');
-require(__DIR__ . '/ACI/autoload.php');
-require(__DIR__ . '/ADI/autoload.php');
-require(__DIR__ . '/API/autoload.php');
-require(__DIR__ . '/CLI/autoload.php');
-require(__DIR__ . '/WPI/autoload.php');
+require(__DIR__ . '/ABI/autoboot.php');
+require(__DIR__ . '/ACI/autoboot.php');
+require(__DIR__ . '/ADI/autoboot.php');
+require(__DIR__ . '/API/autoboot.php');
+require(__DIR__ . '/CLI/autoboot.php');
+require(__DIR__ . '/WPI/autoboot.php');
 
 // @
 /**
