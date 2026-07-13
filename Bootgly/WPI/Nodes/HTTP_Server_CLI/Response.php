@@ -31,7 +31,10 @@ use function is_string;
 use function preg_match;
 use function str_pad;
 use function str_replace;
+use function strcasecmp;
 use function strlen;
+use function strncasecmp;
+use function strncmp;
 use Closure;
 use Error;
 use Fiber;
@@ -53,6 +56,7 @@ use Bootgly\WPI\Modules\HTTP\Server;
 use Bootgly\WPI\Modules\HTTP\Server\Response\Authentication;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Decoder_HTTP2;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders\Catcher;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders\Challenge;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders\Encoder_HTTP2;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Raw;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Raw\Body;
@@ -926,6 +930,13 @@ class Response extends Server\Response
          return;
       }
 
+      // ? Reserved ACME HTTP-01 namespace never stores — mirrors the
+      //   encoders' fetch guard: a cached entry must never shadow the
+      //   built-in responder's token/404 semantics
+      if (strncmp($Request->URI, Challenge::PREFIX, 28) === 0) {
+         return;
+      }
+
       // ? Credentialed exchanges and cookie-setting responses never cache
       //   (request header fields are lowercase-normalized by the decoder)
       $fields = $Request->headers;
@@ -934,8 +945,27 @@ class Response extends Server\Response
          return;
       }
 
-      if (isSet($this->Header->fields['Set-Cookie'])) {
-         return;
+      // ? A Set-Cookie under ANY casing and from ANY serialization source
+      //   blocks storage. The canonical cookie API (Cookies::append → Session,
+      //   Remember, applications) emits through Header::queue() — it never
+      //   touches $fields — so an exact fields-only key check caches one
+      //   client's session cookie and replays it to every other client.
+      $Header = $this->Header;
+
+      foreach ($Header->fields as $name => $_) {
+         if (strcasecmp((string) $name, 'Set-Cookie') === 0) {
+            return;
+         }
+      }
+      foreach ($Header->prepared as $name => $_) {
+         if (strcasecmp((string) $name, 'Set-Cookie') === 0) {
+            return;
+         }
+      }
+      foreach ($Header->queued as $line) {
+         if (strncasecmp($line, 'set-cookie:', 11) === 0) {
+            return;
+         }
       }
 
       // @

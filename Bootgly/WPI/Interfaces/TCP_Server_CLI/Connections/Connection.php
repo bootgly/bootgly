@@ -236,6 +236,19 @@ class Connection extends Packages
          return true;
       }
 
+      // ! Cancel per-connection timers on the first close transition. The
+      //   persistent expire() task holds [$this, 'expire'] in the static
+      //   Timer::$tasks map — a GC root — so __destruct() (which also dels)
+      //   can never run while the timer lives: without this, every closed
+      //   connection is retained for the worker lifetime and its timer keeps
+      //   firing. Safe re-entrancy: tick() checks the task status only after
+      //   the callback returns, so a del from inside expire()->close() still
+      //   suppresses the requeue.
+      foreach ($this->timers as $id) {
+         Timer::del($id);
+      }
+      $this->timers = [];
+
       // @ Protocol-unit cleanup: a decoded session (e.g. a WebSocket Session)
       //   runs its teardown exactly once on any close path, including an abrupt
       //   peer EOF that closes the connection directly at the transport layer.

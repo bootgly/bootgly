@@ -218,6 +218,15 @@ class Header extends HeaderBase
       // Fields
       if ($this->queued !== []) {
          $this->queued = [];
+         // ! Without this, build()'s dirty-gated same-second fast return
+         //   reuses a $raw block still carrying the previous response's
+         //   queued lines (e.g. another client's Set-Cookie). The content
+         //   cache below it compares $queued against $builtQueued, so a
+         //   genuinely identical header set stays as cheap as before.
+         $this->dirty = true;
+         // ! The Cookies helper accumulates every appended cookie for the
+         //   worker lifetime otherwise — queued cookies always land here.
+         $this->Cookies->reset();
       }
    }
    /**

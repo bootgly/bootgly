@@ -61,12 +61,14 @@ class Encoder_Testing extends Encoders
       // ?: Route response cache — serve stored wire bytes before routing,
       //   middleware, handler and serialization (mirrors Encoder_ so E2E
       //   specs exercise the same hit path as production). Only HTTP/1.1
-      //   reads entries and the built-in health path never reads the cache
+      //   reads entries and the built-in health path never reads the cache;
+      //   the reserved ACME HTTP-01 namespace never reads it either
       //   (mirrors Encoder_).
       if (
          Cache::$entries !== [] && $Request->closeConnection === false
          && $Request->protocol === 'HTTP/1.1'
          && $Request->URI !== Server::$health
+         && strncmp($Request->URI, Challenge::PREFIX, 28) !== 0
       ) {
          $vary = Language::$roots !== [] ? "\0" . Language::$locale : '';
          $wire = Cache::fetch("{$Request->method}\0{$Request->URI}{$vary}");

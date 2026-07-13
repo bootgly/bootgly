@@ -51,4 +51,11 @@ abstract class Cookies
 
       return $this;
    }
+
+   public function reset (): void
+   {
+      // ! Per-response accumulator only — without a per-request reset the
+      //   persistent worker grows this list for its whole lifetime.
+      $this->cookies = [];
+   }
 }

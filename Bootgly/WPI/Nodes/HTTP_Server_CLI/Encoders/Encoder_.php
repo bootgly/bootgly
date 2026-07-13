@@ -77,11 +77,15 @@ class Encoder_ extends Encoders
       //   bytes (including interim 103 heads hint() promises it never
       //   sends to HTTP/1.0). The built-in health path never reads the
       //   cache — the probe guard must win over any stale application-
-      //   cached entry on the same path.
+      //   cached entry on the same path. The reserved ACME HTTP-01
+      //   namespace is excluded for the same reason: a stale/preloaded
+      //   entry must never shadow the token/404 semantics of the built-in
+      //   responder below.
       if (
          Cache::$entries !== [] && $Request->closeConnection === false
          && $Request->protocol === 'HTTP/1.1'
          && $Request->URI !== Server::$health
+         && strncmp($Request->URI, Challenge::PREFIX, 28) !== 0
       ) {
          $vary = Language::$roots !== [] ? "\0" . Language::$locale : '';
          $wire = Cache::fetch("{$Request->method}\0{$Request->URI}{$vary}");

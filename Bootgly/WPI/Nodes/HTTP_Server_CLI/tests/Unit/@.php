@@ -16,6 +16,10 @@ return new Suite(
    tests: [
       '1.1-sse_open_dead_connection',
       '1.2-timer_fork_hygiene',
-      '1.3-response_code_contract'
+      '1.3-response_code_contract',
+      '1.4-connection_close_timer_release',
+      '1.5-header_queued_clean_isolation',
+      '1.6-stash_cookie_and_acme_guards',
+      '1.7-router_dynamic_classification'
    ]
 );

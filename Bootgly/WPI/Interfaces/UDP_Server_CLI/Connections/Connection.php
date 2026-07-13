@@ -146,6 +146,17 @@ class Connection extends Packages
          return true;
       }
 
+      // ! Cancel per-connection timers on the first close transition. The
+      //   persistent expire() task holds [$this, 'expire'] in the static
+      //   Timer::$tasks map — a GC root — so __destruct() (which also dels)
+      //   can never run while the timer lives: without this, every closed
+      //   connection is retained for the worker lifetime and its timer keeps
+      //   firing.
+      foreach ($this->timers as $id) {
+         Timer::del($id);
+      }
+      $this->timers = [];
+
       $this->status = Connections::STATUS_CLOSING;
 
       // The underlying socket is shared by the server with every peer —

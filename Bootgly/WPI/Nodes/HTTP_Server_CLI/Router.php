@@ -401,18 +401,29 @@ class Router
                      }
 
                      // @ Direct param extraction via batch set
-                     $Route = $this->Route;
-                     $Route->path = $url;
                      if ($segments === null) {
                         $segments = explode('/', $url);
                      }
 
                      /** @var array<string,string> $pv */
                      $pv = [];
+                     $match = true;
                      foreach ($entry['paramIndices'] as $i => $segIdx) {
-                        $pv[$entry['paramNames'][$i]] = $segments[$segIdx];
+                        $value = $segments[$segIdx];
+                        // ? Regex parity: a param is ([^\/]+) — it never
+                        //   matches an empty segment (e.g. `/users//x`)
+                        if ($value === '') {
+                           $match = false;
+                           break;
+                        }
+                        $pv[$entry['paramNames'][$i]] = $value;
+                     }
+                     if (!$match) {
+                        continue;
                      }
 
+                     $Route = $this->Route;
+                     $Route->path = $url;
                      $Route->Params->set($pv);
                   }
                   else {
@@ -564,6 +575,12 @@ class Router
          $paramNames = [];
          /** @var array<string,int> $paramCounts Track duplicate param names */
          $paramCounts = [];
+         // ! Classification input: literal segments never require regex — only
+         //   catch-alls, constraints, inline regexes and pre-set Params regexes
+         //   do. (The old classifier re-scanned $regexParts for '([^\/]+)'
+         //   equality, so any literal — e.g. `/users/:id` — was misclassified
+         //   complex and paid preg_match() + $matches per request.)
+         $needsRegex = false;
 
          foreach ($parts as $index => $part) {
             if (isset($part[0]) && $part[0] === ':') {
@@ -584,6 +601,7 @@ class Router
 
                if ($isCatchAll) {
                   $regexParts[] = '(.+)';
+                  $needsRegex = true;
                }
                // @ Check for named constraint type: :paramName<int> → expand to regex
                else if (str_ends_with($paramName, '>') && ($anglePos = strpos($paramName, '<')) !== false) {
@@ -597,18 +615,21 @@ class Router
                   }
                   $constraintRegex = self::PARAM_CONSTRAINTS[$typeName];
                   $regexParts[] = "({$constraintRegex})";
+                  $needsRegex = true;
                }
                // @ Check for in-URL regex: :paramName(\d+) → extract name and regex
                else if (str_ends_with($paramName, ')') && ($parenPos = strpos($paramName, '(')) !== false) {
                   $inlineRegex = substr($paramName, $parenPos + 1, -1);
                   $paramName = substr($paramName, 0, $parenPos);
                   $regexParts[] = "({$inlineRegex})";
+                  $needsRegex = true;
                }
                // @ Check for pre-set regex constraint on Params
                else {
                   $paramRegex = $this->Route->Params->$paramName;
                   if ($paramRegex !== null && is_string($paramRegex)) {
                      $regexParts[] = "({$paramRegex})";
+                     $needsRegex = true;
                   } else {
                      $regexParts[] = '([^\\/]+)';
                   }
@@ -636,16 +657,10 @@ class Router
             }
          }
 
-         // @ Classify route type: simple (no regex needed) or complex
-         $isSimple = ($duplicateParams === []);
-         if ($isSimple) {
-            foreach ($regexParts as $rp) {
-               if ($rp !== '([^\\/]+)') {
-                  $isSimple = false;
-                  break;
-               }
-            }
-         }
+         // @ Classify route type: simple (no regex needed) or complex.
+         //   Literals are matched by the bucket key + fixedSegments; only
+         //   regex-bearing params and duplicate params force the PCRE path.
+         $isSimple = ($duplicateParams === [] && $needsRegex === false);
 
          // @ Build segment-based matching data for simple routes
          $firstSegKey = $parts[0][0] === ':' ? '' : $parts[0];
