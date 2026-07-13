@@ -36,7 +36,9 @@ use function str_contains;
 use function str_ends_with;
 use function str_pad;
 use function str_replace;
+use function str_starts_with;
 use function strlen;
+use function strtolower;
 use function strtr;
 
 use function Bootgly\ABI\copy_recursively;
@@ -54,6 +56,27 @@ abstract class Projects
    public const string AUTHOR_DIR = BOOTGLY_ROOT_BASE . '/projects/';
    // Consumer
    public const string CONSUMER_DIR = BOOTGLY_WORKING_BASE . '/projects/';
+   // Reserved
+   /**
+    * Top-level namespace roots a project may not use as its first path segment.
+    * They would shadow the framework (`Bootgly`) and platform namespaces the
+    * autoloader resolves for bare project classes. Compared case-insensitively —
+    * PHP resolves namespaces case-insensitively.
+    *
+    * Current platforms: `Console`, `Web` (plus the framework root `Bootgly`).
+    * Reserved for future platforms: `Data`, `Graphics`, `Embedded`, `Mobile`.
+    *
+    * @var array<int,string>
+    */
+   public const array RESERVED = [
+      'Bootgly',
+      'Console',
+      'Web',
+      'Data',
+      'Graphics',
+      'Embedded',
+      'Mobile',
+   ];
 
    // * Config
    // ...
@@ -297,6 +320,14 @@ abstract class Projects
       // ? Path-safety
       if (self::check($path) === false) {
          return false;
+      }
+      // ? Reserved platform namespace root (Bootgly, Console, Web) — backstop
+      $root = strtolower($path);
+      foreach (self::RESERVED as $reserved) {
+         $reserved = strtolower($reserved);
+         if ($root === $reserved || str_starts_with($root, "{$reserved}/")) {
+            return false;
+         }
       }
       // ? Interfaces are required
       $interfaces = $meta['interfaces'] ?? [];

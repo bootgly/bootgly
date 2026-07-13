@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace projects\Demo_HTTP_Client_CLI;
+namespace Demo\HTTP_Client_CLI;
 
 
 use function getenv;

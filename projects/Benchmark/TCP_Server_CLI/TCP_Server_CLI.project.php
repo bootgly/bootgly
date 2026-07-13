@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace projects\Benchmark\TCP_Server_CLI;
+namespace Benchmark\TCP_Server_CLI;
 
 
 use function exec;
@@ -64,7 +64,7 @@ return new Project(
                // @ Per-worker profiler bootstrap (env-gated; idempotent via internal PID guard)
                if (getenv('BOOTGLY_PROFILE') === '1') {
                   require_once __DIR__ . '/../HTTP_Server_CLI/Profiler.php';
-                  \projects\HTTP_Server_CLI\Profiler::start();
+                  \Benchmark\HTTP_Server_CLI\Profiler::start();
                }
 
                // @ Dual-mode: HTTP or echo

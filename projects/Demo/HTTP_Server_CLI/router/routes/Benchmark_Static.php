@@ -1,6 +1,6 @@
 <?php
 
-namespace projects\HTTP_Server_CLI\router;
+namespace Demo\HTTP_Server_CLI\router;
 
 
 use function explode;

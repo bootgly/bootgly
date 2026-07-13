@@ -84,6 +84,64 @@ spl_autoload_register (function (string $class) {
    include $file;
 });
 
+// ! Projects ([A-Z] — dedicated autoload, bare namespace without the `projects/` prefix)
+// @ Primary: resolve relative to the booted project's absolute path (BOOTGLY_PROJECT->path)
+// @ so an isolated-repo project cloned anywhere still loads; fallback maps the bare FQCN into
+// @ <projects/> under the active environment root (WEB_ROOT_DIR on Web, BOOTGLY_WORKING_DIR on
+// @ Console, BOOTGLY_ROOT_DIR as the monorepo author fallback).
+spl_autoload_register (function (string $class) {
+   $file = '';
+
+   // ? Primary — anchored on the booted project (defined once per process at Project::boot())
+   if (defined('BOOTGLY_PROJECT')) {
+      $root = str_replace('/', '\\', BOOTGLY_PROJECT->folder);
+
+      if (str_starts_with($class, $root . '\\')) {
+         $sub = substr($class, strlen($root) + 1);
+         $file = BOOTGLY_PROJECT->path . str_replace('\\', '/', $sub) . '.php';
+
+         if (is_file($file) === false) {
+            $file = '';
+         }
+      }
+   }
+
+   // ? Fallback — map the bare FQCN into <projects/> under the active environment root
+   if ($file === '') {
+      $path = str_replace('\\', '/', $class) . '.php';
+
+      foreach ([
+         defined('WEB_ROOT_DIR') ? WEB_ROOT_DIR : null,
+         BOOTGLY_WORKING_DIR,
+         BOOTGLY_ROOT_DIR,
+      ] as $base) {
+         if ($base === null) {
+            continue;
+         }
+
+         $candidate = $base . 'projects/' . $path;
+         if (is_file($candidate)) {
+            $file = $candidate;
+            break;
+         }
+      }
+   }
+
+   // ? Nothing matched — let other autoloaders try
+   if ($file === '') {
+      return;
+   }
+
+   if (
+      class_exists(Bootgly\ACI\Tests\Coverage\Drivers\Native::class, false)
+      && Bootgly\ACI\Tests\Coverage\Drivers\Native::route($file)
+   ) {
+      return;
+   }
+
+   include $file;
+});
+
 // ! Resources ([a-z])
 // ...
 

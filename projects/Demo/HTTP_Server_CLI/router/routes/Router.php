@@ -5,7 +5,7 @@
  *        duplicate params, inline regex, nested groups, catch-all parameterized, catch-all 404.
  */
 
-namespace projects\HTTP_Server_CLI\router;
+namespace Demo\HTTP_Server_CLI\router;
 
 
 use Generator;

@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace projects\Demo_WS_Client_CLI;
+namespace Demo\WS_Client_CLI;
 
 
 use function getenv;

@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace projects\Demo_HTTPS_Server_CLI;
+namespace Demo\HTTPS_Server_CLI;
 
 
 use const BOOTGLY_ROOT_DIR;

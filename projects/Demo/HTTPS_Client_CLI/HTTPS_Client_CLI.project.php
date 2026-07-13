@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace projects\Demo_HTTPS_Client_CLI;
+namespace Demo\HTTPS_Client_CLI;
 
 
 use function implode;

@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace projects\Demo_WS_Server_CLI;
+namespace Demo\WS_Server_CLI;
 
 
 use const BOOTGLY_ROOT_DIR;

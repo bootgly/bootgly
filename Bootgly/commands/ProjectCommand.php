@@ -1982,6 +1982,14 @@ class ProjectCommand extends Command
          return "Invalid project path: `{$path}`. Segments must start uppercase and use "
             . 'only letters, numbers, `_` or `-` (e.g. `App` or `App/API`).';
       }
+      // ? Reserved platform namespace root (would shadow the framework/platform namespaces)
+      $root = strtolower(explode('/', $path)[0]);
+      foreach (Projects::RESERVED as $reserved) {
+         if ($root === strtolower($reserved)) {
+            return "Invalid project path: `{$path}`. `{$reserved}` is a reserved Bootgly "
+               . 'namespace root (framework/platform) and cannot be used as a project name.';
+         }
+      }
       // ? Registry collision
       if (array_key_exists($path, Projects::read()) === true) {
          return "Project `{$path}` is already registered.";

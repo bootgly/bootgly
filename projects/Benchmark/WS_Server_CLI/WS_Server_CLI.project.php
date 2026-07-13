@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace projects\Benchmark\WS_Server_CLI;
+namespace Benchmark\WS_Server_CLI;
 
 
 use function exec;

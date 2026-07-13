@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace projects\Benchmark\UDP_Server_CLI;
+namespace Benchmark\UDP_Server_CLI;
 
 
 use function exec;

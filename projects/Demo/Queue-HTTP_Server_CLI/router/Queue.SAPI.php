@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace projects\Demo_Queue_HTTP_Server_CLI\router;
+namespace Demo\Queue_HTTP_Server_CLI\router;
 
 
 use const GET;
@@ -18,7 +18,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router;
 use Bootgly\WPI\Queues;
-use projects\Demo_Queue_HTTP_Server_CLI\SendEmail;
+use Demo\Queue_HTTP_Server_CLI\SendEmail;
 
 
 return static function

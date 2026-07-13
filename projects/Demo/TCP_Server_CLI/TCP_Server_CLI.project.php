@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace projects\Demo_TCP_Server_CLI;
+namespace Demo\TCP_Server_CLI;
 
 
 use function getenv;

@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace projects\Bootgly\WPI;
+namespace Demo\HTTP_Server_CLI\Models;
 
 
 use Bootgly\ADI\Databases\SQL\Model\Auxiliaries\Relations;

@@ -76,6 +76,7 @@ projects/**/configs/**/.env.*
 /storage/cache/*
 /storage/pids/*
 /storage/logs/*
+/storage/queues/*
 /storage/schedule/*
 /storage/security/*
 /storage/temp/*

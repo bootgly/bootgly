@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace projects\HTTP_Server_CLI\router;
+namespace Benchmark\HTTP_Server_CLI\router;
 
 
 use const GET;
@@ -18,7 +18,7 @@ use Generator;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router;
-use projects\HTTP_Server_CLI\Profiler;
+use Benchmark\HTTP_Server_CLI\Profiler;
 
 
 return static function

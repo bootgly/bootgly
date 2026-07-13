@@ -37,7 +37,7 @@
  *      Bootgly\WPI\Nodes\HTTP_Server_CLI\Request::$maxFileSize = 500 * 1024 * 1024;
  */
 
-namespace projects\Bootgly\WPI;
+namespace Demo\HTTP_Server_CLI\router;
 
 
 use const BOOTGLY_STORAGE_DIR;

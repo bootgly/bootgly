@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace projects\Demo_HTTP_Server_CLI;
+namespace Demo\HTTP_Server_CLI;
 
 
 use const BOOTGLY_STORAGE_DIR;

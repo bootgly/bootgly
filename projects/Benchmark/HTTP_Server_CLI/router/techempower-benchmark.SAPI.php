@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace projects\HTTP_Server_CLI\router;
+namespace Benchmark\HTTP_Server_CLI\router;
 
 
 use const ENT_QUOTES;
@@ -35,7 +35,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\Database;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router;
-use projects\HTTP_Server_CLI\Profiler;
+use Benchmark\HTTP_Server_CLI\Profiler;
 
 
 /*

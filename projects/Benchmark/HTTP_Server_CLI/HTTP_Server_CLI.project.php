@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-namespace projects\HTTP_Server_CLI;
+namespace Benchmark\HTTP_Server_CLI;
 
 
 use function defined;

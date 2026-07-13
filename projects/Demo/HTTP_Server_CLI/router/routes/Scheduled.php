@@ -1,6 +1,6 @@
 <?php
 
-namespace projects\Bootgly\WPI;
+namespace Demo\HTTP_Server_CLI\router;
 
 
 use function fclose;

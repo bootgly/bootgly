@@ -1,6 +1,6 @@
 <?php
 
-namespace projects\Bootgly\WPI;
+namespace Demo\HTTP_Server_CLI\router;
 
 
 use const DATE_ATOM;
@@ -19,6 +19,9 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\Database as DatabaseResource;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router;
+use Demo\HTTP_Server_CLI\Models\DemoLazyUser;
+use Demo\HTTP_Server_CLI\Models\DemoPost;
+use Demo\HTTP_Server_CLI\Models\DemoUser;
 
 
 require_once __DIR__ . '/../../Models/DemoUser.php';
