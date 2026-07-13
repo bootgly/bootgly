@@ -90,9 +90,9 @@ class Timeline extends Component
     *
     * @param int $mode self::WRITE_OUTPUT to write, self::RETURN_OUTPUT to return the output.
     *
-    * @return mixed
+    * @return null|string The markup frame when returning — null when writing.
     */
-   protected function render (int $mode = self::WRITE_OUTPUT): mixed
+   public function render (int $mode = self::WRITE_OUTPUT): null|string
    {
       // ! Vertical frame — one glyph + label per step, connected by `│`
       $frame = '';

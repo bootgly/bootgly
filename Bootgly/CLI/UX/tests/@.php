@@ -26,5 +26,9 @@ return new Suite(
       '3.2-tabs-bar',
       '3.3-tabs-switch',
       '3.4-tabs-switching',
+      '4.1-wizard-run',
+      '4.2-wizard-add',
+      '4.3-wizard-fail',
+      '4.4-wizard-components',
    ]
 );

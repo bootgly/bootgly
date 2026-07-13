@@ -27,6 +27,8 @@ return new Suite(
       '5.2-timer-handler',
       '6.1-timeline-states',
       '6.2-timeline-render',
+      '6.3-timeline-return',
+      '6.4-timeline-insert',
       '7.1-progress-bars',
       '7.2-progress-columns',
       '8.1-chart-sparkline',

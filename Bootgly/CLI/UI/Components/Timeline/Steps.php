@@ -11,6 +11,7 @@
 namespace Bootgly\CLI\UI\Components\Timeline;
 
 
+use function array_splice;
 use function count;
 
 use Bootgly\CLI\UI\Components\Timeline\States;
@@ -52,6 +53,29 @@ class Steps
       $Step = new Step($label);
 
       $this->Steps[] = $Step;
+
+      // :
+      return $Step;
+   }
+
+   /**
+    * Inserts a Step at a position (later Steps shift forward).
+    *
+    * @param string $label The step label.
+    * @param int $at The 0-based position — never at or before the current Step.
+    *
+    * @return Step
+    */
+   public function insert (string $label, int $at): Step
+   {
+      $Step = new Step($label);
+
+      // ? The walked prefix is immutable — clamp to right after the current Step
+      if ($at <= $this->current) {
+         $at = $this->current + 1;
+      }
+
+      array_splice($this->Steps, $at, 0, [$Step]);
 
       // :
       return $Step;

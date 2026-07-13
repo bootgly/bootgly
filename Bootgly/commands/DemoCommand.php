@@ -176,6 +176,9 @@ class DemoCommand extends Command
 
          // UX - Tabs component (btop-like tabbed dashboard)
          47 => 'UX/Tabs-01.demo.php',
+
+         // UX - Wizard component (declarative multi-step flow)
+         48 => 'UX/Wizard-01.demo.php',
       ];
 
       $last = array_key_last($examples);

@@ -64,9 +64,9 @@ use function strtoupper;
 use function substr;
 use function sys_get_temp_dir;
 use function time;
-use function trim;
 use function unlink;
 use function usleep;
+use Exception;
 use Throwable;
 
 use const Bootgly\CLI;
@@ -85,7 +85,7 @@ use Bootgly\CLI\UI\Components\Alert;
 use Bootgly\CLI\UI\Components\Fieldset;
 use Bootgly\CLI\UI\Components\Menu;
 use Bootgly\CLI\UI\Components\Question;
-use Bootgly\CLI\UI\Components\Timeline;
+use Bootgly\CLI\UX\Wizard;
 use Bootgly\commands\BootCommand;
 
 
@@ -274,18 +274,18 @@ class ProjectCommand extends Command
    {
       $Output = CLI->Terminal->Output;
 
-      // @ Kit setup (platform submodules + resource dirs) when needed
-      if ($this->prepare($options) === false) {
-         return false;
-      }
-
       // ! Inputs
       $path = $arguments[0] ?? null;
       $from = isSet($options['from']) && is_string($options['from']) ? $options['from'] : null;
 
-      // @ Wizard on interactive terminals (unless --yes)
+      // @ Wizard on interactive terminals (unless --yes) — kit setup is its first step
       if (BOOTGLY_TTY === true && isSet($options['yes']) === false) {
          return $this->wizard($path, $from, $options);
+      }
+
+      // @ Kit setup (platform submodules + resource dirs) when needed
+      if ($this->prepare($options) === false) {
+         return false;
       }
 
       // @ Non-interactive
@@ -1347,7 +1347,11 @@ class ProjectCommand extends Command
    }
 
    /**
-    * Interactive project creation wizard.
+    * Interactive project creation wizard (Wizard UX component).
+    *
+    * Every phase — kit setup, start mode and the branch it resolves — is a
+    * wizard step. Handlers render their own failure Alerts, then throw a
+    * short slug for the ✖ timeline note.
     *
     * @param null|string $path
     * @param null|string $from
@@ -1361,58 +1365,246 @@ class ProjectCommand extends Command
       $Output = $Terminal->Output;
       $Input = $Terminal->Input;
 
-      $Output->render('@.;@#Cyan: Bootgly — New project wizard @;@..;');
-
-      // ! Mode + import sources
+      // ! Flow state (closure-captured across steps)
+      $branch = '';
       /** @var array<array{path: string, source: string}> $imports */
       $imports = [];
-      if ($from !== null && $from !== 'scratch') {
-         $source = $this->trace($from);
+      /** @var array<string> $transferred */
+      $transferred = [];
+      /** @var array{interfaces?: array<string>, default?: bool, name?: string, description?: string, version?: string, author?: string, port?: int|string} $meta */
+      $meta = ['default' => isSet($options['default'])];
+      $interface = '';
+      $url = '';
+      $target = '';
 
-         // ?
-         if ($source === null) {
-            $Alert = new Alert($Output);
-            $Alert->Type::Failure->set();
-            $Alert->message = "Source project @#cyan:{$from}@; not found in the platform folders.";
-            $Alert->render();
+      $Wizard = new Wizard($Input, $Output);
+      $Wizard->title = '@#Cyan: Bootgly — New project wizard @;';
 
-            return false;
-         }
-
-         $imports[] = ['path' => $from, 'source' => $source];
-      }
-      else if ($from === null) {
-         $sources = $this->survey();
-
-         // ! Start modes (platform import only when exportable sources exist)
-         $modes = ['Create project from scratch'];
-         if ($sources !== []) {
-            $modes[] = 'Import projects from Platforms (Demos, Example)';
-         }
-         $modes[] = 'Import project from Git remote';
-
-         $mode = $modes[$this->choose('How do you want to start?', $modes)] ?? $modes[0];
-
-         if ($mode === 'Import projects from Platforms (Demos, Example)') {
-            $labels = array_keys($sources);
-            $picked = $this->select('Pick the projects to import:', $labels);
-
-            // ? Nothing selected
-            if ($picked === []) {
+      // ! Branch steps — appended by the Mode handler once the branch is known
+      // # From scratch: Path → Interface → Metadata → Confirm → Scaffold
+      $scratch = function (Wizard $Wizard) use (&$path, &$meta, &$interface, &$options, $Input, $Output): void {
+         $Wizard->add('Path', function () use (&$path, $Input, $Output): string {
+            $Question = new Question($Input, $Output);
+            $Question->prompt = 'Project path (e.g. `App` or `App/API`)';
+            $Question->required = true;
+            $Question->default = $path ?? '';
+            $Question->Validator = fn (string $answer): true|string => $this->assess($answer);
+            $path = $Question->ask();
+            // ? EOF or invalid prefilled path
+            if ($this->assess($path) !== true) {
                $Alert = new Alert($Output);
-               $Alert->Type::Attention->set();
-               $Alert->message = 'No projects selected.';
+               $Alert->Type::Failure->set();
+               $Alert->message = 'A valid project path is required.';
                $Alert->render();
 
-               return false;
+               throw new Exception('invalid path');
             }
 
-            foreach ($picked as $index) {
-               $imports[] = $sources[(string) $labels[$index]];
+            // :
+            return $path;
+         });
+
+         $Wizard->add('Interface', function () use (&$meta, &$interface, &$options): string {
+            // ? A valid --interfaces option skips the question
+            $interface = strtoupper((string) ($options['interfaces'] ?? ''));
+            if ($interface !== 'CLI' && $interface !== 'WPI') {
+               $web = BOOTGLY_ROOT_DIR === BOOTGLY_WORKING_DIR
+                  || is_file(BOOTGLY_WORKING_DIR . 'Web/autoboot.php');
+
+               $interface = 'CLI';
+               if ($web === true) {
+                  $choice = $this->choose('Which interface?', [
+                     'CLI — Console app',
+                     'WPI — Web (HTTP) server'
+                  ]);
+                  $interface = $choice === 1 ? 'WPI' : 'CLI';
+               }
             }
+            $meta['interfaces'] = [$interface];
+
+            // :
+            return $interface;
+         });
+
+         $Wizard->add('Metadata', function () use (&$path, &$meta, &$interface, &$options, $Input, $Output): null {
+            // # Port (WPI)
+            if ($interface === 'WPI') {
+               $Question = new Question($Input, $Output);
+               $Question->prompt = 'Server port';
+               $Question->default = (string) ($options['port'] ?? '8080');
+               $Question->Validator = static function (string $answer): true|string {
+                  // ?:
+                  if (preg_match('#^\d{1,5}$#', $answer) !== 1) {
+                     return 'Invalid port: use a number between 1 and 65535.';
+                  }
+
+                  // :
+                  return true;
+               };
+               $meta['port'] = $Question->ask();
+            }
+
+            // # Description / Version / Author (options prefill the defaults)
+            $Question = new Question($Input, $Output);
+            $Question->prompt = 'Description';
+            $Question->default = (string) ($options['description'] ?? '');
+            $meta['description'] = $Question->ask();
+
+            $Question = new Question($Input, $Output);
+            $Question->prompt = 'Version';
+            $Question->default = (string) ($options['version'] ?? '1.0.0');
+            $meta['version'] = $Question->ask();
+
+            $Question = new Question($Input, $Output);
+            $Question->prompt = 'Author';
+            $Question->default = (string) ($options['author'] ?? '');
+            $meta['author'] = $Question->ask();
+
+            $meta['name'] = basename((string) $path);
+
+            // :
+            return null;
+         });
+
+         $Wizard->add('Confirm', function () use (&$path, &$meta, &$options, $Input, $Output): null {
+            // ! Summary
+            $content  = '@#Green:' . str_pad('Path', 12) . ' @; ' . $path . PHP_EOL;
+            $content .= '@#Green:' . str_pad('Mode', 12) . ' @; From scratch' . PHP_EOL;
+            $content .= '@#Green:' . str_pad('Interfaces', 12) . ' @; ' . implode(', ', $meta['interfaces'] ?? []);
+            if (isSet($meta['port'])) {
+               $content .= PHP_EOL . '@#Green:' . str_pad('Port', 12) . ' @; ' . $meta['port'];
+            }
+            $content .= PHP_EOL . '@#Green:' . str_pad('Description', 12) . ' @; ' . (($meta['description'] ?? '') ?: '(none)');
+            $content .= PHP_EOL . '@#Green:' . str_pad('Version', 12) . ' @; ' . ($meta['version'] ?? '');
+            $content .= PHP_EOL . '@#Green:' . str_pad('Author', 12) . ' @; ' . (($meta['author'] ?? '') ?: '(none)');
+
+            $Output->write(PHP_EOL);
+            $Fieldset = new Fieldset($Output);
+            $Fieldset->title = '@#Cyan: New project @;';
+            $Fieldset->content = $content;
+            $Fieldset->render();
+            $Output->write(PHP_EOL);
+
+            // ? Confirm
+            if (isSet($options['yes']) === false) {
+               $Question = new Question($Input, $Output);
+
+               if ($Question->confirm('Create the project?', default: true) === false) {
+                  $Alert = new Alert($Output);
+                  $Alert->Type::Attention->set();
+                  $Alert->message = 'Aborted.';
+                  $Alert->render();
+
+                  throw new Exception('aborted');
+               }
+            }
+
+            // :
+            return null;
+         });
+
+         $Wizard->add('Scaffold', function () use (&$path, &$meta, &$interface): string {
+            $stub = $interface === 'WPI' ? 'WPI' : 'CLI';
+            $done = Projects::generate(BOOTGLY_ROOT_DIR . "Bootgly/commands/stubs/{$stub}", (string) $path, $meta);
+            // ? The report renders the actionable failure Alert (permissions / registry)
+            if ($done === false) {
+               $this->report(false, (string) $path);
+
+               throw new Exception('generation failed');
+            }
+
+            // :
+            return 'generated';
+         });
+      };
+
+      // # From Platforms: [Pick →] Confirm → Transfer
+      $platforms = function (Wizard $Wizard, bool $pick) use (&$imports, &$transferred, &$options, $Input, $Output): void {
+         if ($pick === true) {
+            $Wizard->add('Pick', function () use (&$imports, $Output): string {
+               $sources = $this->survey();
+               $labels = array_keys($sources);
+               $picked = $this->select('Pick the projects to import:', $labels);
+
+               // ? Nothing selected
+               if ($picked === []) {
+                  $Alert = new Alert($Output);
+                  $Alert->Type::Attention->set();
+                  $Alert->message = 'No projects selected.';
+                  $Alert->render();
+
+                  throw new Exception('nothing selected');
+               }
+
+               foreach ($picked as $index) {
+                  $imports[] = $sources[(string) $labels[$index]];
+               }
+
+               // :
+               return count($imports) . ' project(s)';
+            });
          }
-         else if ($mode === 'Import project from Git remote') {
-            // ! Repository URL
+
+         $Wizard->add('Confirm', function () use (&$imports, &$options, $Input, $Output): null {
+            // ! Summary (existing user-level copies are flagged as overwrite)
+            $content = '@#Green:' . str_pad('Mode', 12) . ' @; Import projects from Platforms';
+            foreach ($imports as $import) {
+               $path = $import['path'];
+
+               // ! Platform of origin (traced from the source directory)
+               $platform = match (true) {
+                  str_starts_with($import['source'], BOOTGLY_WORKING_DIR . 'Console/') => 'Console',
+                  str_starts_with($import['source'], BOOTGLY_WORKING_DIR . 'Web/') => 'Web',
+                  default => 'Bootgly'
+               };
+
+               $content .= PHP_EOL
+                  . '@#Green:' . str_pad('Import', 12) . ' @; ' . $path
+                  . " @#Cyan:(from {$platform})@;"
+                  . (is_dir(Projects::CONSUMER_DIR . $path) ? ' @#Yellow:(overwrite)@;' : '');
+            }
+
+            $Output->write(PHP_EOL);
+            $Fieldset = new Fieldset($Output);
+            $Fieldset->title = '@#Cyan: Import projects @;';
+            $Fieldset->content = $content;
+            $Fieldset->render();
+            $Output->write(PHP_EOL);
+
+            // ? Confirm
+            if (isSet($options['yes']) === false) {
+               $Question = new Question($Input, $Output);
+
+               if ($Question->confirm('Import the selected projects?', default: true) === false) {
+                  $Alert = new Alert($Output);
+                  $Alert->Type::Attention->set();
+                  $Alert->message = 'Aborted.';
+                  $Alert->render();
+
+                  throw new Exception('aborted');
+               }
+            }
+
+            // :
+            return null;
+         });
+
+         $Wizard->add('Transfer', function () use (&$imports, &$transferred): string {
+            $transferred = $this->transfer($imports);
+
+            // ? Failure Alerts rendered at the failure site (transfer)
+            if (count($transferred) !== count($imports)) {
+               throw new Exception('import failed');
+            }
+
+            // :
+            return count($transferred) . ' project(s)';
+         });
+      };
+
+      // # From Git remote: URL → Path → Interface → Import
+      $git = function (Wizard $Wizard) use (&$url, &$target, &$options, $Input, $Output): void {
+         $Wizard->add('URL', function () use (&$url, $Input, $Output): null {
             $Question = new Question($Input, $Output);
             $Question->prompt = 'Repository URL (git)';
             $Question->required = true;
@@ -1424,10 +1616,14 @@ class ProjectCommand extends Command
                $Alert->message = 'A repository URL is required.';
                $Alert->render();
 
-               return false;
+               throw new Exception('URL required');
             }
 
-            // ! Target project path
+            // :
+            return null;
+         });
+
+         $Wizard->add('Path', function () use (&$url, &$target, $Input, $Output): string {
             $default = basename($url, '.git');
             $Question = new Question($Input, $Output);
             $Question->prompt = 'Project path (e.g. `App` or `App/API`)';
@@ -1442,10 +1638,15 @@ class ProjectCommand extends Command
                $Alert->message = 'A valid project path is required.';
                $Alert->render();
 
-               return false;
+               throw new Exception('invalid path');
             }
 
-            // ! Interface
+            // :
+            return $target;
+         });
+
+         $Wizard->add('Interface', function () use (&$options): string {
+            // ? A valid --interfaces option skips the question
             if (isSet($options['interfaces']) === false) {
                $choice = $this->choose('Which interface?', [
                   'CLI — Console app',
@@ -1454,226 +1655,158 @@ class ProjectCommand extends Command
                $options['interfaces'] = $choice === 1 ? 'WPI' : 'CLI';
             }
 
-            // : Delegated to the import subcommand (clone, validate, confirm, register)
-            return $this->import([$url, $target], $options);
-         }
-      }
+            // :
+            return (string) $options['interfaces'];
+         });
 
-      // @ Import — platform projects keep their paths: straight recursive copy
-      if ($imports !== []) {
-         return $this->transfer($imports, $options);
-      }
-
-      // ! Timeline — from-scratch phases (append mode: prompts write between steps)
-      $Timeline = new Timeline($Output);
-      $Timeline->append = true;
-      $Timeline->add('Path');
-      $Timeline->add('Interface');
-      $Timeline->add('Metadata');
-      $Timeline->add('Confirm');
-      $Timeline->add('Scaffold');
-      $Timeline->start();
-
-      // ! Project path
-      $Question = new Question($Input, $Output);
-      $Question->prompt = 'Project path (e.g. `App` or `App/API`)';
-      $Question->required = true;
-      $Question->default = $path ?? '';
-      $Question->Validator = fn (string $answer): true|string => $this->assess($answer);
-      $path = $Question->ask();
-      // ? EOF or invalid prefilled path
-      if ($this->assess($path) !== true) {
-         $Timeline->fail('invalid path');
-
-         $Alert = new Alert($Output);
-         $Alert->Type::Failure->set();
-         $Alert->message = 'A valid project path is required.';
-         $Alert->render();
-
-         return false;
-      }
-
-      $Timeline->advance($path);
-
-      // ! Metadata
-      $meta = ['default' => isSet($options['default'])];
-
-      // # Interface (a valid --interfaces option skips the question)
-      $interface = strtoupper((string) ($options['interfaces'] ?? ''));
-      if ($interface !== 'CLI' && $interface !== 'WPI') {
-         $web = BOOTGLY_ROOT_DIR === BOOTGLY_WORKING_DIR
-            || is_file(BOOTGLY_WORKING_DIR . 'Web/autoboot.php');
-
-         $interface = 'CLI';
-         if ($web === true) {
-            $choice = $this->choose('Which interface?', [
-               'CLI — Console app',
-               'WPI — Web (HTTP) server'
-            ]);
-            $interface = $choice === 1 ? 'WPI' : 'CLI';
-         }
-      }
-      $meta['interfaces'] = [$interface];
-
-      $Timeline->advance($interface);
-
-      // # Port (WPI)
-      if ($interface === 'WPI') {
-         $Question = new Question($Input, $Output);
-         $Question->prompt = 'Server port';
-         $Question->default = (string) ($options['port'] ?? '8080');
-         $Question->Validator = static function (string $answer): true|string {
-            // ?:
-            if (preg_match('#^\d{1,5}$#', $answer) !== 1) {
-               return 'Invalid port: use a number between 1 and 65535.';
+         $Wizard->add('Import', function () use (&$url, &$target, &$options): string {
+            // ? Delegated to the import subcommand (clone, validate, confirm, register)
+            if ($this->import([$url, $target], $options) === false) {
+               throw new Exception('not imported');
             }
 
             // :
-            return true;
-         };
-         $meta['port'] = $Question->ask();
+            return 'imported';
+         });
+      };
+
+      // ! Seed steps
+      // # Kit setup (platform submodules + resource dirs) — framework repo skips it
+      if (BOOTGLY_ROOT_DIR !== BOOTGLY_WORKING_DIR) {
+         $Wizard->add('Platforms', function () use (&$options): string {
+            // ? prepare() rendered its Alerts
+            if ($this->prepare($options) === false) {
+               throw new Exception('setup failed');
+            }
+
+            // :
+            return 'ready';
+         });
       }
 
-      // # Description / Version / Author (options prefill the defaults)
-      $Question = new Question($Input, $Output);
-      $Question->prompt = 'Description';
-      $Question->default = (string) ($options['description'] ?? '');
-      $meta['description'] = $Question->ask();
+      // # Start mode — resolves the branch and appends its steps
+      $Wizard->add('Mode', function (Wizard $Wizard)
+         use (&$branch, &$imports, $from, $scratch, $platforms, $git, $Output): string {
+         // ? A source option picks the platform-import branch with no menu
+         if ($from !== null && $from !== 'scratch') {
+            $source = $this->trace($from);
 
-      $Question = new Question($Input, $Output);
-      $Question->prompt = 'Version';
-      $Question->default = (string) ($options['version'] ?? '1.0.0');
-      $meta['version'] = $Question->ask();
+            // ?
+            if ($source === null) {
+               $Alert = new Alert($Output);
+               $Alert->Type::Failure->set();
+               $Alert->message = "Source project @#cyan:{$from}@; not found in the platform folders.";
+               $Alert->render();
 
-      $Question = new Question($Input, $Output);
-      $Question->prompt = 'Author';
-      $Question->default = (string) ($options['author'] ?? '');
-      $meta['author'] = $Question->ask();
+               throw new Exception('source not found');
+            }
 
-      $meta['name'] = basename($path);
+            $imports[] = ['path' => $from, 'source' => $source];
 
-      $Timeline->advance();
+            $branch = 'platforms';
+            $platforms($Wizard, pick: false);
 
-      // ! Summary
-      $content  = '@#Green:' . str_pad('Path', 12) . ' @; ' . $path . PHP_EOL;
-      $content .= '@#Green:' . str_pad('Mode', 12) . ' @; From scratch' . PHP_EOL;
-      $content .= '@#Green:' . str_pad('Interfaces', 12) . ' @; ' . implode(', ', $meta['interfaces']);
-      if (isSet($meta['port'])) {
-         $content .= PHP_EOL . '@#Green:' . str_pad('Port', 12) . ' @; ' . $meta['port'];
-      }
-      $content .= PHP_EOL . '@#Green:' . str_pad('Description', 12) . ' @; ' . ($meta['description'] ?: '(none)');
-      $content .= PHP_EOL . '@#Green:' . str_pad('Version', 12) . ' @; ' . $meta['version'];
-      $content .= PHP_EOL . '@#Green:' . str_pad('Author', 12) . ' @; ' . ($meta['author'] ?: '(none)');
-
-      $Output->write(PHP_EOL);
-      $Fieldset = new Fieldset($Output);
-      $Fieldset->title = '@#Cyan: New project @;';
-      $Fieldset->content = $content;
-      $Fieldset->render();
-      $Output->write(PHP_EOL);
-
-      // ? Confirm
-      if (isSet($options['yes']) === false) {
-         $Question = new Question($Input, $Output);
-
-         if ($Question->confirm('Create the project?', default: true) === false) {
-            $Timeline->fail('aborted');
-
-            $Alert = new Alert($Output);
-            $Alert->Type::Attention->set();
-            $Alert->message = 'Aborted.';
-            $Alert->render();
-
-            return false;
+            // :
+            return "from {$from}";
          }
+
+         // ? --from=scratch skips the menu
+         if ($from === 'scratch') {
+            $branch = 'scratch';
+            $scratch($Wizard);
+
+            // :
+            return 'scratch';
+         }
+
+         // ! Start modes (platform import only when exportable sources exist)
+         $modes = ['Create project from scratch'];
+         if ($this->survey() !== []) {
+            $modes[] = 'Import projects from Platforms (Demos, Example)';
+         }
+         $modes[] = 'Import project from Git remote';
+
+         $mode = $modes[$this->choose('How do you want to start?', $modes)] ?? $modes[0];
+
+         if ($mode === 'Import projects from Platforms (Demos, Example)') {
+            $branch = 'platforms';
+            $platforms($Wizard, pick: true);
+
+            // :
+            return 'platforms';
+         }
+
+         if ($mode === 'Import project from Git remote') {
+            $branch = 'git';
+            $git($Wizard);
+
+            // :
+            return 'git remote';
+         }
+
+         $branch = 'scratch';
+         $scratch($Wizard);
+
+         // :
+         return 'scratch';
+      });
+
+      // @ Run the flow
+      $done = $Wizard->run();
+
+      // ? Failure Alerts render at the failure site (handlers) — the final frame appends below them
+      if ($done === false) {
+         return false;
       }
 
-      $Timeline->advance();
+      // : Closing report — rendered after the completion screen, so it stays visible
+      if ($branch === 'git') {
+         return $this->report(true, $target);
+      }
 
-      // @ Execute
-      $stub = $interface === 'WPI' ? 'WPI' : 'CLI';
-      $done = Projects::generate(BOOTGLY_ROOT_DIR . "Bootgly/commands/stubs/{$stub}", $path, $meta);
+      if ($branch === 'platforms') {
+         foreach ($transferred as $index => $imported) {
+            $Alert = new Alert($Output);
+            $Alert->spaced = $index === 0;
+            $Alert->Type::Success->set();
+            $Alert->message = "Project @#cyan:{$imported}@; imported!";
+            $Alert->render();
+         }
 
-      // @ Close the Timeline flow
-      $done === true
-         ? $Timeline->advance('generated')
-         : $Timeline->fail('generation failed');
+         $prefix = shell_exec('command -v bootgly 2>/dev/null') ? '' : 'php ';
+         $Output->render("@.;@#Green:Tip:@; Use @#Black:{$prefix}bootgly project {$transferred[0]} start@; to boot it.@..;");
 
-      // :
-      return $this->report($done, $path);
+         return true;
+      }
+
+      return $this->report(true, (string) $path);
    }
 
    /**
     * Import platform projects into the working directory, keeping their paths.
     *
     * No questions are asked per project: each source is recursively copied to
-    * `projects/<path>` at the working directory. Existing user-level copies —
-    * which overwrite the platform ones on load — are refreshed after the
-    * confirmation.
+    * `projects/<path>` at the working directory — the wizard Confirm step
+    * already summarized and confirmed the batch. Existing user-level copies —
+    * which overwrite the platform ones on load — are refreshed. Success
+    * feedback is the caller's (it must survive the wizard completion screen);
+    * only failures render Alerts here.
     *
     * @param array<array{path: string, source: string}> $imports
-    * @param array<string, bool|int|string> $options
     *
-    * @return bool
+    * @return array<string> The imported project paths.
     */
-   private function transfer (array $imports, array $options): bool
+   private function transfer (array $imports): array
    {
-      $Terminal = CLI->Terminal;
-      $Output = $Terminal->Output;
-      $Input = $Terminal->Input;
-
-      // ! Summary (existing user-level copies are flagged as overwrite)
-      $content = '@#Green:' . str_pad('Mode', 12) . ' @; Import projects from Platforms';
-      $overwrites = [];
-      foreach ($imports as $index => $import) {
-         $path = $import['path'];
-
-         if (is_dir(Projects::CONSUMER_DIR . $path) === true) {
-            $overwrites[$index] = true;
-         }
-
-         // ! Platform of origin (traced from the source directory)
-         $platform = match (true) {
-            str_starts_with($import['source'], BOOTGLY_WORKING_DIR . 'Console/') => 'Console',
-            str_starts_with($import['source'], BOOTGLY_WORKING_DIR . 'Web/') => 'Web',
-            default => 'Bootgly'
-         };
-
-         $content .= PHP_EOL
-            . '@#Green:' . str_pad('Import', 12) . ' @; ' . $path
-            . " @#Cyan:(from {$platform})@;"
-            . (isSet($overwrites[$index]) ? ' @#Yellow:(overwrite)@;' : '');
-      }
-
-      $Output->write(PHP_EOL);
-      $Fieldset = new Fieldset($Output);
-      $Fieldset->title = '@#Cyan: Import projects @;';
-      $Fieldset->content = $content;
-      $Fieldset->render();
-      $Output->write(PHP_EOL);
-
-      // ? Confirm
-      if (isSet($options['yes']) === false) {
-         $Question = new Question($Input, $Output);
-
-         if ($Question->confirm('Import the selected projects?', default: true) === false) {
-            $Alert = new Alert($Output);
-            $Alert->Type::Attention->set();
-            $Alert->message = 'Aborted.';
-            $Alert->render();
-
-            return false;
-         }
-      }
+      $Output = CLI->Terminal->Output;
 
       // @ Execute
-      $done = true;
       $paths = [];
-      foreach ($imports as $index => $import) {
+      foreach ($imports as $import) {
          $path = $import['path'];
 
          // ? User-level copies overwrite the platform ones on load — refresh them
-         if (isSet($overwrites[$index]) === true) {
+         if (is_dir(Projects::CONSUMER_DIR . $path) === true) {
             $this->erase(Projects::CONSUMER_DIR . $path);
          }
 
@@ -1682,29 +1815,21 @@ class ProjectCommand extends Command
             'default'    => false,
          ]);
 
-         $Alert = new Alert($Output);
-         $Alert->spaced = $index === array_key_first($imports);
-         if ($imported === true) {
-            $Alert->Type::Success->set();
-            $Alert->message = "Project @#cyan:{$path}@; imported!";
-            $paths[] = $path;
-         }
-         else {
+         // ? Failures render at the failure site — the wizard keeps them on screen
+         if ($imported === false) {
+            $Alert = new Alert($Output);
             $Alert->Type::Failure->set();
             $Alert->message = "Could not import project @#cyan:{$path}@;.";
-            $done = false;
-         }
-         $Alert->render();
-      }
+            $Alert->render();
 
-      // ?: Tip with the first imported project
-      if ($paths !== []) {
-         $prefix = shell_exec('command -v bootgly 2>/dev/null') ? '' : 'php ';
-         $Output->render("@.;@#Green:Tip:@; Use @#Black:{$prefix}bootgly project {$paths[0]} start@; to boot it.@..;");
+            continue;
+         }
+
+         $paths[] = $path;
       }
 
       // :
-      return $done;
+      return $paths;
    }
 
    /**
