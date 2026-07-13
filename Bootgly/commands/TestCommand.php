@@ -13,6 +13,7 @@ namespace Bootgly\commands;
 
 use const BOOTGLY_ROOT_DIR;
 use const BOOTGLY_STORAGE_DIR;
+use const BOOTGLY_VERSION;
 use const BOOTGLY_WORKING_DIR;
 use const PHP_EOL;
 use const STDERR;
@@ -60,6 +61,7 @@ use Bootgly\ACI\Tests;
 use Bootgly\ACI\Tests\Benchmark\Configs;
 use Bootgly\ACI\Tests\Benchmark\Configs\Options;
 use Bootgly\ACI\Tests\Benchmark\Info;
+use Bootgly\ACI\Tests\Benchmark\Provenance;
 use Bootgly\ACI\Tests\Benchmark\Report;
 use Bootgly\ACI\Tests\Benchmark\Runner;
 use Bootgly\ACI\Tests\Benchmark\Summary;
@@ -531,6 +533,15 @@ class TestCommand extends Command
          $Alert->render();
          return false;
       }
+
+      // # Capture source state before loading or running the benchmark case.
+      //   Git-backed local checkouts are inspected directly; packaged sources
+      //   can supply the documented BOOTGLY_* provenance environment fallbacks.
+      $provenance = [
+         'framework-version' => BOOTGLY_VERSION,
+         ...Provenance::collect(BOOTGLY_ROOT_DIR, dirname($casePath)),
+      ];
+
       // @ Parse options
       $Configs = Configs::parse($options);
 
@@ -670,6 +681,12 @@ class TestCommand extends Command
          }
 
          foreach ($Runner->meta as $metaKey => $metaValue) {
+            $config[$metaKey] = $metaValue;
+         }
+
+         // ! Provenance is runner-agnostic and authoritative: a case cannot
+         //   accidentally shadow the source tree that actually produced a run.
+         foreach ($provenance as $metaKey => $metaValue) {
             $config[$metaKey] = $metaValue;
          }
 

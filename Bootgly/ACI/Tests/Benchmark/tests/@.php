@@ -29,6 +29,9 @@ return new Suite(
       '5.1.1-runner-apply-server_workers',
       // Summary — JSON export
       '6.1.1-summary-export-json_document',
+      // Provenance — packaged fallbacks + live Git state
+      '6.2.1-provenance-inspect_fallbacks',
+      '6.3.1-provenance-inspect_git_state',
       // Chart — native SVG rendering
       '7.1.1-chart-render-svg',
       // Report — Markdown + SVG artifacts

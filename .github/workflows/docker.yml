@@ -33,6 +33,22 @@ jobs:
           repository: bootgly/bootgly_benchmarks
           path: bootgly_benchmarks
 
+      - name: Resolve source provenance
+        id: source
+        run: |
+          echo "framework_sha=$(git -C bootgly rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "benchmarks_sha=$(git -C bootgly_benchmarks rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          if [ -n "$(git -C bootgly status --porcelain=v1 --untracked-files=normal --ignore-submodules=none)" ]; then
+            echo "framework_dirty=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "framework_dirty=false" >> "$GITHUB_OUTPUT"
+          fi
+          if [ -n "$(git -C bootgly_benchmarks status --porcelain=v1 --untracked-files=normal --ignore-submodules=none)" ]; then
+            echo "benchmarks_dirty=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "benchmarks_dirty=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Resolve version
         id: version
         run: |
@@ -64,6 +80,8 @@ jobs:
           push: true
           build-args: |
             BOOTGLY_VERSION=${{ steps.version.outputs.value }}
+            BOOTGLY_FRAMEWORK_SHA=${{ steps.source.outputs.framework_sha }}
+            BOOTGLY_FRAMEWORK_DIRTY=${{ steps.source.outputs.framework_dirty }}
           tags: |
             bootgly/bootgly:slim
             bootgly/bootgly:latest
@@ -78,6 +96,10 @@ jobs:
           push: true
           build-args: |
             BOOTGLY_VERSION=${{ steps.version.outputs.value }}
+            BOOTGLY_FRAMEWORK_SHA=${{ steps.source.outputs.framework_sha }}
+            BOOTGLY_FRAMEWORK_DIRTY=${{ steps.source.outputs.framework_dirty }}
+            BOOTGLY_BENCHMARKS_SHA=${{ steps.source.outputs.benchmarks_sha }}
+            BOOTGLY_BENCHMARKS_DIRTY=${{ steps.source.outputs.benchmarks_dirty }}
           tags: |
             bootgly/bootgly:full
 

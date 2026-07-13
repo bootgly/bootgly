@@ -15,6 +15,10 @@
 
 ARG PHP_IMAGE=php:8.4-cli-bookworm
 ARG BOOTGLY_VERSION=0.24.0-beta
+ARG BOOTGLY_FRAMEWORK_SHA=unknown
+ARG BOOTGLY_FRAMEWORK_DIRTY=unknown
+ARG BOOTGLY_BENCHMARKS_SHA=unknown
+ARG BOOTGLY_BENCHMARKS_DIRTY=unknown
 
 
 # ============================================================================
@@ -66,9 +70,14 @@ RUN set -eux; \
 FROM base AS slim
 
 ARG BOOTGLY_VERSION
+ARG BOOTGLY_FRAMEWORK_SHA
+ARG BOOTGLY_FRAMEWORK_DIRTY
+ENV BOOTGLY_FRAMEWORK_SHA="${BOOTGLY_FRAMEWORK_SHA}" \
+    BOOTGLY_FRAMEWORK_DIRTY="${BOOTGLY_FRAMEWORK_DIRTY}"
 LABEL org.opencontainers.image.title="Bootgly" \
       org.opencontainers.image.description="The Bootgly PHP Framework (slim runtime)" \
       org.opencontainers.image.version="${BOOTGLY_VERSION}" \
+      org.opencontainers.image.revision="${BOOTGLY_FRAMEWORK_SHA}" \
       org.opencontainers.image.licenses="MIT" \
       org.opencontainers.image.source="https://github.com/bootgly/bootgly"
 
@@ -91,6 +100,10 @@ CMD ["help"]
 FROM slim AS full
 
 ARG BOOTGLY_VERSION
+ARG BOOTGLY_BENCHMARKS_SHA
+ARG BOOTGLY_BENCHMARKS_DIRTY
+ENV BOOTGLY_BENCHMARKS_SHA="${BOOTGLY_BENCHMARKS_SHA}" \
+    BOOTGLY_BENCHMARKS_DIRTY="${BOOTGLY_BENCHMARKS_DIRTY}"
 LABEL org.opencontainers.image.description="The Bootgly PHP Framework (full: test + benchmark)" \
       org.opencontainers.image.version="${BOOTGLY_VERSION}"
 
