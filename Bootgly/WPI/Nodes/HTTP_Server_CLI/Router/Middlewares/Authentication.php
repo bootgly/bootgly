@@ -12,6 +12,10 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Middlewares;
 
 
 use function count;
+use function is_int;
+use function is_object;
+use function is_string;
+use function method_exists;
 use Closure;
 use InvalidArgumentException;
 
@@ -43,6 +47,9 @@ class Authentication implements Middleware
       * The middleware normalizes the response status to `401 Unauthorized`
       * before and after the callback, so fallback formatters can customize the
       * body/headers without accidentally returning a successful status.
+      * Redirecting fallbacks are the one exception: a callback result that is
+      * already a redirect (3xx + `Location`) is returned untouched, so
+      * browser/session flows can send guests to a login page.
     *
       * @var null|Closure(object,object):object
     */
@@ -104,6 +111,11 @@ class Authentication implements Middleware
          Challenge::mark($Response);
 
          $Result = ($this->Fallback)($Request, $Response);
+         // ?: Redirecting fallbacks (e.g. guest → login page) keep their 3xx
+         if ($this->detect($Result)) {
+            return $Result;
+         }
+
          return Challenge::mark($Result);
       }
 
@@ -115,5 +127,30 @@ class Authentication implements Middleware
 
       // : Generic unauthorized fallback.
       return Challenge::reject($Response);
+   }
+
+   /**
+    * Detect a redirecting fallback result (3xx status + `Location` header).
+    */
+   private function detect (object $Result): bool
+   {
+      // ! Status code.
+      $code = $Result->code ?? null;
+      // ?
+      if (is_int($code) === false || $code < 300 || $code > 399) {
+         return false;
+      }
+
+      // ! Location header.
+      $Header = $Result->Header ?? null;
+      // ?
+      if (is_object($Header) === false || method_exists($Header, 'get') === false) {
+         return false;
+      }
+
+      // :
+      $location = $Header->get('Location');
+
+      return is_string($location) && $location !== '';
    }
 }

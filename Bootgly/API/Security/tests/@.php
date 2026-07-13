@@ -31,5 +31,9 @@ return new Suite(
       '1.15-encrypter_keyring',
       '1.16-password_hash',
       '1.17-password_policy',
+      '1.18-tokens_lifecycle',
+      '1.19-trust_lifecycle',
+      '1.20-users_credentials',
+      '1.21-auth_flows',
    ]
 );

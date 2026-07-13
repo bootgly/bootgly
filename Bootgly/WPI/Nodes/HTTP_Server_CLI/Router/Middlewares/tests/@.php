@@ -31,6 +31,8 @@ return new Suite(
       '9.2-csrf_token_masking',
       '10.1-validator',
       '11.1-authentication',
+      '11.2-authentication_remember',
+      '11.3-authentication_fallback_redirect',
       '12.1-authorization'
    ]
 );
