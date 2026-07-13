@@ -85,13 +85,15 @@ LABEL org.opencontainers.image.title="Bootgly" \
 COPY bootgly/ /bootgly/
 
 # ! Make `bootgly` global. __DIR__ resolves the symlink → working base stays /bootgly.
-RUN ln -s /bootgly/bootgly /usr/local/bin/bootgly
+RUN ln -s /bootgly/bootgly /usr/local/bin/bootgly && \
+    chmod +x /bootgly/@/__docker__/entrypoint.sh
 
 # # Server ports: HTTP 8082 · HTTPS 443 · TCP 8080 · Benchmark 8083/8084 · UDP 9999
 EXPOSE 8082 443 8080 8083 8084 9999/udp
 
-ENTRYPOINT ["bootgly"]
-CMD ["help"]
+# ! Bare interactive runs open the canonical project installer (see the script)
+ENTRYPOINT ["/bootgly/@/__docker__/entrypoint.sh"]
+CMD ["docker-default"]
 
 
 # ============================================================================

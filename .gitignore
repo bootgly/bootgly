@@ -26,9 +26,11 @@ skills-lock.json
 # Metafolder (@)
 @/*
 # Additional folders
+!@/__docker__/
 !@/certificates/
 !@/phpstan/
 # Adittional files
+!@/__docker__/entrypoint.sh
 !@/phpstan.neon
 !README.md
 !CHANGELOG.md
