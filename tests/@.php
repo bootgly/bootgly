@@ -152,5 +152,13 @@ return new Suites(
       'Bootgly/WPI/Nodes/HTTP_Server_CLI/tests/ACME_Swap/',
       // E2E full ACME issuance against Pebble (opt-in: BOOTGLY_ACME_E2E=1 + Pebble on :14000)
       'Bootgly/WPI/Nodes/HTTP_Server_CLI/tests/ACME_E2E/',
+      // # TCP_Client_CLI — bounded async dial + connection Pool unit suites
+      'Bootgly/WPI/Interfaces/TCP_Client_CLI/tests/',
+      // # HTTP_Client_CLI HTTP/2 — Session engine unit suites (frame-fed, socketless)
+      'Bootgly/WPI/Nodes/HTTP_Client_CLI/tests/HTTP2/',
+      // E2E h2c prior-knowledge (client vs live test-mode HTTP_Server_CLI on 8087)
+      'Bootgly/WPI/Nodes/HTTP_Client_CLI/tests/HTTP2_E2E/',
+      // E2E h2 over TLS-ALPN (negotiation, fallback, multiplex on 8088)
+      'Bootgly/WPI/Nodes/HTTP_Client_CLI/tests/HTTP2_TLS/',
    ]
 );

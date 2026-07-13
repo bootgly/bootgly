@@ -33,6 +33,9 @@ use const STREAM_CLIENT_CONNECT;
 use const WUNTRACED;
 use function count;
 use function defined;
+use function fclose;
+use function is_resource;
+use function microtime;
 use function pcntl_signal;
 use function pcntl_signal_dispatch;
 use function pcntl_wait;
@@ -129,6 +132,9 @@ class TCP_Client_CLI
    // # Error
    /** @var array<int|string|null> */
    public array $error = [];
+   // # Dialing
+   /** In-flight async EVENT_CONNECT dials awaiting their deadline. */
+   public protected(set) int $dialing = 0;
    // # State
    protected static int $started = 0;
    // # Status
@@ -484,8 +490,8 @@ class TCP_Client_CLI
       if ($error === true) {
          $this->Logger->log(warning: 'Unable to connect! Trying to connect in the future...@\\;');
 
-         // @ Add to Event loop to future connection
-         self::$Event->add($Socket, Select::EVENT_CONNECT, true);
+         // @ Add to Event loop to future connection (deadline-bounded)
+         $this->await($Socket);
 
          return $Socket;
       }
@@ -496,6 +502,81 @@ class TCP_Client_CLI
       }
 
       return $Socket;
+   }
+
+   /**
+    * Register an async dial in the event loop, bounded by the connect deadline.
+    *
+    * Without the deadline the loop would keep the connect event armed forever
+    * (a peer that never becomes writable = an infinite dial).
+    *
+    * @param resource $Socket
+    *
+    * @return void
+    */
+   protected function await ($Socket): void
+   {
+      self::$Event->add($Socket, Select::EVENT_CONNECT, true);
+
+      // ! One absolute deadline bounds the dial (0 = unbounded, legacy behavior)
+      $deadline = $this->deadline
+         ?? ($this->connectTimeout > 0 ? microtime(true) + $this->connectTimeout : null);
+      if ($deadline !== null) {
+         $this->dialing++;
+         self::$Event->defer($deadline, function () use ($Socket): void {
+            $this->expire($Socket);
+         });
+      }
+   }
+
+   /**
+    * Expire an async dial at its deadline.
+    *
+    * A dial that already resolved (a Connection was constructed, or the socket
+    * was closed on failure) only releases its in-flight accounting; a dial
+    * still connecting is cancelled and its socket closed.
+    *
+    * @param resource $Socket
+    *
+    * @return void
+    */
+   protected function expire ($Socket): void
+   {
+      // ! Every await() deadline pairs with exactly one expire()
+      $this->dialing--;
+
+      // ? Dial already resolved — nothing to cancel
+      if (
+         is_resource($Socket) === false
+         || isSet(Connections::$Connections[(int) $Socket])
+      ) {
+         $this->halt();
+
+         return;
+      }
+
+      // @ Cancel the dial: it never became writable before its deadline
+      self::$Event->del($Socket, Select::EVENT_CONNECT);
+      fclose($Socket);
+      Connections::$errors['connection']++;
+      $this->Logger->log(warning: 'Unable to establish the TCP connection before its deadline.@\\;');
+
+      $this->halt();
+   }
+
+   /**
+    * Halt the event loop when no connection work remains.
+    *
+    * @return void
+    */
+   protected function halt (): void
+   {
+      // ? Live connections or in-flight dials keep the loop running
+      if (Connections::$Connections !== [] || $this->dialing > 0) {
+         return;
+      }
+
+      self::$Event->destroy();
    }
 
    public function stop (): void

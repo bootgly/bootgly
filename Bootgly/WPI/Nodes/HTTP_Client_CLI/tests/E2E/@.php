@@ -67,6 +67,17 @@ return new Suite(
       ],
       'Retries/' => [
          '11.1-retry_on_failure',
+         '11.2-retry_backoff_timing',
+         '11.3-retry_budget',
+         '11.4-retry_on_status',
+         '11.5-retry_after_date',
+         '11.6-retry_post_blocked',
+      ],
+      'Pool/' => [
+         '13.1-pool_reuse',
+         '13.2-pool_queue',
+         '13.3-pool_stale',
+         '13.4-pool_warm',
       ],
    ]
 );

@@ -79,8 +79,9 @@ class Select implements Events, Loops, Scheduler
    private array $MonotonicTimers = [];
    private int $timer = 0;
    // # Loop
-   public readonly float $started;
-   public readonly float $finished;
+   // ! Reusable reactor: assigned on every loop() entry/exit (never readonly)
+   public float $started = 0.0;
+   public float $finished = 0.0;
 
 
    public function __construct (Connections &$Connections)
@@ -699,6 +700,13 @@ class Select implements Events, Loops, Scheduler
       $this->reads = [];
       $this->writes = [];
       $this->excepts = [];
+
+      // # Events (payload maps — a persistent reactor must not retain
+      //   stale Connection references between drains)
+      $this->connecting = [];
+      $this->reading = [];
+      $this->writing = [];
+      $this->excepting = [];
 
       // # Async
       $this->awaitingReads = [];

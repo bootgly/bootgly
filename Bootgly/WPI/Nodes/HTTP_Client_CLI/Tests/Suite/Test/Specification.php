@@ -90,6 +90,14 @@ class Specification extends Base
     */
    public array $responseLengths;
 
+   /**
+    * Serve all of this spec's responses over ONE accepted connection
+    * (keep-alive) instead of closing after each response.
+    *
+    * @var bool
+    */
+   public bool $keepAlive;
+
 
    /**
    * @param Closure $response HTTP response factory returning string|Generator.
@@ -121,6 +129,7 @@ class Specification extends Base
       array $requests = [],
       null|int $responseLength = null,
       array $responseLengths = [],
+      bool $keepAlive = false,
    )
    {
       foreach ($responses as $responseFactory) {
@@ -156,5 +165,6 @@ class Specification extends Base
       $this->requests = $requests;
       $this->responseLength = $responseLength;
       $this->responseLengths = $responseLengths;
+      $this->keepAlive = $keepAlive;
    }
 }

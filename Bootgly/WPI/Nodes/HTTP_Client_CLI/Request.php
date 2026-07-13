@@ -66,8 +66,15 @@ class Request
    public null|array $redirectTarget;
    // | Timeout
    public float $sentAt;
+   // | Pool
+   /** Whether this request was dispatched on a reused (pooled) connection. */
+   public bool $reused;
+   /** Whether the stale-reuse replay was already consumed. */
+   public bool $replayed;
    // | Retry
    public int $retryCount;
+   /** Wall-clock start of the retry campaign (0.0 = no retry yet). */
+   public float $retryStartedAt;
 
 
    public function __construct ()
@@ -100,8 +107,12 @@ class Request
       $this->redirectTarget = null;
       // | Timeout
       $this->sentAt = 0.0;
+      // | Pool
+      $this->reused = false;
+      $this->replayed = false;
       // | Retry
       $this->retryCount = 0;
+      $this->retryStartedAt = 0.0;
    }
 
    /**
@@ -179,8 +190,12 @@ class Request
       $this->redirectTarget = null;
       // | Timeout
       $this->sentAt = 0.0;
+      // | Pool
+      $this->reused = false;
+      $this->replayed = false;
       // | Retry
       $this->retryCount = 0;
+      $this->retryStartedAt = 0.0;
    }
 
    /**

@@ -647,7 +647,9 @@ class ACME_Client
       //   signal handling and no shutdown SIGINT broadcast — the client
       //   runs inside the certifier child beside a live server master
       $Client = new HTTP_Client_CLI(HTTP_Client_CLI::MODE_TEST);
-      $Client->configure(host: $host, port: $port, workers: 0, secure: $secure);
+      // ! ACME speaks HTTP/1.1 by design: no ALPN h2 offer — directory
+      //   endpoints and the local swap helpers are h1-only transports
+      $Client->configure(host: $host, port: $port, workers: 0, secure: $secure, enableHTTP2: false);
       // Fullchain responses are capped at 1 MiB by the certificate store;
       // reserve 64 KiB for status/headers and reject before accumulation.
       $Client->maxResponseBytes = 1114112;
