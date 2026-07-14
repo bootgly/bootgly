@@ -20,7 +20,13 @@ return new Specification(
          'metric' => 'req/s',
          'command' => 'bootgly test benchmark HTTP_Server_CLI --opponents=bootgly,swoole --loads=techempower:1 --server-workers=1..2',
          'env' => ['OS' => 'Linux', 'CPU' => '24 cores'],
-         'config' => ['connections' => 514, 'duration' => 10],
+         'config' => [
+            'source-identity-version' => 'raw-delta-manifest-v1',
+            'connections' => 514,
+            'duration' => 10,
+            'framework-tracked-diff-sha256' => str_repeat('a', 64),
+            'framework-untracked-manifest-sha256' => str_repeat('b', 64),
+         ],
          'sweep' => ['server-workers' => [1, 2]],
          'loads' => ['Plaintext'],
          'opponents' => ['Bootgly', 'Swoole'],
@@ -63,7 +69,10 @@ return new Specification(
                && str_contains($markdown, '## Peaks')
                && str_contains($markdown, '200,000 @ 2')
                && str_contains($markdown, 'x-r01_bench.marks')
-               && str_contains($markdown, '.chart.throughput.svg'),
+               && str_contains($markdown, '.chart.throughput.svg')
+               && str_contains($markdown, '**framework-tracked-diff-sha256** — `' . str_repeat('a', 64) . '`')
+               && str_contains($markdown, '**framework-untracked-manifest-sha256** — `' . str_repeat('b', 64) . '`')
+               && str_contains($markdown, '**source-identity-version** — `raw-delta-manifest-v1`'),
             Op::Identical,
             true
          )

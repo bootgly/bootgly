@@ -32,6 +32,7 @@ return new Suite(
       // Provenance — packaged fallbacks + live Git state
       '6.2.1-provenance-inspect_fallbacks',
       '6.3.1-provenance-inspect_git_state',
+      '6.4.1-provenance-propagate_marks',
       // Chart — native SVG rendering
       '7.1.1-chart-render-svg',
       // Report — Markdown + SVG artifacts

@@ -26,28 +26,29 @@ jobs:
         uses: actions/checkout@v5
         with:
           path: bootgly
+          submodules: recursive
 
       - name: Checkout bootgly_benchmarks (full target needs the sibling)
         uses: actions/checkout@v5
         with:
           repository: bootgly/bootgly_benchmarks
           path: bootgly_benchmarks
+          submodules: recursive
+
+      - name: Set up PHP for canonical source provenance
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
 
       - name: Resolve source provenance
         id: source
         run: |
-          echo "framework_sha=$(git -C bootgly rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-          echo "benchmarks_sha=$(git -C bootgly_benchmarks rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-          if [ -n "$(git -C bootgly status --porcelain=v1 --untracked-files=normal --ignore-submodules=none)" ]; then
-            echo "framework_dirty=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "framework_dirty=false" >> "$GITHUB_OUTPUT"
-          fi
-          if [ -n "$(git -C bootgly_benchmarks status --porcelain=v1 --untracked-files=normal --ignore-submodules=none)" ]; then
-            echo "benchmarks_dirty=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "benchmarks_dirty=false" >> "$GITHUB_OUTPUT"
-          fi
+          set -euo pipefail
+          PROVENANCE="$(php bootgly/Bootgly/ACI/Tests/Benchmark/provenance.php bootgly bootgly_benchmarks)"
+          while IFS= read -r ENTRY; do
+            echo "$ENTRY" >> "$GITHUB_OUTPUT"
+          done <<< "$PROVENANCE"
 
       - name: Resolve version
         id: version
@@ -82,6 +83,8 @@ jobs:
             BOOTGLY_VERSION=${{ steps.version.outputs.value }}
             BOOTGLY_FRAMEWORK_SHA=${{ steps.source.outputs.framework_sha }}
             BOOTGLY_FRAMEWORK_DIRTY=${{ steps.source.outputs.framework_dirty }}
+            BOOTGLY_FRAMEWORK_TRACKED_DIFF_SHA256=${{ steps.source.outputs.framework_tracked_diff_sha256 }}
+            BOOTGLY_FRAMEWORK_UNTRACKED_MANIFEST_SHA256=${{ steps.source.outputs.framework_untracked_manifest_sha256 }}
           tags: |
             bootgly/bootgly:slim
             bootgly/bootgly:latest
@@ -98,8 +101,12 @@ jobs:
             BOOTGLY_VERSION=${{ steps.version.outputs.value }}
             BOOTGLY_FRAMEWORK_SHA=${{ steps.source.outputs.framework_sha }}
             BOOTGLY_FRAMEWORK_DIRTY=${{ steps.source.outputs.framework_dirty }}
+            BOOTGLY_FRAMEWORK_TRACKED_DIFF_SHA256=${{ steps.source.outputs.framework_tracked_diff_sha256 }}
+            BOOTGLY_FRAMEWORK_UNTRACKED_MANIFEST_SHA256=${{ steps.source.outputs.framework_untracked_manifest_sha256 }}
             BOOTGLY_BENCHMARKS_SHA=${{ steps.source.outputs.benchmarks_sha }}
             BOOTGLY_BENCHMARKS_DIRTY=${{ steps.source.outputs.benchmarks_dirty }}
+            BOOTGLY_BENCHMARKS_TRACKED_DIFF_SHA256=${{ steps.source.outputs.benchmarks_tracked_diff_sha256 }}
+            BOOTGLY_BENCHMARKS_UNTRACKED_MANIFEST_SHA256=${{ steps.source.outputs.benchmarks_untracked_manifest_sha256 }}
           tags: |
             bootgly/bootgly:full
 

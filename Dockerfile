@@ -8,17 +8,26 @@
 #   full   → slim + benchmark cases + dev vendor + bench tools. Test & benchmark.
 #
 # Build context is the PARENT of this file (so the sibling bootgly_benchmarks/
-# is reachable). From the bootgly repo root:
-#   docker build -f Dockerfile --target slim -t bootgly:slim ..
-#   docker build -f Dockerfile --target full -t bootgly:full ..
+# is reachable). From the bootgly repo root, inject the canonical source tuple
+# because the build context excludes `.git`:
+#   docker build \
+#     $(php Bootgly/ACI/Tests/Benchmark/provenance.php . ../bootgly_benchmarks --docker-build-args) \
+#     -f Dockerfile --target slim -t bootgly:slim ..
+#   docker build \
+#     $(php Bootgly/ACI/Tests/Benchmark/provenance.php . ../bootgly_benchmarks --docker-build-args) \
+#     -f Dockerfile --target full -t bootgly:full ..
 # ============================================================================
 
 ARG PHP_IMAGE=php:8.4-cli-bookworm
 ARG BOOTGLY_VERSION=0.24.0-beta
 ARG BOOTGLY_FRAMEWORK_SHA=unknown
 ARG BOOTGLY_FRAMEWORK_DIRTY=unknown
+ARG BOOTGLY_FRAMEWORK_TRACKED_DIFF_SHA256=unknown
+ARG BOOTGLY_FRAMEWORK_UNTRACKED_MANIFEST_SHA256=unknown
 ARG BOOTGLY_BENCHMARKS_SHA=unknown
 ARG BOOTGLY_BENCHMARKS_DIRTY=unknown
+ARG BOOTGLY_BENCHMARKS_TRACKED_DIFF_SHA256=unknown
+ARG BOOTGLY_BENCHMARKS_UNTRACKED_MANIFEST_SHA256=unknown
 
 
 # ============================================================================
@@ -72,8 +81,12 @@ FROM base AS slim
 ARG BOOTGLY_VERSION
 ARG BOOTGLY_FRAMEWORK_SHA
 ARG BOOTGLY_FRAMEWORK_DIRTY
+ARG BOOTGLY_FRAMEWORK_TRACKED_DIFF_SHA256
+ARG BOOTGLY_FRAMEWORK_UNTRACKED_MANIFEST_SHA256
 ENV BOOTGLY_FRAMEWORK_SHA="${BOOTGLY_FRAMEWORK_SHA}" \
-    BOOTGLY_FRAMEWORK_DIRTY="${BOOTGLY_FRAMEWORK_DIRTY}"
+    BOOTGLY_FRAMEWORK_DIRTY="${BOOTGLY_FRAMEWORK_DIRTY}" \
+    BOOTGLY_FRAMEWORK_TRACKED_DIFF_SHA256="${BOOTGLY_FRAMEWORK_TRACKED_DIFF_SHA256}" \
+    BOOTGLY_FRAMEWORK_UNTRACKED_MANIFEST_SHA256="${BOOTGLY_FRAMEWORK_UNTRACKED_MANIFEST_SHA256}"
 LABEL org.opencontainers.image.title="Bootgly" \
       org.opencontainers.image.description="The Bootgly PHP Framework (slim runtime)" \
       org.opencontainers.image.version="${BOOTGLY_VERSION}" \
@@ -104,8 +117,12 @@ FROM slim AS full
 ARG BOOTGLY_VERSION
 ARG BOOTGLY_BENCHMARKS_SHA
 ARG BOOTGLY_BENCHMARKS_DIRTY
+ARG BOOTGLY_BENCHMARKS_TRACKED_DIFF_SHA256
+ARG BOOTGLY_BENCHMARKS_UNTRACKED_MANIFEST_SHA256
 ENV BOOTGLY_BENCHMARKS_SHA="${BOOTGLY_BENCHMARKS_SHA}" \
-    BOOTGLY_BENCHMARKS_DIRTY="${BOOTGLY_BENCHMARKS_DIRTY}"
+    BOOTGLY_BENCHMARKS_DIRTY="${BOOTGLY_BENCHMARKS_DIRTY}" \
+    BOOTGLY_BENCHMARKS_TRACKED_DIFF_SHA256="${BOOTGLY_BENCHMARKS_TRACKED_DIFF_SHA256}" \
+    BOOTGLY_BENCHMARKS_UNTRACKED_MANIFEST_SHA256="${BOOTGLY_BENCHMARKS_UNTRACKED_MANIFEST_SHA256}"
 LABEL org.opencontainers.image.description="The Bootgly PHP Framework (full: test + benchmark)" \
       org.opencontainers.image.version="${BOOTGLY_VERSION}"
 

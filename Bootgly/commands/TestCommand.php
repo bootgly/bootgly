@@ -538,10 +538,19 @@ class TestCommand extends Command
       // # Capture source state before loading or running the benchmark case.
       //   Git-backed local checkouts are inspected directly; packaged sources
       //   can supply the documented BOOTGLY_* provenance environment fallbacks.
+      $frameworkPath = BOOTGLY_ROOT_DIR;
+      $benchmarksPath = dirname($casePath);
       $provenance = [
          'framework-version' => BOOTGLY_VERSION,
-         ...Provenance::collect(BOOTGLY_ROOT_DIR, dirname($casePath)),
+         ...Provenance::collect($frameworkPath, $benchmarksPath),
       ];
+      if (Provenance::validate($provenance) === false) {
+         $Alert->Type::Failure->set();
+         $Alert->message = 'Benchmark source provenance is incomplete or inconsistent; '
+            . 'use attributable Git checkouts or complete validated BOOTGLY_* fallbacks.';
+         $Alert->render();
+         return false;
+      }
 
       // @ Parse options
       $Configs = Configs::parse($options);
@@ -663,6 +672,22 @@ class TestCommand extends Command
          }
 
          $results = $Runner->run($Configs);
+
+         // ! Re-capture at the round boundary. A mismatch cannot prove when the
+         //   change occurred, so the result is rejected before it is persisted.
+         //   Git-less packages can only reconfirm their supplied tuple and must
+         //   keep the attributed source layer/mount immutable during execution.
+         $currentProvenance = [
+            'framework-version' => BOOTGLY_VERSION,
+            ...Provenance::collect($frameworkPath, $benchmarksPath),
+         ];
+         if (Provenance::confirm($provenance, $currentProvenance) === false) {
+            $Alert->Type::Failure->set();
+            $Alert->message = 'Benchmark source provenance changed or became incomplete during the round; '
+               . 'the result was not saved.';
+            $Alert->render();
+            return false;
+         }
 
          Summary::report($results, $Runner->metric, compact: $style === 'compact');
 

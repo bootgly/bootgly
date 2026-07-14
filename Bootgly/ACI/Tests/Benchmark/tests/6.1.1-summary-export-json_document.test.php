@@ -16,11 +16,19 @@ return new Specification(
    {
       // ! One swept round with one result
       $Result = new Result(rps: 104532.0, latency: '1.2ms', transfer: '24.1MB/s');
+      $trackedSHA = str_repeat('a', 64);
+      $untrackedSHA = str_repeat('b', 64);
 
       $json = Summary::export(
          caseName: 'HTTP_Server_CLI',
          metric: 'req/s',
-         config: ['runner' => 'tcp_client', 'connections' => 514],
+         config: [
+            'source-identity-version' => 'raw-delta-manifest-v1',
+            'runner' => 'tcp_client',
+            'connections' => 514,
+            'framework-tracked-diff-sha256' => $trackedSHA,
+            'framework-untracked-manifest-sha256' => $untrackedSHA,
+         ],
          sweeps: ['server-workers' => [1, 5]],
          rounds: [
             [
@@ -42,6 +50,19 @@ return new Specification(
             array_keys($document),
             Op::Equal,
             ['case', 'date', 'metric', 'config', 'sweep', 'rounds', 'artifacts']
+         )
+         ->assert();
+
+      yield new Assertion(
+         description: 'JSON config preserves dirty-tree fingerprints',
+         fallback: 'JSON export dropped source identity!'
+      )
+         ->expect(
+            $document['config']['framework-tracked-diff-sha256'] === $trackedSHA
+               && $document['config']['framework-untracked-manifest-sha256'] === $untrackedSHA
+               && $document['config']['source-identity-version'] === 'raw-delta-manifest-v1',
+            Op::Identical,
+            true
          )
          ->assert();
 
