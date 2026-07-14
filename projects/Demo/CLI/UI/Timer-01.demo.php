@@ -12,7 +12,7 @@ $Output->reset();
 $Output->render(<<<OUTPUT
 /* @*:
  * @#green: Bootgly CLI UI - Timer component @;
- * @#yellow: @@: Demo - Example #1 - countdown with callback @;
+ * @#yellow: @@: Demo 33 - Example #1 - countdown with callback @;
  * {$location}
  */\n\n
 OUTPUT);

@@ -11,7 +11,7 @@ $Output->reset();
 $Output->render(<<<OUTPUT
 /* @*:
  * @#green: Bootgly CLI UI - Menu component @;
- * @#yellow: @@: Demo - Example #7 - viewport + type-ahead filter @;
+ * @#yellow: @@: Demo 30 - Example #7 - viewport + type-ahead filter @;
  * {$location}
  */\n\n
 OUTPUT);

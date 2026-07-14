@@ -20,7 +20,7 @@ $Wizard = new Wizard($Input, $Output);
 $Wizard->title = <<<TITLE
 /* @*:
  * @#green: Bootgly CLI UX - Wizard component @;
- * @#yellow: @@: Demo - Example #1 - declarative multi-step flow @;
+ * @#yellow: @@: Demo 48 - Example #1 - declarative multi-step flow @;
  * {$location}
  */
 TITLE;

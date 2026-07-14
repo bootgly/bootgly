@@ -11,7 +11,7 @@ $Output->reset();
 $Output->render(<<<OUTPUT
 /* @*:
  * @#green: Bootgly CLI UI - Question component @;
- * @#yellow: @@: Demo - Example #3 - autocomplete suggestions @;
+ * @#yellow: @@: Demo 38 - Example #3 - autocomplete suggestions @;
  * {$location}
  */\n\n
 OUTPUT);

@@ -11,7 +11,7 @@ $Output->reset();
 $Output->render(<<<OUTPUT
 /* @*:
  * @#green: Bootgly CLI UI - Question component @;
- * @#yellow: @@: Demo - Example #4 - yes/no confirmation @;
+ * @#yellow: @@: Demo 26 - Example #4 - yes/no confirmation @;
  * {$location}
  */\n\n
 OUTPUT);

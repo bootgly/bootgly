@@ -13,7 +13,7 @@ $Output->reset();
 $Output->render(<<<OUTPUT
 /* @*:
  * @#green: Bootgly CLI UI - Question component @;
- * @#yellow: @@: Demo - Example #1 - single input with validation @;
+ * @#yellow: @@: Demo 27 - Example #1 - single input with validation @;
  * {$location}
  */\n\n
 OUTPUT);

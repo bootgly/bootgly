@@ -11,7 +11,7 @@ $Output->reset();
 $Output->render(<<<OUTPUT
 /* @*:
  * @#green: Bootgly CLI UI - Chart components @;
- * @#yellow: @@: Demo - Example #3 - gradient meters @;
+ * @#yellow: @@: Demo 43 - Example #3 - gradient meters @;
  * {$location}
  */\n\n
 OUTPUT);

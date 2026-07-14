@@ -20,7 +20,7 @@ $Output->reset();
 $Output->render(<<<OUTPUT
 /* @*:
  * @#green: Bootgly CLI UI - Logs component @;
- * @#yellow: @@: Demo - Example #1 - Monitor-mode log viewer @;
+ * @#yellow: @@: Demo 25 - Example #1 - Monitor-mode log viewer @;
  * {$location}
  */\n\n
 OUTPUT);

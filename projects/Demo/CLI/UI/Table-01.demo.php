@@ -14,7 +14,7 @@ $Output->reset();
 $Output->render(<<<OUTPUT
 /* @*: 
  * @#green: Bootgly CLI UI - Table component @;
- * @#yellow: @@: Demo - Example #1 @;
+ * @#yellow: @@: Demo 21 - Example #1 @;
  * {$location}
  */\n\n
 OUTPUT);

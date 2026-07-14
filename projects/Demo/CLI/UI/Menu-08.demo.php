@@ -11,7 +11,7 @@ $Output->reset();
 $Output->render(<<<OUTPUT
 /* @*:
  * @#green: Bootgly CLI UI - Menu component @;
- * @#yellow: @@: Demo - Example #8 - vertical grid (columns) @;
+ * @#yellow: @@: Demo 31 - Example #8 - vertical grid (columns) @;
  * {$location}
  */\n\n
 OUTPUT);

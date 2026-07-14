@@ -21,7 +21,7 @@ $Output->reset();
 $Output->render(<<<OUTPUT
 /* @*:
  * @#green: Bootgly CLI UX - Tabs component @;
- * @#yellow: @@: Demo - Example #1 - btop-like tabbed dashboard @;
+ * @#yellow: @@: Demo 47 - Example #1 - btop-like tabbed dashboard @;
  * {$location}
  */\n\n
 OUTPUT);

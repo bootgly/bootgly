@@ -12,7 +12,7 @@ $Output->reset();
 $Output->render(<<<OUTPUT
 /* @*:
  * @#green: Bootgly CLI UI - Timeline component @;
- * @#yellow: @@: Demo - Example #1 - multi-step guided flow @;
+ * @#yellow: @@: Demo 34 - Example #1 - multi-step guided flow @;
  * {$location}
  */\n\n
 OUTPUT);

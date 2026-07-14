@@ -179,6 +179,9 @@ class DemoCommand extends Command
 
          // UX - Wizard component (declarative multi-step flow)
          48 => 'UX/Wizard-01.demo.php',
+
+         // UX - Dialog component (modal over covered frames)
+         49 => 'UX/Dialog-01.demo.php',
       ];
 
       $last = array_key_last($examples);

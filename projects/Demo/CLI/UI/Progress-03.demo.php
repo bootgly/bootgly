@@ -12,7 +12,7 @@ $Output->reset();
 $Output->render(<<<OUTPUT
 /* @*:
  * @#green: Bootgly CLI UI - Progress component @;
- * @#yellow: @@: Demo - Example #3 - multi-bar grid @;
+ * @#yellow: @@: Demo 35 - Example #3 - multi-bar grid @;
  * {$location}
  */\n\n
 OUTPUT);

@@ -14,7 +14,7 @@ $Output->reset();
 $Output->render(<<<OUTPUT
 /* @*:
  * @#green: Bootgly CLI UI - Form component @;
- * @#yellow: @@: Demo - Example #1 - sequential multi-field input @;
+ * @#yellow: @@: Demo 28 - Example #1 - sequential multi-field input @;
  * {$location}
  */\n\n
 OUTPUT);

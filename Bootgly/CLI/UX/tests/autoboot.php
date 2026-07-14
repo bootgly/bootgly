@@ -30,5 +30,10 @@ return new Suite(
       '4.2-wizard-add',
       '4.3-wizard-fail',
       '4.4-wizard-components',
+      '5.1-dialog-open',
+      '5.2-dialog-confirm',
+      '5.3-dialog-cover',
+      '5.4-dialog-prompt',
+      '5.5-dialog-screen',
    ]
 );

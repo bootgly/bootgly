@@ -14,7 +14,7 @@ $Output->reset();
 $Output->render(<<<OUTPUT
 /* @*:
  * @#green: Bootgly CLI Terminal (>>) - Viewport Panning @;
- * @#yellow: @@: Demo - Example #1 @;
+ * @#yellow: @@: Demo 24 - Example #1 @;
  * {$location}
  */\n\n
 OUTPUT);

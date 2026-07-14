@@ -14,7 +14,7 @@ $Output->reset();
 $Output->render(<<<OUTPUT
 /* @*:
  * @#green: Bootgly CLI UI - Chart components @;
- * @#yellow: @@: Demo - Example #4 - live streaming Graph (braille) @;
+ * @#yellow: @@: Demo 44 - Example #4 - live streaming Graph (braille) @;
  * {$location}
  */\n\n
 OUTPUT);

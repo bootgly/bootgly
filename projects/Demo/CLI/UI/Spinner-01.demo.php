@@ -12,7 +12,7 @@ $Output->reset();
 $Output->render(<<<OUTPUT
 /* @*:
  * @#green: Bootgly CLI UI - Spinner component @;
- * @#yellow: @@: Demo - Example #1 - indeterminate activity @;
+ * @#yellow: @@: Demo 32 - Example #1 - indeterminate activity @;
  * {$location}
  */\n\n
 OUTPUT);

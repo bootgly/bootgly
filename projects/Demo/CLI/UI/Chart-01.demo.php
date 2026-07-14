@@ -11,7 +11,7 @@ $Output->reset();
 $Output->render(<<<OUTPUT
 /* @*:
  * @#green: Bootgly CLI UI - Chart components @;
- * @#yellow: @@: Demo - Example #1 - gradient sparkline @;
+ * @#yellow: @@: Demo 36 - Example #1 - gradient sparkline @;
  * {$location}
  */\n\n
 OUTPUT);

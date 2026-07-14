@@ -17,7 +17,7 @@ $Output->reset();
 $Output->render(<<<OUTPUT
 /* @*:
  * @#green: Bootgly CLI UI - Frame component @;
- * @#yellow: @@: Demo - Example #1 - isolated Output boxes (tail + clear) @;
+ * @#yellow: @@: Demo 45 - Example #1 - isolated Output boxes (tail + clear) @;
  * {$location}
  */\n\n
 OUTPUT);

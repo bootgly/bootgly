@@ -15,7 +15,7 @@ $Output->reset();
 $Output->render(<<<OUTPUT
 /* @*:
  * @#green: Bootgly CLI Terminal - Mouse Reporting @;
- * @#yellow: @@: Demo - Example #1 @;
+ * @#yellow: @@: Demo 23 - Example #1 @;
  * {$location}
  */\n\n
 OUTPUT);

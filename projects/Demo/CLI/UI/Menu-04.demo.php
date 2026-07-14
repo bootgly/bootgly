@@ -12,7 +12,7 @@ $Output->reset();
 $Output->render(<<<OUTPUT
 /* @*: 
  * @#green: Bootgly CLI UI - Menu component @;
- * @#yellow: @@: Demo - Example #4 - Options: horizontal orientation @;
+ * @#yellow: @@: Demo 16 - Example #4 - Options: horizontal orientation @;
  * {$location}
  */\n\n
 OUTPUT);

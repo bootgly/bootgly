@@ -14,7 +14,7 @@ $Output->reset();
 $Output->render(<<<OUTPUT
 /* @*:
  * @#green: Bootgly CLI UX - Prompt component @;
- * @#yellow: @@: Demo - Example #1 - bottom-fixed input (mini REPL) @;
+ * @#yellow: @@: Demo 40 - Example #1 - bottom-fixed input (mini REPL) @;
  * {$location}
  */\n\n
 OUTPUT);

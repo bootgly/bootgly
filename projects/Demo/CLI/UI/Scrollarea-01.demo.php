@@ -26,7 +26,7 @@ $Output->reset();
 $Output->render(<<<OUTPUT
 /* @*:
  * @#green: Bootgly CLI UI - Scrollarea component @;
- * @#yellow: @@: Demo - Example #1 - buffered content band (keyboard + mouse scroll) @;
+ * @#yellow: @@: Demo 41 - Example #1 - buffered content band (keyboard + mouse scroll) @;
  * {$location}
  */\n\n
 OUTPUT);

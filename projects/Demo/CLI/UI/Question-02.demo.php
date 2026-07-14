@@ -13,7 +13,7 @@ $Output->reset();
 $Output->render(<<<OUTPUT
 /* @*:
  * @#green: Bootgly CLI UI - Question component @;
- * @#yellow: @@: Demo - Example #2 - masked (secret) input @;
+ * @#yellow: @@: Demo 29 - Example #2 - masked (secret) input @;
  * {$location}
  */\n\n
 OUTPUT);

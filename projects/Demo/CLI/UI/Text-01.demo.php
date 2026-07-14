@@ -13,7 +13,7 @@ $Output->reset();
 $Output->render(<<<OUTPUT
 /* @*:
  * @#green: Bootgly CLI UI - Text component @;
- * @#yellow: @@: Demo - Example #1 - typewriter, fade and shimmer @;
+ * @#yellow: @@: Demo 37 - Example #1 - typewriter, fade and shimmer @;
  * {$location}
  */\n\n
 OUTPUT);

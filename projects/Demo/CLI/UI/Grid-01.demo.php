@@ -24,7 +24,7 @@ $Output->reset();
 $Output->render(<<<OUTPUT
 /* @*:
  * @#green: Bootgly CLI UI - Grid component @;
- * @#yellow: @@: Demo - Example #1 - btop-like dashboard (weighted tracks) @;
+ * @#yellow: @@: Demo 46 - Example #1 - btop-like dashboard (weighted tracks) @;
  * {$location}
  */\n\n
 OUTPUT);
