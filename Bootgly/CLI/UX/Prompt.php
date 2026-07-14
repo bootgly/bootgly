@@ -138,7 +138,7 @@ class Prompt extends Component
       $this->Output = $Output;
 
       // * Config
-      $this->prompt = '>_ ';
+      $this->prompt = '> ';
       $this->history = 100;
       $this->border = '─';
       $this->top = ['left' => '', 'right' => ''];

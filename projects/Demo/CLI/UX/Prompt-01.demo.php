@@ -24,7 +24,7 @@ OUTPUT);
 //   hover/click/drag and Ctrl+T toggles the selection mode (native select/copy).
 //   Type and press Enter (↑/↓ recall history; Alt+Enter multiline; `exit`, Ctrl+D or 2× Ctrl+C quits)
 $Prompt = new Prompt($Input, $Output);
-$Prompt->prompt = '>_ ';
+$Prompt->prompt = '> ';
 $Prompt->top = ['left' => '@#Cyan:Bootgly REPL@;', 'right' => '@#Black:v0.20@;'];
 $Prompt->bottom = ['left' => '@#Black:`exit`, Ctrl+D or 2× Ctrl+C quits · wheel/PgUp/PgDn scroll · Ctrl+T select · ↑/↓ history@;', 'right' => '@#Black:0 lines@;'];
 
