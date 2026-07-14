@@ -68,6 +68,11 @@ class Header extends HeaderBase
    // Fields
    /** @var array<int,string> */
    protected array $queued;
+   // # Sticky per-response flag: queue() ran during this response. Unlike
+   //   `$queued !== []`, it survives remove() emptying the queue — clean()
+   //   uses it to reset the Cookies accumulator without paying a method
+   //   call on responses that never queued a line.
+   protected bool $enqueued;
    protected int $built;
    protected bool $dirty;
    // # prepare() memo — last raw input and its sanitized result. A response that
@@ -122,6 +127,7 @@ class Header extends HeaderBase
       $this->sent = false;
       // Fields
       $this->queued = [];
+      $this->enqueued = false;
       $this->built = 0;
       $this->dirty = true;
 
@@ -153,6 +159,8 @@ class Header extends HeaderBase
          // Fields
          case 'queued':
             return $this->queued;
+         case 'masked':
+            return $this->masked;
          case 'built':
             return $this->built;
 
@@ -224,8 +232,12 @@ class Header extends HeaderBase
          //   cache below it compares $queued against $builtQueued, so a
          //   genuinely identical header set stays as cheap as before.
          $this->dirty = true;
-         // ! The Cookies helper accumulates every appended cookie for the
-         //   worker lifetime otherwise — queued cookies always land here.
+      }
+      // ? Gated on the sticky flag, not the live queue — remove('Set-Cookie')
+      //   after append() empties $queued, but the Cookies accumulator still
+      //   holds the appended cookie and would grow for the worker lifetime
+      if ($this->enqueued) {
+         $this->enqueued = false;
          $this->Cookies->reset();
       }
    }
@@ -509,6 +521,7 @@ class Header extends HeaderBase
       }
 
       $this->queued[] = "$field: $value";
+      $this->enqueued = true;
       $this->dirty = true;
 
       return true;

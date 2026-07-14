@@ -77,5 +77,28 @@ return new Specification(
          ->expect($stash('/.well-known/acme-challenge/some-token', static function (Response $Response): void {}))
          ->to->be(false)
          ->assert();
+
+      // @ Worker-persistent presets serialize on every response — they must
+      //   block storage too
+      yield new Assertion(
+         description: 'a preset Set-Cookie blocks storage',
+      )
+         ->expect($stash('/preset', static function (Response $Response): void {
+            $Response->Header->preset('Set-Cookie', 'session=SECRET');
+         }))
+         ->to->be(false)
+         ->assert();
+
+      // @ A preset masked by remove() is NOT serialized for this response,
+      //   so it must not block an otherwise cookie-free cacheable response
+      yield new Assertion(
+         description: 'a masked (removed) preset Set-Cookie does not block storage',
+      )
+         ->expect($stash('/preset-masked', static function (Response $Response): void {
+            $Response->Header->preset('Set-Cookie', 'session=SECRET');
+            $Response->Header->remove('Set-Cookie');
+         }))
+         ->to->be(true)
+         ->assert();
    })
 );

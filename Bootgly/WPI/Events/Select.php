@@ -531,6 +531,18 @@ class Select implements Events, Loops, Scheduler
     */
    private function tick (): null|float
    {
+      // ? Empty-set fast return — an ordinary HTTP worker has no one-shot
+      //   timers or timed Fiber waits, yet tick() runs on every reactor
+      //   iteration: skip the four clock reads and six map traversals.
+      //   `null` means "no deadline" (indefinite select block) — never
+      //   return 0.0 here, which would busy-poll.
+      if (
+         $this->Timers === [] && $this->MonotonicTimers === []
+         && $this->awaitingReadDeadlines === [] && $this->awaitingWriteDeadlines === []
+      ) {
+         return null;
+      }
+
       $now = microtime(true);
       $nowMonotonic = (int) hrtime(true);
       $wait = null;

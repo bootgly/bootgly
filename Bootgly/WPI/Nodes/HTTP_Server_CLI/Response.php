@@ -35,6 +35,7 @@ use function strcasecmp;
 use function strlen;
 use function strncasecmp;
 use function strncmp;
+use function strtolower;
 use Closure;
 use Error;
 use Fiber;
@@ -964,6 +965,18 @@ class Response extends Server\Response
       }
       foreach ($Header->queued as $line) {
          if (strncasecmp($line, 'set-cookie:', 11) === 0) {
+            return;
+         }
+      }
+      // ? Worker-persistent presets serialize too — but a preset masked by
+      //   remove() is NOT serialized for this response, so it must not
+      //   block storage
+      $masked = $Header->masked;
+      foreach ($Header->preset as $name => $_) {
+         if (
+            strcasecmp((string) $name, 'Set-Cookie') === 0
+            && isSet($masked[strtolower((string) $name)]) === false
+         ) {
             return;
          }
       }

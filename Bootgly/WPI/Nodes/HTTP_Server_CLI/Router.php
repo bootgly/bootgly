@@ -434,22 +434,29 @@ class Router
 
                      $Route = $this->Route;
                      $Route->path = $url;
+                     // @ Batch param extraction — accumulate locally
+                     //   (duplicates as arrays) and install with one set()
+                     //   instead of magic get/set frames per capture
                      $duplicateParams = $entry['duplicateParams'];
+                     /** @var array<string,string|array<int,string>> $pv */
+                     $pv = [];
                      foreach ($entry['paramNames'] as $i => $paramName) {
                         if (isset($duplicateParams[$paramName])) {
-                           $current = $Route->Params->$paramName;
-                           if ($current === null || !is_array($current)) {
-                              $Route->Params->$paramName = [$matches[$i + 1]];
+                           if (isset($pv[$paramName])) {
+                              /** @var array<int,string> $list */
+                              $list = $pv[$paramName];
+                              $list[] = $matches[$i + 1];
+                              $pv[$paramName] = $list;
                            }
                            else {
-                              $current[] = $matches[$i + 1];
-                              $Route->Params->$paramName = $current;
+                              $pv[$paramName] = [$matches[$i + 1]];
                            }
                         }
                         else {
-                           $Route->Params->$paramName = $matches[$i + 1];
+                           $pv[$paramName] = $matches[$i + 1];
                         }
                      }
+                     $Route->Params->set($pv);
                   }
 
                   return $this->complete(($entry['dispatcher'])($Request, $Response), $Response);

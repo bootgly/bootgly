@@ -160,5 +160,7 @@ return new Suites(
       'Bootgly/WPI/Nodes/HTTP_Client_CLI/tests/HTTP2_E2E/',
       // E2E h2 over TLS-ALPN (negotiation, fallback, multiplex on 8088)
       'Bootgly/WPI/Nodes/HTTP_Client_CLI/tests/HTTP2_TLS/',
+      // # UDP_Server_CLI — per-peer Connection lifecycle unit doubles
+      'Bootgly/WPI/Interfaces/UDP_Server_CLI/tests/',
    ]
 );

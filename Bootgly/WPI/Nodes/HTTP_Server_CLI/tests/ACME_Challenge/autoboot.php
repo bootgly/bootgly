@@ -11,7 +11,9 @@ use function glob;
 use function is_dir;
 use function mkdir;
 use function rmdir;
+use function strlen;
 use function sys_get_temp_dir;
+use function time;
 use function unlink;
 use function usleep;
 use RuntimeException;
@@ -21,6 +23,7 @@ use Bootgly\ACI\Tests\Suite;
 use Bootgly\API\Endpoints\Server\Modes;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\ACME_Client\Challenges;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Cache;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders\Encoder_;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Events;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
@@ -57,6 +60,27 @@ return new Suite(
          $HTTP_Server_CLI->on(
             Events::RequestReceived,
             function ($Request, Response $Response): Response {
+               // ! Spec 1.2 seam: plant stale full-wire cache entries inside
+               //   the worker (Cache::$entries is worker-local) so the client
+               //   spec can prove the reserved ACME namespace never serves
+               //   from the cache while an ordinary path does.
+               if ($Request->URL === '/plant') {
+                  $expiration = time() + 300;
+                  $entry = static function (string $body) use ($expiration): array {
+                     $length = strlen($body);
+                     $wire = "HTTP/1.1 200 OK\r\nContent-Length: {$length}\r\n\r\n{$body}";
+                     return [$wire, $expiration, -1, time()];
+                  };
+
+                  Cache::$entries = [
+                     "GET\0/cached-probe" => $entry('STALE-PROBE'),
+                     "GET\0/.well-known/acme-challenge/e2e-Cache_Token-1" => $entry('STALE-TOKEN'),
+                     "GET\0/.well-known/acme-challenge/e2e-Cache_Unknown-1" => $entry('STALE-UNKNOWN'),
+                  ];
+
+                  return $Response->send('planted');
+               }
+
                return $Response->send('handler');
             }
          );
@@ -105,6 +129,7 @@ return new Suite(
    exitOnFailure: false,
    // * Data
    tests: [
-      '1.1-challenge'
+      '1.1-challenge',
+      '1.2-cache_precedence'
    ]
 );

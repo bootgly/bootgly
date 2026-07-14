@@ -28,14 +28,24 @@ use Bootgly\WPI\Interfaces\UDP_Server_CLI\Connections\Connection;
 
 abstract class Packages extends Server_Packages implements WPI\Connections\Packages
 {
-   public Logger $Logger;
+   // ? Lazy: constructed on first read only. The transport hot path logs
+   //   nothing, so an eager per-peer Logger graph is pure allocation churn
+   //   under peer churn (mirrors TCP_Server_CLI\Packages).
+   public Logger $Logger {
+      get {
+         if ( isSet($this->Logger) === false ) {
+            $this->Logger = new Logger(channel: static::class);
+         }
+
+         return $this->Logger;
+      }
+   }
 
    public Connection $Connection;
 
 
    public function __construct (Connection &$Connection)
    {
-      $this->Logger = new Logger(channel: __CLASS__);
       $this->Connection = $Connection;
 
       parent::__construct();

@@ -18,14 +18,14 @@ use Traversable;
 
 
 /**
- * @implements IteratorAggregate<string,string|int|array<int>|null>
+ * @implements IteratorAggregate<string,string|int|array<int,string>|null>
  */
 class Params implements IteratorAggregate
 {
-   /** @var array<string,string|int|array<int>|null> */
+   /** @var array<string,string|int|array<int,string>|null> */
    private array $params = [];
 
-   /** @return string|int|array<int>|null */
+   /** @return string|int|array<int,string>|null */
    public function &__get (string $name)
    {
       if (array_key_exists($name, $this->params) === false) {
@@ -36,7 +36,7 @@ class Params implements IteratorAggregate
    }
    /**
     * @param string $param
-    * @param string|int|array<int> $value
+    * @param string|int|array<int,string> $value
     */
    public function __set (string $param, string|int|array $value): void
    {
@@ -45,14 +45,14 @@ class Params implements IteratorAggregate
    /**
     * Replace all params at once (batch assignment).
     *
-    * @param array<string,string> $params
+    * @param array<string,string|array<int,string>> $params
     */
    public function set (array $params): void
    {
       $this->params = $params;
    }
 
-   /** @return ArrayIterator<string,string|int|array<int>|null> */
+   /** @return ArrayIterator<string,string|int|array<int,string>|null> */
    public function getIterator (): Traversable
    {
       return new ArrayIterator($this->params);

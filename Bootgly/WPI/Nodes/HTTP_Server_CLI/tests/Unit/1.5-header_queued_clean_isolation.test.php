@@ -55,5 +55,20 @@ return new Specification(
          ->expect($Header->Cookies->cookies === [])
          ->to->be(true)
          ->assert();
+
+      // @ The reset must be unconditional: remove('Set-Cookie') strips the
+      //   queued line first, so a queue-gated reset would retain the
+      //   accumulated cookie forever
+      $Header = new Header;
+      $Header->Cookies->append(new Cookie('a', '1'));
+      $Header->remove('Set-Cookie');
+      $Header->clean();
+
+      yield new Assertion(
+         description: 'append + remove + clean still resets the accumulator',
+      )
+         ->expect($Header->Cookies->cookies === [])
+         ->to->be(true)
+         ->assert();
    })
 );
