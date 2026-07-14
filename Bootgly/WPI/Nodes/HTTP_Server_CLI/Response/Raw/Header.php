@@ -274,7 +274,18 @@ class Header extends HeaderBase
          unset($preset[$name]);
       }
 
+      // ? No-op fast path — an identical map keeps the raw memo valid
+      if ($preset === $this->preset) {
+         return;
+      }
+
       $this->preset = $preset;
+      // ! build()'s first same-second fast return is gated on dirty alone —
+      //   without this, a preset add/replace/removal serves the previous
+      //   response's raw block for the rest of the second (and a removed
+      //   cookie preset would pass stash()'s current-state scan while the
+      //   stale wire still carries the cookie).
+      $this->dirty = true;
    }
    /**
     * @param array<string, string> $fields

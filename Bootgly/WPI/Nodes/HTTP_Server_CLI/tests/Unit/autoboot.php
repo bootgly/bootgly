@@ -20,6 +20,7 @@ return new Suite(
       '1.4-connection_close_timer_release',
       '1.5-header_queued_clean_isolation',
       '1.6-stash_cookie_and_acme_guards',
-      '1.7-router_dynamic_classification'
+      '1.7-router_dynamic_classification',
+      '1.8-header_preset_transitions'
    ]
 );
