@@ -77,6 +77,7 @@ class Scripts
             ]
          ]
       ];
+      $this->scripts = [];
       // * Metadata
       $this->path = null;
       $this->filename = null;
