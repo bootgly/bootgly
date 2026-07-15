@@ -48,6 +48,7 @@ return new Suite(
       '6.13.1-manifest-detect-unpublished_staging',
       '6.14.1-code_runner-enforce_timeout',
       '6.15.1-manifest-redact-untrusted_argv',
+      '6.15.2-command-reject-malformed_argv',
       // Chart — native SVG rendering
       '7.1.1-chart-render-svg',
       // Report — Markdown + SVG artifacts

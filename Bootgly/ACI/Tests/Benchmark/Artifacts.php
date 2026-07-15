@@ -50,6 +50,7 @@ use FilesystemIterator;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
 use RuntimeException;
+use SplFileInfo;
 
 
 /**
@@ -203,6 +204,10 @@ final class Artifacts
       $files = [];
 
       foreach ($Iterator as $File) {
+         if (!$File instanceof SplFileInfo) {
+            throw new RuntimeException('Unexpected benchmark artifact iterator entry');
+         }
+
          if ($File->isFile() === false || $File->isLink()) {
             continue;
          }

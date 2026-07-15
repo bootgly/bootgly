@@ -54,6 +54,8 @@ use function usort;
 use FilesystemIterator;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
+use RuntimeException;
+use SplFileInfo;
 use stdClass;
 
 
@@ -208,12 +210,22 @@ final class Manifest
       $opponents = [];
       $loads = [];
       $roundOptions = [];
-      foreach ($data['rounds'] ?? [] as $round) {
+      $rounds = $data['rounds'] ?? [];
+      if (!is_array($rounds)) {
+         throw new RuntimeException('Benchmark result rounds must be an array.');
+      }
+
+      foreach ($rounds as $round) {
          if (!is_array($round)) {
-            continue;
+            throw new RuntimeException('Benchmark result round must be an object.');
          }
          $roundOptions[] = $round['options'] ?? [];
-         foreach (($round['results'] ?? []) as $opponent => $results) {
+         $resultsByOpponent = $round['results'] ?? [];
+         if (!is_array($resultsByOpponent)) {
+            throw new RuntimeException('Benchmark round results must be an object.');
+         }
+
+         foreach ($resultsByOpponent as $opponent => $results) {
             $opponents[(string) $opponent] = true;
             foreach (is_array($results) ? array_keys($results) : [] as $load) {
                $loads[(string) $load] = true;
@@ -248,6 +260,10 @@ final class Manifest
       );
 
       foreach ($Iterator as $File) {
+         if (!$File instanceof SplFileInfo) {
+            throw new RuntimeException('Unexpected benchmark manifest iterator entry');
+         }
+
          $relative = str_replace(
             DIRECTORY_SEPARATOR,
             '/',
@@ -292,15 +308,24 @@ final class Manifest
       return [$artifacts, $processes, $unpublished];
    }
 
-   /** @param array<int,string> $arguments @return array<int,string> */
+   /**
+    * @param array<array-key,mixed> $arguments
+    * @return array<int,string>
+    */
    private function redact (array $arguments): array
    {
+      $arguments = array_values($arguments);
       $redacted = [];
       $hideNext = false;
       foreach ($arguments as $index => $argument) {
          if ($hideNext) {
             $redacted[] = '<redacted>';
             $hideNext = false;
+            continue;
+         }
+
+         if (!is_string($argument)) {
+            $redacted[] = '<redacted>';
             continue;
          }
 

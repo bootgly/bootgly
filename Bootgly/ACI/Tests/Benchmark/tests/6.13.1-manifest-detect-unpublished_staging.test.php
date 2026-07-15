@@ -43,12 +43,58 @@ return new Specification(
          )
          ->assert();
 
-      $Children = new RecursiveDirectoryIterator($Artifacts->directory, FilesystemIterator::SKIP_DOTS);
+      $malformedRoundsRejected = false;
+      $MalformedRoundsArtifacts = Artifacts::create('manifest-malformed-rounds', $root);
+      $MalformedRoundsManifest = new Manifest(
+         $MalformedRoundsArtifacts,
+         'manifest-malformed-rounds',
+         ['bootgly', 'test'],
+         getcwd(),
+      );
+      $MalformedRoundsDocument = new stdClass;
+      $MalformedRoundsDocument->rounds = 'not-an-array';
+      try {
+         $MalformedRoundsManifest->finish(1, $MalformedRoundsDocument);
+      }
+      catch (RuntimeException) {
+         $malformedRoundsRejected = true;
+      }
+
+      $malformedResultsRejected = false;
+      $MalformedResultsArtifacts = Artifacts::create('manifest-malformed-results', $root);
+      $MalformedResultsManifest = new Manifest(
+         $MalformedResultsArtifacts,
+         'manifest-malformed-results',
+         ['bootgly', 'test'],
+         getcwd(),
+      );
+      $MalformedResultsDocument = new stdClass;
+      $MalformedResultsDocument->rounds = [
+         (object) ['results' => 'not-an-object'],
+      ];
+      try {
+         $MalformedResultsManifest->finish(1, $MalformedResultsDocument);
+      }
+      catch (RuntimeException) {
+         $malformedResultsRejected = true;
+      }
+
+      yield new Assertion(
+         description: 'Manifest rejects malformed round and result containers',
+         fallback: 'Manifest silently normalized malformed benchmark result structure!'
+      )
+         ->expect(
+            $malformedRoundsRejected && $malformedResultsRejected,
+            Op::Identical,
+            true,
+         )
+         ->assert();
+
+      $Children = new RecursiveDirectoryIterator($root, FilesystemIterator::SKIP_DOTS);
       $Iterator = new RecursiveIteratorIterator($Children, RecursiveIteratorIterator::CHILD_FIRST);
       foreach ($Iterator as $Child) {
          $Child->isDir() ? rmdir($Child->getPathname()) : unlink($Child->getPathname());
       }
-      rmdir($Artifacts->directory);
       rmdir($root);
    })
 );

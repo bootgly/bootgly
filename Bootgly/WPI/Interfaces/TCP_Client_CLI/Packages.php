@@ -258,6 +258,10 @@ class Packages implements WPI\Connections\Packages
       // @
       try {
          do {
+            // ! Contract: null uses 65535; a sized read re-enters only while
+            //   positive bytes remain. PHPStan loses that loop invariant after
+            //   `$length -= $bytes`.
+            // @phpstan-ignore argument.type
             $buffer = @fread($Socket, $length ?? 65535);
             #$buffer = @stream_socket_recvfrom($Socket, $length ?? 65535);
 

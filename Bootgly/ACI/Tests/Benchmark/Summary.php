@@ -184,7 +184,10 @@ class Summary
             $childTotal = count($value);
             $childWidth = max(
                15,
-               max(array_map(strlen(...), array_keys($value))) + 1,
+               ...array_map(
+                  static fn (string $label): int => strlen($label) + 1,
+                  array_keys($value),
+               ),
             );
             $stem = $position === $total ? '   ' : '│  ';
             foreach ($value as $childLabel => $childValue) {
@@ -220,7 +223,7 @@ class Summary
    /**
     * Present a scalar option value consistently.
     */
-   private static function present (bool|int|string $value): string
+   private static function present (bool|float|int|string $value): string
    {
       if (is_bool($value)) {
          return $value ? 'enabled' : 'disabled';

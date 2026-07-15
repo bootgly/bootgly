@@ -16,7 +16,6 @@ use const JSON_PRETTY_PRINT;
 use const JSON_THROW_ON_ERROR;
 use const JSON_UNESCAPED_SLASHES;
 use const PHP_BINARY;
-use function array_any;
 use function bin2hex;
 use function clearstatcache;
 use function dirname;
@@ -111,7 +110,7 @@ PHP;
       float $grace = 2.0,
    ): array
    {
-      if ($command === [] || array_any($command, static fn (mixed $argument): bool => is_string($argument) === false)) {
+      if (self::validate($command) === false) {
          throw new RuntimeException('A benchmark child command must be a non-empty argv string list');
       }
       if ($timeout !== null && $timeout < 0) {
@@ -121,7 +120,7 @@ PHP;
          throw new \InvalidArgumentException('Benchmark child termination grace can not be negative');
       }
       foreach (['pcntl_exec', 'posix_kill', 'posix_setsid'] as $function) {
-         if (!function_exists($function)) {
+         if (self::verify($function) === false) {
             throw new RuntimeException("Benchmark child process-group isolation requires {$function}()");
          }
       }
@@ -150,8 +149,7 @@ PHP;
          2 => ['file', $stderrCapture, 'xb'],
       ];
       $pipes = [];
-      $launchEnvironment = $environment ?? getenv();
-      $launchEnvironment = is_array($launchEnvironment) ? $launchEnvironment : [];
+      $launchEnvironment = (array) ($environment ?? getenv());
       $launchEnvironment['BOOTGLY_PROCESS_GROUP_READY'] = $groupReady;
       $processCommand = [
          PHP_BINARY,
@@ -182,16 +180,13 @@ PHP;
       }
 
       $processStatus = proc_get_status($Process);
-      $PID = is_array($processStatus) && isset($processStatus['pid'])
-         ? (int) $processStatus['pid']
-         : null;
+      $PID = $processStatus['pid'];
       $groupDeadline = microtime(true) + 2.0;
       $groupStarted = false;
 
       do {
          if (
-            $PID !== null
-            && is_file($groupReady)
+            is_file($groupReady)
             && trim((string) @file_get_contents($groupReady)) === (string) $PID
          ) {
             $groupStarted = true;
@@ -199,7 +194,7 @@ PHP;
          }
 
          $processStatus = proc_get_status($Process);
-         if (!is_array($processStatus) || !$processStatus['running']) {
+         if (!$processStatus['running']) {
             break;
          }
 
@@ -209,7 +204,7 @@ PHP;
       @unlink($groupReady . '.tmp');
       @unlink($groupReady);
 
-      if (!$groupStarted || $PID === null) {
+      if (!$groupStarted) {
          if (isset($pipes[0]) && is_resource($pipes[0])) {
             fclose($pipes[0]);
          }
@@ -292,24 +287,24 @@ PHP;
       $observedExit = null;
       $signal = null;
       $timedOut = false;
-      $termination = null;
+      $termination = 'completed';
       $cleanupFailed = false;
 
       $Poll = static function () use (&$Process, &$observedExit, &$signal, $PGID): bool {
          if (is_resource($Process)) {
             $status = proc_get_status($Process);
-            if (is_array($status) && !$status['running']) {
-               $observedExit = ($status['exitcode'] ?? -1) >= 0
-                  ? (int) $status['exitcode']
+            if (!$status['running']) {
+               $observedExit = $status['exitcode'] >= 0
+                  ? $status['exitcode']
                   : $observedExit;
-               $signal = ($status['signaled'] ?? false) && isset($status['termsig'])
-                  ? (int) $status['termsig']
+               $signal = $status['signaled']
+                  ? $status['termsig']
                   : $signal;
                $closedExit = proc_close($Process);
                $Process = null;
                $observedExit ??= $closedExit >= 0 ? $closedExit : null;
             }
-            else if (is_array($status) && $status['running']) {
+            else {
                return true;
             }
          }
@@ -325,7 +320,8 @@ PHP;
          }
       };
 
-      while ($Poll()) {
+      $running = $Poll();
+      while ($running) {
          if ($deadline !== null && microtime(true) >= $deadline) {
             $timedOut = true;
             $termination = 'terminated';
@@ -351,6 +347,7 @@ PHP;
          }
 
          usleep(10_000);
+         $running = $Poll();
       }
 
       if ($cleanupFailed) {
@@ -367,6 +364,34 @@ PHP;
          'timed-out' => $timedOut,
          'signal' => $signal,
       ];
+   }
+
+   /**
+    * Keep runtime argv validation at the public process boundary.
+    *
+    * @param array<int,mixed> $command
+    */
+   private static function validate (array $command): bool
+   {
+      if ($command === []) {
+         return false;
+      }
+
+      foreach ($command as $argument) {
+         if (!is_string($argument)) {
+            return false;
+         }
+      }
+
+      return true;
+   }
+
+   /**
+    * Preserve runtime portability checks without specializing the function name.
+    */
+   private static function verify (string $function): bool
+   {
+      return function_exists($function);
    }
 
    /**

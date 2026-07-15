@@ -678,7 +678,7 @@ class TestCommand extends Command
          : new Manifest(
             $Artifacts,
             $caseName,
-            (array) ($_SERVER['argv'] ?? []),
+            self::normalize($_SERVER['argv'] ?? []),
             getcwd() ?: BOOTGLY_WORKING_DIR,
          );
       $Manifest?->select([
@@ -727,7 +727,8 @@ class TestCommand extends Command
       }
 
       // ? Opponents are mandatory — at least one must be selected.
-      if ($Configs->opponents === null) {
+      $selectedOpponents = $Configs->opponents;
+      if ($selectedOpponents === null) {
          $Alert->Type::Failure->set();
          $Alert->message = "Benchmark requires --opponents=<name>[,<name>...] (e.g. --opponents=bootgly).@.;";
          $Alert->render();
@@ -792,7 +793,7 @@ class TestCommand extends Command
          $availableOpponents[Configs::slug($Opponent->name)] = $Opponent->name;
       }
       $unknownOpponents = [];
-      foreach ($Configs->opponents as $opponent) {
+      foreach ($selectedOpponents as $opponent) {
          if (!isset($availableOpponents[Configs::slug($opponent)])) {
             $unknownOpponents[] = $opponent;
          }
@@ -889,7 +890,7 @@ class TestCommand extends Command
 
          // ! Optional unavailable opponents may retain an empty N/A map, but a
          //   missing selected opponent or an entirely empty round is failure.
-         $outcomeError = Outcome::check($results, $Configs->opponents);
+         $outcomeError = Outcome::check($results, $selectedOpponents);
          if ($outcomeError !== null) {
             $Alert->Type::Failure->set();
             $Alert->message = $outcomeError . '@.;';
@@ -1131,7 +1132,7 @@ class TestCommand extends Command
          $Manifest = new Manifest(
             $Artifacts,
             $caseName,
-            (array) ($_SERVER['argv'] ?? []),
+            self::normalize($_SERVER['argv'] ?? []),
             getcwd() ?: BOOTGLY_WORKING_DIR,
          );
          $Requested = Configs::parse($options);
@@ -1157,19 +1158,19 @@ class TestCommand extends Command
          $token = bin2hex(random_bytes(32));
          Artifacts::commit($claimFile, hash('sha256', $token));
 
-         $entry = (string) ($_SERVER['SCRIPT_FILENAME'] ?? ($_SERVER['argv'][0] ?? ''));
+         $CLIArguments = self::normalize($_SERVER['argv'] ?? []);
+         $entry = $_SERVER['SCRIPT_FILENAME'] ?? ($CLIArguments[0] ?? '');
+         $entry = is_string($entry) ? $entry : '';
          $resolved = $entry !== '' ? realpath($entry) : false;
          if ($resolved === false || !is_file($resolved)) {
             throw new RuntimeException('Unable to resolve the active Bootgly CLI entry point.');
          }
 
-         /** @var array<int,string> $route */
-         $route = (array) ($_SERVER['argv'] ?? []);
          $command = [
             PHP_BINARY,
             ...Runtime::replay(),
             $resolved,
-            ...array_slice($route, 1),
+            ...array_slice($CLIArguments, 1),
          ];
          $descriptors = [
             0 => STDIN,
@@ -1178,9 +1179,6 @@ class TestCommand extends Command
          ];
 
          $environment = getenv();
-         if (!is_array($environment)) {
-            $environment = [];
-         }
          $environment['BENCHMARK_JSON_INNER'] = '1';
          $environment['BENCHMARK_RUN_ID'] = $ID;
          $environment['BENCHMARK_RUN_DIR'] = $directory;
@@ -1348,6 +1346,27 @@ class TestCommand extends Command
 
          return false;
       }
+   }
+
+   /** Validate the process argument vector at the untyped superglobal boundary.
+    * @return array<int,string>
+    */
+   private static function normalize (mixed $arguments): array
+   {
+      if (is_array($arguments) === false) {
+         throw new RuntimeException('Process argument vector must be an array.');
+      }
+
+      $normalized = [];
+      foreach ($arguments as $argument) {
+         if (is_string($argument) === false) {
+            throw new RuntimeException('Process argument vector must contain only strings.');
+         }
+
+         $normalized[] = $argument;
+      }
+
+      return $normalized;
    }
 
    /**

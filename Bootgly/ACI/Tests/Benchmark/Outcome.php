@@ -28,7 +28,7 @@ final class Outcome
     * Empty maps remain valid for optional unavailable opponents only when at
     * least one selected opponent produced a real measurement.
     *
-    * @param array<string,array<string,Result>> $Results
+    * @param array<string,mixed> $Results
     * @param array<string> $selectedOpponents
     */
    public static function check (array $Results, array $selectedOpponents): null|string

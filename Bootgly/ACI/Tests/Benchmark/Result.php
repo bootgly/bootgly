@@ -79,6 +79,11 @@ class Result
    public readonly null|array $writeFailures;
 
 
+   /**
+    * @param null|array<int,int> $statuses
+    * @param null|array<string,int> $failures
+    * @param null|array<string,int> $writeFailures
+    */
    public function __construct (
       null|string $time = null,
       null|int $memory = null,

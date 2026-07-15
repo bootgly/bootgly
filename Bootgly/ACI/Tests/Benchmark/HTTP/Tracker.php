@@ -80,7 +80,6 @@ final class Tracker
    private int $trailerBytes = 0;
    private null|int $status = null;
    private null|int $HTTPVersion = null;
-   private null|int $length = null;
    private null|string $lengthText = null;
 
    /** @var list<string> */
@@ -576,7 +575,6 @@ final class Tracker
                //   Enter the existing body state with the exact remaining size.
                $this->buffer = (string) substr($this->buffer, $this->cacheHeadBytes);
                $this->status = $this->cacheStatus;
-               $this->length = $this->cacheBodyBytes;
                $this->remaining = $this->cacheBodyBytes;
                $this->bodyBytes = 0;
                $this->state = self::FIXED;
@@ -725,9 +723,8 @@ final class Tracker
                   return;
                }
 
-               $this->length = $length;
                $this->remember($method, $length);
-               $this->remaining = $this->length;
+               $this->remaining = $length;
                if ($this->remaining === 0) {
                   $this->finish();
                }
@@ -1138,7 +1135,6 @@ final class Tracker
       $this->trailerBytes = 0;
       $this->status = null;
       $this->HTTPVersion = null;
-      $this->length = null;
       $this->lengthText = null;
       $this->codings = [];
       $this->connections = [];

@@ -99,7 +99,10 @@ final class Runtime
 
       $scanned = php_ini_scanned_files();
       $scanned = is_string($scanned)
-         ? array_values(array_filter(array_map('trim', explode(',', $scanned)), 'strlen'))
+         ? array_values(array_filter(
+            array_map('trim', explode(',', $scanned)),
+            static fn (string $file): bool => $file !== '',
+         ))
          : [];
 
       $jit = null;
