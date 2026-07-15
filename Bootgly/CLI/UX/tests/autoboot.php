@@ -35,5 +35,12 @@ return new Suite(
       '5.3-dialog-cover',
       '5.4-dialog-prompt',
       '5.5-dialog-screen',
+      '6.1-toasts-queue',
+      '6.2-toasts-render',
+      '6.3-toasts-reflow',
+      '6.4-toasts-flash',
+      '6.5-toasts-screen',
+      '6.6-toasts-positions',
+      '6.7-toasts-occupant',
    ]
 );

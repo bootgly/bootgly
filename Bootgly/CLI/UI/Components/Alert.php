@@ -19,6 +19,7 @@ use function stream_get_contents;
 
 use Bootgly\API\Component;
 use Bootgly\CLI\Terminal\Output;
+use Bootgly\CLI\UI\Components\Alert\Type;
 
 
 class Alert extends Component
@@ -145,21 +146,6 @@ class Alert extends Component
 
 
 // * Configs
-/**
- * @method self get()
- * @method self set()
- */
-enum Type
-{
-   use \Bootgly\ABI\Configs\Set;
-
-
-   case Default;
-   case Success;
-   case Attention;
-   case Failure;
-}
-
 /**
  * @method self get()
  * @method self set()

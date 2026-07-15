@@ -13,6 +13,7 @@ namespace Bootgly\commands;
 
 use const BOOTGLY_ROOT_DIR;
 use function array_key_last;
+use function ctype_digit;
 use function sleep;
 
 use const Bootgly\CLI;
@@ -33,9 +34,11 @@ class DemoCommand extends Command
    public function run (array $arguments = [], array $options = []): bool
    {
       // * Config
+      // ! Ids stay strings so sub-examples can float (50, 50.1, 50.2, ...); whole
+      //   numbers normalize (leading zeros collapse) to keep `demo 05` == `demo 5`
       $id = $arguments[0] ?? null;
-      if ($id !== null) {
-         $id = (int) $id;
+      if ($id !== null && ctype_digit($id) === true) {
+         $id = (string) (int) $id;
       }
 
       // @
@@ -43,7 +46,7 @@ class DemoCommand extends Command
       $Output->expand(lines: CLI->Terminal::$lines);
 
       // @ Reset Output
-      if ($id === 0) {
+      if ($id === '0') {
          $Output->reset();
          return true;
       }
@@ -182,11 +185,18 @@ class DemoCommand extends Command
 
          // UX - Dialog component (modal over covered frames)
          49 => 'UX/Dialog-01.demo.php',
+
+         // UX - Toasts component (corner toast notifications)
+         50 => 'UX/Toasts-01.demo.php',
+         // UX - Toasts component (position variations)
+         '50.1' => 'UX/Toasts-02.demo.php', // TopLeft
+         '50.2' => 'UX/Toasts-03.demo.php', // Center
+         '50.3' => 'UX/Toasts-04.demo.php', // BottomRight
       ];
 
       $last = array_key_last($examples);
       foreach ($examples as $index => $example) {
-         if ($id && $index !== $id) {
+         if ($id !== null && (string) $index !== $id) {
             continue;
          }
 
