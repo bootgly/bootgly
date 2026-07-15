@@ -129,11 +129,13 @@ abstract class Runner
 
    /**
     * Validate the resolved case selection before execution.
+    *
+    * @param array<int,array<string,scalar>> $rounds Fully resolved execution rounds.
     */
-   public function validate (Configs $Configs): void
+   public function validate (Configs $Configs, array $rounds = []): void
    {
       if ($this->Validator !== null) {
-         ($this->Validator)($this, $Configs);
+         ($this->Validator)($this, $Configs, $rounds);
       }
    }
 

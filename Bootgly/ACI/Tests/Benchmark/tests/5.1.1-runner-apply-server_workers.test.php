@@ -1,7 +1,5 @@
 <?php
 
-use Generator;
-
 use Bootgly\ACI\Tests\Assertion\Auxiliaries\Op;
 use Bootgly\ACI\Tests\Assertion;
 use Bootgly\ACI\Tests\Assertions;
@@ -57,19 +55,36 @@ return new Specification(
       // # A case may install one fail-closed validator after the concrete
       //   opponent/load selection becomes available.
       $validated = false;
-      $Runner->Validator = static function (Runner $Runner, Configs $Configs) use (&$validated): void {
+      $validatedRounds = [];
+      $Runner->Validator = static function (
+         Runner $Runner,
+         Configs $Configs,
+         array $rounds,
+      ) use (&$validated, &$validatedRounds): void {
          $validated = $Runner->opponents !== [] && $Configs->loadSet === 'proof';
+         $validatedRounds = $rounds;
       };
+      $rounds = [
+         ['server-workers' => 4],
+         ['server-workers' => 8],
+      ];
       $Runner->validate(Configs::parse([
          'opponents' => 'bootgly',
          'loads' => 'proof:*',
-      ]));
+      ]), $rounds);
 
       yield new Assertion(
          description: 'Runner invokes the optional case validator',
          fallback: 'The case validator did not receive the resolved benchmark selection!'
       )
          ->expect($validated, Op::Identical, true)
+         ->assert();
+
+      yield new Assertion(
+         description: 'Runner forwards every resolved round to the case validator',
+         fallback: 'The case validator did not receive the complete round plan!'
+      )
+         ->expect($validatedRounds, Op::Identical, $rounds)
          ->assert();
    })
 );

@@ -194,10 +194,12 @@ final class Runtime
       $settings = ini_get_all(null, true);
       $settings = is_array($settings) ? $settings : [];
       $ini = php_ini_loaded_file();
-      if ($ini === false) {
+      $scanned = php_ini_scanned_files();
+      $hasScanned = is_string($scanned) && trim($scanned) !== '';
+      if ($ini === false && $hasScanned === false) {
          $arguments[] = '-n';
       }
-      else {
+      elseif ($ini !== false) {
          $arguments[] = '-c';
          $arguments[] = $ini;
       }

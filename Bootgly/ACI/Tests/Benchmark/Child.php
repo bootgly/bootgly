@@ -32,6 +32,7 @@ use function is_string;
 use function json_encode;
 use function max;
 use function microtime;
+use function pcntl_waitpid;
 use function posix_kill;
 use function preg_replace;
 use function proc_close;
@@ -119,7 +120,7 @@ PHP;
       if ($grace < 0) {
          throw new \InvalidArgumentException('Benchmark child termination grace can not be negative');
       }
-      foreach (['pcntl_exec', 'posix_kill', 'posix_setsid'] as $function) {
+      foreach (['pcntl_exec', 'pcntl_waitpid', 'posix_kill', 'posix_setsid'] as $function) {
          if (self::verify($function) === false) {
             throw new RuntimeException("Benchmark child process-group isolation requires {$function}()");
          }
@@ -308,6 +309,15 @@ PHP;
                return true;
             }
          }
+
+         // When this PHP process is PID 1 (notably in the framework Docker
+         // image), it adopts orphaned descendants from the isolated child.
+         // Reap only children from this exact process group. Otherwise a
+         // zombie keeps posix_kill(-$PGID, 0) true forever even though no
+         // executable descendant remains.
+         do {
+            $reaped = pcntl_waitpid(-$PGID, $childStatus, WNOHANG);
+         } while ($reaped > 0);
 
          return @posix_kill(-$PGID, 0);
       };

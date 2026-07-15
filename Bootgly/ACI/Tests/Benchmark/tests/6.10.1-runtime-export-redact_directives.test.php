@@ -18,6 +18,7 @@ return new Specification(
       try {
          $raw = Runtime::inspect();
          $export = Runtime::export();
+         $replay = Runtime::replay();
          $JSON = json_encode($export, JSON_THROW_ON_ERROR);
       }
       finally {
@@ -38,6 +39,29 @@ return new Specification(
                && array_key_exists('memory_limit', $export['directives'])
                && ($export['directives_policy']['schema'] ?? null) === 'performance-allowlist/v1'
                && ($export['directives_policy']['omitted'] ?? 0) > 0,
+            Op::Identical,
+            true
+         )
+         ->assert();
+
+      $ini = php_ini_loaded_file();
+      $scanned = php_ini_scanned_files();
+      $hasScanned = is_string($scanned) && trim($scanned) !== '';
+      $noINI = in_array('-n', $replay, true);
+      $position = array_search('-c', $replay, true);
+
+      yield new Assertion(
+         description: 'Runtime replay preserves scanned INI fragments when no main file is loaded',
+         fallback: 'Runtime replay disabled active scanned configuration or lost the main INI file!'
+      )
+         ->expect(
+            $ini === false
+               ? ($noINI === !$hasScanned)
+               : (
+                  $noINI === false
+                  && is_int($position)
+                  && ($replay[$position + 1] ?? null) === $ini
+               ),
             Op::Identical,
             true
          )

@@ -832,7 +832,7 @@ class TestCommand extends Command
       //   resolved runner config, rendering a banner or starting any measured
       //   process.
       try {
-         $Runner->validate($Configs);
+         $Runner->validate($Configs, $rounds);
       }
       catch (Throwable $Throwable) {
          $Alert->Type::Failure->set();

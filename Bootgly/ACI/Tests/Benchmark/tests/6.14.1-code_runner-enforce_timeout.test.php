@@ -9,9 +9,19 @@ use Bootgly\ACI\Tests\Benchmark\Opponent;
 use Bootgly\ACI\Tests\Suite\Test\Specification;
 
 
+$runnerFile = BOOTGLY_ROOT_DIR . '../bootgly_benchmarks/runners/Code.php';
+if (is_file($runnerFile) === false) {
+   return new Specification(
+      description: 'It should enforce the Code runner timeout in JSON and text modes '
+         . '(requires the optional bootgly_benchmarks sibling checkout)',
+      skip: true,
+      test: static function (): void {}
+   );
+}
+
 return new Specification(
    description: 'It should enforce the Code runner timeout in JSON and text modes',
-   test: new Assertions(Case: function (): Generator
+   test: new Assertions(Case: function () use ($runnerFile): Generator
    {
       $root = sys_get_temp_dir() . '/bootgly-code-timeout-' . bin2hex(random_bytes(12));
       mkdir($root, 0o755);
@@ -30,7 +40,7 @@ return new Specification(
          . 'usleep(5_000_000);' . "\n";
       file_put_contents($script, $scriptSource);
       $Artifacts = Artifacts::create('CodeTimeout', "{$root}/runs");
-      $Runner = include BOOTGLY_ROOT_DIR . '../bootgly_benchmarks/runners/Code.php';
+      $Runner = include $runnerFile;
       $Runner->timeout = 1;
       $Runner->add(new Opponent('Timeout', $script));
       $Runner->bind($Artifacts);

@@ -49,6 +49,16 @@ return new Suite(
       '6.14.1-code_runner-enforce_timeout',
       '6.15.1-manifest-redact-untrusted_argv',
       '6.15.2-command-reject-malformed_argv',
+      // Worker evidence — nonce-bound proof, lease and sealing protocol
+      '6.16.1-worker_evidence-prove_protocol',
+      '6.16.2-worker_warmup-prove_matrix',
+      '6.16.3-worker_evidence-prove_generic_lifecycle',
+      '6.16.4-worker_generation-prove_stability',
+      '6.16.5-worker_generation-reject_runner_fault',
+      '6.16.6-worker_sweep-reject-late_matrix',
+      '6.16.7-amphp-stop-isolate-worker_tree',
+      // Database parity — selected-load capability contract
+      '6.17.1-database_parity-enforce_contract',
       // Chart — native SVG rendering
       '7.1.1-chart-render-svg',
       // Report — Markdown + SVG artifacts
