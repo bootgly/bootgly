@@ -15,18 +15,31 @@ use const EXCIMER_CPU;
 use const EXCIMER_REAL;
 use function array_slice;
 use function array_values;
-use function file_put_contents;
+use function bin2hex;
+use function fclose;
+use function fflush;
+use function fopen;
+use function function_exists;
+use function fsync;
+use function fwrite;
 use function getenv;
 use function is_dir;
 use function json_encode;
 use function mkdir;
 use function posix_getpid;
+use function random_bytes;
 use function register_shutdown_function;
+use function rename;
 use function round;
+use function rtrim;
 use function str_pad;
 use function str_repeat;
+use function str_starts_with;
+use function strtolower;
 use function strlen;
 use function substr;
+use function trim;
+use function unlink;
 use function usort;
 use ExcimerLog;
 use ExcimerProfiler;
@@ -40,10 +53,11 @@ use ExcimerProfiler;
  * Lifecycle:
  *   - start(): idempotent per-worker init (no-op if same PID already started).
  *   - dump():  auto-invoked at worker shutdown via register_shutdown_function.
- *   - Dumps per-worker files into storage/temp/profile/:
+ *   - Dumps per-worker files into the active run's profiles/server/ directory:
  *       worker-{PID}.collapsed     (Brendan Gregg collapsed format → flamegraph.pl)
- *       worker-{PID}.speedscope    (speedscope.app JSON)
- *       worker-{PID}.aggregated    (top-N self/inclusive table — human readable)
+ *       worker-{PID}.speedscope.json (speedscope.app JSON)
+ *       worker-{PID}.aggregated.txt  (top-N self/inclusive table — human readable)
+ *   - Falls back to storage/temp/profile/ only outside a benchmark run.
  *
  * Enable via env: `BOOTGLY_PROFILE=1`
  * Tune period via env: `BOOTGLY_PROFILE_PERIOD=0.0001` (default 100µs = 10kHz)
@@ -53,16 +67,16 @@ final class Profiler
 {
    // * Data
    private static null|ExcimerProfiler $Profiler = null;
-   private static int $workerPid = 0;
-   private static string $outputDir = '';
+   private static int $workerPID = 0;
+   private static string $outputDirectory = '';
 
 
    public static function start (): void
    {
-      $pid = posix_getpid();
+      $PID = posix_getpid();
 
       // ? Already started in this process — idempotent
-      if (self::$Profiler !== null && self::$workerPid === $pid) {
+      if (self::$Profiler !== null && self::$workerPID === $PID) {
          return;
       }
 
@@ -77,8 +91,38 @@ final class Profiler
       $Profiler->start();
 
       self::$Profiler = $Profiler;
-      self::$workerPid = $pid;
-      self::$outputDir = __DIR__ . '/../../../storage/temp/profile';
+      self::$workerPID = $PID;
+      $runDirectory = getenv('BENCHMARK_RUN_DIR');
+      if ($runDirectory !== false && $runDirectory !== '') {
+         self::$outputDirectory = rtrim($runDirectory, '/\\') . '/profiles/server';
+
+         $round = getenv('BENCHMARK_ROUND');
+         if ($round !== false && $round !== '') {
+            $round = self::normalize($round);
+            self::$outputDirectory .= str_starts_with($round, 'round-')
+               ? "/$round"
+               : "/round-$round";
+         }
+
+         $profileScope = getenv('BENCHMARK_PROFILE_SCOPE');
+         if ($profileScope !== false && $profileScope !== '') {
+            $profileScope = self::normalize($profileScope);
+            self::$outputDirectory .= str_starts_with($profileScope, 'scope-')
+               ? "/$profileScope"
+               : "/scope-$profileScope";
+         }
+
+         $invocationDirectory = getenv('BENCHMARK_INVOCATION_DIR');
+         if ($invocationDirectory !== false && $invocationDirectory !== '') {
+            $invocation = self::normalize(basename(rtrim($invocationDirectory, '/\\')));
+            self::$outputDirectory .= str_starts_with($invocation, 'invocation-')
+               ? "/$invocation"
+               : "/invocation-$invocation";
+         }
+      }
+      else {
+         self::$outputDirectory = __DIR__ . '/../../../storage/temp/profile';
+      }
 
       register_shutdown_function([self::class, 'dump']);
    }
@@ -92,24 +136,101 @@ final class Profiler
       self::$Profiler->stop();
       $Log = self::$Profiler->getLog();
 
-      $dir = self::$outputDir;
-      if (! is_dir($dir)) {
-         @mkdir($dir, 0777, true);
+      $directory = self::$outputDirectory;
+      if (
+         is_dir($directory) === false
+         && @mkdir($directory, 0777, true) === false
+         && is_dir($directory) === false
+      ) {
+         fwrite(STDERR, "ERROR: Cannot create server profile directory: $directory\n");
+         self::$Profiler = null;
+         return;
       }
 
-      $pid = self::$workerPid;
-      $base = "$dir/worker-$pid";
+      $PID = self::$workerPID;
+      $base = "$directory/worker-$PID";
 
       // @ Brendan Gregg collapsed format → flamegraph.pl
-      file_put_contents("$base.collapsed", $Log->formatCollapsed());
+      $published = self::publish("$base.collapsed", $Log->formatCollapsed());
 
       // @ speedscope.app JSON
-      file_put_contents("$base.speedscope.json", json_encode($Log->getSpeedscopeData()));
+      $JSON = json_encode($Log->getSpeedscopeData());
+      $published = $JSON !== false
+         && self::publish("$base.speedscope.json", $JSON)
+         && $published;
 
       // @ Human-readable top-N table
-      file_put_contents("$base.aggregated.txt", self::tabulate($Log));
+      $published = self::publish("$base.aggregated.txt", self::tabulate($Log))
+         && $published;
+
+      if ($published === false) {
+         fwrite(STDERR, "ERROR: Cannot publish every server profile artifact at: $base\n");
+      }
 
       self::$Profiler = null;
+   }
+
+   /**
+    * Publish one complete profile through a same-directory atomic rename.
+    */
+   private static function publish (string $file, string $contents): bool
+   {
+      $Handle = false;
+      $temporary = '';
+      for ($attempt = 0; $attempt < 8; $attempt++) {
+         $temporary = $file . '.' . bin2hex(random_bytes(16)) . '.tmp';
+         $Handle = @fopen($temporary, 'x+b');
+         if ($Handle !== false) {
+            break;
+         }
+      }
+      if ($Handle === false) {
+         return false;
+      }
+
+      $complete = false;
+      try {
+         $length = strlen($contents);
+         $offset = 0;
+         while ($offset < $length) {
+            $written = fwrite($Handle, substr($contents, $offset));
+            if ($written === false || $written === 0) {
+               break;
+            }
+            $offset += $written;
+         }
+         $complete = $offset === $length
+            && fflush($Handle)
+            && (function_exists('fsync') === false || fsync($Handle));
+      }
+      finally {
+         fclose($Handle);
+         if ($complete === false) {
+            @unlink($temporary);
+         }
+      }
+
+      if ($complete === false || @rename($temporary, $file) === false) {
+         @unlink($temporary);
+         return false;
+      }
+
+      return true;
+   }
+
+   /**
+    * Normalize one environment-provided value into a safe path segment.
+    */
+   private static function normalize (string $segment): string
+   {
+      $segment = strtolower(trim($segment));
+      if ($segment === '') {
+         throw new \InvalidArgumentException('Invalid empty benchmark profile segment.');
+      }
+
+      return \preg_match('/\A[a-z0-9][a-z0-9_-]*\z/D', $segment) === 1
+         ? $segment
+         : 'encoded-' . bin2hex($segment);
    }
 
    private static function tabulate (ExcimerLog $Log): string
@@ -133,7 +254,7 @@ final class Profiler
       $selfCols = array_values($rows);
       usort($selfCols, fn ($a, $b) => $b['self'] <=> $a['self']);
 
-      $out = "# Excimer profile — worker PID " . self::$workerPid . "\n";
+      $out = "# Excimer profile — worker PID " . self::$workerPID . "\n";
       $out .= "# Total samples: $total\n";
       $out .= "# Sample period: " . (getenv('BOOTGLY_PROFILE_PERIOD') ?: '0.0001') . "s\n";
       $out .= "# Event type:    " . (getenv('BOOTGLY_PROFILE_EVENT') ?: 'cpu') . "\n";

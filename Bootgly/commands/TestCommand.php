@@ -12,12 +12,17 @@ namespace Bootgly\commands;
 
 
 use const BOOTGLY_ROOT_DIR;
-use const BOOTGLY_STORAGE_DIR;
 use const BOOTGLY_VERSION;
 use const BOOTGLY_WORKING_DIR;
+use const DIRECTORY_SEPARATOR;
+use const JSON_THROW_ON_ERROR;
+use const PHP_BINARY;
 use const PHP_EOL;
 use const STDERR;
+use const STDIN;
+use const STDOUT;
 use const STR_PAD_LEFT;
+use function array_filter;
 use function array_intersect_key;
 use function array_key_last;
 use function array_keys;
@@ -25,22 +30,40 @@ use function array_map;
 use function array_slice;
 use function array_unique;
 use function array_values;
+use function basename;
+use function bin2hex;
 use function count;
 use function dirname;
 use function explode;
+use function file_get_contents;
 use function file_put_contents;
 use function fwrite;
+use function getcwd;
+use function getenv;
+use function hash;
+use function hash_equals;
+use function implode;
 use function in_array;
 use function is_array;
 use function is_dir;
 use function is_file;
+use function is_link;
+use function is_resource;
+use function is_string;
+use function json_decode;
+use function json_encode;
 use function ltrim;
+use function max;
 use function ob_end_clean;
 use function ob_start;
 use function preg_match;
 use function preg_replace;
+use function proc_close;
+use function proc_open;
 use function putenv;
+use function random_bytes;
 use function realpath;
+use function rename;
 use function rtrim;
 use function scandir;
 use function sort;
@@ -48,10 +71,14 @@ use function str_contains;
 use function str_ends_with;
 use function str_pad;
 use function str_replace;
+use function strlen;
 use function strtolower;
 use function substr;
+use function unlink;
 use Closure;
 use LogicException;
+use RuntimeException;
+use stdClass;
 use Throwable;
 
 use const Bootgly\ABI\BOOTSTRAP_FILENAME;
@@ -59,12 +86,16 @@ use const Bootgly\CLI;
 use Bootgly\ABI\Data\__String\Escapeable\Text\Formattable;
 use Bootgly\ACI\Logs\Data\Display;
 use Bootgly\ACI\Tests;
+use Bootgly\ACI\Tests\Benchmark\Artifacts;
 use Bootgly\ACI\Tests\Benchmark\Configs;
 use Bootgly\ACI\Tests\Benchmark\Configs\Options;
 use Bootgly\ACI\Tests\Benchmark\Info;
+use Bootgly\ACI\Tests\Benchmark\Manifest;
+use Bootgly\ACI\Tests\Benchmark\Outcome;
 use Bootgly\ACI\Tests\Benchmark\Provenance;
 use Bootgly\ACI\Tests\Benchmark\Report;
 use Bootgly\ACI\Tests\Benchmark\Runner;
+use Bootgly\ACI\Tests\Benchmark\Runtime;
 use Bootgly\ACI\Tests\Benchmark\Summary;
 use Bootgly\ACI\Tests\Coverage;
 use Bootgly\ACI\Tests\Coverage\Drivers\Native;
@@ -386,6 +417,39 @@ class TestCommand extends Command
     */
    public function benchmark (array $arguments, array $options): bool
    {
+      $machine = strtolower((string) ($options['format'] ?? 'text')) === 'json';
+      $supervised = $machine
+         && getenv('BENCHMARK_JSON_INNER') === '1'
+         && $this->authorize();
+      if ($supervised) {
+         $expectedRuntime = getenv('BENCHMARK_RUNTIME_FINGERPRINT');
+         $runtimeMatches = is_string($expectedRuntime)
+            && $expectedRuntime !== ''
+            && hash_equals($expectedRuntime, Runtime::fingerprint());
+
+         // The run identity remains available to descendants for artifact
+         // scoping; the one-use authorization material does not.
+         putenv('BENCHMARK_JSON_INNER');
+         putenv('BENCHMARK_JSON_TOKEN');
+         putenv('BENCHMARK_RUNTIME_FINGERPRINT');
+
+         if ($runtimeMatches === false) {
+            fwrite(STDERR, "Supervised benchmark PHP runtime differs from its parent; measurement refused.\n");
+            return false;
+         }
+      }
+
+      // # Machine-mode supervisor. The outer process is intentionally small:
+      //   it re-executes this exact CLI invocation and owns the only write to
+      //   the caller's STDOUT. Every byte produced by the benchmark process or
+      //   one of its inherited children is redirected into run-local logs.
+      if (
+         $machine
+         && $supervised === false
+      ) {
+         return $this->supervise($arguments, $options);
+      }
+
       $Output = CLI->Terminal->Output;
       $Alert = new Alert($Output);
 
@@ -582,6 +646,79 @@ class TestCommand extends Command
          return false;
       }
 
+      // # One exclusive workspace owns every artifact from this invocation.
+      //   A JSON supervisor passes its already-claimed identity to the inner
+      //   process; text mode claims the same structure directly.
+      try {
+         if ($supervised) {
+            $runID = getenv('BENCHMARK_RUN_ID');
+            $runDirectory = getenv('BENCHMARK_RUN_DIR');
+            if (
+               $runID === false || $runID === ''
+               || $runDirectory === false || $runDirectory === ''
+            ) {
+               throw new RuntimeException('Incomplete supervised benchmark run workspace environment.');
+            }
+
+            $Artifacts = Artifacts::open($runID, $runDirectory);
+         }
+         else {
+            $Artifacts = Artifacts::create($caseName);
+         }
+      }
+      catch (Throwable $Throwable) {
+         $Alert->Type::Failure->set();
+         $Alert->message = $Throwable->getMessage();
+         $Alert->render();
+         return false;
+      }
+
+      $Manifest = $supervised
+         ? null
+         : new Manifest(
+            $Artifacts,
+            $caseName,
+            (array) ($_SERVER['argv'] ?? []),
+            getcwd() ?: BOOTGLY_WORKING_DIR,
+         );
+      $Manifest?->select([
+         'case' => $caseName,
+         'runner' => $Configs->runner,
+         'format' => $Configs->format,
+         'results' => $Configs->results,
+         'load_set' => $Configs->loadSet,
+         'loads' => $Configs->loads,
+         'opponents' => $Configs->opponents,
+         'round_options' => [],
+         'config' => $provenance,
+      ]);
+      $manifestExit = 1;
+      $manifestFinished = false;
+      $footerRendered = false;
+
+      // ! The command is normally one process per invocation, but tests and
+      //   embedding callers may reuse it. Restore every harness-owned variable
+      //   even when a runner throws or an early validation return is taken.
+      $benchmarkEnvironment = [];
+      foreach ([
+         'BENCHMARK_RUN_ID',
+         'BENCHMARK_RUN_DIR',
+         'BENCHMARK_ROUND',
+         'BENCHMARK_PROFILE_SCOPE',
+         'BENCHMARK_RESULT_FILE',
+         'BENCHMARK_LOAD_SET',
+         'BENCHMARK_FORMAT',
+         'BENCHMARK_RUNNER',
+         'BOOTGLY_WORKERS',
+         'DB_POOL_MAX',
+      ] as $name) {
+         $benchmarkEnvironment[$name] = getenv($name);
+      }
+
+      try {
+      putenv('BENCHMARK_RUN_ID=' . $Artifacts->ID);
+      putenv('BENCHMARK_RUN_DIR=' . $Artifacts->directory);
+
       // # Machine mode — STDOUT carries only the JSON document; every
       //   human-readable byte from here on (banner, progress, tables) is
       //   discarded so terminals, pipes and AI agents get pure JSON
@@ -643,9 +780,45 @@ class TestCommand extends Command
          $Alert->render();
          return false;
       }
+      $Runner->bind($Artifacts);
 
       // @ Apply runner-specific CLI options
       $Runner->configure($options);
+
+      // ! Reject typos before a runner can silently filter every opponent and
+      //   publish an empty benchmark as a successful invocation.
+      $availableOpponents = [];
+      foreach ($Runner->opponents as $Opponent) {
+         $availableOpponents[Configs::slug($Opponent->name)] = $Opponent->name;
+      }
+      $unknownOpponents = [];
+      foreach ($Configs->opponents as $opponent) {
+         if (!isset($availableOpponents[Configs::slug($opponent)])) {
+            $unknownOpponents[] = $opponent;
+         }
+      }
+      if ($unknownOpponents !== []) {
+         $Alert->Type::Failure->set();
+         $Alert->message = 'Unknown benchmark opponent(s): ' . implode(', ', $unknownOpponents)
+            . '. Available: ' . implode(', ', array_values($availableOpponents)) . '.@.;';
+         $Alert->render();
+         return false;
+      }
+
+      if ($Configs->loads !== null) {
+         $maximumLoad = max(1, count($Runner->loads));
+         $invalidLoads = array_values(array_filter(
+            $Configs->loads,
+            static fn (int $load): bool => $load < 1 || $load > $maximumLoad,
+         ));
+         if ($invalidLoads !== []) {
+            $Alert->Type::Failure->set();
+            $Alert->message = 'Invalid load index(es): ' . implode(', ', $invalidLoads)
+               . ". Valid range for {$Configs->loadSet}: 1..{$maximumLoad}.@.;";
+            $Alert->render();
+            return false;
+         }
+      }
 
       // ! Sweep state
       $rounds = $Options->rounds;
@@ -653,17 +826,43 @@ class TestCommand extends Command
       $sweeping = $total > 1;
       $style = $Configs->output ?? ($sweeping ? 'compact' : 'full');
 
+      // ! Case-level fairness/capability checks need the resolved opponents,
+      //   loads and effective runner metadata. Reject before publishing the
+      //   resolved runner config, rendering a banner or starting any measured
+      //   process.
+      try {
+         $Runner->validate($Configs);
+      }
+      catch (Throwable $Throwable) {
+         $Alert->Type::Failure->set();
+         $Alert->message = $Throwable->getMessage() . '@.;';
+         $Alert->render();
+         return false;
+      }
+
+      $Manifest?->select([
+         'case' => $caseName,
+         'runner' => $Runner->name,
+         'format' => $Configs->format,
+         'results' => $Configs->results,
+         'load_set' => $Configs->loadSet,
+         'loads' => $Configs->loads,
+         'opponents' => $Configs->opponents,
+         'round_options' => $rounds,
+         'config' => [...$Runner->meta, ...$provenance],
+      ]);
+
       // @ Banner + summary — once per run, regardless of rounds
       $Info = Info::collect();
-      Summary::banner($Info, $Runner, $Configs, $caseName);
-      Summary::summary($Runner, $Configs);
-      if ($sweeping) {
-         Summary::sweep($Options->sweeps, $total);
-      }
+      Summary::banner($Info, $Runner, $Configs, $caseName, $Options, $style);
 
       // @@ Execution rounds — one benchmark run per resolved value map
       $exports = [];
       foreach ($rounds as $index => $round) {
+         $roundID = 'r' . str_pad((string) ($index + 1), 2, '0', STR_PAD_LEFT);
+         putenv("BENCHMARK_ROUND={$roundID}");
+         putenv('BENCHMARK_PROFILE_SCOPE');
+
          // @ Apply case option values (framework-known keys, e.g. server-workers)
          $Runner->apply($round);
 
@@ -672,6 +871,31 @@ class TestCommand extends Command
          }
 
          $results = $Runner->run($Configs);
+
+         // # Runners may discover provenance-relevant execution metadata only
+         //   while running (for example the Code runner's stdio sink). Refresh
+         //   the text-mode manifest selection before any terminal validation.
+         $Manifest?->select([
+            'case' => $caseName,
+            'runner' => $Runner->name,
+            'format' => $Configs->format,
+            'results' => $Configs->results,
+            'load_set' => $Configs->loadSet,
+            'loads' => $Configs->loads,
+            'opponents' => $Configs->opponents,
+            'round_options' => $rounds,
+            'config' => [...$Runner->meta, ...$provenance],
+         ]);
+
+         // ! Optional unavailable opponents may retain an empty N/A map, but a
+         //   missing selected opponent or an entirely empty round is failure.
+         $outcomeError = Outcome::check($results, $Configs->opponents);
+         if ($outcomeError !== null) {
+            $Alert->Type::Failure->set();
+            $Alert->message = $outcomeError . '@.;';
+            $Alert->render();
+            return false;
+         }
 
          // ! Re-capture at the round boundary. A mismatch cannot prove when the
          //   change occurred, so the result is rejected before it is persisted.
@@ -716,9 +940,14 @@ class TestCommand extends Command
             $config[$metaKey] = $metaValue;
          }
 
-         // # One .marks per round — the rNN suffix disambiguates same-second saves
-         $suffix = $sweeping ? 'r' . str_pad((string) ($index + 1), 2, '0', STR_PAD_LEFT) : '';
-         $marks = Summary::save($caseName, $results, $config, $suffix);
+         // # Stable names are safe because the containing run is exclusive.
+         $marks = Summary::save(
+            caseName: $caseName,
+            results: $results,
+            config: $config,
+            suffix: $sweeping ? $roundID : 'result',
+            Artifacts: $Artifacts,
+         );
 
          $exports[] = ['options' => $round, 'results' => $results, 'marks' => $marks, 'config' => $config];
       }
@@ -727,11 +956,11 @@ class TestCommand extends Command
       $generated = [];
       if ($Configs->results !== 'marks') {
          $run = self::extract($caseName, $Info, $Runner, $Configs, $Options, $exports, $options);
-         $resultsDir = BOOTGLY_STORAGE_DIR . "tests/benchmarks/{$caseName}/results";
+         $resultsDir = $Artifacts->directory . '/reports';
 
          $Report = new Report(charts: $Configs->results === 'charts');
          foreach ($Report->save($resultsDir, $run) as $file) {
-            $generated[] = "storage/tests/benchmarks/{$caseName}/results/{$file}";
+            $generated[] = $Artifacts->relate("reports/{$file}");
          }
       }
 
@@ -743,24 +972,57 @@ class TestCommand extends Command
             unset($config[$swept]);
          }
 
-         // ? Release the suppression — the JSON document must reach STDOUT
+         // ? Release the suppression. The inner process commits the document
+         //   to a dedicated file; only its supervisor may write to STDOUT.
          ob_end_clean();
 
-         echo Summary::export($caseName, $Runner->metric, $config, $Options->sweeps, $exports, $generated);
+         $JSON = Summary::export(
+            $caseName,
+            $Runner->metric,
+            $config,
+            $Options->sweeps,
+            $exports,
+            $generated,
+            $Artifacts->ID,
+            $Artifacts->relativeDirectory,
+            $Artifacts->pathBase,
+         );
+         $Document = json_decode($JSON, false, 512, JSON_THROW_ON_ERROR);
+         if (!($Document instanceof stdClass)) {
+            throw new RuntimeException('Benchmark JSON result must be an object.');
+         }
+
+         $JSON = json_encode($Document, JSON_THROW_ON_ERROR) . "\n";
+         $resultFile = getenv('BENCHMARK_JSON_RESULT');
+         if ($resultFile === false || $resultFile === '') {
+            throw new RuntimeException('BENCHMARK_JSON_RESULT is not configured for the inner benchmark process.');
+         }
+         Artifacts::commit($resultFile, $JSON);
 
          // ! Re-arm the suppression: late shutdown output must not trail the
-         //   JSON document on STDOUT
+         //   machine-readable result in the captured inner-process log.
          ob_start(static fn (string $chunk): string => '', 1);
 
          return true;
       }
 
       // @ Artifacts footer — full AND compact styles always point at the files
+      if ($Manifest instanceof Manifest) {
+         // # Advertise the stable run-local path now, then publish the manifest
+         //   only after every remaining text-mode rendering step succeeds.
+         $generated[] = $Artifacts->relate('manifest.json');
+      }
       $marks = [];
       foreach ($exports as $export) {
          $marks[] = $export['marks'];
       }
-      Summary::locate($marks, $generated);
+      Summary::locate(
+         $marks,
+         $generated,
+         $Artifacts->relativeDirectory,
+         $Artifacts->pathBase,
+      );
+      $footerRendered = true;
 
       // @ ANSI chart — opponents × mean throughput of the last round (server runs)
       if ($exports !== []) {
@@ -797,7 +1059,352 @@ class TestCommand extends Command
          echo "\n  {$DIM}{$Runner->postMessage}{$RESET}\n";
       }
 
+      if ($Manifest instanceof Manifest) {
+         try {
+            $Manifest->finish(0);
+            $manifestFinished = true;
+         }
+         catch (Throwable $Throwable) {
+            // # A retry in finally records the command failure if the first
+            //   atomic publication failed for a transient reason.
+            $manifestExit = 1;
+            throw $Throwable;
+         }
+      }
+
       return true;
+      }
+      finally {
+         if ($Manifest instanceof Manifest && $manifestFinished === false) {
+            try {
+               $Manifest->finish($manifestExit);
+               $manifestFinished = true;
+
+               // # Early text-mode validation failures still need a stable
+               //   pointer to their terminal manifest. Machine mode carries
+               //   the same paths in its one public JSON document.
+               if ($Configs->format === 'text' && $footerRendered === false) {
+                  Summary::locate(
+                     [],
+                     [$Artifacts->relate('manifest.json')],
+                     $Artifacts->relativeDirectory,
+                     $Artifacts->pathBase,
+                  );
+                  $footerRendered = true;
+               }
+            }
+            catch (Throwable) {
+               // Preserve the original benchmark error or false return.
+            }
+         }
+         foreach ($benchmarkEnvironment as $name => $value) {
+            $value === false
+               ? putenv($name)
+               : putenv("{$name}={$value}");
+         }
+      }
+   }
+
+   /**
+    * Execute a JSON benchmark in an isolated child process.
+    *
+    * @param array<string> $arguments Parsed benchmark arguments.
+    * @param array<string,bool|int|string> $options Parsed benchmark options.
+    */
+   private function supervise (array $arguments, array $options): bool
+   {
+      $caseName = (string) ($arguments[0] ?? 'unknown');
+      $ID = null;
+      $directory = null;
+      $STDOUTFile = null;
+      $STDERRFile = null;
+      $STDOUTCapture = null;
+      $STDERRCapture = null;
+      $resultFile = null;
+      $claimFile = null;
+      $exitCode = null;
+      $Artifacts = null;
+      $Manifest = null;
+
+      try {
+         $Artifacts = Artifacts::create($caseName);
+         $Manifest = new Manifest(
+            $Artifacts,
+            $caseName,
+            (array) ($_SERVER['argv'] ?? []),
+            getcwd() ?: BOOTGLY_WORKING_DIR,
+         );
+         $Requested = Configs::parse($options);
+         $Manifest->select([
+            'case' => $caseName,
+            'runner' => $Requested->runner,
+            'format' => $Requested->format,
+            'results' => $Requested->results,
+            'load_set' => $Requested->loadSet,
+            'loads' => $Requested->loads,
+            'opponents' => $Requested->opponents,
+            'round_options' => [],
+            'config' => [],
+         ]);
+         $ID = $Artifacts->ID;
+         $directory = $Artifacts->directory;
+         $STDOUTFile = $Artifacts->resolve('logs/harness.stdout.log');
+         $STDERRFile = $Artifacts->resolve('logs/harness.stderr.log');
+         $STDOUTCapture = $STDOUTFile . '.capture';
+         $STDERRCapture = $STDERRFile . '.capture';
+         $resultFile = $Artifacts->resolve('result.json');
+         $claimFile = $Artifacts->resolve('.supervisor.claim');
+         $token = bin2hex(random_bytes(32));
+         Artifacts::commit($claimFile, hash('sha256', $token));
+
+         $entry = (string) ($_SERVER['SCRIPT_FILENAME'] ?? ($_SERVER['argv'][0] ?? ''));
+         $resolved = $entry !== '' ? realpath($entry) : false;
+         if ($resolved === false || !is_file($resolved)) {
+            throw new RuntimeException('Unable to resolve the active Bootgly CLI entry point.');
+         }
+
+         /** @var array<int,string> $route */
+         $route = (array) ($_SERVER['argv'] ?? []);
+         $command = [
+            PHP_BINARY,
+            ...Runtime::replay(),
+            $resolved,
+            ...array_slice($route, 1),
+         ];
+         $descriptors = [
+            0 => STDIN,
+            1 => ['file', $STDOUTCapture, 'xb'],
+            2 => ['file', $STDERRCapture, 'xb'],
+         ];
+
+         $environment = getenv();
+         if (!is_array($environment)) {
+            $environment = [];
+         }
+         $environment['BENCHMARK_JSON_INNER'] = '1';
+         $environment['BENCHMARK_RUN_ID'] = $ID;
+         $environment['BENCHMARK_RUN_DIR'] = $directory;
+         $environment['BENCHMARK_JSON_RESULT'] = $resultFile;
+         $environment['BENCHMARK_JSON_TOKEN'] = $token;
+         $environment['BENCHMARK_RUNTIME_FINGERPRINT'] = Runtime::fingerprint();
+
+         $pipes = [];
+         $process = @proc_open(
+            $command,
+            $descriptors,
+            $pipes,
+            getcwd() ?: null,
+            $environment,
+            ['bypass_shell' => true]
+         );
+         if (!is_resource($process)) {
+            @unlink($STDOUTCapture);
+            @unlink($STDERRCapture);
+            throw new RuntimeException('Unable to start the isolated benchmark process.');
+         }
+
+         $exitCode = proc_close($process);
+         $STDOUTPublished = @rename($STDOUTCapture, $STDOUTFile);
+         $STDERRPublished = @rename($STDERRCapture, $STDERRFile);
+         if ($STDOUTPublished === false || $STDERRPublished === false) {
+            throw new RuntimeException('Unable to atomically publish the isolated benchmark logs.');
+         }
+         if ($exitCode !== 0) {
+            throw new RuntimeException("The isolated benchmark process exited with status {$exitCode}.");
+         }
+         if (!is_file($resultFile)) {
+            throw new RuntimeException('The isolated benchmark process did not produce result.json.');
+         }
+
+         $JSON = file_get_contents($resultFile);
+         if ($JSON === false) {
+            throw new RuntimeException('Unable to read the isolated benchmark result.');
+         }
+
+         // ! JSON_THROW_ON_ERROR validates the whole file, including trailing
+         //   data. Re-encoding normalizes it to exactly one object + one LF.
+         $Document = json_decode($JSON, false, 512, JSON_THROW_ON_ERROR);
+         if (!($Document instanceof stdClass)) {
+            throw new RuntimeException('The isolated benchmark result is not a JSON object.');
+         }
+
+         $Document->run = [
+            'id' => $Artifacts->ID,
+            'directory' => $Artifacts->relativeDirectory,
+            'path_base' => $Artifacts->pathBase,
+            'stdout' => $Artifacts->relate('logs/harness.stdout.log'),
+            'stderr' => $Artifacts->relate('logs/harness.stderr.log'),
+            'result' => $Artifacts->relate('result.json'),
+            'exit_code' => $exitCode,
+         ];
+         $artifacts = isset($Document->artifacts) && is_array($Document->artifacts)
+            ? $Document->artifacts
+            : [];
+         $Document->artifacts = array_values(array_unique([
+            ...$artifacts,
+            ...$Artifacts->collect(),
+            $Artifacts->relate('manifest.json'),
+         ]));
+         $JSON = json_encode($Document, JSON_THROW_ON_ERROR) . "\n";
+         Artifacts::commit($resultFile, $JSON);
+         $Manifest->finish($exitCode, $Document);
+         self::emit($JSON);
+
+         return true;
+      }
+      catch (Throwable $Throwable) {
+         if (is_string($claimFile)) {
+            @unlink($claimFile);
+         }
+         // # Publish or replace any partially-created capture with an atomic
+         //   final log so failure metadata never points at `.capture` files.
+         if ($Artifacts instanceof Artifacts) {
+            foreach ([
+               [$STDOUTCapture, $STDOUTFile],
+               [$STDERRCapture, $STDERRFile],
+            ] as [$capture, $file]) {
+               if (!is_string($file)) {
+                  continue;
+               }
+               if (is_string($capture) && is_file($capture)) {
+                  if (is_file($file) || @rename($capture, $file) === false) {
+                     @unlink($capture);
+                  }
+               }
+               if (!is_file($file)) {
+                  try {
+                     Artifacts::commit($file, '');
+                  }
+                  catch (Throwable) {
+                     // The in-memory failure document remains available.
+                  }
+               }
+            }
+         }
+
+         $Document = new stdClass;
+         $Document->error = [
+            'code' => 'benchmark_isolation_failed',
+            'message' => $Throwable->getMessage(),
+         ];
+         $Document->run = [
+            'id' => $ID,
+            'directory' => $Artifacts instanceof Artifacts ? $Artifacts->relativeDirectory : $directory,
+            'path_base' => $Artifacts instanceof Artifacts ? $Artifacts->pathBase : null,
+            'stdout' => $Artifacts instanceof Artifacts
+               ? $Artifacts->relate('logs/harness.stdout.log')
+               : $STDOUTFile,
+            'stderr' => $Artifacts instanceof Artifacts
+               ? $Artifacts->relate('logs/harness.stderr.log')
+               : $STDERRFile,
+            'result' => $Artifacts instanceof Artifacts
+               ? $Artifacts->relate('result.json')
+               : $resultFile,
+            'exit_code' => $exitCode,
+         ];
+
+         try {
+            $JSON = json_encode($Document, JSON_THROW_ON_ERROR) . "\n";
+         }
+         catch (Throwable) {
+            $JSON = "{\"error\":{\"code\":\"benchmark_isolation_failed\",\"message\":\"Unable to encode benchmark failure\"}}\n";
+         }
+
+         // # Preserve a machine-readable failure artifact whenever the run
+         //   workspace itself was successfully allocated.
+         if ($resultFile !== null) {
+            try {
+               Artifacts::commit($resultFile, $JSON);
+
+               if ($Artifacts instanceof Artifacts) {
+                  $Document->artifacts = [
+                     ...$Artifacts->collect(),
+                     $Artifacts->relate('manifest.json'),
+                  ];
+                  $JSON = json_encode($Document, JSON_THROW_ON_ERROR) . "\n";
+                  Artifacts::commit($resultFile, $JSON);
+
+                  if ($Manifest instanceof Manifest) {
+                     try {
+                        $Manifest->finish($exitCode ?? 1, $Document);
+                     }
+                     catch (Throwable $ManifestThrowable) {
+                        $Document->error['manifest'] = $ManifestThrowable->getMessage();
+                        $Document->artifacts = array_values(array_filter(
+                           $Document->artifacts,
+                           static fn (string $artifact): bool => !str_ends_with($artifact, '/manifest.json')
+                        ));
+                        $JSON = json_encode($Document, JSON_THROW_ON_ERROR) . "\n";
+                        Artifacts::commit($resultFile, $JSON);
+                     }
+                  }
+               }
+            }
+            catch (Throwable) {
+               // The caller still receives the validated in-memory document.
+            }
+         }
+         self::emit($JSON);
+
+         return false;
+      }
+   }
+
+   /**
+    * Consume the one-use claim created by this invocation's JSON supervisor.
+    */
+   private function authorize (): bool
+   {
+      $ID = getenv('BENCHMARK_RUN_ID');
+      $directory = getenv('BENCHMARK_RUN_DIR');
+      $token = getenv('BENCHMARK_JSON_TOKEN');
+      if (
+         !is_string($ID) || $ID === ''
+         || !is_string($directory) || $directory === ''
+         || !is_string($token) || $token === ''
+      ) {
+         return false;
+      }
+
+      $resolved = realpath($directory);
+      if ($resolved === false || !is_dir($resolved) || basename($resolved) !== $ID) {
+         return false;
+      }
+
+      $claim = $resolved . DIRECTORY_SEPARATOR . '.supervisor.claim';
+      if (!is_file($claim) || is_link($claim)) {
+         return false;
+      }
+
+      $expected = file_get_contents($claim);
+      if (!is_string($expected) || !hash_equals($expected, hash('sha256', $token))) {
+         return false;
+      }
+
+      $consumed = $resolved . DIRECTORY_SEPARATOR . '.supervisor.claimed-'
+         . bin2hex(random_bytes(16));
+      if (!@rename($claim, $consumed)) {
+         return false;
+      }
+      @unlink($consumed);
+
+      return true;
+   }
+
+   /**
+    * Write a complete machine-readable document to STDOUT.
+    */
+   private static function emit (string $JSON): void
+   {
+      $length = strlen($JSON);
+      $offset = 0;
+      while ($offset < $length) {
+         $bytes = @fwrite(STDOUT, substr($JSON, $offset));
+         if ($bytes === false || $bytes === 0) {
+            return;
+         }
+         $offset += $bytes;
+      }
    }
 
    /**

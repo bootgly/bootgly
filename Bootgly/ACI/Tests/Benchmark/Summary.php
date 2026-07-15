@@ -12,32 +12,44 @@ namespace Bootgly\ACI\Tests\Benchmark;
 
 
 use const BOOTGLY_STORAGE_DIR;
+use const JSON_THROW_ON_ERROR;
+use const JSON_UNESCAPED_SLASHES;
 use const PHP_INT_MAX;
 use const STR_PAD_RIGHT;
+use function array_key_exists;
 use function array_keys;
 use function array_map;
+use function bin2hex;
 use function count;
 use function date;
-use function file_put_contents;
+use function explode;
+use function getmypid;
+use function gmdate;
 use function implode;
 use function in_array;
 use function is_array;
-use function is_dir;
+use function is_bool;
 use function json_encode;
 use function ksort;
 use function max;
-use function mkdir;
+use function microtime;
 use function number_format;
+use function preg_replace;
+use function random_bytes;
 use function sprintf;
 use function str_ends_with;
 use function str_pad;
 use function str_repeat;
+use function str_replace;
 use function strlen;
+use function trim;
 use function uasort;
+use function ucwords;
 use stdClass;
 
 use Bootgly\ABI\Data\__String\Bytes;
 use Bootgly\ABI\Data\__String\Escapeable\Text\Formattable;
+use Bootgly\ACI\Tests\Benchmark\Configs\Options;
 
 
 class Summary
@@ -46,51 +58,175 @@ class Summary
 
 
    /**
-    * Print system info banner.
+    * Print the complete benchmark configuration banner.
     *
-    * @param Info $Info
-    * @param Runner $Runner
-    * @param Configs $Configs
+    * Case options come directly from the parsed Options object. This keeps the
+    * banner independent from mutable per-round Runner state and makes fixed and
+    * swept server-worker values equally explicit.
     */
-   public static function banner (Info $Info, Runner $Runner, Configs $Configs, string $caseName = ''): void
+   public static function banner (
+      Info $Info,
+      Runner $Runner,
+      Configs $Configs,
+      string $caseName = '',
+      null|Options $Options = null,
+      string $style = 'full',
+   ): void
    {
-      $BOLD    = self::wrap(self::_BOLD_STYLE);
-      $DIM     = self::wrap(self::_DIM_STYLE);
-      $RESET   = self::_RESET_FORMAT;
+      $CYAN_BOLD = self::wrap(self::_CYAN_BOLD);
+      $DIM       = self::wrap(self::_DIM_STYLE);
+      $RESET     = self::_RESET_FORMAT;
 
-      echo self::wrap(self::_CYAN_BOLD) . "\n";
-      echo "╔══════════════════════════════════════════════════════════╗\n";
-      echo "║               Bootgly Benchmark Runner                   ║\n";
-      echo "╚══════════════════════════════════════════════════════════╝\n";
-      echo $RESET;
+      echo "\n{$CYAN_BOLD}  BOOTGLY BENCHMARK{$RESET}\n";
+      echo "{$DIM}  " . str_repeat('─', 62) . "{$RESET}\n";
 
-      if ($caseName !== '') {
-         echo "  ╰─ {$BOLD}Case:{$RESET} {$DIM}{$caseName}{$RESET}\n\n";
-      }
+      // # Host — stable execution context comes first.
+      self::write('Host', [
+         'Platform' => $Info->os,
+         'CPU' => "{$Info->cpuModel} ({$Info->cpuCount} cores)",
+         'Memory' => $Info->ram,
+         'Storage' => $Info->storage,
+         'Network' => $Info->network,
+         'Started' => $Info->date,
+      ]);
 
-      // # System
-      echo "{$BOLD}  System{$RESET}\n";
-      echo $DIM;
-      echo "  OS        {$Info->os}\n";
-      echo "  CPU       {$Info->cpuModel} ({$Info->cpuCount} cores)\n";
-      echo "  RAM       {$Info->ram}\n";
-      echo "  Storage   {$Info->storage}\n";
-      echo "  Network   {$Info->network}\n";
-      echo "  Date      {$Info->date}\n";
-      echo $RESET;
+      // # Case — resolved values, not guesses based on host CPU count.
+      $caseItems = [
+         'Name' => $caseName !== '' ? $caseName : 'unknown',
+         'Rounds' => $Options !== null && count($Options->rounds) > 1
+            ? count($Options->rounds) . ' (sweep)'
+            : '1',
+      ];
 
-      // # Runner banner sections (Dependencies, Configuration, etc.)
-      $sections = $Runner->banner($Configs);
-      foreach ($sections as $sectionName => $items) {
-         echo "\n{$BOLD}  {$sectionName}{$RESET}\n";
-         echo $DIM;
-         foreach ($items as $label => $value) {
-            echo "  " . str_pad($label, 10) . $value . "\n";
+      $serverWorkers = null;
+      if ($Options !== null) {
+         foreach (array_keys($Options->schema) as $name) {
+            if (isset($Options->sweeps[$name])) {
+               $value = self::describe($Options->sweeps[$name]);
+            }
+            else if (array_key_exists($name, $Options->values)) {
+               $value = self::present($Options->values[$name]);
+            }
+            else {
+               $value = $Options->schema[$name]['type'] === 'bool'
+                  ? 'disabled'
+                  : 'auto';
+            }
+
+            if ($name === 'server-workers') {
+               $serverWorkers = $value;
+               continue;
+            }
+
+            $caseItems[ucwords(str_replace('-', ' ', $name))] = $value;
          }
-         echo $RESET;
+      }
+      // # Optional case-local harness details. A Code case may provide no
+      //   subgroups; server cases can provide Client/Server, Dependencies, etc.
+      $sections = $Runner->banner($Configs);
+      if ($serverWorkers !== null) {
+         $server = $sections['Server'] ?? [];
+         unset($server['Server workers']);
+         $sections['Server'] = [
+            'Server workers' => $serverWorkers,
+            ...$server,
+         ];
+      }
+      foreach ($sections as $sectionName => $items) {
+         if ($items === []) {
+            continue;
+         }
+         $caseItems[$sectionName] = $items;
+      }
+      self::write('Case', $caseItems);
+
+      // # Runner — global execution/output configuration.
+      self::write('Runner', [
+         'Name' => $Runner->name !== '' ? $Runner->name : ($Configs->runner ?? 'default'),
+         'Output style' => $style,
+         'Format' => $Configs->format,
+         'Artifacts' => $Configs->results,
+      ]);
+
+      // # Concrete global selections. Keep the legacy banner-only call
+      //   contract when no Options context was supplied by an older caller.
+      if ($Options !== null) {
+         self::summary($Runner, $Configs, separate: false);
       }
 
       self::separate();
+   }
+
+   /**
+    * Render one compact, consistently aligned banner section.
+    *
+    * @param array<string,string|array<string,string>> $items
+    */
+   private static function write (string $title, array $items): void
+   {
+      $BOLD  = self::wrap(self::_BOLD_STYLE);
+      $CYAN  = self::wrap(self::_CYAN_FOREGROUND);
+      $DIM   = self::wrap(self::_DIM_STYLE);
+      $RESET = self::_RESET_FORMAT;
+
+      echo "\n{$CYAN}{$BOLD}  {$title}{$RESET}\n";
+
+      $position = 0;
+      $total = count($items);
+      foreach ($items as $label => $value) {
+         $position++;
+         $branch = $position === $total ? '└─' : '├─';
+
+         if (is_array($value)) {
+            echo "{$DIM}  {$branch} {$label}{$RESET}\n";
+
+            $childPosition = 0;
+            $childTotal = count($value);
+            $childWidth = max(
+               15,
+               max(array_map(strlen(...), array_keys($value))) + 1,
+            );
+            $stem = $position === $total ? '   ' : '│  ';
+            foreach ($value as $childLabel => $childValue) {
+               $childPosition++;
+               $childBranch = $childPosition === $childTotal ? '└─' : '├─';
+
+               echo "{$DIM}  {$stem}{$childBranch} " . str_pad($childLabel, $childWidth)
+                  . "{$RESET}{$childValue}\n";
+            }
+            continue;
+         }
+
+         echo "{$DIM}  {$branch} " . str_pad($label, 18) . "{$RESET}{$value}\n";
+      }
+   }
+
+   /**
+    * Describe a sweep without allowing a long series to dominate the banner.
+    *
+    * @param array<int,int> $values
+    */
+   private static function describe (array $values): string
+   {
+      $total = count($values);
+      if ($total <= 6) {
+         return implode(', ', $values) . " ({$total} values)";
+      }
+
+      return "{$values[0]}, {$values[1]}, …, {$values[$total - 2]}, {$values[$total - 1]}"
+         . " ({$total} values)";
+   }
+
+   /**
+    * Present a scalar option value consistently.
+    */
+   private static function present (bool|int|string $value): string
+   {
+      if (is_bool($value)) {
+         return $value ? 'enabled' : 'disabled';
+      }
+
+      return (string) $value;
    }
    public static function separate (): void
    {
@@ -103,16 +239,14 @@ class Summary
     * @param Runner $Runner
     * @param Configs $Configs
     */
-   public static function summary (Runner $Runner, Configs $Configs): void
+   public static function summary (Runner $Runner, Configs $Configs, bool $separate = true): void
    {
       $BOLD  = self::wrap(self::_BOLD_STYLE);
       $DIM   = self::wrap(self::_DIM_STYLE);
-      $CYAN  = self::wrap(self::_CYAN_FOREGROUND);
       $RESET = self::_RESET_FORMAT;
 
       // # Opponents
-      echo "{$BOLD}  Opponents{$RESET}\n";
-
+      $opponentItems = [];
       $isFirst = true;
       foreach ($Runner->opponents as $Opponent) {
          if ($Configs->opponents !== null && !in_array(Configs::slug($Opponent->name), array_map(Configs::slug(...), $Configs->opponents))) {
@@ -122,40 +256,44 @@ class Summary
          $version = $Opponent->version !== '' ? " {$Opponent->version}" : '';
          $baseline = $isFirst ? "{$DIM}  [baseline]{$RESET}" : '';
 
-         echo "{$CYAN}  ▸ {$RESET}"
-            . "{$BOLD}{$Opponent->name}{$RESET}"
-            . $version . $baseline . "\n";
+         $opponentItems['#' . (count($opponentItems) + 1)] = "{$BOLD}{$Opponent->name}{$RESET}"
+            . $version . $baseline;
 
          $isFirst = false;
       }
+      $opponentItems = [
+         'Selection' => count($opponentItems) . '/' . count($Runner->opponents) . ' opponents',
+         ...$opponentItems,
+      ];
+      self::write('Opponents', $opponentItems);
 
       // # Loads
       if ($Runner->loads !== []) {
-         $loads = $Runner->loads;
+         $Loads = $Runner->loads;
 
          // ? Apply load filter
-         $filtered = [];
-         foreach ($loads as $index => $Load) {
-         if ($Configs->loads !== null && !in_array($index + 1, $Configs->loads)) {
+         $FilteredLoads = [];
+         foreach ($Loads as $index => $Load) {
+            if ($Configs->loads !== null && !in_array($index + 1, $Configs->loads)) {
                continue;
             }
-            $filtered[$index] = $Load;
+            $FilteredLoads[$index] = $Load;
          }
 
-         echo "\n{$BOLD}  Loads (" . count($filtered) . "){$RESET}\n";
-
-         $prevGroup = '';
-         foreach ($filtered as $index => $Load) {
-            if ($Load->group !== '' && $Load->group !== $prevGroup) {
-               echo "    {$BOLD}{$Load->group}{$RESET}\n";
-               $prevGroup = $Load->group;
-            }
-
-            echo "{$DIM}      " . ($index + 1) . ". {$Load->label}{$RESET}\n";
+         $loadItems = [
+            'Load set' => $Configs->loadSet ?? 'not selected',
+            'Selection' => count($FilteredLoads) . '/' . count($Loads) . ' loads',
+         ];
+         foreach ($FilteredLoads as $index => $Load) {
+            $group = $Load->group !== '' ? "{$DIM}{$Load->group} · {$RESET}" : '';
+            $loadItems['#' . ($index + 1)] = $group . $Load->label;
          }
+         self::write('Loads', $loadItems);
       }
 
-      self::separate();
+      if ($separate) {
+         self::separate();
+      }
    }
 
    /**
@@ -196,7 +334,11 @@ class Summary
       $isServer = false;
       foreach ($results as $loads) {
          foreach ($loads as $Result) {
-            if ($Result->rps !== null) {
+            if (
+               $Result->rps !== null
+               || $Result->accounting !== null
+               || $Result->responses !== null
+            ) {
                $isServer = true;
                break 2;
             }
@@ -412,28 +554,34 @@ class Summary
     *        (server-workers, client-workers, connections, duration, ...) emitted
     *        in the file header so trend tooling can reconstruct the X axis from
     *        a range of .marks files alone.
-    * @param string $suffix Filename disambiguator inserted before `_bench.marks`
-    *        (e.g. `r01` per sweep round — save() timestamps are per-second).
+    * @param string $suffix Filename label inserted before `_bench.marks`
+    *        (e.g. `r01` per sweep round).
+    * @param Artifacts|null $Artifacts Invocation-owned workspace. The legacy
+    *        fallback remains collision-resistant and atomic for direct callers.
     *
     * @return string The saved file path, relative to the working directory.
     */
-   public static function save (string $caseName, array $results, array $config = [], string $suffix = ''): string
+   public static function save (
+      string $caseName,
+      array $results,
+      array $config = [],
+      string $suffix = '',
+      null|Artifacts $Artifacts = null,
+   ): string
    {
-      $dir = BOOTGLY_STORAGE_DIR . 'tests/benchmarks/' . $caseName;
-
-      if ( !is_dir($dir) ) {
-         mkdir($dir, 0775, true);
-      }
-
-      // ! Build the filename once — a second date() call could cross a
-      //   second boundary and display a path that does not exist.
-      $stamp = date('Y-m-d_His');
-      $name = $suffix !== '' ? "{$stamp}-{$suffix}" : $stamp;
-      $file = "$dir/{$name}_bench.marks";
+      $artifactLabel = trim((string) preg_replace('/[^A-Za-z0-9._-]+/', '-', $suffix), '-.');
+      $artifactLabel = $artifactLabel !== '' ? $artifactLabel : 'result';
 
       $lines = [];
       $lines[] = "# Benchmark: {$caseName}";
       $lines[] = "# Date: " . date('Y-m-d H:i:s');
+      if ($Artifacts !== null) {
+         // ! Invocation identity is descriptive metadata, not an experimental
+         //   configuration variable. Keeping it outside Config prevents trend
+         //   tooling from selecting a unique run ID as a varying X axis.
+         $lines[] = "# Run ID: {$Artifacts->ID}";
+         $lines[] = "# Run Directory: {$Artifacts->relativeDirectory}";
+      }
 
       // @ Emit run configuration so charting tools can reconstruct the axis
       //   without rerunning the benchmark.
@@ -471,12 +619,69 @@ class Summary
             if ($Result->transfer !== null) {
                $line .= " transfer={$Result->transfer}";
             }
+            if ($Result->scheduled !== null) {
+               $line .= " scheduled={$Result->scheduled}";
+            }
+            if ($Result->sent !== null) {
+               $line .= " sent={$Result->sent}";
+            }
+            if ($Result->responses !== null) {
+               $line .= " responses={$Result->responses}";
+            }
+            if ($Result->informational !== null) {
+               $line .= " informational={$Result->informational}";
+            }
+            if ($Result->outstanding !== null) {
+               $line .= " outstanding={$Result->outstanding}";
+            }
+            if ($Result->failed !== null) {
+               $line .= " failed={$Result->failed}";
+            }
+            if ($Result->writeFailed !== null) {
+               $line .= " write_failed={$Result->writeFailed}";
+            }
+            if ($Result->connectionFailed !== null) {
+               $line .= " connection_failed={$Result->connectionFailed}";
+            }
+            if ($Result->partialWrites !== null) {
+               $line .= " partial_writes={$Result->partialWrites}";
+            }
+            if ($Result->accounting !== null) {
+               $line .= ' accounting=' . ($Result->accounting ? 'valid' : 'invalid');
+            }
+            if ($Result->statuses !== null) {
+               $line .= ' statuses=' . json_encode((object) $Result->statuses);
+            }
+            if ($Result->failures !== null) {
+               $line .= ' failures=' . json_encode((object) $Result->failures);
+            }
+            if ($Result->writeFailures !== null) {
+               $line .= ' write_failures=' . json_encode((object) $Result->writeFailures);
+            }
 
             $lines[] = $line;
          }
       }
 
-      file_put_contents($file, implode("\n", $lines) . "\n");
+      $contents = implode("\n", $lines) . "\n";
+
+      if ($Artifacts !== null) {
+         return $Artifacts->write("marks/{$artifactLabel}_bench.marks", $contents);
+      }
+
+      // ! Direct API callers still receive a collision-resistant, atomically
+      //   published file even without an invocation workspace.
+      $dir = BOOTGLY_STORAGE_DIR . 'tests/benchmarks/' . $caseName;
+      $time = sprintf('%.6F', microtime(true));
+      [$seconds, $fraction] = explode('.', $time, 2);
+      $PID = getmypid();
+      $stamp = gmdate('Y-m-d_His', (int) $seconds)
+         . "-{$fraction}-p{$PID}-"
+         . bin2hex(random_bytes(8));
+      $name = "{$stamp}-{$artifactLabel}";
+      $file = "{$dir}/{$name}_bench.marks";
+
+      Artifacts::commit($file, $contents);
 
       // : Saved file path (relative) — the run footer (artifacts) displays it
       return "storage/tests/benchmarks/{$caseName}/{$name}_bench.marks";
@@ -535,8 +740,15 @@ class Summary
     *
     * @param array<int,string> $marks Saved `.marks` paths (one per round).
     * @param array<int,string> $generated Report/chart paths (when `--results` > marks).
+    * @param string|null $directory Invocation-owned artifact directory.
+    * @param string|null $pathBase Absolute base for relative artifact paths.
     */
-   public static function locate (array $marks, array $generated = []): void
+   public static function locate (
+      array $marks,
+      array $generated = [],
+      null|string $directory = null,
+      null|string $pathBase = null,
+   ): void
    {
       $BOLD  = self::wrap(self::_BOLD_STYLE);
       $DIM   = self::wrap(self::_DIM_STYLE);
@@ -544,15 +756,24 @@ class Summary
 
       echo "\n{$BOLD}  Artifacts{$RESET}\n";
 
+      if ($pathBase !== null) {
+         echo "{$DIM}  " . str_pad('Base', 9) . "{$pathBase}{$RESET}\n";
+      }
+      if ($directory !== null) {
+         echo "{$DIM}  " . str_pad('Run', 9) . "{$directory}{$RESET}\n";
+      }
+
       // # Marks — one file per round
       foreach ($marks as $file) {
-         echo "{$DIM}  Marks   {$file}{$RESET}\n";
+         echo "{$DIM}  Marks    {$file}{$RESET}\n";
       }
 
       // # Report + charts
       foreach ($generated as $file) {
-         $label = str_ends_with($file, '.svg') ? 'Chart' : 'Report';
-         echo "{$DIM}  " . str_pad($label, 8) . "{$file}{$RESET}\n";
+         $label = str_ends_with($file, '/manifest.json')
+            ? 'Manifest'
+            : (str_ends_with($file, '.svg') ? 'Chart' : 'Report');
+         echo "{$DIM}  " . str_pad($label, 8) . " {$file}{$RESET}\n";
       }
 
       echo "\n";
@@ -561,8 +782,8 @@ class Summary
    /**
     * Serialize a full run (all rounds) to a JSON document.
     *
-    * Emitted as the LAST stdout document in `--format=json` mode, so
-    * machine consumers can `tail -n 1` the output.
+    * The supervised `--format=json` command validates this complete document
+    * and makes it the only content written to its public stdout descriptor.
     *
     * @param string $caseName
     * @param string $metric
@@ -570,6 +791,9 @@ class Summary
     * @param array<string,array<int,int>> $sweeps Swept option name => expanded values.
     * @param array<int,array{options:array<string,scalar>,results:array<string,array<string,Result>>,marks:string}> $rounds
     * @param array<int,string> $artifacts Report/chart paths (when generated).
+    * @param string|null $ID Collision-resistant invocation ID.
+    * @param string|null $directory Invocation-owned artifact directory.
+    * @param string|null $pathBase Absolute base for relative artifact paths.
     */
    public static function export (
       string $caseName,
@@ -577,10 +801,16 @@ class Summary
       array $config,
       array $sweeps,
       array $rounds,
-      array $artifacts = []
+      array $artifacts = [],
+      null|string $ID = null,
+      null|string $directory = null,
+      null|string $pathBase = null,
    ): string
    {
       $document = [
+         'run' => $ID === null
+            ? new stdClass
+            : ['id' => $ID, 'directory' => $directory, 'path_base' => $pathBase],
          'case' => $caseName,
          'date' => date('Y-m-d H:i:s'),
          'metric' => $metric,
@@ -601,6 +831,19 @@ class Summary
                   'transfer' => $Result->transfer,
                   'time' => $Result->time,
                   'memory' => $Result->memory,
+                  'scheduled' => $Result->scheduled,
+                  'sent' => $Result->sent,
+                  'responses' => $Result->responses,
+                  'informational' => $Result->informational,
+                  'outstanding' => $Result->outstanding,
+                  'failed' => $Result->failed,
+                  'write_failed' => $Result->writeFailed,
+                  'connection_failed' => $Result->connectionFailed,
+                  'partial_writes' => $Result->partialWrites,
+                  'accounting' => $Result->accounting,
+                  'statuses' => $Result->statuses,
+                  'failures' => $Result->failures,
+                  'write_failures' => $Result->writeFailures,
                ];
             }
          }
@@ -613,6 +856,6 @@ class Summary
       }
 
       // : Single-line JSON document + trailing newline
-      return json_encode($document) . "\n";
+      return json_encode($document, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . "\n";
    }
 }

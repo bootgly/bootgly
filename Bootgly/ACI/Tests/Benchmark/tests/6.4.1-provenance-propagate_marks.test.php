@@ -7,6 +7,8 @@ use Bootgly\ACI\Tests\Benchmark\Result;
 use Bootgly\ACI\Tests\Benchmark\Summary;
 use Bootgly\ACI\Tests\Suite\Test\Specification;
 
+use const BOOTGLY_WORKING_DIR;
+
 
 return new Specification(
    description: 'It should propagate source fingerprints into marks metadata',
@@ -16,9 +18,26 @@ return new Specification(
       $dir = BOOTGLY_STORAGE_DIR . "tests/benchmarks/{$case}";
       $trackedSHA = str_repeat('a', 64);
       $untrackedSHA = str_repeat('b', 64);
-      $Result = new Result(rps: 1000.0, latency: '1ms', transfer: '1MB/s');
+      $Result = new Result(
+         rps: 1000.0,
+         latency: '1ms',
+         transfer: '1MB/s',
+         scheduled: 1002,
+         sent: 1001,
+         responses: 1000,
+         informational: 2,
+         outstanding: 0,
+         failed: 1,
+         writeFailed: 1,
+         connectionFailed: 0,
+         partialWrites: 2,
+         accounting: true,
+         statuses: [200 => 1000],
+         failures: ['measurement_ended' => 1],
+         writeFailures: ['measurement_ended' => 1],
+      );
 
-      Summary::save(
+      $relative = Summary::save(
          caseName: $case,
          results: ['Bootgly' => ['Plaintext' => $Result]],
          config: [
@@ -31,12 +50,10 @@ return new Specification(
          suffix: 'identity',
       );
 
-      $files = glob("{$dir}/*_bench.marks") ?: [];
-      $marks = isset($files[0]) ? (string) file_get_contents($files[0]) : '';
+      $file = BOOTGLY_WORKING_DIR . $relative;
+      $marks = is_file($file) ? (string) file_get_contents($file) : '';
 
-      foreach ($files as $file) {
-         unlink($file);
-      }
+      is_file($file) && unlink($file);
       if (is_dir($dir)) {
          rmdir($dir);
       }
@@ -51,6 +68,23 @@ return new Specification(
                && str_contains($marks, "#   source-identity-version: raw-delta-manifest-v1\n")
                && substr_count($marks, $trackedSHA) === 1
                && substr_count($marks, $untrackedSHA) === 1,
+            Op::Identical,
+            true
+         )
+         ->assert();
+
+      yield new Assertion(
+         description: 'Marks result preserves exact HTTP accounting evidence',
+         fallback: 'HTTP accounting was lost before .marks serialization!'
+      )
+         ->expect(
+            str_contains(
+               $marks,
+               ' scheduled=1002 sent=1001 responses=1000 informational=2 outstanding=0 failed=1'
+                  . ' write_failed=1 connection_failed=0 partial_writes=2 accounting=valid statuses={"200":1000}'
+                  . ' failures={"measurement_ended":1}'
+                  . ' write_failures={"measurement_ended":1}'
+            ),
             Op::Identical,
             true
          )

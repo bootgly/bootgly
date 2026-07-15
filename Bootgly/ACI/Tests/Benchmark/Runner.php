@@ -11,6 +11,9 @@
 namespace Bootgly\ACI\Tests\Benchmark;
 
 
+use Closure;
+
+
 abstract class Runner
 {
    // * Data
@@ -30,11 +33,51 @@ abstract class Runner
     * @var array<string,scalar>
     */
    public array $meta = [];
+   /**
+    * Optional case-level validation executed after concrete opponent/load
+    * selection is known and before the banner or any measured process starts.
+    */
+   public null|Closure $Validator = null;
+   public protected(set) null|Artifacts $Artifacts = null;
+   protected null|Child $Child = null;
 
 
    public function add (Opponent $Opponent): void
    {
       $this->opponents[] = $Opponent;
+   }
+
+   /**
+    * Bind this runner to the invocation-owned artifact workspace.
+    */
+   public function bind (Artifacts $Artifacts): void
+   {
+      $this->Artifacts = $Artifacts;
+      $this->Child = new Child($Artifacts);
+   }
+
+   /**
+    * Execute a child with run-local, distinct stdout and stderr artifacts.
+    *
+    * @param array<int,string> $command
+    * @param array<string,string>|null $environment
+    *
+    * @return array{exit:int,stdout:string,stderr:string,status:string}
+    */
+   protected function spawn (
+      array $command,
+      string $scope,
+      null|array $environment = null,
+      null|string $input = null,
+      null|float $timeout = null,
+      float $grace = 2.0,
+   ): array
+   {
+      if ($this->Child === null) {
+         throw new \RuntimeException('Benchmark runner has no artifact workspace');
+      }
+
+      return $this->Child->run($command, $scope, $environment, $input, $timeout, $grace);
    }
 
    /**
@@ -82,6 +125,16 @@ abstract class Runner
    public function banner (Configs $Configs): array
    {
       return [];
+   }
+
+   /**
+    * Validate the resolved case selection before execution.
+    */
+   public function validate (Configs $Configs): void
+   {
+      if ($this->Validator !== null) {
+         ($this->Validator)($this, $Configs);
+      }
    }
 
    /**

@@ -4,12 +4,16 @@
  * Bootgly PHP Framework — Profile report aggregator
  * --------------------------------------------------------------------------
  *
- * Reads all per-worker `worker-*.collapsed` files written by
- * projects/Benchmark/HTTP_Server_CLI/Profiler.php and prints a single
- * merged hot-path report sorted by self-sample count.
+ * Reads the per-worker `worker-*.collapsed` files from one explicitly selected
+ * benchmark run and prints a single merged hot-path report sorted by
+ * self-sample count.
  *
- * Usage:  php scripts/profile-report.php [--top=N] [--include=substr] [--full]
+ * Usage:  php scripts/profile-report.php --run-dir=PATH [--round=ID]
+ *             [--profile-scope=NAME] [--top=N] [--include=substr] [--full]
  *
+ *   --run-dir=PATH Unique benchmark run directory (required)
+ *   --round=ID      Include only one round (for example, r01)
+ *   --profile-scope=NAME Include only one profiler scope (for example, bootgly)
  *   --top=N        Limit to top N hottest self-time functions (default 50)
  *   --include=str  Filter functions whose qualified name contains `str`
  *   --full         Include all functions (no truncation, no top limit)
@@ -18,27 +22,88 @@
  *   SELF%   percentage of total samples spent self-time in this function
  *   SELF    raw self sample count
  *   INCL    inclusive (self + callees) sample count
- *   FILE:LINE  best-effort source location from the deepest stack frame
  */
 
 declare(strict_types=1);
 
 
-$opts = getopt('', ['top::', 'include::', 'full']);
-$top = isset($opts['top']) ? (int) $opts['top'] : 50;
-$include = isset($opts['include']) ? (string) $opts['include'] : '';
-$full = isset($opts['full']);
+$options = getopt('', ['run-dir:', 'round:', 'profile-scope:', 'top::', 'include::', 'full']);
+$options = is_array($options) ? $options : [];
+$runOption = $options['run-dir'] ?? null;
+if (is_string($runOption) === false || $runOption === '') {
+   fwrite(STDERR, "Usage: php scripts/profile-report.php --run-dir=PATH [--round=ID] [--profile-scope=NAME] [--top=N] [--include=substr] [--full]\n");
+   exit(2);
+}
 
-$dir = __DIR__ . '/../storage/temp/profile';
-if (! is_dir($dir)) {
-   fwrite(STDERR, "No profile dir at: $dir\n");
+$runDirectory = realpath($runOption);
+if ($runDirectory === false || is_dir($runDirectory) === false) {
+   fwrite(STDERR, "Benchmark run directory does not exist: $runOption\n");
    exit(1);
 }
 
-$files = glob("$dir/worker-*.collapsed") ?: [];
+$profileDirectory = realpath($runDirectory . '/profiles/server');
+$runPrefix = rtrim($runDirectory, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+if (
+   $profileDirectory === false
+   || is_dir($profileDirectory) === false
+   || str_starts_with($profileDirectory . DIRECTORY_SEPARATOR, $runPrefix) === false
+) {
+   fwrite(STDERR, "No run-scoped server profile directory at: $runDirectory/profiles/server\n");
+   exit(1);
+}
+
+$top = isset($options['top']) ? (int) $options['top'] : 50;
+$include = isset($options['include']) ? (string) $options['include'] : '';
+$full = isset($options['full']);
+
+$Normalize = static function (mixed $value, string $prefix): null|string {
+   if ($value === null) {
+      return null;
+   }
+   if (is_string($value) === false || trim($value) === '') {
+      fwrite(STDERR, "Invalid empty profile selector.\n");
+      exit(2);
+   }
+
+   $segment = strtolower(trim($value));
+   $segment = preg_match('/\A[a-z0-9][a-z0-9_-]*\z/D', $segment) === 1
+      ? $segment
+      : 'encoded-' . bin2hex($segment);
+
+   return str_starts_with($segment, $prefix . '-')
+      ? $segment
+      : $prefix . '-' . $segment;
+};
+$roundSelector = $Normalize($options['round'] ?? null, 'round');
+$scopeSelector = $Normalize($options['profile-scope'] ?? null, 'scope');
+
+$files = [];
+$Children = new RecursiveDirectoryIterator(
+   $profileDirectory,
+   FilesystemIterator::SKIP_DOTS,
+);
+$Iterator = new RecursiveIteratorIterator(
+   $Children,
+   RecursiveIteratorIterator::LEAVES_ONLY,
+);
+foreach ($Iterator as $File) {
+   $relative = substr($File->getPathname(), strlen($profileDirectory) + 1);
+   $segments = explode(DIRECTORY_SEPARATOR, $relative);
+   if (
+      $File->isFile()
+      && $File->isLink() === false
+      && preg_match('/\Aworker-(\d+)\.collapsed\z/D', $File->getFilename()) === 1
+      && ($roundSelector === null || in_array($roundSelector, $segments, true))
+      && ($scopeSelector === null || in_array($scopeSelector, $segments, true))
+   ) {
+      $files[] = $File->getPathname();
+   }
+}
+sort($files, SORT_STRING);
+
 if ($files === []) {
-   fwrite(STDERR, "No worker-*.collapsed files in $dir\n");
-   fwrite(STDERR, "Run benchmark with BOOTGLY_PROFILE=1 first.\n");
+   fwrite(STDERR, "No worker-*.collapsed files in $profileDirectory\n");
+   fwrite(STDERR, "Run this benchmark invocation with BOOTGLY_PROFILE=1 first.\n");
    exit(1);
 }
 
@@ -47,13 +112,16 @@ if ($files === []) {
 //   inclusive = count of lines where function appears anywhere in stack
 $selfByFunc = [];   // [func => count]
 $inclByFunc = [];   // [func => count]
-$workerSamples = [];
+$profileSamples = [];
 
 foreach ($files as $file) {
-   $lines = file($file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [];
-   if (preg_match('#worker-(\d+)\.collapsed#', $file, $m)) {
-      $workerSamples[(int) $m[1]] = 0;
+   $lines = file($file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+   if ($lines === false) {
+      fwrite(STDERR, "Cannot read profile artifact: $file\n");
+      exit(1);
    }
+   $artifact = substr($file, strlen($profileDirectory) + 1);
+   $profileSamples[$artifact] = 0;
    foreach ($lines as $line) {
       // collapsed format: "stack;frames;here count"
       $pos = strrpos($line, ' ');
@@ -75,15 +143,15 @@ foreach ($files as $file) {
          $inclByFunc[$f] = ($inclByFunc[$f] ?? 0) + $count;
       }
 
-      if (isset($m[1])) {
-         $workerSamples[(int) $m[1]] += $count;
-      }
+      $profileSamples[$artifact] += $count;
    }
 }
 
+ksort($profileSamples, SORT_STRING);
+
 $totalSelf = array_sum($selfByFunc);
-$totalWorkers = count($workerSamples);
-$totalSamples = array_sum($workerSamples);
+$totalProfiles = count($profileSamples);
+$totalSamples = array_sum($profileSamples);
 
 // @ Build rows
 $rows = [];
@@ -109,7 +177,10 @@ if (! $full) {
 echo "═══════════════════════════════════════════════════════════════════════════════════════════════════\n";
 echo " Bootgly hot-path profile report\n";
 echo "═══════════════════════════════════════════════════════════════════════════════════════════════════\n";
-echo " Workers profiled : $totalWorkers\n";
+echo " Run directory    : $runDirectory\n";
+echo " Round selector   : " . ($roundSelector ?? '(all)') . "\n";
+echo " Profile scope    : " . ($scopeSelector ?? '(all)') . "\n";
+echo " Profile artifacts: $totalProfiles\n";
 echo " Total samples    : $totalSamples\n";
 echo " Filter           : " . ($include ?: '(none)') . "\n";
 echo " Rows shown       : " . count($rows) . ($full ? ' (full)' : " of $top max") . "\n";
@@ -129,8 +200,8 @@ foreach ($rows as $row) {
 }
 
 echo "───────────────────────────────────────────────────────────────────────────────────────────────────\n";
-echo " Per-worker sample counts:\n";
-foreach ($workerSamples as $pid => $count) {
-   echo "   worker $pid : $count samples\n";
+echo " Per-profile sample counts:\n";
+foreach ($profileSamples as $artifact => $count) {
+   echo "   $artifact : $count samples\n";
 }
 echo "═══════════════════════════════════════════════════════════════════════════════════════════════════\n";

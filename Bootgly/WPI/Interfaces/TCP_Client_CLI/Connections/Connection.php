@@ -11,6 +11,7 @@
 namespace Bootgly\WPI\Interfaces\TCP_Client_CLI\Connections;
 
 
+use const INF;
 use const STREAM_CRYPTO_METHOD_TLSv1_2_CLIENT;
 use const STREAM_CRYPTO_METHOD_TLSv1_3_CLIENT;
 use function fclose;

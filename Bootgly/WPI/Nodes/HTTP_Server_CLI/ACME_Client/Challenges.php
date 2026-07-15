@@ -25,14 +25,15 @@ use function fflush;
 use function flock;
 use function fopen;
 use function fread;
-use function fsync;
 use function fstat;
+use function fsync;
 use function function_exists;
 use function fwrite;
 use function is_array;
 use function is_dir;
 use function is_file;
 use function is_link;
+use function is_resource;
 use function lstat;
 use function mkdir;
 use function preg_match;
@@ -44,8 +45,8 @@ use function str_starts_with;
 use function strlen;
 use function substr;
 use function trim;
-use function unlink;
 use function umask;
+use function unlink;
 use InvalidArgumentException;
 
 

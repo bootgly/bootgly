@@ -168,6 +168,9 @@ class Packages implements WPI\Connections\Packages
             $sent = @fwrite($Socket, substr($buffer, $written, $target - $written));
 
             if ($sent === false) {
+               // ! Preserve any prefix accepted by earlier writes in this
+               //   call before close() exposes the remainder to accounting.
+               $this->output = substr($buffer, $written);
                return $this->fail($Socket, 'write', $written);
             }
             // ? Zero progress — the kernel buffer is full. Yield back to the
@@ -184,6 +187,9 @@ class Packages implements WPI\Connections\Packages
                      && (int) hrtime(true) >= $monotonicDeadline
                   )
                ) {
+                  // ! Reconcile a prefix accepted before this zero-progress
+                  //   deadline just like false/exception terminal writes.
+                  $this->output = substr($buffer, $written);
                   return $this->fail($Socket, 'write', $written);
                }
                break;
@@ -193,6 +199,9 @@ class Packages implements WPI\Connections\Packages
          }
       }
       catch (Throwable) {
+         // ! A stream exception after partial progress must not resurrect
+         //   bytes already accepted by the kernel.
+         $this->output = substr($buffer, $written);
          return $this->fail($Socket, 'write', $written);
       }
 
@@ -249,7 +258,7 @@ class Packages implements WPI\Connections\Packages
       // @
       try {
          do {
-            $buffer = @fread($Socket, $length ?? 65535); // @phpstan-ignore-line
+            $buffer = @fread($Socket, $length ?? 65535);
             #$buffer = @stream_socket_recvfrom($Socket, $length ?? 65535);
 
             if ($buffer === false) break;

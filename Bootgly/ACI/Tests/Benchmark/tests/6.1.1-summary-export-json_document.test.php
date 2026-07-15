@@ -15,7 +15,24 @@ return new Specification(
    test: new Assertions(Case: function (): Generator
    {
       // ! One swept round with one result
-      $Result = new Result(rps: 104532.0, latency: '1.2ms', transfer: '24.1MB/s');
+      $Result = new Result(
+         rps: 104532.0,
+         latency: '1.2ms',
+         transfer: '24.1MB/s',
+         scheduled: 104536,
+         sent: 104535,
+         responses: 104532,
+         informational: 7,
+         outstanding: 0,
+         failed: 3,
+         writeFailed: 1,
+         connectionFailed: 0,
+         partialWrites: 2,
+         accounting: true,
+         statuses: [200 => 104530, 503 => 2],
+         failures: ['measurement_ended' => 3],
+         writeFailures: ['measurement_ended' => 1],
+      );
       $trackedSHA = str_repeat('a', 64);
       $untrackedSHA = str_repeat('b', 64);
 
@@ -38,6 +55,9 @@ return new Specification(
             ],
          ],
          artifacts: ['results/RESULTS-benchmark-x.md'],
+         ID: '20260714T120000.000000Z-p123-aabbccdd',
+         directory: 'storage/tests/benchmarks/HTTP_Server_CLI/runs/20260714T120000.000000Z-p123-aabbccdd',
+         pathBase: '/opt/bootgly',
       );
 
       $document = json_decode($json, true);
@@ -49,7 +69,22 @@ return new Specification(
          ->expect(
             array_keys($document),
             Op::Equal,
-            ['case', 'date', 'metric', 'config', 'sweep', 'rounds', 'artifacts']
+            ['run', 'case', 'date', 'metric', 'config', 'sweep', 'rounds', 'artifacts']
+         )
+         ->assert();
+
+      yield new Assertion(
+         description: 'JSON carries the collision-resistant invocation identity',
+         fallback: 'Run identity missing from JSON!'
+      )
+         ->expect(
+            $document['run'] === [
+               'id' => '20260714T120000.000000Z-p123-aabbccdd',
+               'directory' => 'storage/tests/benchmarks/HTTP_Server_CLI/runs/20260714T120000.000000Z-p123-aabbccdd',
+               'path_base' => '/opt/bootgly',
+            ],
+            Op::Identical,
+            true
          )
          ->assert();
 
@@ -83,6 +118,19 @@ return new Specification(
                         'transfer' => '24.1MB/s',
                         'time' => null,
                         'memory' => null,
+                        'scheduled' => 104536,
+                        'sent' => 104535,
+                        'responses' => 104532,
+                        'informational' => 7,
+                        'outstanding' => 0,
+                        'failed' => 3,
+                        'write_failed' => 1,
+                        'connection_failed' => 0,
+                        'partial_writes' => 2,
+                        'accounting' => true,
+                        'statuses' => [200 => 104530, 503 => 2],
+                        'failures' => ['measurement_ended' => 3],
+                        'write_failures' => ['measurement_ended' => 1],
                      ],
                   ],
                ],

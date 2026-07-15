@@ -14,6 +14,7 @@ namespace Bootgly\ACI\Tests;
 use const BOOTGLY_STORAGE_DIR;
 use const BOOTGLY_WORKING_DIR;
 use const FILE_IGNORE_NEW_LINES;
+use const JSON_THROW_ON_ERROR;
 use const PHP_EOL;
 use function array_search;
 use function array_splice;
@@ -32,6 +33,7 @@ use Throwable;
 
 use Bootgly\ABI\Data\__String\Path;
 use Bootgly\ABI\Debugging\Backtrace;
+use Bootgly\ACI\Tests\Benchmark\Artifacts;
 
 
 abstract class Benchmark
@@ -205,11 +207,12 @@ abstract class Benchmark
 
       // @ Output result
       $resultFile = getenv('BENCHMARK_RESULT_FILE');
+      $JSON = json_encode($data, JSON_THROW_ON_ERROR);
       if ($resultFile !== false) {
-         file_put_contents($resultFile, json_encode($data));
+         Artifacts::commit($resultFile, $JSON);
       }
       else {
-         echo json_encode($data);
+         echo $JSON;
       }
    }
 }

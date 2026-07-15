@@ -17,6 +17,7 @@ return new Suite(
       '1.1-connect_bounded',
       '2.1-pool_lifecycle',
       '2.2-pool_capacity',
-      '2.3-pool_health'
+      '2.3-pool_health',
+      '3.1-writing_accounting',
    ]
 );

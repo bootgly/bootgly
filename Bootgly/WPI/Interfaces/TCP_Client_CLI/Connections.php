@@ -11,6 +11,7 @@
 namespace Bootgly\WPI\Interfaces\TCP_Client_CLI;
 
 
+use const INF;
 use const PHP_EOL;
 use function fclose;
 use function hrtime;

@@ -53,5 +53,23 @@ return new Specification(
       )
          ->expect($Runner->opponents[0]->workers, Op::Identical, 8)
          ->assert();
+
+      // # A case may install one fail-closed validator after the concrete
+      //   opponent/load selection becomes available.
+      $validated = false;
+      $Runner->Validator = static function (Runner $Runner, Configs $Configs) use (&$validated): void {
+         $validated = $Runner->opponents !== [] && $Configs->loadSet === 'proof';
+      };
+      $Runner->validate(Configs::parse([
+         'opponents' => 'bootgly',
+         'loads' => 'proof:*',
+      ]));
+
+      yield new Assertion(
+         description: 'Runner invokes the optional case validator',
+         fallback: 'The case validator did not receive the resolved benchmark selection!'
+      )
+         ->expect($validated, Op::Identical, true)
+         ->assert();
    })
 );

@@ -15,21 +15,26 @@ use function array_key_first;
 use function array_keys;
 use function array_map;
 use function array_slice;
+use function bin2hex;
 use function count;
 use function date;
-use function file_put_contents;
+use function explode;
+use function getmypid;
+use function gmdate;
 use function implode;
-use function is_dir;
-use function mkdir;
+use function microtime;
 use function number_format;
+use function preg_replace;
+use function random_bytes;
 use function sprintf;
 use function str_repeat;
+use function trim;
 
 
 /**
  * Markdown results report (`--results=report|charts`).
  *
- * Renders a `RESULTS-<load-set>-<timestamp>.md` document — environment,
+ * Renders a collision-resistant `RESULTS-<load-set>-<run-token>.md` document — environment,
  * reproduction command, per-load comparison tables and peaks — and, when
  * charts are requested and the run swept an option, native SVG charts
  * (throughput / ratio / latency) via [[Chart]].
@@ -227,11 +232,14 @@ class Report
     */
    public function save (string $dir, array $run): array
    {
-      if (is_dir($dir) === false) {
-         mkdir($dir, 0775, true);
-      }
-
-      $base = "RESULTS-{$run['loadSet']}-" . date('Y-m-d_His');
+      $loadSet = trim((string) preg_replace('/[^A-Za-z0-9._-]+/', '-', $run['loadSet']), '-.');
+      $time = sprintf('%.6F', microtime(true));
+      [$seconds, $fraction] = explode('.', $time, 2);
+      $PID = getmypid();
+      $token = gmdate('Y-m-d_His', (int) $seconds)
+         . "-{$fraction}-p{$PID}-"
+         . bin2hex(random_bytes(8));
+      $base = "RESULTS-{$loadSet}-{$token}";
       $written = [];
       $chartFiles = [];
 
@@ -249,7 +257,7 @@ class Report
             yLabel: $run['metric'],
          );
          $chartFiles[] = "{$base}.chart.throughput.svg";
-         file_put_contents("{$dir}/{$base}.chart.throughput.svg", $Throughput->render($x, $run['data']));
+         Artifacts::commit("{$dir}/{$base}.chart.throughput.svg", $Throughput->render($x, $run['data']));
 
          // # Ratio — single panel, one series per load (baseline Δ% vs 2nd opponent)
          if (count($run['opponents']) > 1) {
@@ -271,7 +279,7 @@ class Report
                yLabel: 'Δ%',
             );
             $chartFiles[] = "{$base}.chart.ratio.svg";
-            file_put_contents("{$dir}/{$base}.chart.ratio.svg", $Ratio->render($x, ['Δ%' => $ratios]));
+            Artifacts::commit("{$dir}/{$base}.chart.ratio.svg", $Ratio->render($x, ['Δ%' => $ratios]));
          }
 
          // # Latency — one panel per load, log scale
@@ -294,13 +302,13 @@ class Report
                yscale: 'log',
             );
             $chartFiles[] = "{$base}.chart.latency.svg";
-            file_put_contents("{$dir}/{$base}.chart.latency.svg", $Latency->render($x, $run['latencies']));
+            Artifacts::commit("{$dir}/{$base}.chart.latency.svg", $Latency->render($x, $run['latencies']));
          }
       }
 
       // @ Markdown document (references the chart files just written)
       $markdown = $this->render($run, $chartFiles);
-      file_put_contents("{$dir}/{$base}.md", $markdown);
+      Artifacts::commit("{$dir}/{$base}.md", $markdown);
 
       // : Written file names — report first, then charts
       $written[] = "{$base}.md";

@@ -58,6 +58,7 @@ use function array_key_exists;
 use function array_keys;
 use function array_merge;
 use function array_pad;
+use function array_shift;
 use function array_slice;
 use function array_values;
 use function basename;

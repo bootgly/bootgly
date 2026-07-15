@@ -48,6 +48,7 @@ return new Specification(
       $dir = sys_get_temp_dir() . '/bootgly-report-' . getmypid();
       $Report = new Report(charts: true);
       $written = $Report->save($dir, $run);
+      $sweptWritten = $written;
 
       yield new Assertion(
          description: 'Report .md plus throughput/ratio/latency SVGs are written',
@@ -106,6 +107,13 @@ return new Specification(
          fallback: 'Single-run chart skip broken!'
       )
          ->expect(count($written) === 1 && str_ends_with($written[0], '.md'), Op::Identical, true)
+         ->assert();
+
+      yield new Assertion(
+         description: 'Back-to-back report saves cannot overwrite each other',
+         fallback: 'Report artifact name collision detected!'
+      )
+         ->expect(array_intersect($sweptWritten, $written), Op::Identical, [])
          ->assert();
 
       // ! Cleanup
