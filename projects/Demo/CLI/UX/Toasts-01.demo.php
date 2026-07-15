@@ -22,6 +22,7 @@ $Output = CLI->Terminal->Output;
 //   toast overlay and its restore are unmistakable against real content
 $Screen = new Screen($Output);
 $Screen->open();
+$Output->Cursor->hide();
 
 [$columns, $lines] = Screen::measure();
 
@@ -79,6 +80,7 @@ $Toasts->flash('Deploy complete. Bye!', Type::Success, TTL: 2.0);
 usleep(400_000);
 
 // @ Leave the alternate buffer — the terminal restores the shell untouched
+$Output->Cursor->show();
 $Screen->close();
 
 $Output->render("@.;@#Green:✔@; Toasts demo complete.@.;");

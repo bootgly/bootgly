@@ -16,6 +16,7 @@ $Output = CLI->Terminal->Output;
 // @ Full-screen alternate buffer — a busy interface fills every cell
 $Screen = new Screen($Output);
 $Screen->open();
+$Output->Cursor->hide();
 
 [$columns, $lines] = Screen::measure();
 
@@ -55,6 +56,7 @@ for ($tick = 0; $tick <= 100; $tick++) {
    usleep(50_000);
 }
 
+$Output->Cursor->show();
 $Screen->close();
 
 $Output->render("@.;@#Green:✔@; Toasts demo 50.1 (TopLeft) complete.@.;");
