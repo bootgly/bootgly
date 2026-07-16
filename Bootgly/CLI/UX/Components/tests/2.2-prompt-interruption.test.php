@@ -49,7 +49,7 @@ return new Specification(
             description: 'The first Ctrl+C renders the interruption notice on the bottom border'
          );
          yield assert(
-            assertion: str_contains($written, ">_ \e[0m\e[7m \e[0m") === true,
+            assertion: str_contains($written, "> \e[0m\e[7m \e[0m") === true,
             description: 'The painted input row keeps the prefix space and the inverse-video cursor block'
          );
          yield assert(
@@ -125,7 +125,7 @@ return new Specification(
 
          // @ Valid
          yield assert(
-            assertion: str_contains($frame, '>_') === true
+            assertion: str_contains($frame, "> \e[0m") === true
                && str_contains($frame, 'Press Ctrl+C again to exit') === false,
             description: 'The frame renders without the interruption notice by default'
          );

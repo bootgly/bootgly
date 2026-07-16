@@ -403,12 +403,18 @@ final class Histogram
       $lastIndex = -1;
       $maximumIndex = $Histogram->index($highestTrackableNS);
       foreach ($sparse as $entry) {
-         if (is_array($entry) === false) {
+         // ? Inlined shape check — exactly the keys `index` and `count`.
+         //   (An equivalent self::validate() call here crashes PHPStan.)
+         if (
+            is_array($entry) === false
+            || count($entry) !== 2
+            || array_key_exists('index', $entry) === false
+            || array_key_exists('count', $entry) === false
+         ) {
             throw new InvalidArgumentException('Invalid sparse latency histogram entry.');
          }
-         self::validate($entry, ['index', 'count']);
-         $index = $entry['index'] ?? null;
-         $binCount = $entry['count'] ?? null;
+         $index = $entry['index'];
+         $binCount = $entry['count'];
          if (
             is_int($index) === false || $index <= $lastIndex || $index > $maximumIndex
             || is_int($binCount) === false || $binCount < 1

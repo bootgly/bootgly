@@ -41,3 +41,12 @@ jobs:
             ss -tlnp || true
           fi
           exit "$code"
+      -
+        name: Dump benchmark run artifacts
+        if: failure()
+        run: |
+          find storage/tests/benchmarks -type f 2>/dev/null | while read -r file; do
+            echo "===== $file"
+            cat -v "$file" || true
+            echo
+          done

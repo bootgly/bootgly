@@ -11,9 +11,12 @@ return new Specification(
    description: 'It should persist only allowlisted runtime directives',
    test: new Assertions(Case: function (): Generator
    {
+      // ! `from` is a core INI_ALL directive that can carry credentials (FTP
+      //   anonymous identity) and stays settable in CLI regardless of output
+      //   state — session.* directives reject ini_set() after headers are sent.
       $marker = 'bootgly-runtime-secret-' . bin2hex(random_bytes(12));
-      $previous = ini_get('session.save_path');
-      $changed = ini_set('session.save_path', $marker);
+      $previous = ini_get('from');
+      $changed = ini_set('from', $marker);
 
       try {
          $raw = Runtime::inspect();
@@ -23,7 +26,7 @@ return new Specification(
       }
       finally {
          if (is_string($previous)) {
-            ini_set('session.save_path', $previous);
+            ini_set('from', $previous);
          }
       }
 
@@ -33,9 +36,9 @@ return new Specification(
       )
          ->expect(
             $changed !== false
-               && ($raw['directives']['session.save_path']['local_value'] ?? null) === $marker
+               && ($raw['directives']['from']['local_value'] ?? null) === $marker
                && !str_contains($JSON, $marker)
-               && !array_key_exists('session.save_path', $export['directives'])
+               && !array_key_exists('from', $export['directives'])
                && array_key_exists('memory_limit', $export['directives'])
                && ($export['directives_policy']['schema'] ?? null) === 'performance-allowlist/v1'
                && ($export['directives_policy']['omitted'] ?? 0) > 0,
