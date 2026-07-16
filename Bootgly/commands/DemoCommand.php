@@ -198,6 +198,9 @@ class DemoCommand extends Command
 
          // UX - Filepicker component (filesystem browser with lazy scans)
          52 => 'UX/Filepicker-01.demo.php',
+
+         // UX - Finder component (live search selector)
+         53 => 'UX/Finder-01.demo.php',
       ];
 
       $last = array_key_last($examples);

@@ -105,7 +105,8 @@ class Question extends Component
       $Output ??= $this->Output;
       // ---
       $suffix = $default !== '' ? " [{$default}]: " : ': ';
-      $Output->write("{$prompt}{$suffix}");
+      // ? render, not write — prompts may carry Template markup
+      $Output->render("{$prompt}{$suffix}");
 
       if ($mode === self::RETURN_OUTPUT) {
          rewind($Output->stream);
