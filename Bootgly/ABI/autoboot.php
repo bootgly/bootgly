@@ -326,6 +326,112 @@ namespace {
       }
    }
 
+   // mb_stripos
+   if (!function_exists('mb_stripos')) {
+      function mb_stripos(string $haystack, string $needle, int $offset = 0, string|null $encoding = 'UTF-8'): int|false
+      {
+         // @ Case-fold both strings (map-based folding preserves character counts)
+         $haystack = mb_strtolower($haystack, $encoding);
+         $needle = mb_strtolower($needle, $encoding);
+
+         // ? Negative offsets count from the end
+         if ($offset < 0) {
+            $offset = \max(0, (int) mb_strlen($haystack, $encoding) + $offset);
+         }
+
+         // @ UTF-8 is self-synchronizing — a byte-level match always lands on a character boundary
+         $bytes = \strlen(mb_substr($haystack, 0, $offset, $encoding));
+         $position = \strpos($haystack, $needle, $bytes);
+
+         if ($position === false) {
+            return false;
+         }
+
+         // : Character position
+         return mb_strlen(\substr($haystack, 0, $position), $encoding);
+      }
+   }
+
+   // mb_strwidth
+   if (!function_exists('mb_strwidth')) {
+      function mb_strwidth(string $string, string|null $encoding = 'UTF-8'): int
+      {
+         // @ East Asian Wide + Fullwidth ranges take two columns; everything else takes one
+         $wide = 0;
+         $string = (string) \preg_replace(
+            '/[\x{1100}-\x{115F}\x{2E80}-\x{303E}\x{3041}-\x{33FF}\x{3400}-\x{4DBF}\x{4E00}-\x{9FFF}\x{A000}-\x{A4CF}\x{A960}-\x{A97F}\x{AC00}-\x{D7A3}\x{F900}-\x{FAFF}\x{FE10}-\x{FE19}\x{FE30}-\x{FE6F}\x{FF00}-\x{FF60}\x{FFE0}-\x{FFE6}\x{20000}-\x{2FFFD}\x{30000}-\x{3FFFD}]/u',
+            '',
+            $string,
+            -1,
+            $wide
+         );
+
+         // : Two columns per wide character + one per remaining character
+         return ($wide << 1) + (int) mb_strlen($string, $encoding);
+      }
+   }
+
+   // mb_strimwidth
+   if (!function_exists('mb_strimwidth')) {
+      function mb_strimwidth(string $string, int $start, int $width, string $trim_marker = '', string|null $encoding = 'UTF-8'): string
+      {
+         // ! Slice from the character offset
+         $string = mb_substr($string, $start, null, $encoding);
+
+         // ? The visible width already fits
+         if (mb_strwidth($string, $encoding) <= $width) {
+            return $string;
+         }
+
+         // @ Reserve columns for the trim marker, then fill character by character
+         $width -= mb_strwidth($trim_marker, $encoding);
+
+         $output = '';
+         $columns = 0;
+
+         foreach (mb_str_split($string, 1, $encoding) as $character) {
+            $columns += mb_strwidth($character, $encoding);
+
+            if ($columns > $width) {
+               break;
+            }
+
+            $output .= $character;
+         }
+
+         // : Truncated string with the trim marker appended
+         return "{$output}{$trim_marker}";
+      }
+   }
+
+   // mb_str_pad
+   if (!function_exists('mb_str_pad')) {
+      function mb_str_pad(string $string, int $length, string $pad_string = ' ', int $pad_type = \STR_PAD_RIGHT, string|null $encoding = 'UTF-8'): string
+      {
+         // ? Nothing to pad
+         $missing = $length - (int) mb_strlen($string, $encoding);
+         if ($missing <= 0 || $pad_string === '') {
+            return $string;
+         }
+
+         // ! Characters per side (STR_PAD_BOTH leaves the extra one on the right)
+         $left = match ($pad_type) {
+            \STR_PAD_LEFT => $missing,
+            \STR_PAD_BOTH => \intdiv($missing, 2),
+            default => 0
+         };
+
+         // @ Repeat the pad string and cut each side to its exact character count
+         $unit = \max(1, (int) mb_strlen($pad_string, $encoding));
+         $padding = \str_repeat($pad_string, (int) \ceil($missing / $unit));
+
+         // : Left padding + string + right padding
+         return mb_substr($padding, 0, $left, $encoding)
+            . $string
+            . mb_substr($padding, 0, $missing - $left, $encoding);
+      }
+   }
+
    // mb_chr
    if (!function_exists('mb_chr')) {
       function mb_chr(int $codepoint, string|null $encoding = 'UTF-8'): string|false

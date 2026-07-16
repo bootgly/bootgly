@@ -257,12 +257,12 @@ class __String implements Data // Simple class (advanced methods coming soon)
     * Get data map from the unidata directory (used to polyfills, conversions, etc.).
     * 
     * @param string $case The case to get data from. (e.g. caseFolding, lowerCase, upperCase, titleCaseRegexp)
-    * 
-    * @return array<string, string>|false
+    *
+    * @return array<string, string>|string|false
     */
-   public static function mapping (string $case): array|false
+   public static function mapping (string $case): array|string|false
    {
-      if (file_exists($file = __DIR__.'/resources/unidata/'.$case.'.php')) {
+      if (file_exists($file = __DIR__.'/__String/resources/unidata/'.$case.'.php')) {
          return require $file;
       }
 
