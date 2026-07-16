@@ -90,6 +90,30 @@ return new Specification(
          description: 'A called name groups as TOKEN_FUNCTION'
       );
 
+      // @ Instantiations and member accesses — class and property differentiate
+      $class = false;
+      $property = false;
+      foreach ($Tokens->tokenize('<?php $A = new Foo(1); $A->bar;') as $line) {
+         foreach ($line as $segment) {
+            if ($segment[0] === Tokens::TOKEN_CLASS && str_contains((string) $segment[1], 'Foo') === true) {
+               $class = true;
+            }
+            if ($segment[0] === Tokens::TOKEN_PROPERTY && $segment[1] === 'bar') {
+               $property = true;
+            }
+         }
+      }
+
+      yield assert(
+         assertion: $class === true,
+         description: 'A name after `new` groups as TOKEN_CLASS'
+      );
+
+      yield assert(
+         assertion: $property === true,
+         description: 'An accessed name without a call groups as TOKEN_PROPERTY'
+      );
+
       // @ Fallbacks — unmapped tokens degrade by mode
       $ids = [];
       foreach ($Tokens->tokenize('<?php echo 1;', Tokens::AS_TOKEN_ID) as $line) {

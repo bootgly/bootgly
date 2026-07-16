@@ -19,5 +19,6 @@ return new Suite(
       '2.1-highlighter-render',
       '2.2-highlighter-plain',
       '2.3-highlighter-mark',
+      '2.4-highlighter-theme',
    ]
 );

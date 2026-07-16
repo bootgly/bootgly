@@ -16,6 +16,7 @@ use const STR_PAD_LEFT;
 use function array_key_last;
 use function array_slice;
 use function implode;
+use function is_string;
 use function max;
 use function str_contains;
 use function str_pad;
@@ -23,6 +24,7 @@ use function str_repeat;
 use function str_replace;
 use function stripos;
 use function strlen;
+use ValueError;
 
 use Bootgly\ABI\Data\__String\Escapeable\Text\Formattable;
 use Bootgly\ABI\Data\__String\Theme;
@@ -47,6 +49,7 @@ class Highlighter extends Tokens
             self::TOKEN_COMMENT    => self::_BLACK_BRIGHT_FOREGROUND,
             self::TOKEN_FUNCTION   => self::_YELLOW_FOREGROUND,
             self::TOKEN_VARIABLE   => self::_CYAN_BRIGHT_FOREGROUND,
+            self::TOKEN_PROPERTY   => self::_CYAN_BRIGHT_FOREGROUND,
             self::TOKEN_NUMBER     => self::_ORANGE_FOREGROUND,
 
             self::TOKEN_DECLARATION => self::_MAGENTA_BRIGHT_FOREGROUND,
@@ -60,6 +63,7 @@ class Highlighter extends Tokens
             self::TOKEN_KEYWORD    => self::_CYAN_FOREGROUND,
             self::TOKEN_DEFAULT    => self::_RED_BRIGHT_FOREGROUND,
             self::TOKEN_PATH       => self::_WHITE_FOREGROUND,
+            self::TOKEN_CLASS      => self::_PINK_FOREGROUND,
 
             self::ACTUAL_LINE_MARK    => [self::_BLINK_STYLE, self::_RED_FOREGROUND],
             self::LINE_NUMBER         => self::_BLACK_BRIGHT_FOREGROUND,
@@ -73,17 +77,48 @@ class Highlighter extends Tokens
    private const DELIMITER = '▕'; // |,▕
    private const NO_MARK = ' ';
    private const WIDTH = 3;
+   /**
+    * Named highlight themes — token group => SGR code(s).
+    * Register a new palette here, then construct with its name.
+    *
+    * @var array<string,array<string,string|array<int,string>>>
+    */
+   public static array $Themes = [
+      'bootgly' => self::DEFAULT_THEME['CLI']['values'],
+      'plain'   => []
+   ];
    // * Data
    // ...
    // * Metadata
    // ...
 
 
-   /** @param array<mixed> $theme */
-   public function __construct (array $theme = self::DEFAULT_THEME)
+   /** @param array<mixed>|string $theme A named highlight theme or a full Theme specification */
+   public function __construct (array|string $theme = 'bootgly')
    {
       // !
-      if ($theme === self::DEFAULT_THEME) {
+      if (is_string($theme) === true) {
+         // ? Named themes resolve from the registry — empty values render colorless
+         $values = self::$Themes[$theme]
+            ?? throw new ValueError("Unknown highlight theme: `{$theme}`");
+
+         $theme = [
+            "highlighter.{$theme}" => [
+               'options' => ($values === []
+                  ? [
+                     'prepending' => ['type' => 'string', 'value' => ''],
+                     'appending'  => ['type' => 'string', 'value' => '']
+                  ]
+                  : [
+                     'prepending' => ['type' => 'callback', 'value' => self::wrap(...)],
+                     'appending'  => ['type' => 'string', 'value' => self::_RESET_FORMAT]
+                  ]
+               ),
+               'values' => $values
+            ]
+         ];
+      }
+      else if ($theme === self::DEFAULT_THEME) {
          $theme['CLI']['options'] = [
             'prepending' => [
                'type'  => 'callback',

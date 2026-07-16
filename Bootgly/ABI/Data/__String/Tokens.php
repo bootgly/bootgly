@@ -78,8 +78,10 @@ class Tokens
    // @ Groups
    public const TOKEN_DEFAULT = 'token_default';
    public const TOKEN_PATH = 'token_path';
+   public const TOKEN_CLASS = 'token_class';
 
    public const TOKEN_VARIABLE = 'token_variable';
+   public const TOKEN_PROPERTY = 'token_property';
    public const TOKEN_NUMBER = 'token_number';
 
    public const TOKEN_DECLARATION = 'token_declaration';
@@ -115,6 +117,7 @@ class Tokens
       $token_buffer = '';
       $token_type_current = null;
       $token_type_new = null;
+      $previous = null;
 
       // @
       for ($index = 0; $index < $count; $index++) {
@@ -206,9 +209,10 @@ class Tokens
                };
             }
 
-            // ? Call lookahead — a name directly before `(` paints as a function
-            $called = false;
+            // ? Name resolution — instantiations, member accesses and calls differentiate
+            $resolved = $token_type_new;
             if ($token_type_new === self::TOKEN_DEFAULT) {
+               // Call lookahead — a name directly before `(` paints as a function
                $next = $index + 1;
                while (
                   $next < $count
@@ -218,6 +222,18 @@ class Tokens
                   $next++;
                }
                $called = ($tokens[$next] ?? null) === '(';
+
+               $resolved = match (true) {
+                  $previous === T_NEW
+                     => self::TOKEN_CLASS,
+                  $previous === T_OBJECT_OPERATOR
+                  || $previous === T_NULLSAFE_OBJECT_OPERATOR
+                  || $previous === T_DOUBLE_COLON
+                     => $called === true ? self::TOKEN_FUNCTION : self::TOKEN_PROPERTY,
+                  $called === true
+                     => self::TOKEN_FUNCTION,
+                  default => self::TOKEN_DEFAULT
+               };
             }
 
             // ? Qualified names split at the last separator — namespace path + final node
@@ -227,13 +243,10 @@ class Tokens
                default => false
             };
             $parts = ($position === false
-               ? [[$called === true ? self::TOKEN_FUNCTION : $token_type_new, $token[1]]]
+               ? [[$resolved, $token[1]]]
                : [
                   [self::TOKEN_PATH, substr($token[1], 0, $position + 1)],
-                  [
-                     $called === true ? self::TOKEN_FUNCTION : self::TOKEN_DEFAULT,
-                     substr($token[1], $position + 1)
-                  ]
+                  [$resolved, substr($token[1], $position + 1)]
                ]
             );
          }
@@ -245,6 +258,18 @@ class Tokens
                default => self::TOKEN_KEYWORD
             };
             $parts = [[$token_type_new, $token]];
+         }
+
+         // @ Track the previous significant token — whitespace and comments are transparent
+         if (is_array($token) === false) {
+            $previous = $token;
+         }
+         else if (
+            $token[0] !== T_WHITESPACE
+            && $token[0] !== T_COMMENT
+            && $token[0] !== T_DOC_COMMENT
+         ) {
+            $previous = $token[0];
          }
 
          // @@ Coalesce consecutive same-type parts into segments

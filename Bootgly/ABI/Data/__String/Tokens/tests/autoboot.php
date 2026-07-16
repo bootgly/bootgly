@@ -23,5 +23,6 @@ return new Suite(
       '2.4-highlight-sniff',
       '2.5-highlight-sources',
       '2.6-highlight-themes',
+      '2.7-highlight-named',
    ]
 );

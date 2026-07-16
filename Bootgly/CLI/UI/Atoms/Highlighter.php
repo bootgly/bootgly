@@ -28,18 +28,6 @@ use Bootgly\CLI\Terminal\Output;
  */
 class Highlighter extends Component
 {
-   /** Colorless theme — reuses the full ABI pipeline with no SGR emitted */
-   private const array PLAIN_THEME = [
-      'highlighter.plain' => [
-         'options' => [
-            'prepending' => ['type' => 'string', 'value' => ''],
-            'appending'  => ['type' => 'string', 'value' => '']
-         ],
-         'values' => []
-      ]
-   ];
-
-
    private Output $Output;
 
    // * Config
@@ -53,13 +41,15 @@ class Highlighter extends Component
    public int $before;
    /** Window lines after the marked line */
    public int $after;
+   /** Named highlight theme — resolved from Tokens\Highlighter::$Themes */
+   public string $theme;
 
    // * Data
    /** The PHP source — sources without an open tag are colorized as pure PHP */
    public string $source;
 
    // * Metadata
-   /** @var array<string,false|Tokens\Highlighter> Lazy ABI engines by decoration key — false marks the tokenizer absent */
+   /** @var array<string,false|Tokens\Highlighter> Lazy ABI engines by theme name — false marks the tokenizer absent */
    private array $Engines;
 
 
@@ -73,6 +63,7 @@ class Highlighter extends Component
       $this->mark = null;
       $this->before = 4;
       $this->after = 4;
+      $this->theme = 'bootgly';
 
       // * Data
       $this->source = '';
@@ -94,13 +85,10 @@ class Highlighter extends Component
       // ! Decoration — null follows the interactive TTY
       $plain = ($this->decoration ?? BOOTGLY_TTY) === false;
 
-      // ! Engine — lazy per decoration; probed once
-      $key = $plain === true ? 'plain' : 'colored';
+      // ! Engine — lazy per theme; probed once
+      $key = $plain === true ? 'plain' : $this->theme;
       $Engine = $this->Engines[$key] ??= function_exists('token_get_all') === true
-         ? new Tokens\Highlighter($plain === true
-              ? self::PLAIN_THEME
-              : Tokens\Highlighter::DEFAULT_THEME
-           )
+         ? new Tokens\Highlighter($key)
          : false;
 
       // ?: Verbatim degrade without the native tokenizer
