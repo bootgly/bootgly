@@ -18,7 +18,7 @@ return new Specification(
       $Tokens = new Tokens;
 
       // @ Every mainstream group appears
-      $lines = $Tokens->tokenize("<?php\n\$a = [1, 2]; // c\n\$s = 'x';");
+      $lines = $Tokens->tokenize("<?php\n\$a = [1, 2]; // c\necho 'x';");
 
       $types = [];
       foreach ($lines as $line) {
@@ -53,22 +53,41 @@ return new Specification(
          description: 'The object, nullsafe and static operators group as TOKEN_ACCESS'
       );
 
-      // @ Qualified names — import paths paint as names, not keywords
-      $qualified = false;
+      // @ Qualified names — the namespace path splits from the final node
+      $path = false;
+      $node = false;
       foreach ($Tokens->tokenize('<?php use Bootgly\CLI\Terminal;') as $line) {
          foreach ($line as $segment) {
             if (
-               $segment[0] === Tokens::TOKEN_DEFAULT
-               && str_contains((string) $segment[1], 'Bootgly\CLI\Terminal') === true
+               $segment[0] === Tokens::TOKEN_PATH
+               && str_contains((string) $segment[1], 'Bootgly\CLI\\') === true
             ) {
-               $qualified = true;
+               $path = true;
+            }
+            if ($segment[0] === Tokens::TOKEN_DEFAULT && $segment[1] === 'Terminal') {
+               $node = true;
             }
          }
       }
 
       yield assert(
-         assertion: $qualified === true,
-         description: 'Qualified names group as TOKEN_DEFAULT'
+         assertion: $path === true && $node === true,
+         description: 'Qualified names split into a path segment and a final node'
+      );
+
+      // @ Function calls — a name directly before `(` paints as function
+      $called = false;
+      foreach ($Tokens->tokenize('<?php $a->b(1);') as $line) {
+         foreach ($line as $segment) {
+            if ($segment[0] === Tokens::TOKEN_FUNCTION && $segment[1] === 'b') {
+               $called = true;
+            }
+         }
+      }
+
+      yield assert(
+         assertion: $called === true,
+         description: 'A called name groups as TOKEN_FUNCTION'
       );
 
       // @ Fallbacks — unmapped tokens degrade by mode

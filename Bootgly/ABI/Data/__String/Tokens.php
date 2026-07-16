@@ -58,8 +58,11 @@ use const T_TRAIT_C;
 use const T_USE;
 use const T_VARIABLE;
 use const T_WHITESPACE;
+use function count;
 use function explode;
 use function is_array;
+use function strrpos;
+use function substr;
 use function token_get_all;
 use function token_name;
 
@@ -74,6 +77,7 @@ class Tokens
    // * Metadata
    // @ Groups
    public const TOKEN_DEFAULT = 'token_default';
+   public const TOKEN_PATH = 'token_path';
 
    public const TOKEN_VARIABLE = 'token_variable';
    public const TOKEN_NUMBER = 'token_number';
@@ -104,6 +108,7 @@ class Tokens
    {
       // * Data
       $tokens = token_get_all($source);
+      $count = count($tokens);
 
       // * Metadata
       $output = [];
@@ -112,7 +117,9 @@ class Tokens
       $token_type_new = null;
 
       // @
-      foreach ($tokens as $token) {
+      for ($index = 0; $index < $count; $index++) {
+         $token = $tokens[$index];
+
          if (is_array($token) === true) {
             $token_type_new = match ($token[0]) {
                T_WHITESPACE => null, # 392
@@ -198,27 +205,62 @@ class Tokens
                   default => self::TOKEN_KEYWORD
                };
             }
+
+            // ? Call lookahead — a name directly before `(` paints as a function
+            $called = false;
+            if ($token_type_new === self::TOKEN_DEFAULT) {
+               $next = $index + 1;
+               while (
+                  $next < $count
+                  && is_array($tokens[$next]) === true
+                  && $tokens[$next][0] === T_WHITESPACE
+               ) {
+                  $next++;
+               }
+               $called = ($tokens[$next] ?? null) === '(';
+            }
+
+            // ? Qualified names split at the last separator — namespace path + final node
+            $position = match ($token[0]) {
+               T_NAME_FULLY_QUALIFIED, T_NAME_RELATIVE, T_NAME_QUALIFIED
+                  => strrpos($token[1], '\\'),
+               default => false
+            };
+            $parts = ($position === false
+               ? [[$called === true ? self::TOKEN_FUNCTION : $token_type_new, $token[1]]]
+               : [
+                  [self::TOKEN_PATH, substr($token[1], 0, $position + 1)],
+                  [
+                     $called === true ? self::TOKEN_FUNCTION : self::TOKEN_DEFAULT,
+                     substr($token[1], $position + 1)
+                  ]
+               ]
+            );
          }
          else {
             $token_type_new = match ($token) {
-               ',', ';' => self::TOKEN_PONTUATION,
+               ',', ';', '=' => self::TOKEN_PONTUATION,
                '(', ')', '[', ']' => self::TOKEN_DELIMITER,
                '"' => self::TOKEN_STRING,
                default => self::TOKEN_KEYWORD
             };
+            $parts = [[$token_type_new, $token]];
          }
-         if ($token_type_current === null) {
-            $token_type_current = $token_type_new;
+
+         // @@ Coalesce consecutive same-type parts into segments
+         foreach ($parts as $part) {
+            [$token_type_new, $token_text] = $part;
+
+            if ($token_type_current === null) {
+               $token_type_current = $token_type_new;
+            }
+            if ($token_type_current !== $token_type_new) {
+               $output[] = [$token_type_current, $token_buffer];
+               $token_buffer = '';
+               $token_type_current = $token_type_new;
+            }
+            $token_buffer .= $token_text;
          }
-         if ($token_type_current !== $token_type_new) {
-            $output[] = [$token_type_current, $token_buffer];
-            $token_buffer = '';
-            $token_type_current = $token_type_new;
-         }
-         $token_buffer .= (is_array($token)
-            ? $token[1]
-            : $token
-         );
       }
       // ? Flush the trailing buffer — null-typed segments (whitespace, tags) included
       if ($token_buffer !== '') {

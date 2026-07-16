@@ -47,7 +47,7 @@ class Highlighter extends Tokens
             self::TOKEN_COMMENT    => self::_BLACK_BRIGHT_FOREGROUND,
             self::TOKEN_FUNCTION   => self::_YELLOW_FOREGROUND,
             self::TOKEN_VARIABLE   => self::_CYAN_BRIGHT_FOREGROUND,
-            self::TOKEN_NUMBER     => self::_YELLOW_FOREGROUND,
+            self::TOKEN_NUMBER     => self::_ORANGE_FOREGROUND,
 
             self::TOKEN_DECLARATION => self::_MAGENTA_BRIGHT_FOREGROUND,
             self::TOKEN_ACCESS     => self::_WHITE_FOREGROUND,
@@ -59,6 +59,7 @@ class Highlighter extends Tokens
 
             self::TOKEN_KEYWORD    => self::_CYAN_FOREGROUND,
             self::TOKEN_DEFAULT    => self::_RED_BRIGHT_FOREGROUND,
+            self::TOKEN_PATH       => self::_WHITE_FOREGROUND,
 
             self::ACTUAL_LINE_MARK    => [self::_BLINK_STYLE, self::_RED_FOREGROUND],
             self::LINE_NUMBER         => self::_BLACK_BRIGHT_FOREGROUND,

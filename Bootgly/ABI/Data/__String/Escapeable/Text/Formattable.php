@@ -78,6 +78,7 @@ trait Formattable
    public const string _GREEN_PALE_FOREGROUND  = '38;2;204;255;204';
    public const string _YELLOW_SOFT_FOREGROUND = '38;2;255;221;153';
    public const string _YELLOW_PALE_FOREGROUND = '38;2;255;242;214';
+   public const string _ORANGE_FOREGROUND      = '38;2;209;154;102';
    // @ soft backgrounds
    public const string _RED_DIM_BACKGROUND    = '48;2;50;42;42';
    public const string _RED_SOFT_BACKGROUND   = '48;2;58;48;48';
