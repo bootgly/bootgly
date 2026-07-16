@@ -22,5 +22,7 @@ return new Suite(
       '2.4-highlighter-theme',
       '3.1-dumper-render',
       '3.2-dumper-theme',
+      '4.1-statusbar-render',
+      '4.2-statusbar-style',
    ]
 );
