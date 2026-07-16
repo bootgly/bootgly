@@ -12,6 +12,8 @@ namespace Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections;
 
 
 use function fclose;
+use function hrtime;
+use function max;
 use function stream_get_meta_data;
 use function stream_set_blocking;
 use function stream_socket_enable_crypto;
@@ -45,6 +47,8 @@ class Connection extends Packages
    // * Metadata
    public readonly int $id;
    public bool $encrypted;
+   public bool $handshaking;
+   public int $handshakeTimer;
    public int $status;
    // @ State
    public int $started;
@@ -73,7 +77,11 @@ class Connection extends Packages
       // * Metadata
       $this->id = (int) $Socket;
       $this->encrypted = false;
-      $this->status = Connections::STATUS_ESTABLISHED;
+      $this->handshaking = isSet(Server::$context['ssl']);
+      $this->handshakeTimer = 0;
+      $this->status = $this->handshaking
+         ? Connections::STATUS_CONNECTING
+         : Connections::STATUS_ESTABLISHED;
       // @ State
       $this->started = time();
       $this->used = time();
@@ -96,11 +104,41 @@ class Connection extends Packages
 
       parent::__construct($this);
 
-      // @ Call handshake if SSL is enabled
-      if ( isSet(Server::$context['ssl']) && $this->handshake() === false) {
-         return;
+      if ($this->handshaking) {
+         // ! Defense in depth: Connections::connect() already makes accepted
+         //   sockets nonblocking. Preserve the invariant for any other caller
+         //   before the first readiness-driven crypto step.
+         stream_set_blocking($this->Socket, false);
+         $this->arm();
       }
+      else {
+         $this->guard();
+      }
+   }
 
+   /** Arm the absolute monotonic TLS-handshake deadline. */
+   private function arm (): void
+   {
+      $timeoutNS = (int) (max(0.001, Server::$handshakeTimeout) * 1_000_000_000);
+      $deadlineNS = (int) hrtime(true) + $timeoutNS;
+
+      $this->handshakeTimer = Server::$Event->defer(
+         $deadlineNS,
+         function (): void {
+            if (
+               $this->handshaking
+               && $this->status <= Connections::STATUS_ESTABLISHED
+            ) {
+               Connections::$errors['connection']++;
+               $this->close();
+            }
+         }
+      );
+   }
+
+   /** Install idle expiration only after transport establishment. */
+   private function guard (): void
+   {
       // ! Idle expiration is gated by its own config, NOT by the stats
       //   flag: reaping idle connections is a resource-protection concern
       //   and must work with stats collection disabled (the default).
@@ -129,18 +167,16 @@ class Connection extends Packages
 
    public function handshake (): bool|int
    {
-      static $tries = 1;
+      if ($this->handshaking === false) {
+         return true;
+      }
 
       try {
-         stream_set_blocking($this->Socket, true);
-
          $negotiation = @stream_socket_enable_crypto(
             $this->Socket,
             true,
             STREAM_CRYPTO_METHOD_TLSv1_2_SERVER | STREAM_CRYPTO_METHOD_TLSv1_3_SERVER
          );
-
-         stream_set_blocking($this->Socket, false);
       }
       catch (Throwable) {
          $negotiation = false;
@@ -152,18 +188,24 @@ class Connection extends Packages
          return false;
       }
       else if ($negotiation === 0) {
-         if ($tries > 2) {
-            return false;
-         }
-
-         $tries++;
-
-         $this->handshake();
-
          return 0;
       }
       else {
+         if (
+            isSet(Connections::$Connections[$this->id])
+            && Connections::$pendingHandshakes > 0
+         ) {
+            Connections::$pendingHandshakes--;
+         }
+
+         $this->handshaking = false;
          $this->encrypted = true;
+         $this->status = Connections::STATUS_ESTABLISHED;
+
+         if ($this->handshakeTimer > 0) {
+            Server::$Event->cancel($this->handshakeTimer);
+            $this->handshakeTimer = 0;
+         }
 
          // @ ALPN: hand the connection to the negotiated application
          //   protocol's installer (e.g. 'h2' → HTTP/2 decoder). Registered
@@ -176,6 +218,8 @@ class Connection extends Packages
                (Server::$Protocols[$protocol])($this);
             }
          }
+
+         $this->guard();
       }
 
       return true;
@@ -236,6 +280,11 @@ class Connection extends Packages
          return true;
       }
 
+      if ($this->handshakeTimer > 0) {
+         Server::$Event->cancel($this->handshakeTimer);
+         $this->handshakeTimer = 0;
+      }
+
       // ! Cancel per-connection timers on the first close transition. The
       //   persistent expire() task holds [$this, 'expire'] in the static
       //   Timer::$tasks map — a GC root — so __destruct() (which also dels)
@@ -290,6 +339,10 @@ class Connection extends Packages
       if ( isSet(Connections::$Connections[$this->id]) ) {
          unset(Connections::$Connections[$this->id]);
 
+         if ($this->handshaking && Connections::$pendingHandshakes > 0) {
+            Connections::$pendingHandshakes--;
+         }
+
          if ( isSet(Connections::$ipConnections[$this->ip]) ) {
             if ( --Connections::$ipConnections[$this->ip] <= 0 ) {
                unset(Connections::$ipConnections[$this->ip]);
@@ -305,6 +358,10 @@ class Connection extends Packages
       // ? Half-constructed instances (constructor threw) have no timers yet
       if (isSet($this->timers) === false) { // @phpstan-ignore isset.initializedProperty
          return;
+      }
+
+      if ($this->handshakeTimer > 0) {
+         Server::$Event->cancel($this->handshakeTimer);
       }
 
       foreach ($this->timers as $id) {

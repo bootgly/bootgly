@@ -266,9 +266,10 @@ class TCP_Server_CLI implements Servers
    //   previous synchronous `stream_select(..., 200_000)` retry loop.
    public static int $maxWriteWallTime = 30;
    // # Connection-exhaustion caps (audit F-2)
-   //   Maximum simultaneously-established connections per worker. New
-   //   connections accepted past this ceiling are immediately shed (accepted
-   //   then closed) to bound FD/memory under a connection-flood DoS. 0 =
+   //   Maximum simultaneously-admitted connections per worker, including
+   //   pending TLS peers. New connections accepted past this ceiling are
+   //   immediately shed (accepted then closed) to bound FD/memory under a
+   //   connection-flood DoS. 0 =
    //   unlimited. Evaluated once per accept — never on the per-request hot
    //   path — so it does not affect throughput on established connections.
    public static int $maxConnections = 10000;
@@ -277,6 +278,17 @@ class TCP_Server_CLI implements Servers
    //   client onto one source IP; enable it only when the peer IP is the real
    //   client. When > 0, accepts past it are shed.
    public static int $maxConnectionsPerIP = 0;
+   // # TLS admission
+   //   Absolute wall-time budget for a nonblocking TLS handshake. The
+   //   Connection converts it to a monotonic deadline when the peer is
+   //   accepted, so wall-clock adjustments cannot extend the negotiation.
+   public static float $handshakeTimeout = 10.0;
+   //   Maximum TLS handshakes that may be pending concurrently per worker.
+   //   This is intentionally lower than the general connection ceiling:
+   //   an unauthenticated peer must not reserve the full connection pool by
+   //   opening sockets without sending a ClientHello. 0 does not disable the
+   //   bound; Connection admission clamps it to one as a fail-closed policy.
+   public static int $maxPendingHandshakes = 256;
    // # Reload — graceful drain budget (seconds) each worker gets to finish its
    //   in-flight connections before the master force-kills it during a reload.
    public static int $drainTimeout = 30;

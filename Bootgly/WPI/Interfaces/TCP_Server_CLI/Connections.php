@@ -15,6 +15,7 @@ namespace Bootgly\WPI\Interfaces\TCP_Server_CLI;
 
 use function count;
 use function explode;
+use function max;
 use function str_starts_with;
 use function stream_set_blocking;
 use function stream_set_read_buffer;
@@ -59,8 +60,10 @@ class Connections implements WPI\Connections
    // @ Limiter
    /** @var array<string,bool> */
    public static array $blacklist;
-   /** @var array<string,int> Live established-connection count per peer IP (audit F-2). */
+   /** @var array<string,int> Live admitted-connection count per peer IP (audit F-2). */
    public static array $ipConnections;
+   /** Live admitted TLS connections that have not completed their handshake. */
+   public static int $pendingHandshakes;
    // @ Stats
    public static bool $stats;
    // Connections
@@ -98,7 +101,8 @@ class Connections implements WPI\Connections
       self::$Connections = []; // Connections peers
       // @ Limiter
       self::$blacklist = [];   // Connections blacklist defined by limit methods
-      self::$ipConnections = []; // Live established-connection count per peer IP
+      self::$ipConnections = []; // Live admitted-connection count per peer IP
+      self::$pendingHandshakes = 0;
       // @ Stats
       // ! Off by default: 4 static increments per request, only consumed by
       //   the `stats` command — which lazily enables collection when first
@@ -201,6 +205,8 @@ class Connections implements WPI\Connections
 
       // @ Check connection
       if ( $Connection->check() === false ) {
+         self::$errors['connection']++;
+         $Connection->close();
          return false;
       }
 
@@ -213,14 +219,30 @@ class Connections implements WPI\Connections
          return false;
       }
 
+      // ? Pending TLS ceiling: apply after peer/global admission but before
+      //   any crypto work. The fail-closed minimum prevents a direct static
+      //   assignment of zero/negative values from silently disabling the
+      //   unauthenticated-handshake bound.
+      if (
+         $Connection->handshaking
+         && self::$pendingHandshakes >= max(1, Server::$maxPendingHandshakes)
+      ) {
+         self::$errors['connection']++;
+         $Connection->close();
+         return false;
+      }
+
       // @ Set stats
       $this->connections++;
 
       // @ Set Connection
       self::$Connections[(int) $Socket] = $Connection;
-      // @ Track live per-IP count (balanced by Connection::close()).
+      // @ Track all admitted peers before crypto (balanced by close()).
       self::$ipConnections[$Connection->ip] =
          (self::$ipConnections[$Connection->ip] ?? 0) + 1;
+      if ($Connection->handshaking) {
+         self::$pendingHandshakes++;
+      }
 
       // @ Add Connection Data read to Event loop
       $added = Server::$Event->add($Socket, Server::$Event::EVENT_READ, $Connection);

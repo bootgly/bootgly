@@ -153,6 +153,30 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
       &$Socket, null|int $length = null, null|int $timeout = null
    ): bool
    {
+      // ! TLS is advanced only from reactor readiness. The accepted socket
+      //   remains nonblocking, so a silent or fragmented ClientHello never
+      //   monopolizes the worker. One write-ready retry lets OpenSSL flush its
+      //   server flight; writing() removes that watcher before retrying so a
+      //   peer that still owes input cannot create a writable-socket spin.
+      if ($this->Connection->handshaking) {
+         $negotiation = $this->Connection->handshake();
+
+         if ($negotiation === 0) {
+            if (
+               Server::$Event->add(
+                  $Socket,
+                  Server::$Event::EVENT_WRITE,
+                  $this
+               ) === false
+            ) {
+               $this->Connection->close();
+               return false;
+            }
+         }
+
+         return $negotiation !== false;
+      }
+
       // !
       $input = '';
       $received = 0; // Bytes received from client
@@ -395,6 +419,15 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
     */
    public function writing (&$Socket, null|int $length = null, string $buffer = ''): bool
    {
+      if ($this->Connection->handshaking) {
+         // ! EVENT_WRITE is level-triggered for an ordinary TCP socket. Keep
+         //   it strictly one-shot during negotiation; read readiness remains
+         //   registered for the next fragmented handshake record.
+         Server::$Event->del($Socket, Server::$Event::EVENT_WRITE);
+
+         return $this->Connection->handshake() !== false;
+      }
+
       // ! Recommendation #3: Backpressure-aware async write state machine.
       //   Two entry modes:
       //   - Forward: caller passes encoded response in `$buffer`. We try

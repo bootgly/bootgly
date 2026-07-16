@@ -24,6 +24,14 @@ return new Suite(
    autoBoot: function (Suite|null $Suite = null): true {
       Display::show(Display::NONE);
 
+      // ! Test-only security budgets inherited by the forked worker. Restore
+      //   the master statics during teardown so neighboring suites keep the
+      //   production defaults.
+      $savedHandshakeTimeout = HTTP_Server_CLI::$handshakeTimeout;
+      $savedMaxPendingHandshakes = HTTP_Server_CLI::$maxPendingHandshakes;
+      HTTP_Server_CLI::$handshakeTimeout = 0.75;
+      HTTP_Server_CLI::$maxPendingHandshakes = 2;
+
       // @ A project context is required for the process state lock.
       if ( ! defined('BOOTGLY_PROJECT') ) {
          $projectFile = BOOTGLY_ROOT_DIR . 'projects/Demo/HTTP_Server_CLI/HTTP_Server_CLI.project.php';
@@ -69,6 +77,9 @@ return new Suite(
          $HTTP_Server_CLI->Process->stopping = true;
          $HTTP_Server_CLI->Process->Children->terminate();
          $HTTP_Server_CLI->Process->State->clean();
+
+         HTTP_Server_CLI::$handshakeTimeout = $savedHandshakeTimeout;
+         HTTP_Server_CLI::$maxPendingHandshakes = $savedMaxPendingHandshakes;
       }
 
       return true;
@@ -78,6 +89,10 @@ return new Suite(
    exitOnFailure: false,
    // * Data
    tests: [
-      '1.1-alpn'
+      '1.1-alpn',
+      '2.1-silent_handshake_worker_block',
+      '2.2-silent_handshake_deadline',
+      '2.3-pending_handshake_ceiling',
+      '2.4-fragmented_client_hello',
    ]
 );
