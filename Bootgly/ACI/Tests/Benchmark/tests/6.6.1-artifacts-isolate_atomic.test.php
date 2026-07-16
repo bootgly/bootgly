@@ -69,15 +69,82 @@ return new Specification(
          ->expect($temporaryFound, Op::Identical, false)
          ->assert();
 
-      $Result = new Result(time: '0.1');
+      $latencySummary = [
+         'count' => 1,
+         'sum_ns' => 100000,
+         'sum_overflow' => false,
+         'min_ns' => 100000,
+         'p50_ns' => 100000,
+         'p95_ns' => 100000,
+         'p99_ns' => 100000,
+         'p99_9_ns' => 100000,
+         'max_ns' => 100000,
+         'underflow' => 0,
+         'overflow' => 0,
+         'fidelity' => true,
+      ];
+      $latencyHistogram = [
+         'schema' => 'bootgly.latency-hdr.v1',
+         'sparse_counts' => [['index' => 1, 'count' => 1]],
+      ];
+      $timeSeries = [
+         'schema' => 'bootgly.time-series.v1',
+         'buckets' => [['second' => 0, 'responses' => 1]],
+      ];
+      $Result = new Result(
+         time: '0.1',
+         censored: 1,
+         writeCensored: 2,
+         censors: ['measurement_ended' => 1],
+         writeCensors: ['measurement_ended' => 2],
+         latencySummary: $latencySummary,
+         latencyHistogram: $latencyHistogram,
+         timeSeries: $timeSeries,
+      );
       $marks = Summary::save(
          caseName: 'Isolation',
-         results: ['Opponent' => ['default' => $Result]],
+         results: [
+            'Opponent' => [
+               'default' => $Result,
+               'same/name' => $Result,
+               'same name' => $Result,
+            ],
+         ],
          config: ['connections' => 64],
          suffix: 'r01',
          Artifacts: $ArtifactsA,
       );
       $marksContents = file_get_contents($ArtifactsA->resolve('marks/r01_bench.marks'));
+      $identity = hash(
+         'sha256',
+         json_encode(['Opponent', 'default'], JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR)
+      );
+      $telemetryRelative = "telemetry/r01/Opponent--default--{$identity}.json";
+      $telemetryPath = $ArtifactsA->relate($telemetryRelative);
+      $telemetryFile = $ArtifactsA->resolve($telemetryRelative);
+      $telemetry = is_file($telemetryFile)
+         ? json_decode((string) file_get_contents($telemetryFile), true)
+         : null;
+      $collisionIdentityA = hash(
+         'sha256',
+         json_encode(
+            ['Opponent', 'same/name'],
+            JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR
+         )
+      );
+      $collisionIdentityB = hash(
+         'sha256',
+         json_encode(
+            ['Opponent', 'same name'],
+            JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR
+         )
+      );
+      $collisionA = $ArtifactsA->resolve(
+         "telemetry/r01/Opponent--same-name--{$collisionIdentityA}.json"
+      );
+      $collisionB = $ArtifactsA->resolve(
+         "telemetry/r01/Opponent--same-name--{$collisionIdentityB}.json"
+      );
 
       yield new Assertion(
          description: 'Run identity stays outside experimental Config and a load cannot replace the marks label',
@@ -91,6 +158,36 @@ return new Specification(
                && str_contains($marksContents, "# Config:\n#   connections: 64\n")
                && !str_contains($marksContents, '#   run-id:')
                && !str_contains($marksContents, '#   run-directory:'),
+            Op::Identical,
+            true
+         )
+         ->assert();
+
+      yield new Assertion(
+         description: 'Per-result telemetry is schema-versioned, collision-safe and linked from marks',
+         fallback: 'Telemetry sidecar or its marks reference is invalid!'
+      )
+         ->expect(
+            is_string($marksContents)
+               && str_contains($marksContents, " telemetry={$telemetryPath}\n")
+               && str_contains($telemetryRelative, $identity)
+               && $collisionA !== $collisionB
+               && is_file($collisionA)
+               && is_file($collisionB)
+               && $telemetry === [
+                  'schema' => 'bootgly.benchmark-result-telemetry/v1',
+                  'case' => 'Isolation',
+                  'round' => 'r01',
+                  'opponent' => 'Opponent',
+                  'load' => 'default',
+                  'censored' => 1,
+                  'write_censored' => 2,
+                  'censors' => ['measurement_ended' => 1],
+                  'write_censors' => ['measurement_ended' => 2],
+                  'latency_summary' => $latencySummary,
+                  'latency_histogram' => $latencyHistogram,
+                  'time_series' => $timeSeries,
+               ],
             Op::Identical,
             true
          )

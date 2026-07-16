@@ -953,10 +953,28 @@ class TestCommand extends Command
          $exports[] = ['options' => $round, 'results' => $results, 'marks' => $marks, 'config' => $config];
       }
 
+      // @ Telemetry sidecars are first-class run artifacts even when marks are
+      //   the only requested report level. This makes the raw one-second
+      //   series discoverable without parsing each .marks file first.
+      $telemetry = array_values(array_filter(
+         $Artifacts->collect(),
+         static fn (string $file): bool
+            => str_contains(str_replace('\\', '/', $file), '/telemetry/')
+      ));
+
       // @ --results=report|charts — generate the Markdown report (+ SVG charts)
-      $generated = [];
+      $generated = $telemetry;
       if ($Configs->results !== 'marks') {
-         $run = self::extract($caseName, $Info, $Runner, $Configs, $Options, $exports, $options);
+         $run = self::extract(
+            $caseName,
+            $Info,
+            $Runner,
+            $Configs,
+            $Options,
+            $exports,
+            $options,
+            $telemetry,
+         );
          $resultsDir = $Artifacts->directory . '/reports';
 
          $Report = new Report(charts: $Configs->results === 'charts');
@@ -1431,6 +1449,7 @@ class TestCommand extends Command
     *
     * @param array<int,array{options:array<string,scalar>,results:array<string,array<string,\Bootgly\ACI\Tests\Benchmark\Result>>,marks:string,config:array<string,scalar|array<int,scalar>>}> $exports
     * @param array<string,bool|int|string> $options
+    * @param array<int,string> $telemetry
     *
     * @return array{
     *    case: string, loadSet: string, metric: string, command: string,
@@ -1439,7 +1458,8 @@ class TestCommand extends Command
     *    opponents: array<int,string>,
     *    data: array<string,array<string,array<int,null|float>>>,
     *    latencies: array<string,array<string,array<int,null|float>>>,
-    *    marks: array<int,string>
+    *    percentiles: array<string,array<string,array<int,null|array<string,mixed>>>>,
+    *    marks: array<int,string>, telemetry: array<int,string>
     * }
     */
    private static function extract (
@@ -1449,7 +1469,8 @@ class TestCommand extends Command
       Configs $Configs,
       Options $Options,
       array $exports,
-      array $options
+      array $options,
+      array $telemetry,
    ): array
    {
       // ! Opponent + load label unions (insertion order across rounds)
@@ -1471,6 +1492,7 @@ class TestCommand extends Command
       // ! Series — load => opponent => value per round
       $data = [];
       $latencies = [];
+      $percentiles = [];
       foreach ($exports as $index => $export) {
          foreach ($loads as $label) {
             foreach ($opponents as $opponent) {
@@ -1489,6 +1511,7 @@ class TestCommand extends Command
                   };
                }
                $latencies[$label][$opponent][$index] = $latency;
+               $percentiles[$label][$opponent][$index] = $Result?->latencySummary;
             }
          }
       }
@@ -1525,7 +1548,9 @@ class TestCommand extends Command
          'opponents' => $opponents,
          'data' => $data,
          'latencies' => $latencies,
+         'percentiles' => $percentiles,
          'marks' => array_values(array_map(static fn (array $export): string => $export['marks'], $exports)),
+         'telemetry' => $telemetry,
       ];
    }
 }

@@ -196,6 +196,20 @@ class Packages implements WPI\Connections\Packages
             }
 
             $written += $sent;
+
+            // # Progress hook
+            // ? Unlike DataWrite (full-buffer completion), this fires after
+            //   every positive socket acceptance so request-boundary ledgers
+            //   can timestamp requests completed by intermediate partial writes.
+            if (Client::$onDataProgress) {
+               (Client::$onDataProgress)(
+                  $Socket,
+                  $this->Connection,
+                  $this,
+                  $sent,
+                  $pending - $written,
+               );
+            }
          }
       }
       catch (Throwable) {

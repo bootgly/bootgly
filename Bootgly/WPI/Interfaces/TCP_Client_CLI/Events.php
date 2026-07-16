@@ -20,5 +20,6 @@ enum Events : string implements Event
    case ClientConnect = 'clientConnect';
    case ClientDisconnect = 'clientDisconnect';
    case DataRead = 'dataRead';
+   case DataProgress = 'dataProgress';
    case DataWrite = 'dataWrite';
 }

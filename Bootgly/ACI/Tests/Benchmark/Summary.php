@@ -12,6 +12,7 @@ namespace Bootgly\ACI\Tests\Benchmark;
 
 
 use const BOOTGLY_STORAGE_DIR;
+use const JSON_PRETTY_PRINT;
 use const JSON_THROW_ON_ERROR;
 use const JSON_UNESCAPED_SLASHES;
 use const PHP_INT_MAX;
@@ -25,10 +26,12 @@ use function date;
 use function explode;
 use function getmypid;
 use function gmdate;
+use function hash;
 use function implode;
 use function in_array;
 use function is_array;
 use function is_bool;
+use function is_int;
 use function json_encode;
 use function ksort;
 use function max;
@@ -37,11 +40,13 @@ use function number_format;
 use function preg_replace;
 use function random_bytes;
 use function sprintf;
+use function str_contains;
 use function str_ends_with;
 use function str_pad;
 use function str_repeat;
 use function str_replace;
 use function strlen;
+use function substr;
 use function trim;
 use function uasort;
 use function ucwords;
@@ -321,6 +326,47 @@ class Summary
       $CYAN    = self::wrap(self::_CYAN_FOREGROUND);
       $RESET   = self::_RESET_FORMAT;
 
+      $Format = static function (mixed $nanoseconds): string {
+         if (is_int($nanoseconds) === false || $nanoseconds < 0) {
+            return 'N/A';
+         }
+
+         return match (true) {
+            $nanoseconds >= 1_000_000_000
+               => number_format($nanoseconds / 1_000_000_000, 2, '.', '') . 's',
+            $nanoseconds >= 1_000_000
+               => number_format($nanoseconds / 1_000_000, 2, '.', '') . 'ms',
+            $nanoseconds >= 1_000
+               => number_format($nanoseconds / 1_000, 2, '.', '') . 'µs',
+            default => "{$nanoseconds}ns",
+         };
+      };
+      $Present = static function (Result $Result) use ($Format): null|string {
+         $summary = $Result->latencySummary;
+         if (
+            $summary === null
+            || (
+               array_key_exists('p50_ns', $summary) === false
+               && array_key_exists('p95_ns', $summary) === false
+               && array_key_exists('p99_ns', $summary) === false
+               && array_key_exists('p99_9_ns', $summary) === false
+               && array_key_exists('max_ns', $summary) === false
+            )
+         ) {
+            return null;
+         }
+
+         $percentiles = 'p50 ' . $Format($summary['p50_ns'] ?? null)
+            . ' · p95 ' . $Format($summary['p95_ns'] ?? null)
+            . ' · p99 ' . $Format($summary['p99_ns'] ?? null)
+            . ' · p99.9 ' . $Format($summary['p99_9_ns'] ?? null)
+            . ' · max ' . $Format($summary['max_ns'] ?? null);
+
+         return ($summary['fidelity'] ?? null) === false
+            ? $percentiles . ' · fidelity incomplete'
+            : $percentiles;
+      };
+
       // ? Compact style (sweep rounds) skips the separator + headline
       if ($compact === false) {
          self::separate();
@@ -400,6 +446,11 @@ class Summary
                   . str_pad($rps, $rpsWidth, ' ', STR_PAD_RIGHT)
                   . str_pad($latency, 16, ' ', STR_PAD_RIGHT)
                   . $transfer . "\n";
+
+               $percentiles = $Present($Result);
+               if ($percentiles !== null) {
+                  echo "{$DIM}    Percentiles  {$percentiles}{$RESET}\n";
+               }
             }
 
             echo "\n";
@@ -452,6 +503,11 @@ class Summary
                   . str_pad($latency, 16, ' ', STR_PAD_RIGHT)
                   . str_pad($transfer, 16, ' ', STR_PAD_RIGHT)
                   . $diff . "\n";
+
+               $percentiles = $Present($Result);
+               if ($percentiles !== null) {
+                  echo "{$DIM}    Percentiles  {$percentiles}{$RESET}\n";
+               }
             }
 
             echo "\n";
@@ -661,6 +717,104 @@ class Summary
             if ($Result->writeFailures !== null) {
                $line .= ' write_failures=' . json_encode((object) $Result->writeFailures);
             }
+            if ($Result->censored !== null) {
+               $line .= " censored={$Result->censored}";
+            }
+            if ($Result->writeCensored !== null) {
+               $line .= " write_censored={$Result->writeCensored}";
+            }
+            if ($Result->censors !== null) {
+               $line .= ' censors=' . json_encode(
+                  (object) $Result->censors,
+                  JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR
+               );
+            }
+            if ($Result->writeCensors !== null) {
+               $line .= ' write_censors=' . json_encode(
+                  (object) $Result->writeCensors,
+                  JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR
+               );
+            }
+
+            if ($Result->latencySummary !== null) {
+               $latencyMarks = [
+                  'count' => 'latency_count',
+                  'sum_ns' => 'latency_sum_ns',
+                  'sum_overflow' => 'latency_sum_overflow',
+                  'min_ns' => 'latency_min_ns',
+                  'p50_ns' => 'latency_p50_ns',
+                  'p95_ns' => 'latency_p95_ns',
+                  'p99_ns' => 'latency_p99_ns',
+                  'p99_9_ns' => 'latency_p99_9_ns',
+                  'max_ns' => 'latency_max_ns',
+                  'underflow' => 'latency_underflow',
+                  'overflow' => 'latency_overflow',
+                  'fidelity' => 'latency_fidelity',
+               ];
+
+               foreach ($latencyMarks as $key => $mark) {
+                  if (array_key_exists($key, $Result->latencySummary) === false) {
+                     continue;
+                  }
+
+                  $value = $Result->latencySummary[$key];
+                  if ($value !== null && is_bool($value) === false && is_int($value) === false) {
+                     continue;
+                  }
+
+                  $scalar = match (true) {
+                     $value === null => 'null',
+                     is_bool($value) => $value ? 'true' : 'false',
+                     default => (string) $value,
+                  };
+                  $line .= " {$mark}={$scalar}";
+               }
+            }
+
+            if (
+               $Artifacts !== null
+               && (
+                  $Result->latencySummary !== null
+                  || $Result->latencyHistogram !== null
+                  || $Result->timeSeries !== null
+               )
+            ) {
+               $opponentSlug = trim(
+                  (string) preg_replace('/[^A-Za-z0-9._-]+/', '-', (string) $opponent),
+                  '-.'
+               );
+               $loadSlug = trim(
+                  (string) preg_replace('/[^A-Za-z0-9._-]+/', '-', (string) $label),
+                  '-.'
+               );
+               $opponentSlug = $opponentSlug === '' ? 'opponent' : substr($opponentSlug, 0, 48);
+               $loadSlug = $loadSlug === '' ? 'load' : substr($loadSlug, 0, 48);
+               $identity = hash('sha256', json_encode(
+                  [(string) $opponent, (string) $label],
+                  JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR
+               ));
+               $relative = "telemetry/{$artifactLabel}/{$opponentSlug}--{$loadSlug}--{$identity}.json";
+               $telemetry = [
+                  'schema' => 'bootgly.benchmark-result-telemetry/v1',
+                  'case' => $caseName,
+                  'round' => $artifactLabel,
+                  'opponent' => $opponent,
+                  'load' => $label,
+                  'censored' => $Result->censored,
+                  'write_censored' => $Result->writeCensored,
+                  'censors' => $Result->censors,
+                  'write_censors' => $Result->writeCensors,
+                  'latency_summary' => $Result->latencySummary,
+                  'latency_histogram' => $Result->latencyHistogram,
+                  'time_series' => $Result->timeSeries,
+               ];
+               $encoded = json_encode(
+                  $telemetry,
+                  JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR
+               ) . "\n";
+               $path = $Artifacts->write($relative, $encoded);
+               $line .= " telemetry={$path}";
+            }
 
             $lines[] = $line;
          }
@@ -742,7 +896,7 @@ class Summary
     * output styles — so the `.marks` location is never lost in the noise.
     *
     * @param array<int,string> $marks Saved `.marks` paths (one per round).
-    * @param array<int,string> $generated Report/chart paths (when `--results` > marks).
+    * @param array<int,string> $generated Telemetry/report/chart/manifest paths.
     * @param string|null $directory Invocation-owned artifact directory.
     * @param string|null $pathBase Absolute base for relative artifact paths.
     */
@@ -775,7 +929,9 @@ class Summary
       foreach ($generated as $file) {
          $label = str_ends_with($file, '/manifest.json')
             ? 'Manifest'
-            : (str_ends_with($file, '.svg') ? 'Chart' : 'Report');
+            : (str_contains($file, '/telemetry/')
+               ? 'Telemetry'
+               : (str_ends_with($file, '.svg') ? 'Chart' : 'Report'));
          echo "{$DIM}  " . str_pad($label, 8) . " {$file}{$RESET}\n";
       }
 
@@ -847,6 +1003,13 @@ class Summary
                   'statuses' => $Result->statuses,
                   'failures' => $Result->failures,
                   'write_failures' => $Result->writeFailures,
+                  'censored' => $Result->censored,
+                  'write_censored' => $Result->writeCensored,
+                  'censors' => $Result->censors,
+                  'write_censors' => $Result->writeCensors,
+                  'latency_summary' => $Result->latencySummary,
+                  'latency_histogram' => $Result->latencyHistogram,
+                  'time_series' => $Result->timeSeries,
                ];
             }
          }

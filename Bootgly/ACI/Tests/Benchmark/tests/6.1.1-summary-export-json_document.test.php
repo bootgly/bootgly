@@ -19,19 +19,45 @@ return new Specification(
          rps: 104532.0,
          latency: '1.2ms',
          transfer: '24.1MB/s',
-         scheduled: 104536,
+         scheduled: 104538,
          sent: 104535,
          responses: 104532,
          informational: 7,
          outstanding: 0,
-         failed: 3,
+         failed: 1,
          writeFailed: 1,
          connectionFailed: 0,
          partialWrites: 2,
          accounting: true,
          statuses: [200 => 104530, 503 => 2],
-         failures: ['measurement_ended' => 3],
+         failures: ['connection_closed' => 1],
          writeFailures: ['measurement_ended' => 1],
+         censored: 2,
+         writeCensored: 2,
+         censors: ['measurement_ended' => 2],
+         writeCensors: ['measurement_ended' => 2],
+         latencySummary: [
+            'count' => 104532,
+            'sum_ns' => 125438400000,
+            'sum_overflow' => false,
+            'min_ns' => 8500,
+            'p50_ns' => 12000,
+            'p95_ns' => 18000,
+            'p99_ns' => 24000,
+            'p99_9_ns' => 31000,
+            'max_ns' => 47000,
+            'underflow' => 0,
+            'overflow' => 0,
+            'fidelity' => true,
+         ],
+         latencyHistogram: [
+            'schema' => 'bootgly.latency-hdr.v1',
+            'sparse_counts' => [['index' => 12, 'count' => 104532]],
+         ],
+         timeSeries: [
+            'schema' => 'bootgly.time-series.v1',
+            'buckets' => [['second' => 0, 'responses' => 104532]],
+         ],
       );
       $trackedSHA = str_repeat('a', 64);
       $untrackedSHA = str_repeat('b', 64);
@@ -54,7 +80,10 @@ return new Specification(
                'marks' => 'storage/tests/benchmarks/HTTP_Server_CLI/x-r01_bench.marks',
             ],
          ],
-         artifacts: ['results/RESULTS-benchmark-x.md'],
+         artifacts: [
+            'results/RESULTS-benchmark-x.md',
+            'storage/tests/benchmarks/HTTP_Server_CLI/runs/x/telemetry/r01/Bootgly--Plaintext.json',
+         ],
          ID: '20260714T120000.000000Z-p123-aabbccdd',
          directory: 'storage/tests/benchmarks/HTTP_Server_CLI/runs/20260714T120000.000000Z-p123-aabbccdd',
          pathBase: '/opt/bootgly',
@@ -118,19 +147,45 @@ return new Specification(
                         'transfer' => '24.1MB/s',
                         'time' => null,
                         'memory' => null,
-                        'scheduled' => 104536,
+                        'scheduled' => 104538,
                         'sent' => 104535,
                         'responses' => 104532,
                         'informational' => 7,
                         'outstanding' => 0,
-                        'failed' => 3,
+                        'failed' => 1,
                         'write_failed' => 1,
                         'connection_failed' => 0,
                         'partial_writes' => 2,
                         'accounting' => true,
                         'statuses' => [200 => 104530, 503 => 2],
-                        'failures' => ['measurement_ended' => 3],
+                        'failures' => ['connection_closed' => 1],
                         'write_failures' => ['measurement_ended' => 1],
+                        'censored' => 2,
+                        'write_censored' => 2,
+                        'censors' => ['measurement_ended' => 2],
+                        'write_censors' => ['measurement_ended' => 2],
+                        'latency_summary' => [
+                           'count' => 104532,
+                           'sum_ns' => 125438400000,
+                           'sum_overflow' => false,
+                           'min_ns' => 8500,
+                           'p50_ns' => 12000,
+                           'p95_ns' => 18000,
+                           'p99_ns' => 24000,
+                           'p99_9_ns' => 31000,
+                           'max_ns' => 47000,
+                           'underflow' => 0,
+                           'overflow' => 0,
+                           'fidelity' => true,
+                        ],
+                        'latency_histogram' => [
+                           'schema' => 'bootgly.latency-hdr.v1',
+                           'sparse_counts' => [['index' => 12, 'count' => 104532]],
+                        ],
+                        'time_series' => [
+                           'schema' => 'bootgly.time-series.v1',
+                           'buckets' => [['second' => 0, 'responses' => 104532]],
+                        ],
                      ],
                   ],
                ],
@@ -144,6 +199,20 @@ return new Specification(
          fallback: 'Document not single-line!'
       )
          ->expect(substr_count($json, "\n") === 1 && str_ends_with($json, "\n"), Op::Identical, true)
+         ->assert();
+
+      yield new Assertion(
+         description: 'JSON explicitly advertises the detailed telemetry sidecar',
+         fallback: 'Telemetry artifact is not discoverable in JSON!'
+      )
+         ->expect(
+            $document['artifacts'],
+            Op::Equal,
+            [
+               'results/RESULTS-benchmark-x.md',
+               'storage/tests/benchmarks/HTTP_Server_CLI/runs/x/telemetry/r01/Bootgly--Plaintext.json',
+            ]
+         )
          ->assert();
 
       yield new Assertion(

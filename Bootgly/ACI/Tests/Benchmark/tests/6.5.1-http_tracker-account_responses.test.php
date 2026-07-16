@@ -591,7 +591,7 @@ return new Specification(
       $Ended = new Tracker();
       $Ended->queue([1, 1]);
       $Ended->accept(0);
-      $Ended->abort('measurement ended');
+      $Ended->censor('measurement ended');
       $ended = $Ended->inspect();
 
       $Unsolicited = new Tracker();
@@ -604,12 +604,18 @@ return new Specification(
       $unsolicited = $Unsolicited->inspect();
 
       yield new Assertion(
-         description: 'Explicit aborts close the ledger and unsolicited responses invalidate it',
+         description: 'Measurement censoring closes the ledger and unsolicited responses invalidate it',
          fallback: 'A terminal accounting anomaly was hidden by balanced counters!'
       )
          ->expect(
             [
-               [$ended['failures'], $ended['accounting'], $ended['error']],
+               [
+                  $ended['failures'],
+                  $ended['censors'],
+                  $ended['write_censors'],
+                  $ended['accounting'],
+                  $ended['error'],
+               ],
                [
                   $unsolicited['responses'],
                   $unsolicited['error'],
@@ -618,7 +624,7 @@ return new Specification(
             ],
             Op::Identical,
             [
-               [['measurement_ended' => 2], true, 'measurement_ended'],
+               [[], ['measurement_ended' => 2], [], true, null],
                [1, 'unexpected_response', false],
             ],
          )

@@ -78,11 +78,37 @@ class Result
    /** @var null|array<string,int> Unsent request failure => count. */
    public readonly null|array $writeFailures;
 
+   /** Fully sent requests still pending when the measurement window closed. */
+   public readonly null|int $censored;
+
+   /** Queued requests not fully transmitted when the measurement window closed. */
+   public readonly null|int $writeCensored;
+
+   /** @var null|array<string,int> Fully sent request censor reason => count. */
+   public readonly null|array $censors;
+
+   /** @var null|array<string,int> Unsent request censor reason => count. */
+   public readonly null|array $writeCensors;
+
+   /** @var null|array<string,mixed> Derived latency count, extrema and percentiles. */
+   public readonly null|array $latencySummary;
+
+   /** @var null|array<string,mixed> Mergeable latency histogram document. */
+   public readonly null|array $latencyHistogram;
+
+   /** @var null|array<string,mixed> Raw fixed-interval throughput and error series. */
+   public readonly null|array $timeSeries;
+
 
    /**
     * @param null|array<int,int> $statuses
     * @param null|array<string,int> $failures
     * @param null|array<string,int> $writeFailures
+    * @param null|array<string,int> $censors
+    * @param null|array<string,int> $writeCensors
+    * @param null|array<string,mixed> $latencySummary
+    * @param null|array<string,mixed> $latencyHistogram
+    * @param null|array<string,mixed> $timeSeries
     */
    public function __construct (
       null|string $time = null,
@@ -103,6 +129,13 @@ class Result
       null|array $statuses = null,
       null|array $failures = null,
       null|array $writeFailures = null,
+      null|int $censored = null,
+      null|int $writeCensored = null,
+      null|array $censors = null,
+      null|array $writeCensors = null,
+      null|array $latencySummary = null,
+      null|array $latencyHistogram = null,
+      null|array $timeSeries = null,
    )
    {
       $this->time = $time;
@@ -123,5 +156,12 @@ class Result
       $this->statuses = $statuses;
       $this->failures = $failures;
       $this->writeFailures = $writeFailures;
+      $this->censored = $censored;
+      $this->writeCensored = $writeCensored;
+      $this->censors = $censors;
+      $this->writeCensors = $writeCensors;
+      $this->latencySummary = $latencySummary;
+      $this->latencyHistogram = $latencyHistogram;
+      $this->timeSeries = $timeSeries;
    }
 }

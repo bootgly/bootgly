@@ -126,6 +126,8 @@ class TCP_Client_CLI
    public static null|Closure $onClientDisconnect = null;
    // on Data
    public static null|Closure $onDataRead = null;
+   /** Positive socket-write progress; receives accepted and total remaining bytes. */
+   public static null|Closure $onDataProgress = null;
    public static null|Closure $onDataWrite = null;
 
    // * Metadata
@@ -269,6 +271,7 @@ class TCP_Client_CLI
          TCP_Client_CLI\Events::ClientConnect => self::$onClientConnect = $Callback,
          TCP_Client_CLI\Events::ClientDisconnect => self::$onClientDisconnect = $Callback,
          TCP_Client_CLI\Events::DataRead => self::$onDataRead = $Callback,
+         TCP_Client_CLI\Events::DataProgress => self::$onDataProgress = $Callback,
          TCP_Client_CLI\Events::DataWrite => self::$onDataWrite = $Callback,
       };
 

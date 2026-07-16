@@ -6,6 +6,7 @@ use Bootgly\ACI\Tests\Benchmark\HTTP\Tracker;
 use Bootgly\ACI\Tests\Suite\Test\Specification;
 use Bootgly\WPI\Interfaces\TCP_Client_CLI;
 use Bootgly\WPI\Interfaces\TCP_Client_CLI\Connections\Connection;
+use Bootgly\WPI\Interfaces\TCP_Client_CLI\Events;
 
 
 if (class_exists('TCPClientAccountingConnection', false) === false) {
@@ -71,6 +72,15 @@ return new Specification(
       stream_set_blocking($Socket, false);
       $Client = new TCP_Client_CLI(TCP_Client_CLI::MODE_TEST);
       $Client->deadline = microtime(true) - 1;
+      $progress = [];
+      $Client->on(
+         Events::DataProgress,
+         static function ($Socket, $Connection, $Package, int $accepted, int $remaining)
+            use (&$progress): void
+         {
+            $progress[] = ['accepted' => $accepted, 'remaining' => $remaining];
+         },
+      );
       $Connection = new TCPClientAccountingConnection($Socket, $Client);
       $payload = str_repeat('0123456789abcdef', 262144);
       $Connection->output = $payload;
@@ -79,6 +89,8 @@ return new Specification(
       $remaining = strlen($Connection->output);
       $accepted = strlen($payload) - $remaining;
       $partial = $accepted > 0 && $remaining > 0;
+      $progressAccepted = array_sum(array_column($progress, 'accepted'));
+      $progressRemaining = $progress !== [] ? $progress[array_key_last($progress)]['remaining'] : null;
 
       $accounting = null;
       if ($partial) {
@@ -91,6 +103,7 @@ return new Specification(
 
       @proc_terminate($process);
       proc_close($process);
+      TCP_Client_CLI::$onDataProgress = null;
 
       yield new Assertion(
          description: 'Accepted bytes are not resurrected when zero progress reaches the deadline',
@@ -102,6 +115,8 @@ return new Specification(
                $partial,
                $Connection->output === substr($payload, $accepted),
                $Connection->closed,
+               $progressAccepted,
+               $progressRemaining,
                $accounting['sent'] ?? null,
                $accounting['failures'] ?? null,
                $accounting['write_failures'] ?? null,
@@ -113,6 +128,8 @@ return new Specification(
                true,
                true,
                true,
+               $accepted,
+               $remaining,
                1,
                ['connection_aborted' => 1],
                ['connection_aborted' => 1],

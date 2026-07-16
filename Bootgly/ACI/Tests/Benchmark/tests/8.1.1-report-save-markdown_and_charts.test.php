@@ -42,7 +42,50 @@ return new Specification(
                'Swoole' => [1.9, 1.1],
             ],
          ],
+         'percentiles' => [
+            'Plaintext' => [
+               'Bootgly' => [
+                  [
+                     'p50_ns' => 850000,
+                     'p95_ns' => 1200000,
+                     'p99_ns' => 1800000,
+                     'p99_9_ns' => 2400000,
+                     'max_ns' => 3000000,
+                     'fidelity' => true,
+                  ],
+                  [
+                     'p50_ns' => 600000,
+                     'p95_ns' => 900000,
+                     'p99_ns' => 1300000,
+                     'p99_9_ns' => 1900000,
+                     'max_ns' => 2500000,
+                     'fidelity' => true,
+                  ],
+               ],
+               'Swoole' => [
+                  [
+                     'p50_ns' => 1400000,
+                     'p95_ns' => 2100000,
+                     'p99_ns' => 2800000,
+                     'p99_9_ns' => 3600000,
+                     'max_ns' => 4800000,
+                     'fidelity' => false,
+                  ],
+                  [
+                     'p50_ns' => 800000,
+                     'p95_ns' => 1300000,
+                     'p99_ns' => 1700000,
+                     'p99_9_ns' => 2300000,
+                     'max_ns' => 3100000,
+                     'fidelity' => true,
+                  ],
+               ],
+            ],
+         ],
          'marks' => ['storage/tests/benchmarks/HTTP_Server_CLI/x-r01_bench.marks'],
+         'telemetry' => [
+            'storage/tests/benchmarks/HTTP_Server_CLI/runs/x/telemetry/r01/Bootgly--Plaintext.json',
+         ],
       ];
 
       $dir = sys_get_temp_dir() . '/bootgly-report-' . getmypid();
@@ -69,7 +112,19 @@ return new Specification(
                && str_contains($markdown, '+25.0%')                    // 100k vs 80k
                && str_contains($markdown, '## Peaks')
                && str_contains($markdown, '200,000 @ 2')
+               && str_contains($markdown, '## Latency percentiles')
+               && str_contains(
+                  $markdown,
+                  '| 1 | Bootgly | 850.00µs | 1.20ms | 1.80ms | 2.40ms | 3.00ms | valid |'
+               )
+               && str_contains(
+                  $markdown,
+                  '| 1 | Swoole | 1.40ms | 2.10ms | 2.80ms | 3.60ms | 4.80ms | incomplete |'
+               )
                && str_contains($markdown, 'x-r01_bench.marks')
+               && str_contains($markdown, '## Telemetry')
+               && str_contains($markdown, 'raw one-second throughput/error series')
+               && str_contains($markdown, '/telemetry/r01/Bootgly--Plaintext.json')
                && str_contains($markdown, '.chart.throughput.svg')
                && str_contains($markdown, '**framework-tracked-diff-sha256** — `' . str_repeat('a', 64) . '`')
                && str_contains($markdown, '**framework-untracked-manifest-sha256** — `' . str_repeat('b', 64) . '`')

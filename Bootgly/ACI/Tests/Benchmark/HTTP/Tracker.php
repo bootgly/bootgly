@@ -38,6 +38,9 @@ use function substr;
 use function trim;
 
 use InvalidArgumentException;
+use LogicException;
+
+use Bootgly\ACI\Tests\Benchmark\Latency\Histogram;
 
 
 /**
@@ -72,6 +75,18 @@ final class Tracker
    /** @var list<string> */
    private array $methods = [];
    private int $defaultMethods = 0;
+
+   // # Optional per-logical-request latency correlation
+   // ? Pipeline 1 stays scalar. A compressed FIFO is materialized only when
+   //   more than one distinct send timestamp is simultaneously outstanding.
+   private null|Histogram $Histogram;
+   private int $receivedNS = 0;
+   private int $timestampFastNS = 0;
+   private int $timestampFastCount = 0;
+
+   /** @var list<array{timestamp: int, count: int}> */
+   private array $timestamps = [];
+   private int $timestampHead = 0;
 
    private string $buffer = '';
    private string $state = self::STATUS;
@@ -117,7 +132,13 @@ final class Tracker
    private array $failures = [];
 
    /** @var array<string, int> */
+   private array $censors = [];
+
+   /** @var array<string, int> */
    private array $writeFailures = [];
+
+   /** @var array<string, int> */
+   private array $writeCensors = [];
 
    public protected(set) bool $terminal = false;
    public protected(set) bool $reusable = true;
@@ -131,6 +152,7 @@ final class Tracker
       int $headerLimit = 65536,
       int $bodyLimit = 1073741824,
       int $informationalLimit = 16,
+      null|Histogram $Histogram = null,
    )
    {
       if (
@@ -148,6 +170,7 @@ final class Tracker
       $this->headerLimit = $headerLimit;
       $this->bodyLimit = $bodyLimit;
       $this->informationalLimit = $informationalLimit;
+      $this->Histogram = $Histogram;
    }
 
    /**
@@ -187,7 +210,7 @@ final class Tracker
     * Record default-method requests whose complete bytes were already accepted
     * by one successful socket write.
     */
-   public function send (int $count = 1): void
+   public function send (int $count = 1, null|int $sentNS = null): void
    {
       if ($this->terminal === true || $this->reusable === false) {
          throw new InvalidArgumentException('A closed HTTP tracker cannot send requests.');
@@ -203,6 +226,7 @@ final class Tracker
       $this->scheduled += $count;
       $this->sent += $count;
       $this->defaultMethods += $count;
+      $this->stamp($sentNS, $count);
       if ($this->buffer !== '') {
          $this->advance();
       }
@@ -211,17 +235,19 @@ final class Tracker
    /**
     * Accept the number of queued bytes left after a write attempt.
     */
-   public function accept (int $remaining): void
+   public function accept (int $remaining, null|int $sentNS = null): int
    {
       if ($this->terminal === true) {
-         return;
+         return 0;
       }
 
       if ($remaining < 0 || $remaining > $this->writeBytes) {
          $this->abort('invalid_write_boundary');
 
-         return;
+         return 0;
       }
+
+      $completed = 0;
 
       // ? Pipeline 1 keeps its sole pending request in scalar fields. Partial
       //   progress shrinks the authoritative remainder; a second queued request
@@ -229,7 +255,7 @@ final class Tracker
       if ($this->writeFastBytes > 0 && $this->writes === []) {
          $accepted = $this->writeFastBytes - $remaining;
          if ($accepted === 0) {
-            return;
+            return 0;
          }
 
          if ($remaining > 0) {
@@ -237,22 +263,24 @@ final class Tracker
             $this->writeFastBytes = $remaining;
             $this->writeBytes = $remaining;
 
-            return;
+            return 0;
          }
 
          $this->track($this->writeFastMethod);
+         $this->stamp($sentNS, 1);
          $this->writeFastBytes = 0;
          $this->writeFastMethod = '';
          $this->writeBytes = 0;
          $this->sent++;
+         $completed = 1;
          $this->advance();
 
-         return;
+         return $completed;
       }
 
       $accepted = $this->writeBytes - $remaining;
       if ($accepted === 0) {
-         return;
+         return 0;
       }
 
       if ($remaining > 0) {
@@ -263,12 +291,14 @@ final class Tracker
       //   the generic FIFO loop and array_shift() on every response cycle.
       if ($remaining === 0 && count($this->writes) === 1) {
          $this->track($this->writes[0]['method']);
+         $this->stamp($sentNS, 1);
          $this->writes = [];
          $this->writeBytes = 0;
          $this->sent++;
+         $completed = 1;
          $this->advance();
 
-         return;
+         return $completed;
       }
 
       while ($accepted > 0 && $this->writes !== []) {
@@ -280,18 +310,22 @@ final class Tracker
          if ($this->writes[0]['offset'] === $this->writes[0]['bytes']) {
             $write = array_shift($this->writes);
             $this->track($write['method']);
+            $this->stamp($sentNS, 1);
             $this->sent++;
+            $completed++;
          }
       }
 
       $this->writeBytes = $remaining;
       $this->advance();
+
+      return $completed;
    }
 
    /**
     * @return int Number of final responses completed by this feed.
     */
-   public function feed (string $bytes): int
+   public function feed (string $bytes, null|int $receivedNS = null): int
    {
       if ($this->terminal === true || $bytes === '') {
          return 0;
@@ -299,6 +333,11 @@ final class Tracker
 
       $before = $this->responses;
       $length = strlen($bytes);
+      // ?! Hot path: receive() inlined — one method frame per read at ~1M
+      //    reads/s is measurable load-generator overhead.
+      if ($this->Histogram !== null) {
+         $this->receivedNS = $receivedNS ?? 0;
+      }
 
       // ? Pipeline 1 normally delivers one complete fixed-length response per
       //   read. Once its head has passed the strict parser, validate the same
@@ -318,6 +357,7 @@ final class Tracker
          if ($this->cacheReusable === false) {
             $this->reusable = false;
          }
+         $this->observe();
          $this->defaultMethods--;
          $this->responses++;
          $this->cacheResponses++;
@@ -341,13 +381,14 @@ final class Tracker
    /**
     * @return int Number of EOF-delimited final responses completed by close.
     */
-   public function close (bool $peerEOF): int
+   public function close (bool $peerEOF, null|int $receivedNS = null): int
    {
       if ($this->terminal === true) {
          return 0;
       }
 
       $before = $this->responses;
+      $this->receive($receivedNS);
       if (
          $peerEOF === true
          && $this->state === self::EOF
@@ -395,6 +436,28 @@ final class Tracker
    }
 
    /**
+    * Close the ledger at the measurement boundary without reporting ordinary
+    * in-flight work as a transport or server failure.
+    */
+   public function censor (string $reason = 'measurement_ended'): void
+   {
+      if ($this->terminal === true) {
+         return;
+      }
+
+      $reason = $this->normalize($reason);
+      $this->settle($reason, true);
+
+      if ($this->methods !== [] || $this->defaultMethods > 0) {
+         $this->discard($reason, true);
+      }
+
+      $this->terminal = true;
+      $this->reusable = false;
+      $this->buffer = '';
+   }
+
+   /**
     * Check whether this connection can still accept accounting events.
     */
    public function check (): bool
@@ -411,7 +474,9 @@ final class Tracker
     *    outstanding: int,
     *    statuses: array<int, int>,
     *    failures: array<string, int>,
+    *    censors: array<string, int>,
     *    write_failures: array<string, int>,
+    *    write_censors: array<string, int>,
     *    partial_writes: int,
     *    accounting: bool,
     *    terminal: bool,
@@ -423,9 +488,11 @@ final class Tracker
       $pending = count($this->writes) + ($this->writeFastBytes > 0 ? 1 : 0);
       $outstanding = count($this->methods) + $this->defaultMethods;
       $failed = array_sum($this->failures);
+      $censored = array_sum($this->censors);
       $writeFailed = array_sum($this->writeFailures);
-      $writeAccounted = $this->scheduled === $this->sent + $writeFailed + $pending;
-      $responseAccounted = $this->sent === $this->responses + $failed + $outstanding;
+      $writeCensored = array_sum($this->writeCensors);
+      $writeAccounted = $this->scheduled === $this->sent + $writeFailed + $writeCensored + $pending;
+      $responseAccounted = $this->sent === $this->responses + $failed + $censored + $outstanding;
       $statuses = $this->statuses;
       if ($this->cacheResponses > 0) {
          $statuses[$this->cacheStatus] = ($statuses[$this->cacheStatus] ?? 0)
@@ -440,7 +507,9 @@ final class Tracker
          'outstanding' => $outstanding,
          'statuses' => $statuses,
          'failures' => $this->failures,
+         'censors' => $this->censors,
          'write_failures' => $this->writeFailures,
+         'write_censors' => $this->writeCensors,
          'partial_writes' => $this->partialWrites,
          'accounting' => $writeAccounted && $responseAccounted && $this->anomaly === false,
          'terminal' => $this->terminal,
@@ -1111,6 +1180,7 @@ final class Tracker
 
    private function complete (int $status): void
    {
+      $this->observe();
       if ($this->methods !== []) {
          if (count($this->methods) === 1) {
             $this->methods = [];
@@ -1185,15 +1255,22 @@ final class Tracker
          $this->methods = [];
          $this->defaultMethods = 0;
       }
+      $this->purge();
    }
 
-   private function discard (string $reason): void
+   private function discard (string $reason, bool $censored = false): void
    {
       $outstanding = count($this->methods) + $this->defaultMethods;
       if ($outstanding > 0) {
-         $this->failures[$reason] = ($this->failures[$reason] ?? 0) + $outstanding;
+         if ($censored) {
+            $this->censors[$reason] = ($this->censors[$reason] ?? 0) + $outstanding;
+         }
+         else {
+            $this->failures[$reason] = ($this->failures[$reason] ?? 0) + $outstanding;
+         }
          $this->methods = [];
          $this->defaultMethods = 0;
+         $this->purge();
       }
    }
 
@@ -1207,16 +1284,138 @@ final class Tracker
       }
    }
 
-   private function settle (string $reason): void
+   private function settle (string $reason, bool $censored = false): void
    {
       $pending = count($this->writes) + ($this->writeFastBytes > 0 ? 1 : 0);
       if ($pending > 0) {
-         $this->writeFailures[$reason] = ($this->writeFailures[$reason] ?? 0) + $pending;
+         if ($censored) {
+            $this->writeCensors[$reason] = ($this->writeCensors[$reason] ?? 0) + $pending;
+         }
+         else {
+            $this->writeFailures[$reason] = ($this->writeFailures[$reason] ?? 0) + $pending;
+         }
          $this->writes = [];
          $this->writeFastBytes = 0;
          $this->writeFastMethod = '';
          $this->writeBytes = 0;
       }
+   }
+
+   /**
+    * Retain the monotonic observation instant used by every final response
+    * structurally completed while processing the current read callback.
+    */
+   private function receive (null|int $receivedNS): void
+   {
+      if ($this->Histogram === null) {
+         return;
+      }
+
+      $this->receivedNS = $receivedNS ?? 0;
+   }
+
+   /**
+    * Append one compressed segment to the logical-request send-time FIFO.
+    */
+   private function stamp (null|int $sentNS, int $count): void
+   {
+      if ($this->Histogram === null) {
+         return;
+      }
+      if ($sentNS === null || $sentNS < 1) {
+         throw new LogicException('Latency tracking requires a positive monotonic send timestamp.');
+      }
+
+      // ? Pipeline 1 consumes the scalar slot on every response and never
+      //   materializes the generic FIFO. Avoid count() and redundant empty
+      //   array assignments on that dominant path.
+      if ($this->timestamps !== [] && $this->timestampHead >= count($this->timestamps)) {
+         $this->timestamps = [];
+         $this->timestampHead = 0;
+      }
+
+      if ($this->timestamps === []) {
+         if ($this->timestampFastCount === 0) {
+            $this->timestampFastNS = $sentNS;
+            $this->timestampFastCount = $count;
+
+            return;
+         }
+         if ($this->timestampFastNS === $sentNS) {
+            $this->timestampFastCount += $count;
+
+            return;
+         }
+
+         $this->timestamps[] = [
+            'timestamp' => $this->timestampFastNS,
+            'count' => $this->timestampFastCount,
+         ];
+         $this->timestampFastNS = 0;
+         $this->timestampFastCount = 0;
+      }
+
+      $last = count($this->timestamps) - 1;
+      if ($this->timestamps[$last]['timestamp'] === $sentNS) {
+         $this->timestamps[$last]['count'] += $count;
+
+         return;
+      }
+
+      $this->timestamps[] = ['timestamp' => $sentNS, 'count' => $count];
+   }
+
+   /**
+    * Match one final response to exactly one fully-sent logical request.
+    */
+   private function observe (): void
+   {
+      if ($this->Histogram === null) {
+         return;
+      }
+      if ($this->receivedNS < 1) {
+         throw new LogicException('Latency tracking requires a positive monotonic response timestamp.');
+      }
+
+      if ($this->timestampFastCount > 0) {
+         $sentNS = $this->timestampFastNS;
+         $this->timestampFastCount--;
+         if ($this->timestampFastCount === 0) {
+            $this->timestampFastNS = 0;
+         }
+      }
+      else {
+         $segment = $this->timestamps[$this->timestampHead] ?? null;
+         if ($segment === null || $segment['count'] < 1) {
+            throw new LogicException('A final response has no matching monotonic request timestamp.');
+         }
+
+         $sentNS = $segment['timestamp'];
+         $segment['count']--;
+         if ($segment['count'] === 0) {
+            $this->timestampHead++;
+         }
+         else {
+            $this->timestamps[$this->timestampHead] = $segment;
+         }
+      }
+
+      if ($this->receivedNS < $sentNS) {
+         throw new LogicException('A response timestamp precedes its request timestamp.');
+      }
+
+      $this->Histogram->record($this->receivedNS - $sentNS);
+   }
+
+   /**
+    * Release every send timestamp after terminal failure or censoring.
+    */
+   private function purge (): void
+   {
+      $this->timestampFastNS = 0;
+      $this->timestampFastCount = 0;
+      $this->timestamps = [];
+      $this->timestampHead = 0;
    }
 
    private function normalize (string $reason): string

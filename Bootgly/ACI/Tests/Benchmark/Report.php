@@ -22,6 +22,8 @@ use function explode;
 use function getmypid;
 use function gmdate;
 use function implode;
+use function is_array;
+use function is_int;
 use function microtime;
 use function number_format;
 use function preg_replace;
@@ -70,7 +72,9 @@ class Report
     *    opponents: array<int,string>,
     *    data: array<string,array<string,array<int,null|float>>>,
     *    latencies: array<string,array<string,array<int,null|float>>>,
-    *    marks: array<int,string>
+    *    percentiles: array<string,array<string,array<int,null|array<string,mixed>>>>,
+    *    marks: array<int,string>,
+    *    telemetry: array<int,string>
     * } $run
     * @param array<int,string> $charts Chart file names to reference (same directory).
     */
@@ -80,6 +84,21 @@ class Report
       $sweepKey = $sweeping ? array_key_first($run['sweep']) : null;
       $x = $sweeping ? $run['sweep'][$sweepKey] : [];
       $baseline = $run['opponents'][0] ?? '';
+      $Format = static function (mixed $nanoseconds): string {
+         if (is_int($nanoseconds) === false || $nanoseconds < 0) {
+            return 'N/A';
+         }
+
+         return match (true) {
+            $nanoseconds >= 1_000_000_000
+               => number_format($nanoseconds / 1_000_000_000, 2, '.', '') . 's',
+            $nanoseconds >= 1_000_000
+               => number_format($nanoseconds / 1_000_000, 2, '.', '') . 'ms',
+            $nanoseconds >= 1_000
+               => number_format($nanoseconds / 1_000, 2, '.', '') . 'µs',
+            default => "{$nanoseconds}ns",
+         };
+      };
 
       $lines = [];
 
@@ -163,6 +182,67 @@ class Report
          $lines[] = '';
       }
 
+      // @ Correlated logical request/response latency distribution.
+      $percentiles = $run['percentiles'];
+      $hasPercentiles = false;
+      foreach ($percentiles as $loads) {
+         foreach ($loads as $opponents) {
+            foreach ($opponents as $summary) {
+               if (is_array($summary)) {
+                  $hasPercentiles = true;
+                  break 3;
+               }
+            }
+         }
+      }
+
+      if ($hasPercentiles) {
+         $lines[] = '## Latency percentiles';
+         $lines[] = '';
+         $lines[] = 'Values come from correlated logical request/response samples.';
+         $lines[] = '';
+
+         foreach ($run['loads'] as $load) {
+            $rows = [];
+            $points = $sweeping ? array_keys($x) : [0];
+            foreach ($points as $i) {
+               foreach ($run['opponents'] as $opponent) {
+                  $summary = $percentiles[$load][$opponent][$i] ?? null;
+                  if (is_array($summary) === false) {
+                     continue;
+                  }
+
+                  $point = $sweeping ? (string) $x[$i] : '—';
+                  $fidelity = match ($summary['fidelity'] ?? null) {
+                     true => 'valid',
+                     false => 'incomplete',
+                     default => 'unknown',
+                  };
+                  $rows[] = "| {$point} | {$opponent} | "
+                     . $Format($summary['p50_ns'] ?? null) . ' | '
+                     . $Format($summary['p95_ns'] ?? null) . ' | '
+                     . $Format($summary['p99_ns'] ?? null) . ' | '
+                     . $Format($summary['p99_9_ns'] ?? null) . ' | '
+                     . $Format($summary['max_ns'] ?? null) . " | {$fidelity} |";
+               }
+            }
+
+            if ($rows === []) {
+               continue;
+            }
+
+            $pointHeader = $sweeping ? "`{$sweepKey}`" : 'Run';
+            $lines[] = "### {$load}";
+            $lines[] = '';
+            $lines[] = "| {$pointHeader} | Opponent | p50 | p95 | p99 | p99.9 | Max | Fidelity |";
+            $lines[] = '|---:|---|---:|---:|---:|---:|---:|---|';
+            foreach ($rows as $row) {
+               $lines[] = $row;
+            }
+            $lines[] = '';
+         }
+      }
+
       // @ Peaks
       $lines[] = '## Peaks';
       $lines[] = '';
@@ -205,6 +285,18 @@ class Report
       }
       $lines[] = '';
 
+      $telemetry = $run['telemetry'];
+      if ($telemetry !== []) {
+         $lines[] = '## Telemetry';
+         $lines[] = '';
+         $lines[] = 'Each JSON sidecar contains the mergeable latency histogram and raw one-second throughput/error series.';
+         $lines[] = '';
+         foreach ($telemetry as $file) {
+            $lines[] = "- `{$file}`";
+         }
+         $lines[] = '';
+      }
+
       // : Markdown document
       return implode("\n", $lines);
    }
@@ -225,7 +317,9 @@ class Report
     *    opponents: array<int,string>,
     *    data: array<string,array<string,array<int,null|float>>>,
     *    latencies: array<string,array<string,array<int,null|float>>>,
-    *    marks: array<int,string>
+    *    percentiles: array<string,array<string,array<int,null|array<string,mixed>>>>,
+    *    marks: array<int,string>,
+    *    telemetry: array<int,string>
     * } $run
     *
     * @return array<int,string> Written file names (report first, then charts).

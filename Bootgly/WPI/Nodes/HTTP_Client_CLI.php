@@ -390,8 +390,12 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
 
       // @ On read: decode response using per-request state
       self::$onDataRead = function ($Socket, $Connection) use ($HTTP_Client_CLI) {
+         // # One monotonic arrival timestamp follows this chunk through decoding
+         //   to the logical response callback. Parser work must not inflate wire
+         //   latency or move an in-window final byte beyond the cutoff.
+         $receivedNS = (int) hrtime(true);
          if (self::$httpOnRead !== null) {
-            (self::$httpOnRead)($Socket, $Connection);
+            (self::$httpOnRead)($Socket, $Connection, $receivedNS);
          }
 
          $socketId = (int) $Socket;
@@ -624,7 +628,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
             $Request->connectionState = 'idle';
 
             if (self::$onResponse !== null) {
-               (self::$onResponse)($Request, $Request->Response);
+               (self::$onResponse)($Request, $Request->Response, $receivedNS);
             }
 
             // @ Handle connection close
@@ -731,12 +735,16 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
       };
 
       // @ After write completes, switch to read mode
-      self::$onDataWrite = function ($Socket, $Connection) {
+      self::$onDataWrite = function ($Socket, $Connection) use ($HTTP_Client_CLI) {
          self::$Event->del($Socket, self::$Event::EVENT_WRITE);
          self::$Event->add($Socket, self::$Event::EVENT_READ, $Connection);
 
          if (self::$httpOnWrite !== null) {
-            (self::$httpOnWrite)($Socket, $Connection);
+            // ? The third argument is the exact logical Request whose final
+            //   encoded byte just reached the socket API. Existing callbacks
+            //   that declare fewer arguments remain valid in PHP.
+            $Request = $HTTP_Client_CLI->pendingRequests[$Connection->id] ?? null;
+            (self::$httpOnWrite)($Socket, $Connection, $Request);
          }
       };
 
@@ -747,6 +755,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
       //   Content-Length body cut short by EOF is TRUNCATED, not legal — it
       //   fails immediately while retaining its incomplete-body metadata.
       parent::$onClientDisconnect = function ($Connection) use ($HTTP_Client_CLI) {
+         $completedNS = (int) hrtime(true);
          // @ Pool bookkeeping first — the connection is gone either way
          if (self::$eventDriven === false) {
             $HTTP_Client_CLI->Pool->drop($Connection);
@@ -795,7 +804,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
                unset($HTTP_Client_CLI->pendingRequests[$Connection->id]);
 
                if (self::$eventDriven && self::$onResponse !== null) {
-                  (self::$onResponse)($Request, $Response);
+                  (self::$onResponse)($Request, $Response, $completedNS);
                }
                else if ($Request->onComplete !== null) {
                   ($Request->onComplete)($Request);
@@ -872,7 +881,7 @@ class HTTP_Client_CLI extends TCP_Client_CLI implements HTTP
                unset($HTTP_Client_CLI->pendingRequests[$Connection->id]);
 
                if (self::$eventDriven && self::$onResponse !== null) {
-                  (self::$onResponse)($Request, $Response);
+                  (self::$onResponse)($Request, $Response, $completedNS);
                }
                else if ($Request->onComplete !== null) {
                   ($Request->onComplete)($Request);

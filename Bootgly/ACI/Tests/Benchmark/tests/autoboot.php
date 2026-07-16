@@ -59,6 +59,18 @@ return new Suite(
       '6.16.7-amphp-stop-isolate-worker_tree',
       // Database parity — selected-load capability contract
       '6.17.1-database_parity-enforce_contract',
+      // Latency — bounded mergeable HDR-style distribution
+      '6.18.1-latency_histogram-prove_distribution',
+      '6.18.2-http_tracker-correlate_latency',
+      // Time — aligned monotonic one-second counter series
+      '6.19.1-time_series-align_merge',
+      // Worker boundary — strict telemetry and synchronized child origins
+      '6.20.1-worker_result-reject_telemetry',
+      '6.20.2-measurement_barrier-align_children',
+      // Output — percentile presentation and telemetry discoverability
+      '6.21.1-summary-present-latency_telemetry',
+      // Worker aggregation — strict import, atomic distribution/series merge
+      '6.22.1-worker_telemetry-merge_contract',
       // Chart — native SVG rendering
       '7.1.1-chart-render-svg',
       // Report — Markdown + SVG artifacts

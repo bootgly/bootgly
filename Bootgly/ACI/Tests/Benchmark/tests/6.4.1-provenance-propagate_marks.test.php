@@ -22,8 +22,8 @@ return new Specification(
          rps: 1000.0,
          latency: '1ms',
          transfer: '1MB/s',
-         scheduled: 1002,
-         sent: 1001,
+         scheduled: 1007,
+         sent: 1003,
          responses: 1000,
          informational: 2,
          outstanding: 0,
@@ -35,6 +35,24 @@ return new Specification(
          statuses: [200 => 1000],
          failures: ['measurement_ended' => 1],
          writeFailures: ['measurement_ended' => 1],
+         censored: 2,
+         writeCensored: 3,
+         censors: ['measurement_ended' => 2],
+         writeCensors: ['measurement_ended' => 3],
+         latencySummary: [
+            'count' => 1000,
+            'sum_ns' => 1000000000,
+            'sum_overflow' => false,
+            'min_ns' => 400000,
+            'p50_ns' => 900000,
+            'p95_ns' => 1200000,
+            'p99_ns' => 1800000,
+            'p99_9_ns' => 2400000,
+            'max_ns' => 3000000,
+            'underflow' => 0,
+            'overflow' => 0,
+            'fidelity' => true,
+         ],
       );
 
       $relative = Summary::save(
@@ -80,10 +98,16 @@ return new Specification(
          ->expect(
             str_contains(
                $marks,
-               ' scheduled=1002 sent=1001 responses=1000 informational=2 outstanding=0 failed=1'
+               ' scheduled=1007 sent=1003 responses=1000 informational=2 outstanding=0 failed=1'
                   . ' write_failed=1 connection_failed=0 partial_writes=2 accounting=valid statuses={"200":1000}'
                   . ' failures={"measurement_ended":1}'
                   . ' write_failures={"measurement_ended":1}'
+                  . ' censored=2 write_censored=3 censors={"measurement_ended":2}'
+                  . ' write_censors={"measurement_ended":3}'
+                  . ' latency_count=1000 latency_sum_ns=1000000000 latency_sum_overflow=false'
+                  . ' latency_min_ns=400000 latency_p50_ns=900000 latency_p95_ns=1200000'
+                  . ' latency_p99_ns=1800000 latency_p99_9_ns=2400000 latency_max_ns=3000000'
+                  . ' latency_underflow=0 latency_overflow=0 latency_fidelity=true'
             ),
             Op::Identical,
             true
