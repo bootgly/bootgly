@@ -195,6 +195,9 @@ class DemoCommand extends Command
 
          // UI - Tree component (hierarchical picker with lazy children)
          51 => 'UI/Tree-01.demo.php',
+
+         // UX - Filepicker component (filesystem browser with lazy scans)
+         52 => 'UX/Filepicker-01.demo.php',
       ];
 
       $last = array_key_last($examples);

@@ -42,5 +42,7 @@ return new Suite(
       '6.5-toasts-screen',
       '6.6-toasts-positions',
       '6.7-toasts-occupant',
+      '7.1-filepicker-scan',
+      '7.2-filepicker-pick',
    ]
 );
