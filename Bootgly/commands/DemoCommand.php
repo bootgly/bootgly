@@ -192,6 +192,9 @@ class DemoCommand extends Command
          '50.1' => 'UX/Toasts-02.demo.php', // TopLeft
          '50.2' => 'UX/Toasts-03.demo.php', // Center
          '50.3' => 'UX/Toasts-04.demo.php', // BottomRight
+
+         // UI - Tree component (hierarchical picker with lazy children)
+         51 => 'UI/Tree-01.demo.php',
       ];
 
       $last = array_key_last($examples);

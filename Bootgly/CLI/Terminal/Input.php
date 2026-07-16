@@ -41,6 +41,7 @@ use function strlen;
 use function substr;
 use function system;
 use function time;
+use function usleep;
 use Closure;
 use Generator;
 use Throwable;
@@ -299,6 +300,122 @@ class Input
 
       // : Last line without terminator
       return $line;
+   }
+
+   /**
+    * Reads one key attempt: `false` on a closed channel, an empty string when
+    * drained, the key bytes otherwise. CSI and SS3 sequences read until their
+    * final byte, and UTF-8 lead bytes assemble their continuation bytes — the
+    * tail bytes may lag the first on non-blocking channels, so empty reads
+    * retry briefly before the sequence is given up.
+    * The stream should be non-blocking (see configure) — on blocking streams
+    * a bare Escape stalls the disambiguation until the next byte arrives.
+    *
+    * @return string|false
+    */
+   public function listen (): string|false
+   {
+      $key = $this->read(1);
+
+      // ? Channel closed — only when nothing was read (a byte read at EOF is still a key)
+      if ($key === false || ($key === '' && feof($this->stream) === true)) {
+         // :
+         return false;
+      }
+
+      // ?: Drained
+      if ($key === '') {
+         return '';
+      }
+
+      // ? Escape sequences
+      if ($key === "\e") {
+         $next = '';
+         for ($retry = 0; $retry < 5; $retry++) {
+            $next = (string) $this->read(1);
+            if ($next !== '') {
+               break;
+            }
+
+            usleep(1000);
+         }
+
+         $key .= $next;
+
+         if ($next === '[') {
+            // @@ CSI — reads until its final byte (0x40-0x7E)
+            while (true) {
+               $byte = $this->catch();
+
+               if ($byte === '') {
+                  break;
+               }
+
+               $key .= $byte;
+
+               $final = ord($byte);
+               if ($final >= 0x40 && $final <= 0x7E) {
+                  break;
+               }
+            }
+         }
+         else if ($next === 'O') {
+            // @ SS3 (F1-F4, application-mode Home/End) — exactly one final byte
+            $key .= $this->catch();
+         }
+
+         // :
+         return $key;
+      }
+
+      // ? UTF-8 lead bytes assemble their continuation bytes, so consumers
+      //   always receive complete characters (mirrors Input::scan)
+      $lead = ord($key);
+      if ($lead >= 0xC0) {
+         $remaining = match (true) {
+            $lead >= 0xF0 => 3,
+            $lead >= 0xE0 => 2,
+            default => 1
+         };
+
+         // @@
+         while ($remaining-- > 0) {
+            $byte = $this->catch();
+
+            if ($byte === '') {
+               break;
+            }
+
+            $key .= $byte;
+         }
+      }
+
+      // :
+      return $key;
+   }
+
+   /**
+    * Catches one lagging sequence byte — empty reads retry briefly (the tail
+    * bytes may lag on non-blocking channels).
+    *
+    * @return string The byte — empty when the channel stays drained.
+    */
+   private function catch (): string
+   {
+      $byte = '';
+
+      // @@
+      for ($retry = 0; $retry < 5; $retry++) {
+         $byte = (string) $this->read(1);
+         if ($byte !== '') {
+            break;
+         }
+
+         usleep(1000);
+      }
+
+      // :
+      return $byte;
    }
 
    /**

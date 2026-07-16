@@ -17,7 +17,7 @@ $Output->render(<<<TITLE
  * @#green: Bootgly CLI UX - Dialog component @;
  * @#yellow: @@: Demo 49 - Example #1 - modal over covered frames @;
  * {$location}
- */\\n\\n
+ */\n\n
 TITLE);
 
 // @ Background app — the surface the modal covers

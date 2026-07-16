@@ -49,5 +49,11 @@ return new Suite(
       '15.4-frame-drain',
       '16.3-grid-boxing',
       '17.1-table-hosted',
+      '18.1-tree-build',
+      '18.2-tree-render',
+      '18.3-tree-control',
+      '18.4-tree-lazy',
+      '18.5-tree-viewport',
+      '18.6-tree-navigate',
    ]
 );
