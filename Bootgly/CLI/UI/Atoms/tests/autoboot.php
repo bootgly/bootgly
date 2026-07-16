@@ -24,5 +24,7 @@ return new Suite(
       '3.2-dumper-theme',
       '4.1-statusbar-render',
       '4.2-statusbar-style',
+      '5.1-figlet-render',
+      '5.2-figlet-fonts',
    ]
 );

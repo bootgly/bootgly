@@ -22,9 +22,9 @@ use function trim;
 use const Bootgly\CLI;
 use Bootgly\ABI\Data\__String\Path;
 use Bootgly\CLI\Command;
+use Bootgly\CLI\UI\Atoms\Figlet;
 use Bootgly\CLI\UI\Components\Alert;
 use Bootgly\CLI\UI\Components\Fieldset;
-use Bootgly\CLI\UI\Components\Header;
 
 
 class HelpCommand extends Command
@@ -57,10 +57,9 @@ class HelpCommand extends Command
 
       // @
       // # Banner
-      $Header = new Header($Output);
-      $rendered = $Header
-         ->generate(word: 'Bootgly', inline: true)
-         ->render($Header::RETURN_OUTPUT);
+      $Figlet = new Figlet($Output);
+      $Figlet->text = 'Bootgly';
+      $rendered = $Figlet->render($Figlet::RETURN_OUTPUT);
       if (is_string($rendered)) {
          $output .= $rendered;
       }

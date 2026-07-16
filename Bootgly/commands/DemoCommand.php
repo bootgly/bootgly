@@ -211,6 +211,8 @@ class DemoCommand extends Command
          56 => 'UI/Dumper-01.demo.php',
          // Statusbar
          57 => 'UI/Statusbar-01.demo.php',
+         // Figlet
+         58 => 'UI/Figlet-01.demo.php',
       ];
 
       $last = array_key_last($examples);
