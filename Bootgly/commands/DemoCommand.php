@@ -201,6 +201,9 @@ class DemoCommand extends Command
 
          // UX - Finder component (live search selector)
          53 => 'UX/Finder-01.demo.php',
+
+         // UI - Markdown component (markdown rendered in the terminal)
+         54 => 'UI/Markdown-01.demo.php',
       ];
 
       $last = array_key_last($examples);

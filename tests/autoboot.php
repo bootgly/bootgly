@@ -166,5 +166,7 @@ return new Suites(
       'Bootgly/CLI/UI/Atoms/',
       // # CLI UI Base — Frame (region canvas: buffer, render, diff, drain)
       'Bootgly/CLI/UI/Base/',
+      // # ABI/Data/__String/Markdown — pure markdown → AST parser
+      'Bootgly/ABI/Data/__String/Markdown/',
    ]
 );

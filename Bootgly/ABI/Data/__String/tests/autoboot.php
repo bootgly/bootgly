@@ -19,5 +19,6 @@ return new Suite(
       '1.x-dynamic-props-pascalcase',
       '2.x-dynamic-methods-pad',
       '2.x-dynamic-methods-search',
+      '2.x-dynamic-methods-wrap',
    ]
 );

@@ -50,5 +50,10 @@ return new Suite(
       '18.4-tree-lazy',
       '18.5-tree-viewport',
       '18.6-tree-navigate',
+      '19.1-markdown-render',
+      '19.2-markdown-styles',
+      '19.3-markdown-blocks',
+      '19.4-markdown-tables',
+      '19.5-markdown-width',
    ]
 );
