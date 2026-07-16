@@ -32,7 +32,6 @@ use function explode;
 use function function_exists;
 use function get_loaded_extensions;
 use function hash;
-use function ini_get;
 use function ini_get_all;
 use function is_array;
 use function is_string;
@@ -44,6 +43,7 @@ use function php_ini_loaded_file;
 use function php_ini_scanned_files;
 use function phpversion;
 use function realpath;
+use function trim;
 
 
 /**
@@ -205,21 +205,24 @@ final class Runtime
       }
 
       foreach (self::DIRECTIVES as $name) {
-         $value = ini_get($name);
          $setting = $settings[$name] ?? null;
-         if (
-            $value === false
-            || (
-               is_array($setting)
-               && ($setting['global_value'] ?? null) === null
-               && ($setting['local_value'] ?? null) === null
-            )
-         ) {
+         if (is_array($setting) === false) {
+            continue;
+         }
+
+         // ? `-d` sets startup (global) state — replay the parent's startup
+         //   value, never the runtime-effective one: an extension can mutate
+         //   its local values at boot (e.g. a CLI-disabled opcache zeroes
+         //   opcache.optimization_level), and replaying that mutated local
+         //   value poisons the child's global state, breaking the supervisor's
+         //   complete-state fingerprint comparison.
+         $global = $setting['global_value'] ?? null;
+         if (is_string($global) === false) {
             continue;
          }
 
          $arguments[] = '-d';
-         $arguments[] = "{$name}={$value}";
+         $arguments[] = "{$name}={$global}";
       }
 
       return $arguments;
