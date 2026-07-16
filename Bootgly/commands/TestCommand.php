@@ -104,6 +104,7 @@ use Bootgly\ACI\Tests\Coverage\Drivers\PCOV;
 use Bootgly\ACI\Tests\Coverage\Drivers\XDebug;
 use Bootgly\ACI\Tests\Results;
 use Bootgly\ACI\Tests\Suite;
+use Bootgly\ACI\Tests\Temporaries;
 use Bootgly\API\Environment;
 use Bootgly\API\Environment\Agent;
 use Bootgly\CLI\Command;
@@ -147,6 +148,16 @@ class TestCommand extends Command
          Display::show(Display::NONE);
          Results::$enabled = true;
          Results::$agent = $Agent->name;
+      }
+
+      // ! Reap temporaries orphaned by interrupted past runs (age- and
+      //   ownership-guarded; production surfaces are never matched). Silent:
+      //   a shared-/tmp permission race must never break a test run.
+      try {
+         Temporaries::sweep();
+      }
+      catch (Throwable) {
+         // ...
       }
 
       // ! Tester
