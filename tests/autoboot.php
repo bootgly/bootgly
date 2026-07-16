@@ -170,5 +170,7 @@ return new Suites(
       'Bootgly/ABI/Data/__String/Markdown/',
       // # ABI/Data/__String/Tokens — PHP tokenizer + Highlighter (gutter, gutterless, open-tag sniff)
       'Bootgly/ABI/Data/__String/Tokens/',
+      // # ABI/Debugging/Data/Vars — Dumper engine (typed literals, reflection walk, themes)
+      'Bootgly/ABI/Debugging/Data/Vars/',
    ]
 );

@@ -20,5 +20,7 @@ return new Suite(
       '2.2-highlighter-plain',
       '2.3-highlighter-mark',
       '2.4-highlighter-theme',
+      '3.1-dumper-render',
+      '3.2-dumper-theme',
    ]
 );

@@ -207,6 +207,8 @@ class DemoCommand extends Command
 
          // UI - Highlighter atom (syntax-highlighted PHP in the terminal)
          55 => 'UI/Highlighter-01.demo.php',
+         // Dumper
+         56 => 'UI/Dumper-01.demo.php',
       ];
 
       $last = array_key_last($examples);

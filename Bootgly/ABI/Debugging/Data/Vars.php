@@ -26,6 +26,7 @@ use function substr;
 
 use Bootgly\ABI\Debugging;
 use Bootgly\ABI\Debugging\Backtrace;
+use Bootgly\ABI\Debugging\Data\Vars\Dumper;
 
 
 class Vars implements Debugging
@@ -48,18 +49,20 @@ class Vars implements Debugging
    public static array $labels = [];
    // _ Delimiters
    // Call
-   public static ?int $from = null;
-   public static ?int $to = null;
+   public static null|int $from = null;
+   public static null|int $to = null;
    // Title
-   public static ?string $search = null;
+   public static null|string $search = null;
 
    // * Data
    // .. Backtrace
-   public static ?Backtrace $Backtrace = null;
+   public static null|Backtrace $Backtrace = null;
 
    // * Metadata
    // ! Templating
    protected static bool $CLI = false;
+   // .. Dumper — the CLI value formatter (HTML keeps the legacy walker below)
+   private static null|Dumper $Dumper = null;
    // >> Output
    protected static string $Output = '';
    /** @var array<string> */
@@ -84,6 +87,9 @@ class Vars implements Debugging
       self::$search = null;
    }
 
+   /**
+    * Dump a value for the HTML target only — the CLI target renders via `Vars\Dumper`.
+    */
    private static function dump (
       mixed $value,
       int $indentations = self::DEFAULT_IDENTATIONS
@@ -107,9 +113,6 @@ class Vars implements Debugging
                true  => 'TRUE',
                default => null
             };
-            if (self::$CLI) {
-               $dump = "\033[31m" . $dump . "\033[0m";
-            }
 
             break;
 
@@ -127,9 +130,6 @@ class Vars implements Debugging
             // dump
             /** @var int */
             $dump = $value;
-            if (self::$CLI) {
-               $dump = "\033[33m" . $dump . "\033[0m";
-            }
 
             break;
          case 'double': // float
@@ -146,9 +146,6 @@ class Vars implements Debugging
             // dump
             /** @var float */
             $dump = $value;
-            if (self::$CLI) {
-               $dump = "\033[33m" . $dump . "\033[0m";
-            }
 
             break;
 
@@ -160,20 +157,13 @@ class Vars implements Debugging
             // info
             /** @var string $value */
             $length = (string) strlen($value);
-            $length = match (self::$CLI) {
-               false => $length,
-               true  => "\033[96m" . $length . "\033[0m"
-            };
             $info = ' (length=' . $length . ')';
 
             // @ value
             // color
             $color = '#cc0000';
             // dump
-            $dump = match (self::$CLI) {
-               false => "'" . $value . "'",
-               true  => "\033[92m'" . $value . "'\033[0m"
-            };
+            $dump = "'" . $value . "'";
 
             break;
 
@@ -185,10 +175,6 @@ class Vars implements Debugging
             // info
             /** @var array<mixed> $value */
             $size = (string) count($value);
-            $size = match (self::$CLI) {
-               false => $size,
-               true => "\033[96m" . $size . "\033[0m"
-            };
             $info = ' (size=' . $size . ") [";
 
             // @ value
@@ -197,21 +183,13 @@ class Vars implements Debugging
             // dump
             $dump = '';
             // * Metadata
-            $indentation = self::$CLI
-               ? str_repeat(" ", $indentations)
-               : str_repeat("\t", $indentations);
+            $indentation = str_repeat("\t", $indentations);
             foreach ($value as $_key => $_value) {
                // @@ key
                if (is_string($_key) === true) {
-                  $array_key = match (self::$CLI) {
-                     false => "'" . $_key . "'",
-                     true => "\033[92m'" . $_key . "'\033[0m"
-                  };
+                  $array_key = "'" . $_key . "'";
                } else {
-                  $array_key = match (self::$CLI) {
-                     false => (string) $_key,
-                     true => "\033[36m" . (string) $_key . "\033[0m"
-                  };
+                  $array_key = (string) $_key;
                }
                // @@ value
                if (is_array($_value) === true) {
@@ -262,9 +240,6 @@ class Vars implements Debugging
             $color = '#3465a4';
             // dump
             $dump = 'NULL';
-            if (self::$CLI) {
-               $dump = "\033[90m" . $dump . "\033[0m";
-            }
 
             break;
 
@@ -314,16 +289,7 @@ class Vars implements Debugging
       }
 
       // >
-      if (self::$CLI) { // Console
-         $header = match ($type) {
-            '' => '',
-            default => "\033[95m" . $type . "\033[0m" . $info . ' '
-         };
-
-         $output = $header . $dump;
-      } else { // HTML
-         $output = $prefix . $info . '<span style="color: ' . $color . '">' . $dump . '</span>';
-      }
+      $output = $prefix . $info . '<span style="color: ' . $color . '">' . $dump . '</span>';
 
       return $output;
    }
@@ -442,7 +408,11 @@ class Vars implements Debugging
                };
             }
             // dump
-            self::$vars .= self::dump($value) . "\n";
+            $dump = match (self::$CLI) {
+               true  => (self::$Dumper ??= new Dumper)->dump($value),
+               false => self::dump($value)
+            };
+            self::$vars .= "{$dump}\n";
          }
          // ...
          self::$vars .= match (self::$CLI) {
@@ -486,7 +456,7 @@ class Vars implements Debugging
     * @return string
     */
    public static function output (
-      ?array $backtraces = null,
+      null|array $backtraces = null,
       bool $vars = false
    ): string
    {
