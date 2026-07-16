@@ -4,7 +4,7 @@ namespace Bootgly\CLI;
 use const BOOTGLY_ROOT_DIR;
 
 use const Bootgly\CLI;
-use Bootgly\CLI\UX\Filepicker;
+use Bootgly\CLI\UX\Components\Filepicker;
 
 $Input = CLI->Terminal->Input;
 $Output = CLI->Terminal->Output;

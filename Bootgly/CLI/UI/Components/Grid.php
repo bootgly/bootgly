@@ -24,7 +24,7 @@ use function min;
 use Bootgly\API\Component;
 use Bootgly\CLI\Terminal;
 use Bootgly\CLI\Terminal\Output;
-use Bootgly\CLI\UI\Components\Boxing;
+use Bootgly\CLI\UI\Atoms\Boxing;
 use Bootgly\CLI\UI\Components\Grid\Cell;
 
 

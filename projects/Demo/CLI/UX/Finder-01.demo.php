@@ -7,7 +7,7 @@ use function stripos;
 use function usleep;
 
 use const Bootgly\CLI;
-use Bootgly\CLI\UX\Finder;
+use Bootgly\CLI\UX\Components\Finder;
 
 $Input = CLI->Terminal->Input;
 $Output = CLI->Terminal->Output;

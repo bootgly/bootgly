@@ -8,7 +8,7 @@ use Exception;
 use const Bootgly\CLI;
 use Bootgly\CLI\UI\Components\Menu;
 use Bootgly\CLI\UI\Components\Question;
-use Bootgly\CLI\UX\Wizard;
+use Bootgly\CLI\UX\Components\Wizard;
 
 $Input = CLI->Terminal->Input;
 $Output = CLI->Terminal->Output;

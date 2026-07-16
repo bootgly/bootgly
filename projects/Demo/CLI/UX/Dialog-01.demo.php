@@ -5,8 +5,8 @@ use function str_repeat;
 use function usleep;
 
 use const Bootgly\CLI;
-use Bootgly\CLI\UI\Components\Frame;
-use Bootgly\CLI\UX\Dialog;
+use Bootgly\CLI\UI\Base\Frame;
+use Bootgly\CLI\UX\Components\Dialog;
 
 $Input = CLI->Terminal->Input;
 $Output = CLI->Terminal->Output;

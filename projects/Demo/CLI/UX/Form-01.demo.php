@@ -4,8 +4,8 @@ namespace Bootgly\CLI;
 use function preg_match;
 
 use const Bootgly\CLI;
-use Bootgly\CLI\UX\Form;
-use Bootgly\CLI\UX\Form\Controls;
+use Bootgly\CLI\UX\Components\Form;
+use Bootgly\CLI\UX\Components\Form\Controls;
 
 $Input = CLI->Terminal->Input;
 $Output = CLI->Terminal->Output;

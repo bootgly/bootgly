@@ -8,9 +8,9 @@ use function sin;
 
 use const Bootgly\CLI;
 use Bootgly\CLI\UI\Components\Charts\Graph;
-use Bootgly\CLI\UI\Components\Frame\Borders;
+use Bootgly\CLI\UI\Base\Frame\Borders;
 use Bootgly\CLI\UI\Components\Table;
-use Bootgly\CLI\UX\Tabs;
+use Bootgly\CLI\UX\Components\Tabs;
 
 
 $Input = CLI->Terminal->Input;

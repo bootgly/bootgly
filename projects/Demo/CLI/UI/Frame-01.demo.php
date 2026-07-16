@@ -7,8 +7,8 @@ use function date;
 use function usleep;
 
 use const Bootgly\CLI;
-use Bootgly\CLI\UI\Components\Frame;
-use Bootgly\CLI\UI\Components\Frame\Borders;
+use Bootgly\CLI\UI\Base\Frame;
+use Bootgly\CLI\UI\Base\Frame\Borders;
 
 
 $Output = CLI->Terminal->Output;

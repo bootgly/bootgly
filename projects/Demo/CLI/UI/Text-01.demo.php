@@ -4,8 +4,8 @@ namespace Bootgly\CLI;
 use function usleep;
 
 use const Bootgly\CLI;
-use Bootgly\CLI\UI\Components\Text;
-use Bootgly\CLI\UI\Components\Text\Effects;
+use Bootgly\CLI\UI\Atoms\Text;
+use Bootgly\CLI\UI\Atoms\Text\Effects;
 
 $Output = CLI->Terminal->Output;
 $Output->reset();

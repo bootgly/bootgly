@@ -11,7 +11,7 @@
 namespace Bootgly\CLI\UI\Components\Grid;
 
 
-use Bootgly\CLI\UI\Components\Boxing;
+use Bootgly\CLI\UI\Atoms\Boxing;
 
 
 /**

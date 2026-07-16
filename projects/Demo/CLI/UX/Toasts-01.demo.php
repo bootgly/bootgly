@@ -12,8 +12,8 @@ use const Bootgly\CLI;
 use Bootgly\CLI\Terminal;
 use Bootgly\CLI\Terminal\Screen;
 use Bootgly\CLI\UI\Components\Alert\Type;
-use Bootgly\CLI\UI\Components\Frame;
-use Bootgly\CLI\UX\Toasts;
+use Bootgly\CLI\UI\Base\Frame;
+use Bootgly\CLI\UX\Components\Toasts;
 
 
 $Output = CLI->Terminal->Output;

@@ -5,7 +5,7 @@ use function date;
 use function trim;
 
 use const Bootgly\CLI;
-use Bootgly\CLI\UX\Prompt;
+use Bootgly\CLI\UX\Components\Prompt;
 
 $Input = CLI->Terminal->Input;
 $Output = CLI->Terminal->Output;

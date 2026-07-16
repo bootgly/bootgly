@@ -125,7 +125,7 @@ return new Suites(
       // # CLI UI Components — Question (validated input + yes/no confirm)
       'Bootgly/CLI/UI/Components/',
       // # CLI UX — Form (sequential multi-field input) + Prompt (bottom-fixed REPL)
-      'Bootgly/CLI/UX/',
+      'Bootgly/CLI/UX/Components/',
       // # ACI/Mail — SMTP client unit suites (config, protocol codec, auth strings)
       'Bootgly/ACI/Mail/',
       // E2E (forked scripted mock SMTP server on 9994-9998; TLS certs generated at boot)
@@ -162,5 +162,9 @@ return new Suites(
       'Bootgly/WPI/Nodes/HTTP_Client_CLI/tests/HTTP2_TLS/',
       // # UDP_Server_CLI — per-peer Connection lifecycle unit doubles
       'Bootgly/WPI/Interfaces/UDP_Server_CLI/tests/',
+      // # CLI UI Atoms — Text (+Effects) typographic primitive
+      'Bootgly/CLI/UI/Atoms/',
+      // # CLI UI Base — Frame (region canvas: buffer, render, diff, drain)
+      'Bootgly/CLI/UI/Base/',
    ]
 );

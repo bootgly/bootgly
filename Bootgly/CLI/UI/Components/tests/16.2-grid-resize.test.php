@@ -13,6 +13,7 @@ use function substr_count;
 use Bootgly\ACI\Tests\Suite\Test\Specification;
 use Bootgly\CLI\Terminal;
 use Bootgly\CLI\Terminal\Output;
+use Bootgly\CLI\UI\Base\Frame;
 
 
 return new Specification(

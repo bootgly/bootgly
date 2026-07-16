@@ -86,7 +86,7 @@ use Bootgly\CLI\UI\Components\Alert;
 use Bootgly\CLI\UI\Components\Fieldset;
 use Bootgly\CLI\UI\Components\Menu;
 use Bootgly\CLI\UI\Components\Question;
-use Bootgly\CLI\UX\Wizard;
+use Bootgly\CLI\UX\Components\Wizard;
 use Bootgly\commands\BootCommand;
 
 

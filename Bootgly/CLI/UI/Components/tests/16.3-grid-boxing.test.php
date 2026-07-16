@@ -9,6 +9,8 @@ use function str_contains;
 use Bootgly\ACI\Tests\Suite\Test\Specification;
 use Bootgly\API\Component;
 use Bootgly\CLI\Terminal\Output;
+use Bootgly\CLI\UI\Atoms\Boxing;
+use Bootgly\CLI\UI\Base\Frame;
 
 
 return new Specification(
