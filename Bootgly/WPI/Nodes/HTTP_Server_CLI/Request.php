@@ -1030,12 +1030,8 @@ class Request
 
          $Decoder = new Decoder_Chunked;
          $Decoder->init();
-
-         $initialBody = substr($buffer, $separator_position + 4);
-         if ($initialBody !== '') {
-            $Decoder->feed($initialBody);
-         }
-
+         // @ Decoder_Chunked implements Feeding, so TCP_Server_CLI pipelines
+         //   every byte after the request head into it exactly once.
          $Package->Decoder = $Decoder;
       }
 

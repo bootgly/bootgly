@@ -189,5 +189,9 @@ return new Suite(
       '30.01-content_length_body_overrun_redispatch',
       '30.02-content_length_partial_body_pipeline',
       '30.03-content_length_timeout_redispatch',
+      // # Decoder Chunked (decoded payload length used as raw wire cursor)
+      '31.01-chunked_payload_redispatch',
+      '31.02-chunked_terminal_trailers',
+      '31.03-chunked_timeout_redispatch',
    ],
 );
