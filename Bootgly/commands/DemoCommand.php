@@ -204,6 +204,9 @@ class DemoCommand extends Command
 
          // UI - Markdown component (markdown rendered in the terminal)
          54 => 'UI/Markdown-01.demo.php',
+
+         // UI - Highlighter atom (syntax-highlighted PHP in the terminal)
+         55 => 'UI/Highlighter-01.demo.php',
       ];
 
       $last = array_key_last($examples);

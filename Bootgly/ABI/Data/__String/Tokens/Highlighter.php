@@ -15,10 +15,13 @@ use const PHP_EOL;
 use const STR_PAD_LEFT;
 use function array_key_last;
 use function array_slice;
+use function implode;
 use function max;
+use function str_contains;
 use function str_pad;
 use function str_repeat;
 use function str_replace;
+use function stripos;
 use function strlen;
 
 use Bootgly\ABI\Data\__String\Escapeable\Text\Formattable;
@@ -46,6 +49,8 @@ class Highlighter extends Tokens
             self::TOKEN_VARIABLE   => self::_CYAN_BRIGHT_FOREGROUND,
             self::TOKEN_NUMBER     => self::_YELLOW_FOREGROUND,
 
+            self::TOKEN_DECLARATION => self::_MAGENTA_BRIGHT_FOREGROUND,
+            self::TOKEN_ACCESS     => self::_WHITE_FOREGROUND,
             self::TOKEN_OPERATOR   => self::_RED_BRIGHT_FOREGROUND,
             self::TOKEN_PONTUATION => self::_WHITE_FOREGROUND,
             self::TOKEN_DELIMITER  => self::_YELLOW_BRIGHT_FOREGROUND,
@@ -62,32 +67,6 @@ class Highlighter extends Tokens
          ]
       ]
    ];
-   public const HTML_THEME = [
-      'HTML' => [
-         'values' => [
-            self::TOKEN_STRING     => '',
-            self::TOKEN_COMMENT    => '',
-            self::TOKEN_FUNCTION   => '',
-            self::TOKEN_VARIABLE   => '',
-            self::TOKEN_NUMBER     => '',
-
-            self::TOKEN_OPERATOR   => '',
-            self::TOKEN_PONTUATION => '',
-            self::TOKEN_DELIMITER  => '',
-
-            self::TOKEN_HTML       => '',
-
-            self::TOKEN_KEYWORD    => '',
-            self::TOKEN_DEFAULT    => '',
-
-            self::ACTUAL_LINE_MARK    => '',
-            self::LINE_NUMBER         => '',
-            self::MARKED_LINE_NUMBER  => '',
-            self::LINE_NUMBER_DIVIDER => '',
-         ]
-      ]
-   ];
-
    // * Config
    private const ARROW_SYMBOL = '▶'; // >,➜, ▶
    private const DELIMITER = '▕'; // |,▕
@@ -115,18 +94,6 @@ class Highlighter extends Tokens
             ]
          ];
       }
-      else if ($theme === self::HTML_THEME) {
-         $theme['HTML']['options'] = [
-            'prepending' => [
-               'type'  => 'string',
-               'value' => ''
-            ],
-            'appending' => [
-               'type' => 'string',
-               'value' => ''
-            ]
-         ];
-      }
       // ---
       $Theme = new Theme;
       $Theme->add($theme);
@@ -140,13 +107,41 @@ class Highlighter extends Tokens
       // ...
    }
 
+   /**
+    * Highlight a PHP source
+    *
+    * @param string $source Source code — sources without a PHP open tag are colorized as pure PHP.
+    * @param null|int $marked_line Line to mark — windows the output around it.
+    * @param int $lines_before Window lines before the marked line.
+    * @param int $lines_after Window lines after the marked line.
+    * @param bool $gutter Render the gutter (line numbers, divider, line marker).
+    *                     When false, returns bare colored lines joined by "\n".
+    *
+    * @return string
+    */
    public function highlight (
-      string $source, ? int $marked_line = null, int $lines_before = 4, int $lines_after = 4
+      string $source,
+      null|int $marked_line = null,
+      int $lines_before = 4,
+      int $lines_after = 4,
+      bool $gutter = true
    ): string
    {
       // <<
       $source = str_replace(["\r\n", "\r"], "\n", $source);
+
+      // ? Sources without an open tag tokenize as inline HTML — prepend a
+      // synthetic tag and drop its line so snippets colorize as pure PHP
+      $prepended = stripos($source, '<?php') === false && str_contains($source, '<?=') === false;
+      if ($prepended === true) {
+         $source = "<?php\n{$source}";
+      }
+
       $tokens = $this->tokenize($source);
+
+      if ($prepended === true) {
+         $tokens = array_slice($tokens, 1);
+      }
 
       // |:|
       if ($marked_line !== null) {
@@ -158,9 +153,14 @@ class Highlighter extends Tokens
 
       // >
       $highlighted = $this->color($tokens);
-      $highlighted = $this->number($highlighted, $marked_line);
 
-      return $highlighted;
+      // ?: Gutterless — bare colored lines (fences, embeds)
+      if ($gutter === false) {
+         return implode("\n", $highlighted);
+      }
+
+      // :
+      return $this->number($highlighted, $marked_line);
    }
 
    // @ Lines
@@ -190,11 +190,11 @@ class Highlighter extends Tokens
     * Number lines
     * 
     * @param array<int,string> $lines
-    * @param int|null $marked_line
+    * @param null|int $marked_line
     *
     * @return string
     */
-   private function number (array $lines, ? int $marked_line = null): string
+   private function number (array $lines, null|int $marked_line = null): string
    {
       // * Config
       $mark = ' ' . self::ARROW_SYMBOL . ' ';

@@ -11,18 +11,27 @@
 namespace Bootgly\ABI\Data\__String;
 
 
+use const T_CLASS;
 use const T_CLASS_C;
 use const T_CLOSE_TAG;
 use const T_COALESCE;
 use const T_COMMENT;
+use const T_CONST;
 use const T_CONSTANT_ENCAPSED_STRING;
 use const T_DIR;
 use const T_DNUMBER;
 use const T_DOC_COMMENT;
+use const T_DOUBLE_COLON;
 use const T_ENCAPSED_AND_WHITESPACE;
+use const T_ENUM;
+use const T_EXTENDS;
 use const T_FILE;
+use const T_FN;
 use const T_FUNC_C;
+use const T_FUNCTION;
+use const T_IMPLEMENTS;
 use const T_INLINE_HTML;
+use const T_INTERFACE;
 use const T_IS_EQUAL;
 use const T_IS_GREATER_OR_EQUAL;
 use const T_IS_IDENTICAL;
@@ -33,13 +42,20 @@ use const T_LINE;
 use const T_LNUMBER;
 use const T_METHOD_C;
 use const T_NAME_FULLY_QUALIFIED;
+use const T_NAME_QUALIFIED;
+use const T_NAME_RELATIVE;
+use const T_NAMESPACE;
+use const T_NEW;
 use const T_NS_C;
+use const T_NULLSAFE_OBJECT_OPERATOR;
 use const T_OBJECT_OPERATOR;
 use const T_OPEN_TAG;
 use const T_OPEN_TAG_WITH_ECHO;
 use const T_SPACESHIP;
 use const T_STRING;
+use const T_TRAIT;
 use const T_TRAIT_C;
+use const T_USE;
 use const T_VARIABLE;
 use const T_WHITESPACE;
 use function explode;
@@ -62,14 +78,13 @@ class Tokens
    public const TOKEN_VARIABLE = 'token_variable';
    public const TOKEN_NUMBER = 'token_number';
 
-   public const TOKEN_NEW = 'token_new';
+   public const TOKEN_DECLARATION = 'token_declaration';
    public const TOKEN_ACCESS = 'token_access';
    public const TOKEN_OPERATOR = 'token_operator';
    public const TOKEN_PONTUATION = 'token_pontuation';
    public const TOKEN_DELIMITER = 'token_delimiter';
 
    public const TOKEN_FUNCTION = 'token_function';
-   public const TOKEN_SPREAD = 'token_spread';
    public const TOKEN_COMMENT = 'token_comment';
    public const TOKEN_STRING = 'token_string';
    public const TOKEN_HTML = 'token_html';
@@ -104,6 +119,8 @@ class Tokens
 
                T_STRING, # 262
                T_NAME_FULLY_QUALIFIED, # 263
+               T_NAME_RELATIVE, # 264
+               T_NAME_QUALIFIED, # 265
                T_LINE, # 343
                T_FILE, # 344
                T_DIR, # 345
@@ -145,8 +162,25 @@ class Tokens
                T_INLINE_HTML, # 267
                   => self::TOKEN_HTML,
 
-               T_OBJECT_OPERATOR, # 384
+               T_OBJECT_OPERATOR, # 388
+               T_NULLSAFE_OBJECT_OPERATOR, # 389
+               T_DOUBLE_COLON, # 401
                   => self::TOKEN_ACCESS,
+
+               // Declarations / structure keywords
+               T_NEW, # 284
+               T_FUNCTION, # 310
+               T_FN, # 311
+               T_CONST, # 312
+               T_USE, # 318
+               T_CLASS, # 336
+               T_TRAIT, # 337
+               T_INTERFACE, # 338
+               T_ENUM, # 339
+               T_EXTENDS, # 340
+               T_IMPLEMENTS, # 341
+               T_NAMESPACE, # 342
+                  => self::TOKEN_DECLARATION,
 
                T_OPEN_TAG, # 389
                T_OPEN_TAG_WITH_ECHO, # 390
@@ -186,8 +220,9 @@ class Tokens
             : $token
          );
       }
-      if (isSet($token_type_new)) {
-         $output[] = [$token_type_new, $token_buffer];
+      // ? Flush the trailing buffer — null-typed segments (whitespace, tags) included
+      if ($token_buffer !== '') {
+         $output[] = [$token_type_current, $token_buffer];
       }
 
       // @ Split to lines

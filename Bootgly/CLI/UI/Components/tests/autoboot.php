@@ -55,5 +55,6 @@ return new Suite(
       '19.3-markdown-blocks',
       '19.4-markdown-tables',
       '19.5-markdown-width',
+      '19.6-markdown-highlight',
    ]
 );

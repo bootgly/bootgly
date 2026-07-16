@@ -168,5 +168,7 @@ return new Suites(
       'Bootgly/CLI/UI/Base/',
       // # ABI/Data/__String/Markdown — pure markdown → AST parser
       'Bootgly/ABI/Data/__String/Markdown/',
+      // # ABI/Data/__String/Tokens — PHP tokenizer + Highlighter (gutter, gutterless, open-tag sniff)
+      'Bootgly/ABI/Data/__String/Tokens/',
    ]
 );

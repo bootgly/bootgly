@@ -17,6 +17,7 @@ use const STR_PAD_LEFT;
 use const STR_PAD_RIGHT;
 use function count;
 use function explode;
+use function function_exists;
 use function implode;
 use function intdiv;
 use function max;
@@ -25,6 +26,7 @@ use function preg_replace;
 use function str_pad;
 use function str_repeat;
 use function strlen;
+use function strtolower;
 
 use Bootgly\ABI\Data\__String;
 use Bootgly\ABI\Data\__String\Escapeable\Text\Formattable;
@@ -32,6 +34,7 @@ use Bootgly\ABI\Data\__String\Markdown as Parser;
 use Bootgly\ABI\Data\__String\Markdown\Blocks;
 use Bootgly\ABI\Data\__String\Markdown\Inlines;
 use Bootgly\ABI\Data\__String\Markdown\Node;
+use Bootgly\ABI\Data\__String\Tokens\Highlighter;
 use Bootgly\API\Component;
 use Bootgly\CLI\Terminal;
 use Bootgly\CLI\Terminal\Output;
@@ -58,6 +61,8 @@ class Markdown extends Component
    public null|bool $decoration;
    /** @var array<string,array<int,string>> SGR code lists per element key */
    public array $styles;
+   /** @var array<string,callable(string $source): (null|string)> Fence highlighters by lowercase language infoword */
+   public array $Highlighters;
 
    // * Data
    /** The markdown source */
@@ -99,6 +104,21 @@ class Markdown extends Component
          'rule'      => [self::_BLACK_BRIGHT_FOREGROUND],
          'header'    => [self::_BOLD_STYLE],
          'border'    => [self::_BLACK_BRIGHT_FOREGROUND]
+      ];
+      $this->Highlighters = [
+         'php' => static function (string $source): null|string {
+            // ! Lazy engine — probed once; false marks the tokenizer absent
+            static $Highlighter = null;
+            $Highlighter ??= function_exists('token_get_all') === true ? new Highlighter : false;
+
+            // ?
+            if ($Highlighter === false) {
+               return null;
+            }
+
+            // :
+            return $Highlighter->highlight($source, gutter: false);
+         }
       ];
 
       // * Data
@@ -427,8 +447,9 @@ class Markdown extends Component
    }
 
    /**
-    * Paints a fenced code block — verbatim, dimmed, never wrapped. This is
-    * the syntax-highlighting seam: a future highlighter plugs in here.
+    * Paints a fenced code block — never wrapped. `php` fences colorize via the
+    * pluggable $Highlighters map (ABI Tokens\Highlighter); other languages,
+    * plain output and declined highlighters fall back to verbatim dimmed lines.
     *
     * @param Node $Fence The fence node.
     *
@@ -439,9 +460,29 @@ class Markdown extends Component
       $lines = [];
       $lines[] = $this->paint("```{$Fence->language}", 'fence');
 
-      // @@ Verbatim content
-      foreach ($Fence->text === '' ? [] : explode("\n", $Fence->text) as $line) {
-         $lines[] = $this->paint($this->clean($line), 'source');
+      // ! Untrusted source — ESC/C0 stripped before any rendering path
+      $source = $this->clean($Fence->text);
+
+      // ?: Decorated output delegates to the language highlighter when one is plugged
+      if ($Fence->text !== '' && $this->plain === false) {
+         $highlight = $this->Highlighters[strtolower($Fence->language)] ?? null;
+         $highlighted = $highlight !== null ? $highlight($source) : null;
+
+         if ($highlighted !== null) {
+            foreach (explode("\n", $highlighted) as $line) {
+               $lines[] = $line;
+            }
+
+            $lines[] = $this->paint('```', 'fence');
+
+            // :
+            return $lines;
+         }
+      }
+
+      // @@ Verbatim content — dimmed fallback
+      foreach ($Fence->text === '' ? [] : explode("\n", $source) as $line) {
+         $lines[] = $this->paint($line, 'source');
       }
 
       $lines[] = $this->paint('```', 'fence');

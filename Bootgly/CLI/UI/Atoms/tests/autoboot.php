@@ -15,5 +15,9 @@ return new Suite(
    suiteName: __NAMESPACE__,
    tests: [
       '1.1-text-effects',
+
+      '2.1-highlighter-render',
+      '2.2-highlighter-plain',
+      '2.3-highlighter-mark',
    ]
 );

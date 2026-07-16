@@ -31,14 +31,16 @@ third-party dependencies.
   - with tight children
   - and `code` inside items
 - [x] Task lists
-- [ ] Roadmap: syntax highlighting
+- [x] Syntax highlighting — `php` fences colorize
 
 ## Usage
 
 ```php
 use Bootgly\CLI\UI\Components\Markdown;
 
+// Fenced php colorizes via the native tokenizer
 $Markdown = new Markdown($Output);
+$Markdown->width = 80;
 $Markdown->source = '# Hello';
 $Markdown->render();
 ```
