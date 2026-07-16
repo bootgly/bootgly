@@ -103,5 +103,8 @@ return new Suite(
       '7.2.9-Coverage-Native_bootgly_pipe_suite',
       '7.2.10-Coverage-Native_bootgly_late_suites',
       '7.2.11-Coverage-Native_invalid_suite_index',
+
+      // Temporaries
+      '8.1.1-Temporaries-reserve_and_sweep',
    ]
 );
