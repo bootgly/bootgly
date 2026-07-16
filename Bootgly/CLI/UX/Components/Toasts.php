@@ -16,6 +16,7 @@ use function array_pop;
 use function array_slice;
 use function count;
 use function end;
+use function explode;
 use function in_array;
 use function intdiv;
 use function max;
@@ -23,6 +24,7 @@ use function mb_strlen;
 use function microtime;
 use function min;
 use function preg_replace;
+use function rtrim;
 use function spl_object_id;
 use function str_repeat;
 use function strtoupper;
@@ -283,6 +285,43 @@ class Toasts extends Component
 
       // :
       return null;
+   }
+
+   /**
+    * Composes the visible stack as absolute screen rows — the seam for hosts
+    * that rebuild their whole frame every tick (e.g. the Console App shell)
+    * instead of letting the stack self-blit. Pure: expires, anchors and
+    * returns; nothing touches the screen. Each row is left-padded to its box
+    * column — the host overlays it at its 1-based screen row.
+    *
+    * @param null|float $at The clock (microtime) — null reads the real clock.
+    *
+    * @return array<int,string> The overlay rows — screen row (1-based) => padded row content.
+    */
+   public function overlay (null|float $at = null): array
+   {
+      // @ Expired toasts leave the queue before composing
+      $this->expire($at);
+
+      // ! Geometry — the visible slice at the anchored position
+      [$visible, ] = $this->anchor();
+
+      // @@ Boxes → absolute rows
+      $rows = [];
+      foreach ($visible as $entry) {
+         $Frame = $entry['Frame'];
+         $content = (string) $Frame->render(self::RETURN_OUTPUT);
+         $pad = str_repeat(' ', max(0, $Frame->column - 1));
+
+         $offset = 0;
+         foreach (explode("\n", rtrim($content, "\n")) as $line) {
+            $rows[$Frame->row + $offset] = "{$pad}{$line}";
+            $offset++;
+         }
+      }
+
+      // :
+      return $rows;
    }
 
    /**
