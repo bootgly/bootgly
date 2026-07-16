@@ -3,8 +3,8 @@
 # Ignore AI folders
 .agents/
 .claude
-# Ignore docs (kept in the .docs repository; `docs` is a local symlink)
-/docs
+# Ignore docs (kept in the .docs repository; `docs` may be a local symlink)
+docs
 # Ignore files by extension...
 *.iso
 *.log

@@ -11,12 +11,14 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders;
 
 
+use function min;
 use function substr;
 use function time;
 
 use const Bootgly\WPI;
 use Bootgly\WPI\Endpoints\Servers\Decoder\States;
 use Bootgly\WPI\Endpoints\Servers\Packages;
+use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages as TCP_Packages;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI as Server;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders;
 
@@ -25,19 +27,17 @@ class Decoder_Waiting extends Decoders
 {
    // * Metadata
    private int $decoded = 0;
-   // @ Request Body
-   private int $read = 0;
 
 
    public function init (): void
    {
       $this->decoded = time();
-      $this->read = 0;
    }
 
 
    public function decode (Packages $Package, string $buffer, int $size): States
    {
+      /** @var TCP_Packages $Package */
       // !
       $WPI = WPI;
       /** @var Server $Server */
@@ -56,42 +56,42 @@ class Decoder_Waiting extends Decoders
 
          // ? Valid HTTP Client Body Timeout
          /**
-         * Validate if the client is sending the rest of the Content data 
-         * within a 60-second interval and if the total data has been received.
-         */
+          * Validate if the client sends the complete body within the absolute
+          * 60-second body deadline.
+          */
          $elapsed = time() - $this->decoded;
-         if ($elapsed >= 60 && $this->read === $Body->downloaded) {
-            $Package->Decoder = null;
-            return $Server::$Decoder->decode($Package, $buffer, $size); // @phpstan-ignore method.nonObject
-         }
-
-         // ... Continue reading the Request Body
-         if ($Body->downloaded === null) {
-            $offset = $Body->position ?? 0;
-            $Body->raw = substr($buffer, $offset, $Body->length);
-         }
-         else {
-            $Body->raw .= $buffer;
-         }
-
-         $Body->downloaded += $size;
-         $this->read = $Body->downloaded;
-
-         // ! Reject if received data exceeds declared Content-Length (memory exhaustion guard)
-         if ($Body->downloaded > $Body->length) {
+         if ($elapsed >= 60) {
             $Body->waiting = false;
-
             $Package->Decoder = null;
-            return $Server::$Decoder->decode($Package, $buffer, $size); // @phpstan-ignore method.nonObject
+            $Package->consumed = 0;
+            $Package->reject("HTTP/1.1 408 Request Timeout\r\n\r\n");
+            return States::Rejected;
          }
 
-         if ($Body->length > $Body->downloaded) {
+         // @ Consume only bytes that belong to the declared body. Any bytes
+         // after Content-Length remain in the current transport read and are
+         // processed by TCP_Server_CLI's pipeline after this POST completes.
+         $length = $Body->length ?? 0;
+         $downloaded = $Body->downloaded ?? 0;
+         $remaining = $length - $downloaded;
+         $consumed = $remaining > 0 ? min($size, $remaining) : 0;
+
+         if ($consumed > 0) {
+            $Body->raw .= $consumed === $size
+               ? $buffer
+               : substr($buffer, 0, $consumed);
+         }
+
+         $downloaded += $consumed;
+         $Body->downloaded = $downloaded;
+         $Package->consumed = $consumed;
+
+         if ($downloaded < $length) {
             return States::Incomplete;
          }
 
          $Body->waiting = false;
-
-         $Package->consumed = $Body->length ?? 0;
+         $Package->Decoder = null;
          return States::Complete;
       }
 

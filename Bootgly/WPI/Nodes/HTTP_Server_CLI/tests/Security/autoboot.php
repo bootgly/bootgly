@@ -183,5 +183,11 @@ return new Suite(
       // realistic: a SIGKILLed worker leaks its reservation; the per-respawn
       // sweep()+reconcile() recovery heals the counter and removes the orphan.
       '29.02-downloads_worker_crash_recovery',
+      // # Decoder Waiting (Content-Length overrun redispatch)
+      // A body-shaped request followed by pipeline bytes must complete the
+      // original POST; body bytes must never be decoded as another request.
+      '30.01-content_length_body_overrun_redispatch',
+      '30.02-content_length_partial_body_pipeline',
+      '30.03-content_length_timeout_redispatch',
    ],
 );
