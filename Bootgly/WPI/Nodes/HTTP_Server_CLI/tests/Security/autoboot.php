@@ -212,5 +212,11 @@ return new Suite(
       // selected and serialized by the HTTP/1 encoder.
       '36.01-response_application_framing_headers',
       '36.02-response_application_framing_modes',
+      // # Router (route-group method inheritance — audit M4)
+      // A methodless child must inherit the group's verb restriction; a GET
+      // must never dispatch a handler declared inside a POST-only group.
+      '37.01-router_group_method_restriction_bypass',
+      '37.02-router_group_method_inheritance',
+      '37.03-router_group_method_conflict_rejected',
    ],
 );

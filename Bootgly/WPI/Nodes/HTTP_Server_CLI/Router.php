@@ -11,7 +11,9 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI;
 
 
+use function array_intersect;
 use function array_keys;
+use function array_values;
 use function count;
 use function explode;
 use function implode;
@@ -74,6 +76,8 @@ class Router
    /** @var array<array{prefix:string,handler:callable,methods:array<string>,Middlewares:array<Middleware>}> */
    private array $pendingGroups = [];
    private null|string $groupPrefix = null;
+   /** @var null|array<string> Active group methods; an empty list is method-agnostic. */
+   private null|array $groupMethods = null;
 
    /**
     * Whether the route cache has been warmed (all routes registered).
@@ -235,31 +239,37 @@ class Router
             // ! Save state
             $SavedMiddlewares = $this->Middlewares;
             $savedPrefix = $this->groupPrefix;
+            $savedMethods = $this->groupMethods;
 
             // ! Set group context
             $this->Middlewares = $group['Middlewares'];
             $this->groupPrefix = $group['prefix'];
+            $this->groupMethods = $group['methods'];
 
-            // @ Call group handler to register nested routes
-            $handler = $group['handler'];
-            if ($handler instanceof Closure) {
-               $handler = $handler->bindTo($this->Route, $this->Route) ?? $handler;
-            }
-            /** @var Generator|mixed $NestedRoutes */
-            $NestedRoutes = $handler();
+            try {
+               // @ Call group handler to register nested routes
+               $Handler = $group['handler'];
+               if ($Handler instanceof Closure) {
+                  $Handler = $Handler->bindTo($this->Route, $this->Route) ?? $Handler;
+               }
+               /** @var Generator|mixed $NestedRoutes */
+               $NestedRoutes = $Handler();
 
-            // @ Iterate Generator: each yield calls route() → cache()
-            //   (handlers that register via direct $Router->route() calls — without
-            //    yielding — have already executed by the time $handler() returned)
-            if ($NestedRoutes instanceof Generator) {
-               foreach ($NestedRoutes as $_) {
-                  // intentional drain
+               // @ Iterate Generator: each yield calls route() → cache()
+               //   (handlers that register via direct $Router->route() calls — without
+               //    yielding — have already executed by the time $Handler() returned)
+               if ($NestedRoutes instanceof Generator) {
+                  foreach ($NestedRoutes as $_) {
+                     // intentional drain
+                  }
                }
             }
-
-            // ! Restore state
-            $this->Middlewares = $SavedMiddlewares;
-            $this->groupPrefix = $savedPrefix;
+            finally {
+               // ! Restore state even when nested registration fails.
+               $this->Middlewares = $SavedMiddlewares;
+               $this->groupPrefix = $savedPrefix;
+               $this->groupMethods = $savedMethods;
+            }
          }
       }
    }
@@ -511,6 +521,26 @@ class Router
          }
       }
 
+      // ! A methodless child inherits the active group. Explicit child methods
+      //   may only narrow a restrictive parent; a disjoint declaration is a
+      //   registration error instead of silently broadening either policy.
+      $methodsList = $methods === null ? [] : (array) $methods;
+      $methodAgnostic = $methods === null;
+      if ($this->groupMethods !== null) {
+         if ($methods === null) {
+            $methodsList = $this->groupMethods;
+            $methodAgnostic = $methodsList === [];
+         }
+         else if ($this->groupMethods !== []) {
+            $methodsList = array_values(array_intersect($this->groupMethods, $methodsList));
+            if ($methodsList === []) {
+               throw new InvalidArgumentException(
+                  'Nested route methods must intersect with parent route-group methods!'
+               );
+            }
+         }
+      }
+
       $MergedMiddlewares = [...$this->Middlewares, ...$Middlewares];
 
       // @ Pre-bind Closure to Route — gives handlers `$this->Params` access
@@ -564,7 +594,6 @@ class Router
          if (strpos($route, ':*') !== false) {
             $prefix = rtrim(explode(':*', $normalizedRoute)[0], '/');
 
-            $methodsList = $methods === null ? [] : (array) $methods;
             $this->pendingGroups[] = [
                'prefix' => $prefix,
                'handler' => $handler,
@@ -653,8 +682,6 @@ class Router
 
          $pattern = '/^\\/' . implode('\\/', $regexParts) . '$/';
 
-         $methodsList = $methods === null ? [] : (array) $methods;
-
          // @ Identify duplicated params (appear > 1 time)
          /** @var array<string,bool> $duplicateParams */
          $duplicateParams = [];
@@ -711,7 +738,9 @@ class Router
       }
 
       // @ Static route — cache stores the dispatcher closure directly
-      $methodsList = $methods === null ? [''] : (array) $methods;
+      if ($methodAgnostic) {
+         $methodsList = [''];
+      }
       $Dispatcher = $this->dispatch($boundHandler, $MergedMiddlewares);
       foreach ($methodsList as $method) {
          $this->staticCache[$method][$normalizedRoute] = $Dispatcher;
