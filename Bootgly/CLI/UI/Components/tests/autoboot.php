@@ -23,6 +23,7 @@ return new Suite(
       '3.3-menu-typeahead',
       '3.4-menu-columns',
       '4.1-spinner-frames',
+      '4.2-spinner-visuals',
       '5.1-timer-countdown',
       '5.2-timer-handler',
       '6.1-timeline-states',

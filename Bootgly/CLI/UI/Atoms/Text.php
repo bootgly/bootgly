@@ -157,10 +157,28 @@ class Text extends Component
       $this->rendered = microtime(true);
       $this->frame++;
 
-      // ! Shimmer frame — a bright window slides over the dimmed content
+      $line = $this->shimmer($this->frame);
+
+      // @ Repaint relatively (pipe-safe)
+      $this->Output->Cursor->up(1, column: 1);
+      $this->Output->Text->clear(down: true);
+      $this->Output->render("{$line}\n");
+   }
+
+   /**
+    * Composes a Shimmer frame — a bright window sliding over the dimmed content,
+    * left to right — as Template markup. Consumers animating their own lines
+    * (e.g. Spinner descriptions) paint one frame per own tick.
+    *
+    * @param int $frame The animation frame (the wave phase).
+    *
+    * @return string The composed frame (Template markup).
+    */
+   public function shimmer (int $frame): string
+   {
       $characters = mb_str_split($this->content);
       $count = count($characters);
-      $head = $this->frame % ($count + self::WAVE);
+      $head = $frame % ($count + self::WAVE);
 
       $line = '';
       foreach ($characters as $index => $character) {
@@ -169,10 +187,8 @@ class Text extends Component
             : "@#Black:{$character}@;";
       }
 
-      // @ Repaint relatively (pipe-safe)
-      $this->Output->Cursor->up(1, column: 1);
-      $this->Output->Text->clear(down: true);
-      $this->Output->render("{$line}\n");
+      // :
+      return $line;
    }
 
    /**

@@ -134,6 +134,9 @@ class DemoCommand extends Command
 
          // UI - Spinner component
          32 => 'UI/Spinner-01.demo.php',
+         '32.1' => 'UI/Spinner-02.demo.php', // Assistant style (star + shimmer + status + tips)
+         '32.2' => 'UI/Spinner-03.demo.php', // Named animation sets
+         '32.3' => 'UI/Spinner-04.demo.php', // Pulse effect + live download status
 
          // UI - Timer component
          33 => 'UI/Timer-01.demo.php',
