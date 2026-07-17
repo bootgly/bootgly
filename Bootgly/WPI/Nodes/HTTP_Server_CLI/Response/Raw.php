@@ -11,6 +11,9 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 
 
+use function is_array;
+use function is_int;
+use function is_string;
 use function strlen;
 
 use Bootgly\ABI\Data\Language;
@@ -37,6 +40,48 @@ trait Raw
    private string $wireStatus = '';
    private string $wireHeader = '';
    private string $wireBody = '';
+
+   /**
+    * Measure the exact HTTP/1 representation bytes queued by a streamed file
+    * response: buffered prefix plus file ranges and multipart padding.
+    */
+   private function measure (): int
+   {
+      $size = strlen($this->Body->raw);
+
+      foreach ($this->files as $queued) {
+         $parts = is_array($queued['parts'] ?? null) ? $queued['parts'] : [];
+         $pads = is_array($queued['pads'] ?? null) ? $queued['pads'] : [];
+
+         foreach ($parts as $index => $part) {
+            if (! is_array($part)) {
+               continue;
+            }
+
+            $bytes = $part['length'] ?? null;
+            if (is_int($bytes) && $bytes > 0) {
+               $size += $bytes;
+            }
+
+            $pad = $pads[$index] ?? null;
+            if (! is_array($pad)) {
+               continue;
+            }
+
+            $prepend = $pad['prepend'] ?? null;
+            if (is_string($prepend)) {
+               $size += strlen($prepend);
+            }
+
+            $append = $pad['append'] ?? null;
+            if (is_string($append)) {
+               $size += strlen($append);
+            }
+         }
+      }
+
+      return $size;
+   }
 
    /**
     * Encode the Response raw for sending.
@@ -70,6 +115,13 @@ trait Raw
       //   Single branch point: normal, testing and deferred (Fiber) responses
       //   all funnel through encode(), so they all serialize correctly.
       if ($Request->stream !== 0) {
+         // ! HTTP/2 framing is exclusively encoder-owned. Remove every
+         //   application-supplied CL/TE variant before HPACK serialization;
+         //   Encoder_HTTP2 derives one content-length from DATA bytes and
+         //   connection-specific Transfer-Encoding never exists in HTTP/2.
+         $Header->own('Content-Length');
+         $Header->own('Transfer-Encoding');
+
          // @ Upload queue: HTTP/2 materializes file parts into DATA payload —
          //   the raw `uploading[]` file pump would bypass framing.
          $files = [];
@@ -81,6 +133,27 @@ trait Raw
 
          return Encoder_HTTP2::frame($this, $this->code, $Request, $files, $Package, $length);
       }
+
+      // HTTP/1.0 backward compatibility (RFC 9110 §2.5)
+      if ($Request->protocol === 'HTTP/1.0') {
+         // Respond with HTTP/1.0 status-line for 1.0 clients
+         $response = "HTTP/1.0 {$this->status}";
+
+         // ? Chunked transfer coding does not exist in HTTP/1.0.
+         $this->chunked = false;
+      }
+
+      // ! HTTP/1 framing is exclusively encoder-owned. own() removes every
+      //   case variant from set/append/prepare/queue/preset sources. Buffered
+      //   bodies receive their canonical Content-Length inline below; streamed
+      //   files retain one canonical field calculated from the actual queue.
+      if ($this->stream && ! $this->chunked) {
+         $Header->own('Content-Length', (string) $this->measure());
+      }
+      else {
+         $Header->own('Content-Length');
+      }
+      $Header->own('Transfer-Encoding', $this->chunked ? 'chunked' : null);
 
       // @ Fast lane (typical case): plain buffered HTTP/1.1 response, no
       //   stream/chunked/pre-encoded body, not a HEAD request. Content-Length
@@ -113,23 +186,11 @@ trait Raw
          return $wire;
       }
 
-      // HTTP/1.0 backward compatibility (RFC 9110 §2.5)
-      if ($Request->protocol === 'HTTP/1.0') {
-         // Respond with HTTP/1.0 status-line for 1.0 clients
-         $response = "HTTP/1.0 {$this->status}";
-
-         // ? Disable chunked Transfer-Encoding for HTTP/1.0 responses
-         if ($this->chunked) {
-            $this->chunked = false;
-            $Header->remove('Transfer-Encoding');
-         }
-      }
-
       // @ Prepare
       // ?! Content-Length inline (avoid Header->set to preserve cache)
       // ?! strlen($Body->raw) bypasses the $Body->length property hook dispatch (hot path)
       $contentLength = '';
-      if (! $this->stream && ! $this->chunked && ! $this->encoded) {
+      if (! $this->stream && ! $this->chunked) {
          $contentLength = "\r\nContent-Length: " . strlen($Body->raw);
       }
 

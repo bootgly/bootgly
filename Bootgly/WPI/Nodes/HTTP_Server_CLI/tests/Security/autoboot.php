@@ -207,5 +207,10 @@ return new Suite(
       // # Decoder Downloading (aggregate text-field amplification — audit M2)
       '35.01-multipart_text_aggregate_amplification',
       '35.02-multipart_text_structured_storage',
+      // # Response encoder (application framing headers — audit M3)
+      // Application-supplied CL/TE must never survive beside the framing
+      // selected and serialized by the HTTP/1 encoder.
+      '36.01-response_application_framing_headers',
+      '36.02-response_application_framing_modes',
    ],
 );

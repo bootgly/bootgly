@@ -30,6 +30,9 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Raw\Header\Cookies;
 
 class Header extends HeaderBase
 {
+   private const int CONTENT_LENGTH = 1;
+   private const int TRANSFER_ENCODING = 2;
+
    // * Data
    public string $raw;
    // # Default Content-Type emitted by build() when no explicit Content-Type header is
@@ -83,6 +86,12 @@ class Header extends HeaderBase
    private array $preparedRaw = [];
    /** @var array<string,string> */
    private array $preparedSanitized = [];
+   // # Framing-source bitmasks. The current mask makes encoder ownership a
+   //   zero-scan fast return for ordinary responses; prepared/preset masks
+   //   restore the correct state across memoized prepare() and clean().
+   private int $framing = 0;
+   private int $preparedFraming = 0;
+   private int $presetFraming = 0;
    // # Per-response preset mask — lowercased names remove()d for THIS response
    //   only. preset is worker-persistent config: it must never be mutated by a
    //   single response; clean() lifts the mask.
@@ -122,6 +131,9 @@ class Header extends HeaderBase
       ];
       $this->prepared = [];
       $this->fields = [];
+      $this->framing = 0;
+      $this->preparedFraming = 0;
+      $this->presetFraming = 0;
 
       // * Metadata
       $this->sent = false;
@@ -240,6 +252,10 @@ class Header extends HeaderBase
          $this->enqueued = false;
          $this->Cookies->reset();
       }
+
+      // ? Per-request sources were cleared above. Only worker-persistent
+      //   preset framing can require canonicalization on the next response.
+      $this->framing = $this->presetFraming;
    }
    /**
     * Validate a response header field name against the RFC 9110 §5.1
@@ -263,6 +279,19 @@ class Header extends HeaderBase
       return preg_match("/^[!#\$%&'*+.^_`|~0-9A-Za-z-]+\$/D", $field) === 1;
    }
 
+   /**
+    * Classify encoder-owned framing names without allocating a lowercase copy
+    * for the overwhelmingly common non-framing response header.
+    */
+   private static function classify (string $field): int
+   {
+      return match (strlen($field)) {
+         14 => strcasecmp($field, 'Content-Length') === 0 ? self::CONTENT_LENGTH : 0,
+         17 => strcasecmp($field, 'Transfer-Encoding') === 0 ? self::TRANSFER_ENCODING : 0,
+         default => 0,
+      };
+   }
+
    public function preset (string $name, string|null $value = null): void
    {
       $preset = $this->preset;
@@ -280,6 +309,11 @@ class Header extends HeaderBase
       }
 
       $this->preset = $preset;
+      $this->presetFraming = 0;
+      foreach ($preset as $presetName => $presetValue) {
+         $this->presetFraming |= self::classify($presetName);
+      }
+      $this->framing |= $this->presetFraming;
       // ! build()'s first same-second fast return is gated on dirty alone —
       //   without this, a preset add/replace/removal serves the previous
       //   response's raw block for the rest of the second (and a removed
@@ -301,6 +335,7 @@ class Header extends HeaderBase
             $this->prepared = $this->preparedSanitized;
             $this->dirty = true;
          }
+         $this->framing |= $this->preparedFraming;
 
          return;
       }
@@ -309,6 +344,7 @@ class Header extends HeaderBase
       //   values before they reach build() — prepare() is a bulk entry
       //   point that previously emitted attacker-controlled bytes verbatim.
       $sanitized = [];
+      $framing = 0;
 
       foreach ($fields as $name => $value) {
          $name = str_replace(["\r", "\n"], '', (string) $name);
@@ -318,11 +354,14 @@ class Header extends HeaderBase
          }
 
          $sanitized[$name] = str_replace(["\r", "\n"], '', (string) $value);
+         $framing |= self::classify($name);
       }
 
       // : Memoize this raw input → sanitized output for the next identical call.
       $this->preparedRaw = $fields;
       $this->preparedSanitized = $sanitized;
+      $this->preparedFraming = $framing;
+      $this->framing |= $framing;
 
       if ($sanitized !== $this->prepared) {
          $this->prepared = $sanitized;
@@ -378,6 +417,7 @@ class Header extends HeaderBase
       if (! self::validate($field)) {
          return false;
       }
+      $this->framing |= self::classify($field);
 
       // ! Strip CRLF from header values to prevent HTTP response splitting
       $value = str_replace(["\r", "\n"], '', $value);
@@ -437,6 +477,107 @@ class Header extends HeaderBase
 
       return $removed;
    }
+   /**
+    * Give the encoder exclusive ownership of one response field.
+    *
+    * Every case variant is removed from prepared, queued and preset sources.
+    * When a canonical value is provided, exactly one canonical field remains
+    * in the mutable field map. An existing canonical entry is updated in place
+    * so framework-generated file/range headers keep their stable wire order.
+    *
+    * @internal Response encoders are the intended caller.
+    */
+   public function own (string $field, null|string $value = null): bool
+   {
+      $framing = self::classify($field);
+      if ($value === null && $framing !== 0 && ($this->framing & $framing) === 0) {
+         return true;
+      }
+
+      $field = str_replace(["\r", "\n"], '', $field);
+      if (! self::validate($field)) {
+         return false;
+      }
+
+      if ($value !== null) {
+         $value = str_replace(["\r", "\n"], '', $value);
+      }
+
+      $changed = false;
+      $retained = false;
+      $lower = strtolower($field);
+
+      // ? Preserve the canonical fields-map slot when possible. This keeps
+      //   legitimate framework-owned file/range header ordering stable while
+      //   still deleting every application-controlled case variant.
+      foreach ($this->fields as $name => $current) {
+         if (strtolower($name) !== $lower) {
+            continue;
+         }
+
+         if ($value !== null && $name === $field && $retained === false) {
+            $retained = true;
+            if ($current !== $value) {
+               $this->fields[$name] = $value;
+               $changed = true;
+            }
+            continue;
+         }
+
+         unset($this->fields[$name]);
+         $changed = true;
+      }
+
+      // ! Prepared and queued sources are always application-controlled at
+      //   encode time. No variant may survive beside canonical framing.
+      foreach ($this->prepared as $name => $current) {
+         if (strtolower($name) === $lower) {
+            unset($this->prepared[$name]);
+            $changed = true;
+         }
+      }
+
+      $prefix = "$lower:";
+      $length = strlen($prefix);
+      foreach ($this->queued as $index => $line) {
+         if (strncasecmp($line, $prefix, $length) === 0) {
+            unset($this->queued[$index]);
+            $changed = true;
+         }
+      }
+
+      // ? Presets are worker-persistent configuration. Mask matching fields
+      //   for this response; clean() lifts the mask on the next request.
+      foreach ($this->preset as $name => $current) {
+         if (strtolower($name) === $lower && isSet($this->masked[$lower]) === false) {
+            $this->masked[$lower] = true;
+            $changed = true;
+         }
+      }
+
+      if ($value !== null && $retained === false) {
+         $this->fields[$field] = $value;
+         $changed = true;
+      }
+
+      if ($changed) {
+         $this->dirty = true;
+      }
+
+      // ? A removal fully canonicalized this field for the current response.
+      //   A retained value stays marked: a public caller may invoke own()
+      //   before encode(), and the encoder must still independently verify it.
+      if ($framing !== 0) {
+         if ($value === null) {
+            $this->framing &= ~$framing;
+         }
+         else {
+            $this->framing |= $framing;
+         }
+      }
+
+      return true;
+   }
    public function append (string $field, string $value = '', ? string $separator = ', '): void
    {
       // ! Strip CRLF from header values to prevent HTTP response splitting
@@ -447,6 +588,7 @@ class Header extends HeaderBase
       if (! self::validate($field)) {
          return;
       }
+      $this->framing |= self::classify($field);
 
       $separator ??= ', ';
 
@@ -530,6 +672,7 @@ class Header extends HeaderBase
       if (! self::validate($field)) {
          return false;
       }
+      $this->framing |= self::classify($field);
 
       $this->queued[] = "$field: $value";
       $this->enqueued = true;
