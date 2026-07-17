@@ -86,6 +86,8 @@ if (! class_exists('HTTP2S6Connection', false)) {
          $this->ip = '127.0.0.1';
          $this->port = 12345;
          $this->encrypted = false;
+         $this->handshaking = false;
+         $this->handshakeTimer = 0;
          $this->status = Connections::STATUS_ESTABLISHED;
          $this->started = time();
          $this->used = time();
