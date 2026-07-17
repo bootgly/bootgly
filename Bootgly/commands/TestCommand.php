@@ -32,11 +32,14 @@ use function array_unique;
 use function array_values;
 use function basename;
 use function bin2hex;
+use function constant;
 use function count;
+use function defined;
 use function dirname;
 use function explode;
 use function file_get_contents;
 use function file_put_contents;
+use function function_exists;
 use function fwrite;
 use function getcwd;
 use function getenv;
@@ -56,6 +59,9 @@ use function ltrim;
 use function max;
 use function ob_end_clean;
 use function ob_start;
+use function pcntl_async_signals;
+use function pcntl_signal;
+use function pcntl_signal_get_handler;
 use function preg_match;
 use function preg_replace;
 use function proc_close;
@@ -326,6 +332,25 @@ class TestCommand extends Command
    // # Test Suite
    public function test (string $suite_dir, null|int $index, null|int $suite = null): true|Suite
    {
+      /** @var array<int,int|callable> $signalHandlers */
+      $signalHandlers = [];
+      $asyncSignals = null;
+      if (
+         function_exists('pcntl_async_signals')
+         && function_exists('pcntl_signal')
+         && function_exists('pcntl_signal_get_handler')
+      ) {
+         $asyncSignals = pcntl_async_signals();
+         foreach (['SIGCHLD'] as $signalName) {
+            if (defined($signalName) === false) {
+               continue;
+            }
+
+            $signal = (int) constant($signalName);
+            $signalHandlers[$signal] = pcntl_signal_get_handler($signal);
+         }
+      }
+
       // !
       $hasTests = str_contains($suite_dir, '/tests/') || str_ends_with($suite_dir, '/tests');
       $bootstrap_file = str_replace('\\', '/', $suite_dir . ($hasTests ? '' : '/tests') . '/' . BOOTSTRAP_FILENAME);
@@ -384,6 +409,19 @@ class TestCommand extends Command
       }
       finally {
          Display::$segments = $segments;
+
+         if ($asyncSignals !== null) {
+            // ! A suite may install a non-restarting SIGCHLD handler or enable
+            //   async dispatch. Restore the caller's child handler and async
+            //   mode so later suites cannot inherit interrupted waitpid() calls
+            //   or callbacks bound to already-torn-down servers. Other signals
+            //   retain the runner's process-wide policy (notably SIGPIPE).
+            pcntl_async_signals(false);
+            foreach ($signalHandlers as $signal => $Handler) {
+               pcntl_signal($signal, $Handler);
+            }
+            pcntl_async_signals($asyncSignals);
+         }
       }
 
       $Output = CLI->Terminal->Output;

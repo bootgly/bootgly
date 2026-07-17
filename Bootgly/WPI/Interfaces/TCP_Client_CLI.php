@@ -200,9 +200,17 @@ class TCP_Client_CLI
       // ! @\Commands
       $this->Commands = new Commands($this);
 
-      // @ Register shutdown function to avoid orphaned children
-      register_shutdown_function(function () use ($Process) {
-         $Process->Signals->send(SIGINT);
+      // @ Register shutdown function to avoid orphaned children. A later
+      //   unrelated fork inherits PHP shutdown callbacks, so only the process
+      //   that registered this hook may stop this client's children. Never
+      //   signal the shutting-down process itself.
+      $owner = posix_getpid();
+      register_shutdown_function(static function () use ($Process, $owner): void {
+         if (posix_getpid() !== $owner) {
+            return;
+         }
+
+         $Process->Signals->send(SIGINT, master: false);
       });
    }
    public function __get (string $name): mixed

@@ -69,6 +69,7 @@ return new Specification(
          $Connection->ip = '127.0.0.1';
          $Connection->port = 12345;
          $Connection->encrypted = false;
+         $Connection->writes = 0;
 
          $Package = new class($Connection) extends TCPPackages {
             public function __construct (Connection $Connection)

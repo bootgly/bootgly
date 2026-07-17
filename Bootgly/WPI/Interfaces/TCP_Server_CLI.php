@@ -2155,12 +2155,19 @@ class TCP_Server_CLI implements Servers
             // @ Clean all per-project state files
             $this->Process->State->clean();
 
+            // ? Test servers share the process with the native suite runner.
+            //   Stopping one must return control instead of terminating every
+            //   suite that follows it.
+            if ($this->Mode === Modes::Test) {
+               break;
+            }
+
             $CI_CD = Environment::get('GITHUB_ACTIONS')
                || Environment::get('TRAVIS')
                || Environment::get('CIRCLECI')
                || Environment::get('GITLAB_CI')
                || Environment::get('GIT_EXEC_PATH'); // Git Hooks?
-            if ($this->Mode->value >= Modes::Test->value && $CI_CD) {
+            if ($this->Mode === Modes::Foreground && $CI_CD) {
                break;
             }
 

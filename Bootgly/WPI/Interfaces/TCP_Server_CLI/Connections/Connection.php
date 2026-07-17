@@ -47,8 +47,8 @@ class Connection extends Packages
    // * Metadata
    public readonly int $id;
    public bool $encrypted;
-   public bool $handshaking;
-   public int $handshakeTimer;
+   public bool $handshaking = false;
+   public int $handshakeTimer = 0;
    public int $status;
    // @ State
    public int $started;

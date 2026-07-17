@@ -15,6 +15,7 @@ return new Suite(
    // * Data
    tests: [
       '1.1-connect_bounded',
+      '1.2-shutdown_hook_fork_isolation',
       '2.1-pool_lifecycle',
       '2.2-pool_capacity',
       '2.3-pool_health',

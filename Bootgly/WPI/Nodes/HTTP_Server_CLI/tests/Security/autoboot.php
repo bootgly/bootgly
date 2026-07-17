@@ -230,5 +230,9 @@ return new Suite(
       // Two independently limited custom principals must retain separate
       // counters even when their full sliding-window cache keys collide.
       '40.01-shared_cache_crc32_rate_limit_collision',
+      // # TCP server Connection (partial-construction cleanup regression)
+      // A destructor must not read TLS cleanup state that lacks a neutral
+      // default when construction or a protocol-layer test double omits it.
+      '41.01-partial_connection_destructor_safety',
    ],
 );

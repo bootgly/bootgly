@@ -758,31 +758,36 @@ class Shared extends Driver
          ? $this->Config->segment
          : $this->derive();
 
-      $Segment = shm_attach($key, $this->Config->size, $this->Config->permissions);
-      if ($Segment === false) {
-         throw new RuntimeException('Failed to attach the shared-memory segment.');
-      }
-
-      try {
-         $this->guard($key, 'shm');
-      }
-      catch (Throwable $Throwable) {
-         shm_detach($Segment);
-         throw $Throwable;
-      }
-
       $Semaphore = sem_get($key, 1, $this->Config->permissions, true);
       if ($Semaphore === false) {
-         shm_detach($Segment);
          throw new RuntimeException('Failed to acquire the shared-memory semaphore.');
       }
 
-      try {
-         $this->guard($key, 'sem');
+      $this->guard($key, 'sem');
+      if (sem_acquire($Semaphore) === false) {
+         throw new RuntimeException('Failed to lock the shared-memory semaphore.');
       }
-      catch (Throwable $Throwable) {
-         shm_detach($Segment);
-         throw $Throwable;
+
+      try {
+         // ! Creating and attaching one SysV segment concurrently is not
+         //   reliable on every kernel/PHP combination. The semaphore is the
+         //   creation barrier: only one worker can enter shm_attach() at a
+         //   time, while later workers attach the already-created segment.
+         $Segment = shm_attach($key, $this->Config->size, $this->Config->permissions);
+         if ($Segment === false) {
+            throw new RuntimeException('Failed to attach the shared-memory segment.');
+         }
+
+         try {
+            $this->guard($key, 'shm');
+         }
+         catch (Throwable $Throwable) {
+            shm_detach($Segment);
+            throw $Throwable;
+         }
+      }
+      finally {
+         sem_release($Semaphore);
       }
 
       $this->Segment = $Segment;

@@ -53,7 +53,7 @@ return new Specification(
       try {
          // # First key: shared memory itself is world-writable.
          $Segments[0] = shm_attach($Keys[0], 262_144, 0666);
-         $Semaphores[0] = sem_get($Keys[0], 1, 0666, true);
+         $Semaphores[0] = sem_get($Keys[0], 1, 0600, true);
 
          try {
             $Cache = new Cache([

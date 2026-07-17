@@ -2043,7 +2043,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
 
          try {
             /** @var Specification|null $test */
-            $test = require $Test_Case_File;
+            $test = self::load($Test_Case_File);
          }
          catch (Throwable) {
             $test = null;
@@ -2068,6 +2068,11 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       }
 
       $Suite->tests = SAPI::$tests[self::class];
+   }
+   /** Load one test Specification in an isolated local variable scope. */
+   private static function load (File $File): mixed
+   {
+      return require $File;
    }
    protected static function test (TCP_Server_CLI $TCP_Server_CLI): bool
    {
