@@ -13,12 +13,19 @@ namespace Bootgly\CLI\UX\Components;
 
 use const BOOTGLY_TTY;
 use function array_splice;
+use function max;
+use function rewind;
+use function str_repeat;
+use function stream_get_contents;
+use function substr_count;
 use Closure;
 use Throwable;
 
 use Bootgly\API\Component;
+use Bootgly\CLI\Terminal;
 use Bootgly\CLI\Terminal\Input;
 use Bootgly\CLI\Terminal\Output;
+use Bootgly\CLI\Terminal\Output\Region;
 use Bootgly\CLI\UI\Components\Timeline;
 use Bootgly\CLI\UI\Components\Timeline\States;
 use Bootgly\CLI\UI\Components\Timeline\Step;
@@ -30,8 +37,11 @@ use Bootgly\CLI\UI\Components\Timeline\Step;
  * Each step binds a label to a handler. `run()` walks the steps forward-only.
  * Interactive terminals keep the timeline fixed at the top of the screen:
  * each activation clears the screen and repaints the full frame (past ✔ /
- * active ◉ / future ○), so the active step's content — any component the
- * handler renders via the shared Input/Output — always sits right below it.
+ * active ◉ / future ○) with a reserved content area nested INSIDE the
+ * timeline — between the active step and the upcoming ones — so the step
+ * content (any component the handler renders via the shared Input/Output)
+ * always sits right below the step it belongs to, with the whole flow map
+ * still visible, no matter how many steps the wizard carries.
  * Completion closes on a fresh screen with the final all-done frame; failure
  * appends the final frame instead, preserving the failed step's content and
  * Alerts on screen. Non-interactive output appends one plain line per
@@ -51,6 +61,8 @@ class Wizard extends Component
    // * Config
    /** Heading repainted above the frame (rendered once on non-interactive output) */
    public string $title;
+   /** Guide rows (`│`) reserved for the step content, between the active step and the next */
+   public int $reserve;
 
    // * Data
    /** The state and rendering spine — configure glyphs via Timeline->glyphs */
@@ -62,6 +74,8 @@ class Wizard extends Component
    /** The Throwable that failed the flow (null while none) */
    public private(set) null|Throwable $Throwable;
    public private(set) bool $finished;
+   /** @var array<int,int> Per-step content rows, index-aligned with the Timeline steps (0 = $reserve) */
+   private array $reserves;
    /** Position of the next mid-run insertion (right after the active step, in add order) */
    private int $insertion;
 
@@ -73,6 +87,7 @@ class Wizard extends Component
 
       // * Config
       $this->title = '';
+      $this->reserve = 3;
 
       // * Data
       $this->Timeline = new Timeline($Output);
@@ -81,6 +96,7 @@ class Wizard extends Component
       // * Metadata
       $this->Throwable = null;
       $this->finished = false;
+      $this->reserves = [];
       $this->insertion = 0;
    }
 
@@ -93,22 +109,26 @@ class Wizard extends Component
     *
     * @param string $label The step label.
     * @param Closure $handler The step handler: `function (Wizard $Wizard): null|string`.
+    * @param int $rows Content rows reserved for this step (0 follows $reserve) —
+    *                  size it to the step's tallest editor (e.g. a Menu's frame).
     *
     * @return Step
     */
-   public function add (string $label, Closure $handler): Step
+   public function add (string $label, Closure $handler, int $rows = 0): Step
    {
       $Steps = $this->Timeline->Steps;
 
       // ? Mid-run: insert right after the active step (in add order)
       if ($this->finished === false && $Steps->current >= 0) {
          array_splice($this->handlers, $this->insertion, 0, [$handler]);
+         array_splice($this->reserves, $this->insertion, 0, [$rows]);
 
          // :
          return $Steps->insert($label, $this->insertion++);
       }
 
       $this->handlers[] = $handler;
+      $this->reserves[] = $rows;
 
       // :
       return $this->Timeline->add($label);
@@ -134,6 +154,70 @@ class Wizard extends Component
       $this->Output->render("\n{$frame}\n");
 
       return null;
+   }
+
+   /**
+    * Resolves Template markup into painted output (SGR).
+    *
+    * @param string $markup The content with Template markup.
+    *
+    * @return string
+    */
+   private function paint (string $markup): string
+   {
+      $Memory = new Output('php://memory');
+      $Memory->render($markup);
+      rewind($Memory->stream);
+
+      // :
+      return (string) stream_get_contents($Memory->stream);
+   }
+
+   /**
+    * Presents the activation frame on a fresh screen: title, past + active
+    * steps, the content area — `reserve` dim guide rows (`│`) nested inside
+    * the timeline — and the upcoming steps below it. The cursor is anchored
+    * on the second guide row (after the `│` guide), with relative movements
+    * only: absolute rows drift on scrolled or embedded terminals.
+    */
+   private function present (): void
+   {
+      $Steps = $this->Timeline->Steps;
+      $current = $Steps->current;
+
+      // ! Head — title, past steps and the active one
+      $this->Timeline->until = $current;
+      $top = (string) $this->Timeline->render(self::RETURN_OUTPUT);
+
+      $title = $this->title !== '' ? "{$this->title}\n" : '';
+      $head = $this->paint("{$title}{$top}");
+
+      // ! Content area — `rows` guide rows framed by one breathing guide on
+      //   each side; unused rows read as the connector
+      $rows = $this->reserves[$current] ?? 0;
+      $reserve = max(1, $rows > 0 ? $rows : $this->reserve) + 2;
+      $guide = $this->paint('@#Black:│@;');
+      $gap = str_repeat("{$guide}\n", $reserve);
+
+      // ! Tail — the upcoming steps (the last guide row connects them)
+      $tail = '';
+      if ($current < $Steps->count - 1) {
+         $this->Timeline->from = $current + 1;
+         $this->Timeline->until = null;
+
+         $tail = $this->paint((string) $this->Timeline->render(self::RETURN_OUTPUT));
+      }
+
+      $this->Timeline->from = null;
+      $this->Timeline->until = null;
+
+      $this->Output->write("{$head}{$gap}{$tail}");
+
+      // @ Anchor the cursor on the second guide row, after the `│` guide —
+      //   relative movement only (up from the frame end, then the column)
+      $rows = substr_count($tail, "\n") + $reserve - 1;
+      $this->Output->Cursor->up($rows, column: 1);
+      $this->Output->Cursor->moveTo(column: 4);
    }
 
    /**
@@ -166,15 +250,12 @@ class Wizard extends Component
             $this->Output->render("{$glyphs['active']} {$Step->label}\n");
          }
          else {
-            // @ Fixed timeline: a fresh screen per activation — the frame stays
-            //   at the top and the step content flows right below it
+            // @ Fixed timeline: a fresh screen per activation — the full frame
+            //   stays on screen with the content area nested inside it, right
+            //   below the active step
             $this->Output->clear();
 
-            if ($this->title !== '') {
-               $this->Output->render("{$this->title}\n");
-            }
-
-            $this->render();
+            $this->present();
          }
 
          // ! Mid-run additions land right after this step
@@ -182,10 +263,30 @@ class Wizard extends Component
 
          $handler = $this->handlers[$Steps->current] ?? null;
 
+         // ! Nested region — the handler's components render behind the `│`
+         //   guide, shifted into the content area (width shrinks accordingly)
+         $Host = $this->Output;
+         $shrunk = false;
+
+         if (BOOTGLY_TTY === true) {
+            $gutter = $this->paint('@#Black:│@;') . '  ';
+            $this->Output = new Region($Host->stream, $gutter, 3);
+
+            if (isSet(Terminal::$width) === true) {
+               Terminal::$width -= 3;
+               $shrunk = true;
+            }
+         }
+
          try {
             $note = $handler !== null ? $handler($this) : null;
          }
          catch (Throwable $Throwable) {
+            $this->Output = $Host;
+            if ($shrunk === true) {
+               Terminal::$width += 3;
+            }
+
             // * Metadata
             $this->Throwable = $Throwable;
             $this->finished = true;
@@ -197,11 +298,18 @@ class Wizard extends Component
                $this->Output->render("{$glyphs['failed']} {$Step->label}{$annotated}\n");
             }
             else {
+               // @ Append the final frame at the content cursor — the failed
+               //   step's content and Alerts stay on screen
                $this->render();
             }
 
             // :
             return false;
+         }
+
+         $this->Output = $Host;
+         if ($shrunk === true) {
+            Terminal::$width += 3;
          }
 
          $Step->update(States::Done, $note ?? '');

@@ -55,6 +55,10 @@ return new Specification(
             description: 'The first frame marks the future step muted (○) below the active one (◉)'
          );
          yield assert(
+            assertion: str_contains($output, "\e[4G") === true,
+            description: 'The content cursor anchors inside the guide rows, nested between the active and the upcoming steps'
+         );
+         yield assert(
             assertion: substr_count($output, '✔') >= 3 && str_contains($output, '(n1)'),
             description: 'Frames reprint past steps with the green checkmark and their notes'
          );

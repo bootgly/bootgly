@@ -40,6 +40,10 @@ class Timeline extends Component
     * for flows that write output between steps, where in-place repaints would corrupt
     */
    public bool $append;
+   /** Render steps only from this index (null = first) — for split-frame consumers */
+   public null|int $from;
+   /** Render steps only up to this index (null = last) — for split-frame consumers */
+   public null|int $until;
 
    // * Data
    public Steps $Steps;
@@ -62,6 +66,8 @@ class Timeline extends Component
          'failed'  => '✖'
       ];
       $this->append = false;
+      $this->from = null;
+      $this->until = null;
 
       // * Data
       $this->Steps = new Steps;
@@ -98,7 +104,20 @@ class Timeline extends Component
       $frame = '';
       $count = $this->Steps->count;
 
+      // ? Sliced frames render the [$from, $until] range only (split-frame consumers)
+      $start = $this->from ?? 0;
+      $limit = $this->until !== null && $this->until < $count - 1
+         ? $this->until
+         : $count - 1;
+
       foreach ($this->Steps->Steps as $index => $Step) {
+         if ($index < $start) {
+            continue;
+         }
+         if ($index > $limit) {
+            break;
+         }
+
          $note = $Step->note !== '' ? " @#Black:({$Step->note})@;" : '';
 
          $frame .= match ($Step->State) {
@@ -110,7 +129,7 @@ class Timeline extends Component
          $frame .= "\n";
 
          // ? Connector between steps
-         if ($index < $count - 1) {
+         if ($index < $limit) {
             $frame .= "@#Black:│@;\n";
          }
       }
@@ -123,7 +142,7 @@ class Timeline extends Component
       // @ Repaint relatively over the previous frame
       if ($this->height > 0) {
          $this->Output->Cursor->up($this->height, column: 1);
-         $this->Output->Text->clear(down: true);
+         $this->Output->Text->clear(lines: $this->height);
       }
 
       // ! php://memory renders the markup before counting lines

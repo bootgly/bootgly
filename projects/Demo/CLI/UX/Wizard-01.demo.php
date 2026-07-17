@@ -44,7 +44,7 @@ $Wizard->add('Name', function (Wizard $Wizard): string {
    return $Question->ask();
 });
 
-$Wizard->add('Interface', function (Wizard $Wizard): string {
+$Wizard->add('Interface', rows: 6, handler: function (Wizard $Wizard): string {
    $Menu = new Menu($Wizard->Input, $Wizard->Output);
    $Menu->prompt = "@#Cyan:Which interface?@;\n@#Black:(↑/↓ to move, Space to select one, Enter to confirm)@;\n";
 
