@@ -11,6 +11,8 @@
 namespace Bootgly\ABI\Resources\Cache\Drivers;
 
 
+use const FILE_IGNORE_NEW_LINES;
+use const FILE_SKIP_EMPTY_LINES;
 use function array_keys;
 use function constant;
 use function crc32;
@@ -30,6 +32,7 @@ use function sem_get;
 use function sem_release;
 use function sem_remove;
 use function shm_attach;
+use function shm_detach;
 use function shm_get_var;
 use function shm_has_var;
 use function shm_put_var;
