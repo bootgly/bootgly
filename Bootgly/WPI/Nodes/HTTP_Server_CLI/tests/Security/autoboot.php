@@ -226,5 +226,9 @@ return new Suite(
       // Login/privilege rotation must invalidate both raw and masked forms
       // of the pre-regeneration synchronizer token.
       '39.01-session_regeneration_csrf_rotation',
+      // # Shared cache / RateLimit (CRC32 collision — audit M7)
+      // Two independently limited custom principals must retain separate
+      // counters even when their full sliding-window cache keys collide.
+      '40.01-shared_cache_crc32_rate_limit_collision',
    ],
 );
