@@ -50,12 +50,27 @@ class Header extends HeaderBase
          $normalized = [];
 
          foreach ($value as $key => $presetValue) {
+            // ! Enforce the same invariant for trusted subclasses and internal
+            //   property writes. Public preset() validates before changing any
+            //   framing/memo metadata; this hook is the final storage boundary.
+            //   PHP converts an all-decimal string key to int; casting it back
+            //   preserves such RFC-valid field names at this boundary.
+            $normalizedName = (string) $key;
+            if (! self::validate($normalizedName)) {
+               return;
+            }
+
             if ($presetValue === true) {
-               $normalized[$key] = true;
+               $normalized[$normalizedName] = true;
                continue;
             }
 
-            $normalized[$key] = (string) $presetValue;
+            $normalizedValue = (string) $presetValue;
+            if (! self::check($normalizedValue)) {
+               return;
+            }
+
+            $normalized[$normalizedName] = $normalizedValue;
          }
 
          $this->preset = $normalized;
@@ -278,6 +293,18 @@ class Header extends HeaderBase
       // ! ASCII-only token regex; preg_match returns 1 on full match.
       return preg_match("/^[!#\$%&'*+.^_`|~0-9A-Za-z-]+\$/D", $field) === 1;
    }
+   /**
+    * Check a response field value against RFC 9110 field-content bytes.
+    *
+    * All C0 controls except HTAB, plus DEL, are forbidden. HTAB remains valid
+    * whitespace and bytes 0x80-0xFF remain compatible `obs-text`; the regex
+    * deliberately has no UTF-8 mode so arbitrary permitted octets are checked
+    * byte-for-byte.
+    */
+   private static function check (string $value): bool
+   {
+      return preg_match('/[\x00-\x08\x0A-\x1F\x7F]/', $value) === 0;
+   }
 
    /**
     * Classify encoder-owned framing names without allocating a lowercase copy
@@ -294,6 +321,15 @@ class Header extends HeaderBase
 
    public function preset (string $name, string|null $value = null): void
    {
+      // ! Presets survive Response::reset()/Header::clean(), so accepting one
+      //   injected line poisons every later response served by this worker.
+      //   Reject atomically: never normalize attacker bytes into a different
+      //   persistent field. Null remains an exact removal operation so legacy
+      //   invalid entries can still be deleted during a rolling migration.
+      if ($value !== null && (! self::validate($name) || ! self::check($value))) {
+         return;
+      }
+
       $preset = $this->preset;
 
       if ($value !== null) {

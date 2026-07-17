@@ -7,6 +7,7 @@ use Bootgly\ACI\Tests\Suite\Test\Specification;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Cache;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Raw\Header;
 
 
 return new Specification(
@@ -64,6 +65,85 @@ return new Specification(
          description: 'a same-second preset removal rebuilds the raw block',
       )
          ->expect($removed)
+         ->to->be(true)
+         ->assert();
+
+      // # Validation is atomic — invalid calls cannot normalize-and-store a
+      //   different persistent field or value.
+      $baseline = $Header->preset;
+      $Preset = new ReflectionProperty(Header::class, 'preset');
+      $invalidNamesRejected = true;
+      foreach ([
+         '',
+         'Bad Name',
+         'Bad:Name',
+         "X-M11\r\nInjected",
+         "X-M11\r",
+         "X-M11\n",
+         "X-M11\0Injected",
+         'Não-ASCII',
+      ] as $name) {
+         $Header->preset($name, 'value');
+         $invalidNamesRejected = $invalidNamesRejected && $Header->preset === $baseline;
+      }
+
+      $invalidValuesRejected = true;
+      for ($code = 0; $code <= 0x1F; $code++) {
+         if ($code === 0x09) {
+            continue;
+         }
+
+         $Header->preset('X-M11-CTL', 'safe' . chr($code) . 'value');
+         $invalidValuesRejected = $invalidValuesRejected && $Header->preset === $baseline;
+      }
+      $Header->preset('X-M11-CTL', "safe\x7Fvalue");
+      $invalidValuesRejected = $invalidValuesRejected && $Header->preset === $baseline;
+      $Preset->setValue($Header, [
+         'X-M11-Hook' => "safe\r\nInjected: hook",
+      ]);
+      $invalidHookRejected = $Header->preset === $baseline;
+
+      yield new Assertion(
+         description: 'invalid preset API and protected-hook writes leave the persistent map unchanged',
+      )
+         ->expect($invalidNamesRejected && $invalidValuesRejected && $invalidHookRejected)
+         ->to->be(true)
+         ->assert();
+
+      // # RFC-compatible value bytes: HTAB and obs-text are not response-line
+      //   delimiters and remain available to trusted persistent configuration.
+      //   An all-decimal name is also a valid token despite PHP's numeric-key cast.
+      $Header->preset('X-M11-Compatible', "alpha\tbeta\x80\xFF");
+      $Header->preset('123', 'numeric-name');
+      $Header->clean();
+      $Header->build();
+      $compatible = str_contains($Header->raw, "X-M11-Compatible: alpha\tbeta\x80\xFF")
+         && str_contains($Header->raw, '123: numeric-name');
+      $Header->preset('X-M11-Compatible', null);
+      $Header->preset('123', null);
+
+      yield new Assertion(
+         description: 'preset values preserve permitted HTAB and obs-text bytes',
+      )
+         ->expect($compatible)
+         ->to->be(true)
+         ->assert();
+
+      // # Exact null removal must remain able to clean a legacy invalid key.
+      $legacyName = "X-M11-Legacy\r\nInjected";
+      $legacy = $Header->preset;
+      $legacy[$legacyName] = 'legacy';
+      $Preset->setRawValue($Header, $legacy);
+      $Header->preset($legacyName, null);
+      $Header->clean();
+      $Header->build();
+      $legacyClean = ! str_contains($Header->raw, 'X-M11-Compatible')
+         && ! str_contains($Header->raw, 'X-M11-Legacy');
+
+      yield new Assertion(
+         description: 'null preset removal can delete an exact legacy-invalid key',
+      )
+         ->expect($Header->preset === $baseline && $legacyClean)
          ->to->be(true)
          ->assert();
 

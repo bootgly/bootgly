@@ -260,5 +260,9 @@ return new Suite(
       // Query-derived strings must be encoded before the helper places them
       // inside its default text/html response body.
       '44.01-response_pre_html_xss',
+      // # Response Header preset (persistent response splitting — audit M11)
+      // Names and values containing CR/LF must be rejected before persistent
+      // preset state can serialize them into this or later responses.
+      '45.01-response_header_preset_injection',
    ],
 );

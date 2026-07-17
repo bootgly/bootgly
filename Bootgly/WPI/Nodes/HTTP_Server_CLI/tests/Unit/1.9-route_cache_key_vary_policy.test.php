@@ -8,6 +8,7 @@ use Bootgly\ACI\Tests\Suite\Test\Specification;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Cache;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Raw\Header;
 
 
 return new Specification(
@@ -220,10 +221,15 @@ return new Specification(
          ->assert();
 
       yield new Assertion(
-         description: 'bare CR/LF in a serialized preset value makes route caching fail closed',
+         description: 'the final-wire guard rejects bare CR/LF even below the validated preset API',
       )
          ->expect($Stash(static function (Response $Response): void {
-            $Response->Header->preset('X-Probe', "safe\nVary: X-Tenant");
+            // ! Defense in depth: emulate legacy/corrupted internal state
+            //   below preset(), whose public boundary now rejects this value.
+            $Preset = new ReflectionProperty(Header::class, 'preset');
+            $preset = $Response->Header->preset;
+            $preset['X-Probe'] = "safe\nVary: X-Tenant";
+            $Preset->setRawValue($Response->Header, $preset);
          }))
          ->to->be(false)
          ->assert();
