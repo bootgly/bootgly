@@ -25,5 +25,7 @@ return new Suite(
       '3.1-events',
 
       '4.1-cookie_security_defaults_not_downgraded',
+
+      '5.1-file-handler-filesystem_security',
    ]
 );

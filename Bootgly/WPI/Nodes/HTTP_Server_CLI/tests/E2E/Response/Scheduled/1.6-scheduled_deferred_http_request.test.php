@@ -6,12 +6,12 @@ use function fwrite;
 use function json_encode;
 use function preg_replace;
 use function stream_set_blocking;
-use function stream_socket_client;
 use function strpos;
 use function substr;
 
 use Bootgly\ABI\Debugging\Data\Vars;
 use Bootgly\ACI\Tests\Suite\Test\Specification\Separator;
+use Bootgly\WPI\Interfaces\TCP_Server_CLI;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
@@ -26,18 +26,26 @@ return new Specification(
    },
    response: function (Request $Request, Response $Response, Router $Router)
    {
-      // @ Deferred endpoint (makes async HTTP request to external host)
+      // @ Deferred endpoint (simulates an asynchronous HTTP dependency locally)
       yield $Router->route('/deferred/http', function (Request $Request, Response $Response) {
          return $Response->defer(function (Response $Response) {
-            // @ Open connection to example.com (blocking connect)
-            $client = stream_socket_client(
-               'tcp://example.com:80',
-               $errno,
-               $errstr,
-               timeout: 5
+            [$client, $service] = stream_socket_pair(
+               STREAM_PF_UNIX,
+               STREAM_SOCK_STREAM,
+               STREAM_IPPROTO_IP
             );
-            fwrite($client, "GET / HTTP/1.1\r\nHost: example.com\r\nConnection: close\r\n\r\n");
             stream_set_blocking($client, false);
+
+            TCP_Server_CLI::$Event->defer(
+               hrtime(true) + 5_000_000,
+               static function () use ($service): void {
+                  fwrite(
+                     $service,
+                     "HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+                  );
+                  fclose($service);
+               }
+            );
 
             // @ Suspend with socket: event loop resumes when response is readable
             $Response->wait($client);

@@ -252,5 +252,9 @@ return new Suite(
       // Cache hits execute before routing/middleware, so their lookup key must
       // represent the effective authority and every declared Vary dimension.
       '42.01-route_cache_authority_vary_isolation',
+      // # File session storage (filesystem trust boundary — audit M9)
+      // Existing save directories, final session-file modes and pre-positioned
+      // signing secrets must fail closed under an attacker-influenced path.
+      '43.01-session_file_filesystem_security',
    ],
 );
