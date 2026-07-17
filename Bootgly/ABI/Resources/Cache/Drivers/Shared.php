@@ -12,12 +12,19 @@ namespace Bootgly\ABI\Resources\Cache\Drivers;
 
 
 use function array_keys;
+use function constant;
 use function crc32;
+use function defined;
 use function extension_loaded;
-use function ftok;
+use function file;
+use function function_exists;
 use function in_array;
 use function is_array;
 use function is_int;
+use function is_readable;
+use function octdec;
+use function posix_geteuid;
+use function preg_split;
 use function sem_acquire;
 use function sem_get;
 use function sem_release;
@@ -29,9 +36,11 @@ use function shm_put_var;
 use function shm_remove;
 use function shm_remove_var;
 use function time;
+use function trim;
 use RuntimeException;
 use SysvSemaphore;
 use SysvSharedMemory;
+use Throwable;
 
 use Bootgly\ABI\Resources\Cache\Driver;
 
@@ -441,20 +450,97 @@ class Shared extends Driver
 
       $key = $this->Config->segment !== 0
          ? $this->Config->segment
-         : ftok(__FILE__, 't');
+         : $this->derive();
 
-      $Segment = shm_attach($key, $this->Config->size, 0666);
+      $Segment = shm_attach($key, $this->Config->size, $this->Config->permissions);
       if ($Segment === false) {
          throw new RuntimeException('Failed to attach the shared-memory segment.');
       }
 
-      $Semaphore = sem_get($key, 1, 0666, true);
+      try {
+         $this->guard($key, 'shm');
+      }
+      catch (Throwable $Throwable) {
+         shm_detach($Segment);
+         throw $Throwable;
+      }
+
+      $Semaphore = sem_get($key, 1, $this->Config->permissions, true);
       if ($Semaphore === false) {
+         shm_detach($Segment);
          throw new RuntimeException('Failed to acquire the shared-memory semaphore.');
+      }
+
+      try {
+         $this->guard($key, 'sem');
+      }
+      catch (Throwable $Throwable) {
+         shm_detach($Segment);
+         throw $Throwable;
       }
 
       $this->Segment = $Segment;
       $this->Semaphore = $Semaphore;
+   }
+
+   /** Derive a stable per-application key when no explicit segment is configured. */
+   private function derive (): int
+   {
+      $scope = defined('BOOTGLY_WORKING_DIR')
+         ? (string) constant('BOOTGLY_WORKING_DIR')
+         : $this->Config->path;
+      $key = crc32("bootgly.shared\0{$scope}\0" . __FILE__)
+         & 0x7fffffff;
+
+      return $key > 0 ? $key : 1;
+   }
+
+   /**
+    * On Linux, reject a pre-existing SysV object whose owner or effective
+    * permissions do not match this cache configuration.
+    */
+   private function guard (int $key, string $table): void
+   {
+      $path = "/proc/sysvipc/{$table}";
+      if (is_readable($path) === false) {
+         return;
+      }
+
+      $lines = @file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+      if (is_array($lines) === false) {
+         throw new RuntimeException("Failed to inspect the SysV {$table} table.");
+      }
+
+      $ownerIndex = $table === 'shm' ? 7 : 4;
+      $creatorIndex = $table === 'shm' ? 9 : 6;
+      $EUID = function_exists('posix_geteuid') ? posix_geteuid() : null;
+
+      foreach ($lines as $line) {
+         $fields = preg_split('/\s+/', trim($line));
+         if (
+            is_array($fields) === false
+            || isset($fields[0], $fields[2], $fields[$ownerIndex], $fields[$creatorIndex]) === false
+            || (int) $fields[0] !== $key
+         ) {
+            continue;
+         }
+
+         $permissions = octdec($fields[2]);
+         $owner = (int) $fields[$ownerIndex];
+         $creator = (int) $fields[$creatorIndex];
+         if (
+            $permissions !== $this->Config->permissions
+            || ($EUID !== null && ($owner !== $EUID || $creator !== $EUID))
+         ) {
+            throw new RuntimeException(
+               "Refusing SysV {$table} key {$key}: unexpected owner or permissions."
+            );
+         }
+
+         return;
+      }
+
+      throw new RuntimeException("Failed to locate SysV {$table} key {$key} after attach.");
    }
 
    /**

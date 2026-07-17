@@ -33,6 +33,7 @@ class Config
    public const int DEFAULT_TTL = 0;
    public const int DEFAULT_SEGMENT = 0;
    public const int DEFAULT_SIZE = 16777216;
+   public const int DEFAULT_PERMISSIONS = 0600;
    public const string DEFAULT_HOST = '127.0.0.1';
    public const int DEFAULT_PORT = 6379;
    public const string DEFAULT_PASSWORD = '';
@@ -53,13 +54,17 @@ class Config
     */
    public string $path;
    /**
-    * System V IPC key for the Shared-memory driver; 0 derives one from the driver file.
+    * System V IPC key for the Shared-memory driver; 0 derives an application-local key.
     */
    public int $segment;
    /**
     * Shared-memory segment size in bytes.
     */
    public int $size;
+   /**
+    * Unix permission bits used when Shared creates its SysV objects.
+    */
+   public int $permissions;
    /**
     * Redis server host.
     */
@@ -113,6 +118,7 @@ class Config
       $path = $config['path'] ?? self::locate();
       $segment = $config['segment'] ?? self::DEFAULT_SEGMENT;
       $size = $config['size'] ?? self::DEFAULT_SIZE;
+      $permissions = $config['permissions'] ?? self::DEFAULT_PERMISSIONS;
       $host = $config['host'] ?? self::DEFAULT_HOST;
       $port = $config['port'] ?? self::DEFAULT_PORT;
       $password = $config['password'] ?? self::DEFAULT_PASSWORD;
@@ -129,6 +135,9 @@ class Config
       $this->path = rtrim(is_scalar($path) ? (string) $path : self::locate(), '/');
       $this->segment = is_scalar($segment) ? (int) $segment : self::DEFAULT_SEGMENT;
       $this->size = is_scalar($size) ? (int) $size : self::DEFAULT_SIZE;
+      $this->permissions = is_scalar($permissions)
+         ? ((int) $permissions & 0777)
+         : self::DEFAULT_PERMISSIONS;
       $this->host = is_scalar($host) ? (string) $host : self::DEFAULT_HOST;
       $this->port = is_scalar($port) ? (int) $port : self::DEFAULT_PORT;
       $this->password = is_scalar($password) ? (string) $password : self::DEFAULT_PASSWORD;

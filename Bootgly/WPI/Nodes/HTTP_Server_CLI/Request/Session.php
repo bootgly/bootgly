@@ -12,14 +12,19 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 
 
 use function array_key_exists;
+use function array_pop;
+use function array_values;
 use function bin2hex;
-use function extension_loaded;
-use function ini_get;
 use function is_array;
+use function is_object;
 use function is_scalar;
+use function is_string;
+use function ini_get;
 use function random_bytes;
 use function random_int;
+use function serialize;
 use function session_get_cookie_params;
+use function unserialize;
 
 use Bootgly\ABI\Events\Emitter;
 use Bootgly\WPI\Modules\HTTP\Server\Response\Raw\Header\Cookie;
@@ -66,14 +71,12 @@ class Session
    public protected(set) string $id;
    /**
     * True when the supplied ID matched an existing server-issued session
-    * file and its data was successfully read. Used by `Request->Session`
+    * record and its data was successfully read. Used by `Request->Session`
     * to enforce strict mode: unknown client-supplied IDs are rotated to
     * a fresh server-generated ID before any first write.
     */
    public protected(set) bool $loaded = false;
    protected bool $isSafe = true;
-   /** @var array{callable-string,callable-string} */
-   protected array $serializer = ['serialize', 'unserialize'];
 
    // ! Tracks whether `Set-Cookie: PHPSID=<id>` has already been appended
    //   to the current response. Cookie issuance is deferred until the
@@ -88,13 +91,6 @@ class Session
          static::init();
       }
 
-      // ! Serializer
-      if (
-         extension_loaded('igbinary') && ini_get('session.serialize_handler') === 'igbinary'
-      ) {
-         $this->serializer = ['igbinary_serialize', 'igbinary_unserialize'];
-      }
-
       // ! Handler
       if (Handler::$instance === null) {
          Handler::init();
@@ -103,9 +99,13 @@ class Session
       // @ Read
       $this->id = $id;
 
-      if (Handler::$instance && $data = Handler::$instance->read($id)) {
-         $this->data = (array) ($this->serializer[1])($data);
-         $this->loaded = true;
+      $data = Handler::$instance?->read($id);
+      if (is_string($data)) {
+         $decoded = self::decode($data);
+         if ($decoded !== null) {
+            $this->data = $decoded;
+            $this->loaded = true;
+         }
       }
 
       // @ Events — session established (guarded: zero-alloc when no listeners)
@@ -378,7 +378,7 @@ class Session
          $Emitter->check(Events::Destroy) && $Emitter->emit(Events::Destroy, $this->id);
       }
       else {
-         Handler::$instance->write($this->id, ($this->serializer[0])($this->data));
+         Handler::$instance->write($this->id, serialize($this->data));
       }
 
       $this->needSave = false;
@@ -419,6 +419,59 @@ class Session
 
       // * Metadata
       self::$initialized = true;
+   }
+
+   /**
+    * Decode scalar/array-only session state without instantiating PHP classes.
+    * Cyclic or excessively large graphs fail closed during the bounded scan.
+    *
+    * @return null|array<string,mixed>
+    */
+   private static function decode (string $payload): null|array
+   {
+      $data = @unserialize($payload, [
+         'allowed_classes' => false,
+         'max_depth' => 64,
+      ]);
+      if (is_array($data) === false) {
+         return null;
+      }
+
+      $safe = [];
+      foreach ($data as $key => $value) {
+         if (is_string($key) === false) {
+            return null;
+         }
+         $safe[$key] = $value;
+      }
+
+      /** @var array<int,mixed> $pending */
+      $pending = array_values($safe);
+      $count = 0;
+      while ($pending !== []) {
+         if (++$count > 10_000) {
+            return null;
+         }
+
+         $value = array_pop($pending);
+         if (is_object($value)) {
+            return null;
+         }
+         if (is_array($value) === false) {
+            continue;
+         }
+
+         foreach ($value as $item) {
+            if (is_object($item)) {
+               return null;
+            }
+            if (is_array($item)) {
+               $pending[] = $item;
+            }
+         }
+      }
+
+      return $safe;
    }
 
    // ---

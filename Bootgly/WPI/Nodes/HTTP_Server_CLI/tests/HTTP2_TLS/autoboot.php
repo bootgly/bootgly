@@ -4,13 +4,20 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\tests\HTTP2_TLS;
 
 
 use const BOOTGLY_ROOT_DIR;
+use function array_map;
+use function array_values;
 use function define;
 use function defined;
+use function get_debug_type;
+use function json_encode;
+use function posix_getpid;
 use function usleep;
+use ReflectionObject;
 
 use Bootgly\ACI\Logs\Data\Display;
 use Bootgly\ACI\Tests\Suite;
 use Bootgly\API\Endpoints\Server\Modes;
+use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders\Encoder_;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Events;
@@ -54,6 +61,44 @@ return new Suite(
       $HTTP_Server_CLI->on(
          Events::RequestReceived,
          function ($Request, Response $Response): Response {
+            if ($Request->URI === '/h4-state') {
+               $Reflection = new ReflectionObject(HTTP_Server_CLI::$Event);
+               $streams = [];
+
+               foreach (['reads', 'writes', 'excepts'] as $name) {
+                  $Property = $Reflection->getProperty($name);
+                  /** @var array<int,mixed> $Sockets */
+                  $Sockets = $Property->getValue(HTTP_Server_CLI::$Event);
+                  $streams[$name] = array_values(array_map(
+                     static fn (mixed $Socket): string => get_debug_type($Socket),
+                     $Sockets
+                  ));
+               }
+
+               $Property = $Reflection->getProperty('reading');
+               /** @var array<int,mixed> $Reading */
+               $Reading = $Property->getValue(HTTP_Server_CLI::$Event);
+               $Connections = Connections::$Connections;
+               $JSON = json_encode([
+                  'pid' => posix_getpid(),
+                  'connection_count' => count($Connections),
+                  'connection_statuses' => array_values(array_map(
+                     static fn ($Connection): int => $Connection->status,
+                     $Connections
+                  )),
+                  'connection_handshaking' => array_values(array_map(
+                     static fn ($Connection): bool => $Connection->handshaking,
+                     $Connections
+                  )),
+                  'pending_handshakes' => Connections::$pendingHandshakes,
+                  'ip_connections' => Connections::$ipConnections,
+                  'reading_count' => count($Reading),
+                  'streams' => $streams,
+               ]);
+
+               return $Response->send($JSON === false ? '{}' : $JSON);
+            }
+
             return $Response->send("method={$Request->method};uri={$Request->URI};protocol={$Request->protocol};scheme={$Request->scheme}");
          }
       );
@@ -94,5 +139,6 @@ return new Suite(
       '2.2-silent_handshake_deadline',
       '2.3-pending_handshake_ceiling',
       '2.4-fragmented_client_hello',
+      '3.1-malformed_tls_registry_recovery',
    ]
 );

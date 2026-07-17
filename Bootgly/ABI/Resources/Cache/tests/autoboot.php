@@ -30,6 +30,7 @@ return new Suite(
 
       '5.1-shared-driver',
       '5.2-shared-cross-worker',
+      '5.3-shared-permissions',
 
       '6.1-events',
    ]

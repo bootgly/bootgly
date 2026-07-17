@@ -18,6 +18,9 @@ return new Suite(
       '1.2-cache-handler-expiry',
 
       '2.1-cache-handler-shared',
+      '2.2-cache-handler-shared_ipc_forgery',
+      '2.3-cache-handler-key_race',
+      '2.4-cache-handler-key_path',
 
       '3.1-events',
 
