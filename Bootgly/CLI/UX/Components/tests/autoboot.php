@@ -18,6 +18,7 @@ return new Suite(
       '1.2-form-sequence',
       '1.3-form-revert',
       '1.4-form-validation',
+      '1.5-form-fieldset',
       '2.1-prompt-flow',
       '2.2-prompt-interruption',
       '2.3-prompt-mouse',

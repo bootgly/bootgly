@@ -16,17 +16,27 @@ use function array_search;
 use function count;
 use function in_array;
 use function is_numeric;
+use function max;
+use function mb_strlen;
+use function preg_replace;
 use function rewind;
 use function rtrim;
 use function str_repeat;
 use function stream_get_contents;
+use function strtolower;
+use function substr_count;
 use function trim;
+use function usleep;
 use Closure;
 
+use Bootgly\ABI\Data\__String;
 use Bootgly\API\Component;
+use Bootgly\CLI\Terminal;
 use Bootgly\CLI\Terminal\Input;
 use Bootgly\CLI\Terminal\Input\Keystrokes;
+use Bootgly\CLI\Terminal\Input\Line;
 use Bootgly\CLI\Terminal\Output;
+use Bootgly\CLI\UI\Components\Alert;
 use Bootgly\CLI\UI\Components\Fieldset;
 use Bootgly\CLI\UI\Components\Menu;
 use Bootgly\CLI\UI\Components\Question;
@@ -42,8 +52,10 @@ class Form extends Component
 
    // * Config
    public string $title;
-   /** Per-field attempts forwarded to Question (0 = unlimited) */
+   /** Per-field attempts forwarded to the field editors (0 = unlimited) */
    public int $attempts;
+   /** Field frame width, in columns — null follows the terminal */
+   public null|int $width;
 
    // * Data
    public Fields $Fields;
@@ -62,6 +74,7 @@ class Form extends Component
       // * Config
       $this->title = '';
       $this->attempts = 0;
+      $this->width = null;
 
       // * Data
       $this->Fields = new Fields;
@@ -153,9 +166,11 @@ class Form extends Component
 
    /**
     * Asks all fields sequentially.
-    * Interactive terminals support revert (`↑` then Enter goes back one field) and end
-    * with a summary + confirm loop (edit any field before submitting). Non-interactive
-    * streams read one stdin line per field, deterministically — no revert, no summary.
+    * Interactive terminals render each field inside a fieldset frame — the label as
+    * the legend on the top border, the editor inside — support revert (`↑` then Enter
+    * goes back one field) and end with a summary + confirm loop (edit any field before
+    * submitting). Non-interactive streams read one stdin line per field,
+    * deterministically — no frames, no revert, no summary.
     *
     * @return array<string,string> The answers, keyed by field label.
     */
@@ -190,6 +205,10 @@ class Form extends Component
          if ($answer === Keystrokes::UP->value && $index > 0) {
             $index--;
 
+            // @ Erase the previous field's settled frame (3 rows + 1 gap)
+            $this->Output->Cursor->up(4, column: 1);
+            $this->Output->Text->clear(down: true);
+
             continue;
          }
 
@@ -199,9 +218,6 @@ class Form extends Component
 
       // @@ Summary + confirm loop (edit any field before submitting)
       while (true) {
-         // ? The summary frame breathes: blank line before it
-         $this->Output->write("\n");
-
          $this->render();
 
          // ! Confirm Menu — option 0 confirms; option N edits field N-1
@@ -247,7 +263,10 @@ class Form extends Component
    }
 
    /**
-    * Edits a field with its control editor (Question or Menu).
+    * Edits a field with its control editor.
+    * Interactive terminals edit inside a fieldset frame; the settled frame (dim
+    * legend, recorded answer) stays on screen. Non-interactive streams keep the
+    * plain line editors.
     *
     * @param Field $Field The field to edit.
     *
@@ -258,11 +277,21 @@ class Form extends Component
       // ! Previous answer becomes the default when re-editing
       $default = $Field->answered === true ? $Field->answer : $Field->default;
 
-      $answer = match ($Field->Control) {
-         Controls::Text, Controls::Secret => $this->question($Field, $default),
-         Controls::Select => $this->choose($Field, $default),
-         Controls::Confirm => $this->confirm($Field, $default)
-      };
+      // ? Non-TTY: plain line editors — one stdin read per field
+      if (BOOTGLY_TTY === false) {
+         $answer = match ($Field->Control) {
+            Controls::Text, Controls::Secret => $this->question($Field, $default),
+            Controls::Select => $this->choose($Field, $default),
+            Controls::Confirm => $this->confirm($Field, $default)
+         };
+      }
+      else {
+         $answer = match ($Field->Control) {
+            Controls::Text, Controls::Secret => $this->capture($Field, $default),
+            Controls::Select => $this->select($Field, $default),
+            Controls::Confirm => $this->select($Field, $default, confirm: true)
+         };
+      }
 
       // ?: The revert sentinel is not an answer
       if ($answer === Keystrokes::UP->value) {
@@ -271,12 +300,415 @@ class Form extends Component
 
       $Field->update($answer);
 
+      // ? The settled frame replaces the live editor frame
+      if (BOOTGLY_TTY === true) {
+         $this->settle($Field);
+      }
+
+      // :
+      return $answer;
+   }
+
+   // # Fieldset frames (interactive editors)
+
+   /**
+    * Resolves Template markup into painted output (SGR).
+    *
+    * @param string $markup The content with Template markup.
+    *
+    * @return string
+    */
+   private function paint (string $markup): string
+   {
+      $Memory = new Output('php://memory');
+      $Memory->render($markup);
+      rewind($Memory->stream);
+
+      // :
+      return (string) stream_get_contents($Memory->stream);
+   }
+
+   /**
+    * Measures the visible width of painted output (escape-aware).
+    *
+    * @param string $painted The painted output.
+    *
+    * @return int
+    */
+   private function measure (string $painted): int
+   {
+      // :
+      return mb_strlen(
+         (string) preg_replace(__String::ANSI_ESCAPE_SEQUENCE_REGEX, '', $painted)
+      );
+   }
+
+   /**
+    * Renders a fieldset frame — the legend embedded in the top border, one
+    * content row per line — as a painted string.
+    *
+    * @param string $legend The frame legend (the field label).
+    * @param array<string> $lines The content rows (Template markup allowed).
+    * @param bool $active Whether the frame is being edited (cyan legend) or settled (dim).
+    *
+    * @return string
+    */
+   private function frame (string $legend, array $lines, bool $active): string
+   {
+      $width = max(20, $this->width
+         ?? (isSet(Terminal::$width) === true ? Terminal::$width : 80));
+
+      // ! Legend — colored by state, breathing spaces like a fieldset title
+      // ? Spaces stay OUTSIDE the markup — Template style markers swallow adjacent spaces
+      $color = $active === true ? '@#Cyan:' : '@#Black:';
+      $legend = ' ' . $this->paint("{$color}{$legend}@;") . ' ';
+      $entitled = $this->measure($legend);
+
+      // # Top border row — embeds the legend
+      $fill = str_repeat('─', max(1, $width - 2 - $entitled));
+      $frame = $this->paint('@#Black:┌@;') . $legend . $this->paint("@#Black:{$fill}┐@;") . "\n";
+
+      // # Content rows
+      $left = $this->paint('@#Black:│@;') . ' ';
+      $right = ' ' . $this->paint('@#Black:│@;');
+      $interior = $width - 4;
+
+      foreach ($lines as $line) {
+         $painted = $this->paint($line);
+         $pad = str_repeat(' ', max(0, $interior - $this->measure($painted)));
+
+         $frame .= "{$left}{$painted}{$pad}{$right}\n";
+      }
+
+      // # Bottom border row
+      $bottom = str_repeat('─', max(1, $width - 2));
+      $frame .= $this->paint("@#Black:└{$bottom}┘@;") . "\n";
+
+      // :
+      return $frame;
+   }
+
+   /**
+    * Repaints a live frame relatively over the previous one.
+    *
+    * @param string $frame The painted frame.
+    * @param int $height The height (rows) of the previous frame — 0 on the first paint.
+    *
+    * @return int The height (rows) of the painted frame.
+    */
+   private function repaint (string $frame, int $height): int
+   {
+      if ($height > 0) {
+         $this->Output->Cursor->up($height, column: 1);
+         $this->Output->Text->clear(down: true);
+      }
+
+      $this->Output->write($frame);
+
+      // :
+      return substr_count($frame, "\n");
+   }
+
+   /**
+    * Erases the current live frame.
+    *
+    * @param int $height The height (rows) of the live frame.
+    */
+   private function erase (int $height): void
+   {
+      if ($height > 0) {
+         $this->Output->Cursor->up($height, column: 1);
+         $this->Output->Text->clear(down: true);
+      }
+   }
+
+   /**
+    * Renders the settled frame of an answered field — dim legend, recorded answer —
+    * followed by a blank gap row.
+    *
+    * @param Field $Field The answered field.
+    */
+   private function settle (Field $Field): void
+   {
+      $answer = $Field->answer;
+
+      // ? Masked answers are never revealed
+      if ($Field->mask !== null && $answer !== '') {
+         $answer = str_repeat($Field->mask, 3);
+      }
+      // ? Confirm answers settle with their option label
+      if ($Field->Control === Controls::Confirm) {
+         $answer = $answer === 'yes' ? 'Yes' : 'No';
+      }
+
+      $frame = $this->frame($Field->label, [$answer], active: false);
+
+      $this->Output->write("{$frame}\n");
+   }
+
+   /**
+    * Waits for a keystroke (non-blocking reads keep signals dispatched).
+    *
+    * @return string|false The keystroke — false when the input closes (EOF).
+    */
+   private function listen (): string|false
+   {
+      while (true) {
+         $key = $this->Input->listen();
+
+         // ?: Input closed — interactive input will never arrive
+         if ($key === false) {
+            return false;
+         }
+         // ?: A complete keystroke
+         if ($key !== '') {
+            return $key;
+         }
+
+         usleep(50000);
+      }
+   }
+
+   /**
+    * Captures a Text / Secret field inside a live fieldset frame — raw line editor,
+    * masked echo, required/Validator semantics and the `↑` + Enter revert.
+    *
+    * @param Field $Field The field to capture.
+    * @param string $default The value assumed on empty answer or EOF.
+    *
+    * @return string The captured answer — or the revert sentinel.
+    */
+   private function capture (Field $Field, string $default): string
+   {
+      // ! Line editor — masked echo and a viewport bound to the frame interior
+      $width = max(20, $this->width
+         ?? (isSet(Terminal::$width) === true ? Terminal::$width : 80));
+
+      $Line = new Line;
+      $Line->mask = $Field->mask;
+      $Line->width = max(6, $width - 7);
+
+      // ! Default placeholder — masked defaults are never revealed
+      $placeholder = '';
+      if ($default !== '') {
+         $placeholder = $Field->mask !== null
+            ? '[' . str_repeat($Field->mask, 3) . ']'
+            : "[{$default}]";
+      }
+
+      $Alert = new Alert($this->Output);
+
+      // ! Raw input mode
+      $this->Input->configure(blocking: false, canonical: false, echo: false);
+      $this->Output->Cursor->hide();
+
+      // * Metadata
+      $height = 0;
+      $attempt = 1;
+      $reverting = false;
+      $answer = '';
+
+      // @@ Edit until a valid answer, revert or EOF — every exit assigns and breaks
+      while (true) {
+         // @ Compose the live frame — the editor line plus the default placeholder
+         $content = $Line->render();
+         if ($Line->value === '' && $placeholder !== '') {
+            $content .= "@#Black: {$placeholder}@;";
+         }
+
+         $height = $this->repaint(
+            $this->frame($Field->label, [$content], active: true),
+            $height
+         );
+
+         $key = $this->listen();
+
+         // ? EOF assumes the default
+         if ($key === false) {
+            $answer = $default;
+            break;
+         }
+
+         // ? `↑` arms the revert — the next Enter steps back one field
+         if ($key === Keystrokes::UP->value) {
+            $reverting = true;
+            continue;
+         }
+
+         // ? Enter submits — or reverts when armed
+         if ($key === Keystrokes::ENTER->value || $key === "\r") {
+            if ($reverting === true) {
+               $this->erase($height);
+               $this->restore();
+
+               // :
+               return Keystrokes::UP->value;
+            }
+
+            $candidate = trim($Line->value);
+
+            // ? Empty answer assumes the default
+            if ($candidate === '') {
+               // ? Required fields without a default re-ask
+               if ($Field->required === true && $default === '') {
+                  $this->erase($height);
+                  $height = 0;
+
+                  $Alert->Type::Failure->set();
+                  $Alert->message = 'An answer is required.';
+                  $Alert->render();
+
+                  continue;
+               }
+
+               $candidate = $default;
+            }
+
+            // ? Validate the candidate answer
+            if ($Field->Validator !== null) {
+               $result = ($Field->Validator)($candidate);
+
+               if ($result !== true) {
+                  $this->erase($height);
+                  $height = 0;
+
+                  $Alert->Type::Failure->set();
+                  $Alert->message = (string) $result;
+                  $Alert->render();
+
+                  // ? Attempts exhausted assume the default
+                  $attempt++;
+                  if ($this->attempts > 0 && $attempt > $this->attempts) {
+                     $answer = $default;
+                     break;
+                  }
+
+                  $Line->reset();
+
+                  continue;
+               }
+            }
+
+            $answer = $candidate;
+            break;
+         }
+
+         // @ Edit keys control the buffer; printable input feeds it
+         $reverting = false;
+
+         if ($key[0] === "\e" || $key === "\x7F" || $key < ' ') {
+            $Line->control($key);
+         }
+         else {
+            $Line->feed($key);
+         }
+      }
+
+      $this->erase($height);
+      $this->restore();
+
       // :
       return $answer;
    }
 
    /**
-    * Asks a Text / Secret field with Question.
+    * Chooses a Select / Confirm field option inside a live fieldset frame —
+    * a radio list aimed with `↑`/`↓` (Confirm adds `y`/`n` hotkeys).
+    *
+    * @param Field $Field The field to choose.
+    * @param string $default The option assumed on empty answer or EOF.
+    * @param bool $confirm Whether the field is a Confirm (Yes / No radio).
+    *
+    * @return string The chosen option — Confirm fields answer `yes` / `no`.
+    */
+   private function select (Field $Field, string $default, bool $confirm = false): string
+   {
+      $options = $confirm === true ? ['Yes', 'No'] : $Field->options;
+
+      // ! Option aimed initially — the default when listed, the first otherwise
+      $aimed = 0;
+      if ($confirm === true) {
+         $aimed = $default === 'yes' ? 0 : 1;
+      }
+      else if ($default !== '') {
+         $found = array_search($default, $options, true);
+         $aimed = $found === false ? 0 : (int) $found;
+      }
+
+      // ! Raw input mode
+      $this->Input->configure(blocking: false, canonical: false, echo: false);
+      $this->Output->Cursor->hide();
+
+      // * Metadata
+      $height = 0;
+
+      // @@ Aim until Enter or EOF
+      while (true) {
+         // @ Compose the radio rows — the aimed option carries the cursor and a filled dot
+         $lines = [];
+         foreach ($options as $index => $label) {
+            $lines[] = $aimed === $index
+               ? "@#Cyan:› ● {$label}@;"
+               : "  @#Black:○@; {$label}";
+         }
+
+         $height = $this->repaint(
+            $this->frame($Field->label, $lines, active: true),
+            $height
+         );
+
+         $key = $this->listen();
+
+         // ? EOF selects the aimed option
+         if ($key === false) {
+            break;
+         }
+         // ? Enter selects the aimed option
+         if ($key === Keystrokes::ENTER->value || $key === "\r") {
+            break;
+         }
+
+         match (true) {
+            $key === Keystrokes::UP->value && $aimed > 0
+               => $aimed--,
+            $key === Keystrokes::DOWN->value && $aimed < count($options) - 1
+               => $aimed++,
+            // ? Confirm hotkeys aim directly
+            $confirm === true && strtolower($key) === 'y'
+               => $aimed = 0,
+            $confirm === true && strtolower($key) === 'n'
+               => $aimed = 1,
+            default => null
+         };
+      }
+
+      $this->erase($height);
+      $this->restore();
+
+      $answer = $options[$aimed] ?? ($options[0] ?? '');
+
+      // ?: Confirm fields answer `yes` / `no`
+      if ($confirm === true) {
+         return $aimed === 0 ? 'yes' : 'no';
+      }
+
+      // :
+      return $answer;
+   }
+
+   /**
+    * Restores the input settings and the cursor after a raw editor.
+    */
+   private function restore (): void
+   {
+      $this->Input->configure(blocking: true, canonical: true, echo: true);
+      $this->Output->Cursor->show();
+   }
+
+   // # Plain line editors (non-interactive streams)
+
+   /**
+    * Asks a Text / Secret field with Question (one stdin line).
     *
     * @param Field $Field The field to ask.
     * @param string $default The value assumed on empty answer or EOF.
@@ -292,20 +724,15 @@ class Form extends Component
       $Question->required = $Field->required;
       $Question->attempts = $this->attempts;
       $Question->mask = $Field->mask;
-
-      // ? The revert sentinel must bypass the field Validator
-      $Validator = $Field->Validator;
-      if ($Validator !== null) {
-         $Question->Validator = static fn (string $answer): bool|string
-            => $answer === Keystrokes::UP->value ? true : $Validator($answer);
-      }
+      $Question->Validator = $Field->Validator;
 
       // :
       return $Question->ask();
    }
 
    /**
-    * Chooses a Select field option with Menu (interactive) or one stdin line (pipes).
+    * Chooses a Select field option with one stdin line — option index, exact
+    * label or empty for the default.
     *
     * @param Field $Field The field to choose.
     * @param string $default The option assumed on empty answer or EOF.
@@ -319,63 +746,31 @@ class Form extends Component
       // ! Option assumed on empty / invalid answers
       $assumed = $default !== '' ? $default : ($options[0] ?? '');
 
-      // ? Non-TTY: one stdin line — option index, exact label or empty for the default
-      if (BOOTGLY_TTY === false) {
-         $this->Output->write("{$Field->label} [{$assumed}]: ");
+      $this->Output->write("{$Field->label} [{$assumed}]: ");
 
-         $line = $this->Input->scan();
+      $line = $this->Input->scan();
 
-         $answer = $line === false ? '' : trim($line);
+      $answer = $line === false ? '' : trim($line);
 
-         // ?: Empty answer assumes the default
-         if ($answer === '') {
-            return $assumed;
-         }
-         // ?: Option index
-         if (is_numeric($answer) === true && isSet($options[(int) $answer]) === true) {
-            return $options[(int) $answer];
-         }
-         // ?: Exact option label
-         if (in_array($answer, $options, true) === true) {
-            return $answer;
-         }
-
-         // : Invalid answers assume the default
+      // ?: Empty answer assumes the default
+      if ($answer === '') {
          return $assumed;
       }
-
-      // ! Interactive Menu — unique selection, aim starts at the default option
-      // ? Block editors breathe: blank line before and after the Menu frame
-      $this->Output->write("\n");
-
-      $Menu = new Menu($this->Input, $this->Output);
-      $Menu->prompt = "@#Cyan:{$Field->label}@;\n@#Black:(↑/↓ to move, Enter to confirm)@;\n";
-
-      $Options = $Menu->Items->Options;
-      $Options->Selection::Unique->set();
-
-      foreach ($options as $label) {
-         $Options->add(label: $label);
+      // ?: Option index
+      if (is_numeric($answer) === true && isSet($options[(int) $answer]) === true) {
+         return $options[(int) $answer];
+      }
+      // ?: Exact option label
+      if (in_array($answer, $options, true) === true) {
+         return $answer;
       }
 
-      $aimed = array_search($assumed, $options, true);
-      if ($aimed !== false) {
-         $Options->aim((int) $aimed);
-      }
-
-      // @@ Render until Enter
-      foreach ($Menu->rendering() as $ignored);
-
-      $this->Output->write("\n");
-
-      $index = (int) ($Menu->selected[0] ?? 0);
-
-      // :
-      return $options[$index] ?? $assumed;
+      // : Invalid answers assume the default
+      return $assumed;
    }
 
    /**
-    * Confirms a Confirm field with Question.
+    * Confirms a Confirm field with Question (one stdin line).
     *
     * @param Field $Field The field to confirm.
     * @param string $default The answer (`yes` / `no`) assumed on empty answer or EOF.
