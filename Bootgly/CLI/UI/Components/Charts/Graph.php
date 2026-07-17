@@ -138,7 +138,7 @@ class Graph extends Chart
 
       // @ Repaint relatively over the previous frame
       $this->Output->Cursor->up($this->height, column: 1);
-      $this->Output->Text->clear(down: true);
+      $this->Output->Text->clear(lines: $this->height);
       $this->render();
 
       // :
@@ -180,7 +180,7 @@ class Graph extends Chart
 
       // @ Final frame
       $this->Output->Cursor->up($this->height, column: 1);
-      $this->Output->Text->clear(down: true);
+      $this->Output->Text->clear(lines: $this->height);
       $this->render();
 
       $this->Output->Cursor->show();

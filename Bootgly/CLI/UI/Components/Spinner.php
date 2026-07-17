@@ -218,7 +218,7 @@ class Spinner extends Component
 
       // @ Repaint relatively (pipe-safe: no absolute cursor position involved)
       $this->Output->Cursor->up($this->height, column: 1);
-      $this->Output->Text->clear(down: true);
+      $this->Output->Text->clear(lines: $this->height);
 
       $this->render();
    }
@@ -277,7 +277,7 @@ class Spinner extends Component
       // @ Replace the spinner rows with the resolution
       if ($resolution !== '') {
          $this->Output->Cursor->up($this->height, column: 1);
-         $this->Output->Text->clear(down: true);
+         $this->Output->Text->clear(lines: $this->height);
          $this->Output->render("{$resolution}\n");
       }
 

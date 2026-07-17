@@ -179,7 +179,7 @@ class Timer extends Component
       // @ Repaint relatively (pipe-safe: no absolute cursor position involved)
       $lines = substr_count($this->template, "\n") + 1;
       $this->Output->Cursor->up($lines, column: 1);
-      $this->Output->Text->clear(down: true);
+      $this->Output->Text->clear(lines: $lines);
 
       $this->render();
    }
@@ -249,7 +249,7 @@ class Timer extends Component
       if (BOOTGLY_TTY === true) {
          $lines = substr_count($this->template, "\n") + 1;
          $this->Output->Cursor->up($lines, column: 1);
-         $this->Output->Text->clear(down: true);
+         $this->Output->Text->clear(lines: $lines);
       }
 
       $this->render();

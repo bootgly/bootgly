@@ -115,7 +115,7 @@ class Progress extends Component
       $this->total = 100;
       // ! Templating
       $this->template = <<<'TEMPLATE'
-      @described;
+      @description;
       @current;/@total; [@bar;] @percent;%
       ⏱️ @elapsed;s - 🏁 @eta;s - 📈 @rate; loops/s
       TEMPLATE;
@@ -206,7 +206,7 @@ class Progress extends Component
          // @ Repaint relatively over the previous frame (pipe-safe)
          if ($this->height > 0) {
             $this->Output->Cursor->up($this->height, column: 1);
-            $this->Output->Text->clear(down: true);
+            $this->Output->Text->clear(lines: $this->height);
          }
 
          $this->height = substr_count($frame, "\n");

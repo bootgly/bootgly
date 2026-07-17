@@ -165,7 +165,7 @@ class Finder
             //   scrolls the screen
             if ($height > 0) {
                $this->Output->Cursor->up($height, column: 1);
-               $this->Output->Text->clear(down: true);
+               $this->Output->Text->clear(lines: $height);
             }
 
             // @ Render frame — markup resolves in memory first: the repaint
@@ -212,7 +212,7 @@ class Finder
       // @ Final frame — the found label replaces the dropdown
       if ($height > 0) {
          $this->Output->Cursor->up($height, column: 1);
-         $this->Output->Text->clear(down: true);
+         $this->Output->Text->clear(lines: $height);
       }
 
       $label = $this->found !== null ? $this->matches[$this->aimed][1] : '';

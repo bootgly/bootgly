@@ -208,7 +208,7 @@ class Form extends Component
 
             // @ Erase the previous field's settled frame (3 rows + 1 gap)
             $this->Output->Cursor->up(4, column: 1);
-            $this->Output->Text->clear(down: true);
+            $this->Output->Text->clear(lines: 4);
 
             continue;
          }
@@ -410,7 +410,7 @@ class Form extends Component
    {
       if ($height > 0) {
          $this->Output->Cursor->up($height, column: 1);
-         $this->Output->Text->clear(down: true);
+         $this->Output->Text->clear(lines: $height);
       }
 
       $this->Output->write($frame);
@@ -428,7 +428,7 @@ class Form extends Component
    {
       if ($height > 0) {
          $this->Output->Cursor->up($height, column: 1);
-         $this->Output->Text->clear(down: true);
+         $this->Output->Text->clear(lines: $height);
       }
    }
 

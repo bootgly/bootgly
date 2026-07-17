@@ -29,6 +29,7 @@ use function usleep;
 
 use Bootgly\ABI\Data\__String\Escapeable\Text\Formattable;
 use Bootgly\API\Component;
+use Bootgly\CLI\Terminal;
 use Bootgly\CLI\Terminal\Input;
 use Bootgly\CLI\Terminal\Input\Keystrokes;
 use Bootgly\CLI\Terminal\Output;
@@ -104,14 +105,27 @@ class Textarea extends Component
       $prefix = self::wrap(self::_CYAN_BRIGHT_FOREGROUND) . $this->prompt . self::_RESET_FORMAT;
       $frame = "{$prefix} @#Black:(Enter breaks the line, Ctrl+D finishes)@;\n";
 
+      // ! Horizontal viewport — rows never exceed the terminal (wrapped physical
+      //   rows would break the block-repaint height bookkeeping)
+      $columns = (isSet(Terminal::$width) === true ? Terminal::$width : 80) - 4;
+
       for ($index = $this->Window->first; $index <= $this->Window->last; $index++) {
          $line = $this->lines[$index];
 
          // ? The cursor cell renders inverse-video on the active line
          if ($index === $this->row) {
-            $before = mb_substr($line, 0, $this->column);
-            $current = mb_substr($line, $this->column, 1);
-            $after = mb_substr($line, $this->column + 1);
+            // ? The visible slice slides to keep the cursor on screen
+            $first = 0;
+            if ($this->column > $columns - 1) {
+               $first = $this->column - $columns + 1;
+            }
+
+            $line = mb_substr($line, $first, $columns);
+            $position = $this->column - $first;
+
+            $before = mb_substr($line, 0, $position);
+            $current = mb_substr($line, $position, 1);
+            $after = mb_substr($line, $position + 1);
 
             if ($current === '') {
                $current = ' ';
@@ -122,6 +136,11 @@ class Textarea extends Component
             $frame .= "@#Black:│@; {$before}{$cell}{$after}\n";
          }
          else {
+            // ? Inactive lines crop with an ellipsis
+            if (mb_strlen($line) > $columns) {
+               $line = mb_substr($line, 0, $columns - 1) . '…';
+            }
+
             $frame .= "@#Black:│@; {$line}\n";
          }
       }
@@ -190,7 +209,7 @@ class Textarea extends Component
          // @ Repaint relatively over the previous frame
          if ($height > 0) {
             $this->Output->Cursor->up($height, column: 1);
-            $this->Output->Text->clear(down: true);
+            $this->Output->Text->clear(lines: $height);
          }
 
          // ! php://memory resolves the markup before counting lines

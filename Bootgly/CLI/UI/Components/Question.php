@@ -339,7 +339,7 @@ class Question extends Component
          // @ Repaint relatively over the previous frame
          if ($height > 0) {
             $this->Output->Cursor->up($height, column: 1);
-            $this->Output->Text->clear(down: true);
+            $this->Output->Text->clear(lines: $height);
          }
 
          // ! php://memory resolves the markup before counting lines
@@ -445,7 +445,7 @@ class Question extends Component
       // @ Final frame — the captured line replaces the dropdown
       if ($height > 0) {
          $this->Output->Cursor->up($height, column: 1);
-         $this->Output->Text->clear(down: true);
+         $this->Output->Text->clear(lines: $height);
       }
       $this->Output->write("{$this->prompt}: {$line}\n");
 

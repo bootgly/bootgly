@@ -161,7 +161,7 @@ class Text extends Component
 
       // @ Repaint relatively (pipe-safe)
       $this->Output->Cursor->up(1, column: 1);
-      $this->Output->Text->clear(down: true);
+      $this->Output->Text->clear(lines: 1);
       $this->Output->render("{$line}\n");
    }
 
@@ -182,6 +182,13 @@ class Text extends Component
 
       $line = '';
       foreach ($characters as $index => $character) {
+         // ? Spaces stay raw — Template style markers swallow space-only content
+         if ($character === ' ') {
+            $line .= ' ';
+
+            continue;
+         }
+
          $line .= $index >= $head - self::WAVE && $index < $head
             ? "@#White:{$character}@;"
             : "@#Black:{$character}@;";
@@ -212,7 +219,7 @@ class Text extends Component
 
       // @ Final plain frame
       $this->Output->Cursor->up(1, column: 1);
-      $this->Output->Text->clear(down: true);
+      $this->Output->Text->clear(lines: 1);
       $this->render();
 
       $this->Output->Cursor->show();
@@ -250,7 +257,7 @@ class Text extends Component
       foreach ($ramp as $step) {
          if ($painted === true) {
             $this->Output->Cursor->up(1, column: 1);
-            $this->Output->Text->clear(down: true);
+            $this->Output->Text->clear(lines: 1);
          }
 
          $this->Output->render("{$step}\n");

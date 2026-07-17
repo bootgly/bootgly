@@ -14,6 +14,7 @@ namespace Bootgly\CLI\UI\Components;
 use const BOOTGLY_TTY;
 use function feof;
 use function is_string;
+use function min;
 use function str_pad;
 use function stripos;
 use function substr_count;
@@ -21,6 +22,7 @@ use function usleep;
 use Generator;
 
 use Bootgly\API\Component;
+use Bootgly\CLI\Terminal;
 use Bootgly\CLI\Terminal\Input;
 use Bootgly\CLI\Terminal\Output;
 use Bootgly\CLI\UI\Components\Menu\Items;
@@ -55,7 +57,11 @@ class Menu extends Component
       $this->Output = $Output;
 
       // * Config
-      self::$width = 80;
+      // ? Clamped to the terminal — padded option rows must never wrap
+      //   (wrapped physical rows break the block-repaint height bookkeeping)
+      self::$width = isSet(Terminal::$width) === true
+         ? min(80, Terminal::$width - 1)
+         : 80;
       $this->prompt = '';
       self::$level = 0;
 
@@ -215,7 +221,7 @@ class Menu extends Component
          //   movement: absolute save/restore drifts when rendering scrolls the screen
          if ($height > 0) {
             $this->Output->Cursor->up($height, column: 1);
-            $this->Output->Text->clear(down: true);
+            $this->Output->Text->clear(lines: $height);
          }
 
          // @ Render Menu

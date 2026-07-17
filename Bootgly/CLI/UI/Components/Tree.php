@@ -16,6 +16,8 @@ use const PHP_EOL;
 use function array_search;
 use function count;
 use function max;
+use function mb_strimwidth;
+use function mb_strwidth;
 use function min;
 use function str_repeat;
 use function substr_count;
@@ -23,6 +25,7 @@ use function usleep;
 use Closure;
 
 use Bootgly\API\Component;
+use Bootgly\CLI\Terminal;
 use Bootgly\CLI\Terminal\Input;
 use Bootgly\CLI\Terminal\Output;
 use Bootgly\CLI\Terminal\Output\Window;
@@ -347,7 +350,7 @@ class Tree extends Component
             //   movement: absolute save/restore drifts when rendering scrolls the screen
             if ($height > 0) {
                $this->Output->Cursor->up($height, column: 1);
-               $this->Output->Text->clear(down: true);
+               $this->Output->Text->clear(lines: $height);
             }
 
             // @ Render frame
@@ -476,7 +479,17 @@ class Tree extends Component
       }
 
       // :
-      return "{$aim}{$prefix}{$marker} {$Node->label}\n";
+      // ? Rows never exceed the terminal — wrapped physical rows would break
+      //   the block-repaint height bookkeeping (navigate() counts logical lines)
+      $row = "{$aim}{$prefix}{$marker} {$Node->label}";
+      $width = isSet(Terminal::$width) === true ? Terminal::$width - 1 : 79;
+
+      if (mb_strwidth($row) > $width) {
+         $row = mb_strimwidth($row, 0, $width, '…');
+      }
+
+      // :
+      return "{$row}\n";
    }
 
    /**

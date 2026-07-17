@@ -11,6 +11,9 @@
 namespace Bootgly\CLI\Terminal\Output;
 
 
+use function str_repeat;
+
+use Bootgly\ABI\Data\__String\Escapeable\Cursor\Positionable;
 use Bootgly\ABI\Data\__String\Escapeable\Text\Formattable;
 use Bootgly\ABI\Data\__String\Escapeable\Text\Modifiable;
 
@@ -21,6 +24,7 @@ class Text
 {
    use Formattable;
    use Modifiable;
+   use Positionable;
 
 
    private Output $Output;
@@ -276,16 +280,38 @@ class Text
       return $Output;
    }
    /**
-    * Clear the entire display or a part of it.
+    * Clear the entire display, a part of it, or an exact number of rows.
     *
     * @param bool $up If true, clear the lines above the current cursor position.
     * @param bool $down If true, clear the lines below the current cursor position.
+    * @param int $lines Clear exactly this many rows, from the cursor row down —
+    *                   bounded: content below the cleared block is preserved and
+    *                   the cursor returns to the starting row (same column).
     *
     * @return Output
     */
-   public function clear (bool $up = false, bool $down = false): Output
+   public function clear (bool $up = false, bool $down = false, int $lines = 0): Output
    {
       $Output = &$this->Output;
+
+      // ?: Bounded clear — the block-repaint idiom (up N + clear N) never
+      //    touches content rendered below the block (unlike `down`, which
+      //    erases to the end of the screen)
+      if ($lines > 0) {
+         $erase = self::_START_ESCAPE . self::_TEXT_ERASE_IN_LINE_2;
+         $step = self::_START_ESCAPE . '1' . self::_CURSOR_DOWN . $erase;
+
+         $sequence = $erase . str_repeat($step, $lines - 1);
+
+         if ($lines > 1) {
+            $back = $lines - 1;
+            $sequence .= self::_START_ESCAPE . $back . self::_CURSOR_UP;
+         }
+
+         $Output->write($sequence);
+
+         return $Output;
+      }
 
       match (true) {
          ($up && !$down) => $Output->escape(self::_TEXT_ERASE_IN_DISPLAY_1),
