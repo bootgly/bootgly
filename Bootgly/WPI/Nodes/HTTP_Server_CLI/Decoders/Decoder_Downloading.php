@@ -12,7 +12,6 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders;
 
 
 use const BOOTGLY_STORAGE_DIR;
-use const BOOTGLY_WORKING_BASE;
 use const UPLOAD_ERR_CANT_WRITE;
 use const UPLOAD_ERR_FORM_SIZE;
 use const UPLOAD_ERR_NO_FILE;
@@ -26,8 +25,10 @@ use function fopen;
 use function fstat;
 use function fwrite;
 use function is_dir;
+use function is_file;
 use function is_numeric;
 use function ltrim;
+use function min;
 use function mkdir;
 use function parse_str;
 use function preg_match;
@@ -39,11 +40,13 @@ use function substr;
 use function tempnam;
 use function time;
 use function trim;
+use function unlink;
 use function urlencode;
 use Throwable;
 
 use const Bootgly\WPI;
 use Bootgly\WPI\Endpoints\Servers\Decoder\States;
+use Bootgly\WPI\Endpoints\Servers\Disconnecting;
 use Bootgly\WPI\Endpoints\Servers\Packages;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages as TCP_Packages;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI as Server;
@@ -51,34 +54,37 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Decoder_Downloading\Downloads;
 
 
-class Decoder_Downloading extends Decoders
+class Decoder_Downloading extends Decoders implements Disconnecting
 {
    // * Config
    private string $boundary;
 
    // * Data
-   private string $tailBuffer;
-   private string $headerBuffer;
-   private string $fieldBuffer;
-   private string $postEncoded;
+   private string $tailBuffer = '';
+   private string $headerBuffer = '';
+   private string $fieldBuffer = '';
+   private string $postEncoded = '';
    /** @var array<int,array<string,bool|int|string>> */
-   private array $files;
+   private array $files = [];
    /** @var array<int,string> */
-   private array $filesKeys;
-   private string $currentFieldName;
+   private array $filesKeys = [];
+   private string $currentFieldName = '';
    /** @var resource|null */
    private $fileHandler = null;
 
    // * Metadata
-   private int $decoded;
-   private int $read;
-   private int $state;
-   private int $downloaded;
-   private int $currentFileSize;
-   private int $currentFieldSize;
-   private int $fieldsCount;
-   private int $filesCount;
-   private int $bytesSinceDiskCheck;
+   private int $decoded = 0;
+   private int $read = 0;
+   private int $state = self::STATE_BOUNDARY_START;
+   private int $downloaded = 0;
+   private int $currentFileSize = 0;
+   private int $currentFieldSize = 0;
+   private int $fieldsCount = 0;
+   private int $filesCount = 0;
+   private int $bytesSinceDiskCheck = 0;
+   private bool $parsed = false;
+   private bool $finished = false;
+   private bool $aborted = false;
 
    // # States
    private const int STATE_BOUNDARY_START  = 0;
@@ -112,6 +118,9 @@ class Decoder_Downloading extends Decoders
       $this->fieldsCount = 0;
       $this->filesCount = 0;
       $this->bytesSinceDiskCheck = 0;
+      $this->parsed = false;
+      $this->finished = false;
+      $this->aborted = false;
    }
 
    /**
@@ -119,7 +128,22 @@ class Decoder_Downloading extends Decoders
     */
    public function feed (string $data): void
    {
-      $this->tailBuffer = $data;
+      $this->tailBuffer .= $data;
+      $this->downloaded += strlen($data);
+      $this->read = $this->downloaded;
+   }
+
+   /**
+    * Abort an in-flight upload when its transport connection closes.
+    */
+   public function disconnect (): void
+   {
+      $this->abort();
+   }
+
+   public function __destruct ()
+   {
+      $this->abort();
    }
 
    public function decode (Packages $Package, string $buffer, int $size): States
@@ -134,22 +158,10 @@ class Decoder_Downloading extends Decoders
 
       // ! Reject helper: centralize cleanup and rejection logic
       $reject = function (string $raw) use ($Package, $Request): void {
+         $this->abort();
+
          if ($Package->rejected) {
             return;
-         }
-
-         $this->tailBuffer = '';
-         $this->headerBuffer = '';
-         $this->fieldBuffer = '';
-         $this->postEncoded = '';
-
-         if ($this->fileHandler !== null) {
-            try {
-               fclose($this->fileHandler);
-            }
-            catch (Throwable) {}
-
-            $this->fileHandler = null;
          }
 
          $Request->Body->waiting = false;
@@ -187,18 +199,37 @@ class Decoder_Downloading extends Decoders
       // ?: Valid HTTP Client Body Timeout
       $elapsed = time() - $this->decoded;
       if ($elapsed >= 60 && $this->read === $this->downloaded) {
-         $this->finish($Package);
+         $reject("HTTP/1.1 408 Request Timeout\r\n\r\n");
          $Package->Decoder = null;
-         return $Server::$Decoder->decode($Package, $buffer, $size); // @phpstan-ignore method.nonObject
+         $Package->consumed = 0;
+         return States::Rejected;
       }
 
-      // @ Accumulate downloaded bytes
-      $this->downloaded += $size;
+      // @ Consume only bytes that belong to this Content-Length body. Initial
+      //   bytes accepted with the request head were recorded by feed(); the
+      //   transport cursor for this call must include only the remaining body
+      //   bytes, leaving any pipelined request untouched.
+      $length = $Body->length ?? ($this->downloaded + $size);
+      $remaining = $length - $this->downloaded;
+      $consumed = $remaining > 0 ? min($size, $remaining) : 0;
+      $this->downloaded += $consumed;
       $this->read = $this->downloaded;
 
       // @ Prepend tail buffer from previous chunk
-      $data = $this->tailBuffer . $buffer;
+      $data = $this->tailBuffer;
+      if ($consumed > 0) {
+         $data .= $consumed === $size
+            ? $buffer
+            : substr($buffer, 0, $consumed);
+      }
       $this->tailBuffer = '';
+
+      // ? A terminal boundary may precede an allowed multipart epilogue.
+      //   Once parsed, consume the remaining declared body without feeding
+      //   epilogue bytes back into the part state machine.
+      if ($this->parsed) {
+         $data = '';
+      }
 
       // @@ Process data through state machine
       while ($data !== '') {
@@ -220,8 +251,10 @@ class Decoder_Downloading extends Decoders
                $afterBoundary = $pos + $boundaryLen;
                if ($afterBoundary + 2 <= strlen($data)) {
                   if (substr($data, $afterBoundary, 2) === '--') {
-                     // @ Final boundary: finish
-                     $this->finish($Package);
+                     // @ Final boundary: retain ownership until every byte
+                     //   declared by Content-Length has arrived. A peer may
+                     //   disconnect while an allowed epilogue is outstanding.
+                     $this->parsed = true;
                      $data = '';
                      break;
                   }
@@ -415,7 +448,7 @@ class Decoder_Downloading extends Decoders
                   // @ Check if this is the final boundary (--)
                   if ($afterBoundary + 2 <= strlen($data)) {
                      if (substr($data, $afterBoundary, 2) === '--') {
-                        $this->finish($Package);
+                        $this->parsed = true;
                         $data = '';
                         break;
                      }
@@ -485,7 +518,7 @@ class Decoder_Downloading extends Decoders
                   // @ Check if this is the final boundary (--)
                   if ($afterBoundary + 2 <= strlen($data)) {
                      if (substr($data, $afterBoundary, 2) === '--') {
-                        $this->finish($Package);
+                        $this->parsed = true;
                         $data = '';
                         break;
                      }
@@ -547,12 +580,56 @@ class Decoder_Downloading extends Decoders
       // @ Check if all data received
       if ($Body->length !== null && $this->downloaded >= $Body->length) {
          $this->finish($Package);
-         $Package->consumed = $Body->length;
+         $Body->waiting = false;
+         $Body->streaming = true;
+         $Package->Decoder = null;
+         $Package->consumed = $consumed;
          return States::Complete;
       }
 
-      $Package->consumed = 0;
+      $Package->consumed = $consumed;
       return States::Incomplete;
+   }
+
+   /**
+    * Release every temporary file still owned by this decoder.
+    */
+   private function abort (): void
+   {
+      if ($this->aborted || $this->finished) {
+         return;
+      }
+
+      $this->aborted = true;
+
+      if ($this->fileHandler !== null) {
+         try {
+            fclose($this->fileHandler);
+         }
+         catch (Throwable) {}
+
+         $this->fileHandler = null;
+      }
+
+      foreach ($this->files as $file) {
+         $tmpName = (string) ($file['tmp_name'] ?? '');
+         if ($tmpName === '') {
+            continue;
+         }
+
+         if (is_file($tmpName)) {
+            @unlink($tmpName);
+         }
+
+         Downloads::discard($tmpName);
+      }
+
+      $this->files = [];
+      $this->filesKeys = [];
+      $this->tailBuffer = '';
+      $this->headerBuffer = '';
+      $this->fieldBuffer = '';
+      $this->postEncoded = '';
    }
 
    /**
@@ -689,7 +766,7 @@ class Decoder_Downloading extends Decoders
     */
    private function finish (Packages $Package): void
    {
-      if ($Package->rejected) {
+      if ($Package->rejected || $this->aborted || $this->finished) {
          return;
       }
 
@@ -745,8 +822,12 @@ class Decoder_Downloading extends Decoders
          }
       }
 
-      // @ Update Body state
-      $Request->Body->waiting = false;
-      $Request->Body->streaming = true;
+      // @ Transfer ownership to Request. Once these arrays are cleared,
+      //   disconnect()/destruction cannot delete completed uploads that the
+      //   handler still needs; Request::clean() owns their final reclamation.
+      $this->files = [];
+      $this->filesKeys = [];
+      $this->postEncoded = '';
+      $this->finished = true;
    }
 }

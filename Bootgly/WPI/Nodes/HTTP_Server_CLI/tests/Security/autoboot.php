@@ -193,5 +193,11 @@ return new Suite(
       '31.01-chunked_payload_redispatch',
       '31.02-chunked_terminal_trailers',
       '31.03-chunked_timeout_redispatch',
+      // # Decoder Downloading (multipart lifecycle — audit H7)
+      // Initial body bytes must count toward completion; every abort and
+      // deferred completion path must unlink temps and release reservations.
+      '32.01-multipart_initial_feed_accounting',
+      '32.02-multipart_lifecycle_cleanup',
+      '32.03-multipart_timeout_destructor_cleanup',
    ],
 );

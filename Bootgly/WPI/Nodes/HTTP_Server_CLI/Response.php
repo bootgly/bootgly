@@ -1053,6 +1053,14 @@ class Response extends Server\Response
             }
          }
          finally {
+            // @ Deferred multipart ownership lives on this private Response
+            //   clone. Reclaim it after work/encoding on success, exception,
+            //   or once resumed work observes that its socket was closed.
+            $Request = $Response->Request;
+            if ($Request !== null && $Request->hasFiles) {
+               $Request->clean();
+            }
+
             // @ Drop this job's locale binding before the Fiber is pooled
             Language::unbind();
 
@@ -1096,6 +1104,17 @@ class Response extends Server\Response
       }
 
       $Response = clone $this;
+
+      // @ Request::__clone() intentionally scrubs upload metadata for normal
+      //   request isolation. A deferred response is different: move the sole
+      //   ownership of completed temp files from the live Request into this
+      //   private clone so its Fiber can reclaim them after work finishes.
+      $Request = $this->Request;
+      $DeferredRequest = $Response->Request;
+      if ($Request !== null && $DeferredRequest !== null && $Request->hasFiles) {
+         $DeferredRequest->files = $Request->files;
+         $Request->files = [];
+      }
 
       // @ Reuse a parked pool Fiber — constructing one costs ~8.5µs/request,
       //   resuming into the persistent job loop ~150ns

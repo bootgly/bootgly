@@ -298,9 +298,17 @@ class Connection extends Packages
       }
       $this->timers = [];
 
+      // @ Stateful decoder cleanup: an incomplete protocol body owns resources
+      //   independently from the decoded request/session. Abort it first on
+      //   every transport close path, including abrupt peer EOF.
+      $Decoder = $this->Decoder;
+      if ($Decoder instanceof Disconnecting) {
+         $Decoder->disconnect();
+         $this->Decoder = null;
+      }
+
       // @ Protocol-unit cleanup: a decoded session (e.g. a WebSocket Session)
-      //   runs its teardown exactly once on any close path, including an abrupt
-      //   peer EOF that closes the connection directly at the transport layer.
+      //   runs its teardown exactly once on any close path.
       if ($this->decoded instanceof Disconnecting) {
          $this->decoded->disconnect();
       }
