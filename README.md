@@ -17,14 +17,14 @@
 
 Bootgly is a base framework for building **APIs and apps** on both the **Web (WPI)** and **Console (CLI)** platforms — powered by a native, event-loop HTTP server written in pure PHP. It is the first PHP framework built on the [I2P (Interface-to-Platform) architecture][I2P_ARQUITECTURE].
 
-### 💡 Why Bootgly?
+## 💡 Why Bootgly?
 
 - ⚡ **Native async HTTP server in pure PHP** — long-running and event-loop driven, with Fibers for non-blocking I/O. No Nginx, no PHP-FPM in front. A pure-PHP alternative to Swoole, Workerman and FrankenPHP — no C extension required.
 - 📦 **Zero third-party dependencies in the core** — every essential feature (HTTP server, router, config, testing, sessions, DBAL + ORM) is built in. A smaller `vendor/` and a smaller supply-chain surface.
 - 🎯 **One canonical way to do everything** — one HTTP server, one config schema, one test framework. Predictable, consistent code: fewer decisions, less to maintain, no bikeshedding.
 - 🧱 **Strict, enforceable architecture** — six layers (ABI → ACI → ADI → API → CLI → WPI) with one-way dependencies and no cross-layer skipping. One core, two platforms.
 
-### ⚡ Quickstart
+## ⚡ Quickstart
 
 Install Bootgly and create your first project with one command — the installer opens the project wizard:
 
@@ -61,7 +61,7 @@ curl -fsSL https://bootgly.com/install | bash
 
 <div align="right">
 
-[![][BACK_TO_TOP]](#readme-top)
+[![Back to top][BACK_TO_TOP]](#readme-top)
 
 </div>
 
@@ -109,7 +109,7 @@ Above is the native compatibility, of course it is possible to run on Windows an
 
 <div align="right">
 
-[![][BACK_TO_TOP]](#readme-top)
+[![Back to top][BACK_TO_TOP]](#readme-top)
 
 </div>
 
@@ -144,7 +144,7 @@ Your sponsorship will keep this project always **up to date** with **new feature
 
 <div align="right">
 
-[![][BACK_TO_TOP]](#readme-top)
+[![Back to top][BACK_TO_TOP]](#readme-top)
 
 </div>
 
@@ -235,7 +235,7 @@ Check the documentation for more details and examples: [Bootgly Docs][PROJECT_DO
 
 <div align="right">
 
-[![][BACK_TO_TOP]](#readme-top)
+[![Back to top][BACK_TO_TOP]](#readme-top)
 
 </div>
 
