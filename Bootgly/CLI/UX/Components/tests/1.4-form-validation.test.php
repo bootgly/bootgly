@@ -3,6 +3,7 @@
 namespace Bootgly\CLI\UX\Components;
 
 
+use const BOOTGLY_TTY;
 use function assert;
 use function fopen;
 use function fwrite;
@@ -10,6 +11,7 @@ use function preg_match;
 use function rewind;
 use function str_contains;
 use function stream_get_contents;
+use function strpos;
 
 use Bootgly\ACI\Tests\Suite\Test\Specification;
 use Bootgly\CLI\Terminal\Input;
@@ -59,5 +61,19 @@ return new Specification(
          assertion: str_contains($output, 'Invalid name') === true,
          description: 'The Validator error message is rendered as an Alert'
       );
+
+      if (BOOTGLY_TTY === true) {
+         // @ Interactive extras — the alert renders BELOW the fieldset frame and
+         //   the frame turns green while the typed value passes the Validator
+         yield assert(
+            assertion: strpos($output, 'Invalid name') > strpos($output, '┘'),
+            description: 'The validation alert renders below the fieldset frame'
+         );
+
+         yield assert(
+            assertion: str_contains($output, "\e[92m") === true,
+            description: 'Valid values paint the fieldset line green'
+         );
+      }
    }
 );

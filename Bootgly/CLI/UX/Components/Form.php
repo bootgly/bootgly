@@ -16,6 +16,7 @@ use function array_search;
 use function count;
 use function in_array;
 use function is_numeric;
+use function is_string;
 use function max;
 use function mb_strlen;
 use function preg_replace;
@@ -349,28 +350,37 @@ class Form extends Component
     *
     * @param string $legend The frame legend (the field label).
     * @param array<string> $lines The content rows (Template markup allowed).
-    * @param bool $active Whether the frame is being edited (cyan legend) or settled (dim).
+    * @param string $state The frame state: `active` (cyan legend), `valid`
+    *                      (green legend and borders — the value passes the
+    *                      field Validator) or `settled` (dim).
     *
     * @return string
     */
-   private function frame (string $legend, array $lines, bool $active): string
+   private function frame (string $legend, array $lines, string $state): string
    {
       $width = max(20, $this->width
          ?? (isSet(Terminal::$width) === true ? Terminal::$width : 80));
 
+      // ! State colors — valid values paint the whole fieldset line green
+      $painting = match ($state) {
+         'active' => '@#Cyan:',
+         'valid' => '@#Green:',
+         default => '@#Black:'
+      };
+      $bordering = $state === 'valid' ? '@#Green:' : '@#Black:';
+
       // ! Legend — colored by state, breathing spaces like a fieldset title
       // ? Spaces stay OUTSIDE the markup — Template style markers swallow adjacent spaces
-      $color = $active === true ? '@#Cyan:' : '@#Black:';
-      $legend = ' ' . $this->paint("{$color}{$legend}@;") . ' ';
+      $legend = ' ' . $this->paint("{$painting}{$legend}@;") . ' ';
       $entitled = $this->measure($legend);
 
       // # Top border row — embeds the legend
       $fill = str_repeat('─', max(1, $width - 2 - $entitled));
-      $frame = $this->paint('@#Black:┌@;') . $legend . $this->paint("@#Black:{$fill}┐@;") . "\n";
+      $frame = $this->paint("{$bordering}┌@;") . $legend . $this->paint("{$bordering}{$fill}┐@;") . "\n";
 
       // # Content rows
-      $left = $this->paint('@#Black:│@;') . ' ';
-      $right = ' ' . $this->paint('@#Black:│@;');
+      $left = $this->paint("{$bordering}│@;") . ' ';
+      $right = ' ' . $this->paint("{$bordering}│@;");
       $interior = $width - 4;
 
       foreach ($lines as $line) {
@@ -382,7 +392,7 @@ class Form extends Component
 
       // # Bottom border row
       $bottom = str_repeat('─', max(1, $width - 2));
-      $frame .= $this->paint("@#Black:└{$bottom}┘@;") . "\n";
+      $frame .= $this->paint("{$bordering}└{$bottom}┘@;") . "\n";
 
       // :
       return $frame;
@@ -423,14 +433,24 @@ class Form extends Component
    }
 
    /**
-    * Renders the settled frame of an answered field — dim legend, recorded answer —
-    * followed by a blank gap row.
+    * Renders the settled frame of an answered field — dim legend, recorded answer,
+    * green when the answer passes the field Validator — followed by a blank gap row.
     *
     * @param Field $Field The answered field.
     */
    private function settle (Field $Field): void
    {
       $answer = $Field->answer;
+
+      // ? Validated answers settle green (HTML `:valid`-like)
+      $state = 'settled';
+      if (
+         $Field->Validator !== null
+         && $answer !== ''
+         && ($Field->Validator)($answer) === true
+      ) {
+         $state = 'valid';
+      }
 
       // ? Masked answers are never revealed
       if ($Field->mask !== null && $answer !== '') {
@@ -441,7 +461,7 @@ class Form extends Component
          $answer = $answer === 'yes' ? 'Yes' : 'No';
       }
 
-      $frame = $this->frame($Field->label, [$answer], active: false);
+      $frame = $this->frame($Field->label, [$answer], $state);
 
       $this->Output->write("{$frame}\n");
    }
@@ -497,6 +517,7 @@ class Form extends Component
       }
 
       $Alert = new Alert($this->Output);
+      $Alert->spaced = false;
 
       // ! Raw input mode
       $this->Input->configure(blocking: false, canonical: false, echo: false);
@@ -506,18 +527,31 @@ class Form extends Component
       $height = 0;
       $attempt = 1;
       $reverting = false;
+      $alert = '';
       $answer = '';
 
       // @@ Edit until a valid answer, revert or EOF — every exit assigns and breaks
       while (true) {
-         // @ Compose the live frame — the editor line plus the default placeholder
+         // @ Compose the live frame — the editor line plus the default placeholder,
+         //   the validation alert below the frame (HTML-form-like)
          $content = $Line->render();
          if ($Line->value === '' && $placeholder !== '') {
             $content .= "@#Black: {$placeholder}@;";
          }
 
+         // ? Live validation — the fieldset line turns green while the typed
+         //   value passes the field Validator (HTML `:valid`-like)
+         $state = 'active';
+         if (
+            $Field->Validator !== null
+            && $Line->value !== ''
+            && ($Field->Validator)(trim($Line->value)) === true
+         ) {
+            $state = 'valid';
+         }
+
          $height = $this->repaint(
-            $this->frame($Field->label, [$content], active: true),
+            $this->frame($Field->label, [$content], $state) . $alert,
             $height
          );
 
@@ -549,14 +583,12 @@ class Form extends Component
 
             // ? Empty answer assumes the default
             if ($candidate === '') {
-               // ? Required fields without a default re-ask
+               // ? Required fields without a default re-ask — alert below the frame
                if ($Field->required === true && $default === '') {
-                  $this->erase($height);
-                  $height = 0;
-
                   $Alert->Type::Failure->set();
                   $Alert->message = 'An answer is required.';
-                  $Alert->render();
+                  $rendered = $Alert->render(self::RETURN_OUTPUT);
+                  $alert = is_string($rendered) ? $rendered : '';
 
                   continue;
                }
@@ -569,12 +601,10 @@ class Form extends Component
                $result = ($Field->Validator)($candidate);
 
                if ($result !== true) {
-                  $this->erase($height);
-                  $height = 0;
-
                   $Alert->Type::Failure->set();
                   $Alert->message = (string) $result;
-                  $Alert->render();
+                  $rendered = $Alert->render(self::RETURN_OUTPUT);
+                  $alert = is_string($rendered) ? $rendered : '';
 
                   // ? Attempts exhausted assume the default
                   $attempt++;
@@ -595,6 +625,8 @@ class Form extends Component
 
          // @ Edit keys control the buffer; printable input feeds it
          $reverting = false;
+         // ? Typing dismisses the validation alert (HTML-form-like)
+         $alert = '';
 
          if ($key[0] === "\e" || $key === "\x7F" || $key < ' ') {
             $Line->control($key);
@@ -653,7 +685,7 @@ class Form extends Component
          }
 
          $height = $this->repaint(
-            $this->frame($Field->label, $lines, active: true),
+            $this->frame($Field->label, $lines, state: 'active'),
             $height
          );
 
