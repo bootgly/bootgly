@@ -199,5 +199,8 @@ return new Suite(
       '32.01-multipart_initial_feed_accounting',
       '32.02-multipart_lifecycle_cleanup',
       '32.03-multipart_timeout_destructor_cleanup',
+      // # Decoder HTTP/2 (aggregate unfinished request-body retention — audit H8)
+      '33.01-http2_aggregate_request_body_budget',
+      '33.02-http2_worker_request_body_budget',
    ],
 );

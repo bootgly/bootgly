@@ -49,6 +49,7 @@ use Bootgly\WPI\Modules\HTTP2\HPACK;
 use Bootgly\WPI\Modules\HTTP2\Settings;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI as Server;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Decoder_HTTP2\Bodies;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Decoder_HTTP2\Stream;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 
@@ -95,6 +96,10 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding
    public static int $list = 16384;
    /** @var int Stream resets tolerated per 10s window before GOAWAY (CVE-2023-44487) */
    public static int $resets = 64;
+   /** @var int Aggregate decoded request-body ceiling per HTTP/2 connection (default: 10 MiB). */
+   public static int $maxConnectionBodySize = 10 * 1024 * 1024;
+   /** @var int Aggregate decoded request-body ceiling per worker (default: 64 MiB). */
+   public static int $maxWorkerBodySize = 64 * 1024 * 1024;
    /**
     * @var int Inbound octets consumed before a WINDOW_UPDATE replenishes the
     * peer (default: half the initial window). Bodies are currently consumed
@@ -108,6 +113,7 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding
    public Settings $Local;
    public Settings $Remote;
    public HPACK $HPACK;
+   public Bodies $Bodies;
    /** @var array<int, Stream> */
    public array $Streams;
 
@@ -168,6 +174,10 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding
       $this->Local = $Local;
       $this->Remote = new Settings;
       $this->HPACK = new HPACK($Local->table);
+      $this->Bodies = new Bodies(
+         static::$maxConnectionBodySize,
+         static::$maxWorkerBodySize
+      );
       $this->Streams = [];
 
       // * Metadata
@@ -316,12 +326,19 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding
                   $data = substr($data, 1, $payload - 1 - $padding);
                }
 
-               // @ Accumulate the request body, bounded by the body cap
-               $Stream->body .= $data;
-               if (strlen($Stream->body) > Request::$maxBodySize) {
+               // ! Reserve BEFORE concatenation: a multiplexed peer must not
+               //   transiently exceed either the per-stream, per-connection,
+               //   or per-worker decoded-body ceiling. deny() closes the
+               //   stream and releases every byte it already owned.
+               $bytes = strlen($data);
+               if (
+                  strlen($Stream->body) + $bytes > Request::$maxBodySize
+                  || $this->Bodies->reserve($bytes) === false
+               ) {
                   $this->deny($stream, 413);
                   break;
                }
+               $Stream->body .= $data;
 
                // @ Stream-level replenish while the body is still flowing
                $Stream->pending += $payload;
@@ -869,7 +886,12 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding
       }
 
       // @ Open the stream
-      $Stream = new Stream($stream, $this->Remote->window, $this->Local->window);
+      $Stream = new Stream(
+         $stream,
+         $this->Remote->window,
+         $this->Local->window,
+         $this->Bodies
+      );
       $Stream->method = $method;
       $Stream->target = $target;
       $Stream->scheme = $scheme;

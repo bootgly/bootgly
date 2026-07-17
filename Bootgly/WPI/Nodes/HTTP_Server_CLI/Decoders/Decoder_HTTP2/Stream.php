@@ -13,6 +13,7 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Decoder_HTTP2;
 
 use function fclose;
 use function is_resource;
+use function strlen;
 
 use Bootgly\WPI\Endpoints\Servers\Disconnecting;
 
@@ -36,6 +37,7 @@ class Stream
    public array $fields;
    // # Request body (DATA frames accumulate here until END_STREAM)
    public string $body;
+   public Bodies $Bodies;
 
    // * Metadata
    public readonly int $id;
@@ -77,7 +79,7 @@ class Stream
    public null|Disconnecting $Owner;
 
 
-   public function __construct (int $id, int $window, int $supply)
+   public function __construct (int $id, int $window, int $supply, Bodies $Bodies)
    {
       // * Data
       $this->method = '';
@@ -86,6 +88,7 @@ class Stream
       $this->authority = '';
       $this->fields = [];
       $this->body = '';
+      $this->Bodies = $Bodies;
 
       // * Metadata
       $this->id = $id;
@@ -105,6 +108,12 @@ class Stream
 
    public function close (): void
    {
+      // @ Body accounting is stream-owned and idempotent: every normal,
+      //   reset, denial, GOAWAY, and transport teardown already converges
+      //   here before removing the stream from its decoder.
+      $this->Bodies->release(strlen($this->body));
+      $this->body = '';
+
       foreach ($this->chunks as $chunk) {
          $Handler = $chunk['handler'] ?? null;
          if (is_resource($Handler)) {
