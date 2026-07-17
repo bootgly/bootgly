@@ -70,8 +70,7 @@ class Encoder_Testing extends Encoders
          && $Request->URI !== Server::$health
          && strncmp($Request->URI, Challenge::PREFIX, 28) !== 0
       ) {
-         $vary = Language::$roots !== [] ? "\0" . Language::$locale : '';
-         $wire = Cache::fetch("{$Request->method}\0{$Request->URI}{$vary}");
+         $wire = Cache::fetch(Cache::compose($Request, Language::$roots !== []));
 
          if ($wire !== null) {
             // ! Request header fields are lowercase-normalized by the decoder

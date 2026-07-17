@@ -315,6 +315,7 @@ return new Suite(
          '7.4-route_cache-query_keys',
          '7.5-route_cache-language_variance',
          '7.6-route_cache-queued_set_cookie_guard',
+         '7.7-route_cache-middleware_variance',
       ],
       'Router/Middleware/' => [
          // CORS

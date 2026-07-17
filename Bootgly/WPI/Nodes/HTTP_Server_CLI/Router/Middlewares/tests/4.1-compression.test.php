@@ -94,5 +94,12 @@ return new Specification(
          ->expect($Result->Body->raw)
          ->to->be($largeBody)
          ->assert();
+
+      yield new Assertion(
+         description: 'Eligible identity responses should still vary by Accept-Encoding',
+      )
+         ->expect($Result->Header->get('Vary'))
+         ->to->be('Accept-Encoding')
+         ->assert();
    })
 );

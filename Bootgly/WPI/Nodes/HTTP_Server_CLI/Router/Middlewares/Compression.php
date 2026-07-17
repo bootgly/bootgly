@@ -68,6 +68,12 @@ class Compression implements Middleware
          return $Response;
       }
 
+      // ! Every eligible identity/compressed representation depends on the
+      //   request's Accept-Encoding value. Emit Vary before negotiation so an
+      //   identity response cannot prime either Bootgly's route cache or an
+      //   upstream shared cache for a later compression-capable client.
+      $Response->Header->vary('Accept-Encoding'); // @phpstan-ignore-line
+
       // ? Check Accept-Encoding
       $acceptEncoding = $Request->Header->get('Accept-Encoding') ?? ''; // @phpstan-ignore-line
 
@@ -77,7 +83,6 @@ class Compression implements Middleware
          if ($compressed !== false) {
             $Response->Body->raw = $compressed; // @phpstan-ignore-line
             $Response->Header->set('Content-Encoding', 'gzip'); // @phpstan-ignore-line
-            $Response->Header->vary('Accept-Encoding'); // @phpstan-ignore-line
          }
       }
       else if (str_contains($acceptEncoding, 'deflate') && function_exists('gzdeflate')) {
@@ -85,7 +90,6 @@ class Compression implements Middleware
          if ($compressed !== false) {
             $Response->Body->raw = $compressed; // @phpstan-ignore-line
             $Response->Header->set('Content-Encoding', 'deflate'); // @phpstan-ignore-line
-            $Response->Header->vary('Accept-Encoding'); // @phpstan-ignore-line
          }
       }
 

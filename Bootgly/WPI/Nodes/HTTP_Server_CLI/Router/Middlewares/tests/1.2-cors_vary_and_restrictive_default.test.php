@@ -54,6 +54,12 @@ return new Specification(
          ->expect($Result->Header->get('Access-Control-Allow-Origin'))
          ->not->to->be('*')
          ->assert();
+      yield new Assertion(
+         description: 'Allowlist + no Origin must still declare Vary: Origin',
+      )
+         ->expect(\str_contains((string) $Result->Header->get('Vary'), 'Origin'))
+         ->to->be(true)
+         ->assert();
 
       // @ 3: Restrictive default — bare CORS rejects a cross-origin request
       [$Request, $Response] = $createMocks(

@@ -36,6 +36,8 @@ use function strlen;
 use function strncasecmp;
 use function strncmp;
 use function strtolower;
+use function substr;
+use function trim;
 use Closure;
 use Error;
 use Fiber;
@@ -946,6 +948,19 @@ class Response extends Server\Response
          return;
       }
 
+      // ? TrustedProxy consumes these fields after the early cache lookup and
+      //   may change application address/scheme according to a route-specific
+      //   peer allowlist. The generic cache cannot reproduce that trust
+      //   decision, so forwarded requests may read only their distinct key
+      //   namespace (above) and never seed a reusable representation.
+      if (
+         isSet($fields['x-forwarded-proto'])
+         || isSet($fields['x-forwarded-for'])
+         || isSet($fields['x-real-ip'])
+      ) {
+         return;
+      }
+
       // ? A Set-Cookie under ANY casing and from ANY serialization source
       //   blocks storage. The canonical cookie API (Cookies::append → Session,
       //   Remember, applications) emits through Header::queue() — it never
@@ -981,6 +996,42 @@ class Response extends Server\Response
          }
       }
 
+      // ? Inspect the final serialized header block so every insertion path
+      //   (fields, prepared, queued and unmasked presets) is covered. The
+      //   lookup path has no response metadata, therefore this L1 cache can
+      //   safely represent only automatic Accept-Language variance. Any other
+      //   Vary dimension — or Vary: * — must fail closed instead of replaying
+      //   one representation to a different request variant.
+      $varyLanguage = false;
+      $Header->build();
+
+      // ? A bare CR/LF inside a serialized value can be interpreted as a
+      //   second field by tolerant downstream recipients while remaining
+      //   invisible to a CRLF line scan. Such malformed wire is never safe to
+      //   cache, regardless of which Header insertion source produced it.
+      if (preg_match('/\r(?!\n)|(?<!\r)\n/', $Header->raw) === 1) {
+         return;
+      }
+
+      foreach (explode("\r\n", $Header->raw) as $line) {
+         if (strncasecmp($line, 'Vary:', 5) !== 0) {
+            continue;
+         }
+
+         foreach (explode(',', substr($line, 5)) as $token) {
+            $token = trim($token);
+            if (
+               $token === ''
+               || strcasecmp($token, 'Accept-Language') !== 0
+               || Language::$roots === []
+            ) {
+               return;
+            }
+
+            $varyLanguage = true;
+         }
+      }
+
       // @
       // ! Interim 103 bytes ride at the front of the entry — a cache hit
       //   replays Early Hints exactly like the cold request (the entry's
@@ -989,11 +1040,9 @@ class Response extends Server\Response
          $buffer = "{$this->hints}{$buffer}";
       }
 
-      // ! Language-vary segment mirrors the encoders' fetch key — resolve()
-      //   returns the locale that produced this body even when stash runs
-      //   inside a deferred Fiber whose request is no longer the active one
-      $vary = Language::$roots !== [] ? "\0" . Language::resolve() : '';
-      Cache::store("{$Request->method}\0{$Request->URI}{$vary}", $buffer, $ttl);
+      // ! Stable composition mirrors both encoders' fetch path and keeps
+      //   the scheduling Request's exact variance available to deferred work.
+      Cache::store(Cache::compose($Request, $varyLanguage), $buffer, $ttl);
    }
 
    /**

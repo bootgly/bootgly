@@ -78,6 +78,13 @@ class CORS implements Middleware
 
       $wildcard = ($this->origins === ['*']);
 
+      // ! Every non-wildcard policy depends on the request Origin, including
+      //   the no-Origin representation. Emit Vary before validation so that
+      //   response cannot prime a shared/route cache for a later CORS request.
+      if ($wildcard === false) {
+         $Response->Header->vary('Origin'); // @phpstan-ignore-line
+      }
+
       // ? Validate origin against the allowlist (skipped only for wildcard).
       //   With the restrictive default (empty allowlist, audit F-8) a
       //   cross-origin request is rejected unless an origin is explicitly
@@ -93,14 +100,13 @@ class CORS implements Middleware
       //   - allowlist + valid Origin → reflect it AND emit `Vary: Origin`, so a
       //     shared cache (CDN/proxy) can never serve origin A's response (incl.
       //     `Allow-Credentials: true`) to origin B.
-      //   - allowlist + no Origin   → not a CORS request: emit nothing, never
-      //     fall back to `*`.
+      //   - allowlist + no Origin   → not a CORS request: emit no ACAO and
+      //     never fall back to `*` (Vary was emitted above).
       if ($wildcard) {
          $Response->Header->set('Access-Control-Allow-Origin', '*'); // @phpstan-ignore-line
       }
       else if ($origin !== null) {
          $Response->Header->set('Access-Control-Allow-Origin', $origin); // @phpstan-ignore-line
-         $Response->Header->vary('Origin'); // @phpstan-ignore-line
       }
 
       $Response->Header->set('Access-Control-Allow-Methods', implode(', ', $this->methods)); // @phpstan-ignore-line

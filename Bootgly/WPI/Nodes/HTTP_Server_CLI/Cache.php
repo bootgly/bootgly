@@ -11,8 +11,10 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI;
 
 
+use function array_key_exists;
 use function array_key_first;
 use function count;
+use function is_array;
 use function strlen;
 use function strpos;
 use function substr_replace;
@@ -24,8 +26,10 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Raw\Header;
 /**
  * Per-worker route response cache (L1).
  *
- * Stores fully built HTTP/1.1 wire bytes keyed by request method + target
- * (path + query) for routes that opt in via `Router->route(..., cache: <ttl>)`.
+ * Stores fully built HTTP/1.1 wire bytes keyed by request method, exact
+ * authority, target (path + query), forwarded selectors, and the supported
+ * request variance for routes that opt in via
+ * `Router->route(..., cache: <ttl>)`.
  * A hit is served from `Encoder_::encode()` before routing, middleware,
  * handler and serialization run — cached dynamic routes respond at
  * static-route speed.
@@ -48,7 +52,8 @@ class Cache
     */
    public const int ENTRIES_LIMIT = 512;
    /**
-    * Max cache key length — method + "\0" + request target.
+    * Max cache key length — framed method, authority, target, raw forwarded
+    * fields and the optional Accept-Language request selector.
     */
    public const int KEY_LIMIT = 2048;
    /**
@@ -75,6 +80,82 @@ class Cache
 
    // * Metadata
    // ...
+
+
+   /**
+    * Compose the stable route-cache key for one request.
+    *
+    * Every component is length-framed rather than delimiter-separated: HTTP
+    * request targets and field values can contain delimiter-like bytes, so
+    * concatenation would permit distinct requests to collide. Exact authority
+    * is part of the primary key because application routing and generated
+    * links can depend on it. Raw TrustedProxy inputs are also framed: that
+    * middleware can change application address/scheme after cache lookup, so
+    * a forwarded request must never read an entry primed without those fields.
+    *
+    * When language variance is enabled, preserve the exact parsed request
+    * field (including absent, empty and repeated-field distinctions). Using
+    * only the negotiated locale would be unsafe for handlers that also read
+    * the raw Accept-Language field while declaring `Vary: Accept-Language`.
+    */
+   public static function compose (Request $Request, bool $varyLanguage = false): string
+   {
+      $headers = $Request->headers;
+      /** @var null|string|array<int,string> $forwardedProto */
+      $forwardedProto = array_key_exists('x-forwarded-proto', $headers)
+         ? $headers['x-forwarded-proto']
+         : null;
+      /** @var null|string|array<int,string> $forwardedFor */
+      $forwardedFor = array_key_exists('x-forwarded-for', $headers)
+         ? $headers['x-forwarded-for']
+         : null;
+      /** @var null|string|array<int,string> $realIP */
+      $realIP = array_key_exists('x-real-ip', $headers)
+         ? $headers['x-real-ip']
+         : null;
+
+      $key = '3'
+         . self::frame($Request->method)
+         . self::frame($Request->host)
+         . self::frame($Request->URI)
+         . self::frame($forwardedProto)
+         . self::frame($forwardedFor)
+         . self::frame($realIP);
+
+      if ($varyLanguage === false) {
+         return "{$key}V0";
+      }
+
+      /** @var null|string|array<int,string> $language */
+      $language = array_key_exists('accept-language', $headers)
+         ? $headers['accept-language']
+         : null;
+
+      return "{$key}V1" . self::frame($language);
+   }
+
+   /**
+    * Length-frame one scalar or repeated request-key component.
+    *
+    * @param null|string|array<int,string> $value
+    */
+   private static function frame (null|string|array $value): string
+   {
+      if ($value === null) {
+         return 'N';
+      }
+
+      if (is_array($value)) {
+         $frame = 'A' . count($value) . ':';
+         foreach ($value as $entry) {
+            $frame .= strlen($entry) . ":{$entry}";
+         }
+
+         return $frame;
+      }
+
+      return 'S' . strlen($value) . ":{$value}";
+   }
 
 
    /**

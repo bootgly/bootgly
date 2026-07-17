@@ -14,6 +14,7 @@ use Bootgly\API\Endpoints\Server\Modes;
 use Bootgly\API\Workables\Server as SAPI;
 use Bootgly\API\Workables\Server\Middlewares;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 
 
 return new Suite(
@@ -30,6 +31,18 @@ return new Suite(
       sleep(3); // @ Ensure the previous suite's worker processes have terminated and released state locks.
 
       HTTP_Server_CLI::pretest($Suite, 'Security');
+
+      // ! Host-allowlist PoCs configure this worker-global static before the
+      //   fork. Their client-side cleanup cannot mutate the already-forked
+      //   worker, so declare every legitimate suite authority here. The
+      //   attacker-controlled hosts in those PoCs remain absent and rejected.
+      Request::$allowedHosts = [
+         'localhost',
+         'control.example.test',
+         'tenant-a.example.test',
+         'tenant-b.example.test',
+         'vary.example.test',
+      ];
 
       // @ Ensure Middlewares pipeline is initialized before any request reaches
       //   Encoder_ — PoCs open side connections that may race the @test init
@@ -55,6 +68,7 @@ return new Suite(
       $HTTP_Server_CLI->Process->stopping = true;
       $HTTP_Server_CLI->Process->Children->terminate();
       $HTTP_Server_CLI->Process->State->clean();
+      Request::$allowedHosts = [];
 
       return true;
    },
@@ -234,5 +248,9 @@ return new Suite(
       // A destructor must not read TLS cleanup state that lacks a neutral
       // default when construction or a protocol-layer test double omits it.
       '41.01-partial_connection_destructor_safety',
+      // # Route response cache (authority + declared Vary isolation — audit M8)
+      // Cache hits execute before routing/middleware, so their lookup key must
+      // represent the effective authority and every declared Vary dimension.
+      '42.01-route_cache_authority_vary_isolation',
    ],
 );

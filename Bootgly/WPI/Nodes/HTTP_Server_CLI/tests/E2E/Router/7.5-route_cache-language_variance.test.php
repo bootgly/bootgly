@@ -33,6 +33,9 @@ return new Specification(
          return "GET /cached/i18n HTTP/1.1\r\nHost: localhost\r\n\r\n";
       },
       function () {
+         return "GET /cached/i18n HTTP/1.1\r\nHost: localhost\r\n\r\n";
+      },
+      function () {
          return "GET /cached/i18n-reset HTTP/1.1\r\nHost: localhost\r\n\r\n";
       },
    ],
@@ -60,7 +63,7 @@ return new Specification(
    },
 
    test: function (array $responses) {
-      [$r1, $r2, $r3, $r4, $r5] = $responses;
+      [$r1, $r2, $r3, $r4, $r5, $r6] = $responses;
 
       // @ Assert localized bodies per client language
       if (! str_contains($r1, 'Olá at=')) {
@@ -80,16 +83,25 @@ return new Specification(
          dump(json_encode($r1), json_encode($r3));
          return 'Second pt-BR request missed the pt-BR cache entry';
       }
-      if ($r4 !== $r2) {
-         Vars::$labels = ['Response 2:', 'Response 4:'];
-         dump(json_encode($r2), json_encode($r4));
-         return 'No-header request did not hit the source-locale cache entry';
+      // ! `Vary: Accept-Language` keys the exact request field value, not
+      //   merely the negotiated locale. An absent field therefore has its own
+      //   representation even though both absent and `en` select the source
+      //   catalog. The second absent-field request must hit that exact entry.
+      if ($r4 === $r2 || $r5 !== $r4) {
+         Vars::$labels = ['Response 2:', 'Response 4:', 'Response 5:'];
+         dump(json_encode($r2), json_encode($r4), json_encode($r5));
+         return 'Accept-Language request-field variants were not isolated and replayed exactly';
+      }
+      if (! str_contains($r4, 'Hello at=') || str_contains($r4, 'Olá')) {
+         Vars::$labels = ['Response 4:'];
+         dump(json_encode($r4));
+         return 'No-header source-locale variant did not contain the English representation';
       }
 
       // @ Assert external cache variance — localized responses (cold AND
       //   cached wire) must declare the exact Vary token (substring matches
       //   like X-Accept-Language-Experiment must not satisfy this)
-      foreach ([$r1, $r2, $r3, $r4] as $index => $response) {
+      foreach ([$r1, $r2, $r3, $r4, $r5] as $index => $response) {
          if (! str_contains($response, "Vary: Accept-Language\r\n")) {
             Vars::$labels = ['Response ' . ($index + 1) . ':'];
             dump(json_encode($response));
@@ -98,9 +110,9 @@ return new Specification(
       }
 
       // @ Cleanup ran — later specs see zero catalog roots
-      if (! str_contains($r5, 'reset')) {
-         Vars::$labels = ['Response 5:'];
-         dump(json_encode($r5));
+      if (! str_contains($r6, 'reset')) {
+         Vars::$labels = ['Response 6:'];
+         dump(json_encode($r6));
          return 'i18n cleanup route did not run';
       }
 

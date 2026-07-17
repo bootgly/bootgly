@@ -108,10 +108,10 @@ return new Suites(
       'Bootgly/WPI/Nodes/WS_Client_CLI/tests/E2E_TLS/',
       // E2E adversarial (raw server sends malformed frames -> client rejects)
       'Bootgly/WPI/Nodes/WS_Client_CLI/tests/E2E_Adversarial/',
-      // Security (re-enabled — appended LAST to keep coverage-probe indices
-      // 4, 8 and 14-21 stable; the original in-place slot above stays
+      // Security (re-enabled in a late slot to keep coverage-probe indices
+      // 4, 8 and 14-21 stable; the original in-place slot above remains
       // commented for documentation).
-      #'Bootgly/WPI/Nodes/HTTP_Server_CLI/tests/Security/',
+      'Bootgly/WPI/Nodes/HTTP_Server_CLI/tests/Security/',
       // # HTTP/2 (RFC 9113) — protocol primitive unit suites
       'Bootgly/WPI/Modules/HTTP2/tests/',
       // E2E h2c prior-knowledge (live test-mode server driven by a raw HTTP/2 client)
