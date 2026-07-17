@@ -277,9 +277,12 @@ class Session
       HTTP_Server_CLI::$Response->Header->Cookies->append($Cookie);
       $this->cookieEmitted = true;
 
-      // @ Events — session id rotated (guarded)
+      // @ Events — session id rotated (guarded). Include this Session so
+      //   security middleware can rotate state bound to the old privilege
+      //   context without coupling Session to middleware-specific keys.
       $Emitter = Emitter::$Instance;
-      $Emitter->check(Events::Regenerate) && $Emitter->emit(Events::Regenerate, $oldId, $newId);
+      $Emitter->check(Events::Regenerate)
+         && $Emitter->emit(Events::Regenerate, $oldId, $newId, $this);
    }
 
    /**

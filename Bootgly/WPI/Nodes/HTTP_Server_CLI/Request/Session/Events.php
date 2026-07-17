@@ -18,7 +18,7 @@ use Bootgly\ABI\Event;
  * Session lifecycle events, dispatched through `Emitter::$Instance`.
  *
  * - `Start`      — a session was established for the request. Payload: `$id`.
- * - `Regenerate` — the session id was rotated. Payload: `$oldId`, `$newId`.
+ * - `Regenerate` — the session id was rotated. Payload: `$oldId`, `$newId`, `$Session`.
  * - `Destroy`    — the session was destroyed (emptied on save). Payload: `$id`.
  */
 enum Events implements Event

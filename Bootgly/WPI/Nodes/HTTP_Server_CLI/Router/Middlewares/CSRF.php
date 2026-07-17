@@ -11,6 +11,7 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Middlewares;
 
 
+use const PHP_INT_MAX;
 use const PHP_URL_HOST;
 use function bin2hex;
 use function explode;
@@ -26,8 +27,11 @@ use function strlen;
 use function substr;
 use Closure;
 
+use Bootgly\ABI\Events\Emission;
+use Bootgly\ABI\Events\Emitter;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Session;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Session\Events as SessionEvents;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Middleware;
 
@@ -46,8 +50,8 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Middleware;
  *   $Request->Session->get('_csrf_token')
  *
  * Token rotation is per-session: the token is generated once when the
- * session is first touched and rotated only by `Session::regenerate()`
- * (login or privilege escalation).
+ * session is first touched and rotated synchronously when
+ * `Session::regenerate()` signals login or privilege escalation.
  *
  * Optional defense-in-depth: when `$checkOrigin = true`, the middleware
  * compares the `Origin` (or fallback `Referer`) host against the request
@@ -70,6 +74,8 @@ class CSRF implements Middleware
    // * Metadata
    /** @var array<int,string> */
    private const array SAFE_METHODS = ['GET', 'HEAD', 'OPTIONS'];
+   /** Event bus on which this instance installed its regeneration hook. */
+   private null|Emitter $Emitter = null;
 
 
    /**
@@ -96,6 +102,8 @@ class CSRF implements Middleware
       $this->checkOrigin = $checkOrigin;
       $this->allowedOrigins = $allowedOrigins;
       $this->tokenBytes = $tokenBytes;
+
+      $this->subscribe();
    }
 
    /**
@@ -104,6 +112,10 @@ class CSRF implements Middleware
     */
    public function process (object $Request, object $Response, Closure $next): object
    {
+      // @ Re-register after an explicit event-bus reset in long-lived tests
+      //   or application bootstraps. Normal requests take one identity check.
+      $this->subscribe();
+
       // ! Session
       $Session = $Request->Session;
       /** @var Session $Session */
@@ -190,6 +202,43 @@ class CSRF implements Middleware
 
       // : XOR the cipher back against the nonce to recover the token
       return $cipher ^ $nonce;
+   }
+
+   /**
+    * Subscribe this configured session key to privilege-transition rotation.
+    */
+   private function subscribe (): void
+   {
+      $Emitter = Emitter::$Instance;
+      if ($this->Emitter === $Emitter) {
+         return;
+      }
+
+      $this->Emitter = $Emitter;
+      $sessionKey = $this->sessionKey;
+      $tokenBytes = $this->tokenBytes;
+
+      // ! Run before application listeners can stop propagation: rotating a
+      //   privilege-bound secret is a framework invariant, not an optional
+      //   observer side effect.
+      $Emitter->listen(
+         SessionEvents::Regenerate,
+         static function (Emission $Emission) use ($sessionKey, $tokenBytes): void {
+            $Session = $Emission->payload[2] ?? null;
+            if (
+               ($Session instanceof Session) === false
+               || $Session->check($sessionKey) === false
+            ) {
+               return;
+            }
+
+            $Session->set(
+               $sessionKey,
+               bin2hex(random_bytes(max(1, $tokenBytes)))
+            );
+         },
+         PHP_INT_MAX
+      );
    }
 
    /**

@@ -222,5 +222,9 @@ return new Suite(
       // Present null/false identity values must fail before a protected
       // handler executes; key presence alone is not authentication.
       '38.01-session_null_false_identity_authentication',
+      // # Session regeneration (CSRF secret lifecycle — audit M6)
+      // Login/privilege rotation must invalidate both raw and masked forms
+      // of the pre-regeneration synchronizer token.
+      '39.01-session_regeneration_csrf_rotation',
    ],
 );
