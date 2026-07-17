@@ -256,5 +256,9 @@ return new Suite(
       // Existing save directories, final session-file modes and pre-positioned
       // signing secrets must fail closed under an attacker-influenced path.
       '43.01-session_file_filesystem_security',
+      // # Response Pre resource (HTML-context encoding — audit M10)
+      // Query-derived strings must be encoded before the helper places them
+      // inside its default text/html response body.
+      '44.01-response_pre_html_xss',
    ],
 );

@@ -11,6 +11,11 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources;
 
 
+use const ENT_HTML5;
+use const ENT_QUOTES;
+use const ENT_SUBSTITUTE;
+use function htmlspecialchars;
+
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resource;
 
@@ -43,6 +48,9 @@ class Pre extends Resource
     */
    public function send (mixed $body = null): Response
    {
-      return $this->Response->send('<pre>' . $this->Response->Body->stringify($body) . '</pre>');
+      $content = $this->Response->Body->stringify($body);
+      $content = htmlspecialchars($content, ENT_QUOTES | ENT_SUBSTITUTE | ENT_HTML5, 'UTF-8');
+
+      return $this->Response->send("<pre>{$content}</pre>");
    }
 }

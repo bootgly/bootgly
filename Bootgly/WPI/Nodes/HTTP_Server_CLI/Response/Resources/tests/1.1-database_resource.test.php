@@ -283,9 +283,18 @@ return new Specification(
 
       yield assert(
          assertion: $Pre instanceof Pre
-            && $Response->Body->raw === '<pre>{"status":"ok"}</pre>'
+            && $Response->Body->raw === '<pre>{&quot;status&quot;:&quot;ok&quot;}</pre>'
             && $Response->Resources->fetch('Raw') === null,
          description: 'Pre is a built-in response resource and Raw stays on Response::send'
+      );
+
+      $reset();
+      $Pre->send("</pre><script>globalThis.__bootglyM10=1</script>&\"'\xC3(");
+
+      yield assert(
+         assertion: $Response->Body->raw
+            === '<pre>&lt;/pre&gt;&lt;script&gt;globalThis.__bootglyM10=1&lt;/script&gt;&amp;&quot;&apos;�(</pre>',
+         description: 'Pre encodes HTML metacharacters and substitutes invalid UTF-8'
       );
 
       try {
