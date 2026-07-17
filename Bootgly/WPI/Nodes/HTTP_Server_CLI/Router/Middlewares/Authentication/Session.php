@@ -21,8 +21,9 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Middlewares\Authenticating\Guard;
  * Session-backed authentication guard.
  *
  * The guard checks an application-defined key in the request session and
- * exposes its value as the route identity when available. Session flows do not
- * emit `WWW-Authenticate`; they fail with a generic unauthorized response.
+ * exposes its non-null, non-false value as the route identity. Session flows
+ * do not emit `WWW-Authenticate`; they fail with a generic unauthorized
+ * response.
  */
 class Session extends Guard
 {
@@ -57,7 +58,11 @@ class Session extends Guard
    {
       // ! Session object.
       $Session = $Request->Session ?? null;
-      if (is_object($Session) === false || method_exists($Session, 'check') === false) {
+      if (
+         is_object($Session) === false
+         || method_exists($Session, 'check') === false
+         || method_exists($Session, 'get') === false
+      ) {
          return false;
       }
 
@@ -66,10 +71,15 @@ class Session extends Guard
          return false;
       }
 
-      // @ Expose identity to handlers.
-      if (method_exists($Session, 'get')) {
-         $this->expose($Request, 'identity', $Session->get($this->key));
+      // ! A present falsey sentinel is not an authenticated identity. Fetch
+      //   once so the value validated here is exactly the value exposed.
+      $identity = $Session->get($this->key);
+      if ($identity === null || $identity === false) {
+         return false;
       }
+
+      // @ Expose identity to handlers.
+      $this->expose($Request, 'identity', $identity);
 
       return true;
    }

@@ -218,5 +218,9 @@ return new Suite(
       '37.01-router_group_method_restriction_bypass',
       '37.02-router_group_method_inheritance',
       '37.03-router_group_method_conflict_rejected',
+      // # Session authentication (falsey identity acceptance — audit M5)
+      // Present null/false identity values must fail before a protected
+      // handler executes; key presence alone is not authentication.
+      '38.01-session_null_false_identity_authentication',
    ],
 );
