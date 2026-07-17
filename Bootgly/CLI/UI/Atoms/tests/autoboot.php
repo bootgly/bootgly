@@ -26,5 +26,8 @@ return new Suite(
       '4.2-statusbar-style',
       '5.1-figlet-render',
       '5.2-figlet-fonts',
+
+      '6.1-differ-render',
+      '6.2-differ-split',
    ]
 );
