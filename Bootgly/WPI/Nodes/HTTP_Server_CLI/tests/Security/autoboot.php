@@ -204,5 +204,8 @@ return new Suite(
       '33.02-http2_worker_request_body_budget',
       // # Decoder Chunked (unbounded framing metadata retention — audit M1)
       '34.01-chunked_metadata_memory_cap',
+      // # Decoder Downloading (aggregate text-field amplification — audit M2)
+      '35.01-multipart_text_aggregate_amplification',
+      '35.02-multipart_text_structured_storage',
    ],
 );

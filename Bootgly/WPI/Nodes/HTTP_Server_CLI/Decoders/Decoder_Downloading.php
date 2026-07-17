@@ -63,7 +63,11 @@ class Decoder_Downloading extends Decoders implements Disconnecting
    private string $tailBuffer = '';
    private string $headerBuffer = '';
    private string $fieldBuffer = '';
-   private string $postEncoded = '';
+   // Raw values are retained once; the encoded string carries only each
+   // field name and its index so parse_str() can preserve bracket semantics.
+   /** @var array<int,string> */
+   private array $fields = [];
+   private string $fieldsEncoded = '';
    /** @var array<int,array<string,bool|int|string>> */
    private array $files = [];
    /** @var array<int,string> */
@@ -79,6 +83,7 @@ class Decoder_Downloading extends Decoders implements Disconnecting
    private int $downloaded = 0;
    private int $currentFileSize = 0;
    private int $currentFieldSize = 0;
+   private int $fieldsSize = 0;
    private int $fieldsCount = 0;
    private int $filesCount = 0;
    private int $bytesSinceDiskCheck = 0;
@@ -102,7 +107,8 @@ class Decoder_Downloading extends Decoders implements Disconnecting
       $this->tailBuffer = '';
       $this->headerBuffer = '';
       $this->fieldBuffer = '';
-      $this->postEncoded = '';
+      $this->fields = [];
+      $this->fieldsEncoded = '';
       $this->files = [];
       $this->filesKeys = [];
       $this->currentFieldName = '';
@@ -115,6 +121,7 @@ class Decoder_Downloading extends Decoders implements Disconnecting
       $this->downloaded = 0;
       $this->currentFileSize = 0;
       $this->currentFieldSize = 0;
+      $this->fieldsSize = 0;
       $this->fieldsCount = 0;
       $this->filesCount = 0;
       $this->bytesSinceDiskCheck = 0;
@@ -172,7 +179,8 @@ class Decoder_Downloading extends Decoders implements Disconnecting
             $Package->rejected = true;
          }
       };
-      // ! Append field data with size check, centralize logic for both boundary and non-boundary accumulation
+      // ! Append field data with size checks, centralizing both boundary and
+      //   non-boundary accumulation paths.
       $appendField = function (string $chunk) use ($reject): bool {
          if ($chunk === '') {
             return true;
@@ -183,9 +191,16 @@ class Decoder_Downloading extends Decoders implements Disconnecting
             $reject("HTTP/1.1 413 Request Entity Too Large\r\n\r\n");
             return false;
          }
+         // ? Text parts must not inherit the 500 MiB file-body allowance.
+         //   Bound their raw aggregate to the normal in-memory body policy.
+         if ($this->fieldsSize + $length > Server\Request::$maxBodySize) {
+            $reject("HTTP/1.1 413 Request Entity Too Large\r\n\r\n");
+            return false;
+         }
 
          $this->fieldBuffer .= $chunk;
          $this->currentFieldSize += $length;
+         $this->fieldsSize += $length;
 
          return true;
       };
@@ -506,7 +521,11 @@ class Decoder_Downloading extends Decoders implements Disconnecting
                   // @ Store field value
                   $fieldName = $this->currentFieldName;
                   if ($fieldName !== '') {
-                     $this->postEncoded .= urlencode($fieldName) . '=' . urlencode($this->fieldBuffer) . '&';
+                     // @ Preserve parse_str() field-name shaping without
+                     //   URL-encoding the potentially large value itself.
+                     $index = count($this->fields);
+                     $this->fields[] = $this->fieldBuffer;
+                     $this->fieldsEncoded .= urlencode($fieldName) . '=' . $index . '&';
                   }
 
                   $this->fieldBuffer = '';
@@ -629,7 +648,9 @@ class Decoder_Downloading extends Decoders implements Disconnecting
       $this->tailBuffer = '';
       $this->headerBuffer = '';
       $this->fieldBuffer = '';
-      $this->postEncoded = '';
+      $this->fields = [];
+      $this->fieldsEncoded = '';
+      $this->fieldsSize = 0;
    }
 
    /**
@@ -787,13 +808,19 @@ class Decoder_Downloading extends Decoders implements Disconnecting
       $Request = $WPI->Request;
 
       // @ Populate $Request->fields
-      if ($this->postEncoded !== '') {
-         /** @var array<string,array<string>|bool|float|int|string> $fields */
-         $fields = [];
+      if ($this->fieldsEncoded !== '') {
+         $fieldsData = $this->fields;
+         /** @var array<string,array<string>|bool|float|int|string> $fieldsParsed */
+         $fieldsParsed = [];
 
-         parse_str($this->postEncoded, $fields);
+         parse_str($this->fieldsEncoded, $fieldsParsed);
+         array_walk_recursive($fieldsParsed, function (&$value) use ($fieldsData) {
+            if (is_numeric($value) && isset($fieldsData[(int) $value])) {
+               $value = $fieldsData[(int) $value];
+            }
+         });
 
-         $Request->fields = $fields; // @phpstan-ignore assign.propertyType
+         $Request->fields = $fieldsParsed; // @phpstan-ignore assign.propertyType
       }
 
       // @ Populate $Request->files
@@ -825,9 +852,11 @@ class Decoder_Downloading extends Decoders implements Disconnecting
       // @ Transfer ownership to Request. Once these arrays are cleared,
       //   disconnect()/destruction cannot delete completed uploads that the
       //   handler still needs; Request::clean() owns their final reclamation.
+      $this->fields = [];
+      $this->fieldsEncoded = '';
+      $this->fieldsSize = 0;
       $this->files = [];
       $this->filesKeys = [];
-      $this->postEncoded = '';
       $this->finished = true;
    }
 }
