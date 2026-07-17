@@ -35,6 +35,7 @@ class Decoder_Chunked extends Decoders implements Feeding
    //   (set once in init()), never refreshed per packet — a slow-drip body
    //   cannot extend it.
    private const int BODY_DEADLINE = 30;
+   private const int CHUNK_LINE_LIMIT = 8192;
    private const int TRAILER_LIMIT = 16384;
 
    // # States
@@ -126,6 +127,22 @@ class Decoder_Chunked extends Decoders implements Feeding
             case self::READ_SIZE:
                // @ Find the chunk size line (\r\n terminated)
                $pos = strpos($this->buffer, "\r\n");
+               $lineLength = $pos === false ? strlen($this->buffer) : $pos;
+
+               // ? Chunk-size and extension metadata is not decoded body data,
+               //   so enforce an independent cap before parsing the size. The
+               //   delimiter offset check also rejects an oversized line that
+               //   arrives complete in one transport read.
+               if ($lineLength > self::CHUNK_LINE_LIMIT) {
+                  $Package->reject("HTTP/1.1 431 Request Header Fields Too Large\r\n\r\n");
+                  $Body->waiting = false;
+                  $this->body = '';
+                  $this->buffer = '';
+                  $Package->Decoder = null;
+                  $Package->consumed = 0;
+                  return States::Rejected;
+               }
+
                if ($pos === false) {
                   $Package->consumed = $size;
                   return States::Incomplete; // Need more data

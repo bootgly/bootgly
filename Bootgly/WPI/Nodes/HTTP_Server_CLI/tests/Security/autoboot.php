@@ -202,5 +202,7 @@ return new Suite(
       // # Decoder HTTP/2 (aggregate unfinished request-body retention — audit H8)
       '33.01-http2_aggregate_request_body_budget',
       '33.02-http2_worker_request_body_budget',
+      // # Decoder Chunked (unbounded framing metadata retention — audit M1)
+      '34.01-chunked_metadata_memory_cap',
    ],
 );
