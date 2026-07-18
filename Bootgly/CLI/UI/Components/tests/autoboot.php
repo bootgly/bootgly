@@ -57,5 +57,6 @@ return new Suite(
       '19.4-markdown-tables',
       '19.5-markdown-width',
       '19.6-markdown-highlight',
+      '20.1-heatmap-render',
    ]
 );
