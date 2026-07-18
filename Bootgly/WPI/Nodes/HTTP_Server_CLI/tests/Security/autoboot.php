@@ -161,7 +161,7 @@ return new Suite(
       // multipart downloads (server-side temp files materialised from
       // client uploads) must enforce an aggregate cross-worker
       // disk-byte ceiling — per-file cap × N-workers exhaustion is
-      // closed by `Downloads::reserve()` over a shared-memory counter
+      // closed by `Downloads::reserve()` over a shared counter
       '23.01-aggregate_downloads_disk_cap',
       // # Decoder_ cache (per-connection Request reuse)
       // `Request::assume()` must scrub ALL per-request state between
@@ -190,7 +190,7 @@ return new Suite(
       '28.01-jsonp_javascript_content_type_and_nosniff',
       '28.02-jsonp_callback_length_capped',
       // # Downloads (crash-leak reconciliation)
-      // audit F-10 — temp files + SHM reservations leak when a worker dies
+      // audit F-10 — temp files + shared reservations leak when a worker dies
       // mid-request; reconcile() heals the counter from disk + sweep() removes
       // crash-orphaned files (older than ORPHAN_TTL).
       '29.01-downloads_reconcile_and_orphan_sweep',
@@ -264,5 +264,12 @@ return new Suite(
       // Names and values containing CR/LF must be rejected before persistent
       // preset state can serialize them into this or later responses.
       '45.01-response_header_preset_injection',
+      // # Downloads aggregate cap (fail-closed infrastructure — audit M12)
+      // A configured ceiling must not turn into an allow-all path when the
+      // aggregate controller or advisory lock is unavailable.
+      '46.01-downloads_reservation_fail_closed',
+      // Each forked worker must reopen the aggregate-controller lockfile;
+      // inherited flock descriptors are one lock owner on Linux.
+      '46.02-downloads_worker_lock_isolation',
    ],
 );

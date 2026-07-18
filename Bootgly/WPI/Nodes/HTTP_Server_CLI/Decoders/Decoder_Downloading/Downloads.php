@@ -12,35 +12,47 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Decoder_Downloading;
 
 
 use const BOOTGLY_STORAGE_DIR;
-use const BOOTGLY_WORKING_BASE;
 use const LOCK_EX;
+use const LOCK_SH;
 use const LOCK_UN;
+use function chmod;
 use function clearstatcache;
 use function dirname;
-use function extension_loaded;
 use function fclose;
+use function fflush;
 use function filemtime;
 use function filesize;
 use function flock;
 use function fopen;
-use function ftok;
+use function fread;
+use function fstat;
+use function ftruncate;
+use function fwrite;
+use function getmypid;
+use function hash;
+use function hash_equals;
 use function is_dir;
 use function is_file;
+use function is_link;
 use function is_resource;
+use function is_string;
+use function lchgrp;
+use function lchown;
+use function lstat;
 use function max;
-use function mkdir;
 use function pack;
+use function posix_getegid;
+use function posix_geteuid;
+use function posix_getgrnam;
+use function posix_getpwnam;
+use function rewind;
 use function scandir;
-use function shmop_close;
-use function shmop_delete;
-use function shmop_open;
-use function shmop_read;
-use function shmop_write;
+use function strlen;
+use function substr;
 use function time;
-use function touch;
+use function umask;
 use function unlink;
 use function unpack;
-use Shmop;
 use Throwable;
 
 
@@ -55,13 +67,15 @@ use Throwable;
  *   the client (the client uploads, the server downloads). This class
  *   accounts for those server-side temp files.
  *
- * System V shared memory via `shmop` for the
- *   8-byte counter, with an advisory `flock` lockfile for the
- *   read-modify-write critical section. Reads (`peek()`) are
- *   lock-free.
+ * One runtime-owned regular file stores an integrity-checked counter record
+ *   and provides the advisory `flock` used by every read-modify-write critical
+ *   section. Each process opens its own descriptor, including recovered
+ *   workers and a re-executed demoted master.
  */
 final class Downloads
 {
+   private const int RECORD_SIZE = 40;
+
    // * Config
    /**
     * Hard ceiling, in bytes, on the *aggregate* size of all in-flight
@@ -77,91 +91,384 @@ final class Downloads
    public const int ORPHAN_TTL = 120;
 
    // * Data
-   private static null|Shmop $Shmop = null;
    /** @var resource|null */
-   private static mixed $lock = null;
-   private static bool $owner = false;
+   private static mixed $counter = null;
+   private static string $counterfile = '';
+   private static int $device = 0;
+   private static int $inode = 0;
+   private static int $PID = 0;
    /** @var array<string,int> Per-worker map of tmp_name → bytes reserved on the aggregate counter. */
    private static array $tracked = [];
 
 
    /**
-    * Idempotent. Must be invoked from the master process before
-    *   workers fork so the SHM segment + lockfile are inherited.
+    * Idempotent. The master creates a stable controller inode inside the
+    *   protected process-state directory and hands that inode to the runtime
+    *   identity before workers fork. Each process reopens it on first use.
     */
-   public static function init (): void
+   public static function init (
+      null|string $path = null,
+      null|string $user = null,
+      null|string $group = null,
+   ): bool
    {
       // ?:
-      if (self::$Shmop !== null) {
-         return;
-      }
-      if (! extension_loaded('shmop')) {
-         return;
+      if (self::$counterfile !== '') {
+         if (self::bind() === false) {
+            return false;
+         }
+
+         $counter = self::$counter;
+         if (! is_resource($counter)) {
+            return false;
+         }
+
+         try {
+            $locked = @flock($counter, LOCK_EX);
+         }
+         catch (Throwable) {
+            $locked = false;
+         }
+         if ($locked === false) {
+            return false;
+         }
+
+         $readable = false;
+         $unlocked = false;
+         try {
+            $readable = self::read($counter) !== null;
+         }
+         finally {
+            try { $unlocked = @flock($counter, LOCK_UN); } catch (Throwable) {}
+         }
+
+         return $readable && $unlocked;
       }
 
-      $base = BOOTGLY_STORAGE_DIR . 'temp/';
-      if (! is_dir($base)) {
-         mkdir($base, 0700, true);
+      $PID = getmypid();
+      if ($PID === false || $path === null || $path === '') {
+         return false;
       }
 
-      $anchor = $base . '.downloads.shm';
-      $lockfile = $base . '.downloads.lock';
-
-      if (! is_dir(dirname($anchor))) {
-         mkdir(dirname($anchor), 0700, true);
+      $directory = dirname($path);
+      $directoryMetadata = @lstat($directory);
+      if (
+         is_link($directory)
+         || ! is_dir($directory)
+         || $directoryMetadata === false
+         || (($directoryMetadata['mode'] & 0170000) !== 0040000)
+         || (($directoryMetadata['mode'] & 0022) !== 0)
+      ) {
+         return false;
       }
-      touch($anchor);
-      touch($lockfile);
 
-      // !?:
-      $key = ftok($anchor, 'B');
-      if ($key === -1) {
-         return;
+      self::$counterfile = $path;
+      $counter = self::open('c+b');
+      if ($counter === false) {
+         self::$counterfile = '';
+         return false;
       }
 
       try {
-         $Shmop = @shmop_open($key, 'c', 0600, 8);
+         $locked = @flock($counter, LOCK_EX);
       }
       catch (Throwable) {
-         $Shmop = false;
+         $locked = false;
       }
 
-      // ?:
-      if ($Shmop === false) {
-         return;
+      if ($locked === false) {
+         try { @fclose($counter); } catch (Throwable) {}
+         self::$counterfile = '';
+         return false;
       }
 
-      // !?:
-      $lock = @fopen($lockfile, 'c+');
-      if ($lock === false) {
-         try { @shmop_close($Shmop); } catch (Throwable) {}
-
-         return;
+      // @ Keep the exclusive lock from initialization through ownership/mode
+      //   handoff. The inode is born 0600 under umask(0077), so no less-trusted
+      //   UID can retain a writable descriptor before the final validation.
+      $unlocked = false;
+      try {
+         $initialized = self::write($counter, 0);
+         $granted = $initialized
+            && self::grant($counter, self::$counterfile, $user, $group, 0600);
+      }
+      finally {
+         try { $unlocked = @flock($counter, LOCK_UN); } catch (Throwable) {}
       }
 
-      // @ Master initializes counter to 0 on first creation
-      @shmop_write($Shmop, pack('P', 0), 0);
+      if (
+         $initialized === false
+         || $granted === false
+         || $unlocked === false
+      ) {
+         try { @fclose($counter); } catch (Throwable) {}
+         self::$counterfile = '';
+         return false;
+      }
 
-      self::$Shmop = $Shmop;
-      self::$lock = $lock;
-      self::$owner = true;
+      self::$counter = $counter;
+      $metadata = @fstat($counter);
+      if ($metadata === false) {
+         try { @fclose($counter); } catch (Throwable) {}
+         self::$counter = null;
+         self::$counterfile = '';
+         return false;
+      }
+      self::$device = (int) $metadata['dev'];
+      self::$inode = (int) $metadata['ino'];
+      self::$PID = $PID;
+
+      return true;
    }
 
-   private static function read (Shmop $Shmop): int
+   /**
+    * Give each process an independently opened counter/lock descriptor.
+    * Linux flock locks are associated with the open file description, so
+    * workers must not synchronize through the descriptor inherited from
+    * their master: that shared description is treated as one lock owner.
+    */
+   private static function bind (): bool
    {
+      $PID = getmypid();
+      if ($PID === false) {
+         return false;
+      }
+      if (self::$PID === $PID && is_resource(self::$counter)) {
+         return true;
+      }
+      if (self::$counterfile === '') {
+         return false;
+      }
+
+      $counter = self::open('r+b');
+      if ($counter === false) {
+         return false;
+      }
+
+      $inherited = self::$counter;
+      self::$counter = $counter;
+      self::$PID = $PID;
+
+      if (is_resource($inherited)) {
+         try { @fclose($inherited); } catch (Throwable) {}
+      }
+
+      return true;
+   }
+
+   /** @return resource|false */
+   private static function open (string $mode): mixed
+   {
+      $path = self::$counterfile;
+      if ($path === '' || is_link($path)) {
+         return false;
+      }
+
+      clearstatcache(true, $path);
+      $before = @lstat($path);
+      if ($before !== false) {
+         if (
+            (($before['mode'] & 0170000) !== 0100000)
+            || (($before['mode'] & 0777) !== 0600)
+         ) {
+            return false;
+         }
+      }
+
+      $previousMask = umask(0077);
+      try {
+         // ! The initial master is the sole valid creator under the acquired
+         //   service-state lock. Exclusive creation avoids following a name
+         //   that appeared after lstat(); recovered/reloaded processes open
+         //   only the already-validated stable inode.
+         $counter = $before === false && $mode === 'c+b'
+            ? @fopen($path, 'x+b')
+            : @fopen($path, $mode);
+      }
+      catch (Throwable) {
+         $counter = false;
+      }
+      finally {
+         umask($previousMask);
+      }
+      if ($counter === false) {
+         return false;
+      }
+
+      $opened = @fstat($counter);
+      clearstatcache(true, $path);
+      $current = @lstat($path);
+      if (
+         $opened === false
+         || $current === false
+         || (($current['mode'] & 0170000) !== 0100000)
+         || $opened['dev'] !== $current['dev']
+         || $opened['ino'] !== $current['ino']
+         || (($opened['mode'] & 0777) !== 0600)
+         || (($current['mode'] & 0777) !== 0600)
+         || (self::$device !== 0 && (int) $opened['dev'] !== self::$device)
+         || (self::$inode !== 0 && (int) $opened['ino'] !== self::$inode)
+      ) {
+         try { @fclose($counter); } catch (Throwable) {}
+         return false;
+      }
+
+      return $counter;
+   }
+
+   private static function grant (
+      mixed $counter,
+      string $path,
+      null|string $user,
+      null|string $group,
+      null|int $mode = null,
+   ): bool {
+      if (! is_resource($counter) || is_link($path)) {
+         return false;
+      }
+      $openedBefore = @fstat($counter);
+      $pathBefore = @lstat($path);
+      if (
+         $openedBefore === false
+         || $pathBefore === false
+         || (($openedBefore['mode'] & 0170000) !== 0100000)
+         || (($pathBefore['mode'] & 0170000) !== 0100000)
+         || $openedBefore['dev'] !== $pathBefore['dev']
+         || $openedBefore['ino'] !== $pathBefore['ino']
+      ) {
+         return false;
+      }
+
+      $UID = posix_geteuid();
+      $GID = posix_getegid();
+      if ($UID === 0) {
+         if ($user !== null) {
+            $userInfo = posix_getpwnam($user);
+            if ($userInfo === false) {
+               return false;
+            }
+            $UID = (int) $userInfo['uid'];
+            $GID = (int) $userInfo['gid'];
+
+            if ($group !== null) {
+               $groupInfo = posix_getgrnam($group);
+               if ($groupInfo === false) {
+                  return false;
+               }
+               $GID = (int) $groupInfo['gid'];
+            }
+         }
+
+         if (@lchown($path, $UID) === false || @lchgrp($path, $GID) === false) {
+            return false;
+         }
+      }
+
+      // ! PHP exposes no descriptor-based chown/chmod API. The State-owned
+      //   parent rejects symlinks and group/world write access; revalidate the
+      //   pathname against the still-locked descriptor before chmod and again
+      //   afterward so accidental replacement fails the boot closed.
+      $middle = @lstat($path);
+      if (
+         $middle === false
+         || (($middle['mode'] & 0170000) !== 0100000)
+         || $openedBefore['dev'] !== $middle['dev']
+         || $openedBefore['ino'] !== $middle['ino']
+      ) {
+         return false;
+      }
+      if ($mode !== null && @chmod($path, $mode) === false) {
+         return false;
+      }
+
+      $openedAfter = @fstat($counter);
+      $pathAfter = @lstat($path);
+
+      return $openedAfter !== false
+         && $pathAfter !== false
+         && (($openedAfter['mode'] & 0170000) === 0100000)
+         && (($pathAfter['mode'] & 0170000) === 0100000)
+         && $openedBefore['dev'] === $openedAfter['dev']
+         && $openedBefore['ino'] === $openedAfter['ino']
+         && $openedAfter['dev'] === $pathAfter['dev']
+         && $openedAfter['ino'] === $pathAfter['ino']
+         && (($openedAfter['mode'] & 0777) === ($mode ?? ($openedAfter['mode'] & 0777)))
+         && (($pathAfter['mode'] & 0777) === ($mode ?? ($pathAfter['mode'] & 0777)))
+         && (int) $openedAfter['uid'] === $UID
+         && (int) $openedAfter['gid'] === $GID
+         && (int) $pathAfter['uid'] === $UID
+         && (int) $pathAfter['gid'] === $GID;
+   }
+
+   /**
+    * Read one complete unsigned 64-bit counter value. Null is a controller
+    * failure, never a synthetic zero: callers must not undercount on errors.
+    */
+   private static function read (mixed $counter): null|int
+   {
+      if (! is_resource($counter)) {
+         return null;
+      }
+
       // !?:
-      $raw = @shmop_read($Shmop, 0, 8);
-      if ($raw === '') {
-         return 0;
+      try {
+         $metadata = @fstat($counter);
+         if (
+            $metadata === false
+            || $metadata['size'] !== self::RECORD_SIZE
+            || @rewind($counter) === false
+         ) {
+            return null;
+         }
+         $record = @fread($counter, self::RECORD_SIZE);
+      }
+      catch (Throwable) {
+         return null;
+      }
+      if (! is_string($record) || strlen($record) !== self::RECORD_SIZE) {
+         return null;
+      }
+
+      $raw = substr($record, 0, 8);
+      $digest = substr($record, 8);
+      if (! hash_equals(hash('sha256', $raw, true), $digest)) {
+         return null;
       }
 
       // !?:
       $u = @unpack('P', $raw);
       if ($u === false || !isset($u[1])) {
-         return 0;
+         return null;
       }
 
-      return (int) $u[1];
+      $value = (int) $u[1];
+
+      return $value >= 0 ? $value : null;
+   }
+
+   /**
+    * Persist one complete unsigned 64-bit counter value.
+    */
+   private static function write (mixed $counter, int $value): bool
+   {
+      if (! is_resource($counter)) {
+         return false;
+      }
+
+      try {
+         if (@rewind($counter) === false || @ftruncate($counter, 0) === false) {
+            return false;
+         }
+
+         $raw = pack('P', $value);
+         $record = $raw . hash('sha256', $raw, true);
+
+         return @fwrite($counter, $record) === self::RECORD_SIZE
+            && @fflush($counter)
+            && self::read($counter) === $value;
+      }
+      catch (Throwable) {
+         return false;
+      }
    }
 
    /**
@@ -170,9 +477,8 @@ final class Downloads
     *   should reject the download chunk with UPLOAD_ERR_CANT_WRITE).
     *   Returns true if reserved (caller MUST call release($bytes)
     *   when the file is unlinked or on rollback).
-    *   Returns true (no-op) if SHM is unavailable — preserves
-    *   per-process behaviour as a fail-open fallback when the
-    *   `shmop` extension is missing.
+    *   Returns false when the shared controller cannot prove and persist
+    *   the reservation. Infrastructure failure is fail-closed.
     */
    public static function reserve (int $bytes): bool
    {
@@ -181,36 +487,53 @@ final class Downloads
          return true;
       }
 
-      $Shmop = self::$Shmop;
-      $lock = self::$lock;
-
       // ?:
-      if ($Shmop === null || $lock === null) {
-         return true;
+      if (self::bind() === false) {
+         return false;
+      }
+      $counter = self::$counter;
+      if (! is_resource($counter)) {
+         return false;
       }
 
       // !?:
-      $locked = @flock($lock, LOCK_EX);
+      try {
+         $locked = @flock($counter, LOCK_EX);
+      }
+      catch (Throwable) {
+         $locked = false;
+      }
       if ($locked === false) {
-         return true;
+         return false;
       }
 
-      // @
+      // @ The reservation is successful only if both the exact counter write
+      //   and lock release succeed. A committed reservation followed by a
+      //   failed unlock is conservatively rejected and may only overcount.
+      $reserved = false;
+      $unlocked = false;
       try {
-         $cur = self::read($Shmop);
-         $new = $cur + $bytes;
+         $cur = self::read($counter);
+         $maxBytesOnDisk = self::$maxBytesOnDisk;
 
-         if ($new > self::$maxBytesOnDisk) {
-            return false;
+         // ! A failed/invalid read, a counter already beyond the ceiling,
+         //   and addition overflow all reject before any upload byte is written.
+         if (
+            $cur === null
+            || $cur > $maxBytesOnDisk
+            || $bytes > $maxBytesOnDisk - $cur
+         ) {
+            $reserved = false;
          }
-
-         @shmop_write($Shmop, pack('P', $new), 0);
-
-         return true;
+         else {
+            $reserved = self::write($counter, $cur + $bytes);
+         }
       }
       finally {
-         @flock($lock, LOCK_UN);
+         try { $unlocked = @flock($counter, LOCK_UN); } catch (Throwable) {}
       }
+
+      return $reserved && $unlocked;
    }
 
    /**
@@ -224,44 +547,71 @@ final class Downloads
          return;
       }
 
-      $Shmop = self::$Shmop;
-      $lock = self::$lock;
-
       // ?:
-      if ($Shmop === null || $lock === null) {
+      if (self::bind() === false) {
+         return;
+      }
+      $counter = self::$counter;
+      if (! is_resource($counter)) {
          return;
       }
 
       // !?:
-      $locked = @flock($lock, LOCK_EX);
+      try {
+         $locked = @flock($counter, LOCK_EX);
+      }
+      catch (Throwable) {
+         $locked = false;
+      }
       if ($locked === false) {
          return;
       }
 
       // @
       try {
-         $cur = self::read($Shmop);
+         $cur = self::read($counter);
+         if ($cur === null) {
+            return;
+         }
+
          $new = max(0, $cur - $bytes);
-         @shmop_write($Shmop, pack('P', $new), 0);
+         self::write($counter, $new);
       }
       finally {
-         @flock($lock, LOCK_UN);
+         try { @flock($counter, LOCK_UN); } catch (Throwable) {}
       }
    }
 
    /**
-    * Lock-free read of the current aggregate. Used for diagnostics
-    *   and the security test harness. Not safe for read-modify-write.
+    * Shared-lock read of the current aggregate. Used for diagnostics and the
+    *   security test harness; mutations use an exclusive lock.
     */
    public static function peek (): int
    {
-      // !?:
-      $Shmop = self::$Shmop;
-      if ($Shmop === null) {
+      if (self::bind() === false) {
+         return 0;
+      }
+      $counter = self::$counter;
+      if (! is_resource($counter)) {
          return 0;
       }
 
-      return self::read($Shmop);
+      try {
+         $locked = @flock($counter, LOCK_SH);
+      }
+      catch (Throwable) {
+         $locked = false;
+      }
+      if ($locked === false) {
+         return 0;
+      }
+
+      try {
+         return self::read($counter) ?? 0;
+      }
+      finally {
+         try { @flock($counter, LOCK_UN); } catch (Throwable) {}
+      }
    }
 
    /**
@@ -323,7 +673,7 @@ final class Downloads
 
    /**
     * Recompute the aggregate counter from the bytes actually on disk
-    *   (audit F-10). The SHM total is a *cache* of the download directory
+    *   (audit F-10). The shared total is a *cache* of the download directory
     *   size, not the source of truth: a worker that dies mid-request leaves
     *   its reservation stranded on the counter (its in-memory `$tracked`
     *   map dies with it), permanently shrinking the budget until the master
@@ -332,26 +682,32 @@ final class Downloads
     */
    public static function reconcile (): void
    {
-      $Shmop = self::$Shmop;
-      $lock = self::$lock;
-
       // ?:
-      if ($Shmop === null || $lock === null) {
+      if (self::bind() === false) {
+         return;
+      }
+      $counter = self::$counter;
+      if (! is_resource($counter)) {
          return;
       }
 
       // !?:
-      $locked = @flock($lock, LOCK_EX);
+      try {
+         $locked = @flock($counter, LOCK_EX);
+      }
+      catch (Throwable) {
+         $locked = false;
+      }
       if ($locked === false) {
          return;
       }
 
       // @
       try {
-         @shmop_write($Shmop, pack('P', self::bytes()), 0);
+         self::write($counter, self::measure());
       }
       finally {
-         @flock($lock, LOCK_UN);
+         try { @flock($counter, LOCK_UN); } catch (Throwable) {}
       }
    }
 
@@ -403,7 +759,7 @@ final class Downloads
     * Sum the bytes currently held in the download temp directory. Source of
     *   truth for `reconcile()`.
     */
-   private static function bytes (): int
+   private static function measure (): int
    {
       $dir = BOOTGLY_STORAGE_DIR . 'temp/files/downloaded/';
 
@@ -438,34 +794,23 @@ final class Downloads
    }
 
    /**
-    * Master-only teardown: removes the SHM segment + lockfile.
-    *   Safe to call from non-owner workers (no-op).
+    * Process-local teardown: close this descriptor without resetting or
+    *   unlinking the shared inode. The HTTP master calls this before the base
+    *   server drains its workers, so mutating the record here would lower the
+    *   aggregate while uploads may still be completing. The next pre-fork
+    *   `init()` owns the authoritative reset.
     */
    public static function destroy (): void
    {
-      if (self::$lock !== null && is_resource(self::$lock)) {
-         try { @fclose(self::$lock); } catch (Throwable) {}
+      $counter = self::$counter;
+      if (is_resource($counter)) {
+         try { @fclose($counter); } catch (Throwable) {}
       }
-      self::$lock = null;
-
-      // !?
-      $Shmop = self::$Shmop;
-      if ($Shmop !== null && self::$owner) {
-         try { @shmop_delete($Shmop); } catch (Throwable) {}
-         try { @shmop_close($Shmop); } catch (Throwable) {}
-      }
-
-      self::$Shmop = null;
-      self::$owner = false;
+      self::$counter = null;
+      self::$counterfile = '';
+      self::$device = 0;
+      self::$inode = 0;
+      self::$PID = 0;
       self::$tracked = [];
-
-      $base = BOOTGLY_STORAGE_DIR . 'temp/';
-      clearstatcache();
-
-      // @@
-      foreach (['.downloads.lock', '.downloads.shm'] as $f) {
-         $p = $base . $f;
-         try { @unlink($p); } catch (Throwable) {}
-      }
    }
 }

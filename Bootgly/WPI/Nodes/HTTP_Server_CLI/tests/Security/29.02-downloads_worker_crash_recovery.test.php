@@ -37,7 +37,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test\Specification;
  *
  * Unlike the direct-API probe in `29.01`, this exercises an actual process
  *   death over the wire. The handler forks a child that stands in for a worker
- *   crashing mid-upload: the child reserves bytes on the shared SHM counter and
+ *   crashing mid-upload: the child reserves bytes on the shared counter and
  *   writes a temp file, then dies by **SIGKILL** — uncatchable, so neither
  *   `Request::__destruct()` nor `Downloads::discard()` runs and the reservation
  *   + file are leaked exactly as in a real OOM/segfault/SIGKILL crash. (A
@@ -69,8 +69,7 @@ return new Specification(
    response: function (Request $Request, Response $Response, Router $Router) {
       yield $Router->route('/downloads-crash-recovery', function (Request $Request, Response $Response) {
          if (
-            ! extension_loaded('shmop')
-            || ! extension_loaded('pcntl')
+            ! extension_loaded('pcntl')
             || ! extension_loaded('posix')
          ) {
             return $Response->JSON->send(['skip' => true]);
@@ -153,7 +152,7 @@ return new Specification(
       }
 
       if (($decoded['skip'] ?? false) === true) {
-         return true; // shmop/pcntl/posix unavailable
+         return true; // pcntl/posix unavailable
       }
 
       // (1) The crash must be a real signal death.

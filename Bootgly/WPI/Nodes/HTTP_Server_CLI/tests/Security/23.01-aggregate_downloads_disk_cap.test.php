@@ -1,7 +1,5 @@
 <?php
 
-use function extension_loaded;
-
 use Bootgly\ABI\Debugging\Data\Vars;
 use Bootgly\ACI\Tests\Suite\Test\Specification\Separator;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Decoder_Downloading\Downloads;
@@ -18,7 +16,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test\Specification;
  *   sustains an unbounded N×C × in-flight footprint until disk fills
  *   and every subsequent fwrite returns -ENOSPC.
  *
- * Defense — `Downloads` exposes a cross-worker shared-memory counter
+ * Defense — `Downloads` exposes a cross-worker shared counter
  *   gated by an advisory file lock. `reserve()` performs an atomic
  *   read-modify-write check against `$maxBytesOnDisk` and rejects when
  *   the new total would breach the ceiling. `release()` decrements,
@@ -46,10 +44,6 @@ return new Specification(
    },
 
    response: function (Request $Request, Response $Response) {
-      if (! extension_loaded('shmop')) {
-         return $Response(code: 200, body: 'SKIP-NO-SHMOP');
-      }
-
       $oldCap = Downloads::$maxBytesOnDisk;
       $baseline = Downloads::peek();
 
@@ -112,9 +106,6 @@ return new Specification(
    },
 
    test: function (string $response): bool|string {
-      if (str_contains($response, 'SKIP-NO-SHMOP')) {
-         return true;
-      }
       if (str_contains($response, 'PASS')) {
          return true;
       }

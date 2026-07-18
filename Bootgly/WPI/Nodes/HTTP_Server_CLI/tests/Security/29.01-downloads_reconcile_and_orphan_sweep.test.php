@@ -1,7 +1,5 @@
 <?php
 
-use function extension_loaded;
-
 use Bootgly\ABI\Debugging\Data\Vars;
 use Bootgly\ACI\Tests\Suite\Test\Specification\Separator;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Decoder_Downloading\Downloads;
@@ -11,11 +9,11 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test\Specification;
 
 
 /**
- * PoC — per-request upload temp files and SHM reservations leak on worker
+ * PoC — per-request upload temp files and shared reservations leak on worker
  *   crash (audit F-10).
  *
  * `Decoder_Downloading` streams parts to `storage/temp/files/downloaded/`
- *   and reserves bytes on the cross-worker `Downloads` SHM counter. Cleanup
+ *   and reserves bytes on the cross-worker `Downloads` counter. Cleanup
  *   (`Request::clean()` → `unlink` + `Downloads::discard`) runs on the normal
  *   encode path. If a worker dies mid-request, the temp file is left on disk
  *   AND the reservation is stranded on the shared counter (the worker's
@@ -23,7 +21,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test\Specification;
  *   `$maxBytesOnDisk` budget until the master restarts. Repeated crashes
  *   ratchet the aggregate cap toward zero, denying all uploads.
  *
- * Defense — the SHM total is treated as a *cache* of the directory size:
+ * Defense — the shared total is treated as a *cache* of the directory size:
  *   `Downloads::reconcile()` recomputes the counter from the bytes actually
  *   on disk (dropping stranded phantom reservations), and `Downloads::sweep()`
  *   deletes temp files orphaned by a crashed worker (mtime older than
@@ -37,7 +35,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test\Specification;
  */
 
 return new Specification(
-   description: 'Downloads must reconcile the SHM counter to disk and sweep crash-orphaned temp files',
+   description: 'Downloads must reconcile the shared counter to disk and sweep crash-orphaned temp files',
    Separator: new Separator(line: true),
 
    request: function (): string {
@@ -48,10 +46,6 @@ return new Specification(
    },
 
    response: function (Request $Request, Response $Response) {
-      if (! extension_loaded('shmop')) {
-         return $Response(code: 200, body: 'SKIP-NO-SHMOP');
-      }
-
       $dir = BOOTGLY_STORAGE_DIR . 'temp/files/downloaded/';
       if (! is_dir($dir)) {
          mkdir($dir, 0700, true);
@@ -63,7 +57,7 @@ return new Specification(
       try {
          // @ Establish a clean, disk-backed baseline.
          Downloads::sweep(0);     // clear any prior temp files
-         Downloads::reconcile();  // SHM := actual on-disk bytes
+         Downloads::reconcile();  // shared counter := actual on-disk bytes
          $base = Downloads::peek();
 
          // (1) A stranded reservation (no file written — i.e. the worker that
@@ -106,9 +100,6 @@ return new Specification(
    },
 
    test: function (string $response): bool|string {
-      if (str_contains($response, 'SKIP-NO-SHMOP')) {
-         return true;
-      }
       if (str_contains($response, 'PASS')) {
          return true;
       }

@@ -579,17 +579,29 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
    }
 
    /**
-    * Pre-fork setup: initialize the cross-worker upload byte counter (master-
-    * side, before fork) so workers inherit the SHM segment + lockfile, then
-    * purge temp files orphaned by a previous (crashed) run.
+    * Pre-fork setup: initialize the stable cross-worker upload controller
+    * inode, then purge temp files orphaned by a previous crashed run.
     */
    protected function booting (): void
    {
-      // @ Inherited by workers via the SHM segment + lockfile descriptor.
-      Downloads::init();
+      // @ Keep the controller inode under the protected per-service process
+      //   state namespace. Workers and a re-executed demoted master reopen
+      //   independent descriptors without gaining pathname replacement rights.
+      if (Downloads::init(
+         path: $this->Process->State->pidLockFile . '.downloads',
+         user: $this->user,
+         group: $this->group,
+      ) === false) {
+         // ! Safe degraded mode: keep non-upload routes available, but every
+         //   positive multipart file reservation fails closed in reserve().
+         //   Never silently advertise an aggregate ceiling that is disabled.
+         $this->Logger->log(
+            critical: '@\;Aggregate download disk controller unavailable: multipart file writes will fail closed until the server is restarted with a valid counter inode and advisory locking.@.;'
+         );
+      }
       // @ Purge temp files orphaned by a previous (crashed) run before the
       //   first fork — no worker is in-flight yet, so a full sweep is safe
-      //   (audit F-10). The SHM counter is reset to 0 by init().
+      //   (audit F-10). The shared counter is reset to 0 by init().
       Downloads::sweep();
 
       // @ Auto-TLS — own the storage tree, bind the HTTP-01 gate and fork
@@ -1911,7 +1923,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       //   (re)spawned worker — both the initial fork and the SIGCHLD refork
       //   reach the worker through `$this->instance()`. Sweep temp files
       //   orphaned by a crashed worker (older than `ORPHAN_TTL`, so a live
-      //   in-flight upload is untouched) and reconcile the SHM counter
+      //   in-flight upload is untouched) and reconcile the shared counter
       //   against the bytes actually on disk, healing any reservation a dead
       //   worker stranded on the shared counter.
       Downloads::sweep(Downloads::ORPHAN_TTL);
