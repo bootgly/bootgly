@@ -154,7 +154,7 @@ class Test
       if ($description === null) {
          return;
       }
-      if (Results::$enabled) {
+      if (Results::$enabled || Suite::$quiet) {
          return;
       }
 
@@ -217,7 +217,7 @@ class Test
    }
    public function separate (): void
    {
-      if (Results::$enabled) {
+      if (Results::$enabled || Suite::$quiet) {
          return;
       }
 
@@ -531,7 +531,22 @@ class Test
 
       // @ output
       $help = $message ?? $this->AssertionError?->getMessage();
-      if (Results::$enabled === false) {
+
+      // @ Record the case for runner views
+      // ? The failing assertion was already pushed to results/descriptions:
+      //   descriptions[0] is the Specification description, assertion i lives
+      //   at descriptions[i] — the failure is assertion #count(results).
+      $this->Suite->records[] = [
+         'case' => $this->Specification->case ?? 0,
+         'file' => $this->filename,
+         'status' => 'failed',
+         'results' => $this->results,
+         'description' => $this->descriptions[count($this->results)] ?? null,
+         'message' => $help,
+         'elapsed' => $this->elapsed,
+      ];
+
+      if (Results::$enabled === false && Suite::$quiet === false) {
          // header
          $this->Logger->log(debug: 
             "\033[30m\033[47m " . $case . " \033[0m" .
@@ -564,7 +579,9 @@ class Test
       );
 
       // @ exit
-      if (Suite::$exitOnFailure && $this->Specification->retest === null) {
+      // ? Quiet runs feed a runner view (dashboard) — they must survive the
+      //   whole run, even when a mid-suite `new Suite` re-enables the static.
+      if (Suite::$exitOnFailure && Suite::$quiet === false && $this->Specification->retest === null) {
          $this->Suite->summarize();
 
          if (Results::$enabled) {
@@ -582,8 +599,19 @@ class Test
       $test = str_pad($this->filename, Suite::$width, ' ', STR_PAD_RIGHT);
       $elapsed = $this->elapsed;
 
+      // @ Record the case for runner views
+      $this->Suite->records[] = [
+         'case' => $this->Specification->case ?? 0,
+         'file' => $this->filename,
+         'status' => 'passed',
+         'results' => $this->results,
+         'description' => null,
+         'message' => null,
+         'elapsed' => $elapsed,
+      ];
+
       // @ output
-      if (Results::$enabled === false) {
+      if (Results::$enabled === false && Suite::$quiet === false) {
          // header
          $this->Logger->log(debug: 
             "\033[47;30m " . $case . " \033[0m" .

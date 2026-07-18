@@ -63,6 +63,9 @@ class Suite
    public null|Fixture $Fixture;
    // exit
    public static bool $exitOnFailure = false;
+   // output
+   /** Mute per-case and per-suite human output — runner views render instead. */
+   public static bool $quiet = false;
    // pretesting
    /** @var array<object> */
    public array $testables;
@@ -81,6 +84,11 @@ class Suite
    public int $failed;
    public int $passed;
    public int $skipped;
+   /**
+    * Ordered per-case records (status + per-assertion results) for runner views.
+    * @var array<int,array{case:int,file:string,status:string,results:array<int,bool|null>,description:null|string,message:null|string,elapsed:null|string}>
+    */
+   public array $records;
    // # Stats
    public int $assertions;
    // public static int $cases = 0;
@@ -145,6 +153,7 @@ class Suite
       $this->failed = 0;
       $this->passed = 0;
       $this->skipped = 0;
+      $this->records = [];
       // # Stats
       $this->assertions = count($this->tests);
       Assertions::$count += $this->assertions;
@@ -268,7 +277,7 @@ class Suite
     */
    public function separate (string $header): void
    {
-      if (Results::$enabled) {
+      if (Results::$enabled || self::$quiet) {
          return;
       }
 
@@ -362,7 +371,18 @@ class Suite
 
       $case_index = sprintf('%03d', $this->case);
 
-      if (Results::$enabled === false) {
+      // @ Record the case for runner views
+      $this->records[] = [
+         'case' => $this->case,
+         'file' => $file ?: '',
+         'status' => 'skipped',
+         'results' => [],
+         'description' => null,
+         'message' => $info,
+         'elapsed' => null,
+      ];
+
+      if (Results::$enabled === false && self::$quiet === false) {
          // @ Set additional info
          if ($info) {
             $info = "\033[1;35m $info \033[0m";
@@ -409,6 +429,11 @@ class Suite
          }
          Results::$assertions += $this->assertions;
          Results::$durationMs += ($finished - $started) * 1000;
+         return;
+      }
+
+      // ? Quiet — runner views render their own per-suite summary
+      if (self::$quiet) {
          return;
       }
 

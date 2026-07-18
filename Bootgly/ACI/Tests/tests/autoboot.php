@@ -106,5 +106,8 @@ return new Suite(
 
       // Temporaries
       '8.1.1-Temporaries-reserve_and_sweep',
+
+      // Records
+      '9.1.1-Records-ordered_capture_and_quiet',
    ]
 );
