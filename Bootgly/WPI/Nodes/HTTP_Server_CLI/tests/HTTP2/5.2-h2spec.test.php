@@ -49,6 +49,10 @@ return new Specification(
       $passed = (int) ($m[2] ?? 0);
       $failed = (int) ($m[4] ?? 0);
 
+      if ($matched !== 1 || $passed < 145 || $failed > 1) {
+         fwrite(STDERR, "\n[h2spec diagnostic]\n{$output}\n");
+      }
+
       // @ 145/146 pass. The single tolerated failure is Generic §3.5
       //   "invalid connection preface": h2spec assumes an HTTP/2-only port,
       //   but this server multiplexes h2c AND HTTP/1.1 on one port, so

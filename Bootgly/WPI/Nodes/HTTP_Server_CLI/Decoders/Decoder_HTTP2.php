@@ -610,9 +610,17 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding
                if ($payload < 8) {
                   return $this->fail($Package, Errors::FrameSize, 'GOAWAY payload must be >= 8 octets');
                }
+               // @ Peer-initiated graceful shutdown forbids new streams but
+               //   does not make connection-level frames inert. Keep parsing
+               //   PING/SETTINGS/WINDOW_UPDATE for unknown error codes, which
+               //   must not trigger special behavior (RFC 9113 §7).
+               /** @var array{1: int} $status */
+               $status = unpack('N', $data, 4);
+               $Error = Errors::tryFrom($status[1]);
                $this->closing = true;
-               // ?: Nothing in flight — close now
-               if ($this->opened === 0) {
+               // ?: A recognized graceful/error shutdown with nothing in
+               //   flight retains the established immediate-close contract.
+               if ($Error !== null && $this->opened === 0) {
                   $Package->reject($this->outbox);
                   $this->outbox = '';
                   return States::Rejected;

@@ -12,6 +12,16 @@ use Bootgly\ABI\Debugging\Data\Throwables;
 use Bootgly\ACI\Observability;
 use Bootgly\ACI\Observability\Metrics\Counter;
 
+// ! The agent-output wrapper launches the real test runner as a child. Give
+// that child its own POSIX session before any process-control suite boots, so
+// a test-owned daemon's group signal cannot terminate the outer JSON collector.
+if (
+   getenv('BOOTGLY_AGENT_STDOUT_REDIRECTED') === '1'
+   && function_exists('posix_setsid')
+) {
+   @posix_setsid();
+}
+
 // @ Agent-mode stdout redirection for `bootgly test`
 // When an AI agent drives `bootgly test`, the consumer expects a single JSON
 // document on stdout — nothing else. We can't reliably silence every

@@ -20,6 +20,8 @@ use function htmlspecialchars;
 use function is_file;
 use function json_encode;
 use function str_replace;
+use function strpos;
+use function substr;
 use Throwable;
 
 use Bootgly\ABI\Data\__String\Path;
@@ -101,8 +103,13 @@ abstract class Catcher
       if ($Throwable !== null) {
          $report = ['interface' => 'WPI'];
          if ($Request !== null) {
+            $URI = $Request->URI;
+            $query = strpos($URI, '?');
+
             $report['method'] = $Request->method;
-            $report['URI'] = $Request->URI;
+            $report['URI'] = $query === false
+               ? $URI
+               : substr($URI, 0, $query);
             $report['peer'] = $Request->peer;
          }
 

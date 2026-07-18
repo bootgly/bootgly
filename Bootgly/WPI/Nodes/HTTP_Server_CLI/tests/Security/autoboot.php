@@ -283,5 +283,9 @@ return new Suite(
       // Directory metadata must not make the client contact an unapproved
       // authority or a prohibited address class, even when HTTPS is used.
       '49.01-acme_advertised_url_authority_ssrf',
+      // # Throwable reporter context (query-secret disclosure — audit L1)
+      // A route exception must reach the configured reporter without copying
+      // secret query values from the request target into its context.
+      '50.01-throwable_report_query_secret_leak',
    ],
 );

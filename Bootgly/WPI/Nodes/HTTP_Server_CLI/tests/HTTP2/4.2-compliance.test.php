@@ -158,6 +158,27 @@ return new Specification(
          ->assert();
       $Client->close();
 
+      // @ Unknown error codes do not trigger special behavior (RFC 9113 §7).
+      //   GOAWAY starts draining, but connection-level frames remain active.
+      $Client = new Client;
+      $Client->preface();
+      $Client->expect(HTTP2::FRAME_SETTINGS);
+      $Client->send(
+         Frame::pack(HTTP2::FRAME_GOAWAY, 0, 0, pack('NN', 0, 0xfaceb00c))
+         . Frame::pack(HTTP2::FRAME_PING, 0, 0, 'unknown!')
+      );
+      $pong = $Client->expect(HTTP2::FRAME_PING);
+      yield new Assertion(
+         description: 'GOAWAY with an unknown error code keeps control frames active while draining',
+      )
+         ->expect([
+            $pong['flags'] ?? null,
+            $pong['payload'] ?? null,
+         ])
+         ->to->be([HTTP2::FLAG_ACK, 'unknown!'])
+         ->assert();
+      $Client->close();
+
       // @ SETTINGS ACK as the very first frame also violates §3.4
       $Client = new Client;
       $Client->send(
