@@ -661,7 +661,14 @@ class TCP_Server_CLI implements Servers
          // ? @info
          // @ $connections
          case SIGIOT:  // 6
-            CLI->Commands->find('connections', From: $this)?->run();
+            try {
+               CLI->Commands->find('connections', From: $this)?->run();
+            }
+            catch (Throwable) {
+               // ! Signal callbacks must never let a diagnostic failure
+               //   terminate the worker. Do not log exception-controlled
+               //   text here: it may contain the remote state being guarded.
+            }
             break;
          // @ $stats
          case SIGIO:   // 29

@@ -8,7 +8,7 @@ use Bootgly\ACI\Tests\Suite\Test\Specification;
 
 
 return new Specification(
-   description: 'Tested methods: route (exit-status contract)',
+   description: 'Tested methods: route, find (exit-status and exact-scope contracts)',
    test: function () {
       $Commands = new Commands;
 
@@ -44,6 +44,37 @@ return new Specification(
       $Commands->register($TestCommand);
       $Commands->register($HelpCommand);
 
+      // ! Same-class scopes must resolve their own instance-bound command.
+      //   Long-lived test/worker processes construct several server instances
+      //   of one class; selecting the first class match executes stale context.
+      $SourceA = new class {};
+      $SourceB = clone $SourceA;
+      $SourceC = clone $SourceA;
+      $ScopedA = new class extends Command
+      {
+         public string $name = 'scoped';
+         public string $description = 'First scoped command...';
+
+
+         public function run (array $arguments = [], array $options = []) : bool
+         {
+            return true;
+         }
+      };
+      $ScopedB = new class extends Command
+      {
+         public string $name = 'scoped';
+         public string $description = 'Second scoped command...';
+
+
+         public function run (array $arguments = [], array $options = []) : bool
+         {
+            return true;
+         }
+      };
+      $Commands->register($ScopedA, $SourceA);
+      $Commands->register($ScopedB, $SourceB);
+
       // @ A registered command routes successfully with the default scope
       //   (`From: null` = all namespaces)
       yield assert(
@@ -55,6 +86,21 @@ return new Specification(
       yield assert(
          assertion: $Commands->route(['bootgly', 'testing'], $Commands) === true,
          description: 'A known command routes with success on an explicit scope'
+      );
+
+      yield assert(
+         assertion: $Commands->find('scoped', $SourceA) === $ScopedA,
+         description: 'A command resolves the exact first same-class scope instance'
+      );
+
+      yield assert(
+         assertion: $Commands->find('scoped', $SourceB) === $ScopedB,
+         description: 'A command resolves the exact second same-class scope instance'
+      );
+
+      yield assert(
+         assertion: $Commands->find('scoped', $SourceC) === $ScopedA,
+         description: 'An unknown same-class scope retains the historical first-match fallback'
       );
 
       // @ An unknown command renders help but the route itself FAILS —

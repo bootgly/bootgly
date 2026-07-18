@@ -271,5 +271,9 @@ return new Suite(
       // Each forked worker must reopen the aggregate-controller lockfile;
       // inherited flock descriptors are one lock owner on Linux.
       '46.02-downloads_worker_lock_isolation',
+      // # connections diagnostic (raw-state disclosure + terminal injection + crash — audit M13)
+      // Remote request bytes must never be rendered by the operator command,
+      // and decoded protocol objects must be summarized without string casts.
+      '47.01-connections_diagnostic_exposure_terminal_crash',
    ],
 );

@@ -17,6 +17,7 @@ use function array_values;
 use function count;
 use function is_array;
 use function preg_replace;
+use function spl_object_id;
 use function str_replace;
 use Closure;
 use Error;
@@ -37,6 +38,8 @@ class Commands
    // # Command
    /** @var array<string,array<Command>> */
    protected array $commands;
+   /** @var array<int,object> Exact registry scope, keyed by command object ID. */
+   protected array $Sources;
    // # Commands/Arguments
    protected null|Closure $Helper;
    // ...
@@ -59,6 +62,7 @@ class Commands
       $this->banner = null;
       // # Command
       $this->commands = [];
+      $this->Sources = [];
 
       // * Metadata
       // ...
@@ -136,6 +140,7 @@ class Commands
       }
 
       $this->commands[$Script::class][] = $Command;
+      $this->Sources[spl_object_id($Command)] = $Script;
 
       return true;
    }
@@ -192,6 +197,23 @@ class Commands
       $commands = $From === null
          ? array_merge(...array_values($this->commands))
          : $this->list($From);
+
+      // ! Prefer the exact registry scope before the historical class-level
+      //   fallback. Long-lived processes may construct multiple servers of
+      //   the same class; their commands carry instance-bound contexts.
+      if ($From !== null) {
+         /** @var Command $Command */
+         foreach ($commands as $Command) {
+            if (
+               $Command->name === $command
+               && ($this->Sources[spl_object_id($Command)] ?? null) === $From
+            ) {
+               $Command->input = $input;
+
+               return $Command;
+            }
+         }
+      }
 
       /** @var Command $Command */
       foreach ($commands as $Command) {
