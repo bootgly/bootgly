@@ -117,6 +117,7 @@ use Bootgly\CLI\Command;
 use Bootgly\CLI\UI\Components\Alert;
 use Bootgly\CLI\UI\Components\Charts\Bars;
 use Bootgly\CLI\UI\Components\Fieldset;
+use Bootgly\CLI\UI\Components\Heatmap;
 
 
 class TestCommand extends Command
@@ -139,8 +140,15 @@ class TestCommand extends Command
       'Native driver mode: strict | parity (default: strict)' => ['--coverage-native-mode=MODE'],
       'Coverage report: text | html | clover (default: text)' => ['--coverage-report=FORMAT[:PATH]'],
       'Restrict the coverage report to changed lines' => ['--coverage-diff'],
+      'Output view: list | heatmap (default: heatmap on full runs)' => ['--view=MODE'],
       'Show help information' => ['--help', '-h'],
    ];
+
+   // * Metadata
+   /** Output view resolved from --view (list | heatmap) */
+   private string $view = 'list';
+   /** Failed test cases accumulated across heatmap-mode suites */
+   private int $failures = 0;
 
 
    public function run (array $arguments = [], array $options = []): bool
@@ -173,6 +181,26 @@ class TestCommand extends Command
          Results::$agent = $Agent->name;
       }
 
+      // ! View
+      // ? Contextual default: full runs dashboard as heatmap; targeted runs
+      //   (suite/case index) keep the list view for assertion-level debugging.
+      $targeted = ((int) ($arguments[0] ?? 0)) > 0;
+      $view = strtolower((string) ($options['view'] ?? ($targeted ? 'list' : 'heatmap')));
+      if (in_array($view, ['list', 'heatmap'], true) === false) {
+         $Output = CLI->Terminal->Output;
+         $Alert = new Alert($Output);
+         $Alert->Type::Failure->set();
+         $Alert->message = "Invalid --view '{$view}'. Use: list | heatmap.@.;";
+         $Alert->render();
+
+         return false;
+      }
+      // ? Agents consume the JSON results document — views only shape human output
+      if (Results::$enabled) {
+         $view = 'list';
+      }
+      $this->view = $view;
+
       // ! Reap temporaries orphaned by interrupted past runs (age- and
       //   ownership-guarded; production surfaces are never matched). Silent:
       //   a shared-/tmp permission race must never break a test run.
@@ -185,7 +213,11 @@ class TestCommand extends Command
 
       // ! Tester
       // * Config
-      Suite::$exitOnFailure = true;
+      // ? Heatmap view: dashboards run every suite and list failures under
+      //   each card — quiet mutes the ACI per-case output and disables the
+      //   exit-on-first-failure contract.
+      Suite::$exitOnFailure = $this->view !== 'heatmap';
+      Suite::$quiet = $this->view === 'heatmap';
 
       // !
       // arguments
@@ -343,7 +375,7 @@ class TestCommand extends Command
          echo Results::toJSON();
       }
 
-      return $Tests->Suites->failed === 0;
+      return $Tests->Suites->failed === 0 && $this->failures === 0;
    }
 
    // # Help
@@ -401,6 +433,7 @@ class TestCommand extends Command
       $Fieldset->title = '@#green: Test usage @;';
       $Fieldset->content = 'bootgly test @#Black: [suite] [case] @;@.;';
       $Fieldset->content .= 'bootgly test @#Black: [suite] --coverage @;@.;';
+      $Fieldset->content .= 'bootgly test @#Black: [suite] --view=heatmap @;@.;';
       $Fieldset->content .= 'bootgly test @#Black: benchmark CASE --opponents=LIST --loads=SET:IDX @;';
       $Fieldset->render();
 
@@ -408,6 +441,7 @@ class TestCommand extends Command
       $examples = '@#Black:bootgly test@;' . PHP_EOL;
       $examples .= '@#Black:bootgly test 23@;' . PHP_EOL;
       $examples .= '@#Black:bootgly test 23 1@;' . PHP_EOL;
+      $examples .= '@#Black:bootgly test --view=heatmap@;' . PHP_EOL;
       $examples .= '@#Black:php -d opcache.enable_cli=0 bootgly test 8 --coverage-driver=native@;' . PHP_EOL;
       $examples .= '@#Black:AI_AGENT=1 bootgly test@;  (JSON results for AI agents)';
       $Fieldset = new Fieldset($Output);
@@ -468,6 +502,11 @@ class TestCommand extends Command
          throw new LogicException("Test suite index {$suite} did not load a valid Suite: {$suite_dir}");
       }
 
+      // ? Heatmap view — a suite autoboot may re-enable exit-on-failure
+      if ($this->view === 'heatmap') {
+         Suite::$exitOnFailure = false;
+      }
+
       // ?!
       // * Config
       if ($index) {
@@ -483,7 +522,13 @@ class TestCommand extends Command
       try {
          $autoBoot = $Suite->autoBoot ?? false;
          if ($autoBoot instanceof Closure) {
-            return $autoBoot($Suite);
+            $Return = $autoBoot($Suite);
+            // ? Closure suites usually run in child processes and return true
+            if ($this->view === 'heatmap' && $Return instanceof Suite) {
+               $this->chart($Return);
+            }
+
+            return $Return;
          }
          else if ($autoBoot) {
             $Suite->autoboot($autoBoot);
@@ -493,6 +538,10 @@ class TestCommand extends Command
             }
             if ($Suite->autoSummarize) {
                $Suite->summarize();
+            }
+
+            if ($this->view === 'heatmap') {
+               $this->chart($Suite);
             }
 
             return $Suite;
@@ -523,6 +572,62 @@ class TestCommand extends Command
 
       $suite ??= 0;
       throw new LogicException("Test suite index {$suite} was not loaded or does not exist: {$suite_dir}");
+   }
+
+   /**
+    * Chart a Suite as a heatmap dashboard card, listing its failures below.
+    */
+   private function chart (Suite $Suite): void
+   {
+      $this->failures += $Suite->failed;
+
+      $Output = CLI->Terminal->Output;
+
+      // ! Cells — one per assertion, in execution order
+      $cells = [];
+      foreach ($Suite->records as $record) {
+         // ? A skipped case contributes a single skipped cell
+         if ($record['status'] === 'skipped') {
+            $cells[] = 'skipped';
+
+            continue;
+         }
+
+         foreach ($record['results'] as $result) {
+            $cells[] = match ($result) {
+               true => 'passed',
+               false => 'failed',
+               default => 'skipped',
+            };
+         }
+      }
+
+      // @ Card
+      $Heatmap = new Heatmap($Output);
+      $Heatmap->title = $Suite->name !== '' ? $Suite->name : '(suite)';
+      $Heatmap->cells = $cells;
+      $Heatmap->render();
+
+      // @ Failures — raw SGR: assertion messages may contain markup-like text
+      $red = self::wrap(self::_RED_FOREGROUND);
+      $dim = self::wrap(self::_DIM_STYLE);
+      $reset = self::_RESET_FORMAT;
+      foreach ($Suite->records as $record) {
+         if ($record['status'] !== 'failed') {
+            continue;
+         }
+
+         $description = $record['description'] ?? ('Assertion #' . count($record['results']));
+         $elapsed = $record['elapsed'] !== null ? " {$dim}(+{$record['elapsed']}s){$reset}" : '';
+         $Output->write(" {$red}✘{$reset} {$record['file']} — {$description}{$elapsed}\n");
+
+         $message = (string) $record['message'];
+         if ($message !== '') {
+            $Output->write("   {$dim}↪ {$message}{$reset}\n");
+         }
+      }
+
+      $Output->write("\n");
    }
 
    private function locate (string $scope): null|string

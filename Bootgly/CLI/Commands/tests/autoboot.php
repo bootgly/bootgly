@@ -15,5 +15,6 @@ return new Suite(
       '_Commands-register-01',
       'Commands-route-01',
       'TestCommand-help-01',
+      'TestCommand-view-01',
    ]
 );
