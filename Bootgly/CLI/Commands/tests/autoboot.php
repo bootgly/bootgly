@@ -14,5 +14,6 @@ return new Suite(
    tests: [
       '_Commands-register-01',
       'Commands-route-01',
+      'TestCommand-help-01',
    ]
 );

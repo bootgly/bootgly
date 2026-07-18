@@ -116,6 +116,7 @@ use Bootgly\API\Environment\Agent;
 use Bootgly\CLI\Command;
 use Bootgly\CLI\UI\Components\Alert;
 use Bootgly\CLI\UI\Components\Charts\Bars;
+use Bootgly\CLI\UI\Components\Fieldset;
 
 
 class TestCommand extends Command
@@ -130,6 +131,17 @@ class TestCommand extends Command
    public string $name = 'test';
    public string $description = 'Perform Bootgly tests';
 
+   /** @var array<string,array<string>> */
+   public array $options = [
+      'Increase the verbosity of the command' => ['-v', '-vv', '-vvv'],
+      'Enable code coverage (auto-detected driver)' => ['--coverage'],
+      'Coverage driver: xdebug | pcov | native | nothing' => ['--coverage-driver=DRIVER'],
+      'Native driver mode: strict | parity (default: strict)' => ['--coverage-native-mode=MODE'],
+      'Coverage report: text | html | clover (default: text)' => ['--coverage-report=FORMAT[:PATH]'],
+      'Restrict the coverage report to changed lines' => ['--coverage-diff'],
+      'Show help information' => ['--help', '-h'],
+   ];
+
 
    public function run (array $arguments = [], array $options = []): bool
    {
@@ -139,6 +151,11 @@ class TestCommand extends Command
             array_slice($arguments, 1),
             $options
          );
+      }
+
+      // ? --help/-h → show usage without running suites
+      if (isset($options['help']) || isset($options['h'])) {
+         return $this->help();
       }
 
       // ! Agent detection
@@ -327,6 +344,80 @@ class TestCommand extends Command
       }
 
       return $Tests->Suites->failed === 0;
+   }
+
+   // # Help
+   /**
+    * Show the test command usage information.
+    *
+    * @return bool
+    */
+   public function help (): bool
+   {
+      $Output = CLI->Terminal->Output;
+
+      $Output->write(PHP_EOL);
+
+      // # Arguments
+      $arguments = [
+         '[suite]' => 'Suite index (1-based, tests/autoboot.php order); omitted or 0 = all suites',
+         '[case]' => 'Test case index inside the selected suite (1-based)',
+         'benchmark' => 'Benchmark subcommand; see: bootgly test benchmark --help',
+      ];
+      $width = 0;
+      foreach ($arguments as $argument => $description) {
+         $width = max($width, strlen($argument));
+      }
+      $content = '';
+      foreach ($arguments as $argument => $description) {
+         $padding = str_pad('', $width - strlen($argument));
+         $content .= "@#Yellow:{$argument}@;{$padding}  {$description}" . PHP_EOL;
+      }
+      $content = rtrim($content);
+      $Fieldset = new Fieldset($Output);
+      $Fieldset->title = '@#Cyan: Test arguments @;';
+      $Fieldset->content = $content;
+      $Fieldset->render();
+
+      // # Options
+      $width = 0;
+      foreach ($this->options as $flags) {
+         $width = max($width, strlen(implode(', ', $flags)));
+      }
+      $content = '';
+      foreach ($this->options as $description => $flags) {
+         $joined = implode(', ', $flags);
+         $padding = str_pad('', $width - strlen($joined));
+         $content .= "@#Yellow:{$joined}@;{$padding}  {$description}" . PHP_EOL;
+      }
+      $content = rtrim($content);
+      $Fieldset = new Fieldset($Output);
+      $Fieldset->title = '@#Cyan: Test options @;';
+      $Fieldset->content = $content;
+      $Fieldset->render();
+
+      // # Usage
+      $Fieldset = new Fieldset($Output);
+      $Fieldset->title = '@#green: Test usage @;';
+      $Fieldset->content = 'bootgly test @#Black: [suite] [case] @;@.;';
+      $Fieldset->content .= 'bootgly test @#Black: [suite] --coverage @;@.;';
+      $Fieldset->content .= 'bootgly test @#Black: benchmark CASE --opponents=LIST --loads=SET:IDX @;';
+      $Fieldset->render();
+
+      // # Examples
+      $examples = '@#Black:bootgly test@;' . PHP_EOL;
+      $examples .= '@#Black:bootgly test 23@;' . PHP_EOL;
+      $examples .= '@#Black:bootgly test 23 1@;' . PHP_EOL;
+      $examples .= '@#Black:php -d opcache.enable_cli=0 bootgly test 8 --coverage-driver=native@;' . PHP_EOL;
+      $examples .= '@#Black:AI_AGENT=1 bootgly test@;  (JSON results for AI agents)';
+      $Fieldset = new Fieldset($Output);
+      $Fieldset->title = '@#green: Test examples @;';
+      $Fieldset->content = $examples;
+      $Fieldset->render();
+
+      $Output->render('@.;');
+
+      return true;
    }
 
    // # Test Suite
