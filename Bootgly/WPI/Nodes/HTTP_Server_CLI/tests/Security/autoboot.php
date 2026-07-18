@@ -287,5 +287,9 @@ return new Suite(
       // A route exception must reach the configured reporter without copying
       // secret query values from the request target into its context.
       '50.01-throwable_report_query_secret_leak',
+      // # RequestId middleware (correlation-label bounds — audit L2)
+      // Client IDs must satisfy a conservative token grammar and length cap;
+      // otherwise a fresh server-owned identifier must replace them.
+      '51.01-request_id_token_length_bound',
    ],
 );

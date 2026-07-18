@@ -13,6 +13,7 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Middlewares;
 
 use function bin2hex;
 use function chr;
+use function is_string;
 use function ord;
 use function preg_match;
 use function random_bytes;
@@ -47,15 +48,20 @@ class RequestId implements Middleware
    public function process (object $Request, object $Response, Closure $next): object
    {
       // ! Generate or use existing request ID
-      $requestId = $Request->Header->get($this->header); // @phpstan-ignore-line
+      $requestID = $Request->Header->get($this->header); // @phpstan-ignore-line
 
-      // ! Reject client-supplied IDs containing CRLF (header injection guard)
-      if ($requestId === null || $requestId === '' || preg_match('/[\r\n]/', $requestId) === 1) {
+      // ! Accept only bounded RFC token values. Request IDs flow into response
+      //   headers and commonly into logs/traces, so whitespace, controls,
+      //   non-ASCII bytes and unbounded correlation labels fail closed.
+      if (
+         ! is_string($requestID)
+         || preg_match('/\A[!#$%&\'*+\-.^_`|~0-9A-Za-z]{1,128}\z/D', $requestID) !== 1
+      ) {
          // @ Generate UUID v4-like ID
          $data = random_bytes(16);
          $data[6] = chr(ord($data[6]) & 0x0f | 0x40);
          $data[8] = chr(ord($data[8]) & 0x3f | 0x80);
-         $requestId = bin2hex($data[0] . $data[1] . $data[2] . $data[3]) . '-'
+         $requestID = bin2hex($data[0] . $data[1] . $data[2] . $data[3]) . '-'
             . bin2hex("$data[4]$data[5]") . '-'
             . bin2hex("$data[6]$data[7]") . '-'
             . bin2hex("$data[8]$data[9]") . '-'
@@ -63,7 +69,7 @@ class RequestId implements Middleware
       }
 
       // @ Set request ID on response
-      $Response->Header->set($this->header, $requestId); // @phpstan-ignore-line
+      $Response->Header->set($this->header, $requestID); // @phpstan-ignore-line
 
       // :
       return $next($Request, $Response);

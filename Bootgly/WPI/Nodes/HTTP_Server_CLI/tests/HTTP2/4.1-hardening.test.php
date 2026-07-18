@@ -257,16 +257,40 @@ return new Specification(
          ->assert();
       $Client->close();
 
-      // @ Client GOAWAY with no open streams → server closes cleanly
+      // @ Graceful client GOAWAY enters drain: control frames remain active,
+      //   while new request streams are refused.
       $Client = new Client;
       $Client->preface();
       $Client->expect(HTTP2::FRAME_SETTINGS);
-      $Client->send(Frame::pack(HTTP2::FRAME_GOAWAY, 0, 0, pack('NN', 0, 0)));
+      $Client->send(
+         Frame::pack(HTTP2::FRAME_GOAWAY, 0, 0, pack('NN', 0, Errors::None->value))
+         . Frame::pack(HTTP2::FRAME_PING, 0, 0, 'draining')
+      );
+      $pong = $Client->expect(HTTP2::FRAME_PING);
       yield new Assertion(
-         description: 'Client GOAWAY (idle) → connection closed',
+         description: 'Client GOAWAY(NO_ERROR) keeps connection-control frames active',
       )
-         ->expect($Client->closed())
-         ->to->be(true)
+         ->expect([
+            $pong['flags'] ?? null,
+            $pong['payload'] ?? null,
+         ])
+         ->to->be([HTTP2::FLAG_ACK, 'draining'])
+         ->assert();
+
+      $Client->send(Frame::pack(
+         HTTP2::FRAME_HEADERS,
+         HTTP2::FLAG_END_HEADERS | HTTP2::FLAG_END_STREAM,
+         1,
+         $request('/after-goaway'),
+      ));
+      $reset = $Client->expect(HTTP2::FRAME_RST_STREAM);
+      /** @var array{1: int}|false $status */
+      $status = unpack('N', $reset['payload'] ?? '');
+      yield new Assertion(
+         description: 'Client GOAWAY drain refuses newly opened request streams',
+      )
+         ->expect($status[1] ?? null)
+         ->to->be(Errors::RefusedStream->value)
          ->assert();
       $Client->close();
    })

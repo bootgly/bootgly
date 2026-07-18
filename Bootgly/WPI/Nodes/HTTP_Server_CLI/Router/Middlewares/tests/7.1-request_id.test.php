@@ -1,7 +1,9 @@
 <?php
 
+use function is_string;
 use function strlen;
 use function preg_match;
+use function str_repeat;
 use Generator;
 
 use Bootgly\ACI\Tests\Assertion;
@@ -52,7 +54,52 @@ return new Specification(
          ->to->be('my-custom-id-123')
          ->assert();
 
-      // @ Test 3: Custom header name
+      // @ Test 3: Preserves the maximum accepted RFC-token length
+      $boundaryID = str_repeat('a', 128);
+      [$Request, $Response] = $createMocks(
+         requestHeaders: ['X-Request-Id' => $boundaryID]
+      );
+      $RequestId = new RequestId;
+      $Result = $RequestId->process($Request, $Response, $passthrough);
+      yield new Assertion(
+         description: 'A 128-byte token request ID should be preserved',
+      )
+         ->expect($Result->Header->get('X-Request-Id'))
+         ->to->be($boundaryID)
+         ->assert();
+
+      // @ Test 4: Replaces values outside the grammar/length contract
+      $invalidIDs = [
+         '129-byte token' => str_repeat('b', 129),
+         'space' => 'contains space',
+         'horizontal tab' => "contains\ttab",
+         'control byte' => "contains\x1fcontrol",
+         'Unicode' => "unicode-\u{00e9}",
+         'CRLF' => "split\r\nheader",
+      ];
+      foreach ($invalidIDs as $label => $invalidID) {
+         [$Request, $Response] = $createMocks(
+            requestHeaders: ['X-Request-Id' => $invalidID]
+         );
+         $RequestId = new RequestId;
+         $Result = $RequestId->process($Request, $Response, $passthrough);
+         $generatedID = $Result->Header->get('X-Request-Id');
+
+         yield new Assertion(
+            description: "Invalid request ID ({$label}) should be replaced with a UUID v4",
+         )
+            ->expect(
+               is_string($generatedID)
+               && preg_match(
+                  '/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/',
+                  $generatedID,
+               ) === 1
+            )
+            ->to->be(true)
+            ->assert();
+      }
+
+      // @ Test 5: Custom header name
       [$Request, $Response] = $createMocks();
       $RequestId = new RequestId(header: 'X-Trace-Id');
       $Result = $RequestId->process($Request, $Response, $passthrough);
