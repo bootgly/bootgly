@@ -291,5 +291,9 @@ return new Suite(
       // Client IDs must satisfy a conservative token grammar and length cap;
       // otherwise a fresh server-owned identifier must replace them.
       '51.01-request_id_token_length_bound',
+      // # CLI terminal sizing (PATH execution before demotion — audit L3)
+      // Invalid COLUMNS/LINES must not execute an attacker-selected `tput`
+      // during the launch-credential CLI bootstrap.
+      '52.01-tput_path_pre_demote_execution',
    ],
 );

@@ -13,13 +13,21 @@ namespace Bootgly\CLI\Terminal;
 
 use const SIG_DFL;
 use const SIGWINCH;
-use function exec;
+use function fclose;
 use function function_exists;
 use function getenv;
-use function is_numeric;
+use function is_executable;
+use function is_resource;
+use function is_string;
 use function pcntl_signal;
+use function preg_match;
+use function proc_close;
+use function proc_open;
 use function register_shutdown_function;
+use function stream_get_contents;
+use function trim;
 use Closure;
+use Throwable;
 
 use Bootgly\ABI\Data\__String\Escapeable;
 use Bootgly\ABI\Data\__String\Escapeable\Cursor\Positionable;
@@ -35,6 +43,12 @@ use Bootgly\CLI\Terminal\Output;
  */
 class Screen
 {
+   /** Trusted terminal-capability helpers; never resolve executables through PATH. */
+   private const array TPUT_BINARIES = [
+      '/usr/bin/tput',
+      '/bin/tput',
+   ];
+
    use Escapeable;
    use Positionable;
    use Modifiable;
@@ -65,33 +79,114 @@ class Screen
    }
 
    /**
-    * Measures the terminal size: COLUMNS / LINES environment first
-    * (ncurses convention), then `tput`, then the 80×30 fallback.
+    * Measures the terminal size: validated COLUMNS / LINES environment first,
+    * then a trusted absolute `tput` without a shell, then the 80×30 fallback.
     *
     * @return array{0: int, 1: int} The terminal size as [columns, lines].
     */
    public static function measure (): array
    {
       // ! Columns
-      $columns = getenv('COLUMNS');
-      if (is_numeric($columns) === false && function_exists('exec') === true) {
-         $columns = exec('tput cols 2>/dev/null');
-      }
-      if (is_numeric($columns) === false) {
-         $columns = 80;
-      }
+      $columns = self::parse(getenv('COLUMNS'));
+      $columns = $columns === false ? self::probe('cols') : $columns;
+      $columns = $columns === false ? 80 : $columns;
 
       // ! Lines
-      $lines = getenv('LINES');
-      if (is_numeric($lines) === false && function_exists('exec') === true) {
-         $lines = exec('tput lines 2>/dev/null');
-      }
-      if (is_numeric($lines) === false) {
-         $lines = 30;
-      }
+      $lines = self::parse(getenv('LINES'));
+      $lines = $lines === false ? self::probe('lines') : $lines;
+      $lines = $lines === false ? 30 : $lines;
 
       // :
-      return [(int) $columns, (int) $lines];
+      return [$columns, $lines];
+   }
+
+   /** Parse one positive, bounded terminal dimension. */
+   private static function parse (false|string $value): false|int
+   {
+      if (
+         $value === false
+         || preg_match('/\\A[1-9][0-9]{0,5}\\z/D', $value) !== 1
+      ) {
+         return false;
+      }
+
+      return (int) $value;
+   }
+
+   /** Query one capability through a trusted absolute binary without a shell. */
+   private static function probe (string $capability): false|int
+   {
+      if (function_exists('proc_open') === false) {
+         return false;
+      }
+
+      $binary = null;
+      foreach (self::TPUT_BINARIES as $candidate) {
+         if (is_executable($candidate)) {
+            $binary = $candidate;
+            break;
+         }
+      }
+      if ($binary === null) {
+         return false;
+      }
+
+      $term = getenv('TERM');
+      if (
+         is_string($term) === false
+         || preg_match('/\\A[A-Za-z0-9][A-Za-z0-9+._-]{0,63}\\z/D', $term) !== 1
+      ) {
+         return false;
+      }
+
+      $process = null;
+      $pipes = [];
+
+      try {
+         $process = @proc_open(
+            [$binary, $capability],
+            [
+               0 => ['file', '/dev/null', 'r'],
+               1 => ['pipe', 'w'],
+               2 => ['file', '/dev/null', 'w'],
+            ],
+            $pipes,
+            '/',
+            [
+               'TERM' => $term,
+               'LC_ALL' => 'C',
+            ]
+         );
+         if (is_resource($process) === false) {
+            return false;
+         }
+
+         $output = stream_get_contents($pipes[1], 32);
+         fclose($pipes[1]);
+         unset($pipes[1]);
+
+         $status = proc_close($process);
+         $process = null;
+
+         if ($status !== 0 || is_string($output) === false) {
+            return false;
+         }
+
+         return self::parse(trim($output));
+      }
+      catch (Throwable) {
+         return false;
+      }
+      finally {
+         foreach ($pipes as $pipe) {
+            if (is_resource($pipe)) {
+               fclose($pipe);
+            }
+         }
+         if (is_resource($process)) {
+            proc_close($process);
+         }
+      }
    }
 
    /**

@@ -67,7 +67,6 @@ use function chdir;
 use function chmod;
 use function count;
 use function defined;
-use function exec;
 use function explode;
 use function fclose;
 use function feof;
@@ -186,6 +185,7 @@ use Bootgly\API\Environments;
 use Bootgly\API\Projects;
 use Bootgly\API\Workables\Server as SAPI;
 use Bootgly\CLI\Terminal;
+use Bootgly\CLI\Terminal\Screen;
 use Bootgly\CLI\UI\Components\Logs as LogsViewer;
 use Bootgly\WPI\Endpoints\Servers;
 use Bootgly\WPI\Endpoints\Servers\Decoder;
@@ -1597,14 +1597,10 @@ class TCP_Server_CLI implements Servers
 
       // @ Refresh terminal size on resize (SIGWINCH)
       pcntl_signal(SIGWINCH, static function (): void {
-         $columns = exec('tput cols 2>/dev/null');
-         $lines = exec('tput lines 2>/dev/null');
-         if (is_numeric($columns)) {
-            Terminal::$width = (int) $columns;
-         }
-         if (is_numeric($lines)) {
-            Terminal::$height = (int) $lines;
-         }
+         [$columns, $lines] = Screen::measure();
+
+         Terminal::$width = $columns;
+         Terminal::$height = $lines;
       });
 
       $Viewer = new LogsViewer($Input, $Output);

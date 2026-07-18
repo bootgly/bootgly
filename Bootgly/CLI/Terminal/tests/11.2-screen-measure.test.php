@@ -4,6 +4,8 @@ namespace Bootgly\CLI\Terminal;
 
 
 use function assert;
+use function getenv;
+use function is_string;
 use function putenv;
 
 use Bootgly\ACI\Tests\Suite\Test\Specification;
@@ -46,9 +48,23 @@ return new Specification(
             . Terminal::$columns . '×' . Terminal::$lines
       );
 
+      // @ Invalid dimensions and TERM cannot reach an external capability probe
+      $term = getenv('TERM');
+      putenv('COLUMNS=0');
+      putenv('LINES=-1');
+      putenv('TERM=../../attacker-controlled');
+
+      [$columns, $lines] = Screen::measure();
+
+      yield assert(
+         assertion: $columns === 80 && $lines === 30,
+         description: "Invalid terminal inputs use the bounded fallback: {$columns}×{$lines}"
+      );
+
       // @ Restore environment and Terminal size
       putenv('COLUMNS');
       putenv('LINES');
+      is_string($term) ? putenv("TERM={$term}") : putenv('TERM');
       new Terminal;
    }
 );
