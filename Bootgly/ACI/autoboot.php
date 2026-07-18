@@ -19,10 +19,17 @@ use Bootgly\ACI\Observability\Metrics\Counter;
 // by E2E tests, so we reopen fd 1 onto a pipe at the process level before
 // the PHP app boots. The parent process drains the pipe and emits only the
 // last valid JSON document (the one produced by Results::toJSON()).
+// This file is included from inside Bootgly::autoboot(), where $argv is not
+// in scope — CLI arguments come from the $_SERVER superglobal instead.
+// Help requests (--help/-h) print raw text for the caller, so they bypass
+// the redirection — like the `benchmark` subcommand already does.
+$arguments = (array) ($_SERVER['argv'] ?? []);
 if (
    PHP_SAPI === 'cli'
-   && ($argv[1] ?? null) === 'test'
-   && ($argv[2] ?? null) !== 'benchmark'
+   && ($arguments[1] ?? null) === 'test'
+   && ($arguments[2] ?? null) !== 'benchmark'
+   && in_array('--help', $arguments, true) === false
+   && in_array('-h', $arguments, true) === false
    && getenv('BOOTGLY_AGENT_STDOUT_REDIRECTED') !== '1'
 ) {
    $agentEnvVars = [
@@ -52,7 +59,12 @@ if (
       $agentDetected = true;
    }
 
-   if ($agentDetected && function_exists('proc_open')) {
+   // ? Re-invoke the active CLI entry script — run standalone, this bootstrap
+   //   fragment is a no-op, so the child must boot the real `bootgly` entry.
+   $entry = $_SERVER['SCRIPT_FILENAME'] ?? ($arguments[0] ?? '');
+   $entry = is_string($entry) && $entry !== '' ? realpath($entry) : false;
+
+   if ($agentDetected && $entry !== false && is_file($entry) && function_exists('proc_open')) {
       $descriptors = [
          0 => STDIN,
          1 => ['pipe', 'w'],
@@ -60,8 +72,8 @@ if (
       ];
       $env = getenv();
       $env['BOOTGLY_AGENT_STDOUT_REDIRECTED'] = '1';
-      $self = [PHP_BINARY, __FILE__];
-      foreach (array_slice($argv, 1) as $arg) {
+      $self = [PHP_BINARY, $entry];
+      foreach (array_slice($arguments, 1) as $arg) {
          $self[] = $arg;
       }
 
@@ -104,10 +116,10 @@ if (
       }
    }
 }
+unset($arguments, $entry);
 
 // @ Debugging reporters — ACI Observability hook
-// Skipped when this file runs standalone as the agent-stdout child above
-// (no autoloader is registered in that mode).
+// Skipped when this file is executed standalone (no autoloader registered).
 if (defined('BOOTGLY_VERSION') === true) {
    Throwables::$reporters[] = static function (Throwable $Throwable, array $context): void {
       // ? No registry configured — zero cost
