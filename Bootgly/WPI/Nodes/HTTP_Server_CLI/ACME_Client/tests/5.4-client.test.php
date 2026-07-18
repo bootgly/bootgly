@@ -16,7 +16,9 @@ return new Specification(
          static fn () => new ACME_Client($Account, 'https://ca.test/directory', polls: 0),
          static fn () => new ACME_Client($Account, 'https://ca.test/directory', wait: 0),
          static fn () => new ACME_Client($Account, 'https://ca.test/directory', wait: INF),
-         static fn () => new ACME_Client($Account, 'http://ca.test/directory')
+         static fn () => new ACME_Client($Account, 'http://ca.test/directory'),
+         static fn () => new ACME_Client($Account, 'https://ca.test:99999/directory'),
+         static fn () => new ACME_Client($Account, 'https://ca.test\\@127.0.0.1/directory')
       ];
       foreach ($Cases as $Construct) {
          $rejected = false;

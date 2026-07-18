@@ -279,5 +279,9 @@ return new Suite(
       // An in-place state rewrite must never select an unrelated process for
       // reload/stop signaling without trusted process-identity validation.
       '48.01-project_command_mutable_pid_identity_signal',
+      // # ACME advertised endpoint authority (HTTPS SSRF — audit M15)
+      // Directory metadata must not make the client contact an unapproved
+      // authority or a prohibited address class, even when HTTPS is used.
+      '49.01-acme_advertised_url_authority_ssrf',
    ],
 );

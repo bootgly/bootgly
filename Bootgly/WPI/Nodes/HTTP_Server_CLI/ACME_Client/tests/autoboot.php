@@ -29,5 +29,6 @@ return new Suite(
       '5.4-client',
       '5.5-transport_deadline',
       '5.6-protocol_faults',
+      '5.7-destination_policy',
    ]
 );

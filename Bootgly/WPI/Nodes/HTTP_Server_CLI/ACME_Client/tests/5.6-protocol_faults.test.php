@@ -163,7 +163,8 @@ return new Specification(
          $Client = new ACME_Client(
             new Account($path),
             "{$base}/directory",
-            verify: false
+            verify: false,
+            allowPrivate: true
          );
 
          $Property = new ReflectionProperty($Client, 'Nonces');
@@ -224,7 +225,8 @@ return new Specification(
          $Client = new ACME_Client(
             new Account($path),
             "{$base}/directory",
-            verify: false
+            verify: false,
+            allowPrivate: true
          );
 
          return (new ReflectionMethod($Client, 'connect'))->invoke($Client);
@@ -265,7 +267,8 @@ return new Specification(
          $Client = new ACME_Client(
             new Account(sys_get_temp_dir() . '/bootgly-acme-head-' . getmypid() . '/'),
             "{$base}/directory",
-            verify: false
+            verify: false,
+            allowPrivate: true
          );
 
          return (new ReflectionMethod($Client, 'fetch'))->invoke($Client);

@@ -11,24 +11,45 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI;
 
 
+use const DNS_A;
+use const DNS_AAAA;
+use const FILTER_FLAG_GLOBAL_RANGE;
+use const FILTER_VALIDATE_IP;
+use const SOCK_STREAM;
+use function array_unique;
+use function array_values;
 use function ctype_digit;
+use function dns_get_record;
+use function filter_var;
+use function function_exists;
+use function gethostbynamel;
 use function hrtime;
 use function implode;
 use function in_array;
+use function inet_ntop;
+use function inet_pton;
 use function intdiv;
 use function is_array;
 use function is_finite;
+use function is_int;
 use function is_string;
 use function json_decode;
 use function max;
 use function microtime;
 use function min;
+use function ord;
 use function parse_url;
 use function preg_match;
+use function socket_addrinfo_explain;
+use function socket_addrinfo_lookup;
+use function str_contains;
 use function str_ends_with;
+use function str_repeat;
 use function str_starts_with;
+use function strlen;
 use function strtolower;
 use function strtotime;
+use function substr;
 use function time;
 use function usleep;
 use InvalidArgumentException;
@@ -79,6 +100,19 @@ class ACME_Client
     */
    public private(set) bool $verify;
    /**
+    * Canonical HTTPS origins that ACME metadata may target. The configured
+    * directory origin is always the first member; delegated origins require
+    * explicit configuration and an exact effective-port match.
+    * @var array<int,string>
+    */
+   public private(set) array $authorities;
+   /**
+    * Whether approved authorities may resolve to non-global unicast addresses.
+    * Explicit trust expansion for private/test CAs only: `verify: false` does
+    * not imply it. Each origin remains pinned to its first vetted address.
+    */
+   public private(set) bool $allowPrivate;
+   /**
     * Maximum poll attempts per authorization/order.
     */
    public private(set) int $polls;
@@ -99,31 +133,47 @@ class ACME_Client
    private null|Directory $Directory = null;
    private Nonces $Nonces;
    private JWS $JWS;
+   /**
+    * Exact numeric dial target pinned on first use of each approved origin.
+    * @var array<string,string>
+    */
+   private array $addresses = [];
    /** Active order deadline; request() derives its socket timeouts from it. */
    private null|int $deadline = null;
 
 
+   /** @param array<int,mixed> $authorities Runtime validation rejects non-strings. */
    public function __construct (
       Account $Account,
       string $directory,
       bool $verify = true,
       int $polls = 30,
       float $wait = 2.0,
-      null|string $challenges = null
+      null|string $challenges = null,
+      array $authorities = [],
+      bool $allowPrivate = false
    )
    {
-      $parts = parse_url($directory);
-      if (
-         is_array($parts) === false
-         || ($parts['scheme'] ?? null) !== 'https'
-         || is_string($parts['host'] ?? null) === false
-         || $parts['host'] === ''
-         || isset($parts['user']) || isset($parts['pass']) || isset($parts['fragment'])
-         || preg_match('/[\x00-\x20\x7f]/', $directory) === 1
-      ) {
+      $target = $this->parse($directory);
+      if ($target === null) {
          throw new InvalidArgumentException(
             "ACME directory `{$directory}` must be an absolute https:// URL with a host."
          );
+      }
+      $origins = [$target['origin']];
+      foreach ($authorities as $authority) {
+         if (is_string($authority) === false) {
+            throw new InvalidArgumentException(
+               'Every delegated ACME authority must be an absolute https:// origin string.'
+            );
+         }
+         $delegated = $this->parse($authority);
+         if ($delegated === null || $delegated['path'] !== '/') {
+            throw new InvalidArgumentException(
+               "Delegated ACME authority `{$authority}` must be an absolute https:// origin without a path or query."
+            );
+         }
+         $origins[] = $delegated['origin'];
       }
       if ($polls < 1) {
          throw new InvalidArgumentException('ACME `polls` must be at least 1.');
@@ -135,6 +185,8 @@ class ACME_Client
       // * Config
       $this->directory = $directory;
       $this->verify = $verify;
+      $this->authorities = array_values(array_unique($origins));
+      $this->allowPrivate = $allowPrivate;
       $this->polls = $polls;
       $this->wait = $wait;
       $this->challenges = $challenges;
@@ -163,6 +215,9 @@ class ACME_Client
       //   silently treating a changed configured email as already applied.
       $accountURL = $this->Account->URL;
       if ($accountURL !== null) {
+         // ! A persisted kid is untrusted legacy/CA state. Validate it even
+         //   when unchanged contact means no network request would follow.
+         $this->authorize($accountURL);
          if ($this->Account->contact !== $email) {
             $updated = $this->post($accountURL, [
                'contact' => ["mailto:{$email}"]
@@ -195,6 +250,9 @@ class ACME_Client
             'ACME newAccount response is missing the account `Location`.'
          );
       }
+      // ! Never persist a foreign kid that could become a future update sink
+      //   or be embedded into JWS requests sent to an approved authority.
+      $this->authorize($URL);
 
       $this->Account->save($URL);
       $this->Account->update($email);
@@ -253,6 +311,14 @@ class ACME_Client
                'ACME newOrder response is missing `Location`, `finalize` or `authorizations`.'
             );
          }
+         $this->authorize($orderURL);
+         $this->authorize($finalize);
+         foreach ($authorizations as $authorization) {
+            if (is_string($authorization) === false) {
+               throw new ProtocolException('ACME authorization URL is not a string.');
+            }
+            $this->authorize($authorization);
+         }
 
          // @@ Authorizations — publish and answer one HTTP-01 challenge each
          foreach ($authorizations as $authorization) {
@@ -291,6 +357,8 @@ class ACME_Client
                   'ACME authorization offers no usable http-01 challenge.'
                );
             }
+            // ! Reject a foreign challenge URL before publishing a token.
+            $this->authorize($trigger);
 
             // @ Publish the key authorization for the HTTP-01 responders
             if (Challenges::save(
@@ -358,6 +426,7 @@ class ACME_Client
                'ACME order settled without a `certificate` URL.'
             );
          }
+         $this->authorize($certificate);
 
          // @ Download the certificate chain
          $this->expire($deadline);
@@ -423,6 +492,11 @@ class ACME_Client
 
       /** @var array<string,mixed> $endpoints */
       $this->Directory = new Directory($endpoints);
+      // ! Directory JSON is CA-controlled. Validate every active advertised
+      //   endpoint immediately so no later operation can partially act on it.
+      $this->authorize($this->Directory->newAccount);
+      $this->authorize($this->Directory->newNonce);
+      $this->authorize($this->Directory->newOrder);
 
       // :
       return $this->Directory;
@@ -470,10 +544,20 @@ class ACME_Client
     */
    private function post (string $URL, null|array $payload, array $headers = []): array
    {
+      // ! Fail before key materialization/nonce fetch/signing when the caller
+      //   presents an out-of-policy endpoint.
+      $this->authorize($URL);
+
       // ! Materialize the account key BEFORE reading the kid: generating a
       //   fresh key drops a stale persisted URL — reading the URL first
       //   would sign one doomed request with the obsolete kid
       $Key = $this->Account->Key;
+      $kid = $this->Account->URL;
+      if ($kid !== null) {
+         // ! The persisted kid is untrusted state even when callers invoke
+         //   order() directly without the normal register() preflight.
+         $this->authorize($kid);
+      }
 
       $nonce = $this->Nonces->take() ?? $this->fetch();
 
@@ -606,6 +690,273 @@ class ACME_Client
    }
 
    /**
+    * Parse and canonicalize one HTTPS ACME URL without performing I/O.
+    *
+    * @return null|array{host:string,lookup:string,port:int,origin:string,authority:string,path:string}
+    */
+   private function parse (string $URL): null|array
+   {
+      if (
+         $URL === '' || strlen($URL) > 8192
+         || preg_match('/[\x00-\x20\x7f]/', $URL) === 1
+         || str_contains($URL, '\\')
+      ) {
+         return null;
+      }
+
+      try {
+         $parts = parse_url($URL);
+      }
+      catch (Throwable) {
+         return null;
+      }
+      if (
+         is_array($parts) === false
+         || strtolower((string) ($parts['scheme'] ?? '')) !== 'https'
+         || is_string($parts['host'] ?? null) === false
+         || $parts['host'] === ''
+         || isset($parts['user']) || isset($parts['pass']) || isset($parts['fragment'])
+      ) {
+         return null;
+      }
+
+      $given = $parts['host'];
+      $lookup = '';
+      if (str_starts_with($given, '[')) {
+         if (str_ends_with($given, ']') === false) {
+            return null;
+         }
+         $host = $this->normalize(substr($given, 1, -1));
+         if ($host === null || str_contains($host, ':') === false) {
+            return null;
+         }
+         $lookup = $host;
+      }
+      else {
+         $host = $this->normalize($given);
+         if ($host === null) {
+            $absolute = str_ends_with($given, '.');
+            if (str_ends_with($given, '.')) {
+               $given = substr($given, 0, -1);
+               if ($given === '' || str_ends_with($given, '.')) {
+                  return null;
+               }
+            }
+            $host = strtolower($given);
+            if (
+               preg_match(
+                  '/^(?=.{1,253}$)([a-z0-9]([a-z0-9\-]{0,61}[a-z0-9])?\.)*[a-z0-9]([a-z0-9\-]{0,61}[a-z0-9])?$/',
+                  $host
+               ) !== 1
+            ) {
+               return null;
+            }
+            // A terminal dot is omitted from origin/Host/TLS identity but
+            // retained for DNS lookup, preventing resolver search suffixes
+            // from changing the configured absolute name.
+            $lookup = $absolute ? "{$host}." : $host;
+         }
+         else {
+            $lookup = $host;
+         }
+      }
+
+      /** @var mixed $port parse_url() accepts zero despite its static stub. */
+      $port = $parts['port'] ?? 443;
+      if (is_int($port) === false || $port < 1 || $port > 65535) {
+         return null;
+      }
+      $label = str_contains($host, ':') ? "[{$host}]" : $host;
+      $authority = $port === 443 ? $label : "{$label}:{$port}";
+      $path = $parts['path'] ?? '/';
+      if ($path === '') {
+         $path = '/';
+      }
+      if (isset($parts['query'])) {
+         $path .= "?{$parts['query']}";
+      }
+
+      return [
+         'host' => $host,
+         'lookup' => $lookup,
+         'port' => $port,
+         'origin' => "https://{$authority}",
+         'authority' => $authority,
+         'path' => $path,
+      ];
+   }
+
+   /** Canonicalize an IPv4/IPv6 literal, including IPv4-mapped IPv6. */
+   private function normalize (string $IP): null|string
+   {
+      $packed = @inet_pton($IP);
+      if ($packed === false) {
+         return null;
+      }
+      if (
+         strlen($packed) === 16
+         && substr($packed, 0, 12) === str_repeat("\0", 10) . "\xff\xff"
+      ) {
+         $packed = substr($packed, 12);
+      }
+
+      $normalized = inet_ntop($packed);
+
+      return is_string($normalized) ? $normalized : null;
+   }
+
+   /**
+    * Enforce exact configured-origin policy without resolving DNS.
+    *
+    * @return array{host:string,lookup:string,port:int,origin:string,authority:string,path:string}
+    */
+   private function authorize (string $URL): array
+   {
+      $target = $this->parse($URL);
+      if ($target === null) {
+         throw new ProtocolException(
+            "ACME URL `{$URL}` is not an unambiguous absolute https:// URL."
+         );
+      }
+      if (in_array($target['origin'], $this->authorities, true) === false) {
+         throw new ProtocolException(
+            "ACME URL `{$URL}` targets unapproved authority `{$target['origin']}`."
+         );
+      }
+
+      return $target;
+   }
+
+   /** Resolve one approved host and return one exact vetted dial address. */
+   private function resolve (string $host, null|string $origin = null): string
+   {
+      if ($origin !== null && isset($this->addresses[$origin])) {
+         return $this->addresses[$origin];
+      }
+
+      $literal = $this->normalize($host);
+      $addresses = $literal === null ? [] : [$literal];
+      if ($literal === null) {
+         $resolved = false;
+         if (function_exists('socket_addrinfo_lookup')) {
+            try {
+               $AddressInfos = @socket_addrinfo_lookup($host, null, [
+                  'ai_socktype' => SOCK_STREAM,
+               ]);
+            }
+            catch (Throwable) {
+               $AddressInfos = false;
+            }
+            foreach (is_array($AddressInfos) ? $AddressInfos : [] as $AddressInfo) {
+               $explained = socket_addrinfo_explain($AddressInfo);
+               $IP = $explained['ai_addr']['sin_addr']
+                  ?? ($explained['ai_addr']['sin6_addr'] ?? null);
+               if (is_string($IP)) {
+                  $addresses[] = $IP;
+               }
+            }
+            $resolved = true;
+         }
+         if ($resolved === false) {
+            $IPv4 = @gethostbynamel($host);
+            foreach (is_array($IPv4) ? $IPv4 : [] as $IP) {
+               $addresses[] = $IP;
+            }
+
+            $records = @dns_get_record($host, DNS_A | DNS_AAAA);
+            foreach (is_array($records) ? $records : [] as $record) {
+               $IP = $record['ip'] ?? ($record['ipv6'] ?? null);
+               if (is_string($IP)) {
+                  $addresses[] = $IP;
+               }
+            }
+         }
+      }
+
+      $normalized = [];
+      foreach ($addresses as $IP) {
+         $address = $this->normalize($IP);
+         if ($address === null) {
+            throw new ProtocolException(
+               "ACME authority `{$host}` resolved to an invalid address."
+            );
+         }
+         $normalized[] = $address;
+      }
+      $addresses = array_values(array_unique($normalized));
+      if ($addresses === []) {
+         throw new ConnectionException(
+            "ACME authority `{$host}` could not be resolved."
+         );
+      }
+      foreach ($addresses as $IP) {
+         if ($this->permit($IP) === false) {
+            throw new ProtocolException(
+               "ACME authority `{$host}` resolved to prohibited address `{$IP}`."
+            );
+         }
+      }
+
+      $IP = $addresses[0];
+      if ($origin !== null) {
+         $this->addresses[$origin] = $IP;
+      }
+
+      return $IP;
+   }
+
+   /** Whether one canonical IP is an admitted unicast destination. */
+   private function permit (string $IP): bool
+   {
+      $packed = @inet_pton($IP);
+      if ($packed === false) {
+         return false;
+      }
+      $first = ord($packed[0]);
+      if (strlen($packed) === 4) {
+         // 0/8 is not a remote destination; 224/4 is multicast and 240/4
+         // is reserved/broadcast. They remain invalid even in test mode.
+         if ($first === 0 || $first >= 224) {
+            return false;
+         }
+      }
+      else if ($IP === '::' || $first === 255) {
+         // Unspecified and multicast IPv6 are never valid ACME peers.
+         return false;
+      }
+
+      if ($this->allowPrivate === false) {
+         if (
+            strlen($packed) === 4
+            && substr($packed, 0, 3) === "\xc0\x58\x63"
+         ) {
+            // Deprecated 6to4 relay anycast is special-use even though PHP's
+            // GLOBAL_RANGE classifier currently admits 192.88.99/24.
+            return false;
+         }
+         if (strlen($packed) === 16) {
+            $wellKnown = inet_pton('64:ff9b::');
+            $localUse = inet_pton('64:ff9b:1::');
+            if (
+               is_string($wellKnown) && substr($packed, 0, 12) === substr($wellKnown, 0, 12)
+               || is_string($localUse) && substr($packed, 0, 6) === substr($localUse, 0, 6)
+            ) {
+               // NAT64 can translate an apparently global IPv6 destination
+               // into an embedded private/loopback IPv4 address.
+               return false;
+            }
+         }
+      }
+
+      if ($this->allowPrivate) {
+         return true;
+      }
+
+      // @phpstan-ignore notIdentical.alwaysTrue (GLOBAL_RANGE is narrower than valid-IP)
+      return filter_var($IP, FILTER_VALIDATE_IP, FILTER_FLAG_GLOBAL_RANGE) !== false;
+   }
+
+   /**
     * Run one HTTP request against an absolute URL and harvest its nonce.
     *
     * @param array<string,string> $headers
@@ -617,30 +968,21 @@ class ACME_Client
       mixed $body = null
    ): Response
    {
-      // ? HTTPS only — RFC 8555 §6.1 requires TLS for every ACME endpoint,
-      //   including each URL the directory advertises
-      $parts = parse_url($URL);
-      $scheme = $parts['scheme'] ?? '';
-      $host = $parts['host'] ?? '';
-      if (
-         $host === '' || $scheme !== 'https'
-         || isset($parts['user']) || isset($parts['pass']) || isset($parts['fragment'])
-         || preg_match('/[\x00-\x20\x7f]/', $URL) === 1
-      ) {
-         throw new ProtocolException("ACME URL `{$URL}` is not an https:// URL.");
-      }
-
-      $port = $parts['port'] ?? 443;
-      $path = ($parts['path'] ?? '/')
-         . (isSet($parts['query']) ? "?{$parts['query']}" : '');
+      // ! One final central gate for every current/future ACME URL sink. DNS
+      //   is resolved now and the transport dials that exact vetted literal;
+      //   it never resolves the attacker-influenced hostname a second time.
+      $target = $this->authorize($URL);
+      $IP = $this->resolve($target['lookup'], $target['origin']);
+      $dial = str_contains($IP, ':') ? "[{$IP}]" : $IP;
 
       // ! TLS toward the CA — verification only relaxed for test CAs
       $secure = $this->verify
-         ? []
+         ? ['peer_name' => $target['host']]
          : [
             'verify_peer' => false,
             'verify_peer_name' => false,
-            'allow_self_signed' => true
+            'allow_self_signed' => true,
+            'peer_name' => $target['host']
          ];
 
       // ! MODE_TEST = embedded/library mode: no Process state lock, no
@@ -649,7 +991,13 @@ class ACME_Client
       $Client = new HTTP_Client_CLI(HTTP_Client_CLI::MODE_TEST);
       // ! ACME speaks HTTP/1.1 by design: no ALPN h2 offer — directory
       //   endpoints and the local swap helpers are h1-only transports
-      $Client->configure(host: $host, port: $port, workers: 0, secure: $secure, enableHTTP2: false);
+      $Client->configure(
+         host: $dial,
+         port: $target['port'],
+         workers: 0,
+         secure: $secure,
+         enableHTTP2: false
+      );
       // Fullchain responses are capped at 1 MiB by the certificate store;
       // reserve 64 KiB for status/headers and reject before accumulation.
       $Client->maxResponseBytes = 1114112;
@@ -671,7 +1019,11 @@ class ACME_Client
       //   old target (RFC 8555 §6.4); unexpected 3xx surfaces as an error
       $Client->maxRedirects = 0;
 
-      $Response = $Client->request($method, $path, $headers, $body);
+      // ! The numeric dial target must not change HTTP authority or TLS/JWS
+      //   identity. Host carries the original canonical authority; peer_name
+      //   above preserves SNI/certificate verification; JWS keeps `$URL`.
+      $headers = ['Host' => $target['authority']] + $headers;
+      $Response = $Client->request($method, $target['path'], $headers, $body);
       if ($this->deadline !== null) {
          $this->expire($this->deadline);
       }

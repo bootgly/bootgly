@@ -208,7 +208,8 @@ return new Specification(
             email: 'admin@example.com',
             path: "{$path}unreachable/",
             directory: 'https://127.0.0.1:1/dir',
-            verify: false
+            verify: false,
+            allowPrivate: true
          );
 
          $thrown = false;

@@ -35,6 +35,7 @@ use function fsync;
 use function function_exists;
 use function fwrite;
 use function hash;
+use function inet_pton;
 use function is_array;
 use function is_dir;
 use function is_file;
@@ -155,6 +156,14 @@ class AutoTLS
     */
    public private(set) bool $verify;
    /**
+    * Extra HTTPS origins explicitly trusted for CA-delegated ACME endpoints.
+    * The directory origin is always included by the protocol client.
+    * @var array<int,string>
+    */
+   public private(set) array $authorities;
+   /** Explicit private/test-CA egress opt-in; origins still pin their first IP. */
+   public private(set) bool $allowPrivate;
+   /**
     * Extra SSL stream-context options merged into the server `$context`.
     * @var array<string,mixed>
     */
@@ -261,6 +270,7 @@ class AutoTLS
     * @param array<int,mixed> $domains List of domain name strings — every
     *                                  entry is validated at construction.
     * @param array<string,mixed> $options
+    * @param array<int,mixed> $authorities Runtime validation rejects non-strings.
     *
     * @throws InvalidArgumentException On any invalid configuration value.
     */
@@ -276,7 +286,9 @@ class AutoTLS
       bool $agreement = true,
       int $port = self::DEFAULT_PORT,
       bool $verify = true,
-      array $options = []
+      array $options = [],
+      array $authorities = [],
+      bool $allowPrivate = false
    )
    {
       // ? Validate the domain set — HTTP-01 constraints apply
@@ -343,20 +355,20 @@ class AutoTLS
             "Invalid AutoTLS `port` `{$port}`: expected 1-65535."
          );
       }
-      if ($directory !== null) {
-         $parts = parse_url($directory);
-         $authority = is_array($parts) ? ($parts['host'] ?? null) : null;
-         if (
-            is_array($parts) === false
-            || ($parts['scheme'] ?? null) !== 'https'
-            || is_string($authority) === false || $authority === ''
-            || isset($parts['user']) || isset($parts['pass']) || isset($parts['fragment'])
-            || preg_match('/[\x00-\x20\x7f]/', $directory) === 1
-         ) {
+      if ($directory !== null && self::validate($directory) === false) {
+         throw new InvalidArgumentException(
+            "Invalid AutoTLS `directory` `{$directory}`: expected an unambiguous https:// URL with a valid host and port."
+         );
+      }
+      $origins = [];
+      foreach ($authorities as $authority) {
+         if (is_string($authority) === false || self::validate($authority, true) === false) {
+            $given = is_string($authority) ? $authority : '(non-string)';
             throw new InvalidArgumentException(
-               "Invalid AutoTLS `directory` `{$directory}`: expected an https:// URL with a host."
+               "Invalid AutoTLS delegated authority `{$given}`: expected an https:// origin without path, query, credentials or fragment."
             );
          }
+         $origins[] = $authority;
       }
 
       // ? Validate the storage path — the privileged boot writes into and
@@ -420,12 +432,83 @@ class AutoTLS
       $this->port = $port;
       $this->verify = $verify;
       $this->options = $options;
+      $this->authorities = $origins;
+      $this->allowPrivate = $allowPrivate;
 
       // * Metadata
       $sorted = $names;
       sort($sorted);
       $this->identity = hash('sha256', json_encode([$sorted, $this->directory], JSON_THROW_ON_ERROR));
       $this->instance = bin2hex(random_bytes(8));
+   }
+
+   /** Validate one unambiguous HTTPS URL or origin without performing I/O. */
+   private static function validate (string $URL, bool $origin = false): bool
+   {
+      if (
+         $URL === '' || strlen($URL) > 8192
+         || preg_match('/[\x00-\x20\x7f]/', $URL) === 1
+         || str_contains($URL, '\\')
+      ) {
+         return false;
+      }
+
+      try {
+         $parts = parse_url($URL);
+      }
+      catch (Throwable) {
+         return false;
+      }
+      if (
+         is_array($parts) === false
+         || strtolower((string) ($parts['scheme'] ?? '')) !== 'https'
+         || is_string($parts['host'] ?? null) === false
+         || $parts['host'] === ''
+         || isset($parts['user']) || isset($parts['pass']) || isset($parts['fragment'])
+      ) {
+         return false;
+      }
+
+      $host = $parts['host'];
+      if (str_starts_with($host, '[')) {
+         if (
+            str_ends_with($host, ']') === false
+            || str_contains(substr($host, 1, -1), ':') === false
+            || @inet_pton(substr($host, 1, -1)) === false
+         ) {
+            return false;
+         }
+      }
+      else {
+         if (str_ends_with($host, '.')) {
+            $host = substr($host, 0, -1);
+         }
+         if (
+            $host === ''
+            || (
+               @inet_pton($host) === false
+               && preg_match(
+                  '/^(?=.{1,253}$)([a-z0-9]([a-z0-9\-]{0,61}[a-z0-9])?\.)*[a-z0-9]([a-z0-9\-]{0,61}[a-z0-9])?$/i',
+                  $host
+               ) !== 1
+            )
+         ) {
+            return false;
+         }
+      }
+
+      /** @var mixed $port parse_url() accepts zero despite its static stub. */
+      $port = $parts['port'] ?? 443;
+      if (is_int($port) === false || $port < 1 || $port > 65535) {
+         return false;
+      }
+      if ($origin) {
+         $path = $parts['path'] ?? '';
+
+         return ($path === '' || $path === '/') && isset($parts['query']) === false;
+      }
+
+      return true;
    }
 
    /**
@@ -536,7 +619,9 @@ class AutoTLS
             $this->Account,
             $this->directory,
             $this->verify,
-            challenges: $this->challenges
+            challenges: $this->challenges,
+            authorities: $this->authorities,
+            allowPrivate: $this->allowPrivate
          );
          try {
             try {

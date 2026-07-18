@@ -83,6 +83,7 @@ return new Suite(
          path: $storage,
          port: 5002,
          verify: false,
+         allowPrivate: true,
          options: ['verify_peer' => false]
       );
 

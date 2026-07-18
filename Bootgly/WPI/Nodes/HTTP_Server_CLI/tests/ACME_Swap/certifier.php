@@ -29,7 +29,8 @@ $Server->configure(
       directory: "https://127.0.0.1:{$CA}/directory",
       path: "{$storage}/autotls/",
       port: $gate,
-      verify: false
+      verify: false,
+      allowPrivate: true
    )
 );
 $Server->on(

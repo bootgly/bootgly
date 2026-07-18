@@ -52,6 +52,10 @@ return new Specification(
          assertion: $AutoTLS->options === [],
          description: 'extra SSL context options default to empty'
       );
+      yield assert(
+         assertion: $AutoTLS->authorities === [] && $AutoTLS->allowPrivate === false,
+         description: 'delegated origins default empty and private ACME egress defaults denied'
+      );
 
       // @ Directory resolution
       $Staging = new AutoTLS(
@@ -68,7 +72,9 @@ return new Specification(
          domains: ['localhost'],
          email: 'admin@example.com',
          staging: true,
-         directory: 'https://localhost:14000/dir'
+         directory: 'https://localhost:14000/dir',
+         authorities: ['https://localhost:15000'],
+         allowPrivate: true,
       );
       yield assert(
          assertion: $Pebble->directory === 'https://localhost:14000/dir',
@@ -77,6 +83,11 @@ return new Specification(
       yield assert(
          assertion: $Pebble->domains === ['localhost'],
          description: 'a single-label hostname (localhost) is accepted'
+      );
+      yield assert(
+         assertion: $Pebble->authorities === ['https://localhost:15000']
+            && $Pebble->allowPrivate === true,
+         description: 'explicit delegated origins and private-test egress opt-in are retained'
       );
 
       // @ Path normalization
@@ -154,6 +165,76 @@ return new Specification(
             domains: ['example.com'],
             email: 'admin@example.com',
             directory: 'https://user:secret@localhost:14000/dir'
+         ),
+         'directory backslash ambiguity' => fn () => new AutoTLS(
+            domains: ['example.com'],
+            email: 'admin@example.com',
+            directory: 'https://localhost\\@127.0.0.1/dir'
+         ),
+         'directory invalid port' => fn () => new AutoTLS(
+            domains: ['example.com'],
+            email: 'admin@example.com',
+            directory: 'https://localhost:99999/dir'
+         ),
+         'directory zero port' => fn () => new AutoTLS(
+            domains: ['example.com'],
+            email: 'admin@example.com',
+            directory: 'https://localhost:0/dir'
+         ),
+         'directory malformed host' => fn () => new AutoTLS(
+            domains: ['example.com'],
+            email: 'admin@example.com',
+            directory: 'https://-invalid.example/dir'
+         ),
+         'delegated authority non-https' => fn () => new AutoTLS(
+            domains: ['example.com'],
+            email: 'admin@example.com',
+            authorities: ['http://delegate.example.com']
+         ),
+         'delegated authority path' => fn () => new AutoTLS(
+            domains: ['example.com'],
+            email: 'admin@example.com',
+            authorities: ['https://delegate.example.com/acme']
+         ),
+         'delegated authority query' => fn () => new AutoTLS(
+            domains: ['example.com'],
+            email: 'admin@example.com',
+            authorities: ['https://delegate.example.com?tenant=1']
+         ),
+         'delegated authority credentials' => fn () => new AutoTLS(
+            domains: ['example.com'],
+            email: 'admin@example.com',
+            authorities: ['https://user@delegate.example.com']
+         ),
+         'delegated authority fragment' => fn () => new AutoTLS(
+            domains: ['example.com'],
+            email: 'admin@example.com',
+            authorities: ['https://delegate.example.com/#fragment']
+         ),
+         'delegated authority backslash ambiguity' => fn () => new AutoTLS(
+            domains: ['example.com'],
+            email: 'admin@example.com',
+            authorities: ['https://delegate.example.com\\@127.0.0.1']
+         ),
+         'delegated authority invalid port' => fn () => new AutoTLS(
+            domains: ['example.com'],
+            email: 'admin@example.com',
+            authorities: ['https://delegate.example.com:99999']
+         ),
+         'delegated authority zero port' => fn () => new AutoTLS(
+            domains: ['example.com'],
+            email: 'admin@example.com',
+            authorities: ['https://delegate.example.com:0']
+         ),
+         'delegated authority malformed host' => fn () => new AutoTLS(
+            domains: ['example.com'],
+            email: 'admin@example.com',
+            authorities: ['https://-invalid.example.com']
+         ),
+         'delegated authority non-string' => fn () => new AutoTLS(
+            domains: ['example.com'],
+            email: 'admin@example.com',
+            authorities: [42]
          ),
          'empty path' => fn () => new AutoTLS(
             domains: ['example.com'],
