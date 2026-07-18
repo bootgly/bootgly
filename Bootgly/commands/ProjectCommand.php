@@ -17,8 +17,13 @@ use const BOOTGLY_STORAGE_DIR;
 use const BOOTGLY_TTY;
 use const BOOTGLY_WORKING_DIR;
 use const GLOB_ONLYDIR;
+use const LOCK_EX;
+use const LOCK_NB;
+use const LOCK_UN;
 use const PHP_EOL;
+use const SIGCONT;
 use const SIGKILL;
+use const SIGSTOP;
 use const SIGTERM;
 use const SIGUSR2;
 use function array_filter;
@@ -32,7 +37,6 @@ use function basename;
 use function count;
 use function escapeshellarg;
 use function explode;
-use function file_get_contents;
 use function getmypid;
 use function glob;
 use function implode;
@@ -41,10 +45,10 @@ use function intdiv;
 use function is_array;
 use function is_dir;
 use function is_file;
+use function is_int;
 use function is_link;
 use function is_numeric;
 use function is_string;
-use function json_decode;
 use function json_encode;
 use function passthru;
 use function posix_get_last_error;
@@ -701,56 +705,85 @@ class ProjectCommand extends Command
 
       $stopped = 0;
       foreach ($instances as $instance => $PIDs) {
-         if ($this->probe($PIDs['master']) === false) {
-            // @ Tombstone stale per-instance state without requiring the
-            //   runtime UID to own the shared parent directory.
-            $this->scrub($projectName, $instance);
+         $masterPID = $PIDs['master'];
+         if ($this->authenticate($projectName, $instance, $masterPID) === false) {
             continue;
          }
 
-         $masterPid = $PIDs['master'];
-
          // @ Send SIGTERM to master
-         if (
-            posix_kill($masterPid, SIGTERM) === false
-            && posix_get_last_error() === 1 // EPERM
-         ) {
+         if (posix_kill($masterPID, SIGTERM) === false) {
+            $error = posix_get_last_error();
             $Alert = new Alert($Output);
             $Alert->Type::Failure->set();
-            $Alert->message = "Project @#cyan:{$projectName}@; is running as a different user (PID {$masterPid}). Run with @#Black:sudo@; to stop it.@.;";
+            $Alert->message = "Verified project instance @#cyan:{$projectName}@; could not be signaled (PID {$masterPID}, error {$error}).@.;";
             $Alert->render();
             return false;
          }
 
          // @ Wait for graceful shutdown
          $elapsed = 0.0;
-         while ($elapsed < 5.0 && $this->probe($masterPid)) {
+         while (
+            $elapsed < 5.0
+            && $this->authenticate($projectName, $instance, $masterPID)
+         ) {
             usleep(100000); // 100ms
             $elapsed += 0.1;
          }
 
-         // @ Force kill if still alive
-         if ($this->probe($masterPid)) {
-            posix_kill($masterPid, SIGKILL);
-            usleep(100000);
-         }
-
-         // @ Kill remaining workers
-         foreach ($PIDs['workers'] as $workerPid) {
-            if ($this->probe($workerPid)) {
-               posix_kill($workerPid, SIGTERM);
+         // ! Freeze a non-responsive authenticated master before terminating
+         //   its authenticated children. It cannot refork a worker between the
+         //   worker signal and the final master kill.
+         if ($this->authenticate($projectName, $instance, $masterPID)) {
+            if (posix_kill($masterPID, SIGSTOP) === false) {
+               continue;
             }
-         }
-         usleep(100000);
-         foreach ($PIDs['workers'] as $workerPid) {
-            if ($this->probe($workerPid)) {
-               posix_kill($workerPid, SIGKILL);
+
+            $current = $this->locate($projectName, $instance !== '' ? $instance : null);
+            $workers = $current !== null && $current['master'] === $masterPID
+               ? $current['workers']
+               : $PIDs['workers'];
+
+            foreach ($workers as $workerPID) {
+               if ($this->authenticate($projectName, $instance, $workerPID, $masterPID)) {
+                  posix_kill($workerPID, SIGTERM);
+               }
+            }
+            usleep(100000);
+            foreach ($workers as $workerPID) {
+               if ($this->authenticate($projectName, $instance, $workerPID, $masterPID)) {
+                  posix_kill($workerPID, SIGKILL);
+               }
+            }
+
+            // @ Force-kill only the same kernel-bound master identity. A reused
+            //   numeric PID does not hold the qualified lock and is never hit.
+            if (
+               $this->authenticate($projectName, $instance, $masterPID)
+               && posix_kill($masterPID, SIGKILL) === false
+            ) {
+               // ? Do not strand a verified service in SIGSTOP if SIGKILL was
+               //   denied or failed for an external reason.
+               posix_kill($masterPID, SIGCONT);
+               continue;
             }
          }
 
          // @ Tombstone PID/command state. The lock inode is preserved so a
          //   concurrent restart cannot split flock exclusivity across inodes.
-         $this->scrub($projectName, $instance);
+         //   Success requires the complete process lineage to release it.
+         $cleaned = false;
+         $elapsed = 0.0;
+         while ($elapsed < 2.0) {
+            if ($this->scrub($projectName, $instance, $masterPID)) {
+               $cleaned = true;
+               break;
+            }
+            usleep(100000);
+            $elapsed += 0.1;
+         }
+         if ($cleaned === false) {
+            continue;
+         }
 
          $stopped++;
       }
@@ -805,17 +838,17 @@ class ProjectCommand extends Command
 
       foreach ($instances as $instance => $PIDs) {
          // @ Check master
-         $masterAlive = $this->probe($PIDs['master']);
+         $masterAlive = $this->authenticate(
+            $projectName,
+            $instance,
+            $PIDs['master'],
+         );
          $status = $masterAlive ? '@#green:running@;' : '@#red:stopped@;';
 
-         // @ Count alive workers
+         // @ locate() already retained only workers authenticated as direct
+         //   children holding this exact qualified instance lock.
          $workers = $PIDs['workers'];
-         $aliveWorkers = 0;
-         foreach ($workers as $workerPid) {
-            if ($this->probe($workerPid)) {
-               $aliveWorkers++;
-            }
-         }
+         $aliveWorkers = count($workers);
          $totalWorkers = count($workers);
 
          // @ Calculate uptime
@@ -841,7 +874,11 @@ class ProjectCommand extends Command
             $content .= '@#Green:' . str_pad('Workers', 14) . ' @; ' . $aliveWorkers . '/' . $totalWorkers . PHP_EOL;
          }
 
-         if ($PIDs['type'] === 'WPI') {
+         if (
+            $PIDs['type'] === 'WPI'
+            && is_string($PIDs['host'] ?? null)
+            && is_int($PIDs['port'] ?? null)
+         ) {
             $content .= '@#Green:' . str_pad('Address', 14) . ' @; ' . $PIDs['host'] . ':' . $PIDs['port'] . PHP_EOL;
          }
 
@@ -897,13 +934,13 @@ class ProjectCommand extends Command
       }
 
       $reloaded = 0;
-      foreach ($instances as $PIDs) {
-         if ($this->probe($PIDs['master']) === false) {
+      foreach ($instances as $instance => $PIDs) {
+         if (
+            $this->authenticate($projectName, $instance, $PIDs['master']) === false
+            || posix_kill($PIDs['master'], SIGUSR2) === false
+         ) {
             continue;
          }
-
-         // @ Send SIGUSR2 to master
-         posix_kill($PIDs['master'], SIGUSR2);
 
          $reloaded++;
       }
@@ -957,7 +994,7 @@ class ProjectCommand extends Command
       }
       $live = [];
       foreach ($this->scan($projectName) as $instance => $PIDs) {
-         if ($this->probe($PIDs['master'])) {
+         if ($this->authenticate($projectName, $instance, $PIDs['master'])) {
             $live[$instance] = $PIDs;
          }
       }
@@ -965,7 +1002,7 @@ class ProjectCommand extends Command
       // ? Ambiguous target: multiple instances and no port
       if ($port === null && count($live) > 1) {
          $ports = implode(', ', array_map(
-            fn (array $PIDs): string => (string) $PIDs['port'],
+            fn (array $PIDs): string => (string) ($PIDs['port'] ?? ''),
             $live
          ));
          $Alert = new Alert($Output);
@@ -983,7 +1020,7 @@ class ProjectCommand extends Command
       }
       else if (count($live) === 1) {
          $stopKey = (string) array_key_first($live);
-         $port = (string) $live[$stopKey]['port'];
+         $port = (string) ($live[$stopKey]['port'] ?? $stopKey);
       }
 
       // @ Stop the running target instance
@@ -2443,50 +2480,96 @@ class ProjectCommand extends Command
    }
 
    /**
-    * Locate a running project's PID data from its state file.
+    * Locate a running project's authenticated process data.
     *
     * @param string $projectName
     * @param null|string $instance Optional instance qualifier — the bound port (e.g. '8080').
     *
-    * @return null|array{master: int, workers: array<int>, host: string, port: int, started: int, type: string}
+    * @return null|array{master:int,workers:array<int>,started:int,type:string,host?:string,port?:int}
     */
    private function locate (string $projectName, null|string $instance = null): null|array
    {
-      $suffix = $instance !== null ? '.' . $instance : '';
-      $pidFile = BOOTGLY_STORAGE_DIR . 'pids/' . Projects::encode($projectName) . $suffix . '.json';
-
-      if (is_file($pidFile) === false) {
+      try {
+         $State = new State(Projects::encode($projectName), $instance);
+      }
+      catch (Throwable) {
          return null;
       }
 
-      $content = file_get_contents($pidFile);
-      if ($content === false) {
+      $data = $State->read();
+      if (
+         is_array($data) === false
+         || is_int($data['master'] ?? null) === false
+         || $data['master'] <= 0
+         || is_array($data['workers'] ?? null) === false
+         || count($data['workers']) > 4096
+         || is_int($data['started'] ?? null) === false
+         || is_string($data['type'] ?? null) === false
+         || $data['type'] === ''
+         || (
+            $data['type'] === 'WPI'
+            && (
+               is_string($data['host'] ?? null) === false
+               || is_int($data['port'] ?? null) === false
+            )
+         )
+         || $State->authenticate($data['master']) === false
+      ) {
          return null;
       }
 
-      /** @var null|array{master: int, workers: array<int>, host: string, port: int, started: int, type: string} $data */
-      $data = json_decode($content, true);
-
-      if (is_array($data) === false || isSet($data['master']) === false) { // @phpstan-ignore isset.offset, identical.alwaysFalse
-         return null;
+      $Workers = [];
+      $seen = [];
+      foreach ($data['workers'] as $workerPID) {
+         if (
+            is_int($workerPID) === false
+            || $workerPID <= 0
+            || isSet($seen[$workerPID])
+         ) {
+            return null;
+         }
+         $seen[$workerPID] = true;
+         if ($State->authenticate($workerPID, parent: $data['master'])) {
+            $Workers[] = $workerPID;
+         }
       }
+      $data['workers'] = $Workers;
 
+      /** @var array{master:int,workers:array<int>,started:int,type:string,host?:string,port?:int} $data */
       return $data;
    }
 
-   /** Best-effort cleanup through the same safe state protocol as the server. */
-   private function scrub (string $projectName, string $instance): void
+   /** Best-effort cleanup without tombstoning a replacement instance. */
+   private function scrub (string $projectName, string $instance, int $masterPID): bool
    {
       try {
          $State = new State(
             Projects::encode($projectName),
             $instance !== '' ? $instance : null
          );
+         // ! Cleanup authority comes from acquiring the exact stable lock,
+         //   not merely from observing an unauthenticated/stale JSON snapshot.
+         //   A replacement master or surviving lineage keeps this acquisition
+         //   contended, so a delayed stop can never tombstone the new state.
+         if ($State->lock(LOCK_EX | LOCK_NB) === false) {
+            return false;
+         }
+         $current = $State->read();
+         if (
+            is_array($current)
+            && ($current['master'] ?? null) !== $masterPID
+         ) {
+            $State->lock(LOCK_UN);
+            return false;
+         }
          $State->clean();
+
+         return true;
       }
       catch (Throwable) {
          // ? State cleanup has always been best-effort here. An unsafe storage
          //   directory fails closed instead of falling back to raw pathname IO.
+         return false;
       }
    }
 
@@ -2495,7 +2578,7 @@ class ProjectCommand extends Command
     *
     * @param string $projectName
     *
-    * @return array<string, array{master: int, workers: array<int>, host: string, port: int, started: int, type: string}>
+    * @return array<string, array{master:int,workers:array<int>,started:int,type:string,host?:string,port?:int}>
     *         Keys are instance qualifiers ('' for legacy unqualified files, the bound port otherwise)
     */
    private function scan (string $projectName): array
@@ -2528,32 +2611,28 @@ class ProjectCommand extends Command
    }
 
    /**
-    * Probe if a process is alive.
+    * Re-authenticate the master immediately before a project-control action.
     *
-    * Uses `/proc/<pid>` when available (Linux) so we detect processes owned
-    * by other users (e.g. a server demoted to www-data probed by the caller
-    * as rodrigo — `posix_kill($pid, 0)` returns false with EPERM in that
-    * case, which would otherwise be misread as "process not running").
-    *
-    * @param int $pid
-    *
-    * @return bool
+    * @phpstan-impure The kernel process and flock state can change between calls.
     */
-   private function probe (int $pid): bool
+   private function authenticate (
+      string $projectName,
+      string $instance,
+      int $PID,
+      null|int $parent = null
+   ): bool
    {
-      if ($pid <= 0) {
+      try {
+         $State = new State(
+            Projects::encode($projectName),
+            $instance !== '' ? $instance : null,
+         );
+      }
+      catch (Throwable) {
          return false;
       }
 
-      if (is_dir('/proc/' . $pid)) {
-         return true;
-      }
-
-      if (posix_kill($pid, 0)) {
-         return true;
-      }
-
-      return posix_get_last_error() === 1; // EPERM → process exists, not ours
+      return $State->authenticate($PID, $parent);
    }
 
    /**

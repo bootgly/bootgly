@@ -24,6 +24,7 @@ use const SIGHUP;
 use const SIGINT;
 use const SIGIO;
 use const SIGIOT;
+use const SIGKILL;
 use const SIGPIPE;
 use const SIGQUIT;
 use const SIGTERM;
@@ -33,7 +34,10 @@ use const SIGUSR2;
 use const STDERR;
 use const STDIN;
 use const STDOUT;
+use const STREAM_IPPROTO_IP;
+use const STREAM_PF_UNIX;
 use const STREAM_SERVER_BIND;
+use const STREAM_SOCK_STREAM;
 use const WNOHANG;
 use const WUNTRACED;
 use function array_merge;
@@ -43,13 +47,18 @@ use function count;
 use function defined;
 use function explode;
 use function fclose;
+use function feof;
 use function file;
 use function fopen;
+use function fread;
+use function fwrite;
 use function get_included_files;
 use function getcwd;
 use function getenv;
 use function is_file;
+use function is_resource;
 use function method_exists;
+use function microtime;
 use function pcntl_exec;
 use function pcntl_fork;
 use function pcntl_signal;
@@ -58,9 +67,11 @@ use function pcntl_wait;
 use function pcntl_waitpid;
 use function posix_getgrnam;
 use function posix_getpid;
+use function posix_getppid;
 use function posix_getpwnam;
 use function posix_getuid;
 use function posix_initgroups;
+use function posix_kill;
 use function posix_setgid;
 use function posix_setsid;
 use function posix_setuid;
@@ -68,7 +79,11 @@ use function register_shutdown_function;
 use function rtrim;
 use function str_contains;
 use function stream_context_create;
+use function stream_select;
+use function stream_set_blocking;
+use function stream_socket_pair;
 use function stream_socket_server;
+use function strlen;
 use function time;
 use function usleep;
 use BackedEnum;
@@ -146,6 +161,10 @@ class UDP_Server_CLI implements Servers
    // # State
    protected int $started = 0;
    protected bool $daemonized = false;
+   /** @var array<int,resource> */
+   protected array $daemonStreams = [];
+   /** @var resource|null Launcher readiness channel, daemon child only. */
+   protected $daemonReady = null;
    // # Reload — launch command captured at start(), replayed by reload() via
    //   pcntl_exec so the master re-execs into a fresh image (same PID). UDP is
    //   connectionless, so reload has no in-flight connections to drain.
@@ -438,12 +457,7 @@ class UDP_Server_CLI implements Servers
 
                   // # Child process (new worker)
                   if ($newPID === 0) {
-                     // @ Fork hygiene — drop Timer tasks inherited from the parent: POSIX
-                     //   clears pending alarms on fork, so inherited tasks can never
-                     //   fire here, yet a non-empty inherited task map would stop the
-                     //   next `Timer::add()` from arming its alarm — leaving every
-                     //   timer this worker installs silently dead.
-                     Timer::del();
+                     $this->watch();
 
                      $this->Process->Children->push($this->Process->id, $deadIndex);
                      Process::$index = $deadIndex + 1;
@@ -530,17 +544,10 @@ class UDP_Server_CLI implements Servers
       }
 
       // ! Process
-      // ? Late instance guard: qualify the state files with the bound port and
-      //   take a non-blocking lock — the bind itself uses SO_REUSEPORT, so two
-      //   Bootgly servers CAN share a port; this lock is what rejects the second.
+      // ? Qualify the state files with the bound port before the final master
+      //   acquires its kernel-authenticated instance lock.
       $State = $this->Process->State;
       $State->qualify((string) ($this->port ?? 0));
-      if ($State->lock(LOCK_EX | LOCK_NB) === false) {
-         $this->Logger->log(
-            error: '@\;Another instance is already running on port ' . ($this->port ?? 0) . '.@\;Use `project stop <name> <port>` to stop it or start this one on another port (PORT env).@.;'
-         );
-         exit(1);
-      }
 
       // ? Pre-flight: verify socket can be bound before forking workers
       $probeCode = 0;
@@ -568,6 +575,20 @@ class UDP_Server_CLI implements Servers
       }
       fclose($probeSocket);
 
+      // ! Select the final daemon master before it acquires the lock or forks
+      //   workers. The flock owner PID is then a stable kernel identity and
+      //   every advertised worker is its real child.
+      if ($this->Mode === Modes::Daemon) {
+         $this->detach();
+      }
+
+      if ($State->lock(LOCK_EX | LOCK_NB) === false) {
+         $this->Logger->log(
+            error: '@\;Another instance is already running on port ' . ($this->port ?? 0) . '.@\;Use `project stop <name> <port>` to stop it or start this one on another port (PORT env).@.;'
+         );
+         exit(1);
+      }
+
       // ? Signals
       // @ Install process signals
       $this->Process->Signals->install([
@@ -588,10 +609,7 @@ class UDP_Server_CLI implements Servers
 
       // @ Fork process workers...
       $this->Process->fork($this->workers, instance: function (Process $Process, int $index): void {
-         // @ Fork hygiene — drop Timer tasks inherited from the parent (see the
-         //   SIGCHLD recovery fork): inherited tasks can never fire in the child
-         //   and would stop the next `Timer::add()` from arming its alarm.
-         Timer::del();
+         $this->watch();
 
          $Process->title = 'Bootgly_UDP_Server_CLI: child process (Worker #' . Process::$index . ')';
 
@@ -624,6 +642,10 @@ class UDP_Server_CLI implements Servers
          'started' => time(),
          'type'    => 'WPI'
       ]);
+
+      // @ Report daemon success only after the final master owns the lock,
+      //   workers exist, and their topology has been published.
+      $this->announce();
 
       // ... Continue to master process:
       switch ($this->Mode) {
@@ -749,29 +771,127 @@ class UDP_Server_CLI implements Servers
       }
    }
 
-   protected function daemonize (): void
+   /** Install inherited-resource hygiene and the worker parent watchdog. */
+   protected function watch (): void
    {
-      $this->Status = Status::Running;
+      // ? The launcher handshake belongs only to the final daemon master. A
+      //   worker retaining it would hide a startup failure from the parent.
+      if (is_resource($this->daemonReady)) {
+         fclose($this->daemonReady);
+         $this->daemonReady = null;
+      }
 
-      $this->Logger->log(info: 'Running in Daemon mode (no UI)...');
+      // @ Fork hygiene — pending alarms do not survive fork, but the inherited
+      //   task map would prevent the new worker timer from being armed.
+      Timer::del();
 
-      // @ Fork: parent returns to terminal, child becomes daemon master
-      $pid = pcntl_fork();
+      // ! A hard-killed master cannot signal its workers. Stop locally after
+      //   reparenting so no worker keeps serving or pins the instance lock.
+      $masterPID = Process::$master;
+      Timer::add(
+         interval: 1,
+         handler: function () use ($masterPID): void {
+            if (posix_getppid() !== $masterPID) {
+               $this->stop();
+            }
+         },
+         persistent: true
+      );
+   }
 
-      if ($pid === -1) {
+   /** Fork the final daemon master before any serving worker exists. */
+   protected function detach (): void
+   {
+      $Pair = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+      if ($Pair === false) {
+         $this->Logger->log(error: '@\;Failed to create the daemon readiness channel!@\;');
+         exit(1);
+      }
+
+      $PID = pcntl_fork();
+
+      if ($PID === -1) {
+         fclose($Pair[0]);
+         fclose($Pair[1]);
          $this->Logger->log(error: '@\;Failed to fork daemon process!@\;');
          exit(1);
       }
 
       // # Parent process (CLI caller): return control to terminal
-      if ($pid > 0) {
+      if ($PID > 0) {
          $this->daemonized = true;
-         $this->Logger->log(notice: '@\;Daemon started (PID: ' . $pid . ')@\;@.;');
-         return;
+         fclose($Pair[1]);
+         stream_set_blocking($Pair[0], false);
+
+         $ready = '';
+         $deadline = microtime(true) + 30.0;
+         while (strlen($ready) < 5 && microtime(true) < $deadline) {
+            $remaining = $deadline - microtime(true);
+            if ($remaining <= 0) {
+               break;
+            }
+            $seconds = (int) $remaining;
+            $microseconds = (int) (($remaining - $seconds) * 1_000_000);
+            $read = [$Pair[0]];
+            $write = null;
+            $except = null;
+            $selected = @stream_select($read, $write, $except, $seconds, $microseconds);
+            if ($selected === false) {
+               continue;
+            }
+            if ($selected === 0) {
+               break;
+            }
+            $chunk = fread($Pair[0], 5 - strlen($ready));
+            if ($chunk === false || ($chunk === '' && feof($Pair[0]))) {
+               break;
+            }
+            $ready .= $chunk;
+         }
+         fclose($Pair[0]);
+
+         if ($ready === 'ready') {
+            $this->Logger->log(notice: '@\;Daemon started (PID: ' . $PID . ')@\;@.;');
+            exit(0);
+         }
+
+         if (posix_kill(-$PID, 0)) {
+            posix_kill(-$PID, SIGTERM);
+         }
+         else if (posix_kill($PID, 0)) {
+            posix_kill($PID, SIGTERM);
+         }
+         $reaped = pcntl_waitpid($PID, $status, WNOHANG);
+         $stopDeadline = microtime(true) + 2.0;
+         while ($reaped === 0 && microtime(true) < $stopDeadline) {
+            usleep(50000);
+            $reaped = pcntl_waitpid($PID, $status, WNOHANG);
+         }
+         if (posix_kill(-$PID, 0)) {
+            posix_kill(-$PID, SIGKILL);
+         }
+         else if ($reaped === 0 && posix_kill($PID, 0)) {
+            posix_kill($PID, SIGKILL);
+         }
+         if ($reaped === 0) {
+            pcntl_waitpid($PID, $status);
+         }
+         if ($this->Process->State->lock(LOCK_EX | LOCK_NB)) {
+            $this->Process->State->clean();
+         }
+         $this->Logger->log(error: '@\;Daemon startup failed before readiness was acknowledged.@\;');
+         exit(1);
       }
 
+      fclose($Pair[0]);
+      $this->daemonReady = $Pair[1];
+
       // # Child process (new daemon master): become session leader
-      posix_setsid();
+      if (posix_setsid() === -1) {
+         $this->Logger->log(error: '@\;Failed to create daemon session!@\;');
+         exit(1);
+      }
+      Process::$master = posix_getpid();
 
       // @ Detach the standard descriptors from the launching terminal: pin fds
       //   0-2 on /dev/null so nothing in the daemon lineage — including the
@@ -786,17 +906,35 @@ class UDP_Server_CLI implements Servers
       $stdin = fopen('/dev/null', 'r');
       $stdout = fopen('/dev/null', 'w');
       $stderr = fopen('/dev/null', 'w');
+      foreach ([$stdin, $stdout, $stderr] as $Stream) {
+         if (is_resource($Stream)) {
+            $this->daemonStreams[] = $Stream;
+         }
+      }
 
-      // @ Update master PID to daemon child and re-save PID file
-      Process::$master = posix_getpid();
-      $this->Process->State->save([
-         'master'  => Process::$master,
-         'workers' => $this->Process->Children->PIDs,
-         'host'    => $this->host ?? '0.0.0.0',
-         'port'    => $this->port ?? 0,
-         'started' => $this->started,
-         'type'    => 'WPI'
-      ]);
+   }
+
+   /** Acknowledge complete daemon startup to the waiting launcher. */
+   protected function announce (): void
+   {
+      if (is_resource($this->daemonReady) === false) {
+         return;
+      }
+
+      $written = fwrite($this->daemonReady, 'ready');
+      fclose($this->daemonReady);
+      $this->daemonReady = null;
+      if ($written !== 5) {
+         $this->Logger->log(error: '@\;Daemon readiness acknowledgement failed.@\;');
+         $this->stop();
+      }
+   }
+
+   protected function daemonize (): void
+   {
+      $this->Status = Status::Running;
+
+      $this->Logger->log(info: 'Running in Daemon mode (no UI)...');
 
       // @ Daemon master loop (Status changes via signal handlers)
       while ($this->Status === Status::Running) { // @phpstan-ignore identical.alwaysTrue

@@ -11,6 +11,9 @@
 namespace Bootgly\CLI\Terminal;
 
 
+use const LOCK_EX;
+use const LOCK_NB;
+use const SIGALRM;
 use const SIGINT;
 use const SIGTERM;
 use const STDIN;
@@ -25,12 +28,14 @@ use function fwrite;
 use function getenv;
 use function intdiv;
 use function ord;
+use function pcntl_alarm;
 use function pcntl_async_signals;
 use function pcntl_fork;
 use function pcntl_signal;
 use function pcntl_signal_dispatch;
 use function pcntl_waitpid;
 use function posix_getpid;
+use function posix_getppid;
 use function posix_kill;
 use function register_shutdown_function;
 use function stream_get_meta_data;
@@ -44,6 +49,7 @@ use function time;
 use function usleep;
 use Closure;
 use Generator;
+use RuntimeException;
 use Throwable;
 
 use Bootgly\ABI\IO\IPC\Pipe;
@@ -450,22 +456,37 @@ class Input
       // @ Arm the terminal restore net (stty + blocking + mouse + cursor on any exit)
       $this->arm();
 
-      // @ Fork process
-      $pid = pcntl_fork();
-
       // @ Save PID state for show/stop visibility
       // ? Non-server instances are qualified by master PID (servers use the
       //   bound port) — multiple TUI instances stay individually stoppable.
-      $stateId = defined('BOOTGLY_PROJECT') ? Projects::encode(BOOTGLY_PROJECT->folder) : self::class;
-      $State = new State(id: $stateId, instance: (string) posix_getpid());
+      $stateID = defined('BOOTGLY_PROJECT') ? Projects::encode(BOOTGLY_PROJECT->folder) : self::class;
+      $masterPID = posix_getpid();
+      $State = new State(id: $stateID, instance: (string) $masterPID);
+      if ($State->lock(LOCK_EX | LOCK_NB) === false) {
+         throw new RuntimeException('Can not acquire the terminal process state lock.');
+      }
 
-      if ($pid === 0) { // @ Child (Client)
+      // @ Fork only after the master owns the qualified lock. The child
+      //   inherits that exact descriptor, while the kernel flock owner remains
+      //   the parent PID authenticated by project controls.
+      $PID = pcntl_fork();
+
+      if ($PID === 0) { // @ Child (Client)
          cli_set_process_title("BootglyCLI: Client");
 
          // Watch for a signal from the parent process to terminate
          pcntl_signal(SIGTERM, function () {
             exit(0);
          });
+         // ! A hard-killed parent cannot send SIGTERM. Poll the real PPID so
+         //   this child cannot retain the qualified process lock indefinitely.
+         pcntl_signal(SIGALRM, function () use ($masterPID): void {
+            if (posix_getppid() !== $masterPID) {
+               exit(0);
+            }
+            pcntl_alarm(1);
+         });
+         pcntl_alarm(1);
 
          // Disable canonical input processing mode and echo return
          system('stty -icanon -echo');
@@ -483,13 +504,13 @@ class Input
          // Close Client API
          exit(0);
       }
-      else if ($pid > 0) { // @ Parent (Server)
+      else if ($PID > 0) { // @ Parent (Server)
          cli_set_process_title("BootglyCLI: Server");
 
          // @ Handle SIGTERM: kill child before exiting
-         pcntl_signal(SIGTERM, function () use ($pid, $State) {
-            posix_kill($pid, SIGTERM);
-            pcntl_waitpid($pid, $status);
+         pcntl_signal(SIGTERM, function () use ($PID, $State) {
+            posix_kill($PID, SIGTERM);
+            pcntl_waitpid($PID, $status);
             $State->clean();
             exit(0);
          });
@@ -497,7 +518,7 @@ class Input
          // @ Save PID state
          $State->save([
             'master'  => posix_getpid(),
-            'workers' => [$pid],
+            'workers' => [$PID],
             'type'    => 'CLI-IPC',
             'started' => time()
          ]);
@@ -511,15 +532,15 @@ class Input
          }
 
          // Send signal to terminate child process
-         posix_kill($pid, SIGTERM);
+         posix_kill($PID, SIGTERM);
 
          // Wait for child process to exit
-         pcntl_waitpid($pid, $status);
+         pcntl_waitpid($PID, $status);
 
          // @ Clean PID state
          $State->clean();
       }
-      else if ($pid === -1) {
+      else if ($PID === -1) {
          die('Could not fork process!');
       }
    }

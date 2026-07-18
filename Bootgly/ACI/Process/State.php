@@ -18,8 +18,11 @@ use const LOCK_SH;
 use const LOCK_UN;
 use function bin2hex;
 use function chmod;
+use function closedir;
+use function ctype_digit;
 use function fclose;
 use function fflush;
+use function file_get_contents;
 use function flock;
 use function fopen;
 use function fstat;
@@ -39,11 +42,15 @@ use function lchgrp;
 use function lchown;
 use function lstat;
 use function mkdir;
+use function opendir;
 use function posix_geteuid;
+use function preg_match;
 use function random_bytes;
+use function readdir;
 use function rename;
 use function rewind;
 use function rtrim;
+use function stat;
 use function str_starts_with;
 use function stream_get_contents;
 use function strlen;
@@ -371,6 +378,142 @@ class State
       //   content is the tombstone, so pathname existence alone must never
       //   advertise a live process.
       return $this->read() !== null;
+   }
+
+   /**
+    * Authenticate a process against this exact qualified instance lock.
+    *
+    * The PID document is deliberately runtime-writable and is discovery data,
+    * never an identity authority. A serving master and its forked workers keep
+    * the acquired lock's open-file-description for their complete lifetime.
+    * Linux exposes that kernel-held relationship through `/proc/<pid>/fd` and
+    * `fdinfo`; an unrelated or PID-reused process cannot satisfy it merely by
+    * copying fields into the mutable JSON document.
+    *
+    * @param int $PID Process to authenticate.
+    * @param null|int $parent Required direct parent PID for worker checks.
+    */
+   public function authenticate (
+      int $PID,
+      null|int $parent = null
+   ): bool
+   {
+      if (
+         $PID <= 0
+         || ($parent !== null && $parent <= 0)
+         || is_link($this->pidLockFile)
+      ) {
+         return false;
+      }
+
+      $before = @lstat($this->pidLockFile);
+      if (
+         is_array($before) === false
+         || ((int) $before['mode'] & 0170000) !== 0100000
+         || ((int) $before['mode'] & 0777) !== 0600
+      ) {
+         return false;
+      }
+
+      $status = @file_get_contents("/proc/{$PID}/status");
+      if (
+         is_string($status) === false
+         || preg_match(
+            '/^Uid:\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s*$/m',
+            $status,
+            $UIDs,
+         ) !== 1
+         || (int) $UIDs[1] !== (int) $UIDs[2]
+         || (int) $UIDs[2] !== (int) $UIDs[3]
+         || (int) $UIDs[3] !== (int) $UIDs[4]
+      ) {
+         return false;
+      }
+      if ($parent === null) {
+         if ((int) $UIDs[1] !== (int) $before['uid']) {
+            return false;
+         }
+      }
+      else {
+         $parentStatus = @file_get_contents("/proc/{$parent}/status");
+         if (
+            preg_match('/^PPid:\s+(\d+)\s*$/m', $status, $parents) !== 1
+            || (int) $parents[1] !== $parent
+            || is_string($parentStatus) === false
+            || preg_match(
+               '/^Uid:\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s*$/m',
+               $parentStatus,
+               $parentUIDs,
+            ) !== 1
+            || (int) $parentUIDs[1] !== (int) $before['uid']
+            || (int) $parentUIDs[2] !== (int) $before['uid']
+            || (int) $parentUIDs[3] !== (int) $before['uid']
+            || (int) $parentUIDs[4] !== (int) $before['uid']
+         ) {
+            return false;
+         }
+      }
+
+      $Directory = @opendir("/proc/{$PID}/fd");
+      if ($Directory === false) {
+         return false;
+      }
+
+      $bound = false;
+      $inspected = 0;
+      try {
+         while (($descriptor = readdir($Directory)) !== false) {
+            if (ctype_digit($descriptor) === false) {
+               continue;
+            }
+            if (++$inspected > 65536) {
+               break;
+            }
+
+            $FD = "/proc/{$PID}/fd/{$descriptor}";
+            $opened = @stat($FD);
+            if (
+               is_array($opened) === false
+               || $opened['dev'] !== $before['dev']
+               || $opened['ino'] !== $before['ino']
+               || ((int) $opened['mode'] & 0170000) !== 0100000
+            ) {
+               continue;
+            }
+
+            $info = @file_get_contents("/proc/{$PID}/fdinfo/{$descriptor}");
+            $confirmed = @stat($FD);
+            if (
+               is_string($info)
+               && preg_match(
+                  '/^lock:\s+\d+:\s+FLOCK\s+ADVISORY\s+WRITE\s+(\d+)\s+[0-9a-f]+:[0-9a-f]+:'
+                     . (string) $before['ino'] . '\s+0\s+EOF\s*$/mi',
+                  $info,
+                  $locks,
+               ) === 1
+               && (int) $locks[1] === ($parent ?? $PID)
+               && is_array($confirmed)
+               && $confirmed['dev'] === $before['dev']
+               && $confirmed['ino'] === $before['ino']
+            ) {
+               $bound = true;
+               break;
+            }
+         }
+      }
+      finally {
+         closedir($Directory);
+      }
+
+      $after = @lstat($this->pidLockFile);
+
+      return $bound
+         && is_array($after)
+         && $after['dev'] === $before['dev']
+         && $after['ino'] === $before['ino']
+         && ((int) $after['mode'] & 0170000) === 0100000
+         && ((int) $after['mode'] & 0777) === 0600
+         && $after['uid'] === $before['uid'];
    }
 
    /**

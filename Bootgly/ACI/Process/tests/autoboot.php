@@ -21,5 +21,6 @@ return new Suite(
       '1.5-state-demoted-cleanup',
       '1.6-state-root-handoff',
       '1.7-state-lock-handoff',
+      '1.8-state-process-identity',
    ]
 );

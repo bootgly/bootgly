@@ -719,21 +719,6 @@ class TCP_Server_CLI implements Servers
          exit(1);
       }
 
-      // ! Process
-      // ? Instance guard: take a non-blocking lock — the bind itself uses
-      //   SO_REUSEPORT, so two Bootgly servers CAN share a port; this lock is
-      //   what rejects the second.
-      if ($State->lock(LOCK_EX | LOCK_NB) === false) {
-         $this->Logger->log(
-            error: '@\;Another instance is already running on port ' . ($this->port ?? 0) . '.@\;Use `project stop <name> <port>` to stop it or start this one on another port (PORT env).@.;'
-         );
-         exit(1);
-      }
-      if ($this->Commands->erase() === false) {
-         $this->Logger->log(error: '@\;The process command channel could not be initialized safely.@.;');
-         exit(1);
-      }
-
       // ? On an ordinary launch there is no handoff, so retain the early bind
       //   probe and its useful permission diagnostic.
       if ($this->Listeners === []) {
@@ -768,6 +753,22 @@ class TCP_Server_CLI implements Servers
       //   parent/reaper of every process created below.
       if ($this->Mode === Modes::Daemon && $handoff !== true) {
          $this->detach();
+      }
+
+      // ! Process
+      // ? Acquire the qualified instance lock only after daemonization chose
+      //   the final master PID. Project controls authenticate that PID as the
+      //   kernel-reported owner of this exact flock; workers inherit the same
+      //   descriptor but can never impersonate the master role.
+      if ($State->lock(LOCK_EX | LOCK_NB) === false) {
+         $this->Logger->log(
+            error: '@\;Another instance is already running on port ' . ($this->port ?? 0) . '.@\;Use `project stop <name> <port>` to stop it or start this one on another port (PORT env).@.;'
+         );
+         exit(1);
+      }
+      if ($this->Commands->erase() === false) {
+         $this->Logger->log(error: '@\;The process command channel could not be initialized safely.@.;');
+         exit(1);
       }
 
       // ? Signals
@@ -1369,7 +1370,12 @@ class TCP_Server_CLI implements Servers
          if ($reaped === 0) {
             pcntl_waitpid($PID, $status);
          }
-         $this->Process->State->clean();
+         // ! This launcher never owns the post-detach child lock. Acquire the
+         //   exact stable inode before cleanup so a losing duplicate launch
+         //   cannot tombstone the already-running winner's state.
+         if ($this->Process->State->lock(LOCK_EX | LOCK_NB)) {
+            $this->Process->State->clean();
+         }
          $this->Logger->log(error: '@\;Daemon startup failed before readiness was acknowledged.@\;');
          exit(1);
       }

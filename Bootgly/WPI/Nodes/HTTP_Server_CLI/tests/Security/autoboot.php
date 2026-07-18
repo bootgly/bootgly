@@ -275,5 +275,9 @@ return new Suite(
       // Remote request bytes must never be rendered by the operator command,
       // and decoded protocol objects must be summarized without string casts.
       '47.01-connections_diagnostic_exposure_terminal_crash',
+      // # Project control (mutable PID-state identity — audit M14)
+      // An in-place state rewrite must never select an unrelated process for
+      // reload/stop signaling without trusted process-identity validation.
+      '48.01-project_command_mutable_pid_identity_signal',
    ],
 );
