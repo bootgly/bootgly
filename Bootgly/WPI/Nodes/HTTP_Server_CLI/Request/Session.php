@@ -31,6 +31,7 @@ use Bootgly\WPI\Modules\HTTP\Server\Response\Raw\Header\Cookie;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Session\Events;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Session\Handler;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Session\Regenerators;
 
 
 class Session
@@ -276,6 +277,11 @@ class Session
 
       HTTP_Server_CLI::$Response->Header->Cookies->append($Cookie);
       $this->cookieEmitted = true;
+
+      // ! Security invariants run synchronously outside the replaceable,
+      //   stoppable application event bus. Ordinary observers still receive
+      //   the Regenerate event below after privilege-bound state is safe.
+      Regenerators::execute($this);
 
       // @ Events — session id rotated (guarded). Include this Session so
       //   security middleware can rotate state bound to the old privilege

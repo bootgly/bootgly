@@ -23,6 +23,7 @@ return new Suite(
       '2.4-cache-handler-key_path',
 
       '3.1-events',
+      '3.2-regenerators',
 
       '4.1-cookie_security_defaults_not_downgraded',
 

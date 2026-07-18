@@ -240,6 +240,16 @@ return new Suite(
       // Login/privilege rotation must invalidate both raw and masked forms
       // of the pre-regeneration synchronizer token.
       '39.01-session_regeneration_csrf_rotation',
+      // The rotation invariant must not depend on an ordinary stoppable
+      // listener or on the identity of the replaceable application event bus.
+      '39.02-session_regeneration_csrf_equal_priority_stopper',
+      '39.03-session_regeneration_csrf_emitter_replacement',
+      // A transient CSRF owner must not silently remove rotation while its
+      // configured token remains live in a Session across regeneration.
+      '39.04-session_regeneration_csrf_weak_owner_lifecycle',
+      // One failing invariant callback must not prevent later security
+      // callbacks from completing the same privilege transition.
+      '39.05-session_regeneration_csrf_regenerator_exception',
       // # Shared cache / RateLimit (CRC32 collision — audit M7)
       // Two independently limited custom principals must retain separate
       // counters even when their full sliding-window cache keys collide.
