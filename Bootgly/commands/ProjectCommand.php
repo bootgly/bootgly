@@ -195,7 +195,7 @@ class ProjectCommand extends Command
    public array $options = [
       'Increase the verbosity of the command' => ['-v', '-vv', '-vvv'],
       'Preview seed run without executing SQL' => ['--dry-run'],
-      'Platforms to set up on first run (create/import)' => ['--platform=console', '--platform=web', '--platform=console,web'],
+      'Platforms to set up on first run (create/import)' => ['--platform=console', '--platform=web', '--platform=console,web', '--platform=none'],
       'Creation source: from scratch or a platform project' => ['--from=scratch', '--from=<source>'],
       'Interface bound to the new project (create/import)' => ['--interfaces=CLI', '--interfaces=WPI'],
       'New project metadata (create)' => ['--description=', '--version=', '--author=', '--port='],
@@ -373,9 +373,21 @@ class ProjectCommand extends Command
       $source = $this->trace($from);
       // ?
       if ($source === null) {
+         $message = "Source project @#cyan:{$from}@; not found in the platform folders.";
+         // ? Platforms not initialized in the kit are invisible to trace()
+         if (
+            BOOTGLY_ROOT_DIR !== BOOTGLY_WORKING_DIR
+            && (
+               is_file(BOOTGLY_WORKING_DIR . 'Console/' . BOOTSTRAP_FILENAME) === false
+               || is_file(BOOTGLY_WORKING_DIR . 'Web/' . BOOTSTRAP_FILENAME) === false
+            )
+         ) {
+            $message .= ' Initialize a platform with @#cyan:--platform=console|web@;.';
+         }
+
          $Alert = new Alert($Output);
          $Alert->Type::Failure->set();
-         $Alert->message = "Source project @#cyan:{$from}@; not found in the platform folders.";
+         $Alert->message = $message;
          $Alert->render();
 
          return false;
@@ -2027,13 +2039,18 @@ class ProjectCommand extends Command
          if (isSet($options['platform']) && is_string($options['platform'])) {
             $platforms = array_filter(explode(',', strtolower($options['platform'])));
 
+            // ? `none` keeps the base platform only (no extra submodules)
+            if ($platforms === ['none']) {
+               $platforms = [];
+            }
+
             // ?
             foreach ($platforms as $platform) {
                if ($platform !== 'console' && $platform !== 'web') {
                   $Alert = new Alert($Output);
                   $Alert->Type::Failure->set();
                   $Alert->message = "Invalid platform: @#cyan:{$platform}@;. "
-                     . 'Use console, web or console,web.';
+                     . 'Use console, web, console,web or none.';
                   $Alert->render();
 
                   return false;
@@ -2041,7 +2058,7 @@ class ProjectCommand extends Command
             }
          }
 
-         // ? Fresh kit (no resources booted yet): select interactively
+         // ? Fresh kit (no resources booted yet): select interactively (unless --yes)
          $fresh = is_file(BOOTGLY_WORKING_DIR . 'projects/Bootgly.projects.php') === false;
          if ($fresh === true && $platforms === null) {
             // ! Offer only platforms not initialized yet — a resumed install
@@ -2054,7 +2071,7 @@ class ProjectCommand extends Command
                $available['web'] = 'Web — opinionated WPI extras';
             }
 
-            if (BOOTGLY_TTY === true && $available !== []) {
+            if (BOOTGLY_TTY === true && isSet($options['yes']) === false && $available !== []) {
                // ? Two short rows — a single long row would hard-wrap at the
                //   terminal edge, escaping the wizard's nested region gutter
                $Output->render(
