@@ -45,8 +45,8 @@ use Bootgly\ABI\Syntax\Builtins;
 use Bootgly\ABI\Syntax\Imports;
 use Bootgly\API\Environment\Agent;
 use Bootgly\CLI\Command;
+use Bootgly\CLI\UI\Base\Fieldset;
 use Bootgly\CLI\UI\Components\Alert;
-use Bootgly\CLI\UI\Components\Fieldset;
 
 
 class LintCommand extends Command

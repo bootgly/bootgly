@@ -24,7 +24,7 @@ use Bootgly\ABI\Data\__String\Path;
 use Bootgly\API\Endpoints\Server\Modes;
 use Bootgly\API\Workables\Server as SAPI;
 use Bootgly\CLI\Command;
-use Bootgly\CLI\UI\Components\Fieldset;
+use Bootgly\CLI\UI\Base\Fieldset;
 use Bootgly\CLI\UI\Components\Progress;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI as Server;
 

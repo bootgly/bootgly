@@ -18,5 +18,6 @@ return new Suite(
       '1.2-frame-render',
       '1.3-frame-diff',
       '1.4-frame-drain',
+      '2.1-fieldset-render',
    ]
 );
