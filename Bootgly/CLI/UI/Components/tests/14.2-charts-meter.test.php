@@ -4,9 +4,15 @@ namespace Bootgly\CLI\UI\Components;
 
 
 use function assert;
+use function count;
+use function explode;
+use function mb_strlen;
+use function preg_replace;
+use function rtrim;
 use function str_contains;
 use function substr_count;
 
+use Bootgly\ABI\Data\__String;
 use Bootgly\ACI\Tests\Suite\Test\Specification;
 use Bootgly\CLI\Terminal\Output;
 use Bootgly\CLI\UI\Components\Chart\Gradient;
@@ -66,6 +72,37 @@ return new Specification(
          assertion: str_contains($frame, "\e[38;2;230;230;230m") === true
             && str_contains($frame, "\e[38;2;0;0;0m") === true,
          description: 'Inverted gauges sample the gradient from 100 down to 0'
+      );
+
+      // @ Corner labels — heading/summary above, caption/note below
+      $Meter->inverted = false;
+      $Meter->width = 30;
+      $Meter->value = 75.0;
+      $Meter->heading = 'Cases';
+      $Meter->summary = '@:success:3 passed@;';
+      $Meter->caption = '3 / 4 cases';
+      $Meter->note = '75%';
+      $frame = (string) $Meter->render(Meter::RETURN_OUTPUT);
+      $rows = explode("\n", rtrim($frame, "\n"));
+
+      yield assert(
+         assertion: count($rows) === 3,
+         description: 'Labeled gauges render heading and caption rows around the bar'
+      );
+      yield assert(
+         assertion: str_contains($rows[0] ?? '', 'Cases')
+            && str_contains($rows[0] ?? '', '3 passed')
+            && str_contains($rows[2] ?? '', '3 / 4 cases')
+            && str_contains($rows[2] ?? '', '75%'),
+         description: 'The corner labels land on their rows'
+      );
+
+      $visible = mb_strlen(
+         (string) preg_replace(__String::ANSI_ESCAPE_SEQUENCE_REGEX, '', $rows[2] ?? '')
+      );
+      yield assert(
+         assertion: $visible === 30,
+         description: 'Right labels align flush with the bar width'
       );
    }
 );
