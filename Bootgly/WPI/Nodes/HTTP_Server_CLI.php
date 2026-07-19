@@ -536,6 +536,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
 
       match ($Event) {
          Events::RequestReceived => $this->listen($Callback),
+         Events::ServerAdvertised => $this->onServerAdvertised = $Callback,
          Events::ServerStarted => $this->onServerStarted = $Callback,
          Events::ServerStopped => $this->onServerStopped = $Callback,
       };

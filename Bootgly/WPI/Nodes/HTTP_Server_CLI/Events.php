@@ -17,6 +17,7 @@ use Bootgly\WPI\Event;
 enum Events : string implements Event
 {
    case RequestReceived = 'requestReceived';
+   case ServerAdvertised = 'serverAdvertised';
    case ServerStarted = 'serverStarted';
    case ServerStopped = 'serverStopped';
 }

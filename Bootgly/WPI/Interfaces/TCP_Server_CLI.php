@@ -100,6 +100,7 @@ use function method_exists;
 use function microtime;
 use function min;
 use function mkdir;
+use function net_get_interfaces;
 use function openssl_x509_check_private_key;
 use function openssl_x509_fingerprint;
 use function pcntl_exec;
@@ -295,10 +296,31 @@ class TCP_Server_CLI implements Servers
    /** @var array<string,true> */
    protected array $Events = [];
    // # Hooks — server lifecycle callbacks, set by the node `on()` overrides.
+   /** Launch banner hook — fired on the process that owns the terminal (the launcher on Daemon mode) */
+   protected null|Closure $onServerAdvertised = null;
    protected null|Closure $onServerStarted = null;
    protected null|Closure $onServerStopped = null;
 
    // * Metadata
+   /** The first non-loopback IPv4 of the machine — null when none is resolvable */
+   public null|string $network {
+      get {
+         if (function_exists('net_get_interfaces') === true) {
+            foreach (net_get_interfaces() ?: [] as $interface) {
+               foreach ($interface['unicast'] ?? [] as $unicast) {
+                  $address = (string) ($unicast['address'] ?? '');
+                  // ? family 2 = IPv4 (AF_INET, literal: the sockets extension is optional)
+                  if (($unicast['family'] ?? 0) === 2 && $address !== '' && $address !== '127.0.0.1') {
+                     return $address;
+                  }
+               }
+            }
+         }
+
+         // :
+         return null;
+      }
+   }
    // # State
    protected int $started = 0;
    protected bool $daemonized = false;
@@ -868,6 +890,12 @@ class TCP_Server_CLI implements Servers
       //   privilege drop and the node-specific startup hook all completed.
       $this->announce();
 
+      // @ Launch banner on the modes that keep the terminal — on Daemon mode
+      //   the launcher fires the same hook on its own side, before detaching
+      if ($this->Mode !== Modes::Daemon && $this->onServerAdvertised !== null) {
+         ($this->onServerAdvertised)($this);
+      }
+
       // ... Continue to master process:
       switch ($this->Mode) {
          case Modes::Daemon:
@@ -1344,6 +1372,13 @@ class TCP_Server_CLI implements Servers
 
          if ($ready === 'ready') {
             $this->Logger->log(notice: '@\;Daemon started (PID: ' . $PID . ')@\;@.;');
+
+            // @ Launch banner — the daemon terminal is detached, so the
+            //   launcher renders it (the project hook owns the presentation)
+            if ($this->onServerAdvertised !== null) {
+               ($this->onServerAdvertised)($this);
+            }
+
             exit(0);
          }
 
@@ -1401,6 +1436,38 @@ class TCP_Server_CLI implements Servers
          if (is_resource($Stream)) {
             $this->daemonStreams[] = $Stream;
          }
+      }
+   }
+
+   /**
+    * Advertise the bound endpoint, user friendly: the Local URL always and
+    * the Network URL when the bind covers external interfaces. Call it from
+    * an `Events::ServerAdvertised` hook to compose the project banner. Muted
+    * on the Test runner and on fully muted output.
+    */
+   public function advertise (): void
+   {
+      // ? The Test runner and muted output keep the stream clean
+      if ($this->Mode === Modes::Test || Display::$segments === Display::NONE) {
+         return;
+      }
+
+      // ! Scheme — nodes set `socket` as `http`/`https://`/`ws`...; normalize
+      $scheme = rtrim($this->socket ?? 'tcp', ':/');
+      $host = $this->host ?? '0.0.0.0';
+      $port = $this->port ?? 0;
+
+      // ? Specific bind — a single address line
+      if ($host !== '0.0.0.0' && $host !== '::') {
+         $this->Logger->log(info: "  Listening on @#cyan:{$scheme}://{$host}:{$port}@;@.;");
+
+         return;
+      }
+
+      // @ Wildcard bind — Local plus the machine Network address
+      $this->Logger->log(info: "  Local:   @#cyan:{$scheme}://localhost:{$port}@;@.;");
+      if ($this->network !== null) {
+         $this->Logger->log(info: "  Network: @#cyan:{$scheme}://{$this->network}:{$port}@;@.;");
       }
    }
 

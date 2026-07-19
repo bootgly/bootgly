@@ -20,6 +20,7 @@ enum Events : string implements Event
    case Connected = 'connected';
    case MessageReceived = 'messageReceived';
    case Disconnected = 'disconnected';
+   case ServerAdvertised = 'serverAdvertised';
    case ServerStarted = 'serverStarted';
    case ServerStopped = 'serverStopped';
 }
