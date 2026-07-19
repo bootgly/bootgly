@@ -31,12 +31,14 @@ use function array_key_exists;
 use function array_key_first;
 use function array_keys;
 use function array_map;
+use function array_merge;
 use function array_slice;
 use function array_values;
 use function basename;
 use function count;
 use function escapeshellarg;
 use function explode;
+use function file_get_contents;
 use function getmypid;
 use function glob;
 use function implode;
@@ -51,10 +53,13 @@ use function is_numeric;
 use function is_string;
 use function json_encode;
 use function max;
+use function microtime;
 use function min;
 use function passthru;
 use function posix_get_last_error;
+use function posix_getuid;
 use function posix_kill;
+use function posix_strerror;
 use function preg_match;
 use function putenv;
 use function realpath;
@@ -62,6 +67,7 @@ use function rmdir;
 use function rtrim;
 use function scandir;
 use function shell_exec;
+use function str_contains;
 use function str_pad;
 use function str_repeat;
 use function str_starts_with;
@@ -840,6 +846,7 @@ class ProjectCommand extends Command
             ? "Project @#cyan:{$projectName}@; is not running on port @#cyan:{$port}@;.@.;"
             : "Project @#cyan:{$projectName}@; is not running.@.;";
          $Alert->render();
+         $this->hint($projectName, 'stop');
          return false;
       }
 
@@ -853,9 +860,14 @@ class ProjectCommand extends Command
          // @ Send SIGTERM to master
          if (posix_kill($masterPID, SIGTERM) === false) {
             $error = posix_get_last_error();
+            // ? EPERM: the daemon lineage belongs to another user (root boot)
+            $hint = $error === 1
+               ? ' The daemon runs as another user (started as root?) — retry with sudo.'
+               : '';
+            $reason = posix_strerror($error);
             $Alert = new Alert($Output);
             $Alert->Type::Failure->set();
-            $Alert->message = "Verified project instance @#cyan:{$projectName}@; could not be signaled (PID {$masterPID}, error {$error}).@.;";
+            $Alert->message = "Verified project instance @#cyan:{$projectName}@; could not be signaled (PID {$masterPID}: {$reason}).{$hint}@.;";
             $Alert->render();
             return false;
          }
@@ -908,6 +920,52 @@ class ProjectCommand extends Command
             }
          }
 
+         // @ The ACME helper never joins the worker pool — a SIGKILLed master
+         //   orphans it still holding the HTTP-01 port. Signal it only when
+         //   its process title proves it is an ACME helper.
+         $lease = $PIDs['AutoTLS'] ?? null;
+         $helper = is_array($lease) && is_int($lease['helper'] ?? null) ? $lease['helper'] : 0;
+         if ($helper > 1) {
+            $cmdline = @file_get_contents("/proc/{$helper}/cmdline");
+            if (is_string($cmdline) && str_contains($cmdline, ': ACME helper')) {
+               posix_kill($helper, SIGTERM);
+            }
+            else {
+               $helper = 0;
+            }
+         }
+
+         // ! Success must mean TERMINATED: verify the whole lineage (master,
+         //   workers and helper) actually exited instead of trusting signal
+         //   dispatch — survivors keep ports bound and break the next start.
+         $survivors = array_merge([$masterPID], $PIDs['workers'], $helper > 1 ? [$helper] : []);
+         $deadline = microtime(true) + 3.0;
+         // @@
+         while (microtime(true) < $deadline) {
+            $survivors = array_values(array_filter(
+               $survivors,
+               static function (int $PID): bool {
+                  if (posix_kill($PID, 0)) {
+                     return true;
+                  }
+                  // ? EPERM still proves liveness (foreign-owned process)
+                  return posix_get_last_error() === 1;
+               }
+            ));
+            if ($survivors === []) {
+               break;
+            }
+            usleep(100000);
+         }
+         if ($survivors !== []) {
+            $list = implode(', ', $survivors);
+            $Alert = new Alert($Output);
+            $Alert->Type::Failure->set();
+            $Alert->message = "Project @#cyan:{$projectName}@; did not fully terminate — surviving PID(s): @#cyan:{$list}@;.@.;";
+            $Alert->render();
+            return false;
+         }
+
          // @ Tombstone PID/command state. The lock inode is preserved so a
          //   concurrent restart cannot split flock exclusivity across inodes.
          //   Success requires the complete process lineage to release it.
@@ -933,6 +991,7 @@ class ProjectCommand extends Command
          $Alert->Type::Failure->set();
          $Alert->message = "Project @#cyan:{$projectName}@; is not running.@.;";
          $Alert->render();
+         $this->hint($projectName, 'stop');
          return false;
       }
 
@@ -972,6 +1031,7 @@ class ProjectCommand extends Command
          $Alert->Type::Failure->set();
          $Alert->message = "No running instance found for project @#cyan:{$projectName}@;.@.;";
          $Alert->render();
+         $this->hint($projectName, 'show');
 
          return false;
       }
@@ -2677,7 +2737,7 @@ class ProjectCommand extends Command
     * @param string $projectName
     * @param null|string $instance Optional instance qualifier — the bound port (e.g. '8080').
     *
-    * @return null|array{master:int,workers:array<int>,started:int,type:string,host?:string,port?:int}
+    * @return null|array{master:int,workers:array<int>,started:int,type:string,host?:string,port?:int,AutoTLS?:array<string,mixed>}
     */
    private function locate (string $projectName, null|string $instance = null): null|array
    {
@@ -2727,7 +2787,7 @@ class ProjectCommand extends Command
       }
       $data['workers'] = $Workers;
 
-      /** @var array{master:int,workers:array<int>,started:int,type:string,host?:string,port?:int} $data */
+      /** @var array{master:int,workers:array<int>,started:int,type:string,host?:string,port?:int,AutoTLS?:array<string,mixed>} $data */
       return $data;
    }
 
@@ -2770,7 +2830,7 @@ class ProjectCommand extends Command
     *
     * @param string $projectName
     *
-    * @return array<string, array{master:int,workers:array<int>,started:int,type:string,host?:string,port?:int}>
+    * @return array<string, array{master:int,workers:array<int>,started:int,type:string,host?:string,port?:int,AutoTLS?:array<string,mixed>}>
     *         Keys are instance qualifiers ('' for legacy unqualified files, the bound port otherwise)
     */
    private function scan (string $projectName): array
@@ -2825,6 +2885,34 @@ class ProjectCommand extends Command
       }
 
       return $State->authenticate($PID, $parent);
+   }
+
+   /**
+    * Surface the sudo path when project state files exist but could not be
+    * verified — a root-started daemon holds root-owned state the runtime
+    * user can neither authenticate nor signal.
+    */
+   private function hint (string $projectName, string $action): void
+   {
+      // ? Running as root already sees everything
+      if (posix_getuid() === 0) {
+         return;
+      }
+
+      // ? Only when candidate state files actually exist
+      $encoded = Projects::encode($projectName);
+      $states = array_merge(
+         glob(BOOTGLY_STORAGE_DIR . "pids/{$encoded}.json") ?: [],
+         glob(BOOTGLY_STORAGE_DIR . "pids/{$encoded}.*.json") ?: []
+      );
+      if ($states === []) {
+         return;
+      }
+
+      $prefix = shell_exec('command -v bootgly 2>/dev/null') ? '' : 'php ';
+      CLI->Terminal->Output->render(
+         "@#Green:Tip:@; state files exist but could not be verified — if the project was started as @#cyan:root@;, retry with @#Black:sudo {$prefix}bootgly project {$projectName} {$action}@;.@..;"
+      );
    }
 
    /**

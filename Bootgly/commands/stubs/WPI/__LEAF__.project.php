@@ -44,8 +44,10 @@ return new Project(
          // secure: new AutoTLS(
          //    domains: ['example.com'],
          //    email: 'admin@example.com',
-         //    // staging: true, // Let's Encrypt staging CA while testing
+         //    staging: true, // validate with the staging CA first — flip to false for the real certificate
          // ),
+         user: 'debian',   // demote workers from root (root needed to bind port 80 for HTTP-01)
+         group: 'debian',
          // health: '/health', // built-in K8s probe endpoint (answers before middlewares)
       );
       $Server
