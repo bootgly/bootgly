@@ -334,6 +334,8 @@ class TCP_Server_CLI implements Servers
    protected null|array $credential = null;
    /** @var resource|null Launcher readiness channel, daemon child only. */
    protected $daemonReady = null;
+   /** Why the startup readiness barrier failed — node-set, shipped to the daemon launcher. */
+   protected string $fault = '';
    /**
     * Inside the startup readiness barrier. A worker lost here is a definitive
     * startup failure: it is reaped but never reforked (reforking would rebuild
@@ -865,6 +867,11 @@ class TCP_Server_CLI implements Servers
       $this->starting = false;
 
       if ($crossed === false) {
+         $message = 'Server workers did not cross the startup readiness barrier.';
+         if ($this->fault !== '') {
+            $message .= " {$this->fault}";
+         }
+
          $this->Process->stopping = true;
          $this->Process->Children->terminate();
          foreach ($this->Listeners as $Listener) {
@@ -873,11 +880,14 @@ class TCP_Server_CLI implements Servers
          $this->Listeners = [];
          $this->Process->State->clean();
          if (is_resource($this->daemonReady)) {
+            // ! Daemon mode detached the terminal — ship the real reason to
+            //   the waiting launcher through the readiness channel
+            fwrite($this->daemonReady, "fail!{$message}");
             fclose($this->daemonReady);
             $this->daemonReady = null;
          }
 
-         throw new RuntimeException('Server workers did not cross the startup readiness barrier.');
+         throw new RuntimeException($message);
       }
 
       // # Hook — the server is up and ready for connections (master, post-fork,
@@ -1368,6 +1378,32 @@ class TCP_Server_CLI implements Servers
             }
             $ready .= $chunk;
          }
+
+         // ? A failing master ships the reason right after the 5-byte verdict
+         $fault = '';
+         if ($ready === 'fail!') {
+            $drain = microtime(true) + 2.0;
+            while (strlen($fault) < 1024 && microtime(true) < $drain) {
+               $remaining = $drain - microtime(true);
+               if ($remaining <= 0) {
+                  break;
+               }
+               $seconds = (int) $remaining;
+               $microseconds = (int) (($remaining - $seconds) * 1_000_000);
+               $read = [$Pair[0]];
+               $write = null;
+               $except = null;
+               $selected = @stream_select($read, $write, $except, $seconds, $microseconds);
+               if ($selected !== 1) {
+                  break;
+               }
+               $chunk = fread($Pair[0], 1024 - strlen($fault));
+               if ($chunk === false || ($chunk === '' && feof($Pair[0]))) {
+                  break;
+               }
+               $fault .= $chunk;
+            }
+         }
          fclose($Pair[0]);
 
          if ($ready === 'ready') {
@@ -1410,6 +1446,9 @@ class TCP_Server_CLI implements Servers
          //   cannot tombstone the already-running winner's state.
          if ($this->Process->State->lock(LOCK_EX | LOCK_NB)) {
             $this->Process->State->clean();
+         }
+         if ($fault !== '') {
+            $this->Logger->log(error: "@\;{$fault}@\;");
          }
          $this->Logger->log(error: '@\;Daemon startup failed before readiness was acknowledged.@\;');
          exit(1);

@@ -32,10 +32,17 @@ final readonly class CertificateSnapshot
       public array $domains
    ) {}
 
-   /** @return array<string,string> */
+   /** @return array<string,bool|string> */
    public function secure (): array
    {
-      $context = ['local_cert' => $this->certificate];
+      // ? PHP's SSL context inherits verify_peer=true — on a server socket
+      //   that requests a CLIENT certificate (accidental mTLS: browsers
+      //   prompt for one). Explicit AutoTLS `options` override these.
+      $context = [
+         'local_cert'       => $this->certificate,
+         'verify_peer'      => false,
+         'verify_peer_name' => false,
+      ];
       if ($this->key !== null) {
          $context['local_pk'] = $this->key;
       }

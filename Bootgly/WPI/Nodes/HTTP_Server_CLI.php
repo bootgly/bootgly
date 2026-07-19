@@ -34,10 +34,13 @@ use const STREAM_IPPROTO_IP;
 use const STREAM_PF_UNIX;
 use const STREAM_SOCK_STREAM;
 use const WNOHANG;
+use function array_diff;
+use function array_reverse;
 use function array_values;
 use function clearstatcache;
 use function cli_set_process_title;
 use function count;
+use function dirname;
 use function explode;
 use function fclose;
 use function feof;
@@ -73,6 +76,7 @@ use function pcntl_fork;
 use function pcntl_signal;
 use function pcntl_signal_dispatch;
 use function pcntl_waitpid;
+use function posix_geteuid;
 use function posix_getgrnam;
 use function posix_getpid;
 use function posix_getppid;
@@ -80,8 +84,11 @@ use function posix_getpwnam;
 use function posix_getuid;
 use function posix_kill;
 use function preg_match;
+use function rtrim;
 use function scandir;
 use function spl_object_id;
+use function sprintf;
+use function stat;
 use function str_contains;
 use function str_replace;
 use function str_starts_with;
@@ -436,6 +443,18 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       }
       /** @var null|array<string,mixed> $secure */
 
+      // ? Safe server defaults: PHP's SSL context inherits verify_peer=true,
+      //   which makes OpenSSL send a CertificateRequest — browsers then prompt
+      //   for a CLIENT certificate (accidental mTLS). A public server must not
+      //   request one unless explicitly configured; user options keep
+      //   precedence, so real mTLS stays one override away.
+      if ($secure !== null) {
+         $secure += [
+            'verify_peer'      => false,
+            'verify_peer_name' => false,
+         ];
+      }
+
       // @ HTTP/2 — on by default; `enableHTTP2: false` disables BOTH the
       //   TLS-ALPN advertisement (RFC 9113 §3.2) and the cleartext
       //   prior-knowledge preface probe (§3.3), making the server
@@ -655,6 +674,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       }
 
       if ($this->exchange() === false) {
+         $this->fault = $this->diagnose($this->Process->Children->PIDs);
          $this->halt();
          return false;
       }
@@ -688,10 +708,78 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
          && $this->appliedGeneration === $desired['generation']
          && $this->appliedAttempt === $desired['attempt'];
       if ($ready === false) {
+         $this->fault = $this->diagnose($Workers);
          $this->halt();
       }
 
       return $ready;
+   }
+
+   /**
+    * Compose the reason the Auto-TLS startup barrier failed — the demoted
+    * master probes the credential store it shares with the demoted workers
+    * (an EACCES here IS their error), then the workers' own negative
+    * acknowledgements, then the barrier bookkeeping itself.
+    *
+    * @param array<int,int> $Workers Worker PIDs when the barrier opened.
+    */
+   private function diagnose (array $Workers): string
+   {
+      $AutoTLS = $this->AutoTLS;
+      if ($AutoTLS === null) {
+         return '';
+      }
+
+      // # Store reachability, segment by segment — a root-owned 0700
+      //   ancestor blocks traversal into an otherwise owned tree
+      $walk = '';
+      $previous = null;
+      foreach (explode('/', trim($AutoTLS->path, '/')) as $segment) {
+         if ($segment === '') {
+            continue;
+         }
+
+         $walk .= "/{$segment}";
+         $status = @stat($walk);
+         if ($status === false) {
+            $uid = posix_geteuid();
+            $detail = 'it does not exist or cannot be read';
+            if (is_array($previous)) {
+               $mode = $previous['mode'] & 0777;
+               $owner = $previous['uid'];
+               if ($owner !== $uid || ($mode & 0100) === 0) {
+                  $octal = sprintf('%03o', $mode);
+                  $detail = "its parent is mode {$octal} owned by uid {$owner} — not traversable by uid {$uid}";
+               }
+            }
+
+            return "Auto-TLS credential store unreachable at `{$walk}` (uid {$uid}): {$detail}.";
+         }
+         $previous = $status;
+      }
+
+      // # Failed worker acknowledgements carry their own reason
+      $desired = $AutoTLS->Swaps->fetch();
+      $generation = $desired['generation'] ?? null;
+      $attempt = $desired['attempt'] ?? null;
+      if (is_string($generation) && is_string($attempt)) {
+         foreach ($AutoTLS->Swaps->collect($generation, $attempt) as $ack) {
+            if ($ack['success'] === false && $ack['error'] !== '') {
+               return "Auto-TLS worker {$ack['pid']} rejected the startup credential: {$ack['error']}";
+            }
+         }
+      }
+
+      // # Workers lost inside the barrier acknowledged nothing
+      $lost = array_values(array_diff($Workers, $this->Process->Children->PIDs));
+      if ($lost !== []) {
+         $list = implode(', ', $lost);
+
+         return "Auto-TLS worker(s) {$list} exited inside the startup barrier before acknowledging the credential.";
+      }
+
+      // :
+      return 'Auto-TLS: the workers did not acknowledge the startup credential within the barrier budget.';
    }
 
    /**
@@ -1848,7 +1936,9 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
 
    /**
     * Recursively hand a storage tree to the configured runtime user/group
-    * (the demoted certifier and helper must read/write it).
+    * (the demoted certifier and helper must read/write it). Root-created
+    * ancestors inside the storage dir are handed over too — the runtime
+    * identity must be able to TRAVERSE into its own tree.
     */
    private function own (string $directory): bool
    {
@@ -1873,6 +1963,43 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
          $walk .= "/{$segment}";
          if (is_link($walk)) {
             return false;
+         }
+      }
+
+      // ! Root-created ancestors (a privileged recursive mkdir defaults them
+      //   to 0700 root) would strand the demoted runtime outside its own
+      //   tree. Hand every root-owned ancestor inside the storage dir over
+      //   as well — the directories themselves only, never their contents.
+      $storage = rtrim(BOOTGLY_STORAGE_DIR, '/');
+      $chain = [];
+      $ancestor = rtrim($directory, '/');
+      while (true) {
+         $ancestor = dirname($ancestor);
+         if (
+            $ancestor === $storage
+            || $ancestor === '/'
+            || $ancestor === '.'
+            || strlen($ancestor) <= strlen($storage)
+         ) {
+            break;
+         }
+         $chain[] = $ancestor;
+      }
+      if ($ancestor === $storage) {
+         foreach (array_reverse($chain) as $parent) {
+            $status = @stat($parent);
+            if ($status === false) {
+               return false;
+            }
+            if ($status['uid'] !== 0) {
+               continue;
+            }
+            if ($this->user !== null && lchown($parent, $this->user) === false) {
+               return false;
+            }
+            if ($this->group !== null && lchgrp($parent, $this->group) === false) {
+               return false;
+            }
          }
       }
 
