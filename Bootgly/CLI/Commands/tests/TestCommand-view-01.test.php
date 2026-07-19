@@ -48,7 +48,7 @@ return new Specification(
          'AUGMENT_AGENT', 'CLAUDECODE', 'CLAUDE_CODE', 'CODEX_SANDBOX',
          'CODEX_THREAD_ID', 'COPILOT_CLI', 'CURSOR_AGENT', 'GEMINI_CLI',
          'OPENCODE', 'OPENCODE_CLIENT', 'REPL_ID',
-         'BOOTGLY_AGENT_STDOUT_REDIRECTED',
+         'BOOTGLY_AGENT_STDOUT_REDIRECTED', 'BOOTGLY_TTY',
       ] as $variable) {
          unset($human[$variable]);
       }
@@ -121,6 +121,14 @@ return new Specification(
          assertion: $status === 0 && str_contains($output, ' PASS ')
             && str_contains($output, '╭') === false,
          description: 'A targeted run defaults to the list view'
+      );
+
+      // @ --view=heatmap (human, forced TTY): the card streams live
+      [$status, $output] = $run(['4', '--view=heatmap'], ['BOOTGLY_TTY' => '1'] + $human);
+      yield assert(
+         assertion: $status === 0 && str_contains($output, "\e[?25l")
+            && str_contains($output, "\e[?25h"),
+         description: 'A TTY heatmap run streams the card live (cursor hidden while painting)'
       );
 
       // @ Invalid view (human): alert + failure exit

@@ -12,6 +12,7 @@ namespace Bootgly\commands;
 
 
 use const BOOTGLY_ROOT_DIR;
+use const BOOTGLY_TTY;
 use const BOOTGLY_VERSION;
 use const BOOTGLY_WORKING_DIR;
 use const DIRECTORY_SEPARATOR;
@@ -43,6 +44,7 @@ use function function_exists;
 use function fwrite;
 use function getcwd;
 use function getenv;
+use function getmypid;
 use function hash;
 use function hash_equals;
 use function implode;
@@ -57,6 +59,9 @@ use function json_decode;
 use function json_encode;
 use function ltrim;
 use function max;
+use function mb_strlen;
+use function microtime;
+use function min;
 use function ob_end_clean;
 use function ob_start;
 use function pcntl_async_signals;
@@ -70,16 +75,19 @@ use function putenv;
 use function random_bytes;
 use function realpath;
 use function rename;
+use function round;
 use function rtrim;
 use function scandir;
 use function sort;
 use function str_contains;
 use function str_ends_with;
 use function str_pad;
+use function str_repeat;
 use function str_replace;
 use function strlen;
 use function strtolower;
 use function substr;
+use function substr_count;
 use function unlink;
 use Closure;
 use LogicException;
@@ -89,9 +97,11 @@ use Throwable;
 
 use const Bootgly\ABI\BOOTSTRAP_FILENAME;
 use const Bootgly\CLI;
+use Bootgly\ABI\Data\__String;
 use Bootgly\ABI\Data\__String\Escapeable\Text\Formattable;
 use Bootgly\ACI\Logs\Data\Display;
 use Bootgly\ACI\Tests;
+use Bootgly\ACI\Tests\Benchmark;
 use Bootgly\ACI\Tests\Benchmark\Artifacts;
 use Bootgly\ACI\Tests\Benchmark\Configs;
 use Bootgly\ACI\Tests\Benchmark\Configs\Options;
@@ -114,9 +124,12 @@ use Bootgly\ACI\Tests\Temporaries;
 use Bootgly\API\Environment;
 use Bootgly\API\Environment\Agent;
 use Bootgly\CLI\Command;
+use Bootgly\CLI\Terminal;
+use Bootgly\CLI\UI\Base\Fieldset;
 use Bootgly\CLI\UI\Components\Alert;
+use Bootgly\CLI\UI\Components\Chart\Gradient;
 use Bootgly\CLI\UI\Components\Charts\Bars;
-use Bootgly\CLI\UI\Components\Fieldset;
+use Bootgly\CLI\UI\Components\Charts\Meter;
 use Bootgly\CLI\UI\Components\Heatmap;
 
 
@@ -136,11 +149,11 @@ class TestCommand extends Command
    public array $options = [
       'Increase the verbosity of the command' => ['-v', '-vv', '-vvv'],
       'Enable code coverage (auto-detected driver)' => ['--coverage'],
-      'Coverage driver: xdebug | pcov | native | nothing' => ['--coverage-driver=DRIVER'],
-      'Native driver mode: strict | parity (default: strict)' => ['--coverage-native-mode=MODE'],
-      'Coverage report: text | html | clover (default: text)' => ['--coverage-report=FORMAT[:PATH]'],
+      'Coverage driver: @#Cyan:xdebug | pcov | native | nothing@;' => ['--coverage-driver=DRIVER'],
+      'Native driver mode: @#Cyan:strict | parity@; @#Black:(default: strict)@;' => ['--coverage-native-mode=MODE'],
+      'Coverage report: @#Cyan:text | html | clover@; @#Black:(default: text)@;' => ['--coverage-report=FORMAT[:PATH]'],
       'Restrict the coverage report to changed lines' => ['--coverage-diff'],
-      'Output view: list | heatmap (default: heatmap on full runs)' => ['--view=MODE'],
+      'Output view: @#Cyan:list | heatmap@; @#Black:(default: heatmap on full runs)@;' => ['--view=MODE'],
       'Show help information' => ['--help', '-h'],
    ];
 
@@ -149,6 +162,13 @@ class TestCommand extends Command
    private string $view = 'list';
    /** Failed test cases accumulated across heatmap-mode suites */
    private int $failures = 0;
+   // # Live card
+   /** Rows painted by the previous live card frame */
+   private int $rows = 0;
+   /** Last live repaint timestamp — `0.0` while no live frame was painted */
+   private float $painted = 0.0;
+   /** PID that owns the live card — forked children must stay silent */
+   private int $owner = 0;
 
 
    public function run (array $arguments = [], array $options = []): bool
@@ -502,9 +522,66 @@ class TestCommand extends Command
          throw new LogicException("Test suite index {$suite} did not load a valid Suite: {$suite_dir}");
       }
 
+      // ! Title — the suite's tests directory path
+      $title = rtrim(str_replace('\\', '/', $suite_dir), '/');
+      if ($hasTests === false) {
+         $title .= '/tests';
+      }
+
       // ? Heatmap view — a suite autoboot may re-enable exit-on-failure
+      $Meter = null;
+      $Heatmap = null;
       if ($this->view === 'heatmap') {
          Suite::$exitOnFailure = false;
+
+         // ! Card pieces — the Meter gauges CASES (their count is known
+         //   upfront, so progress is deterministic); the Heatmap cells are the
+         //   ASSERTIONS discovered as each case runs. The card paints lazily on
+         //   the first record, so closure/E2E suites that fork (and never run
+         //   a case in this process) never paint an empty card.
+         $totalCases = count($Suite->tests);
+         $Meter = new Meter(CLI->Terminal->Output);
+         $Meter->Gradient = new Gradient(['#98c379']);
+         $Heatmap = new Heatmap(CLI->Terminal->Output);
+
+         $this->rows = 0;
+         $this->painted = 0.0;
+         $this->owner = getmypid() ?: 0;
+
+         // ! Per-case observer — self-test cases build probe Suites of their
+         //   own; only records owned by this Suite feed this card
+         $passed = 0;
+         Suite::$Observer = function (Suite $Notified) use ($Suite, $Meter, $Heatmap, $title, $totalCases, &$passed): void {
+            if ($Notified !== $Suite) {
+               return;
+            }
+            $records = $Notified->records;
+            $record = $records[array_key_last($records)] ?? null;
+            if ($record === null) {
+               return;
+            }
+
+            $cells = $this->map([$record]);
+            foreach ($cells as $cell) {
+               if ($cell === 'passed') {
+                  $passed++;
+               }
+            }
+
+            $Heatmap->feed(...$cells); // not started — appends silently
+            $this->fill($Meter, $Heatmap, $Suite, $totalCases, $passed);
+
+            // ? Live repaint — interactive terminals, owner process only
+            if (BOOTGLY_TTY === false || getmypid() !== $this->owner) {
+               return;
+            }
+            // ? Throttle
+            if (microtime(true) - $this->painted < 0.1) {
+               return;
+            }
+
+            $this->repaint($this->compose($Meter, $Heatmap, $title));
+         };
       }
 
       // ?!
@@ -523,9 +600,18 @@ class TestCommand extends Command
          $autoBoot = $Suite->autoBoot ?? false;
          if ($autoBoot instanceof Closure) {
             $Return = $autoBoot($Suite);
-            // ? Closure suites usually run in child processes and return true
-            if ($this->view === 'heatmap' && $Return instanceof Suite) {
-               $this->chart($Return);
+            // ? Closure suites run their own lifecycle (E2E boots often fork
+            //   server workers, but run their client cases in this process).
+            //   Chart the suite when it produced records here; either way its
+            //   failures must fold into the exit code — no exit-on-failure
+            //   fires under the heatmap view.
+            if ($Meter !== null && $Heatmap !== null) { // @phpstan-ignore notIdentical.alwaysTrue (assigned together)
+               if ($Suite->records !== []) {
+                  $this->plot($Suite, $Meter, $Heatmap, $title);
+               }
+               else {
+                  $this->failures += $Suite->failed;
+               }
             }
 
             return $Return;
@@ -540,8 +626,8 @@ class TestCommand extends Command
                $Suite->summarize();
             }
 
-            if ($this->view === 'heatmap') {
-               $this->chart($Suite);
+            if ($Meter !== null && $Heatmap !== null) { // @phpstan-ignore notIdentical.alwaysTrue (assigned together)
+               $this->plot($Suite, $Meter, $Heatmap, $title);
             }
 
             return $Suite;
@@ -549,6 +635,14 @@ class TestCommand extends Command
       }
       finally {
          Display::$segments = $segments;
+         Suite::$Observer = null;
+
+         // ? A live card interrupted mid-paint (exception) must restore the cursor
+         if ($this->painted > 0.0 && getmypid() === $this->owner) {
+            CLI->Terminal->Output->Cursor->show();
+            $this->rows = 0;
+            $this->painted = 0.0;
+         }
 
          if ($asyncSignals !== null) {
             // ! A suite may install a non-restarting SIGCHLD handler or enable
@@ -575,17 +669,16 @@ class TestCommand extends Command
    }
 
    /**
-    * Chart a Suite as a heatmap dashboard card, listing its failures below.
+    * Map Suite records into heatmap cells — one per assertion, in execution order.
+    *
+    * @param array<int,array{case:int,file:string,status:string,results:array<int,bool|null>,description:null|string,message:null|string,elapsed:null|string}> $records
+    *
+    * @return array<int,string>
     */
-   private function chart (Suite $Suite): void
+   private function map (array $records): array
    {
-      $this->failures += $Suite->failed;
-
-      $Output = CLI->Terminal->Output;
-
-      // ! Cells — one per assertion, in execution order
       $cells = [];
-      foreach ($Suite->records as $record) {
+      foreach ($records as $record) {
          // ? A skipped case contributes a single skipped cell
          if ($record['status'] === 'skipped') {
             $cells[] = 'skipped';
@@ -602,16 +695,55 @@ class TestCommand extends Command
          }
       }
 
-      // @ Card
-      $Heatmap = new Heatmap($Output);
-      $Heatmap->title = $Suite->name !== '' ? $Suite->name : '(suite)';
+      // :
+      return $cells;
+   }
+
+   /**
+    * Plot a Suite as a heatmap dashboard card, listing its failures below.
+    */
+   private function plot (Suite $Suite, Meter $Meter, Heatmap $Heatmap, string $title): void
+   {
+      $this->failures += $Suite->failed;
+
+      $Output = CLI->Terminal->Output;
+
+      // ! Cells — one per assertion, in execution order (the authoritative
+      //   final state: throttled live feeds may lag)
+      $cells = $this->map($Suite->records);
+      $passed = 0;
+      foreach ($cells as $cell) {
+         if ($cell === 'passed') {
+            $passed++;
+         }
+      }
       $Heatmap->cells = $cells;
-      $Heatmap->render();
+      $this->fill($Meter, $Heatmap, $Suite, count($Suite->tests), $passed);
+
+      // ! Captions — match the list view colors
+      $duration = Benchmark::format($Suite->started, $Suite->finished);
+      $dim = self::wrap(self::_DIM_STYLE);
+      $reset = self::_RESET_FORMAT;
+      $left = self::wrap(self::_BLACK_BRIGHT_FOREGROUND) . "Ran all test cases{$reset}";
+      $right = self::wrap(self::_WHITE_FOREGROUND) . "Total Duration:{$reset} "
+         . self::wrap(self::_MAGENTA_BRIGHT_FOREGROUND) . "{$duration}s{$reset}";
+
+      // @ Final frame — replaces the live frame when one was painted
+      $frame = $this->compose($Meter, $Heatmap, $title, $left, $right);
+      $live = $this->painted > 0.0 && getmypid() === $this->owner;
+      if ($live && $this->rows > 0) {
+         $Output->Cursor->up($this->rows, column: 1);
+         $Output->Text->clear(lines: $this->rows);
+      }
+      $Output->write($frame);
+      if ($live) {
+         $Output->Cursor->show();
+      }
+      $this->rows = 0;
+      $this->painted = 0.0;
 
       // @ Failures — raw SGR: assertion messages may contain markup-like text
       $red = self::wrap(self::_RED_FOREGROUND);
-      $dim = self::wrap(self::_DIM_STYLE);
-      $reset = self::_RESET_FORMAT;
       foreach ($Suite->records as $record) {
          if ($record['status'] !== 'failed') {
             continue;
@@ -628,6 +760,112 @@ class TestCommand extends Command
       }
 
       $Output->write("\n");
+   }
+
+   /**
+    * Fill the card labels from the suite state — the Meter gauges cases, the
+    * Heatmap tallies assertions.
+    */
+   private function fill (Meter $Meter, Heatmap $Heatmap, Suite $Suite, int $totalCases, int $passed): void
+   {
+      $cases = count($Suite->records);
+      $assertions = count($Heatmap->cells);
+
+      $heading = self::wrap(self::_WHITE_BRIGHT_FOREGROUND);
+      $bold = self::wrap(self::_BOLD_STYLE, self::_WHITE_BRIGHT_FOREGROUND);
+      $dim = self::wrap(self::_DIM_STYLE);
+      $reset = self::_RESET_FORMAT;
+
+      $Meter->value = $totalCases > 0 ? $cases * 100 / $totalCases : 100.0;
+      $Meter->heading = "{$heading}Cases{$reset}";
+      $Meter->summary = "@:error:{$Suite->failed} failed@;, @:notice:{$Suite->skipped} skipped@;, @:success:{$Suite->passed} passed@;";
+      $Meter->caption = "{$dim}{$cases} / {$totalCases} cases{$reset}";
+      $Meter->note = $bold . ((int) round($Meter->value)) . "%{$reset}";
+
+      $Heatmap->heading = "{$heading}Assertions{$reset}";
+      $Heatmap->caption = "{$dim}{$passed} / {$assertions} assertions{$reset}";
+   }
+
+   /**
+    * Compose the suite dashboard card — a Fieldset boxing the Meter (cases)
+    * and the Heatmap (assertions), with optional captions below.
+    */
+   private function compose (Meter $Meter, Heatmap $Heatmap, string $title, string $left = '', string $right = ''): string
+   {
+      $width = min(isSet(Terminal::$width) === true ? Terminal::$width : 80, 100);
+      $width = max($width, 20);
+      $inner = $width - 4;
+
+      $Meter->width = $inner;
+      $Heatmap->width = $inner;
+
+      $bold = self::wrap(self::_BOLD_STYLE, self::_WHITE_BRIGHT_FOREGROUND);
+      $reset = self::_RESET_FORMAT;
+
+      $meter = $Meter->render(Meter::RETURN_OUTPUT);
+      $meter = rtrim(is_string($meter) ? $meter : '', "\n");
+      $grid = rtrim((string) $Heatmap->render(Heatmap::RETURN_OUTPUT), "\n");
+
+      $Fieldset = new Fieldset(CLI->Terminal->Output);
+      $Fieldset->width = $inner;
+      $Fieldset->borders = [
+         'top'          => '─',
+         'top-left'     => '╭',
+         'top-right'    => '╮',
+
+         'mid'          => '─',
+         'left'         => '│',
+         'right'        => '│',
+
+         'bottom'       => '─',
+         'bottom-left'  => '╰',
+         'bottom-right' => '╯',
+      ];
+      $Fieldset->content = "{$bold}{$title}{$reset}\n\n{$meter}\n\n{$grid}";
+      $frame = (string) $Fieldset->render(Fieldset::RETURN_OUTPUT);
+
+      // # Captions — plain text below the box, aligned to the box content
+      //   columns: 2-space left margin (matching "│ "), no trailing pad
+      if ($left !== '' || $right !== '') {
+         $gap = max(1, $inner - $this->measure($left) - $this->measure($right));
+         $frame .= "  {$left}" . str_repeat(' ', $gap) . "{$right}\n";
+      }
+
+      // :
+      return $frame;
+   }
+
+   /**
+    * Repaint the live card over its previous frame (the card grows as cells arrive).
+    */
+   private function repaint (string $frame): void
+   {
+      $Output = CLI->Terminal->Output;
+
+      // ! The first live frame hides the cursor
+      if ($this->painted === 0.0) {
+         $Output->Cursor->hide();
+      }
+      $this->painted = microtime(true);
+
+      // ? Clear the previous frame
+      if ($this->rows > 0) {
+         $Output->Cursor->up($this->rows, column: 1);
+         $Output->Text->clear(lines: $this->rows);
+      }
+
+      $this->rows = substr_count($frame, "\n");
+
+      $Output->write($frame);
+   }
+
+   /**
+    * Measure the visible columns of a caption (escapes occupy none).
+    */
+   private function measure (string $caption): int
+   {
+      // :
+      return mb_strlen((string) preg_replace(__String::ANSI_ESCAPE_SEQUENCE_REGEX, '', $caption));
    }
 
    private function locate (string $scope): null|string
@@ -701,7 +939,7 @@ class TestCommand extends Command
       // ! Case name
       $caseName = $arguments[0] ?? null;
       // ! Help function
-      $help = function (?string $caseName = null) use ($options) {
+      $help = function (null|string $caseName = null) use ($options) {
          // @ List available cases
          $benchDirs = [
             BOOTGLY_WORKING_DIR . 'benchmarks/',
