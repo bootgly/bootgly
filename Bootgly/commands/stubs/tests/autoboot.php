@@ -22,6 +22,9 @@ use Bootgly\ACI\Tests\Suites;
 // single case with `bootgly test <index> <case>`.
 return new Suites(
    directories: [
+      // The example suite — a running tour of the test API (Basic asserts +
+      // Advanced fluent expectations); remove it when your suites take over:
+      'tests/example/',
       // Register your project suites here — e.g.:
       // 'projects/App/',
    ]

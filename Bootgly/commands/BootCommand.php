@@ -66,13 +66,13 @@ class BootCommand extends Command
             $Alert->render();
          }
 
-         // # tests/ — seeded with an EMPTY registry template: the framework
-         // suites are never listed in a kit; the user registers project suites
+         // # tests/ — seeded with the registry template + the example suite
+         // (a running tour of the test API): the framework suites are never
+         // listed in a kit; the user registers project suites
          if (is_dir(BOOTGLY_WORKING_DIR . 'tests') === false) {
-            mkdir(BOOTGLY_WORKING_DIR . 'tests', 0755, true);
-            copy(
-               BOOTGLY_ROOT_DIR . 'Bootgly/commands/stubs/tests/autoboot.php',
-               BOOTGLY_WORKING_DIR . 'tests/autoboot.php'
+            copy_recursively(
+               BOOTGLY_ROOT_DIR . 'Bootgly/commands/stubs/tests',
+               BOOTGLY_WORKING_DIR . 'tests'
             );
 
             $Alert->Type::Success->set();

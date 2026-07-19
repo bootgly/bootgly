@@ -84,6 +84,7 @@ use function str_ends_with;
 use function str_pad;
 use function str_repeat;
 use function str_replace;
+use function str_starts_with;
 use function strlen;
 use function strtolower;
 use function substr;
@@ -533,8 +534,11 @@ class TestCommand extends Command
          }
       }
 
-      // !
-      $hasTests = str_contains($suite_dir, '/tests/') || str_ends_with($suite_dir, '/tests');
+      // ! Entries already inside a tests folder load their own autoboot —
+      //   including workspace-root suites (`tests/...`, e.g. the kit example)
+      $hasTests = str_contains($suite_dir, '/tests/')
+         || str_ends_with($suite_dir, '/tests')
+         || str_starts_with($suite_dir, 'tests/');
       $bootstrap_file = str_replace('\\', '/', $suite_dir . ($hasTests ? '' : '/tests') . '/' . BOOTSTRAP_FILENAME);
       $bootstrap_file = preg_replace('#/{2,}#', '/', $bootstrap_file) ?? $bootstrap_file;
       $bootstrap = BOOTGLY_ROOT_DIR !== BOOTGLY_WORKING_DIR
