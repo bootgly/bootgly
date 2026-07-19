@@ -267,10 +267,18 @@ class Wizard extends Component
          //   guide, shifted into the content area (width shrinks accordingly)
          $Host = $this->Output;
          $shrunk = false;
+         $swapped = false;
 
          if (BOOTGLY_TTY === true) {
             $gutter = $this->paint('@#Black:│@;') . '  ';
             $this->Output = new Region($Host->stream, $gutter, 3);
+
+            // @ Swap the Terminal Output too — handler code reading the global
+            //   Output at call time nests without knowing (restored after)
+            if (isSet(Terminal::$Terminal) === true && Terminal::$Terminal->Output === $Host) {
+               Terminal::$Terminal->Output = $this->Output;
+               $swapped = true;
+            }
 
             if (isSet(Terminal::$width) === true) {
                Terminal::$width -= 3;
@@ -283,6 +291,9 @@ class Wizard extends Component
          }
          catch (Throwable $Throwable) {
             $this->Output = $Host;
+            if ($swapped === true) {
+               Terminal::$Terminal->Output = $Host;
+            }
             if ($shrunk === true) {
                Terminal::$width += 3;
             }
@@ -308,6 +319,9 @@ class Wizard extends Component
          }
 
          $this->Output = $Host;
+         if ($swapped === true) {
+            Terminal::$Terminal->Output = $Host;
+         }
          if ($shrunk === true) {
             Terminal::$width += 3;
          }

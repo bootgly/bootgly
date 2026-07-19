@@ -56,6 +56,9 @@ class Terminal // extends API/Project or API/Node
    // ! Command
    /** @var array<string> */
    public static array $command = []; // @ Last command used (returned by autocomplete)
+   // ! Instance
+   /** The booted Terminal — embedded outputs (e.g. a Wizard Region) swap $Output through this handle */
+   public static Terminal $Terminal;
 
 
    // ! IO
@@ -99,6 +102,9 @@ class Terminal // extends API/Project or API/Node
       $this->Screen = new Screen($this->Output);
       // ! Reporting
       $this->Mouse = new Mouse($this->Input, $this->Output);
+
+      // ! Instance
+      self::$Terminal = $this;
    }
 
    // ! Command

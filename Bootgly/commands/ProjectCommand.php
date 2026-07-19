@@ -1420,9 +1420,9 @@ class ProjectCommand extends Command
 
       // ! Branch steps — appended by the Mode handler once the branch is known
       // # From scratch: Path → Interface → Metadata → Confirm → Scaffold
-      $scratch = function (Wizard $Wizard) use (&$path, &$meta, &$interface, &$options, $Input, $Output): void {
-         $Wizard->add('Path', function () use (&$path, $Input, $Output): string {
-            $Question = new Question($Input, $Output);
+      $scratch = function (Wizard $Wizard) use (&$path, &$meta, &$interface, &$options): void {
+         $Wizard->add('Path', function (Wizard $Wizard) use (&$path): string {
+            $Question = new Question($Wizard->Input, $Wizard->Output);
             $Question->prompt = 'Project path (e.g. `App` or `App/API`)';
             $Question->required = true;
             $Question->default = $path ?? '';
@@ -1430,7 +1430,7 @@ class ProjectCommand extends Command
             $path = $Question->ask();
             // ? EOF or invalid prefilled path
             if ($this->assess($path) !== true) {
-               $Alert = new Alert($Output);
+               $Alert = new Alert($Wizard->Output);
                $Alert->Type::Failure->set();
                $Alert->message = 'A valid project path is required.';
                $Alert->render();
@@ -1462,12 +1462,12 @@ class ProjectCommand extends Command
 
             // :
             return $interface;
-         });
+         }, rows: 5);
 
-         $Wizard->add('Metadata', function () use (&$path, &$meta, &$interface, &$options, $Input, $Output): null {
+         $Wizard->add('Metadata', function (Wizard $Wizard) use (&$path, &$meta, &$interface, &$options): null {
             // # Port (WPI)
             if ($interface === 'WPI') {
-               $Question = new Question($Input, $Output);
+               $Question = new Question($Wizard->Input, $Wizard->Output);
                $Question->prompt = 'Server port';
                $Question->default = (string) ($options['port'] ?? '8080');
                $Question->Validator = static function (string $answer): true|string {
@@ -1483,17 +1483,17 @@ class ProjectCommand extends Command
             }
 
             // # Description / Version / Author (options prefill the defaults)
-            $Question = new Question($Input, $Output);
+            $Question = new Question($Wizard->Input, $Wizard->Output);
             $Question->prompt = 'Description';
             $Question->default = (string) ($options['description'] ?? '');
             $meta['description'] = $Question->ask();
 
-            $Question = new Question($Input, $Output);
+            $Question = new Question($Wizard->Input, $Wizard->Output);
             $Question->prompt = 'Version';
             $Question->default = (string) ($options['version'] ?? '1.0.0');
             $meta['version'] = $Question->ask();
 
-            $Question = new Question($Input, $Output);
+            $Question = new Question($Wizard->Input, $Wizard->Output);
             $Question->prompt = 'Author';
             $Question->default = (string) ($options['author'] ?? '');
             $meta['author'] = $Question->ask();
@@ -1502,9 +1502,9 @@ class ProjectCommand extends Command
 
             // :
             return null;
-         });
+         }, rows: 5);
 
-         $Wizard->add('Confirm', function () use (&$path, &$meta, &$options, $Input, $Output): null {
+         $Wizard->add('Confirm', function (Wizard $Wizard) use (&$path, &$meta, &$options): null {
             // ! Summary
             $content  = '@#Green:' . str_pad('Path', 12) . ' @; ' . $path . PHP_EOL;
             $content .= '@#Green:' . str_pad('Mode', 12) . ' @; From scratch' . PHP_EOL;
@@ -1516,19 +1516,19 @@ class ProjectCommand extends Command
             $content .= PHP_EOL . '@#Green:' . str_pad('Version', 12) . ' @; ' . ($meta['version'] ?? '');
             $content .= PHP_EOL . '@#Green:' . str_pad('Author', 12) . ' @; ' . (($meta['author'] ?? '') ?: '(none)');
 
-            $Output->write(PHP_EOL);
-            $Fieldset = new Fieldset($Output);
+            $Wizard->Output->write(PHP_EOL);
+            $Fieldset = new Fieldset($Wizard->Output);
             $Fieldset->title = '@#Cyan: New project @;';
             $Fieldset->content = $content;
             $Fieldset->render();
-            $Output->write(PHP_EOL);
+            $Wizard->Output->write(PHP_EOL);
 
             // ? Confirm
             if (isSet($options['yes']) === false) {
-               $Question = new Question($Input, $Output);
+               $Question = new Question($Wizard->Input, $Wizard->Output);
 
                if ($Question->confirm('Create the project?', default: true) === false) {
-                  $Alert = new Alert($Output);
+                  $Alert = new Alert($Wizard->Output);
                   $Alert->Type::Attention->set();
                   $Alert->message = 'Aborted.';
                   $Alert->render();
@@ -1539,7 +1539,7 @@ class ProjectCommand extends Command
 
             // :
             return null;
-         });
+         }, rows: 13);
 
          $Wizard->add('Scaffold', function () use (&$path, &$meta, &$interface): string {
             $stub = $interface === 'WPI' ? 'WPI' : 'CLI';
@@ -1557,16 +1557,16 @@ class ProjectCommand extends Command
       };
 
       // # From Platforms: [Pick →] Confirm → Transfer
-      $platforms = function (Wizard $Wizard, bool $pick) use (&$imports, &$transferred, &$options, $Input, $Output): void {
+      $platforms = function (Wizard $Wizard, bool $pick) use (&$imports, &$transferred, &$options): void {
          if ($pick === true) {
-            $Wizard->add('Pick', function () use (&$imports, $Output): string {
+            $Wizard->add('Pick', function (Wizard $Wizard) use (&$imports): string {
                $sources = $this->survey();
                $labels = array_keys($sources);
                $picked = $this->select('Pick the projects to import:', $labels);
 
                // ? Nothing selected
                if ($picked === []) {
-                  $Alert = new Alert($Output);
+                  $Alert = new Alert($Wizard->Output);
                   $Alert->Type::Attention->set();
                   $Alert->message = 'No projects selected.';
                   $Alert->render();
@@ -1580,10 +1580,10 @@ class ProjectCommand extends Command
 
                // :
                return count($imports) . ' project(s)';
-            });
+            }, rows: 9);
          }
 
-         $Wizard->add('Confirm', function () use (&$imports, &$options, $Input, $Output): null {
+         $Wizard->add('Confirm', function (Wizard $Wizard) use (&$imports, &$options): null {
             // ! Summary (existing user-level copies are flagged as overwrite)
             $content = '@#Green:' . str_pad('Mode', 12) . ' @; Import projects from Platforms';
             foreach ($imports as $import) {
@@ -1602,19 +1602,19 @@ class ProjectCommand extends Command
                   . (is_dir(Projects::CONSUMER_DIR . $path) ? ' @#Yellow:(overwrite)@;' : '');
             }
 
-            $Output->write(PHP_EOL);
-            $Fieldset = new Fieldset($Output);
+            $Wizard->Output->write(PHP_EOL);
+            $Fieldset = new Fieldset($Wizard->Output);
             $Fieldset->title = '@#Cyan: Import projects @;';
             $Fieldset->content = $content;
             $Fieldset->render();
-            $Output->write(PHP_EOL);
+            $Wizard->Output->write(PHP_EOL);
 
             // ? Confirm
             if (isSet($options['yes']) === false) {
-               $Question = new Question($Input, $Output);
+               $Question = new Question($Wizard->Input, $Wizard->Output);
 
                if ($Question->confirm('Import the selected projects?', default: true) === false) {
-                  $Alert = new Alert($Output);
+                  $Alert = new Alert($Wizard->Output);
                   $Alert->Type::Attention->set();
                   $Alert->message = 'Aborted.';
                   $Alert->render();
@@ -1625,7 +1625,7 @@ class ProjectCommand extends Command
 
             // :
             return null;
-         });
+         }, rows: 12);
 
          $Wizard->add('Transfer', function () use (&$imports, &$transferred): string {
             $transferred = $this->transfer($imports);
@@ -1641,15 +1641,15 @@ class ProjectCommand extends Command
       };
 
       // # From Git remote: URL → Path → Interface → Import
-      $git = function (Wizard $Wizard) use (&$url, &$target, &$options, $Input, $Output): void {
-         $Wizard->add('URL', function () use (&$url, $Input, $Output): null {
-            $Question = new Question($Input, $Output);
+      $git = function (Wizard $Wizard) use (&$url, &$target, &$options): void {
+         $Wizard->add('URL', function (Wizard $Wizard) use (&$url): null {
+            $Question = new Question($Wizard->Input, $Wizard->Output);
             $Question->prompt = 'Repository URL (git)';
             $Question->required = true;
             $url = $Question->ask();
             // ?
             if ($url === '') {
-               $Alert = new Alert($Output);
+               $Alert = new Alert($Wizard->Output);
                $Alert->Type::Failure->set();
                $Alert->message = 'A repository URL is required.';
                $Alert->render();
@@ -1661,9 +1661,9 @@ class ProjectCommand extends Command
             return null;
          });
 
-         $Wizard->add('Path', function () use (&$url, &$target, $Input, $Output): string {
+         $Wizard->add('Path', function (Wizard $Wizard) use (&$url, &$target): string {
             $default = basename($url, '.git');
-            $Question = new Question($Input, $Output);
+            $Question = new Question($Wizard->Input, $Wizard->Output);
             $Question->prompt = 'Project path (e.g. `App` or `App/API`)';
             $Question->required = true;
             $Question->default = $this->assess($default) === true ? $default : '';
@@ -1671,7 +1671,7 @@ class ProjectCommand extends Command
             $target = $Question->ask();
             // ?
             if ($this->assess($target) !== true) {
-               $Alert = new Alert($Output);
+               $Alert = new Alert($Wizard->Output);
                $Alert->Type::Failure->set();
                $Alert->message = 'A valid project path is required.';
                $Alert->render();
@@ -1695,7 +1695,7 @@ class ProjectCommand extends Command
 
             // :
             return (string) $options['interfaces'];
-         });
+         }, rows: 5);
 
          $Wizard->add('Import', function () use (&$url, &$target, &$options): string {
             // ? Delegated to the import subcommand (clone, validate, confirm, register)
@@ -1719,19 +1719,19 @@ class ProjectCommand extends Command
 
             // :
             return 'ready';
-         });
+         }, rows: 11);
       }
 
       // # Start mode — resolves the branch and appends its steps
       $Wizard->add('Mode', function (Wizard $Wizard)
-         use (&$branch, &$imports, $from, $scratch, $platforms, $git, $Output): string {
+         use (&$branch, &$imports, $from, $scratch, $platforms, $git): string {
          // ? A source option picks the platform-import branch with no menu
          if ($from !== null && $from !== 'scratch') {
             $source = $this->trace($from);
 
             // ?
             if ($source === null) {
-               $Alert = new Alert($Output);
+               $Alert = new Alert($Wizard->Output);
                $Alert->Type::Failure->set();
                $Alert->message = "Source project @#cyan:{$from}@; not found in the platform folders.";
                $Alert->render();
@@ -1787,7 +1787,7 @@ class ProjectCommand extends Command
 
          // :
          return 'scratch';
-      });
+      }, rows: 6);
 
       // @ Run the flow
       $done = $Wizard->run();
@@ -1926,9 +1926,11 @@ class ProjectCommand extends Command
             }
 
             if (BOOTGLY_TTY === true && $available !== []) {
+               // ? Two short rows — a single long row would hard-wrap at the
+               //   terminal edge, escaping the wizard's nested region gutter
                $Output->render(
-                  '@.;The @#Cyan:Bootgly@; base platform is always included — unopinionated, '
-                  . 'it ships the @#Cyan:CLI@; and @#Cyan:WPI@; interfaces.@..;'
+                  "@.;The @#Cyan:Bootgly@; base platform is always included —\n"
+                  . 'unopinionated, it ships the @#Cyan:CLI@; and @#Cyan:WPI@; interfaces.@..;'
                );
 
                $pinned = ['Bootgly — base platform (always included)'];
