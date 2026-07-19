@@ -50,6 +50,8 @@ use function is_link;
 use function is_numeric;
 use function is_string;
 use function json_encode;
+use function max;
+use function min;
 use function passthru;
 use function posix_get_last_error;
 use function posix_kill;
@@ -61,6 +63,7 @@ use function rtrim;
 use function scandir;
 use function shell_exec;
 use function str_pad;
+use function str_repeat;
 use function str_starts_with;
 use function strlen;
 use function strtolower;
@@ -75,6 +78,7 @@ use Throwable;
 
 use const Bootgly\ABI\BOOTSTRAP_FILENAME;
 use const Bootgly\CLI;
+use Bootgly\ABI\Data\__String;
 use Bootgly\ACI\Process\State;
 use Bootgly\ADI\Databases\SQL;
 use Bootgly\ADI\Databases\SQL\Schema\Migrations;
@@ -86,6 +90,7 @@ use Bootgly\API\Projects;
 use Bootgly\API\Projects\Configs;
 use Bootgly\API\Projects\Project;
 use Bootgly\CLI\Command;
+use Bootgly\CLI\Terminal;
 use Bootgly\CLI\UI\Base\Fieldset;
 use Bootgly\CLI\UI\Components\Alert;
 use Bootgly\CLI\UI\Components\Menu;
@@ -393,10 +398,12 @@ class ProjectCommand extends Command
    }
 
    /**
-    * Import a project from a git repository URL.
+    * Import projects — from the Platforms or from a git repository URL.
     *
-    * The repository must carry the Bootgly project signature — a
-    * `*.project.php` file at its root.
+    * With a URL argument, imports the repository directly (it must carry the
+    * Bootgly project signature — a `*.project.php` file at its root). Without
+    * one, interactive terminals choose the import source: the Platforms
+    * (pick, confirm, transfer) or a Git remote (asks the URL).
     *
     * @param array<string> $arguments
     * @param array<string, bool|int|string> $options
@@ -407,15 +414,128 @@ class ProjectCommand extends Command
    {
       $Output = CLI->Terminal->Output;
 
-      // ? Repository URL required
+      // ? No URL — interactive terminals choose the import source
       $url = $arguments[0] ?? null;
       if ($url === null || $url === '') {
-         $Alert = new Alert($Output);
-         $Alert->Type::Failure->set();
-         $Alert->message = 'Missing repository URL. Usage: @#cyan:bootgly project import <url> [Name]@;';
-         $Alert->render();
+         if (BOOTGLY_TTY === false) {
+            $Alert = new Alert($Output);
+            $Alert->Type::Failure->set();
+            $Alert->message = 'Missing repository URL. Usage: @#cyan:bootgly project import <url> [Name]@;';
+            $Alert->render();
 
-         return false;
+            return false;
+         }
+
+         // ! Import sources (platform import only when exportable sources exist)
+         $sources = $this->survey();
+
+         $froms = [];
+         if ($sources !== []) {
+            $available = count($sources);
+            $froms[] = "Import projects from Platforms ({$available} available)";
+         }
+         $froms[] = 'Import project from Git remote (URL)';
+
+         $from = $froms[$this->choose('Import from where?', $froms)] ?? $froms[0];
+
+         // ?: Platforms — pick, confirm and transfer
+         if (str_starts_with($from, 'Import projects from Platforms') === true) {
+            // @ Kit setup (platform submodules + resource dirs) when needed
+            if ($this->prepare($options) === false) {
+               return false;
+            }
+
+            // ! Pick
+            $labels = array_keys($sources);
+            $picked = $this->select('Pick the projects to import:', $labels);
+            // ?
+            if ($picked === []) {
+               $Alert = new Alert($Output);
+               $Alert->Type::Attention->set();
+               $Alert->message = 'No projects selected.';
+               $Alert->render();
+
+               return false;
+            }
+
+            $imports = [];
+            foreach ($picked as $index) {
+               $imports[] = $sources[(string) $labels[$index]];
+            }
+
+            // ! Summary (existing user-level copies are flagged as overwrite)
+            $content = '@#Green:' . str_pad('Mode', 12) . ' @; Import projects from Platforms';
+            foreach ($imports as $import) {
+               $path = $import['path'];
+
+               // ! Platform of origin (traced from the source directory)
+               $platform = match (true) {
+                  str_starts_with($import['source'], BOOTGLY_WORKING_DIR . 'Console/') => 'Console',
+                  str_starts_with($import['source'], BOOTGLY_WORKING_DIR . 'Web/') => 'Web',
+                  default => 'Bootgly'
+               };
+
+               $content .= PHP_EOL
+                  . '@#Green:' . str_pad('Import', 12) . ' @; ' . $path
+                  . " @#Cyan:(from {$platform})@;"
+                  . (is_dir(Projects::CONSUMER_DIR . $path) ? ' @#Yellow:(overwrite)@;' : '');
+            }
+
+            $Output->write(PHP_EOL);
+            $Fieldset = new Fieldset($Output);
+            $Fieldset->title = '@#Cyan: Import projects @;';
+            $Fieldset->content = $content;
+            $Fieldset->render();
+            $Output->write(PHP_EOL);
+
+            // ? Confirm (Yes by default — first-party sources, same as the wizard)
+            if (isSet($options['yes']) === false) {
+               if ($this->confirm('Import the selected projects?', default: true) === false) {
+                  $Alert = new Alert($Output);
+                  $Alert->Type::Attention->set();
+                  $Alert->message = 'Import aborted.';
+                  $Alert->render();
+
+                  return false;
+               }
+            }
+
+            // @ Transfer
+            $transferred = $this->transfer($imports);
+            // ? Failure Alerts rendered at the failure site (transfer)
+            if (count($transferred) !== count($imports)) {
+               return false;
+            }
+
+            foreach ($transferred as $index => $imported) {
+               $Alert = new Alert($Output);
+               $Alert->spaced = $index === 0;
+               $Alert->Type::Success->set();
+               $Alert->message = "Project @#cyan:{$imported}@; imported!";
+               $Alert->render();
+            }
+
+            $prefix = shell_exec('command -v bootgly 2>/dev/null') ? '' : 'php ';
+            $Output->render("@.;@#Green:Tip:@; Use @#Black:{$prefix}bootgly project {$transferred[0]} start@; to boot it.@..;");
+
+            // :
+            return true;
+         }
+
+         // # Git remote — ask the URL and continue with the direct flow
+         $Question = new Question(CLI->Terminal->Input, $Output);
+         $Question->prompt = 'Repository URL (git)';
+         $Question->required = true;
+         $url = $Question->ask();
+         // ?
+         if ($url === '') {
+            $Alert = new Alert($Output);
+            $Alert->Type::Failure->set();
+            $Alert->message = 'A repository URL is required.';
+            $Alert->render();
+
+            return false;
+         }
       }
 
       // @ Kit setup (platform submodules + resource dirs) when needed
@@ -527,7 +647,7 @@ class ProjectCommand extends Command
    }
 
    /**
-    * List all discovered projects with their interfaces and default marker.
+    * List all discovered projects with their descriptions and default marker.
     *
     * @return bool
     */
@@ -540,25 +660,17 @@ class ProjectCommand extends Command
       $projects_WPI = $this->discover('WPI');
 
       // @ Merge in registry order (kept alphabetical by path)
-      /** @var array<string, array{interfaces: list<string>, name: string, description: string}> $all */
+      /** @var array<string, array{description: string, default: bool}> $all */
       $all = [];
-      foreach (array_keys(Projects::read()) as $folder) {
-         $interfaces = [];
-         if (isSet($projects_CLI[$folder])) {
-            $interfaces[] = 'CLI';
-         }
-         if (isSet($projects_WPI[$folder])) {
-            $interfaces[] = 'WPI';
-         }
-         if ($interfaces === []) {
+      foreach (Projects::read() as $folder => $entry) {
+         $meta = $projects_CLI[$folder] ?? $projects_WPI[$folder] ?? null;
+         if ($meta === null) {
             continue;
          }
 
-         $meta = $projects_CLI[$folder] ?? $projects_WPI[$folder];
          $all[$folder] = [
-            'interfaces'  => $interfaces,
-            'name'        => $meta['name'],
-            'description' => $meta['description']
+            'description' => $meta['description'],
+            'default'     => ($entry['default'] ?? false) === true
          ];
       }
 
@@ -567,31 +679,48 @@ class ProjectCommand extends Command
          return true;
       }
 
-      $Output->render('@.;@#cyan: Project list: @;@..;');
+      // ! Inner width — fit the terminal, keep the box readable
+      $width = isSet(Terminal::$width) === true
+         ? min(max(Terminal::$width - 6, 40), 100)
+         : 80;
 
+      // ! Index gutter — right-aligned indexes keep names and descriptions
+      //   aligned past #9
+      $count = count($all);
+      $gutter = strlen((string) $count) + 1;
+      $indent = str_repeat(' ', $gutter + 1);
+
+      // @ One row per project — folder, default marker and wrapped description
       $index = 1;
+      $rows = [];
       foreach ($all as $folder => $info) {
-         $interfaceList = implode(', ', $info['interfaces']);
+         // ? Right-align outside the markup token — it swallows adjacent spaces
+         $number = "#{$index}";
+         $aligned = str_repeat(' ', max(0, $gutter - strlen($number)));
 
-         $Output->render(
-            "@#magenta: #{$index} @; - "
-            . "@#yellow:{$folder}@;"
-            . PHP_EOL
-         );
-
-         if ($info['description'] !== '') {
-            $Output->render(
-               "     @#green:Description:@; {$info['description']}" . PHP_EOL
-            );
+         $row = "{$aligned}@#Magenta:{$number}@; @#Yellow:{$folder}@;";
+         if ($info['default'] === true) {
+            $row .= ' @#Green:(default)@;';
          }
 
-         $Output->render(
-            "     @#green:Type:@; {$interfaceList}@..;"
-         );
+         if ($info['description'] !== '') {
+            // @phpstan-ignore-next-line -- wrap() resolves via __callStatic (pad precedent)
+            foreach (explode("\n", (string) __String::wrap($info['description'], $width - $gutter - 1)) as $piece) {
+               $row .= "\n{$indent}{$piece}";
+            }
+         }
 
+         $rows[] = $row;
          $index++;
       }
 
+      $Fieldset = new Fieldset($Output);
+      $Fieldset->width = $width;
+      $Fieldset->title = "@#Cyan: Projects ({$count}) @;";
+      $Fieldset->content = implode("\n@---;\n", $rows);
+
+      $Output->write(PHP_EOL);
+      $Fieldset->render();
       $Output->write(PHP_EOL);
 
       return true;
@@ -1375,13 +1504,13 @@ class ProjectCommand extends Command
    /**
     * Confirm one destructive CLI action.
     */
-   private function confirm (string $question): bool
+   private function confirm (string $question, bool $default = false): bool
    {
       $Terminal = CLI->Terminal;
 
       $Question = new Question($Terminal->Input, $Terminal->Output);
 
-      return $Question->confirm($question);
+      return $Question->confirm($question, default: $default);
    }
 
    /**
@@ -1759,14 +1888,16 @@ class ProjectCommand extends Command
 
          // ! Start modes (platform import only when exportable sources exist)
          $modes = ['Create project from scratch'];
-         if ($this->survey() !== []) {
-            $modes[] = 'Import projects from Platforms (Demos, Example)';
+         $sources = $this->survey();
+         if ($sources !== []) {
+            $available = count($sources);
+            $modes[] = "Import projects from Platforms ({$available} available)";
          }
          $modes[] = 'Import project from Git remote';
 
          $mode = $modes[$this->choose('How do you want to start?', $modes)] ?? $modes[0];
 
-         if ($mode === 'Import projects from Platforms (Demos, Example)') {
+         if (str_starts_with($mode, 'Import projects from Platforms') === true) {
             $branch = 'platforms';
             $platforms($Wizard, pick: true);
 
