@@ -148,6 +148,9 @@ class TestCommand extends Command
    /** @var array<string,array<string>> */
    public array $options = [
       'Increase the verbosity of the command' => ['-v', '-vv', '-vvv'],
+      'Run the Bootgly framework suites (from a kit)' => ['--bootgly'],
+      'Run the Console platform suites' => ['--console'],
+      'Run the Web platform suites' => ['--web'],
       'Enable code coverage (auto-detected driver)' => ['--coverage'],
       'Coverage driver: @#Cyan:xdebug | pcov | native | nothing@;' => ['--coverage-driver=DRIVER'],
       'Native driver mode: @#Cyan:strict | parity@; @#Black:(default: strict)@;' => ['--coverage-native-mode=MODE'],
@@ -294,8 +297,42 @@ class TestCommand extends Command
       }
 
 
+      // ! Suite source — the context registry by default; `--bootgly`,
+      //   `--console` and `--web` run the framework/platform registries
+      //   from a kit (their directories resolve behind the platform folder)
+      $registry = null;
+      $prefix = '';
+      foreach (['bootgly' => 'Bootgly/', 'console' => 'Console/', 'web' => 'Web/'] as $flag => $folder) {
+         if (isSet($options[$flag]) === false) {
+            continue;
+         }
+
+         // ? The author context already runs its own registry natively
+         if ($flag === 'bootgly' && BOOTGLY_ROOT_DIR === BOOTGLY_WORKING_DIR) {
+            break;
+         }
+
+         $file = BOOTGLY_WORKING_DIR . "{$folder}tests/" . BOOTSTRAP_FILENAME;
+         if (is_file($file) === false) {
+            // ? STDERR — immune to the test wrapper's stdout draining
+            $platform = rtrim($folder, '/');
+            fwrite(
+               STDERR,
+               "No {$folder} test registry found — initialize the platform first "
+               . "(project wizard or `git submodule update --init {$platform}`)." . PHP_EOL
+            );
+
+            return false;
+         }
+
+         $registry = $file;
+         $prefix = $folder;
+
+         break;
+      }
+
       // @
-      $Tests = new Tests;
+      $Tests = new Tests($registry, $prefix);
 
       if ($suite_index > 0 && ! isset($Tests->Suites->directories[$suite_index - 1])) {
          $Output = CLI->Terminal->Output;

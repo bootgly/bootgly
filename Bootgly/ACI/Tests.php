@@ -28,19 +28,35 @@ class Tests
    public Suites $Suites;
 
 
-   public function __construct()
+   /**
+    * @param null|string $registry Registry file override (`null` = the context registry).
+    * @param string $prefix Directory prefix for nested registries (e.g. a platform run from a kit).
+    */
+   public function __construct (null|string $registry = null, string $prefix = '')
    {
       // !
       /** @var Suites|false $Suites */
-      $Suites = BOOTGLY_ROOT_DIR === BOOTGLY_WORKING_DIR
-         // Author (Bootgly) Test Suites
-         ? include BOOTGLY_ROOT_DIR . '/tests/' . BOOTSTRAP_FILENAME
+      $Suites = match (true) {
+         $registry !== null
+            // Explicit registry (e.g. a platform registry from a kit)
+            => include $registry,
+         BOOTGLY_ROOT_DIR === BOOTGLY_WORKING_DIR
+            // Author (Bootgly) Test Suites
+            => include BOOTGLY_ROOT_DIR . '/tests/' . BOOTSTRAP_FILENAME,
          // Consumer (User) Test Suites
-         : include BOOTGLY_WORKING_DIR . '/tests/' . BOOTSTRAP_FILENAME;
+         default => include BOOTGLY_WORKING_DIR . '/tests/' . BOOTSTRAP_FILENAME
+      };
 
       // ?
       if ($Suites instanceof Suites === false) {
          throw new RuntimeException('Invalid Test Suites Specification');
+      }
+
+      // ? Nested registries resolve their directories behind the given folder
+      if ($prefix !== '') {
+         foreach ($Suites->directories as $index => $directory) {
+            $Suites->directories[$index] = $prefix . $directory;
+         }
       }
 
       // @

@@ -172,5 +172,19 @@ return new Suites(
       'Bootgly/ABI/Data/__String/Tokens/',
       // # ABI/Debugging/Data/Vars — Dumper engine (typed literals, reflection walk, themes)
       'Bootgly/ABI/Debugging/Data/Vars/',
+      // ! Demo projects — example signature suites (kit import guide)
+      'projects/Demo/CLI/',
+      'projects/Demo/HTTP2-HTTP_Server_CLI/',
+      'projects/Demo/HTTPS_Client_CLI/',
+      'projects/Demo/HTTPS_Server_CLI/',
+      'projects/Demo/HTTP_Client_CLI/',
+      'projects/Demo/HTTP_Server_CLI/',
+      'projects/Demo/Queue-HTTP_Server_CLI/',
+      'projects/Demo/TCP_Client_CLI/',
+      'projects/Demo/TCP_Server_CLI/',
+      'projects/Demo/UDP_Client_CLI/',
+      'projects/Demo/UDP_Server_CLI/',
+      'projects/Demo/WS_Client_CLI/',
+      'projects/Demo/WS_Server_CLI/',
    ]
 );

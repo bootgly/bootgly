@@ -2481,6 +2481,12 @@ class ProjectCommand extends Command
       foreach ($steps as [$action, $goal]) {
          $Output->render("@#Green:Tip:@; Use @#Black:{$prefix}bootgly project {$path} {$action}@; to {$goal}.@.;");
       }
+
+      // ? Example tests — imported projects ship them as a writing guide
+      if (is_dir(Projects::CONSUMER_DIR . "{$path}/tests") === true) {
+         $Output->render("@#Green:Tip:@; Register @#Black:'projects/{$path}/'@; in @#cyan:tests/autoboot.php@; and run @#Black:{$prefix}bootgly test@;.@.;");
+      }
+
       $Output->write(PHP_EOL);
    }
 
