@@ -4,17 +4,23 @@ namespace Bootgly\CLI\UI\Components;
 
 
 use function assert;
+use function count;
+use function explode;
 use function getenv;
+use function mb_strlen;
+use function preg_replace;
 use function putenv;
+use function rtrim;
 use function str_contains;
 use function substr_count;
 
+use Bootgly\ABI\Data\__String;
 use Bootgly\ACI\Tests\Suite\Test\Specification;
 use Bootgly\CLI\Terminal\Output;
 
 
 return new Specification(
-   description: 'It should render a bordered dashboard card with state-colored cells',
+   description: 'It should render a wrapped grid of state-colored cells with corner labels',
    test: function () {
       // ! Deterministic truecolor escapes
       $previous = getenv('COLORTERM');
@@ -24,7 +30,6 @@ return new Specification(
          $Output = new Output('php://memory');
 
          $Heatmap = new Heatmap($Output);
-         $Heatmap->title = 'http';
          $Heatmap->width = 40;
          $Heatmap->cells = [
             'passed', 'passed', 'passed', 'passed', 'passed',
@@ -35,38 +40,66 @@ return new Specification(
 
          $frame = (string) $Heatmap->render(Heatmap::RETURN_OUTPUT);
 
-         // @ Frame structure
+         // @ Grid
          yield assert(
-            assertion: str_contains($frame, '╭') && str_contains($frame, '╮')
-               && str_contains($frame, '╰') && str_contains($frame, '╯'),
-            description: 'The card draws rounded corners'
+            assertion: substr_count($frame, '■') === 12,
+            description: 'The grid renders one cell per entry'
          );
          yield assert(
-            assertion: str_contains($frame, 'http') && str_contains($frame, '75%'),
-            description: 'The title row shows the title and the derived score'
-         );
-         yield assert(
-            assertion: str_contains($frame, '9 / 12'),
-            description: 'The counts row shows positives over total'
-         );
-         // @ Cells: grid (12) + Meter (inner width = 36)
-         yield assert(
-            assertion: substr_count($frame, '■') === 12 + 36,
-            description: 'The grid renders one cell per entry and the Meter fills the inner width'
+            assertion: substr_count($frame, "\n") === 1,
+            description: 'Cells within the width span a single row'
          );
          // @ Colors
          yield assert(
-            assertion: str_contains($frame, "\e[38;2;224;103;159m")
+            assertion: str_contains($frame, "\e[38;2;152;195;121m")
                && str_contains($frame, "\e[38;2;224;108;117m")
                && str_contains($frame, "\e[38;2;216;208;187m"),
             description: 'Cells sample the palette colors (passed, failed, skipped)'
          );
-         // @ Explicit score
-         $Heatmap->score = 33.0;
+
+         // @ Wrap — each cell spans 2 columns, so width 10 fits 5 per row
+         $Heatmap->width = 10;
          $frame = (string) $Heatmap->render(Heatmap::RETURN_OUTPUT);
          yield assert(
-            assertion: str_contains($frame, '33%'),
-            description: 'An explicit score overrides the derived one'
+            assertion: substr_count($frame, "\n") === 3,
+            description: 'The grid wraps the cells by the width'
+         );
+
+         // @ Corner labels — heading/summary above, caption/note below
+         $Heatmap->width = 40;
+         $Heatmap->heading = 'Assertions';
+         $Heatmap->summary = '@:error:2 failed@;';
+         $Heatmap->caption = '9 / 12 assertions';
+         $Heatmap->note = 'suite 4';
+         $frame = (string) $Heatmap->render(Heatmap::RETURN_OUTPUT);
+
+         yield assert(
+            assertion: str_contains($frame, 'Assertions')
+               && str_contains($frame, '2 failed')
+               && str_contains($frame, '9 / 12 assertions')
+               && str_contains($frame, 'suite 4'),
+            description: 'The corner labels land around the grid'
+         );
+
+         $rows = explode("\n", rtrim($frame, "\n"));
+         $visible = mb_strlen(
+            (string) preg_replace(__String::ANSI_ESCAPE_SEQUENCE_REGEX, '', $rows[0] ?? '')
+         );
+         yield assert(
+            assertion: count($rows) === 3 && $visible === 40,
+            description: 'Label rows frame the grid and align flush with the width'
+         );
+
+         // @ Unknown states render dim
+         $Heatmap->heading = '';
+         $Heatmap->summary = '';
+         $Heatmap->caption = '';
+         $Heatmap->note = '';
+         $Heatmap->cells = ['unknown'];
+         $frame = (string) $Heatmap->render(Heatmap::RETURN_OUTPUT);
+         yield assert(
+            assertion: str_contains($frame, "\e[90m"),
+            description: 'A state missing from the palette renders dim'
          );
       }
       finally {

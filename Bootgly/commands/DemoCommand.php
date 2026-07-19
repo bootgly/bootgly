@@ -220,6 +220,8 @@ class DemoCommand extends Command
          59 => 'UI/Differ-01.demo.php',
          // Heatmap
          60 => 'UI/Heatmap-01.demo.php',
+         '60.1' => 'UI/Heatmap-02.demo.php', // Live streaming card
+         '60.2' => 'UI/Heatmap-03.demo.php', // Live failures + custom palette
       ];
 
       $last = array_key_last($examples);

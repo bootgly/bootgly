@@ -11,63 +11,76 @@
 namespace Bootgly\CLI\UI\Components;
 
 
+use const BOOTGLY_TTY;
 use function array_chunk;
-use function count;
+use function getmypid;
 use function implode;
 use function intdiv;
 use function is_string;
 use function max;
 use function mb_strlen;
+use function microtime;
 use function min;
 use function preg_replace;
-use function round;
-use function rtrim;
 use function str_repeat;
+use function substr_count;
 
+use Bootgly\ABI\Data\__String;
 use Bootgly\ABI\Data\__String\Escapeable\Text\Formattable;
+use Bootgly\ABI\Templates\Template\Escaped as TemplateEscaped;
 use Bootgly\API\Component;
 use Bootgly\CLI\Terminal;
 use Bootgly\CLI\Terminal\Output;
-use Bootgly\CLI\UI\Base\Frame\Borders;
 use Bootgly\CLI\UI\Components\Chart\Gradient;
 use Bootgly\CLI\UI\Components\Chart\Symbols;
-use Bootgly\CLI\UI\Components\Charts\Meter;
 
 
 /**
- * Heatmap — a bordered dashboard card: bold title + score header, a Meter
- * gauge, a dense wrapped grid of state-colored cells and a dim counts footer.
- * One-shot, cursor-free — built for per-suite test dashboards.
+ * Heatmap — a dense wrapped grid of state-colored cells, one `■` per entry in
+ * execution order. Optional corner labels frame the grid — heading/summary
+ * above, caption/note below. Streams live on interactive terminals through
+ * `start()` / `feed()` / `finish()`; renders one-shot frames otherwise.
  */
 class Heatmap extends Component
 {
    use Formattable;
 
 
-   // ! ANSI escape sequence matcher (escape-aware measuring)
-   private const string ANSI = '/\e\[[0-9;]*m/';
-
    protected Output $Output;
 
    // * Config
-   /** Card title (top-left, bold) */
-   public string $title;
-   /** Card columns — `null` follows the terminal, capped at 100 */
+   /** Grid columns — `null` follows the terminal, capped at 100 */
    public null|int $width;
    /** @var array<string,string> state ⇒ `#RRGGBB` cell color */
    public array $palette;
-   /** The state gauged by the Meter and the derived score */
-   public string $positive;
+   /** Label above the grid, left-aligned (accepts markup) */
+   public string $heading;
+   /** Label above the grid, right-aligned (accepts markup) */
+   public string $summary;
+   /** Label below the grid, left-aligned (accepts markup) */
+   public string $caption;
+   /** Label below the grid, right-aligned (accepts markup) */
+   public string $note;
+   /** Live streaming — `null` follows the TTY, false forces plain, true forces live */
+   public null|bool $decoration;
+   /** Minimum seconds between live repaints */
+   public float $throttle;
 
    // * Data
    /** @var array<int,string> Cells in execution order (palette state keys) */
    public array $cells;
-   /** Score percentage (header + Meter) — `null` derives from the positive cells */
-   public null|float $score;
 
    // * Metadata
    /** @var array<string,Gradient> Solid Gradients cached by `#RRGGBB` color */
    private array $Gradients;
+   // # Live
+   private float $started;
+   private float $rendered;
+   private bool $finished;
+   /** Rows painted by the previous live frame (the grid grows as cells arrive) */
+   private int $rows;
+   /** PID that started the live grid — forked children inherit it and must stay silent */
+   private int $owner;
 
 
    public function __construct (Output $Output)
@@ -75,28 +88,121 @@ class Heatmap extends Component
       $this->Output = $Output;
 
       // * Config
-      $this->title = '';
       $this->width = null;
       $this->palette = [
-         'passed'  => '#e0679f',
+         'passed'  => '#98c379',
          'failed'  => '#e06c75',
          'skipped' => '#d8d0bb',
       ];
-      $this->positive = 'passed';
+      $this->heading = '';
+      $this->summary = '';
+      $this->caption = '';
+      $this->note = '';
+      $this->decoration = null;
+      $this->throttle = 0.1;
 
       // * Data
       $this->cells = [];
-      $this->score = null;
 
       // * Metadata
       $this->Gradients = [];
+      // # Live
+      $this->started = 0.0;
+      $this->rendered = 0.0;
+      $this->finished = false;
+      $this->rows = 0;
+      $this->owner = 0;
    }
 
 
    /**
-    * Render the heatmap card.
+    * Starts the live grid — paints the initial frame and hides the cursor.
+    * Plain output starts silently (the final frame renders on `finish()`).
+    */
+   public function start (): void
+   {
+      // ?
+      if ($this->started > 0.0) {
+         return;
+      }
+
+      $this->started = microtime(true);
+      $this->owner = getmypid() ?: 0;
+
+      // ? Plain output renders the final frame only
+      if (($this->decoration ?? BOOTGLY_TTY) === false) {
+         return;
+      }
+
+      // !
+      $this->Output->Cursor->hide();
+
+      // @
+      $this->repaint();
+   }
+
+   /**
+    * Feeds cells into the grid and repaints live on interactive terminals.
+    */
+   public function feed (string ...$states): self
+   {
+      // ! Cells grow before any output guard — feeding never loses data
+      foreach ($states as $state) {
+         $this->cells[] = $state;
+      }
+
+      // ? Plain output renders the final frame only — and forked children
+      //   inherit the live grid, but only the starting process may paint it
+      if (
+         ($this->decoration ?? BOOTGLY_TTY) === false
+         || $this->started === 0.0
+         || $this->finished === true
+         || getmypid() !== $this->owner
+      ) {
+         return $this;
+      }
+      // ? Throttle
+      if (microtime(true) - $this->rendered < $this->throttle) {
+         return $this;
+      }
+
+      // @
+      $this->repaint();
+
+      // :
+      return $this;
+   }
+
+   /**
+    * Finishes the live grid — plain output renders its single frame here.
+    */
+   public function finish (): void
+   {
+      // ? Forked children inherit the live grid — only the owner finishes it
+      if ($this->finished === true || $this->started === 0.0 || getmypid() !== $this->owner) {
+         return;
+      }
+
+      $this->finished = true;
+
+      // ? Plain output renders the final frame only
+      if (($this->decoration ?? BOOTGLY_TTY) === false) {
+         $this->render();
+
+         return;
+      }
+
+      // @ Final frame
+      $this->repaint();
+
+      $this->Output->Cursor->show();
+   }
+
+
+   /**
+    * Render the heatmap grid.
     *
-    * @param int $mode `WRITE_OUTPUT` writes the card to the Output;
+    * @param int $mode `WRITE_OUTPUT` writes the grid to the Output;
     *                  `RETURN_OUTPUT` returns the raw frame instead.
     *
     * @return null|string The raw frame on `RETURN_OUTPUT`; `null` otherwise.
@@ -104,71 +210,29 @@ class Heatmap extends Component
    public function render (int $mode = self::WRITE_OUTPUT): null|string
    {
       // !
+      $this->rendered = microtime(true);
+
       $width = $this->width
          ?? min(isSet(Terminal::$width) === true ? Terminal::$width : 80, 100);
-      $width = max($width, 20);
-      $inner = $width - 4;
-
-      $edge = self::wrap(self::_BLACK_BRIGHT_FOREGROUND);
-      $reset = self::_RESET_FORMAT;
-      $borders = Borders::Round->map();
-
-      // # Score
-      $total = count($this->cells);
-      $positives = 0;
-      foreach ($this->cells as $state) {
-         if ($state === $this->positive) {
-            $positives++;
-         }
-      }
-      $score = $this->score ?? ($total > 0 ? $positives * 100 / $total : 0.0);
+      $width = max($width, 2);
 
       // @ Frame
-      // # Top border
-      $frame = "{$edge}{$borders['top-left']}" . str_repeat($borders['top'], $width - 2) . "{$borders['top-right']}{$reset}\n";
+      $frame = $this->align($this->heading, $this->summary, $width);
 
-      // # Title row — bold title left, bold score right
-      $bold = self::wrap(self::_BOLD_STYLE, self::_WHITE_BRIGHT_FOREGROUND);
-      $title = "{$bold}{$this->title}{$reset}";
-      $percentage = $bold . (int) round($score) . "%{$reset}";
-      $gap = max(1, $inner - $this->measure($title) - $this->measure($percentage));
-      $frame .= $this->box($title . str_repeat(' ', $gap) . $percentage, $inner, $edge);
-
-      // # Meter row
-      $frame .= $this->box('', $inner, $edge);
-      $Meter = new Meter($this->Output);
-      $Meter->width = $inner;
-      $Meter->value = $score;
-      $color = $this->palette[$this->positive] ?? null;
-      if ($color !== null) {
-         $this->Gradients[$color] ??= new Gradient([$color]);
-         $Meter->Gradient = $this->Gradients[$color];
-      }
-      $gauge = $Meter->render(Meter::RETURN_OUTPUT);
-      $gauge = rtrim(is_string($gauge) ? $gauge : '', "\n");
-      $frame .= $this->box($gauge, $inner, $edge);
-
-      // # Grid rows — each cell spans 2 columns (`■` + gap), last one spans 1
-      if ($total > 0) {
-         $frame .= $this->box('', $inner, $edge);
-
-         $columns = max(1, intdiv($inner + 1, 2));
+      // # Grid — one `■` per cell (wrapped, each spanning 2 columns)
+      if ($this->cells !== []) {
+         $columns = max(1, intdiv($width + 1, 2));
          foreach (array_chunk($this->cells, $columns) as $chunk) {
             $cells = [];
             foreach ($chunk as $state) {
                $cells[] = $this->paint($state) . Symbols::METER;
             }
 
-            $frame .= $this->box(implode(' ', $cells) . $reset, $inner, $edge);
+            $frame .= implode(' ', $cells) . self::_RESET_FORMAT . "\n";
          }
       }
 
-      // # Counts row
-      $frame .= $this->box('', $inner, $edge);
-      $frame .= $this->box(self::wrap(self::_DIM_STYLE) . "{$positives} / {$total}{$reset}", $inner, $edge);
-
-      // # Bottom border
-      $frame .= "{$edge}{$borders['bottom-left']}" . str_repeat($borders['bottom'], $width - 2) . "{$borders['bottom-right']}{$reset}\n";
+      $frame .= $this->align($this->caption, $this->note, $width);
 
       // ?: Return — raw frame, the host positions it
       if ($mode === self::RETURN_OUTPUT || $this->render === self::RETURN_OUTPUT) {
@@ -183,24 +247,56 @@ class Heatmap extends Component
    }
 
    /**
-    * Box a content row between the card edges, padded to the inner width.
+    * Repaints the grid over the previous live frame (the grid grows as cells arrive).
     */
-   private function box (string $content, int $inner, string $edge): string
+   private function repaint (): void
    {
-      $reset = self::_RESET_FORMAT;
-      $padding = str_repeat(' ', max(0, $inner - $this->measure($content)));
+      // ? Clear the previous frame
+      if ($this->rows > 0) {
+         $this->Output->Cursor->up($this->rows, column: 1);
+         $this->Output->Text->clear(lines: $this->rows);
+      }
 
-      // :
-      return "{$edge}│{$reset} {$content}{$padding} {$edge}│{$reset}\n";
+      $frame = $this->render(self::RETURN_OUTPUT);
+      $frame = is_string($frame) ? $frame : '';
+
+      $this->rows = substr_count($frame, "\n");
+
+      $this->Output->write($frame);
    }
 
    /**
-    * Measure the visible columns of a segment string (escapes occupy none).
+    * Align a left/right label pair into a row spanning the given columns.
     */
-   private function measure (string $string): int
+   private function align (string $left, string $right, int $width): string
+   {
+      // ?
+      if ($left === '' && $right === '') {
+         return '';
+      }
+
+      // ! Resolve markup upfront — the row gap is measured on visible columns
+      $left = TemplateEscaped::render($left);
+      $right = TemplateEscaped::render($right);
+
+      // ?: Left label only — no gap to fill
+      if ($right === '') {
+         return "{$left}\n";
+      }
+
+      $gap = max(1, $width - $this->measure($left) - $this->measure($right));
+
+      // :
+      return $left . str_repeat(' ', $gap) . "{$right}\n";
+   }
+
+   /**
+    * Measure the visible columns of a resolved label (escapes occupy none).
+    */
+   private function measure (string $label): int
    {
       // :
-      return mb_strlen((string) preg_replace(self::ANSI, '', $string));
+      return mb_strlen((string) preg_replace(__String::ANSI_ESCAPE_SEQUENCE_REGEX, '', $label));
    }
 
    /**
@@ -219,5 +315,10 @@ class Heatmap extends Component
 
       // :
       return $this->Gradients[$color]->sample(0);
+   }
+
+   public function __destruct ()
+   {
+      $this->finish();
    }
 }

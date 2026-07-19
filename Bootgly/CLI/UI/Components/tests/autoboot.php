@@ -58,5 +58,6 @@ return new Suite(
       '19.5-markdown-width',
       '19.6-markdown-highlight',
       '20.1-heatmap-render',
+      '20.2-heatmap-live',
    ]
 );
