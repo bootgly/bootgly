@@ -66,11 +66,24 @@ class BootCommand extends Command
             $Alert->render();
          }
 
+         // # tests/ — seeded with an EMPTY registry template: the framework
+         // suites are never listed in a kit; the user registers project suites
+         if (is_dir(BOOTGLY_WORKING_DIR . 'tests') === false) {
+            mkdir(BOOTGLY_WORKING_DIR . 'tests', 0755, true);
+            copy(
+               BOOTGLY_ROOT_DIR . 'Bootgly/commands/stubs/tests/autoboot.php',
+               BOOTGLY_WORKING_DIR . 'tests/autoboot.php'
+            );
+
+            $Alert->Type::Success->set();
+            $Alert->message = 'Resource dir created: @#cyan:tests/@;';
+            $Alert->render();
+         }
+
          // TODO get resources dirs dynamically
          $resource_dirs = [
             'public/',
             'scripts/',
-            'tests/',
             'storage/',
          ];
 

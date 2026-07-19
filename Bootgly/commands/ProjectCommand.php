@@ -515,8 +515,7 @@ class ProjectCommand extends Command
                $Alert->render();
             }
 
-            $prefix = shell_exec('command -v bootgly 2>/dev/null') ? '' : 'php ';
-            $Output->render("@.;@#Green:Tip:@; Use @#Black:{$prefix}bootgly project {$transferred[0]} start@; to boot it.@..;");
+            $this->advise($transferred);
 
             // :
             return true;
@@ -1942,8 +1941,7 @@ class ProjectCommand extends Command
             $Alert->render();
          }
 
-         $prefix = shell_exec('command -v bootgly 2>/dev/null') ? '' : 'php ';
-         $Output->render("@.;@#Green:Tip:@; Use @#Black:{$prefix}bootgly project {$transferred[0]} start@; to boot it.@..;");
+         $this->advise($transferred);
 
          return true;
       }
@@ -2434,8 +2432,7 @@ class ProjectCommand extends Command
          $Alert->message = "Project @#cyan:{$path}@; created!";
          $Alert->render();
 
-         $prefix = shell_exec('command -v bootgly 2>/dev/null') ? '' : 'php ';
-         $Output->render("@.;@#Green:Tip:@; Use @#Black:{$prefix}bootgly project {$path} start@; to boot it.@..;");
+         $this->advise([$path]);
       }
       else {
          $Alert->Type::Failure->set();
@@ -2446,6 +2443,45 @@ class ProjectCommand extends Command
 
       // :
       return $done;
+   }
+
+   /**
+    * Advise the next steps for ready projects: migrate and seed when the
+    * first one ships database resources, then start.
+    *
+    * @param array<string> $paths The ready project paths.
+    *
+    * @return void
+    */
+   private function advise (array $paths): void
+   {
+      // ?
+      $path = $paths[0] ?? '';
+      if ($path === '') {
+         return;
+      }
+
+      $Output = CLI->Terminal->Output;
+
+      $prefix = shell_exec('command -v bootgly 2>/dev/null') ? '' : 'php ';
+
+      // ! Database steps — only when the project ships the resources
+      $database = Projects::CONSUMER_DIR . "{$path}/database/";
+
+      $steps = [];
+      if (is_dir("{$database}migrations") === true) {
+         $steps[] = ['migrate up', 'create the database schema'];
+      }
+      if (is_dir("{$database}seeders") === true) {
+         $steps[] = ['seed run', 'seed the database'];
+      }
+      $steps[] = ['start', 'boot it'];
+
+      $Output->write(PHP_EOL);
+      foreach ($steps as [$action, $goal]) {
+         $Output->render("@#Green:Tip:@; Use @#Black:{$prefix}bootgly project {$path} {$action}@; to {$goal}.@.;");
+      }
+      $Output->write(PHP_EOL);
    }
 
    /**
