@@ -15,6 +15,7 @@ use const STDIN;
 use function defined;
 use function fread;
 use function function_exists;
+use function getmypid;
 use function intval;
 use function is_resource;
 use function preg_match;
@@ -39,6 +40,8 @@ class Cursor
    private Output $Output;
 
    // * Metadata
+   /** PID that owns this cursor — forked children inherit it and must not restore */
+   private int $owner;
    public private(set) bool $hidden {
       get {
          return $this->hidden;
@@ -113,6 +116,7 @@ class Cursor
       $this->Output = $Output;
 
       // * Metadata
+      $this->owner = getmypid() ?: 0;
       $this->hidden = false;
    }
 
@@ -222,6 +226,13 @@ class Cursor
 
    public function __destruct()
    {
+      // ? A forked child inherits this cursor over the shared terminal — only
+      //   the owning process may restore it, or a child's shutdown would emit
+      //   show()/shape() onto the TTY the parent is still driving
+      if (getmypid() !== $this->owner) {
+         return;
+      }
+
       // ? Cursor restore escapes only make sense on an interactive terminal:
       //   never trail them into pipes or files (e.g. `--format=json | jq`)
       $stream = $this->Output->stream;
