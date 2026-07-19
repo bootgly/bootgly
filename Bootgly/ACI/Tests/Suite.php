@@ -88,7 +88,7 @@ class Suite
    public int $skipped;
    /**
     * Ordered per-case records (status + per-assertion results) for runner views.
-    * @var array<int,array{case:int,file:string,status:string,results:array<int,bool|null>,description:null|string,message:null|string,elapsed:null|string}>
+    * @var array<int,array{case:int,file:string,status:string,results:array<int,bool|null>,description:null|string,message:null|string,debug:null|string,elapsed:null|string}>
     */
    public array $records;
    // # Stats
@@ -381,6 +381,7 @@ class Suite
          'results' => [],
          'description' => null,
          'message' => $info,
+         'debug' => null,
          'elapsed' => null,
       ];
       if (self::$Observer !== null) {

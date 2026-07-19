@@ -671,7 +671,7 @@ class TestCommand extends Command
    /**
     * Map Suite records into heatmap cells — one per assertion, in execution order.
     *
-    * @param array<int,array{case:int,file:string,status:string,results:array<int,bool|null>,description:null|string,message:null|string,elapsed:null|string}> $records
+    * @param array<int,array{case:int,file:string,status:string,results:array<int,bool|null>,description:null|string,message:null|string,debug:null|string,elapsed:null|string}> $records
     *
     * @return array<int,string>
     */
@@ -756,6 +756,13 @@ class TestCommand extends Command
          $message = (string) $record['message'];
          if ($message !== '') {
             $Output->write("   {$dim}↪ {$message}{$reset}\n");
+         }
+
+         // ? Captured debug (dump output) — quiet runs swallow it mid-suite,
+         //   so it surfaces here or CI logs lose the failure evidence
+         $debug = (string) ($record['debug'] ?? '');
+         if ($debug !== '') {
+            $Output->write(rtrim($debug, "\n") . "\n");
          }
       }
 

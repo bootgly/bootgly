@@ -543,6 +543,7 @@ class Test
          'results' => $this->results,
          'description' => $this->descriptions[count($this->results)] ?? null,
          'message' => $help,
+         'debug' => $this->debugged ?: null,
          'elapsed' => $this->elapsed,
       ];
       if (Suite::$Observer !== null) {
@@ -610,6 +611,7 @@ class Test
          'results' => $this->results,
          'description' => null,
          'message' => null,
+         'debug' => null,
          'elapsed' => $elapsed,
       ];
       if (Suite::$Observer !== null) {
