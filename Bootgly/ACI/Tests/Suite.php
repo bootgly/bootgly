@@ -66,6 +66,8 @@ class Suite
    // output
    /** Mute per-case and per-suite human output — runner views render instead. */
    public static bool $quiet = false;
+   /** Runner-view observer — notified with the owning Suite after each case record. */
+   public static null|Closure $Observer = null;
    // pretesting
    /** @var array<object> */
    public array $testables;
@@ -381,6 +383,9 @@ class Suite
          'message' => $info,
          'elapsed' => null,
       ];
+      if (self::$Observer !== null) {
+         (self::$Observer)($this);
+      }
 
       if (Results::$enabled === false && self::$quiet === false) {
          // @ Set additional info

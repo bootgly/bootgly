@@ -15,6 +15,7 @@ return new Specification(
       $exitOnFailure = Suite::$exitOnFailure;
       $quiet = Suite::$quiet;
       $enabled = Results::$enabled;
+      $Observer = Suite::$Observer;
 
       try {
          // ! Quiet probe — exitOnFailure stays ON: surviving the failing case
@@ -23,6 +24,12 @@ return new Specification(
          Suite::$exitOnFailure = true;
          Suite::$quiet = true;
          Results::$enabled = false;
+
+         // ! Observer probe — collects every notified Suite
+         $notified = [];
+         Suite::$Observer = function (Suite $Notified) use (&$notified): void {
+            $notified[] = $Notified;
+         };
 
          $Suite = new Suite(tests: [], autoReport: true, suiteName: 'Records probe');
 
@@ -79,11 +86,23 @@ return new Specification(
             ->expect([$Suite->passed, $Suite->failed, $Suite->skipped])
             ->to->be([1, 1, 1])
             ->assert();
+
+         // @ Observer
+         yield (new Assertion(description: 'the observer is notified once per case record'))
+            ->expect(count($notified))
+            ->to->be(3)
+            ->assert();
+
+         yield (new Assertion(description: 'the observer receives the owning Suite'))
+            ->expect($notified[0] === $Suite && $notified[1] === $Suite && $notified[2] === $Suite)
+            ->to->be(true)
+            ->assert();
       }
       finally {
          Suite::$exitOnFailure = $exitOnFailure;
          Suite::$quiet = $quiet;
          Results::$enabled = $enabled;
+         Suite::$Observer = $Observer;
       }
    })
 );

@@ -545,6 +545,9 @@ class Test
          'message' => $help,
          'elapsed' => $this->elapsed,
       ];
+      if (Suite::$Observer !== null) {
+         (Suite::$Observer)($this->Suite);
+      }
 
       if (Results::$enabled === false && Suite::$quiet === false) {
          // header
@@ -609,6 +612,9 @@ class Test
          'message' => null,
          'elapsed' => $elapsed,
       ];
+      if (Suite::$Observer !== null) {
+         (Suite::$Observer)($this->Suite);
+      }
 
       // @ output
       if (Results::$enabled === false && Suite::$quiet === false) {
