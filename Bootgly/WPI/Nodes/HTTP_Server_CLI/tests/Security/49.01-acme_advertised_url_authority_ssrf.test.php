@@ -185,6 +185,11 @@ return new Specification(
          $label = $alternate
             ? ($allowed ? 'allowed' : 'attack')
             : 'control';
+         // ! The alternate authority must bind exactly where its advertised
+         //   hostname resolves. 'localhost' maps to ::1 first on dual-stack
+         //   hosts (GitHub runners ship "::1 localhost"), so an IPv4-only
+         //   bind would strand the client's newAccount POST and time out.
+         $alternateHost = $allowed ? 'localhost' : '127.0.0.1';
          $result = [
             'label' => $label,
             'authority_url' => '',
@@ -222,7 +227,7 @@ return new Specification(
          $AlternateListener = null;
          if ($alternate) {
             $AlternateListener = @stream_socket_server(
-               'tls://127.0.0.1:0',
+               "tls://{$alternateHost}:0",
                $alternateCode,
                $alternateMessage,
                STREAM_SERVER_BIND | STREAM_SERVER_LISTEN,
@@ -265,7 +270,7 @@ return new Specification(
 
          $authorityURL = "https://127.0.0.1:{$authorityPort}";
          $alternateURL = $alternate
-            ? 'https://' . ($allowed ? 'localhost' : '127.0.0.1') . ":{$alternatePort}"
+            ? "https://{$alternateHost}:{$alternatePort}"
             : $authorityURL;
          $result['authority_url'] = $authorityURL;
          $result['alternate_url'] = $alternateURL;
