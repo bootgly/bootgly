@@ -17,9 +17,9 @@
 
 Bootgly is a base framework for building **APIs and apps** on both the **Web (WPI)** and **Console (CLI)** platforms — powered by a native, event-loop HTTP server written in pure PHP. It is the first PHP framework built on the [I2P (Interface-to-Platform) architecture][I2P_ARQUITECTURE].
 
-## 💡 Why Bootgly?
+## Why Bootgly?
 
-- ⚡ **Native async HTTP server in pure PHP** — long-running and event-loop driven, with Fibers for non-blocking I/O. No Nginx, no PHP-FPM in front. A pure-PHP alternative to Swoole, Workerman and FrankenPHP — no C extension required.
+- ⚡ **Native async HTTP server in pure PHP** — long-running and event-loop driven, with Fibers for non-blocking I/O. No Nginx, no PHP-FPM in front. A pure-PHP alternative to Swoole, Workerman and FrankenPHP — no C extension required. <ins>**AutoTLS with ACME v2</ins>.**
 - 📦 **Zero third-party dependencies in the core** — every essential feature (HTTP server, router, config, testing, sessions, DBAL + ORM) is built in. A smaller `vendor/` and a smaller supply-chain surface.
 - 🎯 **One canonical way to do everything** — one HTTP server, one config schema, one test framework. Predictable, consistent code: fewer decisions, less to maintain, no bikeshedding.
 - 🧱 **Strict, enforceable architecture** — six layers (ABI → ACI → ADI → API → CLI → WPI) with one-way dependencies and no cross-layer skipping. One core, two platforms.
@@ -36,7 +36,7 @@ curl -fsSL https://bootgly.com/install | bash
 >
 > _Measured on 24 logical CPUs, PHP 8.4.22, 514 connections, 10 s per route, symmetric DB pool._ → **Full comparison & reproducible runs:** [Bootgly vs Swoole, Hyperf, ReactPHP, AMPHP & Laravel](https://docs.bootgly.com/manual/WPI/HTTP/HTTP_Server_CLI/vs/)
 >
-> Check [Benchmark Detailed Results](https://github.com/bootgly/bootgly_benchmarks/tree/main/HTTP_Server_CLI)
+> Check [Benchmark Detailed Results](https://github.com/bootgly/bootgly_benchmarks/tree/main/HTTP_Server_CLI/)
 
 > [!NOTE]
 > **Beta — stabilizing toward 1.0.** Bootgly is under active development and the public API is still being finalized ahead of the 1.0 release. Pin a version and expect some changes before then; not yet recommended for production use. [Documentation is a work in progress.][PROJECT_DOCS]
@@ -65,39 +65,19 @@ curl -fsSL https://bootgly.com/install | bash
 
 </div>
 
-## 🟢 Boot Requirements
-
-### 🤝 Compatibility
-
-Operation System |
---- |
-✅ Linux (Debian based) |
-❌ Windows |
-❔ Unix |
-
---
-
-✅ = Compatible
-
-❌ = Incompatible
-
-❔ = Untested
-
-Above is the native compatibility, of course it is possible to run on Windows and Unix using Docker containers.
-
-> 🐳 **Docker:** build a `slim` or `full` Bootgly image to run servers, test, benchmark and ship your own projects — see the [`Dockerfile`](Dockerfile) and the [Docker guide][DOCKER_GUIDE].
-
-### ⚙️ Dependencies
+## ⚙️ Dependencies
 
 - PHP 8.4+ ⚠️
 - Opcache + JIT enabled (+50% performance) 👍
 
-#### PHP Packages
+> 🐳 **Docker:** build a `slim` or `full` Bootgly image to run servers, test, benchmark and ship your own projects — see the [`Dockerfile`](Dockerfile) and the [Docker guide][DOCKER_GUIDE].
+
+### PHP Packages
 
 - `php-cli` ⚠️
-- `php-mbstring` 👍
-- `php-readline` ⚠️
 - `php-openssl` ⚠️
+- `php-readline` ⚠️
+- `php-mbstring` 👍
 
 --
 
@@ -133,6 +113,8 @@ Help us keep Bootgly open and inclusive. Please read and follow our [Code of Con
 - Bootgly on **Telegram**: [[Telegram Group][TELEGRAM]]
 - Bootgly on **Reddit**: [[Reddit Community][REDDIT]]
 - Bootgly on **Discord**: [[Discord Channel][DISCORD]]
+- Bootgly on **X** (formerly Twitter): [[X (Twitter)][X_TWITTER]]
+- Bootgly on **Youtube**: [[YouTube Channel][YOUTUBE]]
 
 ### 💖 Sponsorship
 
@@ -152,7 +134,7 @@ Your sponsorship will keep this project always **up to date** with **new feature
 
 ### 📦 Install (one command)
 
-The canonical way to start: the installer clones the [bootgly.kit](https://github.com/bootgly/bootgly.kit) starter template, initializes the Bootgly platform and opens the **project wizard**:
+The canonical way to start: the installer clones the [bootgly.kit](https://github.com/bootgly/bootgly.kit/) starter template, initializes the Bootgly platform and opens the **project wizard**:
 
 ```bash
 curl -fsSL https://bootgly.com/install | bash
@@ -164,10 +146,10 @@ Create more projects anytime — from scratch or importing a platform project (l
 php bootgly project create
 ```
 
-Or import any git repository carrying the Bootgly project signature (a `*.project.php` file at its root):
+Or import any Project from Platforms or git repository carrying the Bootgly project signature (a `*.project.php` file at its root):
 
 ```bash
-php bootgly project import https://github.com/foo/project1 Project1
+php bootgly project import
 ```
 
 ### 📟 Bootgly CLI
@@ -245,47 +227,24 @@ The Bootgly is open-sourced software licensed under the [MIT license][MIT_LICENS
 
 
 <!-- Links -->
-[I2P_ARQUITECTURE]: https://docs.bootgly.com/manual/Bootgly/basic/architecture/overview
-[ROUTING]: https://docs.bootgly.com/manual/WPI/HTTP/HTTP_Server_CLI/Router/overview
-
-[CLI_INTERFACE]: https://github.com/bootgly/bootgly/tree/main/Bootgly/CLI/
-[CLI_TERMINAL_COMPONENTS]: https://github.com/bootgly/bootgly/tree/main/Bootgly/CLI/Terminal/components
-
-[CLI_TERMINAL_ALERT]: https://github.com/bootgly/bootgly/tree/main/Bootgly/CLI/Terminal/components/Alert
-[CLI_TERMINAL_FIELDSET]: https://github.com/bootgly/bootgly/tree/main/Bootgly/CLI/Terminal/components/Fieldset
-[CLI_TERMINAL_MENU]: https://github.com/bootgly/bootgly/tree/main/Bootgly/CLI/Terminal/components/Menu
-[CLI_TERMINAL_PROGRESS]: https://github.com/bootgly/bootgly/tree/main/Bootgly/CLI/Terminal/components/Progress
-[CLI_TERMINAL_TABLE]: https://github.com/bootgly/bootgly/tree/main/Bootgly/CLI/Terminal/components/Table
-[CLI_HEADER]: https://github.com/bootgly/bootgly/tree/main/Bootgly/CLI/components/Header.php
-[CONSOLE_PLATFORM]: https://github.com/bootgly/bootgly-console
-
-[WPI_INTERFACE]: https://github.com/bootgly/bootgly/tree/main/Bootgly/WPI/
-[HTTP_SERVER_ROUTER_CLASS]: https://github.com/bootgly/bootgly/blob/main/Bootgly/WPI/Nodes/HTTP_Server_CLI/Router.php
-[WEB_TCP_CLIENT_INTERFACE]: https://github.com/bootgly/bootgly/blob/main/Bootgly/WPI/Interfaces/TCP_Client_CLI.php
-[WEB_TCP_SERVER_INTERFACE]: https://github.com/bootgly/bootgly/blob/main/Bootgly/WPI/Interfaces/TCP_Server_CLI.php
-[WEB_UDP_CLIENT_INTERFACE]: https://github.com/bootgly/bootgly/blob/main/Bootgly/WPI/Interfaces/UDP_Client_CLI.php
-[WEB_UDP_SERVER_INTERFACE]: https://github.com/bootgly/bootgly/blob/main/Bootgly/WPI/Interfaces/UDP_Server_CLI.php
-[WEB_HTTP_SERVER_CLI]: https://github.com/bootgly/bootgly/blob/main/Bootgly/WPI/Nodes/HTTP_Server_CLI.php
-[WEB_HTTP_CLIENT_CLI]: https://github.com/bootgly/bootgly/blob/main/Bootgly/WPI/Nodes/HTTP_Client_CLI.php
-[WEB_PLATFORM]: https://github.com/bootgly/bootgly-web
+[I2P_ARQUITECTURE]: https://docs.bootgly.com/manual/Bootgly/basic/architecture/overview/
+[ROUTING]: https://docs.bootgly.com/manual/WPI/HTTP/HTTP_Server_CLI/Router/overview/
 
 [PROJECT_DOCS]: https://docs.bootgly.com/
-[DOCKER_GUIDE]: https://docs.bootgly.com/guide/docker
+[DOCKER_GUIDE]: https://docs.bootgly.com/guide/docker/
 [GITHUB_REPOSITORY]: https://github.com/bootgly/bootgly/
 [GITHUB_SPONSOR]: https://github.com/sponsors/bootgly/
-[VS_HTTP]: https://docs.bootgly.com/manual/WPI/HTTP/HTTP_Server_CLI/vs/
-[BENCHMARKS]: https://github.com/bootgly/bootgly_benchmarks/tree/main/HTTP_Server_CLI
+[X_TWITTER]: https://x.com/bootglyphp/
+[YOUTUBE]: https://www.youtube.com/@Bootgly/
 
 [TELEGRAM]: https://t.me/bootgly/
 [REDDIT]: https://www.reddit.com/r/bootgly/
 [DISCORD]: https://discord.com/invite/SKRHsYmtyJ/
 [LINKEDIN]: https://www.linkedin.com/company/bootgly/
 
-
 [CODE_OF_CONDUCT]: https://github.com/bootgly/bootgly/blob/main/.github/CODE_OF_CONDUCT.md
 [SEMANTIC_VERSIONING]: https://semver.org/
 [CONVENTIONAL_COMMITS]: https://www.conventionalcommits.org/en/v1.0.0/
-
 
 [MIT_LICENSE]: https://opensource.org/license/mit/
 
