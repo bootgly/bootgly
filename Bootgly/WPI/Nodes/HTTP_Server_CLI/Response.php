@@ -47,7 +47,7 @@ use stdClass;
 use Throwable;
 
 use const Bootgly\WPI;
-use Bootgly\ABI\Data\__String\Path;
+use Bootgly\ABI\Code\__String\Path;
 use Bootgly\ABI\Data\Language;
 use Bootgly\ABI\IO\FS\File;
 use Bootgly\ACI\Events\Readiness;

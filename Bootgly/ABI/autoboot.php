@@ -68,7 +68,7 @@ namespace Bootgly\ABI {
 // @ Global namespace
 namespace {
 
-   use Bootgly\ABI\Data\__String;
+   use Bootgly\ABI\Code\__String;
    use Bootgly\ABI\Debugging\Backtrace;
    use Bootgly\ABI\Debugging\Data\Vars;
 

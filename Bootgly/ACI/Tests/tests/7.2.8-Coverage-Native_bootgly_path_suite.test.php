@@ -56,7 +56,7 @@ return new Specification(
          ->assert();
 
       yield (new Assertion(description: 'Path suite report includes the Path SUT'))
-         ->expect(str_contains($output, 'Bootgly/ABI/Data/__String/Path.php'))
+         ->expect(str_contains($output, 'Bootgly/ABI/Code/__String/Path.php'))
          ->to->be(true)
          ->assert();
 

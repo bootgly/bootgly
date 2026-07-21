@@ -20,7 +20,7 @@ use Closure;
 use ReflectionClass;
 
 use const Bootgly\CLI;
-use Bootgly\ABI\Data\__String\Path;
+use Bootgly\ABI\Code\__String\Path;
 use Bootgly\API\Endpoints\Server\Modes;
 use Bootgly\API\Workables\Server as SAPI;
 use Bootgly\CLI\Command;

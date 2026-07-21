@@ -12,7 +12,7 @@ use function rtrim;
 use function str_contains;
 use function stream_get_contents;
 
-use Bootgly\ABI\Data\__String;
+use Bootgly\ABI\Code\__String;
 use Bootgly\ACI\Tests\Suite\Test\Specification;
 use Bootgly\CLI\Terminal\Output;
 

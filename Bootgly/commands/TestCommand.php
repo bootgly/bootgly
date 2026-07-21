@@ -98,8 +98,8 @@ use Throwable;
 
 use const Bootgly\ABI\BOOTSTRAP_FILENAME;
 use const Bootgly\CLI;
-use Bootgly\ABI\Data\__String;
-use Bootgly\ABI\Data\__String\Escapeable\Text\Formattable;
+use Bootgly\ABI\Code\__String;
+use Bootgly\ABI\Code\__String\Escapeable\Text\Formattable;
 use Bootgly\ACI\Logs\Data\Display;
 use Bootgly\ACI\Tests;
 use Bootgly\ACI\Tests\Benchmark;
@@ -365,7 +365,7 @@ class TestCommand extends Command
                continue;
             }
 
-            // e.g. 'Bootgly/ABI/Data/__Array/' → 'Bootgly/ABI/Data/__Array'
+            // e.g. 'Bootgly/ABI/Code/__Array/' → 'Bootgly/ABI/Code/__Array'
             $scope = rtrim(str_replace('\\', '/', $dir), '/');
             if ($scope === '') {
                continue;

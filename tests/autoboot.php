@@ -8,11 +8,11 @@ return new Suites(
       // ? 1
       #'Bootgly/ABI/Configs/*', // ! Not testable (for now)
       // ? 2
-      'Bootgly/ABI/Data/__Array/',
-      'Bootgly/ABI/Data/__String/',
-      'Bootgly/ABI/Data/__String/Bytes/',
-      #'Bootgly/ABI/Data/__String/Escapeable/', // ! Not testable directly (traits)
-      'Bootgly/ABI/Data/__String/Path/',
+      'Bootgly/ABI/Code/__Array/',
+      'Bootgly/ABI/Code/__String/',
+      'Bootgly/ABI/Code/__String/Bytes/',
+      #'Bootgly/ABI/Code/__String/Escapeable/', // ! Not testable directly (traits)
+      'Bootgly/ABI/Code/__String/Path/',
       // ? 3
       #'Bootgly/ABI/Debugging/*', // ! Not testable
       // ? 3.5
@@ -132,8 +132,8 @@ return new Suites(
       'Bootgly/ACI/Mail/tests/E2E/',
       // # WPI/Services/Mail — web mail service (queued dispatch via the Courier handler)
       'Bootgly/WPI/Services/Mail/',
-      // # ABI/Data/__String/Theme — theme system (public API, builtins, Escaped seam)
-      'Bootgly/ABI/Data/__String/Theme/',
+      // # ABI/Code/__String/Theme — theme system (public API, builtins, Escaped seam)
+      'Bootgly/ABI/Code/__String/Theme/',
       // # ABI/Debugging — throwable rendering (CLI/HTML targets), reporter seam, debug page
       'Bootgly/ABI/Debugging/',
       // # ABI/Data/Language — i18n minimal contract (translate, catalogs, locale negotiation)
@@ -166,10 +166,10 @@ return new Suites(
       'Bootgly/CLI/UI/Atoms/',
       // # CLI UI Base — Frame (region canvas: buffer, render, diff, drain)
       'Bootgly/CLI/UI/Base/',
-      // # ABI/Data/__String/Markdown — pure markdown → AST parser
-      'Bootgly/ABI/Data/__String/Markdown/',
-      // # ABI/Data/__String/Tokens — PHP tokenizer + Highlighter (gutter, gutterless, open-tag sniff)
-      'Bootgly/ABI/Data/__String/Tokens/',
+      // # ABI/Code/__String/Markdown — pure markdown → AST parser
+      'Bootgly/ABI/Code/__String/Markdown/',
+      // # ABI/Code/__String/Tokens — PHP tokenizer + Highlighter (gutter, gutterless, open-tag sniff)
+      'Bootgly/ABI/Code/__String/Tokens/',
       // # ABI/Debugging/Data/Vars — Dumper engine (typed literals, reflection walk, themes)
       'Bootgly/ABI/Debugging/Data/Vars/',
       // ! Demo projects — example signature suites (kit import guide)

@@ -25,7 +25,7 @@ use function pcntl_signal_dispatch;
 use function usleep;
 use Generator;
 
-use Bootgly\ABI\Data\__String\Escapeable\Text\Formattable;
+use Bootgly\ABI\Code\__String\Escapeable\Text\Formattable;
 use Bootgly\ABI\Templates\Template\Escaped as TemplateEscaped;
 use Bootgly\API\Component;
 use Bootgly\CLI\Terminal\Input;

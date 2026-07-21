@@ -52,8 +52,8 @@ use function uasort;
 use function ucwords;
 use stdClass;
 
-use Bootgly\ABI\Data\__String\Bytes;
-use Bootgly\ABI\Data\__String\Escapeable\Text\Formattable;
+use Bootgly\ABI\Code\__String\Bytes;
+use Bootgly\ABI\Code\__String\Escapeable\Text\Formattable;
 use Bootgly\ACI\Tests\Benchmark\Configs\Options;
 
 

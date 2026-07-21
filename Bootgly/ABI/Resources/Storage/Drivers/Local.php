@@ -37,7 +37,7 @@ use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
 use SplFileInfo;
 
-use Bootgly\ABI\Data\__String\Path;
+use Bootgly\ABI\Code\__String\Path;
 use Bootgly\ABI\IO\FS\File;
 use Bootgly\ABI\Resources\Storage\Driver;
 

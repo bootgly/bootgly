@@ -36,8 +36,8 @@ use ReflectionProperty;
 use UnitEnum;
 use ValueError;
 
-use Bootgly\ABI\Data\__String\Escapeable\Text\Formattable;
-use Bootgly\ABI\Data\__String\Theme;
+use Bootgly\ABI\Code\__String\Escapeable\Text\Formattable;
+use Bootgly\ABI\Code\__String\Theme;
 
 
 class Dumper

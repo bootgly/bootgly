@@ -1,6 +1,6 @@
 <?php
 
-use Bootgly\ABI\Data\__String\Theme;
+use Bootgly\ABI\Code\__String\Theme;
 use Bootgly\ABI\Templates\Template\Escaped;
 use Bootgly\ACI\Tests\Suite\Test\Specification;
 

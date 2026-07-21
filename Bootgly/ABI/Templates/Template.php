@@ -43,7 +43,7 @@ use function str_replace;
 use function uniqid;
 use Throwable;
 
-use Bootgly\ABI\Data\__String\Path;
+use Bootgly\ABI\Code\__String\Path;
 use Bootgly\ABI\IO\FS\File;
 use Bootgly\ABI\Templates;
 use Bootgly\ABI\Templates\Template\Exceptions\TemplateException;

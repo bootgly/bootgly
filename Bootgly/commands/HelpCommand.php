@@ -20,7 +20,7 @@ use function strlen;
 use function trim;
 
 use const Bootgly\CLI;
-use Bootgly\ABI\Data\__String\Path;
+use Bootgly\ABI\Code\__String\Path;
 use Bootgly\CLI\Command;
 use Bootgly\CLI\UI\Atoms\Figlet;
 use Bootgly\CLI\UI\Base\Fieldset;

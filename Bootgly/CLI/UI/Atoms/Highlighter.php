@@ -15,7 +15,7 @@ use const BOOTGLY_TTY;
 use function function_exists;
 use function str_ends_with;
 
-use Bootgly\ABI\Data\__String\Tokens;
+use Bootgly\ABI\Code\__String\Tokens;
 use Bootgly\API\Component;
 use Bootgly\CLI\Terminal\Output;
 

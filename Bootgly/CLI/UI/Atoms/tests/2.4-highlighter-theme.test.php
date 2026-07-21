@@ -6,7 +6,7 @@ namespace Bootgly\CLI\UI\Atoms;
 use function assert;
 use function str_contains;
 
-use Bootgly\ABI\Data\__String\Tokens;
+use Bootgly\ABI\Code\__String\Tokens;
 use Bootgly\ACI\Tests\Suite\Test\Specification;
 use Bootgly\API\Component;
 use Bootgly\CLI\Terminal\Output;

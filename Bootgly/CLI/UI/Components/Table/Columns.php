@@ -14,7 +14,7 @@ namespace Bootgly\CLI\UI\Components\Table;
 use function mb_strlen;
 use function preg_replace;
 
-use Bootgly\ABI\Data\__String;
+use Bootgly\ABI\Code\__String;
 use Bootgly\CLI\UI\Components\Table;
 use Bootgly\CLI\UI\Components\Table\Columns\Width;
 

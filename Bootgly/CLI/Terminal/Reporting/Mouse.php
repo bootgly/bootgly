@@ -19,7 +19,7 @@ use function strlen;
 use function substr;
 use Closure;
 
-use Bootgly\ABI\Data\__String\Escapeable\Mouse\Reportable;
+use Bootgly\ABI\Code\__String\Escapeable\Mouse\Reportable;
 use Bootgly\CLI\Terminal\Input;
 use Bootgly\CLI\Terminal\Input\Mousestrokes;
 use Bootgly\CLI\Terminal\Output;

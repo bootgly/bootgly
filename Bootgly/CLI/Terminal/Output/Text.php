@@ -13,9 +13,9 @@ namespace Bootgly\CLI\Terminal\Output;
 
 use function str_repeat;
 
-use Bootgly\ABI\Data\__String\Escapeable\Cursor\Positionable;
-use Bootgly\ABI\Data\__String\Escapeable\Text\Formattable;
-use Bootgly\ABI\Data\__String\Escapeable\Text\Modifiable;
+use Bootgly\ABI\Code\__String\Escapeable\Cursor\Positionable;
+use Bootgly\ABI\Code\__String\Escapeable\Text\Formattable;
+use Bootgly\ABI\Code\__String\Escapeable\Text\Modifiable;
 
 use Bootgly\CLI\Terminal\Output;
 

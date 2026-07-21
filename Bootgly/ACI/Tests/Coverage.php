@@ -167,7 +167,7 @@ class Coverage
          $canonical = self::normalize($file);
          $norm = $canonical;
 
-         // Skip test scripts (e.g. Bootgly/ABI/Data/__Array/tests/1.x.test.php).
+         // Skip test scripts (e.g. Bootgly/ABI/Code/__Array/tests/1.x.test.php).
          // Note: the test-framework source lives under uppercase /Tests/, so
          // this case-sensitive check does NOT exclude those files.
          if (str_contains($norm, '/tests/')) {

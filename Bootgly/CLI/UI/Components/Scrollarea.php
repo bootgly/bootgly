@@ -28,8 +28,8 @@ use function str_ends_with;
 use function stream_get_contents;
 use function substr;
 
-use Bootgly\ABI\Data\__String;
-use Bootgly\ABI\Data\__String\Escapeable\Text\Formattable;
+use Bootgly\ABI\Code\__String;
+use Bootgly\ABI\Code\__String\Escapeable\Text\Formattable;
 use Bootgly\API\Component;
 use Bootgly\CLI\Terminal;
 use Bootgly\CLI\Terminal\Output;

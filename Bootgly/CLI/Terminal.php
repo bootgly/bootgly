@@ -21,9 +21,9 @@ use function readline_add_history;
 use function readline_completion_function;
 use function trim;
 
-use Bootgly\ABI\Data\__String\Escapeable;
-use Bootgly\ABI\Data\__String\Escapeable\Cursor\Positionable;
-use Bootgly\ABI\Data\__String\Escapeable\Text\Modifiable;
+use Bootgly\ABI\Code\__String\Escapeable;
+use Bootgly\ABI\Code\__String\Escapeable\Cursor\Positionable;
+use Bootgly\ABI\Code\__String\Escapeable\Text\Modifiable;
 use Bootgly\CLI\Terminal\Input;
 use Bootgly\CLI\Terminal\Output;
 use Bootgly\CLI\Terminal\Reporting\Mouse;

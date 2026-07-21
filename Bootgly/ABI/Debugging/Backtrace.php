@@ -19,7 +19,7 @@ use function array_values;
 use function debug_backtrace;
 use function dirname;
 
-use Bootgly\ABI\Data\__String\Path;
+use Bootgly\ABI\Code\__String\Path;
 use Bootgly\ABI\Debugging\Backtrace\Call;
 
 

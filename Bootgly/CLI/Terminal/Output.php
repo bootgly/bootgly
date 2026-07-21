@@ -24,10 +24,10 @@ use function str_split;
 use function usleep;
 use Throwable;
 
-use Bootgly\ABI\Data\__String;
-use Bootgly\ABI\Data\__String\Escapeable;
-use Bootgly\ABI\Data\__String\Escapeable\Cursor\Positionable;
-use Bootgly\ABI\Data\__String\Escapeable\Text\Modifiable;
+use Bootgly\ABI\Code\__String;
+use Bootgly\ABI\Code\__String\Escapeable;
+use Bootgly\ABI\Code\__String\Escapeable\Cursor\Positionable;
+use Bootgly\ABI\Code\__String\Escapeable\Text\Modifiable;
 use Bootgly\ABI\Templates\Template\Escaped as TemplateEscaped;
 use Bootgly\CLI\Terminal;
 use Bootgly\CLI\Terminal\Output\Cursor;

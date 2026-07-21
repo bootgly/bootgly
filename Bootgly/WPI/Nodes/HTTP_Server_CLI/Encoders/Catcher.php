@@ -24,7 +24,7 @@ use function strpos;
 use function substr;
 use Throwable;
 
-use Bootgly\ABI\Data\__String\Path;
+use Bootgly\ABI\Code\__String\Path;
 use Bootgly\ABI\Data\Language;
 use Bootgly\ABI\Debugging\Data\Throwables;
 use Bootgly\ABI\Debugging\Page;

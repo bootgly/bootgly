@@ -23,10 +23,10 @@ use function strpos;
 use function strtr;
 use function substr_count;
 
-use Bootgly\ABI\Data\__String\Escapeable;
-use Bootgly\ABI\Data\__String\Escapeable\Cursor\Positionable;
-use Bootgly\ABI\Data\__String\Escapeable\Cursor\Visualizable;
-use Bootgly\ABI\Data\__String\Escapeable\Text\Modifiable;
+use Bootgly\ABI\Code\__String\Escapeable;
+use Bootgly\ABI\Code\__String\Escapeable\Cursor\Positionable;
+use Bootgly\ABI\Code\__String\Escapeable\Cursor\Visualizable;
+use Bootgly\ABI\Code\__String\Escapeable\Text\Modifiable;
 use Bootgly\ABI\Templates\Template\Escaped as TemplateEscaped;
 use Bootgly\API\Component;
 use Bootgly\CLI\Terminal;

@@ -22,7 +22,7 @@ use function str_repeat;
 use function strlen;
 use function substr;
 
-use Bootgly\ABI\Data\__String\Escapeable\Text\Formattable;
+use Bootgly\ABI\Code\__String\Escapeable\Text\Formattable;
 use Bootgly\CLI\Terminal\Input\Keystrokes;
 
 

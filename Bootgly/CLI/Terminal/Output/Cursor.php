@@ -23,9 +23,9 @@ use function shell_exec;
 use function sprintf;
 use function stream_isatty;
 
-use Bootgly\ABI\Data\__String\Escapeable\Cursor\Positionable;
-use Bootgly\ABI\Data\__String\Escapeable\Cursor\Shapeable;
-use Bootgly\ABI\Data\__String\Escapeable\Cursor\Visualizable;
+use Bootgly\ABI\Code\__String\Escapeable\Cursor\Positionable;
+use Bootgly\ABI\Code\__String\Escapeable\Cursor\Shapeable;
+use Bootgly\ABI\Code\__String\Escapeable\Cursor\Visualizable;
 use Bootgly\CLI\Terminal;
 use Bootgly\CLI\Terminal\Output;
 

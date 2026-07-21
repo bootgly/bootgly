@@ -27,7 +27,7 @@ use function strtr;
 use function substr_count;
 use ValueError;
 
-use Bootgly\ABI\Data\__String;
+use Bootgly\ABI\Code\__String;
 use Bootgly\ABI\Templates\Template\Escaped as TemplateEscaped;
 use Bootgly\API\Component;
 use Bootgly\CLI\Terminal\Output;

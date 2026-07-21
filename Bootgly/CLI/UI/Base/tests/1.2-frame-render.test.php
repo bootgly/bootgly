@@ -11,7 +11,7 @@ use function preg_replace;
 use function str_contains;
 use function trim;
 
-use Bootgly\ABI\Data\__String;
+use Bootgly\ABI\Code\__String;
 use Bootgly\ACI\Tests\Suite\Test\Specification;
 use Bootgly\CLI\Terminal\Output;
 use Bootgly\CLI\UI\Components\Chart\Gradient;

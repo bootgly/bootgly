@@ -21,7 +21,7 @@ use Error;
 use Throwable;
 
 use const Bootgly\WPI;
-use Bootgly\ABI\Data\__String\Path;
+use Bootgly\ABI\Code\__String\Path;
 use Bootgly\ABI\Debugging\Data\Throwables;
 use Bootgly\ABI\IO\FS\File;
 use Bootgly\ABI\Templates\Template;

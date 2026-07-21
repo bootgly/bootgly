@@ -29,10 +29,10 @@ use function trim;
 use Closure;
 use Throwable;
 
-use Bootgly\ABI\Data\__String\Escapeable;
-use Bootgly\ABI\Data\__String\Escapeable\Cursor\Positionable;
-use Bootgly\ABI\Data\__String\Escapeable\Text\Modifiable;
-use Bootgly\ABI\Data\__String\Escapeable\Viewport\Bufferable;
+use Bootgly\ABI\Code\__String\Escapeable;
+use Bootgly\ABI\Code\__String\Escapeable\Cursor\Positionable;
+use Bootgly\ABI\Code\__String\Escapeable\Text\Modifiable;
+use Bootgly\ABI\Code\__String\Escapeable\Viewport\Bufferable;
 
 use Bootgly\CLI\Terminal\Output;
 

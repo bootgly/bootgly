@@ -58,7 +58,7 @@ return new Specification(
       $agent = $human;
       $agent['AI_AGENT'] = '1';
 
-      // ! Runner — targets suite 4 (Bootgly/ABI/Data/__String/Path/): small,
+      // ! Runner — targets suite 4 (Bootgly/ABI/Code/__String/Path/): small,
       //   subprocess-free and index-frozen by the root tests/autoboot.php
       $run = static function (array $arguments, array $environment): array {
          $descriptors = [

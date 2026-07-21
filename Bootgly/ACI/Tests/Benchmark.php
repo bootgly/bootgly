@@ -31,7 +31,7 @@ use function touch;
 use ErrorException;
 use Throwable;
 
-use Bootgly\ABI\Data\__String\Path;
+use Bootgly\ABI\Code\__String\Path;
 use Bootgly\ABI\Debugging\Backtrace;
 use Bootgly\ACI\Tests\Benchmark\Artifacts;
 

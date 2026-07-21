@@ -32,9 +32,9 @@ use function substr;
 use function usleep;
 use Generator;
 
-use Bootgly\ABI\Data\__String;
-use Bootgly\ABI\Data\__String\Escapeable\Mouse\Reportable;
-use Bootgly\ABI\Data\__String\Escapeable\Text\Formattable;
+use Bootgly\ABI\Code\__String;
+use Bootgly\ABI\Code\__String\Escapeable\Mouse\Reportable;
+use Bootgly\ABI\Code\__String\Escapeable\Text\Formattable;
 use Bootgly\API\Component;
 use Bootgly\CLI\Terminal;
 use Bootgly\CLI\Terminal\Input;

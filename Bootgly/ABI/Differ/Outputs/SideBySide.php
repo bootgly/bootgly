@@ -24,7 +24,7 @@ use function rtrim;
 use function sprintf;
 use function str_repeat;
 
-use Bootgly\ABI\Data\__String\Escapeable\Text\Formattable;
+use Bootgly\ABI\Code\__String\Escapeable\Text\Formattable;
 use Bootgly\ABI\Differ\Calculators\Memory;
 use Bootgly\ABI\Differ\Calculators\Time;
 use Bootgly\ABI\Differ\Codes;

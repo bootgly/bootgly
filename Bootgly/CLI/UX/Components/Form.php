@@ -30,7 +30,7 @@ use function trim;
 use function usleep;
 use Closure;
 
-use Bootgly\ABI\Data\__String;
+use Bootgly\ABI\Code\__String;
 use Bootgly\API\Component;
 use Bootgly\CLI\Terminal;
 use Bootgly\CLI\Terminal\Input;

@@ -17,14 +17,14 @@ use function preg_replace_callback_array;
 use function str_repeat;
 use function strlen;
 
-use Bootgly\ABI\Data\__String\Escapeable;
-use Bootgly\ABI\Data\__String\Escapeable\Cursor\Positionable;
-use Bootgly\ABI\Data\__String\Escapeable\Cursor\Shapeable;
-use Bootgly\ABI\Data\__String\Escapeable\Cursor\Visualizable;
-use Bootgly\ABI\Data\__String\Escapeable\Text\Formattable;
-use Bootgly\ABI\Data\__String\Escapeable\Text\Modifiable;
-use Bootgly\ABI\Data\__String\Escapeable\Viewport\Scrollable;
-use Bootgly\ABI\Data\__String\Theme;
+use Bootgly\ABI\Code\__String\Escapeable;
+use Bootgly\ABI\Code\__String\Escapeable\Cursor\Positionable;
+use Bootgly\ABI\Code\__String\Escapeable\Cursor\Shapeable;
+use Bootgly\ABI\Code\__String\Escapeable\Cursor\Visualizable;
+use Bootgly\ABI\Code\__String\Escapeable\Text\Formattable;
+use Bootgly\ABI\Code\__String\Escapeable\Text\Modifiable;
+use Bootgly\ABI\Code\__String\Escapeable\Viewport\Scrollable;
+use Bootgly\ABI\Code\__String\Theme;
 use Bootgly\ABI\Resources;
 
 

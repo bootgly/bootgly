@@ -17,7 +17,7 @@ use function number_format;
 use function str_repeat;
 use function strlen;
 
-use Bootgly\ABI\Data\__String\Escapeable\Text\Formattable;
+use Bootgly\ABI\Code\__String\Escapeable\Text\Formattable;
 use Bootgly\CLI\Terminal;
 use Bootgly\CLI\UI\Components\Chart;
 

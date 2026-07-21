@@ -15,7 +15,7 @@ use function number_format;
 use function sprintf;
 use Closure;
 
-use Bootgly\ABI\Data\__String\Bytes;
+use Bootgly\ABI\Code\__String\Bytes;
 use Bootgly\ACI\Logs\Data\Display;
 use Bootgly\CLI\Command;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI as Server;

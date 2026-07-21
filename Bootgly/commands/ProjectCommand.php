@@ -84,7 +84,7 @@ use Throwable;
 
 use const Bootgly\ABI\BOOTSTRAP_FILENAME;
 use const Bootgly\CLI;
-use Bootgly\ABI\Data\__String;
+use Bootgly\ABI\Code\__String;
 use Bootgly\ACI\Process\State;
 use Bootgly\ADI\Databases\SQL;
 use Bootgly\ADI\Databases\SQL\Schema\Migrations;

@@ -54,7 +54,7 @@ use function time;
 use function trim;
 use InvalidArgumentException;
 
-use Bootgly\ABI\Data\__String\Path;
+use Bootgly\ABI\Code\__String\Path;
 use Bootgly\ABI\Resources\Storage\Driver;
 
 

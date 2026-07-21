@@ -17,7 +17,7 @@ use function is_string;
 use Closure;
 
 use const Bootgly\ABI\BOOTSTRAP_FILENAME;
-use Bootgly\ABI\Data\__String\Path;
+use Bootgly\ABI\Code\__String\Path;
 use Bootgly\ABI\Resources;
 
 

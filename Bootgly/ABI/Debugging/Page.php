@@ -33,7 +33,7 @@ use function ob_start;
 use function str_replace;
 use Throwable;
 
-use Bootgly\ABI\Data\__String\Path;
+use Bootgly\ABI\Code\__String\Path;
 use Bootgly\ABI\Debugging\Backtrace\Call;
 
 

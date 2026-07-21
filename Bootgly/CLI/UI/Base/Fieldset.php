@@ -17,7 +17,7 @@ use function mb_strlen;
 use function preg_replace;
 use function str_repeat;
 
-use Bootgly\ABI\Data\__String;
+use Bootgly\ABI\Code\__String;
 use Bootgly\ABI\Templates\Template\Escaped as TemplateEscaped;
 use Bootgly\API\Component;
 use Bootgly\CLI\Terminal\Output;

@@ -16,7 +16,7 @@ use function explode;
 use function implode;
 use function str_starts_with;
 
-use Bootgly\ABI\Data\__String\Escapeable\Text\Formattable;
+use Bootgly\ABI\Code\__String\Escapeable\Text\Formattable;
 use Bootgly\ABI\Differ\Output;
 
 

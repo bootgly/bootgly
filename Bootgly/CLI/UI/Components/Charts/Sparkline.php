@@ -13,7 +13,7 @@ namespace Bootgly\CLI\UI\Components\Charts;
 
 use function intdiv;
 
-use Bootgly\ABI\Data\__String\Escapeable\Text\Formattable;
+use Bootgly\ABI\Code\__String\Escapeable\Text\Formattable;
 use Bootgly\CLI\UI\Components\Chart;
 use Bootgly\CLI\UI\Components\Chart\Symbols;
 

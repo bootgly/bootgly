@@ -21,7 +21,7 @@ use function strlen;
 use function substr;
 use function time;
 
-use Bootgly\ABI\Data\__String\Path;
+use Bootgly\ABI\Code\__String\Path;
 use Bootgly\ABI\Resources\Storage\Driver;
 
 

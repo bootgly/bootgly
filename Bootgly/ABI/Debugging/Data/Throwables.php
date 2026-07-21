@@ -35,10 +35,10 @@ use Closure;
 use Throwable;
 use WeakMap;
 
-use Bootgly\ABI\Data\__String\Escapeable\Text\Formattable;
-use Bootgly\ABI\Data\__String\Path;
-use Bootgly\ABI\Data\__String\Theme;
-use Bootgly\ABI\Data\__String\Tokens\Highlighter;
+use Bootgly\ABI\Code\__String\Escapeable\Text\Formattable;
+use Bootgly\ABI\Code\__String\Path;
+use Bootgly\ABI\Code\__String\Theme;
+use Bootgly\ABI\Code\__String\Tokens\Highlighter;
 use Bootgly\ABI\Debugging;
 
 
