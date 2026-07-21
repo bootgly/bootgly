@@ -34,7 +34,6 @@ skills-lock.json
 !@/__docker__/entrypoint.sh
 !@/phpstan.neon
 !README.md
-!CHANGELOG.md
 
 ## Private files
 # Benchmarks

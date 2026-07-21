@@ -9,4 +9,3 @@
 *.template.php linguist-language=html
 
 /.github export-ignore
-CHANGELOG.md export-ignore
