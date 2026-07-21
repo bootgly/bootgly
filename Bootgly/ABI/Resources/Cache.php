@@ -11,6 +11,7 @@
 namespace Bootgly\ABI\Resources;
 
 
+use function spl_object_id;
 use Closure;
 
 use Bootgly\ABI\Events\Emitter;
@@ -62,13 +63,20 @@ class Cache
    {
       $value = $this->Driver->fetch("{$this->prefix}{$key}");
 
-      // @ Events — guarded so a no-listener fetch stays zero-allocation
+      // @ Events — guarded so a no-listener fetch stays zero-allocation.
+      // ! Direct Listeners read instead of check(): the call frame plus a
+      //   repeated spl_object_id of process-stable enum cases is measurable
+      //   on per-request cache reads (same pattern as Encoder_::encode).
+      static $hit = null, $miss = null;
+      $hit ??= spl_object_id(Events::Hit);
+      $miss ??= spl_object_id(Events::Miss);
+
       $Emitter = Emitter::$Instance;
       if ($value !== null) {
-         $Emitter->check(Events::Hit) && $Emitter->emit(Events::Hit, $key, $value);
+         isSet($Emitter->Listeners[$hit]) && $Emitter->emit(Events::Hit, $key, $value);
       }
       else {
-         $Emitter->check(Events::Miss) && $Emitter->emit(Events::Miss, $key);
+         isSet($Emitter->Listeners[$miss]) && $Emitter->emit(Events::Miss, $key);
       }
 
       // :
