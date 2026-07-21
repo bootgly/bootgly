@@ -90,14 +90,16 @@ final class Histogram
       }
 
       $index = null;
+      $slot = 0;
       if ($nanoseconds <= $this->highestTrackableNS) {
          // ? The dominant plaintext range fits the first HDR sub-bucket. Its
          //   exact index is one shift; retain the generic logarithmic mapping
-         //   for the tail.
+         //   for the tail. The slot is fetched once and written back below.
          $index = $nanoseconds < self::FIRST_UNTRACKABLE_NS
             ? $nanoseconds >> self::UNIT_MAGNITUDE
             : $this->index($nanoseconds);
-         if ($this->counts[$index] === PHP_INT_MAX) {
+         $slot = $this->counts[$index];
+         if ($slot === PHP_INT_MAX) {
             throw new OverflowException('Latency histogram bucket count overflow.');
          }
       }
@@ -107,7 +109,7 @@ final class Histogram
          $this->overflow++;
       }
       else {
-         $this->counts[$index]++; // @phpstan-ignore assign.propertyType (preallocated dense slot)
+         $this->counts[$index] = $slot + 1; // @phpstan-ignore assign.propertyType (preallocated dense slot)
          if ($nanoseconds < self::LOWEST_DISCERNIBLE_NS) {
             $this->underflow++;
          }

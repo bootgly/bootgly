@@ -226,7 +226,26 @@ final class Tracker
       $this->scheduled += $count;
       $this->sent += $count;
       $this->defaultMethods += $count;
-      $this->stamp($sentNS, $count);
+      // ?! stamp() scalar branch inlined — pipeline 1 never materializes the
+      //    send-time FIFO, so one method frame per send is measurable at ~1M
+      //    sends/s. The FIFO, spill and error paths stay in stamp().
+      if ($this->Histogram !== null) {
+         if ($sentNS !== null && $sentNS >= 1 && $this->timestamps === []) {
+            if ($this->timestampFastCount === 0) {
+               $this->timestampFastNS = $sentNS;
+               $this->timestampFastCount = $count;
+            }
+            else if ($this->timestampFastNS === $sentNS) {
+               $this->timestampFastCount += $count;
+            }
+            else {
+               $this->stamp($sentNS, $count);
+            }
+         }
+         else {
+            $this->stamp($sentNS, $count);
+         }
+      }
       if ($this->buffer !== '') {
          $this->advance();
       }
@@ -357,7 +376,24 @@ final class Tracker
          if ($this->cacheReusable === false) {
             $this->reusable = false;
          }
-         $this->observe();
+         // ?! observe() scalar branch inlined — one method frame per response
+         //    is measurable at ~1M responses/s. The FIFO and error paths stay
+         //    in observe(); a stale/invalid stamp falls through unchanged.
+         if (
+            $this->Histogram !== null
+            && $this->timestampFastCount > 0
+            && $this->receivedNS >= $this->timestampFastNS
+         ) {
+            $sentNS = $this->timestampFastNS;
+            $this->timestampFastCount--;
+            if ($this->timestampFastCount === 0) {
+               $this->timestampFastNS = 0;
+            }
+            $this->Histogram->record($this->receivedNS - $sentNS);
+         }
+         else {
+            $this->observe();
+         }
          $this->defaultMethods--;
          $this->responses++;
          $this->cacheResponses++;
