@@ -23,6 +23,7 @@ use function array_map;
 use function bin2hex;
 use function count;
 use function date;
+use function dirname;
 use function explode;
 use function getmypid;
 use function gmdate;
@@ -925,13 +926,30 @@ class Summary
          echo "{$DIM}  Marks    {$file}{$RESET}\n";
       }
 
-      // # Report + charts
+      // # Telemetry sidecars — grouped per directory when a run generates
+      //   more than one, so multi-load runs keep a readable footer. The
+      //   `--format=json` document still carries every individual path.
+      $telemetries = [];
+      $others = [];
       foreach ($generated as $file) {
+         if (str_contains($file, '/telemetry/')) {
+            $telemetries[dirname($file)][] = $file;
+            continue;
+         }
+         $others[] = $file;
+      }
+      foreach ($telemetries as $parent => $files) {
+         $count = count($files);
+         echo $count === 1
+            ? "{$DIM}  " . str_pad('Telemetry', 8) . " {$files[0]}{$RESET}\n"
+            : "{$DIM}  " . str_pad('Telemetry', 8) . " {$parent}/ ({$count} files){$RESET}\n";
+      }
+
+      // # Report + charts
+      foreach ($others as $file) {
          $label = str_ends_with($file, '/manifest.json')
             ? 'Manifest'
-            : (str_contains($file, '/telemetry/')
-               ? 'Telemetry'
-               : (str_ends_with($file, '.svg') ? 'Chart' : 'Report'));
+            : (str_ends_with($file, '.svg') ? 'Chart' : 'Report');
          echo "{$DIM}  " . str_pad($label, 8) . " {$file}{$RESET}\n";
       }
 

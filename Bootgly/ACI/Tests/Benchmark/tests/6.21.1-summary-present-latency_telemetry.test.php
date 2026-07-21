@@ -91,5 +91,36 @@ return new Specification(
             true,
          )
          ->assert();
+
+      $parent = 'storage/tests/benchmarks/HTTP_Server_CLI/runs/x/telemetry/result';
+      ob_start();
+      Summary::locate(
+         ['storage/tests/benchmarks/HTTP_Server_CLI/runs/x/marks/r01_bench.marks'],
+         [
+            "{$parent}/Bootgly--Plaintext.json",
+            "{$parent}/Bootgly--JSON.json",
+            "{$parent}/Swoole--Plaintext.json",
+            'storage/tests/benchmarks/HTTP_Server_CLI/runs/x/manifest.json',
+         ],
+         'storage/tests/benchmarks/HTTP_Server_CLI/runs/x',
+         '/opt/bootgly',
+      );
+      $output = ob_get_clean();
+      $plain = is_string($output)
+         ? preg_replace('/\x1B\[[0-?]*[ -\/]*[@-~]/', '', $output) ?? $output
+         : '';
+
+      yield new Assertion(
+         description: 'Artifact footer groups multiple telemetry sidecars per directory with a count',
+         fallback: 'Multi-load telemetry sidecars are not grouped in the footer!'
+      )
+         ->expect(
+            str_contains($plain, "Telemetry {$parent}/ (3 files)")
+               && substr_count($plain, 'Telemetry') === 1
+               && str_contains($plain, 'Manifest storage/tests/benchmarks/HTTP_Server_CLI/runs/x/manifest.json'),
+            Op::Identical,
+            true,
+         )
+         ->assert();
    })
 );
