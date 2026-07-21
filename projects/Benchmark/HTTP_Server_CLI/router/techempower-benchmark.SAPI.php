@@ -30,12 +30,12 @@ use Generator;
 use RuntimeException;
 use Throwable;
 
+use Benchmark\HTTP_Server_CLI\Profiler;
 use Bootgly\ABI\Resources\Cache;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\Database;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router;
-use Benchmark\HTTP_Server_CLI\Profiler;
 
 
 /*
@@ -317,9 +317,16 @@ $Pick = static function (Cache $Cache, int $count): string {
 };
 
 $TfbCached = function (Request $Request, Response $Response) use ($Cached, $Count, $Exception, $Pick, $World) {
+   // ! Worker-local one-way latch — priming never reverts, so once this worker
+   //   proves it the per-request driver round-trip is skipped. The per-request
+   //   cache *data* read (`fetch('worlds')` in $Pick) stays untouched.
+   static $primed = false;
+
    $count = $Count($Request, 'count');
    $Cache = $Cached();
-   $primed = $Cache->check('primed');
+   if ($primed === false) {
+      $primed = $Cache->check('primed');
+   }
 
    // ?: Fast path — cache already primed: respond synchronously, no event-loop defer.
    //   JSON->send keeps build()'s fast path (media type, no per-request header array).
