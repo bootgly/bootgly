@@ -47,7 +47,9 @@ class Resources
    public private(set) array $definitions = [];
 
    // * Metadata
-   // ...
+   // ! True only while at least one NON-persistent resource is mounted —
+   //   reset() then scans; persistent-only mounts (the hot routes) skip it.
+   private bool $ephemeral = false;
 
 
    /**
@@ -201,6 +203,11 @@ class Resources
     */
    public function reset (): void
    {
+      // ? Persistent-only mounts — nothing to unset, skip the scan entirely.
+      if ($this->ephemeral === false) {
+         return;
+      }
+
       foreach ($this->resources as $name => $Resource) {
          if ($Resource->persistent) {
             continue;
@@ -208,6 +215,8 @@ class Resources
 
          unset($this->resources[$name]);
       }
+
+      $this->ephemeral = false;
    }
 
    /**
@@ -222,6 +231,10 @@ class Resources
       $Attach = $this->Attach;
 
       if ($Attach === null) {
+         if ($Resource->persistent === false) {
+            $this->ephemeral = true;
+         }
+
          return $Resource;
       }
 
@@ -229,6 +242,10 @@ class Resources
 
       if ($Attached instanceof Resource === false) {
          throw new RuntimeException('Response resource attach hook must return a Resource.');
+      }
+
+      if ($Attached->persistent === false) {
+         $this->ephemeral = true;
       }
 
       /** @var T $Attached */

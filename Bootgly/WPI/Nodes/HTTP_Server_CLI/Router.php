@@ -309,7 +309,10 @@ class Router
       //   a previous dynamic match must never leak into this request; the
       //   regex path also appends duplicate params onto whatever is stored
       $Route = $this->Route;
-      $Route->path = $URI === '/' ? '/' : $Request->URL;
+      // ! One URL property-hook read per request — the hook memoizes _URL,
+      //   but each read still pays the hook frame.
+      $url = $URI === '/' ? '' : $Request->URL;
+      $Route->path = $URI === '/' ? '/' : $url;
       $Route->Params->set([]);
 
       // 1. Static route lookup — O(1)
@@ -329,11 +332,6 @@ class Router
             }
             return $Response;
          }
-
-         $url = '';
-      }
-      else {
-         $url = $Request->URL;
       }
 
       $Dispatcher = $this->staticCache[$method][$url] ?? null;

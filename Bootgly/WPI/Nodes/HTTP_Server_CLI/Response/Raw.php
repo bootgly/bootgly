@@ -150,10 +150,17 @@ trait Raw
       if ($this->stream && ! $this->chunked) {
          $Header->own('Content-Length', (string) $this->measure());
       }
-      else {
+      else if ($Header->framing !== 0) {
          $Header->own('Content-Length');
       }
-      $Header->own('Transfer-Encoding', $this->chunked ? 'chunked' : null);
+      if ($this->chunked) {
+         $Header->own('Transfer-Encoding', 'chunked');
+      }
+      else if ($Header->framing !== 0) {
+         // ? No framing header was sourced at all — own() would fast-return;
+         //   skip its call frame + name classification on the ordinary case.
+         $Header->own('Transfer-Encoding', null);
+      }
 
       // @ Fast lane (typical case): plain buffered HTTP/1.1 response, no
       //   stream/chunked/pre-encoded body, not a HEAD request. Content-Length

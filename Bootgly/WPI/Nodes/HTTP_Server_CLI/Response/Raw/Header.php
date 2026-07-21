@@ -104,7 +104,9 @@ class Header extends HeaderBase
    // # Framing-source bitmasks. The current mask makes encoder ownership a
    //   zero-scan fast return for ordinary responses; prepared/preset masks
    //   restore the correct state across memoized prepare() and clean().
-   private int $framing = 0;
+   //   Publicly readable so the encoder can skip the own() frames entirely
+   //   when no framing header was sourced at all (the ordinary hot case).
+   public private(set) int $framing = 0;
    private int $preparedFraming = 0;
    private int $presetFraming = 0;
    // # Per-response preset mask — lowercased names remove()d for THIS response
