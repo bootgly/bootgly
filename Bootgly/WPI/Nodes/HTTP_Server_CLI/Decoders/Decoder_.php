@@ -77,20 +77,27 @@ class Decoder_ extends Decoders
       $cacheable = ($carried === 0 && $size <= 2048);
       $cacheKey = null;
       if ($cacheable) {
-         // @ Do not cache query-bearing targets. They are attacker-mutable and
-         //   create one-shot key churn that evicts hot entries with no hit-rate
-         //   benefit (DoS amplification vector).
-         // ?! Probe for '?' first: query-less requests (the hot case) cost a
-         //   single memchr scan and skip the CRLF scan entirely.
-         $queryMark = strpos($buffer, '?');
-         if ($queryMark !== false) {
-            $requestLineEnd = strpos($buffer, "\r\n");
-            if ($requestLineEnd === false || $queryMark < $requestLineEnd) {
-               $cacheable = false;
-            }
+         // ?! Exact-input lookup FIRST: stored keys can never carry a
+         //    request-line query (the store below classifies before writing),
+         //    so a hit both proves cacheability and skips the per-request '?'
+         //    scan entirely. Only misses pay the classification.
+         if (isSet($inputs[$buffer])) {
+            $cacheKey = $buffer;
          }
+         else {
+            // @ Do not cache query-bearing targets. They are attacker-mutable
+            //   and create one-shot key churn that evicts hot entries with no
+            //   hit-rate benefit (DoS amplification vector).
+            $queryMark = strpos($buffer, '?');
+            if ($queryMark !== false) {
+               $requestLineEnd = strpos($buffer, "\r\n");
+               if ($requestLineEnd === false || $queryMark < $requestLineEnd) {
+                  $cacheable = false;
+               }
+            }
 
-         $cacheKey = (!$cacheable) ? null : $buffer;
+            $cacheKey = (!$cacheable) ? null : $buffer;
+         }
       }
 
       // ? Check local cache and return
@@ -160,6 +167,12 @@ class Decoder_ extends Decoders
          && $length <= 2048
          && ! $Request->Body->waiting
       ) {
+         // ! Intentional bare read — the URL property hook derives and
+         //   memoizes the private `_URL` as its side effect, so the clone
+         //   below carries a warmed routing target: every future L1
+         //   hit's Router read then fast-returns instead of re-running the
+         //   URL derivation per request. Same bytes, same base — same URL.
+         $Request->URL; // @phpstan-ignore expr.resultUnused (hook side effect: memoizes the private _URL)
          $inputs[$cacheKey] = clone $Request;
 
          if (count($inputs) > 512) {
