@@ -82,6 +82,12 @@ class Select implements Events, Loops, Scheduler
    // ! Reusable reactor: assigned on every loop() entry/exit (never readonly)
    public float $started = 0.0;
    public float $finished = 0.0;
+   /**
+    * One monotonic stamp per dispatching select() wakeup — every socket
+    * dispatched in that wakeup became ready before this instant, so hot read
+    * callbacks may reuse it instead of paying one clock syscall per socket.
+    */
+   public private(set) int $wakeNS = 0;
 
 
    public function __construct (Connections &$Connections)
@@ -355,6 +361,9 @@ class Select implements Events, Loops, Scheduler
             continue;
          }
 
+         // ! One wakeup stamp for the whole dispatch below (see $wakeNS).
+         $this->wakeNS = (int) hrtime(true);
+
          // @ Dispatch (direct call — Fibers are created by handlers when needed)
          if ($read) {
             foreach ($read as $Socket) {
@@ -543,9 +552,17 @@ class Select implements Events, Loops, Scheduler
          return null;
       }
 
-      $now = microtime(true);
-      $nowMonotonic = (int) hrtime(true);
+      // ! Read each clock only for its consumers: the wall clock serves the
+      //   Timers set plus the awaiting-I/O deadlines, the monotonic clock
+      //   serves MonotonicTimers. A lone monotonic deadline (the common
+      //   benchmark-worker shape) then costs one clock read per wakeup.
+      $wall = $this->Timers !== []
+         || $this->awaitingReadDeadlines !== []
+         || $this->awaitingWriteDeadlines !== [];
+      $now = $wall ? microtime(true) : 0.0;
+      $nowMonotonic = $this->MonotonicTimers !== [] ? (int) hrtime(true) : 0;
       $wait = null;
+      $fired = false;
 
       foreach ($this->Timers as $ID => $Timer) {
          if ($Timer['deadline'] > $now) {
@@ -553,6 +570,7 @@ class Select implements Events, Loops, Scheduler
          }
 
          unset($this->Timers[$ID]);
+         $fired = true;
          try {
             ($Timer['Callback'])();
          }
@@ -567,6 +585,7 @@ class Select implements Events, Loops, Scheduler
          }
 
          unset($this->MonotonicTimers[$ID]);
+         $fired = true;
          try {
             ($Timer['Callback'])();
          }
@@ -577,8 +596,18 @@ class Select implements Events, Loops, Scheduler
 
       // @ Callbacks may cancel or register timers. Compute the next wait from
       //   the post-callback sets so a newly-nearest timer is never overslept.
-      $now = microtime(true);
-      $nowMonotonic = (int) hrtime(true);
+      //   Without a fired callback the sets are unchanged and the elapsed time
+      //   is nanoseconds — reuse the first reads instead of two more.
+      if ($fired) {
+         $now = $this->Timers !== []
+            || $this->awaitingReadDeadlines !== []
+            || $this->awaitingWriteDeadlines !== []
+            ? microtime(true)
+            : $now;
+         $nowMonotonic = $this->MonotonicTimers !== []
+            ? (int) hrtime(true)
+            : $nowMonotonic;
+      }
       foreach ($this->Timers as $Timer) {
          $this->bound(max(0.0, $Timer['deadline'] - $now), $wait);
       }

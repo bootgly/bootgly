@@ -289,7 +289,15 @@ class Packages implements WPI\Connections\Packages
                continue; // TODO check EOF?
             }
 
-            $input .= $buffer;
+            // ? Dominant path: the whole response arrives in one read — adopt
+            //   the buffer by refcount instead of copying it into the empty
+            //   accumulator (the copy scales with the response body size).
+            if ($input === '') {
+               $input = $buffer;
+            }
+            else {
+               $input .= $buffer;
+            }
 
             $bytes = strlen($buffer);
             $received += $bytes;
