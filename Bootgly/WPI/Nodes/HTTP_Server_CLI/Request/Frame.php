@@ -11,6 +11,8 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 
 
+use function array_key_first;
+use function count;
 use function ctype_digit;
 use function explode;
 use function is_string;
@@ -75,6 +77,21 @@ final class Frame
    // # Offsets
    public int $separatorPosition = 0;
    public int $length = 0;
+
+   // # Header-block memo
+   /**
+    * Per-worker memo of the header-block field scan, keyed on the raw block
+    * bytes and stored only after a fully-successful scan. Query-bearing
+    * targets bypass the decoder's exact-input cache by design, yet keep-alive
+    * traffic repeats a byte-identical header block on every request — the
+    * scan is a pure function of those bytes. Request-line and runtime-limit
+    * guards always replay per request.
+    * @var array<string,array{
+    *    0: array<string, string|array<int,string>>,
+    *    1: null|int, 2: bool, 3: bool, 4: string, 5: string, 6: bool, 7: bool
+    * }>
+    */
+   private static array $scans = [];
 
 
    /**
@@ -191,6 +208,16 @@ final class Frame
          }
       }
 
+      // ? Header-block memo hit — reuse the outputs of an earlier successful
+      //   scan of these exact bytes. The Test environment is excluded so the
+      //   evidence/testing dispatch path stays untouched.
+      $testing = Server::$Environment === Environments::Test;
+      $scan = $testing ? null : (self::$scans[$header_raw] ?? null);
+      if ($scan !== null) {
+         [$fields, $contentLength, $chunked, $expectContinue, $contentType,
+            $hostValue, $closeConnection, $keepAliveSeen] = $scan;
+      }
+      else {
       // @ Single linear scan over the header block.
       //   Produces simultaneously: the application `$fields` map (lowercased
       //   keys) and every framing decision needed by `Request::decode()`.
@@ -308,6 +335,19 @@ final class Frame
                }
                break;
          }
+      }
+
+      // : Memoize only a fully-successful scan (every reject returned above),
+      //   bounded against attacker-driven churn: small blocks only, FIFO
+      //   eviction at capacity.
+      if ($testing === false && strlen($header_raw) <= 2048) {
+         if (count(self::$scans) >= 512) {
+            unset(self::$scans[array_key_first(self::$scans)]);
+         }
+         self::$scans[$header_raw] = [$fields, $contentLength, $chunked,
+            $expectContinue, $contentType, $hostValue, $closeConnection,
+            $keepAliveSeen];
+      }
       }
 
       // @ TE+CL conflict (RFC 9112 §6.1 — must be rejected).
