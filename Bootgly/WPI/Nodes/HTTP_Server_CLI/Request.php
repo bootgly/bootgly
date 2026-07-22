@@ -613,9 +613,26 @@ class Request
    }
 
    // * Metadata
-   public readonly string $on;
-   public readonly string $at;
-   public readonly int $time;
+   // # Arrival timestamps — restamped per request by `reset()` / `assume()`
+   //   (one `time()` call; the date strings derive lazily on first read).
+   /**
+    * The Request arrival date (`Y-m-d`), derived from `$time`.
+    */
+   private null|string $_on = null;
+   public string $on {
+      get => $this->_on ??= date('Y-m-d', $this->time);
+   }
+   /**
+    * The Request arrival clock time (`H:i:s`), derived from `$time`.
+    */
+   private null|string $_at = null;
+   public string $at {
+      get => $this->_at ??= date('H:i:s', $this->time);
+   }
+   /**
+    * The Request arrival Unix timestamp.
+    */
+   public protected(set) int $time;
    public static int $multiparts = 0;
    /**
     * Authenticated principal exposed by router authentication guards.
@@ -678,10 +695,7 @@ class Request
       $this->hasFiles = false;
 
       // * Metadata
-      $this->on = date("Y-m-d");
-      $this->at = date("H:i:s");
       $this->time = time();
-
    }
 
    // @ Undeclared property access → per-request attribute bag. Dynamic
@@ -768,9 +782,9 @@ class Request
     *   constraint as `__clone` (see its comment: data-dependent branches
     *   here deopt the whole request pipeline, 717k → 320k req/s).
     *
-    * NOTE: `$on`/`$at`/`$time` are readonly and keep this instance's
-    *   creation timestamps for the connection lifetime (same staleness
-    *   class as the cache-hit path).
+    * NOTE: arrival timestamps are restamped here (`$time` + lazy `on`/`at`
+    *   memos) — the reused instance reports each request's own arrival
+    *   time.
     */
    public function reset (): void
    {
@@ -801,6 +815,11 @@ class Request
       $this->_query = null;
       $this->_queries = null;
 
+      // @ Arrival timestamps — per-request semantics on the reused instance.
+      $this->time = time();
+      $this->_on = null;
+      $this->_at = null;
+
       $this->Body->reset();
    }
 
@@ -819,9 +838,9 @@ class Request
     *   constraint as `__clone` (see its comment: data-dependent branches here
     *   deopt the whole request pipeline, 717k → 320k req/s).
     *
-    * NOTE: `$on`/`$at`/`$time` are readonly and keep this instance's creation
-    *   timestamps — same staleness class as the clone path, which carried the
-    *   template's creation timestamps.
+    * NOTE: arrival timestamps are restamped here (`$time` + lazy `on`/`at`
+    *   memos) — adopted requests carry their own arrival time, never the
+    *   template's.
     */
    public function assume (self $Template, Connection $Connection): void
    {
@@ -841,6 +860,12 @@ class Request
       // @ HTTP/2 stream id: templates are always HTTP/1.x (h2 Requests are
       //   never pooled) — unconditional zero write keeps this straight-line.
       $this->stream = 0;
+
+      // @ Arrival timestamps — per-request semantics on the reused instance
+      //   (never the template's creation time).
+      $this->time = time();
+      $this->_on = null;
+      $this->_at = null;
 
       $this->Header->assume($Template->Header);
       $this->Body->assume($Template->Body);
@@ -1024,7 +1049,6 @@ class Request
          && $size >= 14
          && strncmp($buffer, HTTP2::PREFACE, 14) === 0
       ) {
-         $Package->cache = false;
          $Decoder = new Decoder_HTTP2;
          $Package->Decoder = $Decoder;
          $Package->decoded = $Decoder;

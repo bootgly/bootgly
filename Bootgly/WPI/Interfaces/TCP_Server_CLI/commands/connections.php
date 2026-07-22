@@ -81,7 +81,7 @@ return new class extends Command
                   'started' => date('Y-m-d H:i:s', $Connection->started),
                   'used' => date('Y-m-d H:i:s', $Connection->used),
                   'writes' => (string) $Connection->writes,
-                  'input bytes' => (string) strlen($Connection->input),
+                  'carry bytes' => (string) strlen($Connection->carry),
                   'output bytes' => (string) strlen($Connection->output),
                   'pending bytes' => (string) max(
                      0,

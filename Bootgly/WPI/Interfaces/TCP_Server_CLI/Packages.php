@@ -257,14 +257,6 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
          $this->carried = true;
       }
 
-      // @ On success
-      $this->changed = ($this->input !== $input);
-
-      // @ Handle cache and set Input
-      if ($this->cache === false || $this->changed === true) {
-         $this->input = $input;
-      }
-
       // @ Set Stats (disable to max performance in benchmarks)
       if (Connections::$stats) {
          // Global
@@ -297,6 +289,17 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
       }
       else {
          $Decoder = null;
+         // @ Raw transport (no framing layer): the SAPI handler consumes
+         //   `$this->input` by reference (`callbacks`), so retention and
+         //   the repeat compare live HERE. Framed protocols decode the
+         //   `$input` argument directly and never read the retained copy —
+         //   the decoder owns its byte-keyed caches (per-connection L0 and
+         //   the shared L1), so the transport no longer pays a per-event
+         //   compare + store for them.
+         $this->changed = ($this->input !== $input);
+         if ($this->cache === false || $this->changed === true) {
+            $this->input = $input;
+         }
       }
 
       if ($state === States::Complete) {
@@ -334,8 +337,9 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
                $remaining = substr($input, $offset);
                $remainingLength = $inputLength - $offset;
 
-               $this->changed = true;
-               $this->input = $remaining;
+               // ! Pipelined sub-request isolation is the decoder's own
+               //   contract now (`reset()`/`assume()` per dispatch) — the
+               //   transport no longer maintains `changed`/`input` here.
                $this->consumed = 0;
                $this->rejected = false;
 

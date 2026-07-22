@@ -50,7 +50,6 @@ class Decoder_ extends Decoders
 
          // ? Only padding in this event: consume it all and wait.
          if ($skipped >= $size) {
-            $Package->cache = false;
             $Package->consumed = $size;
             return States::Incomplete;
          }
@@ -73,7 +72,6 @@ class Decoder_ extends Decoders
       ) {
          $signal = min($size, 14);
          if (strncmp($buffer, HTTP2::PREFACE, $signal) === 0 && $size < 14) {
-            $Package->cache = false;
             $Package->consumed = $skipped;
             return States::Incomplete;
          }

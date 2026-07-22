@@ -469,10 +469,6 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
          $secure['alpn_protocols'] ??= 'h2,http/1.1';
 
          self::$Protocols['h2'] = static function (Connection $Connection): void {
-            // ! The input cache keys on repeated identical reads — useless
-            //   for multiplexed binary frames.
-            $Connection->cache = false;
-
             $Decoder = new Decoder_HTTP2;
             $Connection->Decoder = $Decoder;
             $Connection->decoded = $Decoder;
