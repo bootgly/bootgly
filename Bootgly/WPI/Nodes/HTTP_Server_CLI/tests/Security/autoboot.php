@@ -323,5 +323,9 @@ return new Suite(
       // Missing or late first boundaries must not retain the complete
       // unauthenticated preamble while split valid boundaries remain accepted.
       '56.01-multipart_initial_boundary_preamble_retention',
+      // # Response byte ranges (duplicate full-file amplification — audit C5)
+      // Duplicate and overlapping ranges must be coalesced or rejected before
+      // they multiply file reads, multipart metadata, and network egress.
+      '57.01-duplicate_byte_range_response_amplification',
    ],
 );

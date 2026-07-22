@@ -94,6 +94,8 @@ class Request
    public static int $maxMultipartFields = 1024;
    /** @var int Maximum number of multipart file parts */
    public static int $maxMultipartFiles = 1024;
+   /** @var int Maximum number of byte-range members accepted from one header */
+   public static int $maxRanges = 16;
    /**
     * Allowed `Host` header values (RFC 9112 §3.2 / §7.2). When non-empty,
     *   any request whose `Host` header (case-insensitive, port-agnostic)
@@ -1726,22 +1728,34 @@ class Request
       }
 
       // @ Split ranges
-      $headerRanges = explode(',', substr($header, $equalIndex + 1));
+      $maxRanges = self::$maxRanges;
+      if ($maxRanges < 1) {
+         return -1; // Unsatisfiable range set
+      }
+
+      $headerRanges = explode(',', substr($header, $equalIndex + 1), $maxRanges + 1);
+      $rangeCount = count($headerRanges);
+      if ($rangeCount > $maxRanges) {
+         return -1; // Unsatisfiable range set
+      }
       $ranges = [];
 
       // @ Iterate ranges (0-1,50-100,...)
-      for ($i = 0; $i < count($headerRanges); $i++) {
-         $range = explode('-', $headerRanges[$i]);
+      for ($i = 0; $i < $rangeCount; $i++) {
+         $range = explode('-', trim($headerRanges[$i]), 3);
 
-         if ( count($range) > 2 ) {
-            return -1; // Unsatisifiable range
+         if ( count($range) !== 2 ) {
+            return -1; // Unsatisfiable range
          }
+
+         $range[0] = trim($range[0]);
+         $range[1] = trim($range[1]);
 
          if ( $range[0] !== '' && ! ctype_digit($range[0]) ) {
-            return -1; // Unsatisifiable range
+            return -1; // Unsatisfiable range
          }
          if ( $range[1] !== '' && ! ctype_digit($range[1]) ) {
-            return -1; // Unsatisifiable range
+            return -1; // Unsatisfiable range
          }
 
          $start = (int) $range[0];
@@ -1771,7 +1785,7 @@ class Request
       }
 
       if ( empty($ranges) ) {
-         return -1; // Unsatisifiable range
+         return -1; // Unsatisfiable range
       }
 
       if ($combine) {
@@ -1801,9 +1815,11 @@ class Request
                // @ Next range
                $ordered[++$j] = $next;
             }
-            else if ($next['end'] > $current['end']) {
-               // @ Extend range
-               $current['end'] = $next['end'];
+            else {
+               // @ Merge range and retain its earliest request position
+               if ($next['end'] > $current['end']) {
+                  $current['end'] = $next['end'];
+               }
                $current['index'] = min($current['index'], $next['index']);
             }
          }

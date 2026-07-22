@@ -774,7 +774,7 @@ class Response extends Server\Response
 
       if (is_string($Range) && $Range !== '') {
          // @ Parse Client range requests
-         $ranges = WPI->Request->range($size, $Range);
+         $ranges = WPI->Request->range($size, $Range, combine: true);
 
          switch ($ranges) {
             case -2: // Malformed Range header string
@@ -796,17 +796,19 @@ class Response extends Server\Response
                   return $this;
                }
 
-               /** @var array<int, array{start:int,end:int|null}> $ranges */
+               $selected = 0;
+               /** @var array<int, array{start:int,end:int}> $ranges */
                foreach ($ranges as $range) {
                   $start = $range['start'];
                   $end = $range['end'];
 
                   $offset = $start;
-                  $length = 0;
-                  if ($end > $start) {
-                     $length += ($end - $start);
+                  $length = $end - $start + 1;
+                  if ($length > $size - $selected) {
+                     $this->end(416, (string) $size);
+                     return $this;
                   }
-                  $length += 1;
+                  $selected += $length;
 
                   $parts[] = [
                      'offset' => $offset,
