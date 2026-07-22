@@ -171,12 +171,6 @@ return new Specification(
       $OldDecoder = TCPServer::$Decoder;
       $OldEncoder = TCPServer::$Encoder;
 
-      // ! Transport statics normally initialized at server boot — prime them
-      //   so this case is self-sufficient in single-case runs.
-      if (! isset(Connections::$stats)) {
-         Connections::$stats = false;
-      }
-
       $Decoder = new U110Decoder;
       $Connection = new U110Connection($Socket);
       $Package = new class($Connection) extends TCPPackages {};

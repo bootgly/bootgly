@@ -30,8 +30,8 @@ use Throwable;
 use const Bootgly\CLI;
 use Bootgly\ACI\Logs\Logger;
 use Bootgly\WPI;
-use Bootgly\WPI\Connections\Peer;
 use Bootgly\WPI\Connections\Packages;
+use Bootgly\WPI\Connections\Peer;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI as Server;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections\Connection;
 
@@ -59,27 +59,35 @@ class Connections implements WPI\Connections
 
    // * Metadata
    // @ Remote
+   //   Declaration defaults mirror the constructor: transport code (e.g.
+   //   `Packages::reading()`, `Packages::fail()`) reads these statics
+   //   unconditionally, so they must be readable in processes that never
+   //   construct a server (socketless tests, tooling).
    /** @var array<int,Connection> */
-   public static array $Connections;
+   public static array $Connections = [];
    // @ Limiter
    /** @var array<string,bool> */
-   public static array $blacklist;
+   public static array $blacklist = [];
    /** @var array<string,int> Live admitted-connection count per peer IP (audit F-2). */
-   public static array $ipConnections;
+   public static array $ipConnections = [];
    /** Live admitted TLS connections that have not completed their handshake. */
-   public static int $pendingHandshakes;
+   public static int $pendingHandshakes = 0;
    // @ Stats
-   public static bool $stats;
+   public static bool $stats = false;
    // Connections
    public int $connections;
    // Errors
    /** @var array<string,int> */
-   public static array $errors;
+   public static array $errors = [
+      'connection' => 0,
+      'read' => 0,
+      'write' => 0
+   ];
    // Packages
-   public static int $reads;
-   public static int $writes;
-   public static int $read;
-   public static int $written;
+   public static int $reads = 0;
+   public static int $writes = 0;
+   public static int $read = 0;
+   public static int $written = 0;
    // @ Status
    public const int STATUS_INITIAL = 0;
    public const int STATUS_CONNECTING = 1;
