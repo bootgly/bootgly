@@ -114,6 +114,7 @@ return new Specification(
          $Request->Body->length = $prefixBytes + $suffixBytes;
 
          $Decoder = new Decoder_Downloading;
+         $Decoder->Request = $Request;
          $Decoder->init($wireBoundary);
          $Package->Decoder = $Decoder;
          $FieldsStorage = new ReflectionProperty(Decoder_Downloading::class, 'fields');

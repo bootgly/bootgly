@@ -31,11 +31,36 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders\Catcher;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders\Challenge;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders\Check;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Events as RequestEvents;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 
 
 class Encoder_ extends Encoders
 {
+   /**
+    * Fetch cacheable HTTP/1.1 wire after admission middleware has run.
+    */
+   private static function replay (Request $Request): null|string
+   {
+      if (
+         Cache::$entries === []
+         || $Request->closeConnection
+         || $Request->protocol !== 'HTTP/1.1'
+         || $Request->URI === Server::$health
+         || strncmp($Request->URI, Challenge::PREFIX, 28) === 0
+      ) {
+         return null;
+      }
+
+      // ! Request header fields are lowercase-normalized by the decoder.
+      $fields = $Request->headers;
+      if (isSet($fields['cookie']) || isSet($fields['authorization'])) {
+         return null;
+      }
+
+      return Cache::fetch(Cache::compose($Request, Language::$roots !== []));
+   }
+
    /**
     * @param int<0, max>|null $length
     * @param-out int<0, max>|null $length
@@ -67,41 +92,6 @@ class Encoder_ extends Encoders
             : Language::$source;
       }
 
-      // ?: Route response cache — serve stored wire bytes before routing,
-      //   middleware, handler and serialization (empty-store check keeps the
-      //   cost at one static array read for servers that never opt in).
-      //   Guards mirror stash(): plain keep-alive HTTP/1.1 GET, no
-      //   credentials, language-vary segment when catalogs are registered.
-      //   Only HTTP/1.1 reads entries — stash() only stores HTTP/1.1 wire,
-      //   and an HTTP/1.0 keep-alive hit would replay another protocol's
-      //   bytes (including interim 103 heads hint() promises it never
-      //   sends to HTTP/1.0). The built-in health path never reads the
-      //   cache — the probe guard must win over any stale application-
-      //   cached entry on the same path. The reserved ACME HTTP-01
-      //   namespace is excluded for the same reason: a stale/preloaded
-      //   entry must never shadow the token/404 semantics of the built-in
-      //   responder below.
-      if (
-         Cache::$entries !== [] && $Request->closeConnection === false
-         && $Request->protocol === 'HTTP/1.1'
-         && $Request->URI !== Server::$health
-         && strncmp($Request->URI, Challenge::PREFIX, 28) !== 0
-      ) {
-         $wire = Cache::fetch(Cache::compose($Request, Language::$roots !== []));
-
-         if ($wire !== null) {
-            // ! Request header fields are lowercase-normalized by the decoder
-            $fields = $Request->headers;
-
-            if (isSet($fields['cookie']) === false && isSet($fields['authorization']) === false) {
-               $length = strlen($wire);
-
-               // :
-               return $wire;
-            }
-         }
-      }
-
       // @ Events — request fully decoded (guarded: zero-alloc when no listeners)
       // ! Direct Listeners read instead of check(): the call frame +
       //   Event&UnitEnum intersection-type check cost ~9% of worker CPU
@@ -115,6 +105,8 @@ class Encoder_ extends Encoders
 
       // @ Reset Response state and bind per-request context.
       $Response->reset($Packages, $Request);
+      $cacheWire = null;
+      $CachedResponse = null;
 
       // @
       try {
@@ -139,12 +131,6 @@ class Encoder_ extends Encoders
          ) {
             Challenge::respond($Request, $Response);
          }
-         // @ Fast path: resolve from route cache (bypass Generator entirely)
-         else if (($Result = $Router->cached ? $Router->resolve() : null) instanceof Response) {
-            if ($Result !== $Response) {
-               $Response = $Result;
-            }
-         }
          else {
             // @ Defensive: Middlewares pipeline may not have been initialized yet
             //   (e.g. when trailing bytes from a previous test connection arrive
@@ -163,7 +149,29 @@ class Encoder_ extends Encoders
             }
             else {
                $Result = SAPI::$Middlewares->process($Request, $Response,
-                  function (object $Request, object $Res) use ($Router): mixed {
+                  function (object $Request, object $Res) use (
+                     $Router,
+                     &$cacheWire,
+                     &$CachedResponse,
+                  ): mixed {
+                     // ?: Cache replay is inside the global admission pipeline.
+                     //   Route/group middleware routes never create entries, so
+                     //   every security middleware decides before this lookup.
+                     /** @var Request $Request */
+                     $cacheWire = self::replay($Request);
+                     if ($cacheWire !== null) {
+                        $CachedResponse = $Res;
+                        return $Res;
+                     }
+
+                     // @ Warm-router fast path, still inside global middleware.
+                     if ($Router->cached) {
+                        $Result = $Router->resolve();
+                        if ($Result instanceof Response) {
+                           return $Result;
+                        }
+                     }
+
                      $Result = (SAPI::$Handler)($Request, $Res, $Router);
 
                      // ?: Handler returned a Response directly — short-circuit
@@ -191,6 +199,8 @@ class Encoder_ extends Encoders
          }
       }
       catch (Throwable $Throwable) {
+         $cacheWire = null;
+         $CachedResponse = null;
          // ! Break the static-Response alias (see the 503 path above)
          $Errored = Catcher::respond($Request, Server::$Response, $Throwable);
          unset($Response);
@@ -226,6 +236,19 @@ class Encoder_ extends Encoders
 
          // @ Events — request handled, response ready (guarded: zero-alloc when no listeners)
          isSet($Emitter->Listeners[$handled]) && $Emitter->emit(RequestEvents::Handled, $Request, $Response);
+
+         // ?: Replay only when the admitted Response remains the active 200.
+         //   A post-middleware/event denial or replacement must serialize its
+         //   own response instead of reviving the cached success wire.
+         if (
+            $cacheWire !== null
+            && $CachedResponse === $Response
+            && $Response->code === 200
+            && $Request->closeConnection === false
+         ) {
+            $length = strlen($cacheWire);
+            return $cacheWire;
+         }
 
          // @ Encode HTTP Response
          $buffer = $Response->encode($Packages, $length);

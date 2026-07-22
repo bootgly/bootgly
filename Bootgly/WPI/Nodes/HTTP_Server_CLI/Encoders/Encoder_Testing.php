@@ -29,12 +29,37 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders\Catcher;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders\Challenge;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders\Check;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Events as RequestEvents;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router;
 
 
 class Encoder_Testing extends Encoders
 {
+   /**
+    * Fetch cacheable HTTP/1.1 wire after admission middleware has run.
+    */
+   private static function replay (Request $Request): null|string
+   {
+      if (
+         Cache::$entries === []
+         || $Request->closeConnection
+         || $Request->protocol !== 'HTTP/1.1'
+         || $Request->URI === Server::$health
+         || strncmp($Request->URI, Challenge::PREFIX, 28) === 0
+      ) {
+         return null;
+      }
+
+      // ! Request header fields are lowercase-normalized by the decoder.
+      $fields = $Request->headers;
+      if (isSet($fields['cookie']) || isSet($fields['authorization'])) {
+         return null;
+      }
+
+      return Cache::fetch(Cache::compose($Request, Language::$roots !== []));
+   }
+
    /**
     * @param int<0,max>|null $length
     * @param-out int<0,max>|null $length
@@ -56,33 +81,6 @@ class Encoder_Testing extends Encoders
          Language::$locale = isSet($Request->headers['accept-language'])
             ? Language::negotiate($Request->languages, $Request->exclusions)
             : Language::$source;
-      }
-
-      // ?: Route response cache — serve stored wire bytes before routing,
-      //   middleware, handler and serialization (mirrors Encoder_ so E2E
-      //   specs exercise the same hit path as production). Only HTTP/1.1
-      //   reads entries and the built-in health path never reads the cache;
-      //   the reserved ACME HTTP-01 namespace never reads it either
-      //   (mirrors Encoder_).
-      if (
-         Cache::$entries !== [] && $Request->closeConnection === false
-         && $Request->protocol === 'HTTP/1.1'
-         && $Request->URI !== Server::$health
-         && strncmp($Request->URI, Challenge::PREFIX, 28) !== 0
-      ) {
-         $wire = Cache::fetch(Cache::compose($Request, Language::$roots !== []));
-
-         if ($wire !== null) {
-            // ! Request header fields are lowercase-normalized by the decoder
-            $fields = $Request->headers;
-
-            if (isSet($fields['cookie']) === false && isSet($fields['authorization']) === false) {
-               $length = strlen($wire);
-
-               // :
-               return $wire;
-            }
-         }
       }
 
       // @ Events — request fully decoded (guarded: zero-alloc when no listeners)
@@ -107,6 +105,8 @@ class Encoder_Testing extends Encoders
 
       // ! Reset Response state and bind per-request context.
       $Response->reset($Packages, $Request);
+      $cacheWire = null;
+      $CachedResponse = null;
 
       // ! Response
       // @
@@ -130,7 +130,20 @@ class Encoder_Testing extends Encoders
          }
          else {
             $Result = SAPI::$Middlewares->process($Request, $Response,
-               function (object $Request, object $Res) use ($Router): mixed {
+               function (object $Request, object $Res) use (
+                  $Router,
+                  &$cacheWire,
+                  &$CachedResponse,
+               ): mixed {
+                  // ?: Mirror production: every global middleware runs before
+                  //   replay; route/group middleware routes never seed entries.
+                  /** @var Request $Request */
+                  $cacheWire = self::replay($Request);
+                  if ($cacheWire !== null) {
+                     $CachedResponse = $Res;
+                     return $Res;
+                  }
+
                   $Result = (SAPI::$Handler)($Request, $Res, $Router);
 
                   // ?: Handler returned a Response directly — short-circuit
@@ -157,6 +170,8 @@ class Encoder_Testing extends Encoders
          }
       }
       catch (Throwable $Throwable) {
+         $cacheWire = null;
+         $CachedResponse = null;
          // ! Break the static-Response alias: the Catcher builds a fresh,
          //   resource-less Response for THIS request only — writing it
          //   through the reference would strip the persistent test worker's
@@ -198,6 +213,17 @@ class Encoder_Testing extends Encoders
 
          // @ Events — request handled, response ready (guarded: zero-alloc when no listeners)
          $Emitter->check(RequestEvents::Handled) && $Emitter->emit(RequestEvents::Handled, $Request, $Response);
+
+         // ?: A post-middleware/event denial or replacement wins over replay.
+         if (
+            $cacheWire !== null
+            && $CachedResponse === $Response
+            && $Response->code === 200
+            && $Request->closeConnection === false
+         ) {
+            $length = strlen($cacheWire);
+            return $cacheWire;
+         }
 
          // @ Encode HTTP Response
          $buffer = $Response->encode($Packages, $length);

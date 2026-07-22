@@ -60,6 +60,7 @@ return new Specification(
          };
 
          $Decoder = new Decoder_Chunked;
+         $Decoder->Request = $Request;
          $Decoder->init();
          $Package->Decoder = $Decoder;
 
@@ -90,6 +91,7 @@ return new Specification(
             }
          };
          $MalformedDecoder = new Decoder_Chunked;
+         $MalformedDecoder->Request = $MalformedRequest;
          $MalformedDecoder->init();
          $MalformedPackage->Decoder = $MalformedDecoder;
 
@@ -117,6 +119,7 @@ return new Specification(
             }
          };
          $WhitespaceDecoder = new Decoder_Chunked;
+         $WhitespaceDecoder->Request = $WhitespaceRequest;
          $WhitespaceDecoder->init();
          $WhitespacePackage->Decoder = $WhitespaceDecoder;
 
@@ -151,6 +154,7 @@ return new Specification(
                }
             };
             $SplitDecoder = new Decoder_Chunked;
+            $SplitDecoder->Request = $SplitRequest;
             $SplitDecoder->init();
             $SplitPackage->Decoder = $SplitDecoder;
 

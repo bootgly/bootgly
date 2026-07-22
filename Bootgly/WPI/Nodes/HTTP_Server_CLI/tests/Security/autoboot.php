@@ -309,5 +309,11 @@ return new Suite(
       // A queued SO_LINGER reset must be rejected without allowing a partial
       // Connection to throw from the accept callback and terminate the worker.
       '53.01-abortive_tcp_close_worker_crash',
+      // # Route response cache (custom-header authentication bypass — audit C2)
+      // A cache entry primed by a valid custom credential must never replay
+      // its protected response before route authentication middleware runs.
+      '54.01-route_cache_custom_header_auth_bypass',
+      // Global admission middleware must likewise run before cache lookup.
+      '54.02-route_cache_global_middleware_admission',
    ],
 );

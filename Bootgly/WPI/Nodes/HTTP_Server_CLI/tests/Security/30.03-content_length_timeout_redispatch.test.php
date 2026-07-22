@@ -67,6 +67,7 @@ return new Specification(
          };
 
          $Waiting = new Decoder_Waiting;
+         $Waiting->Request = $Request;
          $Waiting->init();
 
          $Reflection = new ReflectionClass($Waiting);

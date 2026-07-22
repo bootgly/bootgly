@@ -122,6 +122,7 @@ return new Specification(
          $Request->Body->length = $probe['multipart_bytes'];
 
          $Decoder = new Decoder_Downloading;
+         $Decoder->Request = $Request;
          $Decoder->init($wireBoundary);
          $Package->Decoder = $Decoder;
          $encodedStorage = property_exists(Decoder_Downloading::class, 'postEncoded')

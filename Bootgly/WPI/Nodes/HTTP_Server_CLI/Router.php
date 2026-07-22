@@ -551,7 +551,10 @@ class Router
 
       // @ Route response cache opt-in: stamp the TTL on the Response before
       //   the handler runs — the encoder (or defer()) consumes it to store the
-      //   built wire bytes. Only cache-enabled routes pay the wrapper frame.
+      //   built wire bytes. Cache replay skips the handler, so any route/group
+      //   middleware makes the route ineligible: those admission and response
+      //   policies must execute on every request. Middleware-free routes keep
+      //   the wrapper-only fast path.
       if ($cacheConfig !== null) {
          // ? Fail loud at registration time — runtime pays nothing for it
          foreach ($cacheConfig as $option => $_) {
@@ -570,14 +573,16 @@ class Router
             );
          }
 
-         $Inner = $boundHandler;
-         $boundHandler = static function (object $Request, object $Response) use ($Inner, $cacheTTL): mixed {
-            if ($Response instanceof Response) {
-               $Response->cache = $cacheTTL;
-            }
+         if ($MergedMiddlewares === []) {
+            $Inner = $boundHandler;
+            $boundHandler = static function (object $Request, object $Response) use ($Inner, $cacheTTL): mixed {
+               if ($Response instanceof Response) {
+                  $Response->cache = $cacheTTL;
+               }
 
-            return $Inner($Request, $Response);
-         };
+               return $Inner($Request, $Response);
+            };
+         }
       }
 
       // @ Catch-all route — store dispatcher closure directly (O(1) callable)

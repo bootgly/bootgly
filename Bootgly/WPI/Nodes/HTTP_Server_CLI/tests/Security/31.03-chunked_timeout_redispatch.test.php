@@ -65,6 +65,7 @@ return new Specification(
          };
 
          $Decoder = new Decoder_Chunked;
+         $Decoder->Request = $Request;
          $Decoder->init();
          $Package->Decoder = $Decoder;
 

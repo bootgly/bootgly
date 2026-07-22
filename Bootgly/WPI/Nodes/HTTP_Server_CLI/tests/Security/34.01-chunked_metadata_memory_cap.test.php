@@ -86,6 +86,7 @@ return new Specification(
             }
          };
          $ControlDecoder = new Decoder_Chunked;
+         $ControlDecoder->Request = $ControlRequest;
          $ControlDecoder->init();
          $ControlPackage->Decoder = $ControlDecoder;
 
@@ -114,6 +115,7 @@ return new Specification(
             }
          };
          $TrailerDecoder = new Decoder_Chunked;
+         $TrailerDecoder->Request = $TrailerRequest;
          $TrailerDecoder->init();
          $TrailerPackage->Decoder = $TrailerDecoder;
 
@@ -143,6 +145,7 @@ return new Specification(
             }
          };
          $BoundaryDecoder = new Decoder_Chunked;
+         $BoundaryDecoder->Request = $BoundaryRequest;
          $BoundaryDecoder->init();
          $BoundaryPackage->Decoder = $BoundaryDecoder;
 
@@ -185,6 +188,7 @@ return new Specification(
             }
          };
          $SplitDecoder = new Decoder_Chunked;
+         $SplitDecoder->Request = $SplitRequest;
          $SplitDecoder->init();
          $SplitPackage->Decoder = $SplitDecoder;
 
@@ -219,6 +223,7 @@ return new Specification(
             }
          };
          $TerminatedDecoder = new Decoder_Chunked;
+         $TerminatedDecoder->Request = $TerminatedRequest;
          $TerminatedDecoder->init();
          $TerminatedPackage->Decoder = $TerminatedDecoder;
 
@@ -251,6 +256,7 @@ return new Specification(
             }
          };
          $AttackDecoder = new Decoder_Chunked;
+         $AttackDecoder->Request = $AttackRequest;
          $AttackDecoder->init();
          $AttackPackage->Decoder = $AttackDecoder;
 
