@@ -202,8 +202,15 @@ class Decoder_ extends Decoders
       //   cycle read the worker-global cell — on every Complete, including
       //   Complete-with-waiting-body (the encoder reads `Body->waiting`
       //   from it to defer the response). Never on Rejected (no encoder
-      //   runs) nor Incomplete.
-      if ($state === States::Complete) {
+      //   runs) nor Incomplete — and never when `decode()` switched
+      //   protocols: the h2c preface delegates into `Decoder_HTTP2`, which
+      //   publishes its own per-stream Request; overwriting it with the
+      //   preface-detector instance (stream 0) would make the encoder
+      //   serialize HTTP/1 bytes onto an HTTP/2 connection. The identity
+      //   check holds on the body-decoder installs (the slot still holds
+      //   this Request) and fails exactly on the switch (the slot holds the
+      //   HTTP/2 decoder).
+      if ($state === States::Complete && $Package->decoded === $Request) {
          Server::$Request = $Request;
       }
 
