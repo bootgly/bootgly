@@ -402,9 +402,23 @@ class Test
 
          $this->postest();
 
+         // ? A crashed Case is a failed test, not a runner abort: rethrowing
+         //   would reach the global exception handler, which exits the
+         //   process silently under suppressed display — no report, no
+         //   AI_AGENT JSON, exit 1 (observed on single-case runs). The
+         //   fixture was already disposed by `postest()` above.
          $retest = null;
 
-         throw $Throwable;
+         $origin = $Throwable::class;
+         $message = "{$origin}: {$Throwable->getMessage()} in {$Throwable->getFile()}:{$Throwable->getLine()}";
+         $this->AssertionError = new AssertionError(message: $message);
+
+         $this->descriptions[] = Assertion::$description;
+         $this->results[] = false;
+
+         if ($this->Suite->autoReport) {
+            $this->fail($message);
+         }
       }
       finally {
          if ($retest) {

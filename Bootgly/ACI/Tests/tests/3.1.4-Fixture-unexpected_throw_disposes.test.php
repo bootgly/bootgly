@@ -45,9 +45,12 @@ return new Specification(
          $message = $Exception->getMessage();
       }
 
-      yield (new Assertion(description: 'unexpected Throwable is rethrown'))
-         ->expect($message)
-         ->to->be('unexpected boom')
+      // ! Containment contract: a crashed Case must be recorded as a failed
+      //   test instead of propagating — a rethrow reaches the global
+      //   exception handler and kills the runner without a report.
+      yield (new Assertion(description: 'unexpected Throwable is contained as a test failure'))
+         ->expect([$message, $Test->passed])
+         ->to->be([null, false])
          ->assert();
 
       yield (new Assertion(description: 'fixture teardown ran once'))
