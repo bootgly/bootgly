@@ -140,8 +140,28 @@ class Decoder_Downloading extends Decoders implements Disconnecting
     */
    public function feed (string $data): void
    {
-      $this->tailBuffer .= $data;
-      $this->downloaded += strlen($data);
+      $length = strlen($data);
+      $buffer = $this->tailBuffer . $data;
+      $boundaryLen = strlen($this->boundary);
+      $position = strpos($buffer, $this->boundary);
+
+      if ($position === false) {
+         // ! The initial transport event follows the same bounded-preamble
+         //   rule as continuation reads. Preserve CRLF plus any boundary
+         //   prefix that may complete in the next event.
+         $tailLength = $boundaryLen + 2;
+         $this->tailBuffer = strlen($buffer) > $tailLength
+            ? substr($buffer, -$tailLength)
+            : $buffer;
+      }
+      else {
+         // @ A boundary is already present: discard only its preamble. Bytes
+         //   after the match may contain part headers/body and must be parsed
+         //   by the normal state machine on the next read.
+         $this->tailBuffer = substr($buffer, $position);
+      }
+
+      $this->downloaded += $length;
       $this->read = $this->downloaded;
    }
 
@@ -256,19 +276,25 @@ class Decoder_Downloading extends Decoders implements Disconnecting
             case self::STATE_BOUNDARY_START:
                $boundary = $this->boundary;
                $boundaryLen = strlen($boundary);
+               $dataLength = strlen($data);
 
                // @ Search for boundary in data
                $pos = strpos($data, $boundary);
                if ($pos === false) {
-                  // @ Not enough data, save as tail buffer
-                  $this->tailBuffer = $data;
+                  // ! Discard the already-scanned multipart preamble. Only a
+                  //   boundary-sized suffix can participate in a boundary
+                  //   split across the next transport read.
+                  $tailLength = $boundaryLen + 2;
+                  $this->tailBuffer = $dataLength > $tailLength
+                     ? substr($data, -$tailLength)
+                     : $data;
                   $data = null;
                   break;
                }
 
                // @ Check if this is the final boundary (--boundary--)
                $afterBoundary = $pos + $boundaryLen;
-               if ($afterBoundary + 2 <= strlen($data)) {
+               if ($afterBoundary + 2 <= $dataLength) {
                   if (substr($data, $afterBoundary, 2) === '--') {
                      // @ Final boundary: retain ownership until every byte
                      //   declared by Content-Length has arrived. A peer may
@@ -281,8 +307,11 @@ class Decoder_Downloading extends Decoders implements Disconnecting
 
                // @ Skip boundary + \r\n
                $nextPos = $afterBoundary + 2; // +2 for \r\n
-               if ($nextPos > strlen($data)) {
-                  $this->tailBuffer = $data;
+               if ($nextPos > $dataLength) {
+                  // @ The boundary matched, but its two-byte delimiter is
+                  //   split. Retain from the match, never the discarded
+                  //   preamble that preceded it.
+                  $this->tailBuffer = substr($data, $pos);
                   $data = null;
                   break;
                }
@@ -476,7 +505,9 @@ class Decoder_Downloading extends Decoders implements Disconnecting
                   // @ Skip \r\n after boundary
                   $nextPos = $afterBoundary + 2; // +2 for \r\n
                   if ($nextPos > strlen($data)) {
-                     $this->tailBuffer = substr($data, $afterBoundary);
+                     // @ Re-enter boundary parsing with the matched token
+                     //   intact; only its `--`/CRLF suffix is fragmented.
+                     $this->tailBuffer = substr($data, $pos);
                      $this->state = self::STATE_BOUNDARY_START;
                      $data = null;
                      break;
@@ -550,7 +581,9 @@ class Decoder_Downloading extends Decoders implements Disconnecting
                   // @ Skip \r\n after boundary
                   $nextPos = $afterBoundary + 2;
                   if ($nextPos > strlen($data)) {
-                     $this->tailBuffer = substr($data, $afterBoundary);
+                     // @ Re-enter boundary parsing with the matched token
+                     //   intact; only its `--`/CRLF suffix is fragmented.
+                     $this->tailBuffer = substr($data, $pos);
                      $this->state = self::STATE_BOUNDARY_START;
                      $data = null;
                      break;
@@ -602,6 +635,16 @@ class Decoder_Downloading extends Decoders implements Disconnecting
 
       // @ Check if all data received
       if ($Body->length !== null && $this->downloaded >= $Body->length) {
+         // ! A Content-Length-complete multipart body is malformed until its
+         //   terminal boundary has been parsed. Never route a missing or
+         //   truncated boundary as an empty successful request.
+         if ($this->parsed === false) {
+            $reject("HTTP/1.1 400 Bad Request\r\n\r\n");
+            $Package->Decoder = null;
+            $Package->consumed = 0;
+            return States::Rejected;
+         }
+
          $this->finish($Package);
          $Body->waiting = false;
          $Body->streaming = true;

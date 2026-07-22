@@ -319,5 +319,9 @@ return new Suite(
       // An authorized deferred handler must retain its own route/request
       // context while a denied dynamic request interleaves on the worker.
       '55.01-deferred_route_context_authorization_confusion',
+      // # Multipart initial boundary (linear preamble retention — audit C4)
+      // Missing or late first boundaries must not retain the complete
+      // unauthenticated preamble while split valid boundaries remain accepted.
+      '56.01-multipart_initial_boundary_preamble_retention',
    ],
 );
