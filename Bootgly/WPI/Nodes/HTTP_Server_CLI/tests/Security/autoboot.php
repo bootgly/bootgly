@@ -315,5 +315,9 @@ return new Suite(
       '54.01-route_cache_custom_header_auth_bypass',
       // Global admission middleware must likewise run before cache lookup.
       '54.02-route_cache_global_middleware_admission',
+      // # Deferred routing context (cross-request authorization confusion — audit C3)
+      // An authorized deferred handler must retain its own route/request
+      // context while a denied dynamic request interleaves on the worker.
+      '55.01-deferred_route_context_authorization_confusion',
    ],
 );

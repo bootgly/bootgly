@@ -42,6 +42,8 @@ use Closure;
 use Error;
 use Fiber;
 use InvalidArgumentException;
+use LogicException;
+use ReflectionFunction;
 use SplObjectStorage;
 use stdClass;
 use Throwable;
@@ -50,6 +52,7 @@ use const Bootgly\WPI;
 use Bootgly\ABI\Code\__String\Path;
 use Bootgly\ABI\Data\Language;
 use Bootgly\ABI\IO\FS\File;
+use Bootgly\ACI\Events\Contextualizing;
 use Bootgly\ACI\Events\Readiness;
 use Bootgly\ACI\Events\Scheduler;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI;
@@ -76,6 +79,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\Pre as PreResource;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\SSE as SSEResource;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\View as ViewResource;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Resources\XML as XMLResource;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router\Route;
 
 
 /**
@@ -97,6 +101,11 @@ class Response extends Server\Response
 
    private null|Packages $Package;
    private null|Request $Request;
+   private null|Router $Router;
+   private null|Route $Route;
+   private bool $capturing;
+   /** @var array<int,array{Request:Request,Response:self,Router:Router,Route:Route}> */
+   private array $Contexts;
 
    // * Config
    // ...
@@ -172,6 +181,10 @@ class Response extends Server\Response
       $this->Package = null;
 
       $this->Request = null;
+      $this->Router = null;
+      $this->Route = null;
+      $this->capturing = false;
+      $this->Contexts = [];
 
       // * Config
       // ...
@@ -229,12 +242,19 @@ class Response extends Server\Response
       $this->Header = clone $this->Header;
       $this->Body = clone $this->Body;
 
-      if ($this->Request !== null) {
+      if ($this->capturing) {
+         if ($this->Request !== null) {
+            $this->Request = $this->Request->capture();
+         }
+         $this->capturing = false;
+      }
+      else if ($this->Request !== null) {
          $this->Request = clone $this->Request;
       }
 
       // # Deferred
       $this->Fibers = new SplObjectStorage;
+      $this->Contexts = [];
 
       // / Resources
       $this->Resources = $this->Resources->fork(
@@ -1140,25 +1160,114 @@ class Response extends Server\Response
       }
    }
 
+   /**
+    * Install this deferred response's admitted HTTP context for one Fiber
+    * execution segment. The scheduler pairs every call with unbind().
+    */
+   private function bind (): void
+   {
+      $Request = $this->Request;
+      $Router = $this->Router;
+      $Route = $this->Route;
+
+      if ($Request === null || $Router === null || $Route === null) {
+         return;
+      }
+
+      $WPI = WPI;
+      $this->Contexts[] = [
+         'Request' => $WPI->Request,
+         'Response' => $WPI->Response,
+         'Router' => $WPI->Router,
+         'Route' => $Router->Route,
+      ];
+
+      $WPI->Request = $Request;
+      $WPI->Response = $this;
+      $WPI->Router = $Router;
+      $Router->Route = $Route;
+   }
+
+   /**
+    * Restore the ambient HTTP context that preceded the current Fiber
+    * execution segment.
+    */
+   private function unbind (): void
+   {
+      $Context = array_pop($this->Contexts);
+
+      if ($Context === null) {
+         return;
+      }
+
+      $Router = $this->Router;
+      if ($Router !== null) {
+         $Router->Route = $Context['Route'];
+      }
+
+      $WPI = WPI;
+      $WPI->Router = $Context['Router'];
+      $WPI->Response = $Context['Response'];
+      $WPI->Request = $Context['Request'];
+   }
+
    public function defer (Closure $work): self
    {
-      // !
-      $this->deferred = true;
-
       $Package = $this->Package;
 
       // ?
       if ($Package === null) {
+         $this->deferred = true;
          return $this;
       }
 
-      $Response = clone $this;
+      // ! Validate the capability before cloning or executing user work. A
+      //   late failure could otherwise orphan a suspended Fiber after its
+      //   callback had already produced side effects.
+      $Event = TCP_Server_CLI::$Event;
+      if ($Event instanceof Contextualizing === false) {
+         throw new LogicException(
+            'HTTP deferred execution requires a context-aware scheduler.'
+         );
+      }
+
+      $this->deferred = true;
+
+      $Request = $this->Request;
+      $this->capturing = true;
+      try {
+         // ! The clone captures the admitted Request instead of following the
+         //   normal cache-template scrub. This avoids constructing and then
+         //   discarding an intermediate scrubbed Request clone.
+         $Response = clone $this;
+      }
+      finally {
+         $this->capturing = false;
+      }
+
+      // ! Snapshot the ambient Router route for resources such as View, and
+      //   independently snapshot a Route-bound work Closure. The two snapshots
+      //   are shared only when they originate from the same Route object.
+      $WPI = WPI;
+      $Router = $WPI->Router;
+      $RouterRoute = $Router->Route;
+      $Route = clone $RouterRoute;
+      $Response->Router = $Router;
+      $Response->Route = $Route;
+
+      $Reflection = new ReflectionFunction($work);
+      $BoundRoute = $Reflection->getClosureThis();
+      if ($BoundRoute instanceof Route) {
+         $WorkRoute = $BoundRoute === $RouterRoute
+            ? $Route
+            : clone $BoundRoute;
+         $work = $work->bindTo($WorkRoute, $WorkRoute) ?? $work;
+      }
 
       // @ Request::__clone() intentionally scrubs upload metadata for normal
       //   request isolation. A deferred response is different: move the sole
       //   ownership of completed temp files from the live Request into this
       //   private clone so its Fiber can reclaim them after work finishes.
-      $Request = $this->Request;
       $DeferredRequest = $Response->Request;
       if ($Request !== null && $DeferredRequest !== null && $Request->hasFiles) {
          $DeferredRequest->files = $Request->files;
@@ -1177,21 +1286,41 @@ class Response extends Server\Response
 
          // @ Start Fiber with its first job (resolve() also covers nested
          //   defers — the child job inherits the parent Fiber's locale)
-         $suspendedValue = $Fiber->start([$work, $Response, $Package, Language::resolve()]);
+         $Response->bind();
+         try {
+            $suspendedValue = $Fiber->start([$work, $Response, $Package, Language::resolve()]);
+         }
+         finally {
+            $Response->unbind();
+         }
       }
       else {
          // @ Register Fiber for wait() guard (must be set before resume)
          $Response->Fibers->attach($Fiber);
 
          // @ Resume the parked job loop with the new job
-         $suspendedValue = $Fiber->resume([$work, $Response, $Package, Language::resolve()]);
+         $Response->bind();
+         try {
+            $suspendedValue = $Fiber->resume([$work, $Response, $Package, Language::resolve()]);
+         }
+         finally {
+            $Response->unbind();
+         }
       }
 
       // @ Schedule suspended Fiber in event loop — forwards the suspended
       //   value for I/O-aware routing; DETACH (parked) and terminated
       //   Fibers are dropped by the scheduler
-      if ($Fiber->isSuspended()) {
-         TCP_Server_CLI::$Event->schedule($Fiber, $suspendedValue);
+      if ($Fiber->isSuspended() && $suspendedValue !== Scheduler::DETACH) {
+         $Enter = static function () use ($Response): void {
+            $Response->bind();
+         };
+         $Leave = static function () use ($Response): void {
+            $Response->unbind();
+         };
+
+         $Event->bind($Fiber, $Enter, $Leave);
+         $Event->schedule($Fiber, $suspendedValue);
       }
 
       return $this;

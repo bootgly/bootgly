@@ -19,6 +19,7 @@ use function max;
 use function microtime;
 use function pcntl_signal_dispatch;
 use function sleep;
+use function spl_object_id;
 use function stream_select;
 use function usleep;
 use Closure;
@@ -26,13 +27,14 @@ use Fiber;
 use Throwable;
 
 use Bootgly\ACI\Events\Loops;
+use Bootgly\ACI\Events\Contextualizing;
 use Bootgly\ACI\Events\Readiness;
 use Bootgly\ACI\Events\Scheduler;
 use Bootgly\WPI\Connections;
 use Bootgly\WPI\Events;
 
 
-class Select implements Events, Loops, Scheduler
+class Select implements Events, Loops, Scheduler, Contextualizing
 {
    public Connections $Connections;
 
@@ -64,6 +66,8 @@ class Select implements Events, Loops, Scheduler
    // Tick-based (resumed every iteration)
    /** @var array<int,Fiber<mixed,mixed,mixed,mixed>> */
    private array $Fibers = [];
+   /** @var array<int,array{Enter:Closure,Leave:Closure}> */
+   private array $Bindings = [];
    // I/O-bound (resumed when stream_select signals readiness)
    /** @var array<int,array<int,Fiber<mixed,mixed,mixed,mixed>>> */
    private array $awaitingReads = [];
@@ -283,12 +287,15 @@ class Select implements Events, Loops, Scheduler
          if ($this->Fibers) {
             foreach ($this->Fibers as $id => $Fiber) {
                if ($Fiber->isSuspended()) {
-                  $value = $Fiber->resume();
+                  $value = $this->Bindings === []
+                     ? $Fiber->resume()
+                     : $this->advance($Fiber);
 
                   // ? Pooled Fiber parked itself (job finished) — drop it
                   //   from the tick queue, never resume it without a job
                   if ($value === self::DETACH) {
                      unset($this->Fibers[$id]);
+                     unset($this->Bindings[spl_object_id($Fiber)]);
 
                      continue;
                   }
@@ -447,12 +454,8 @@ class Select implements Events, Loops, Scheduler
    public function schedule (Fiber $Fiber, mixed $value = null, int $flag = self::SCHEDULE_READ): bool
    {
       // ?
-      if ($Fiber->isTerminated()) {
-         return false;
-      }
-
-      // ? Pooled Fiber parked itself (job finished) — nothing to schedule
-      if ($value === self::DETACH) {
+      if ($Fiber->isTerminated() || $value === self::DETACH) {
+         unset($this->Bindings[spl_object_id($Fiber)]);
          return false;
       }
 
@@ -466,6 +469,19 @@ class Select implements Events, Loops, Scheduler
 
       // :
       return true;
+   }
+
+   /**
+    * Bind callbacks around every scheduled execution segment of a Fiber.
+    *
+    * @param Fiber<mixed,mixed,mixed,mixed> $Fiber
+    */
+   public function bind (Fiber $Fiber, Closure $Enter, Closure $Leave): void
+   {
+      $this->Bindings[spl_object_id($Fiber)] = [
+         'Enter' => $Enter,
+         'Leave' => $Leave,
+      ];
    }
 
    /**
@@ -715,7 +731,9 @@ class Select implements Events, Loops, Scheduler
          return;
       }
 
-      $value = $Fiber->resume();
+      $value = $this->Bindings === []
+         ? $Fiber->resume()
+         : $this->advance($Fiber);
 
       if ($Fiber->isTerminated()) {
          return;
@@ -723,11 +741,51 @@ class Select implements Events, Loops, Scheduler
 
       // ? Pooled Fiber parked itself (job finished) — drop, do not requeue
       if ($value === self::DETACH) {
+         unset($this->Bindings[spl_object_id($Fiber)]);
          return;
       }
 
       if ($this->queue($Fiber, $value) === false) {
          $this->Fibers[] = $Fiber;
+      }
+   }
+
+   /**
+    * Resume one Fiber within its optional execution-segment binding.
+    *
+    * @param Fiber<mixed,mixed,mixed,mixed> $Fiber
+    */
+   private function advance (Fiber $Fiber): mixed
+   {
+      $FiberID = spl_object_id($Fiber);
+      $Binding = $this->Bindings[$FiberID] ?? null;
+
+      if ($Binding === null) {
+         return $Fiber->resume();
+      }
+
+      $failed = false;
+      try {
+         ($Binding['Enter'])();
+         return $Fiber->resume();
+      }
+      catch (Throwable $Throwable) {
+         $failed = true;
+         throw $Throwable;
+      }
+      finally {
+         try {
+            ($Binding['Leave'])();
+         }
+         catch (Throwable $Throwable) {
+            $failed = true;
+            throw $Throwable;
+         }
+         finally {
+            if ($failed || $Fiber->isTerminated()) {
+               unset($this->Bindings[$FiberID]);
+            }
+         }
       }
    }
 
@@ -755,6 +813,7 @@ class Select implements Events, Loops, Scheduler
       $this->awaitingReadDeadlines = [];
       $this->awaitingWriteDeadlines = [];
       $this->Fibers = [];
+      $this->Bindings = [];
       $this->Timers = [];
       $this->MonotonicTimers = [];
 

@@ -47,4 +47,11 @@ class Route
       // * Data
       $this->path = '';
    }
+
+   public function __clone ()
+   {
+      // ! Route params are request state. A shallow clone would retain the
+      //   worker Router's mutable Params object and preserve the C3 alias.
+      $this->Params = clone $this->Params;
+   }
 }

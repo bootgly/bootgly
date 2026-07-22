@@ -720,6 +720,41 @@ class Request
       unset($this->attributes[$name]);
    }
 
+   /**
+    * Capture this admitted request for deferred execution.
+    *
+    * Normal cloning intentionally scrubs per-request state because it is the
+    * Decoder cache-template path. A deferred snapshot instead preserves the
+    * authentication/session/application state that was admitted while still
+    * deep-cloning the mutable Header and Body subobjects via __clone().
+    */
+   public function capture (): self
+   {
+      $Captured = clone $this;
+
+      $Captured->_fields = $this->_fields;
+      $Captured->_files = $this->_files;
+      $Captured->hasFiles = $this->hasFiles;
+      $Captured->authUsername = $this->authUsername;
+      $Captured->authPassword = $this->authPassword;
+      $Captured->authParsed = $this->authParsed;
+      $Captured->authCredentials = $this->authCredentials;
+      $Captured->authToken = $this->authToken;
+      $Captured->authTokenParsed = $this->authTokenParsed;
+      $Captured->identity = $this->identity;
+      $Captured->claims = $this->claims;
+      $Captured->tokenHeaders = $this->tokenHeaders;
+      $Captured->exclusions = $this->exclusions;
+      $Captured->attributes = $this->attributes;
+      $Captured->stream = $this->stream;
+      if ($this->sessioned) {
+         $Captured->Session = $this->Session;
+         $Captured->sessioned = true;
+      }
+
+      return $Captured;
+   }
+
    public function __clone ()
    {
       // @ Per-request data: never bleed across cached connections.
