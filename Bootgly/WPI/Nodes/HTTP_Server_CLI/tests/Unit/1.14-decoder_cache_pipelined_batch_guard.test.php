@@ -88,6 +88,16 @@ return new Specification(
             ->to->be([States::Complete, $length, States::Complete, $length])
             ->assert();
 
+         // ? The per-connection L0 mirrors the batch guard: a partially
+         //   consumed read (consumed < size) must never build the
+         //   connection template either — a batch hit would drop its tail.
+         yield new Assertion(
+            description: 'A pipelined batch never builds the connection template',
+         )
+            ->expect($Package->Template === null)
+            ->to->be(true)
+            ->assert();
+
          // @ Control: an exactly-one-request read still stores its template
          //   and later byte-identical reads hit it.
          $Package->changed = true;

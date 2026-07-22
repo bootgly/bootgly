@@ -65,6 +65,23 @@ abstract class Packages
     * byte-keyed caches — but only the transport writes it.
     */
    public protected(set) bool $carried = false;
+   // # L0 — per-connection consecutive-repeat template
+   /**
+    * The exact input bytes the entry decoder last keyed on this connection
+    * (bounded at 2,048 bytes — empty when the event was larger). Decoder-
+    * owned, like `$decoded`; the endpoint layer does not name the decoded
+    * type.
+    */
+   public string $known = '';
+   /**
+    * The decoded template for `$known` — set on the second consecutive
+    * sighting of the same bytes, or aliased from the shared byte-keyed
+    * cache on its hits; `null` while the connection's traffic keeps
+    * changing. Invariant: non-null implies `$known` holds exactly the
+    * bytes whose decode produced it, and that decode consumed
+    * `strlen($known)`.
+    */
+   public null|object $Template = null;
 
 
    public function __construct ()

@@ -141,6 +141,11 @@ class Header
    {
       $this->fields = $fields;
       $this->built = true;
+      // ? Fields replaced ⇒ the lazily-parsed cookie memo is stale. Drop it
+      //   so the next access re-binds to the adopted fields — required for
+      //   instances reused across requests (per-connection decode) and for
+      //   any future adopt() caller (e.g. the HTTP/2 head adoption).
+      unset($this->Cookies);
    }
 
       /**

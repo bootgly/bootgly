@@ -464,7 +464,7 @@ class Request
    }
    /**
     * Set by the `files` setter when at least one uploaded file part lands in
-    * `$_files`. Reset by `clean()` and by `reboot()` / `__clone()` / the
+    * `$_files`. Reset by `clean()` and by `reset()` / `__clone()` / the
     * constructor. Lets the Encoder gate `$Request->clean()` to a single
     * boolean check per request — most requests carry no uploads and pay zero.
     */
@@ -749,9 +749,32 @@ class Request
       $this->Body = clone $this->Body;
       $this->Header = clone $this->Header;
    }
-   public function reboot (): void
+   /**
+    * Reset this per-connection instance for a fresh miss decode.
+    *
+    * The cache-miss path decodes INTO the connection-owned Request instead
+    * of allocating one per request. `decode()` overwrites every
+    * decode-derived member on its own (method, URI, protocol, connection
+    * truth, Header via define/adopt), so this scrub covers exactly what
+    * `decode()` does NOT rewrite: the per-request accumulators (mirror of
+    * the `__clone`/`assume` lists), the Router-written `base`, the URI
+    * derivations (hygiene for Incomplete exits) and the FULL Body — a
+    * body-less decode writes only `Body->position`, so a previous POST body
+    * would otherwise leak into the next request, and a stale
+    * `length > downloaded` pair would flip `Body->parse()` back into
+    * `waiting` and hang the connection behind a forever-deferred response.
+    *
+    * !! KEEP THIS STRAIGHT-LINE AND UNCONDITIONAL — same tracing-JIT
+    *   constraint as `__clone` (see its comment: data-dependent branches
+    *   here deopt the whole request pipeline, 717k → 320k req/s).
+    *
+    * NOTE: `$on`/`$at`/`$time` are readonly and keep this instance's
+    *   creation timestamps for the connection lifetime (same staleness
+    *   class as the cache-hit path).
+    */
+   public function reset (): void
    {
-      // @ Reset per-request data accumulators.
+      // @ Per-request data (mirror of the __clone / assume lists).
       $this->_fields = [];
       $this->_files = [];
       $this->hasFiles = false;
@@ -766,14 +789,19 @@ class Request
       $this->tokenHeaders = [];
       $this->exclusions = [];
       $this->attributes = [];
+      $this->stream = 0;
 
       $this->Session = null;
       $this->sessioned = false;
 
-      // @ Invalidate URI-derived caches (safe: URI is re-set on cache miss,
-      // but on cache hit the cached Request keeps its URI so these stay valid).
-      // Reset here only when session-sensitive or cross-connection state may have changed.
-      // NOTE: we keep $_URL et al. because the cached Request's URI is unchanged.
+      // @ Decode state `decode()` does not rewrite.
+      $this->base = '';
+      $this->_URL = null;
+      $this->_URN = null;
+      $this->_query = null;
+      $this->_queries = null;
+
+      $this->Body->reset();
    }
 
    /**
@@ -825,7 +853,7 @@ class Request
       $this->port = $Connection->port;
       $this->scheme = $Connection->encrypted ? 'https' : 'http';
 
-      // @ Per-request state — scrub (mirror of __clone / reboot lists).
+      // @ Per-request state — scrub (mirror of __clone / reset lists).
       $this->_fields = [];
       $this->_files = [];
       $this->hasFiles = false;
@@ -1076,10 +1104,11 @@ class Request
                   $Decoder->Request = $this;
                   // @ Simulate decode call with the full body data.
                   // @ Body is fully consumed here; do NOT attach the decoder
-                  // to the Connection — otherwise the next request on the
-                  // same connection would dispatch through this stale
-                  // decoder and trigger an extra Request::__construct,
-                  // whose __destruct clears the current $_FILES superglobal.
+                  // to the Connection — the next request on the same
+                  // connection must dispatch through the shared entry
+                  // decoder, never through this consumed multipart decoder
+                  // (its uploads live on THIS Request and are cleaned by
+                  // `clean()` in the Encoder's finally).
                   if ($Decoder->decode($Package, $initialBody, $initialLength) !== States::Complete) {
                      $Package->consumed = 0;
                      return States::Rejected;

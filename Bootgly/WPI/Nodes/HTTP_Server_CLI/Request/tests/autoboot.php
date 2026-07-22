@@ -17,5 +17,6 @@ return new Suite(
       '1.1-events',
       '1.2-attributes_bag',
       '1.3-assume_scrub_parity',
+      '1.4-reset_scrub_parity',
    ]
 );

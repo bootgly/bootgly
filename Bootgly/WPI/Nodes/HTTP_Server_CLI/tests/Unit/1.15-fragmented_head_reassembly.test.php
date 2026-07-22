@@ -11,6 +11,7 @@ use Bootgly\WPI\Interfaces\TCP_Server_CLI as TCPServer;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections\Connection;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages as TCPPackages;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Decoder_;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 
@@ -212,7 +213,7 @@ return new Specification(
             ->expect([
                U115Stream::$written['a'],
                $PackageA->carry,
-               $WPI->Request->method,
+               HTTP_Server_CLI::$Request->method,
                $ConnectionA->closed,
             ])
             ->to->be(['R2', '', 'GET', false])

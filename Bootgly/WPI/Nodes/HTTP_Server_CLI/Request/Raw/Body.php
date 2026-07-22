@@ -73,6 +73,30 @@ class Body
       $this->streaming = $Template->streaming;
    }
 
+   /**
+    * Reset every member to its constructor default.
+    *
+    * Used by `Request::reset()` on the per-connection cache-miss path: a
+    * body-less `Request::decode()` writes only `position`, so without this
+    * scrub a previous request's body would survive on the reused instance —
+    * and a stale `length > downloaded` pair would flip `parse()` back into
+    * `waiting`, deferring the response forever. Unconditional straight-line
+    * writes (same tracing-JIT constraint as `Request::__clone`).
+    */
+   public function reset (): void
+   {
+      // * Data
+      $this->raw = '';
+      $this->input = null;
+
+      // * Metadata
+      $this->length = null;
+      $this->position = null;
+      $this->downloaded = null;
+      $this->waiting = false;
+      $this->streaming = false;
+   }
+
    public function parse (string $content, ?string $type): bool|string
    {
       if ($type === null) {

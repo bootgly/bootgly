@@ -26,8 +26,12 @@ return new Suite(
       '1.10-deferred_write_pipeline_retention',
       '1.11-pipeline_zero_consumed_guard',
       '1.12-decoder_waiting_request_binding',
-      '1.13-decoder_claimed_cell_guard',
+      '1.13-decoder_owned_request_isolation',
       '1.14-decoder_cache_pipelined_batch_guard',
-      '1.15-fragmented_head_reassembly'
+      '1.15-fragmented_head_reassembly',
+      '1.16-decoder_cache_streaming_store_guard',
+      '1.17-owned_request_reset_matrix',
+      '1.18-connection_decoder_dispatch_invariant',
+      '1.19-decoder_connection_template_lifecycle'
    ]
 );

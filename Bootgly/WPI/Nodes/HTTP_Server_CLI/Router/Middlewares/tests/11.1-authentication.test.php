@@ -235,19 +235,19 @@ return new Specification(
       $Original->identity = 'user-42';
       $Original->claims = ['sub' => 'user-42'];
       $Original->tokenHeaders = ['alg' => 'HS256'];
-      $Original->reboot();
+      $Original->reset();
 
-      yield new Assertion(description: 'Request reboot should reset identity')
+      yield new Assertion(description: 'Request reset should scrub identity')
          ->expect($Original->identity)
          ->to->be(Type::Null)
          ->assert();
 
-      yield new Assertion(description: 'Request reboot should reset claims')
+      yield new Assertion(description: 'Request reset should scrub claims')
          ->expect($Original->claims)
          ->to->be([])
          ->assert();
 
-      yield new Assertion(description: 'Request reboot should reset token headers')
+      yield new Assertion(description: 'Request reset should scrub token headers')
          ->expect($Original->tokenHeaders)
          ->to->be([])
          ->assert();
