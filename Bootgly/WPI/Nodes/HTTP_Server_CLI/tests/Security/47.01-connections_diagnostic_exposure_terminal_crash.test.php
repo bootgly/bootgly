@@ -20,14 +20,16 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test\Specification;
  * Security PoC M13 — the operator `connections` diagnostic must not render
  * remote request buffers or concatenate decoded protocol objects.
  *
- * A real side connection sends two byte-identical requests. The first request
- * is a decoder-cache miss; the second is a natural cache hit and therefore
- * installs its live Request in Connection::$decoded. Both requests carry an
- * Authorization secret, Bootgly markup, OSC-52 and DCS bytes. The route calls
- * the registered command through the real SIGIOT dispatch branch, while its
- * production Line formatter writes exclusively to php://temp. The normal
- * diagnostic catch preserves the pre-fix confirmation at the test boundary;
- * a separate throwing exact-scope command verifies the fixed signal boundary.
+ * A real side connection sends two byte-identical requests. Both decode into
+ * the connection-owned Request (the first a decoder-cache miss, the second a
+ * template hit), so Connection::$decoded holds a live Request on each. Both
+ * requests carry an Authorization secret, Bootgly markup, OSC-52 and DCS
+ * bytes. The receive buffer is no longer retained per connection, so the
+ * remote source is proven through the decoded Request headers the diagnostic
+ * has access to. The route calls the registered command through the real
+ * SIGIOT dispatch branch, while its production Line formatter writes
+ * exclusively to php://temp. A separate throwing exact-scope command verifies
+ * the fixed signal boundary.
  *
  * Expected secure behavior: only allowlisted scalar metadata is rendered,
  * no remote buffer/control byte reaches the diagnostic stream, and the
@@ -141,9 +143,14 @@ return new Specification(
          Request $Request,
          Response $Response,
       ) use ($secret, $OSC, $DCS, $markup): Response {
+         // ! Locate the live side connection by its transport peer port. The
+         //   receive buffer is no longer retained per connection (the very
+         //   hardening this diagnostic must honor), so the secret cannot be
+         //   matched from a raw input buffer — the current request's peer
+         //   port is the stable transport identity of the side connection.
          $Connection = null;
          foreach (Connections::$Connections as $Candidate) {
-            if (str_contains($Candidate->input, $secret)) {
+            if ($Candidate->port === $Request->port) {
                $Connection = $Candidate;
                break;
             }
@@ -156,8 +163,16 @@ return new Specification(
             ]);
          }
 
-         $input = $Connection->input;
-         $decodedRequest = $Connection->decoded instanceof Request;
+         // ! The remote source is proven present through the decoded Request
+         //   headers the diagnostic can reach — a stronger control than the
+         //   retired input buffer: it shows the diagnostic HAD the secret
+         //   available and still rendered only allowlisted scalar metadata.
+         $decoded = $Connection->decoded;
+         $decodedRequest = $decoded instanceof Request;
+         $sourceHeaders = $decodedRequest ? $decoded->headers : [];
+         $authorization = (string) ($sourceHeaders['authorization'] ?? '');
+         $terminal = (string) ($sourceHeaders['x-m13-terminal'] ?? '');
+         $sourceMarkup = (string) ($sourceHeaders['x-m13-markup'] ?? '');
          $Server = WPI->Server;
          $sink = fopen('php://temp', 'w+b');
          if ($sink === false) {
@@ -243,10 +258,10 @@ return new Specification(
             'phase' => 'attack',
             'connection_registered' => isset($SavedConnections[$Connection->id])
                && $SavedConnections[$Connection->id] === $Connection,
-            'source_secret' => str_contains($input, $secret),
-            'source_osc' => str_contains($input, $OSC),
-            'source_dcs' => str_contains($input, $DCS),
-            'source_markup' => str_contains($input, $markup),
+            'source_secret' => str_contains($authorization, $secret),
+            'source_osc' => str_contains($terminal, $OSC),
+            'source_dcs' => str_contains($terminal, $DCS),
+            'source_markup' => str_contains($sourceMarkup, $markup),
             'decoded_request' => $decodedRequest,
             'diagnostic_rendered' => str_contains($capture, 'Worker #')
                && str_contains($capture, 'Connection ID #'),
@@ -324,36 +339,35 @@ return new Specification(
          && ($hit['source_markup'] ?? false) === true
          && ($miss['diagnostic_rendered'] ?? false) === true
          && ($hit['diagnostic_rendered'] ?? false) === true
-         && ($miss['decoded_request'] ?? true) === false
+         && ($miss['decoded_request'] ?? false) === true
          && ($hit['decoded_request'] ?? false) === true;
       if ($sourceControls === false) {
          Vars::$labels = ['M13 source/cache/diagnostic controls'];
          dump(json_encode($evidence));
 
-         return 'M13 fixture did not prove the remote source, diagnostic sink, and natural decoded-Request cache transition.';
+         return 'M13 fixture did not prove the remote source, diagnostic sink, and connection-owned decoded Request.';
       }
 
-      $leakedBoth = ($miss['secret_leaked'] ?? false) === true
-         && ($hit['secret_leaked'] ?? false) === true
-         && ($miss['osc_leaked'] ?? false) === true
-         && ($hit['osc_leaked'] ?? false) === true
-         && ($miss['dcs_leaked'] ?? false) === true
-         && ($hit['dcs_leaked'] ?? false) === true
-         && ($miss['markup_marker_leaked'] ?? false) === true
-         && ($hit['markup_marker_leaked'] ?? false) === true
-         && ($miss['markup_processed'] ?? false) === true
-         && ($hit['markup_processed'] ?? false) === true;
-      $crashedOnDecoded = ($miss['command_returned'] ?? false) === true
-         && ($miss['object_conversion_error'] ?? true) === false
-         && ($hit['command_returned'] ?? true) === false
-         && ($hit['error_class'] ?? '') === Error::class
-         && ($hit['object_conversion_error'] ?? false) === true;
+      // ! Regression signature — the connection now owns its decoded Request
+      //   on both requests, so a vulnerable diagnostic would either LEAK the
+      //   remote secret / terminal bytes / markup or CRASH converting the
+      //   decoded object to string. Either on either request fails closed.
+      $leakedAny = ($miss['secret_leaked'] ?? false) === true
+         || ($hit['secret_leaked'] ?? false) === true
+         || ($miss['osc_leaked'] ?? false) === true
+         || ($hit['osc_leaked'] ?? false) === true
+         || ($miss['dcs_leaked'] ?? false) === true
+         || ($hit['dcs_leaked'] ?? false) === true
+         || ($miss['markup_marker_leaked'] ?? false) === true
+         || ($hit['markup_marker_leaked'] ?? false) === true;
+      $crashedOnDecoded = ($miss['object_conversion_error'] ?? false) === true
+         || ($hit['object_conversion_error'] ?? false) === true;
 
-      if ($leakedBoth && $crashedOnDecoded) {
-         Vars::$labels = ['M13 safe vulnerability evidence'];
+      if ($leakedAny || $crashedOnDecoded) {
+         Vars::$labels = ['M13 vulnerability evidence'];
          dump(json_encode($evidence));
 
-         return 'CONFIRMED M13: the registered connections diagnostic emitted an Authorization secret and exact OSC/DCS bytes from a live remote request, processed remote Bootgly markup, and threw Error on the naturally cached decoded Request.';
+         return 'CONFIRMED M13: the registered connections diagnostic exposed remote request state (Authorization secret / OSC / DCS / Bootgly markup) or threw Error on the connection-owned decoded Request.';
       }
 
       $secure = ($miss['command_returned'] ?? false) === true
