@@ -15,9 +15,9 @@ use function array_key_first;
 use function array_key_last;
 use function count;
 use function min;
-use function strlen;
 use function strncmp;
 use function strpos;
+use function substr;
 
 use const Bootgly\WPI;
 use Bootgly\WPI\Endpoints\Servers\Decoder\States;
@@ -31,27 +31,42 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 
 class Decoder_ extends Decoders
 {
-   // @ Carried first-request bytes while h2c prior-knowledge sniffing is ambiguous.
-   public string $buffer = '';
-
-
    public function decode (Packages $Package, string $buffer, int $size): States
    {
       /** @var array<string,Request> $inputs */
       static $inputs = []; // @ L1 cache (stable/hot keys)
       /** @var TCP_Packages $Package */
 
-      $carried = 0;
-      if ($this->buffer !== '') {
-         $carried = strlen($this->buffer);
-         $buffer = "{$this->buffer}{$buffer}";
-         $size += $carried;
-         $this->buffer = '';
+      // ? RFC 7230 section 3.5 robustness: ignore empty line(s) — CRLF —
+      //   received prior to the request-line. Lenient peers emit stray
+      //   CRLFs between pipelined requests; the skipped padding COUNTS AS
+      //   CONSUMED so the transport's pipeline/carry offsets stay exact
+      //   (retaining padding would poison the next request's reassembly).
+      //   Hot path pays one first-byte compare.
+      $skipped = 0;
+      if ($buffer[0] === "\r") {
+         while (substr($buffer, $skipped, 2) === "\r\n") {
+            $skipped += 2;
+         }
+
+         // ? Only padding in this event: consume it all and wait.
+         if ($skipped >= $size) {
+            $Package->cache = false;
+            $Package->consumed = $size;
+            return States::Incomplete;
+         }
+
+         if ($skipped > 0) {
+            $buffer = substr($buffer, $skipped);
+            $size -= $skipped;
+         }
       }
 
       // ? h2c prior-knowledge neutral sniffing. A one-byte `P` can be a
-      //   segmented POST/PUT/PATCH, so short prefixes are carried by a
-      //   per-connection Decoder_ until the protocol can be distinguished.
+      //   segmented POST/PUT/PATCH, so an ambiguous short prefix returns
+      //   Incomplete with nothing consumed — the transport carry retains it
+      //   and the next event reassembles until the protocol can be
+      //   distinguished (`Request::decode()` commits HTTP/2 at >= 14 bytes).
       if (
          Server::$enableHTTP2
          && $Package->Connection->writes === 0
@@ -59,22 +74,16 @@ class Decoder_ extends Decoders
       ) {
          $signal = min($size, 14);
          if (strncmp($buffer, HTTP2::PREFACE, $signal) === 0 && $size < 14) {
-            if ($Package->Decoder === null) {
-               $Decoder = new self;
-               $Decoder->buffer = $buffer;
-               $Package->Decoder = $Decoder;
-            }
-            else {
-               $this->buffer = $buffer;
-            }
-
             $Package->cache = false;
-            $Package->consumed = $size - $carried;
+            $Package->consumed = $skipped;
             return States::Incomplete;
          }
       }
 
-      $cacheable = ($carried === 0 && $size <= 2048);
+      // ! Reassembled events are never L1-cached: their keys are
+      //   attacker-mutable at packet granularity (any request split into
+      //   two packets would churn the LRU) with no benign hit-rate benefit.
+      $cacheable = ($Package->carried === false && $size <= 2048);
       $cacheKey = null;
       if ($cacheable) {
          // ?! Exact-input lookup FIRST: stored keys can never carry a
@@ -125,7 +134,7 @@ class Decoder_ extends Decoders
          $Request->assume($cached, $Package->Connection);
          Server::$Request = $Request;
 
-         $Package->consumed = $size;
+         $Package->consumed = $size + $skipped;
          return States::Complete;
       }
 
@@ -146,16 +155,10 @@ class Decoder_ extends Decoders
       $state = $Request->decode($Package, $buffer, $size);
       $length = $Package->consumed;
 
-      if ($carried > 0 && $Package->consumed > 0) {
-         $Package->consumed = $Package->consumed > $carried
-            ? $Package->consumed - $carried
-            : 0;
-         $length = $Package->consumed;
-      }
-
-      if ($state === States::Incomplete && $Package->Decoder === $this) {
-         $this->buffer = $buffer;
-         $Package->consumed = $size - $carried;
+      // ! Account the skipped request-line padding as consumed (every
+      //   `decode()` outcome writes `consumed` in trimmed-buffer space).
+      if ($skipped > 0) {
+         $Package->consumed += $skipped;
       }
 
       // @ Write to local cache

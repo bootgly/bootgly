@@ -298,6 +298,11 @@ class Connection extends Packages
          $this->decoded->disconnect();
       }
 
+      // @ Receive-carry hygiene: a closing connection never revisits its
+      //   bytes — do not pin a retained fragment until object destruction.
+      $this->carry = '';
+      $this->carried = false;
+
       $this->status = Connections::STATUS_CLOSING;
 
       $Socket = &$this->Socket;

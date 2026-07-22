@@ -27,6 +27,7 @@ return new Suite(
       '1.11-pipeline_zero_consumed_guard',
       '1.12-decoder_waiting_request_binding',
       '1.13-decoder_claimed_cell_guard',
-      '1.14-decoder_cache_pipelined_batch_guard'
+      '1.14-decoder_cache_pipelined_batch_guard',
+      '1.15-fragmented_head_reassembly'
    ]
 );

@@ -58,6 +58,13 @@ abstract class Packages
     * across keep-alive requests (see `Request::assume()`).
     */
    public null|object $decoded = null;
+   /**
+    * Whether the current receive event was reassembled from a previous
+    * event's retained carry (see `TCP_Server_CLI\Packages::$carry`).
+    * Decoders may consult it — e.g. to exclude reassembled reads from
+    * byte-keyed caches — but only the transport writes it.
+    */
+   public protected(set) bool $carried = false;
 
 
    public function __construct ()

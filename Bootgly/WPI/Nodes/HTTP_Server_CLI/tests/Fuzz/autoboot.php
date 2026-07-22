@@ -75,5 +75,7 @@ return new Suite(
       '24.04-multipart_shape_fuzz',
       // # Degenerate framing
       '24.05-degenerate_framing',
+      // Receive-carry fragmentation matrix
+      '24.06-receive_carry_matrix',
    ],
 );

@@ -87,6 +87,13 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
    //   from the event loop. Idempotent on `Select::add`, but tracking it
    //   lets us issue a matching `del` on full drain.
    public bool $writeRegistered = false;
+   // # Receive carry (per-connection request reassembly)
+   //   Unconsumed inbound bytes retained at the end of a receive event —
+   //   an incomplete request head or frame fragment. The next event
+   //   prepends them to the fresh read before decoding (`$carried` on the
+   //   base Packages flags such reassembled events). Empty string means
+   //   nothing is carried. Raw TCP (no registered decoder) never retains.
+   public protected(set) string $carry = '';
 
 
    public Connection $Connection;
@@ -234,6 +241,22 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
          return $this->fail($Socket, 'read');
       }
 
+      // @ Reassemble the receive carry: bytes a previous event retained
+      //   (an incomplete request head or frame fragment) prepend the fresh
+      //   read, so decoders always see one contiguous request stream. Raw
+      //   TCP (no decoder) never retains — the common path pays one
+      //   empty-string check.
+      if ($this->carry === '') {
+         if ($this->carried) {
+            $this->carried = false;
+         }
+      }
+      else {
+         $input = "{$this->carry}{$input}";
+         $this->carry = '';
+         $this->carried = true;
+      }
+
       // @ On success
       $this->changed = ($this->input !== $input);
 
@@ -252,7 +275,10 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
       }
 
       // @ Write data
-      $inputLength = $received; // Store original buffer length for pipelining
+      // ! Event input length for decoding/pipelining: the assembled length
+      //   on reassembled events; the fresh read length otherwise (stats
+      //   above keep counting only fresh bytes via `$received`).
+      $inputLength = $this->carried ? strlen($input) : $received;
       // @ Decoder outcome:
       //   `States::Complete`   \u2192 byte count via `$this->consumed`, write response.
       //   `States::Incomplete` \u2192 wait for more bytes (no response).
@@ -267,7 +293,7 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
       //   (Complete/Incomplete/Rejected); no pre-reset needed.
       if (Server::$Decoder) { // @ Decode Application Data if exists
          $Decoder = $this->Decoder ?? Server::$Decoder;
-         $state = $Decoder->decode($this, $input, $received);
+         $state = $Decoder->decode($this, $input, $inputLength);
       }
       else {
          $Decoder = null;
@@ -317,13 +343,20 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
                $decoded = $Decoder->decode($this, $remaining, $remainingLength);
 
                if ($decoded !== States::Complete) {
-                  if (
-                     $decoded === States::Incomplete
-                     && $Decoder instanceof Feeding
-                     && $this->consumed < $remainingLength
-                  ) {
-                     $Decoder->feed(substr($remaining, $this->consumed));
-                     $this->consumed = $remainingLength;
+                  if ($decoded === States::Incomplete) {
+                     if (
+                        $Decoder instanceof Feeding
+                        && $this->consumed < $remainingLength
+                     ) {
+                        $Decoder->feed(substr($remaining, $this->consumed));
+                        $this->consumed = $remainingLength;
+                     }
+
+                     // @ Retain the undecoded tail (from the event offset)
+                     //   for the next event's reassembly \u2014 no-op when the
+                     //   decoder consumed or absorbed everything. Rejected
+                     //   decodes never retain: the connection is closing.
+                     $this->retain($input, $offset + $this->consumed, $inputLength);
                   }
                   break; // Incomplete or rejected \u2014 stop pipelining
                }
@@ -378,6 +411,13 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
             $Decoder->feed(substr($input, $this->consumed));
             $this->consumed = $inputLength;
          }
+
+         // @ Retain the undecoded tail for the next event's reassembly —
+         //   fixes fragmented request heads (previously dropped: the shared
+         //   decoder had no per-connection carry). No-op when the decoder
+         //   consumed or absorbed everything (stateful body decoders,
+         //   Feeding protocols).
+         $this->retain($input, $this->consumed, $inputLength);
       }
       // @ Consume test handler on reject (decoder rejected, encoder never ran)
       // ?! The explicit enum check is kept for readability — after the
@@ -397,6 +437,41 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
       }
 
       return true;
+   }
+   /**
+    * Retain the unconsumed tail of the current receive event as the
+    * connection's carry, reassembled in front of the next read.
+    *
+    * Single compaction per event: when nothing was consumed the whole
+    * input string is adopted by refcount (zero copy); `substr()` runs only
+    * for a true mid-buffer tail. Callers skip retention on close intents —
+    * a closing connection never revisits its bytes.
+    *
+    * @param string $input The full (possibly reassembled) event input
+    * @param int $offset Total bytes consumed from `$input` by this event
+    * @param int $length Length of `$input`
+    */
+   protected function retain (string $input, int $offset, int $length): void
+   {
+      // ? Everything consumed — nothing to carry.
+      if ($offset >= $length) {
+         return;
+      }
+
+      // !
+      $carry = ($offset === 0) ? $input : substr($input, $offset);
+
+      // ? Memory cap: a peer that never completes a request cannot grow
+      //   the carry unbounded (defense in depth — `Frame::parse` rejects
+      //   oversized heads deterministically well below this).
+      if (strlen($carry) > Server::$maxPendingBytes) {
+         $this->carry = '';
+         $this->Connection->close();
+         return;
+      }
+
+      // :
+      $this->carry = $carry;
    }
    // ---
    /**
