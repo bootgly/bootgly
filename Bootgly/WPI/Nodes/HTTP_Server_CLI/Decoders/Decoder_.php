@@ -119,7 +119,7 @@ class Decoder_ extends Decoders
          //   requests: `assume()` overwrites every decode-derived member from
          //   the template and scrubs all per-request state unconditionally —
          //   no state survives between requests on the same connection.
-         //   See tests/Security/2.01-decoder_cache_shared_request_across_connections.test.php
+         //   See tests/Security/03.01-decoder_cache_shared_request_across_connections.test.php
          /** @var Request $Request */
          $Request = $Package->decoded ??= new Request;
          $Request->assume($cached, $Package->Connection);
@@ -131,13 +131,16 @@ class Decoder_ extends Decoders
 
       // !
       $WPI = WPI;
-      // ?! Handle Package cache
-      if ($Package->changed) {
-         $WPI->Request = new Request;
-      }
-      // !
       /** @var Request $Request */
       $Request = $WPI->Request;
+      // ?! Handle Package cache — a fresh Request is also required when the
+      //    worker cell is still claimed by a paused body decode of another
+      //    connection (its `Body->waiting` stays true until that decoder
+      //    completes): re-entering the claimed instance would corrupt its
+      //    in-flight body state.
+      if ($Package->changed || $Request->Body->waiting) {
+         $WPI->Request = $Request = new Request;
+      }
 
       // @
       $state = $Request->decode($Package, $buffer, $size);
@@ -156,15 +159,18 @@ class Decoder_ extends Decoders
       }
 
       // @ Write to local cache
-      // Skip caching when Body is waiting for more data (chunked/streaming)
-      // or when this read installed a per-connection decoder (e.g. the
-      // HTTP/2 preface switch) — protocol-switch bytes must never be
-      // served as an HTTP/1.1 template.
+      // Skip caching when the read was not exactly one complete request
+      // (a pipelined batch would store the whole batch as the template of
+      // its first request and hits would then drop the tail), when Body is
+      // waiting for more data (chunked/streaming) or when this read
+      // installed a per-connection decoder (e.g. the HTTP/2 preface
+      // switch) — protocol-switch bytes must never be served as an
+      // HTTP/1.1 template.
       if ($state === States::Complete
          && $cacheKey !== null
          && $Package->Decoder === null
          && $length > 0
-         && $length <= 2048
+         && $length === $size
          && ! $Request->Body->waiting
       ) {
          // ! Intentional bare read — the URL property hook derives and

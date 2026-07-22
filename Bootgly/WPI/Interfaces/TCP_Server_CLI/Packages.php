@@ -11,6 +11,7 @@
 namespace Bootgly\WPI\Interfaces\TCP_Server_CLI;
 
 
+use const PHP_EOL;
 use const SEEK_SET;
 use function array_key_exists;
 use function array_key_first;
@@ -275,22 +276,19 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
       if ($state === States::Complete) {
          $this->write($Socket);
 
-         // @ Recommendation #3: write deferred to event loop. Do NOT
-         //   pipeline (next request would race with the unflushed bytes)
-         //   and do NOT close synchronously — `writing()` will close on
-         //   drain via `closeAfterDrain`.
-         //   EXCEPT for framed protocols (`Feeding`, HTTP/2): the peer may
-         //   be waiting for the queued responses before sending any further
-         //   bytes, so stopping would deadlock the connection. Keep
-         //   pipelining — `writing()` in resume mode appends the next
-         //   responses to `pendingBuffer` in order, bounded by
-         //   `$maxPendingBytes` + the stall deadline.
-         $Decoder = $this->Decoder ?? $Decoder;
-         if ($this->pendingBuffer !== '' && $Decoder instanceof Feeding === false) {
-            if ($this->closeAfterWrite) {
-               $this->closeAfterDrain = true;
-               $this->closeAfterWrite = false;
-            }
+         // @ Recommendation #3: write deferred to event loop. A deferred
+         //   write must NOT stop pipelining: the peer may have already sent
+         //   every pipelined request in this read, so no future read event
+         //   would ever revisit the tail — stopping silently drops it.
+         //   Follow-up responses append to `pendingBuffer` in order via
+         //   `writing()` resume mode, bounded by `$maxPendingBytes` + the
+         //   stall deadline (the same semantics framed protocols — Feeding,
+         //   HTTP/2 — always required to avoid deadlocking their peers).
+         //   Only a close intent stops here, deferred to `closeAfterDrain`
+         //   so the queued bytes drain first.
+         if ($this->pendingBuffer !== '' && $this->closeAfterWrite) {
+            $this->closeAfterDrain = true;
+            $this->closeAfterWrite = false;
             return true;
          }
 
@@ -330,31 +328,47 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
                   break; // Incomplete or rejected \u2014 stop pipelining
                }
 
-               $this->write($Socket);
-
-               // @ Pipeline write deferred — stop and let event loop drain.
-               //   PHPStan cannot infer that `write()` mutates `$pendingBuffer`
-               //   via `writing()`, so it narrows the property to `''` here.
-               //   Framed protocols (`Feeding`) keep pipelining — see the
-               //   top-level twin.
-               if (
-                  $this->pendingBuffer !== '' // @phpstan-ignore notIdentical.alwaysFalse
-                  && $Decoder instanceof Feeding === false
-               ) {
-                  if ($this->closeAfterWrite) { // @phpstan-ignore if.alwaysFalse
-                     $this->closeAfterDrain = true;
-                     $this->closeAfterWrite = false;
-                  }
+               // ? Forward-progress guard: a Complete decode that consumed
+               //   zero bytes can never advance the pipeline offset — the
+               //   worker would relive the same bytes forever. No current
+               //   decoder produces this; treat it as a decoder defect and
+               //   close instead of livelocking (or silently dropping the
+               //   remaining requests).
+               //   PHPStan cannot infer that `decode()` mutates
+               //   `$this->consumed` through the `$this` argument, so it
+               //   narrows the property to the pre-decode `0` literal.
+               if ($this->consumed <= 0) { // @phpstan-ignore smallerOrEqual.alwaysTrue
+                  $this->Logger->log(
+                     error: 'Pipelined decode completed without consuming bytes — closing connection.' . PHP_EOL
+                  );
+                  $this->Connection->close();
                   return true;
                }
 
-               if ($this->closeAfterWrite) { // @phpstan-ignore if.alwaysFalse
+               // ? `write()` propagates `writing() === false`: the deferred
+               //   write layer closed the connection (pending-memory cap or
+               //   stall deadline) — stop decoding for a dead connection.
+               if ($this->write($Socket) === false) { // @phpstan-ignore deadCode.unreachable
+                  return true;
+               }
+
+               // @ Pipeline write deferred — keep pipelining: follow-up
+               //   responses append to `pendingBuffer` in order (see the
+               //   top-level twin). Only a close intent stops the loop,
+               //   deferred to `closeAfterDrain` so queued bytes drain first.
+               if ($this->pendingBuffer !== '' && $this->closeAfterWrite) {
+                  $this->closeAfterDrain = true;
+                  $this->closeAfterWrite = false;
+                  return true;
+               }
+
+               if ($this->closeAfterWrite) {
                   $this->closeAfterWrite = false;
                   $this->Connection->close();
                   return true;
                }
 
-               $offset += $this->consumed; // @phpstan-ignore smaller.invalid
+               $offset += $this->consumed;
             }
          }
       }

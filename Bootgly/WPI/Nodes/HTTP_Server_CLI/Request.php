@@ -1030,6 +1030,7 @@ class Request
 
          $Decoder = new Decoder_Chunked;
          $Decoder->init();
+         $Decoder->Request = $this;
          // @ Decoder_Chunked implements Feeding, so TCP_Server_CLI pipelines
          //   every byte after the request head into it exactly once.
          $Package->Decoder = $Decoder;
@@ -1072,6 +1073,7 @@ class Request
 
                   $Decoder = new Decoder_Downloading;
                   $Decoder->init($multipartBoundary);
+                  $Decoder->Request = $this;
                   // @ Simulate decode call with the full body data.
                   // @ Body is fully consumed here; do NOT attach the decoder
                   // to the Connection — otherwise the next request on the
@@ -1091,6 +1093,7 @@ class Request
 
                   $Decoder = new Decoder_Downloading;
                   $Decoder->init($multipartBoundary);
+                  $Decoder->Request = $this;
 
                   if ($initialBody !== '') {
                      $Decoder->feed($initialBody);
@@ -1108,6 +1111,7 @@ class Request
                   $this->Body->waiting = true;
                   $Waiting = new Decoder_Waiting;
                   $Waiting->init();
+                  $Waiting->Request = $this;
                   $Package->Decoder = $Waiting;
                }
             }

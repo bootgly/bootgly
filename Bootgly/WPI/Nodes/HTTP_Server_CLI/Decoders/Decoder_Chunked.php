@@ -26,6 +26,7 @@ use Bootgly\WPI\Endpoints\Servers\Packages;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages as TCP_Packages;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI as Server;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 
 
 class Decoder_Chunked extends Decoders implements Feeding
@@ -44,6 +45,10 @@ class Decoder_Chunked extends Decoders implements Feeding
    private const int READ_TRAILERS = 2;
 
    // * Data
+   //   Owning Request, bound at the decoder install site in Request::decode():
+   //   body continuations must never resolve the worker-global Request —
+   //   another connection may replace or claim it between transport reads.
+   public Request $Request;
    private string $buffer = '';
    private string $body = '';
 
@@ -91,8 +96,7 @@ class Decoder_Chunked extends Decoders implements Feeding
       /** @var Server $Server */
       $Server = $WPI->Server;
 
-      /** @var Server\Request $Request */
-      $Request = $WPI->Request;
+      $Request = $this->Request;
       $Body = $Request->Body;
 
       if (! $Body->waiting) {
@@ -329,6 +333,10 @@ class Decoder_Chunked extends Decoders implements Feeding
                $Package->Decoder = null;
                $Package->consumed = $consumed;
 
+               // ! Restore the worker-global Request before the response cycle:
+               //   `Encoder_::encode()` serializes `Server::$Request` (mirror
+               //   of the L1-hit path in `Decoder_::decode()`).
+               Server::$Request = $Request;
                return States::Complete;
          }
       }

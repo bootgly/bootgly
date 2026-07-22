@@ -104,6 +104,13 @@ return new Specification(
                }
 
                $expected = $input['expected'];
+               // @ Exact-count invariant: every pipelined request must get its
+               //   response. A correct prefix alone would mask dropped tails
+               //   (stored batch templates, deferred-write stops).
+               if (count($found) !== count($expected)) {
+                  return 'response count mismatch: got ' . count($found)
+                     . ' expected ' . count($expected);
+               }
                if ($found[0] !== $expected[0]) {
                   return "ordering violated at first response: got {$found[0]} expected {$expected[0]}";
                }

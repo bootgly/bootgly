@@ -21,10 +21,17 @@ use Bootgly\WPI\Endpoints\Servers\Packages;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages as TCP_Packages;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI as Server;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 
 
 class Decoder_Waiting extends Decoders
 {
+   // * Data
+   //   Owning Request, bound at the decoder install site in Request::decode():
+   //   body continuations must never resolve the worker-global Request —
+   //   another connection may replace or claim it between transport reads.
+   public Request $Request;
+
    // * Metadata
    private int $decoded = 0;
 
@@ -43,8 +50,7 @@ class Decoder_Waiting extends Decoders
       /** @var Server $Server */
       $Server = $WPI->Server;
 
-      /** @var Server\Request $Request */
-      $Request = $WPI->Request;
+      $Request = $this->Request;
       $Body = $Request->Body;
 
       // @ Check if Request Body is waiting data
@@ -92,6 +98,10 @@ class Decoder_Waiting extends Decoders
 
          $Body->waiting = false;
          $Package->Decoder = null;
+         // ! Restore the worker-global Request before the response cycle:
+         //   `Encoder_::encode()` serializes `Server::$Request` (mirror of
+         //   the L1-hit path in `Decoder_::decode()`).
+         Server::$Request = $Request;
          return States::Complete;
       }
 

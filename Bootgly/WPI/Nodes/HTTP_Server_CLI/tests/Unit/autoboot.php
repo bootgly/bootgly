@@ -22,6 +22,11 @@ return new Suite(
       '1.6-stash_cookie_and_acme_guards',
       '1.7-router_dynamic_classification',
       '1.8-header_preset_transitions',
-      '1.9-route_cache_key_vary_policy'
+      '1.9-route_cache_key_vary_policy',
+      '1.10-deferred_write_pipeline_retention',
+      '1.11-pipeline_zero_consumed_guard',
+      '1.12-decoder_waiting_request_binding',
+      '1.13-decoder_claimed_cell_guard',
+      '1.14-decoder_cache_pipelined_batch_guard'
    ]
 );
