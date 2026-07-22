@@ -305,5 +305,9 @@ return new Suite(
       // Invalid COLUMNS/LINES must not execute an attacker-selected `tput`
       // during the launch-credential CLI bootstrap.
       '52.01-tput_path_pre_demote_execution',
+      // # TCP listener admission (abortive-close worker crash — audit C1)
+      // A queued SO_LINGER reset must be rejected without allowing a partial
+      // Connection to throw from the accept callback and terminate the worker.
+      '53.01-abortive_tcp_close_worker_crash',
    ],
 );

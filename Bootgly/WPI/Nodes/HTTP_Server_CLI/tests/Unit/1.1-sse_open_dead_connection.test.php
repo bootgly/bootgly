@@ -19,9 +19,12 @@ return new Specification(
       //   pending `closeAfterDrain` applies on the drained write: it
       //   returns TRUE and the connection is already past ESTABLISHED.
       $pair = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
-      [$Socket, ] = $pair !== false ? $pair : [null, null];
+      if ($pair === false) {
+         throw new RuntimeException('Could not create the socket pair.');
+      }
+      [$Socket, $PeerSocket] = $pair;
 
-      $Connection = new class($Socket) extends Connection {
+      $Connection = new class($Socket, '127.0.0.1', 1) extends Connection {
          public function writing (&$Socket, null|int $length = null, string $buffer = ''): bool
          {
             $this->status = Connections::STATUS_CLOSED;
@@ -70,5 +73,7 @@ return new Specification(
       // ! Defensive cleanup — a regression that installs the supervisor
       //   would otherwise leave a pending SIGALRM task in this process
       Timer::del();
+      fclose($Socket);
+      fclose($PeerSocket);
    })
 );

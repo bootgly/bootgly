@@ -15,18 +15,22 @@ namespace Bootgly\WPI\Interfaces\TCP_Server_CLI;
 
 use function count;
 use function explode;
+use function fclose;
+use function is_resource;
 use function max;
 use function str_starts_with;
 use function stream_set_blocking;
 use function stream_set_read_buffer;
 use function stream_set_timeout;
 use function stream_socket_accept;
+use function stream_socket_get_name;
 use function substr;
 use Throwable;
 
 use const Bootgly\CLI;
 use Bootgly\ACI\Logs\Logger;
 use Bootgly\WPI;
+use Bootgly\WPI\Connections\Peer;
 use Bootgly\WPI\Connections\Packages;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI as Server;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections\Connection;
@@ -175,9 +179,16 @@ class Connections implements WPI\Connections
    // Accept connection from client / Open connection with client / Connect with client
    public function connect (): bool
    {
+      $Socket = false;
+
       try {
-         /** @var resource $Socket */
+         /** @var resource|false $Socket */
          $Socket = @stream_socket_accept($this->Server->Socket, null);
+         if ($Socket === false) {
+            self::$errors['connection']++;
+
+            return false;
+         }
 
          stream_set_timeout($Socket, 0);
 
@@ -191,17 +202,45 @@ class Connections implements WPI\Connections
          #stream_set_write_buffer($Socket, 65535);
       }
       catch (Throwable) {
-         $Socket = false;
-      }
+         if (is_resource($Socket)) {
+            @fclose($Socket);
+         }
 
-      if ($Socket === false) {
-         #$this->Logger->log(debug: 'Socket connection is false!' . PHP_EOL);
          self::$errors['connection']++;
+
          return false;
       }
 
-      // @ Instance new connection
-      $Connection = new Connection($Socket);
+      // ! Resolve the kernel-owned peer identity before constructing a
+      //   Connection. A reset socket can still be returned by accept() after
+      //   getpeername has become unavailable; no partially initialized object
+      //   may escape into blacklist, limiter, TLS, or event-loop paths.
+      $peer = @stream_socket_get_name($Socket, true);
+      if ($peer === false) {
+         self::$errors['connection']++;
+         @fclose($Socket);
+
+         return false;
+      }
+
+      [$IP, $port] = Peer::parse($peer);
+      if ($IP === '' || $port < 1 || $port > 65_535) {
+         self::$errors['connection']++;
+         @fclose($Socket);
+
+         return false;
+      }
+
+      try {
+         // @ Instance only a fully identified connection.
+         $Connection = new Connection($Socket, $IP, $port);
+      }
+      catch (Throwable) {
+         self::$errors['connection']++;
+         @fclose($Socket);
+
+         return false;
+      }
 
       // @ Check connection
       if ( $Connection->check() === false ) {

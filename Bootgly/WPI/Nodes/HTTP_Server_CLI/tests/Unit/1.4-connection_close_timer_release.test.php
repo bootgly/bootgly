@@ -5,6 +5,7 @@ use Bootgly\ACI\Events\Timer;
 use Bootgly\ACI\Tests\Assertion;
 use Bootgly\ACI\Tests\Assertions;
 use Bootgly\ACI\Tests\Suite\Test\Specification;
+use Bootgly\WPI\Connections\Peer;
 use Bootgly\WPI\Events\Select;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections;
@@ -26,27 +27,57 @@ return new Specification(
 
       // ! Boot the statics Connection->close() needs (no event loop run)
       $Server = new TCP_Server_CLI;
-      TCP_Server_CLI::$Event = new Select(new Connections($Server));
+      $Connections = new Connections($Server);
+      TCP_Server_CLI::$Event = new Select($Connections);
 
       // ! A real established loopback pair — Connection requires a socket
       //   with a peer name (unix socketpairs have none and self-close on
       //   construct); explicit timeouts so a broken pair fails fast instead
       //   of blocking on default_socket_timeout
       $Listener = stream_socket_server('tcp://127.0.0.1:0');
+      if ($Listener === false) {
+         throw new RuntimeException('Could not create the loopback listener.');
+      }
       $address = stream_socket_get_name($Listener, false);
+      if ($address === false) {
+         throw new RuntimeException('Could not resolve the loopback listener address.');
+      }
       $Client = stream_socket_client("tcp://{$address}", $code, $message, 2.0);
-      $Accepted = $Client !== false ? stream_socket_accept($Listener, 2.0) : false;
+      if ($Client === false) {
+         throw new RuntimeException("Could not connect the loopback client: {$code} {$message}");
+      }
+      $Accepted = stream_socket_accept($Listener, 2.0);
+      if ($Accepted === false) {
+         throw new RuntimeException('Could not accept the loopback client.');
+      }
+      $peer = stream_socket_get_name($Accepted, true);
+      if ($peer === false) {
+         throw new RuntimeException('Could not resolve the accepted peer identity.');
+      }
+      [$IP, $port] = Peer::parse($peer);
 
       yield new Assertion(
          description: 'the loopback pair is established',
       )
-         ->expect($Client !== false && $Accepted !== false)
+         ->expect(
+            $IP !== ''
+            && $port > 0
+         )
          ->to->be(true)
          ->assert();
 
-      $tasksProperty = new ReflectionProperty(Timer::class, 'tasks');
-      $registered = static function (array $ids) use ($tasksProperty): bool {
-         foreach ($tasksProperty->getValue() as $bucket) {
+      $TasksProperty = new ReflectionProperty(Timer::class, 'tasks');
+      $Registered = static function (array $ids) use ($TasksProperty): bool {
+         $tasks = $TasksProperty->getValue();
+         if (! is_array($tasks)) {
+            return false;
+         }
+
+         foreach ($tasks as $bucket) {
+            if (! is_array($bucket)) {
+               return false;
+            }
+
             foreach ($ids as $id) {
                if (array_key_exists($id, $bucket)) {
                   return true;
@@ -56,13 +87,13 @@ return new Specification(
          return false;
       };
 
-      $Connection = new Connection($Accepted);
+      $Connection = new Connection($Accepted, $IP, $port);
       $ids = $Connection->timers;
 
       yield new Assertion(
          description: 'construct registers the persistent expiration timer',
       )
-         ->expect($ids !== [] && $registered($ids))
+         ->expect($ids !== [] && $Registered($ids))
          ->to->be(true)
          ->assert();
 
@@ -75,7 +106,7 @@ return new Specification(
       yield new Assertion(
          description: 'close() cancels the expiration timer',
       )
-         ->expect($Connection->timers === [] && $registered($ids) === false)
+         ->expect($Connection->timers === [] && $Registered($ids) === false)
          ->to->be(true)
          ->assert();
 
@@ -91,9 +122,7 @@ return new Specification(
          ->assert();
 
       // @ Cleanup
-      if ($Client !== false) {
-         fclose($Client);
-      }
+      fclose($Client);
       fclose($Listener);
       Timer::del();
    })

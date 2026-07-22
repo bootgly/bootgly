@@ -17,12 +17,10 @@ use function max;
 use function stream_get_meta_data;
 use function stream_set_blocking;
 use function stream_socket_enable_crypto;
-use function stream_socket_get_name;
 use function time;
 use Throwable;
 
 use Bootgly\ACI\Events\Timer;
-use Bootgly\WPI\Connections\Peer;
 use Bootgly\WPI\Endpoints\Servers\Disconnecting;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI as Server;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections;
@@ -63,16 +61,15 @@ class Connection extends Packages
    /**
     * @param resource $Socket
     */
-   public function __construct (&$Socket)
+   public function __construct (&$Socket, string $IP, int $port)
    {
       $this->Socket = $Socket;
+      $this->ip = $IP;
+      $this->port = $port;
 
       // * Config
       $this->timers = [];
       $this->expiration = 15;
-
-      // * Data
-      // ... dynamicaly
 
       // * Metadata
       $this->id = (int) $Socket;
@@ -89,18 +86,6 @@ class Connection extends Packages
       #$this->reads = 0;
       $this->writes = 0;
       $this->expiredWrites = 0;
-
-
-      // @ Set Remote Data if possible
-      // IP:port
-      $peer = stream_socket_get_name($Socket, true);
-      if ($peer === false) {
-         $this->close();
-         return;
-      }
-      // * Data
-      // @ Remote
-      [$this->ip, $this->port] = Peer::parse($peer);
 
       parent::__construct($this);
 
