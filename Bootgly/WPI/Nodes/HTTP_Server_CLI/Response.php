@@ -1042,7 +1042,7 @@ class Response extends Server\Response
 
       // ! Stable composition mirrors both encoders' fetch path and keeps
       //   the scheduling Request's exact variance available to deferred work.
-      Cache::store(Cache::compose($Request, $varyLanguage), $buffer, $ttl);
+      Cache::store(Cache::compose($Request, $varyLanguage), $buffer, $ttl, $Request->URI);
    }
 
    /**

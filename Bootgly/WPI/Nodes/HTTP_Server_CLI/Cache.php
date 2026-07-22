@@ -77,6 +77,18 @@ class Cache
     * @var array<string,array{0:string,1:int,2:int,3:int}>
     */
    public static array $entries = [];
+   /**
+    * Admission pre-gate: URIs that have EVER stored an entry on this worker.
+    *
+    * The encoders test membership on the raw request URI before paying the
+    * key composition + lookup, so never-cached routes (the common case) skip
+    * the whole replay path. Deliberately a superset of the live entries —
+    * evictions and expirations do not remove URIs (a stale member only costs
+    * that URI the old compose-then-miss path); bounded by a periodic clear.
+    *
+    * @var array<string,true>
+    */
+   public static array $URIs = [];
 
    // * Metadata
    // ...
@@ -200,7 +212,7 @@ class Cache
     * Callers are responsible for request/response-side guards; this method
     * only enforces structural limits.
     */
-   public static function store (string $key, string $wire, int $ttl): void
+   public static function store (string $key, string $wire, int $ttl, string $URI): void
    {
       // ?
       if ($ttl <= 0 || strlen($key) > self::KEY_LIMIT || strlen($wire) > self::WIRE_LIMIT) {
@@ -211,6 +223,13 @@ class Cache
       if (count(self::$entries) >= self::ENTRIES_LIMIT && isSet(self::$entries[$key]) === false) {
          unset(self::$entries[array_key_first(self::$entries)]);
       }
+
+      // ! Register the URI in the admission pre-gate set (bounded: cleared
+      //   when it doubles the entry capacity; re-stores repopulate it).
+      if (count(self::$URIs) > self::ENTRIES_LIMIT * 2) {
+         self::$URIs = [];
+      }
+      self::$URIs[$URI] = true;
 
       // ! Locate the Date header value once — fetch() patches it in place
       $offset = strpos($wire, "\r\nDate: ");
@@ -225,5 +244,6 @@ class Cache
    public static function flush (): void
    {
       self::$entries = [];
+      self::$URIs = [];
    }
 }

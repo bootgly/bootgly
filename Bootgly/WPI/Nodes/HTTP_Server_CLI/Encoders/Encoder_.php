@@ -30,13 +30,20 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders\Catcher;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders\Challenge;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders\Check;
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Events as RequestEvents;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Events as RequestEvents;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 
 
 class Encoder_ extends Encoders
 {
+   // * Metadata
+   // # Replay handoff — per-request, reset by encode(); written by the
+   //   admission core so the worker-lifetime closure captures nothing.
+   private static null|string $wire = null;
+   private static null|Response $Admitted = null;
+
+
    /**
     * Fetch cacheable HTTP/1.1 wire after admission middleware has run.
     */
@@ -44,11 +51,15 @@ class Encoder_ extends Encoders
    {
       if (
          Cache::$entries === []
+         || isSet(Cache::$URIs[$Request->URI]) === false
          || $Request->closeConnection
          || $Request->protocol !== 'HTTP/1.1'
          || $Request->URI === Server::$health
          || strncmp($Request->URI, Challenge::PREFIX, 28) === 0
       ) {
+         // ? The URI pre-gate keeps every never-cached route (the common
+         //   case) at one set-membership test — the header reads and the
+         //   key composition below only run for URIs that have stored.
          return null;
       }
 
@@ -71,7 +82,6 @@ class Encoder_ extends Encoders
       // @ Get callbacks
       $Request  = Server::$Request;
       $Response = &Server::$Response;
-      $Router   = Server::$Router;
 
       // ?: Do not route / run middleware while request body is incomplete.
       //   The decoder has already installed a per-connection body decoder;
@@ -105,8 +115,8 @@ class Encoder_ extends Encoders
 
       // @ Reset Response state and bind per-request context.
       $Response->reset($Packages, $Request);
-      $cacheWire = null;
-      $CachedResponse = null;
+      self::$wire = null;
+      self::$Admitted = null;
 
       // @
       try {
@@ -148,49 +158,53 @@ class Encoder_ extends Encoders
                $Response = $Errored;
             }
             else {
-               $Result = SAPI::$Middlewares->process($Request, $Response,
-                  function (object $Request, object $Res) use (
-                     $Router,
-                     &$cacheWire,
-                     &$CachedResponse,
-                  ): mixed {
-                     // ?: Cache replay is inside the global admission pipeline.
-                     //   Route/group middleware routes never create entries, so
-                     //   every security middleware decides before this lookup.
-                     /** @var Request $Request */
-                     $cacheWire = self::replay($Request);
-                     if ($cacheWire !== null) {
-                        $CachedResponse = $Res;
-                        return $Res;
-                     }
+               // ! One admission-core closure per worker, not per request:
+               //   it captures nothing — per-request state flows through the
+               //   `self::$wire` / `self::$Admitted` statics reset above.
+               static $core = null;
+               $core ??= static function (object $Request, object $Res): mixed {
+                  // ?: Cache replay is inside the global admission pipeline.
+                  //   Route/group middleware routes never create entries, so
+                  //   every security middleware decides before this lookup.
+                  /** @var Request $Request */
+                  /** @var Response $Res */
+                  $wire = self::replay($Request);
+                  if ($wire !== null) {
+                     self::$wire = $wire;
+                     self::$Admitted = $Res;
+                     return $Res;
+                  }
 
-                     // @ Warm-router fast path, still inside global middleware.
-                     if ($Router->cached) {
-                        $Result = $Router->resolve();
-                        if ($Result instanceof Response) {
-                           return $Result;
-                        }
-                     }
+                  $Router = Server::$Router;
 
-                     $Result = (SAPI::$Handler)($Request, $Res, $Router);
-
-                     // ?: Handler returned a Response directly — short-circuit
+                  // @ Warm-router fast path, still inside global middleware.
+                  if ($Router->cached) {
+                     $Result = $Router->resolve();
                      if ($Result instanceof Response) {
                         return $Result;
                      }
-
-                     // @ Resolve through the cache (handler may have yielded a Generator
-                     //   of routes, or registered routes via direct $Router->route() calls)
-                     $Routes = $Result instanceof Generator ? $Result : null;
-                     foreach ($Router->routing($Routes) as $Responses) {
-                        if ($Responses instanceof Response) {
-                           $Res = $Responses;
-                        }
-                     }
-
-                     return $Res;
                   }
-               );
+
+                  $Result = (SAPI::$Handler)($Request, $Res, $Router);
+
+                  // ?: Handler returned a Response directly — short-circuit
+                  if ($Result instanceof Response) {
+                     return $Result;
+                  }
+
+                  // @ Resolve through the cache (handler may have yielded a Generator
+                  //   of routes, or registered routes via direct $Router->route() calls)
+                  $Routes = $Result instanceof Generator ? $Result : null;
+                  foreach ($Router->routing($Routes) as $Responses) {
+                     if ($Responses instanceof Response) {
+                        $Res = $Responses;
+                     }
+                  }
+
+                  return $Res;
+               };
+
+               $Result = SAPI::$Middlewares->process($Request, $Response, $core);
 
                if ($Result instanceof Response && $Result !== $Response) {
                   $Response = $Result;
@@ -199,8 +213,8 @@ class Encoder_ extends Encoders
          }
       }
       catch (Throwable $Throwable) {
-         $cacheWire = null;
-         $CachedResponse = null;
+         self::$wire = null;
+         self::$Admitted = null;
          // ! Break the static-Response alias (see the 503 path above)
          $Errored = Catcher::respond($Request, Server::$Response, $Throwable);
          unset($Response);
@@ -240,14 +254,17 @@ class Encoder_ extends Encoders
          // ?: Replay only when the admitted Response remains the active 200.
          //   A post-middleware/event denial or replacement must serialize its
          //   own response instead of reviving the cached success wire.
+         // ! PHPStan cannot see that the admission-core closure (invoked by
+         //   `Middlewares::process` above) writes `self::$wire`/`$Admitted`,
+         //   so it narrows both to their pre-try null resets.
          if (
-            $cacheWire !== null
-            && $CachedResponse === $Response
+            self::$wire !== null // @phpstan-ignore notIdentical.alwaysFalse, booleanAnd.alwaysFalse, booleanAnd.alwaysFalse, booleanAnd.alwaysFalse
+            && self::$Admitted === $Response // @phpstan-ignore identical.alwaysFalse
             && $Response->code === 200
             && $Request->closeConnection === false
          ) {
-            $length = strlen($cacheWire);
-            return $cacheWire;
+            $length = strlen(self::$wire);
+            return self::$wire;
          }
 
          // @ Encode HTTP Response
