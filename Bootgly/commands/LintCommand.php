@@ -70,20 +70,17 @@ class LintCommand extends Command
 
    /** @var array<string,array<string>> */
    public array $options = [
+      // Global options
       'Increase the verbosity of the command' => ['-v', '-vv', '-vvv'],
+      'Show help information' => ['--help', '-h'],
+      // Local options
       'Auto-fix violations' => ['--fix'],
       'Show changes without writing' => ['--dry-run'],
-      'Show help information' => ['--help'],
    ];
 
 
    public function run (array $arguments = [], array $options = []): bool
    {
-      // @ --help flag → show help
-      if ( isset($options['help']) ) {
-         return $this->help($arguments);
-      }
-
       // @ Route subcommand
       $submodule = $arguments[0] ?? null;
 
@@ -280,7 +277,7 @@ class LintCommand extends Command
    /**
     * @param array<int,string> $arguments
     */
-   public function help (array $arguments): bool
+   public function help (array $arguments = []): bool
    {
       $Output = CLI->Terminal->Output;
 
@@ -290,6 +287,12 @@ class LintCommand extends Command
 
       if ( empty($arguments) ) {
          $Output->write(PHP_EOL);
+
+         // # Header
+         $Fieldset = new Fieldset($Output);
+         $Fieldset->title = "@#Cyan: {$this->name} @;";
+         $Fieldset->content = $this->description;
+         $Fieldset->render();
 
          // # Arguments
          $content = '';

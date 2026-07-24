@@ -200,6 +200,7 @@ class ProjectCommand extends Command
    /** @var array<string,array<string>> */
    public array $options = [
       'Increase the verbosity of the command' => ['-v', '-vv', '-vvv'],
+      'Show help information' => ['--help', '-h'],
       'Preview seed run without executing SQL' => ['--dry-run'],
       'Platforms to set up on first run (create/import)' => ['--platform=console', '--platform=web', '--platform=console,web', '--platform=none'],
       'Creation source: from scratch or a platform project' => ['--from=scratch', '--from=<source>'],
@@ -3046,7 +3047,7 @@ class ProjectCommand extends Command
     *
     * @return bool
     */
-   public function help (array $arguments): bool
+   public function help (array $arguments = []): bool
    {
       $Output = CLI->Terminal->Output;
 
@@ -3056,6 +3057,12 @@ class ProjectCommand extends Command
 
       if ( empty($arguments) ) {
          $Output->write(PHP_EOL);
+
+         // # Header
+         $Fieldset = new Fieldset($Output);
+         $Fieldset->title = "@#Cyan: {$this->name} @;";
+         $Fieldset->content = $this->description;
+         $Fieldset->render();
 
          // # Arguments
          $content = '';

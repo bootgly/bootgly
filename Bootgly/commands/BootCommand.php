@@ -29,6 +29,15 @@ class BootCommand extends Command
    // * Config
    public int $group = 1;
 
+   /** @var array<string,array<string>> */
+   public array $options = [
+      // Global options
+      'Increase the verbosity of the command' => ['-v', '-vv', '-vvv'],
+      'Show help information' => ['--help', '-h'],
+      // Local options
+      'Boot Bootgly resource directories (projects, tests, public, ...)' => ['--resources'],
+   ];
+
    public string $name = 'boot';
    public string $description = 'Boot Bootgly resources, projects, etc.';
 

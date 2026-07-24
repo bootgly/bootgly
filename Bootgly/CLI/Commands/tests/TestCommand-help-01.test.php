@@ -91,6 +91,10 @@ return new Specification(
          description: '--help exits with success'
       );
       yield assert(
+         assertion: str_contains($output, 'Perform Bootgly tests'),
+         description: '--help renders the command header (name + description)'
+      );
+      yield assert(
          assertion: str_contains($output, 'Test usage'),
          description: '--help renders the usage section'
       );

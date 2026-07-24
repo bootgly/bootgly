@@ -186,11 +186,6 @@ class TestCommand extends Command
          );
       }
 
-      // ? --help/-h → show usage without running suites
-      if (isset($options['help']) || isset($options['h'])) {
-         return $this->help();
-      }
-
       // ! Agent detection
       // When an AI agent drives `bootgly test`, the `bootgly` executable
       // re-invokes itself via proc_open with a pipe on fd 1, drains the
@@ -445,11 +440,23 @@ class TestCommand extends Command
     *
     * @return bool
     */
-   public function help (): bool
+   public function help (array $arguments = []): bool
    {
+      // ? Benchmark subcommand help — delegate so `test benchmark [case] --help`
+      //   renders the runner-specific usage, not the test-runner help
+      if (($arguments[0] ?? null) === 'benchmark') {
+         return $this->benchmark(array_slice($arguments, 1), ['help' => true]);
+      }
+
       $Output = CLI->Terminal->Output;
 
       $Output->write(PHP_EOL);
+
+      // # Header
+      $Fieldset = new Fieldset($Output);
+      $Fieldset->title = "@#Cyan: {$this->name} @;";
+      $Fieldset->content = $this->description;
+      $Fieldset->render();
 
       // # Arguments
       $arguments = [

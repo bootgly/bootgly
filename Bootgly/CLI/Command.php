@@ -11,8 +11,18 @@
 namespace Bootgly\CLI;
 
 
+use const PHP_EOL;
 use function array_merge;
+use function implode;
+use function max;
+use function rtrim;
+use function str_pad;
+use function strlen;
 use Closure;
+
+use const Bootgly\CLI;
+use Bootgly\ABI\Code\__String\Path;
+use Bootgly\CLI\UI\Base\Fieldset;
 
 
 abstract class Command
@@ -26,6 +36,7 @@ abstract class Command
    public array $options = [
       // Global options
       'Increase the verbosity of the command' => ['-v', '-vv', '-vvv'],
+      'Show help information' => ['--help', '-h'],
       // Local options
       // ...
    ];
@@ -114,6 +125,67 @@ abstract class Command
 
          $this->context = $Closure;
       }
+   }
+
+   /**
+    * Render this command's own help — its name, description and options.
+    *
+    * This is the standardized default triggered by the global `--help`/`-h`
+    * option (dispatched centrally in `Commands::route()`). Commands that ship
+    * a richer, argument-aware help override this method.
+    *
+    * @param array<string> $arguments The subcommand path (unused by the default).
+    *
+    * @return bool
+    */
+   public function help (array $arguments = []): bool
+   {
+      // !
+      $Output = CLI->Terminal->Output;
+
+      $Output->write(PHP_EOL);
+
+      // @
+      // # Header
+      $Fieldset = new Fieldset($Output);
+      $Fieldset->title = "@#Cyan: {$this->name} @;";
+      $Fieldset->content = $this->description;
+      $Fieldset->render();
+
+      // # Options
+      // * Metadata
+      $width = 0;
+      foreach ($this->options as $flags) {
+         $width = max($width, strlen(implode(', ', $flags)));
+      }
+      // @@
+      $content = '';
+      foreach ($this->options as $description => $flags) {
+         $joined = implode(', ', $flags);
+         $padding = str_pad('', $width - strlen($joined));
+         $content .= "@#Yellow:{$joined}@;{$padding}  {$description}" . PHP_EOL;
+      }
+      $content = rtrim($content);
+
+      $Fieldset = new Fieldset($Output);
+      $Fieldset->title = '@#Green: Commands options @;';
+      $Fieldset->content = $content;
+      $Fieldset->render();
+
+      // # Usage
+      $script = $this->script;
+      $script = match ($script[0] ?? '') {
+         '/'     => new Path($script)->current,
+         '.'     => $script,
+         default => "php {$script}",
+      };
+      $Fieldset = new Fieldset($Output);
+      $Fieldset->title = '@#Green: Commands usage @;';
+      $Fieldset->content = "{$script} {$this->name} @#Black: [arguments] [...options] @;";
+      $Fieldset->render();
+
+      // :
+      return true;
    }
 
    /**

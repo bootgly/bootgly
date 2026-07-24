@@ -298,6 +298,11 @@ class Commands
          $arguments,
          $options,
          handler: function (Command $Command, array $arguments, array $options): bool {
+            // ? Global --help/-h → render the command's own help, never run it
+            if (isset($options['help']) || isset($options['h'])) {
+               return $Command->help($arguments);
+            }
+
             return $Command->run($arguments, $options);
          }
       );

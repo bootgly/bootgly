@@ -37,6 +37,12 @@ class HelpCommand extends Command
    public string $description = 'Display this help message';
 
 
+   public function help (array $arguments = []): bool
+   {
+      // : The help command IS the help — `help --help` shows the full help
+      return $this->run();
+   }
+
    public function run (array $arguments = [], array $options = []): bool
    {
       // !

@@ -46,7 +46,10 @@ class SetupCommand extends Command
 
    /** @var array<string,array<string>> */
    public array $options = [
+      // Global options
       'Increase the verbosity of the command' => ['-v', '-vv', '-vvv'],
+      'Show help information' => ['--help', '-h'],
+      // Local options
       'Uninstall Bootgly CLI from /usr/local/bin' => ['--uninstall'],
       'Grant PHP the ability to bind privileged ports without root' => ['--capabilities'],
    ];
