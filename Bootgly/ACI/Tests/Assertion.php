@@ -43,6 +43,11 @@ class Assertion extends Expectations
     * A custom `fallback` message displayed if the Assertion fails.
     */
    public static string|null $fallback = null;
+   /**
+    * The output `verbosity` level (0-3) applied to failure Fallbacks.
+    * Fed by the runner from the CLI `-v`/`-vv`/`-vvv` global option.
+    */
+   public static int $verbosity = 0;
    // ---
    // # Expectations
    // ..$to
@@ -307,11 +312,10 @@ class Assertion extends Expectations
             $this->expected = $Expectation;
             $this->using = $using;
 
-            // TODO: implement verbosity
             /**
              * @var Asserting $using
              */
-            $Fallback = $using->fail($actual, $expected);
+            $Fallback = $using->fail($actual, $expected, self::$verbosity);
    
             // @ Call fail in the Assertion
             $this->fail($Fallback);

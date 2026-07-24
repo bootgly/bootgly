@@ -102,6 +102,7 @@ use Bootgly\ABI\Code\__String;
 use Bootgly\ABI\Code\__String\Escapeable\Text\Formattable;
 use Bootgly\ACI\Logs\Data\Display;
 use Bootgly\ACI\Tests;
+use Bootgly\ACI\Tests\Assertion;
 use Bootgly\ACI\Tests\Benchmark;
 use Bootgly\ACI\Tests\Benchmark\Artifacts;
 use Bootgly\ACI\Tests\Benchmark\Configs;
@@ -242,6 +243,8 @@ class TestCommand extends Command
       //   exit-on-first-failure contract.
       Suite::$exitOnFailure = $this->view !== 'heatmap';
       Suite::$quiet = $this->view === 'heatmap';
+      // ? Global -v/-vv/-vvv raises the detail of assertion failure Fallbacks
+      Assertion::$verbosity = $this->verbosity;
 
       // !
       // arguments

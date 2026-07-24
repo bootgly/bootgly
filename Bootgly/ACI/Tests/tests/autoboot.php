@@ -23,6 +23,7 @@ return new Suite(
       // Advanced API
       '1.0.0-Advanced_API-asserted',
       '1.0.1-Advanced_API-assert',
+      '1.0.2-Advanced_API-fallback_verbosity',
       // Advanced API - Expectations
       '1.1.1-Advanced_API-expectations-equal',
       '1.1.2-Advanced_API-expectations-greater_than',
