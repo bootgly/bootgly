@@ -331,5 +331,9 @@ return new Suite(
       // The pre-demote recursive handoff must never apply a root lchown()
       // through a path component the runtime identity can replace mid-walk.
       '58.01-autotls_privileged_ownership_symlink_toctou',
+      // # Decoder Chunked (chunk-size overflow — audit M1)
+      // A chunk-size token at or above 2^64 collapses to 0 through
+      // hexdec()'s float and must not be read as the terminal chunk.
+      '59.01-chunked_size_overflow_terminal_zero',
    ],
 );

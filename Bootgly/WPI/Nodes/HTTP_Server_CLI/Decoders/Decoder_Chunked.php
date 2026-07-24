@@ -15,6 +15,7 @@ use const Bootgly\WPI;
 use function ctype_xdigit;
 use function explode;
 use function hexdec;
+use function ltrim;
 use function preg_match;
 use function strlen;
 use function strpos;
@@ -37,6 +38,14 @@ class Decoder_Chunked extends Decoders implements Feeding
    //   cannot extend it.
    private const int BODY_DEADLINE = 30;
    private const int CHUNK_LINE_LIMIT = 8192;
+   /**
+    * Maximum SIGNIFICANT hexadecimal digits accepted in a chunk-size (audit
+    * M1). 15 digits cap a chunk at 16^15-1 (just under 2^60), which keeps
+    * `hexdec()` on the integer side of its float threshold and leaves the
+    * aggregate addition far from overflowing. Any longer token is orders of
+    * magnitude beyond every servable body cap anyway.
+    */
+   private const int CHUNK_SIZE_DIGITS = 15;
    private const int TRAILER_LIMIT = 16384;
 
    // # States
@@ -176,7 +185,26 @@ class Decoder_Chunked extends Decoders implements Feeding
                   return States::Rejected;
                }
 
-               $chunkSize = (int) hexdec($sizeLine);
+               // ! RFC 9112 §7.1 permits leading zeros, so significance — not
+               //   token length — carries the magnitude. `hexdec()` returns a
+               //   FLOAT from 2^64 up, and the int cast collapses that float to
+               //   0, which would then read as the terminal chunk and hand the
+               //   bytes behind it to the pipeline (audit M1). Bound the
+               //   significant digits BEFORE converting, so every accepted
+               //   token converts exactly.
+               $significant = ltrim($sizeLine, '0');
+
+               if (strlen($significant) > self::CHUNK_SIZE_DIGITS) {
+                  $Package->reject("HTTP/1.1 413 Request Entity Too Large\r\n\r\n");
+                  $Body->waiting = false;
+                  $this->body = '';
+                  $this->buffer = '';
+                  $Package->Decoder = null;
+                  $Package->consumed = 0;
+                  return States::Rejected;
+               }
+
+               $chunkSize = $significant === '' ? 0 : (int) hexdec($significant);
 
                if ($chunkSize === 0) {
                   // @ A zero chunk starts the terminal section; completion
@@ -187,7 +215,9 @@ class Decoder_Chunked extends Decoders implements Feeding
 
                // @ Validate total size against the configurable cap (audit F-6:
                //   honors `requestMaxBodySize`; was a hard-coded 10 MB constant).
-               if ($this->totalSize + $chunkSize > Server\Request::$maxBodySize) {
+               //   Compared as a remainder, never as a sum, so the aggregate
+               //   itself can never overflow into a passing value (audit M1).
+               if ($chunkSize > Server\Request::$maxBodySize - $this->totalSize) {
                   $Package->reject("HTTP/1.1 413 Request Entity Too Large\r\n\r\n");
                   $Body->waiting = false;
 
