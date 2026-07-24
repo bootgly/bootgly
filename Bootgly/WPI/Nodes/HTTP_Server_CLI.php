@@ -1981,6 +1981,17 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
          }
          $chain[] = $ancestor;
       }
+      // ---
+
+      // @ Hand the tree itself over first (audit C6). Every ancestor handoff
+      //   below GRANTS the runtime identity write access, so it must never
+      //   run while this walk is still resolving names underneath it.
+      if ($this->walk($directory) === false) {
+         return false;
+      }
+
+      // ---
+
       if ($ancestor === $storage) {
          foreach (array_reverse($chain) as $parent) {
             $status = @stat($parent);
@@ -1999,11 +2010,45 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
          }
       }
 
+      return true;
+   }
+
+   /**
+    * Hand one managed subtree to the runtime identity, contents before the
+    * directory that holds them (audit C6).
+    *
+    * A privileged walk is only safe while the runtime identity cannot rewrite
+    * the names it resolves. Two invariants keep it that way: a directory is
+    * only ever entered while it is still root-owned and root-only-writable,
+    * and it is only chowned AFTER everything inside it — so it never becomes
+    * attacker-writable while this walk is still working within it.
+    */
+   private function walk (string $directory): bool
+   {
+      $status = @lstat($directory);
+      if ($status === false) {
+         return false;
+      }
+
+      // ?: Already the runtime identity's — this subtree was handed over by an
+      //    earlier boot and there is nothing left to transfer. Descending would
+      //    resolve names inside a directory that identity can rewrite, which is
+      //    precisely the check/use window this ordering exists to close.
+      if ($status['uid'] !== 0) {
+         return true;
+      }
+
+      // ? Root-owned but group/other-writable is equally rewritable.
+      if (($status['mode'] & 0022) !== 0) {
+         return false;
+      }
+
       $entries = scandir($directory);
       if ($entries === false) {
          return false;
       }
 
+      // @@ Contents first
       foreach ($entries as $entry) {
          if ($entry === '.' || $entry === '..') {
             continue;
@@ -2017,18 +2062,28 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
             return false;
          }
 
+         // @ Descend before owning: walk() chowns the subdirectory itself once
+         //   its own contents are done, so no directory on the path currently
+         //   being resolved is ever writable by the runtime identity.
+         if (is_dir($path)) {
+            if ($this->walk($path) === false) {
+               return false;
+            }
+
+            continue;
+         }
+
          if ($this->user !== null && lchown($path, $this->user) === false) {
             return false;
          }
          if ($this->group !== null && lchgrp($path, $this->group) === false) {
             return false;
          }
-
-         if (is_dir($path) && $this->own($path) === false) {
-            return false;
-         }
       }
 
+      // ---
+
+      // @ The directory last — after this it belongs to the runtime identity.
       if ($this->user !== null && lchown($directory, $this->user) === false) {
          return false;
       }

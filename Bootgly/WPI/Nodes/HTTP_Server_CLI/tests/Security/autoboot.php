@@ -327,5 +327,9 @@ return new Suite(
       // Duplicate and overlapping ranges must be coalesced or rejected before
       // they multiply file reads, multipart metadata, and network egress.
       '57.01-duplicate_byte_range_response_amplification',
+      // # Auto-TLS ownership handoff (privileged symlink TOCTOU — audit C6)
+      // The pre-demote recursive handoff must never apply a root lchown()
+      // through a path component the runtime identity can replace mid-walk.
+      '58.01-autotls_privileged_ownership_symlink_toctou',
    ],
 );
