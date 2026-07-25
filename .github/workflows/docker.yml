@@ -4,6 +4,11 @@ name: Docker (build + push)
 # release. The Dockerfile lives at the repo root but builds with the WORKSPACE
 # as context (the `full` target COPYs the sibling bootgly_benchmarks/), so this
 # job checks out both repos side by side and builds from their parent.
+#
+# Tags follow "version is the axis, variant is the suffix" — see the tag scheme
+# documented in the "Resolve version and tags" step. Pre-releases (-beta.N,
+# -rc.N) publish their exact version plus a moving channel alias only; they
+# never move `latest`.
 
 on:
   release:
@@ -50,9 +55,10 @@ jobs:
             echo "$ENTRY" >> "$GITHUB_OUTPUT"
           done <<< "$PROVENANCE"
 
-      - name: Resolve version
+      - name: Resolve version and tags
         id: version
         run: |
+          set -euo pipefail
           V="${{ github.event.release.tag_name || inputs.version }}"
           V="${V#v}"
           if [ -z "$V" ]; then
@@ -60,7 +66,52 @@ jobs:
             exit 1
           fi
           echo "value=$V" >> "$GITHUB_OUTPUT"
-          echo "Resolved version: $V"
+
+          # ! Tag scheme: the VERSION is the primary axis, the VARIANT is a
+          #   suffix. `slim` is the default variant, so it carries the bare
+          #   version tag; `full` is always suffixed. This keeps the two axes
+          #   from being confused the way a bare `latest` + `slim` + `full`
+          #   trio does, and it makes a Bootgly version pinnable at all.
+          #
+          #     stable 1.2.3 → 1.2.3  1.2  1  slim  latest
+          #                    1.2.3-full  1.2-full  1-full  full
+          #     pre-release  → 1.0.0-beta.1  beta
+          #                    1.0.0-beta.1-full  beta-full
+          #
+          # ? A pre-release must NEVER move `latest`, `slim`, `full` or the
+          #   major/minor aliases: `docker pull bootgly/bootgly` would hand
+          #   unreleased code to every user. Pre-releases publish their exact
+          #   version plus a moving channel alias (`beta`, `rc`) that people
+          #   opt into deliberately.
+          PRERELEASE="${{ github.event.release.prerelease }}"
+          case "$V" in *-*) PRERELEASE=true ;; esac
+
+          REPO=bootgly/bootgly
+          if [ "$PRERELEASE" = "true" ]; then
+            CHANNEL="${V#*-}"      # 1.0.0-beta.1 → beta.1
+            CHANNEL="${CHANNEL%%.*}" # beta.1      → beta
+            SLIM_TAGS="$REPO:$V"$'\n'"$REPO:$CHANNEL"
+            FULL_TAGS="$REPO:$V-full"$'\n'"$REPO:$CHANNEL-full"
+          else
+            MAJOR="${V%%.*}"
+            MINOR="${V%.*}"
+            SLIM_TAGS="$REPO:$V"$'\n'"$REPO:$MINOR"$'\n'"$REPO:$MAJOR"$'\n'"$REPO:slim"$'\n'"$REPO:latest"
+            FULL_TAGS="$REPO:$V-full"$'\n'"$REPO:$MINOR-full"$'\n'"$REPO:$MAJOR-full"$'\n'"$REPO:full"
+          fi
+
+          {
+            echo "prerelease=$PRERELEASE"
+            echo "slim_tags<<TAGS_EOF"
+            echo "$SLIM_TAGS"
+            echo "TAGS_EOF"
+            echo "full_tags<<TAGS_EOF"
+            echo "$FULL_TAGS"
+            echo "TAGS_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "Resolved version: $V (prerelease: $PRERELEASE)"
+          echo "slim tags:"; echo "$SLIM_TAGS"
+          echo "full tags:"; echo "$FULL_TAGS"
 
       - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -85,9 +136,7 @@ jobs:
             BOOTGLY_FRAMEWORK_DIRTY=${{ steps.source.outputs.framework_dirty }}
             BOOTGLY_FRAMEWORK_TRACKED_DIFF_SHA256=${{ steps.source.outputs.framework_tracked_diff_sha256 }}
             BOOTGLY_FRAMEWORK_UNTRACKED_MANIFEST_SHA256=${{ steps.source.outputs.framework_untracked_manifest_sha256 }}
-          tags: |
-            bootgly/bootgly:slim
-            bootgly/bootgly:latest
+          tags: ${{ steps.version.outputs.slim_tags }}
 
       - name: Build and push full
         uses: docker/build-push-action@v7
@@ -107,8 +156,7 @@ jobs:
             BOOTGLY_BENCHMARKS_DIRTY=${{ steps.source.outputs.benchmarks_dirty }}
             BOOTGLY_BENCHMARKS_TRACKED_DIFF_SHA256=${{ steps.source.outputs.benchmarks_tracked_diff_sha256 }}
             BOOTGLY_BENCHMARKS_UNTRACKED_MANIFEST_SHA256=${{ steps.source.outputs.benchmarks_untracked_manifest_sha256 }}
-          tags: |
-            bootgly/bootgly:full
+          tags: ${{ steps.version.outputs.full_tags }}
 
       # The bootgly_benchmarks images bake FROM bootgly/bootgly:full — now that
       # it is on Hub, tell that repo to rebuild every opponent against it. No
