@@ -565,14 +565,26 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding
                }
 
                // @ Rapid-reset mitigation (CVE-2023-44487): count client
-               //   aborts of unanswered streams inside a 10s window.
+               //   aborts inside a 10s window.
+               //
+               // ! Charged for every stream still open here, NOT only for
+               //   unanswered ones (audit M4). `responded` is set as soon as a
+               //   response is PARTIALLY emitted, which is the normal outcome
+               //   under a zero send window — the handler ran, the body was
+               //   built and parked in the backlog. Excusing those resets let a
+               //   peer advertise no credit and then cycle
+               //   HEADERS -> handler -> RST without bound, spending server work
+               //   per iteration and never spending budget. A stream that
+               //   reached its local END_STREAM is already closed and removed,
+               //   so its presence in the map IS the proof that work was
+               //   aborted mid-flight.
                $Stream = $this->Streams[$stream] ?? null;
                if ($Stream !== null) {
                   $Stream->close();
                   unset($this->Streams[$stream]);
                   $this->opened--;
 
-                  if ($Stream->responded === false && $this->count($Package) !== null) {
+                  if ($this->count($Package) !== null) {
                      return States::Rejected;
                   }
                }

@@ -335,5 +335,17 @@ return new Suite(
       // A chunk-size token at or above 2^64 collapses to 0 through
       // hexdec()'s float and must not be read as the terminal chunk.
       '59.01-chunked_size_overflow_terminal_zero',
+      // # Response defer over HTTP/2 (lost stream identity — audit M2)
+      // A deferred response must keep its stream id, never serializing
+      // HTTP/1 wire bytes into a live HTTP/2 connection.
+      '60.01-http2_deferred_response_stream_identity',
+      // # HTTP/2 rapid reset (flow-stalled bypass — audit M4)
+      // A stream whose response is only PARTIALLY emitted must still
+      // charge its peer reset to the CVE-2023-44487 budget.
+      '61.01-http2_flow_stalled_reset_budget_bypass',
+      // # HTTP/2 outbound backlog (aggregate budget — audit M3)
+      // Parked response bodies must be bounded per connection, not one
+      // whole body per concurrent flow-stalled stream.
+      '62.01-http2_outbound_backlog_aggregate_budget',
    ],
 );

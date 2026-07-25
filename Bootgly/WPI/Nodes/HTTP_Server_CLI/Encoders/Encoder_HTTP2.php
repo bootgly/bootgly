@@ -18,13 +18,16 @@ use function is_array;
 use function is_int;
 use function is_string;
 use function ltrim;
+use function pack;
 use function strlen;
 use function strpos;
 use function strtolower;
 use function substr;
 
 use Bootgly\WPI\Endpoints\Servers\Packages;
+use Bootgly\WPI\Interfaces\TCP_Server_CLI;
 use Bootgly\WPI\Modules\HTTP2;
+use Bootgly\WPI\Modules\HTTP2\Errors;
 use Bootgly\WPI\Modules\HTTP2\Frame;
 use Bootgly\WPI\Modules\HTTP2\HPACK;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Decoder_HTTP2;
@@ -151,6 +154,34 @@ final class Encoder_HTTP2
          $frames .= $data;
 
          if ($done === false) {
+            // ? Outbound retention cap (audit M3) — what drain() could not
+            //   emit stays in memory until the peer grants credit. A peer that
+            //   simply withholds WINDOW_UPDATE could otherwise park one whole
+            //   response body per concurrent stream, multiplying the transport
+            //   pending cap by the stream limit. Budget is per CONNECTION, the
+            //   same shape SSE already enforces for sustained streams.
+            $retained = 0;
+            foreach ($H2->Streams as $Sibling) {
+               $retained += strlen($Sibling->backlog);
+            }
+
+            if ($retained > TCP_Server_CLI::$maxPendingBytes) {
+               $Stream->close();
+               unset($H2->Streams[$stream]);
+               $H2->opened--;
+
+               $frames .= Frame::pack(
+                  HTTP2::FRAME_RST_STREAM,
+                  0,
+                  $stream,
+                  pack('N', Errors::EnhanceYourCalm->value)
+               );
+
+               $raw = "{$outbox}{$frames}";
+               $length = strlen($raw);
+               return $raw;
+            }
+
             $Stream->responded = true;
 
             $raw = "{$outbox}{$frames}";
