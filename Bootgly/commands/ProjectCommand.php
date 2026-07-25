@@ -2788,6 +2788,30 @@ class ProjectCommand extends Command
       }
       $data['workers'] = $Workers;
 
+      // ? The Auto-TLS helper PID rides in the SAME runtime-writable discovery
+      //   state as everything else here, but unlike master/workers it used to
+      //   pass through unauthenticated — the stop path then signalled it after
+      //   only a `/proc/<pid>/cmdline` substring match, so a compromised
+      //   runtime UID could point it at another project's similarly titled
+      //   helper and let a privileged operator deliver the signal (audit M6).
+      //
+      // ! Bind it to the already-authenticated master HERE, while that master
+      //   is still alive. The signal site runs after the master is SIGKILLed,
+      //   at which point the helper may already be reparented and PPid can no
+      //   longer prove anything.
+      $lease = $data['AutoTLS'] ?? null;
+      if (is_array($lease)) {
+         $helper = $lease['helper'] ?? null;
+         if (
+            is_int($helper) === false
+            || $helper < 2
+            || $State->authenticate($helper, parent: $data['master']) === false
+         ) {
+            unset($lease['helper']);
+            $data['AutoTLS'] = $lease;
+         }
+      }
+
       /** @var array{master:int,workers:array<int>,started:int,type:string,host?:string,port?:int,AutoTLS?:array<string,mixed>} $data */
       return $data;
    }

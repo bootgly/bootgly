@@ -1010,14 +1010,19 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
          return;
       }
 
-      if ($this->delegate($AutoTLS)) {
-         return;
-      }
-
       // @ Bind the gate WITHOUT so_reuseport — deliberately exclusive: with
       //   it the kernel would balance real user traffic between this
       //   token-only socket and any later-started :80 server, black-holing
       //   half its connections; an exclusive bind fails loudly instead.
+      //
+      // ! Attempted BEFORE any delegated lease (audit M7). A lease lives in
+      //   runtime-writable state JSON, so a compromised runtime UID can forge
+      //   every field it is checked against and keep an arbitrary parent/child
+      //   pair alive to satisfy the liveness probes — a victim that trusted it
+      //   skipped binding while no responder existed at all, silently failing
+      //   issuance. The kernel is the authority the attacker cannot forge: if
+      //   this exclusive bind SUCCEEDS, nothing held the port and every lease
+      //   claiming readiness for it was false.
       $error_code = 0;
       $error_message = '';
       $bindHost = str_contains((string) $this->host, ':')
@@ -1028,20 +1033,29 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
          $error_code,
          $error_message
       );
-      if ($Gate === false) {
-         $this->helperReady = false;
-         $this->Logger->log(
-            error: "@\\;Auto-TLS: could not prove or bind an HTTP-01 responder on port {$AutoTLS->port} ({$error_message}); renewal is paused until a same-spool helper or the port becomes available.@\\;"
-         );
+
+      if ($Gate !== false) {
+         $this->Gate = $Gate;
+         $this->validator = 0;
+
+         // @ The final daemon master already exists (TCP detach happens before
+         //   booting()), so every mode can fork an owned helper here.
+         $this->guard();
+
          return;
       }
 
-      $this->Gate = $Gate;
-      $this->validator = 0;
+      // ?: The port is genuinely held by someone. Only now may a same-spool
+      //    lease explain WHO holds it — the claim is corroborated by the
+      //    kernel refusing this bind, never accepted on its own word.
+      if ($this->delegate($AutoTLS)) {
+         return;
+      }
 
-      // @ The final daemon master already exists (TCP detach happens before
-      //   booting()), so every mode can fork an owned helper here.
-      $this->guard();
+      $this->helperReady = false;
+      $this->Logger->log(
+         error: "@\\;Auto-TLS: could not prove or bind an HTTP-01 responder on port {$AutoTLS->port} ({$error_message}); renewal is paused until a same-spool helper or the port becomes available.@\\;"
+      );
    }
 
    /**
