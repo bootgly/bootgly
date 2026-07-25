@@ -39,7 +39,7 @@ use Bootgly\API\Component;
 use Bootgly\CLI\Terminal;
 use Bootgly\CLI\Terminal\Input;
 use Bootgly\CLI\Terminal\Input\Keystrokes;
-use Bootgly\CLI\Terminal\Input\Line;
+use Bootgly\CLI\Terminal\Input\Lines;
 use Bootgly\CLI\Terminal\Input\Mousestrokes;
 use Bootgly\CLI\Terminal\Output;
 use Bootgly\CLI\UI\Components\Scrollarea;
@@ -92,20 +92,20 @@ class Prompt extends Component
    public string $selection;
 
    // * Data
-   public private(set) Line $Line;
+   /** The multiline input buffer — one Line per row */
+   public private(set) Lines $Lines;
    /** The buffered content band (scrollable above the input frame) */
    public private(set) Scrollarea $Scrollarea;
    /** @var array<string> History entries (oldest first) */
    public private(set) array $entries;
 
    // * Metadata
-   /** @var array<string> Multiline accumulation (Alt+Enter) */
-   private array $buffer;
    /** Content region bottom row (the frame rows come next) */
    private int $region;
    /** Frame rows: optional top texts + border + input + border + optional bottom texts */
    public int $rows {
       get => 3
+         + count($this->Lines->Lines) - 1
          + ($this->top['left'] !== '' || $this->top['right'] !== '' ? 1 : 0)
          + ($this->bottom['left'] !== '' || $this->bottom['right'] !== '' ? 1 : 0);
    }
@@ -149,12 +149,11 @@ class Prompt extends Component
       $this->selection = 'Selection mode · Ctrl+T resumes the mouse';
 
       // * Data
-      $this->Line = new Line;
+      $this->Lines = new Lines;
       $this->Scrollarea = new Scrollarea($Output);
       $this->entries = [];
 
       // * Metadata
-      $this->buffer = [];
       $this->region = 0;
       $this->recalled = 0;
       $this->draft = '';
@@ -193,11 +192,16 @@ class Prompt extends Component
       $border = "@#Black:" . str_repeat($this->border, $width) . "@;";
       $lines[] = $border;
 
-      // # Input row (raw SGR prefix — Template resets swallow adjacent spaces/underscores)
-      $pending = count($this->buffer);
-      $hint = $pending > 0 ? "@#Black:…+{$pending}@; " : '';
+      // # Input rows — the prompt marks the first row, broken lines stack above
+      //   the active one and continuation rows align under the marker
+      //   (raw SGR prefix — Template resets swallow adjacent spaces/underscores)
       $prefix = self::wrap(self::_CYAN_BRIGHT_FOREGROUND) . $this->prompt . self::_RESET_FORMAT;
-      $lines[] = "{$hint}{$prefix}{$this->Line->render()}";
+      $indent = str_repeat(' ', mb_strlen($this->prompt));
+
+      foreach ($this->Lines->Lines as $index => $Line) {
+         $lines[] = ($index === 0 ? $prefix : $indent)
+            . ($index === $this->Lines->row ? $Line->render() : $Line->value);
+      }
 
       // ? Notices replace part of the bottom border while active
       if ($this->interrupting === true) {
@@ -292,6 +296,54 @@ class Prompt extends Component
    }
 
    /**
+    * Fits the content region to the current frame height — the frame grows one
+    * row per broken line, so the band above it shrinks by the same amount.
+    * Re-clips the scroll region only when the height actually changed.
+    *
+    * @return void
+    */
+   private function fit (): void
+   {
+      $region = (int) Terminal::$height - $this->rows;
+
+      // ? Never let the frame eat the whole screen
+      if ($region < 1) {
+         $region = 1;
+      }
+
+      // ?
+      if ($region === $this->region && $this->Scrollarea->rows === $region) {
+         return;
+      }
+
+      $previous = $this->region;
+      $this->region = $region;
+
+      // @ Rows the frame gives back still carry its paint — erase them before
+      //   they belong to the content again (the frame only repaints its own)
+      if ($previous > 0 && $region > $previous) {
+         for ($row = $previous + 1; $row <= $region; $row++) {
+            $this->Output->Cursor->moveTo(line: $row, column: 1);
+            $this->Output->Text->clear(lines: 1);
+         }
+      }
+
+      // ? Native flow keeps no scroll region — only the flow position clamps
+      if ($this->buffered === false) {
+         if ($this->flowed > $region) {
+            $this->flowed = $region;
+         }
+
+         return;
+      }
+
+      $this->Scrollarea->rows = $region;
+
+      // @ Clip the scroll region (DECSTBM homes the cursor — reposition after)
+      $this->Output->Viewport->clip(1, $region);
+   }
+
+   /**
     * Starts the prompt: clips the content scroll region and draws the input row.
     *
     * @return void
@@ -317,11 +369,9 @@ class Prompt extends Component
       if ($this->buffered === true) {
          // ! Content band over the region rows
          $this->Scrollarea->row = 1;
-         $this->Scrollarea->rows = $this->region;
          $this->Scrollarea->width = (int) Terminal::$width;
 
-         // @ Clip the scroll region (DECSTBM homes the cursor — reposition after)
-         $this->Output->Viewport->clip(1, $this->region);
+         $this->fit();
       }
       else {
          // ! Flow position: below the existing screen content when the cursor is
@@ -331,7 +381,11 @@ class Prompt extends Component
          $this->flowed = ($row > 0 && $row < $this->region) ? $row : $this->region;
       }
 
-      // @ Raw input mode — signals off so Ctrl+C arrives as a byte (two-stage exit)
+      // @ Raw input mode — signals off so Ctrl+C arrives as a byte (two-stage exit).
+      //   The extended keyboard protocol is what makes Shift+Enter reportable at
+      //   all; terminals without it simply ignore the negotiation and Enter stays
+      //   the only way to submit.
+      $this->Input->extended = true;
       $this->Input->configure(blocking: false, canonical: false, echo: false, signals: false);
       $this->Output->Cursor->hide();
 
@@ -602,36 +656,53 @@ class Prompt extends Component
                }
                break;
 
-            // @ Multiline (Alt+Enter accumulates)
-            case Keystrokes::ALT_ENTER->value:
-               $this->buffer[] = $this->Line->value;
-               $this->Line->reset();
+            // ? Shift+Enter breaks the line — it only arrives when the terminal
+            //   speaks the extended keyboard protocol (negotiated in start()),
+            //   since a plain terminal sends CR for Enter and Shift+Enter alike
+            case Keystrokes::SHIFT_ENTER->value:
+               $this->Lines->control(Keystrokes::ENTER->value);
+
+               // @ The frame grew by a row — the content band gives it up
+               $this->fit();
                break;
 
-            // @ History recall
+            // @ Row navigation, then history recall at the edges — a multiline
+            //   input walks its own rows first (the history is one row away)
             case Keystrokes::UP->value:
+               if ($this->Lines->row > 0) {
+                  $this->Lines->control($key);
+
+                  break;
+               }
+
                if ($this->recalled > 0) {
                   // ? The draft survives the first recall
                   if ($this->recalled === count($this->entries)) {
-                     $this->draft = $this->Line->value;
+                     $this->draft = $this->Lines->value;
                   }
 
                   $this->recalled--;
 
-                  $this->Line->reset();
-                  $this->Line->feed($this->entries[$this->recalled]);
+                  $this->Lines->load($this->entries[$this->recalled]);
+                  $this->fit();
                }
                break;
             case Keystrokes::DOWN->value:
+               if ($this->Lines->row < count($this->Lines->Lines) - 1) {
+                  $this->Lines->control($key);
+
+                  break;
+               }
+
                if ($this->recalled < count($this->entries)) {
                   $this->recalled++;
 
-                  $this->Line->reset();
-                  $this->Line->feed(
+                  $this->Lines->load(
                      $this->recalled === count($this->entries)
                         ? $this->draft
                         : $this->entries[$this->recalled]
                   );
+                  $this->fit();
                }
                break;
 
@@ -650,17 +721,17 @@ class Prompt extends Component
 
             default:
                // ? Enter submits the line (plus the multiline buffer)
-               if ($key === Keystrokes::ENTER->value || $key === "\r") {
-                  $this->buffer[] = $this->Line->value;
-                  $submitted = $this->buffer;
-                  $line = implode("\n", $submitted);
+               if ($key === Keystrokes::ENTER->value || $key === Keystrokes::CTRL_M->value) {
+                  $line = $this->Lines->value;
 
-                  $this->buffer = [];
-                  $this->Line->reset();
+                  $this->Lines->reset();
                   $this->draft = '';
 
+                  // @ The frame shrank back to one input row
+                  $this->fit();
+
                   // @ Record the history (bounded ring) — lone empty lines never enter
-                  if ($submitted !== ['']) {
+                  if ($line !== '') {
                      $this->entries[] = $line;
 
                      if (count($this->entries) > $this->history) {
@@ -681,12 +752,15 @@ class Prompt extends Component
                   break;
                }
 
-               // ? Edit keys control the buffer; printable input feeds it
-               if ($key[0] === "\e" || $key === "\x7F" || (strlen($key) === 1 && ord($key) < 32)) {
-                  $this->Line->control($key);
-               }
-               else {
-                  $this->Line->feed($key);
+               // ? The buffer classifies the key itself (control vs printable)
+               //   and merges rows on Backspace/Delete at the edges
+               $rows = count($this->Lines->Lines);
+
+               $this->Lines->control($key);
+
+               // ? A merged row shrank the frame
+               if (count($this->Lines->Lines) !== $rows) {
+                  $this->fit();
                }
          }
 

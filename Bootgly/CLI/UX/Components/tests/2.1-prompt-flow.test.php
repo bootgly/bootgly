@@ -22,9 +22,9 @@ return new Specification(
       if (BOOTGLY_TTY === true) {
          // ! Interactive: two submits, then history recall, then multiline, then Ctrl+D
          // keys: "one\n" · "two\n" · ↑ ↑ ↓ (recall walk) "\n" (submits `two`) ·
-         //       "a" Alt+Enter "b" "\n" (multiline `a\nb`) · Ctrl+D
+         //       "a" Shift+Enter "b" "\n" (multiline `a\nb`) · Ctrl+D
          $stream = fopen('php://memory', 'r+');
-         fwrite($stream, "one\ntwo\n\e[A\e[A\e[B\na\e\rb\n\x04");
+         fwrite($stream, "one\ntwo\n\e[A\e[A\e[B\na\e[13;2ub\n\x04");
          rewind($stream);
 
          $Input = new Input($stream); // @phpstan-ignore-line
@@ -43,7 +43,7 @@ return new Specification(
          // @ Valid
          yield assert(
             assertion: $lines === ['one', 'two', 'two', "a\nb"],
-            description: 'Submits, history recall (↑↑↓ lands on `two`) and Alt+Enter multiline'
+            description: 'Submits, history recall (↑↑↓ lands on `two`) and Shift+Enter multiline'
          );
          yield assert(
             assertion: $Prompt->entries === ['one', 'two', 'two', "a\nb"],
