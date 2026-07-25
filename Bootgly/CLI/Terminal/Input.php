@@ -55,6 +55,7 @@ use Throwable;
 use Bootgly\ABI\IO\IPC\Pipe;
 use Bootgly\ACI\Process\State;
 use Bootgly\API\Projects;
+use Bootgly\CLI\Terminal\Input\Keystrokes;
 use Bootgly\CLI\Terminal\Input\Roles;
 
 
@@ -66,6 +67,15 @@ class Input
     * discipline of emulated TTYs (real TTYs echo in the kernel; pipes never echo).
     */
    public bool $echo;
+   /**
+    * Negotiate the extended keyboard protocol when entering raw mode — kitty
+    * `CSI u` plus xterm modifyOtherKeys. It is what makes combinations with no
+    * legacy encoding reportable (Shift+Enter, Ctrl+Enter); listen() normalizes
+    * everything else back to its legacy bytes, so consumers are unaffected.
+    * Opt-in: terminal support varies and the negotiation changes how the
+    * terminal encodes keys for the whole session.
+    */
+   public bool $extended;
 
    // * Data
    /** @var resource */
@@ -92,6 +102,7 @@ class Input
       // * Config
       // ? Emulated TTYs (BOOTGLY_TTY forced by env) have no kernel line discipline
       $this->echo = getenv('BOOTGLY_TTY') === '1' && stream_isatty($stream) === false;
+      $this->extended = false;
 
       // * Data
       $this->stream = $stream;
@@ -129,6 +140,12 @@ class Input
       // ? Entering raw mode arms the terminal restore net (once)
       if ($canonical === false) {
          $this->arm();
+
+         // ? Negotiate the extended keyboard protocol — unsupported terminals
+         //   ignore both (private-mode CSI), so no capability query is needed
+         if ($this->extended === true) {
+            fwrite($this->output, "\e[>1u\e[>4;2m");
+         }
       }
 
       $canonical
@@ -169,9 +186,11 @@ class Input
          stream_set_blocking($stream, true);
          system('stty icanon echo isig 2>/dev/null');
 
-         // Disable mouse reporting (a leaked tracking floods the shell with escapes)
+         // Disable mouse reporting (a leaked tracking floods the shell with escapes),
+         // pop the extended keyboard protocol (unconditional — popping an empty
+         // stack and resetting modifyOtherKeys to its default are both no-ops)
          // and show the cursor — components may die between hide() and show()
-         fwrite($output, "\e[?1003l\e[?1002l\e[?1000l\e[?1006l\e[?25h");
+         fwrite($output, "\e[?1003l\e[?1002l\e[?1000l\e[?1006l\e[<u\e[>4;0m\e[?25h");
       });
 
       // ? Signal handling requires process control
@@ -370,8 +389,8 @@ class Input
             $key .= $this->catch();
          }
 
-         // :
-         return $key;
+         // : Extended keyboard protocol reports rewrite to their legacy key
+         return Keystrokes::normalize($key);
       }
 
       // ? UTF-8 lead bytes assemble their continuation bytes, so consumers

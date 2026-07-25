@@ -11,6 +11,11 @@
 namespace Bootgly\CLI\Terminal\Input;
 
 
+use function chr;
+use function preg_match;
+use function str_ends_with;
+
+
 enum Keystrokes : string
 {
    case BACKSPACE = "\177";
@@ -110,4 +115,91 @@ enum Keystrokes : string
    case ALT_BACKSPACE = "\e\x7F";  // Alt + Backspace
    case ALT_B         = "\eb";     // Alt + B (word backward)
    case ALT_F         = "\ef";     // Alt + F (word forward)
+
+   // SHIFT/CTRL + Enter — no legacy encoding exists (a plain terminal sends CR
+   // for all three), so these only arrive under the extended keyboard protocol.
+   // The kitty `CSI code ; modifiers u` form is the canonical value: normalize()
+   // rewrites the xterm modifyOtherKeys form into it.
+   case SHIFT_ENTER = "\e[13;2u";
+   case CTRL_ENTER  = "\e[13;5u";
+
+
+   /**
+    * Normalizes an extended keyboard protocol sequence into the canonical key.
+    * Combinations that already have a legacy encoding rewrite to it — so
+    * enabling the protocol never changes what consumers compare against — and
+    * the ones that do not keep the kitty `CSI u` form. Anything else passes
+    * through untouched.
+    *
+    * Both forms are accepted: kitty `CSI code ; modifiers u` and xterm
+    * modifyOtherKeys `CSI 27 ; modifiers ; code ~`. Modifiers are the usual
+    * 1-based bitmask (1 none, +1 shift, +2 alt, +4 ctrl).
+    *
+    * Only ASCII key codes reconstruct a legacy byte: with the disambiguate flag
+    * a terminal reports text keys in their legacy UTF-8 encoding anyway.
+    *
+    * @param string $sequence The assembled key sequence.
+    *
+    * @return string
+    */
+   public static function normalize (string $sequence): string
+   {
+      // ? Only the extended protocols end this way (cheap hot-path guard)
+      if (str_ends_with($sequence, 'u') === false && str_ends_with($sequence, '~') === false) {
+         // :
+         return $sequence;
+      }
+
+      // ! Parse both forms into (code, modifiers)
+      if (preg_match('/^\e\[(\d+)(?:;(\d+))?u$/', $sequence, $matches) === 1) {
+         $code = (int) $matches[1];
+         $modifiers = (int) ($matches[2] ?? 1);
+      }
+      else if (preg_match('/^\e\[27;(\d+);(\d+)~$/', $sequence, $matches) === 1) {
+         $modifiers = (int) $matches[1];
+         $code = (int) $matches[2];
+      }
+      else {
+         // :
+         return $sequence;
+      }
+
+      // ? Non-ASCII keys keep their legacy encoding — nothing to reconstruct
+      if ($code > 127) {
+         // :
+         return $sequence;
+      }
+
+      // ! Modifier bitmask (0 = unmodified)
+      $held = $modifiers > 0 ? $modifiers - 1 : 0;
+
+      // ---
+
+      // ? Unmodified — the key is its own legacy byte
+      if ($held === 0) {
+         // :
+         return $code === 13 ? self::ENTER->value : chr($code);
+      }
+
+      // ? Ctrl + letter collapses to its C0 control byte (Ctrl+A = \x01)
+      if ($held === 4 && $code >= 97 && $code <= 122) {
+         // :
+         return chr($code - 96);
+      }
+
+      // ? Alt + key is the ESC-prefixed legacy pair
+      if ($held === 2 && $code !== 13) {
+         // :
+         return "\e" . chr($code);
+      }
+
+      // :
+      return match (true) {
+         $held === 1 && $code === 9  => self::SHIFT_TAB->value,
+         $held === 1 && $code === 13 => self::SHIFT_ENTER->value,
+         $held === 2 && $code === 13 => self::ALT_ENTER->value,
+         $held === 4 && $code === 13 => self::CTRL_ENTER->value,
+         default => $sequence
+      };
+   }
 }

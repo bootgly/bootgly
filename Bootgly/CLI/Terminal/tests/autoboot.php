@@ -33,6 +33,7 @@ return new Suite(
       '11.2-screen-measure',
       '11.3-screen-watch',
       '12.1-input-listen-keys',
+      '12.2-input-extended-keys',
       '13.1-output-text-clear',
       '14.1-input-lines-editing',
    ]
