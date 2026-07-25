@@ -351,5 +351,9 @@ return new Suite(
       // Field-names must be RFC tchar, every nonempty head line must
       // carry a colon, and the 16 KiB cap must not depend on packetization.
       '63.01-http1_head_grammar_and_size_cap',
+      // # Response header identity + octets (audit M8)
+      // Field identity is case-insensitive, and every insertion path
+      // must reject forbidden C0/DEL octets, not only preset insertion.
+      '64.01-response_header_case_identity_and_octets',
    ],
 );

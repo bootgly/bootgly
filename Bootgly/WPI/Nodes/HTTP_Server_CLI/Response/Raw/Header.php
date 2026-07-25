@@ -460,6 +460,27 @@ class Header extends HeaderBase
       // ! Strip CRLF from header values to prevent HTTP response splitting
       $value = str_replace(["\r", "\n"], '', $value);
 
+      // ? The forbidden-octet check already existed but was reachable only
+      //   from preset insertion, so NUL, vertical tab and the rest of the C0
+      //   range reached the wire through set() (audit M8).
+      if (! self::check($value)) {
+         return false;
+      }
+
+      // ? Field identity is case-insensitive (RFC 9110 §5.1). Storage is keyed
+      //   by the supplied casing, so `Content-Type` and `content-type` used to
+      //   serialize as two independent lines and leave the recipient to pick.
+      //   Replace the existing case variant in place instead (audit M8).
+      if (isSet($this->fields[$field]) === false) {
+         foreach ($this->fields as $existing => $ignored) {
+            if (strcasecmp($existing, $field) === 0) {
+               unset($this->fields[$existing]);
+               $this->dirty = true;
+               break;
+            }
+         }
+      }
+
       if (! isSet($this->fields[$field]) || $this->fields[$field] !== $value) {
          $this->fields[$field] = $value;
          $this->dirty = true;
@@ -626,9 +647,24 @@ class Header extends HeaderBase
       if (! self::validate($field)) {
          return;
       }
+      // ? Same forbidden-octet gate as set() (audit M8).
+      if (! self::check($value)) {
+         return;
+      }
       $this->framing |= self::classify($field);
 
       $separator ??= ', ';
+
+      // ? Append onto the existing case variant rather than starting a second
+      //   independent line for the same case-insensitive field (audit M8).
+      if (isSet($this->fields[$field]) === false) {
+         foreach ($this->fields as $existing => $ignored) {
+            if (strcasecmp($existing, $field) === 0) {
+               $field = $existing;
+               break;
+            }
+         }
+      }
 
       if ( isSet($this->fields[$field]) ) {
          $this->fields[$field] .= $separator . $value;
