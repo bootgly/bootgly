@@ -12,18 +12,13 @@ namespace Bootgly\CLI\UI\Components;
 
 
 use const BOOTGLY_TTY;
-use function array_slice;
-use function array_splice;
 use function count;
 use function feof;
 use function implode;
 use function mb_strlen;
 use function mb_substr;
-use function min;
-use function ord;
 use function rewind;
 use function stream_get_contents;
-use function strlen;
 use function substr_count;
 use function usleep;
 
@@ -32,6 +27,7 @@ use Bootgly\API\Component;
 use Bootgly\CLI\Terminal;
 use Bootgly\CLI\Terminal\Input;
 use Bootgly\CLI\Terminal\Input\Keystrokes;
+use Bootgly\CLI\Terminal\Input\Lines;
 use Bootgly\CLI\Terminal\Output;
 use Bootgly\CLI\Terminal\Output\Window;
 
@@ -55,14 +51,22 @@ class Textarea extends Component
    public int $rows;
 
    // * Data
-   /** @var array<int,string> */
-   public private(set) array $lines;
+   /** The multiline buffer — one Line per row */
+   public private(set) Lines $Lines;
+   /** @var array<int,string> The row values, top to bottom */
+   public array $lines {
+      get => $this->Lines->lines;
+   }
 
    // * Metadata
    /** Cursor line index */
-   public private(set) int $row;
+   public int $row {
+      get => $this->Lines->row;
+   }
    /** Cursor column, in codepoints */
-   public private(set) int $column;
+   public int $column {
+      get => $this->Lines->column;
+   }
    public private(set) Window $Window;
    public private(set) string $answer;
 
@@ -77,11 +81,9 @@ class Textarea extends Component
       $this->rows = 5;
 
       // * Data
-      $this->lines = [''];
+      $this->Lines = new Lines;
 
       // * Metadata
-      $this->row = 0;
-      $this->column = 0;
       $this->Window = new Window(size: 5);
       $this->answer = '';
    }
@@ -110,30 +112,15 @@ class Textarea extends Component
       $columns = (isSet(Terminal::$width) === true ? Terminal::$width : 80) - 4;
 
       for ($index = $this->Window->first; $index <= $this->Window->last; $index++) {
-         $line = $this->lines[$index];
+         $Line = $this->Lines->Lines[$index];
+         $line = $Line->value;
 
-         // ? The cursor cell renders inverse-video on the active line
+         // ? The active row renders through its own buffer — visible slice,
+         //   inverse-video cursor cell and truncation ellipsis
          if ($index === $this->row) {
-            // ? The visible slice slides to keep the cursor on screen
-            $first = 0;
-            if ($this->column > $columns - 1) {
-               $first = $this->column - $columns + 1;
-            }
+            $Line->width = $columns;
 
-            $line = mb_substr($line, $first, $columns);
-            $position = $this->column - $first;
-
-            $before = mb_substr($line, 0, $position);
-            $current = mb_substr($line, $position, 1);
-            $after = mb_substr($line, $position + 1);
-
-            if ($current === '') {
-               $current = ' ';
-            }
-
-            // ? Raw SGR — Template style markers swallow adjacent spaces (the cell is often a space)
-            $cell = self::wrap(self::_INVERSE_STYLE) . $current . self::_RESET_FORMAT;
-            $frame .= "@#Black:│@; {$before}{$cell}{$after}\n";
+            $frame .= "@#Black:│@; {$Line->render()}\n";
          }
          else {
             // ? Inactive lines crop with an ellipsis
@@ -178,7 +165,7 @@ class Textarea extends Component
             $lines[] = $line;
          }
 
-         $this->lines = $lines === [] ? [''] : $lines;
+         $this->Lines->load(implode("\n", $lines));
          $this->answer = implode("\n", $lines);
 
          // :
@@ -263,120 +250,6 @@ class Textarea extends Component
     */
    public function control (string $key): void
    {
-      $line = $this->lines[$this->row];
-      $length = mb_strlen($line);
-
-      switch ($key) {
-         // @ Moving
-         case Keystrokes::LEFT->value:
-            if ($this->column > 0) {
-               $this->column--;
-            }
-            else if ($this->row > 0) {
-               // ? Wrap to the end of the previous line
-               $this->row--;
-               $this->column = mb_strlen($this->lines[$this->row]);
-            }
-            break;
-         case Keystrokes::RIGHT->value:
-            if ($this->column < $length) {
-               $this->column++;
-            }
-            else if ($this->row < count($this->lines) - 1) {
-               // ? Wrap to the start of the next line
-               $this->row++;
-               $this->column = 0;
-            }
-            break;
-         case Keystrokes::UP->value:
-            if ($this->row > 0) {
-               $this->row--;
-               $this->column = min($this->column, mb_strlen($this->lines[$this->row]));
-            }
-            break;
-         case Keystrokes::DOWN->value:
-            if ($this->row < count($this->lines) - 1) {
-               $this->row++;
-               $this->column = min($this->column, mb_strlen($this->lines[$this->row]));
-            }
-            break;
-         case Keystrokes::HOME->value:
-         case Keystrokes::CTRL_A->value:
-            $this->column = 0;
-            break;
-         case Keystrokes::END->value:
-         case Keystrokes::CTRL_E->value:
-            $this->column = $length;
-            break;
-
-         // @ Breaking
-         case Keystrokes::ENTER->value:
-         case "\r":
-            // ? Split the line at the cursor
-            $before = mb_substr($line, 0, $this->column);
-            $after = mb_substr($line, $this->column);
-
-            $this->lines[$this->row] = $before;
-
-            $tail = [];
-            for ($index = $this->row + 1; $index < count($this->lines); $index++) {
-               $tail[] = $this->lines[$index];
-            }
-
-            $this->lines = [...array_slice($this->lines, 0, $this->row + 1), $after, ...$tail];
-
-            $this->row++;
-            $this->column = 0;
-            break;
-
-         // @ Erasing
-         case Keystrokes::BACKSPACE->value:
-         case Keystrokes::CTRL_H->value:
-            if ($this->column > 0) {
-               $this->lines[$this->row] = mb_substr($line, 0, $this->column - 1)
-                  . mb_substr($line, $this->column);
-
-               $this->column--;
-            }
-            else if ($this->row > 0) {
-               // ? Merge with the previous line
-               $previous = $this->lines[$this->row - 1];
-
-               $this->column = mb_strlen($previous);
-               $this->lines[$this->row - 1] = "{$previous}{$line}";
-
-               array_splice($this->lines, $this->row, 1);
-
-               $this->row--;
-            }
-            break;
-         case Keystrokes::DELETE->value:
-            if ($this->column < $length) {
-               $this->lines[$this->row] = mb_substr($line, 0, $this->column)
-                  . mb_substr($line, $this->column + 1);
-            }
-            else if ($this->row < count($this->lines) - 1) {
-               // ? Merge the next line
-               $this->lines[$this->row] = "{$line}{$this->lines[$this->row + 1]}";
-
-               array_splice($this->lines, $this->row + 1, 1);
-            }
-            break;
-
-         default:
-            // ? Printable input inserts at the cursor
-            if (strlen($key) === 1 && (ord($key) < 32 || ord($key) === 127)) {
-               break;
-            }
-            if ($key[0] === "\e") {
-               break;
-            }
-
-            $this->lines[$this->row] = mb_substr($line, 0, $this->column)
-               . $key
-               . mb_substr($line, $this->column);
-
-            $this->column++;
-      }
+      $this->Lines->control($key);
    }
 }

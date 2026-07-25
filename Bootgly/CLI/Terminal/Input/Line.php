@@ -157,13 +157,36 @@ class Line
 
          // @ Submitting
          case Keystrokes::ENTER->value:
-         case "\r":
+         case Keystrokes::CTRL_M->value:
             // :
             return false;
       }
 
       // :
       return true;
+   }
+
+   /**
+    * Moves the virtual cursor to a position, clamped to the value bounds
+    * (hosts composing lines reposition it when the active line changes).
+    *
+    * @param int $position The target position, in codepoints.
+    *
+    * @return self
+    */
+   public function move (int $position): self
+   {
+      $length = mb_strlen($this->value);
+
+      // * Metadata
+      $this->cursor = match (true) {
+         $position < 0 => 0,
+         $position > $length => $length,
+         default => $position
+      };
+
+      // :
+      return $this;
    }
 
    /**
