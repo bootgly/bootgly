@@ -15,13 +15,9 @@ use const BOOTGLY_TTY;
 use function array_keys;
 use function array_values;
 use function count;
-use function feof;
-use function function_exists;
 use function implode;
 use function is_int;
 use function microtime;
-use function ord;
-use function pcntl_signal_dispatch;
 use function usleep;
 use Generator;
 
@@ -323,10 +319,11 @@ class Tabs extends Component implements Boxing
 
          // @@ Drain every pending key this tick — no key-repeat backlog
          while (true) {
-            $key = $this->Input->read(1);
+            // ! listen() assembles whole sequences (arrows, Shift+Tab = `\e[Z`)
+            $key = $this->Input->listen();
 
             // ? Channel closed
-            if ($key === false || feof($this->Input->stream) === true) {
+            if ($key === false) {
                $ended = true;
 
                break;
@@ -334,53 +331,7 @@ class Tabs extends Component implements Boxing
 
             // ? Drained
             if ($key === '') {
-               if (function_exists('pcntl_signal_dispatch') === true) {
-                  pcntl_signal_dispatch();
-               }
-
                break;
-            }
-
-            // ? Escape sequences: CSI reads until its final byte (arrows, Shift+Tab
-            //   = `\e[Z`) — the tail bytes may lag the ESC on non-blocking channels,
-            //   so empty reads retry briefly before giving the sequence up
-            if ($key === "\e") {
-               $next = '';
-               for ($retry = 0; $retry < 5; $retry++) {
-                  $next = (string) $this->Input->read(1);
-                  if ($next !== '') {
-                     break;
-                  }
-
-                  usleep(1000);
-               }
-
-               $key .= $next;
-
-               if ($next === '[') {
-                  while (true) {
-                     $byte = '';
-                     for ($retry = 0; $retry < 5; $retry++) {
-                        $byte = (string) $this->Input->read(1);
-                        if ($byte !== '') {
-                           break;
-                        }
-
-                        usleep(1000);
-                     }
-
-                     if ($byte === '') {
-                        break;
-                     }
-
-                     $key .= $byte;
-
-                     $final = ord($byte);
-                     if ($final >= 0x40 && $final <= 0x7E) {
-                        break;
-                     }
-                  }
-               }
             }
 
             // @ Navigation

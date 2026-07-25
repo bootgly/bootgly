@@ -31,6 +31,7 @@ use Closure;
 
 use Bootgly\CLI\Terminal;
 use Bootgly\CLI\Terminal\Input;
+use Bootgly\CLI\Terminal\Input\Keystrokes;
 use Bootgly\CLI\Terminal\Input\Line;
 use Bootgly\CLI\Terminal\Output;
 use Bootgly\CLI\Terminal\Output\Window;
@@ -239,20 +240,20 @@ class Finder
 
       switch ($key) {
          // @ Aiming — clamped, no wrap
-         case "\e[A":
+         case Keystrokes::UP->value:
             if ($this->aimed > 0) {
                $this->aimed--;
             }
 
             break;
-         case "\e[B":
+         case Keystrokes::DOWN->value:
             if ($this->aimed < count($this->matches) - 1) {
                $this->aimed++;
             }
 
             break;
          // @ Confirming
-         case "\r":
+         case Keystrokes::CTRL_M->value:
          case PHP_EOL:
             // ? No aimed match — a pure selector never submits raw text
             if (isSet($this->matches[$this->aimed]) === false) {
@@ -264,7 +265,7 @@ class Finder
             // :
             return false;
          // @ Canceling
-         case "\e":
+         case Keystrokes::ESCAPE->value:
             $this->found = null;
 
             // :

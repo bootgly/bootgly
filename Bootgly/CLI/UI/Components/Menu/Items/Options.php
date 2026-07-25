@@ -21,6 +21,7 @@ use function stripos;
 use function strlen;
 use function substr;
 
+use Bootgly\CLI\Terminal\Input\Keystrokes;
 use Bootgly\CLI\Terminal\Output\Window;
 use Bootgly\CLI\UI\Components\Menu;
 use Bootgly\CLI\UI\Components\Menu\Items;
@@ -340,19 +341,19 @@ final class Options extends Items
       switch ($char) {
          // \x1b \e \033
          // @ Aiming
-         case "\e[D": // Left Key
+         case Keystrokes::LEFT->value: // Left Key
             $this->regress();
             break;
-         case "\e[A": // Up Key
+         case Keystrokes::UP->value: // Up Key
             // ? Vertical grids move one visual line up
             $this->columns !== null
                ? $this->jump(-$this->columns)
                : $this->regress();
             break;
-         case "\e[C": // Right Key
+         case Keystrokes::RIGHT->value: // Right Key
             $this->advance();
             break;
-         case "\e[B": // Down Key
+         case Keystrokes::DOWN->value: // Down Key
             // ? Vertical grids move one visual line down
             $this->columns !== null
                ? $this->jump($this->columns)
@@ -365,7 +366,7 @@ final class Options extends Items
 
             break;
 
-         case "\r": // Enter Key (raw terminals without icrnl — e.g. terminal emulators feeding stdin directly)
+         case Keystrokes::CTRL_M->value: // Enter Key (raw terminals without icrnl — e.g. terminal emulators feeding stdin directly)
          case PHP_EOL: // Enter Key
             // ? Enter with an empty selection confirms the aimed option
             if (self::$selected[Menu::$level] === []) {
@@ -382,8 +383,8 @@ final class Options extends Items
             return false;
 
          // @ Filtering (incremental type-ahead)
-         case "\x7F": // Backspace Key
-         case "\x08": // Backspace Key (Ctrl+H)
+         case Keystrokes::BACKSPACE->value: // Backspace Key
+         case Keystrokes::CTRL_H->value: // Backspace Key (Ctrl+H)
             // ? Backspace pops the last filter byte
             if ($this->filter !== '') {
                $this->filter = substr($this->filter, 0, -1);
@@ -391,7 +392,7 @@ final class Options extends Items
                $this->seek();
             }
             break;
-         case "\e": // Escape Key (bare — no trailing sequence bytes)
+         case Keystrokes::ESCAPE->value: // Escape Key (bare — no trailing sequence bytes)
             $this->filter = '';
             break;
 

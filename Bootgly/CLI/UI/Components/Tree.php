@@ -27,6 +27,7 @@ use Closure;
 use Bootgly\API\Component;
 use Bootgly\CLI\Terminal;
 use Bootgly\CLI\Terminal\Input;
+use Bootgly\CLI\Terminal\Input\Keystrokes;
 use Bootgly\CLI\Terminal\Output;
 use Bootgly\CLI\Terminal\Output\Window;
 use Bootgly\CLI\UI\Components\Tree\Node;
@@ -192,20 +193,20 @@ class Tree extends Component
 
       switch ($key) {
          // @ Aiming — clamped, no wrap (trees are spatial)
-         case "\e[A":
+         case Keystrokes::UP->value:
             if ($this->aimed > 0) {
                $this->aimed--;
             }
 
             break;
-         case "\e[B":
+         case Keystrokes::DOWN->value:
             if ($this->aimed < $total - 1) {
                $this->aimed++;
             }
 
             break;
          // @ Expanding
-         case "\e[C":
+         case Keystrokes::RIGHT->value:
             // ? Leaves have nothing to expand
             if ($Node === null || $Node->leaf === true) {
                break;
@@ -226,7 +227,7 @@ class Tree extends Component
 
             break;
          // @ Collapsing
-         case "\e[D":
+         case Keystrokes::LEFT->value:
             // ?
             if ($Node === null) {
                break;
@@ -261,7 +262,7 @@ class Tree extends Component
 
             break;
          // @ Selecting
-         case "\r":
+         case Keystrokes::CTRL_M->value:
          case PHP_EOL:
             // ? Empty tree — nothing to confirm
             if ($Node === null) {
@@ -299,7 +300,7 @@ class Tree extends Component
             // :
             return false;
          // @ Canceling
-         case "\e":
+         case Keystrokes::ESCAPE->value:
             $this->selected = null;
 
             // :

@@ -546,51 +546,18 @@ class Prompt extends Component
 
       // @@ Edit until Ctrl+C, Ctrl+D or EOF
       while (true) {
-         // @@ Wait for input (non-blocking reads keep signals dispatched)
+         // @@ Wait for a key (listen() assembles whole sequences — parameterized
+         //    keys like PgUp `\e[5~`, SS3, SGR mouse reports and Alt+key pairs)
          while (true) {
-            $key = $this->Input->read(1);
-
-            if ($key !== false && $key !== '') {
-               // ? Escape sequences: CSI reads until its final byte (0x40–0x7E — covers
-               //   parameterized keys like PgUp `\e[5~`); SS3 takes one more byte;
-               //   Alt+key pairs stop at two
-               if ($key === "\e") {
-                  $next = (string) $this->Input->read(1);
-                  $key .= $next;
-
-                  if ($next === '[') {
-                     // @@ Parameter/intermediate bytes end at a final byte
-                     $attempts = 0;
-                     while ($attempts < 16) {
-                        $byte = (string) $this->Input->read(1);
-
-                        // ? Burst not fully arrived yet
-                        if ($byte === '') {
-                           $attempts++;
-                           usleep(1000);
-
-                           continue;
-                        }
-
-                        $key .= $byte;
-
-                        $final = ord($byte);
-                        if ($final >= 0x40 && $final <= 0x7E) {
-                           break;
-                        }
-                     }
-                  }
-                  else if ($next === 'O') {
-                     $key .= (string) $this->Input->read(1);
-                  }
-               }
-
-               break;
-            }
+            $key = $this->Input->listen();
 
             // ? EOF: interactive input will never arrive
-            if (feof($this->Input->stream) === true) {
+            if ($key === false || feof($this->Input->stream) === true) {
                break 2;
+            }
+            // ? Key available
+            if ($key !== '') {
+               break;
             }
 
             // ? The interruption notice expires
@@ -600,10 +567,6 @@ class Prompt extends Component
             }
 
             usleep(50000);
-         }
-
-         if ($key === false) {
-            break;
          }
 
          // ? Mouse reports route to the pointer handler (the frame stays untouched)

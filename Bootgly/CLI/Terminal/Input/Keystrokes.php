@@ -58,7 +58,7 @@ enum Keystrokes : string
    #case CTRL_J = "\x0A"; // (duplicated with ENTER)
    case CTRL_K = "\x0B";
    case CTRL_L = "\x0C"; // \f
-   case CTRL_M = "\x0D"; // \n?
+   case CTRL_M = "\x0D"; // \r (CR — Enter on raw terminals without icrnl)
    case CTRL_N = "\x0E";
    case CTRL_O = "\x0F";
    case CTRL_P = "\x10";

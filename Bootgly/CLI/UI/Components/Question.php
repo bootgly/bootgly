@@ -352,33 +352,22 @@ class Question extends Component
 
          $this->Output->write($painted);
 
-         // @@ Wait for input (non-blocking reads keep signals dispatched)
+         // @@ Wait for a key (listen() assembles full sequences)
          while (true) {
-            $key = $this->Input->read(1);
-
-            if ($key !== false && $key !== '') {
-               // ? Escape sequences arrive as up to 3 bytes (e.g. arrows: ESC [ A)
-               if ($key === "\e") {
-                  $key .= (string) $this->Input->read(2);
-               }
-
-               break;
-            }
+            $key = $this->Input->listen();
 
             // ? EOF: interactive input will never arrive
-            if (feof($this->Input->stream) === true) {
+            if ($key === false || feof($this->Input->stream) === true) {
                $eof = true;
 
                break 2;
             }
+            // ? Key available
+            if ($key !== '') {
+               break;
+            }
 
             usleep(50000);
-         }
-
-         if ($key === false) {
-            $eof = true;
-
-            break;
          }
 
          // @ Control

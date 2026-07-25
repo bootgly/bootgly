@@ -36,6 +36,7 @@ return new Suite(
       '8.2-chart-bars',
       '10.1-question-suggestions',
       '11.1-textarea-edit',
+      '11.2-textarea-keys',
       '13.1-scrollarea-scroll',
       '13.2-scrollarea-pointer',
       '14.1-chart-gradient',

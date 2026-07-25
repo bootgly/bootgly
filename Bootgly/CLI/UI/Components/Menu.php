@@ -231,30 +231,20 @@ class Menu extends Component
 
          yield $this->Output->render($frame);
 
-         // @@ Wait for input without re-rendering (non-blocking reads keep signals dispatched)
+         // @@ Wait for a key (listen() assembles full sequences)
          while (true) {
-            $char = $this->Input->read(1);
+            $char = $this->Input->listen();
 
-            // ? Input available — read one key at a time (bursts and pipes never desync)
-            if ($char !== false && $char !== '') {
-               // ? Escape sequences arrive as up to 3 bytes (e.g. arrows: ESC [ A)
-               if ($char === "\e") {
-                  $char .= (string) $this->Input->read(2);
-               }
-
-               break;
-            }
             // ? EOF: interactive input will never arrive — finish with the current selection
-            if (feof($this->Input->stream) === true) {
+            if ($char === false || feof($this->Input->stream) === true) {
                break 2;
+            }
+            // ? Key available — one key at a time (bursts and pipes never desync)
+            if ($char !== '') {
+               break;
             }
 
             usleep(50000);
-         }
-
-         // ? The wait loop only breaks here with a non-empty key
-         if ($char === false) {
-            break;
          }
 
          // @ Control Menu Items

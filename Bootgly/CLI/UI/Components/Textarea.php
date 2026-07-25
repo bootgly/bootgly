@@ -224,29 +224,20 @@ class Textarea extends Component
 
          $this->Output->write($painted);
 
-         // @@ Wait for input (non-blocking reads keep signals dispatched)
+         // @@ Wait for a key (listen() assembles full sequences)
          while (true) {
-            $key = $this->Input->read(1);
+            $key = $this->Input->listen();
 
-            if ($key !== false && $key !== '') {
-               // ? Escape sequences arrive as up to 3 bytes (e.g. arrows: ESC [ A)
-               if ($key === "\e") {
-                  $key .= (string) $this->Input->read(2);
-               }
-
+            // ? EOF: interactive input will never arrive — submit
+            if ($key === false || feof($this->Input->stream) === true) {
+               break 2;
+            }
+            // ? Key available
+            if ($key !== '') {
                break;
             }
 
-            // ? EOF: interactive input will never arrive — submit
-            if (feof($this->Input->stream) === true) {
-               break 2;
-            }
-
             usleep(50000);
-         }
-
-         if ($key === false) {
-            break;
          }
 
          // ? Ctrl+D submits

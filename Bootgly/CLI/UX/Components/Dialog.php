@@ -12,13 +12,10 @@ namespace Bootgly\CLI\UX\Components;
 
 
 use const BOOTGLY_TTY;
-use function feof;
-use function function_exists;
 use function intdiv;
 use function max;
 use function microtime;
 use function ord;
-use function pcntl_signal_dispatch;
 use function str_repeat;
 use function strlen;
 use function strtolower;
@@ -360,7 +357,7 @@ class Dialog extends Component implements Boxing
 
          $this->render();
 
-         $key = $this->listen();
+         $key = $this->Input->listen();
 
          // ? Channel closed assumes the default
          if ($key === false) {
@@ -453,7 +450,7 @@ class Dialog extends Component implements Boxing
 
          $this->render();
 
-         $key = $this->listen();
+         $key = $this->Input->listen();
 
          // ? Any key (or a closed channel) acknowledges
          if ($key !== '') {
@@ -546,7 +543,7 @@ class Dialog extends Component implements Boxing
          );
          $this->render();
 
-         $key = $this->listen();
+         $key = $this->Input->listen();
 
          // ? Channel closed keeps the default
          if ($key === false) {
@@ -724,124 +721,6 @@ class Dialog extends Component implements Boxing
       $this->Output->Cursor->show();
    }
 
-   /**
-    * Reads one key attempt: `false` on a closed channel, an empty string when
-    * drained, the key bytes otherwise. CSI and SS3 read until their final
-    * byte, and UTF-8 lead bytes assemble their continuation bytes — the tail
-    * bytes may lag the first on non-blocking channels, so empty reads retry
-    * briefly before the sequence is given up.
-    *
-    * @return string|false
-    */
-   private function listen (): string|false
-   {
-      $key = $this->Input->read(1);
-
-      // ? Channel closed
-      if ($key === false || feof($this->Input->stream) === true) {
-         // :
-         return false;
-      }
-
-      // ? Drained
-      if ($key === '') {
-         if (function_exists('pcntl_signal_dispatch') === true) {
-            pcntl_signal_dispatch();
-         }
-
-         // :
-         return '';
-      }
-
-      // ? Escape sequences
-      if ($key === "\e") {
-         $next = '';
-         for ($retry = 0; $retry < 5; $retry++) {
-            $next = (string) $this->Input->read(1);
-            if ($next !== '') {
-               break;
-            }
-
-            usleep(1000);
-         }
-
-         $key .= $next;
-
-         if ($next === '[') {
-            // @@ CSI — reads until its final byte (0x40-0x7E)
-            while (true) {
-               $byte = $this->catch();
-
-               if ($byte === '') {
-                  break;
-               }
-
-               $key .= $byte;
-
-               $final = ord($byte);
-               if ($final >= 0x40 && $final <= 0x7E) {
-                  break;
-               }
-            }
-         }
-         else if ($next === 'O') {
-            // @ SS3 (F1-F4, application-mode Home/End) — exactly one final byte
-            $key .= $this->catch();
-         }
-
-         // :
-         return $key;
-      }
-
-      // ? UTF-8 lead bytes assemble their continuation bytes, so hosted line
-      //   editors always receive complete characters (mirrors Input::scan)
-      $lead = ord($key);
-      if ($lead >= 0xC0) {
-         $remaining = match (true) {
-            $lead >= 0xF0 => 3,
-            $lead >= 0xE0 => 2,
-            default => 1
-         };
-
-         // @@
-         while ($remaining-- > 0) {
-            $byte = $this->catch();
-
-            if ($byte === '') {
-               break;
-            }
-
-            $key .= $byte;
-         }
-      }
-
-      // :
-      return $key;
-   }
-
-   /**
-    * Catches one lagging sequence byte — empty reads retry briefly (the tail
-    * bytes may lag on non-blocking channels).
-    *
-    * @return string The byte — empty when the channel stays drained.
-    */
-   private function catch (): string
-   {
-      $byte = '';
-
-      // @@
-      for ($retry = 0; $retry < 5; $retry++) {
-         $byte = (string) $this->Input->read(1);
-         if ($byte !== '') {
-            break;
-         }
-
-         usleep(1000);
-      }
-
-      // :
-      return $byte;
-   }
 
    /**
     * Paces the interactive tick — the clock is fixed whatever the keyboard
