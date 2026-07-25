@@ -54,6 +54,17 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
  */
 final class Frame
 {
+   // * Config
+   /**
+    * RFC 9110 §5.6.2 tchar set — the complete alphabet of a field-name.
+    * Used with `strspn()` so validation stays one C-call per field.
+    */
+   private const string TCHAR =
+      "!#$%&'*+-.^_`|~"
+      . '0123456789'
+      . 'abcdefghijklmnopqrstuvwxyz'
+      . 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+
    // # Request line
    public string $method = '';
    public string $URI = '';
@@ -110,6 +121,15 @@ final class Frame
          if ($size >= 16384) {
             $Package->reject("HTTP/1.1 413 Request Entity Too Large\r\n\r\n");
          }
+         return null;
+      }
+
+      // ? The same cap once the separator IS present (audit N2). Checking it
+      //   only while the head looked incomplete made the limit depend on
+      //   packetization: a complete oversized head delivered in one transport
+      //   read skipped it entirely.
+      if ($separator_position + 4 > 16384) {
+         $Package->reject("HTTP/1.1 413 Request Entity Too Large\r\n\r\n");
          return null;
       }
 
@@ -243,11 +263,22 @@ final class Frame
          //   whitespace before ':' is not. Parse at the first colon so
          //   framing and application lookup cannot silently diverge.
          $sepPos = strpos($line, ':');
+         // ? A nonempty head line without a colon is not a field line. It used
+         //   to be skipped silently, which let an obs-fold or a disguised
+         //   duplicate of a framing header sit in the head unseen while a
+         //   tolerant upstream still read it (audit N1).
          if ($sepPos === false) {
-            continue;
+            $Package->reject("HTTP/1.1 400 Bad Request\r\n\r\n");
+            return null;
          }
          $rawKey = substr($line, 0, $sepPos);
-         if ($rawKey === '' || strpos($rawKey, ' ') !== false || strpos($rawKey, "\t") !== false) {
+         // ? RFC 9110 §5.1: field-name = token = 1*tchar. Previously only
+         //   empty/SP/HTAB names were rejected, so `Content-Length\x0B`,
+         //   `Transfer-Encoding\x00` and `Bad(Name)` were accepted and then
+         //   ignored by framing — exactly the shape a differential proxy
+         //   normalizes back into a framing header. One `strspn` C-call per
+         //   field keeps this off the profile.
+         if ($rawKey === '' || strspn($rawKey, self::TCHAR) !== strlen($rawKey)) {
             $Package->reject("HTTP/1.1 400 Bad Request\r\n\r\n");
             return null;
          }

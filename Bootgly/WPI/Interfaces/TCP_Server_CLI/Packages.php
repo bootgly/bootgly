@@ -180,6 +180,20 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
                $this->Connection->close();
                return false;
             }
+
+            // ! Track the TLS retry watcher under the SAME flag as ordinary
+            //   backpressure (audit M5). Registering it untracked meant only
+            //   `writing()` could remove it, and only while `handshaking` was
+            //   still true — so a handshake completed by THIS read dispatch
+            //   left a level-triggered writable socket registered forever, and
+            //   `reset()` skipped it because the flag was false.
+            $this->writeRegistered = true;
+         }
+         else {
+            // @ Negotiation settled (succeeded or failed): drop the one-shot
+            //   watcher here, so completion never depends on a later write
+            //   dispatch observing `handshaking`.
+            $this->reset($Socket);
          }
 
          return $negotiation !== false;
@@ -516,7 +530,9 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
          // ! EVENT_WRITE is level-triggered for an ordinary TCP socket. Keep
          //   it strictly one-shot during negotiation; read readiness remains
          //   registered for the next fragmented handshake record.
-         Server::$Event->del($Socket, Server::$Event::EVENT_WRITE);
+         //   Cleared through reset() so the watcher and its tracking flag can
+         //   never disagree (audit M5).
+         $this->reset($Socket);
 
          return $this->Connection->handshake() !== false;
       }

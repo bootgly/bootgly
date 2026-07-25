@@ -347,5 +347,9 @@ return new Suite(
       // Parked response bodies must be bounded per connection, not one
       // whole body per concurrent flow-stalled stream.
       '62.01-http2_outbound_backlog_aggregate_budget',
+      // # HTTP/1 head grammar + size cap (audit N1, N2)
+      // Field-names must be RFC tchar, every nonempty head line must
+      // carry a colon, and the 16 KiB cap must not depend on packetization.
+      '63.01-http1_head_grammar_and_size_cap',
    ],
 );
