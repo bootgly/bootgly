@@ -178,6 +178,12 @@ class Menu extends Component
          $body .= "\n";
       }
 
+      // ? A filter matching nothing would leave a silent empty block — say so,
+      //   and say how to get out of it
+      if ($body === '' && $Options->filter !== '') {
+         $body = "@#Black:(no matches — Backspace erases, Esc clears)@;\n";
+      }
+
       $rendered .= $body;
 
       return match ($this->render) {

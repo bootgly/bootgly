@@ -11,6 +11,7 @@
 namespace Bootgly\CLI\Terminal\Output;
 
 
+use function max;
 use function preg_replace_callback;
 use function str_ends_with;
 
@@ -34,20 +35,36 @@ class Region extends Output
    public private(set) string $gutter;
    /** Visible gutter width — the region column offset */
    public private(set) int $offset;
+   /**
+    * Rows the host reserved below the region's first one. Content that outgrows
+    * them makes the region GROW: the extra row is inserted, pushing whatever the
+    * host painted below it further down instead of overwriting it. `0` disables
+    * the growth (the region then never touches what follows it).
+    */
+   public int $rows;
+
+   // * Metadata
+   /** Current row offset inside the region */
+   private int $row;
 
 
    /**
     * @param resource $stream The host output stream (shared with the outer Output).
     * @param string $gutter The painted left gutter (SGR allowed).
     * @param int $offset The visible gutter width, in columns.
+    * @param int $rows The reserved rows below the first one (0 disables growth).
     */
-   public function __construct ($stream, string $gutter, int $offset)
+   public function __construct ($stream, string $gutter, int $offset, int $rows = 0)
    {
       parent::__construct($stream);
 
       // * Config
       $this->gutter = $gutter;
       $this->offset = $offset;
+      $this->rows = $rows;
+
+      // * Metadata
+      $this->row = 0;
    }
 
 
@@ -88,12 +105,38 @@ class Region extends Output
 
       // :
       return (string) preg_replace_callback(
-         '/\r\n|\n|\r|\e\[(\d*)F|\e\[(\d*)G|\e\[2K/',
+         '/\r\n|\n|\r|\e\[(\d*)F|\e\[(\d*)G|\e\[2K|\e\[(\d*)([AB])/',
          function (array $match) use ($column): string {
             $sequence = $match[0];
 
+            // ? Vertical moves only shift the tracked row — they pass through
+            if (isSet($match[4]) === true) {
+               $moved = (int) ($match[3] !== '' ? $match[3] : 1);
+
+               $this->row = $match[4] === 'A'
+                  ? max(0, $this->row - $moved)
+                  : $this->row + $moved;
+
+               return $sequence;
+            }
+
             // ? Line breaks re-enter the region after the gutter
             if ($sequence === "\n" || $sequence === "\r\n" || $sequence === "\r") {
+               // ? A bare CR stays on its row
+               if ($sequence === "\r") {
+                  return "{$sequence}{$this->gutter}";
+               }
+
+               $this->row++;
+
+               // ? Outgrew the reserved rows — insert one, pushing whatever the
+               //   host painted below further down instead of overwriting it
+               if ($this->rows > 0 && $this->row > $this->rows) {
+                  $this->rows++;
+
+                  return "{$sequence}" . self::_START_ESCAPE . '1L' . $this->gutter;
+               }
+
                return "{$sequence}{$this->gutter}";
             }
             // ? Line erase repaints the gutter, resting on the region column
@@ -105,6 +148,8 @@ class Region extends Output
                $rows = (int) (($match[1] ?? '') !== '' ? $match[1] : 1);
 
                if (str_ends_with($sequence, 'F') === true) {
+                  $this->row = max(0, $this->row - $rows);
+
                   return "\e[{$rows}A\e[{$column}G";
                }
             }

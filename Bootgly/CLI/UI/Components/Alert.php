@@ -13,11 +13,14 @@ namespace Bootgly\CLI\UI\Components;
 
 use const PHP_EOL;
 use const STR_PAD_RIGHT;
+use function mb_strimwidth;
+use function mb_strwidth;
 use function rewind;
 use function str_pad;
 use function stream_get_contents;
 
 use Bootgly\API\Component;
+use Bootgly\CLI\Terminal;
 use Bootgly\CLI\Terminal\Output;
 use Bootgly\CLI\UI\Components\Alert\Type;
 
@@ -65,6 +68,23 @@ class Alert extends Component
       $style = $this->Style->get();
       // * Data
       $message = $this->message;
+
+      // ? Crop to the terminal — a wrapped alert breaks the block repaints and
+      //   the row accounting of any region hosting it
+      if (isSet(Terminal::$width) === true) {
+         $badge = match ($type) {
+            Type::Success => 10,
+            Type::Attention => 12,
+            Type::Failure => 7,
+            default => 8
+         };
+
+         $columns = (int) Terminal::$width - $badge - 2;
+
+         if ($columns > 1 && mb_strwidth($message) > $columns) {
+            $message = mb_strimwidth($message, 0, $columns, '…');
+         }
+      }
 
       // @
       if ($mode === self::RETURN_OUTPUT) {

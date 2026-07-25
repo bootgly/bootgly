@@ -78,6 +78,8 @@ class Wizard extends Component
    private array $reserves;
    /** Position of the next mid-run insertion (right after the active step, in add order) */
    private int $insertion;
+   /** Content rows the active step reserved below its anchor row */
+   private int $reserved;
 
 
    public function __construct (Input $Input, Output $Output)
@@ -98,6 +100,7 @@ class Wizard extends Component
       $this->finished = false;
       $this->reserves = [];
       $this->insertion = 0;
+      $this->reserved = 0;
    }
 
 
@@ -199,6 +202,10 @@ class Wizard extends Component
       $guide = $this->paint('@#Black:│@;');
       $gap = str_repeat("{$guide}\n", $reserve);
 
+      // ! Rows the content may use below its anchor — the last guide row stays
+      //   as the breathing one, and outgrowing them grows the region
+      $this->reserved = max(1, $reserve - 3);
+
       // ! Tail — the upcoming steps (the last guide row connects them)
       $tail = '';
       if ($current < $Steps->count - 1) {
@@ -271,7 +278,7 @@ class Wizard extends Component
 
          if (BOOTGLY_TTY === true) {
             $gutter = $this->paint('@#Black:│@;') . '  ';
-            $this->Output = new Region($Host->stream, $gutter, 3);
+            $this->Output = new Region($Host->stream, $gutter, 3, $this->reserved);
 
             // @ Swap the Terminal Output too — handler code reading the global
             //   Output at call time nests without knowing (restored after)
