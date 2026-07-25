@@ -32,6 +32,9 @@ return new Suite(
       '1.16-decoder_cache_streaming_store_guard',
       '1.17-owned_request_reset_matrix',
       '1.18-connection_decoder_dispatch_invariant',
-      '1.19-decoder_connection_template_lifecycle'
+      '1.19-decoder_connection_template_lifecycle',
+      // # Production header-block memo (audit N3) — the live suites all
+      // run in the Test environment, which bypasses the memo entirely.
+      '1.20-header_scan_memo_production_replay'
    ]
 );
