@@ -34,7 +34,7 @@ use Bootgly\CLI\Terminal\Screen;
 use Bootgly\CLI\UI\Atoms\Boxing;
 use Bootgly\CLI\UI\Base\Frame;
 use Bootgly\CLI\UI\Base\Frame\Borders;
-use Bootgly\CLI\UI\Components\Question;
+use Bootgly\CLI\UI\Components\Textbox;
 
 
 /**
@@ -305,7 +305,7 @@ class Dialog extends Component implements Boxing
 
    /**
     * Asks a modal yes/no confirmation: `y`/`n` answer; Enter, Esc and EOF
-    * assume the default. Non-interactive input keeps the Question semantics
+    * assume the default. Non-interactive input keeps the Textbox semantics
     * (no box on pipes).
     *
     * @param string $prompt The confirmation prompt.
@@ -315,11 +315,11 @@ class Dialog extends Component implements Boxing
     */
    public function confirm (string $prompt, bool $default = false): bool
    {
-      // ? Non-interactive input delegates to the Question semantics
+      // ? Non-interactive input delegates to the Textbox semantics
       if (BOOTGLY_TTY === false) {
-         $Question = new Question($this->Input, $this->Output);
+         $Textbox = new Textbox($this->Input, $this->Output);
 
-         $confirmed = $Question->confirm($prompt, $default);
+         $confirmed = $Textbox->confirm($prompt, $default);
 
          // * Metadata
          $this->confirmed = $confirmed;
@@ -473,7 +473,7 @@ class Dialog extends Component implements Boxing
     * Asks a modal line of text with the Line editor (arrows, Home/End,
     * Backspace/Delete, kill keys): Enter submits — an empty value keeps the
     * default; Esc and EOF keep the default. Non-interactive input keeps the
-    * Question semantics (no box on pipes).
+    * Textbox semantics (no box on pipes).
     *
     * @param string $prompt The prompt.
     * @param string $default The value kept on empty submit, Esc or EOF.
@@ -482,13 +482,13 @@ class Dialog extends Component implements Boxing
     */
    public function prompt (string $prompt, string $default = ''): string
    {
-      // ? Non-interactive input delegates to the Question semantics
+      // ? Non-interactive input delegates to the Textbox semantics
       if (BOOTGLY_TTY === false) {
-         $Question = new Question($this->Input, $this->Output);
-         $Question->prompt = $prompt;
-         $Question->default = $default;
+         $Textbox = new Textbox($this->Input, $this->Output);
+         $Textbox->prompt = $prompt;
+         $Textbox->default = $default;
 
-         $answer = $Question->ask();
+         $answer = $Textbox->ask();
 
          // * Metadata
          $this->answer = $answer;
@@ -563,7 +563,7 @@ class Dialog extends Component implements Boxing
          }
 
          // ? Enter submits — an empty value keeps the default (trimmed, so a
-         //   whitespace-only submit matches the non-interactive Question path)
+         //   whitespace-only submit matches the non-interactive Textbox path)
          if ($key === Keystrokes::ENTER->value || $key === "\r") {
             $value = trim($Line->value);
             if ($value !== '') {

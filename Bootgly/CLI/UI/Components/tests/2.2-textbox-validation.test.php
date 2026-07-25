@@ -19,7 +19,7 @@ use Bootgly\CLI\Terminal\Output;
 return new Specification(
    description: 'It should validate answers with a Validator Closure and bounded attempts',
    test: function () {
-      // ! Question with in-memory streams
+      // ! Textbox with in-memory streams
       $stream = fopen('php://memory', 'r+');
       fwrite($stream, "bad name\nGoodName\nstill bad\nworse\n");
       rewind($stream);
@@ -37,17 +37,17 @@ return new Specification(
       };
 
       // @ Invalid answer re-asks until valid
-      $Question = new Question($Input, $Output);
-      $Question->prompt = 'Name';
-      $Question->required = true;
-      $Question->Validator = $Validator;
+      $Textbox = new Textbox($Input, $Output);
+      $Textbox->prompt = 'Name';
+      $Textbox->required = true;
+      $Textbox->Validator = $Validator;
 
       yield assert(
-         assertion: $Question->ask() === 'GoodName',
+         assertion: $Textbox->ask() === 'GoodName',
          description: 'Invalid answer re-asks until the Validator accepts'
       );
       yield assert(
-         assertion: $Question->attempt === 2,
+         assertion: $Textbox->attempt === 2,
          description: 'Attempt metadata counts the rejected answer'
       );
 
@@ -60,14 +60,14 @@ return new Specification(
       );
 
       // @ Exhausted attempts assume the default
-      $Question = new Question($Input, $Output);
-      $Question->prompt = 'Name';
-      $Question->default = 'Fallback';
-      $Question->attempts = 2;
-      $Question->Validator = $Validator;
+      $Textbox = new Textbox($Input, $Output);
+      $Textbox->prompt = 'Name';
+      $Textbox->default = 'Fallback';
+      $Textbox->attempts = 2;
+      $Textbox->Validator = $Validator;
 
       yield assert(
-         assertion: $Question->ask() === 'Fallback',
+         assertion: $Textbox->ask() === 'Fallback',
          description: 'Exhausted attempts assume the default'
       );
    }

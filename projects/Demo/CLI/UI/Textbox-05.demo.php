@@ -7,7 +7,7 @@ use function stripos;
 use function usleep;
 
 use const Bootgly\CLI;
-use Bootgly\CLI\UX\Components\Finder;
+use Bootgly\CLI\UI\Components\Textbox;
 
 $Input = CLI->Terminal->Input;
 $Output = CLI->Terminal->Output;
@@ -15,38 +15,38 @@ $Output->reset();
 
 $Output->render(<<<TITLE
 /* @*:
- * @#green: Bootgly CLI UX - Finder component @;
- * @#yellow: @@: Demo 53 - Example #1 - live search selector @;
+ * @#green: Bootgly CLI UI - Textbox component @;
+ * @#yellow: @@: Demo 53 - Example #5 - search with a dynamic source @;
  * {$location}
  */\n\n
 TITLE);
 
-// @ Static options — typing filters (case-insensitive), ↑/↓ aim, Enter confirms,
-//   Esc cancels; key = returned value, item = shown label
-$Finder = new Finder($Input, $Output);
-$Finder->prompt = '@*:Search a component@;';
-$Finder->hint = '(type to filter, ↑/↓ aim, Enter confirm, Esc cancel)';
-$Finder->options = [
+// @ Static options — typing filters (case-insensitive), ↑/↓ aim, Enter confirms
+//   the aimed one (strict), Esc closes the list; key = returned value, item = shown label
+$Textbox = new Textbox($Input, $Output);
+$Textbox->prompt = '@*:Search a component@;';
+$Textbox->hint = '(type to filter, ↑/↓ aim, Enter confirm, Esc close the list)';
+$Textbox->options = [
    'alert' => 'Alert',
    'dialog' => 'Dialog',
    'filepicker' => 'Filepicker',
-   'finder' => 'Finder',
    'menu' => 'Menu',
    'progress' => 'Progress',
    'prompt' => 'Prompt',
+   'textbox' => 'Textbox',
    'toasts' => 'Toasts',
    'tree' => 'Tree',
    'wizard' => 'Wizard'
 ];
-$Finder->viewport = 6;
-$Finder->blink = true;
+$Textbox->viewport = 6;
+$Textbox->strict = true;
 
-$found = $Finder->find();
+$found = $Textbox->ask();
 
 // @ Result
-$result = $found !== null
+$result = $found !== ''
    ? "@#Green:✔@; You found: @#Cyan:{$found}@;"
-   : '@#Yellow:●@; Canceled (nothing found).';
+   : '@#Yellow:●@; Nothing found.';
 
 $Output->render("@.;{$result}@.;");
 
@@ -61,10 +61,10 @@ $extensions = [
    'session', 'sockets', 'sodium', 'xdebug', 'xml', 'zip', 'zlib'
 ];
 
-$Finder = new Finder($Input, $Output);
-$Finder->prompt = '@*:Search an extension@;';
-$Finder->hint = '(dynamic source — the lookup runs per keystroke)';
-$Finder->source = static function (string $query) use ($extensions): array {
+$Textbox = new Textbox($Input, $Output);
+$Textbox->prompt = '@*:Search an extension@;';
+$Textbox->hint = '(dynamic source — the lookup runs per keystroke)';
+$Textbox->source = static function (string $query) use ($extensions): array {
    // @ Simulate a slow lookup
    usleep(80_000);
 
@@ -80,12 +80,13 @@ $Finder->source = static function (string $query) use ($extensions): array {
       static fn (string $extension): bool => stripos($extension, $query) !== false
    ));
 };
+$Textbox->strict = true;
 
-$found = $Finder->find();
+$found = $Textbox->ask();
 
 // @ Result
-$result = $found !== null
+$result = $found !== ''
    ? "@#Green:✔@; You found: @#Cyan:{$found}@;"
-   : '@#Yellow:●@; Canceled (nothing found).';
+   : '@#Yellow:●@; Nothing found.';
 
 $Output->render("@.;{$result}@.;");

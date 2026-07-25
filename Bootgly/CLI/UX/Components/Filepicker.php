@@ -24,7 +24,7 @@ use UnexpectedValueException;
 
 use Bootgly\CLI\Terminal\Input;
 use Bootgly\CLI\Terminal\Output;
-use Bootgly\CLI\UI\Components\Question;
+use Bootgly\CLI\UI\Components\Textbox;
 use Bootgly\CLI\UI\Components\Tree;
 use Bootgly\CLI\UI\Components\Tree\Node;
 
@@ -109,12 +109,12 @@ class Filepicker
          return null;
       }
 
-      // ? Non-interactive input delegates to the Question semantics
+      // ? Non-interactive input delegates to the Textbox semantics
       if (BOOTGLY_TTY === false) {
-         $Question = new Question($this->Input, $this->Output);
-         $Question->prompt = $this->prompt;
+         $Textbox = new Textbox($this->Input, $this->Output);
+         $Textbox->prompt = $this->prompt;
 
-         $answer = $Question->ask();
+         $answer = $Textbox->ask();
          // ? An empty line picks nothing — realpath('') would leak the cwd
          $path = $answer === '' ? false : realpath($answer);
          $this->picked = $path === false ? null : $path;

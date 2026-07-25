@@ -100,7 +100,7 @@ use Bootgly\CLI\Terminal;
 use Bootgly\CLI\UI\Base\Fieldset;
 use Bootgly\CLI\UI\Components\Alert;
 use Bootgly\CLI\UI\Components\Menu;
-use Bootgly\CLI\UI\Components\Question;
+use Bootgly\CLI\UI\Components\Textbox;
 use Bootgly\CLI\UX\Components\Wizard;
 use Bootgly\commands\BootCommand;
 
@@ -541,10 +541,10 @@ class ProjectCommand extends Command
          }
 
          // # Git remote — ask the URL and continue with the direct flow
-         $Question = new Question(CLI->Terminal->Input, $Output);
-         $Question->prompt = 'Repository URL (git)';
-         $Question->required = true;
-         $url = $Question->ask();
+         $Textbox = new Textbox(CLI->Terminal->Input, $Output);
+         $Textbox->prompt = 'Repository URL (git)';
+         $Textbox->required = true;
+         $url = $Textbox->ask();
          // ?
          if ($url === '') {
             $Alert = new Alert($Output);
@@ -1580,9 +1580,9 @@ class ProjectCommand extends Command
    {
       $Terminal = CLI->Terminal;
 
-      $Question = new Question($Terminal->Input, $Terminal->Output);
+      $Textbox = new Textbox($Terminal->Input, $Terminal->Output);
 
-      return $Question->confirm($question, default: $default);
+      return $Textbox->confirm($question, default: $default);
    }
 
    /**
@@ -1623,12 +1623,12 @@ class ProjectCommand extends Command
       // # From scratch: Path → Interface → Metadata → Confirm → Scaffold
       $scratch = function (Wizard $Wizard) use (&$path, &$meta, &$interface, &$options): void {
          $Wizard->add('Path', function (Wizard $Wizard) use (&$path): string {
-            $Question = new Question($Wizard->Input, $Wizard->Output);
-            $Question->prompt = 'Project path (e.g. `App` or `App/API`)';
-            $Question->required = true;
-            $Question->default = $path ?? '';
-            $Question->Validator = fn (string $answer): true|string => $this->assess($answer);
-            $path = $Question->ask();
+            $Textbox = new Textbox($Wizard->Input, $Wizard->Output);
+            $Textbox->prompt = 'Project path (e.g. `App` or `App/API`)';
+            $Textbox->required = true;
+            $Textbox->default = $path ?? '';
+            $Textbox->Validator = fn (string $answer): true|string => $this->assess($answer);
+            $path = $Textbox->ask();
             // ? EOF or invalid prefilled path
             if ($this->assess($path) !== true) {
                $Alert = new Alert($Wizard->Output);
@@ -1668,10 +1668,10 @@ class ProjectCommand extends Command
          $Wizard->add('Metadata', function (Wizard $Wizard) use (&$path, &$meta, &$interface, &$options): null {
             // # Port (WPI)
             if ($interface === 'WPI') {
-               $Question = new Question($Wizard->Input, $Wizard->Output);
-               $Question->prompt = 'Server port';
-               $Question->default = (string) ($options['port'] ?? '8080');
-               $Question->Validator = static function (string $answer): true|string {
+               $Textbox = new Textbox($Wizard->Input, $Wizard->Output);
+               $Textbox->prompt = 'Server port';
+               $Textbox->default = (string) ($options['port'] ?? '8080');
+               $Textbox->Validator = static function (string $answer): true|string {
                   // ?:
                   if (preg_match('#^\d{1,5}$#', $answer) !== 1) {
                      return 'Invalid port: use a number between 1 and 65535.';
@@ -1680,24 +1680,24 @@ class ProjectCommand extends Command
                   // :
                   return true;
                };
-               $meta['port'] = $Question->ask();
+               $meta['port'] = $Textbox->ask();
             }
 
             // # Description / Version / Author (options prefill the defaults)
-            $Question = new Question($Wizard->Input, $Wizard->Output);
-            $Question->prompt = 'Description';
-            $Question->default = (string) ($options['description'] ?? '');
-            $meta['description'] = $Question->ask();
+            $Textbox = new Textbox($Wizard->Input, $Wizard->Output);
+            $Textbox->prompt = 'Description';
+            $Textbox->default = (string) ($options['description'] ?? '');
+            $meta['description'] = $Textbox->ask();
 
-            $Question = new Question($Wizard->Input, $Wizard->Output);
-            $Question->prompt = 'Version';
-            $Question->default = (string) ($options['version'] ?? '1.0.0');
-            $meta['version'] = $Question->ask();
+            $Textbox = new Textbox($Wizard->Input, $Wizard->Output);
+            $Textbox->prompt = 'Version';
+            $Textbox->default = (string) ($options['version'] ?? '1.0.0');
+            $meta['version'] = $Textbox->ask();
 
-            $Question = new Question($Wizard->Input, $Wizard->Output);
-            $Question->prompt = 'Author';
-            $Question->default = (string) ($options['author'] ?? '');
-            $meta['author'] = $Question->ask();
+            $Textbox = new Textbox($Wizard->Input, $Wizard->Output);
+            $Textbox->prompt = 'Author';
+            $Textbox->default = (string) ($options['author'] ?? '');
+            $meta['author'] = $Textbox->ask();
 
             $meta['name'] = basename((string) $path);
 
@@ -1726,9 +1726,9 @@ class ProjectCommand extends Command
 
             // ? Confirm
             if (isSet($options['yes']) === false) {
-               $Question = new Question($Wizard->Input, $Wizard->Output);
+               $Textbox = new Textbox($Wizard->Input, $Wizard->Output);
 
-               if ($Question->confirm('Create the project?', default: true) === false) {
+               if ($Textbox->confirm('Create the project?', default: true) === false) {
                   $Alert = new Alert($Wizard->Output);
                   $Alert->Type::Attention->set();
                   $Alert->message = 'Aborted.';
@@ -1812,9 +1812,9 @@ class ProjectCommand extends Command
 
             // ? Confirm
             if (isSet($options['yes']) === false) {
-               $Question = new Question($Wizard->Input, $Wizard->Output);
+               $Textbox = new Textbox($Wizard->Input, $Wizard->Output);
 
-               if ($Question->confirm('Import the selected projects?', default: true) === false) {
+               if ($Textbox->confirm('Import the selected projects?', default: true) === false) {
                   $Alert = new Alert($Wizard->Output);
                   $Alert->Type::Attention->set();
                   $Alert->message = 'Aborted.';
@@ -1844,10 +1844,10 @@ class ProjectCommand extends Command
       // # From Git remote: URL → Path → Interface → Import
       $git = function (Wizard $Wizard) use (&$url, &$target, &$options): void {
          $Wizard->add('URL', function (Wizard $Wizard) use (&$url): null {
-            $Question = new Question($Wizard->Input, $Wizard->Output);
-            $Question->prompt = 'Repository URL (git)';
-            $Question->required = true;
-            $url = $Question->ask();
+            $Textbox = new Textbox($Wizard->Input, $Wizard->Output);
+            $Textbox->prompt = 'Repository URL (git)';
+            $Textbox->required = true;
+            $url = $Textbox->ask();
             // ?
             if ($url === '') {
                $Alert = new Alert($Wizard->Output);
@@ -1864,12 +1864,12 @@ class ProjectCommand extends Command
 
          $Wizard->add('Path', function (Wizard $Wizard) use (&$url, &$target): string {
             $default = basename($url, '.git');
-            $Question = new Question($Wizard->Input, $Wizard->Output);
-            $Question->prompt = 'Project path (e.g. `App` or `App/API`)';
-            $Question->required = true;
-            $Question->default = $this->assess($default) === true ? $default : '';
-            $Question->Validator = fn (string $answer): true|string => $this->assess($answer);
-            $target = $Question->ask();
+            $Textbox = new Textbox($Wizard->Input, $Wizard->Output);
+            $Textbox->prompt = 'Project path (e.g. `App` or `App/API`)';
+            $Textbox->required = true;
+            $Textbox->default = $this->assess($default) === true ? $default : '';
+            $Textbox->Validator = fn (string $answer): true|string => $this->assess($answer);
+            $target = $Textbox->ask();
             // ?
             if ($this->assess($target) !== true) {
                $Alert = new Alert($Wizard->Output);

@@ -2,7 +2,7 @@
 namespace Bootgly\CLI;
 
 use const Bootgly\CLI;
-use Bootgly\CLI\UI\Components\Question;
+use Bootgly\CLI\UI\Components\Textbox;
 
 $Input = CLI->Terminal->Input;
 $Output = CLI->Terminal->Output;
@@ -10,16 +10,16 @@ $Output->reset();
 
 $Output->render(<<<OUTPUT
 /* @*:
- * @#green: Bootgly CLI UI - Question component @;
+ * @#green: Bootgly CLI UI - Textbox component @;
  * @#yellow: @@: Demo 26 - Example #4 - yes/no confirmation @;
  * {$location}
  */\n\n
 OUTPUT);
 
-$Question = new Question($Input, $Output);
+$Textbox = new Textbox($Input, $Output);
 
 // @ Confirm (yes/no — empty answer assumes the default: Y)
-$confirmed = $Question->confirm('Do you like Bootgly?', default: true);
+$confirmed = $Textbox->confirm('Do you like Bootgly?', default: true);
 
 $Output->render(
    $confirmed
@@ -28,7 +28,7 @@ $Output->render(
 );
 
 // @ Refusing default (y/N)
-$deployed = $Question->confirm('Deploy to production?');
+$deployed = $Textbox->confirm('Deploy to production?');
 
 $Output->render(
    $deployed

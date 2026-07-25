@@ -7,7 +7,7 @@ use Exception;
 
 use const Bootgly\CLI;
 use Bootgly\CLI\UI\Components\Menu;
-use Bootgly\CLI\UI\Components\Question;
+use Bootgly\CLI\UI\Components\Textbox;
 use Bootgly\CLI\UX\Components\Wizard;
 
 $Input = CLI->Terminal->Input;
@@ -26,11 +26,11 @@ $Wizard->title = <<<TITLE
 TITLE;
 
 $Wizard->add('Name', function (Wizard $Wizard): string {
-   $Question = new Question($Wizard->Input, $Wizard->Output);
-   $Question->prompt = 'Project name';
-   $Question->required = true;
-   $Question->default = 'App';
-   $Question->Validator = static function (string $answer): true|string {
+   $Textbox = new Textbox($Wizard->Input, $Wizard->Output);
+   $Textbox->prompt = 'Project name';
+   $Textbox->required = true;
+   $Textbox->default = 'App';
+   $Textbox->Validator = static function (string $answer): true|string {
       // ?:
       if (preg_match('#^[A-Z][A-Za-z0-9_-]*$#', $answer) !== 1) {
          return 'Invalid name: use letters, numbers, `_` or `-`, starting uppercase.';
@@ -41,7 +41,7 @@ $Wizard->add('Name', function (Wizard $Wizard): string {
    };
 
    // :
-   return $Question->ask();
+   return $Textbox->ask();
 });
 
 $Wizard->add('Interface', rows: 6, handler: function (Wizard $Wizard): string {
@@ -61,12 +61,12 @@ $Wizard->add('Interface', rows: 6, handler: function (Wizard $Wizard): string {
    // ? WPI flows branch: a Port step slots in right after this one
    if ($interface === 'WPI') {
       $Wizard->add('Port', function (Wizard $Wizard): string {
-         $Question = new Question($Wizard->Input, $Wizard->Output);
-         $Question->prompt = 'Server port';
-         $Question->default = '8080';
+         $Textbox = new Textbox($Wizard->Input, $Wizard->Output);
+         $Textbox->prompt = 'Server port';
+         $Textbox->default = '8080';
 
          // :
-         return $Question->ask();
+         return $Textbox->ask();
       });
    }
 
@@ -75,10 +75,9 @@ $Wizard->add('Interface', rows: 6, handler: function (Wizard $Wizard): string {
 });
 
 $Wizard->add('Confirm', function (Wizard $Wizard): null {
-   $Question = new Question($Wizard->Input, $Wizard->Output);
-
+   $Textbox = new Textbox($Wizard->Input, $Wizard->Output);
    // ? Throw a short slug to fail the step and stop the flow
-   if ($Question->confirm('Build the project?', default: true) === false) {
+   if ($Textbox->confirm('Build the project?', default: true) === false) {
       throw new Exception('aborted');
    }
 

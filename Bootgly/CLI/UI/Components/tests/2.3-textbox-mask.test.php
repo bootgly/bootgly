@@ -18,7 +18,7 @@ use Bootgly\CLI\Terminal\Output;
 return new Specification(
    description: 'It should mask secret answers and never reveal masked defaults',
    test: function () {
-      // ! Question with in-memory streams (self-echo redirected to memory)
+      // ! Textbox with in-memory streams (self-echo redirected to memory)
       $stream = fopen('php://memory', 'r+');
       fwrite($stream, "hunter2\n");
       rewind($stream);
@@ -32,12 +32,12 @@ return new Specification(
       $Output = new Output('php://memory');
 
       // @ Masked answer
-      $Question = new Question($Input, $Output);
-      $Question->prompt = 'Password';
-      $Question->mask = '•';
+      $Textbox = new Textbox($Input, $Output);
+      $Textbox->prompt = 'Password';
+      $Textbox->mask = '•';
 
       yield assert(
-         assertion: $Question->ask() === 'hunter2',
+         assertion: $Textbox->ask() === 'hunter2',
          description: 'The mask never leaks into the answer value'
       );
 
@@ -57,12 +57,12 @@ return new Specification(
       $Input = new Input($stream); // @phpstan-ignore-line
       $Output = new Output('php://memory');
 
-      $Question = new Question($Input, $Output);
-      $Question->prompt = 'Token';
-      $Question->default = 'secret-token';
-      $Question->mask = '•';
+      $Textbox = new Textbox($Input, $Output);
+      $Textbox->prompt = 'Token';
+      $Textbox->default = 'secret-token';
+      $Textbox->mask = '•';
 
-      $answer = $Question->ask();
+      $answer = $Textbox->ask();
 
       rewind($Output->stream);
       $output = (string) stream_get_contents($Output->stream);

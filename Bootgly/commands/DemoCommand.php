@@ -114,17 +114,17 @@ class DemoCommand extends Command
          // UI - Logs component
          25 => 'UI/Logs-01.demo.php',
 
-         // UI - Question component (yes/no confirmation)
-         26 => 'UI/Question-04.demo.php',
+         // UI - Textbox component (yes/no confirmation)
+         26 => 'UI/Textbox-04.demo.php',
 
-         // UI - Question component
-         27 => 'UI/Question-01.demo.php',
+         // UI - Textbox component
+         27 => 'UI/Textbox-01.demo.php',
 
          // UX - Form component
          28 => 'UX/Form-01.demo.php',
 
-         // UI - Question component (masked input)
-         29 => 'UI/Question-02.demo.php',
+         // UI - Textbox component (masked input)
+         29 => 'UI/Textbox-02.demo.php',
 
          // UI - Menu component (viewport + type-ahead)
          30 => 'UI/Menu-07.demo.php',
@@ -153,8 +153,8 @@ class DemoCommand extends Command
          // UI - Text component
          37 => 'UI/Text-01.demo.php',
 
-         // UI - Question component (autocomplete suggestions)
-         38 => 'UI/Question-03.demo.php',
+         // UI - Textbox component (autocomplete options)
+         38 => 'UI/Textbox-03.demo.php',
 
          // UI - Textarea component
          39 => 'UI/Textarea-01.demo.php',
@@ -202,8 +202,8 @@ class DemoCommand extends Command
          // UX - Filepicker component (filesystem browser with lazy scans)
          52 => 'UX/Filepicker-01.demo.php',
 
-         // UX - Finder component (live search selector)
-         53 => 'UX/Finder-01.demo.php',
+         // UI - Textbox component (search with a dynamic source)
+         53 => 'UI/Textbox-05.demo.php',
 
          // UI - Markdown component (markdown rendered in the terminal)
          54 => 'UI/Markdown-01.demo.php',

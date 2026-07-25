@@ -16,7 +16,7 @@ use Bootgly\CLI\Terminal\Output;
 return new Specification(
    description: 'It should ask questions with defaults, required re-asking and EOF fallback',
    test: function () {
-      // ! Question with in-memory streams
+      // ! Textbox with in-memory streams
       $stream = fopen('php://memory', 'r+');
       fwrite($stream, "\n\nanswered\n");
       rewind($stream);
@@ -24,36 +24,36 @@ return new Specification(
       $Output = new Output('php://memory');
 
       // @ Default on empty answer
-      $Question = new Question($Input, $Output);
-      $Question->prompt = 'Version';
-      $Question->default = '1.0.0';
+      $Textbox = new Textbox($Input, $Output);
+      $Textbox->prompt = 'Version';
+      $Textbox->default = '1.0.0';
 
       yield assert(
-         assertion: $Question->ask() === '1.0.0',
+         assertion: $Textbox->ask() === '1.0.0',
          description: 'Empty answer assumes the default'
       );
 
       // @ Required without default re-asks until answered
-      $Question = new Question($Input, $Output);
-      $Question->prompt = 'Name';
-      $Question->required = true;
+      $Textbox = new Textbox($Input, $Output);
+      $Textbox->prompt = 'Name';
+      $Textbox->required = true;
 
       yield assert(
-         assertion: $Question->ask() === 'answered',
+         assertion: $Textbox->ask() === 'answered',
          description: 'Required question re-asks on empty answer until answered'
       );
       yield assert(
-         assertion: $Question->attempt === 2,
+         assertion: $Textbox->attempt === 2,
          description: 'Attempt metadata counts the re-ask'
       );
 
       // @ EOF assumes the default
-      $Question = new Question($Input, $Output);
-      $Question->prompt = 'Author';
-      $Question->default = 'anonymous';
+      $Textbox = new Textbox($Input, $Output);
+      $Textbox->prompt = 'Author';
+      $Textbox->default = 'anonymous';
 
       yield assert(
-         assertion: $Question->ask() === 'anonymous',
+         assertion: $Textbox->ask() === 'anonymous',
          description: 'EOF assumes the default'
       );
    }

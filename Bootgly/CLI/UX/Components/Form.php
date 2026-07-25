@@ -40,7 +40,7 @@ use Bootgly\CLI\Terminal\Output;
 use Bootgly\CLI\UI\Base\Fieldset;
 use Bootgly\CLI\UI\Components\Alert;
 use Bootgly\CLI\UI\Components\Menu;
-use Bootgly\CLI\UI\Components\Question;
+use Bootgly\CLI\UI\Components\Textbox;
 use Bootgly\CLI\UX\Components\Form\Controls;
 use Bootgly\CLI\UX\Components\Form\Field;
 use Bootgly\CLI\UX\Components\Form\Fields;
@@ -740,7 +740,7 @@ class Form extends Component
    // # Plain line editors (non-interactive streams)
 
    /**
-    * Asks a Text / Secret field with Question (one stdin line).
+    * Asks a Text / Secret field with Textbox (one stdin line).
     *
     * @param Field $Field The field to ask.
     * @param string $default The value assumed on empty answer or EOF.
@@ -749,17 +749,17 @@ class Form extends Component
     */
    private function question (Field $Field, string $default): string
    {
-      $Question = new Question($this->Input, $this->Output);
+      $Textbox = new Textbox($this->Input, $this->Output);
       // * Config
-      $Question->prompt = $Field->label;
-      $Question->default = $default;
-      $Question->required = $Field->required;
-      $Question->attempts = $this->attempts;
-      $Question->mask = $Field->mask;
-      $Question->Validator = $Field->Validator;
+      $Textbox->prompt = $Field->label;
+      $Textbox->default = $default;
+      $Textbox->required = $Field->required;
+      $Textbox->attempts = $this->attempts;
+      $Textbox->mask = $Field->mask;
+      $Textbox->Validator = $Field->Validator;
 
       // :
-      return $Question->ask();
+      return $Textbox->ask();
    }
 
    /**
@@ -802,7 +802,7 @@ class Form extends Component
    }
 
    /**
-    * Confirms a Confirm field with Question (one stdin line).
+    * Confirms a Confirm field with Textbox (one stdin line).
     *
     * @param Field $Field The field to confirm.
     * @param string $default The answer (`yes` / `no`) assumed on empty answer or EOF.
@@ -811,9 +811,9 @@ class Form extends Component
     */
    private function confirm (Field $Field, string $default): string
    {
-      $Question = new Question($this->Input, $this->Output);
+      $Textbox = new Textbox($this->Input, $this->Output);
 
-      $confirmed = $Question->confirm($Field->label, $default === 'yes');
+      $confirmed = $Textbox->confirm($Field->label, $default === 'yes');
 
       // :
       return $confirmed === true ? 'yes' : 'no';

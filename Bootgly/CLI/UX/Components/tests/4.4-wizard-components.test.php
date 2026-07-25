@@ -13,14 +13,14 @@ use function stream_get_contents;
 use Bootgly\ACI\Tests\Suite\Test\Specification;
 use Bootgly\CLI\Terminal\Input;
 use Bootgly\CLI\Terminal\Output;
-use Bootgly\CLI\UI\Components\Question;
+use Bootgly\CLI\UI\Components\Textbox;
 use Bootgly\CLI\UI\Components\Timeline\States;
 
 
 return new Specification(
    description: 'It should host any component between the timeline points',
    test: function () {
-      // ! Wizard with in-memory streams — the Question answer is primed
+      // ! Wizard with in-memory streams — the Textbox answer is primed
       $stream = fopen('php://memory', 'r+');
       fwrite($stream, "Alpha\n");
       rewind($stream);
@@ -30,11 +30,11 @@ return new Specification(
       $Wizard = new Wizard($Input, $Output);
       $Name = $Wizard->add('Name', function (Wizard $Wizard) {
          // @ Handlers instantiate components directly with the shared IO
-         $Question = new Question($Wizard->Input, $Wizard->Output);
-         $Question->prompt = 'Project name';
+         $Textbox = new Textbox($Wizard->Input, $Wizard->Output);
+         $Textbox->prompt = 'Project name';
 
          // :
-         return $Question->ask();
+         return $Textbox->ask();
       });
 
       // @ Run drives the component between the transitions

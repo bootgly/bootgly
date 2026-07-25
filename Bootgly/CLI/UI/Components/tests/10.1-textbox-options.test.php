@@ -17,10 +17,10 @@ use Bootgly\CLI\Terminal\Output;
 
 
 return new Specification(
-   description: 'It should autocomplete with suggestions (dropdown on TTY; plain scan on pipes)',
+   description: 'It should autocomplete with options (flyout on TTY; plain scan on pipes)',
    test: function () {
       if (BOOTGLY_TTY === true) {
-         // ! Interactive: type `We`, dropdown filters, Enter accepts (strict → aimed match)
+         // ! Interactive: type `We`, the flyout filters, Enter accepts (strict → aimed match)
          $stream = fopen('php://memory', 'r+');
          fwrite($stream, "We\n");
          rewind($stream);
@@ -28,14 +28,14 @@ return new Specification(
          $Input = new Input($stream); // @phpstan-ignore-line
          $Output = new Output('php://memory');
 
-         $Question = new Question($Input, $Output);
-         $Question->prompt = 'Platform';
-         $Question->suggestions = ['Console', 'Web', 'Both'];
-         $Question->strict = true;
+         $Textbox = new Textbox($Input, $Output);
+         $Textbox->prompt = 'Platform';
+         $Textbox->options = ['Console', 'Web', 'Both'];
+         $Textbox->strict = true;
 
          yield assert(
-            assertion: $Question->ask() === 'Web',
-            description: 'Typing filters the dropdown; Enter accepts the aimed match (strict)'
+            assertion: $Textbox->ask() === 'Web',
+            description: 'Typing filters the flyout; Enter accepts the aimed match (strict)'
          );
 
          rewind($Output->stream);
@@ -43,7 +43,7 @@ return new Specification(
 
          yield assert(
             assertion: str_contains($output, 'Web') === true,
-            description: 'The dropdown frame renders the matches'
+            description: 'The flyout frame renders the matches'
          );
 
          // ! Non-strict: free text wins over the matches
@@ -54,12 +54,12 @@ return new Specification(
          $Input = new Input($stream); // @phpstan-ignore-line
          $Output = new Output('php://memory');
 
-         $Question = new Question($Input, $Output);
-         $Question->prompt = 'Platform';
-         $Question->suggestions = ['Console', 'Web'];
+         $Textbox = new Textbox($Input, $Output);
+         $Textbox->prompt = 'Platform';
+         $Textbox->options = ['Console', 'Web'];
 
          yield assert(
-            assertion: $Question->ask() === 'Custom',
+            assertion: $Textbox->ask() === 'Custom',
             description: 'Non-strict mode accepts free text'
          );
       }
@@ -72,13 +72,13 @@ return new Specification(
          $Input = new Input($stream); // @phpstan-ignore-line
          $Output = new Output('php://memory');
 
-         $Question = new Question($Input, $Output);
-         $Question->prompt = 'Platform';
-         $Question->suggestions = ['Console', 'Web', 'Both'];
-         $Question->strict = true;
+         $Textbox = new Textbox($Input, $Output);
+         $Textbox->prompt = 'Platform';
+         $Textbox->options = ['Console', 'Web', 'Both'];
+         $Textbox->strict = true;
 
          yield assert(
-            assertion: $Question->ask() === 'Web',
+            assertion: $Textbox->ask() === 'Web',
             description: 'Strict mode re-asks until a listed answer arrives (pipe)'
          );
 
@@ -86,7 +86,7 @@ return new Specification(
          $output = (string) stream_get_contents($Output->stream);
 
          yield assert(
-            assertion: str_contains($output, 'Pick one of the suggestions.') === true,
+            assertion: str_contains($output, 'Pick one of the options.') === true,
             description: 'Unlisted answers render the strict Failure Alert'
          );
       }

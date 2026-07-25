@@ -46,8 +46,5 @@ return new Suite(
       '6.8-toasts-overlay',
       '7.1-filepicker-scan',
       '7.2-filepicker-pick',
-      '8.1-finder-search',
-      '8.2-finder-control',
-      '8.3-finder-find',
    ]
 );
