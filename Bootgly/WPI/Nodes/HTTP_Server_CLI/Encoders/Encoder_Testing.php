@@ -28,8 +28,8 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders\Catcher;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders\Challenge;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders\Check;
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Events as RequestEvents;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Events as RequestEvents;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router;
 
@@ -176,65 +176,81 @@ class Encoder_Testing extends Encoders
          //   resource-less Response for THIS request only — writing it
          //   through the reference would strip the persistent test worker's
          //   bound Response of its loaded resources (mirrors Encoder_)
-         $Errored = Catcher::respond($Request, Server::$Response, $Throwable);
+         // ? The Catcher can itself throw — degrade to a bare 500 instead of
+         //   letting it escape (mirrors Encoder_; the tail below is no longer
+         //   a `finally`, so nothing would swallow it).
+         try {
+            $Errored = Catcher::respond($Request, Server::$Response, $Throwable);
+         }
+         catch (Throwable) {
+            $Errored = new Response(code: 500, body: '');
+         }
          unset($Response);
          $Response = $Errored;
       }
-      finally {
-         // @ Persist the session before the response leaves the server —
-         //   mirrors Encoder_ (deterministic save; __destruct is GC-bound).
-         if ($Request->sessioned) {
-            $Request->Session?->save();
-         }
 
-         // ?: Check if Response is deferred (async Fiber)
-         if ($Response->deferred) {
-            return '';
-         }
+      // ---
 
-         // @ Remove dynamic Headers
-         $Response->Header->preset('Date', null);
+      // ! Straight-line response tail, NOT a `finally` — mirrors Encoder_,
+      //   where `finally` made the op_array untraceable by the tracing JIT
+      //   (ZEND_FAST_CALL/ZEND_FAST_RET) and got it blacklisted. Kept
+      //   structurally identical here so both encoders stay comparable.
+      //   Equivalent because the `try` holds no function-level `return` (they
+      //   live inside the admission closure) and the `catch` is total.
 
-         // @ Connection management (RFC 9112 §9.3)
-         if ($Request->closeConnection) {
-            if ($Request->protocol === 'HTTP/1.1') {
-               $Response->Header->set('Connection', 'close');
-            }
-
-            // @ Skip actual connection close in test mode to preserve
-            // the test runner's single persistent TCP connection.
-            // closeAfterWrite is tested via compliance test 4.10/4.16.
-         }
-
-         // @ Per-request file cleanup (replaces Request::__destruct)
-         if ($Request->hasFiles) {
-            $Request->clean();
-         }
-
-         // @ Events — request handled, response ready (guarded: zero-alloc when no listeners)
-         $Emitter->check(RequestEvents::Handled) && $Emitter->emit(RequestEvents::Handled, $Request, $Response);
-
-         // ?: A post-middleware/event denial or replacement wins over replay.
-         if (
-            $cacheWire !== null
-            && $CachedResponse === $Response
-            && $Response->code === 200
-            && $Request->closeConnection === false
-         ) {
-            $length = strlen($cacheWire);
-            return $cacheWire;
-         }
-
-         // @ Encode HTTP Response
-         $buffer = $Response->encode($Packages, $length);
-
-         // ? Route response cache opt-in — store the built wire bytes
-         if ($Response->cache !== 0) {
-            $Response->stash($buffer);
-         }
-
-         // :
-         return $buffer;
+      // @ Persist the session before the response leaves the server —
+      //   mirrors Encoder_ (deterministic save; __destruct is GC-bound).
+      if ($Request->sessioned) {
+         $Request->Session?->save();
       }
+
+      // ?: Check if Response is deferred (async Fiber)
+      if ($Response->deferred) {
+         return '';
+      }
+
+      // @ Remove dynamic Headers
+      $Response->Header->preset('Date', null);
+
+      // @ Connection management (RFC 9112 §9.3)
+      if ($Request->closeConnection) {
+         if ($Request->protocol === 'HTTP/1.1') {
+            $Response->Header->set('Connection', 'close');
+         }
+
+         // @ Skip actual connection close in test mode to preserve
+         // the test runner's single persistent TCP connection.
+         // closeAfterWrite is tested via compliance test 4.10/4.16.
+      }
+
+      // @ Per-request file cleanup (replaces Request::__destruct)
+      if ($Request->hasFiles) {
+         $Request->clean();
+      }
+
+      // @ Events — request handled, response ready (guarded: zero-alloc when no listeners)
+      $Emitter->check(RequestEvents::Handled) && $Emitter->emit(RequestEvents::Handled, $Request, $Response);
+
+      // ?: A post-middleware/event denial or replacement wins over replay.
+      if (
+         $cacheWire !== null
+         && $CachedResponse === $Response
+         && $Response->code === 200
+         && $Request->closeConnection === false
+      ) {
+         $length = strlen($cacheWire);
+         return $cacheWire;
+      }
+
+      // @ Encode HTTP Response
+      $buffer = $Response->encode($Packages, $length);
+
+      // ? Route response cache opt-in — store the built wire bytes
+      if ($Response->cache !== 0) {
+         $Response->stash($buffer);
+      }
+
+      // :
+      return $buffer;
    }
 }

@@ -216,67 +216,93 @@ class Encoder_ extends Encoders
          self::$wire = null;
          self::$Admitted = null;
          // ! Break the static-Response alias (see the 503 path above)
-         $Errored = Catcher::respond($Request, Server::$Response, $Throwable);
+         // ? The Catcher can itself throw (Throwables::notify, content
+         //   negotiation, error-page rendering). The response tail below is
+         //   no longer a `finally`, so there is nothing left to swallow that
+         //   throwable — and nothing between here and Select::loop catches,
+         //   so it would kill the worker. Degrade to a bare 500 instead: a
+         //   failing Catcher costs one response, never the whole worker.
+         try {
+            $Errored = Catcher::respond($Request, Server::$Response, $Throwable);
+         }
+         catch (Throwable) {
+            $Errored = new Response(code: 500, body: '');
+         }
          unset($Response);
          $Response = $Errored;
       }
-      finally {
-         // @ Persist the session before the response leaves the server —
-         //   __destruct timing is GC-bound (reference cycles can defer it
-         //   past subsequent requests), so save explicitly per request.
-         if ($Request->sessioned) {
-            $Request->Session?->save();
-         }
 
-         // ?: Check if Response is deferred (async Fiber)
-         if ($Response->deferred) {
-            return '';
-         }
+      // ---
 
-         // @ Connection management (RFC 9112 §9.3)
-         if ($Request->closeConnection) {
-            if ($Request->protocol === 'HTTP/1.1') {
-               $Response->Header->set('Connection', 'close');
-            }
+      // ! The response tail is deliberately straight-line code and NOT a
+      //   `finally` block. `finally` compiles to ZEND_FAST_CALL/ZEND_FAST_RET,
+      //   which the tracing JIT cannot record: the root trace aborted on every
+      //   attempt and, after `opcache.jit_blacklist_root_trace` (16) tries,
+      //   this op_array — the framework's hottest PHP function — was
+      //   blacklisted and ran fully interpreted for the worker's lifetime.
+      //   Measured on PHP 8.4 (CRTO 1254): 16 trace starts, 0 stops for a
+      //   function returning through `finally`; the straight-line shape needs
+      //   no root trace of its own at all.
+      //   The equivalence holds because the `try` above contains no
+      //   function-level `return` (those live inside the `$core` closure, a
+      //   separate op_array) and the `catch` is total — so control always
+      //   arrives here exactly once, which is what `finally` guaranteed.
 
-            $Packages->closeAfterWrite = true;
-         }
-
-         // @ Per-request file cleanup (replaces Request::__destruct)
-         //   Gated to avoid a method frame when no uploads exist.
-         if ($Request->hasFiles) {
-            $Request->clean();
-         }
-
-         // @ Events — request handled, response ready (guarded: zero-alloc when no listeners)
-         isSet($Emitter->Listeners[$handled]) && $Emitter->emit(RequestEvents::Handled, $Request, $Response);
-
-         // ?: Replay only when the admitted Response remains the active 200.
-         //   A post-middleware/event denial or replacement must serialize its
-         //   own response instead of reviving the cached success wire.
-         // ! PHPStan cannot see that the admission-core closure (invoked by
-         //   `Middlewares::process` above) writes `self::$wire`/`$Admitted`,
-         //   so it narrows both to their pre-try null resets.
-         if (
-            self::$wire !== null // @phpstan-ignore notIdentical.alwaysFalse, booleanAnd.alwaysFalse, booleanAnd.alwaysFalse, booleanAnd.alwaysFalse
-            && self::$Admitted === $Response // @phpstan-ignore identical.alwaysFalse
-            && $Response->code === 200
-            && $Request->closeConnection === false
-         ) {
-            $length = strlen(self::$wire);
-            return self::$wire;
-         }
-
-         // @ Encode HTTP Response
-         $buffer = $Response->encode($Packages, $length);
-
-         // ? Route response cache opt-in — store the built wire bytes
-         if ($Response->cache !== 0) {
-            $Response->stash($buffer);
-         }
-
-         // :
-         return $buffer;
+      // @ Persist the session before the response leaves the server —
+      //   __destruct timing is GC-bound (reference cycles can defer it
+      //   past subsequent requests), so save explicitly per request.
+      if ($Request->sessioned) {
+         $Request->Session?->save();
       }
+
+      // ?: Check if Response is deferred (async Fiber)
+      if ($Response->deferred) {
+         return '';
+      }
+
+      // @ Connection management (RFC 9112 §9.3)
+      if ($Request->closeConnection) {
+         if ($Request->protocol === 'HTTP/1.1') {
+            $Response->Header->set('Connection', 'close');
+         }
+
+         $Packages->closeAfterWrite = true;
+      }
+
+      // @ Per-request file cleanup (replaces Request::__destruct)
+      //   Gated to avoid a method frame when no uploads exist.
+      if ($Request->hasFiles) {
+         $Request->clean();
+      }
+
+      // @ Events — request handled, response ready (guarded: zero-alloc when no listeners)
+      isSet($Emitter->Listeners[$handled]) && $Emitter->emit(RequestEvents::Handled, $Request, $Response);
+
+      // ?: Replay only when the admitted Response remains the active 200.
+      //   A post-middleware/event denial or replacement must serialize its
+      //   own response instead of reviving the cached success wire.
+      // ! PHPStan cannot see that the admission-core closure (invoked by
+      //   `Middlewares::process` above) writes `self::$wire`/`$Admitted`,
+      //   so it narrows both to their pre-try null resets.
+      if (
+         self::$wire !== null // @phpstan-ignore notIdentical.alwaysFalse, booleanAnd.alwaysFalse, booleanAnd.alwaysFalse, booleanAnd.alwaysFalse
+         && self::$Admitted === $Response // @phpstan-ignore identical.alwaysFalse
+         && $Response->code === 200
+         && $Request->closeConnection === false
+      ) {
+         $length = strlen(self::$wire);
+         return self::$wire;
+      }
+
+      // @ Encode HTTP Response
+      $buffer = $Response->encode($Packages, $length);
+
+      // ? Route response cache opt-in — store the built wire bytes
+      if ($Response->cache !== 0) {
+         $Response->stash($buffer);
+      }
+
+      // :
+      return $buffer;
    }
 }
