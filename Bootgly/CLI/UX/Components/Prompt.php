@@ -21,12 +21,10 @@ use function implode;
 use function max;
 use function mb_strlen;
 use function microtime;
-use function ord;
 use function preg_replace;
 use function rewind;
 use function str_repeat;
 use function stream_get_contents;
-use function strlen;
 use function strncmp;
 use function substr;
 use function usleep;
@@ -50,8 +48,9 @@ use Bootgly\CLI\UI\Components\Scrollarea;
  * The content area is a Scrollarea band (internally buffered — `PgUp`/`PgDn` scroll
  * it while the input stays fixed); a DECSTBM scroll region protects the frame.
  * `feed()` writes app content into the band; `prompting()` yields submitted lines
- * with `↑`/`↓` history recall and `Alt+Enter` multiline input. Non-interactive
- * input degrades to a plain stdin line loop — identical consumer code.
+ * with `↑`/`↓` history recall and `Shift+Enter` multiline input (the frame grows
+ * one row per break). Non-interactive input degrades to a plain stdin line loop
+ * — identical consumer code.
  */
 class Prompt extends Component
 {
@@ -168,9 +167,9 @@ class Prompt extends Component
 
 
    /**
-    * Renders the input frame: optional top texts, the top border, the input row
-    * (prompt + line editor + multiline hint), the bottom border and optional
-    * bottom texts.
+    * Renders the input frame: optional top texts, the top border, one row per
+    * input line (the prompt marks the first, continuations align under it), the
+    * bottom border and optional bottom texts.
     *
     * @param int $mode self::WRITE_OUTPUT to write, self::RETURN_OUTPUT to return the output.
     *
@@ -577,8 +576,9 @@ class Prompt extends Component
     * Yields submitted lines until a double Ctrl+C, Ctrl+D or EOF.
     * The first Ctrl+C shows a notice on the bottom border — a second press within
     * the timeout ends; otherwise the notice expires and the editing continues.
-    * `↑`/`↓` recall the history (the current draft is preserved); `Alt+Enter`
-    * accumulates multiline input, submitted together on Enter.
+    * `↑`/`↓` walk the input rows first and reach the history at the edges (the
+    * current draft is preserved); `Shift+Enter` breaks the line, and Enter
+    * submits every row joined by `\n`.
     *
     * @return Generator<int,string>
     */

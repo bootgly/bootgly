@@ -22,7 +22,7 @@ OUTPUT);
 // @ Mini REPL — the input stays fixed at the bottom; content scrolls above in a
 //   buffered band: PgUp/PgDn or the mouse wheel scroll it, the scrollbar accepts
 //   hover/click/drag and Ctrl+T toggles the selection mode (native select/copy).
-//   Type and press Enter (↑/↓ recall history; Alt+Enter multiline; `exit`, Ctrl+D or 2× Ctrl+C quits)
+//   Type and press Enter (↑/↓ walk rows then history; Shift+Enter multiline; `exit`, Ctrl+D or 2× Ctrl+C quits)
 $Prompt = new Prompt($Input, $Output);
 $Prompt->prompt = '> ';
 $Prompt->top = ['left' => '@#Cyan:Bootgly REPL@;', 'right' => '@#Black:v0.20@;'];
