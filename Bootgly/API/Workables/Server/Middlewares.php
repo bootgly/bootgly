@@ -12,6 +12,7 @@ namespace Bootgly\API\Workables\Server;
 
 
 use function array_reduce;
+use function count;
 use function array_reverse;
 use function array_unshift;
 use Closure;
@@ -27,7 +28,17 @@ class Middlewares
    private array $stack = [];
 
    // * Metadata
-   // ...
+   /**
+    * How many middlewares this pipeline will run.
+    *
+    * Read by route-cache eligibility (audit 2026-07-27 H1): a global pipeline
+    * can admit more than one valid principal, and the route-cache key carries
+    * no admitted identity, so a route guarded only by global middleware must
+    * not store replayable wire.
+    */
+   public int $count {
+      get => count($this->stack);
+   }
 
 
    public function prepend (Middleware $Middleware): self

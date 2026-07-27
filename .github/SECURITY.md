@@ -49,9 +49,13 @@ benchmark hosts, CI) and social-engineering/physical attacks are always out of s
 
 ## Security Audit History
 
-Two holistic, adversarial audits have run against the network-facing surface. Both are
-closed — every finding is fixed and covered by a regression test in the corresponding test
-suite (`.../tests/Security/*.test.php`).
+Three holistic, adversarial audits have run against the network-facing surface. All three
+are closed — every finding is fixed and covered by a regression test in the corresponding
+test suite (`.../tests/Security/*.test.php`).
+
+We publish audits only once their findings are remediated. An audit that is still being
+worked is not listed here, and its findings are not described publicly until they ship as
+fixed — the same coordinated-disclosure standard we ask of external reporters.
 
 ### HTTP/1.1 — `HTTP_Server_CLI` (2026-06-11 → 2026-06-16)
 
@@ -83,6 +87,45 @@ suite (`.../tests/Security/*.test.php`).
 
 Validated against `h2spec v2.6.0` (145/146 — the one divergence is a documented,
 intentionally tolerated shared-port case) plus the dedicated `tests/Security/` suite.
+
+### Transport, HTTP/1.1, HTTP/2, TLS and AutoTLS — `HTTP_Server_CLI` + `TCP_Server_CLI` (2026-07-21 → 2026-07-25)
+
+The broadest audit so far: the accept loop, both protocol decoders/encoders, route response
+caching, deferred (Fiber) execution, the TLS handshake watcher, and the privileged AutoTLS
+boot path. Every finding below was reproduced by a native PoC before any production code was
+changed, and each PoC was retained as the regression that fails on the vulnerable code and
+passes on the fix.
+
+| ID | Severity | Finding | Status |
+| --- | --- | --- | --- |
+| C1 | High | Abortive TCP close could throw from the accept loop and crash a worker | ✅ Fixed |
+| C2 | High | Early route-cache hits could bypass custom authentication and admission middleware | ✅ Fixed |
+| C3 | High | Deferred work could observe another request's mutable Route/Request context | ✅ Fixed |
+| C4 | High | Multipart initial-boundary search retained the full preamble in memory | ✅ Fixed |
+| C5 | High | Duplicate byte ranges created multi-million-fold response amplification | ✅ Fixed |
+| C6 | High | Privileged AutoTLS recursive ownership handoff had a symlink TOCTOU | ✅ Fixed |
+| M1 | Medium | Oversized chunk-size integer conversion became a terminal zero chunk → request smuggling | ✅ Fixed |
+| M2 | Medium | Deferred HTTP/2 responses could lose their stream identity | ✅ Fixed |
+| M3 | Medium | Ordinary HTTP/2 response backlogs lacked an aggregate budget | ✅ Fixed |
+| M4 | Medium | Flow-stalled responded streams bypassed the HTTP/2 rapid-reset budget | ✅ Fixed |
+| M5 | Medium | Successful TLS negotiation could leave a stale write watcher | ✅ Fixed |
+| M6 | Medium | AutoTLS helper PID was outside authenticated project-control identity | ✅ Fixed |
+| M7 | Medium | Delegated AutoTLS readiness trusted forgeable runtime-writable PID JSON | ✅ Fixed |
+| M8 | Medium | Response header identity was case-sensitive and value validation was inconsistent | ✅ Fixed |
+| N1 | Low | HTTP/1 field-name grammar was not fully validated | ✅ Fixed |
+| N2 | Low | A complete HTTP/1 request head could bypass the nominal 16 KiB cap | ✅ Fixed |
+| N3 | Low | Production header-scan memoization was not exercised by the native Test environment | ✅ Fixed |
+
+Two of these are worth calling out for deployers. **M1** is a request-smuggling primitive
+that needs no differential proxy in front — the server itself dispatched the request hidden
+behind the overflowing chunk-size token. **C6** is a local privilege-escalation boundary: it
+only applies when the server is started as root with AutoTLS, and it was validated by driving
+the real ownership walker as UID 0 inside an unprivileged user namespace against a root-owned
+canary outside the managed store.
+
+Several findings closed a primary attack path while leaving a narrower, related surface
+scoped out of that pass. Those remainders are recorded explicitly in the audit report rather
+than silently absorbed, and they are carried into the follow-up audit.
 
 ## Best Practices for Deployers
 

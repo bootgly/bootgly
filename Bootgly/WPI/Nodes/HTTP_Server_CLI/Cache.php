@@ -12,6 +12,9 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_CLI;
 
 
 use function array_key_exists;
+use function json_encode;
+use function is_scalar;
+use function implode;
 use function array_key_first;
 use function count;
 use function is_array;
@@ -126,13 +129,14 @@ class Cache
          ? $headers['x-real-ip']
          : null;
 
-      $key = '3'
+      $key = '4'
          . self::frame($Request->method)
          . self::frame($Request->host)
          . self::frame($Request->URI)
          . self::frame($forwardedProto)
          . self::frame($forwardedFor)
-         . self::frame($realIP);
+         . self::frame($realIP)
+         . self::frame(self::principal($Request));
 
       if ($varyLanguage === false) {
          return "{$key}V0";
@@ -144,6 +148,61 @@ class Cache
          : null;
 
       return "{$key}V1" . self::frame($language);
+   }
+
+   /**
+    * The admitted principal this entry belongs to (audit 2026-07-27 H1).
+    *
+    * Cache replay runs AFTER global admission, so a global middleware pipeline
+    * can admit two DIFFERENT valid principals that reach the same
+    * method/authority/URI. Without the principal in the key, the second one
+    * replays the first one's raw wire and never runs the handler. Only
+    * `Cookie` and `Authorization` had dedicated replay guards; a custom
+    * credential such as `X-API-Key` reached this state.
+    *
+    * An anonymous request returns `null` — the overwhelmingly common case,
+    * costing three property reads and no allocation, so public routes keep
+    * sharing one entry exactly as before.
+    *
+    * A non-scalar identity cannot be proven equal to another instance, so it
+    * yields a value that never repeats: the request is served cold rather than
+    * risking a cross-principal hit.
+    */
+   private static int $unshared = 0;
+
+   private static function principal (Request $Request): null|string
+   {
+      $identity = $Request->identity;
+      $claims = $Request->claims;
+      $attributes = $Request->attributes;
+
+      // ?: Anonymous — nothing admitted, nothing to partition on.
+      if ($identity === null && $claims === [] && $attributes === []) {
+         return null;
+      }
+
+      $marks = [];
+
+      if (is_scalar($identity)) {
+         $marks[] = 'i:' . $identity;
+      }
+      else if ($identity !== null) {
+         // ! Unprovable equality — force a miss instead of guessing.
+         $marks[] = 'i!' . (string) ++self::$unshared;
+      }
+
+      foreach (['c' => $claims, 'a' => $attributes] as $prefix => $bag) {
+         if ($bag === []) {
+            continue;
+         }
+
+         $encoded = json_encode($bag);
+         $marks[] = $encoded === false
+            ? "{$prefix}!" . (string) ++self::$unshared
+            : "{$prefix}:{$encoded}";
+      }
+
+      return implode('|', $marks);
    }
 
    /**

@@ -355,5 +355,9 @@ return new Suite(
       // Field identity is case-insensitive, and every insertion path
       // must reject forbidden C0/DEL octets, not only preset insertion.
       '64.01-response_header_case_identity_and_octets',
+      // # Route cache identity partition (audit 2026-07-27 H1)
+      // Two DIFFERENT valid principals admitted by GLOBAL middleware must
+      // never share a cached response: the key omits the admitted identity.
+      '65.01-route_cache_global_identity_partition',
    ],
 );
