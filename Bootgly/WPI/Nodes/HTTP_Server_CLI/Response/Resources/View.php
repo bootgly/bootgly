@@ -52,10 +52,23 @@ class View extends Resource
 
    public function __construct (Response $Response)
    {
-      parent::__construct(persistent: true);
+      parent::__construct(persistent: true, scoped: true);
 
       // * Data
       $this->Response = $Response;
+      $this->uses = [];
+   }
+
+   /**
+    * Drop the exported variables between requests (audit 2026-07-27 M2).
+    *
+    * `View` is a persistent resource, so without this the `$uses` map built by
+    * one request's `export()` survives into the next request on the same
+    * worker and is merged into its render — handing request A's user, tenant
+    * or CSRF value to request B's template.
+    */
+   public function clean (): void
+   {
       $this->uses = [];
    }
 

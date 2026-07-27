@@ -375,5 +375,9 @@ return new Suite(
       // no-store/private must prevent storage and request no-cache must
       // force the handler path, over any route-level TTL.
       '69.01-route_cache_control_directives',
+      // # View export scope (audit 2026-07-27 M2)
+      // View is a persistent resource: its export() map must not carry
+      // one request's data into the next on the same worker.
+      '70.01-view_export_request_scope',
    ],
 );

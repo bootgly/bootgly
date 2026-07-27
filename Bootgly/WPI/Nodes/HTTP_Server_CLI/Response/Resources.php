@@ -50,6 +50,10 @@ class Resources
    // ! True only while at least one NON-persistent resource is mounted —
    //   reset() then scans; persistent-only mounts (the hot routes) skip it.
    private bool $ephemeral = false;
+   // ! Persistent resources carrying request-scoped state. Empty on every
+   //   route that mounts none, so reset() stays free on the hot path.
+   /** @var array<int,Resource> */
+   private array $Scoped = [];
 
 
    /**
@@ -203,6 +207,13 @@ class Resources
     */
    public function reset (): void
    {
+      // @ A persistent instance may still hold request-scoped data; drop it
+      //   without dropping the instance (audit 2026-07-27 M2). The list is
+      //   empty unless a scoped resource was actually mounted.
+      foreach ($this->Scoped as $Resource) {
+         $Resource->clean();
+      }
+
       // ? Persistent-only mounts — nothing to unset, skip the scan entirely.
       if ($this->ephemeral === false) {
          return;
@@ -234,6 +245,9 @@ class Resources
          if ($Resource->persistent === false) {
             $this->ephemeral = true;
          }
+         if ($Resource->scoped) {
+            $this->Scoped[spl_object_id($Resource)] = $Resource;
+         }
 
          return $Resource;
       }
@@ -246,6 +260,9 @@ class Resources
 
       if ($Attached->persistent === false) {
          $this->ephemeral = true;
+      }
+      if ($Attached->scoped) {
+         $this->Scoped[spl_object_id($Attached)] = $Attached;
       }
 
       /** @var T $Attached */
