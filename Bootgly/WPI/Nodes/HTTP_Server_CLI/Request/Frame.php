@@ -128,7 +128,7 @@ final class Frame
 
 
    /**
-    * Validate a Host authority as RFC 9110 §7.2 `uri-host [ ":" port ]`
+    * Check a Host authority against RFC 9110 §7.2 `uri-host [ ":" port ]`
     * (audit 2026-07-27 M1).
     *
     * `Request::allow()` strips a port by taking the LAST colon, so an authority
@@ -138,7 +138,7 @@ final class Frame
     * Rejecting the grammar here means no such value ever reaches the request,
     * with or without an allowlist configured.
     */
-   private static function authority (string $value): bool
+   private static function check (string $value): bool
    {
       // ?: Absence is handled by the mandatory-Host guard, not here.
       if ($value === '') {
@@ -441,7 +441,7 @@ final class Frame
                $hostValue = trim($rawValue, " \t");
                // ? Reject userinfo and malformed ports before the value can
                //   reach `Request::$host` or the allowlist (audit M1).
-               if (self::authority($hostValue) === false) {
+               if (self::check($hostValue) === false) {
                   $Package->reject("HTTP/1.1 400 Bad Request\r\n\r\n");
                   return null;
                }

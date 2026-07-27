@@ -136,7 +136,7 @@ class Cache
          . self::frame($forwardedProto)
          . self::frame($forwardedFor)
          . self::frame($realIP)
-         . self::frame(self::principal($Request));
+         . self::frame(self::identify($Request));
 
       if ($varyLanguage === false) {
          return "{$key}V0";
@@ -151,7 +151,7 @@ class Cache
    }
 
    /**
-    * The admitted principal this entry belongs to (audit 2026-07-27 H1).
+    * Identify the admitted principal this entry belongs to (audit 2026-07-27 H1).
     *
     * Cache replay runs AFTER global admission, so a global middleware pipeline
     * can admit two DIFFERENT valid principals that reach the same
@@ -170,7 +170,7 @@ class Cache
     */
    private static int $unshared = 0;
 
-   private static function principal (Request $Request): null|string
+   private static function identify (Request $Request): null|string
    {
       $identity = $Request->identity;
       $claims = $Request->claims;
