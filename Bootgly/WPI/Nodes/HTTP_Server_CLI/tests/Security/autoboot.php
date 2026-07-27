@@ -363,5 +363,9 @@ return new Suite(
       // RFC 9110 7.2 Host is `uri-host [":" port]` and never userinfo:
       // `allowed:@evil` must not reduce to the allowed name.
       '66.01-host_authority_userinfo_allowlist_bypass',
+      // # ACME HTTP-01 helper redirect (audit 2026-07-27 L2)
+      // The target is appended to a trusted authority, so only
+      // origin-form may be reflected into the 308 Location.
+      '67.01-acme_helper_location_origin_form',
    ],
 );

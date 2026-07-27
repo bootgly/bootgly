@@ -1385,12 +1385,28 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
     */
    private function answer (string $head): string
    {
-      // ? Request line
-      if (preg_match('/^(GET|HEAD) (\S+) HTTP/', $head, $matches) !== 1) {
+      // ? Request line — the version is anchored so a malformed line cannot
+      //   reach the target handling below (audit 2026-07-27 L2).
+      if (preg_match('/^(GET|HEAD) (\S+) HTTP\/1\.[01]/', $head, $matches) !== 1) {
          return "HTTP/1.1 400 Bad Request\r\nConnection: close\r\nContent-Length: 0\r\n\r\n";
       }
       $method = $matches[1];
       $URI = $matches[2];
+
+      // ? Origin-form only (RFC 9112 §3.2.1). The target is appended verbatim
+      //   to a trusted authority in the 308 below, so anything able to
+      //   re-point that URL must be refused here: a target not starting with
+      //   `/` reads as userinfo/authority (`:pw@evil.test/path` yields
+      //   `https://victim.test:pw@evil.test/path`), and a `//` prefix makes the
+      //   Location protocol-relative. Control bytes are excluded too — `\S+`
+      //   rejects whitespace but not NUL, ESC or the rest of C0/DEL.
+      if (
+         $URI[0] !== '/'
+         || ($URI[1] ?? '') === '/'
+         || preg_match('/[\x00-\x1F\x7F]/', $URI) === 1
+      ) {
+         return "HTTP/1.1 400 Bad Request\r\nConnection: close\r\nContent-Length: 0\r\n\r\n";
+      }
 
       // ?: ACME HTTP-01 token
       if (strncmp($URI, '/.well-known/acme-challenge/', 28) === 0) {
