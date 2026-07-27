@@ -116,6 +116,18 @@ return new Specification(
             . "Connection: close\r\n\r\n"
          ));
 
+         // ! L3 — raw C0/DEL octets in the request target.
+         foreach ([
+            'l3_target_nul' => "/n-ok\x00tail",
+            'l3_target_vtab' => "/n-ok\x0Btail",
+            'l3_target_del' => "/n-ok\x7Ftail",
+         ] as $leg => $target) {
+            $probe['legs'][$leg] = $Status($Send(
+               "GET {$target} HTTP/1.1\r\nHost: localhost\r\n"
+               . "X-Bootgly-Test: {$testIndex}\r\nConnection: close\r\n\r\n"
+            ));
+         }
+
          // ! Controls — ordinary request, RFC-valid no-space value, and a head
          //   sized EXACTLY at the 16384-byte limit.
          $probe['legs']['control_ordinary'] = $Status($Send(
@@ -191,6 +203,9 @@ return new Specification(
          'n1_vtab_content_length' => "Content-Length\\x0B",
          'n1_nul_transfer_encoding' => "Transfer-Encoding\\x00",
          'n1_separator_in_name' => 'Bad(Name)',
+         'l3_target_nul' => 'a NUL byte in the request target',
+         'l3_target_vtab' => 'a vertical tab in the request target',
+         'l3_target_del' => 'a DEL byte in the request target',
       ] as $leg => $label) {
          if (($legs[$leg] ?? 0) !== 400) {
             $accepted[] = "N1 {$label} → " . json_encode($legs[$leg] ?? null) . ' (expected 400)';
@@ -198,7 +213,7 @@ return new Specification(
       }
 
       if ($accepted !== []) {
-         return 'CONFIRMED N1/N2: the HTTP/1 head parser accepted forms it must reject — '
+         return 'CONFIRMED N1/N2/L3: the HTTP/1 head parser accepted forms it must reject — '
             . implode('; ', $accepted)
             . '. Each is a parser-differential primitive: Bootgly ignores the disguised field '
             . 'while a tolerant intermediary may still read it.';

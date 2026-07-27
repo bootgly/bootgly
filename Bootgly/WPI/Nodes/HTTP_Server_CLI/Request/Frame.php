@@ -18,6 +18,7 @@ use function explode;
 use function is_string;
 use function preg_match;
 use function strcasecmp;
+use function strcspn;
 use function stripos;
 use function strlen;
 use function strpos;
@@ -64,6 +65,16 @@ final class Frame
       . '0123456789'
       . 'abcdefghijklmnopqrstuvwxyz'
       . 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+
+   /**
+    * Raw C0 controls plus DEL — never valid unencoded in a request target or a
+    * field value (audit 2026-07-27 L3). SP and HTAB are excluded: they are
+    * delimiters handled by the line/field split, not smuggled octets.
+    */
+   private const string CTL =
+      "\x00\x01\x02\x03\x04\x05\x06\x07\x08\x0A\x0B\x0C\x0D\x0E\x0F"
+      . "\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1A\x1B\x1C\x1D\x1E\x1F"
+      . "\x7F";
 
    /**
     * RFC 3986 host characters (unreserved + sub-delims + pct-encoding), which
@@ -256,6 +267,16 @@ final class Frame
       }
       if (strlen($URI) > 8192) {
          $Package->reject("HTTP/1.1 414 URI Too Long\r\n\r\n");
+         return null;
+      }
+      // ? No raw C0/DEL in the request target (audit 2026-07-27 L3). The head
+      //   is split on CRLF and the request line on SP, so NUL, VT, bare CR and
+      //   DEL all survive into the target and then into routing, logs and any
+      //   URL the application echoes. A tolerant intermediary may normalize
+      //   them differently than Bootgly does — one `strcspn` over a target
+      //   already bounded to 8 KiB.
+      if (strcspn($URI, self::CTL) !== strlen($URI)) {
+         $Package->reject("HTTP/1.1 400 Bad Request\r\n\r\n");
          return null;
       }
 
