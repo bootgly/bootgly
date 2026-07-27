@@ -82,6 +82,12 @@ class Decoder_Downloading extends Decoders implements Disconnecting
    private $fileHandler = null;
 
    // * Metadata
+   //   Share of the worker-wide unfinished-body budget held by this decoder.
+   //   File parts stream to disk under `Downloads`, but TEXT parts are kept in
+   //   memory (`$fieldBuffer` plus the completed values in `$fields`), so they
+   //   belong to the same in-memory ceiling the other HTTP/1 body decoders draw
+   //   on. `$fieldsSize` is their exact retained total.
+   public protected(set) Bodies $Bodies;
    private int $decoded = 0;
    private int $read = 0;
    private int $state = self::STATE_BOUNDARY_START;
@@ -107,6 +113,9 @@ class Decoder_Downloading extends Decoders implements Disconnecting
    {
       // * Config
       $this->boundary = $boundary;
+
+      // * Metadata
+      $this->Bodies = new Bodies;
 
       // * Data
       $this->tailBuffer = '';
@@ -219,6 +228,14 @@ class Decoder_Downloading extends Decoders implements Disconnecting
          //   Bound their raw aggregate to the normal in-memory body policy.
          if ($this->fieldsSize + $length > Server\Request::$maxBodySize) {
             $reject("HTTP/1.1 413 Request Entity Too Large\r\n\r\n");
+            return false;
+         }
+         // ? Both caps above bound THIS request. Text parts are held in memory
+         //   for as long as the multipart body stays unfinished, so their sum
+         //   across connections draws on the same worker ceiling the other
+         //   HTTP/1 body decoders use — file parts do not, they go to disk.
+         if ($this->Bodies->reserve($this->fieldsSize + $length) === false) {
+            $reject("HTTP/1.1 503 Service Unavailable\r\n\r\n");
             return false;
          }
 
@@ -702,6 +719,7 @@ class Decoder_Downloading extends Decoders implements Disconnecting
       $this->fields = [];
       $this->fieldsEncoded = '';
       $this->fieldsSize = 0;
+      $this->Bodies->release();
    }
 
    /**
@@ -906,6 +924,10 @@ class Decoder_Downloading extends Decoders implements Disconnecting
       $this->fields = [];
       $this->fieldsEncoded = '';
       $this->fieldsSize = 0;
+      // ! The values now belong to the Request, dispatched and freed with it,
+      //   so they leave the unfinished-body budget here — `abort()` returns
+      //   early once `$finished` is set and would never release them.
+      $this->Bodies->release();
       $this->files = [];
       $this->filesKeys = [];
       $this->finished = true;

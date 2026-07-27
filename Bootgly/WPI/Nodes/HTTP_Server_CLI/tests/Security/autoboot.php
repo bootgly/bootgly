@@ -391,5 +391,9 @@ return new Suite(
       // A parked response body must be bounded by TIME too: a peer can
       // defer the idle reaper with PINGs while never granting credit.
       '73.01-http2_flow_progress_deadline',
+      // # HTTP/1 aggregate request-body budget
+      // The per-request cap bounds one body; nothing bounds their sum, and
+      // neither body decoder released on close — HTTP/2 has both controls.
+      '74.01-http1_aggregate_request_body_budget',
    ],
 );

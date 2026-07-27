@@ -180,6 +180,33 @@ drives adversarial payloads (request smuggling, resource exhaustion, privileged 
 paths) that must not run on a plain `bootgly test`. It is opted into explicitly; see the
 [Security guide](https://bootgly.com/docs/security).
 
+### HTTP/1 request-body retention — `HTTP_Server_CLI` + `TCP_Server_CLI` (2026-07-27, follow-up)
+
+| ID | Severity | Finding | Status |
+| --- | --- | --- | --- |
+| H1 | High | HTTP/1 request bodies had no worker-wide budget and outlived connection close | ✅ Fixed |
+
+`Request::$maxBodySize` bounded a single request body, but nothing bounded their sum. An
+unauthenticated peer could open many connections, declare a legal body on each and send only
+part of it, spending the per-request cap once per connection. HTTP/2 already carried both a
+per-connection and a per-worker ledger; HTTP/1 carried neither. Separately, no HTTP/1 body
+decoder was torn down on close, and every connection held a self-reference that plain
+refcounting could never free — so a disconnect did not promptly return the memory either.
+
+Every in-memory HTTP/1 body path now draws on a worker-wide budget, the body decoders release
+deterministically on close, and a closed connection is freed by refcount instead of waiting
+for the cycle collector.
+
+**This carries a behavior change deployers should know about.** Unfinished in-memory HTTP/1
+request bodies are now capped per worker at 64 MiB by default, matching the ceiling HTTP/2
+already used. A request that would push a worker past that ceiling is refused with `503
+Service Unavailable` rather than buffered. The ceiling covers Content-Length bodies, chunked
+bodies and `multipart/form-data` **text** parts — everything held in memory while the request
+is still arriving. Multipart **file** parts are not counted: they stream to disk under their
+own separate aggregate. A completed body stops counting the moment it is dispatched.
+Deployments that legitimately receive many large concurrent uploads on a single worker can
+raise it.
+
 ## Best Practices for Deployers
 
 - Run behind TLS; enable `TrustedProxy` only for proxies you actually control, and keep it

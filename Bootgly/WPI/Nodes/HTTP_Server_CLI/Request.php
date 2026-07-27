@@ -1202,6 +1202,16 @@ class Request
                   $Waiting = new Decoder_Waiting;
                   $Waiting->init();
                   $Waiting->Request = $this;
+                  // ? The slice already taken from this read is retained for
+                  //   as long as the body stays unfinished, so it draws on the
+                  //   same worker budget its continuations will.
+                  if ($Waiting->Bodies->reserve($initialLength) === false) {
+                     $this->Body->raw = '';
+                     $this->Body->waiting = false;
+                     $Package->consumed = 0;
+                     $Package->reject("HTTP/1.1 503 Service Unavailable\r\n\r\n");
+                     return States::Rejected;
+                  }
                   $Package->Decoder = $Waiting;
                }
             }

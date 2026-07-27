@@ -41,7 +41,6 @@ return new Specification(
          }
       };
       $Connection->status = Connections::STATUS_ESTABLISHED;
-      $Connection->Connection = $Connection;
 
       $hooked = 0;
       $Response = new Response;

@@ -25,6 +25,7 @@ use function strspn;
 use function substr;
 use function time;
 use Bootgly\WPI\Endpoints\Servers\Decoder\States;
+use Bootgly\WPI\Endpoints\Servers\Disconnecting;
 use Bootgly\WPI\Endpoints\Servers\Feeding;
 use Bootgly\WPI\Endpoints\Servers\Packages;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages as TCP_Packages;
@@ -33,7 +34,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 
 
-class Decoder_Chunked extends Decoders implements Feeding
+class Decoder_Chunked extends Decoders implements Disconnecting, Feeding
 {
    // * Config
    //   Absolute decode deadline in seconds (audit F-6): anchored to `$decoded`
@@ -84,11 +85,15 @@ class Decoder_Chunked extends Decoders implements Feeding
    //   Owning Request, bound at the decoder install site in Request::decode():
    //   body continuations must never resolve the worker-global Request —
    //   another connection may replace or claim it between transport reads.
-   public Request $Request;
+   //   Final so `disconnect()` can drop it: an unset is only safe when no
+   //   subclass can attach hooks to the slot.
+   final public Request $Request;
    private string $buffer = '';
    private string $body = '';
 
    // * Metadata
+   //   Share of the worker-wide unfinished-body budget held by this decoder.
+   public protected(set) Bodies $Bodies;
    // Absolute decode start time (set once in init(); NOT refreshed per packet).
    private int $decoded = 0;
    private int $state = self::READ_SIZE;
@@ -212,6 +217,7 @@ class Decoder_Chunked extends Decoders implements Feeding
 
    public function init (): void
    {
+      $this->Bodies = new Bodies;
       $this->buffer = '';
       $this->body = '';
       $this->decoded = time();
@@ -219,6 +225,34 @@ class Decoder_Chunked extends Decoders implements Feeding
       $this->chunkSize = 0;
       $this->chunkRead = 0;
       $this->totalSize = 0;
+   }
+
+   /**
+    * Drop everything this decoder retains and hand its share of the worker
+    * budget back. Every terminal path — completion, rejection, timeout and
+    * transport teardown — runs through here, so the ledger cannot drift.
+    */
+   private function reset (): void
+   {
+      $this->body = '';
+      $this->buffer = '';
+      $this->Bodies->release();
+   }
+
+   /**
+    * Transport teardown (`Connection::close()`), on every close path including
+    * an abrupt peer EOF. Without this the accumulated chunk data stays
+    * reachable from the closed Package until the cycle collector happens to
+    * run — precisely the window a burst of half-sent bodies exploits.
+    */
+   public function disconnect (): void
+   {
+      $this->reset();
+
+      if ( isSet($this->Request) ) {
+         $this->Request->Body->waiting = false;
+         unset($this->Request);
+      }
    }
 
    public function feed (string $data): void
@@ -259,8 +293,7 @@ class Decoder_Chunked extends Decoders implements Feeding
       if ($this->expire()) {
          $Body->waiting = false;
 
-         $this->body = '';
-         $this->buffer = '';
+         $this->reset();
 
          $Package->Decoder = null;
          $Package->consumed = 0;
@@ -273,6 +306,20 @@ class Decoder_Chunked extends Decoders implements Feeding
       //   Package::$consumed when this call completes.
       $carried = strlen($this->buffer);
       $this->buffer .= $buffer;
+
+      // ? `Request::$maxBodySize` bounds THIS body; the worker budget bounds
+      //   the sum of every unfinished one. Both the decoded body and the
+      //   not-yet-parsed wire behind it survive across reads, so both count.
+      //   Checked right after the append, so the reservation covers exactly
+      //   what is now held; a refusal drops all of it.
+      if ($this->Bodies->reserve(strlen($this->body) + strlen($this->buffer)) === false) {
+         $Body->waiting = false;
+         $this->reset();
+         $Package->Decoder = null;
+         $Package->consumed = 0;
+         $Package->reject("HTTP/1.1 503 Service Unavailable\r\n\r\n");
+         return States::Rejected;
+      }
 
       // @ Process chunks
       while (true) {
@@ -289,8 +336,7 @@ class Decoder_Chunked extends Decoders implements Feeding
                if ($lineLength > self::CHUNK_LINE_LIMIT) {
                   $Package->reject("HTTP/1.1 431 Request Header Fields Too Large\r\n\r\n");
                   $Body->waiting = false;
-                  $this->body = '';
-                  $this->buffer = '';
+                  $this->reset();
                   $Package->Decoder = null;
                   $Package->consumed = 0;
                   return States::Rejected;
@@ -323,8 +369,7 @@ class Decoder_Chunked extends Decoders implements Feeding
                   ) {
                      $Package->reject("HTTP/1.1 400 Bad Request\r\n\r\n");
                      $Body->waiting = false;
-                     $this->body = '';
-                     $this->buffer = '';
+                     $this->reset();
                      $Package->Decoder = null;
                      $Package->consumed = 0;
                      return States::Rejected;
@@ -345,8 +390,7 @@ class Decoder_Chunked extends Decoders implements Feeding
                if ($sizeLine === '' || ! ctype_xdigit($sizeLine)) {
                   $Package->reject("HTTP/1.1 400 Bad Request\r\n\r\n");
                   $Body->waiting = false;
-                  $this->body = '';
-                  $this->buffer = '';
+                  $this->reset();
                   $Package->Decoder = null;
                   $Package->consumed = 0;
                   return States::Rejected;
@@ -364,8 +408,7 @@ class Decoder_Chunked extends Decoders implements Feeding
                if (strlen($significant) > self::CHUNK_SIZE_DIGITS) {
                   $Package->reject("HTTP/1.1 413 Request Entity Too Large\r\n\r\n");
                   $Body->waiting = false;
-                  $this->body = '';
-                  $this->buffer = '';
+                  $this->reset();
                   $Package->Decoder = null;
                   $Package->consumed = 0;
                   return States::Rejected;
@@ -389,8 +432,7 @@ class Decoder_Chunked extends Decoders implements Feeding
                   $Body->waiting = false;
 
                   // @ Clean up instance state to prevent cross-request leakage
-                  $this->body = '';
-                  $this->buffer = '';
+                  $this->reset();
 
                   $Package->Decoder = null;
 
@@ -435,8 +477,7 @@ class Decoder_Chunked extends Decoders implements Feeding
                if ($this->buffer[0] !== "\r" || $this->buffer[1] !== "\n") {
                   $Package->reject("HTTP/1.1 400 Bad Request\r\n\r\n");
                   $Body->waiting = false;
-                  $this->body = '';
-                  $this->buffer = '';
+                  $this->reset();
                   $Package->Decoder = null;
                   $Package->consumed = 0;
                   return States::Rejected;
@@ -464,8 +505,7 @@ class Decoder_Chunked extends Decoders implements Feeding
                      if ($length > self::TRAILER_LIMIT) {
                         $Package->reject("HTTP/1.1 431 Request Header Fields Too Large\r\n\r\n");
                         $Body->waiting = false;
-                        $this->body = '';
-                        $this->buffer = '';
+                        $this->reset();
                         $Package->Decoder = null;
                         $Package->consumed = 0;
                         return States::Rejected;
@@ -478,8 +518,7 @@ class Decoder_Chunked extends Decoders implements Feeding
                   if ($trailerEnd > self::TRAILER_LIMIT) {
                      $Package->reject("HTTP/1.1 431 Request Header Fields Too Large\r\n\r\n");
                      $Body->waiting = false;
-                     $this->body = '';
-                     $this->buffer = '';
+                     $this->reset();
                      $Package->Decoder = null;
                      $Package->consumed = 0;
                      return States::Rejected;
@@ -496,8 +535,7 @@ class Decoder_Chunked extends Decoders implements Feeding
                      ) !== 1) {
                         $Package->reject("HTTP/1.1 400 Bad Request\r\n\r\n");
                         $Body->waiting = false;
-                        $this->body = '';
-                        $this->buffer = '';
+                        $this->reset();
                         $Package->Decoder = null;
                         $Package->consumed = 0;
                         return States::Rejected;
@@ -525,8 +563,7 @@ class Decoder_Chunked extends Decoders implements Feeding
                $Body->downloaded = $this->totalSize;
                $Body->waiting = false;
 
-               $this->body = '';
-               $this->buffer = '';
+               $this->reset();
                $Package->Decoder = null;
                $Package->consumed = $consumed;
 

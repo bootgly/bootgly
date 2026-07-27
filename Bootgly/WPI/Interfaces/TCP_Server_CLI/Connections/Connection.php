@@ -29,6 +29,16 @@ use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages;
 
 class Connection extends Packages
 {
+   // ! Virtual, so it costs no slot and — decisively — creates no reference:
+   //   a stored `$this` would be a self-cycle only the collector could break,
+   //   which is what let a closed connection keep its retained request body
+   //   alive long past the disconnect. Read-only by construction.
+   //   Not reading the inherited slot is the entire point, so the hook is
+   //   deliberately value-less: nothing ever writes it either.
+   public Connection $Connection {
+      get => $this; // @phpstan-ignore propertyGetHook.noRead
+   }
+
    /** @var resource */
    public $Socket;
 

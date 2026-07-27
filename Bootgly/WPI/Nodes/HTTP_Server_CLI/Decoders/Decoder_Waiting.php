@@ -17,6 +17,7 @@ use function time;
 
 use const Bootgly\WPI;
 use Bootgly\WPI\Endpoints\Servers\Decoder\States;
+use Bootgly\WPI\Endpoints\Servers\Disconnecting;
 use Bootgly\WPI\Endpoints\Servers\Packages;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages as TCP_Packages;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI as Server;
@@ -24,21 +25,43 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 
 
-class Decoder_Waiting extends Decoders
+class Decoder_Waiting extends Decoders implements Disconnecting
 {
    // * Data
    //   Owning Request, bound at the decoder install site in Request::decode():
    //   body continuations must never resolve the worker-global Request —
    //   another connection may replace or claim it between transport reads.
-   public Request $Request;
+   //   Final so `disconnect()` can drop it: an unset is only safe when no
+   //   subclass can attach hooks to the slot.
+   final public Request $Request;
 
    // * Metadata
+   //   Share of the worker-wide unfinished-body budget held by this decoder.
+   public protected(set) Bodies $Bodies;
    private int $decoded = 0;
 
 
    public function init (): void
    {
+      $this->Bodies = new Bodies;
       $this->decoded = time();
+   }
+
+   /**
+    * Transport teardown (`Connection::close()`), on every close path including
+    * an abrupt peer EOF. Without this the retained body stays reachable from
+    * the closed Package until the cycle collector happens to run — precisely
+    * the window a burst of half-sent bodies exploits.
+    */
+   public function disconnect (): void
+   {
+      $this->Bodies->release();
+
+      if ( isSet($this->Request) ) {
+         $this->Request->Body->raw = '';
+         $this->Request->Body->waiting = false;
+         unset($this->Request);
+      }
    }
 
 
@@ -68,6 +91,7 @@ class Decoder_Waiting extends Decoders
          $elapsed = time() - $this->decoded;
          if ($elapsed >= 60) {
             $Body->waiting = false;
+            $this->Bodies->release();
             $Package->Decoder = null;
             $Package->consumed = 0;
             $Package->reject("HTTP/1.1 408 Request Timeout\r\n\r\n");
@@ -82,6 +106,19 @@ class Decoder_Waiting extends Decoders
          $remaining = $length - $downloaded;
          $consumed = $remaining > 0 ? min($size, $remaining) : 0;
 
+         // ? The per-request cap bounds THIS body; the worker budget bounds the
+         //   sum of every unfinished one. Reserve before appending: a body that
+         //   does not fit must never be allocated in the first place.
+         if ($consumed > 0 && $this->Bodies->reserve($downloaded + $consumed) === false) {
+            $Body->waiting = false;
+            $Body->raw = '';
+            $this->Bodies->release();
+            $Package->Decoder = null;
+            $Package->consumed = 0;
+            $Package->reject("HTTP/1.1 503 Service Unavailable\r\n\r\n");
+            return States::Rejected;
+         }
+
          if ($consumed > 0) {
             $Body->raw .= $consumed === $size
                ? $buffer
@@ -95,6 +132,10 @@ class Decoder_Waiting extends Decoders
          if ($downloaded < $length) {
             return States::Incomplete;
          }
+
+         // ! The body is complete: it is now the Request's, dispatched and
+         //   freed with it, so it no longer belongs to the unfinished budget.
+         $this->Bodies->release();
 
          $Body->waiting = false;
          $Package->Decoder = null;
