@@ -12,15 +12,20 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Response\Raw;
 
 
 use function array_key_exists;
+use function array_values;
 use function explode;
 use function gmdate;
 use function implode;
 use function preg_match;
+use function preg_replace;
 use function str_replace;
 use function strcasecmp;
+use function strcspn;
 use function strlen;
 use function strncasecmp;
+use function strpos;
 use function strtolower;
+use function substr;
 use function time;
 use function trim;
 
@@ -32,6 +37,14 @@ class Header extends HeaderBase
 {
    private const int CONTENT_LENGTH = 1;
    private const int TRANSFER_ENCODING = 2;
+   /**
+    * The `check()` octet class as a scan set: every octet forbidden in a field
+    * value (all C0 except HTAB, plus DEL).
+    */
+   private const string VALUE_CTL =
+      "\x00\x01\x02\x03\x04\x05\x06\x07\x08\x0A\x0B\x0C\x0D\x0E\x0F"
+      . "\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1A\x1B\x1C\x1D\x1E\x1F"
+      . "\x7F";
 
    // * Data
    public string $raw;
@@ -391,7 +404,16 @@ class Header extends HeaderBase
             continue;
          }
 
-         $sanitized[$name] = str_replace(["\r", "\n"], '', (string) $value);
+         $value = str_replace(["\r", "\n"], '', (string) $value);
+
+         // ? Same forbidden-octet gate every other insertion path applies:
+         //   stripping CR/LF alone still admitted NUL, vertical tab and the
+         //   rest of the C0 range through this bulk entry point.
+         if (! self::check($value)) {
+            continue;
+         }
+
+         $sanitized[$name] = $value;
          $framing |= self::classify($name);
       }
 
@@ -558,8 +580,10 @@ class Header extends HeaderBase
          return false;
       }
 
-      if ($value !== null) {
-         $value = str_replace(["\r", "\n"], '', $value);
+      // ? own() is encoder-oriented but public, and CR/LF stripping alone let
+      //   NUL/VT/DEL through where every other insertion path rejects them.
+      if ($value !== null && ! self::check($value)) {
+         return false;
       }
 
       $changed = false;
@@ -651,9 +675,18 @@ class Header extends HeaderBase
       if (! self::check($value)) {
          return;
       }
-      $this->framing |= self::classify($field);
 
       $separator ??= ', ';
+      // ? The separator is caller-controlled and lands in the serialized value
+      //   exactly like the value does, so it needs the SAME gate: a `\r\n` in
+      //   it splits the field into a second response header the application
+      //   never wrote. Checked before any state changes, so a rejected call
+      //   leaves no framing/dirty side effect behind.
+      if (! self::check($separator)) {
+         return;
+      }
+
+      $this->framing |= self::classify($field);
 
       // ? Append onto the existing case variant rather than starting a second
       //   independent line for the same case-insensitive field (audit M8).
@@ -746,7 +779,25 @@ class Header extends HeaderBase
       if (! self::validate($field)) {
          return false;
       }
+      // ? Same forbidden-octet gate as set()/append()/preset.
+      if (! self::check($value)) {
+         return false;
+      }
       $this->framing |= self::classify($field);
+
+      // ? Set-Cookie is intentionally repeatable — every other field is a
+      //   case-insensitive singleton, so replace the queued variant instead of
+      //   emitting a second line the recipient has to choose between.
+      if (strcasecmp($field, 'Set-Cookie') !== 0) {
+         $length = strlen($field) + 1;
+         foreach ($this->queued as $index => $line) {
+            if (strncasecmp($line, "{$field}:", $length) === 0) {
+               unset($this->queued[$index]);
+            }
+         }
+
+         $this->queued = array_values($this->queued);
+      }
 
       $this->queued[] = "$field: $value";
       $this->enqueued = true;
@@ -833,32 +884,60 @@ class Header extends HeaderBase
          }
       }
 
-      // ! Strip CRLF from the default media type at the single point it is serialized
-      //   (response-splitting guard). Done here — on real rebuild only, never on the
-      //   cached fast returns above — so a plain `$type` write stays allocation-free.
-      $type = str_replace(["\r", "\n"], '', $this->type);
+      // ! Strip every octet forbidden in a field value from the default media type
+      //   at the single point it is serialized. `$type` is a public property with no
+      //   gate of its own, so CR/LF (response splitting) and NUL/VT/DEL (parser
+      //   differentials) can only be removed here — the same class `check()` rejects
+      //   for set()/append()/prepare()/queue()/preset(). Done on real rebuild only,
+      //   never on the cached fast returns above, and the scan is a single C call so
+      //   a clean `$type` stays allocation-free.
+      $type = $this->type;
+      if (strcspn($type, self::VALUE_CTL) !== strlen($type)) {
+         $type = (string) preg_replace('/[\x00-\x08\x0A-\x1F\x7F]/', '', $type);
+      }
+
+      // ! Queued lines are serialized FIRST, so they own their field identity.
+      //   Without seeding the case-insensitive set from them, a queued `X-Policy`
+      //   and a mapped `x-policy` both reach the wire and the recipient chooses
+      //   which policy applies — the same defect the map-to-map union closed.
+      //   `Set-Cookie` is the one documented repeatable field and never
+      //   participates in the identity set.
+      $seen = [];
+      foreach ($queued as $line) {
+         $colon = strpos($line, ':');
+         if ($colon === false) {
+            continue;
+         }
+
+         $key = strtolower(substr($line, 0, $colon));
+         if ($key !== 'set-cookie') {
+            $seen[$key] = true;
+         }
+      }
 
       // ?! Hot path: most responses have no user fields/prepared — skip array merge.
       if ($this->fields === [] && $this->prepared === []) {
          // Preset only
-         $typed = false;
          foreach ($preset as $name => $value) {
+            // ? Field identity is case-insensitive across EVERY source, so a
+            //   name already queued owns the line and suppresses this one.
+            $key = strtolower((string) $name);
+            if (isSet($seen[$key])) {
+               continue;
+            }
+            $seen[$key] = true;
+
             $value = ($value === true) ? match ($name) {
                'Date' => self::stamp(),
                default => ''
             } : (string) $value;
 
-            // ? Field identity is case-insensitive, so a preset supplied under
-            //   any casing must suppress the default below.
-            if ($typed === false && strcasecmp($name, 'Content-Type') === 0) {
-               $typed = true;
-            }
-
             $queued[] = "$name: $value";
          }
 
-         // @ Default Content-Type (preset never carries it)
-         if ($typed === false) {
+         // @ Default Content-Type — suppressed by a queued or preset one under
+         //   ANY casing
+         if (isSet($seen['content-type']) === false) {
             $queued[] = "Content-Type: {$type}";
          }
 
@@ -874,9 +953,9 @@ class Header extends HeaderBase
       //   `Content-Type` in one map and `content-type` in another serialized as
       //   two independent lines and left the recipient to choose which policy
       //   applies. Precedence is unchanged — the earliest map still wins, as
-      //   `+` did — and the winner's own casing is what reaches the wire.
+      //   `+` did — and the winner's own casing is what reaches the wire. `$seen`
+      //   already carries the queued names, which serialize ahead of every map.
       $fields = [];
-      $seen = [];
       foreach ([$preset, $this->fields, $this->prepared] as $map) {
          foreach ($map as $name => $value) {
             $key = strtolower((string) $name);

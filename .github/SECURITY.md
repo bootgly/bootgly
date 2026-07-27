@@ -124,8 +124,61 @@ the real ownership walker as UID 0 inside an unprivileged user namespace against
 canary outside the managed store.
 
 Several findings closed a primary attack path while leaving a narrower, related surface
-scoped out of that pass. Those remainders are recorded explicitly in the audit report rather
-than silently absorbed, and they are carried into the follow-up audit.
+scoped out of that pass. Those remainders were recorded explicitly rather than silently
+absorbed, and they were carried into the follow-up audit below, which closed them.
+
+### Route caching, response headers, HTTP/2 flow control and parser memos — `HTTP_Server_CLI` + `TCP_Server_CLI` (2026-07-27)
+
+A follow-up audit that re-examined the surfaces the previous pass had narrowed rather than
+closed, plus the route response cache under global authentication. It ran three
+fix-validation rounds: every remediation was re-attacked with production-class probes, and a
+fix was only accepted once the retained regression failed on the vulnerable code and passed
+on the fix.
+
+| ID | Severity | Finding | Status |
+| --- | --- | --- | --- |
+| H1 | High | Route cache served one admitted principal's response to a different admitted principal | ✅ Fixed |
+| M1 | Medium | Malformed `Host`/`:authority` userinfo satisfied the `allowedHosts` allowlist | ✅ Fixed |
+| M2 | Medium | Persistent `View::export()` data survived request resets | ✅ Fixed |
+| M3 | Medium | Cache-session key path accepted replaceable ancestor directories | ✅ Fixed |
+| M4 | Medium | Response header identity and value validation diverged across insertion maps | ✅ Fixed |
+| M5 | Medium | Route cache ignored request and response `Cache-Control` directives | ✅ Fixed |
+| M6 | Medium | Ordinary HTTP/2 response backlogs had no flow-progress deadline | ✅ Fixed |
+| L1 | Low | ACME problem details could inject terminal controls and markup into logs | ✅ Fixed |
+| L2 | Low | HTTP-01 helper reflected malformed targets into an off-origin `Location` | ✅ Fixed |
+| L3 | Low | HTTP/1 accepted invalid request-target/header octets and discarded chunk-extension grammar | ✅ Fixed |
+| L4 | Low | Parser memos retained credential and body material in worker memory | ✅ Fixed |
+
+**H1** is the one deployers should read closely. It only applies when global middleware
+authenticates a custom credential, admits more than one valid principal, and a route opts
+into `cache: ['TTL' => ...]`. Cache replay runs inside the global admission pipeline — so the
+second principal WAS authenticated — but the key omitted the admitted identity, and the
+second principal received the first one's response without their handler ever running. The
+key now carries a length-framed, type-tagged identity/claims/attributes partition, and a
+response mutated by middleware after `$Next` is preserved instead of being replaced by the
+stored bytes.
+
+**L4** carries a deliberate behavior change deployers should know about. The parser memos
+(the header-scan memo and both decoder request-template layers) now retain a block only when
+every field name in it is a standard, non-credential one. No name-based rule can tell a
+custom credential such as `X-Access-Code` from an ordinary custom header, so the boundary is
+an allowlist rather than a denylist: an application that sends any custom request header no
+longer benefits from those memos. This costs nothing in correctness and only affects
+repeated byte-identical requests.
+
+L4 also carries one **accepted residual**, recorded rather than closed: a credential
+embedded in a request **path** still reaches those memos. Nothing distinguishes
+`/account/<secret>` from an ordinary target, so the only rule that would close it is to
+memoize no target at all — which removes the request-template fast path entirely. Query
+strings, the part of a target that routinely carries credentials, ARE excluded. Keep
+credentials out of URLs; RFC 9110 §4.2.4 discourages them there precisely because they land
+in logs, referrers and caches.
+
+**L5** of that report — the dedicated HTTP security suite not being registered by default —
+was reviewed and accepted as a deliberate design decision rather than a defect: the suite
+drives adversarial payloads (request smuggling, resource exhaustion, privileged filesystem
+paths) that must not run on a plain `bootgly test`. It is opted into explicitly; see the
+[Security guide](https://bootgly.com/docs/security).
 
 ## Best Practices for Deployers
 

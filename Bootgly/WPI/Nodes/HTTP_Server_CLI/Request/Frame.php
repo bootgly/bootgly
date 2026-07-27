@@ -32,6 +32,7 @@ use function trim;
 use Bootgly\API\Environments;
 use Bootgly\API\Workables\Server;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Decoder_;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 
 
@@ -71,6 +72,16 @@ final class Frame
     * field value (audit 2026-07-27 L3). SP and HTAB are excluded: they are
     * delimiters handled by the line/field split, not smuggled octets.
     */
+   /**
+    * Raw C0 controls plus DEL that are never valid in a request target. HTAB is
+    * included here — unlike a field value, a target has no whitespace
+    * delimiter role, so a tab in it is smuggled, not structural.
+    */
+   private const string TARGET_CTL =
+      "\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0A\x0B\x0C\x0D\x0E\x0F"
+      . "\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1A\x1B\x1C\x1D\x1E\x1F"
+      . "\x7F";
+
    private const string CTL =
       "\x00\x01\x02\x03\x04\x05\x06\x07\x08\x0A\x0B\x0C\x0D\x0E\x0F"
       . "\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1A\x1B\x1C\x1D\x1E\x1F"
@@ -128,7 +139,10 @@ final class Frame
 
 
    /**
-    * Check a Host authority against RFC 9110 §7.2 `uri-host [ ":" port ]`
+    * Check a Host authority against RFC 9110 §7.2 `uri-host [ ":" port ]`.
+    *
+    * Public because HTTP/2 carries the same authority through `:authority` on
+    * its own decode path: one grammar, not two that can drift.
     * (audit 2026-07-27 M1).
     *
     * `Request::allow()` strips a port by taking the LAST colon, so an authority
@@ -138,7 +152,7 @@ final class Frame
     * Rejecting the grammar here means no such value ever reaches the request,
     * with or without an allowlist configured.
     */
-   private static function check (string $value): bool
+   public static function check (string $value): bool
    {
       // ?: Absence is handled by the mandatory-Host guard, not here.
       if ($value === '') {
@@ -275,7 +289,7 @@ final class Frame
       //   URL the application echoes. A tolerant intermediary may normalize
       //   them differently than Bootgly does — one `strcspn` over a target
       //   already bounded to 8 KiB.
-      if (strcspn($URI, self::CTL) !== strlen($URI)) {
+      if (strcspn($URI, self::TARGET_CTL) !== strlen($URI)) {
          $Package->reject("HTTP/1.1 400 Bad Request\r\n\r\n");
          return null;
       }
@@ -368,6 +382,13 @@ final class Frame
             return null;
          }
          $rawValue = trim(substr($line, $sepPos + 1), " \t");
+         // ? RFC 9110 §5.5 field-value: HTAB and printable octets only. CR/LF
+         //   are already excluded by the line split, but NUL, VT and the rest
+         //   of the C0 range reached the application and the logs verbatim.
+         if (strcspn($rawValue, self::CTL) !== strlen($rawValue)) {
+            $Package->reject("HTTP/1.1 400 Bad Request\r\n\r\n");
+            return null;
+         }
          $key = strtolower($rawKey);
 
          // # fields map (RFC 9110 §5.1: case-insensitive).
@@ -463,18 +484,26 @@ final class Frame
       //   bounded against attacker-driven churn: small blocks only, FIFO
       //   eviction at capacity.
       //
-      //   Credential-bearing blocks are never memoized (audit 2026-07-27 L4).
-      //   The memo is keyed on the RAW block, so an `Authorization` or `Cookie`
+      //   Only blocks whose every field name is memoizable are stored (audit
+      //   2026-07-27 L4). The memo is keyed on the RAW block, so a credential
       //   line would sit in worker memory in plaintext as the KEY itself —
-      //   scrubbing the stored value array could not help. Those two names also
-      //   make a block near-unique per user, so skipping them costs nothing:
-      //   the memo exists for the byte-identical blocks keep-alive repeats.
-      if (
-         $testing === false
-         && strlen($header_raw) <= 2048
-         && isSet($fields['authorization']) === false
-         && isSet($fields['cookie']) === false
-      ) {
+      //   scrubbing the stored value array could not help. A denylist of
+      //   credential-shaped names is not a boundary either: an application can
+      //   authenticate with any name it likes. So the allowlist decides, and a
+      //   block carrying anything unrecognized is simply never stored — which
+      //   costs nothing, because such a block is near-unique per user and was
+      //   never the byte-identical repeat the memo exists for.
+      $memoizable = $testing === false && strlen($header_raw) <= 2048;
+      if ($memoizable) {
+         foreach ($fields as $name => $ignored) {
+            if (isSet(Decoder_::MEMOIZABLE[$name]) === false) {
+               $memoizable = false;
+               break;
+            }
+         }
+      }
+
+      if ($memoizable) {
          if (count(self::$scans) >= 512) {
             unset(self::$scans[array_key_first(self::$scans)]);
          }

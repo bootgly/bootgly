@@ -1,5 +1,8 @@
 <?php
 
+use Bootgly\WPI\Modules\HTTP2;
+use Bootgly\WPI\Modules\HTTP2\Frame;
+use Bootgly\WPI\Modules\HTTP2\HPACK;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
@@ -83,6 +86,63 @@ return new Specification(
          // ! Controls — legitimate authorities must keep working.
          $probe['legs']['control_plain'] = $Status('localhost');
          $probe['legs']['control_port'] = $Status('localhost:8081');
+
+         // @ HTTP/2 carries the same authority through `:authority` on its own
+         //   decode path, so it needs the same grammar.
+         $H2 = static function (string $authority) use ($hostPort, $testIndex): int {
+            $socket = @stream_socket_client(
+               "tcp://{$hostPort}", $errorNumber, $errorMessage, timeout: 5
+            );
+            if (! is_resource($socket)) {
+               return -1;
+            }
+
+            stream_set_blocking($socket, true);
+            stream_set_timeout($socket, 3);
+            @fwrite(
+               $socket,
+               "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"
+               . Frame::pack(HTTP2::FRAME_SETTINGS, 0, 0, '')
+               . Frame::pack(
+                  HTTP2::FRAME_HEADERS,
+                  HTTP2::FLAG_END_HEADERS | HTTP2::FLAG_END_STREAM,
+                  1,
+                  HPACK::encode([
+                     [':method', 'GET'],
+                     [':scheme', 'http'],
+                     [':path', '/m1-host'],
+                     [':authority', $authority],
+                     ['x-bootgly-test', (string) $testIndex],
+                  ])
+               )
+            );
+
+            $wire = '';
+            $deadline = microtime(true) + 4.0;
+            while (microtime(true) < $deadline) {
+               $chunk = @fread($socket, 65535);
+               if ($chunk === false || $chunk === '') {
+                  if (@feof($socket)) {
+                     break;
+                  }
+
+                  $metadata = stream_get_meta_data($socket);
+                  if (($metadata['timed_out'] ?? false) === true) {
+                     break;
+                  }
+                  continue;
+               }
+               $wire .= $chunk;
+            }
+            @fclose($socket);
+
+            // : 1 when the stream produced a normal response, 0 otherwise.
+            return str_contains($wire, 'M1-HOST:') ? 1 : 0;
+         };
+
+         $probe['legs']['h2_userinfo_empty_port'] = $H2('localhost:@evil.example');
+         $probe['legs']['h2_userinfo_numeric_port'] = $H2('localhost:443@evil.example');
+         $probe['legs']['h2_control_plain'] = $H2('localhost');
       }
       catch (Throwable $Throwable) {
          $probe['error'] = $Throwable::class . ': ' . $Throwable->getMessage();
@@ -120,6 +180,11 @@ return new Specification(
       $legs = $probe['legs'];
 
       // ? Controls — legitimate authorities must still be served.
+      if (($legs['h2_control_plain'] ?? 0) !== 1) {
+         return 'M1 HTTP/2 control failed: a plain `:authority` did not produce a response, so '
+            . 'the h2 legs prove nothing: ' . json_encode($legs);
+      }
+
       foreach (['control_plain', 'control_port'] as $control) {
          if (($legs[$control] ?? 0) !== 200) {
             return "M1 control `{$control}` did not return 200 (got "
@@ -136,6 +201,15 @@ return new Specification(
       ] as $leg => $authority) {
          if (($legs[$leg] ?? 0) === 200) {
             $accepted[] = $authority;
+         }
+      }
+
+      foreach ([
+         'h2_userinfo_empty_port' => 'localhost:@evil.example',
+         'h2_userinfo_numeric_port' => 'localhost:443@evil.example',
+      ] as $leg => $authority) {
+         if (($legs[$leg] ?? 0) === 1) {
+            $accepted[] = "HTTP/2 :authority {$authority}";
          }
       }
 

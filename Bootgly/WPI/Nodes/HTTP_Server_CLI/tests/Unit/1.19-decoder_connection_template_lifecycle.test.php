@@ -15,15 +15,16 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 /**
  * L0 lifecycle — the per-connection consecutive-repeat template:
  *  - first sighting keys the connection (`known`) without cloning;
- *  - the SECOND consecutive sighting of a query-bearing target (refused by
+ *  - the SECOND consecutive sighting of a reassembled target (refused by
  *    the shared L1) builds the template;
  *  - the third adopts it (hit: the template instance survives untouched —
  *    a re-decode would have replaced it with a fresh clone);
  *  - the compare lives in trimmed space, so a repeat behind stray CRLF
  *    padding still hits with exact consumed accounting;
  *  - alternating targets never build a template (no clone churn);
- *  - reassembled (carried) events — refused by the L1 — may key and hit
- *    the L0 (fragmenting repeat clients converge on their own connection).
+ *  - a QUERY-bearing target is refused by BOTH layers (audit 2026-07-27 L4):
+ *    a query is the one part of a target that routinely carries a credential,
+ *    and the L0 used to retain it in the raw connection key.
  */
 
 if (! class_exists('U119Connection', false)) {
@@ -71,9 +72,12 @@ return new Specification(
          };
          $Decoder = new Decoder_;
 
-         // ! Query-bearing target: the shared L1 refuses it — only the L0
-         //   can accelerate its repeats.
-         $wire = "GET /u119?id=1 HTTP/1.1\r\nHost: localhost\r\n\r\n";
+         // ! Reassembled (carried) events are refused by the shared L1 — only
+         //   the L0 can accelerate their repeats, which is the lifecycle under
+         //   test. (A query-bearing target used to serve this role; it is now
+         //   refused by both layers — asserted at the end.)
+         $Package->pretend(true);
+         $wire = "GET /u119 HTTP/1.1\r\nHost: localhost\r\n\r\n";
          $size = strlen($wire);
 
          // @ 1st sighting: keys the connection, no template yet.
@@ -154,7 +158,7 @@ return new Specification(
             ->assert();
 
          // @ Alternating targets: the template drops and never rebuilds.
-         $other = "GET /u119?id=2 HTTP/1.1\r\nHost: localhost\r\n\r\n";
+         $other = "GET /u119-other HTTP/1.1\r\nHost: localhost\r\n\r\n";
          $Decoder->decode($Package, $other, strlen($other));
          $afterOther = $Package->Template;
          $Decoder->decode($Package, $wire, $size);
@@ -167,9 +171,8 @@ return new Specification(
             ->to->be([null, null, $wire])
             ->assert();
 
-         // @ Carried (reassembled) repeats — refused by the L1 — converge
-         //   on the L0: 2nd carried sighting stores, 3rd hits.
-         $Package->pretend(true);
+         // @ Carried repeats — refused by the L1 — converge on the L0:
+         //   2nd carried sighting stores, 3rd hits.
          $Decoder->decode($Package, $wire, $size);          // repeat of known → store
          $CarriedTemplate = $Package->Template;
          $stateCarried = $Decoder->decode($Package, $wire, $size); // hit
@@ -184,6 +187,21 @@ return new Specification(
                $Package->consumed,
             ])
             ->to->be([true, States::Complete, true, $size])
+            ->assert();
+
+         // @ A query-bearing target is refused by BOTH layers: it neither keys
+         //   the connection nor builds a template, however often it repeats.
+         $Package->pretend(false);
+         $query = "GET /u119?id=1 HTTP/1.1\r\nHost: localhost\r\n\r\n";
+         $Decoder->decode($Package, $query, strlen($query));
+         $knownAfterQuery = $Package->known;
+         $Decoder->decode($Package, $query, strlen($query));
+
+         yield new Assertion(
+            description: 'A query-bearing target never keys the L0 nor builds a template',
+         )
+            ->expect([$knownAfterQuery, $Package->known, $Package->Template])
+            ->to->be(['', '', null])
             ->assert();
       }
       finally {

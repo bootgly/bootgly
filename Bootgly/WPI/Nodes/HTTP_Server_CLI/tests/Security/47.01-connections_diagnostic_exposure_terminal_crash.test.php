@@ -58,8 +58,19 @@ return new Specification(
          . "X-Bootgly-Test: {$testIndex}\r\n"
          . "Host: localhost\r\n"
          . "Authorization: Bearer {$secret}\r\n"
-         . "X-M13-Terminal: {$OSC}{$DCS}\r\n"
          . "X-M13-Markup: {$markup}\r\n"
+         . "\r\n";
+
+      // ! The raw OSC/DCS terminal bytes moved out of this request: field
+      //   values may not carry C0, so the parser now refuses them and they can
+      //   never reach the diagnostic at all. That vector is asserted on its own
+      //   connection below — closed upstream is stronger than sanitized at the
+      //   sink, and this request keeps proving the secret/markup half.
+      $terminal = "GET /m13/connections HTTP/1.1\r\n"
+         . "X-Bootgly-Test: {$testIndex}\r\n"
+         . "Host: localhost\r\n"
+         . "X-M13-Terminal: {$OSC}{$DCS}\r\n"
+         . "Connection: close\r\n"
          . "\r\n";
 
       $Read = static function ($socket): string {
@@ -93,6 +104,23 @@ return new Specification(
 
          return $response;
       };
+
+      // @ Terminal-byte leg: must be refused by the parser.
+      $terminalSocket = @stream_socket_client(
+         "tcp://{$hostPort}", $errorNumber, $errorMessage, timeout: 5
+      );
+      if (is_resource($terminalSocket)) {
+         stream_set_blocking($terminalSocket, true);
+         stream_set_timeout($terminalSocket, 3);
+         @fwrite($terminalSocket, $terminal);
+         $terminalStatus = (string) @fread($terminalSocket, 4096);
+         @fclose($terminalSocket);
+
+         if (str_contains($terminalStatus, '400') === false) {
+            $probeError = 'A header value carrying raw OSC/DCS terminal bytes was not '
+               . 'rejected: ' . json_encode(substr($terminalStatus, 0, 120));
+         }
+      }
 
       $socket = @stream_socket_client(
          "tcp://{$hostPort}",
@@ -331,10 +359,11 @@ return new Specification(
          && ($hit['connection_registered'] ?? false) === true
          && ($miss['source_secret'] ?? false) === true
          && ($hit['source_secret'] ?? false) === true
-         && ($miss['source_osc'] ?? false) === true
-         && ($hit['source_osc'] ?? false) === true
-         && ($miss['source_dcs'] ?? false) === true
-         && ($hit['source_dcs'] ?? false) === true
+         // ! `source_osc`/`source_dcs` are no longer required: a field value
+         //   carrying raw C0 is now refused by the parser, so those bytes can
+         //   never reach a handler or the diagnostic. The terminal leg above
+         //   asserts that rejection instead — closed upstream beats sanitized
+         //   at the sink. The secret and markup halves still ride this request.
          && ($miss['source_markup'] ?? false) === true
          && ($hit['source_markup'] ?? false) === true
          && ($miss['diagnostic_rendered'] ?? false) === true

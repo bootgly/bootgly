@@ -12,12 +12,13 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_CLI;
 
 
 use function array_key_exists;
-use function json_encode;
-use function is_scalar;
-use function implode;
 use function array_key_first;
 use function count;
 use function is_array;
+use function is_float;
+use function is_int;
+use function is_string;
+use function sprintf;
 use function strlen;
 use function strpos;
 use function substr_replace;
@@ -94,7 +95,12 @@ class Cache
    public static array $URIs = [];
 
    // * Metadata
-   // ...
+   /**
+    * Monotonic counter behind every unshareable identity/claim marker: a state
+    * that cannot be proven equal to another gets a value that never repeats, so
+    * the request is served cold instead of risking a cross-principal hit.
+    */
+   private static int $unshared = 0;
 
 
    /**
@@ -129,7 +135,7 @@ class Cache
          ? $headers['x-real-ip']
          : null;
 
-      $key = '4'
+      $key = '5'
          . self::frame($Request->method)
          . self::frame($Request->host)
          . self::frame($Request->URI)
@@ -168,8 +174,6 @@ class Cache
     * yields a value that never repeats: the request is served cold rather than
     * risking a cross-principal hit.
     */
-   private static int $unshared = 0;
-
    private static function identify (Request $Request): null|string
    {
       $identity = $Request->identity;
@@ -181,28 +185,70 @@ class Cache
          return null;
       }
 
-      $marks = [];
+      // ! Three FIXED slots, each length-framed like every other key component,
+      //   and the identity slot carries its PHP type.
+      //
+      //   Concatenating raw markers with a separator was ambiguous in two ways
+      //   that both let distinct principals share one entry: an identity whose
+      //   own text contained the separator and a marker prefix reproduced the
+      //   string a different principal built from its claims, and a scalar was
+      //   stringified so integer `1` and string `"1"` were indistinguishable.
+      //   A fixed slot count also stops an absent bag from shifting positions.
+      // ! The identity goes through the SAME canonical encoder as the bags.
+      //   Interpolating a scalar stringifies it: the adjacent finite doubles
+      //   `1.0` and `1.0000000000000002` both rendered as `float:1`, so the
+      //   second principal reused the first one's entry.
+      $mark = self::frame(self::encode($identity));
 
-      if (is_scalar($identity)) {
-         $marks[] = 'i:' . $identity;
-      }
-      else if ($identity !== null) {
-         // ! Unprovable equality — force a miss instead of guessing.
-         $marks[] = 'i!' . (string) ++self::$unshared;
-      }
-
-      foreach (['c' => $claims, 'a' => $attributes] as $prefix => $bag) {
+      foreach ([$claims, $attributes] as $bag) {
          if ($bag === []) {
+            $mark .= self::frame(null);
             continue;
          }
 
-         $encoded = json_encode($bag);
-         $marks[] = $encoded === false
-            ? "{$prefix}!" . (string) ++self::$unshared
-            : "{$prefix}:{$encoded}";
+         $mark .= self::frame(self::encode($bag));
       }
 
-      return implode('|', $marks);
+      return $mark;
+   }
+
+   /**
+    * Serialize one claim/attribute bag into a canonical, TYPE-TAGGED string.
+    *
+    * `json_encode()` erases distinctions the application itself can act on: a
+    * float `1.0` and an integer `1` both render as `1`, so two principals whose
+    * only difference was a claim's TYPE composed the same key and one replayed
+    * the other's wire. Every scalar therefore carries its type tag, every string
+    * its length, and every composite its arity — and anything that cannot be
+    * compared structurally (object, resource, closure) makes the state
+    * unshareable instead of collapsing onto a peer.
+    */
+   private static function encode (mixed $value): string
+   {
+      // ? Composite — recurse over the pairs in their own order, which is part
+      //   of the state: two bags differing only in order are not the same bag.
+      if (is_array($value)) {
+         $encoded = 'A' . count($value) . ':';
+         foreach ($value as $key => $item) {
+            $encoded .= self::encode($key) . self::encode($item);
+         }
+
+         return "{$encoded};";
+      }
+
+      // :
+      return match (true) {
+         $value === null => 'N;',
+         $value === true => 'B1;',
+         $value === false => 'B0;',
+         is_int($value) => "I{$value};",
+         // ! 17 significant digits round-trip every double exactly, and the tag
+         //   keeps `1.0` distinct from the integer `1`.
+         is_float($value) => 'D' . sprintf('%.17G', $value) . ';',
+         is_string($value) => 'S' . strlen($value) . ':' . $value . ';',
+         // ? Unprovable equality — force a miss instead of guessing.
+         default => 'U' . ++self::$unshared . ';'
+      };
    }
 
    /**

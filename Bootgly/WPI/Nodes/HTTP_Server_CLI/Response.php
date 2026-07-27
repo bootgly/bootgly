@@ -35,6 +35,7 @@ use function strcasecmp;
 use function strlen;
 use function strncasecmp;
 use function strncmp;
+use function str_starts_with;
 use function strtolower;
 use function substr;
 use function trim;
@@ -524,6 +525,13 @@ class Response extends Server\Response
          $link = str_replace(["\r", "\n"], '', (string) $link);
 
          if ($link === '') {
+            continue;
+         }
+
+         // ? Same forbidden-octet gate the final response applies. Stripping
+         //   CR/LF alone still let NUL, vertical tab and the rest of the C0
+         //   range onto the interim wire.
+         if (preg_match('/[\x00-\x08\x0A-\x1F\x7F]/', $link) === 1) {
             continue;
          }
 
@@ -1043,7 +1051,18 @@ class Response extends Server\Response
             foreach (explode(',', substr($line, 14)) as $directive) {
                $directive = strtolower(trim($directive));
 
-               if ($directive === 'no-store' || $directive === 'private') {
+               // ? This cache stores RAW WIRE, so it can neither revalidate nor
+               //   selectively drop the fields a qualified form names. Every
+               //   directive it cannot honour exactly must fail closed:
+               //   `no-cache` demands validation before reuse, and
+               //   `private="Set-Cookie"` demands removing one named field.
+               if (
+                  $directive === 'no-store'
+                  || $directive === 'private'
+                  || $directive === 'no-cache'
+                  || str_starts_with($directive, 'private=')
+                  || str_starts_with($directive, 'no-cache=')
+               ) {
                   return;
                }
             }

@@ -28,6 +28,8 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test\Specification;
 $private = 0;
 $nostore = 0;
 $plain = 0;
+$nocache = 0;
+$qualified = 0;
 
 return new Specification(
    description: 'route cache must honour no-store/private on storage and no-cache on replay',
@@ -43,7 +45,13 @@ return new Specification(
       // 5/6 — control: an ordinary cached route MUST replay.
       static fn (): string => "GET /m5-plain HTTP/1.1\r\nHost: localhost\r\n\r\n",
       static fn (): string => "GET /m5-plain HTTP/1.1\r\nHost: localhost\r\n\r\n",
-      // 7 — a client asking for no-cache must reach the handler again.
+      // 7/8 — response `no-cache`: a raw-wire cache cannot revalidate.
+      static fn (): string => "GET /m5-nocache HTTP/1.1\r\nHost: localhost\r\n\r\n",
+      static fn (): string => "GET /m5-nocache HTTP/1.1\r\nHost: localhost\r\n\r\n",
+      // 9/10 — qualified `private="Set-Cookie"`: cannot drop a named field.
+      static fn (): string => "GET /m5-qualified HTTP/1.1\r\nHost: localhost\r\n\r\n",
+      static fn (): string => "GET /m5-qualified HTTP/1.1\r\nHost: localhost\r\n\r\n",
+      // 11 — a client asking for no-cache must reach the handler again.
       static fn (): string => "GET /m5-plain HTTP/1.1\r\nHost: localhost\r\n"
          . "Cache-Control: no-cache\r\n\r\n",
    ],
@@ -51,7 +59,9 @@ return new Specification(
    response: static function (Request $Request, Response $Response, Router $Router) use (
       &$private,
       &$nostore,
-      &$plain
+      &$plain,
+      &$nocache,
+      &$qualified
    ) {
       yield $Router->route('/m5-private', function (
          Request $Request,
@@ -73,6 +83,26 @@ return new Specification(
          return $Response(body: "M5-NOSTORE:{$nostore}");
       }, GET, cache: ['TTL' => 60]);
 
+      yield $Router->route('/m5-nocache', function (
+         Request $Request,
+         Response $Response
+      ) use (&$nocache): Response {
+         $nocache++;
+         $Response->Header->set('Cache-Control', 'no-cache');
+
+         return $Response(body: "M5-NOCACHE:{$nocache}");
+      }, GET, cache: ['TTL' => 60]);
+
+      yield $Router->route('/m5-qualified', function (
+         Request $Request,
+         Response $Response
+      ) use (&$qualified): Response {
+         $qualified++;
+         $Response->Header->set('Cache-Control', 'private="Set-Cookie"');
+
+         return $Response(body: "M5-QUALIFIED:{$qualified}");
+      }, GET, cache: ['TTL' => 60]);
+
       yield $Router->route('/m5-plain', function (
          Request $Request,
          Response $Response
@@ -84,11 +114,11 @@ return new Specification(
    },
 
    test: static function (array $responses): bool|string {
-      if (count($responses) !== 7) {
-         return 'M5 fixture failed: expected seven live responses, got ' . count($responses) . '.';
+      if (count($responses) !== 11) {
+         return 'M5 fixture failed: expected eleven live responses, got ' . count($responses) . '.';
       }
 
-      [$p1, $p2, $n1, $n2, $c1, $c2, $revalidate] = $responses;
+      [$p1, $p2, $n1, $n2, $c1, $c2, $nc1, $nc2, $q1, $q2, $revalidate] = $responses;
 
       // ? Control — an ordinary cached route MUST still replay, otherwise this
       //   case would pass simply because caching stopped working.
@@ -107,6 +137,14 @@ return new Specification(
       if (! str_contains($n1, 'M5-NOSTORE:1') || ! str_contains($n2, 'M5-NOSTORE:2')) {
          $violations[] = 'a `Cache-Control: no-store` response was stored and replayed ('
             . json_encode(substr($n2, -40)) . ', expected a second handler run)';
+      }
+      if (! str_contains($nc1, 'M5-NOCACHE:1') || ! str_contains($nc2, 'M5-NOCACHE:2')) {
+         $violations[] = 'a `Cache-Control: no-cache` response was stored and replayed ('
+            . json_encode(substr($nc2, -40)) . ') — a raw-wire cache cannot revalidate';
+      }
+      if (! str_contains($q1, 'M5-QUALIFIED:1') || ! str_contains($q2, 'M5-QUALIFIED:2')) {
+         $violations[] = 'a qualified `private="Set-Cookie"` response was stored and replayed ('
+            . json_encode(substr($q2, -40)) . ') — a raw-wire cache cannot drop a named field';
       }
       if (! str_contains($revalidate, 'M5-PLAIN:2')) {
          $violations[] = 'a request carrying `Cache-Control: no-cache` was answered from cache ('

@@ -38,10 +38,10 @@ use Throwable;
 use Bootgly\API\Environments;
 use Bootgly\API\Workables\Server as SAPI;
 use Bootgly\WPI\Endpoints\Servers\Decoder\States;
-use Bootgly\WPI\Interfaces\TCP_Server_CLI;
 use Bootgly\WPI\Endpoints\Servers\Disconnecting;
 use Bootgly\WPI\Endpoints\Servers\Feeding;
 use Bootgly\WPI\Endpoints\Servers\Packages;
+use Bootgly\WPI\Interfaces\TCP_Server_CLI;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages as TCP_Packages;
 use Bootgly\WPI\Modules\HTTP2;
 use Bootgly\WPI\Modules\HTTP2\Errors;
@@ -53,6 +53,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Decoder_HTTP2\Bodies;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Decoder_HTTP2\Stream;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Frame as RequestFrame;
 
 
 /**
@@ -909,6 +910,15 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding
          return $this->reset($stream, Errors::Protocol);
       }
 
+      // ? Authority grammar, before the allowlist reads it. `:authority` is the
+      //   HTTP/2 spelling of Host and carries the same RFC 9110 §7.2 shape, so
+      //   userinfo must be refused here too — `allow()` strips a port by the
+      //   LAST colon, which reduces `allowed:@evil` to the allowed name while
+      //   `Request::$host` keeps the hostile value for the application.
+      if (RequestFrame::check($authority) === false) {
+         return $this->deny($stream, 400);
+      }
+
       // ? Host allowlist (same policy as HTTP/1.1 decode)
       if (Request::$allowedHosts !== [] && Request::allow($authority) === false) {
          return $this->deny($stream, 400);
@@ -1152,6 +1162,10 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding
                $Stream->chunk++;
             }
 
+            // ! Real consumption — advance the flow-control progress clock, the
+            //   same as the raw-backlog branch. Without this a file response
+            //   that IS draining would look stalled to the deadline sweep.
+            $Stream->drained = time();
             $this->window -= $send;
             $Stream->window -= $send;
             $done = $Stream->chunk >= count($Stream->chunks)
@@ -1234,6 +1248,11 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding
             $read = strlen($payload);
             $sent += $read;
             $position += $read;
+            // ! Real consumption — a file transfer that IS progressing under
+            //   small window credit must advance the clock too, otherwise the
+            //   deadline sweep measures from the original park time and resets
+            //   a stream that is demonstrably draining.
+            $Stream->drained = time();
             $this->window -= $read;
             $Stream->window -= $read;
             $Stream->chunks[$Stream->chunk]['position'] = $position;
@@ -1285,7 +1304,13 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding
       $now = time();
 
       foreach ($this->Streams as $id => $Stream) {
-         if ($Stream->sustained || $Stream->backlog === '') {
+         // ? A stalled stream can be holding file/pad segments with an EMPTY
+         //   raw backlog — the response is just as retained, and its open
+         //   descriptors cost more than the bytes do.
+         if (
+            $Stream->sustained
+            || ($Stream->backlog === '' && $Stream->chunk >= count($Stream->chunks))
+         ) {
             continue;
          }
          if (($now - $Stream->drained) <= $deadline) {

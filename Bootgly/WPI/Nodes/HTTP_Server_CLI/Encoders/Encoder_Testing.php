@@ -11,10 +11,15 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders;
 
 
+use function explode;
 use function is_array;
+use function ltrim;
 use function strlen;
 use function stripos;
 use function strncmp;
+use function strpos;
+use function strtolower;
+use function substr;
 use Generator;
 use Throwable;
 
@@ -121,6 +126,13 @@ class Encoder_Testing extends Encoders
       $Response->reset($Packages, $Request);
       $cacheWire = null;
       $CachedResponse = null;
+      // ! Admission snapshot — production tells replay from post-$Next
+      //   mutation the same way; without it this encoder would serve a stale
+      //   representation to every case the suite runs through it.
+      $admitted = [];
+      $adopted = false;
+      $handled = [];
+      $mutated = false;
 
       // ! Response
       // @
@@ -148,6 +160,9 @@ class Encoder_Testing extends Encoders
                   $Router,
                   &$cacheWire,
                   &$CachedResponse,
+                  &$admitted,
+                  &$adopted,
+                  &$handled,
                ): mixed {
                   // ?: Mirror production: every global middleware runs before
                   //   replay; route/group middleware routes never seed entries.
@@ -155,6 +170,15 @@ class Encoder_Testing extends Encoders
                   $cacheWire = self::replay($Request);
                   if ($cacheWire !== null) {
                      $CachedResponse = $Res;
+                     /** @var Response $Res */
+                     // ! Same contract as production: restore before any
+                     //   post-$Next code can read an empty body.
+                     if (SAPI::$Middlewares->count > 0) {
+                        Encoder_::adopt($Res, $cacheWire);
+                        $adopted = true;
+                     }
+
+                     $admitted = Encoder_::capture($Res);
                      return $Res;
                   }
 
@@ -162,6 +186,10 @@ class Encoder_Testing extends Encoders
 
                   // ?: Handler returned a Response directly — short-circuit
                   if ($Result instanceof Response) {
+                     if ($Result->cache !== 0) {
+                        $handled = Encoder_::capture($Result);
+                     }
+
                      return $Result;
                   }
 
@@ -174,9 +202,21 @@ class Encoder_Testing extends Encoders
                      }
                   }
 
+                  /** @var Response $Res */
+                  if ($Res->cache !== 0) {
+                     $handled = Encoder_::capture($Res);
+                  }
+
                   return $Res;
                }
             );
+
+            // ! Same boundary as production: compare before the response tail.
+            if ($handled !== []) {
+               /** @var Response $Mutable */
+               $Mutable = $Result instanceof Response ? $Result : $Response;
+               $mutated = $handled !== Encoder_::capture($Mutable);
+            }
 
             if ($Result instanceof Response && $Result !== $Response) {
                $Response = $Result;
@@ -186,6 +226,7 @@ class Encoder_Testing extends Encoders
       catch (Throwable $Throwable) {
          $cacheWire = null;
          $CachedResponse = null;
+         $admitted = [];
          // ! Break the static-Response alias: the Catcher builds a fresh,
          //   resource-less Response for THIS request only — writing it
          //   through the reference would strip the persistent test worker's
@@ -252,16 +293,33 @@ class Encoder_Testing extends Encoders
          && $Response->code === 200
          && $Request->closeConnection === false
       ) {
-         $length = strlen($cacheWire);
-         return $cacheWire;
+         $Header = $Response->Header;
+
+         // ?: Nothing touched the admitted response after $Next.
+         if ($admitted === Encoder_::capture($Response)) {
+            $length = strlen($cacheWire);
+            return $cacheWire;
+         }
+
+         // @ Mutated after $Next — restore underneath the mutation unless the
+         //   admission path already did.
+         if ($adopted === false) {
+            Encoder_::adopt($Response, $cacheWire);
+         }
       }
 
       // @ Encode HTTP Response
       $buffer = $Response->encode($Packages, $length);
 
-      // ? Route response cache opt-in — store the built wire bytes
+      // ? Route response cache opt-in — store the built wire bytes. A response
+      //   post-processed after $Next is per-request, never a representation.
       if ($Response->cache !== 0) {
-         $Response->stash($buffer);
+         if ($mutated === false) {
+            $Response->stash($buffer);
+         }
+         else {
+            $Response->cache = 0;
+         }
       }
 
       // :

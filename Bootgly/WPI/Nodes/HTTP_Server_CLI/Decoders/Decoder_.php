@@ -17,6 +17,7 @@ use function count;
 use function min;
 use function strncmp;
 use function strpos;
+use function strtolower;
 use function substr;
 
 use Bootgly\WPI\Endpoints\Servers\Decoder\States;
@@ -30,6 +31,69 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 
 class Decoder_ extends Decoders
 {
+   /**
+    * Request field names a memo may retain.
+    *
+    * A keyword denylist is not a credential boundary — an application can
+    * authenticate with any name it likes (`X-Access-Code`, `X-Tenant-Ref`), and
+    * no list of substrings enumerates them. The boundary is inverted instead:
+    * only these standard, non-credential names are known not to carry secrets,
+    * and a block containing anything else is never memoized. Unknown means
+    * potentially secret.
+    *
+    * `Referer` is deliberately absent — a referring URL routinely carries
+    * tokens in its query, and it varies per request anyway, so the memo it
+    * would serve does not exist.
+    *
+    * Shared with `Request\Frame`, which memoizes the same blocks one layer up.
+    *
+    * @var array<string,true>
+    */
+   public const array MEMOIZABLE = [
+      'accept' => true,
+      'accept-charset' => true,
+      'accept-encoding' => true,
+      'accept-language' => true,
+      'cache-control' => true,
+      'connection' => true,
+      'content-length' => true,
+      'content-type' => true,
+      'dnt' => true,
+      'expect' => true,
+      'from' => true,
+      'host' => true,
+      'if-match' => true,
+      'if-modified-since' => true,
+      'if-none-match' => true,
+      'if-range' => true,
+      'if-unmodified-since' => true,
+      'keep-alive' => true,
+      'max-forwards' => true,
+      'origin' => true,
+      'pragma' => true,
+      'priority' => true,
+      'purpose' => true,
+      'range' => true,
+      'sec-ch-ua' => true,
+      'sec-ch-ua-mobile' => true,
+      'sec-ch-ua-platform' => true,
+      'sec-fetch-dest' => true,
+      'sec-fetch-mode' => true,
+      'sec-fetch-site' => true,
+      'sec-fetch-user' => true,
+      'sec-purpose' => true,
+      'te' => true,
+      'transfer-encoding' => true,
+      'upgrade-insecure-requests' => true,
+      'user-agent' => true,
+      'via' => true,
+      'x-forwarded-for' => true,
+      'x-forwarded-host' => true,
+      'x-forwarded-proto' => true,
+      'x-real-ip' => true,
+      'x-requested-with' => true,
+   ];
+
    public function decode (Packages $Package, string $buffer, int $size): States
    {
       /** @var array<string,Request> $inputs */
@@ -85,17 +149,66 @@ class Decoder_ extends Decoders
       //   event — churn and memory stay confined to this connection
       //   (self-inflicted; key bounded at 2,048 bytes). The compare is in
       //   trimmed space, so a repeat with/without stray padding still hits.
+      // ? Requests carrying a BODY or any field outside `MEMOIZABLE` are memoized
+      //   nowhere (L0 key, L0 template, shared L1). Both layers retain the RAW
+      //   request bytes and a cloned Request built from them, so a credential —
+      //   or any secret a small POST body happens to carry — would sit in worker
+      //   memory long after the request ended. Neither is traffic the memo exists
+      //   for: it pays off on byte-identical keep-alive repeats of public,
+      //   bodyless requests, which carry standard fields only.
+      $sensitive = false;
+
+      // ! A stored key is memoizable by construction (it is only ever written
+      //   below, after this classification), so a repeat needs no scan at all —
+      //   the hot keep-alive path pays one string compare.
       $repeat = ($buffer === $Package->known);
       if ($repeat) {
          /** @var null|Request $Template */
          $Template = $Package->Template;
       }
       else {
+         // ! Body bytes present in the blob that WOULD be memoized. This asks the
+         //   retention question directly instead of trusting a declared length.
+         $separator = strpos($buffer, "\r\n\r\n");
+         $sensitive = $separator === false || $separator + 4 < $size;
+
+         // ? A query is the one part of a target that routinely carries
+         //   credentials (`?code=`, `?token=`). The shared L1 already refused
+         //   such keys as attacker-mutable churn; the per-connection L0 kept
+         //   them, so the raw query sat in worker memory until the next
+         //   request replaced it.
+         if ($sensitive === false) {
+            $line = strpos($buffer, "\r\n");
+            $query = strpos($buffer, '?');
+            $sensitive = $query !== false && $line !== false && $query < $line;
+         }
+
+         // @@ Every field name must be one the memo may retain. Bounded by the
+         //    head itself and paid on the miss path only.
+         $offset = $sensitive ? false : strpos($buffer, "\r\n");
+         while ($offset !== false && $offset < $separator) {
+            $offset += 2;
+
+            $colon = strpos($buffer, ':', $offset);
+            $line = strpos($buffer, "\r\n", $offset);
+
+            if ($colon === false || $line === false || $colon > $line) {
+               $sensitive = true;
+               break;
+            }
+            if (isSet(self::MEMOIZABLE[strtolower(substr($buffer, $offset, $colon - $offset))]) === false) {
+               $sensitive = true;
+               break;
+            }
+
+            $offset = $line;
+         }
+
          // @ Churn: re-key to this event's bytes; drop the stale template.
          //   Unique-target traffic pays one refcount assign per request and
          //   never builds a template (see the second-sighting store below).
          $Template = null;
-         $Package->known = ($size <= 2048) ? $buffer : '';
+         $Package->known = ($sensitive === false && $size <= 2048) ? $buffer : '';
          $Package->Template = null;
       }
 
@@ -103,7 +216,12 @@ class Decoder_ extends Decoders
       //   attacker-mutable at packet granularity (any request split into
       //   two packets would churn the LRU) with no benign hit-rate benefit.
       //   An L0 hit needs no classification at all.
-      $cacheable = ($Template === null && $Package->carried === false && $size <= 2048);
+      $cacheable = (
+         $sensitive === false
+         && $Template === null
+         && $Package->carried === false
+         && $size <= 2048
+      );
       $cacheKey = null;
       if ($cacheable) {
          // ?! Exact-input lookup FIRST: stored keys can never carry a
