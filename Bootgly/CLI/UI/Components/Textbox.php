@@ -12,6 +12,7 @@ namespace Bootgly\CLI\UI\Components;
 
 
 use const BOOTGLY_TTY;
+use function array_column;
 use function feof;
 use function is_int;
 use function is_string;
@@ -478,7 +479,8 @@ class Textbox extends Component
 
          $frame .= $legend;
 
-         $Flyout->options = $open === true ? $this->labels() : [];
+         // ? The list shows the labels; the values answer for them on submit
+         $Flyout->options = $open === true ? array_column($this->matches, 1) : [];
          $frame .= (string) $Flyout->render(self::RETURN_OUTPUT);
 
          // @ Repaint relatively over the previous frame
@@ -644,23 +646,5 @@ class Textbox extends Component
 
       // :
       return null;
-   }
-
-   /**
-    * The current match labels, in order.
-    *
-    * @return array<int,string>
-    */
-   private function labels (): array
-   {
-      $labels = [];
-
-      // @@
-      foreach ($this->matches as [, $label]) {
-         $labels[] = $label;
-      }
-
-      // :
-      return $labels;
    }
 }
