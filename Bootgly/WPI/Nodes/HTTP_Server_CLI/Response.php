@@ -1036,6 +1036,21 @@ class Response extends Server\Response
       }
 
       foreach (explode("\r\n", $Header->raw) as $line) {
+         // ? Response cache directives are policy, not a hint (audit
+         //   2026-07-27 M5). A handler that discovers its response is private
+         //   and says so must not have a route-level TTL store it anyway.
+         if (strncasecmp($line, 'Cache-Control:', 14) === 0) {
+            foreach (explode(',', substr($line, 14)) as $directive) {
+               $directive = strtolower(trim($directive));
+
+               if ($directive === 'no-store' || $directive === 'private') {
+                  return;
+               }
+            }
+
+            continue;
+         }
+
          if (strncasecmp($line, 'Vary:', 5) !== 0) {
             continue;
          }

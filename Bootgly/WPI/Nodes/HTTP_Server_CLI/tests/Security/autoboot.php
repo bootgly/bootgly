@@ -371,5 +371,9 @@ return new Suite(
       // The memo is keyed on the RAW block, so an Authorization/Cookie
       // line would sit in worker memory as the key itself.
       '68.01-parser_memo_credential_retention',
+      // # Route cache directives (audit 2026-07-27 M5)
+      // no-store/private must prevent storage and request no-cache must
+      // force the handler path, over any route-level TTL.
+      '69.01-route_cache_control_directives',
    ],
 );

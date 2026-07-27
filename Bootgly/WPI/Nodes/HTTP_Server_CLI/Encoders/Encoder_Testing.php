@@ -11,7 +11,9 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders;
 
 
+use function is_array;
 use function strlen;
+use function stripos;
 use function strncmp;
 use Generator;
 use Throwable;
@@ -55,6 +57,18 @@ class Encoder_Testing extends Encoders
       $fields = $Request->headers;
       if (isSet($fields['cookie']) || isSet($fields['authorization'])) {
          return null;
+      }
+
+      // ? A client asking for `no-cache` is asking for the handler, not a
+      //   replay (audit 2026-07-27 M5). Only that exact directive counts, so a
+      //   `max-age`/`no-store` request still replays as before.
+      $control = $fields['cache-control'] ?? null;
+      if ($control !== null) {
+         $directives = is_array($control) ? implode(',', $control) : $control;
+
+         if (stripos($directives, 'no-cache') !== false) {
+            return null;
+         }
       }
 
       return Cache::fetch(Cache::compose($Request, Language::$roots !== []));
