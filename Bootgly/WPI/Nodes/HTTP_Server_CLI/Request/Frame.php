@@ -462,7 +462,19 @@ final class Frame
       // : Memoize only a fully-successful scan (every reject returned above),
       //   bounded against attacker-driven churn: small blocks only, FIFO
       //   eviction at capacity.
-      if ($testing === false && strlen($header_raw) <= 2048) {
+      //
+      //   Credential-bearing blocks are never memoized (audit 2026-07-27 L4).
+      //   The memo is keyed on the RAW block, so an `Authorization` or `Cookie`
+      //   line would sit in worker memory in plaintext as the KEY itself —
+      //   scrubbing the stored value array could not help. Those two names also
+      //   make a block near-unique per user, so skipping them costs nothing:
+      //   the memo exists for the byte-identical blocks keep-alive repeats.
+      if (
+         $testing === false
+         && strlen($header_raw) <= 2048
+         && isSet($fields['authorization']) === false
+         && isSet($fields['cookie']) === false
+      ) {
          if (count(self::$scans) >= 512) {
             unset(self::$scans[array_key_first(self::$scans)]);
          }

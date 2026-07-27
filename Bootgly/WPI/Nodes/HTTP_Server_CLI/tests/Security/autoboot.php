@@ -367,5 +367,9 @@ return new Suite(
       // The target is appended to a trusted authority, so only
       // origin-form may be reflected into the 308 Location.
       '67.01-acme_helper_location_origin_form',
+      // # Header-block memo credential retention (audit 2026-07-27 L4)
+      // The memo is keyed on the RAW block, so an Authorization/Cookie
+      // line would sit in worker memory as the key itself.
+      '68.01-parser_memo_credential_retention',
    ],
 );
