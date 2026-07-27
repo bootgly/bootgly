@@ -387,5 +387,9 @@ return new Suite(
       // A CA-supplied type/detail must not carry control bytes or
       // Bootgly markup into the formatted log line.
       '72.01-acme_problem_detail_log_injection',
+      // # HTTP/2 flow-progress deadline
+      // A parked response body must be bounded by TIME too: a peer can
+      // defer the idle reaper with PINGs while never granting credit.
+      '73.01-http2_flow_progress_deadline',
    ],
 );

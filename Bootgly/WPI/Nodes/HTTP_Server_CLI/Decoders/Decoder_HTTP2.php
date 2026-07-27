@@ -38,6 +38,7 @@ use Throwable;
 use Bootgly\API\Environments;
 use Bootgly\API\Workables\Server as SAPI;
 use Bootgly\WPI\Endpoints\Servers\Decoder\States;
+use Bootgly\WPI\Interfaces\TCP_Server_CLI;
 use Bootgly\WPI\Endpoints\Servers\Disconnecting;
 use Bootgly\WPI\Endpoints\Servers\Feeding;
 use Bootgly\WPI\Endpoints\Servers\Packages;
@@ -206,6 +207,14 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding
    {
       /** @var TCP_Packages $Package */
       $this->Package ??= $Package;
+
+      // @ Bound retention by TIME, not only by volume. A peer that withholds
+      //   WINDOW_UPDATE can still defer the transport idle reaper by eliciting
+      //   writes — periodic PINGs, whose ACKs refresh write activity — so
+      //   parked response bodies would sit in worker memory indefinitely under
+      //   the aggregate cap. Driving the sweep from decode() catches exactly
+      //   that peer: it has to keep sending frames to hold the connection.
+      $this->expire();
       // ! Assemble the work buffer: carried partial bytes + this read.
       //   `$carried` maps work-buffer offsets back into this read's input —
       //   `Packages::reading()` pipelining slices the ORIGINAL input by
@@ -1257,6 +1266,45 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding
    /**
     * Count one reset toward the rapid-reset budget; exceed → GOAWAY.
     */
+   /**
+    * Reset streams whose parked body stopped making flow-control progress.
+    *
+    * The clock is `Stream::$drained`, advanced by every REAL consumption in
+    * `drain()` and by the write that first parks bytes — so partial
+    * WINDOW_UPDATE progress is never a stall, and a drained backlog cannot
+    * poison a later one with a stale stamp. Sustained streams (SSE) are exempt:
+    * they carry their own deadline and owner teardown.
+    */
+   protected function expire (): void
+   {
+      if ($this->Streams === []) {
+         return;
+      }
+
+      $deadline = TCP_Server_CLI::$maxWriteWallTime;
+      $now = time();
+
+      foreach ($this->Streams as $id => $Stream) {
+         if ($Stream->sustained || $Stream->backlog === '') {
+            continue;
+         }
+         if (($now - $Stream->drained) <= $deadline) {
+            continue;
+         }
+
+         $Stream->close();
+         unset($this->Streams[$id]);
+         $this->opened--;
+
+         $this->outbox .= Frame::pack(
+            HTTP2::FRAME_RST_STREAM,
+            0,
+            $id,
+            pack('N', Errors::EnhanceYourCalm->value)
+         );
+      }
+   }
+
    protected function count (Packages $Package): null|States
    {
       /** @var TCP_Packages $Package */

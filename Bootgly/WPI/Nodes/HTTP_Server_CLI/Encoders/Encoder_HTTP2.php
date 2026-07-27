@@ -23,6 +23,7 @@ use function strlen;
 use function strpos;
 use function strtolower;
 use function substr;
+use function time;
 
 use Bootgly\WPI\Endpoints\Servers\Packages;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI;
@@ -149,6 +150,11 @@ final class Encoder_HTTP2
          $Stream->backlog = $body;
          $Stream->chunks = $chunks;
          $Stream->chunk = 0;
+         // ! Start the flow-control clock at the moment bytes are parked.
+         //   drain() advances it on every real consumption; without this
+         //   stamp it would still read 0 here and the stall deadline would
+         //   treat a brand-new backlog as infinitely old.
+         $Stream->drained = time();
 
          [$data, $done] = $H2->drain($Stream, $stream);
          $frames .= $data;
