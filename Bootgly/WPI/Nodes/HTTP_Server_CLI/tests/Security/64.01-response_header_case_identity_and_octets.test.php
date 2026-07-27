@@ -93,6 +93,15 @@ return new Specification(
          $Header->set('X-Nul', "a\x00b");
          $Header->set('X-Vtab', "a\x0Bb");
 
+         // @ Cross-map identity: a variant supplied through prepare() must
+         //   collapse with the one in the fields map, not serialize beside it.
+         $Header->prepare(['x-prepared' => 'from-prepared']);
+         $Header->set('X-Prepared', 'from-fields');
+
+         // @ And a lowercase Content-Type must suppress the default one that
+         //   build() injects when it sees no Content-Type.
+         $Header->set('content-type', 'application/json');
+
          // ! Control — a clean header must still arrive.
          $Header->set('X-Clean', 'clean');
 
@@ -147,6 +156,10 @@ return new Specification(
       if ($count('content-type') !== 1) {
          $problems[] = 'Content-Type serialized ' . $count('content-type')
             . ' times (MIME ambiguity)';
+      }
+      if ($count('x-prepared') !== 1) {
+         $problems[] = 'X-Prepared serialized ' . $count('x-prepared')
+            . ' times (identity not unified across the prepared and fields maps)';
       }
       if (str_contains($head, "\x00")) {
          $problems[] = 'a NUL byte reached the response head';

@@ -841,17 +841,24 @@ class Header extends HeaderBase
       // ?! Hot path: most responses have no user fields/prepared — skip array merge.
       if ($this->fields === [] && $this->prepared === []) {
          // Preset only
+         $typed = false;
          foreach ($preset as $name => $value) {
             $value = ($value === true) ? match ($name) {
                'Date' => self::stamp(),
                default => ''
             } : (string) $value;
 
+            // ? Field identity is case-insensitive, so a preset supplied under
+            //   any casing must suppress the default below.
+            if ($typed === false && strcasecmp($name, 'Content-Type') === 0) {
+               $typed = true;
+            }
+
             $queued[] = "$name: $value";
          }
 
          // @ Default Content-Type (preset never carries it)
-         if (! array_key_exists('Content-Type', $preset)) {
+         if ($typed === false) {
             $queued[] = "Content-Type: {$type}";
          }
 
@@ -863,7 +870,25 @@ class Header extends HeaderBase
          return true;
       }
 
-      $fields = $preset + $this->fields + $this->prepared;
+      // ! Union the three maps case-insensitively. `+` keys on exact case, so
+      //   `Content-Type` in one map and `content-type` in another serialized as
+      //   two independent lines and left the recipient to choose which policy
+      //   applies. Precedence is unchanged — the earliest map still wins, as
+      //   `+` did — and the winner's own casing is what reaches the wire.
+      $fields = [];
+      $seen = [];
+      foreach ([$preset, $this->fields, $this->prepared] as $map) {
+         foreach ($map as $name => $value) {
+            $key = strtolower((string) $name);
+
+            if (isSet($seen[$key])) {
+               continue;
+            }
+
+            $seen[$key] = true;
+            $fields[$name] = $value;
+         }
+      }
 
       // Fields
       foreach ($fields as $name => $value) {
@@ -876,8 +901,8 @@ class Header extends HeaderBase
          $queued[] = "$name: $value";
       }
 
-      // @ Set default Content-Type if not present
-      if (! array_key_exists('Content-Type', $fields)) {
+      // @ Set default Content-Type if not present, under ANY casing
+      if (isSet($seen['content-type']) === false) {
          $queued[] = "Content-Type: {$type}";
       }
 
