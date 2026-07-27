@@ -65,6 +65,17 @@ final class Frame
       . 'abcdefghijklmnopqrstuvwxyz'
       . 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 
+   /**
+    * RFC 3986 host characters (unreserved + sub-delims + pct-encoding), which
+    * deliberately EXCLUDE `@`, `[`, `]`, `/` and `:` — a Host field carries
+    * `uri-host [ ":" port ]` and never userinfo (audit 2026-07-27 M1).
+    */
+   private const string HOSTCHAR =
+      "!$&'()*+,;=%-._~"
+      . '0123456789'
+      . 'abcdefghijklmnopqrstuvwxyz'
+      . 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+
    // # Request line
    public string $method = '';
    public string $URI = '';
@@ -104,6 +115,59 @@ final class Frame
     */
    private static array $scans = [];
 
+
+   /**
+    * Validate a Host authority as RFC 9110 §7.2 `uri-host [ ":" port ]`
+    * (audit 2026-07-27 M1).
+    *
+    * `Request::allow()` strips a port by taking the LAST colon, so an authority
+    * carrying userinfo — `allowed.example:@evil.example` — reduced to the
+    * allowed name and passed the allowlist while `Request::$host` kept the
+    * hostile value for the application to interpolate into an absolute URL.
+    * Rejecting the grammar here means no such value ever reaches the request,
+    * with or without an allowlist configured.
+    */
+   private static function authority (string $value): bool
+   {
+      // ?: Absence is handled by the mandatory-Host guard, not here.
+      if ($value === '') {
+         return true;
+      }
+
+      // # IP-literal
+      if ($value[0] === '[') {
+         $bracket = strpos($value, ']');
+         if ($bracket === false) {
+            return false;
+         }
+
+         $rest = substr($value, $bracket + 1);
+      }
+      // # reg-name / IPv4address
+      else {
+         // ! FIRST colon: everything after it must be the port, so a second
+         //   colon or any userinfo marker fails below instead of being hidden.
+         $colon = strpos($value, ':');
+         $name = $colon === false ? $value : substr($value, 0, $colon);
+         $rest = $colon === false ? '' : substr($value, $colon);
+
+         if ($name === '' || strspn($name, self::HOSTCHAR) !== strlen($name)) {
+            return false;
+         }
+      }
+
+      if ($rest === '') {
+         return true;
+      }
+      if ($rest[0] !== ':') {
+         return false;
+      }
+
+      $port = substr($rest, 1);
+
+      // ?: `host:` with no digits is malformed; a port is 1*DIGIT.
+      return $port !== '' && strspn($port, '0123456789') === strlen($port);
+   }
 
    /**
     * Parse the request head out of `$buffer`.
@@ -354,6 +418,12 @@ final class Frame
                   return null;
                }
                $hostValue = trim($rawValue, " \t");
+               // ? Reject userinfo and malformed ports before the value can
+               //   reach `Request::$host` or the allowlist (audit M1).
+               if (self::authority($hostValue) === false) {
+                  $Package->reject("HTTP/1.1 400 Bad Request\r\n\r\n");
+                  return null;
+               }
                break;
 
             case 'connection':

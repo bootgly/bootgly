@@ -359,5 +359,9 @@ return new Suite(
       // Two DIFFERENT valid principals admitted by GLOBAL middleware must
       // never share a cached response: the key omits the admitted identity.
       '65.01-route_cache_global_identity_partition',
+      // # Host authority grammar (audit 2026-07-27 M1)
+      // RFC 9110 7.2 Host is `uri-host [":" port]` and never userinfo:
+      // `allowed:@evil` must not reduce to the allowed name.
+      '66.01-host_authority_userinfo_allowlist_bypass',
    ],
 );
