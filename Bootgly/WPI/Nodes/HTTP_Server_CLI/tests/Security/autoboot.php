@@ -383,5 +383,9 @@ return new Suite(
       // Key creation/import resolve the path in separate steps, so a
       // replaceable ancestor must be refused, not just the leaf.
       '71.01-session_cache_key_path_ancestors',
+      // # ACME problem details reaching the log renderer
+      // A CA-supplied type/detail must not carry control bytes or
+      // Bootgly markup into the formatted log line.
+      '72.01-acme_problem_detail_log_injection',
    ],
 );
