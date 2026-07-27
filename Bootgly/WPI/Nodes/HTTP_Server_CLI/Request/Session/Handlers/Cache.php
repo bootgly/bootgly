@@ -11,6 +11,7 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Session\Handlers;
 
 
+use const DIRECTORY_SEPARATOR;
 use const BOOTGLY_STORAGE_DIR;
 use const BOOTGLY_WORKING_DIR;
 use function base64_decode;
@@ -387,6 +388,49 @@ class Cache implements Handling
          )
       ) {
          throw new RuntimeException('Session Cache key directory has unsafe metadata.');
+      }
+
+      // ---
+
+      // @ Walk the ancestors too. Key creation and import
+      //   perform separate pathname-based lstat/link/read operations, so a
+      //   replaceable ancestor lets another local UID swap a component between
+      //   them — validating only the immediate directory leaves that window
+      //   open. An ancestor is acceptable only while it is a directory owned by
+      //   root or by this process, and is not world/group-writable without the
+      //   sticky bit. Mirrors the File handler, which already walks its chain.
+      $rootState = @lstat(DIRECTORY_SEPARATOR);
+      $rootUID = is_array($rootState) ? (int) $rootState['uid'] : 0;
+
+      $ancestor = dirname($directory);
+      while (true) {
+         $state = @lstat($ancestor);
+         if (
+            is_array($state) === false
+            || ((int) $state['mode'] & 0170000) !== 0040000
+         ) {
+            throw new RuntimeException('Session Cache key path ancestor is unsafe.');
+         }
+
+         $mode = (int) $state['mode'];
+         $owner = (int) $state['uid'];
+         if (
+            ($EUID !== null && $owner !== $rootUID && $owner !== $EUID)
+            || (($mode & 0022) !== 0 && ($mode & 01000) === 0)
+         ) {
+            throw new RuntimeException('Session Cache key path ancestor is replaceable.');
+         }
+
+         if ($ancestor === DIRECTORY_SEPARATOR) {
+            break;
+         }
+
+         $parent = dirname($ancestor);
+         if ($parent === $ancestor) {
+            break;
+         }
+
+         $ancestor = $parent;
       }
    }
 }

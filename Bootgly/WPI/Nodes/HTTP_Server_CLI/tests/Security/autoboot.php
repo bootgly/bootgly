@@ -379,5 +379,9 @@ return new Suite(
       // View is a persistent resource: its export() map must not carry
       // one request's data into the next on the same worker.
       '70.01-view_export_request_scope',
+      // # Session Cache key path ancestors
+      // Key creation/import resolve the path in separate steps, so a
+      // replaceable ancestor must be refused, not just the leaf.
+      '71.01-session_cache_key_path_ancestors',
    ],
 );
