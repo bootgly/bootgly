@@ -108,7 +108,7 @@ return new Suites(
       'Bootgly/WPI/Nodes/WS_Client_CLI/tests/E2E_TLS/',
       // E2E adversarial (raw server sends malformed frames -> client rejects)
       'Bootgly/WPI/Nodes/WS_Client_CLI/tests/E2E_Adversarial/',
-      // Security (re-enabled in a late slot to keep coverage-probe indices
+      // Security [57] (re-enabled in a late slot to keep coverage-probe indices
       // 4, 8 and 14-21 stable; the original in-place slot above remains
       // commented for documentation).
       #'Bootgly/WPI/Nodes/HTTP_Server_CLI/tests/Security/',
