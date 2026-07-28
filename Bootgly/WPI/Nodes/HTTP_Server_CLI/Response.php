@@ -121,6 +121,23 @@ class Response extends Server\Response
     * consumed by the encoder / defer() to store the built wire bytes.
     */
    public int $cache = 0;
+   /**
+    * Whether this response may become worker-shared route-cache wire.
+    *
+    * A Received listener, global middleware or a Handled listener makes this
+    * false before routing.
+    * Deferred clones retain that decision, preventing their later stash()
+    * from bypassing a lifecycle boundary the live encoder cannot serialize
+    * into reusable raw wire.
+   */
+   public private(set) bool $cacheable = true;
+   /**
+    * Cache invalidation generation captured when this Response was bound.
+    *
+    * Clones retain it, so work deferred across Cache::flush() cannot repopulate
+    * entries invalidated by a response-lifecycle transition.
+    */
+   private int $cacheGeneration;
    private object $Scope;
    // Whether $Scope was handed to a resource this request (see attach()).
    // Lets reset() skip the per-request stdClass realloc on routes that
@@ -133,7 +150,7 @@ class Response extends Server\Response
    public bool $encoded;
    // @ Interim 103 bytes emitted by hint() this request (HTTP/1.1 only) —
    //   prepended to the route-cache entry so warm hits replay Early Hints
-   private string $hints;
+   public private(set) string $hints;
    // # Type (set)
    #public bool $dynamic;
    #public bool $static;
@@ -195,6 +212,7 @@ class Response extends Server\Response
 
       $this->source = null;
       $this->type = null;
+      $this->cacheGeneration = Cache::$generation;
       $this->Scope = new stdClass;
       $this->scoped = false;
 
@@ -341,6 +359,8 @@ class Response extends Server\Response
       $this->source = null;
       $this->type = null;
       $this->cache = 0;
+      $this->cacheable = true;
+      $this->cacheGeneration = Cache::$generation;
       // ? Realloc Scope only when the previous request actually scoped a
       //   resource into it — non-scoped routes skip the per-request alloc.
       if ($this->scoped) {
@@ -374,6 +394,17 @@ class Response extends Server\Response
       if ($this->code !== 200) {
          $this->code(200);
       }
+   }
+
+   /**
+    * Make this response ineligible for worker-shared route-cache storage.
+    *
+    * The state is one-way for the current request and survives cloning, which
+    * protects deferred completion after the synchronous encoder has returned.
+    */
+   public function guard (): void
+   {
+      $this->cacheable = false;
    }
 
    /**
@@ -954,6 +985,8 @@ class Response extends Server\Response
 
       if (
          $ttl <= 0
+         || $this->cacheable === false
+         || $this->cacheGeneration !== Cache::$generation
          || $Request === null
          || $Request->method !== 'GET'
          || $Request->protocol !== 'HTTP/1.1'

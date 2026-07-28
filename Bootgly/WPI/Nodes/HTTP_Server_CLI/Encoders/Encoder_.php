@@ -65,6 +65,13 @@ class Encoder_ extends Encoders
    /** @var array<string,true> */
    private static array $admittedMasked = [];
    private static string $admittedType = '';
+   /** @var array<string,string|true> */
+   private static array $admittedPreset = [];
+   private static int $admittedCode = 200;
+   private static string $admittedHints = '';
+   private static bool $admittedStream = false;
+   private static bool $admittedChunked = false;
+   private static bool $admittedEncoded = false;
    // # Whether this request's replay already restored the cached representation
    //   into the response (see adopt()).
    private static bool $adopted = false;
@@ -73,8 +80,19 @@ class Encoder_ extends Encoders
    //   the route cache, so ordinary traffic pays one property read.
    /** @var array<int,mixed> */
    private static array $handled = [];
-   // # Whether global middleware post-processed the response after $Next.
+   // # Whether lifecycle code changed the response before/after $Next or in
+   //   the synchronous Handled event.
    private static bool $mutated = false;
+   // # Whether the same Emitter instance used by this request has a Handled
+   //   listener. A hit must be materialized before that listener observes it.
+   private static bool $observed = false;
+   // # Immutable admission policy for this request. Raw cached wire cannot
+   //   preserve generic middleware/event ownership, so either lifecycle makes
+   //   both replay and storage fail closed.
+   private static bool $mediated = false;
+   // # Whether the worker cache was invalidated for the current mediated
+   //   configuration. Kept across requests so a stable stack pays one flush.
+   private static bool $guarded = false;
    // # Response fields the encoder owns or regenerates per response. When a
    //   mutated replay restores the cached representation, these must come from
    //   THIS response, never from the stored head.
@@ -91,9 +109,10 @@ class Encoder_ extends Encoders
    /**
     * Capture every response surface that affects serialization.
     *
-    * Used twice per cached response: once as the handler leaves it, once at
-    * emission. An inequality means global middleware post-processed the
-    * response after `$Next`.
+    * Snapshots delimit Received, global middleware, handler and Handled-event
+    * ownership.
+    * An inequality at one of those boundaries means the representation carries
+    * request-lifecycle output and cannot be stored as shared wire.
     *
     * @return array<int,mixed>
     */
@@ -102,12 +121,17 @@ class Encoder_ extends Encoders
       $Header = $Response->Header;
 
       return [
+         $Response->code,
          $Response->Body->raw,
          $Header->fields,
          $Header->prepared,
          $Header->queued,
          $Header->masked,
          $Header->type,
+         $Response->hints,
+         $Response->stream,
+         $Response->chunked,
+         $Response->encoded,
          // ! `preset` is worker-persistent config, normally written once at
          //   boot — but it serializes into every response, so a middleware that
          //   writes one after $Next changes THIS response too. Omitting it let a
@@ -120,12 +144,11 @@ class Encoder_ extends Encoders
     * Restore a stored representation into the response a replay short-circuits.
     *
     * A replay skips the handler, so the response object carries no content of
-    * its own. Any code that runs afterwards — global middleware returning from
-    * `$Next`, a `Handled` listener — therefore reads an EMPTY body and appends
-    * to nothing, and its mutation would either be dropped by the raw-wire
-    * replay or serialized as a content-less response. Putting the cached
-    * status-line-less head fields and body back first makes that code compose
-    * with real content, exactly as it would after a live handler.
+    * its own. Global middleware returning from `$Next` would therefore read an
+    * EMPTY body and append to nothing, and its mutation would either be dropped
+    * by the raw-wire replay or serialized as a content-less response. Putting
+    * the cached status-line-less head fields and body back first makes that code
+    * compose with real content, exactly as it would after a live handler.
     *
     * Fields this response already carries always win; framing fields stay the
     * encoder's own. Public because `Encoder_Testing` runs the same contract.
@@ -245,15 +268,31 @@ class Encoder_ extends Encoders
       $handled ??= spl_object_id(RequestEvents::Handled);
 
       $Emitter = Emitter::$Instance;
-      isSet($Emitter->Listeners[$received]) && $Emitter->emit(RequestEvents::Received, $Request);
+      $receiving = isSet($Emitter->Listeners[$received]);
+      if ($receiving) {
+         // ! Received runs before reset(), and listeners can reach the
+         //   worker-persistent Response singleton. Guard that pre-reset object
+         //   and invalidate older wire before user code can clone/stash it or
+         //   change a persistent Header preset from current-request input.
+         $Response->guard();
+         if (self::$guarded === false) {
+            Cache::flush();
+            self::$guarded = true;
+         }
+
+         $Emitter->emit(RequestEvents::Received, $Request);
+      }
 
       // @ Reset Response state and bind per-request context.
       $Response->reset($Packages, $Request);
-      // ? The replay/capture statics are only written by a route-cache hit or
-      //   a cache-opted handler, and every path that writes them leaves one of
-      //   these two roots set (the catch below restores the invariant on the
-      //   exception path). Ordinary traffic skips the eleven writes.
-      if (self::$wire !== null || self::$handled !== []) {
+      // ? Every path that writes replay/capture state leaves a reset root set;
+      //   the catch below restores the same invariant on exceptions.
+      if (
+         self::$wire !== null
+         || self::$handled !== []
+         || self::$observed
+         || self::$mediated
+      ) {
          self::$wire = null;
          self::$Admitted = null;
          self::$admittedBody = '';
@@ -262,10 +301,19 @@ class Encoder_ extends Encoders
          self::$admittedQueued = [];
          self::$admittedMasked = [];
          self::$admittedType = '';
+         self::$admittedPreset = [];
+         self::$admittedCode = 200;
+         self::$admittedHints = '';
+         self::$admittedStream = false;
+         self::$admittedChunked = false;
+         self::$admittedEncoded = false;
          self::$adopted = false;
          self::$handled = [];
          self::$mutated = false;
+         self::$observed = false;
+         self::$mediated = false;
       }
+      self::$observed = isSet($Emitter->Listeners[$handled]);
 
       // @
       try {
@@ -307,6 +355,28 @@ class Encoder_ extends Encoders
                $Response = $Errored;
             }
             else {
+               // ! Raw final-response wire has no generic operation/source
+               //   model for Received, middleware or Handled output. Snapshot this
+               //   request's lifecycle before entering the onion and decline
+               //   both replay and storage. The Response flag survives
+               //   defer()'s private clone and protects its later stash().
+               self::$mediated = $receiving
+                  || SAPI::$Middlewares->count > 0
+                  || self::$observed;
+               if (self::$mediated) {
+                  $Response->guard();
+
+                  // ! Entries primed before a lifecycle/preset transition
+                  //   cannot safely resurrect after that lifecycle is removed.
+                  if (self::$guarded === false) {
+                     Cache::flush();
+                     self::$guarded = true;
+                  }
+               }
+               else {
+                  self::$guarded = false;
+               }
+
                // ! One admission-core closure per worker, not per request:
                //   it captures nothing — per-request state flows through the
                //   `self::$wire` / `self::$Admitted` statics reset above.
@@ -317,20 +387,19 @@ class Encoder_ extends Encoders
                   //   every security middleware decides before this lookup.
                   /** @var Request $Request */
                   /** @var Response $Res */
-                  $wire = self::replay($Request);
+                  // ! A middleware may pass a replacement Response into
+                  //   $Next. Guard that exact object before the handler can
+                  //   clone/defer it, not only the pipeline's original object.
+                  if (self::$mediated) {
+                     $Res->guard();
+                  }
+
+                  $wire = self::$mediated
+                     ? null
+                     : self::replay($Request);
                   if ($wire !== null) {
                      self::$wire = $wire;
                      self::$Admitted = $Res;
-
-                     // ! A global pipeline can run code after $Next. Restore the
-                     //   representation BEFORE that code sees the response, so an
-                     //   append composes with the cached body instead of
-                     //   replacing it. With no pipeline nothing can mutate here,
-                     //   and the hit stays a pure memcpy of the stored bytes.
-                     if (SAPI::$Middlewares->count > 0) {
-                        /** @var Response $Res */
-                        self::adopt($Res, $wire);
-                     }
 
                      $Header = $Res->Header;
                      self::$admittedBody = $Res->Body->raw;
@@ -339,6 +408,12 @@ class Encoder_ extends Encoders
                      self::$admittedQueued = $Header->queued;
                      self::$admittedMasked = $Header->masked;
                      self::$admittedType = $Header->type;
+                     self::$admittedPreset = $Header->preset;
+                     self::$admittedCode = $Res->code;
+                     self::$admittedHints = $Res->hints;
+                     self::$admittedStream = $Res->stream;
+                     self::$admittedChunked = $Res->chunked;
+                     self::$admittedEncoded = $Res->encoded;
                      return $Res;
                   }
 
@@ -388,13 +463,19 @@ class Encoder_ extends Encoders
                if ($Result instanceof Response && $Result !== $Response) {
                   $Response = $Result;
                }
+               if (self::$mediated) {
+                  $Response->guard();
+               }
 
-               // ! Compare HERE, not at emission: everything below this point —
-               //   the Date preset, Connection handling, the Handled event — is
-               //   the encoder's own response tail and would read as a mutation.
+               // ! Compare HERE, not at emission: connection framing below is
+               //   encoder-owned. This remains defense in depth for the
+               //   unmediated path; a mediated response never stores at all.
                // ! PHPStan cannot see the admission closure writing `$handled`.
                if (self::$handled !== []) { // @phpstan-ignore notIdentical.alwaysFalse
-                  self::$mutated = self::$handled !== self::capture($Response); // @phpstan-ignore notIdentical.alwaysTrue
+                  if (self::$handled !== self::capture($Response)) { // @phpstan-ignore notIdentical.alwaysTrue
+                     self::$mutated = true;
+                  }
+
                }
             }
          }
@@ -411,9 +492,17 @@ class Encoder_ extends Encoders
          self::$admittedQueued = [];
          self::$admittedMasked = [];
          self::$admittedType = '';
+         self::$admittedPreset = [];
+         self::$admittedCode = 200;
+         self::$admittedHints = '';
+         self::$admittedStream = false;
+         self::$admittedChunked = false;
+         self::$admittedEncoded = false;
          self::$adopted = false;
          self::$handled = [];
          self::$mutated = false;
+         self::$observed = false;
+         self::$mediated = false;
          // ! Break the static-Response alias (see the 503 path above)
          // ? The Catcher can itself throw (Throwables::notify, content
          //   negotiation, error-page rendering). The response tail below is
@@ -475,7 +564,39 @@ class Encoder_ extends Encoders
       }
 
       // @ Events — request handled, response ready (guarded: zero-alloc when no listeners)
-      isSet($Emitter->Listeners[$handled]) && $Emitter->emit(RequestEvents::Handled, $Request, $Response);
+      // ! Re-read the same Emitter: handlers/middleware may register a
+      //   listener after admission. A late listener cannot influence the
+      //   earlier replay decision, so materialize a hit before it observes it.
+      $observed = isSet($Emitter->Listeners[$handled]);
+      if ($observed) {
+         if (
+            self::$observed === false // @phpstan-ignore booleanAnd.alwaysFalse, booleanAnd.alwaysFalse, booleanAnd.alwaysFalse
+            && self::$wire !== null // @phpstan-ignore notIdentical.alwaysFalse
+            && self::$Admitted === $Response // @phpstan-ignore identical.alwaysFalse
+            && self::$adopted === false
+         ) {
+            self::adopt($Response, self::$wire);
+         }
+
+         self::$observed = true;
+         self::$mediated = true;
+         if (self::$guarded === false) {
+            Cache::flush();
+            self::$guarded = true;
+         }
+         // ! Guard before user event code runs: a listener can clone/defer the
+         //   Response and call stash() during the synchronous emission.
+         $Response->guard();
+         $before = self::capture($Response);
+         $Emitter->emit(RequestEvents::Handled, $Request, $Response);
+
+         // ! Handled runs after the middleware snapshot and has no cache-safe
+         //   declaration contract. Its current-request output reaches this
+         //   response, but the lifecycle is never eligible for shared wire.
+         if ($before !== self::capture($Response)) {
+            self::$mutated = true;
+         }
+      }
 
       // ?: Replay only when the admitted Response remains the active 200.
       //   A post-middleware/event denial or replacement must serialize its
@@ -500,6 +621,12 @@ class Encoder_ extends Encoders
             && $Header->queued === self::$admittedQueued
             && $Header->masked === self::$admittedMasked
             && $Header->type === self::$admittedType
+            && $Header->preset === self::$admittedPreset
+            && $Response->code === self::$admittedCode
+            && $Response->hints === self::$admittedHints
+            && $Response->stream === self::$admittedStream
+            && $Response->chunked === self::$admittedChunked
+            && $Response->encoded === self::$admittedEncoded
          ) {
             $length = strlen(self::$wire);
             return self::$wire;
@@ -520,14 +647,14 @@ class Encoder_ extends Encoders
 
       // ? Route response cache opt-in — store the built wire bytes
       if ($Response->cache !== 0) {
-         // ? A response that global middleware post-processed after $Next is
-         //   per-request by construction, not a shared representation: storing
-         //   it would replay one request's nonce or body marker to every later
-         //   client. Skipping the store is also what makes adopt() correct on
-         //   the replay side — every stored entry is pure handler output, so a
-         //   later request's mutation composes with it instead of duplicating
-         //   the stored one.
-         if (self::$mutated === false) { // @phpstan-ignore identical.alwaysTrue
+         // ! Any mediated lifecycle is per-request by policy. Raw final wire
+         //   cannot retain source/precedence ownership for Received listeners,
+         //   generic middleware or Handled output, so only an unmediated
+         //   handler representation may enter the shared route cache.
+         if (
+            self::$mediated === false // @phpstan-ignore identical.alwaysTrue, booleanAnd.alwaysFalse
+            && self::$mutated === false // @phpstan-ignore identical.alwaysTrue
+         ) {
             $Response->stash($buffer);
          }
          else {

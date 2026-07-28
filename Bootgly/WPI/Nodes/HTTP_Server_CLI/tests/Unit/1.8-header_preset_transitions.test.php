@@ -15,6 +15,7 @@ return new Specification(
    test: new Assertions(Case: function (): Generator {
       // ! ONE persistent Response/Header across "requests" — a fresh instance
       //   per scenario cannot catch the raw-memo/state split under test
+      Cache::flush();
       $Response = new Response;
       $Header = $Response->Header;
 
@@ -157,7 +158,6 @@ return new Specification(
       (new ReflectionProperty(Response::class, 'Request'))->setValue($Response, $Request);
       $Response->cache = 60;
 
-      Cache::flush();
       $Response->stash("HTTP/1.1 200 OK\r\n{$Header->raw}\r\n\r\nok");
 
       $storedCookie = false;

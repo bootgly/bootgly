@@ -129,6 +129,7 @@ return new Specification(
          Language::$roots = $languages ? ['/route-cache-policy-test'] : [];
 
          try {
+            Cache::flush();
             $Request = $RequestFactory(
                'tenant.example.test',
                language: $language,
@@ -140,7 +141,6 @@ return new Specification(
             $Response->cache = 60;
             $Emit($Response);
 
-            Cache::flush();
             $Response->stash("HTTP/1.1 200 OK\r\n\r\nok");
 
             return Cache::$entries !== [];

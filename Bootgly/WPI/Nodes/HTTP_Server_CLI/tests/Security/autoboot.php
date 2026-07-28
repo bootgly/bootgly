@@ -395,5 +395,13 @@ return new Suite(
       // The per-request cap bounds one body; nothing bounds their sum, and
       // neither body decoder released on close — HTTP/2 has both controls.
       '74.01-http1_aggregate_request_body_budget',
+      // # Route-cache lifecycle output ownership (audit 2026-07-27 M1)
+      // Current-request middleware/event output must never be replaced by a
+      // previously cached request's raw header or body representation.
+      '75.01-route_cache_lifecycle_per_request_replay',
+      // # Route-cache Received-event preset ownership (audit 2026-07-28 M1)
+      // A persistent preset changed for the current request before reset must
+      // not be replaced by raw wire cached under the previous request's value.
+      '75.02-route_cache_received_preset_replay',
    ],
 );

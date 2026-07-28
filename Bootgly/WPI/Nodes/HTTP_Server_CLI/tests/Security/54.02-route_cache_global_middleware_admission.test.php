@@ -12,11 +12,11 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test\Specification;
 /**
  * C2 remediation regression — global admission must precede cache replay.
  *
- * The public pair proves cache hits remain functional inside the global
- * pipeline. A cold invalid request proves the global policy is active. The
- * protected route is middleware-free at Router level so its valid response
- * can be cached, but invalid and missing custom credentials must be rejected
- * globally before the encoder is allowed to fetch that entry.
+ * The public pair proves the fail-closed M1 policy: raw route-cache wire is
+ * ineligible whenever a global lifecycle is active, even when this particular
+ * middleware branch is response-neutral. A cold invalid request proves the
+ * global policy is active, and invalid/missing custom credentials must remain
+ * rejected before the handler.
  */
 $controlRuns = 0;
 $protectedRuns = 0;
@@ -44,7 +44,7 @@ $Admission = new class implements Middleware {
 };
 
 return new Specification(
-   description: 'Global admission middleware must execute before route-cache replay',
+   description: 'Global admission middleware must make route-cache wire ineligible',
    Separator: new Separator(line: true),
 
    requests: [
@@ -127,12 +127,12 @@ return new Specification(
 
       if (
          $controlFirst !== 'C2-GLOBAL-CONTROL:run=1'
-         || $controlSecond !== $controlFirst
+         || $controlSecond !== 'C2-GLOBAL-CONTROL:run=2'
       ) {
          Vars::$labels = ['C2 global cache control'];
          dump(json_encode($evidence));
 
-         return 'C2 global control failed: public cache replay was not retained inside the pipeline.';
+         return 'C2/M1 control failed: a global lifecycle still consumed shared route-cache wire.';
       }
 
       if (

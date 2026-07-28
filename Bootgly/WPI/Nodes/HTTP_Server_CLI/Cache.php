@@ -93,6 +93,15 @@ class Cache
     * @var array<string,true>
     */
    public static array $URIs = [];
+   /**
+    * Monotonic invalidation generation for delayed route-cache writers.
+    *
+    * Response captures this value when it is bound to a request. A deferred
+    * clone from before flush() must not repopulate entries after the lifecycle
+    * transition that invalidated it. Public for the same hot-path reason as
+    * entries/URIs; treat as read-only outside this class.
+    */
+   public static int $generation = 0;
 
    // * Metadata
    /**
@@ -348,6 +357,7 @@ class Cache
     */
    public static function flush (): void
    {
+      self::$generation++;
       self::$entries = [];
       self::$URIs = [];
    }

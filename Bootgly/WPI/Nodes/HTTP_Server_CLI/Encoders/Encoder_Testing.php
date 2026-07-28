@@ -86,7 +86,9 @@ class Encoder_Testing extends Encoders
    public static function encode (Packages $Packages, null|int &$length): string
    {
       /** @var TCPPackages $Packages */
-      $Request  = Server::$Request;
+      $Request = Server::$Request;
+      $Response = &Server::$Response;
+      static $guarded = false;
 
       // @ Skip handler consumption while waiting for request body (chunked)
       if ($Request->Body->waiting) {
@@ -104,7 +106,18 @@ class Encoder_Testing extends Encoders
 
       // @ Events — request fully decoded (guarded: zero-alloc when no listeners)
       $Emitter = Emitter::$Instance;
-      $Emitter->check(RequestEvents::Received) && $Emitter->emit(RequestEvents::Received, $Request);
+      $receiving = $Emitter->check(RequestEvents::Received);
+      if ($receiving) {
+         // ! Mirror production: protect the pre-reset singleton and invalidate
+         //   older wire before Received can persist current-request output.
+         $Response->guard();
+         if ($guarded === false) {
+            Cache::flush();
+            $guarded = true;
+         }
+
+         $Emitter->emit(RequestEvents::Received, $Request);
+      }
 
       // @ Instance new Router (per-test: each test defines different routes)
       Server::$Router = new Router;
@@ -119,7 +132,6 @@ class Encoder_Testing extends Encoders
       SAPI::boot(reset: true, base: Server::class, key: 'response', testIndex: $testIndex);
 
       // @ Get callbacks
-      $Response = &Server::$Response;
       $Router   = Server::$Router;
 
       // ! Reset Response state and bind per-request context.
@@ -133,6 +145,8 @@ class Encoder_Testing extends Encoders
       $adopted = false;
       $handled = [];
       $mutated = false;
+      $observed = $Emitter->check(RequestEvents::Handled);
+      $mediated = $receiving || SAPI::$Middlewares->count > 0 || $observed;
 
       // ! Response
       // @
@@ -155,29 +169,39 @@ class Encoder_Testing extends Encoders
             Challenge::respond($Request, $Response);
          }
          else {
+            if ($mediated) {
+               $Response->guard();
+               if ($guarded === false) {
+                  Cache::flush();
+                  $guarded = true;
+               }
+            }
+            else {
+               $guarded = false;
+            }
+
             $Result = SAPI::$Middlewares->process($Request, $Response,
                function (object $Request, object $Res) use (
                   $Router,
+                  $mediated,
                   &$cacheWire,
                   &$CachedResponse,
                   &$admitted,
-                  &$adopted,
                   &$handled,
                ): mixed {
                   // ?: Mirror production: every global middleware runs before
                   //   replay; route/group middleware routes never seed entries.
                   /** @var Request $Request */
-                  $cacheWire = self::replay($Request);
+                  /** @var Response $Res */
+                  if ($mediated) {
+                     $Res->guard();
+                  }
+
+                  $cacheWire = $mediated
+                     ? null
+                     : self::replay($Request);
                   if ($cacheWire !== null) {
                      $CachedResponse = $Res;
-                     /** @var Response $Res */
-                     // ! Same contract as production: restore before any
-                     //   post-$Next code can read an empty body.
-                     if (SAPI::$Middlewares->count > 0) {
-                        Encoder_::adopt($Res, $cacheWire);
-                        $adopted = true;
-                     }
-
                      $admitted = Encoder_::capture($Res);
                      return $Res;
                   }
@@ -211,15 +235,19 @@ class Encoder_Testing extends Encoders
                }
             );
 
-            // ! Same boundary as production: compare before the response tail.
-            if ($handled !== []) {
-               /** @var Response $Mutable */
-               $Mutable = $Result instanceof Response ? $Result : $Response;
-               $mutated = $handled !== Encoder_::capture($Mutable);
-            }
-
             if ($Result instanceof Response && $Result !== $Response) {
                $Response = $Result;
+            }
+            if ($mediated) {
+               $Response->guard();
+            }
+
+            // ! Same boundary as production: compare before the response tail.
+            if ($handled !== []) {
+               if ($handled !== Encoder_::capture($Response)) {
+                  $mutated = true;
+               }
+
             }
          }
       }
@@ -284,7 +312,32 @@ class Encoder_Testing extends Encoders
       }
 
       // @ Events — request handled, response ready (guarded: zero-alloc when no listeners)
-      $Emitter->check(RequestEvents::Handled) && $Emitter->emit(RequestEvents::Handled, $Request, $Response);
+      // ! A handler/middleware may have registered Handled after admission.
+      $handling = $Emitter->check(RequestEvents::Handled);
+      if ($handling) {
+         if (
+            $observed === false
+            && $cacheWire !== null
+            && $CachedResponse === $Response
+         ) {
+            Encoder_::adopt($Response, $cacheWire);
+            $adopted = true;
+         }
+
+         $mediated = true;
+         if ($guarded === false) {
+            Cache::flush();
+            $guarded = true;
+         }
+         // ! Guard before user event code can clone/defer this Response.
+         $Response->guard();
+         $before = Encoder_::capture($Response);
+         $Emitter->emit(RequestEvents::Handled, $Request, $Response);
+
+         if ($before !== Encoder_::capture($Response)) {
+            $mutated = true;
+         }
+      }
 
       // ?: A post-middleware/event denial or replacement wins over replay.
       if (
@@ -311,10 +364,9 @@ class Encoder_Testing extends Encoders
       // @ Encode HTTP Response
       $buffer = $Response->encode($Packages, $length);
 
-      // ? Route response cache opt-in — store the built wire bytes. A response
-      //   post-processed after $Next is per-request, never a representation.
+      // ? Route response cache opt-in — only unmediated handler wire is shared.
       if ($Response->cache !== 0) {
-         if ($mutated === false) {
+         if ($mediated === false && $mutated === false) {
             $Response->stash($buffer);
          }
          else {

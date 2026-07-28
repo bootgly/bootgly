@@ -18,6 +18,7 @@ return new Specification(
 
       // ! One cacheable GET/HTTP/1.1 exchange per scenario; stash() decides
       $stash = static function (string $URI, callable $emit) use ($URIProperty, $RequestProperty): bool {
+         Cache::flush();
          $Response = new Response;
          $Request = new Request;
          $Request->method = 'GET';
@@ -28,7 +29,6 @@ return new Specification(
 
          $emit($Response);
 
-         Cache::flush();
          $Response->stash("HTTP/1.1 200 OK\r\n\r\nok");
 
          $stored = Cache::$entries !== [];
