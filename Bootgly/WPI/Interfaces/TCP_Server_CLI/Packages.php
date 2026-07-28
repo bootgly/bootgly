@@ -101,14 +101,7 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
 
    public function __construct (Connection &$Connection)
    {
-      // ? A Connection IS its own Package (it inherits this class), so storing
-      //   the back-reference would make every connection a self-cycle that
-      //   refcounting can never free — the whole graph, retained bodies
-      //   included, would then survive close until the cycle collector runs.
-      //   `Connection` answers reads through a virtual property instead.
-      if ($Connection !== $this) {
-         $this->Connection = $Connection;
-      }
+      $this->Connection = $Connection;
 
       parent::__construct();
 

@@ -29,16 +29,6 @@ use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages;
 
 class Connection extends Packages
 {
-   // ! Virtual, so it costs no slot and — decisively — creates no reference:
-   //   a stored `$this` would be a self-cycle only the collector could break,
-   //   which is what let a closed connection keep its retained request body
-   //   alive long past the disconnect. Read-only by construction.
-   //   Not reading the inherited slot is the entire point, so the hook is
-   //   deliberately value-less: nothing ever writes it either.
-   public Connection $Connection {
-      get => $this; // @phpstan-ignore propertyGetHook.noRead
-   }
-
    /** @var resource */
    public $Socket;
 
@@ -312,6 +302,16 @@ class Connection extends Packages
       //   bytes — do not pin a retained fragment until object destruction.
       $this->carry = '';
       $this->carried = false;
+
+      // @ Request-data hygiene: the Connection is a self-cycle (Packages
+      //   stores back the very object that inherits it), so refcounting alone
+      //   never frees this graph — the cycle collector does, later. What must
+      //   not wait for it is request data: the decoded Request (its body), the
+      //   L0 template and its key are released here, on every close path, so
+      //   the cycle retains only an empty shell until collection.
+      $this->decoded = null;
+      $this->Template = null;
+      $this->known = '';
 
       $this->status = Connections::STATUS_CLOSING;
 
