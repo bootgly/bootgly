@@ -37,6 +37,7 @@ use function constant;
 use function count;
 use function defined;
 use function dirname;
+use function escapeshellarg;
 use function explode;
 use function file_get_contents;
 use function file_put_contents;
@@ -49,6 +50,7 @@ use function hash;
 use function hash_equals;
 use function implode;
 use function in_array;
+use function ini_get;
 use function is_array;
 use function is_dir;
 use function is_file;
@@ -64,7 +66,9 @@ use function microtime;
 use function min;
 use function ob_end_clean;
 use function ob_start;
+use function passthru;
 use function pcntl_async_signals;
+use function pcntl_exec;
 use function pcntl_signal;
 use function pcntl_signal_get_handler;
 use function preg_match;
@@ -184,6 +188,38 @@ class TestCommand extends Command
             array_slice($arguments, 1),
             $options
          );
+      }
+
+      // ? Under `zend.assertions=-1` (production INI — the PHP 8.5 CLI package
+      //   default) every native assert() is compiled out at parse time and can
+      //   NEVER be re-enabled at runtime: thousands of `yield assert(...)`
+      //   cases would pass vacuously and the sweep would lie green. Re-exec
+      //   this exact command once with assertions forced on; the env marker
+      //   stops a loop if the flag cannot take effect.
+      if (ini_get('zend.assertions') !== '1' && getenv('BOOTGLY_ASSERTIONS') === false) {
+         /** @var array<int,string> $argv */
+         $argv = (array) ($_SERVER['argv'] ?? []);
+         $command = $argv === [] ? [BOOTGLY_ROOT_DIR . 'bootgly', 'test'] : $argv;
+
+         putenv('BOOTGLY_ASSERTIONS=1');
+
+         // @ Replace this process when the platform allows it...
+         if (function_exists('pcntl_exec')) {
+            $environment = getenv();
+            $environment['BOOTGLY_ASSERTIONS'] = '1';
+
+            pcntl_exec(PHP_BINARY, ['-d', 'zend.assertions=1', ...$command], $environment);
+         }
+
+         // @ ...or degrade to a child run with the same exit code.
+         $line = escapeshellarg(PHP_BINARY) . ' -d zend.assertions=1';
+         foreach ($command as $part) {
+            $part = escapeshellarg($part);
+            $line .= " {$part}";
+         }
+         $code = 1;
+         passthru($line, $code);
+         exit($code);
       }
 
       // ! Agent detection
