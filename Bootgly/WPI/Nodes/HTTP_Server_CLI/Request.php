@@ -16,7 +16,6 @@ use const PREG_SET_ORDER;
 use function array_keys;
 use function array_map;
 use function array_slice;
-use function array_walk_recursive;
 use function base64_decode;
 use function bin2hex;
 use function clearstatcache;
@@ -73,6 +72,7 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Raw\Body;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Raw\Header;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Raw\Header\Cookies;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Session;
+use Throwable;
 
 
 class Request
@@ -1187,6 +1187,17 @@ class Request
 
                   if ($initialBody !== '') {
                      $Decoder->feed($initialBody);
+
+                     // ? `feed()` retains everything from the boundary onward,
+                     //   so a head that arrives WITH its first body bytes lands
+                     //   the whole slice in the decoder before any append path
+                     //   runs. Charge it here or it never draws on the budget.
+                     if ($Decoder->charge() === false) {
+                        $this->Body->waiting = false;
+                        $Package->consumed = 0;
+                        $Package->reject("HTTP/1.1 503 Service Unavailable\r\n\r\n");
+                        return States::Rejected;
+                     }
                   }
 
                   $Package->Decoder = $Decoder;
@@ -1411,9 +1422,9 @@ class Request
 
       // @ Consume the temp: remove it + release its aggregate-cap reservation,
       //   then blank tmp_name so a later clean() skips this (now-persisted) part
-      @unlink($tmp);
-      Downloads::discard($tmp);
-      $this->_files[$key]['tmp_name'] = '';
+      if ($this->remove($tmp)) {
+         $this->_files[$key]['tmp_name'] = '';
+      }
 
       // :
       return $path;
@@ -1860,6 +1871,52 @@ class Request
    }
 
    /**
+    * Best-effort removal for one Request-owned upload.
+    *
+    * Warning-to-exception handlers must not escape cleanup, and the shared
+    * disk counter must continue to cover a path whose deletion failed.
+    */
+   private function remove (string $path): bool
+   {
+      $absent = false;
+      try {
+         $absent = ! is_file($path) || @unlink($path);
+      }
+      catch (Throwable) {
+         try {
+            $absent = ! is_file($path);
+         }
+         catch (Throwable) {}
+      }
+
+      if ($absent) {
+         try {
+            Downloads::discard($path);
+         }
+         catch (Throwable) {}
+      }
+
+      return $absent;
+   }
+
+   /**
+    * Reclaim every temporary upload path in one decoded file-map branch.
+    *
+    * @param array<int|string,mixed> $files
+    */
+   private function purge (array $files): void
+   {
+      foreach ($files as $key => $value) {
+         if ($key === 'tmp_name' && is_string($value) && $value !== '') {
+            $this->remove($value);
+         }
+         else if (is_array($value)) {
+            $this->purge($value);
+         }
+      }
+   }
+
+   /**
     * Per-request cleanup of uploaded temp files.
     *
     * Replaces the previous `__destruct`. Called explicitly by the Encoder
@@ -1877,18 +1934,15 @@ class Request
       // @ Clear cache
       clearstatcache();
 
-      // @ Delete temp files + release aggregate-cap reservations
-      array_walk_recursive($this->_files, function ($value, $key) {
-         if ($key === 'tmp_name' && is_string($value) && $value !== '') {
-            if (is_file($value) === true) {
-               unlink($value);
-            }
-
-            Downloads::discard($value);
-         }
-      });
-
-      $this->_files = [];
-      $this->hasFiles = false;
+      // @ Delete temp files + release aggregate-cap reservations. A warning
+      //   promoted by an application error handler must not stop later paths
+      //   from being reclaimed, and accounting leaves only with the file.
+      try {
+         $this->purge($this->_files);
+      }
+      finally {
+         $this->_files = [];
+         $this->hasFiles = false;
+      }
    }
 }
