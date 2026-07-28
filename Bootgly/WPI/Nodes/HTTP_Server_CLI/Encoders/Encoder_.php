@@ -249,17 +249,23 @@ class Encoder_ extends Encoders
 
       // @ Reset Response state and bind per-request context.
       $Response->reset($Packages, $Request);
-      self::$wire = null;
-      self::$Admitted = null;
-      self::$admittedBody = '';
-      self::$admittedFields = [];
-      self::$admittedPrepared = [];
-      self::$admittedQueued = [];
-      self::$admittedMasked = [];
-      self::$admittedType = '';
-      self::$adopted = false;
-      self::$handled = [];
-      self::$mutated = false;
+      // ? The replay/capture statics are only written by a route-cache hit or
+      //   a cache-opted handler, and every path that writes them leaves one of
+      //   these two roots set (the catch below restores the invariant on the
+      //   exception path). Ordinary traffic skips the eleven writes.
+      if (self::$wire !== null || self::$handled !== []) {
+         self::$wire = null;
+         self::$Admitted = null;
+         self::$admittedBody = '';
+         self::$admittedFields = [];
+         self::$admittedPrepared = [];
+         self::$admittedQueued = [];
+         self::$admittedMasked = [];
+         self::$admittedType = '';
+         self::$adopted = false;
+         self::$handled = [];
+         self::$mutated = false;
+      }
 
       // @
       try {
@@ -394,6 +400,9 @@ class Encoder_ extends Encoders
          }
       }
       catch (Throwable $Throwable) {
+         // ! Full snapshot reset — the guarded reset at the next encode() only
+         //   fires while one of the two roots is set, so the exception path
+         //   must not leave a flag stranded behind cleared roots.
          self::$wire = null;
          self::$Admitted = null;
          self::$admittedBody = '';
@@ -402,6 +411,9 @@ class Encoder_ extends Encoders
          self::$admittedQueued = [];
          self::$admittedMasked = [];
          self::$admittedType = '';
+         self::$adopted = false;
+         self::$handled = [];
+         self::$mutated = false;
          // ! Break the static-Response alias (see the 503 path above)
          // ? The Catcher can itself throw (Throwables::notify, content
          //   negotiation, error-page rendering). The response tail below is

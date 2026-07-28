@@ -787,7 +787,9 @@ class Header extends HeaderBase
 
       // ? Set-Cookie is intentionally repeatable — every other field is a
       //   case-insensitive singleton, so replace the queued variant instead of
-      //   emitting a second line the recipient has to choose between.
+      //   emitting a second line the recipient has to choose between. The gap
+      //   the unset leaves behind stays: every reader iterates, and the other
+      //   removal paths (own(), del()) already leave theirs.
       if (strcasecmp($field, 'Set-Cookie') !== 0) {
          $length = strlen($field) + 1;
          foreach ($this->queued as $index => $line) {
@@ -795,8 +797,6 @@ class Header extends HeaderBase
                unset($this->queued[$index]);
             }
          }
-
-         $this->queued = array_values($this->queued);
       }
 
       $this->queued[] = "$field: $value";

@@ -159,6 +159,8 @@ final class Frame
          return true;
       }
 
+      $length = strlen($value);
+
       // # IP-literal
       if ($value[0] === '[') {
          $bracket = strpos($value, ']');
@@ -166,32 +168,31 @@ final class Frame
             return false;
          }
 
-         $rest = substr($value, $bracket + 1);
+         $offset = $bracket + 1;
       }
       // # reg-name / IPv4address
       else {
-         // ! FIRST colon: everything after it must be the port, so a second
-         //   colon or any userinfo marker fails below instead of being hidden.
-         $colon = strpos($value, ':');
-         $name = $colon === false ? $value : substr($value, 0, $colon);
-         $rest = $colon === false ? '' : substr($value, $colon);
-
-         if ($name === '' || strspn($name, self::HOSTCHAR) !== strlen($name)) {
+         // ! The span stops at the FIRST octet outside the host alphabet, so a
+         //   second colon or any userinfo marker fails below instead of being
+         //   hidden. Offset-based: this runs on every parsed Host field and
+         //   allocated three substrings before.
+         $offset = strspn($value, self::HOSTCHAR);
+         if ($offset === 0) {
             return false;
          }
       }
 
-      if ($rest === '') {
+      // ?: Bare authority — no port part.
+      if ($offset === $length) {
          return true;
       }
-      if ($rest[0] !== ':') {
+      if ($value[$offset] !== ':') {
          return false;
       }
 
-      $port = substr($rest, 1);
-
       // ?: `host:` with no digits is malformed; a port is 1*DIGIT.
-      return $port !== '' && strspn($port, '0123456789') === strlen($port);
+      $port = $offset + 1;
+      return $port < $length && strspn($value, '0123456789', $port) === $length - $port;
    }
 
    /**
