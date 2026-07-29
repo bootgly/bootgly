@@ -13,7 +13,6 @@ use function mkdir;
 use function rmdir;
 use function strlen;
 use function sys_get_temp_dir;
-use function time;
 use function unlink;
 use function usleep;
 use ReflectionProperty;
@@ -66,11 +65,10 @@ return new Suite(
                //   spec can prove the reserved ACME namespace never serves
                //   from the cache while an ordinary path does.
                if ($Request->URL === '/plant') {
-                  $expiration = time() + 300;
-                  $Entry = static function (string $body) use ($expiration): array {
+                  $Wire = static function (string $body): string {
                      $length = strlen($body);
-                     $wire = "HTTP/1.1 200 OK\r\nContent-Length: {$length}\r\n\r\n{$body}";
-                     return [$wire, $expiration, -1, time()];
+
+                     return "HTTP/1.1 200 OK\r\nContent-Length: {$length}\r\n\r\n{$body}";
                   };
 
                   // ! Plant through the production key composer. Clone the
@@ -84,11 +82,17 @@ return new Suite(
                      return Cache::compose($Probe);
                   };
 
-                  Cache::$entries = [
-                     $Compose('/cached-probe') => $Entry('STALE-PROBE'),
-                     $Compose('/.well-known/acme-challenge/e2e-Cache_Token-1') => $Entry('STALE-TOKEN'),
-                     $Compose('/.well-known/acme-challenge/e2e-Cache_Unknown-1') => $Entry('STALE-UNKNOWN'),
+                  Cache::flush();
+                  $wires = [
+                     '/cached-probe' => $Wire('STALE-PROBE'),
+                     '/.well-known/acme-challenge/e2e-Cache_Token-1' =>
+                        $Wire('STALE-TOKEN'),
+                     '/.well-known/acme-challenge/e2e-Cache_Unknown-1' =>
+                        $Wire('STALE-UNKNOWN'),
                   ];
+                  foreach ($wires as $target => $wire) {
+                     Cache::store($Compose($target), $wire, 300, $target);
+                  }
 
                   return $Response->send('planted');
                }

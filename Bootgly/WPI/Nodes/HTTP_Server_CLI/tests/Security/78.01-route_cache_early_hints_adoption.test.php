@@ -72,6 +72,7 @@ return new Specification(
       $OldMiddlewares = SAPI::$Middlewares ?? null;
       $OldEmitter = Emitter::$Instance;
       $oldEntries = Cache::$entries;
+      $oldBytes = Cache::$bytes;
       $oldURIs = Cache::$URIs;
       $oldGeneration = Cache::$generation;
       $oldLocale = Language::$locale;
@@ -531,6 +532,7 @@ return new Specification(
          }
 
          Cache::$entries = $oldEntries;
+         Cache::$bytes = $oldBytes;
          Cache::$URIs = $oldURIs;
          Cache::$generation = $oldGeneration;
          Language::$locale = $oldLocale;

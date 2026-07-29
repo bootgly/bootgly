@@ -18,9 +18,11 @@ use function is_array;
 use function is_float;
 use function is_int;
 use function is_string;
+use function preg_match;
 use function sprintf;
 use function strlen;
 use function strpos;
+use function substr;
 use function substr_replace;
 use function time;
 
@@ -65,6 +67,14 @@ class Cache
     */
    public const int WIRE_LIMIT = 1048576;
    /**
+    * Max aggregate stored wire bytes per worker.
+    *
+    * Public so deployments can size the L1 cache against their worker memory
+    * limit. Configure before the worker starts; flush before lowering it on a
+    * live worker. A non-positive value disables storage.
+    */
+   public static int $maxBytes = 64 * 1024 * 1024;
+   /**
     * Byte length of the RFC 9110 IMF-fixdate produced by Header::stamp().
     */
    private const int DATE_LENGTH = 29;
@@ -78,9 +88,17 @@ class Cache
     * read-only — mutate only through store()/flush(). (PHP 8.4 does not allow
     * asymmetric visibility on static properties.)
     *
-    * @var array<string,array{0:string,1:int,2:int,3:int}>
+    * @var array<array-key,array{0:string,1:int,2:int,3:int}>
     */
    public static array $entries = [];
+   /**
+    * Exact sum of the stored wire lengths in entries.
+    *
+    * Public for diagnostics and tests; treat as read-only. Mutating operations
+    * reconcile it from entries before applying an admission decision because
+    * entries itself must remain public for the encoder's zero-frame hit gate.
+    */
+   public static int $bytes = 0;
    /**
     * Admission pre-gate: URIs that have EVER stored an entry on this worker.
     *
@@ -285,6 +303,124 @@ class Cache
 
 
    /**
+    * Normalize a public string key exactly as PHP normalizes array keys.
+    */
+   private static function normalize (string $key): int|string
+   {
+      /** @var array<array-key,true> $keys */
+      $keys = [$key => true];
+      $index = array_key_first($keys);
+
+      return $index ?? $key;
+   }
+
+   /**
+    * Locate a canonical Date value inside the final HTTP/1.1 response head.
+    */
+   private static function locate (string $wire): int
+   {
+      $head = 0;
+
+      // ! A cached wire may begin with one or more informational responses.
+      //   Only the following final 200 head owns the refreshable Date field.
+      while (true) {
+         $separator = strpos($wire, "\r\n\r\n", $head);
+         if ($separator === false) {
+            return -1;
+         }
+
+         $statusEnd = strpos($wire, "\r\n", $head);
+         if ($statusEnd === false || $statusEnd > $separator) {
+            return -1;
+         }
+
+         $status = substr($wire, $head, $statusEnd - $head);
+         if (
+            preg_match(
+               '/\AHTTP\/1\.1 ([0-9]{3})(?: [^\r\n]*)?\z/D',
+               $status,
+               $matches
+            ) !== 1
+         ) {
+            return -1;
+         }
+
+         $code = (int) $matches[1];
+         if ($code < 100 || $code >= 200) {
+            break;
+         }
+
+         // ! 101 is terminal, never an interim block before a final response.
+         if ($code === 101) {
+            return -1;
+         }
+
+         $head = $separator + 4;
+      }
+
+      // ? stash() admits only final 200 responses. Direct structural callers
+      //   fail closed when their wire does not share that contract.
+      if ($code !== 200) {
+         return -1;
+      }
+
+      $search = $statusEnd;
+      while (true) {
+         $field = strpos($wire, "\r\nDate: ", $search);
+         if ($field === false || $field >= $separator) {
+            return -1;
+         }
+
+         $offset = $field + 8;
+         $dateEnd = $offset + self::DATE_LENGTH;
+         if (
+            $dateEnd <= $separator
+            && substr($wire, $dateEnd, 2) === "\r\n"
+            && preg_match(
+               '/\A(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun), [0-9]{2} '
+                  . '(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) '
+                  . '[0-9]{4} [0-9]{2}:[0-9]{2}:[0-9]{2} GMT\z/D',
+               substr($wire, $offset, self::DATE_LENGTH)
+            ) === 1
+         ) {
+            return $offset;
+         }
+
+         // ? A malformed duplicate must not hide a later canonical field.
+         $search = $offset;
+      }
+   }
+
+
+   /**
+    * Reconcile aggregate wire accounting with the public entries map.
+    */
+   private static function synchronize (): void
+   {
+      $bytes = 0;
+      foreach (self::$entries as $entry) {
+         $bytes += strlen($entry[0]);
+      }
+
+      self::$bytes = $bytes;
+   }
+
+   /**
+    * Evict one known entry and release its aggregate wire accounting.
+    */
+   private static function evict (int|string $key): void
+   {
+      $entry = self::$entries[$key] ?? null;
+      if ($entry === null) {
+         return;
+      }
+
+      self::$bytes -= strlen($entry[0]);
+      unset(self::$entries[$key]);
+   }
+
+
+   /**
     * Fetch stored wire bytes by key, refreshing the Date header per second.
     *
     * Returns null on miss or on an expired entry (which is dropped).
@@ -302,7 +438,11 @@ class Cache
 
       // ? Expired — drop and fall through to the normal pipeline
       if ($entry[1] <= $now) {
-         unset(self::$entries[$key]);
+         // ! entries is public for the encoder's frame-free hit gate. Reconcile
+         //   before releasing so a trusted diagnostic/test assignment cannot
+         //   leave the aggregate ledger negative or permanently inflated.
+         self::synchronize();
+         self::evict($key);
 
          return null;
       }
@@ -310,7 +450,24 @@ class Cache
       // @ Refresh the Date header once per second (fixed 29-byte IMF-fixdate);
       //   hits within the same second return the stored bytes with zero copies
       if ($entry[3] !== $now && $entry[2] >= 0) {
-         $entry[0] = substr_replace($entry[0], Header::stamp(), $entry[2], self::DATE_LENGTH);
+         $stamp = Header::stamp();
+
+         // ! Keep the mutation length-neutral even if trusted in-process code
+         //   changed the public entries map after admission.
+         if (
+            strlen($stamp) === self::DATE_LENGTH
+            && self::locate($entry[0]) === $entry[2]
+         ) {
+            $entry[0] = substr_replace(
+               $entry[0],
+               $stamp,
+               $entry[2],
+               self::DATE_LENGTH
+            );
+         }
+         else {
+            $entry[2] = -1;
+         }
          $entry[3] = $now;
 
          self::$entries[$key] = $entry;
@@ -328,14 +485,57 @@ class Cache
     */
    public static function store (string $key, string $wire, int $ttl, string $URI): void
    {
+      $index = self::normalize($key);
+      $wireSize = strlen($wire);
+
+      // ! Reconcile before every mutation. Cache misses/stores are outside the
+      //   hit hot path, and this preserves exact accounting even though PHP 8.4
+      //   requires the encoder-visible static entries map to remain mutable.
+      self::synchronize();
+
       // ?
-      if ($ttl <= 0 || strlen($key) > self::KEY_LIMIT || strlen($wire) > self::WIRE_LIMIT) {
+      if (
+         $ttl <= 0
+         || strlen($key) > self::KEY_LIMIT
+         || $wireSize > self::WIRE_LIMIT
+         || self::$maxBytes <= 0
+         || $wireSize > self::$maxBytes
+      ) {
          return;
       }
 
-      // ? FIFO eviction at capacity
-      if (count(self::$entries) >= self::ENTRIES_LIMIT && isSet(self::$entries[$key]) === false) {
-         unset(self::$entries[array_key_first(self::$entries)]);
+      $existing = self::$entries[$index] ?? null;
+      $existingSize = $existing === null ? 0 : strlen($existing[0]);
+      $retainedBytes = self::$bytes - $existingSize;
+      $retainedEntries = count(self::$entries) + ($existing === null ? 1 : 0);
+      $availableBytes = self::$maxBytes - $wireSize;
+
+      // ? FIFO eviction until BOTH independent ceilings fit. A replacement's
+      //   old wire is excluded from the projection, while its array position
+      //   remains stable when no peer needs eviction.
+      while (
+         $retainedEntries > self::ENTRIES_LIMIT
+         || $retainedBytes > $availableBytes
+      ) {
+         $evictionKey = null;
+         foreach (self::$entries as $candidate => $entry) {
+            if ($candidate === $index) {
+               continue;
+            }
+
+            $evictionKey = $candidate;
+            $retainedBytes -= strlen($entry[0]);
+            $retainedEntries--;
+            break;
+         }
+
+         // ? Only the replacement itself remains. Its old size is already
+         //   excluded, and the validated new wire fits an empty cache.
+         if ($evictionKey === null) {
+            break;
+         }
+
+         self::evict($evictionKey);
       }
 
       // ! Register the URI in the admission pre-gate set (bounded: cleared
@@ -345,11 +545,11 @@ class Cache
       }
       self::$URIs[$URI] = true;
 
-      // ! Locate the Date header value once — fetch() patches it in place
-      $offset = strpos($wire, "\r\nDate: ");
-      $offset = $offset === false ? -1 : $offset + 8;
+      // ! Locate only a canonical Date value in the final response head.
+      $offset = self::locate($wire);
 
-      self::$entries[$key] = [$wire, time() + $ttl, $offset, time()];
+      self::$entries[$index] = [$wire, time() + $ttl, $offset, time()];
+      self::$bytes = $retainedBytes + $wireSize;
    }
 
    /**
@@ -359,6 +559,7 @@ class Cache
    {
       self::$generation++;
       self::$entries = [];
+      self::$bytes = 0;
       self::$URIs = [];
    }
 }

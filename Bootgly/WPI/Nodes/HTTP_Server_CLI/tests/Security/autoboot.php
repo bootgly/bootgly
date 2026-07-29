@@ -419,5 +419,9 @@ return new Suite(
       // Query decoding must not let CR/LF/HTAB hide a dangerous scheme from
       // redirect() before Location serialization canonicalizes the value.
       '79.01-response_redirect_control_byte_scheme_bypass',
+      // # Route-cache aggregate byte budget (audit M6)
+      // Distinct query targets on one eligible route must not retain one
+      // independently admissible wire each without a per-worker byte ceiling.
+      '80.01-route_cache_aggregate_byte_budget',
    ],
 );

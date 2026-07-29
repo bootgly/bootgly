@@ -65,6 +65,7 @@ return new Specification(
       $OldMiddlewares = SAPI::$Middlewares ?? null;
       $OldEmitter = Emitter::$Instance;
       $oldEntries = Cache::$entries;
+      $oldBytes = Cache::$bytes;
       $oldURIs = Cache::$URIs;
       $oldGeneration = Cache::$generation;
 
@@ -354,6 +355,7 @@ return new Specification(
          Server::$Response->Header->preset('X-M1-Received-Preset', null);
          Server::$Response->Header->preset('X-M1-Received-Transition', null);
          Cache::$entries = $oldEntries;
+         Cache::$bytes = $oldBytes;
          Cache::$URIs = $oldURIs;
          Cache::$generation = $oldGeneration;
          Emitter::$Instance = $OldEmitter;
