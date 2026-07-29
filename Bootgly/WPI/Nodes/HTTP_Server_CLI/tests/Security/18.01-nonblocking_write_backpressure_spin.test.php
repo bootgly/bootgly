@@ -237,10 +237,13 @@ return new Specification(
          };
 
          $payloadLength = strlen($payloadU);
+         // ! Keep unread disk state beyond the first stalled fread chunk.
+         //   Resume must drain pendingBuffer and then the remaining handler
+         //   cursor, not silently finish after the first six bytes.
          $probe['uploadWritten'] = $UploadPackage->upload(
             $uploadSocket,
             $uploadFile,
-            $payloadLength,
+            6,
             $payloadLength
          );
          $probe['uploadCalls'] = HTTPServerCLIBackpressureStream::$calls;

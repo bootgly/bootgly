@@ -206,17 +206,38 @@ trait Raw
       $Header->build();
       // Body
       $response ??= $this->response;
-      if ($this->stream) {
-         $length = strlen($response) + 1 + strlen($Header->raw) + 5;
+      $wire = "{$response}\r\n{$Header->raw}{$contentLength}\r\n\r\n"
+         . ($Request->method === 'HEAD' ? '' : $Body->raw);
 
-         $Package->uploading = $this->files;
+      if ($this->stream) {
+         // ! The transport length contract covers the entire returned prefix,
+         //   including any buffered Body bytes before the streamed file.
+         $length = strlen($wire);
+
+         // ! Bind streamed bytes to their own response head. The first file
+         //   response installs the active queue and marks its returned head as
+         //   the owner. A later file response encoded while output is deferred
+         //   stages its descriptors; writing() queues that head + files as one
+         //   ordered job instead of overwriting the active disk cursor.
+         if (
+            $Package->pendingBuffer === ''
+            && $Package->uploading === []
+            && $Package->pendingResponses === []
+            && $Package->stagedUploading === []
+            && $Package->uploadAwaiting === false
+         ) {
+            $Package->uploading = $this->files;
+            $Package->uploadAwaiting = true;
+         }
+         else {
+            $Package->stagedUploading = $this->files;
+         }
 
          $this->files = [];
          $this->stream = false;
       }
 
       // :
-      return "{$response}\r\n{$Header->raw}{$contentLength}\r\n\r\n"
-         . ($Request->method === 'HEAD' ? '' : $Body->raw);
+      return $wire;
    }
 }

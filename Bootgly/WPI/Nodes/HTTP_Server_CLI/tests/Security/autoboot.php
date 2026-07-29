@@ -403,5 +403,9 @@ return new Suite(
       // A persistent preset changed for the current request before reset must
       // not be replaced by raw wire cached under the previous request's value.
       '75.02-route_cache_received_preset_replay',
+      // # HTTP/1 file-response backpressure (audit M2)
+      // A stalled multi-chunk upload must retain its disk cursor and finish
+      // the advertised body before a later keep-alive response reaches wire.
+      '76.01-http1_file_stream_backpressure_state_loss',
    ],
 );

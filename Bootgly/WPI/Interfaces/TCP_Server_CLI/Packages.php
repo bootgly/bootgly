@@ -23,13 +23,16 @@ use function feof;
 use function fopen;
 use function fread;
 use function fseek;
+use function fstat;
 use function fwrite;
 use function get_resource_type;
 use function is_array;
 use function is_int;
 use function is_resource;
 use function is_string;
+use function max;
 use function microtime;
+use function min;
 use function strlen;
 use function substr;
 use Throwable;
@@ -87,6 +90,32 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
    //   from the event loop. Idempotent on `Select::add`, but tracking it
    //   lets us issue a matching `del` on full drain.
    public bool $writeRegistered = false;
+   //   Streamed-response files associated with the response head that has
+   //   not entered writing() yet. Raw::encode() sets this flag together with
+   //   `$uploading`, so the first head is not mistaken for a response queued
+   //   behind its own file body.
+   public bool $uploadAwaiting = false;
+   //   File descriptors belonging to a later streamed response. They are
+   //   claimed by the next writing() call and travel with that response's
+   //   buffered head in `$pendingResponses`.
+   /** @var array<int, array<string, mixed>> */
+   public array $stagedUploading = [];
+   //   Response buffers received while an earlier streamed body still owns
+   //   the wire. Each entry keeps its own upload descriptors so file→file
+   //   pipelining preserves head/body ordering.
+   /** @var array<int, array{buffer:string, uploads:array<int, array<string, mixed>>}> */
+   public array $pendingResponses = [];
+   //   Cursor retained when the public upload() helper is used directly
+   //   instead of through the managed `$uploading` response queue.
+   /** @var resource|null */
+   protected $directUploadHandler = null;
+   protected int $directUploadRate = 0;
+   protected int $directUploadRemaining = 0;
+   //   Internal failure signal for uploading(), whose public return contract
+   //   remains the number of bytes accepted by the socket.
+   protected bool $outputFailed = false;
+   protected bool $uploadClosing = false;
+   protected bool $uploadCloseRequested = false;
    // # Receive carry (per-connection request reassembly)
    //   Unconsumed inbound bytes retained at the end of a receive event —
    //   an incomplete request head or frame fragment. The next event
@@ -109,6 +138,9 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
       // # Stream
       $this->downloading = [];
       $this->uploading = [];
+      $this->stagedUploading = [];
+      $this->pendingResponses = [];
+      $this->uploadAwaiting = false;
       // # Connection management
       $this->closeAfterWrite = false;
    }
@@ -537,212 +569,437 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
          return $this->Connection->handshake() !== false;
       }
 
-      // ! Recommendation #3: Backpressure-aware async write state machine.
-      //   Two entry modes:
-      //   - Forward: caller passes encoded response in `$buffer`. We try
-      //     fwrite once; on EAGAIN-like zero-write we stash the un-sent
-      //     bytes in `$pendingBuffer`, register EVENT_WRITE, and return
-      //     true. Caller (reading()) honors `$pendingBuffer !== ''` and
-      //     stops pipelining.
-      //   - Resume: event loop calls us back with empty `$buffer` after
-      //     the socket signals writable. We drain `$pendingBuffer` from
-      //     `$pendingOffset`. On full drain we del EVENT_WRITE and apply
-      //     `$closeAfterDrain`. Replaces the old synchronous
-      //     `stream_select(..., 200_000)` retry that closed legitimate
-      //     slow clients after 50 zero-writes.
+      $available = strlen($buffer);
 
-      // @ Resume mode: drain stashed bytes from a previous stall.
-      if ($this->pendingBuffer !== '') {
-         // Deadline guard: stalled longer than maxWriteWallTime \u2192 close.
-         if ($this->pendingDeadline > 0.0 && microtime(true) > $this->pendingDeadline) {
-            $this->reset($Socket);
-            $this->Connection->close();
-            return false;
-         }
-
-         // Optional: caller passed extra bytes alongside resume. Append
-         //   them subject to the per-connection memory cap.
-         if ($buffer !== '') {
-            $remaining = strlen($this->pendingBuffer) - $this->pendingOffset + strlen($buffer);
-            if ($remaining > Server::$maxPendingBytes) {
-               $this->reset($Socket);
-               $this->Connection->close();
-               return false;
-            }
-            $this->pendingBuffer .= $buffer;
-         }
-
-         $buffer = ($this->pendingOffset === 0)
-            ? $this->pendingBuffer
-            : substr($this->pendingBuffer, $this->pendingOffset);
-         $length = strlen($buffer);
-      }
-
-      // !
-      $length ??= strlen($buffer);
-      if ($length === 0 || $buffer === '') {
-         // Nothing to send and nothing pending: ensure event-loop registration is cleared.
-         $this->reset($Socket);
-         if ($this->closeAfterDrain) {
-            $this->closeAfterDrain = false;
-            $this->Connection->close();
-         }
-         return true;
-      }
-
-      // @ Fast lane (typical case): forward mode, whole buffer accepted by
-      //   the kernel on the first fwrite, no upload chain queued.
-      //   `pendingBuffer === ''` implies `writeRegistered === false`, so the
-      //   reset() walk, the loop frame and the substr bookkeeping are all
-      //   skipped on the hot path.
-      $fastWritten = 0;
-      if ($this->pendingBuffer === '' && $this->uploading === []) {
+      // @ Fast lane — the ordered writer is fully idle and this is a plain
+      //   whole-buffer response: one fwrite, inline stats, zero state-machine
+      //   bookkeeping. An engaged output owner, a prefix `$length` or a zero
+      //   write falls through to the ordered writer below unchanged.
+      //   Skipping the stall-deadline check is sound only while an idle gate
+      //   implies no deadline: `$pendingDeadline > 0` is installed exclusively
+      //   by defer() together with a non-empty `$pendingBuffer`, and only
+      //   reset() clears that pair — keep that coupling when editing either.
+      if (
+         $available !== 0
+         && ($length === null || $length === $available)
+         && $this->pendingBuffer === ''
+         && $this->uploading === []
+         && $this->pendingResponses === []
+         && $this->stagedUploading === []
+         && $this->directUploadRemaining === 0
+         && ! $this->uploadAwaiting
+         && ! $this->writeRegistered
+      ) {
          try {
-            $sent = @fwrite($Socket, $buffer, $length); // @phpstan-ignore-line
+            $sent = @fwrite($Socket, $buffer, $available); // @phpstan-ignore-line
          }
          catch (Throwable) {
             $sent = false;
          }
 
-         if ($sent === $length) {
-            // ! Always-on: `expire()` activity signal (idle reaping)
+         if ($sent === $available) {
+            // ! Always-on: `expire()` activity signal (idle reaping).
             $this->Connection->writes++;
             if (Connections::$stats) {
                Connections::$writes++;
-               Connections::$written += $length;
+               Connections::$written += $sent;
             }
 
-            // @ Apply close-after-drain (deferred close intent from reading()).
             if ($this->closeAfterDrain) {
                $this->closeAfterDrain = false;
                $this->Connection->close();
             }
 
+            // :
             return true;
          }
+         if ($sent === false) {
+            return $this->abort($Socket);
+         }
+         if ($sent > 0) {
+            // ? Short write: the unsent suffix moves to EVENT_WRITE ownership.
+            if ($this->defer($Socket, substr($buffer, $sent)) === false) {
+               return $this->abort($Socket);
+            }
 
-         // @ Shortfall: advance past the accepted bytes and enter the
-         //   backpressure state machine below with the remainder.
-         //   (`$sent === 0|false` re-tries once in the machine, which then
-         //   stashes/fails — rare path, one redundant fwrite is acceptable.)
-         if ($sent !== false && $sent > 0) {
-            $fastWritten = $sent;
-            $buffer = substr($buffer, $sent);
-            $length -= $sent;
+            $this->account($sent);
+            return true;
+         }
+         // ? Zero write: the ordered writer gets its single retry below.
+      }
+
+      // @ `$length` is a public prefix contract used by direct transport
+      //   callers. Preserve it explicitly, while rejecting impossible values
+      //   instead of asking fwrite() to read past the supplied string.
+      if ($length !== null) {
+         if ($length > $available) {
+            return $this->abort($Socket);
+         }
+         if ($length < $available) {
+            $buffer = substr($buffer, 0, $length);
          }
       }
 
-      $written = $fastWritten;
-      $failed = false;
-      $sent = 0; // Bytes sent to client per write loop iteration
+      // ! One ordered nonblocking writer owns every HTTP/1 response segment:
+      //   the current in-memory slice, the unread tail of an active file, and
+      //   later response heads. A later head can never enter the advertised
+      //   body of the active file; it stays in `$pendingResponses` until the
+      //   file cursor reaches the end of every part and padding phase.
+      if (
+         $this->pendingDeadline > 0.0
+         && microtime(true) > $this->pendingDeadline
+      ) {
+         return $this->abort($Socket);
+      }
 
-      // @
-      try {
-         while ($buffer) {
-            $sent = @fwrite($Socket, $buffer, $length); // @phpstan-ignore-line
+      $this->outputFailed = false;
+      $this->uploadClosing = false;
 
-            if ($sent === false) {
-               $failed = true;
-               break;
+      // @ Raw::encode() installs the first file queue before returning its
+      //   response head. That head owns the queue. Later streamed responses
+      //   stage their files separately and are queued as one ordered job.
+      $ownsUpload = $buffer !== '' && $this->uploadAwaiting;
+      $uploads = [];
+      if ($ownsUpload) {
+         $this->uploadAwaiting = false;
+      }
+      else {
+         $uploads = $this->stagedUploading;
+         $this->stagedUploading = [];
+      }
+
+      if ($buffer !== '' && ! $ownsUpload) {
+         $busy = $this->pendingBuffer !== ''
+            || $this->uploading !== []
+            || $this->directUploadRemaining > 0
+            || $this->pendingResponses !== [];
+
+         // Preserve the established normal-response pipeline contract:
+         // without a file boundary, contiguous deferred responses share one
+         // pendingBuffer. A file-associated response must remain a separate
+         // job so its head precedes its own file bytes.
+         if (
+            $this->pendingBuffer !== ''
+            && $this->uploading === []
+            && $this->directUploadRemaining === 0
+            && $this->pendingResponses === []
+            && $uploads === []
+         ) {
+            if ($this->measure() + strlen($buffer) > Server::$maxPendingBytes) {
+               return $this->abort($Socket);
             }
-            if ($sent === 0) {
-               // ! Backpressure: defer to the event loop instead of
-               //   busy-spinning or closing. Stash the un-sent tail and
-               //   request EVENT_WRITE; the loop will reenter `writing()`
-               //   when the socket is writable.
-               $newPendingLen = strlen($buffer);
-               if ($newPendingLen > Server::$maxPendingBytes) {
-                  $this->reset($Socket);
-                  $this->Connection->close();
-                  return false;
-               }
 
-               $this->pendingBuffer = $buffer;
-               $this->pendingOffset = 0;
-               if ($this->pendingDeadline === 0.0) {
-                  $this->pendingDeadline = microtime(true) + (float) Server::$maxWriteWallTime;
-               }
-               if (! $this->writeRegistered && isset(Server::$Event)) {
-                  Server::$Event->add($Socket, Server::$Event::EVENT_WRITE, $this);
-                  $this->writeRegistered = true;
-               }
+            $pending = $this->pendingOffset === 0
+               ? $this->pendingBuffer
+               : substr($this->pendingBuffer, $this->pendingOffset);
+            $this->pendingBuffer = $pending . $buffer;
+            $this->pendingOffset = 0;
+            $buffer = '';
+         }
+         else if ($busy) {
+            if ($this->queue($Socket, $buffer, $uploads) === false) {
+               return false;
+            }
+            $buffer = '';
+         }
+         else if ($uploads !== []) {
+            $this->uploading = $uploads;
+            $this->uploadCloseRequested = false;
+         }
+      }
 
-               // Stats for the partial write (if any).
-               if ($written > 0) {
-                  // ! Always-on: `expire()` activity signal (idle reaping)
-                  $this->Connection->writes++;
-                  if (Connections::$stats) {
-                     Connections::$writes++;
-                     Connections::$written += $written;
-                  }
-               }
+      // @ Resume the exact already-read slice first. Clear its owner before
+      //   transmitting so a new stall can atomically install only the new
+      //   unsent suffix.
+      $resuming = $this->pendingBuffer !== '';
+      if ($resuming) {
+         $buffer = $this->pendingOffset === 0
+            ? $this->pendingBuffer
+            : substr($this->pendingBuffer, $this->pendingOffset);
+         $this->pendingBuffer = '';
+         $this->pendingOffset = 0;
+      }
+
+      $written = 0;
+
+      while (true) {
+         if ($buffer !== '') {
+            $sent = 0;
+            $complete = $this->transmit($Socket, $buffer, $sent);
+            if ($complete === false) {
+               $this->account($written + $sent);
+               return $this->abort($Socket);
+            }
+            $written += $sent;
+            $buffer = '';
+
+            if ($complete === null) {
+               $this->account($written);
                return true;
             }
+         }
 
-            $written += $sent;
-
-            if ($sent < $length) {
-               $buffer = substr($buffer, $sent);
-               $length -= $sent;
-               continue;
+         // @ Direct upload() callers use the same disk-tail invariant as
+         //   managed HTTP file responses. The pending slice drains first;
+         //   only then may this retained handler produce its next chunk.
+         if ($this->directUploadRemaining > 0) {
+            if (
+               ! is_resource($this->directUploadHandler)
+               || $this->directUploadRate <= 0
+            ) {
+               $this->account($written);
+               return $this->abort($Socket);
             }
 
-            if ( count($this->uploading) ) {
-               $written += $this->uploading($Socket);
-               // If uploading() stalled, it set pendingBuffer + EVENT_WRITE.
-               if ($this->pendingBuffer !== '') {
-                  if ($written > 0) {
-                     // ! Always-on: `expire()` activity signal (idle reaping)
-                     $this->Connection->writes++;
-                     if (Connections::$stats) {
-                        Connections::$writes++;
-                        Connections::$written += $written;
-                     }
-                  }
-                  return true;
-               }
+            $Result = $this->pump(
+               $Socket,
+               $this->directUploadHandler,
+               $this->directUploadRate,
+               $this->directUploadRemaining
+            );
+            $read = $Result['read'];
+            $written += $Result['written'];
+
+            if (
+               $Result['success'] === false
+               || $read < 0
+               || $read > $this->directUploadRemaining
+            ) {
+               $this->account($written);
+               return $this->abort($Socket);
             }
 
+            $this->directUploadRemaining -= $read;
+            if ($Result['deferred']) {
+               $this->account($written);
+               return true;
+            }
+            if ($this->directUploadRemaining !== 0) {
+               $this->account($written);
+               return $this->abort($Socket);
+            }
+
+            $this->directUploadHandler = null;
+            $this->directUploadRate = 0;
+         }
+
+         // @ A drained in-memory file slice is not a completed upload. Resume
+         //   the retained descriptor/cursor before selecting any later job.
+         if ($this->uploading !== []) {
+            $written += $this->uploading($Socket);
+
+            if ($this->outputFailed) { // @phpstan-ignore-line (set by uploading())
+               $this->account($written);
+               return false;
+            }
+            if ($this->pendingBuffer !== '') { // @phpstan-ignore-line (set by uploading())
+               $this->account($written);
+               return true;
+            }
+            if ($this->uploadClosing) { // @phpstan-ignore-line (set by uploading())
+               break;
+            }
+         }
+
+         if ($this->pendingResponses === []) {
             break;
-         };
+         }
+
+         $key = array_key_first($this->pendingResponses);
+         $Response = $this->pendingResponses[$key];
+         unset($this->pendingResponses[$key]);
+
+         $buffer = $Response['buffer'];
+         $this->uploading = $Response['uploads'];
+         $this->uploadCloseRequested = false;
+      }
+
+      // @ Only the terminal drain drops EVENT_WRITE/deadline. File cursor and
+      //   response jobs are both empty here (or close=true discarded them).
+      $this->reset($Socket);
+      $this->account($written);
+
+      if ($this->closeAfterDrain) {
+         $this->closeAfterDrain = false;
+         $this->uploadClosing = false;
+         $this->Connection->close();
+      }
+
+      return true;
+   }
+   /**
+    * Transmit one owned in-memory slice.
+    *
+    * A zero or short write transfers ownership of the unsent suffix to
+    * pendingBuffer and returns successfully; false means an unrecoverable
+    * transport/event-registration failure.
+    *
+    * @param resource $Socket
+    */
+   protected function transmit (&$Socket, string $buffer, int &$written): null|bool
+   {
+      $written = 0;
+      $length = strlen($buffer);
+      if ($length === 0) {
+         return true;
+      }
+
+      try {
+         $sent = @fwrite($Socket, $buffer, $length); // @phpstan-ignore-line
       }
       catch (Throwable) {
          $sent = false;
       }
 
-      // @ Full drain reached this point: cleanup deferred-write state
-      //   (idempotent if no EVENT_WRITE was ever registered).
-      $this->reset($Socket);
-
-      // @ Close Connection
       if ($sent === false) {
-         $this->Connection->close();
-      }
-      // @ Fail
-      if ($failed) {
-         return $this->fail($Socket, 'write');
+         return false;
       }
 
-      // @ Set Stats
-      // Per client — $this->Connection IS the registry entry for $Socket;
-      // direct access skips two hash lookups + cast per request. An
-      // increment on an already-closed Connection object is harmless.
-      // ! Always-on (not gated by $stats): this is the `expire()` activity
-      //   signal — idle reaping depends on it.
-      $this->Connection->writes++;
-      if (Connections::$stats) {
-         // Global
-         Connections::$writes++;
-         Connections::$written += $written;
-      }
+      $written = $sent;
+      if ($sent < $length) {
+         if ($this->defer($Socket, substr($buffer, $sent)) === false) {
+            return false;
+         }
 
-      // @ Apply close-after-drain (deferred close intent from reading()).
-      if ($this->closeAfterDrain) {
-         $this->closeAfterDrain = false;
-         $this->Connection->close();
+         return null;
       }
 
       return true;
+   }
+   /**
+    * Transfer an unsent in-memory suffix to EVENT_WRITE ownership.
+    *
+    * @param resource $Socket
+    */
+   protected function defer (&$Socket, string $buffer): bool
+   {
+      if ($buffer === '') {
+         return true;
+      }
+
+      $pending = $this->pendingBuffer === ''
+         ? ''
+         : (
+            $this->pendingOffset === 0
+               ? $this->pendingBuffer
+               : substr($this->pendingBuffer, $this->pendingOffset)
+         );
+      $buffer = $pending . $buffer;
+
+      if ($this->measure() - strlen($pending) + strlen($buffer) > Server::$maxPendingBytes) {
+         return false;
+      }
+
+      $this->pendingBuffer = $buffer;
+      $this->pendingOffset = 0;
+      if ($this->pendingDeadline === 0.0) {
+         $this->pendingDeadline = microtime(true) + (float) Server::$maxWriteWallTime;
+      }
+
+      if (! $this->writeRegistered && isset(Server::$Event)) {
+         try {
+            $registered = Server::$Event->add(
+               $Socket,
+               Server::$Event::EVENT_WRITE,
+               $this
+            );
+         }
+         catch (Throwable) {
+            $registered = false;
+         }
+
+         if ($registered === false) {
+            return false;
+         }
+         $this->writeRegistered = true;
+      }
+
+      return true;
+   }
+   /**
+    * Queue a later response and its file descriptors behind the current body.
+    *
+    * @param resource $Socket
+    * @param array<int, array<string, mixed>> $uploads
+    */
+   protected function queue (&$Socket, string $buffer, array $uploads): bool
+   {
+      if ($this->measure() + strlen($buffer) > Server::$maxPendingBytes) {
+         $this->abort($Socket);
+         return false;
+      }
+
+      $this->pendingResponses[] = [
+         'buffer' => $buffer,
+         'uploads' => $uploads,
+      ];
+
+      return true;
+   }
+   /**
+    * Measure all resident output bytes governed by maxPendingBytes.
+    */
+   protected function measure (): int
+   {
+      $bytes = max(
+         0,
+         strlen($this->pendingBuffer) - $this->pendingOffset,
+      );
+
+      foreach ($this->pendingResponses as $Response) {
+         $bytes += strlen($Response['buffer']);
+      }
+
+      return $bytes;
+   }
+   /**
+    * Account one successful write batch.
+    */
+   protected function account (int $written): void
+   {
+      if ($written <= 0) {
+         return;
+      }
+
+      // ! Always-on: this is the expire() activity signal.
+      $this->Connection->writes++;
+      if (Connections::$stats) {
+         Connections::$writes++;
+         Connections::$written += $written;
+      }
+   }
+   /**
+    * Fail closed and release every output owner.
+    *
+    * @param resource $Socket
+    */
+   protected function abort (&$Socket): false
+   {
+      $this->release();
+      $this->uploading = [];
+      $this->stagedUploading = [];
+      $this->pendingResponses = [];
+      $this->uploadAwaiting = false;
+      $this->uploadClosing = false;
+      $this->uploadCloseRequested = false;
+      $this->closeAfterDrain = false;
+      $this->outputFailed = true;
+      $this->reset($Socket);
+      $this->Connection->close();
+
+      return false;
+   }
+   /**
+    * Release direct-upload cursor ownership, if any.
+    */
+   protected function release (): void
+   {
+      // upload() does not own its caller-supplied handler. Dropping this
+      // reference lets the caller's lifecycle decide when to close it while
+      // ensuring a closed Connection cannot pin it until cycle collection.
+      $this->directUploadHandler = null;
+      $this->directUploadRate = 0;
+      $this->directUploadRemaining = 0;
    }
    /**
     * Reset deferred-write state and drop any EVENT_WRITE registration.
@@ -864,125 +1121,238 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
     */
    public function uploading ($Socket): int
    {
-      $queued = $this->uploading[0] ?? null;
-      if (! is_array($queued)) {
-         return 0;
-      }
-
-      if (! array_key_exists('file', $queued) || ! is_string($queued['file']) || $queued['file'] === '') {
-         return 0;
-      }
-      $file = $queued['file'];
-
-      $Handler = @fopen($file, 'r');
-      if ($Handler === false) {
-         return 0;
-      }
-      $parts = (array) ($queued['parts'] ?? []);
-      $pads = (array) ($queued['pads'] ?? []);
-      $close = array_key_exists('close', $queued) ? (bool) $queued['close'] : false;
-
       $written = 0;
 
-      foreach ($parts as $index => $part) {
-         if (! is_array($part)) {
-            continue;
-         }
-
-         $offsetValue = $part['offset'] ?? null;
-         $lengthValue = $part['length'] ?? null;
-         if (! is_int($offsetValue) || ! is_int($lengthValue)) {
-            continue;
-         }
-
-         $offset = $offsetValue;
-         $length = $lengthValue;
-
-         $pad = $pads[$index] ?? null;
-         $prepend = '';
-         $append = '';
-
-         if (is_array($pad)) {
-            $prependValue = $pad['prepend'] ?? null;
-            $appendValue = $pad['append'] ?? null;
-            $prepend = is_string($prependValue) ? $prependValue : '';
-            $append = is_string($appendValue) ? $appendValue : '';
-         }
-
-         // @ Move pointer of file to offset
-         try {
-            @fseek($Handler, $offset, SEEK_SET);
-         }
-         catch (Throwable) {
+      while ($this->uploading !== []) {
+         $key = array_key_first($this->uploading);
+         $queued = &$this->uploading[$key];
+         if (! is_array($queued)) { // @phpstan-ignore-line (public queue may be corrupted at runtime)
+            $this->abort($Socket);
             return $written;
          }
-
-         // @ Prepend
-         if ($prepend !== '') {
-            try {
-               $sent = @fwrite($Socket, $prepend);
-            }
-            catch (Throwable) {
-               break;
-            }
-
-            if ($sent === false) break;
-
-            $written += $sent;
-            // TODO check if the data has been completely sent
+         if (
+            ! array_key_exists('file', $queued)
+            || ! is_string($queued['file'])
+            || $queued['file'] === ''
+         ) {
+            $this->abort($Socket);
+            return $written;
          }
+         $file = $queued['file'];
 
-         // @ Set over / rate
-         $over = 0;
-         $rate = 1 * 1024 * 1024; // 1 MB (1048576) = Max rate to read/send data file by loop
-
-         if ($length < $rate) {
-            $rate = $length;
+         $partsValue = $queued['parts'] ?? null;
+         if (! is_array($partsValue)) {
+            $this->abort($Socket);
+            return $written;
          }
-         else if ($length > $rate) {
-            $over = $length % $rate;
+         $queued['parts'] = $partsValue;
+
+         $padsValue = $queued['pads'] ?? [];
+         if (! is_array($padsValue)) {
+            $this->abort($Socket);
+            return $written;
          }
+         $queued['pads'] = $padsValue;
 
-         // @ Upload File
-         if ($over > 0) {
-            $written += $this->upload($Socket, $Handler, $over, $over);
-            // TODO check if the data has been completely sent
-            $length -= $over;
-         }
+         $parts = &$queued['parts'];
+         $pads = &$queued['pads'];
 
-         $written += $this->upload($Socket, $Handler, $rate, $length); // @phpstan-ignore-line
-
-         // @ Append
-         if ($append !== '') {
-            try {
-               $sent = @fwrite($Socket, $append);
-            }
-            catch (Throwable) {
-               break;
+         while ($parts !== []) {
+            $partKey = array_key_first($parts);
+            if (! is_array($parts[$partKey])) {
+               $this->abort($Socket);
+               return $written;
             }
 
-            if ($sent === false) break;
+            $part = &$parts[$partKey];
+            $pad = $pads[$partKey] ?? [];
+            if (! is_array($pad)) {
+               $this->abort($Socket);
+               return $written;
+            }
 
-            $written += $sent;
-            // TODO check if the data has been completely sent
+            // @ Multipart prepend. Once transmit() accepts or defers the
+            //   suffix, pendingBuffer owns every remaining padding byte.
+            $prependValue = $pad['prepend'] ?? null;
+            $prepend = is_string($prependValue) ? $prependValue : '';
+            if ($prepend !== '') {
+               $sent = 0;
+               $complete = $this->transmit($Socket, $prepend, $sent);
+               $written += $sent;
+               $pad['prepend'] = '';
+               $pads[$partKey] = $pad;
+
+               if ($complete === false) {
+                  $this->abort($Socket);
+                  return $written;
+               }
+               if ($complete === null) {
+                  return $written;
+               }
+            }
+
+            $offsetValue = $part['offset'] ?? null;
+            $lengthValue = $part['length'] ?? null;
+            if (
+               ! is_int($offsetValue)
+               || ! is_int($lengthValue)
+               || $offsetValue < 0
+               || $lengthValue < 0
+            ) {
+               $this->abort($Socket);
+               return $written;
+            }
+
+            // @ File phase. pump() reports bytes read separately from bytes
+            //   accepted by the socket. The cursor advances by all bytes read:
+            //   an unsent suffix is already owned by pendingBuffer and must
+            //   never be read from disk a second time.
+            if ($lengthValue > 0) {
+               try {
+                  $Handler = @fopen($file, 'rb');
+               }
+               catch (Throwable) {
+                  $Handler = false;
+               }
+
+               if ($Handler === false) {
+                  $this->abort($Socket);
+                  return $written;
+               }
+
+               try {
+                  try {
+                     $stat = @fstat($Handler);
+                  }
+                  catch (Throwable) {
+                     $stat = false;
+                  }
+
+                  if ($stat === false) {
+                     $this->abort($Socket);
+                     return $written;
+                  }
+
+                  $Identity = [
+                     'dev' => $stat['dev'],
+                     'ino' => $stat['ino'],
+                     'size' => $stat['size'],
+                     'mtime' => $stat['mtime'],
+                     'ctime' => $stat['ctime'],
+                  ];
+
+                  $known = $queued['_identity'] ?? null;
+                  if ($known === null) {
+                     $queued['_identity'] = $Identity;
+                  }
+                  else if (! is_array($known) || $known !== $Identity) {
+                     // The path now names a different or modified file. Close
+                     // rather than mix two representations under one length.
+                     $this->abort($Socket);
+                     return $written;
+                  }
+
+                  try {
+                     $seeked = @fseek($Handler, $offsetValue, SEEK_SET);
+                  }
+                  catch (Throwable) {
+                     $seeked = -1;
+                  }
+
+                  if ($seeked !== 0) {
+                     $this->abort($Socket);
+                     return $written;
+                  }
+
+                  $rate = min(1024 * 1024, $lengthValue);
+                  $Result = $this->pump(
+                     $Socket,
+                     $Handler,
+                     $rate,
+                     $lengthValue
+                  );
+               }
+               finally {
+                  try {
+                     @fclose($Handler);
+                  }
+                  catch (Throwable) {}
+               }
+
+               $read = $Result['read'];
+               $written += $Result['written'];
+
+               if ($read < 0 || $read > $lengthValue) {
+                  $this->abort($Socket);
+                  return $written;
+               }
+
+               $part['offset'] = $offsetValue + $read;
+               $part['length'] = $lengthValue - $read;
+
+               if ($Result['success'] === false) {
+                  $this->abort($Socket);
+                  return $written;
+               }
+               if ($Result['deferred']) {
+                  return $written;
+               }
+               if ($part['length'] !== 0) {
+                  // A successful, nondeferred pump owns the requested range.
+                  // Anything less is a premature EOF and ambiguous framing.
+                  $this->abort($Socket);
+                  return $written;
+               }
+            }
+
+            // @ Multipart append follows the exact same ownership transfer.
+            $pad = $pads[$partKey] ?? [];
+            if (! is_array($pad)) {
+               $this->abort($Socket);
+               return $written;
+            }
+            $appendValue = $pad['append'] ?? null;
+            $append = is_string($appendValue) ? $appendValue : '';
+            if ($append !== '') {
+               $sent = 0;
+               $complete = $this->transmit($Socket, $append, $sent);
+               $written += $sent;
+               $pad['append'] = '';
+               $pads[$partKey] = $pad;
+
+               if ($complete === false) {
+                  $this->abort($Socket);
+                  return $written;
+               }
+               if ($complete === null) {
+                  return $written;
+               }
+            }
+
+            unset($parts[$partKey]);
+            unset($pads[$partKey]);
+            unset($part);
          }
+
+         $close = array_key_exists('close', $queued)
+            ? (bool) $queued['close']
+            : false;
+         $this->uploadCloseRequested = $this->uploadCloseRequested || $close;
+
+         unset($this->uploading[$key]);
+         unset($queued);
       }
 
-      // @ Try to close the file Handler
-      try {
-         @fclose($Handler);
-      }
-      catch (Throwable) {}
-
-      // @ Unset current uploading
-      unSet($this->uploading[0]);
-
-      // @ Try to close the Socket if requested
-      if ($close) {
-         try {
-            $this->Connection->close();
-         }
-         catch (Throwable) {}
+      if ($this->uploadCloseRequested) {
+         // close=true belongs to the complete streamed representation, not
+         // the first blocked slice or first file record.
+         $this->uploadCloseRequested = false;
+         $this->uploading = [];
+         $this->stagedUploading = [];
+         $this->pendingResponses = [];
+         $this->uploadAwaiting = false;
+         $this->closeAfterDrain = true;
+         $this->uploadClosing = true;
       }
 
       return $written;
@@ -1066,81 +1436,113 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
     */
    public function upload (&$Socket, &$Handler, int $rate, int $length): int
    {
-      $written = 0;
-
-      while ($written < $length) {
-         // ! Stream
-         // @ Read buffer using Handler
-         try {
-            $buffer = @fread($Handler, $rate);
-         }
-         catch (Throwable) {
-            break;
-         }
-
-         if ($buffer === false) break;
-
-         $read = strlen($buffer);
-
-         // @ Write part of data (if exists) to Client
-         while ($read) {
-            // ! Socket
-            try {
-               $sent = @fwrite($Socket, $buffer, $read); // @phpstan-ignore-line
-            }
-            catch (Throwable) {
-               break;
-            }
-
-            if ($sent === false) break;
-            if ($sent === 0) {
-               // ! Recommendation #3: defer instead of synchronously
-               //   closing. Stash the un-sent slice as `pendingBuffer`
-               //   and request EVENT_WRITE; `writing()` will drain it on
-               //   loop reentry. NOTE: bytes still on disk past this
-               //   fread chunk are not auto-resumed in this revision \u2014
-               //   callers that need full-file delivery across stalls
-               //   should keep `$rate >= $length` (single fread).
-               if ($read > Server::$maxPendingBytes) {
-                  $this->Connection->close();
-                  return $written;
-               }
-
-               $this->pendingBuffer = $buffer;
-               $this->pendingOffset = 0;
-               if ($this->pendingDeadline === 0.0) {
-                  $this->pendingDeadline = microtime(true) + (float) Server::$maxWriteWallTime;
-               }
-               if (! $this->writeRegistered && isset(Server::$Event)) {
-                  Server::$Event->add($Socket, Server::$Event::EVENT_WRITE, $this);
-                  $this->writeRegistered = true;
-               }
-               return $written;
-            }
-
-            $written += $sent;
-
-            if ($sent < $read) {
-               $buffer = substr($buffer, $sent);
-               $read -= $sent;
-               continue;
-            }
-
-            break;
-         }
-
-         // @ Check Handler EOF (End-Of-File)
-         try {
-            $end = @feof($Handler);
-         }
-         catch (Throwable) {
-            break;
-         }
-
-         if ($end) break;
+      if ($this->directUploadRemaining > 0) {
+         $this->abort($Socket);
+         return 0;
       }
 
-      return $written;
+      $Result = $this->pump($Socket, $Handler, $rate, $length);
+      if ($Result['success'] === false) {
+         $this->abort($Socket);
+         return $Result['written'];
+      }
+
+      $remaining = $length - $Result['read'];
+      if ($remaining < 0) {
+         $this->abort($Socket);
+         return $Result['written'];
+      }
+
+      if ($Result['deferred'] && $remaining > 0) {
+         // The current read slice is owned by pendingBuffer; retain only the
+         // caller's handler reference and unread length for the next callback.
+         $this->directUploadHandler = $Handler;
+         $this->directUploadRate = $rate;
+         $this->directUploadRemaining = $remaining;
+      }
+
+      return $Result['written'];
+   }
+   /**
+    * Pump a bounded file range into the ordered socket writer.
+    *
+    * `read` counts bytes whose ownership left the file descriptor. They were
+    * either accepted by the socket or retained in pendingBuffer. `written`
+    * counts only bytes accepted now and is therefore safe for transport stats.
+    *
+    * @param resource $Socket
+    * @param resource $Handler
+    * @return array{written:int,read:int,success:bool,deferred:bool}
+    */
+   protected function pump (
+      &$Socket,
+      &$Handler,
+      int $rate,
+      int $length
+   ): array
+   {
+      $written = 0;
+      $owned = 0;
+      $deferred = false;
+
+      if ($rate <= 0 || $length < 0) {
+         return [
+            'written' => 0,
+            'read' => 0,
+            'success' => false,
+            'deferred' => false,
+         ];
+      }
+
+      while ($owned < $length) {
+         /** @var int<1, max> $size */
+         $size = min($rate, $length - $owned);
+
+         try {
+            $buffer = @fread($Handler, $size);
+         }
+         catch (Throwable) {
+            $buffer = false;
+         }
+
+         if ($buffer === false || $buffer === '') {
+            return [
+               'written' => $written,
+               'read' => $owned,
+               'success' => false,
+               'deferred' => false,
+            ];
+         }
+
+         $read = strlen($buffer);
+         $owned += $read;
+
+         $sent = 0;
+         $complete = $this->transmit($Socket, $buffer, $sent);
+         if ($complete === false) {
+            $written += $sent;
+
+            return [
+               'written' => $written,
+               'read' => $owned,
+               'success' => false,
+               'deferred' => false,
+            ];
+         }
+         $written += $sent;
+
+         if ($complete === null) {
+            $deferred = true;
+            break;
+         }
+      }
+
+      return [
+         'written' => $written,
+         'read' => $owned,
+         'success' => true,
+         'deferred' => $deferred,
+      ];
    }
 
    public function reject (string $raw): void

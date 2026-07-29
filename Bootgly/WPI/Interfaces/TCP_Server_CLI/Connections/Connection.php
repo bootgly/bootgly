@@ -261,6 +261,11 @@ class Connection extends Packages
 
    public function close (): true
    {
+      // ! A direct backpressured upload may retain its caller-supplied handler
+      //   reference between EVENT_WRITE callbacks. Every transport-close path
+      //   drops that cursor immediately instead of waiting for cycle collection.
+      $this->release();
+
       if ($this->status > Connections::STATUS_ESTABLISHED) {
          return true;
       }
