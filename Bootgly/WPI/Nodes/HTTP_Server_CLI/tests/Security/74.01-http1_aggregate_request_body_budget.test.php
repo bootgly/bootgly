@@ -1200,7 +1200,10 @@ return new Specification(
                   . "Content-Disposition: form-data; name=\"{$name}\"\r\n"
                   . "\r\n";
             }
-            $appendSuffix = "\r\n--{$appendTag}";
+            // @ Complete the delimiter line before measuring field commit:
+            //   M3 validation deliberately keeps an unclassified boundary
+            //   candidate in the current field state.
+            $appendSuffix = "\r\n--{$appendTag}\r\n";
             $appendLength = strlen($appendPrefix) + 1024;
 
             [$Connection, $Package, $Request] = $open();
@@ -2607,8 +2610,11 @@ return new Specification(
                   . "\r\n"
                   . "x\r\n";
             }
-            $projectionPrefix .= "--{$projectionTag}";
-            $projectionSuffix = "--\r\n";
+            // @ Validate and commit the terminal field before measuring only
+            //   finish()'s projection. One epilogue byte remains outstanding
+            //   so the decoder stays Incomplete until the measured call.
+            $projectionPrefix .= "--{$projectionTag}--\r\n";
+            $projectionSuffix = 'E';
             $projectionLength = strlen($projectionPrefix) + strlen($projectionSuffix);
             $warm($projectionTag, $projectionPrefix, $projectionSuffix);
 
@@ -2736,8 +2742,10 @@ return new Specification(
                   . "\r\n"
                   . "x\r\n";
             }
-            $floorPrefix .= "--{$floorTag}";
-            $floorSuffix = "--\r\n";
+            // @ Commit the terminal field before isolating finish()'s
+            //   projection; an epilogue byte keeps the measured call pending.
+            $floorPrefix .= "--{$floorTag}--\r\n";
+            $floorSuffix = 'E';
             $floorLength = strlen($floorPrefix) + strlen($floorSuffix);
             $warm($floorTag, $floorPrefix, $floorSuffix);
 
@@ -2877,8 +2885,10 @@ return new Specification(
                   . "\r\n"
                   . "x\r\n";
             }
-            $cliffPrefix .= "--{$cliffTag}";
-            $cliffSuffix = "--\r\n";
+            // @ Commit the terminal field before isolating finish()'s
+            //   projection; an epilogue byte keeps the measured call pending.
+            $cliffPrefix .= "--{$cliffTag}--\r\n";
+            $cliffSuffix = 'E';
             $cliffLength = strlen($cliffPrefix) + strlen($cliffSuffix);
             $warm($cliffTag, $cliffPrefix, $cliffSuffix);
 
@@ -3026,8 +3036,10 @@ return new Specification(
                   . "\r\n"
                   . "x\r\n";
             }
-            $segmentedPrefix .= "--{$segmentedTag}";
-            $segmentedSuffix = "--\r\n";
+            // @ Commit the terminal field before isolating finish()'s
+            //   projection; an epilogue byte keeps the measured call pending.
+            $segmentedPrefix .= "--{$segmentedTag}--\r\n";
+            $segmentedSuffix = 'E';
             $segmentedLength = strlen($segmentedPrefix) + strlen($segmentedSuffix);
             $warm($segmentedTag, $segmentedPrefix, $segmentedSuffix);
 

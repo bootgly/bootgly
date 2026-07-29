@@ -120,7 +120,9 @@ return new Specification(
          $Package = $Build();
          $Decoder = new Decoder_Downloading;
          $Decoder->Request = $Request;
-         $Decoder->init($boundary);
+         // @ init() receives the wire dash-boundary, as Request::decode()
+         //   supplies it after parsing Content-Type.
+         $Decoder->init('--' . $boundary);
          $Package->Decoder = $Decoder;
          $Decoder->decode($Package, $partial, strlen($partial));
 
@@ -152,7 +154,7 @@ return new Specification(
          $DroppedPackage = $Build();
          $DroppedDecoder = new Decoder_Downloading;
          $DroppedDecoder->Request = $Request;
-         $DroppedDecoder->init($boundary);
+         $DroppedDecoder->init('--' . $boundary);
          $DroppedPackage->Decoder = $DroppedDecoder;
          $DroppedDecoder->decode($DroppedPackage, $partial, strlen($partial));
 

@@ -407,5 +407,9 @@ return new Suite(
       // A stalled multi-chunk upload must retain its disk cursor and finish
       // the advertised body before a later keep-alive response reaches wire.
       '76.01-http1_file_stream_backpressure_state_loss',
+      // # Multipart boundary delimiter classification (audit M3)
+      // An anchored boundary token with a malformed suffix must reject before
+      // it can manufacture a hidden field or hand off a truncated file.
+      '77.01-multipart_boundary_delimiter_validation',
    ],
 );

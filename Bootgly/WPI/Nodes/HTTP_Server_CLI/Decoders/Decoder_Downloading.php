@@ -42,6 +42,7 @@ use function preg_replace;
 use function random_bytes;
 use function strcspn;
 use function strlen;
+use function str_starts_with;
 use function strpos;
 use function strspn;
 use function strtolower;
@@ -136,6 +137,10 @@ class Decoder_Downloading extends Decoders implements Disconnecting
    //   another connection may replace or claim it between transport reads.
    public Request $Request;
    private string $tailBuffer = '';
+   //   Whether tail byte zero is still a proved multipart line start. It is
+   //   true at absolute body offset zero and for a candidate already found
+   //   after CRLF; generic preamble truncation revokes that provenance.
+   private bool $tailAnchored = true;
    private string $headerBuffer = '';
    private string $fieldBuffer = '';
    // Raw values are retained once; the encoded string carries only each
@@ -203,6 +208,12 @@ class Decoder_Downloading extends Decoders implements Disconnecting
    private const int STATE_PART_HEADER     = 1;
    private const int STATE_PART_BODY_FILE  = 2;
    private const int STATE_PART_BODY_FIELD = 3;
+   // # Multipart delimiter classification
+   //   A non-negative result is the first byte after a valid next-part line.
+   private const int DELIMITER_INVALID    = -1;
+   private const int DELIMITER_INCOMPLETE = -2;
+   private const int DELIMITER_CLOSED     = -3;
+   private const string DELIMITER_PADDING = " \t";
 
 
    public function init (string $boundary): void
@@ -220,6 +231,7 @@ class Decoder_Downloading extends Decoders implements Disconnecting
 
       // * Data
       $this->tailBuffer = '';
+      $this->tailAnchored = true;
       $this->headerBuffer = '';
       $this->fieldBuffer = '';
       $this->fields = [];
@@ -258,22 +270,31 @@ class Decoder_Downloading extends Decoders implements Disconnecting
       $length = strlen($data);
       $buffer = $this->tailBuffer . $data;
       $boundaryLen = strlen($this->boundary);
-      $position = strpos($buffer, $this->boundary);
+      $position = self::locate(
+         $buffer,
+         $this->boundary,
+         $this->tailAnchored
+      );
 
       if ($position === false) {
          // ! The initial transport event follows the same bounded-preamble
          //   rule as continuation reads. Preserve CRLF plus any boundary
          //   prefix that may complete in the next event.
          $tailLength = $boundaryLen + 2;
-         $this->tailBuffer = strlen($buffer) > $tailLength
-            ? substr($buffer, -$tailLength)
-            : $buffer;
+         if (strlen($buffer) > $tailLength) {
+            $this->tailBuffer = substr($buffer, -$tailLength);
+            $this->tailAnchored = false;
+         }
+         else {
+            $this->tailBuffer = $buffer;
+         }
       }
       else {
          // @ A boundary is already present: discard only its preamble. Bytes
          //   after the match may contain part headers/body and must be parsed
          //   by the normal state machine on the next read.
          $this->tailBuffer = substr($buffer, $position);
+         $this->tailAnchored = true;
       }
 
       $this->downloaded += $length;
@@ -439,6 +460,173 @@ class Decoder_Downloading extends Decoders implements Disconnecting
    }
 
    /**
+    * Locate the first dash-boundary that starts a multipart line.
+    *
+    * The initial state may contain a preamble, so searching for the bare token
+    * is insufficient: an inline occurrence is ordinary preamble text. The
+    * body states search for CRLF plus the token and therefore need no second
+    * anchor check.
+    */
+   private static function locate (
+      string $data,
+      string $boundary,
+      bool $anchored
+   ): int|false
+   {
+      if ($anchored && str_starts_with($data, $boundary)) {
+         return 0;
+      }
+
+      // ? Frame has already excluded CR/LF from the boundary value. Searching
+      //   the anchored needle once in C skips every inline preamble occurrence
+      //   without an attacker-amplifiable PHP loop.
+      $position = strpos($data, "\r\n" . $boundary);
+
+      return $position === false ? false : $position + 2;
+   }
+
+   /**
+    * Retain a constant-size canonical prefix for an incomplete delimiter.
+    *
+    * RFC transport padding is unbounded. Keeping its complete run would copy
+    * and rescan an attacker-growing string on every transport fragment. Once
+    * classify() has proved every available suffix byte valid but incomplete,
+    * one SP preserves the padding phase and one CR preserves a split CRLF.
+    */
+   private static function retain (
+      string $data,
+      int $position,
+      int $offset,
+      int $length
+   ): string
+   {
+      $candidate = substr($data, $position, $offset - $position);
+      if ($offset >= $length) {
+         return $candidate;
+      }
+
+      $first = $data[$offset];
+      if ($first === '-') {
+         $candidate .= '-';
+         $offset++;
+         if ($offset >= $length) {
+            return $candidate;
+         }
+
+         // ? classify() only returns INCOMPLETE here after proving the second
+         //   close hyphen. Preserve that phase without retaining its padding.
+         $candidate .= '-';
+         $offset++;
+         if ($offset >= $length) {
+            return $candidate;
+         }
+      }
+
+      // ? An incomplete suffix beginning with padding can contain only more
+      //   padding and, optionally, one terminal CR already validated above.
+      if ($data[$offset] === ' ' || $data[$offset] === "\t") {
+         $candidate .= ' ';
+      }
+
+      return $candidate . ($data[$length - 1] === "\r" ? "\r" : '');
+   }
+
+   /**
+    * Classify the bytes immediately following one complete dash-boundary.
+    *
+    * A valid next-part delimiter is optional SP/HTAB transport padding plus
+    * CRLF. A closing delimiter adds `--` before that padding and may end with
+    * the declared body instead of CRLF. The common zero-padding path uses
+    * direct byte comparisons; strspn() runs only when padding is present.
+    *
+    * @return int A non-negative next-part offset or DELIMITER_* state.
+    */
+   private static function classify (
+      string $data,
+      int $offset,
+      int $length,
+      bool $complete
+   ): int
+   {
+      if ($offset >= $length) {
+         return $complete
+            ? self::DELIMITER_INVALID
+            : self::DELIMITER_INCOMPLETE;
+      }
+
+      // ? The overwhelmingly common next-part suffix is immediate CRLF.
+      //   Return from that two-byte path before initializing close/padding
+      //   state or calling a scanning primitive.
+      $first = $data[$offset];
+      if ($first === "\r") {
+         if ($offset + 1 >= $length) {
+            return $complete
+               ? self::DELIMITER_INVALID
+               : self::DELIMITER_INCOMPLETE;
+         }
+
+         return $data[$offset + 1] === "\n"
+            ? $offset + 2
+            : self::DELIMITER_INVALID;
+      }
+
+      $closing = false;
+      if ($first === '-') {
+         // ?: A leading hyphen can only begin the closing `--`. One trailing
+         //   hyphen is incomplete until another transport read proves otherwise.
+         if ($offset + 1 >= $length) {
+            return $complete
+               ? self::DELIMITER_INVALID
+               : self::DELIMITER_INCOMPLETE;
+         }
+         if ($data[$offset + 1] !== '-') {
+            return self::DELIMITER_INVALID;
+         }
+
+         $closing = true;
+         $offset += 2;
+      }
+      else if ($first !== ' ' && $first !== "\t") {
+         return self::DELIMITER_INVALID;
+      }
+
+      // ? RFC 2046 transport-padding. Keep the zero-padding hot path in PHP
+      //   above; scan a present padding run once in C.
+      if (
+         $offset < $length
+         && ($data[$offset] === ' ' || $data[$offset] === "\t")
+      ) {
+         $offset += strspn($data, self::DELIMITER_PADDING, $offset);
+      }
+
+      if ($offset >= $length) {
+         if ($closing && $complete) {
+            return self::DELIMITER_CLOSED;
+         }
+
+         return $complete
+            ? self::DELIMITER_INVALID
+            : self::DELIMITER_INCOMPLETE;
+      }
+
+      if ($data[$offset] !== "\r") {
+         return self::DELIMITER_INVALID;
+      }
+      if ($offset + 1 >= $length) {
+         return $complete
+            ? self::DELIMITER_INVALID
+            : self::DELIMITER_INCOMPLETE;
+      }
+      if ($data[$offset + 1] !== "\n") {
+         return self::DELIMITER_INVALID;
+      }
+
+      return $closing
+         ? self::DELIMITER_CLOSED
+         : $offset + 2;
+   }
+
+   /**
     * Re-price this decoder against the worker-wide budget. False means the
     * current footprint does not fit and the caller must reject the request.
     */
@@ -592,6 +780,8 @@ class Decoder_Downloading extends Decoders implements Disconnecting
             : substr($buffer, 0, $consumed);
       }
       $this->tailBuffer = '';
+      $bodyComplete = $Body->length !== null
+         && $this->downloaded >= $Body->length;
 
       // ? A terminal boundary may precede an allowed multipart epilogue.
       //   Once parsed, consume the remaining declared body without feeding
@@ -608,48 +798,70 @@ class Decoder_Downloading extends Decoders implements Disconnecting
                $boundaryLen = strlen($boundary);
                $dataLength = strlen($data);
 
-               // @ Search for boundary in data
-               $pos = strpos($data, $boundary);
+               // @ The first boundary may follow a preamble, but only at the
+               //   beginning of a multipart line.
+               $pos = self::locate(
+                  $data,
+                  $boundary,
+                  $this->tailAnchored
+               );
                if ($pos === false) {
                   // ! Discard the already-scanned multipart preamble. Only a
                   //   boundary-sized suffix can participate in a boundary
                   //   split across the next transport read.
                   $tailLength = $boundaryLen + 2;
-                  $this->tailBuffer = $dataLength > $tailLength
-                     ? substr($data, -$tailLength)
-                     : $data;
+                  if ($dataLength > $tailLength) {
+                     $this->tailBuffer = substr($data, -$tailLength);
+                     $this->tailAnchored = false;
+                  }
+                  else {
+                     $this->tailBuffer = $data;
+                  }
                   $data = null;
                   break;
                }
 
-               // @ Check if this is the final boundary (--boundary--)
                $afterBoundary = $pos + $boundaryLen;
-               if ($afterBoundary + 2 <= $dataLength) {
-                  if (substr($data, $afterBoundary, 2) === '--') {
-                     // @ Final boundary: retain ownership until every byte
-                     //   declared by Content-Length has arrived. A peer may
-                     //   disconnect while an allowed epilogue is outstanding.
-                     $this->parsed = true;
-                     $data = '';
-                     break;
-                  }
-               }
+               $delimiter = self::classify(
+                  $data,
+                  $afterBoundary,
+                  $dataLength,
+                  $bodyComplete
+               );
 
-               // @ Skip boundary + \r\n
-               $nextPos = $afterBoundary + 2; // +2 for \r\n
-               if ($nextPos > $dataLength) {
-                  // @ The boundary matched, but its two-byte delimiter is
-                  //   split. Retain from the match, never the discarded
-                  //   preamble that preceded it.
-                  $this->tailBuffer = substr($data, $pos);
+               // ! Fail closed on one malformed line-start candidate. The
+               //   sender chose this boundary and MUST keep it out of part
+               //   lines; rejection is both cheaper and safer than recovery.
+               if ($delimiter === self::DELIMITER_INVALID) {
+                  $reject("HTTP/1.1 400 Bad Request\r\n\r\n");
+                  $data = '';
+                  break;
+               }
+               if ($delimiter === self::DELIMITER_INCOMPLETE) {
+                  // @ Retain a canonical candidate, never the discarded
+                  //   preamble or an attacker-growing transport-padding run.
+                  $this->tailBuffer = self::retain(
+                     $data,
+                     $pos,
+                     $afterBoundary,
+                     $dataLength
+                  );
+                  $this->tailAnchored = true;
                   $data = null;
+                  break;
+               }
+               if ($delimiter === self::DELIMITER_CLOSED) {
+                  // @ Retain ownership until every declared body byte arrives;
+                  //   later bytes are the allowed multipart epilogue.
+                  $this->parsed = true;
+                  $data = '';
                   break;
                }
 
                $this->state = self::STATE_PART_HEADER;
                $this->headerBuffer = '';
 
-               $data = substr($data, $nextPos);
+               $data = substr($data, $delimiter);
                break;
 
             case self::STATE_PART_HEADER:
@@ -916,52 +1128,66 @@ class Decoder_Downloading extends Decoders implements Disconnecting
             case self::STATE_PART_BODY_FILE:
                $boundary = "\r\n" . $this->boundary;
                $boundaryLen = strlen($boundary);
+               $dataLength = strlen($data);
 
                // @ Search for boundary in data
                $pos = strpos($data, $boundary);
 
                if ($pos !== false) {
-                  // @ Boundary found: write everything before boundary to file
-                  $fileData = substr($data, 0, $pos);
-
-                  $this->write($fileData);
-
-                  // @ Close file and finalize file entry
-                  $this->close();
-
-                  // @ Move past boundary
                   $afterBoundary = $pos + $boundaryLen;
+                  $delimiter = self::classify(
+                     $data,
+                     $afterBoundary,
+                     $dataLength,
+                     $bodyComplete
+                  );
 
-                  // @ Check if this is the final boundary (--)
-                  if ($afterBoundary + 2 <= strlen($data)) {
-                     if (substr($data, $afterBoundary, 2) === '--') {
-                        $this->parsed = true;
-                        $data = '';
-                        break;
+                  // ! Do not write or close on a candidate until its complete
+                  //   suffix proves that this is a delimiter.
+                  if ($delimiter === self::DELIMITER_INVALID) {
+                     $reject("HTTP/1.1 400 Bad Request\r\n\r\n");
+                     $data = '';
+                     break;
+                  }
+                  if ($delimiter === self::DELIMITER_INCOMPLETE) {
+                     // @ The prefix is certainly file data. Stream it now,
+                     //   retain only the candidate, and keep the handle open.
+                     if ($pos > 0) {
+                        $this->write(substr($data, 0, $pos));
                      }
+                     $this->tailBuffer = self::retain(
+                        $data,
+                        $pos,
+                        $afterBoundary,
+                        $dataLength
+                     );
+                     $data = null;
+                     break;
                   }
 
-                  // @ Skip \r\n after boundary
-                  $nextPos = $afterBoundary + 2; // +2 for \r\n
-                  if ($nextPos > strlen($data)) {
-                     // @ Re-enter boundary parsing with the matched token
-                     //   intact; only its `--`/CRLF suffix is fragmented.
-                     $this->tailBuffer = substr($data, $pos);
-                     $this->state = self::STATE_BOUNDARY_START;
-                     $data = null;
+                  // @ Valid boundary: only now write the final file bytes and
+                  //   transfer the current part out of its open state.
+                  if ($pos > 0) {
+                     $this->write(substr($data, 0, $pos));
+                  }
+                  $this->close();
+
+                  if ($delimiter === self::DELIMITER_CLOSED) {
+                     $this->parsed = true;
+                     $data = '';
                      break;
                   }
 
                   $this->state = self::STATE_PART_HEADER;
                   $this->headerBuffer = '';
 
-                  $data = substr($data, $nextPos);
+                  $data = substr($data, $delimiter);
                   break;
                }
 
                // @ Boundary not found: write data except tail buffer to file
                // @ Keep enough bytes for boundary detection across chunks
-               $safeLen = strlen($data) - $boundaryLen - 2;
+               $safeLen = $dataLength - $boundaryLen - 2;
 
                if ($safeLen > 0) {
                   $safeData = substr($data, 0, $safeLen);
@@ -981,13 +1207,52 @@ class Decoder_Downloading extends Decoders implements Disconnecting
             case self::STATE_PART_BODY_FIELD:
                $boundary = "\r\n" . $this->boundary;
                $boundaryLen = strlen($boundary);
+               $dataLength = strlen($data);
 
                // @ Search for boundary in data
                $pos = strpos($data, $boundary);
 
                if ($pos !== false) {
+                  $afterBoundary = $pos + $boundaryLen;
+                  $delimiter = self::classify(
+                     $data,
+                     $afterBoundary,
+                     $dataLength,
+                     $bodyComplete
+                  );
+
+                  // ! Classify before appending or committing this field. An
+                  //   arbitrary suffix must never manufacture the next part.
+                  if ($delimiter === self::DELIMITER_INVALID) {
+                     $reject("HTTP/1.1 400 Bad Request\r\n\r\n");
+                     $data = '';
+                     break;
+                  }
+                  if ($delimiter === self::DELIMITER_INCOMPLETE) {
+                     // @ The prefix is certainly field data. Retain only the
+                     //   candidate and remain in this field-body state.
+                     if (
+                        $pos > 0
+                        && $appendField(substr($data, 0, $pos)) === false
+                     ) {
+                        $data = '';
+                        break;
+                     }
+                     $this->tailBuffer = self::retain(
+                        $data,
+                        $pos,
+                        $afterBoundary,
+                        $dataLength
+                     );
+                     $data = null;
+                     break;
+                  }
+
                   // @ Boundary found: accumulate everything before boundary
-                  if ($appendField(substr($data, 0, $pos)) === false) {
+                  if (
+                     $pos > 0
+                     && $appendField(substr($data, 0, $pos)) === false
+                  ) {
                      $data = '';
                      break;
                   }
@@ -1057,38 +1322,21 @@ class Decoder_Downloading extends Decoders implements Disconnecting
                   $this->fieldBuffer = '';
                   $this->currentFieldSize = 0;
 
-                  // @ Move past boundary
-                  $afterBoundary = $pos + $boundaryLen;
-
-                  // @ Check if this is the final boundary (--)
-                  if ($afterBoundary + 2 <= strlen($data)) {
-                     if (substr($data, $afterBoundary, 2) === '--') {
-                        $this->parsed = true;
-                        $data = '';
-                        break;
-                     }
-                  }
-
-                  // @ Skip \r\n after boundary
-                  $nextPos = $afterBoundary + 2;
-                  if ($nextPos > strlen($data)) {
-                     // @ Re-enter boundary parsing with the matched token
-                     //   intact; only its `--`/CRLF suffix is fragmented.
-                     $this->tailBuffer = substr($data, $pos);
-                     $this->state = self::STATE_BOUNDARY_START;
-                     $data = null;
+                  if ($delimiter === self::DELIMITER_CLOSED) {
+                     $this->parsed = true;
+                     $data = '';
                      break;
                   }
 
                   $this->state = self::STATE_PART_HEADER;
                   $this->headerBuffer = '';
 
-                  $data = substr($data, $nextPos);
+                  $data = substr($data, $delimiter);
                   break;
                }
 
                // @ Boundary not found: accumulate data except tail buffer
-               $safeLen = strlen($data) - $boundaryLen - 2;
+               $safeLen = $dataLength - $boundaryLen - 2;
 
                if ($safeLen > 0) {
                   if ($appendField(substr($data, 0, $safeLen)) === false) {
