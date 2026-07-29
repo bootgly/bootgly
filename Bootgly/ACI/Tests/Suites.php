@@ -19,6 +19,7 @@ use Bootgly\ABI\Debugging\Data\Throwables\Exceptions;
 use Bootgly\ACI\Logs\Logger;
 use Bootgly\ACI\Tests\Assertions;
 use Bootgly\ACI\Tests\Results;
+use Bootgly\ACI\Tests\Suite;
 
 
 class Suites
@@ -95,6 +96,15 @@ class Suites
          try {
             /** @var null|true|Suite $Suite */
             $Suite = $iterator($dir, $case, $index + 1);
+
+            // ? A suite whose cases failed returns normally — count the
+            //   failure here or the run summary (and the exit code, when no
+            //   exit-on-failure fired) would report it as passed
+            if ($Suite instanceof Suite && $Suite->failed > 0) {
+               $this->failed++;
+
+               continue;
+            }
 
             $this->passed++;
          }

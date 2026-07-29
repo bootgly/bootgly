@@ -559,7 +559,7 @@ class TestCommand extends Command
    }
 
    // # Test Suite
-   public function test (string $suite_dir, null|int $index, null|int $suite = null): true|Suite
+   public function test (string $suite_dir, null|int $index, null|int $suite = null): Suite
    {
       /** @var array<int,int|callable> $signalHandlers */
       $signalHandlers = [];
@@ -686,12 +686,12 @@ class TestCommand extends Command
       try {
          $autoBoot = $Suite->autoBoot ?? false;
          if ($autoBoot instanceof Closure) {
-            $Return = $autoBoot($Suite);
+            $autoBoot($Suite);
             // ? Closure suites run their own lifecycle (E2E boots often fork
             //   server workers, but run their client cases in this process).
-            //   Chart the suite when it produced records here; either way its
-            //   failures must fold into the exit code — no exit-on-failure
-            //   fires under the heatmap view.
+            //   Chart the suite when it produced records here; returning the
+            //   Suite lets the aggregate iterator count its case failures in
+            //   every view — no exit-on-failure fires under the heatmap view.
             if ($Meter !== null && $Heatmap !== null) { // @phpstan-ignore notIdentical.alwaysTrue (assigned together)
                if ($Suite->records !== []) {
                   $this->plot($Suite, $Meter, $Heatmap, $title);
@@ -701,7 +701,7 @@ class TestCommand extends Command
                }
             }
 
-            return $Return;
+            return $Suite;
          }
          else if ($autoBoot) {
             $Suite->autoboot($autoBoot);
