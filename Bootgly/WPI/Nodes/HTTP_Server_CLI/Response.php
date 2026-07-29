@@ -632,9 +632,18 @@ class Response extends Server\Response
     */
    public function redirect (string $URI, int|null $code = null, bool $allowExternal = false): self
    {
-      // ! Always block dangerous schemes — emitted Location with
-      //   `javascript:` / `data:` / `vbscript:` / `file:` is executed by
-      //   email clients and WebView hybrids even if browsers ignore it.
+      // ! Reject before any redirect classification or header normalization.
+      //   Header::set() removes CR/LF and permits HTAB, so sanitizing there can
+      //   join a split executable scheme after this method has already checked
+      //   it. Backslash is also rejected in both modes because URL consumers
+      //   can reinterpret it as a path separator.
+      if (preg_match('/[\x00-\x1F\x7F\\\\]/', $URI) === 1) {
+         $URI = '/';
+      }
+
+      // ! Always block executable/local schemes. Modern browsers can refuse
+      //   these redirects, but embedded and non-browser consumers vary; the
+      //   Response contract must never emit them as Location.
       if (preg_match('#^\s*(?:javascript|data|vbscript|file)\s*:#i', $URI) === 1) {
          $URI = '/';
       }
@@ -644,14 +653,12 @@ class Response extends Server\Response
          // @ Reject:
          //   - empty / not-leading-`/` targets (`\\evil.com`, `evil.com`)
          //   - protocol-relative `//evil.com`
-         //   - backslash-smuggled `/\evil.com` (UA normalises `\` → `/`)
-         //   - any control byte (`\x00-\x1F`, `\x7F`) or backslash anywhere
-         //     (defeats proxy-trimmed `/\t//evil.com` variants)
+         //   The common guard above already rejects every control byte and
+         //   backslash in both internal and external modes.
          if (
             $URI === ''
             || $URI[0] !== '/'
-            || (isset($URI[1]) && ($URI[1] === '/' || $URI[1] === '\\'))
-            || preg_match('/[\x00-\x1F\x7F\\\\]/', $URI) === 1
+            || (isset($URI[1]) && $URI[1] === '/')
          ) {
             $URI = '/';
          }

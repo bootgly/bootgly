@@ -415,5 +415,9 @@ return new Suite(
       // A leading informational response is not the final response head:
       // materializing a lifecycle-aware hit must parse the following 200.
       '78.01-route_cache_early_hints_adoption',
+      // # Executable redirect schemes split by control bytes (audit M5)
+      // Query decoding must not let CR/LF/HTAB hide a dangerous scheme from
+      // redirect() before Location serialization canonicalizes the value.
+      '79.01-response_redirect_control_byte_scheme_bypass',
    ],
 );
