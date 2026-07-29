@@ -26,6 +26,7 @@ use Throwable;
 use Bootgly\ABI\Data\Language;
 use Bootgly\ABI\Events\Emitter;
 use Bootgly\API\Workables\Server as SAPI;
+use Bootgly\API\Workables\Server\Middlewares;
 use Bootgly\WPI\Endpoints\Servers\Packages;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages as TCPPackages;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI as Server;
@@ -146,7 +147,11 @@ class Encoder_Testing extends Encoders
       $handled = [];
       $mutated = false;
       $observed = $Emitter->check(RequestEvents::Handled);
-      $mediated = $receiving || SAPI::$Middlewares->count > 0 || $observed;
+      $Middlewares = SAPI::$Middlewares;
+      $mediated = $receiving
+         || $Middlewares::class !== Middlewares::class
+         || $Middlewares->count > 0
+         || $observed;
 
       // ! Response
       // @
@@ -180,7 +185,7 @@ class Encoder_Testing extends Encoders
                $guarded = false;
             }
 
-            $Result = SAPI::$Middlewares->process($Request, $Response,
+            $Result = $Middlewares->process($Request, $Response,
                function (object $Request, object $Res) use (
                   $Router,
                   $mediated,

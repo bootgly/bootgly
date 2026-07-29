@@ -15,6 +15,7 @@ use function explode;
 use function implode;
 use function is_array;
 use function ltrim;
+use function preg_match;
 use function spl_object_id;
 use function stripos;
 use function strlen;
@@ -155,23 +156,107 @@ class Encoder_ extends Encoders
     */
    public static function adopt (Response $Response, string $wire): void
    {
-      $separator = strpos($wire, "\r\n\r\n");
-      if ($separator === false) {
+      // ! A cache entry may begin with one or more informational responses
+      //   emitted by Response::hint(). Only the following final response owns
+      //   the mutable Header/Body representation. Splitting at the first empty
+      //   line promotes a 103 Link into the final head and embeds the complete
+      //   cached 200 wire in a new outer response (audit M4).
+      $offset = 0;
+      while (true) {
+         $separator = strpos($wire, "\r\n\r\n", $offset);
+         if ($separator === false) {
+            return;
+         }
+
+         $statusEnd = strpos($wire, "\r\n", $offset);
+         if ($statusEnd === false || $statusEnd > $separator) {
+            return;
+         }
+
+         $status = substr($wire, $offset, $statusEnd - $offset);
+         if (
+            preg_match(
+               '/\AHTTP\/1\.1 ([0-9]{3})(?: [^\r\n]*)?\z/D',
+               $status,
+               $matches
+            ) !== 1
+         ) {
+            return;
+         }
+
+         $code = (int) $matches[1];
+         if ($code < 100 || $code >= 200) {
+            break;
+         }
+
+         // ! 101 is a terminal protocol switch, never an interim block before
+         //   an HTTP final response. Route-cache adoption cannot represent it.
+         if ($code === 101) {
+            return;
+         }
+
+         $offset = $separator + 4;
+      }
+
+      // ? stash() admits only final 200 responses. A different code means the
+      //   cache wire is malformed or came from an incompatible producer.
+      if ($code !== 200) {
          return;
       }
 
       $Header = $Response->Header;
-      $head = explode("\r\n", substr($wire, 0, $separator));
+      $head = explode("\r\n", substr($wire, $offset, $separator - $offset));
       unset($head[0]); // @ status line — this response owns its own
+      $fields = [];
+      $contentLength = null;
 
-      // @@
+      // ! Validate the complete final representation before mutating Response.
+      //   Route-cache wire is a buffered GET 200 and therefore owns exactly one
+      //   canonical Content-Length. A truncated/concatenated or incompatible
+      //   entry fails closed without partially importing its fields.
       foreach ($head as $line) {
          $colon = strpos($line, ':');
          if ($colon === false) {
-            continue;
+            return;
          }
 
          $name = substr($line, 0, $colon);
+         $value = ltrim(substr($line, $colon + 1), " \t");
+         if (
+            preg_match("/\A[!#\$%&'*+.^_`|~0-9A-Za-z-]+\z/D", $name) !== 1
+            || preg_match('/[\x00-\x08\x0A-\x1F\x7F]/', $value) === 1
+         ) {
+            return;
+         }
+
+         $lower = strtolower($name);
+         if ($lower === 'transfer-encoding' || $lower === 'set-cookie') {
+            return;
+         }
+         if ($lower === 'content-length') {
+            if (
+               $contentLength !== null
+               || preg_match('/\A(?:0|[1-9][0-9]*)\z/D', $value) !== 1
+            ) {
+               return;
+            }
+
+            $contentLength = $value;
+         }
+
+         $fields[] = [$name, $value];
+      }
+
+      $body = substr($wire, $separator + 4);
+      if (
+         $contentLength === null
+         || $contentLength !== (string) strlen($body)
+      ) {
+         return;
+      }
+
+      // @@
+      foreach ($fields as [$name, $value]) {
          // ? Framing and per-response fields belong to THIS response
          if (isSet(self::OWNED[strtolower($name)])) {
             continue;
@@ -181,10 +266,10 @@ class Encoder_ extends Encoders
             continue;
          }
 
-         $Header->set($name, ltrim(substr($line, $colon + 1), ' '));
+         $Header->set($name, $value);
       }
 
-      $Response(body: substr($wire, $separator + 4));
+      $Response(body: $body);
 
       self::$adopted = true;
    }
@@ -360,8 +445,13 @@ class Encoder_ extends Encoders
                //   request's lifecycle before entering the onion and decline
                //   both replay and storage. The Response flag survives
                //   defer()'s private clone and protects its later stash().
+               $Middlewares = SAPI::$Middlewares;
                self::$mediated = $receiving
-                  || SAPI::$Middlewares->count > 0
+                  // ! A subtype can override process() while its inherited
+                  //   private stack (and count) stays empty. Treat every subtype
+                  //   as lifecycle-bearing instead of trusting that divergence.
+                  || $Middlewares::class !== Middlewares::class
+                  || $Middlewares->count > 0
                   || self::$observed;
                if (self::$mediated) {
                   $Response->guard();
@@ -458,7 +548,7 @@ class Encoder_ extends Encoders
                   return $Res;
                };
 
-               $Result = SAPI::$Middlewares->process($Request, $Response, $core);
+               $Result = $Middlewares->process($Request, $Response, $core);
 
                if ($Result instanceof Response && $Result !== $Response) {
                   $Response = $Result;

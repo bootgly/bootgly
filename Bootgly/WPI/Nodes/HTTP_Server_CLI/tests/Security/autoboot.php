@@ -411,5 +411,9 @@ return new Suite(
       // An anchored boundary token with a malformed suffix must reject before
       // it can manufacture a hidden field or hand off a truncated file.
       '77.01-multipart_boundary_delimiter_validation',
+      // # Route-cache Early Hints adoption (audit M4)
+      // A leading informational response is not the final response head:
+      // materializing a lifecycle-aware hit must parse the following 200.
+      '78.01-route_cache_early_hints_adoption',
    ],
 );
