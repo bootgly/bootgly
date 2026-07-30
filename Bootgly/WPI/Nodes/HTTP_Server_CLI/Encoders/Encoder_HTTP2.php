@@ -14,6 +14,7 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders;
 use function explode;
 use function fclose;
 use function fopen;
+use function fstat;
 use function is_array;
 use function is_int;
 use function is_string;
@@ -340,15 +341,43 @@ final class Encoder_HTTP2
       // @@
       foreach ($files as $queued) {
          $file = $queued['file'] ?? null;
-         if (is_string($file) === false || $file === '') {
+         $identity = $queued['identity'] ?? null;
+         if (
+            is_string($file) === false
+            || $file === ''
+            || ! is_array($identity)
+            || ! is_int($identity['device'] ?? null)
+            || ! is_int($identity['inode'] ?? null)
+            || ! is_int($identity['mode'] ?? null)
+            || ! is_int($identity['size'] ?? null)
+            || ! is_int($identity['modified'] ?? null)
+            || ! is_int($identity['changed'] ?? null)
+         ) {
             return null;
          }
 
-         $Handler = @fopen($file, 'r');
+         $Handler = @fopen($file, 'rb');
          if ($Handler === false) {
             return null;
          }
-         @fclose($Handler);
+         try {
+            $state = @fstat($Handler);
+         }
+         finally {
+            @fclose($Handler);
+         }
+         if (
+            $state === false
+            || $state['dev'] !== $identity['device']
+            || $state['ino'] !== $identity['inode']
+            || $state['mode'] !== $identity['mode']
+            || $state['size'] !== $identity['size']
+            || $state['mtime'] !== $identity['modified']
+            || $state['ctime'] !== $identity['changed']
+         ) {
+            return null;
+         }
+         $fileSize = $identity['size'];
 
          $parts = is_array($queued['parts'] ?? null) ? $queued['parts'] : [];
          $pads = is_array($queued['pads'] ?? null) ? $queued['pads'] : [];
@@ -359,7 +388,14 @@ final class Encoder_HTTP2
             }
             $offset = $part['offset'] ?? null;
             $bytes = $part['length'] ?? null;
-            if (is_int($offset) === false || is_int($bytes) === false || $bytes < 1) {
+            if (
+               is_int($offset) === false
+               || is_int($bytes) === false
+               || $offset < 0
+               || $bytes < 1
+               || $offset > $fileSize
+               || $bytes > $fileSize - $offset
+            ) {
                continue;
             }
 
@@ -376,7 +412,11 @@ final class Encoder_HTTP2
                'file' => $file,
                'offset' => $offset,
                'length' => $bytes,
-               'position' => 0
+               'position' => 0,
+               // ! Reopen identity: flow-control callbacks never retain the
+               //   descriptor, so pathname replacement is rejected before a
+               //   later file read continues.
+               'identity' => $identity,
             ];
             $size += $bytes;
 

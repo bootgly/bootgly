@@ -9,6 +9,7 @@ use Bootgly\WPI\Endpoints\Servers\Decoder\States;
 use Bootgly\WPI\Endpoints\Servers\Encoder as ServerEncoder;
 use Bootgly\WPI\Endpoints\Servers\Feeding;
 use Bootgly\WPI\Endpoints\Servers\Packages as ServerPackages;
+use Bootgly\WPI\Events\Select;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI as TCPServer;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections\Connection;
@@ -169,6 +170,7 @@ return new Specification(
 
       $OldDecoder = TCPServer::$Decoder;
       $OldEncoder = TCPServer::$Encoder;
+      $OldEvent = TCPServer::$Event;
 
       $Decoder = new HTTP2S6Decoder;
       $Connection = new HTTP2S6Connection($Socket);
@@ -177,6 +179,18 @@ return new Specification(
 
       TCPServer::$Decoder = $Decoder;
       TCPServer::$Encoder = new HTTP2S6Encoder;
+      // ! This test isolates the carry/Feeding contract with a user-space
+      //   stream that deliberately returns zero writes. Production Select now
+      //   rejects such non-selectable resources, so retain the historical
+      //   registration success through a focused event double.
+      TCPServer::$Event = new class extends Select {
+         public function __construct () {}
+
+         public function add ($Socket, int $flag, mixed $payload): bool
+         {
+            return true;
+         }
+      };
 
       try {
          $Package->reading($Socket);
@@ -184,6 +198,7 @@ return new Specification(
       finally {
          TCPServer::$Decoder = $OldDecoder;
          TCPServer::$Encoder = $OldEncoder;
+         TCPServer::$Event = $OldEvent;
 
          if (is_resource($Socket)) {
             @fclose($Socket);

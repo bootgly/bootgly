@@ -19,6 +19,7 @@ use function fclose;
 use function fopen;
 use function fread;
 use function fseek;
+use function fstat;
 use function fwrite;
 use function hrtime;
 use function intdiv;
@@ -84,6 +85,11 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding, Resuming
    //   the event-local duplicate created while disk-backed tails are framed,
    //   even when a peer advertises the RFC maximum flow-control windows.
    protected const int DATA_BATCH = 1024 * 1024;
+   // @ Large file segments reopen at most once per 4 KiB of useful credit.
+   //   Small files retain byte-granular flow-control behavior, while a peer
+   //   cannot turn every one-byte WINDOW_UPDATE on a huge file into a full
+   //   open/stat/seek/read/close cycle.
+   protected const int FILE_QUANTUM = 4096;
 
    // @ Connection-specific fields forbidden in HTTP/2 requests (RFC 9113 §8.2.2)
    protected const array FORBIDDEN = [
@@ -1224,6 +1230,72 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding, Resuming
    }
 
    /**
+    * Open one queued file segment at its current cursor only when the path
+    * still matches the filesystem identity captured before response HEADERS.
+    *
+    * The returned handler belongs exclusively to the current `drain()` call.
+    * It is never stored in Stream state.
+    *
+    * @param array<string,mixed> $segment
+    * @return resource|false
+    */
+   protected function open (array $segment, int $position): mixed
+   {
+      $file = $segment['file'] ?? null;
+      $offset = $segment['offset'] ?? null;
+      $length = $segment['length'] ?? null;
+      $identity = $segment['identity'] ?? null;
+      if (
+         ! is_string($file)
+         || ! is_int($offset)
+         || ! is_int($length)
+         || ! is_array($identity)
+         || ! is_int($identity['device'] ?? null)
+         || ! is_int($identity['inode'] ?? null)
+         || ! is_int($identity['mode'] ?? null)
+         || ! is_int($identity['size'] ?? null)
+         || ! is_int($identity['modified'] ?? null)
+         || ! is_int($identity['changed'] ?? null)
+         || $offset < 0
+         || $length < 1
+         || $position < 0
+         || $position >= $length
+         || $offset > $identity['size']
+         || $length > $identity['size'] - $offset
+      ) {
+         return false;
+      }
+
+      $Handler = @fopen($file, 'rb');
+      if ($Handler === false) {
+         return false;
+      }
+
+      try {
+         $state = @fstat($Handler);
+         if (
+            $state === false
+            || $state['dev'] !== $identity['device']
+            || $state['ino'] !== $identity['inode']
+            || $state['mode'] !== $identity['mode']
+            || $state['size'] !== $identity['size']
+            || $state['mtime'] !== $identity['modified']
+            || $state['ctime'] !== $identity['changed']
+            || @fseek($Handler, $offset + $position) !== 0
+         ) {
+            @fclose($Handler);
+            return false;
+         }
+      }
+      catch (Throwable) {
+         @fclose($Handler);
+         return false;
+      }
+
+      return $Handler;
+   }
+
+   /**
     * Drain one stream's parked response tail (raw `backlog` + file/pad
     * `chunks`) into DATA frames, bounded by the connection + stream send
     * windows, the peer frame size and a strict serialized-byte batch. File
@@ -1247,181 +1319,219 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding, Resuming
       $frames = '';
       $limit = max(1, $this->Remote->frame);
       $budget = min(self::DATA_BATCH, max(0, $budget ?? self::DATA_BATCH));
+      // ! Ephemeral file ownership: one handler may be reused while this
+      //   serialized batch is built, but it never enters persistent Stream
+      //   state and is closed before every return.
+      $Handler = false;
+      $handlerChunk = -1;
 
-      // @@
-      while ($this->window > 0 && $Stream->window > 0 && $budget > 9) {
-         // # Raw body tail
-         if ($Stream->backlog !== '') {
-            $send = min(
-               $this->window,
-               $Stream->window,
-               strlen($Stream->backlog),
-               $limit,
-               $budget - 9
-            );
-            $payload = substr($Stream->backlog, 0, $send);
-            $Stream->backlog = substr($Stream->backlog, $send);
-            // ! Real consumption — advance the flow-control progress clock
-            $Stream->drained = time();
-            $this->window -= $send;
-            $Stream->window -= $send;
-            $budget -= 9 + $send;
+      try {
+         // @@
+         while ($this->window > 0 && $Stream->window > 0 && $budget > 9) {
+            // # Raw body tail
+            if ($Stream->backlog !== '') {
+               $send = min(
+                  $this->window,
+                  $Stream->window,
+                  strlen($Stream->backlog),
+                  $limit,
+                  $budget - 9
+               );
+               $payload = substr($Stream->backlog, 0, $send);
+               $Stream->backlog = substr($Stream->backlog, $send);
+               // ! Real consumption — advance the flow-control progress clock
+               $Stream->drained = time();
+               $this->window -= $send;
+               $Stream->window -= $send;
+               $budget -= 9 + $send;
 
-            $done = $Stream->backlog === '' && $Stream->chunk >= count($Stream->chunks)
-               && $Stream->sustained === false;
-            $frames .= Frame::pack(
-               HTTP2::FRAME_DATA,
-               $done ? HTTP2::FLAG_END_STREAM : 0,
-               $stream,
-               $payload
-            );
-            continue;
-         }
+               $done = $Stream->backlog === '' && $Stream->chunk >= count($Stream->chunks)
+                  && $Stream->sustained === false;
+               $frames .= Frame::pack(
+                  HTTP2::FRAME_DATA,
+                  $done ? HTTP2::FLAG_END_STREAM : 0,
+                  $stream,
+                  $payload
+               );
+               continue;
+            }
 
-         // ?: All segments sent
-         $segment = $Stream->chunks[$Stream->chunk] ?? null;
-         if ($segment === null) {
-            break;
-         }
+            // ?: All segments sent
+            $segment = $Stream->chunks[$Stream->chunk] ?? null;
+            if ($segment === null) {
+               break;
+            }
 
-         // # In-memory segment (multipart/range pads)
-         if (is_string($segment['data'] ?? null)) {
-            $data = $segment['data'];
-            $position = is_int($segment['position'] ?? null) ? $segment['position'] : 0;
-            $remaining = strlen($data) - $position;
-            if ($remaining <= 0) {
-               $Stream->chunks[$Stream->chunk]['data'] = '';
+            // # In-memory segment (multipart/range pads)
+            if (is_string($segment['data'] ?? null)) {
+               $data = $segment['data'];
+               $position = is_int($segment['position'] ?? null) ? $segment['position'] : 0;
+               $remaining = strlen($data) - $position;
+               if ($remaining <= 0) {
+                  $Stream->chunks[$Stream->chunk]['data'] = '';
+                  $Stream->chunk++;
+                  continue;
+               }
+
+               $send = min(
+                  $this->window,
+                  $Stream->window,
+                  $remaining,
+                  $limit,
+                  $budget - 9
+               );
+               $payload = substr($data, $position, $send);
+               $position += $send;
+               $Stream->chunks[$Stream->chunk]['position'] = $position;
+               if ($position >= strlen($data)) {
+                  // @ Drop the consumed in-memory pad immediately. Keeping the
+                  //   original string in an already-passed array slot would make
+                  //   the heap outlive its reservation until stream teardown.
+                  $Stream->chunks[$Stream->chunk]['data'] = '';
+                  $Stream->chunk++;
+               }
+
+               // ! Real consumption — advance the flow-control progress clock, the
+               //   same as the raw-backlog branch. Without this a file response
+               //   that IS draining would look stalled to the deadline sweep.
+               $Stream->drained = time();
+               $this->window -= $send;
+               $Stream->window -= $send;
+               $budget -= 9 + $send;
+               $done = $Stream->chunk >= count($Stream->chunks)
+                  && $Stream->sustained === false;
+
+               $frames .= Frame::pack(
+                  HTTP2::FRAME_DATA,
+                  $done ? HTTP2::FLAG_END_STREAM : 0,
+                  $stream,
+                  $payload
+               );
+               continue;
+            }
+
+            // # File segment
+            $file = $segment['file'] ?? null;
+            $length = $segment['length'] ?? null;
+            if (is_string($file) === false || is_int($length) === false) {
                $Stream->chunk++;
                continue;
             }
 
-            $send = min(
+            $position = is_int($segment['position'] ?? null) ? $segment['position'] : 0;
+            $remaining = $length - $position;
+            if ($remaining <= 0) {
+               if (is_resource($Handler)) {
+                  @fclose($Handler);
+                  $Handler = false;
+               }
+               $handlerChunk = -1;
+               // @ Defensive cleanup for Stream state created by an older
+               //   decoder revision before a hot worker reload.
+               $Legacy = $segment['handler'] ?? null;
+               if (is_resource($Legacy)) {
+                  @fclose($Legacy);
+                  unset($Stream->chunks[$Stream->chunk]['handler']);
+               }
+               $Stream->chunk++;
+               continue;
+            }
+
+            $available = min(
                $this->window,
                $Stream->window,
                $remaining,
-               $limit,
-               $budget - 9
+               $limit
             );
-            $payload = substr($data, $position, $send);
-            $position += $send;
+            $bytes = min($available, $budget - 9);
+            $minimum = $length > self::FILE_QUANTUM
+               ? min(self::FILE_QUANTUM, $remaining)
+               : 1;
+            if ($bytes < $minimum) {
+               // ? Peer credit below the quantum must wait for WINDOW_UPDATE.
+               //   If peer credit is already ample, only this callback's local
+               //   serialized-byte budget is exhausted; schedule another turn
+               //   so a segment boundary cannot strand the file indefinitely.
+               if ($available >= $minimum) {
+                  $this->schedule();
+               }
+               break;
+            }
+
+            // ?! Lazy and ephemeral: open only after real window credit, pin the
+            //   verified handle for this drain quantum, then close before
+            //   returning to the event loop. A zero-window peer therefore owns
+            //   metadata and a cursor, never a process descriptor.
+            if (
+               ! is_resource($Handler)
+               || $handlerChunk !== $Stream->chunk
+            ) {
+               if (is_resource($Handler)) {
+                  @fclose($Handler);
+               }
+               $Handler = $this->open($segment, $position);
+               $handlerChunk = $Stream->chunk;
+               if ($Handler === false) {
+                  $Stream->close();
+                  $frames .= Frame::pack(
+                     HTTP2::FRAME_RST_STREAM, 0, $stream, pack('N', Errors::Internal->value)
+                  );
+                  return [$frames, true, $budget];
+               }
+            }
+
+            try {
+               $payload = @fread($Handler, $bytes);
+            }
+            catch (Throwable) {
+               $payload = false;
+            }
+            if ($payload === false || $payload === '') {
+               if (is_resource($Handler)) {
+                  @fclose($Handler);
+                  $Handler = false;
+               }
+               $handlerChunk = -1;
+               $Stream->close();
+               $frames .= Frame::pack(
+                  HTTP2::FRAME_RST_STREAM, 0, $stream, pack('N', Errors::Internal->value)
+               );
+               return [$frames, true, $budget];
+            }
+
+            $read = strlen($payload);
+            $position += $read;
+            // ! Real consumption — a file transfer that IS progressing under
+            //   small window credit must advance the clock too, otherwise the
+            //   deadline sweep measures from the original park time and resets
+            //   a stream that is demonstrably draining.
+            $Stream->drained = time();
+            $this->window -= $read;
+            $Stream->window -= $read;
+            $budget -= 9 + $read;
             $Stream->chunks[$Stream->chunk]['position'] = $position;
-            if ($position >= strlen($data)) {
-               // @ Drop the consumed in-memory pad immediately. Keeping the
-               //   original string in an already-passed array slot would make
-               //   the heap outlive its reservation until stream teardown.
-               $Stream->chunks[$Stream->chunk]['data'] = '';
+
+            if ($position >= $length) {
+               @fclose($Handler);
+               $Handler = false;
+               $handlerChunk = -1;
                $Stream->chunk++;
             }
 
-            // ! Real consumption — advance the flow-control progress clock, the
-            //   same as the raw-backlog branch. Without this a file response
-            //   that IS draining would look stalled to the deadline sweep.
-            $Stream->drained = time();
-            $this->window -= $send;
-            $Stream->window -= $send;
-            $budget -= 9 + $send;
             $done = $Stream->chunk >= count($Stream->chunks)
                && $Stream->sustained === false;
-
             $frames .= Frame::pack(
                HTTP2::FRAME_DATA,
                $done ? HTTP2::FLAG_END_STREAM : 0,
                $stream,
                $payload
             );
-            continue;
          }
-
-         // # File segment
-         $file = $segment['file'] ?? null;
-         $length = $segment['length'] ?? null;
-         if (is_string($file) === false || is_int($length) === false) {
-            $Stream->chunk++;
-            continue;
-         }
-
-         $position = is_int($segment['position'] ?? null) ? $segment['position'] : 0;
-         $remaining = $length - $position;
-         if ($remaining <= 0) {
-            $Handler = $segment['handler'] ?? null;
-            if (is_resource($Handler)) {
-               @fclose($Handler);
-            }
-            $Stream->chunk++;
-            continue;
-         }
-
-         // ?! Lazy open on first credit; reopen is impossible mid-segment
-         //   (the handler stays parked in the segment between drains)
-         $Handler = $segment['handler'] ?? null;
-         if (is_resource($Handler) === false) {
-            $Handler = @fopen($file, 'r');
-            if ($Handler === false) {
-               $Stream->close();
-               $frames .= Frame::pack(
-                  HTTP2::FRAME_RST_STREAM, 0, $stream, pack('N', Errors::Internal->value)
-               );
-               return [$frames, true, $budget];
-            }
-            $base = is_int($segment['offset'] ?? null) ? $segment['offset'] : 0;
-            if (@fseek($Handler, $base + $position) !== 0) {
-               @fclose($Handler);
-               $Stream->close();
-               $frames .= Frame::pack(
-                  HTTP2::FRAME_RST_STREAM, 0, $stream, pack('N', Errors::Internal->value)
-               );
-               return [$frames, true, $budget];
-            }
-            $Stream->chunks[$Stream->chunk]['handler'] = $Handler;
-         }
-
-         $bytes = min(
-            $this->window,
-            $Stream->window,
-            $remaining,
-            $limit,
-            $budget - 9
-         );
-         try {
-            $payload = @fread($Handler, $bytes);
-         }
-         catch (Throwable) {
-            $payload = false;
-         }
-         if ($payload === false || $payload === '') {
-            $Stream->close();
-            $frames .= Frame::pack(
-               HTTP2::FRAME_RST_STREAM, 0, $stream, pack('N', Errors::Internal->value)
-            );
-            return [$frames, true, $budget];
-         }
-
-         $read = strlen($payload);
-         $position += $read;
-         // ! Real consumption — a file transfer that IS progressing under
-         //   small window credit must advance the clock too, otherwise the
-         //   deadline sweep measures from the original park time and resets
-         //   a stream that is demonstrably draining.
-         $Stream->drained = time();
-         $this->window -= $read;
-         $Stream->window -= $read;
-         $budget -= 9 + $read;
-         $Stream->chunks[$Stream->chunk]['position'] = $position;
-
-         if ($position >= $length) {
+      }
+      finally {
+         if (is_resource($Handler)) {
             @fclose($Handler);
-            unset($Stream->chunks[$Stream->chunk]['handler']);
-            $Stream->chunk++;
          }
-
-         $done = $Stream->chunk >= count($Stream->chunks)
-            && $Stream->sustained === false;
-         $frames .= Frame::pack(
-            HTTP2::FRAME_DATA,
-            $done ? HTTP2::FLAG_END_STREAM : 0,
-            $stream,
-            $payload
-         );
       }
 
       // :
@@ -1510,9 +1620,9 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding, Resuming
       $now = time();
 
       foreach ($this->Streams as $id => $Stream) {
-         // ? A stalled stream can be holding file/pad segments with an EMPTY
-         //   raw backlog — the response is just as retained, and its open
-         //   descriptors cost more than the bytes do.
+         // ? A stalled stream can be holding file/pad metadata with an EMPTY
+         //   raw backlog. File handlers are ephemeral, but the response cursor
+         //   and protocol state still require a bounded lifetime.
          if (
             $Stream->sustained
             || ($Stream->backlog === '' && $Stream->chunk >= count($Stream->chunks))

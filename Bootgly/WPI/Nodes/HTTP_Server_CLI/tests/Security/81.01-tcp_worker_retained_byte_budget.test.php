@@ -4,6 +4,7 @@ use const Bootgly\WPI;
 
 use Bootgly\ABI\Debugging\Data\Vars;
 use Bootgly\ACI\Tests\Suite\Test\Specification\Separator;
+use Bootgly\WPI\Events\Select;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI as TCPServer;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections\Connection;
@@ -184,6 +185,7 @@ return new Specification(
 
       $WPI = WPI;
       $OldRequest = $WPI->Request;
+      $OldEvent = TCPServer::$Event;
       $savedPerConnectionCap = TCPServer::$maxPendingBytes;
       $Cap = null;
       $Counter = null;
@@ -191,6 +193,19 @@ return new Specification(
       $Peers = [];
       $Control = null;
       $Fresh = null;
+
+      // ! The deterministic zero-write wrappers are intentionally outside
+      //   stream_select's supported resource set. This case audits retained
+      //   byte accounting, so use a focused registration double and leave
+      //   descriptor admission to its dedicated selector regression.
+      TCPServer::$Event = new class extends Select {
+         public function __construct () {}
+
+         public function add ($Socket, int $flag, mixed $payload): bool
+         {
+            return true;
+         }
+      };
 
       $Pending = static fn (TCPPackages $Package): int => max(
          0,
@@ -516,6 +531,7 @@ return new Specification(
             catch (Throwable) {}
          }
          TCPServer::$maxPendingBytes = $savedPerConnectionCap;
+         TCPServer::$Event = $OldEvent;
          $WPI->Request = $OldRequest;
       }
 

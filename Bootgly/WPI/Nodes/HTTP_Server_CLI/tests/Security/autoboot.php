@@ -433,5 +433,12 @@ return new Suite(
       // Separate HTTP/2 connections must share the same worker authority and
       // release it on RST_STREAM before fresh admission.
       '81.03-http2_worker_retained_byte_budget',
+      // # HTTP/2 file-descriptor aggregation (audit H2)
+      // One byte of flow-control credit per file stream must not retain enough
+      // independent handlers to invalidate the worker's select() backend.
+      '82.01-http2_file_descriptor_selector_exhaustion',
+      // Reopening per positive flow-control quantum must reject atomic
+      // pathname identity changes without parking the file descriptor.
+      '82.02-http2_file_reopen_identity',
    ],
 );

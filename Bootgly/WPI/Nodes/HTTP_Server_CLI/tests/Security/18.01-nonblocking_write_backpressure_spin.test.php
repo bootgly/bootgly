@@ -17,6 +17,8 @@ use function tmpfile;
 
 use Bootgly\ABI\Debugging\Data\Vars;
 use Bootgly\ACI\Tests\Suite\Test\Specification\Separator;
+use Bootgly\WPI\Events\Select;
+use Bootgly\WPI\Interfaces\TCP_Server_CLI as TCPServer;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections\Connection;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages as TCPPackages;
@@ -154,6 +156,19 @@ return new Specification(
          stream_wrapper_register($scheme, HTTPServerCLIBackpressureStream::class);
       }
 
+      $OldEvent = TCPServer::$Event;
+      // ! The zero-write wrapper is intentionally not selectable. Keep this
+      //   transport-state test independent from the production selector's
+      //   descriptor admission guard through a focused registration double.
+      TCPServer::$Event = new class extends Select {
+         public function __construct () {}
+
+         public function add ($Socket, int $flag, mixed $payload): bool
+         {
+            return true;
+         }
+      };
+
       try {
          // ! Two consecutive zero-writes model a genuine backpressure stall.
          //   writing() has a happy-path fast lane that issues one fwrite up
@@ -264,6 +279,9 @@ return new Specification(
       }
       catch (Throwable $Throwable) {
          $probe['error'] = $Throwable::class . ': ' . $Throwable->getMessage();
+      }
+      finally {
+         TCPServer::$Event = $OldEvent;
       }
 
       return "GET /backpressure-harness HTTP/1.1\r\n"

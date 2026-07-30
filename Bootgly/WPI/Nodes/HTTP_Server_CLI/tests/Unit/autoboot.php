@@ -35,6 +35,7 @@ return new Suite(
       '1.19-decoder_connection_template_lifecycle',
       // # Production header-block memo (audit N3) — the live suites all
       // run in the Test environment, which bypasses the memo entirely.
-      '1.20-header_scan_memo_production_replay'
+      '1.20-header_scan_memo_production_replay',
+      '1.21-select_descriptor_admission'
    ]
 );

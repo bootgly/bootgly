@@ -4,6 +4,8 @@ use const Bootgly\WPI;
 
 use Bootgly\ABI\Debugging\Data\Vars;
 use Bootgly\ACI\Tests\Suite\Test\Specification\Separator;
+use Bootgly\WPI\Events\Select;
+use Bootgly\WPI\Interfaces\TCP_Server_CLI as TCPServer;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections\Connection;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages as TCPPackages;
@@ -276,6 +278,19 @@ return new Specification(
          }
       };
 
+      $OldEvent = TCPServer::$Event;
+      // ! The deterministic backpressure wrapper is not a selectable OS
+      //   socket. Isolate this upload-state regression from descriptor
+      //   admission while preserving the historical writable registration.
+      TCPServer::$Event = new class extends Select {
+         public function __construct () {}
+
+         public function add ($Socket, int $flag, mixed $payload): bool
+         {
+            return true;
+         }
+      };
+
       try {
          $fast = $Run(0);
          $stalled = $Run(2);
@@ -291,6 +306,9 @@ return new Specification(
       }
       catch (Throwable $Throwable) {
          $probe['error'] = $Throwable::class . ': ' . $Throwable->getMessage();
+      }
+      finally {
+         TCPServer::$Event = $OldEvent;
       }
 
       return "GET /m2-file-backpressure-harness HTTP/1.1\r\n"

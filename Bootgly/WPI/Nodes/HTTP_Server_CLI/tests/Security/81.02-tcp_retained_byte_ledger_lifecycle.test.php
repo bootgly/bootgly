@@ -329,6 +329,19 @@ if (! class_exists('L1PipelineCloseDecoder', false)) {
    }
 }
 
+if (! class_exists('L1QuantumDecoder', false)) {
+   class L1QuantumDecoder extends Decoder_HTTP2
+   {
+      public int $continuations = 0;
+
+
+      protected function schedule (): void
+      {
+         $this->continuations++;
+      }
+   }
+}
+
 if (! class_exists('L1PipelineCloseEncoder', false)) {
    class L1PipelineCloseEncoder implements ServerEncoder
    {
@@ -362,6 +375,7 @@ $probe = [
    'h2_carry' => [],
    'outbox' => [],
    'batch' => [],
+   'quantum' => [],
    'resume' => [],
    'pads' => [],
    'carry' => [],
@@ -653,19 +667,29 @@ return new Specification(
          //   Complete request reaches an application that can defer its
          //   response. A zero-progress transport makes that handoff persistent
          //   and proves it enters the same worker-wide accounting authority.
-         $scheme = 'bootgly-l1-ledger';
-         if (! in_array($scheme, stream_get_wrappers(), true)) {
-            stream_wrapper_register($scheme, L1LedgerStream::class);
+         $OutboxPairA = stream_socket_pair(
+            STREAM_PF_UNIX,
+            STREAM_SOCK_STREAM,
+            STREAM_IPPROTO_IP
+         );
+         $OutboxPairB = stream_socket_pair(
+            STREAM_PF_UNIX,
+            STREAM_SOCK_STREAM,
+            STREAM_IPPROTO_IP
+         );
+         if ($OutboxPairA === false || $OutboxPairB === false) {
+            throw new RuntimeException('Could not create HTTP/2 outbox fixture sockets.');
          }
-         L1LedgerStream::reset();
-
-         $OutboxSocketA = fopen("{$scheme}://outbox-a/probe", 'w+');
-         $OutboxSocketB = fopen("{$scheme}://outbox-b/probe", 'w+');
-         if (! is_resource($OutboxSocketA) || ! is_resource($OutboxSocketB)) {
-            throw new RuntimeException('Could not create HTTP/2 outbox fixture streams.');
-         }
+         [$OutboxSocketA, $OutboxPeerA] = $OutboxPairA;
+         [$OutboxSocketB, $OutboxPeerB] = $OutboxPairB;
+         stream_set_blocking($OutboxSocketA, false);
+         stream_set_blocking($OutboxPeerA, false);
+         stream_set_blocking($OutboxSocketB, false);
+         stream_set_blocking($OutboxPeerB, false);
          $Resources[] = $OutboxSocketA;
+         $Resources[] = $OutboxPeerA;
          $Resources[] = $OutboxSocketB;
+         $Resources[] = $OutboxPeerB;
 
          $OutboxConnectionA = new L1LedgerConnection($OutboxSocketA, 18410);
          $OutboxConnectionB = new L1LedgerConnection($OutboxSocketB, 18411);
@@ -691,8 +715,17 @@ return new Specification(
             strlen($preface),
          );
 
-         L1LedgerStream::block('outbox-a', true);
-         L1LedgerStream::block('outbox-b', true);
+         $Fill = static function ($Socket): void {
+            $block = str_repeat('B', 65536);
+            while (true) {
+               $written = @fwrite($Socket, $block);
+               if ($written === false || $written === 0) {
+                  return;
+               }
+            }
+         };
+         $Fill($OutboxSocketA);
+         $Fill($OutboxSocketB);
          $pingCount = 4;
          $ping = Frame::pack(HTTP2::FRAME_PING, 0, 0, '12345678');
          $ackBytes = $pingCount * strlen(
@@ -729,7 +762,12 @@ return new Specification(
          );
          $outboxOverflowTotal = TCPServer::$pendingBytes;
 
-         L1LedgerStream::block('outbox-a', false);
+         while (true) {
+            $drained = @fread($OutboxPeerA, 65536);
+            if ($drained === false || $drained === '') {
+               break;
+            }
+         }
          $outboxDrained = $OutboxPackageA->writing($OutboxSocketA);
 
          $probe['outbox'] = [
@@ -775,7 +813,19 @@ return new Specification(
                throw new RuntimeException('Could not populate the HTTP/2 batch fixture.');
             }
          }
+         $state = fstat($Handler);
          @fclose($Handler);
+         if (
+            $state === false
+            || ! is_int($state['dev'] ?? null)
+            || ! is_int($state['ino'] ?? null)
+            || ! is_int($state['mode'] ?? null)
+            || ! is_int($state['size'] ?? null)
+            || ! is_int($state['mtime'] ?? null)
+            || ! is_int($state['ctime'] ?? null)
+         ) {
+            throw new RuntimeException('Could not identify the HTTP/2 batch fixture.');
+         }
 
          $fileSize = 2 * 1024 * 1024;
          $Decoder = new Decoder_HTTP2;
@@ -788,6 +838,14 @@ return new Specification(
             'offset' => 0,
             'length' => $fileSize,
             'position' => 0,
+            'identity' => [
+               'device' => $state['dev'],
+               'inode' => $state['ino'],
+               'mode' => $state['mode'],
+               'size' => $state['size'],
+               'modified' => $state['mtime'],
+               'changed' => $state['ctime'],
+            ],
          ]];
 
          $calls = 0;
@@ -798,6 +856,7 @@ return new Specification(
          $firstPosition = null;
          $firstDone = null;
          $done = false;
+         $handlerPersisted = false;
          $remainingBudget = null;
          while ($done === false && $calls < 8) {
             [$wire, $done, $remainingBudget] = $Decoder->drain($FileStream, 3);
@@ -807,6 +866,8 @@ return new Specification(
             $position = $FileStream->chunks[0]['position'] ?? $fileSize;
             $progressive = $progressive && is_int($position) && $position > $previous;
             $previous = is_int($position) ? $position : $previous;
+            $handlerPersisted = $handlerPersisted
+               || is_resource($FileStream->chunks[0]['handler'] ?? null);
 
             if ($calls === 1) {
                $firstBytes = $wireBytes;
@@ -825,10 +886,115 @@ return new Specification(
             'done' => $done,
             'final_position' => $previous,
             'remaining_budget' => $remainingBudget,
+            'handler_persisted' => $handlerPersisted,
             'stream_chunk' => $FileStream->chunk,
             'stream_measured' => $FileStream->measure(),
             'stream_retained' => $FileStream->Buffers->retained,
             'total' => TCPServer::$pendingBytes,
+         ];
+
+         // # Large disk responses coalesce tiny credits before reopening.
+         //   This bounds open/stat/seek/read/close amplification without
+         //   changing byte-granular behavior for small files.
+         $QuantumStream = new Stream(5, 1, 0, new Bodies(1, 1));
+         $Streams[] = $QuantumStream;
+         $QuantumStream->chunks = [[
+            'file' => $path,
+            'offset' => 0,
+            'length' => $fileSize,
+            'position' => 0,
+            'identity' => [
+               'device' => $state['dev'],
+               'inode' => $state['ino'],
+               'mode' => $state['mode'],
+               'size' => $state['size'],
+               'modified' => $state['mtime'],
+               'changed' => $state['ctime'],
+            ],
+         ]];
+         [$quantumBefore, $quantumBeforeDone] = $Decoder->drain($QuantumStream, 5);
+         $quantumBeforePosition = $QuantumStream->chunks[0]['position'] ?? null;
+         $quantumBeforeHandler = is_resource(
+            $QuantumStream->chunks[0]['handler'] ?? null
+         );
+
+         $QuantumStream->window += 4095;
+         [$quantumAfter, $quantumAfterDone] = $Decoder->drain($QuantumStream, 5);
+         $quantumAfterPosition = $QuantumStream->chunks[0]['position'] ?? null;
+         $quantumAfterHandler = is_resource(
+            $QuantumStream->chunks[0]['handler'] ?? null
+         );
+
+         // # Consuming a preceding segment can leave enough serialized budget
+         //   to enter the file branch, but one byte less than FILE_QUANTUM plus
+         //   its DATA header. With ample peer credit, this is a local slice and
+         //   must schedule exactly one continuation instead of waiting for a
+         //   WINDOW_UPDATE that the peer has no reason to send.
+         $QuantumDecoder = new L1QuantumDecoder;
+         $Decoders[] = $QuantumDecoder;
+         $QuantumDecoder->window = 65535;
+         $QuantumDecoder->Remote->frame = 16384;
+         $ContinuationStream = new Stream(7, 65535, 0, new Bodies(1, 1));
+         $Streams[] = $ContinuationStream;
+         $ContinuationStream->chunks = [
+            [
+               'data' => 'P',
+               'position' => 0,
+            ],
+            [
+               'file' => $path,
+               'offset' => 0,
+               'length' => $fileSize,
+               'position' => 0,
+               'identity' => [
+                  'device' => $state['dev'],
+                  'inode' => $state['ino'],
+                  'mode' => $state['mode'],
+                  'size' => $state['size'],
+                  'modified' => $state['mtime'],
+                  'changed' => $state['ctime'],
+               ],
+            ],
+         ];
+         [$continuationWire, $continuationDone, $continuationBudget] =
+            $QuantumDecoder->drain($ContinuationStream, 7, 4114);
+         $continuationPosition = $ContinuationStream->chunks[1]['position'] ?? null;
+         $continuationConnectionWindow = $QuantumDecoder->window;
+         $continuationStreamWindow = $ContinuationStream->window;
+         $continuations = $QuantumDecoder->continuations;
+         $ContinuationStream->window = 4095;
+         [$streamCreditWire, $streamCreditDone, $streamCreditBudget] =
+            $QuantumDecoder->drain($ContinuationStream, 7, 4114);
+         $ContinuationStream->window = 65535;
+         $QuantumDecoder->window = 4095;
+         [$connectionCreditWire, $connectionCreditDone, $connectionCreditBudget] =
+            $QuantumDecoder->drain($ContinuationStream, 7, 4114);
+
+         $probe['quantum'] = [
+            'before_bytes' => strlen($quantumBefore),
+            'before_done' => $quantumBeforeDone,
+            'before_position' => $quantumBeforePosition,
+            'before_handler' => $quantumBeforeHandler,
+            'after_bytes' => strlen($quantumAfter),
+            'after_done' => $quantumAfterDone,
+            'after_position' => $quantumAfterPosition,
+            'after_handler' => $quantumAfterHandler,
+            'continuation_wire_bytes' => strlen($continuationWire),
+            'continuation_done' => $continuationDone,
+            'continuation_budget' => $continuationBudget,
+            'continuation_chunk' => $ContinuationStream->chunk,
+            'continuation_position' => $continuationPosition,
+            'continuation_connection_window' => $continuationConnectionWindow,
+            'continuation_stream_window' => $continuationStreamWindow,
+            'continuations' => $continuations,
+            'stream_credit_wire_bytes' => strlen($streamCreditWire),
+            'stream_credit_done' => $streamCreditDone,
+            'stream_credit_budget' => $streamCreditBudget,
+            'connection_credit_wire_bytes' => strlen($connectionCreditWire),
+            'connection_credit_done' => $connectionCreditDone,
+            'connection_credit_budget' => $connectionCreditBudget,
+            'control_position' => $ContinuationStream->chunks[1]['position'] ?? null,
+            'control_continuations' => $QuantumDecoder->continuations,
          ];
 
          // # A backpressured protocol continuation is event-driven: after the
@@ -1027,12 +1193,19 @@ return new Specification(
          // ! Normal terminal drain is distinct from writing() failure: it
          //   closes after successfully flushing an already-deferred owner and
          //   returns true. reading() must still stop before the pipeline tail.
-         L1WriteFailureStream::reset('close', $input, true);
-         $CloseSocket = fopen("{$scheme}://close/probe", 'w+');
-         if (! is_resource($CloseSocket)) {
-            throw new RuntimeException('Could not create the close-after-drain probe stream.');
+         $ClosePair = stream_socket_pair(
+            STREAM_PF_UNIX,
+            STREAM_SOCK_STREAM,
+            STREAM_IPPROTO_IP
+         );
+         if ($ClosePair === false) {
+            throw new RuntimeException('Could not create the close-after-drain probe sockets.');
          }
+         [$CloseSocket, $ClosePeer] = $ClosePair;
+         stream_set_blocking($CloseSocket, false);
+         stream_set_blocking($ClosePeer, false);
          $Resources[] = $CloseSocket;
+         $Resources[] = $ClosePeer;
 
          TCPServer::$maxPendingBytes = 64;
          TCPServer::$maxWorkerPendingBytes = $baseline + 64;
@@ -1042,14 +1215,31 @@ return new Specification(
          $Owners[] = $ClosePackage;
          TCPServer::$Decoder = $CloseDecoder;
 
+         $Fill($CloseSocket);
          $parked = $ClosePackage->writing($CloseSocket, buffer: 'OLD');
          $parkedPending = $ClosePackage->pendingBuffer;
          $parkedRetained = $ClosePackage->Buffers->retained;
          $parkedTotal = TCPServer::$pendingBytes;
          $ClosePackage->closeAfterDrain = true;
-         L1WriteFailureStream::$blocked['close'] = false;
+         while (true) {
+            $drained = @fread($ClosePeer, 65536);
+            if ($drained === false || $drained === '') {
+               break;
+            }
+         }
+         if (@fwrite($ClosePeer, $input) !== strlen($input)) {
+            throw new RuntimeException('Could not feed the close-after-drain probe.');
+         }
 
          $closeRead = $ClosePackage->reading($CloseSocket);
+         $closeWritten = '';
+         while (true) {
+            $drained = @fread($ClosePeer, 65536);
+            if ($drained === false || $drained === '') {
+               break;
+            }
+            $closeWritten .= $drained;
+         }
          $close = [
             'parked' => $parked,
             'parked_pending' => $parkedPending,
@@ -1058,7 +1248,7 @@ return new Specification(
             'read' => $closeRead,
             'calls' => $CloseDecoder->calls,
             'closed' => $CloseConnection->closed,
-            'written' => L1WriteFailureStream::$written['close'],
+            'written' => $closeWritten,
             'carry' => $ClosePackage->carry,
             'retained' => $ClosePackage->Buffers->retained,
             'total' => TCPServer::$pendingBytes,
@@ -1325,6 +1515,7 @@ return new Specification(
          || ($batch['first_done'] ?? null) !== false
          || ($batch['done'] ?? null) !== true
          || ($batch['final_position'] ?? null) !== 2 * 1024 * 1024
+         || ($batch['handler_persisted'] ?? null) !== false
          || ($batch['stream_chunk'] ?? null) !== 1
          || ($batch['stream_measured'] ?? null) !== 0
          || ($batch['stream_retained'] ?? null) !== 0
@@ -1334,7 +1525,43 @@ return new Specification(
          dump(json_encode($probe));
 
          return 'L1 HTTP/2 file framing was not bounded to one serialized MiB '
-            . 'per callback or failed to preserve disk-backed progress.';
+            . 'per callback, retained a handler between callbacks, or failed '
+            . 'to preserve disk-backed progress.';
+      }
+
+      $quantum = $probe['quantum'];
+      if (
+         ($quantum['before_bytes'] ?? null) !== 0
+         || ($quantum['before_done'] ?? null) !== false
+         || ($quantum['before_position'] ?? null) !== 0
+         || ($quantum['before_handler'] ?? null) !== false
+         || ($quantum['after_bytes'] ?? null) !== 4096 + 9
+         || ($quantum['after_done'] ?? null) !== false
+         || ($quantum['after_position'] ?? null) !== 4096
+         || ($quantum['after_handler'] ?? null) !== false
+         || ($quantum['continuation_wire_bytes'] ?? null) !== 10
+         || ($quantum['continuation_done'] ?? null) !== false
+         || ($quantum['continuation_budget'] ?? null) !== 4104
+         || ($quantum['continuation_chunk'] ?? null) !== 1
+         || ($quantum['continuation_position'] ?? null) !== 0
+         || ($quantum['continuation_connection_window'] ?? null) !== 65534
+         || ($quantum['continuation_stream_window'] ?? null) !== 65534
+         || ($quantum['continuations'] ?? null) !== 1
+         || ($quantum['stream_credit_wire_bytes'] ?? null) !== 0
+         || ($quantum['stream_credit_done'] ?? null) !== false
+         || ($quantum['stream_credit_budget'] ?? null) !== 4114
+         || ($quantum['connection_credit_wire_bytes'] ?? null) !== 0
+         || ($quantum['connection_credit_done'] ?? null) !== false
+         || ($quantum['connection_credit_budget'] ?? null) !== 4114
+         || ($quantum['control_position'] ?? null) !== 0
+         || ($quantum['control_continuations'] ?? null) !== 1
+      ) {
+         Vars::$labels = ['H2 HTTP/2 file reopen quantum'];
+         dump(json_encode($probe));
+
+         return 'H2 large HTTP/2 file responses reopened for sub-quantum '
+            . 'credit, retained a handler, or missed one local continuation '
+            . 'after useful credit was drained.';
       }
 
       $resume = $probe['resume'];

@@ -8,6 +8,7 @@ use Bootgly\WPI\Endpoints\Servers\Decoder as ServerDecoder;
 use Bootgly\WPI\Endpoints\Servers\Decoder\States;
 use Bootgly\WPI\Endpoints\Servers\Encoder as ServerEncoder;
 use Bootgly\WPI\Endpoints\Servers\Packages as ServerPackages;
+use Bootgly\WPI\Events\Select;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI as TCPServer;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections\Connection;
@@ -170,6 +171,7 @@ return new Specification(
 
       $OldDecoder = TCPServer::$Decoder;
       $OldEncoder = TCPServer::$Encoder;
+      $OldEvent = isset(TCPServer::$Event) ? TCPServer::$Event : null;
 
       $Decoder = new U110Decoder;
       $Connection = new U110Connection($Socket);
@@ -177,6 +179,19 @@ return new Specification(
 
       TCPServer::$Decoder = $Decoder;
       TCPServer::$Encoder = new U110Encoder;
+      // ! This pipeline test needs deterministic zero writes from a
+      //   non-selectable user-space stream. Preserve writable registration
+      //   with a focused double; Select admission is covered separately.
+      if ($OldEvent !== null) {
+         TCPServer::$Event = new class extends Select {
+            public function __construct () {}
+
+            public function add ($Socket, int $flag, mixed $payload): bool
+            {
+               return true;
+            }
+         };
+      }
 
       try {
          $Package->reading($Socket);
@@ -191,6 +206,9 @@ return new Specification(
       finally {
          TCPServer::$Decoder = $OldDecoder;
          TCPServer::$Encoder = $OldEncoder;
+         if ($OldEvent !== null) {
+            TCPServer::$Event = $OldEvent;
+         }
 
          if (is_resource($Socket)) {
             @fclose($Socket);

@@ -20,12 +20,14 @@ use function array_pop;
 use function count;
 use function defined;
 use function explode;
+use function fclose;
+use function fopen;
+use function fstat;
 use function gmdate;
 use function gzcompress;
 use function gzdeflate;
 use function gzencode;
 use function is_array;
-use function is_int;
 use function is_resource;
 use function is_string;
 use function preg_match;
@@ -791,16 +793,40 @@ class Response extends Server\Response
          return $this;
       }
 
-      // @
-      $size = $File->size;
-      if (! is_int($size)) {
+      // ! Capture filesystem identity and metadata from one opened handler.
+      //   HTTP/2 will close between flow-control callbacks, so every later
+      //   reopen can reject pathname replacement before continuing.
+      $Handler = @fopen($File->file, 'rb');
+      if ($Handler === false) {
+         $this->code(403);
+         return $this;
+      }
+      try {
+         $state = @fstat($Handler);
+      }
+      finally {
+         @fclose($Handler);
+      }
+      if (
+         $state === false
+         || ($state['mode'] & 0170000) !== 0100000
+      ) {
          $this->code( 500);
          return $this;
       }
+      $size = $state['size'];
+      $identity = [
+         'device' => $state['dev'],
+         'inode' => $state['ino'],
+         'mode' => $state['mode'],
+         'size' => $size,
+         'modified' => $state['mtime'],
+         'changed' => $state['ctime'],
+      ];
 
       // @ Prepare HTTP headers
       $this->Header->prepare([
-         'Last-Modified' => gmdate('D, d M Y H:i:s \G\M\T', $File->modified),
+         'Last-Modified' => gmdate('D, d M Y H:i:s \G\M\T', $state['mtime']),
          // Cache
          'Cache-Control' => 'no-cache, must-revalidate',
          'Expires' => '0',
@@ -954,6 +980,7 @@ class Response extends Server\Response
       // @ Prepare writing
       $this->files[] = [
          'file' => $File->file, // @ Set file path to open handler
+         'identity' => $identity,
 
          'parts' => $parts,
          'pads' => $pads,

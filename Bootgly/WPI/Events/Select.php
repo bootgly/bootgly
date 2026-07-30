@@ -24,6 +24,7 @@ use function stream_select;
 use function usleep;
 use Closure;
 use Fiber;
+use RuntimeException;
 use Throwable;
 
 use Bootgly\ACI\Events\Loops;
@@ -82,6 +83,9 @@ class Select implements Events, Loops, Scheduler, Contextualizing
    /** @var array<int,array{deadline:int,Callback:Closure}> */
    private array $MonotonicTimers = [];
    private int $timer = 0;
+   // # Backend
+   // @ Consecutive false selector returns. A timeout is not a failure.
+   private int $failures = 0;
    // # Loop
    // ! Reusable reactor: assigned on every loop() entry/exit (never readonly)
    public float $started = 0.0;
@@ -97,6 +101,59 @@ class Select implements Events, Loops, Scheduler, Contextualizing
    public function __construct (Connections &$Connections)
    {
       $this->Connections = $Connections;
+   }
+
+   /**
+    * Check that one new resource is representable by this select backend.
+    *
+    * PHP resource IDs are not OS descriptor numbers, and an array-count cap
+    * cannot detect an FD at or above the build's FD_SETSIZE. Probe the exact
+    * resource once before persistent admission. Resources already present in
+    * any selector set were validated on their first admission.
+    *
+    * @param resource $Socket
+    */
+   protected function check ($Socket, int $flag): bool
+   {
+      $id = (int) $Socket;
+      if (
+         isset($this->reads[$id])
+         || isset($this->writes[$id])
+         || isset($this->excepts[$id])
+      ) {
+         return true;
+      }
+
+      for ($attempt = 0; $attempt < 2; $attempt++) {
+         $read = [];
+         $write = [];
+         $except = [];
+         match ($flag) {
+            self::EVENT_CONNECT, self::EVENT_READ => $read[] = $Socket,
+            self::EVENT_WRITE => $write[] = $Socket,
+            self::EVENT_EXCEPT => $except[] = $Socket,
+            default => null,
+         };
+         if ($read === [] && $write === [] && $except === []) {
+            return false;
+         }
+
+         try {
+            $selected = @stream_select($read, $write, $except, 0, 0);
+         }
+         catch (Throwable) {
+            $selected = false;
+         }
+         if ($selected !== false) {
+            return true;
+         }
+
+         // ? A signal can race even a zero-time probe. Dispatch it once and
+         //   retry with fresh arrays before rejecting a valid descriptor.
+         pcntl_signal_dispatch();
+      }
+
+      return false;
    }
 
    /**
@@ -116,7 +173,13 @@ class Select implements Events, Loops, Scheduler, Contextualizing
             $id = (int) $Socket;
 
             // System call select exceeded the maximum number of connections 1024.
-            if (count($this->reads) >= 1000 && isset($this->reads[$id]) === false) {
+            if (
+               isset($this->reads[$id]) === false
+               && (
+                  count($this->reads) >= 1000
+                  || $this->check($Socket, $flag) === false
+               )
+            ) {
                return false;
             }
 
@@ -130,7 +193,13 @@ class Select implements Events, Loops, Scheduler, Contextualizing
             $id = (int) $Socket;
 
             // System call select exceeded the maximum number of connections 1024.
-            if (count($this->reads) >= 1000 && isset($this->reads[$id]) === false) {
+            if (
+               isset($this->reads[$id]) === false
+               && (
+                  count($this->reads) >= 1000
+                  || $this->check($Socket, $flag) === false
+               )
+            ) {
                return false;
             }
 
@@ -143,7 +212,13 @@ class Select implements Events, Loops, Scheduler, Contextualizing
             $id = (int) $Socket;
 
             // System call select exceeded the maximum number of connections 1024.
-            if (count($this->writes) >= 1000 && isset($this->writes[$id]) === false) {
+            if (
+               isset($this->writes[$id]) === false
+               && (
+                  count($this->writes) >= 1000
+                  || $this->check($Socket, $flag) === false
+               )
+            ) {
                return false;
             }
 
@@ -156,7 +231,13 @@ class Select implements Events, Loops, Scheduler, Contextualizing
             $id = (int) $Socket;
 
             // System call select exceeded the maximum number of connections 1024.
-            if (count($this->excepts) >= 1000 && isset($this->excepts[$id]) === false) {
+            if (
+               isset($this->excepts[$id]) === false
+               && (
+                  count($this->excepts) >= 1000
+                  || $this->check($Socket, $flag) === false
+               )
+            ) {
                return false;
             }
 
@@ -362,7 +443,47 @@ class Select implements Events, Loops, Scheduler, Contextualizing
             continue;
          }
 
-         if ($streams === false || $streams === 0) {
+         if ($streams === false) {
+            // ? Every worker receives a one-second SIGALRM. PHP reports an
+            //   interrupted blocking select and an invalid descriptor set as
+            //   the same `false`, so dispatch the signal and immediately
+            //   probe the current persistent sets without blocking.
+            pcntl_signal_dispatch();
+            $read = $this->reads;
+            $write = $this->writes;
+            $except = $this->excepts;
+            if ($read || $write || $except) {
+               try {
+                  $streams = @stream_select($read, $write, $except, 0, 0);
+               }
+               catch (Throwable) {
+                  $streams = false;
+               }
+            }
+            else {
+               $streams = 0;
+            }
+
+            if ($streams === false) {
+               $this->failures++;
+               $this->tick();
+
+               // ! The immediate retry proved that this was not merely the
+               //   expected alarm interruption. Back off before retrying and
+               //   recycle a persistently invalid worker instead of hot-spin.
+               usleep(min(100_000, 1_000 << min(6, $this->failures - 1)));
+               if ($this->failures >= 3) {
+                  throw new RuntimeException(
+                     'stream_select failed on the admitted event set.'
+                  );
+               }
+
+               continue;
+            }
+         }
+         $this->failures = 0;
+
+         if ($streams === 0) {
             $this->tick();
 
             continue;
