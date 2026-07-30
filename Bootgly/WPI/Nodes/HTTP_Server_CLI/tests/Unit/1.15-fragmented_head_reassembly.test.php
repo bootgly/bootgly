@@ -154,6 +154,8 @@ return new Specification(
       $OldRequest = $WPI->Request ?? null;
       $OldDecoder = TCPServer::$Decoder;
       $OldEncoder = TCPServer::$Encoder;
+      $oldWorkerCap = TCPServer::$maxWorkerPendingBytes;
+      $baseline = TCPServer::$pendingBytes;
 
       $ConnectionA = new U115Connection($SocketA);
       $PackageA = new class($ConnectionA) extends TCPPackages {};
@@ -177,8 +179,20 @@ return new Specification(
          yield new Assertion(
             description: 'The first fragment is retained whole, with no response',
          )
-            ->expect([$PackageA->carry, U115Stream::$written['a'], $PackageA->carried])
-            ->to->be([$fragment1, '', false])
+            ->expect([
+               $PackageA->carry,
+               U115Stream::$written['a'],
+               $PackageA->carried,
+               $PackageA->Buffers->retained,
+               TCPServer::$pendingBytes,
+            ])
+            ->to->be([
+               $fragment1,
+               '',
+               false,
+               strlen($fragment1),
+               $baseline + strlen($fragment1),
+            ])
             ->assert();
 
          // @ Connection B interleaves a COMPLETE request meanwhile.
@@ -188,8 +202,22 @@ return new Specification(
          yield new Assertion(
             description: 'The interleaved connection completes without seeing the other carry',
          )
-            ->expect([U115Stream::$written['b'], $PackageB->carry, $PackageB->carried, $PackageA->carry])
-            ->to->be(['R1', '', false, $fragment1])
+            ->expect([
+               U115Stream::$written['b'],
+               $PackageB->carry,
+               $PackageB->carried,
+               $PackageA->carry,
+               $PackageB->Buffers->retained,
+               TCPServer::$pendingBytes,
+            ])
+            ->to->be([
+               'R1',
+               '',
+               false,
+               $fragment1,
+               0,
+               $baseline + strlen($fragment1),
+            ])
             ->assert();
 
          // @ Connection A: second fragment — still incomplete, carry grows.
@@ -199,8 +227,20 @@ return new Specification(
          yield new Assertion(
             description: 'The reassembled-but-incomplete head is re-retained whole',
          )
-            ->expect([$PackageA->carry, U115Stream::$written['a'], $PackageA->carried])
-            ->to->be(["{$fragment1}{$fragment2}", '', true])
+            ->expect([
+               $PackageA->carry,
+               U115Stream::$written['a'],
+               $PackageA->carried,
+               $PackageA->Buffers->retained,
+               TCPServer::$pendingBytes,
+            ])
+            ->to->be([
+               "{$fragment1}{$fragment2}",
+               '',
+               true,
+               strlen($fragment1 . $fragment2),
+               $baseline + strlen($fragment1 . $fragment2),
+            ])
             ->assert();
 
          // @ Connection A: final fragment completes the head.
@@ -215,13 +255,66 @@ return new Specification(
                $PackageA->carry,
                HTTP_Server_CLI::$Request->method,
                $ConnectionA->closed,
+               $PackageA->Buffers->retained,
+               TCPServer::$pendingBytes,
             ])
-            ->to->be(['R2', '', 'GET', false])
+            ->to->be(['R2', '', 'GET', false, 0, $baseline])
+            ->assert();
+
+         // # Aggregate cap: each fragment fits alone, the second concurrent
+         //   carry is exactly cap+1 and must close only its growing peer.
+         TCPServer::$maxWorkerPendingBytes =
+            $baseline + (2 * strlen($fragment1)) - 1;
+
+         U115Stream::$chunks['a'][] = $fragment1;
+         $PackageA->reading($SocketA);
+         U115Stream::$chunks['b'][] = $fragment1;
+         $PackageB->reading($SocketB);
+
+         yield new Assertion(
+            description: 'Concurrent carry growth is rejected at worker cap plus one',
+         )
+            ->expect([
+               $ConnectionA->closed,
+               $PackageA->carry,
+               $PackageA->Buffers->retained,
+               $ConnectionB->closed,
+               $PackageB->carry,
+               $PackageB->Buffers->retained,
+               TCPServer::$pendingBytes,
+            ])
+            ->to->be([
+               false,
+               $fragment1,
+               strlen($fragment1),
+               true,
+               '',
+               0,
+               $baseline + strlen($fragment1),
+            ])
+            ->assert();
+
+         U115Stream::$chunks['a'][] = $fragment2 . $fragment3;
+         $PackageA->reading($SocketA);
+
+         yield new Assertion(
+            description: 'The admitted carry reassembles and returns the worker budget',
+         )
+            ->expect([
+               U115Stream::$written['a'],
+               $PackageA->carry,
+               $PackageA->Buffers->retained,
+               TCPServer::$pendingBytes,
+            ])
+            ->to->be(['R2R3', '', 0, $baseline])
             ->assert();
       }
       finally {
          TCPServer::$Decoder = $OldDecoder;
          TCPServer::$Encoder = $OldEncoder;
+         TCPServer::$maxWorkerPendingBytes = $oldWorkerCap;
+         $PackageA->Buffers->release();
+         $PackageB->Buffers->release();
          if ($OldRequest !== null) {
             $WPI->Request = $OldRequest;
          }

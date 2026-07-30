@@ -11,11 +11,11 @@
 namespace Bootgly\WPI\Interfaces\TCP_Server_CLI;
 
 
+use const PHP_INT_MAX;
 use const PHP_EOL;
 use const SEEK_SET;
 use function array_key_exists;
 use function array_key_first;
-use function count;
 use function dirname;
 use function disk_free_space;
 use function fclose;
@@ -43,6 +43,7 @@ use Bootgly\WPI;
 use Bootgly\WPI\Endpoints\Servers\Decoder\States;
 use Bootgly\WPI\Endpoints\Servers\Feeding;
 use Bootgly\WPI\Endpoints\Servers\Packages as Server_Packages;
+use Bootgly\WPI\Endpoints\Servers\Resuming;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI as Server;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections\Connection;
@@ -86,6 +87,21 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
    //   true at the moment a write deferred; the actual close happens once
    //   `$pendingBuffer` fully drains.
    public bool $closeAfterDrain = false;
+   //   Absolute reservation for this Package's persistent in-memory transport
+   //   bytes. Independent protocol owners use their own token against the
+   //   same worker ledger.
+   private null|Buffers $Accountant = null;
+   public Buffers $Buffers {
+      get {
+         // ? Test doubles and specialized parser fixtures may intentionally
+         //   bypass the transport constructor. Production eagerly initializes
+         //   this token; the hook keeps those valid subclasses safe.
+         return $this->Accountant ??= new Buffers;
+      }
+      set (Buffers $Accountant) {
+         $this->Accountant = $Accountant;
+      }
+   }
    //   Whether this Package has already requested EVENT_WRITE notification
    //   from the event loop. Idempotent on `Select::add`, but tracking it
    //   lets us issue a matching `del` on full drain.
@@ -131,6 +147,7 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
    public function __construct (Connection &$Connection)
    {
       $this->Connection = $Connection;
+      $this->Buffers = new Buffers;
 
       parent::__construct();
 
@@ -300,6 +317,9 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
       else {
          $input = "{$this->carry}{$input}";
          $this->carry = '';
+         // @ Ownership moved from persistent carry to this event-local input.
+         //   Shrinkage cannot fail, even when the configured cap was lowered.
+         $this->Buffers->reserve($this->measure());
          $this->carried = true;
       }
 
@@ -349,7 +369,16 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
       }
 
       if ($state === States::Complete) {
-         $this->write($Socket);
+         // ? A failed first write already aborted, released and closed this
+         //   Package. A successful terminal drain can also close here. Stop
+         //   before a pipelined incomplete tail can reacquire retained-byte
+         //   ownership on the dead connection.
+         if (
+            $this->write($Socket) === false // @phpstan-ignore deadCode.unreachable
+            || $this->Connection->status > Connections::STATUS_ESTABLISHED
+         ) {
+            return true;
+         }
 
          // @ Recommendation #3: write deferred to event loop. A deferred
          //   write must NOT stop pipelining: the peer may have already sent
@@ -428,10 +457,13 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
                   return true;
                }
 
-               // ? `write()` propagates `writing() === false`: the deferred
-               //   write layer closed the connection (pending-memory cap or
-               //   stall deadline) — stop decoding for a dead connection.
-               if ($this->write($Socket) === false) { // @phpstan-ignore deadCode.unreachable
+               // ? `write()` propagates `writing() === false` on abort. A
+               //   successful terminal drain can also close here. Either
+               //   outcome stops decoding for the dead connection.
+               if ( // @phpstan-ignore deadCode.unreachable
+                  $this->write($Socket) === false
+                  || $this->Connection->status > Connections::STATUS_ESTABLISHED
+               ) {
                   return true;
                }
 
@@ -505,23 +537,30 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
    {
       // ? Everything consumed — nothing to carry.
       if ($offset >= $length) {
+         if ($this->carry !== '') {
+            $this->carry = '';
+            $this->Buffers->reserve($this->measure());
+         }
          return;
       }
-
-      // !
-      $carry = ($offset === 0) ? $input : substr($input, $offset);
 
       // ? Memory cap: a peer that never completes a request cannot grow
       //   the carry unbounded (defense in depth — `Frame::parse` rejects
       //   oversized heads deterministically well below this).
-      if (strlen($carry) > Server::$maxPendingBytes) {
+      $bytes = $length - $offset;
+      $retained = $this->measure() - strlen($this->carry);
+      if (
+         $bytes > max(0, Server::$maxPendingBytes) - $retained
+         || $this->reserve($retained + $bytes) === false
+      ) {
          $this->carry = '';
+         $this->Buffers->reserve($this->measure());
          $this->Connection->close();
          return;
       }
 
       // :
-      $this->carry = $carry;
+      $this->carry = ($offset === 0) ? $input : substr($input, $offset);
    }
    // ---
    /**
@@ -567,6 +606,16 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
          $this->reset($Socket);
 
          return $this->Connection->handshake() !== false;
+      }
+
+      // @ Raw::encode() installs file-response metadata directly on the
+      //   Package immediately before writing(). Admit its in-memory pads here,
+      //   before any socket operation or ownership transfer.
+      if (
+         ($this->uploading !== [] || $this->stagedUploading !== [])
+         && $this->reserve($this->measure()) === false
+      ) {
+         return $this->abort($Socket);
       }
 
       $available = strlen($buffer);
@@ -685,7 +734,12 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
             && $this->pendingResponses === []
             && $uploads === []
          ) {
-            if ($this->measure() + strlen($buffer) > Server::$maxPendingBytes) {
+            $bytes = strlen($buffer);
+            $retained = $this->measure();
+            if (
+               $bytes > max(0, Server::$maxPendingBytes) - $retained
+               || $this->reserve($retained + $bytes) === false
+            ) {
                return $this->abort($Socket);
             }
 
@@ -824,6 +878,12 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
          $this->uploadClosing = false;
          $this->Connection->close();
       }
+      else if ($this->decoded instanceof Resuming) {
+         // @ A protocol-local tail (HTTP/2 DATA) may have intentionally
+         //   stopped materializing while this writer owned the previous
+         //   bounded slice. Resume only after every transport owner drained.
+         $this->decoded->resume();
+      }
 
       return true;
    }
@@ -884,13 +944,16 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
                ? $this->pendingBuffer
                : substr($this->pendingBuffer, $this->pendingOffset)
          );
-      $buffer = $pending . $buffer;
-
-      if ($this->measure() - strlen($pending) + strlen($buffer) > Server::$maxPendingBytes) {
+      $bytes = strlen($buffer);
+      $retained = $this->measure();
+      if (
+         $bytes > max(0, Server::$maxPendingBytes) - $retained
+         || $this->reserve($retained + $bytes) === false
+      ) {
          return false;
       }
 
-      $this->pendingBuffer = $buffer;
+      $this->pendingBuffer = $pending . $buffer;
       $this->pendingOffset = 0;
       if ($this->pendingDeadline === 0.0) {
          $this->pendingDeadline = microtime(true) + (float) Server::$maxWriteWallTime;
@@ -924,7 +987,16 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
     */
    protected function queue (&$Socket, string $buffer, array $uploads): bool
    {
-      if ($this->measure() + strlen($buffer) > Server::$maxPendingBytes) {
+      $bytes = strlen($buffer);
+      $uploadBytes = $this->weigh($uploads);
+      $bytes = $uploadBytes > PHP_INT_MAX - $bytes
+         ? PHP_INT_MAX
+         : $bytes + $uploadBytes;
+      $retained = $this->measure();
+      if (
+         $bytes > max(0, Server::$maxPendingBytes) - $retained
+         || $this->reserve($retained + $bytes) === false
+      ) {
          $this->abort($Socket);
          return false;
       }
@@ -937,20 +1009,95 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
       return true;
    }
    /**
-    * Measure all resident output bytes governed by maxPendingBytes.
+    * Measure every persistent byte owned by this Package.
     */
    protected function measure (): int
    {
-      $bytes = max(
+      $bytes = strlen($this->carry) + max(
          0,
          strlen($this->pendingBuffer) - $this->pendingOffset,
       );
 
       foreach ($this->pendingResponses as $Response) {
-         $bytes += strlen($Response['buffer']);
+         $bufferBytes = strlen($Response['buffer']);
+         if ($bufferBytes > PHP_INT_MAX - $bytes) {
+            return PHP_INT_MAX;
+         }
+         $bytes += $bufferBytes;
+
+         $uploadBytes = $this->weigh($Response['uploads']);
+         if ($uploadBytes > PHP_INT_MAX - $bytes) {
+            return PHP_INT_MAX;
+         }
+         $bytes += $uploadBytes;
+      }
+
+      foreach ([$this->uploading, $this->stagedUploading] as $uploads) {
+         $uploadBytes = $this->weigh($uploads);
+         if ($uploadBytes > PHP_INT_MAX - $bytes) {
+            return PHP_INT_MAX;
+         }
+         $bytes += $uploadBytes;
       }
 
       return $bytes;
+   }
+   /**
+    * Weigh in-memory output strings retained by file-response metadata.
+    *
+    * Disk-backed ranges are excluded. Multipart prepend/append strings are
+    * resident output and remain charged until their owning pad is cleared.
+    *
+    * @param array<int, mixed> $uploads
+    */
+   protected function weigh (array $uploads): int
+   {
+      $bytes = 0;
+
+      foreach ($uploads as $queued) {
+         if (! is_array($queued)) {
+            continue;
+         }
+         $pads = $queued['pads'] ?? [];
+         if (! is_array($pads)) {
+            continue;
+         }
+
+         foreach ($pads as $pad) {
+            if (! is_array($pad)) {
+               continue;
+            }
+            foreach (['prepend', 'append'] as $key) {
+               $value = $pad[$key] ?? null;
+               if (! is_string($value)) {
+                  continue;
+               }
+
+               $length = strlen($value);
+               if ($length > PHP_INT_MAX - $bytes) {
+                  return PHP_INT_MAX;
+               }
+               $bytes += $length;
+            }
+         }
+      }
+
+      return $bytes;
+   }
+   /**
+    * Reserve an absolute Package footprint against both byte ceilings.
+    */
+   protected function reserve (int $bytes): bool
+   {
+      $wanted = max(0, $bytes);
+      if (
+         $wanted > $this->Buffers->retained
+         && $wanted > max(0, Server::$maxPendingBytes)
+      ) {
+         return false;
+      }
+
+      return $this->Buffers->reserve($wanted);
    }
    /**
     * Account one successful write batch.
@@ -990,7 +1137,7 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
       return false;
    }
    /**
-    * Release direct-upload cursor ownership, if any.
+    * Release every persistent transport owner held by this Package.
     */
    protected function release (): void
    {
@@ -1000,6 +1147,20 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
       $this->directUploadHandler = null;
       $this->directUploadRate = 0;
       $this->directUploadRemaining = 0;
+
+      $this->pendingBuffer = '';
+      $this->pendingOffset = 0;
+      $this->pendingDeadline = 0.0;
+      $this->pendingResponses = [];
+      $this->uploading = [];
+      $this->stagedUploading = [];
+      $this->uploadAwaiting = false;
+      $this->uploadClosing = false;
+      $this->uploadCloseRequested = false;
+      $this->closeAfterDrain = false;
+      $this->carry = '';
+      $this->carried = false;
+      $this->Buffers->release();
    }
    /**
     * Reset deferred-write state and drop any EVENT_WRITE registration.
@@ -1011,6 +1172,10 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
       $this->pendingBuffer = '';
       $this->pendingOffset = 0;
       $this->pendingDeadline = 0.0;
+      // @ A queued response or receive carry may remain after a write reset.
+      //   Reconcile to the exact persistent footprint instead of zeroing the
+      //   token blindly.
+      $this->Buffers->reserve($this->measure());
 
       if ($this->writeRegistered) {
          if (isset(Server::$Event)) {
@@ -1181,6 +1346,9 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
                $written += $sent;
                $pad['prepend'] = '';
                $pads[$partKey] = $pad;
+               // @ The pad either left memory or its unsent suffix moved to
+               //   pendingBuffer. Reconcile after the source owner is cleared.
+               $this->Buffers->reserve($this->measure());
 
                if ($complete === false) {
                   $this->abort($Socket);
@@ -1319,6 +1487,7 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
                $written += $sent;
                $pad['append'] = '';
                $pads[$partKey] = $pad;
+               $this->Buffers->reserve($this->measure());
 
                if ($complete === false) {
                   $this->abort($Socket);

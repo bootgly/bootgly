@@ -13,9 +13,11 @@ namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Decoder_HTTP2;
 
 use function fclose;
 use function is_resource;
+use function is_string;
 use function strlen;
 
 use Bootgly\WPI\Endpoints\Servers\Disconnecting;
+use Bootgly\WPI\Interfaces\TCP_Server_CLI\Buffers;
 
 
 /**
@@ -53,6 +55,8 @@ class Stream
    public int $pending;
    // @ Outbound DATA blocked by an exhausted window, waiting for credit.
    public string $backlog;
+   // @ Worker-wide reservation for this stream's in-memory outbound tail.
+   public Buffers $Buffers;
    // @ Flow-control progress clock: stamped when backlog bytes are actually
    //   CONSUMED by drain() and when a write first parks bytes into an empty
    //   backlog. A non-empty backlog whose clock stops advancing is a real
@@ -96,6 +100,7 @@ class Stream
       $this->supply = $supply;
       $this->pending = 0;
       $this->backlog = '';
+      $this->Buffers = new Buffers;
       $this->drained = 0;
       $this->chunks = [];
       $this->chunk = 0;
@@ -124,10 +129,35 @@ class Stream
       $this->chunks = [];
       $this->chunk = 0;
       $this->backlog = '';
+      $this->Buffers->release();
 
       // # Notify the owning unit exactly once (disconnect() is idempotent)
       $Owner = $this->Owner;
       $this->Owner = null;
       $Owner?->disconnect();
+   }
+
+   /**
+    * Measure the stream's persistent in-memory outbound tail.
+    *
+    * File ranges remain disk-backed and are intentionally excluded. Only
+    * unread raw backlog and in-memory pad segments are charged.
+    */
+   public function measure (): int
+   {
+      $bytes = strlen($this->backlog);
+
+      foreach ($this->chunks as $index => $segment) {
+         if ($index < $this->chunk || ! is_string($segment['data'] ?? null)) {
+            continue;
+         }
+
+         // ! `position` is a send cursor, not a memory cursor: substr() used
+         //   by drain() does not compact this source string. Charge the whole
+         //   allocation until drain() clears `data` on complete consumption.
+         $bytes += strlen($segment['data']);
+      }
+
+      return $bytes;
    }
 }

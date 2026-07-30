@@ -16,6 +16,7 @@ use function explode;
 use function feof;
 use function is_string;
 use function json_encode;
+use function max;
 use function pack;
 use function strcasecmp;
 use function strlen;
@@ -731,10 +732,32 @@ class SSE extends Resource implements Disconnecting
          //   multiply the transport pendingBuffer cap by the stream limit.
          //   On breach, reset THIS stream (CANCEL) and tear this unit down.
          $backlogged = strlen($payload);
+         $limit = max(0, TCP_Server_CLI::$maxPendingBytes);
+         $exceeded = $backlogged > $limit;
          foreach ($H2->Streams as $Sibling) {
-            $backlogged += strlen($Sibling->backlog);
+            $bytes = $Sibling->measure();
+            if ($bytes > $limit - $backlogged) {
+               $exceeded = true;
+               break;
+            }
+            $backlogged += $bytes;
          }
-         if ($backlogged > TCP_Server_CLI::$maxPendingBytes) {
+         if ($exceeded) {
+            $this->abort();
+            return false;
+         }
+
+         // ? The per-connection check above and this worker-wide reservation
+         //   are separate boundaries. Reserve before concatenation so many
+         //   HTTP/2 connections cannot multiply an individually valid SSE
+         //   backlog into unbounded worker retention.
+         $retained = $Stream->measure();
+         $bytes = strlen($payload);
+         if (
+            $bytes > max(0, TCP_Server_CLI::$maxWorkerPendingBytes)
+               - TCP_Server_CLI::$pendingBytes
+            || $Stream->Buffers->reserve($retained + $bytes) === false
+         ) {
             $this->abort();
             return false;
          }

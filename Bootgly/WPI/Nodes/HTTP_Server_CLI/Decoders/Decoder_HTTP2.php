@@ -11,6 +11,7 @@
 namespace Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders;
 
 
+use const PHP_INT_MAX;
 use function array_unshift;
 use function count;
 use function ctype_digit;
@@ -19,10 +20,13 @@ use function fopen;
 use function fread;
 use function fseek;
 use function fwrite;
+use function hrtime;
+use function intdiv;
 use function is_array;
 use function is_int;
 use function is_resource;
 use function is_string;
+use function max;
 use function min;
 use function ord;
 use function pack;
@@ -41,7 +45,9 @@ use Bootgly\WPI\Endpoints\Servers\Decoder\States;
 use Bootgly\WPI\Endpoints\Servers\Disconnecting;
 use Bootgly\WPI\Endpoints\Servers\Feeding;
 use Bootgly\WPI\Endpoints\Servers\Packages;
+use Bootgly\WPI\Endpoints\Servers\Resuming;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI;
+use Bootgly\WPI\Interfaces\TCP_Server_CLI\Buffers;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages as TCP_Packages;
 use Bootgly\WPI\Modules\HTTP2;
 use Bootgly\WPI\Modules\HTTP2\Errors;
@@ -68,12 +74,17 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Frame as RequestFrame;
  * `decode()` consumes frames incrementally and returns `States::Complete`
  * once per stream that finished (END_STREAM + valid head), so the existing
  * pipelining loop in `Packages::reading()` dispatches N streams per TCP
- * read. Control frames are answered through `$outbox`, which is flushed
- * together with the next response — typically one single `fwrite` for
- * SETTINGS + ACK + HEADERS + DATA.
+ * read. Control frames are assembled through `$outbox`, then transferred to
+ * the accounting transport writer before every decoder return. When a request
+ * completes, this happens before application dispatch can defer its response.
  */
-class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding
+class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding, Resuming
 {
+   // @ Maximum serialized DATA retained by one decoder callback. This bounds
+   //   the event-local duplicate created while disk-backed tails are framed,
+   //   even when a peer advertises the RFC maximum flow-control windows.
+   protected const int DATA_BATCH = 1024 * 1024;
+
    // @ Connection-specific fields forbidden in HTTP/2 requests (RFC 9113 §8.2.2)
    protected const array FORBIDDEN = [
       'connection' => true,
@@ -116,6 +127,8 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding
    public Settings $Remote;
    public HPACK $HPACK;
    public Bodies $Bodies;
+   /** Worker-wide reservation for protocol-internal receive carry. */
+   public Buffers $Buffers;
    /** @var array<int, Stream> */
    public array $Streams;
 
@@ -165,6 +178,8 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding
    protected int $since;
    // # Transport back-reference (for Disconnecting teardown)
    protected null|TCP_Packages $Package;
+   // @ One deferred continuation for locally-sliced outbound DATA.
+   protected bool $scheduled;
 
 
    public function __construct ()
@@ -180,6 +195,7 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding
          static::$maxConnectionBodySize,
          static::$maxWorkerBodySize
       );
+      $this->Buffers = new Buffers;
       $this->Streams = [];
 
       // * Metadata
@@ -202,6 +218,7 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding
       $this->churn = 0;
       $this->since = 0;
       $this->Package = null;
+      $this->scheduled = false;
    }
 
    public function decode (Packages $Package, string $buffer, int $size): States
@@ -228,6 +245,9 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding
          $work = "{$this->buffer}{$buffer}";
          $carried = strlen($this->buffer);
          $this->buffer = '';
+         // @ The partial frame moved into this callback's local work buffer.
+         //   Keep only any still-persistent CONTINUATION fragments charged.
+         $this->reserve($this->measure());
       }
       $length = $carried + $size;
       $offset = 0;
@@ -235,6 +255,13 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding
       // ? Connection preface (RFC 9113 §3.4) — also sent over TLS-ALPN
       if ($this->prefaced === false) {
          if ($length < 24) {
+            if ($this->reserve(strlen($work) + strlen($this->fragments)) === false) {
+               return $this->fail(
+                  $Package,
+                  Errors::EnhanceYourCalm,
+                  'retained input budget exceeded'
+               );
+            }
             $this->buffer = $work;
             $Package->consumed = $size;
             return States::Incomplete;
@@ -367,6 +394,13 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding
                $Stream->ended = true;
                if ($this->dispatch($Package, $Stream)) {
                   $Package->consumed = $offset - $carried;
+                  // ! A deferred application response returns no encoder wire,
+                  //   so control frames cannot rely on response piggybacking.
+                  //   Transfer them to the accounting transport writer before
+                  //   this Complete boundary can hand execution to the router.
+                  if ($this->flush($Package) === false) {
+                     return States::Rejected;
+                  }
                   return States::Complete;
                }
                break;
@@ -431,6 +465,9 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding
                   if ($state !== null) {
                      if ($state === States::Complete) {
                         $Package->consumed = $offset - $carried;
+                        if ($this->flush($Package) === false) {
+                           return States::Rejected;
+                        }
                      }
                      return $state;
                   }
@@ -438,6 +475,13 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding
                }
 
                // @ Await CONTINUATION frames
+               if ($this->reserve(strlen($this->buffer) + strlen($data)) === false) {
+                  return $this->fail(
+                     $Package,
+                     Errors::EnhanceYourCalm,
+                     'retained input budget exceeded'
+                  );
+               }
                $this->expected = $stream;
                $this->fragments = $data;
                break;
@@ -448,20 +492,42 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding
                   return $this->fail($Package, Errors::Protocol, 'stray CONTINUATION');
                }
 
-               $this->fragments .= $data;
                // ? Compressed accumulation cap — CONTINUATION flood guard
-               if (strlen($this->fragments) > 2 * static::$list) {
+               $fragmentBytes = strlen($this->fragments);
+               $dataBytes = strlen($data);
+               $fragmentLimit = static::$list > intdiv(PHP_INT_MAX, 2)
+                  ? PHP_INT_MAX
+                  : 2 * static::$list;
+               if ($dataBytes > $fragmentLimit - $fragmentBytes) {
                   return $this->fail($Package, Errors::EnhanceYourCalm, 'header block too large');
                }
+               if (
+                  $this->reserve(
+                     strlen($this->buffer) + $fragmentBytes + $dataBytes
+                  ) === false
+               ) {
+                  return $this->fail(
+                     $Package,
+                     Errors::EnhanceYourCalm,
+                     'retained input budget exceeded'
+                  );
+               }
+               $this->fragments .= $data;
 
                // ?: Block complete?
                if (($flags & HTTP2::FLAG_END_HEADERS) !== 0) {
                   $this->expected = 0;
-                  $state = $this->resolve($Package, $stream, $this->fragments);
+                  $block = $this->fragments;
                   $this->fragments = '';
+                  // @ Ownership moved to the event-local HPACK decode input.
+                  $this->reserve($this->measure());
+                  $state = $this->resolve($Package, $stream, $block);
                   if ($state !== null) {
                      if ($state === States::Complete) {
                         $Package->consumed = $offset - $carried;
+                        if ($this->flush($Package) === false) {
+                           return States::Rejected;
+                        }
                      }
                      return $state;
                   }
@@ -661,11 +727,24 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding
 
       // @ Stash any partial frame for the next read
       if ($offset < $length) {
-         $this->buffer = substr($work, $offset);
+         $carry = substr($work, $offset);
+         if (
+            $this->reserve(strlen($carry) + strlen($this->fragments)) === false
+         ) {
+            return $this->fail(
+               $Package,
+               Errors::EnhanceYourCalm,
+               'retained input budget exceeded'
+            );
+         }
+         $this->buffer = $carry;
       }
 
       // @ Nothing dispatched this pass — push pending control frames out
-      $this->flush($Package);
+      if ($this->flush($Package) === false) {
+         $Package->consumed = $size;
+         return States::Rejected;
+      }
 
       $Package->consumed = $size;
       return States::Incomplete;
@@ -677,7 +756,38 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding
     */
    public function feed (string $buffer): void
    {
+      $retained = $this->measure();
+      $bytes = strlen($buffer);
+      if (
+         $bytes > PHP_INT_MAX - $retained
+         || $this->reserve($retained + $bytes) === false
+      ) {
+         $Package = $this->Package;
+         if ($Package !== null) {
+            $this->fail(
+               $Package,
+               Errors::EnhanceYourCalm,
+               'retained input budget exceeded'
+            );
+         }
+         else {
+            $this->buffer = '';
+            $this->fragments = '';
+            $this->Buffers->release();
+         }
+         return;
+      }
+
       $this->buffer .= $buffer;
+   }
+
+   /**
+    * Ask the reactor to continue a locally-sliced response tail now that the
+    * ordered transport writer has returned to an idle state.
+    */
+   public function resume (): void
+   {
+      $this->schedule();
    }
 
    /**
@@ -710,8 +820,11 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding
          $Stream->close();
       }
       $this->closing = true;
+      $this->scheduled = false;
       $this->outbox = '';
       $this->buffer = '';
+      $this->fragments = '';
+      $this->Buffers->release();
       $this->Streams = [];
       $this->opened = 0;
    }
@@ -1067,6 +1180,11 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding
          return;
       }
 
+      // ! Share one serialized-byte allowance across every runnable stream.
+      //   Without a connection-wide batch, 128 streams could each materialize
+      //   one full allowance during the same callback.
+      $budget = self::DATA_BATCH;
+
       // @@
       foreach ($this->Streams as $id => $Stream) {
          if (
@@ -1076,7 +1194,7 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding
             continue;
          }
 
-         [$frames, $done] = $this->drain($Stream, $id);
+         [$frames, $done, $budget] = $this->drain($Stream, $id, $budget);
          $this->outbox .= $frames;
 
          if ($done) {
@@ -1087,9 +1205,19 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding
 
          // ?! `drain()` spends connection-window credit — PHPStan cannot see
          //   the `$this->window` mutation through the call.
-         if ($this->window <= 0) { // @phpstan-ignore smallerOrEqual.alwaysFalse
+         if (
+            $this->window <= 0 // @phpstan-ignore smallerOrEqual.alwaysFalse
+            || $budget <= 9
+         ) {
             break;
          }
+      }
+
+      // @ Locally slicing DATA must not wait for another WINDOW_UPDATE when
+      //   the peer already granted ample credit. Continue on a later reactor
+      //   turn, after this batch has entered the ordered transport writer.
+      if ($budget <= 9) {
+         $this->schedule();
       }
 
       $this->flush($Package);
@@ -1098,43 +1226,55 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding
    /**
     * Drain one stream's parked response tail (raw `backlog` + file/pad
     * `chunks`) into DATA frames, bounded by the connection + stream send
-    * windows and the peer frame size. File segments are read lazily per
-    * window credit — never materialized whole.
+    * windows, the peer frame size and a strict serialized-byte batch. File
+    * segments are read lazily per batch — never materialized whole.
     *
     * Called by `pump()` (window credit arrived) and by
     * `Encoder_HTTP2::frame()` (first drain, DATA rides with HEADERS).
     *
-    * @return array{0: string, 1: bool} Packed DATA frames + whether the tail finished.
+    * @param null|int $budget Maximum serialized bytes for this call. `null`
+    *                         selects the hard per-callback DATA batch.
+    * @return array{0: string, 1: bool, 2: int} Packed DATA frames, whether
+    *         the tail finished, and the unspent serialized-byte allowance.
     */
-   public function drain (Stream $Stream, int $stream): array
+   public function drain (
+      Stream $Stream,
+      int $stream,
+      null|int $budget = null
+   ): array
    {
       // !
       $frames = '';
-      $limit = $this->Remote->frame;
+      $limit = max(1, $this->Remote->frame);
+      $budget = min(self::DATA_BATCH, max(0, $budget ?? self::DATA_BATCH));
 
       // @@
-      while ($this->window > 0 && $Stream->window > 0) {
+      while ($this->window > 0 && $Stream->window > 0 && $budget > 9) {
          // # Raw body tail
          if ($Stream->backlog !== '') {
-            $send = min($this->window, $Stream->window, strlen($Stream->backlog));
+            $send = min(
+               $this->window,
+               $Stream->window,
+               strlen($Stream->backlog),
+               $limit,
+               $budget - 9
+            );
             $payload = substr($Stream->backlog, 0, $send);
             $Stream->backlog = substr($Stream->backlog, $send);
             // ! Real consumption — advance the flow-control progress clock
             $Stream->drained = time();
             $this->window -= $send;
             $Stream->window -= $send;
+            $budget -= 9 + $send;
 
             $done = $Stream->backlog === '' && $Stream->chunk >= count($Stream->chunks)
                && $Stream->sustained === false;
-            for ($offset = 0; $offset < $send; $offset += $limit) {
-               $chunk = substr($payload, $offset, min($limit, $send - $offset));
-               $frames .= Frame::pack(
-                  HTTP2::FRAME_DATA,
-                  ($done && $offset + $limit >= $send) ? HTTP2::FLAG_END_STREAM : 0,
-                  $stream,
-                  $chunk
-               );
-            }
+            $frames .= Frame::pack(
+               HTTP2::FRAME_DATA,
+               $done ? HTTP2::FLAG_END_STREAM : 0,
+               $stream,
+               $payload
+            );
             continue;
          }
 
@@ -1150,15 +1290,26 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding
             $position = is_int($segment['position'] ?? null) ? $segment['position'] : 0;
             $remaining = strlen($data) - $position;
             if ($remaining <= 0) {
+               $Stream->chunks[$Stream->chunk]['data'] = '';
                $Stream->chunk++;
                continue;
             }
 
-            $send = min($this->window, $Stream->window, $remaining);
+            $send = min(
+               $this->window,
+               $Stream->window,
+               $remaining,
+               $limit,
+               $budget - 9
+            );
             $payload = substr($data, $position, $send);
             $position += $send;
             $Stream->chunks[$Stream->chunk]['position'] = $position;
             if ($position >= strlen($data)) {
+               // @ Drop the consumed in-memory pad immediately. Keeping the
+               //   original string in an already-passed array slot would make
+               //   the heap outlive its reservation until stream teardown.
+               $Stream->chunks[$Stream->chunk]['data'] = '';
                $Stream->chunk++;
             }
 
@@ -1168,18 +1319,16 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding
             $Stream->drained = time();
             $this->window -= $send;
             $Stream->window -= $send;
+            $budget -= 9 + $send;
             $done = $Stream->chunk >= count($Stream->chunks)
                && $Stream->sustained === false;
 
-            for ($offset = 0; $offset < $send; $offset += $limit) {
-               $chunk = substr($payload, $offset, min($limit, $send - $offset));
-               $frames .= Frame::pack(
-                  HTTP2::FRAME_DATA,
-                  ($done && $offset + $limit >= $send) ? HTTP2::FLAG_END_STREAM : 0,
-                  $stream,
-                  $chunk
-               );
-            }
+            $frames .= Frame::pack(
+               HTTP2::FRAME_DATA,
+               $done ? HTTP2::FLAG_END_STREAM : 0,
+               $stream,
+               $payload
+            );
             continue;
          }
 
@@ -1212,7 +1361,7 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding
                $frames .= Frame::pack(
                   HTTP2::FRAME_RST_STREAM, 0, $stream, pack('N', Errors::Internal->value)
                );
-               return [$frames, true];
+               return [$frames, true, $budget];
             }
             $base = is_int($segment['offset'] ?? null) ? $segment['offset'] : 0;
             if (@fseek($Handler, $base + $position) !== 0) {
@@ -1221,65 +1370,122 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding
                $frames .= Frame::pack(
                   HTTP2::FRAME_RST_STREAM, 0, $stream, pack('N', Errors::Internal->value)
                );
-               return [$frames, true];
+               return [$frames, true, $budget];
             }
             $Stream->chunks[$Stream->chunk]['handler'] = $Handler;
          }
 
-         $send = min($this->window, $Stream->window, $remaining);
-         $sent = 0;
-         while ($sent < $send) {
-            /** @var int<1, max> $bytes `$sent < $send` bounds the difference */
-            $bytes = min($limit, $send - $sent);
-            try {
-               $payload = @fread($Handler, $bytes);
-            }
-            catch (Throwable) {
-               $payload = false;
-            }
-            if ($payload === false || $payload === '') {
-               $Stream->close();
-               $frames .= Frame::pack(
-                  HTTP2::FRAME_RST_STREAM, 0, $stream, pack('N', Errors::Internal->value)
-               );
-               return [$frames, true];
-            }
-
-            $read = strlen($payload);
-            $sent += $read;
-            $position += $read;
-            // ! Real consumption — a file transfer that IS progressing under
-            //   small window credit must advance the clock too, otherwise the
-            //   deadline sweep measures from the original park time and resets
-            //   a stream that is demonstrably draining.
-            $Stream->drained = time();
-            $this->window -= $read;
-            $Stream->window -= $read;
-            $Stream->chunks[$Stream->chunk]['position'] = $position;
-
-            if ($position >= $length) {
-               @fclose($Handler);
-               unset($Stream->chunks[$Stream->chunk]['handler']);
-               $Stream->chunk++;
-            }
-
-            $done = $Stream->chunk >= count($Stream->chunks)
-               && $Stream->sustained === false;
-            $frames .= Frame::pack(
-               HTTP2::FRAME_DATA,
-               $done ? HTTP2::FLAG_END_STREAM : 0,
-               $stream,
-               $payload
-            );
+         $bytes = min(
+            $this->window,
+            $Stream->window,
+            $remaining,
+            $limit,
+            $budget - 9
+         );
+         try {
+            $payload = @fread($Handler, $bytes);
          }
+         catch (Throwable) {
+            $payload = false;
+         }
+         if ($payload === false || $payload === '') {
+            $Stream->close();
+            $frames .= Frame::pack(
+               HTTP2::FRAME_RST_STREAM, 0, $stream, pack('N', Errors::Internal->value)
+            );
+            return [$frames, true, $budget];
+         }
+
+         $read = strlen($payload);
+         $position += $read;
+         // ! Real consumption — a file transfer that IS progressing under
+         //   small window credit must advance the clock too, otherwise the
+         //   deadline sweep measures from the original park time and resets
+         //   a stream that is demonstrably draining.
+         $Stream->drained = time();
+         $this->window -= $read;
+         $Stream->window -= $read;
+         $budget -= 9 + $read;
+         $Stream->chunks[$Stream->chunk]['position'] = $position;
+
+         if ($position >= $length) {
+            @fclose($Handler);
+            unset($Stream->chunks[$Stream->chunk]['handler']);
+            $Stream->chunk++;
+         }
+
+         $done = $Stream->chunk >= count($Stream->chunks)
+            && $Stream->sustained === false;
+         $frames .= Frame::pack(
+            HTTP2::FRAME_DATA,
+            $done ? HTTP2::FLAG_END_STREAM : 0,
+            $stream,
+            $payload
+         );
       }
 
       // :
+      // @ Every successful path only consumes retained bytes here. Reconcile
+      //   once after ownership moved into event-local DATA frames.
+      $Stream->Buffers->reserve($Stream->measure());
+
+      $done = $Stream->backlog === '' && $Stream->chunk >= count($Stream->chunks)
+         && $Stream->sustained === false;
+      if (
+         $done === false
+         && ($Stream->backlog !== '' || $Stream->chunk < count($Stream->chunks))
+         && $this->window > 0
+         && $Stream->window > 0
+         && $budget <= 9
+      ) {
+         $this->schedule();
+      }
+
       return [
          $frames,
-         $Stream->backlog === '' && $Stream->chunk >= count($Stream->chunks)
-            && $Stream->sustained === false
+         $done,
+         $budget
       ];
+   }
+
+   /**
+    * Continue a locally-sliced DATA tail on a later reactor turn.
+    *
+    * A previous serialized batch must first leave the decoder and enter the
+    * ordered writer. Backpressured writers call `resume()` after their queue
+    * drains, so this scheduler never polls slow connections.
+    */
+   protected function schedule (): void
+   {
+      if (
+         $this->scheduled
+         || $this->Package === null
+         || isset(TCP_Server_CLI::$Event) === false
+      ) {
+         return;
+      }
+
+      $this->scheduled = true;
+      TCP_Server_CLI::$Event->defer(
+         (int) hrtime(true),
+         function (): void {
+            $this->scheduled = false;
+            $Package = $this->Package;
+
+            if (
+               $Package === null
+               || is_resource($Package->Connection->Socket) === false
+            ) {
+               return;
+            }
+
+            if ($Package->pendingBuffer !== '' || $Package->writeRegistered) {
+               return;
+            }
+
+            $this->pump($Package);
+         }
+      );
    }
 
    /**
@@ -1348,6 +1554,26 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding
       return null;
    }
 
+   /** Measure protocol-internal receive bytes retained across callbacks. */
+   protected function measure (): int
+   {
+      return strlen($this->buffer) + strlen($this->fragments);
+   }
+
+   /** Reserve an absolute receive-carry footprint against both TCP ceilings. */
+   protected function reserve (int $bytes): bool
+   {
+      $wanted = max(0, $bytes);
+      if (
+         $wanted > $this->Buffers->retained
+         && $wanted > max(0, TCP_Server_CLI::$maxPendingBytes)
+      ) {
+         return false;
+      }
+
+      return $this->Buffers->reserve($wanted);
+   }
+
    /**
     * Connection error: emit pending frames + GOAWAY, close the transport.
     */
@@ -1364,6 +1590,9 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding
          $Stream->close();
       }
       $this->closing = true;
+      $this->buffer = '';
+      $this->fragments = '';
+      $this->Buffers->release();
       $raw = "{$this->outbox}{$goaway}";
       $this->outbox = '';
       $this->Streams = [];
@@ -1380,16 +1609,16 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding
    /**
     * Push pending control frames through the backpressure-aware writer.
     */
-   protected function flush (Packages $Package): void
+   protected function flush (Packages $Package): bool
    {
       /** @var TCP_Packages $Package */
       // ?
       if ($this->outbox === '') {
-         return;
+         return true;
       }
 
       $raw = $this->outbox;
       $this->outbox = '';
-      $Package->writing($Package->Connection->Socket, buffer: $raw);
+      return $Package->writing($Package->Connection->Socket, buffer: $raw);
    }
 }

@@ -262,6 +262,14 @@ class TCP_Server_CLI implements Servers
    //   backlog while the socket is unwritable. Past this threshold the
    //   connection is closed to avoid memory exhaustion.
    public static int $maxPendingBytes = 4194304; // 4 MiB
+   //   Maximum bytes every transport retention owner in one worker may keep
+   //   in aggregate. This covers TCP pending output/receive carry and
+   //   protocol-level output backlogs. A zero value rejects every new
+   //   retained byte; already-held bytes can always drain or be released.
+   public static int $maxWorkerPendingBytes = 67108864; // 64 MiB
+   //   Exact worker-local retained-byte diagnostic, maintained by Buffers.
+   //   Configuration must use maxWorkerPendingBytes, never this counter.
+   public static int $pendingBytes = 0;
    //   Wall-clock budget (seconds) a deferred write may remain stalled
    //   before the connection is closed deterministically. Replaces the
    //   previous synchronous `stream_select(..., 200_000)` retry loop.
@@ -1037,6 +1045,10 @@ class TCP_Server_CLI implements Servers
       //   warning (@fwrite/@fread EAGAIN under backpressure); the CLI default is
       //   a no-op for suppressed errors (zero cost).
       restore_error_handler();
+
+      // @ Fresh worker-local retained-byte ledger. This runs after fork and
+      //   before Worker::Boot can create any connection-owned buffer token.
+      TCP_Server_CLI\Buffers::reset();
 
       // @ Events — worker booted (guarded: zero-alloc when no listeners).
       $Emitter = Emitter::$Instance;

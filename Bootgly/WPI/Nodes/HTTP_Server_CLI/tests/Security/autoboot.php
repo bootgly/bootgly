@@ -423,5 +423,15 @@ return new Suite(
       // Distinct query targets on one eligible route must not retain one
       // independently admissible wire each without a per-worker byte ceiling.
       '80.01-route_cache_aggregate_byte_budget',
+      // # TCP retained output aggregate byte budget (audit L1)
+      // Independently admissible per-connection pending buffers must not
+      // multiply past one configurable worker-wide retained-byte ceiling.
+      '81.01-tcp_worker_retained_byte_budget',
+      // Exact-cap, cross-owner, carry, shrink and cleanup invariants for the
+      // retained-byte ledger introduced by the L1 remediation.
+      '81.02-tcp_retained_byte_ledger_lifecycle',
+      // Separate HTTP/2 connections must share the same worker authority and
+      // release it on RST_STREAM before fresh admission.
+      '81.03-http2_worker_retained_byte_budget',
    ],
 );

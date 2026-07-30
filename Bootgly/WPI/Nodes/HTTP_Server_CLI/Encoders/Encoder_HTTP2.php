@@ -18,6 +18,7 @@ use function is_array;
 use function is_int;
 use function is_string;
 use function ltrim;
+use function max;
 use function pack;
 use function strlen;
 use function strpos;
@@ -147,6 +148,33 @@ final class Encoder_HTTP2
 
       // @ DATA — bounded by the connection + stream send windows.
       if ($body !== '' || $chunks !== []) {
+         $retained = strlen($body);
+         foreach ($chunks as $chunk) {
+            if (is_string($chunk['data'] ?? null)) {
+               $retained += strlen($chunk['data']);
+            }
+         }
+
+         // ? Reserve before the Stream adopts the body/pad owners. On worker
+         //   pressure only this newly-growing stream is reset; existing
+         //   owners keep their ordered wire intact.
+         if ($Stream->Buffers->reserve($retained) === false) {
+            $Stream->close();
+            unset($H2->Streams[$stream]);
+            $H2->opened--;
+
+            $frames .= Frame::pack(
+               HTTP2::FRAME_RST_STREAM,
+               0,
+               $stream,
+               pack('N', Errors::EnhanceYourCalm->value)
+            );
+
+            $raw = "{$outbox}{$frames}";
+            $length = strlen($raw);
+            return $raw;
+         }
+
          $Stream->backlog = $body;
          $Stream->chunks = $chunks;
          $Stream->chunk = 0;
@@ -167,11 +195,18 @@ final class Encoder_HTTP2
             //   pending cap by the stream limit. Budget is per CONNECTION, the
             //   same shape SSE already enforces for sustained streams.
             $retained = 0;
+            $limit = max(0, TCP_Server_CLI::$maxPendingBytes);
+            $exceeded = false;
             foreach ($H2->Streams as $Sibling) {
-               $retained += strlen($Sibling->backlog);
+               $bytes = $Sibling->measure();
+               if ($bytes > $limit - $retained) {
+                  $exceeded = true;
+                  break;
+               }
+               $retained += $bytes;
             }
 
-            if ($retained > TCP_Server_CLI::$maxPendingBytes) {
+            if ($exceeded) {
                $Stream->close();
                unset($H2->Streams[$stream]);
                $H2->opened--;

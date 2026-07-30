@@ -336,6 +336,8 @@ class Connection extends Packages
       Server::$Event->del($Socket, Server::$Event::EVENT_READ);
       Server::$Event->del($Socket, Server::$Event::EVENT_WRITE);
 
+      $this->writeRegistered = false;
+
       try {
          @fclose($Socket);
       }
@@ -368,6 +370,10 @@ class Connection extends Packages
 
    public function __destruct ()
    {
+      // @ Fallback for construction/test paths that let the object die
+      //   without an explicit close transition.
+      $this->release();
+
       // ? Half-constructed instances (constructor threw) have no timers yet
       if (isSet($this->timers) === false) { // @phpstan-ignore isset.initializedProperty
          return;
