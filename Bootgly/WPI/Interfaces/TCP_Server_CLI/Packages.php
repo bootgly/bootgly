@@ -1341,11 +1341,15 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
             $prependValue = $pad['prepend'] ?? null;
             $prepend = is_string($prependValue) ? $prependValue : '';
             if ($prepend !== '') {
+               // ! Move source ownership to the local string before transmit()
+               //   can defer an unsent suffix. The reservation remains
+               //   conservatively held until defer() or the reconciliation
+               //   below, but measure() must see only one persistent owner.
+               $pad['prepend'] = '';
+               $pads[$partKey] = $pad;
                $sent = 0;
                $complete = $this->transmit($Socket, $prepend, $sent);
                $written += $sent;
-               $pad['prepend'] = '';
-               $pads[$partKey] = $pad;
                // @ The pad either left memory or its unsent suffix moved to
                //   pendingBuffer. Reconcile after the source owner is cleared.
                $this->Buffers->reserve($this->measure());
@@ -1482,11 +1486,11 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
             $appendValue = $pad['append'] ?? null;
             $append = is_string($appendValue) ? $appendValue : '';
             if ($append !== '') {
+               $pad['append'] = '';
+               $pads[$partKey] = $pad;
                $sent = 0;
                $complete = $this->transmit($Socket, $append, $sent);
                $written += $sent;
-               $pad['append'] = '';
-               $pads[$partKey] = $pad;
                $this->Buffers->reserve($this->measure());
 
                if ($complete === false) {

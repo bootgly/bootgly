@@ -447,5 +447,9 @@ return new Suite(
       // Incomplete request Streams have a separate absolute monotonic
       // lifetime that PING activity and one-byte DATA progress cannot renew.
       '83.02-http2_incomplete_request_deadline',
+      // # Multipart pad deferred-write ownership (audit L2)
+      // A generated prepend/append must move to pendingBuffer exactly once
+      // when an exact-cap public Range upload short- or zero-writes.
+      '84.01-multipart_pad_deferred_write_ownership',
    ],
 );
