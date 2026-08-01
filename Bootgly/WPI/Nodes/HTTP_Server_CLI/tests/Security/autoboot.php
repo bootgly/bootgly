@@ -440,5 +440,12 @@ return new Suite(
       // Reopening per positive flow-control quantum must reject atomic
       // pathname identity changes without parking the file descriptor.
       '82.02-http2_file_reopen_identity',
+      // # Half-open HTTP/2 request-head aggregation (audit H3)
+      // Valid near-limit decoded heads retained without END_STREAM must share
+      // one worker authority across independent connections.
+      '83.01-http2_half_open_request_head_accounting',
+      // Incomplete request Streams have a separate absolute monotonic
+      // lifetime that PING activity and one-byte DATA progress cannot renew.
+      '83.02-http2_incomplete_request_deadline',
    ],
 );

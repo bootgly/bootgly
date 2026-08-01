@@ -90,6 +90,14 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding, Resuming
    //   cannot turn every one-byte WINDOW_UPDATE on a huge file into a full
    //   open/stat/seek/read/close cycle.
    protected const int FILE_QUANTUM = 4096;
+   // @ Decoded heads retain semantic strings, an associative field map and,
+   //   after dispatch, a synthesized raw-header representation. The logical
+   //   reservation deliberately overprices those bytes plus PHP container
+   //   overhead; it is a stable security budget, not an RSS estimator.
+   protected const int HEAD_LIST_FACTOR = 2;
+   protected const int HEAD_FIELD_BYTES = 384;
+   protected const int HEAD_BASE_BYTES = 1024;
+   protected const int NANOSECOND = 1_000_000_000;
 
    // @ Connection-specific fields forbidden in HTTP/2 requests (RFC 9113 §8.2.2)
    protected const array FORBIDDEN = [
@@ -119,6 +127,11 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding, Resuming
    public static int $maxConnectionBodySize = 10 * 1024 * 1024;
    /** @var int Aggregate decoded request-body ceiling per worker (default: 64 MiB). */
    public static int $maxWorkerBodySize = 64 * 1024 * 1024;
+   /**
+    * @var int Absolute seconds from a decoded opening HEADERS block to
+    * END_STREAM. Values below one are clamped to one (fail closed).
+    */
+   public static int $maxRequestWallTime = 300;
    /**
     * @var int Inbound octets consumed before a WINDOW_UPDATE replenishes the
     * peer (default: half the initial window). Bodies are currently consumed
@@ -186,6 +199,9 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding, Resuming
    protected null|TCP_Packages $Package;
    // @ One deferred continuation for locally-sliced outbound DATA.
    protected bool $scheduled;
+   // @ One monotonic timer for the nearest incomplete request Stream.
+   protected int $timer;
+   protected int $timerDeadline;
 
 
    public function __construct ()
@@ -225,6 +241,8 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding, Resuming
       $this->since = 0;
       $this->Package = null;
       $this->scheduled = false;
+      $this->timer = 0;
+      $this->timerDeadline = 0;
    }
 
    public function decode (Packages $Package, string $buffer, int $size): States
@@ -232,13 +250,15 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding, Resuming
       /** @var TCP_Packages $Package */
       $this->Package ??= $Package;
 
-      // @ Bound retention by TIME, not only by volume. A peer that withholds
-      //   WINDOW_UPDATE can still defer the transport idle reaper by eliciting
-      //   writes — periodic PINGs, whose ACKs refresh write activity — so
-      //   parked response bodies would sit in worker memory indefinitely under
-      //   the aggregate cap. Driving the sweep from decode() catches exactly
-      //   that peer: it has to keep sending frames to hold the connection.
-      $this->expire();
+      // @ Activity-driven fallback for both absolute request deadlines and
+      //   output stalls. Incomplete requests also own a monotonic reactor
+      //   timer, so expiry does not depend on another peer frame arriving.
+      if ($this->expire()) {
+         if ($Package->rejected) {
+            return States::Rejected;
+         }
+         $this->watch();
+      }
       // ! Assemble the work buffer: carried partial bytes + this read.
       //   `$carried` maps work-buffer offsets back into this read's input —
       //   `Packages::reading()` pipelining slices the ORIGINAL input by
@@ -398,6 +418,8 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding, Resuming
 
                // @ END_STREAM — the request is complete
                $Stream->ended = true;
+               $Stream->deadline = 0;
+               $this->watch();
                if ($this->dispatch($Package, $Stream)) {
                   $Package->consumed = $offset - $carried;
                   // ! A deferred application response returns no encoder wire,
@@ -669,6 +691,7 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding, Resuming
                   if ($this->count($Package) !== null) {
                      return States::Rejected;
                   }
+                  $this->watch();
                }
                break;
 
@@ -802,6 +825,12 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding, Resuming
     */
    public function disconnect (): void
    {
+      if ($this->timer > 0 && isset(TCP_Server_CLI::$Event)) {
+         TCP_Server_CLI::$Event->cancel($this->timer);
+      }
+      $this->timer = 0;
+      $this->timerDeadline = 0;
+
       // ? Already told the peer (connection error / GOAWAY drained)
       if ($this->closing === false && $this->Package !== null) {
          $Socket = $this->Package->Connection->Socket;
@@ -829,7 +858,11 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding, Resuming
       $this->scheduled = false;
       $this->outbox = '';
       $this->buffer = '';
+      $this->expected = 0;
       $this->fragments = '';
+      $this->ending = false;
+      $this->trailing = false;
+      $this->circular = false;
       $this->Buffers->release();
       $this->Streams = [];
       $this->opened = 0;
@@ -874,6 +907,8 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding, Resuming
 
          $Stream = $this->Streams[$stream];
          $Stream->ended = true;
+         $Stream->deadline = 0;
+         $this->watch();
          if ($this->dispatch($Package, $Stream)) {
             return States::Complete;
          }
@@ -1048,13 +1083,44 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding, Resuming
          return $this->deny($stream, 413);
       }
 
-      // @ Open the stream
+      // ! Persistent decoded heads share both the per-connection transport
+      //   ceiling and the worker-wide Buffers authority. Charge BEFORE the
+      //   Stream adopts the map so pressure cannot create untracked owners.
+      $head = $this->price($fields);
+      if ($head === null) {
+         return $this->fail(
+            $Package,
+            Errors::EnhanceYourCalm,
+            'request head accounting overflow'
+         );
+      }
+
+      $deadline = 0;
+      if ($this->ending === false) {
+         $now = (int) hrtime(true);
+         $seconds = max(1, static::$maxRequestWallTime);
+         $remaining = PHP_INT_MAX - $now;
+         $timeout = $seconds > intdiv($remaining, self::NANOSECOND)
+            ? $remaining
+            : $seconds * self::NANOSECOND;
+         $deadline = $now + $timeout;
+      }
+
       $Stream = new Stream(
          $stream,
          $this->Remote->window,
          $this->Local->window,
-         $this->Bodies
+         $this->Bodies,
+         $deadline
       );
+      if ($this->admit($Stream, $head) === false) {
+         return $this->fail(
+            $Package,
+            Errors::EnhanceYourCalm,
+            'retained request head budget exceeded'
+         );
+      }
+
       $Stream->method = $method;
       $Stream->target = $target;
       $Stream->scheme = $scheme;
@@ -1063,10 +1129,13 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding, Resuming
       $Stream->length = $size;
       $this->Streams[$stream] = $Stream;
       $this->opened++;
+      $this->watch();
 
       // ?: END_STREAM on HEADERS — bodyless request, dispatch now
       if ($this->ending) {
          $Stream->ended = true;
+         $Stream->deadline = 0;
+         $this->watch();
          if ($this->dispatch($Package, $Stream)) {
             return States::Complete;
          }
@@ -1147,6 +1216,7 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding, Resuming
             );
          }
       }
+      $this->watch();
 
       // :
       return null;
@@ -1169,6 +1239,7 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding, Resuming
          unset($this->Streams[$stream]);
          $this->opened--;
       }
+      $this->watch();
 
       // :
       return null;
@@ -1599,27 +1670,60 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding, Resuming
    }
 
    /**
-    * Count one reset toward the rapid-reset budget; exceed → GOAWAY.
-    */
-   /**
-    * Reset streams whose parked body stopped making flow-control progress.
+    * Reset streams whose incomplete request or parked output exceeded its
+    * independent absolute deadline.
     *
-    * The clock is `Stream::$drained`, advanced by every REAL consumption in
-    * `drain()` and by the write that first parks bytes — so partial
-    * WINDOW_UPDATE progress is never a stall, and a drained backlog cannot
-    * poison a later one with a stale stamp. Sustained streams (SSE) are exempt:
-    * they carry their own deadline and owner teardown.
+    * Request deadlines are monotonic and never refreshed by PING, DATA
+    * trickles, WINDOW_UPDATE, writes or SSE activity. Output deadlines keep
+    * their existing progress clock: `Stream::$drained` advances only when
+    * drain() consumes bytes. Sustained streams are exempt from output expiry.
     */
-   protected function expire (): void
+   protected function expire (): bool
    {
       if ($this->Streams === []) {
-         return;
+         return false;
       }
 
-      $deadline = TCP_Server_CLI::$maxWriteWallTime;
+      $writeDeadline = TCP_Server_CLI::$maxWriteWallTime;
+      $nowNS = (int) hrtime(true);
       $now = time();
+      $requests = false;
 
       foreach ($this->Streams as $id => $Stream) {
+         // ! Absolute inbound lifetime. Body progress intentionally does not
+         //   move this clock, otherwise one-byte DATA trickles recreate H3.
+         if (
+            $Stream->ended === false
+            && $Stream->deadline > 0
+            && $nowNS >= $Stream->deadline
+         ) {
+            // ! HPACK blocks are connection-scoped and cannot be abandoned
+            //   stream-locally. Expiring the Stream that owns an unfinished
+            //   trailer block would leave resolve() with no Stream after the
+            //   matching CONTINUATION. Fail the connection atomically instead.
+            if ($this->expected === $id && $this->Package !== null) {
+               $this->fail(
+                  $this->Package,
+                  Errors::EnhanceYourCalm,
+                  'header continuation exceeded request deadline'
+               );
+               return true;
+            }
+
+            $Stream->close();
+            unset($this->Streams[$id]);
+            $this->opened--;
+
+            $this->outbox .= Frame::pack(
+               HTTP2::FRAME_RST_STREAM,
+               0,
+               $id,
+               pack('N', Errors::EnhanceYourCalm->value)
+            );
+            $requests = true;
+            continue;
+         }
+
          // ? A stalled stream can be holding file/pad metadata with an EMPTY
          //   raw backlog. File handlers are ephemeral, but the response cursor
          //   and protocol state still require a bounded lifetime.
@@ -1629,7 +1733,7 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding, Resuming
          ) {
             continue;
          }
-         if (($now - $Stream->drained) <= $deadline) {
+         if (($now - $Stream->drained) <= $writeDeadline) {
             continue;
          }
 
@@ -1644,6 +1748,139 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding, Resuming
             pack('N', Errors::EnhanceYourCalm->value)
          );
       }
+
+      return $requests;
+   }
+
+   /**
+    * Keep exactly one monotonic timer for the nearest incomplete Stream.
+    */
+   protected function watch (): void
+   {
+      if (
+         $this->Package === null
+         || isset(TCP_Server_CLI::$Event) === false
+      ) {
+         return;
+      }
+
+      $deadline = 0;
+      foreach ($this->Streams as $Stream) {
+         if ($Stream->ended || $Stream->deadline === 0) {
+            continue;
+         }
+         if ($deadline === 0 || $Stream->deadline < $deadline) {
+            $deadline = $Stream->deadline;
+         }
+      }
+
+      // @ PING/DATA activity does not change absolute deadlines. Avoid
+      //   cancel/register churn when a state transition leaves the same
+      //   nearest Stream armed.
+      if (
+         $this->timer > 0
+         && $this->timerDeadline === $deadline
+      ) {
+         return;
+      }
+
+      if ($this->timer > 0) {
+         TCP_Server_CLI::$Event->cancel($this->timer);
+      }
+      $this->timer = 0;
+      $this->timerDeadline = 0;
+      if ($deadline === 0) {
+         return;
+      }
+
+      $this->timer = TCP_Server_CLI::$Event->defer(
+         $deadline,
+         function (): void {
+            $this->timer = 0;
+            $this->timerDeadline = 0;
+            $Package = $this->Package;
+            if (
+               $Package === null
+               || is_resource($Package->Connection->Socket) === false
+            ) {
+               return;
+            }
+
+            $this->expire();
+            if ($Package->rejected) {
+               return;
+            }
+            if ($this->flush($Package) === false) {
+               return;
+            }
+            $this->watch();
+         }
+      );
+      $this->timerDeadline = $deadline;
+   }
+
+   /**
+    * Admit one decoded head under the connection and worker authorities.
+    */
+   protected function admit (Stream $Stream, int $bytes): bool
+   {
+      $limit = max(0, TCP_Server_CLI::$maxPendingBytes);
+      $retained = $this->Buffers->retained;
+      if ($retained > $limit) {
+         return false;
+      }
+
+      foreach ($this->Streams as $Sibling) {
+         $owned = $Sibling->HeadBuffers->retained
+            + $Sibling->Buffers->retained;
+         if ($owned > $limit - $retained) {
+            return false;
+         }
+         $retained += $owned;
+      }
+      if ($bytes > $limit - $retained) {
+         return false;
+      }
+
+      return $Stream->HeadBuffers->reserve($bytes);
+   }
+
+   /**
+    * Price a decoded list plus persistent string/map/raw container overhead.
+    *
+    * @param array<int, array{0: string, 1: string}> $fields
+    */
+   protected function price (array $fields): null|int
+   {
+      $list = 0;
+      foreach ($fields as [$name, $value]) {
+         $entry = strlen($name) + strlen($value) + 32;
+         if ($entry > PHP_INT_MAX - $list) {
+            return null;
+         }
+         $list += $entry;
+      }
+
+      if ($list > intdiv(PHP_INT_MAX, self::HEAD_LIST_FACTOR)) {
+         return null;
+      }
+      $semantic = $list * self::HEAD_LIST_FACTOR;
+      $count = count($fields);
+      if (
+         $count > intdiv(
+            PHP_INT_MAX - self::HEAD_BASE_BYTES,
+            self::HEAD_FIELD_BYTES
+         )
+      ) {
+         return null;
+      }
+      $containers = self::HEAD_BASE_BYTES
+         + $count * self::HEAD_FIELD_BYTES;
+      if ($semantic > PHP_INT_MAX - $containers) {
+         return null;
+      }
+
+      return $semantic + $containers;
    }
 
    protected function count (Packages $Package): null|States
@@ -1690,6 +1927,12 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding, Resuming
    protected function fail (Packages $Package, Errors $error, string $debug = ''): States
    {
       /** @var TCP_Packages $Package */
+      if ($this->timer > 0 && isset(TCP_Server_CLI::$Event)) {
+         TCP_Server_CLI::$Event->cancel($this->timer);
+      }
+      $this->timer = 0;
+      $this->timerDeadline = 0;
+
       $goaway = Frame::pack(
          HTTP2::FRAME_GOAWAY, 0, 0, pack('NN', $this->last, $error->value) . $debug
       );
@@ -1701,7 +1944,11 @@ class Decoder_HTTP2 extends Decoders implements Disconnecting, Feeding, Resuming
       }
       $this->closing = true;
       $this->buffer = '';
+      $this->expected = 0;
       $this->fragments = '';
+      $this->ending = false;
+      $this->trailing = false;
+      $this->circular = false;
       $this->Buffers->release();
       $raw = "{$this->outbox}{$goaway}";
       $this->outbox = '';

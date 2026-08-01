@@ -195,11 +195,12 @@ final class Encoder_HTTP2
             //   response body per concurrent stream, multiplying the transport
             //   pending cap by the stream limit. Budget is per CONNECTION, the
             //   same shape SSE already enforces for sustained streams.
-            $retained = 0;
+            $retained = $H2->Buffers->retained;
             $limit = max(0, TCP_Server_CLI::$maxPendingBytes);
-            $exceeded = false;
+            $exceeded = $retained > $limit;
             foreach ($H2->Streams as $Sibling) {
-               $bytes = $Sibling->measure();
+               $bytes = $Sibling->HeadBuffers->retained
+                  + $Sibling->measure();
                if ($bytes > $limit - $retained) {
                   $exceeded = true;
                   break;

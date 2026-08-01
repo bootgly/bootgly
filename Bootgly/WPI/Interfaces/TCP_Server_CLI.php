@@ -258,9 +258,9 @@ class TCP_Server_CLI implements Servers
    /** @var array<string, Closure> */
    public static array $Protocols = [];
    // # Backpressure (async write state machine)
-   //   Maximum bytes a single connection may keep in its in-memory write
-   //   backlog while the socket is unwritable. Past this threshold the
-   //   connection is closed to avoid memory exhaustion.
+   //   Maximum bytes one connection-level retention domain may keep in
+   //   memory. Enforced independently by the transport writer and by
+   //   aggregate HTTP/2 protocol state (decoded heads + response tails).
    public static int $maxPendingBytes = 4194304; // 4 MiB
    //   Maximum bytes every transport retention owner in one worker may keep
    //   in aggregate. This covers TCP pending output/receive carry and

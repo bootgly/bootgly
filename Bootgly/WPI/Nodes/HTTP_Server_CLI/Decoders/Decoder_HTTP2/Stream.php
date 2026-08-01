@@ -40,9 +40,16 @@ class Stream
    // # Request body (DATA frames accumulate here until END_STREAM)
    public string $body;
    public Bodies $Bodies;
+   // @ Worker-wide reservation for the persistent decoded request head.
+   //   Kept separate from outbound Buffers because response encoders resize
+   //   that token absolutely as flow-controlled tails grow and drain.
+   public Buffers $HeadBuffers;
 
    // * Metadata
    public readonly int $id;
+   // @ Absolute monotonic deadline for receiving END_STREAM. Zero means the
+   //   remote side already ended while the opening HEADERS was resolved.
+   public int $deadline;
    // # Flow control
    // @ Outbound (send) window — decremented by DATA we send, raised by
    //   WINDOW_UPDATE / SETTINGS_INITIAL_WINDOW_SIZE deltas from the peer.
@@ -83,7 +90,13 @@ class Stream
    public null|Disconnecting $Owner;
 
 
-   public function __construct (int $id, int $window, int $supply, Bodies $Bodies)
+   public function __construct (
+      int $id,
+      int $window,
+      int $supply,
+      Bodies $Bodies,
+      int $deadline = 0
+   )
    {
       // * Data
       $this->method = '';
@@ -93,9 +106,11 @@ class Stream
       $this->fields = [];
       $this->body = '';
       $this->Bodies = $Bodies;
+      $this->HeadBuffers = new Buffers;
 
       // * Metadata
       $this->id = $id;
+      $this->deadline = $deadline;
       $this->window = $window;
       $this->supply = $supply;
       $this->pending = 0;
@@ -113,6 +128,17 @@ class Stream
 
    public function close (): void
    {
+      // @ Release actual request-head owners before their logical budget.
+      //   Clearing matters when a sustained-stream resource still references
+      //   this object after decoder removal.
+      $this->method = '';
+      $this->target = '';
+      $this->scheme = '';
+      $this->authority = '';
+      $this->fields = [];
+      $this->deadline = 0;
+      $this->HeadBuffers->release();
+
       // @ Body accounting is stream-owned and idempotent: every normal,
       //   reset, denial, GOAWAY, and transport teardown already converges
       //   here before removing the stream from its decoder.

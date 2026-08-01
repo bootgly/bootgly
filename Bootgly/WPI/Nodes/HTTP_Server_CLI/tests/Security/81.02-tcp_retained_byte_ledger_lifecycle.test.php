@@ -590,7 +590,9 @@ return new Specification(
             [':method', 'GET'],
             [':scheme', 'http'],
             [':path', '/l1-h2-carry'],
-            [':authority', 'localhost'],
+            // ! Deliberately omit authority: completion must release the
+            //   decoder carry through a stream-level protocol reset without
+            //   creating a separately-budgeted persistent request head.
          ]);
          $fragmentBytes = max(1, intdiv(strlen($headerBlock), 2));
          TCPServer::$maxWorkerPendingBytes = $baseline + (2 * $fragmentBytes) - 1;
@@ -731,19 +733,28 @@ return new Specification(
          $ackBytes = $pingCount * strlen(
             Frame::pack(HTTP2::FRAME_PING, HTTP2::FLAG_ACK, 0, '12345678')
          );
+         $outboxFields = [
+            [':method', 'GET'],
+            [':scheme', 'http'],
+            [':path', '/l1-outbox-defer'],
+            [':authority', 'localhost'],
+         ];
+         $outboxList = 0;
+         foreach ($outboxFields as [$name, $value]) {
+            $outboxList += strlen($name) + strlen($value) + 32;
+         }
+         $outboxHead = 2 * $outboxList
+            + count($outboxFields) * 384
+            + 1024;
          $request = Frame::pack(
             HTTP2::FRAME_HEADERS,
             HTTP2::FLAG_END_HEADERS | HTTP2::FLAG_END_STREAM,
             1,
-            HPACK::encode([
-               [':method', 'GET'],
-               [':scheme', 'http'],
-               [':path', '/l1-outbox-defer'],
-               [':authority', 'localhost'],
-            ]),
+            HPACK::encode($outboxFields),
          );
          $attack = str_repeat($ping, $pingCount) . $request;
-         TCPServer::$maxWorkerPendingBytes = $baseline + (2 * $ackBytes) - 1;
+         TCPServer::$maxWorkerPendingBytes =
+            $baseline + (2 * $outboxHead) + (2 * $ackBytes) - 1;
 
          $OutboxA = $OutboxDecoderA->decode(
             $OutboxPackageA,
@@ -760,6 +771,10 @@ return new Specification(
             $attack,
             strlen($attack),
          );
+         // @ The fixture Connection intentionally overrides close() and does
+         //   not run production decoder teardown; model that convergence
+         //   explicitly before measuring the post-rejection worker ledger.
+         $OutboxDecoderB->disconnect();
          $outboxOverflowTotal = TCPServer::$pendingBytes;
 
          while (true) {
@@ -769,11 +784,13 @@ return new Specification(
             }
          }
          $outboxDrained = $OutboxPackageA->writing($OutboxSocketA);
+         $OutboxDecoderA->disconnect();
 
          $probe['outbox'] = [
             'preface_a' => $OutboxPrefaceA === States::Incomplete,
             'preface_b' => $OutboxPrefaceB === States::Incomplete,
             'ack_bytes' => $ackBytes,
+            'head_bytes' => $outboxHead,
             'a' => $OutboxA === States::Complete,
             'a_decoder_bytes' => strlen($OutboxDecoderA->outbox),
             'a_pending' => $outboxAPending,
@@ -1475,22 +1492,26 @@ return new Specification(
 
       $outbox = $probe['outbox'];
       $ackBytes = $outbox['ack_bytes'] ?? null;
+      $headBytes = $outbox['head_bytes'] ?? null;
       if (
          ($outbox['preface_a'] ?? null) !== true
          || ($outbox['preface_b'] ?? null) !== true
          || ! is_int($ackBytes)
          || $ackBytes <= 0
+         || ! is_int($headBytes)
+         || $headBytes <= 0
          || ($outbox['a'] ?? null) !== true
          || ($outbox['a_decoder_bytes'] ?? null) !== 0
          || ($outbox['a_pending'] ?? null) !== $ackBytes
          || ($outbox['a_retained'] ?? null) !== $ackBytes
-         || ($outbox['a_total'] ?? null) !== $baseline + $ackBytes
+         || ($outbox['a_total'] ?? null) !== $baseline + $headBytes + $ackBytes
          || ($outbox['b'] ?? null) !== true
          || ($outbox['b_closed'] ?? null) !== true
          || ($outbox['b_decoder_bytes'] ?? null) !== 0
          || ($outbox['b_pending'] ?? null) !== 0
          || ($outbox['b_retained'] ?? null) !== 0
-         || ($outbox['overflow_total'] ?? null) !== $baseline + $ackBytes
+         || ($outbox['overflow_total'] ?? null)
+            !== $baseline + $headBytes + $ackBytes
          || ($outbox['drained'] ?? null) !== true
          || ($outbox['drained_pending'] ?? null) !== 0
          || ($outbox['drained_retained'] ?? null) !== 0
