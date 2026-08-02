@@ -451,5 +451,12 @@ return new Suite(
       // A generated prepend/append must move to pendingBuffer exactly once
       // when an exact-cap public Range upload short- or zero-writes.
       '84.01-multipart_pad_deferred_write_ownership',
+      // # File session revocation (audit 2026-08-01 H1)
+      // A stale request loaded before regenerate() must never recreate the
+      // invalidated authenticated ID through its later save().
+      '85.01-session_stale_writer_revocation',
+      // The default Shared Cache session backend must enforce the same
+      // stale-writer revocation invariant on its cross-worker store.
+      '85.02-session_cache_stale_writer_revocation',
    ],
 );

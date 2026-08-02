@@ -34,6 +34,33 @@ return new Specification(
       );
 
       yield assert(
+         assertion: $Cache->swap('conditional', 'missing', 'unexpected') === false
+            && $Cache->evict('conditional', 'missing') === false
+            && $Cache->renew('conditional', 30) === false
+            && $Cache->fetch('conditional') === null,
+         description: 'Unsupported APCu atomic mutations fail closed on a missing key'
+      );
+      yield assert(
+         assertion: $Cache->create('conditional', 'created') === true
+            && $Cache->create(
+               'conditional',
+               'clobbered',
+               tags: ['rejected-create'],
+            ) === false
+            && $Cache->invalidate('rejected-create') === true
+            && $Cache->fetch('conditional') === 'created',
+         description: 'create() stores only the first live value and tags only successful writes'
+      );
+      yield assert(
+         assertion: $Cache->swap('conditional', 'created', 'replaced') === false
+            && $Cache->evict('conditional', 'created') === false
+            && $Cache->renew('conditional', 30) === false
+            && $Cache->fetch('conditional') === 'created',
+         description: 'APCu swap()/evict()/renew() fail closed without a true atomic primitive'
+      );
+      $Cache->delete('conditional');
+
+      yield assert(
          assertion: $Cache->increment('hits') === 1 && $Cache->increment('hits', 4) === 5,
          description: 'increment() creates and advances a counter'
       );

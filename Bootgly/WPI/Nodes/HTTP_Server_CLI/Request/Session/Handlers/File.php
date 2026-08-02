@@ -29,6 +29,7 @@ use function fsync;
 use function function_exists;
 use function fwrite;
 use function glob;
+use function hash;
 use function hash_equals;
 use function hash_hmac;
 use function is_array;
@@ -56,10 +57,10 @@ use InvalidArgumentException;
 use RuntimeException;
 
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Session;
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Session\Handling;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Session\Committing;
 
 
-class File implements Handling
+class File implements Committing
 {
    // * Config
    protected static string $path = '';
@@ -71,6 +72,8 @@ class File implements Handling
 
    // # HMAC
    private const int MAC_LENGTH = 64;
+   private const string RECORD_VERSION = 'BGS1';
+   private const int REVISION_LENGTH = 64;
    /** Cached generated/imported 64-byte hexadecimal HMAC secret. */
    private static string $secret = '';
    /** Filesystem path to which the static secret cache belongs. */
@@ -104,10 +107,173 @@ class File implements Handling
 
    public function read (string $sessionId): string|false
    {
+      $revision = null;
+
+      return $this->fetch($sessionId, $revision);
+   }
+
+   public function fetch (
+      string $sessionId,
+      null|string &$revision = null,
+   ): string|false
+   {
+      $revision = null;
       $file = $this->locate($sessionId);
       if ($file === '') {
          return false;
       }
+
+      $record = $this->load($file, true);
+      if ($record === false) {
+         return false;
+      }
+
+      return $this->unpack($record, $revision);
+   }
+
+   public function write (string $sessionId, string $sessionData): bool
+   {
+      $revision = null;
+
+      return $this->store($sessionId, $sessionData, $revision, false);
+   }
+
+   public function commit (
+      string $sessionId,
+      string $sessionData,
+      null|string &$revision,
+   ): bool
+   {
+      return $this->store($sessionId, $sessionData, $revision, true);
+   }
+
+   private function store (
+      string $sessionId,
+      string $sessionData,
+      null|string &$revision,
+      bool $conditional,
+   ): bool
+   {
+      $target = $this->locate($sessionId);
+      if ($target === '') {
+         return false;
+      }
+
+      $Lock = self::lock($this->directory . '.records.lock');
+      $locked = false;
+      try {
+         $locked = @flock($Lock, LOCK_EX);
+         if ($locked === false) {
+            throw new RuntimeException('Failed to lock the File session records.');
+         }
+
+         if ($conditional) {
+            $current = $this->load($target, false);
+            if ($revision === null) {
+               if ($current !== false) {
+                  return false;
+               }
+            }
+            elseif ($current === false) {
+               return false;
+            }
+            else {
+               $currentRevision = null;
+               if (
+                  $this->unpack($current, $currentRevision) === false
+                  || is_string($currentRevision) === false
+                  || hash_equals($revision, $currentRevision) === false
+               ) {
+                  return false;
+               }
+            }
+         }
+
+         $nextRevision = bin2hex(random_bytes(32));
+         $record = self::pack($sessionData, $nextRevision);
+         $mac = hash_hmac('sha256', $record, $this->sign());
+         $temporary = $this->directory . static::$prefix . '.tmp.'
+            . bin2hex(random_bytes(16));
+         $Handle = self::create($temporary);
+         $persisted = false;
+
+         try {
+            $persisted = self::persist($Handle, $mac . $record);
+         }
+         finally {
+            @fclose($Handle);
+         }
+         if ($persisted === false) {
+            @unlink($temporary);
+            throw new RuntimeException('Failed to persist a File session temporary record.');
+         }
+         if (@rename($temporary, $target) === false) {
+            @unlink($temporary);
+            throw new RuntimeException('Failed to publish a File session record atomically.');
+         }
+
+         $revision = $nextRevision;
+
+         return true;
+      }
+      finally {
+         if ($locked) {
+            @flock($Lock, LOCK_UN);
+         }
+         @fclose($Lock);
+      }
+   }
+
+   /** Encode one revision inside the HMAC-authenticated record body. */
+   private static function pack (string $sessionData, string $revision): string
+   {
+      return self::RECORD_VERSION . $revision . $sessionData;
+   }
+
+   /** Decode a versioned record, or derive a stable revision for a legacy one. */
+   private function unpack (
+      string $record,
+      null|string &$revision = null,
+   ): string|false
+   {
+      $revision = null;
+      $headerLength = strlen(self::RECORD_VERSION) + self::REVISION_LENGTH;
+      if (
+         strlen($record) >= $headerLength
+         && substr($record, 0, strlen(self::RECORD_VERSION)) === self::RECORD_VERSION
+      ) {
+         $candidate = substr(
+            $record,
+            strlen(self::RECORD_VERSION),
+            self::REVISION_LENGTH,
+         );
+         if (preg_match('/^[a-f0-9]{64}$/D', $candidate) !== 1) {
+            return false;
+         }
+
+         $payload = substr($record, $headerLength);
+         if ($payload === '') {
+            return false;
+         }
+
+         $revision = $candidate;
+
+         return $payload;
+      }
+
+      // ! Existing HMAC-protected records remain readable. The first
+      // successful conditional commit migrates them to the versioned format.
+      if ($record === '') {
+         return false;
+      }
+      $revision = 'legacy:' . hash('sha256', $record);
+
+      return $record;
+   }
+
+   /** Read and authenticate one opened record; optionally remove expiry. */
+   private function load (string $file, bool $remove): string|false
+   {
 
       // ! Owner-owned legacy 0644 files inside the already verified 0700
       // directory are migrated through the opened inode before their contents
@@ -123,7 +289,7 @@ class File implements Handling
          || time() - (int) $state['mtime'] > Session::$lifetime
       ) {
          @fclose($Handle);
-         if (is_array($state) && self::compare($file, $state)) {
+         if ($remove && is_array($state) && self::compare($file, $state)) {
             @unlink($file);
          }
 
@@ -151,37 +317,6 @@ class File implements Handling
       return $payload !== '' ? $payload : false;
    }
 
-   public function write (string $sessionId, string $sessionData): bool
-   {
-      $target = $this->locate($sessionId);
-      if ($target === '') {
-         return false;
-      }
-
-      $mac = hash_hmac('sha256', $sessionData, $this->sign());
-      $temporary = $this->directory . static::$prefix . '.tmp.'
-         . bin2hex(random_bytes(16));
-      $Handle = self::create($temporary);
-      $persisted = false;
-
-      try {
-         $persisted = self::persist($Handle, $mac . $sessionData);
-      }
-      finally {
-         @fclose($Handle);
-      }
-      if ($persisted === false) {
-         @unlink($temporary);
-         throw new RuntimeException('Failed to persist a File session temporary record.');
-      }
-      if (@rename($temporary, $target) === false) {
-         @unlink($temporary);
-         throw new RuntimeException('Failed to publish a File session record atomically.');
-      }
-
-      return true;
-   }
-
    public function touch (string $sessionId): bool
    {
       $file = $this->locate($sessionId);
@@ -189,23 +324,67 @@ class File implements Handling
          return false;
       }
 
-      $Handle = self::open($file, repair: true);
-      if ($Handle === false) {
+      $Lock = self::lock($this->directory . '.records.lock');
+      $locked = false;
+      try {
+         $locked = @flock($Lock, LOCK_EX);
+         if ($locked === false) {
+            throw new RuntimeException('Failed to lock the File session records.');
+         }
+         if ($this->load($file, false) === false) {
+            return false;
+         }
+
+         return @touch($file);
+      }
+      finally {
+         if ($locked) {
+            @flock($Lock, LOCK_UN);
+         }
+         @fclose($Lock);
+         clearstatcache(true, $file);
+      }
+   }
+
+   public function revoke (string $sessionId, string $revision): bool
+   {
+      $file = $this->locate($sessionId);
+      if ($file === '') {
          return false;
       }
 
+      $Lock = self::lock($this->directory . '.records.lock');
+      $locked = false;
       try {
-         $state = @fstat($Handle);
-         $touched = is_array($state)
-            && self::compare($file, $state)
-            && @touch($file);
+         $locked = @flock($Lock, LOCK_EX);
+         if ($locked === false) {
+            throw new RuntimeException('Failed to lock the File session records.');
+         }
+         $record = $this->load($file, false);
+         if ($record === false) {
+            return false;
+         }
+         $currentRevision = null;
+         if (
+            $this->unpack($record, $currentRevision) === false
+            || is_string($currentRevision) === false
+            || hash_equals($revision, $currentRevision) === false
+         ) {
+            return false;
+         }
+
+         if (@unlink($file) === false) {
+            throw new RuntimeException('Failed to revoke the File session record.');
+         }
+
+         return true;
       }
       finally {
-         @fclose($Handle);
-         clearstatcache(true, $file);
+         if ($locked) {
+            @flock($Lock, LOCK_UN);
+         }
+         @fclose($Lock);
       }
-
-      return $touched;
    }
 
    public function destroy (string $sessionId): bool
@@ -215,35 +394,65 @@ class File implements Handling
          return true;
       }
 
-      clearstatcache(true, $file);
-      $state = @lstat($file);
-      if (is_array($state) === false) {
-         return true;
-      }
-      if (((int) $state['mode'] & 0170000) === 0040000) {
-         return false;
-      }
+      $Lock = self::lock($this->directory . '.records.lock');
+      $locked = false;
+      try {
+         $locked = @flock($Lock, LOCK_EX);
+         if ($locked === false) {
+            throw new RuntimeException('Failed to lock the File session records.');
+         }
 
-      return @unlink($file);
+         clearstatcache(true, $file);
+         $state = @lstat($file);
+         if (is_array($state) === false) {
+            return true;
+         }
+         if (((int) $state['mode'] & 0170000) === 0040000) {
+            return false;
+         }
+
+         return @unlink($file);
+      }
+      finally {
+         if ($locked) {
+            @flock($Lock, LOCK_UN);
+         }
+         @fclose($Lock);
+      }
    }
 
    public function purge (int $maxLifetime): bool
    {
-      $timeNow = time();
-      $files = glob($this->directory . static::$prefix . '*');
-
-      foreach ($files ?: [] as $file) {
-         $state = @lstat($file);
-         if (
-            is_array($state)
-            && ((int) $state['mode'] & 0170000) !== 0040000
-            && $timeNow - (int) $state['mtime'] > $maxLifetime
-         ) {
-            @unlink($file);
+      $Lock = self::lock($this->directory . '.records.lock');
+      $locked = false;
+      try {
+         $locked = @flock($Lock, LOCK_EX);
+         if ($locked === false) {
+            throw new RuntimeException('Failed to lock the File session records.');
          }
-      }
 
-      return true;
+         $timeNow = time();
+         $files = glob($this->directory . static::$prefix . '*');
+
+         foreach ($files ?: [] as $file) {
+            $state = @lstat($file);
+            if (
+               is_array($state)
+               && ((int) $state['mode'] & 0170000) !== 0040000
+               && $timeNow - (int) $state['mtime'] > $maxLifetime
+            ) {
+               @unlink($file);
+            }
+         }
+
+         return true;
+      }
+      finally {
+         if ($locked) {
+            @flock($Lock, LOCK_UN);
+         }
+         @fclose($Lock);
+      }
    }
 
    // ---

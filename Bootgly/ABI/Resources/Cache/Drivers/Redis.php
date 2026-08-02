@@ -57,6 +57,34 @@ use Bootgly\ABI\Resources\Cache\Driver;
  */
 class Redis extends Driver
 {
+   private const string SWAP_SCRIPT = <<<'LUA'
+if redis.call('GET', KEYS[1]) ~= ARGV[1] then
+   return 0
+end
+if tonumber(ARGV[3]) > 0 then
+   redis.call('SET', KEYS[1], ARGV[2], 'EX', ARGV[3])
+else
+   redis.call('SET', KEYS[1], ARGV[2])
+end
+return 1
+LUA;
+   private const string EVICT_SCRIPT = <<<'LUA'
+if redis.call('GET', KEYS[1]) ~= ARGV[1] then
+   return 0
+end
+return redis.call('DEL', KEYS[1])
+LUA;
+   private const string RENEW_SCRIPT = <<<'LUA'
+if redis.call('EXISTS', KEYS[1]) == 0 then
+   return 0
+end
+if tonumber(ARGV[1]) > 0 then
+   return redis.call('EXPIRE', KEYS[1], ARGV[1])
+end
+redis.call('PERSIST', KEYS[1])
+return 1
+LUA;
+
    // * Metadata
    private bool $ext;
    private bool $connected = false;
@@ -80,11 +108,83 @@ class Redis extends Driver
     */
    public function store (string $key, mixed $value, int $TTL = 0, array $tags = []): bool
    {
+      return $this->persist($key, $value, $TTL, $tags);
+   }
+
+   /** @param array<int,string> $tags */
+   public function create (string $key, mixed $value, int $TTL = 0, array $tags = []): bool
+   {
+      return $this->persist($key, $value, $TTL, $tags, 'NX');
+   }
+
+   /** @param array<int,string> $tags */
+   public function swap (
+      string $key,
+      mixed $expected,
+      mixed $value,
+      int $TTL = 0,
+      array $tags = [],
+   ): bool
+   {
+      $reply = $this->command([
+         'EVAL',
+         self::SWAP_SCRIPT,
+         1,
+         $key,
+         $this->pack($expected),
+         $this->pack($value),
+         $TTL,
+      ]);
+      if ($reply !== 1) {
+         return false;
+      }
+
+      $this->bind($key, $tags);
+
+      return true;
+   }
+
+   public function evict (string $key, mixed $expected): bool
+   {
+      return $this->command([
+         'EVAL',
+         self::EVICT_SCRIPT,
+         1,
+         $key,
+         $this->pack($expected),
+      ]) === 1;
+   }
+
+   public function renew (string $key, int $TTL = 0): bool
+   {
+      return $this->command([
+         'EVAL',
+         self::RENEW_SCRIPT,
+         1,
+         $key,
+         $TTL,
+      ]) === 1;
+   }
+
+   /**
+    * @param array<int,string> $tags
+    */
+   private function persist (
+      string $key,
+      mixed $value,
+      int $TTL,
+      array $tags,
+      null|string $condition = null,
+   ): bool
+   {
       $packed = $this->pack($value);
 
       $set = $TTL > 0
          ? ['SET', $key, $packed, 'EX', $TTL]
          : ['SET', $key, $packed];
+      if ($condition !== null) {
+         $set[] = $condition;
+      }
 
       // ?: No tags — single command, single round-trip
       if ($tags === []) {
@@ -93,14 +193,24 @@ class Redis extends Driver
          return $reply === true || $reply === 'OK';
       }
 
-      // @ Pipeline the SET and the tag SADDs in one round-trip
-      $commands = [$set];
+      // ! A conditional SET must succeed before tag membership is published.
+      //   Ordinary store keeps its single-round-trip pipeline.
+      if ($condition !== null) {
+         $reply = $this->command($set);
+         if ($reply !== true && $reply !== 'OK') {
+            return false;
+         }
+         $commands = [];
+      }
+      else {
+         $commands = [$set];
+      }
       foreach ($tags as $tag) {
          $commands[] = ['SADD', $this->index($tag), $key];
       }
 
       $replies = $this->flush($commands);
-      $reply = $replies[0] ?? null;
+      $reply = $condition !== null ? true : ($replies[0] ?? null);
 
       return $reply === true || $reply === 'OK';
    }
@@ -219,6 +329,20 @@ class Redis extends Driver
    private function index (string $tag): string
    {
       return "{$this->Config->prefix}@tag:{$tag}";
+   }
+
+   /** @param array<int,string> $tags */
+   private function bind (string $key, array $tags): void
+   {
+      if ($tags === []) {
+         return;
+      }
+
+      $commands = [];
+      foreach ($tags as $tag) {
+         $commands[] = ['SADD', $this->index($tag), $key];
+      }
+      $this->flush($commands);
    }
 
    /**

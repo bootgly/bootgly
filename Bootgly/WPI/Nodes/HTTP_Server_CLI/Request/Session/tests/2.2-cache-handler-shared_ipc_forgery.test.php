@@ -167,21 +167,24 @@ return new Specification(
 
                         $recordKey = $record['k'] ?? null;
                         $recordValue = $record['v'] ?? null;
-                        if (is_string($recordKey) && is_string($recordValue)) {
-                           $records[$recordKey] = base64_encode($recordValue);
+                        $sealed = is_array($recordValue)
+                           ? ($recordValue['sealed'] ?? null)
+                           : $recordValue;
+                        if (is_string($recordKey) && is_string($sealed)) {
+                           $records[$recordKey] = base64_encode($sealed);
                            $captured ??= $recordValue;
                         }
                      }
                   }
 
-                  if (is_string($captured) === false || $captured === '') {
+                  if (is_string($captured) === false && is_array($captured) === false) {
                      throw new RuntimeException('Raw attacker found no victim ciphertext.');
                   }
 
                   $Inject = static function (
                      SysvSharedMemory $Segment,
                      string $key,
-                     string $value
+                     mixed $value
                   ): void {
                      $recordID = crc32($key);
                      shm_put_var($Segment, $recordID, [
@@ -212,9 +215,21 @@ return new Specification(
                      $captured
                   );
 
-                  $offset = intdiv(strlen($captured), 2);
                   $tampered = $captured;
-                  $tampered[$offset] = chr(ord($tampered[$offset]) ^ 1);
+                  $tamperedSealed = is_array($tampered)
+                     ? ($tampered['sealed'] ?? null)
+                     : $tampered;
+                  if (is_string($tamperedSealed) === false || $tamperedSealed === '') {
+                     throw new RuntimeException('Raw attacker found an invalid ciphertext envelope.');
+                  }
+                  $offset = intdiv(strlen($tamperedSealed), 2);
+                  $tamperedSealed[$offset] = chr(ord($tamperedSealed[$offset]) ^ 1);
+                  if (is_array($tampered)) {
+                     $tampered['sealed'] = $tamperedSealed;
+                  }
+                  else {
+                     $tampered = $tamperedSealed;
+                  }
                   $Inject(
                      $AttackerSegment,
                      "session:{$tamperedID}",

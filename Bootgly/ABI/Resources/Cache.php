@@ -95,6 +95,56 @@ class Cache
       return $this->Driver->store("{$this->prefix}{$key}", $value, $TTL, $tags);
    }
 
+   /**
+    * @param array<int,string> $tags
+    */
+   public function create (string $key, mixed $value, int $TTL = 0, array $tags = []): bool
+   {
+      if ($TTL === 0) {
+         $TTL = $this->Config->TTL;
+      }
+
+      return $this->Driver->create("{$this->prefix}{$key}", $value, $TTL, $tags);
+   }
+
+   /**
+    * @param array<int,string> $tags
+    */
+   public function swap (
+      string $key,
+      mixed $expected,
+      mixed $value,
+      int $TTL = 0,
+      array $tags = [],
+   ): bool
+   {
+      if ($TTL === 0) {
+         $TTL = $this->Config->TTL;
+      }
+
+      return $this->Driver->swap(
+         "{$this->prefix}{$key}",
+         $expected,
+         $value,
+         $TTL,
+         $tags,
+      );
+   }
+
+   public function evict (string $key, mixed $expected): bool
+   {
+      return $this->Driver->evict("{$this->prefix}{$key}", $expected);
+   }
+
+   public function renew (string $key, int $TTL = 0): bool
+   {
+      if ($TTL === 0) {
+         $TTL = $this->Config->TTL;
+      }
+
+      return $this->Driver->renew("{$this->prefix}{$key}", $TTL);
+   }
+
    public function delete (string $key): bool
    {
       $deleted = $this->Driver->delete("{$this->prefix}{$key}");

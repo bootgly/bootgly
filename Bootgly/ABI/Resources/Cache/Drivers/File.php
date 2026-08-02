@@ -45,6 +45,7 @@ use function unlink;
 use function unserialize;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
+use RuntimeException;
 use SplFileInfo;
 
 use Bootgly\ABI\Resources\Cache\Driver;
@@ -61,6 +62,9 @@ use Bootgly\ABI\Resources\Cache\Item;
  */
 class File extends Driver
 {
+   private const string LOCK = '.cache.lock';
+
+
    public function fetch (string $key): mixed
    {
       $clock = $this->Config->clock;
@@ -73,6 +77,105 @@ class File extends Driver
     * @param array<int,string> $tags
     */
    public function store (string $key, mixed $value, int $TTL = 0, array $tags = []): bool
+   {
+      $Lock = $this->lock();
+      try {
+         return $this->persist($key, $value, $TTL, $tags);
+      }
+      finally {
+         $this->release($Lock);
+      }
+   }
+
+   /** @param array<int,string> $tags */
+   public function create (string $key, mixed $value, int $TTL = 0, array $tags = []): bool
+   {
+      $Lock = $this->lock();
+      try {
+         $clock = $this->Config->clock;
+         $now = $clock === null ? time() : (int) $clock();
+         if ($this->read($key, $now, true)[0]) {
+            return false;
+         }
+
+         return $this->persist($key, $value, $TTL, $tags);
+      }
+      finally {
+         $this->release($Lock);
+      }
+   }
+
+   /** @param array<int,string> $tags */
+   public function swap (
+      string $key,
+      mixed $expected,
+      mixed $value,
+      int $TTL = 0,
+      array $tags = [],
+   ): bool
+   {
+      $Lock = $this->lock();
+      try {
+         $clock = $this->Config->clock;
+         $now = $clock === null ? time() : (int) $clock();
+         [$live, $current] = $this->read($key, $now, true);
+         if ($live === false || $current !== $expected) {
+            return false;
+         }
+
+         return $this->persist($key, $value, $TTL, $tags);
+      }
+      finally {
+         $this->release($Lock);
+      }
+   }
+
+   public function evict (string $key, mixed $expected): bool
+   {
+      $Lock = $this->lock();
+      try {
+         $clock = $this->Config->clock;
+         $now = $clock === null ? time() : (int) $clock();
+         [$live, $current] = $this->read($key, $now, true);
+         if ($live === false || $current !== $expected) {
+            return false;
+         }
+
+         return @unlink($this->locate($key));
+      }
+      finally {
+         $this->release($Lock);
+      }
+   }
+
+   public function renew (string $key, int $TTL = 0): bool
+   {
+      $Lock = $this->lock();
+      try {
+         $clock = $this->Config->clock;
+         $now = $clock === null ? time() : (int) $clock();
+         [$live, $value, $tags] = $this->read($key, $now, true);
+         if ($live === false) {
+            return false;
+         }
+
+         // ! The read and write share the same lock, so no stale value can be
+         //   restored while only the expiry metadata is renewed.
+         return $this->persist($key, $value, $TTL, $tags, false);
+      }
+      finally {
+         $this->release($Lock);
+      }
+   }
+
+   /** @param array<int,string> $tags */
+   private function persist (
+      string $key,
+      mixed $value,
+      int $TTL,
+      array $tags,
+      bool $bind = true,
+   ): bool
    {
       $clock = $this->Config->clock;
       $now = $clock === null ? time() : (int) $clock();
@@ -104,8 +207,10 @@ class File extends Driver
       }
 
       // @ Record tag membership
-      foreach ($tags as $tag) {
-         $this->tag($tag, $key);
+      if ($bind) {
+         foreach ($tags as $tag) {
+            $this->tag($tag, $key);
+         }
       }
 
       return true;
@@ -113,28 +218,39 @@ class File extends Driver
 
    public function delete (string $key): bool
    {
-      $file = $this->locate($key);
+      $Lock = $this->lock();
+      try {
+         $file = $this->locate($key);
 
-      // ?
-      if (is_file($file) === false) {
-         return true;
+         // ?
+         if (is_file($file) === false) {
+            return true;
+         }
+
+         return @unlink($file);
       }
-
-      return @unlink($file);
+      finally {
+         $this->release($Lock);
+      }
    }
 
    public function clear (): bool
    {
-      // ?
-      if (is_dir($this->Config->path) === false) {
+      $Lock = $this->lock();
+      try {
+         $lockPath = $this->Config->path . '/' . self::LOCK;
+
+         foreach ($this->scan() as $file) {
+            if ($file !== $lockPath) {
+               @unlink($file);
+            }
+         }
+
          return true;
       }
-
-      foreach ($this->scan() as $file) {
-         @unlink($file);
+      finally {
+         $this->release($Lock);
       }
-
-      return true;
    }
 
    public function check (string $key): bool
@@ -150,54 +266,60 @@ class File extends Driver
       $clock = $this->Config->clock;
       $now = $clock === null ? time() : (int) $clock();
 
-      $file = $this->locate($key);
+      $Lock = $this->lock();
+      try {
+         $file = $this->locate($key);
 
-      // ? Open (creating the file); create the shard dir lazily only on failure
-      $handle = @fopen($file, 'c+b');
-      if ($handle === false) {
-         $this->prepare($file);
+         // ? Open (creating the file); create the shard dir lazily only on failure
          $handle = @fopen($file, 'c+b');
          if ($handle === false) {
-            return 0;
-         }
-      }
-
-      flock($handle, LOCK_EX);
-
-      // @ Read current counter under lock
-      $base = 0;
-      $expiry = 0;
-      $live = false;
-      $bytes = stream_get_contents($handle);
-      if ($bytes !== false && $bytes !== '') {
-         $record = @unserialize($bytes);
-         if (is_array($record) === true && ($record['key'] ?? null) === $key) {
-            $Item = $record['Item'] ?? null;
-            if ($Item instanceof Item === true && ($Item->expiry === 0 || $Item->expiry > $now)) {
-               if (is_int($Item->value) === true) {
-                  $base = $Item->value;
-               }
-               $expiry = $Item->expiry;
-               $live = true;
+            $this->prepare($file);
+            $handle = @fopen($file, 'c+b');
+            if ($handle === false) {
+               return 0;
             }
          }
+
+         flock($handle, LOCK_EX);
+
+         // @ Read current counter under lock
+         $base = 0;
+         $expiry = 0;
+         $live = false;
+         $bytes = stream_get_contents($handle);
+         if ($bytes !== false && $bytes !== '') {
+            $record = @unserialize($bytes);
+            if (is_array($record) === true && ($record['key'] ?? null) === $key) {
+               $Item = $record['Item'] ?? null;
+               if ($Item instanceof Item === true && ($Item->expiry === 0 || $Item->expiry > $now)) {
+                  if (is_int($Item->value) === true) {
+                     $base = $Item->value;
+                  }
+                  $expiry = $Item->expiry;
+                  $live = true;
+               }
+            }
+         }
+
+         // @ Compute and persist (TTL applies only when creating the counter)
+         $value = $base + $by;
+         if ($TTL > 0 && $live === false) {
+            $expiry = $now + $TTL;
+         }
+
+         $out = serialize(['key' => $key, 'Item' => new Item($value, $expiry, [])]);
+         rewind($handle);
+         ftruncate($handle, 0);
+         fwrite($handle, $out);
+         fflush($handle);
+         flock($handle, LOCK_UN);
+         fclose($handle);
+
+         return $value;
       }
-
-      // @ Compute and persist (TTL applies only when creating the counter)
-      $value = $base + $by;
-      if ($TTL > 0 && $live === false) {
-         $expiry = $now + $TTL;
+      finally {
+         $this->release($Lock);
       }
-
-      $out = serialize(['key' => $key, 'Item' => new Item($value, $expiry, [])]);
-      rewind($handle);
-      ftruncate($handle, 0);
-      fwrite($handle, $out);
-      fflush($handle);
-      flock($handle, LOCK_UN);
-      fclose($handle);
-
-      return $value;
    }
 
    public function remain (string $key): int
@@ -241,68 +363,75 @@ class File extends Driver
 
    public function invalidate (string $tag): bool
    {
-      $hash = hash('xxh3', $tag);
-      $file = "{$this->Config->path}/@tags/{$hash}.tag";
+      $Lock = $this->lock();
+      try {
+         $hash = hash('xxh3', $tag);
+         $file = "{$this->Config->path}/@tags/{$hash}.tag";
 
-      // ?
-      if (is_file($file) === false) {
+         // ?
+         if (is_file($file) === false) {
+            return true;
+         }
+
+         $bytes = @file_get_contents($file);
+         if ($bytes !== false && $bytes !== '') {
+            $keys = array_unique(explode("\n", trim($bytes)));
+            foreach ($keys as $member) {
+               if ($member === '') {
+                  continue;
+               }
+               @unlink($this->locate($member));
+            }
+         }
+
+         @unlink($file);
+
          return true;
       }
-
-      $bytes = @file_get_contents($file);
-      if ($bytes !== false && $bytes !== '') {
-         $keys = array_unique(explode("\n", trim($bytes)));
-         foreach ($keys as $member) {
-            if ($member === '') {
-               continue;
-            }
-            @unlink($this->locate($member));
-         }
+      finally {
+         $this->release($Lock);
       }
-
-      @unlink($file);
-
-      return true;
    }
 
    public function purge (): int
    {
-      // ?
-      if (is_dir($this->Config->path) === false) {
-         return 0;
+      $Lock = $this->lock();
+      try {
+         $clock = $this->Config->clock;
+         $now = $clock === null ? time() : (int) $clock();
+
+         $count = 0;
+
+         foreach ($this->scan() as $file) {
+            if (str_ends_with($file, '.cache') === false) {
+               continue;
+            }
+
+            $bytes = @file_get_contents($file);
+            if ($bytes === false || $bytes === '') {
+               continue;
+            }
+
+            $record = @unserialize($bytes);
+            if (is_array($record) === false) {
+               continue;
+            }
+
+            $Item = $record['Item'] ?? null;
+            if ($Item instanceof Item === false) {
+               continue;
+            }
+
+            if ($Item->expiry !== 0 && $Item->expiry <= $now && @unlink($file) === true) {
+               $count++;
+            }
+         }
+
+         return $count;
       }
-
-      $clock = $this->Config->clock;
-      $now = $clock === null ? time() : (int) $clock();
-
-      $count = 0;
-
-      foreach ($this->scan() as $file) {
-         if (str_ends_with($file, '.cache') === false) {
-            continue;
-         }
-
-         $bytes = @file_get_contents($file);
-         if ($bytes === false || $bytes === '') {
-            continue;
-         }
-
-         $record = @unserialize($bytes);
-         if (is_array($record) === false) {
-            continue;
-         }
-
-         $Item = $record['Item'] ?? null;
-         if ($Item instanceof Item === false) {
-            continue;
-         }
-
-         if ($Item->expiry !== 0 && $Item->expiry <= $now && @unlink($file) === true) {
-            $count++;
-         }
+      finally {
+         $this->release($Lock);
       }
-
-      return $count;
    }
 
    // ---
@@ -370,40 +499,72 @@ class File extends Driver
    /**
     * Read a record under no lock.
     *
-    * @return array{0: bool, 1: mixed} [hit, value]
+    * @return array{0: bool, 1: mixed, 2: array<int,string>} [hit, value, tags]
     */
-   private function read (string $key, int $now): array
+   private function read (string $key, int $now, bool $remove = false): array
    {
       $file = $this->locate($key);
 
       // ?
       if (is_file($file) === false) {
-         return [false, null];
+         return [false, null, []];
       }
 
       $bytes = @file_get_contents($file);
       if ($bytes === false || $bytes === '') {
-         return [false, null];
+         return [false, null, []];
       }
 
       $record = @unserialize($bytes);
       if (is_array($record) === false || ($record['key'] ?? null) !== $key) {
-         return [false, null];
+         return [false, null, []];
       }
 
       $Item = $record['Item'] ?? null;
       if ($Item instanceof Item === false) {
-         return [false, null];
+         return [false, null, []];
       }
 
       // ? Expired
       if ($Item->expiry !== 0 && $Item->expiry <= $now) {
-         @unlink($file);
+         if ($remove) {
+            @unlink($file);
+         }
 
-         return [false, null];
+         return [false, null, []];
       }
 
       // :
-      return [true, $Item->value];
+      return [true, $Item->value, $Item->tags];
+   }
+
+   /**
+    * Open and acquire the stable directory-wide mutation lock.
+    *
+    * @return resource
+    */
+   private function lock (): mixed
+   {
+      if (is_dir($this->Config->path) === false) {
+         @mkdir($this->Config->path, 0775, true);
+      }
+
+      $path = $this->Config->path . '/' . self::LOCK;
+      $Lock = @fopen($path, 'c+b');
+      if ($Lock === false || @flock($Lock, LOCK_EX) === false) {
+         if ($Lock !== false) {
+            @fclose($Lock);
+         }
+         throw new RuntimeException('Failed to lock the File cache.');
+      }
+
+      return $Lock;
+   }
+
+   /** @param resource $Lock */
+   private function release (mixed $Lock): void
+   {
+      @flock($Lock, LOCK_UN);
+      @fclose($Lock);
    }
 }

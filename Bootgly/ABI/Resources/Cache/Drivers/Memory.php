@@ -95,6 +95,108 @@ class Memory extends Driver
       return true;
    }
 
+   /** @param array<int,string> $tags */
+   public function create (string $key, mixed $value, int $TTL = 0, array $tags = []): bool
+   {
+      $now = $this->now;
+      if (isset($this->entries[$key]) === true) {
+         $expiry = $this->entries[$key]['e'];
+         if ($expiry === 0 || $expiry > $now) {
+            return false;
+         }
+
+         unset($this->entries[$key]);
+      }
+
+      $this->entries[$key] = [
+         'e' => $TTL > 0 ? $now + $TTL : 0,
+         'v' => $value,
+      ];
+      foreach ($tags as $tag) {
+         $this->bind($tag, $key);
+      }
+
+      return true;
+   }
+
+   /** @param array<int,string> $tags */
+   public function swap (
+      string $key,
+      mixed $expected,
+      mixed $value,
+      int $TTL = 0,
+      array $tags = [],
+   ): bool
+   {
+      $now = $this->now;
+      if (isset($this->entries[$key]) === false) {
+         return false;
+      }
+
+      $record = $this->entries[$key];
+      $expiry = $record['e'];
+      if ($expiry !== 0 && $expiry <= $now) {
+         unset($this->entries[$key]);
+
+         return false;
+      }
+      if ($record['v'] !== $expected) {
+         return false;
+      }
+
+      $this->entries[$key] = [
+         'e' => $TTL > 0 ? $now + $TTL : 0,
+         'v' => $value,
+      ];
+      foreach ($tags as $tag) {
+         $this->bind($tag, $key);
+      }
+
+      return true;
+   }
+
+   public function evict (string $key, mixed $expected): bool
+   {
+      $now = $this->now;
+      if (isset($this->entries[$key]) === false) {
+         return false;
+      }
+
+      $record = $this->entries[$key];
+      $expiry = $record['e'];
+      if ($expiry !== 0 && $expiry <= $now) {
+         unset($this->entries[$key]);
+
+         return false;
+      }
+      if ($record['v'] !== $expected) {
+         return false;
+      }
+
+      unset($this->entries[$key]);
+
+      return true;
+   }
+
+   public function renew (string $key, int $TTL = 0): bool
+   {
+      $now = $this->now;
+      if (isset($this->entries[$key]) === false) {
+         return false;
+      }
+
+      $expiry = $this->entries[$key]['e'];
+      if ($expiry !== 0 && $expiry <= $now) {
+         unset($this->entries[$key]);
+
+         return false;
+      }
+
+      $this->entries[$key]['e'] = $TTL > 0 ? $now + $TTL : 0;
+
+      return true;
+   }
+
    public function delete (string $key): bool
    {
       unset($this->entries[$key]);

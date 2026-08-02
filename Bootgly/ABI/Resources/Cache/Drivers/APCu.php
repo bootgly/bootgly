@@ -12,6 +12,7 @@ namespace Bootgly\ABI\Resources\Cache\Drivers;
 
 
 use const APC_ITER_KEY;
+use function apcu_add;
 use function apcu_delete;
 use function apcu_exists;
 use function apcu_fetch;
@@ -64,6 +65,22 @@ class APCu extends Driver
       }
 
       // @ Track tag membership
+      foreach ($tags as $tag) {
+         $this->tag($tag, $key, $TTL);
+      }
+
+      return true;
+   }
+
+   /** @param array<int,string> $tags */
+   public function create (string $key, mixed $value, int $TTL = 0, array $tags = []): bool
+   {
+      $this->guard();
+
+      if (apcu_add($key, $value, $TTL) === false) {
+         return false;
+      }
+
       foreach ($tags as $tag) {
          $this->tag($tag, $key, $TTL);
       }

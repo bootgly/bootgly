@@ -141,20 +141,68 @@ class Shared extends Driver
     */
    public function store (string $key, mixed $value, int $TTL = 0, array $tags = []): bool
    {
+      return $this->persist($key, $value, $TTL, $tags);
+   }
+
+   /** @param array<int,string> $tags */
+   public function create (string $key, mixed $value, int $TTL = 0, array $tags = []): bool
+   {
+      return $this->persist($key, $value, $TTL, $tags, true);
+   }
+
+   /** @param array<int,string> $tags */
+   public function swap (
+      string $key,
+      mixed $expected,
+      mixed $value,
+      int $TTL = 0,
+      array $tags = [],
+   ): bool
+   {
+      return $this->persist($key, $value, $TTL, $tags, false, $expected);
+   }
+
+   /**
+    * @param array<int,string> $tags
+    */
+   private function persist (
+      string $key,
+      mixed $value,
+      int $TTL,
+      array $tags,
+      null|bool $create = null,
+      mixed $expected = null,
+   ): bool
+   {
       $this->attach();
 
-      $now = $this->now;
-      $expiry = $TTL > 0 ? $now + $TTL : 0;
       $id = crc32($key);
 
-      sem_acquire($this->Semaphore);
+      if (sem_acquire($this->Semaphore) === false) {
+         throw new RuntimeException('Failed to lock the shared-memory semaphore.');
+      }
       try {
+         $now = $this->now;
+         $expiry = $TTL > 0 ? $now + $TTL : 0;
          $existed = shm_has_var($this->Segment, $id);
          $stored = $existed === true
             ? shm_get_var($this->Segment, $id)
             : null;
+         $current = $this->find($stored, $key);
+         $live = $current !== null
+            && ($current['e'] === 0 || $current['e'] > $now);
+         if (
+            ($create === true && $live)
+            || (
+               $create === false
+               && ($live === false || $current['v'] !== $expected)
+            )
+         ) {
+            return false;
+         }
+
          $record = ['e' => $expiry, 'v' => $value, 't' => $tags];
-         shm_put_var($this->Segment, $id, $this->write($stored, $key, $record));
+         $this->put($id, $this->write($stored, $key, $record));
 
          if ($existed === false) {
             $this->track($id);
@@ -163,6 +211,81 @@ class Shared extends Driver
          foreach ($tags as $tag) {
             $this->bind($tag, $id);
          }
+      }
+      finally {
+         sem_release($this->Semaphore);
+      }
+
+      return true;
+   }
+
+   public function evict (string $key, mixed $expected): bool
+   {
+      $this->attach();
+
+      $id = crc32($key);
+
+      if (sem_acquire($this->Semaphore) === false) {
+         throw new RuntimeException('Failed to lock the shared-memory semaphore.');
+      }
+      try {
+         $now = $this->now;
+         if (shm_has_var($this->Segment, $id) === false) {
+            return false;
+         }
+
+         $stored = shm_get_var($this->Segment, $id);
+         $record = $this->find($stored, $key);
+         if (
+            $record === null
+            || ($record['e'] !== 0 && $record['e'] <= $now)
+            || $record['v'] !== $expected
+         ) {
+            return false;
+         }
+
+         $updated = $this->erase($stored, $key);
+         if ($updated === null) {
+            $this->drop($id);
+            $this->untrack($id);
+         }
+         else {
+            $this->put($id, $updated);
+         }
+      }
+      finally {
+         sem_release($this->Semaphore);
+      }
+
+      return true;
+   }
+
+   public function renew (string $key, int $TTL = 0): bool
+   {
+      $this->attach();
+
+      $id = crc32($key);
+
+      if (sem_acquire($this->Semaphore) === false) {
+         throw new RuntimeException('Failed to lock the shared-memory semaphore.');
+      }
+      try {
+         $now = $this->now;
+         if (shm_has_var($this->Segment, $id) === false) {
+            return false;
+         }
+
+         $stored = shm_get_var($this->Segment, $id);
+         $record = $this->find($stored, $key);
+         if (
+            $record === null
+            || ($record['e'] !== 0 && $record['e'] <= $now)
+         ) {
+            return false;
+         }
+
+         $record['e'] = $TTL > 0 ? $now + $TTL : 0;
+         $this->put($id, $this->write($stored, $key, $record));
       }
       finally {
          sem_release($this->Semaphore);
@@ -184,11 +307,11 @@ class Shared extends Driver
             $updated = $this->erase($stored, $key);
 
             if ($updated === null) {
-               shm_remove_var($this->Segment, $id);
+               $this->drop($id);
                $this->untrack($id);
             }
             else {
-               shm_put_var($this->Segment, $id, $updated);
+               $this->put($id, $updated);
             }
          }
       }
@@ -216,12 +339,12 @@ class Shared extends Driver
                foreach (array_keys($bucket) as $id) {
                   $id = (int) $id;
                   if (shm_has_var($this->Segment, $id) === true) {
-                     shm_remove_var($this->Segment, $id);
+                     $this->drop($id);
                   }
                }
             }
 
-            shm_remove_var($this->Segment, $bucketId);
+            $this->drop($bucketId);
          }
       }
       finally {
@@ -301,8 +424,7 @@ class Shared extends Driver
          $tags = $live === true && is_array($record['t'] ?? null)
             ? $record['t']
             : [];
-         shm_put_var(
-            $this->Segment,
+         $this->put(
             $id,
             $this->write($stored, $key, ['e' => $expiry, 'v' => $value, 't' => $tags])
          );
@@ -406,11 +528,11 @@ class Shared extends Driver
 
                $updated = $this->collapse($records);
                if ($updated === null) {
-                  shm_remove_var($this->Segment, $member);
+                  $this->drop($member);
                   $this->untrack($member);
                }
                else {
-                  shm_put_var($this->Segment, $member, $updated);
+                  $this->put($member, $updated);
                }
             }
 
@@ -418,10 +540,10 @@ class Shared extends Driver
                unset($tagBuckets[$tag]);
                if ($tagBuckets === []) {
                   $this->untrack($tagId);
-                  shm_remove_var($this->Segment, $tagId);
+                  $this->drop($tagId);
                }
                else {
-                  shm_put_var($this->Segment, $tagId, [
+                  $this->put($tagId, [
                      'b' => self::BUCKET_VERSION,
                      't' => $tagBuckets,
                   ]);
@@ -429,7 +551,7 @@ class Shared extends Driver
             }
             else {
                $this->untrack($tagId);
-               shm_remove_var($this->Segment, $tagId);
+               $this->drop($tagId);
             }
          }
       }
@@ -490,18 +612,18 @@ class Shared extends Driver
                if ($slotChanged === true) {
                   $updated = $this->collapse($records);
                   if ($updated === null) {
-                     shm_remove_var($this->Segment, $id);
+                     $this->drop($id);
                      unset($bucket[$id]);
                   }
                   else {
-                     shm_put_var($this->Segment, $id, $updated);
+                     $this->put($id, $updated);
                   }
                   $changed = true;
                }
             }
 
             if ($changed === true) {
-               shm_put_var($this->Segment, $bucketId, $bucket);
+               $this->put($bucketId, $bucket);
             }
          }
       }
@@ -854,6 +976,22 @@ class Shared extends Driver
       throw new RuntimeException("Failed to locate SysV {$table} key {$key} after attach.");
    }
 
+   /** Persist one shared-memory variable and fail explicitly on capacity/IPC errors. */
+   private function put (int $id, mixed $value): void
+   {
+      if (shm_put_var($this->Segment, $id, $value) === false) {
+         throw new RuntimeException("Failed to write shared-memory variable {$id}.");
+      }
+   }
+
+   /** Remove one shared-memory variable and fail explicitly on IPC errors. */
+   private function drop (int $id): void
+   {
+      if (shm_remove_var($this->Segment, $id) === false) {
+         throw new RuntimeException("Failed to remove shared-memory variable {$id}.");
+      }
+   }
+
    /**
     * Add a var key to its live-key index bucket (caller holds the semaphore).
     */
@@ -869,7 +1007,7 @@ class Shared extends Driver
       }
 
       $bucket[$id] = true;
-      shm_put_var($this->Segment, $bucketId, $bucket);
+      $this->put($bucketId, $bucket);
    }
 
    /**
@@ -889,7 +1027,7 @@ class Shared extends Driver
       }
 
       unset($bucket[$id]);
-      shm_put_var($this->Segment, $bucketId, $bucket);
+      $this->put($bucketId, $bucket);
    }
 
    /**
@@ -930,7 +1068,7 @@ class Shared extends Driver
       $memberSet[$id] = true;
       $tagBuckets[$tag] = $memberSet;
 
-      shm_put_var($this->Segment, $tagId, [
+      $this->put($tagId, [
          'b' => self::BUCKET_VERSION,
          't' => $tagBuckets,
       ]);

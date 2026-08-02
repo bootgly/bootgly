@@ -43,6 +43,50 @@ abstract class Driver
     */
    abstract public function store (string $key, mixed $value, int $TTL = 0, array $tags = []): bool;
    /**
+    * Atomically create a value only when no live key exists.
+    *
+    * Custom drivers fail closed until they provide a backend-native override.
+    *
+    * @param array<int,string> $tags
+    */
+   public function create (string $key, mixed $value, int $TTL = 0, array $tags = []): bool
+   {
+      return false;
+   }
+   /**
+    * Atomically replace a live value only when it exactly matches the expected value.
+    *
+    * Custom drivers fail closed until they provide a backend-native override.
+    *
+    * @param array<int,string> $tags
+    */
+   public function swap (
+      string $key,
+      mixed $expected,
+      mixed $value,
+      int $TTL = 0,
+      array $tags = [],
+   ): bool
+   {
+      return false;
+   }
+   /**
+    * Atomically remove a live key only when it exactly matches the expected value.
+    * Custom drivers fail closed until they provide a backend-native override.
+    */
+   public function evict (string $key, mixed $expected): bool
+   {
+      return false;
+   }
+   /**
+    * Atomically renew a live key's TTL without rewriting its value.
+    * Custom drivers fail closed until they provide a backend-native override.
+    */
+   public function renew (string $key, int $TTL = 0): bool
+   {
+      return false;
+   }
+   /**
     * Remove one key.
     */
    abstract public function delete (string $key): bool;

@@ -25,10 +25,12 @@ use function random_int;
 use function serialize;
 use function session_get_cookie_params;
 use function unserialize;
+use RuntimeException;
 
 use Bootgly\ABI\Events\Emitter;
 use Bootgly\WPI\Modules\HTTP\Server\Response\Raw\Header\Cookie;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Session\Committing;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Session\Events;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Session\Handler;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Session\Regenerators;
@@ -69,6 +71,10 @@ class Session
    /** @var array<string,mixed> */
    protected array $data = [];
    protected bool $needSave = false;
+   /** Whether this object loaded or successfully created its current ID. */
+   protected bool $persisted = false;
+   /** Opaque revision of the exact persisted snapshot loaded by this object. */
+   protected null|string $revision = null;
    public protected(set) string $id;
    /**
     * True when the supplied ID matched an existing server-issued session
@@ -100,12 +106,24 @@ class Session
       // @ Read
       $this->id = $id;
 
-      $data = Handler::$instance?->read($id);
+      $Handler = Handler::$instance;
+      $revision = null;
+      $data = $Handler instanceof Committing
+         ? $Handler->fetch($id, $revision)
+         : $Handler?->read($id);
       if (is_string($data)) {
+         if ($Handler instanceof Committing && is_string($revision) === false) {
+            throw new RuntimeException(
+               'Atomic Session handlers must return a revision for every fetched record.'
+            );
+         }
+
          $decoded = self::decode($data);
          if ($decoded !== null) {
             $this->data = $decoded;
             $this->loaded = true;
+            $this->persisted = true;
+            $this->revision = $revision;
          }
       }
 
@@ -255,14 +273,36 @@ class Session
    {
       // @ Destroy old session data
       $oldId = $this->id;
-      if (Handler::$instance) {
-         Handler::$instance->destroy($oldId);
+      $Handler = Handler::$instance;
+      if ($this->persisted) {
+         if (
+            $Handler instanceof Committing === false
+            || is_string($this->revision) === false
+         ) {
+            throw new RuntimeException(
+               'Loaded Session handlers must implement atomic commit/revoke semantics.'
+            );
+         }
+
+         $revoked = $Handler->revoke($oldId, $this->revision);
+         if ($revoked === false) {
+            // ! Another request already changed or revoked this authenticated snapshot.
+            //   Never migrate its stale data into a fresh session ID.
+            $this->invalidate();
+
+            return;
+         }
+      }
+      elseif ($Handler !== null) {
+         $Handler->destroy($oldId);
       }
 
       // @ Generate new session ID
       $newId = bin2hex(random_bytes(16));
       $this->id = $newId;
       $this->needSave = true;
+      $this->persisted = false;
+      $this->revision = null;
 
       // @ Update Set-Cookie header on current response
       $name = static::$name;
@@ -331,8 +371,19 @@ class Session
     */
    public function rotate (string $newId): void
    {
+      // ! rotate() is the strict-mode path for an unknown, unloaded ID. If a
+      //   caller applies it to persisted state, discard that state so this
+      //   helper cannot migrate a stale authenticated snapshot.
+      if ($this->persisted) {
+         $this->data = [];
+         $this->needSave = false;
+      }
+
       $this->id = $newId;
       $this->loaded = false;
+      $this->persisted = false;
+      $this->revision = null;
+      $this->cookieEmitted = false;
    }
 
    /**
@@ -378,19 +429,90 @@ class Session
          return;
       }
 
-      // @
-      if (empty($this->data)) {
-         Handler::$instance->destroy($this->id);
+      try {
+         // @
+         if (empty($this->data)) {
+            $Handler = Handler::$instance;
+            if ($this->persisted) {
+               if (
+                  $Handler instanceof Committing === false
+                  || is_string($this->revision) === false
+               ) {
+                  throw new RuntimeException(
+                     'Loaded Session handlers must implement atomic commit/revoke semantics.'
+                  );
+               }
 
-         // @ Events — session destroyed (emptied on save) (guarded)
-         $Emitter = Emitter::$Instance;
-         $Emitter->check(Events::Destroy) && $Emitter->emit(Events::Destroy, $this->id);
-      }
-      else {
-         Handler::$instance->write($this->id, serialize($this->data));
-      }
+               if ($Handler->revoke($this->id, $this->revision) === false) {
+                  $this->invalidate();
 
+                  return;
+               }
+            }
+            elseif ($Handler->destroy($this->id) === false) {
+               throw new RuntimeException('Failed to destroy the Session record.');
+            }
+            $this->persisted = false;
+            $this->revision = null;
+
+            // @ Events — session destroyed (emptied on save) (guarded)
+            $Emitter = Emitter::$Instance;
+            $Emitter->check(Events::Destroy) && $Emitter->emit(Events::Destroy, $this->id);
+         }
+         else {
+            $Handler = Handler::$instance;
+            $payload = serialize($this->data);
+
+            // ! Loaded sessions must never fall back to unconditional write().
+            //   The opaque revision binds this save to the exact snapshot read,
+            //   so in-place logout/downgrade and revocation both win over stale data.
+            if ($Handler instanceof Committing) {
+               $revision = $this->revision;
+               $saved = $Handler->commit($this->id, $payload, $revision);
+            }
+            elseif ($this->persisted === false) {
+               $saved = $Handler->write($this->id, $payload);
+               if ($saved === false) {
+                  throw new RuntimeException('Failed to persist the new Session record.');
+               }
+               $revision = null;
+            }
+            else {
+               throw new RuntimeException(
+                  'Loaded Session handlers must implement atomic commit/revoke semantics.'
+               );
+            }
+
+            if ($saved === false) {
+               // ! A conditional conflict means another request revoked or
+               //   claimed this ID. Drop the stale snapshot and move to a new,
+               //   empty ID so later application code cannot retry as create.
+               $this->invalidate();
+
+               return;
+            }
+
+            $this->persisted = true;
+            $this->revision = $revision;
+         }
+      }
+      finally {
+         // ! Neither a stale conflict nor a backend exception may be retried
+         //   later from __destruct() against changed global handler state.
+         $this->needSave = false;
+      }
+   }
+
+   /** Discard one stale snapshot and select a fresh, empty local ID. */
+   private function invalidate (): void
+   {
+      $this->data = [];
+      $this->id = bin2hex(random_bytes(16));
+      $this->loaded = false;
+      $this->persisted = false;
+      $this->revision = null;
       $this->needSave = false;
+      $this->cookieEmitted = false;
    }
 
    // ---
@@ -501,7 +623,7 @@ class Session
       // @ Safety net — the server normally persists via save() pre-response
       if ($this->needSave && Handler::$instance) {
          $this->save();
-      } elseif (static::$autoUpdateTimestamp) {
+      } elseif (static::$autoUpdateTimestamp && $this->persisted) {
          // ?
          if (Handler::$instance !== null) {
             Handler::$instance->touch($this->id);

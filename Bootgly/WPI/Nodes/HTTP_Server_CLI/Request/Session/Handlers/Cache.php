@@ -18,6 +18,7 @@ use function base64_decode;
 use function base64_encode;
 use function bin2hex;
 use function chmod;
+use function count;
 use function dirname;
 use function fclose;
 use function fflush;
@@ -28,6 +29,7 @@ use function fsync;
 use function function_exists;
 use function fwrite;
 use function hash;
+use function hash_equals;
 use function hash_hmac;
 use function is_array;
 use function is_dir;
@@ -54,7 +56,7 @@ use RuntimeException;
 use Bootgly\ABI\Resources\Cache as CacheResource;
 use Bootgly\API\Security\Encrypter;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Session;
-use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Session\Handling;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Session\Committing;
 
 
 /**
@@ -73,8 +75,10 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Session\Handling;
  * fleets spanning multiple hosts must provision the same explicit `secret`
  * on every host.
  */
-class Cache implements Handling
+class Cache implements Committing
 {
+   private const int RECORD_VERSION = 1;
+
    // * Data
    private CacheResource $Cache;
    private Encrypter $Encrypter;
@@ -144,23 +148,26 @@ class Cache implements Handling
 
    public function read (string $sessionId): string|false
    {
+      $revision = null;
+
+      return $this->fetch($sessionId, $revision);
+   }
+
+   public function fetch (
+      string $sessionId,
+      null|string &$revision = null,
+   ): string|false
+   {
+      $revision = null;
       // ?
       if (self::validate($sessionId) === false) {
          return false;
       }
 
-      $sealed = $this->Cache->fetch($sessionId);
-      if (is_string($sealed) === false) {
-         return false;
-      }
-
-      $data = $this->Encrypter->decrypt(
-         $sealed,
-         "{$this->context}:{$sessionId}"
-      );
+      $record = $this->Cache->fetch($sessionId);
 
       // : Expired entries vanish natively (TTL set on write)
-      return is_string($data) === true ? $data : false;
+      return $this->open($record, $sessionId, $revision);
    }
 
    public function write (string $sessionId, string $sessionData): bool
@@ -170,13 +177,110 @@ class Cache implements Handling
          return false;
       }
 
-      $sealed = $this->Encrypter->encrypt(
-         $sessionData,
-         "{$this->context}:{$sessionId}"
-      );
+      $revision = bin2hex(random_bytes(32));
+      $record = $this->seal($sessionData, $sessionId, $revision);
 
       // @ TTL = session lifetime — the backend expires the entry natively
-      return $this->Cache->store($sessionId, $sealed, Session::$lifetime);
+      return $this->Cache->store($sessionId, $record, Session::$lifetime);
+   }
+
+   public function commit (
+      string $sessionId,
+      string $sessionData,
+      null|string &$revision,
+   ): bool
+   {
+      if (self::validate($sessionId) === false) {
+         return false;
+      }
+
+      $nextRevision = bin2hex(random_bytes(32));
+      $next = $this->seal($sessionData, $sessionId, $nextRevision);
+      if ($revision === null) {
+         $committed = $this->Cache->create(
+            $sessionId,
+            $next,
+            Session::$lifetime,
+         );
+         if ($committed) {
+            $revision = $nextRevision;
+
+            return true;
+         }
+
+         if ($this->Cache->fetch($sessionId) !== null) {
+            return false;
+         }
+
+         throw new RuntimeException('The Cache driver failed its atomic Session create.');
+      }
+
+      $current = $this->Cache->fetch($sessionId);
+      $currentRevision = null;
+      if (
+         $this->open($current, $sessionId, $currentRevision) === false
+         || is_string($currentRevision) === false
+         || hash_equals($revision, $currentRevision) === false
+      ) {
+         return false;
+      }
+
+      $committed = $this->Cache->swap(
+         $sessionId,
+         $current,
+         $next,
+         Session::$lifetime,
+      );
+      if ($committed) {
+         $revision = $nextRevision;
+
+         return true;
+      }
+
+      $latest = $this->Cache->fetch($sessionId);
+      $latestRevision = null;
+      if (
+         $this->open($latest, $sessionId, $latestRevision) === false
+         || is_string($latestRevision) === false
+         || hash_equals($revision, $latestRevision) === false
+      ) {
+         return false;
+      }
+
+      throw new RuntimeException('The Cache driver failed its atomic Session commit.');
+   }
+
+   public function revoke (string $sessionId, string $revision): bool
+   {
+      if (self::validate($sessionId) === false) {
+         return false;
+      }
+
+      $current = $this->Cache->fetch($sessionId);
+      $currentRevision = null;
+      if (
+         $this->open($current, $sessionId, $currentRevision) === false
+         || is_string($currentRevision) === false
+         || hash_equals($revision, $currentRevision) === false
+      ) {
+         return false;
+      }
+
+      if ($this->Cache->evict($sessionId, $current)) {
+         return true;
+      }
+
+      $latest = $this->Cache->fetch($sessionId);
+      $latestRevision = null;
+      if (
+         $this->open($latest, $sessionId, $latestRevision) === false
+         || is_string($latestRevision) === false
+         || hash_equals($revision, $latestRevision) === false
+      ) {
+         return false;
+      }
+
+      throw new RuntimeException('The Cache driver failed its atomic Session revocation.');
    }
 
    public function touch (string $sessionId): bool
@@ -186,19 +290,15 @@ class Cache implements Handling
          return false;
       }
 
-      $sealed = $this->Cache->fetch($sessionId);
-      if (
-         is_string($sealed) === false
-         || $this->Encrypter->decrypt(
-            $sealed,
-            "{$this->context}:{$sessionId}"
-         ) === null
-      ) {
+      $record = $this->Cache->fetch($sessionId);
+      $revision = null;
+      if ($this->open($record, $sessionId, $revision) === false) {
          return false;
       }
 
-      // @ Re-store to renew the TTL (sliding expiration)
-      return $this->Cache->store($sessionId, $sealed, Session::$lifetime);
+      // @ Backend-native TTL renewal never writes the fetched snapshot, so a
+      // concurrent logout/downgrade cannot be rolled back by a stale reader.
+      return $this->Cache->renew($sessionId, Session::$lifetime);
    }
 
    public function destroy (string $sessionId): bool
@@ -221,6 +321,63 @@ class Cache implements Handling
    }
 
    // ---
+
+   /** @return array{version:int,revision:string,sealed:string} */
+   private function seal (
+      string $sessionData,
+      string $sessionId,
+      string $revision,
+   ): array
+   {
+      return [
+         'version' => self::RECORD_VERSION,
+         'revision' => $revision,
+         'sealed' => $this->Encrypter->encrypt(
+            $sessionData,
+            "{$this->context}:{$sessionId}",
+         ),
+      ];
+   }
+
+   /** Decode one versioned record, retaining compatibility with legacy ciphertext. */
+   private function open (
+      mixed $record,
+      string $sessionId,
+      null|string &$revision = null,
+   ): string|false
+   {
+      $revision = null;
+      if (is_string($record)) {
+         $sealed = $record;
+         $revision = 'legacy:' . hash('sha256', $sealed);
+      }
+      elseif (
+         is_array($record)
+         && count($record) === 3
+         && ($record['version'] ?? null) === self::RECORD_VERSION
+         && is_string($record['revision'] ?? null)
+         && preg_match('/^[a-f0-9]{64}$/D', $record['revision']) === 1
+         && is_string($record['sealed'] ?? null)
+      ) {
+         $revision = $record['revision'];
+         $sealed = $record['sealed'];
+      }
+      else {
+         return false;
+      }
+
+      $data = $this->Encrypter->decrypt(
+         $sealed,
+         "{$this->context}:{$sessionId}",
+      );
+      if (is_string($data) === false) {
+         $revision = null;
+
+         return false;
+      }
+
+      return $data;
+   }
 
    /**
     * Validate the session ID shape (mirrors the File handler guard).

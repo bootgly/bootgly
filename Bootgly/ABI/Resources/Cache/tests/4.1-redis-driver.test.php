@@ -47,16 +47,55 @@ return new Specification(
          description: 'Miss returns null; check() reflects presence'
       );
 
+      yield assert(
+         assertion: $Cache->swap('conditional', 'missing', 'unexpected') === false
+            && $Cache->evict('conditional', 'missing') === false
+            && $Cache->renew('conditional', 30) === false
+            && $Cache->fetch('conditional') === null,
+         description: 'Atomic mutations refuse a missing key'
+      );
+      yield assert(
+         assertion: $Cache->create('conditional', 'created') === true
+            && $Cache->create(
+               'conditional',
+               'clobbered',
+               tags: ['rejected-create'],
+            ) === false
+            && $Cache->invalidate('rejected-create') === true
+            && $Cache->fetch('conditional') === 'created',
+         description: 'create() stores only the first live value and tags only successful writes'
+      );
+      yield assert(
+         assertion: $Cache->swap(
+            'conditional',
+            'stale',
+            'clobbered',
+            tags: ['rejected-swap'],
+         ) === false
+            && $Cache->invalidate('rejected-swap') === true
+            && $Cache->fetch('conditional') === 'created'
+            && $Cache->swap('conditional', 'created', 'replaced') === true
+            && $Cache->fetch('conditional') === 'replaced'
+            && $Cache->evict('conditional', 'created') === false
+            && $Cache->evict('conditional', 'replaced') === true
+            && $Cache->swap('conditional', 'replaced', 'resurrected') === false,
+         description: 'Lua swap()/evict() require exact packed bytes and cannot resurrect a key'
+      );
+
       // # Counters + native TTL
       yield assert(
          assertion: $Cache->increment('n') === 1 && $Cache->increment('n', 6) === 7,
          description: 'increment() creates and advances'
       );
       $Cache->store('ttltest', 'v', 100);
+      $renewed = $Cache->renew('ttltest', 200);
       $TTL = $Cache->remain('ttltest');
       yield assert(
-         assertion: $TTL > 0 && $TTL <= 100,
-         description: 'remain() returns remaining seconds for an expiring key'
+         assertion: $renewed === true
+            && $Cache->fetch('ttltest') === 'v'
+            && $TTL > 100
+            && $TTL <= 200,
+         description: 'renew() extends native TTL without rewriting the value'
       );
       yield assert(
          assertion: $Cache->remain('missing') === -2,

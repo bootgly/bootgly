@@ -21,6 +21,7 @@ return new Suite(
       '1.5-tags-invalidate',
       '1.6-clear-purge',
       '1.7-resolve',
+      '1.8-conditional-create-replace',
 
       '2.1-apcu-driver',
 

@@ -28,5 +28,6 @@ return new Suite(
       '4.1-cookie_security_defaults_not_downgraded',
 
       '5.1-file-handler-filesystem_security',
+      '5.2-file-handler-atomic_commit_destroy',
    ]
 );
