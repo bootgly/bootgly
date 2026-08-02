@@ -270,9 +270,9 @@ class TCP_Server_CLI implements Servers
    //   Exact worker-local retained-byte diagnostic, maintained by Buffers.
    //   Configuration must use maxWorkerPendingBytes, never this counter.
    public static int $pendingBytes = 0;
-   //   Wall-clock budget (seconds) a deferred write may remain stalled
-   //   before the connection is closed deterministically. Replaces the
-   //   previous synchronous `stream_select(..., 200_000)` retry loop.
+   //   Elapsed-time budget (seconds) a deferred write may remain stalled
+   //   before a generation-bound monotonic timer closes the connection.
+   //   Replaces the previous synchronous `stream_select(..., 200_000)` retry.
    public static int $maxWriteWallTime = 30;
    // # Connection-exhaustion caps (audit F-2)
    //   Maximum simultaneously-admitted connections per worker, including

@@ -196,6 +196,14 @@ return new Specification(
          $Package->reading($Socket);
       }
       finally {
+         // @ The fixture deliberately stalls its first response writes. Drain
+         //   that owned suffix through the public transport path so the Package
+         //   cancels its generation-bound deadline and releases its byte token
+         //   before the focused event backend is replaced.
+         if ($Package->pendingBuffer !== '' && is_resource($Socket)) {
+            $Package->writing($Socket, buffer: '');
+         }
+
          TCPServer::$Decoder = $OldDecoder;
          TCPServer::$Encoder = $OldEncoder;
          TCPServer::$Event = $OldEvent;

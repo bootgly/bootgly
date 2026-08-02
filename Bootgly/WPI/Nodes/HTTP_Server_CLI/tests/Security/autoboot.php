@@ -478,6 +478,10 @@ return new Suite(
       // A second proxy-resolution pass must authenticate the immutable socket
       // peer rather than the application-facing address changed by a prior pass.
       '90.01-trusted_proxy_mutable_address_trust_confusion',
+      // # Deferred-write wall-time enforcement (audit 2026-08-02 L2)
+      // A permanently non-writable peer must be closed by an independent
+      // monotonic deadline without waiting for another EVENT_WRITE callback.
+      '91.01-tcp_nonwritable_write_deadline',
       // # Worker listener descriptor admission (audit 2026-08-01 L3)
       // A worker must fail startup before entering its event loop when the
       // inherited listener cannot be represented by the select backend.

@@ -26,6 +26,8 @@ use function fseek;
 use function fstat;
 use function fwrite;
 use function get_resource_type;
+use function hrtime;
+use function intdiv;
 use function is_array;
 use function is_int;
 use function is_resource;
@@ -37,6 +39,7 @@ use function strlen;
 use function substr;
 use Throwable;
 
+use Bootgly\ACI\Events\Scheduler;
 use Bootgly\ACI\Logs\Logger;
 use Bootgly\API\Workables\Server as SAPI;
 use Bootgly\WPI;
@@ -81,8 +84,17 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
    //   Drain cursor inside `$pendingBuffer`. Always 0 after `reset()`.
    public int $pendingOffset = 0;
    //   Absolute UNIX timestamp (microtime) past which the deferred write
-   //   is considered stalled and the connection is force-closed.
+   //   is considered stalled. Retained for compatibility and diagnostics;
+   //   enforcement uses the monotonic deadline and timer below.
    public float $pendingDeadline = 0.0;
+   //   Exact one-shot timer owner and generation token for pending output.
+   //   The token prevents an old callback from aborting a later generation;
+   //   retaining the owning Scheduler makes cancellation independent from a
+   //   later replacement of the global Server::$Event reference.
+   private int $writeDeadlineNS = 0;
+   private int $writeTimer = 0;
+   private null|Scheduler $WriteEvent = null;
+   private null|object $WriteToken = null;
    //   Deferred close-after-write intent. Set when `closeAfterWrite` was
    //   true at the moment a write deferred; the actual close happens once
    //   `$pendingBuffer` fully drains.
@@ -625,9 +637,9 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
       //   bookkeeping. An engaged output owner, a prefix `$length` or a zero
       //   write falls through to the ordered writer below unchanged.
       //   Skipping the stall-deadline check is sound only while an idle gate
-      //   implies no deadline: `$pendingDeadline > 0` is installed exclusively
-      //   by defer() together with a non-empty `$pendingBuffer`, and only
-      //   reset() clears that pair — keep that coupling when editing either.
+      //   implies no deadline: defer() installs `$writeDeadlineNS` exclusively
+      //   with a non-empty `$pendingBuffer`, and only reset()/release() clear
+      //   that pair — keep that coupling when editing either.
       if (
          $available !== 0
          && ($length === null || $length === $available)
@@ -695,8 +707,8 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
       //   body of the active file; it stays in `$pendingResponses` until the
       //   file cursor reaches the end of every part and padding phase.
       if (
-         $this->pendingDeadline > 0.0
-         && microtime(true) > $this->pendingDeadline
+         $this->writeDeadlineNS > 0
+         && (int) hrtime(true) >= $this->writeDeadlineNS
       ) {
          return $this->abort($Socket);
       }
@@ -955,15 +967,24 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
 
       $this->pendingBuffer = $pending . $buffer;
       $this->pendingOffset = 0;
-      if ($this->pendingDeadline === 0.0) {
+      $fresh = $this->writeDeadlineNS === 0;
+      if ($fresh) {
          $this->pendingDeadline = microtime(true) + (float) Server::$maxWriteWallTime;
+
+         $nowNS = (int) hrtime(true);
+         $seconds = max(0, Server::$maxWriteWallTime);
+         $maximumSeconds = intdiv(PHP_INT_MAX - $nowNS, 1_000_000_000);
+         $this->writeDeadlineNS = $seconds > $maximumSeconds
+            ? PHP_INT_MAX
+            : $nowNS + ($seconds * 1_000_000_000);
       }
 
-      if (! $this->writeRegistered && isset(Server::$Event)) {
+      $Event = isset(Server::$Event) ? Server::$Event : null;
+      if (! $this->writeRegistered && $Event !== null) {
          try {
-            $registered = Server::$Event->add(
+            $registered = $Event->add(
                $Socket,
-               Server::$Event::EVENT_WRITE,
+               $Event::EVENT_WRITE,
                $this
             );
          }
@@ -975,6 +996,52 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
             return false;
          }
          $this->writeRegistered = true;
+      }
+
+      if ($fresh && $Event !== null) {
+         // ! The readiness watcher cannot enforce a deadline while a peer
+         //   remains permanently non-writable. Register an independent
+         //   monotonic one-shot for this exact pending-output generation.
+         $deadlineNS = $this->writeDeadlineNS;
+         $Token = new \stdClass;
+
+         $this->WriteEvent = $Event;
+         $this->WriteToken = $Token;
+         try {
+            $timer = $Event->defer(
+               $deadlineNS,
+               function () use ($Socket, $Token, $Event, $deadlineNS): void {
+                  if (
+                     $this->WriteToken !== $Token
+                     || $this->WriteEvent !== $Event
+                     || $this->writeDeadlineNS !== $deadlineNS
+                     || $this->writeTimer < 1
+                     || $this->pendingBuffer === ''
+                  ) {
+                     return;
+                  }
+
+                  // @ Select removes a one-shot before invoking it. Invalidate
+                  //   local ownership before abort() reaches reset()/close().
+                  $this->writeTimer = 0;
+                  $this->WriteEvent = null;
+                  $this->WriteToken = null;
+                  $CallbackSocket = $Socket;
+                  $this->abort($CallbackSocket);
+               }
+            );
+         }
+         catch (Throwable) {
+            $timer = 0;
+         }
+
+         if ($timer < 1) {
+            $this->WriteEvent = null;
+            $this->WriteToken = null;
+
+            return false;
+         }
+         $this->writeTimer = $timer;
       }
 
       return true;
@@ -1141,6 +1208,8 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
     */
    protected function release (): void
    {
+      $this->disarm();
+
       // upload() does not own its caller-supplied handler. Dropping this
       // reference lets the caller's lifecycle decide when to close it while
       // ensuring a closed Connection cannot pin it until cycle collection.
@@ -1151,6 +1220,7 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
       $this->pendingBuffer = '';
       $this->pendingOffset = 0;
       $this->pendingDeadline = 0.0;
+      $this->writeDeadlineNS = 0;
       $this->pendingResponses = [];
       $this->uploading = [];
       $this->stagedUploading = [];
@@ -1169,9 +1239,12 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
     */
    protected function reset (&$Socket): void
    {
+      $this->disarm();
+
       $this->pendingBuffer = '';
       $this->pendingOffset = 0;
       $this->pendingDeadline = 0.0;
+      $this->writeDeadlineNS = 0;
       // @ A queued response or receive carry may remain after a write reset.
       //   Reconcile to the exact persistent footprint instead of zeroing the
       //   token blindly.
@@ -1185,6 +1258,25 @@ abstract class Packages extends Server_Packages implements WPI\Connections\Packa
             catch (Throwable) {}
          }
          $this->writeRegistered = false;
+      }
+   }
+   /** Cancel and invalidate the timer for the current output generation. */
+   protected function disarm (): void
+   {
+      $timer = $this->writeTimer;
+      $Event = $this->WriteEvent;
+
+      // ! Clear the identity before cancellation. Even if an event backend has
+      //   already dequeued the callback, its exact-generation check fails.
+      $this->writeTimer = 0;
+      $this->WriteEvent = null;
+      $this->WriteToken = null;
+
+      if ($timer > 0 && $Event !== null) {
+         try {
+            $Event->cancel($timer);
+         }
+         catch (Throwable) {}
       }
    }
    public function read (&$Socket): void
