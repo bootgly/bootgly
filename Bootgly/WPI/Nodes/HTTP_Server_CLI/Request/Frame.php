@@ -425,6 +425,14 @@ final class Frame
                break;
 
             case 'transfer-encoding':
+               // ! HTTP/1.0 has no Transfer-Encoding request framing. Reject
+               //   every coding as faulty before coding-specific status
+               //   selection. The post-scan guard below repeats this invariant
+               //   when an HTTP/1.1 block is replayed from the header memo.
+               if ($protocol === 'HTTP/1.0') {
+                  $Package->reject("HTTP/1.1 400 Bad Request\r\n\r\n");
+                  return null;
+               }
                // Reject duplicates (smuggling guard).
                if ($transferEncodingSeen) {
                   $Package->reject("HTTP/1.1 400 Bad Request\r\n\r\n");
@@ -512,6 +520,17 @@ final class Frame
             $expectContinue, $contentType, $hostValue, $closeConnection,
             $keepAliveSeen];
       }
+      }
+
+      // ! Repeat the HTTP/1.0 Transfer-Encoding guard after the header memo
+      //   lookup. The memo key excludes the request line, so HTTP/1.1 can warm
+      //   a valid coding block later presented with HTTP/1.0 (audit M1).
+      if (
+         isSet($fields['transfer-encoding'])
+         && $protocol === 'HTTP/1.0'
+      ) {
+         $Package->reject("HTTP/1.1 400 Bad Request\r\n\r\n");
+         return null;
       }
 
       // @ TE+CL conflict (RFC 9112 §6.1 — must be rejected).

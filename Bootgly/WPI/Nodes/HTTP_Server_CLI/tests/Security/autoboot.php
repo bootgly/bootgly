@@ -458,6 +458,10 @@ return new Suite(
       // The default Shared Cache session backend must enforce the same
       // stale-writer revocation invariant on its cross-worker store.
       '85.02-session_cache_stale_writer_revocation',
+      // # HTTP/1.0 Transfer-Encoding persistence (audit 2026-08-01 M1)
+      // Transfer coding belongs to HTTP/1.1 request framing. HTTP/1.0 must
+      // reject it and close before terminal-chunk bytes can become a follower.
+      '86.01-http10_chunked_request_persistence',
       // # Privileged startup upload cleanup (audit 2026-08-01 H2)
       // A runtime-replaceable downloaded directory must never let the
       // pre-demote orphan sweep delete files through a selected symlink.

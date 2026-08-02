@@ -146,6 +146,80 @@ return new Specification(
             ->expect([$coldConflict, $coldRejected, $warmConflict, $warmRejected])
             ->to->be([null, true, null, true])
             ->assert();
+
+         // # 4 — the memo key excludes the request line. Warm a chunked block
+         //   under HTTP/1.1, then replay those exact header bytes under
+         //   HTTP/1.0. The protocol-dependent guard must run after the hit.
+         $memoBefore = count($scans->getValue());
+         $HTTP11Head = "POST /memo HTTP/1.1\r\n"
+            . "Host: memo.example.test\r\n"
+            . "Transfer-Encoding: chunked\r\n"
+            . "Connection: keep-alive\r\n"
+            . "\r\n0\r\n\r\n";
+         $HTTP10Head = "POST /memo HTTP/1.0\r\n"
+            . "Host: memo.example.test\r\n"
+            . "Transfer-Encoding: chunked\r\n"
+            . "Connection: keep-alive\r\n"
+            . "\r\n0\r\n\r\n";
+
+         [$HTTP11Frame, $HTTP11Rejected] = $Parse($HTTP11Head);
+         [$HTTP10Frame, $HTTP10Rejected, $HTTP10Rejection] = $Parse($HTTP10Head);
+
+         yield new Assertion(
+            description: 'HTTP/1.0 chunked framing is rejected after an HTTP/1.1 memo warm',
+         )
+            ->expect([
+               $HTTP11Frame?->chunked,
+               $HTTP11Rejected,
+               $HTTP10Frame,
+               $HTTP10Rejected,
+               $HTTP10Rejection,
+            ])
+            ->to->be([
+               true,
+               false,
+               null,
+               true,
+               "HTTP/1.1 400 Bad Request\r\n\r\n",
+            ])
+            ->assert();
+
+         yield new Assertion(
+            description: 'the protocol replay reused one memoized header block',
+         )
+            ->expect(count($scans->getValue()))
+            ->to->be($memoBefore + 1)
+            ->assert();
+
+         // # 5 — the cold path applies the HTTP/1.0 policy before the
+         //   coding-specific HTTP/1.1 501 response.
+         $HTTP10UnknownHead = "POST /memo HTTP/1.0\r\n"
+            . "Host: memo.example.test\r\n"
+            . "Transfer-Encoding: gzip\r\n"
+            . "Connection: keep-alive\r\n"
+            . "\r\n";
+         [
+            $HTTP10UnknownFrame,
+            $HTTP10UnknownRejected,
+            $HTTP10UnknownRejection,
+         ] = $Parse($HTTP10UnknownHead);
+
+         yield new Assertion(
+            description: 'cold HTTP/1.0 rejects every transfer coding with 400',
+         )
+            ->expect([
+               $HTTP10UnknownFrame,
+               $HTTP10UnknownRejected,
+               $HTTP10UnknownRejection,
+               count($scans->getValue()),
+            ])
+            ->to->be([
+               null,
+               true,
+               "HTTP/1.1 400 Bad Request\r\n\r\n",
+               $memoBefore + 1,
+            ])
+            ->assert();
       }
       finally {
          Server::$Environment = $Environment;
