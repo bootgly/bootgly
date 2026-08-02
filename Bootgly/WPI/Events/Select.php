@@ -12,6 +12,7 @@ namespace Bootgly\WPI\Events;
 
 
 use function count;
+use function get_debug_type;
 use function hrtime;
 use function is_int;
 use function is_resource;
@@ -382,10 +383,19 @@ class Select implements Events, Loops, Scheduler, Contextualizing
                   }
 
                   // @ Convert to I/O-awaiting if Fiber suspended with readiness
-                  if ( !$Fiber->isTerminated() && $this->queue($Fiber, $value)) {
-                     unset($this->Fibers[$id]);
+                  if (!$Fiber->isTerminated()) {
+                     $queued = $this->queue($Fiber, $value);
+                     if ($queued === true) {
+                        unset($this->Fibers[$id]);
 
-                     continue;
+                        continue;
+                     }
+                     if ($queued === false) {
+                        unset($this->Fibers[$id]);
+                        $this->reject($Fiber);
+
+                        continue;
+                     }
                   }
                }
 
@@ -565,12 +575,14 @@ class Select implements Events, Loops, Scheduler, Contextualizing
     * it is registered in stream_select() and only resumed when readable.
     * When $value is a Readiness object, the Fiber becomes read/write I/O-bound
     * according to Readiness::$flag.
-    * When $value is null, the Fiber is tick-based: resumed every iteration.
+    * Other suspended values are tick-based: resumed every iteration.
     *
     * @param Fiber<mixed, mixed, mixed, mixed> $Fiber
     * @param mixed $value The suspended value from Fiber::start() or resume().
     *
-    * @return bool
+    * @return bool False when an explicit I/O wait cannot be admitted.
+    *    Rejection is delivered into the suspended Fiber so its normal
+    *    exception/finally path can terminate without poisoning the reactor.
     */
    public function schedule (Fiber $Fiber, mixed $value = null, int $flag = self::SCHEDULE_READ): bool
    {
@@ -581,8 +593,12 @@ class Select implements Events, Loops, Scheduler, Contextualizing
       }
 
       // @ I/O-bound: register socket in stream_select + map to Fiber
-      if ($this->queue($Fiber, $value, $flag)) {
+      $queued = $this->queue($Fiber, $value, $flag);
+      if ($queued === true) {
          return true;
+      }
+      if ($queued === false) {
+         return $this->reject($Fiber);
       }
 
       // @ Tick-based: resume every iteration
@@ -610,22 +626,35 @@ class Select implements Events, Loops, Scheduler, Contextualizing
     *
     * @param Fiber<mixed, mixed, mixed, mixed> $Fiber
     * @param mixed $value
+    *
+    * @return null|bool null for tick-compatible non-I/O values, true when
+    *    admitted, false when an explicit I/O wait was rejected without
+    *    mutating selector state.
     */
-   private function queue (Fiber $Fiber, mixed $value = null, int $flag = self::SCHEDULE_READ): bool
+   private function queue (Fiber $Fiber, mixed $value = null, int $flag = self::SCHEDULE_READ): null|bool
    {
       $deadline = 0.0;
+      $readiness = $value instanceof Readiness;
 
-      if ($value instanceof Readiness) {
-         $flag = $value->flag;
-         $deadline = $value->deadline;
-         $value = $value->socket;
+      if ($readiness) {
+         /** @var Readiness $Readiness */
+         $Readiness = $value;
+         $flag = $Readiness->flag;
+         $deadline = $Readiness->deadline;
+         $value = $Readiness->socket;
       }
 
       if (is_resource($value) === false) {
+         return $readiness || get_debug_type($value) === 'resource (closed)'
+            ? false
+            : null;
+      }
+      if ($flag !== self::SCHEDULE_READ && $flag !== self::SCHEDULE_WRITE) {
          return false;
       }
 
-      $id = (int) $value;
+      $Socket = $value;
+      $id = (int) $Socket;
 
       if ($flag === self::SCHEDULE_WRITE) {
          foreach ($this->awaitingWrites[$id] ?? [] as $Queued) {
@@ -633,10 +662,19 @@ class Select implements Events, Loops, Scheduler, Contextualizing
                return true;
             }
          }
+         if (
+            isset($this->writes[$id]) === false
+            && (
+               count($this->writes) >= 1000
+               || $this->check($Socket, self::EVENT_WRITE) === false
+            )
+         ) {
+            return false;
+         }
 
          $this->awaitingWrites[$id][] = $Fiber;
          $this->track($this->awaitingWriteDeadlines, $id, $deadline);
-         $this->writes[$id] = $value;
+         $this->writes[$id] = $Socket;
 
          return true;
       }
@@ -646,10 +684,19 @@ class Select implements Events, Loops, Scheduler, Contextualizing
             return true;
          }
       }
+      if (
+         isset($this->reads[$id]) === false
+         && (
+            count($this->reads) >= 1000
+            || $this->check($Socket, self::EVENT_READ) === false
+         )
+      ) {
+         return false;
+      }
 
       $this->awaitingReads[$id][] = $Fiber;
       $this->track($this->awaitingReadDeadlines, $id, $deadline);
-      $this->reads[$id] = $value;
+      $this->reads[$id] = $Socket;
 
       return true;
    }
@@ -866,9 +913,68 @@ class Select implements Events, Loops, Scheduler, Contextualizing
          return;
       }
 
-      if ($this->queue($Fiber, $value) === false) {
+      $queued = $this->queue($Fiber, $value);
+      if ($queued === null) {
          $this->Fibers[] = $Fiber;
       }
+      else if ($queued === false) {
+         $this->reject($Fiber);
+      }
+   }
+
+   /**
+    * Fail one rejected I/O wait inside its suspended Fiber.
+    *
+    * Delivering the error at the wait point lets the Fiber run its own
+    * exception and finally lifecycle. If it catches the rejection and
+    * suspends again, inspect that next target once. A second rejected target
+    * is dropped instead of recursively injecting errors without a bound.
+    *
+    * @param Fiber<mixed,mixed,mixed,mixed> $Fiber
+    *
+    * @return bool True when the Fiber was rescheduled after handling the
+    *    rejection; false when it terminated, detached or was dropped.
+    */
+   private function reject (Fiber $Fiber): bool
+   {
+      if ($Fiber->isSuspended() === false) {
+         unset($this->Bindings[spl_object_id($Fiber)]);
+
+         return false;
+      }
+
+      $Error = new RuntimeException(
+         'Fiber I/O resource failed selector admission.'
+      );
+
+      try {
+         $value = $this->advance($Fiber, $Error);
+      }
+      catch (Throwable) {
+         unset($this->Bindings[spl_object_id($Fiber)]);
+
+         return false;
+      }
+
+      if ($Fiber->isTerminated() || $value === self::DETACH) {
+         unset($this->Bindings[spl_object_id($Fiber)]);
+
+         return false;
+      }
+
+      $queued = $this->queue($Fiber, $value);
+      if ($queued === true) {
+         return true;
+      }
+      if ($queued === null) {
+         $this->Fibers[] = $Fiber;
+
+         return true;
+      }
+
+      unset($this->Bindings[spl_object_id($Fiber)]);
+
+      return false;
    }
 
    /**
@@ -876,19 +982,23 @@ class Select implements Events, Loops, Scheduler, Contextualizing
     *
     * @param Fiber<mixed,mixed,mixed,mixed> $Fiber
     */
-   private function advance (Fiber $Fiber): mixed
+   private function advance (Fiber $Fiber, null|Throwable $Throwable = null): mixed
    {
       $FiberID = spl_object_id($Fiber);
       $Binding = $this->Bindings[$FiberID] ?? null;
 
       if ($Binding === null) {
-         return $Fiber->resume();
+         return $Throwable === null
+            ? $Fiber->resume()
+            : $Fiber->throw($Throwable);
       }
 
       $failed = false;
       try {
          ($Binding['Enter'])();
-         return $Fiber->resume();
+         return $Throwable === null
+            ? $Fiber->resume()
+            : $Fiber->throw($Throwable);
       }
       catch (Throwable $Throwable) {
          $failed = true;

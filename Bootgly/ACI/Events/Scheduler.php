@@ -37,13 +37,14 @@ interface Scheduler
     * it will only resume when stream_select() signals read readiness.
     * When $value is a Readiness object, the Fiber becomes read/write I/O-bound
     * according to Readiness::$flag.
-    * When $value is null, the Fiber is tick-based: resumed every iteration.
+    * Other suspended values are tick-based: resumed every iteration.
     *
     * @param Fiber<mixed, mixed, mixed, mixed> $Fiber
     * @param mixed $value The suspended value from Fiber::start() or resume().
     * @param int $flag SCHEDULE_READ (default) or SCHEDULE_WRITE for I/O-bound Fibers.
     *
-    * @return bool
+    * @return bool False when the Fiber is terminal/detached or an explicit
+    *    I/O wait was rejected without retention by the scheduler.
     */
    public function schedule (Fiber $Fiber, mixed $value = null, int $flag = self::SCHEDULE_READ): bool;
 

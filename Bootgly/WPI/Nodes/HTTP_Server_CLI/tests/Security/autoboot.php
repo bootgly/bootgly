@@ -466,5 +466,9 @@ return new Suite(
       // A runtime-replaceable downloaded directory must never let the
       // pre-demote orphan sweep delete files through a selected symlink.
       '87.01-downloads_privileged_startup_symlink_deletion',
+      // # Deferred Fiber selector admission (audit 2026-08-01 H3)
+      // Readiness scheduling must reject the same unrepresentable descriptor
+      // as guarded add(), without poisoning unrelated low-FD progress.
+      '88.01-deferred_fiber_selector_descriptor_admission',
    ],
 );
