@@ -1753,7 +1753,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       // # Certifier child
       cli_set_process_title("{$this->process}: ACME certifier");
       $this->Process->State->detach();
-      $master = Process::$master;
+      $master = $this->Process->master;
 
       foreach ([
          SIGALRM, SIGUSR1, SIGURG, SIGHUP, SIGINT, SIGQUIT, SIGTERM,
@@ -1813,7 +1813,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
             exit(1);
          }
 
-         if (posix_kill(Process::$master, SIGURG) === false) {
+         if (posix_kill($this->Process->master, SIGURG) === false) {
             $this->Logger->log(
                error: '@\\;Auto-TLS: generation published but the master wake-up failed — the manifest watch will recover.@\\;'
             );
@@ -2105,7 +2105,7 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       //   report the failure instead. Test mode records the exhausted state
       //   without replacing the harness.
       if ($this->starting === false && $this->Mode !== Modes::Test) {
-         if (posix_kill(Process::$master, SIGUSR2) === false) {
+         if (posix_kill($this->Process->master, SIGUSR2) === false) {
             $this->Logger->log(
                critical: '@\\;Auto-TLS: SIGUSR2 fallback delivery failed; the generation remains unapplied and will be retried by the manifest watch.@\\;'
             );

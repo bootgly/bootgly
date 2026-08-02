@@ -459,8 +459,9 @@ class UDP_Server_CLI implements Servers
                   if ($newPID === 0) {
                      $this->watch();
 
-                     $this->Process->Children->push($this->Process->id, $deadIndex);
-                     Process::$index = $deadIndex + 1;
+                     if ($this->Process->descend($deadIndex) === false) {
+                        exit(1);
+                     }
 
                      $this->Process->title = 'Bootgly_UDP_Server_CLI: child process (Worker #' . Process::$index . ')';
 
@@ -486,7 +487,7 @@ class UDP_Server_CLI implements Servers
                      $this->Logger->log(notice: "Worker #{$deadIndex} recovered (new PID: {$newPID})@.;");
 
                      $this->Process->State->save([
-                        'master'  => Process::$master,
+                        'master'  => $this->Process->master,
                         'workers' => $this->Process->Children->PIDs,
                         'host'    => $this->host ?? '0.0.0.0',
                         'port'    => $this->port ?? 0,
@@ -635,7 +636,7 @@ class UDP_Server_CLI implements Servers
 
       // @ Save full process state (master + workers + host + port)
       $this->Process->State->save([
-         'master'  => Process::$master,
+         'master'  => $this->Process->master,
          'workers' => $this->Process->Children->PIDs,
          'host'    => $this->host ?? '0.0.0.0',
          'port'    => $this->port ?? 0,
@@ -787,7 +788,7 @@ class UDP_Server_CLI implements Servers
 
       // ! A hard-killed master cannot signal its workers. Stop locally after
       //   reparenting so no worker keeps serving or pins the instance lock.
-      $masterPID = Process::$master;
+      $masterPID = $this->Process->master;
       Timer::add(
          interval: 1,
          handler: function () use ($masterPID): void {
@@ -891,7 +892,10 @@ class UDP_Server_CLI implements Servers
          $this->Logger->log(error: '@\;Failed to create daemon session!@\;');
          exit(1);
       }
-      Process::$master = posix_getpid();
+      if ($this->Process->claim() === false) {
+         $this->Logger->log(error: '@\;Failed to claim daemon process ownership!@\;');
+         exit(1);
+      }
 
       // @ Detach the standard descriptors from the launching terminal: pin fds
       //   0-2 on /dev/null so nothing in the daemon lineage — including the

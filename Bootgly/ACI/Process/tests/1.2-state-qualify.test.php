@@ -45,20 +45,22 @@ return new Specification(
 
       // @ save/read/check roundtrip on a qualified path
       $State->qualify('8082');
+      $locked = $State->lock(LOCK_EX | LOCK_NB);
       $State->save(['master' => 12345, 'port' => 8082]);
 
       yield assert(
-         assertion: $State->check() === true
+         assertion: $locked
+            && $State->check() === true
             && $State->read() === ['master' => 12345, 'port' => 8082],
-         description: 'save()/read()/check() operate on the qualified PID file'
+         description: 'lock()/save()/read()/check() operate on the qualified process state'
       );
 
       // @ clean() tombstones the qualified process state
-      $State->clean();
+      $cleaned = $State->clean();
 
       yield assert(
-         assertion: $State->check() === false,
-         description: 'clean() makes the qualified PID state non-live'
+         assertion: $cleaned && $State->check() === false,
+         description: 'the lock owner can clean the qualified PID state'
       );
 
       // ! Cleanup

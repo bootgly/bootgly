@@ -1,6 +1,5 @@
 <?php
 
-use Bootgly\ACI\Process;
 use Bootgly\ACI\Tests\Suite\Test\Specification;
 
 return new Specification(
@@ -54,7 +53,7 @@ return new Specification(
             assertion: $shared !== null
                && $shared['ready'] === true
                && $shared['local'] === false
-               && $shared['validator'] === Process::$master,
+               && $shared['validator'] === $Server->Process->master,
             description: 'a second process consumes the live helper only for the exact same port and spool'
          );
 

@@ -64,12 +64,15 @@ return new Specification(
                if (posix_setgid($GID) === false || posix_setuid($UID) === false) {
                   exit(2);
                }
+               if ($State->lock(LOCK_EX | LOCK_NB) === false) {
+                  exit(6);
+               }
                $State->save(['master' => getmypid(), 'demoted' => true]);
                if ($State->check() === false) {
                   exit(3);
                }
-               $State->clean();
-               exit($State->check() ? 4 : 0);
+               $cleaned = $State->clean();
+               exit($cleaned && $State->check() === false ? 0 : 4);
             }
             catch (Throwable) {
                exit(5);

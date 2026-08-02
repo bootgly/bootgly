@@ -470,5 +470,9 @@ return new Suite(
       // Readiness scheduling must reject the same unrepresentable descriptor
       // as guarded add(), without poisoning unrelated low-FD progress.
       '88.01-deferred_fiber_selector_descriptor_admission',
+      // # Process identity ownership (audit 2026-08-01 M2)
+      // A default outbound client created in a forked server worker must not
+      // overwrite that server Process or signal inherited sibling entries.
+      '89.01-process_role_outbound_client_corruption',
    ],
 );

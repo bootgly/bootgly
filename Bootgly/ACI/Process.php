@@ -31,7 +31,7 @@ class Process
 {
 
 
-   public Children $Children;
+   public private(set) Children $Children;
 
    public Signals $Signals;
 
@@ -64,13 +64,14 @@ class Process
       get => posix_getpid();
    }
    public string $level {
-      get => $this->id === self::$master
+      get => $this->id === $this->master
          ? 'master'
          : 'child';
    }
    // # Id
    public static int $index = 0;
-   public static int $master;
+   public private(set) int $master;
+   private bool $descended = false;
    // # Lifecycle
    public bool $stopping = false;
    public bool $reloading = false;
@@ -78,6 +79,8 @@ class Process
 
    public function __construct (string $id, null|string $instance = null)
    {
+      $this->master = posix_getpid();
+
       $this->Children = new Children;
 
       $this->Signals  = new Signals($this);
@@ -86,9 +89,37 @@ class Process
 
       $this->User     = new User;
       $this->Group    = new Group;
+   }
 
-      // * Metadata
-      self::$master = posix_getpid();
+   /**
+    * Claim the current PID as this Process instance's master after an external
+    * daemon fork. A worker created through descend() can never promote itself.
+    */
+   public function claim (): bool
+   {
+      if ($this->descended || $this->Children->PIDs !== []) {
+         return false;
+      }
+
+      $this->master = posix_getpid();
+
+      return true;
+   }
+
+   /**
+    * Enter a forked worker with no inherited authority over sibling PIDs.
+    */
+   public function descend (int $index): bool
+   {
+      if ($this->id === $this->master) {
+         return false;
+      }
+
+      $this->Children = new Children;
+      self::$index = $index + 1;
+      $this->descended = true;
+
+      return true;
    }
 
    public function fork (int $workers, Closure $instance): void
@@ -98,9 +129,9 @@ class Process
 
          // # Child process
          if ($PID === 0) {
-            $this->Children->push($this->id, $index);
-
-            self::$index = $index + 1;
+            if ($this->descend($index) === false) {
+               exit(1);
+            }
 
             $instance($this, $index);
 

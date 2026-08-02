@@ -44,6 +44,7 @@ use function lstat;
 use function mkdir;
 use function opendir;
 use function posix_geteuid;
+use function posix_getpid;
 use function preg_match;
 use function random_bytes;
 use function readdir;
@@ -78,6 +79,8 @@ class State
    private mixed $lockHandle = null;
    /** The local handle represents an acquired instance lock. */
    private bool $locked = false;
+   /** PID that acquired or adopted the local lock descriptor. */
+   private null|int $ownerPID = null;
 
 
    public function __construct (string $id, null|string $instance = null)
@@ -141,18 +144,31 @@ class State
    public function lock (int $flag = LOCK_EX): bool
    {
       $file = $this->pidLockFile;
+      $currentPID = posix_getpid();
 
       if ($flag === LOCK_UN) {
          if ($this->lockHandle === null) {
             $this->locked = false;
+            $this->ownerPID = null;
             return true;
+         }
+         // ! A worker inherits the master's open-file-description. It may
+         //   close its duplicate through detach(), but must never unlock the
+         //   shared kernel lock or claim cleanup authority from that handle.
+         if ($this->ownerPID !== $currentPID) {
+            return false;
          }
          flock($this->lockHandle, LOCK_UN);
          fclose($this->lockHandle);
          $this->lockHandle = null;
          $this->locked = false;
+         $this->ownerPID = null;
 
          return true;
+      }
+
+      if ($this->lockHandle !== null && $this->ownerPID !== $currentPID) {
+         return false;
       }
 
       $this->lockHandle = $this->lockHandle ?: $this->open($file);
@@ -170,10 +186,12 @@ class State
          fclose($this->lockHandle);
 
          $this->lockHandle = null;
+         $this->ownerPID = null;
       }
       // Only the exclusive instance lock is eligible for exec handoff; a
       // shared/read lock must never be promoted into serving authority.
       $this->locked = $locked && ($flag & LOCK_EX) === LOCK_EX;
+      $this->ownerPID = $locked ? $currentPID : null;
 
       // :
       return $locked;
@@ -195,6 +213,7 @@ class State
          $this->lockHandle = null;
       }
       $this->locked = false;
+      $this->ownerPID = null;
    }
 
    /**
@@ -211,6 +230,7 @@ class State
       if (
          $this->locked === false
          || $this->lockHandle === null
+         || $this->ownerPID !== posix_getpid()
          || $this->verify($this->lockHandle) === false
       ) {
          return null;
@@ -246,6 +266,7 @@ class State
 
       $this->lockHandle = $Handle;
       $this->locked = true;
+      $this->ownerPID = posix_getpid();
 
       return true;
    }
@@ -601,14 +622,27 @@ class State
     * may remove a foreign-owned state inode after a hard kill. An empty PID file
     * is a tombstone; check()/read() therefore report it as absent.
     *
-    * @return void
+    * Only the PID that acquired or adopted the exact exclusive lock may clean
+    * state. Forked workers inherit the descriptor, but not cleanup authority.
+    *
+    * @return bool true when state was cleaned and the lock was released.
     */
-   public function clean (): void
+   public function clean (): bool
    {
-      $this->tombstone($this->commandFile);
-      $this->tombstone($this->pidFile);
+      if (
+         $this->locked === false
+         || $this->lockHandle === null
+         || $this->ownerPID !== posix_getpid()
+         || $this->verify($this->lockHandle) === false
+      ) {
+         return false;
+      }
 
-      $this->lock(LOCK_UN);
+      $command = $this->tombstone($this->commandFile);
+      $PID = $this->tombstone($this->pidFile);
+      $unlocked = $this->lock(LOCK_UN);
+
+      return $command && $PID && $unlocked;
    }
 
    /** Clear an existing owned state inode without requiring parent-directory writes. */

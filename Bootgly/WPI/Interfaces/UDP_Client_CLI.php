@@ -321,7 +321,7 @@ class UDP_Client_CLI
 
          // @ Save full process state
          $this->Process->State->save([
-            'master'  => Process::$master,
+            'master'  => $this->Process->master,
             'workers' => $this->Process->Children->PIDs,
             'host'    => $this->host ?? '0.0.0.0',
             'port'    => $this->port ?? 0,

@@ -937,7 +937,7 @@ class TCP_Server_CLI implements Servers
    protected function describe (): array
    {
       return [
-         'master'  => Process::$master,
+         'master'  => $this->Process->master,
          'workers' => $this->Process->Children->PIDs,
          'host'    => $this->host ?? '0.0.0.0',
          'port'    => $this->port ?? 0,
@@ -1012,7 +1012,7 @@ class TCP_Server_CLI implements Servers
       // ! A hard-killed daemon master cannot signal its workers. Detect
       //   reparenting and stop locally so stale workers never outlive their
       //   supervisor or retain its inherited process-state lock forever.
-      $master = Process::$master;
+      $master = $this->Process->master;
       Timer::add(
          interval: 1,
          handler: function () use ($master): void {
@@ -1318,8 +1318,9 @@ class TCP_Server_CLI implements Servers
 
          // # Child process (new worker)
          if ($newPID === 0) {
-            $this->Process->Children->push($this->Process->id, $deadIndex);
-            Process::$index = $deadIndex + 1;
+            if ($this->Process->descend($deadIndex) === false) {
+               exit(1);
+            }
 
             // @ Run the SAME boot body as the initial fork, so a recovered
             //   worker gets the node process title, the monitor sink, the
@@ -1474,7 +1475,10 @@ class TCP_Server_CLI implements Servers
          exit(1);
       }
 
-      Process::$master = posix_getpid();
+      if ($this->Process->claim() === false) {
+         $this->Logger->log(error: '@\;Failed to claim daemon process ownership!@\;');
+         exit(1);
+      }
       Display::show(Display::NONE);
 
       fclose(STDIN);
@@ -2906,10 +2910,9 @@ class TCP_Server_CLI implements Servers
       pcntl_sigprocmask(SIG_SETMASK, []);
       pcntl_exec(self::$binary, self::$argv, getenv());
 
-      // ? exec only returns on failure — workers are already gone, so surface the
-      //   error, tombstone the stale topology and exit rather than linger as a
-      //   workerless master. detach() made clean() a no-unlock operation here.
-      $this->Process->State->clean();
+      // ? exec only returns on failure — workers are already gone. The relay
+      //   owns the transferred lock at this point, so this detached process is
+      //   deliberately unauthorized to tombstone the published topology.
       $this->Logger->log(error: 'Reload failed: could not re-exec the master.@\;');
       exit(1);
    }

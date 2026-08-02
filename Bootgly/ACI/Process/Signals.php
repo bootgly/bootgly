@@ -64,7 +64,7 @@ class Signals
       $sent = true;
 
       if ($master) {
-         if (posix_kill(Process::$master, $signal) === false) {
+         if (posix_kill($this->Process->master, $signal) === false) {
             $sent = false;
          }
 

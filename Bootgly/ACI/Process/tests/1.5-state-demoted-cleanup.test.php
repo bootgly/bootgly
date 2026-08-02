@@ -95,15 +95,18 @@ return new Specification(
          //   removing this owner's write bits: directory authority can remove
          //   PID/command, but the stable lock pathname still survives.
          chmod($directory, 0700);
+         $adminRelocked = $Peer->lock(LOCK_EX | LOCK_NB);
          $Peer->save(['master' => getmypid(), 'generation' => 4]);
          file_put_contents($Peer->commandFile, "stale-command\n");
          chmod($Peer->pidFile, 0400);
          chmod($Peer->commandFile, 0400);
          $adminLock = lstat($Peer->pidLockFile);
-         $Peer->clean();
+         $adminCleaned = $Peer->clean();
          $adminLockAfter = lstat($Peer->pidLockFile);
          yield assert(
-            assertion: is_file($Peer->pidFile) === false
+            assertion: $adminRelocked
+               && $adminCleaned
+               && is_file($Peer->pidFile) === false
                && is_file($Peer->commandFile) === false
                && is_array($adminLock)
                && is_array($adminLockAfter)
