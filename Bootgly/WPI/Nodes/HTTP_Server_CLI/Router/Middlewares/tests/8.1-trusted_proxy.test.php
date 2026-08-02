@@ -20,7 +20,7 @@ return new Specification(
       // @ Test 1: Untrusted proxy — address unchanged
       [$Request, $Response] = $createMocks(
          requestHeaders: ['X-Forwarded-For' => '203.0.113.50'],
-         requestProps: ['address' => '10.0.0.1']
+         requestProps: ['address' => '10.0.0.1', 'peer' => '10.0.0.1']
       );
       $TrustedProxy = new TrustedProxy(proxies: ['127.0.0.1']);
       $TrustedProxy->process($Request, $Response, $passthrough);
@@ -37,7 +37,7 @@ return new Specification(
       //   (10.0.0.2 is trusted) → first untrusted = 203.0.113.50.
       [$Request, $Response] = $createMocks(
          requestHeaders: ['X-Forwarded-For' => '203.0.113.50, 10.0.0.2'],
-         requestProps: ['address' => '127.0.0.1']
+         requestProps: ['address' => '127.0.0.1', 'peer' => '127.0.0.1']
       );
       $TrustedProxy = new TrustedProxy(proxies: ['127.0.0.1', '::1', '10.0.0.2']);
       $TrustedProxy->process($Request, $Response, $passthrough);
@@ -57,7 +57,7 @@ return new Specification(
          requestHeaders: [
             'X-Forwarded-For' => '198.51.100.77, 203.0.113.50, 10.0.0.2',
          ],
-         requestProps: ['address' => '127.0.0.1']
+         requestProps: ['address' => '127.0.0.1', 'peer' => '127.0.0.1']
       );
       $TrustedProxy = new TrustedProxy(proxies: ['127.0.0.1', '10.0.0.2']);
       $TrustedProxy->process($Request, $Response, $passthrough);
@@ -71,7 +71,7 @@ return new Specification(
       // @ Test 3: Trusted proxy + X-Real-IP rewrites address
       [$Request, $Response] = $createMocks(
          requestHeaders: ['X-Real-IP' => '198.51.100.10'],
-         requestProps: ['address' => '127.0.0.1']
+         requestProps: ['address' => '127.0.0.1', 'peer' => '127.0.0.1']
       );
       $TrustedProxy = new TrustedProxy;
       $TrustedProxy->process($Request, $Response, $passthrough);
@@ -85,7 +85,11 @@ return new Specification(
       // @ Test 4: X-Forwarded-Proto updates scheme
       [$Request, $Response] = $createMocks(
          requestHeaders: ['X-Forwarded-Proto' => 'https'],
-         requestProps: ['address' => '127.0.0.1', 'scheme' => 'http']
+         requestProps: [
+            'address' => '127.0.0.1',
+            'peer' => '127.0.0.1',
+            'scheme' => 'http',
+         ]
       );
       $TrustedProxy = new TrustedProxy;
       $TrustedProxy->process($Request, $Response, $passthrough);
@@ -99,7 +103,7 @@ return new Specification(
       // @ Test 5: IPv6 loopback trusted by default
       [$Request, $Response] = $createMocks(
          requestHeaders: ['X-Forwarded-For' => '203.0.113.99'],
-         requestProps: ['address' => '::1']
+         requestProps: ['address' => '::1', 'peer' => '::1']
       );
       $TrustedProxy = new TrustedProxy;
       $TrustedProxy->process($Request, $Response, $passthrough);

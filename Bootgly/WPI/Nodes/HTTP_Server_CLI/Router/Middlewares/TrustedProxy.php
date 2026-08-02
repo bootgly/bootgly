@@ -75,8 +75,8 @@ class TrustedProxy implements Middleware
    public function process (object $Request, object $Response, Closure $next): object
    {
       // ? Only resolve if request comes from trusted proxy.
-      $clientIp = $Request->address; // @phpstan-ignore-line
-      if (in_array($clientIp, $this->proxies, true) === false) {
+      $peer = $Request->peer; // @phpstan-ignore-line
+      if (in_array($peer, $this->proxies, true) === false) {
          return $next($Request, $Response);
       }
 

@@ -474,5 +474,9 @@ return new Suite(
       // A default outbound client created in a forked server worker must not
       // overwrite that server Process or signal inherited sibling entries.
       '89.01-process_role_outbound_client_corruption',
+      // # Mutable TrustedProxy trust provenance (audit 2026-08-01 L1)
+      // A second proxy-resolution pass must authenticate the immutable socket
+      // peer rather than the application-facing address changed by a prior pass.
+      '90.01-trusted_proxy_mutable_address_trust_confusion',
    ],
 );
