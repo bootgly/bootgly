@@ -458,5 +458,9 @@ return new Suite(
       // The default Shared Cache session backend must enforce the same
       // stale-writer revocation invariant on its cross-worker store.
       '85.02-session_cache_stale_writer_revocation',
+      // # Privileged startup upload cleanup (audit 2026-08-01 H2)
+      // A runtime-replaceable downloaded directory must never let the
+      // pre-demote orphan sweep delete files through a selected symlink.
+      '87.01-downloads_privileged_startup_symlink_deletion',
    ],
 );

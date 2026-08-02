@@ -15,7 +15,9 @@ use const BOOTGLY_ROOT_DIR;
 use const BOOTGLY_STORAGE_DIR;
 use const LOCK_SH;
 use const LOCK_UN;
+use const PCNTL_EINTR;
 use const SIG_DFL;
+use const SIG_SETMASK;
 use const SIGALRM;
 use const SIGCHLD;
 use const SIGCONT;
@@ -52,6 +54,7 @@ use function fstat;
 use function function_exists;
 use function fwrite;
 use function glob;
+use function hrtime;
 use function implode;
 use function in_array;
 use function is_a;
@@ -73,9 +76,13 @@ use function opcache_invalidate;
 use function pcntl_alarm;
 use function pcntl_async_signals;
 use function pcntl_fork;
+use function pcntl_get_last_error;
 use function pcntl_signal;
 use function pcntl_signal_dispatch;
+use function pcntl_sigprocmask;
 use function pcntl_waitpid;
+use function pcntl_wexitstatus;
+use function pcntl_wifexited;
 use function posix_geteuid;
 use function posix_getgrnam;
 use function posix_getpid;
@@ -616,9 +623,10 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
          );
       }
       // @ Purge temp files orphaned by a previous (crashed) run before the
-      //   first fork — no worker is in-flight yet, so a full sweep is safe
-      //   (audit F-10). The shared counter is reset to 0 by init().
-      Downloads::sweep();
+      //   first worker fork — no upload is in-flight yet, so a full sweep is
+      //   safe (audit F-10). Filesystem deletion is never performed with root
+      //   authority (audit H2). The shared counter is reset to 0 by init().
+      $this->purge();
 
       // @ Auto-TLS — own the storage tree, bind the HTTP-01 gate and fork
       //   the port-80 helper. Master-side, pre-fork and PRE-DEMOTE: binding
@@ -626,6 +634,152 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       if ($this->AutoTLS !== null) {
          $this->prime();
       }
+   }
+
+   /**
+    * Run the startup orphan sweep with only the configured runtime authority.
+    *
+    * The download directory is intentionally runtime-owned and replaceable.
+    * A privileged pathname sweep beneath it would therefore let that identity
+    * redirect deletion into a root-only tree. On a privileged launch, isolate
+    * the operation in a short-lived child and irreversibly demote it first.
+    * Failure is safe: startup may leave stale temp files, but never retries the
+    * deletion as root. Worker reconciliation still repairs the byte counter.
+    */
+   private function purge (): void
+   {
+      // A process with neither real nor effective UID 0 already has only its
+      // runtime filesystem authority; no privilege-separation fork is needed.
+      if (posix_getuid() !== 0 && posix_geteuid() !== 0) {
+         Downloads::sweep();
+         return;
+      }
+
+      // demote() can safely establish the configured identity only from a
+      // real-root launch. Never attempt the sweep under an ambiguous setuid
+      // identity or when no runtime user was configured.
+      if (posix_getuid() !== 0 || $this->user === null) {
+         $this->Logger->log(
+            critical: '@\;Startup upload orphan cleanup skipped: no safe non-root runtime identity is available.@.;'
+         );
+         return;
+      }
+
+      $PID = pcntl_fork();
+      if ($PID < 0) {
+         $this->Logger->log(
+            critical: '@\;Startup upload orphan cleanup skipped: privilege-separation fork failed.@.;'
+         );
+         return;
+      }
+
+      if ($PID === 0) {
+         // Auxiliary children must not retain descriptors that represent the
+         // serving process or share the upload controller's flock identity.
+         $this->Process->State->detach();
+         Downloads::destroy();
+
+         if (is_resource($this->daemonReady)) {
+            fclose($this->daemonReady);
+            $this->daemonReady = null;
+         }
+
+         foreach ($this->Listeners as $Listener) {
+            fclose($Listener);
+         }
+         $this->Listeners = [];
+
+         // The master's handlers can stop or reload the server and must never
+         // execute inside this filesystem-only auxiliary child.
+         foreach ([
+            SIGALRM, SIGUSR1, SIGURG, SIGHUP, SIGINT, SIGQUIT, SIGTERM,
+            SIGTSTP, SIGCONT, SIGUSR2, SIGCHLD, SIGIOT, SIGIO
+         ] as $signal) {
+            pcntl_signal($signal, SIG_DFL);
+         }
+         pcntl_sigprocmask(SIG_SETMASK, []);
+
+         $this->demote();
+         if (posix_geteuid() === 0) {
+            exit(1);
+         }
+
+         Downloads::sweep();
+         exit(0);
+      }
+
+      $status = 0;
+      $reaped = $this->await($PID, $status, 5_000_000_000);
+      $timedOut = $reaped === 0;
+
+      if ($reaped === 0) {
+         posix_kill($PID, SIGTERM);
+         $reaped = $this->await($PID, $status, 500_000_000);
+      }
+      if ($reaped === 0) {
+         posix_kill($PID, SIGKILL);
+         $reaped = $this->await($PID, $status, 1_000_000_000);
+      }
+
+      // Never start workers while an untracked cleanup child may still be
+      // traversing the upload tree. Parent exit also lets the system reaper
+      // adopt a child stuck in uninterruptible kernel I/O.
+      if ($reaped !== $PID && $reaped !== -1) {
+         $this->Logger->log(
+            critical: '@\;Startup aborted: the upload cleanup child could not be stopped and reaped safely.@.;'
+         );
+         exit(1);
+      }
+      if ($reaped === -1) {
+         $this->Logger->log(
+            critical: '@\;Startup aborted: the upload cleanup child status could not be verified.@.;'
+         );
+         exit(1);
+      }
+
+      if (
+         $timedOut
+         || pcntl_wifexited($status) === false
+         || pcntl_wexitstatus($status) !== 0
+      ) {
+         // Never fall back to a privileged sweep after a child failure.
+         $this->Logger->log(
+            critical: '@\;Startup upload orphan cleanup was not completed by the demoted child.@.;'
+         );
+      }
+   }
+
+   /**
+    * Wait for one exact auxiliary child without allowing signals or a blocking
+    * filesystem operation to make startup wait forever.
+    *
+    * @param int $status Raw wait status, populated only when `$PID` is reaped.
+    * @param int $timeoutNS Monotonic timeout in nanoseconds.
+    *
+    * @return int `$PID` when reaped, `0` on timeout, or `-1` on wait failure.
+    */
+   private function await (int $PID, int &$status, int $timeoutNS): int
+   {
+      $deadline = (int) hrtime(true) + $timeoutNS;
+      do {
+         $reaped = pcntl_waitpid($PID, $status, WNOHANG);
+         if ($reaped === $PID) {
+            return $reaped;
+         }
+         if ($reaped === -1) {
+            if (pcntl_get_last_error() !== PCNTL_EINTR) {
+               return -1;
+            }
+            $reaped = 0;
+         }
+
+         if ((int) hrtime(true) >= $deadline) {
+            break;
+         }
+         usleep(10_000);
+      } while (true);
+
+      return $reaped;
    }
 
    /** @return array<string,resource> */
@@ -2135,6 +2289,18 @@ class HTTP_Server_CLI extends TCP_Server_CLI implements HTTP, Server
       //   in-flight upload is untouched) and reconcile the shared counter
       //   against the bytes actually on disk, healing any reservation a dead
       //   worker stranded on the shared counter.
+      //
+      // ! A root worker exists when no valid non-root runtime user was
+      //   configured. Do not traverse the runtime-replaceable download path
+      //   with that authority. Startup already skipped its privileged sweep;
+      //   worker cleanup must preserve the same fail-safe boundary (audit H2).
+      if (posix_geteuid() === 0) {
+         $this->Logger->log(
+            critical: '@\;Worker upload orphan cleanup skipped: the worker still has root authority.@.;'
+         );
+         return $Socket;
+      }
+
       Downloads::sweep(Downloads::ORPHAN_TTL);
       Downloads::reconcile();
 
