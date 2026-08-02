@@ -478,5 +478,9 @@ return new Suite(
       // A second proxy-resolution pass must authenticate the immutable socket
       // peer rather than the application-facing address changed by a prior pass.
       '90.01-trusted_proxy_mutable_address_trust_confusion',
+      // # Worker listener descriptor admission (audit 2026-08-01 L3)
+      // A worker must fail startup before entering its event loop when the
+      // inherited listener cannot be represented by the select backend.
+      '92.01-tcp_worker_listener_descriptor_admission',
    ],
 );

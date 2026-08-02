@@ -1057,15 +1057,24 @@ class TCP_Server_CLI implements Servers
       // @ Adopt this worker's pre-bound SO_REUSEPORT listener.
       $this->instance();
 
+      // ! The master probes every listener before forking, but the worker is
+      //   the final owner of this selector. Refuse service before node wiring
+      //   or loop entry if its exact inherited descriptor cannot be retained.
+      if (self::$Event->add(
+         $this->Socket,
+         Select::EVENT_CONNECT,
+         true
+      ) === false) {
+         $this->Logger->log(
+            critical: '@\;Worker listener rejected by the event backend; refusing to enter the event loop.@\;'
+         );
+         exit(1);
+      }
+
       // @ Per-worker wiring hook (e.g. WS cross-worker relay). Default: nothing.
       $this->wire($index);
 
       // @ Event loop.
-      self::$Event->add(
-         $this->Socket,
-         Select::EVENT_CONNECT,
-         true
-      );
       self::$Event->loop();
 
       // @ Close the stream socket server.
@@ -1080,6 +1089,24 @@ class TCP_Server_CLI implements Servers
    protected function wire (int $index): void
    {
       // ...
+   }
+
+   /**
+    * Prove that the configured event backend can retain one exact listener,
+    * then restore its prior state. The descriptor itself remains open and at
+    * the same number across the subsequent fork.
+    *
+    * @param resource $Listener
+    */
+   private function admit ($Listener): bool
+   {
+      if (
+         self::$Event->add($Listener, Select::EVENT_CONNECT, true) === false
+      ) {
+         return false;
+      }
+
+      return self::$Event->del($Listener, Select::EVENT_CONNECT);
    }
 
    /**
@@ -1173,6 +1200,14 @@ class TCP_Server_CLI implements Servers
       if ($this->prepare($Listener) === false) {
          fclose($Listener);
          $this->Logger->log(error: '@\;Failed to prepare stream socket!@\;');
+
+         return false;
+      }
+      if ($this->admit($Listener) === false) {
+         fclose($Listener);
+         $this->Logger->log(
+            error: '@\;Listener rejected by the event backend during startup.@\;'
+         );
 
          return false;
       }
@@ -2776,7 +2811,10 @@ class TCP_Server_CLI implements Servers
          self::$context['ssl'] = $this->secure;
       }
       foreach ($Listeners as $Listener) {
-         if ($this->prepare($Listener) === false) {
+         if (
+            $this->prepare($Listener) === false
+            || $this->admit($Listener) === false
+         ) {
             fclose($Client);
             foreach ([$StateLock, ...$Listeners, ...$Resources] as $Descriptor) {
                is_resource($Descriptor) && fclose($Descriptor);
