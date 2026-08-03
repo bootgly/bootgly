@@ -53,6 +53,7 @@ use function uasort;
 use function unlink;
 use function usort;
 use JsonException;
+use RuntimeException;
 
 use const Bootgly\WPI;
 use Bootgly\ABI\Resources\Storage\Driver;
@@ -61,6 +62,7 @@ use Bootgly\WPI\Interfaces\TCP_Server_CLI\Connections\Connection;
 use Bootgly\WPI\Interfaces\TCP_Server_CLI\Packages;
 use Bootgly\WPI\Modules\HTTP2;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI as Server;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Bodies;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Decoder_Chunked;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Decoder_Downloading;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Decoder_Downloading\Downloads;
@@ -417,6 +419,14 @@ class Request
    }
 
    /**
+    * Worker-ledger reservation covering the body this Request holds.
+    *
+    * Only a snapshot built by `capture()` ever owns one: the live Request is
+    * emptied by `Encoder_::encode()` at the end of its cycle, while a
+    * deferred Fiber keeps reading its private copy. Released by `clean()`.
+    */
+   private null|Bodies $Bodies = null;
+   /**
     * @internal Backing storage for $fields.
     *
     * @var array<string, array<string>|bool|float|int|string>
@@ -692,6 +702,7 @@ class Request
 
       // * Data
       // ... dynamically
+      $this->Bodies = null;
       $this->_fields = [];
       $this->_files = [];
       $this->hasFiles = false;
@@ -734,6 +745,22 @@ class Request
    {
       $Captured = clone $this;
 
+      // @ This snapshot is the ONE body retainer a scrub cannot cover:
+      //   `Encoder_::encode()` empties the live Request the moment the
+      //   synchronous cycle ends, while the deferred work legitimately reads
+      //   this copy until its Fiber finishes. Charge it to the same worker
+      //   ledger that bounds every other in-memory body — otherwise parked
+      //   deferrals are the one way to hold request bodies that no ceiling
+      //   can see. Released by `clean()` (and by the reservation's own
+      //   destructor if the snapshot is simply dropped).
+      $Bodies = new Bodies;
+      if ($Bodies->reserve(strlen($this->Body->raw)) === false) {
+         throw new RuntimeException(
+            'HTTP deferred execution rejected: the worker retained-body budget is exhausted.'
+         );
+      }
+      $Captured->Bodies = $Bodies;
+
       $Captured->_fields = $this->_fields;
       $Captured->_files = $this->_files;
       $Captured->hasFiles = $this->hasFiles;
@@ -773,6 +800,7 @@ class Request
       //   entire pipeline to the interpreter. Branchless straight-line writes
       //   keep the trace JIT-compiled. See docs/reports/implementations/
       //   Profile.WPI_HTTP_Server_CLI.HotPath.md §10.
+      $this->Bodies = null;
       $this->_fields = [];
       $this->_files = [];
       $this->hasFiles = false;
@@ -826,6 +854,7 @@ class Request
    public function reset (): void
    {
       // @ Per-request data (mirror of the __clone / assume lists).
+      $this->Bodies = null;
       $this->_fields = [];
       $this->_files = [];
       $this->hasFiles = false;
@@ -916,6 +945,7 @@ class Request
       $this->scheme = $Connection->encrypted ? 'https' : 'http';
 
       // @ Per-request state — scrub (mirror of __clone / reset lists).
+      $this->Bodies = null;
       $this->_fields = [];
       $this->_files = [];
       $this->hasFiles = false;
@@ -1926,6 +1956,12 @@ class Request
     */
    public function clean (): void
    {
+      // @ Give back the worker-ledger bytes a deferred snapshot was holding.
+      //   Only a Request built by `capture()` ever owns one, so this is a
+      //   single null read for every other caller.
+      $this->Bodies?->release();
+      $this->Bodies = null;
+
       // ? No uploads — fast path (callers gate on $this->hasFiles)
       if ($this->_files === []) {
          return;

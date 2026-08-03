@@ -635,6 +635,14 @@ class Encoder_ extends Encoders
 
       // ?: Check if Response is deferred (async Fiber)
       if ($Response->deferred) {
+         // @ The Fiber works on the deep copy taken by `Request::capture()`
+         //   (`Request::__clone` clones the Body), so the live payload is
+         //   already redundant here — and it would otherwise sit on the
+         //   connection until the next request, unreserved. Same rationale
+         //   as the post-`Handled` scrub below.
+         $Request->Body->scrub();
+         $Request->fields = [];
+
          return '';
       }
 
@@ -687,6 +695,22 @@ class Encoder_ extends Encoders
             self::$mutated = true;
          }
       }
+
+      // @ End of the synchronous request cycle: every consumer allowed to read
+      //   the body has run (handler, middlewares, `Handled` listeners), and
+      //   nothing below reads it — replay compares Response state, `encode()`
+      //   only reads `method`/`protocol`/`stream`, and `stash()` stores wire
+      //   bytes. Drop the payload now instead of leaving it for the NEXT
+      //   request's `reset()`/`assume()` to overwrite: the decoders release
+      //   their reservation the moment a body completes, so between those two
+      //   points a completed body was resident with nothing accounting for it
+      //   and an idle keep-alive peer could park memory the ceiling in
+      //   `Decoders\Bodies` never saw. This also unpins the body from the
+      //   worker-global `Server::$Request`, which nothing else ever clears.
+      // !! KEEP THIS STRAIGHT-LINE AND UNCONDITIONAL — same tracing-JIT
+      //   constraint as `Request::__clone` / `Request::reset`.
+      $Request->Body->scrub();
+      $Request->fields = [];
 
       // ?: Replay only when the admitted Response remains the active 200.
       //   A post-middleware/event denial or replacement must serialize its

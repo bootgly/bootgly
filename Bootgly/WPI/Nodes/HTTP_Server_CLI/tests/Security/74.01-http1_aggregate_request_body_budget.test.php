@@ -1,17 +1,8 @@
 <?php
 
-use function class_exists;
-use function fclose;
-use function gc_collect_cycles;
-use function is_resource;
-use function json_encode;
-use function str_contains;
-use function str_repeat;
-use function strlen;
-use function time;
-use function tmpfile;
-
 use Bootgly\ABI\Debugging\Data\Vars;
+use Bootgly\ABI\Events\Emission;
+use Bootgly\ABI\Events\Emitter;
 use Bootgly\ACI\Events\Timer;
 use Bootgly\ACI\Tests\Suite\Test\Specification\Separator;
 use Bootgly\API\Workables\Server as SAPI;
@@ -26,13 +17,12 @@ use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Bodies;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Decoder_;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Decoder_Downloading;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Decoders\Decoder_Downloading\Downloads;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Encoders\Encoder_;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Response;
+use Bootgly\WPI\Nodes\HTTP_Server_CLI\Request\Events as RequestEvents;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Router;
 use Bootgly\WPI\Nodes\HTTP_Server_CLI\Tests\Suite\Test\Specification;
-use Throwable;
-use WeakReference;
-
 
 if (! class_exists('HTTPServerCLIBodyBudgetConnection', false)) {
    class HTTPServerCLIBodyBudgetConnection extends Connection
@@ -401,6 +391,22 @@ $probe = [
    // # Controls
    'control_complete_body' => '',
    'control_reservation_released' => false,
+   // # Completed bodies must not survive their own response cycle
+   'retained_payload_bytes' => 0,
+   'retained_frag_state' => '',
+   'retained_frag_bytes' => -1,
+   'retained_frag_fields' => -1,
+   'retained_initial_decoder' => true,
+   'retained_initial_bytes' => -1,
+   'retained_initial_fields' => -1,
+   'retained_peers' => 4,
+   'retained_aggregate_bytes' => -1,
+   'retained_handler_saw' => 0,
+   'retained_listener_saw' => 0,
+   'retained_deferred_live_bytes' => -1,
+   'retained_deferred_clone_bytes' => -1,
+   'retained_deferred_ledger_free' => true,
+   'retained_deferred_ledger_drained' => false,
 ];
 
 return new Specification(
@@ -3410,6 +3416,189 @@ return new Specification(
             $Closed->release();
          }
          unset($Transport);
+
+         // --- Leg 11: a COMPLETED body must not survive its own response
+         //     cycle. The ledger bounds only UNFINISHED bodies, so anything
+         //     still resident once the cycle ends sits outside every ceiling
+         //     — and on an idle keep-alive connection it stays there until the
+         //     next request or the close.
+
+         $OldEmitter = Emitter::$Instance;
+         $handlerSaw = 0;
+         $listenerSaw = 0;
+
+         try {
+            // ! Own budget: the legs above leave the ceiling wherever their
+            //   own scenario needed it, and 11.5 must be able to reserve its
+            //   captured body without inheriting someone else's limit.
+            Bodies::$maxWorkerBodySize = 1024 * 1024;
+
+            $probe['retained_payload_bytes'] = 60000;
+            $payload = str_repeat('A', $probe['retained_payload_bytes']);
+            $retainedBody = "k={$payload}";
+            $retainedLength = strlen($retainedBody);
+
+            $Events = new Emitter;
+            Emitter::$Instance = $Events;
+            // ! Control: a Handled listener is the LAST reader of the live
+            //   Request, so it must still see the body. A scrub placed before
+            //   it would pass the leg while breaking every listener.
+            $Events->listen(
+               RequestEvents::Handled,
+               static function (Emission $Emission) use (&$listenerSaw): void {
+                  /** @var Request $Request */
+                  [$Request] = $Emission->payload;
+
+                  $listenerSaw += strlen((string) ($Request->fields['k'] ?? ''));
+               }
+            );
+
+            SAPI::$Handler = static function (
+               Request $Request,
+               Response $Response,
+               Router $Router
+            ) use (&$handlerSaw): Response {
+               $handlerSaw += strlen((string) ($Request->fields['k'] ?? ''));
+
+               return $Response(code: 200, body: 'RETAINED-OK');
+            };
+
+            $retainedHead = static fn (string $URI): string =>
+               "POST {$URI} HTTP/1.1\r\n"
+               . "Host: localhost\r\n"
+               . "Content-Type: application/x-www-form-urlencoded\r\n"
+               . "Content-Length: {$GLOBALS['h1RetainedLength']}\r\n"
+               . "\r\n";
+            $GLOBALS['h1RetainedLength'] = $retainedLength;
+
+            // # 11.1 — fragmented: the body completes through Decoder_Waiting
+            [$Connection, $Package, $Request] = $open();
+            $head = $retainedHead('/h1-retained-fragmented');
+            $Request->decode($Package, $head, strlen($head));
+
+            if ($Package->Decoder !== null) {
+               $probe['retained_frag_state'] = $Package->Decoder
+                  ->decode($Package, $retainedBody, $retainedLength)->name;
+            }
+
+            $length = null;
+            Encoder_::encode($Package, $length);
+
+            $probe['retained_frag_bytes'] = strlen($Request->Body->raw);
+            $Fields = new ReflectionProperty($Request, '_fields');
+            $probe['retained_frag_fields'] = count((array) $Fields->getValue($Request));
+
+            // # 11.2 — the whole body arrives in the FIRST read, so no
+            //   Decoder_Waiting is ever installed and nothing is reserved.
+            [$Connection, $Package, $Request] = $open();
+            $whole = $retainedHead('/h1-retained-initial') . $retainedBody;
+            $Request->decode($Package, $whole, strlen($whole));
+
+            $probe['retained_initial_decoder'] = $Package->Decoder !== null;
+
+            $length = null;
+            Encoder_::encode($Package, $length);
+
+            $probe['retained_initial_bytes'] = strlen($Request->Body->raw);
+            $probe['retained_initial_fields'] = count((array) $Fields->getValue($Request));
+
+            // # 11.3 — the aggregate an attacker parks across idle peers
+            $Idle = [];
+            $aggregate = 0;
+            for ($peer = 0; $peer < $probe['retained_peers']; $peer++) {
+               [$Connection, $Package, $Request] = $open();
+               $whole = $retainedHead("/h1-retained-idle/{$peer}") . $retainedBody;
+               $Request->decode($Package, $whole, strlen($whole));
+
+               $length = null;
+               Encoder_::encode($Package, $length);
+
+               // ! Hold every peer: an idle keep-alive connection is exactly
+               //   what keeps the decoded Request — and its body — reachable.
+               $Idle[] = [$Connection, $Package, $Request];
+            }
+            foreach ($Idle as [$IdleConnection, $IdlePackage, $IdleRequest]) {
+               $aggregate += strlen($IdleRequest->Body->raw);
+            }
+            $probe['retained_aggregate_bytes'] = $aggregate;
+            $Idle = [];
+
+            $probe['retained_handler_saw'] = $handlerSaw;
+            $probe['retained_listener_saw'] = $listenerSaw;
+
+            // # 11.5 — deferred: the encoder returns early, the Fiber works on
+            //   the deep copy `Request::capture()` took, and that copy is the
+            //   ONE retainer a scrub cannot cover. The live Request must still
+            //   be emptied, and the copy must draw on the worker ledger for as
+            //   long as it holds the body.
+            // # 11.5 — deferred: `Request::capture()` hands the Fiber its own
+            //   deep copy of the body — the ONE retainer the encoder's scrub
+            //   cannot cover — so that copy must draw on the worker ledger for
+            //   as long as it lives.
+            // ! The snapshot is taken directly instead of through
+            //   `Response::defer()`: this probe drives `Encoder_::encode()`
+            //   inline, and PHP refuses to start a Fiber from this execution
+            //   context ("Cannot switch fibers"). `capture()` is the exact
+            //   production call `Response::__clone()` makes for a deferral,
+            //   and it is what owns the reservation.
+            $Captured = null;
+            SAPI::$Handler = static function (
+               Request $Request,
+               Response $Response,
+               Router $Router
+            ) use (&$Captured): Response {
+               $Captured = $Request->capture();
+               $Response->deferred = true;
+
+               return $Response;
+            };
+
+            [$Connection, $Package, $Request] = $open();
+            $whole = $retainedHead('/h1-retained-deferred') . $retainedBody;
+            $Request->decode($Package, $whole, strlen($whole));
+
+            $length = null;
+            Encoder_::encode($Package, $length);
+
+            $probe['retained_deferred_clone_bytes'] = ($Captured !== null)
+               ? strlen($Captured->Body->raw)
+               : -1;
+
+            // ! With the snapshot still holding the body, ask the ledger for
+            //   the WHOLE worker budget. It is granted only when nothing at
+            //   all is reserved — which is the finding: a parked copy that is
+            //   invisible to the ceiling bounding every other in-memory body.
+            $Ledger = new Bodies;
+            $probe['retained_deferred_ledger_free'] = $Ledger->reserve(
+               Bodies::$maxWorkerBodySize
+            );
+            $Ledger->release();
+
+            // ! And the snapshot must give the bytes back when it is cleaned,
+            //   exactly as the Fiber's `finally` does.
+            // ! Hold the reservation object across the call, so the release
+            //   has to be the EXPLICIT one. Letting it fall out of scope would
+            //   let `Bodies::__destruct()` drain the ledger on its own and the
+            //   assertion below would pass with no release in `clean()` at all
+            //   — and a destructor is GC-bound, so a reference cycle could
+            //   defer it past the requests this budget is meant to bound.
+            $Reservation = new ReflectionProperty($Captured, 'Bodies');
+            $Held = $Reservation->getValue($Captured);
+            $Captured->clean();
+            $Drained = new Bodies;
+            $probe['retained_deferred_ledger_drained'] = $Drained->reserve(
+               Bodies::$maxWorkerBodySize
+            );
+            $Drained->release();
+            $Held = null;
+            $Captured = null;
+
+            $probe['retained_deferred_live_bytes'] = strlen($Request->Body->raw);
+         }
+         finally {
+            Emitter::$Instance = $OldEmitter;
+            unset($GLOBALS['h1RetainedLength']);
+         }
       }
       catch (Throwable $Throwable) {
          $probe['error'] = $Throwable::class . ': ' . $Throwable->getMessage()
@@ -4352,6 +4541,94 @@ return new Specification(
          dump(json_encode($probe));
          return 'Container-budget rejection did not release its reservation before teardown; '
             . 'evidence=' . json_encode($probe);
+      }
+
+      // ? CONTROLS FIRST: both the handler and the Handled listener — the
+      //   last reader of the live Request — must still observe the real body.
+      //   Without these, a scrub placed too early would satisfy every
+      //   assertion below while silently emptying the body under consumers.
+      if (
+         $probe['retained_handler_saw'] !== $probe['retained_payload_bytes'] * 6
+         || $probe['retained_listener_saw'] !== $probe['retained_payload_bytes'] * 6
+      ) {
+         Vars::$labels = ['H1 retained-body consumer controls'];
+         dump(json_encode($probe));
+         return 'Request consumers stopped seeing the body: the handler read '
+            . $probe['retained_handler_saw'] . ' and the Handled listener '
+            . $probe['retained_listener_saw'] . ' bytes across 6 cycles, expected '
+            . ($probe['retained_payload_bytes'] * 6) . ' each; evidence='
+            . json_encode($probe);
+      }
+      if ($probe['retained_frag_state'] !== States::Complete->name) {
+         Vars::$labels = ['H1 retained-body setup'];
+         dump(json_encode($probe));
+         return 'The fragmented retained-body leg never completed its body; evidence='
+            . json_encode($probe);
+      }
+
+      // ? A body that completed its own response cycle must not still be
+      //   resident: the ledger bounds only unfinished bodies.
+      if ($probe['retained_frag_bytes'] !== 0 || $probe['retained_frag_fields'] !== 0) {
+         Vars::$labels = ['H1 retained-body evidence'];
+         dump(json_encode($probe));
+         return 'H1 still reproduced: a completed fragmented body stayed resident after its '
+            . 'response cycle — ' . $probe['retained_frag_bytes'] . ' raw bytes and '
+            . $probe['retained_frag_fields'] . ' parsed fields, none of them reserved; '
+            . 'evidence=' . json_encode($probe);
+      }
+      if ($probe['retained_initial_decoder'] !== false) {
+         Vars::$labels = ['H1 retained-body evidence'];
+         dump(json_encode($probe));
+         return 'The initial-read-complete leg installed a body decoder, so it is not '
+            . 'exercising the unreserved path; evidence=' . json_encode($probe);
+      }
+      if ($probe['retained_initial_bytes'] !== 0 || $probe['retained_initial_fields'] !== 0) {
+         Vars::$labels = ['H1 retained-body evidence'];
+         dump(json_encode($probe));
+         return 'H1 still reproduced: a body delivered complete in the first read stayed '
+            . 'resident after its response cycle — ' . $probe['retained_initial_bytes']
+            . ' raw bytes, never reserved by any decoder; evidence=' . json_encode($probe);
+      }
+      if ($probe['retained_deferred_live_bytes'] !== 0) {
+         Vars::$labels = ['H1 deferred retention'];
+         dump(json_encode($probe));
+
+         return 'H1 still reproduced (deferred): the live Request kept '
+            . $probe['retained_deferred_live_bytes'] . ' body bytes after the encoder '
+            . 'returned for a deferred response; evidence=' . json_encode($probe);
+      }
+      if ($probe['retained_deferred_clone_bytes'] !== $probe['retained_payload_bytes'] + 2) {
+         Vars::$labels = ['H1 deferred capture control'];
+         dump(json_encode($probe));
+
+         return 'The deferred leg did not hand the Fiber a usable body copy — '
+            . $probe['retained_deferred_clone_bytes'] . ' bytes, expected '
+            . ($probe['retained_payload_bytes'] + 2) . '; evidence=' . json_encode($probe);
+      }
+      if ($probe['retained_deferred_ledger_drained'] !== true) {
+         Vars::$labels = ['H1 deferred ledger drain'];
+         dump(json_encode($probe));
+
+         return 'The deferred snapshot did not return its reservation when cleaned — '
+            . 'the worker ledger stayed charged after the Fiber would have finished; '
+            . 'evidence=' . json_encode($probe);
+      }
+      if ($probe['retained_deferred_ledger_free'] !== false) {
+         Vars::$labels = ['H1 deferred ledger'];
+         dump(json_encode($probe));
+
+         return 'H1 still reproduced (deferred): the captured Request holds '
+            . $probe['retained_deferred_clone_bytes'] . ' body bytes while the worker '
+            . 'ledger granted its ENTIRE budget — the parked copy draws on no '
+            . 'reservation at all; evidence=' . json_encode($probe);
+      }
+      if ($probe['retained_aggregate_bytes'] !== 0) {
+         Vars::$labels = ['H1 idle keep-alive retention'];
+         dump(json_encode($probe));
+
+         return 'H1 still reproduced: ' . $probe['retained_peers'] . ' idle keep-alive peers '
+            . 'held ' . $probe['retained_aggregate_bytes'] . ' bytes of completed bodies '
+            . 'outside every worker ceiling; evidence=' . json_encode($probe);
       }
 
       // ? Teardown must be deterministic, not cycle-collector dependent.

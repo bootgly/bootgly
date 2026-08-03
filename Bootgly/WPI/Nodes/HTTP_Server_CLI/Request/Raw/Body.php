@@ -97,6 +97,31 @@ class Body
       $this->streaming = false;
    }
 
+   /**
+    * Drop the decoded payload, keeping the decode metadata intact.
+    *
+    * Called by `Encoder_::encode()` once the response cycle has ended, so a
+    * COMPLETED body does not stay resident on the connection's Request until
+    * the next request happens to reuse it. Without this an idle keep-alive
+    * peer parks its whole body with no reservation behind it — the decoders
+    * release theirs on completion — which is memory the worker ceiling in
+    * `Decoders\Bodies` never sees.
+    *
+    * Only `raw`/`input` are cleared: `length`, `downloaded` and `position`
+    * are decode state that the body decoders read, and `reset()` already
+    * owns the full-object scrub on the next decode.
+    *
+    * !! KEEP THIS STRAIGHT-LINE AND UNCONDITIONAL — same tracing-JIT
+    *   constraint as `Request::__clone` (see its comment: data-dependent
+    *   branches on this path deopt the request pipeline, 717k → 320k req/s).
+    */
+   public function scrub (): void
+   {
+      // * Data
+      $this->raw = '';
+      $this->input = null;
+   }
+
    public function parse (string $content, ?string $type): bool|string
    {
       if ($type === null) {

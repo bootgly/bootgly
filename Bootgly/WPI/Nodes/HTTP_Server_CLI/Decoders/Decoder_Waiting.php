@@ -133,8 +133,11 @@ class Decoder_Waiting extends Decoders implements Disconnecting
             return States::Incomplete;
          }
 
-         // ! The body is complete: it is now the Request's, dispatched and
-         //   freed with it, so it no longer belongs to the unfinished budget.
+         // ! The body is complete, so it leaves the unfinished-body budget.
+         //   What bounds it from here is `Encoder_::encode()`, which scrubs
+         //   the payload at the end of the response cycle — the reservation
+         //   is dropped because the bytes are dropped, not because the
+         //   Request is assumed to free them.
          $this->Bodies->release();
 
          $Body->waiting = false;

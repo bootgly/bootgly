@@ -33,11 +33,11 @@ use function is_string;
 use function preg_match;
 use function str_pad;
 use function str_replace;
+use function str_starts_with;
 use function strcasecmp;
 use function strlen;
 use function strncasecmp;
 use function strncmp;
-use function str_starts_with;
 use function strtolower;
 use function substr;
 use function trim;
@@ -1228,10 +1228,12 @@ class Response extends Server\Response
             // @ Deferred multipart ownership lives on this private Response
             //   clone. Reclaim it after work/encoding on success, exception,
             //   or once resumed work observes that its socket was closed.
+            // @ Ungated on purpose: `clean()` also returns the captured
+            //   body's bytes to the worker ledger, and that reservation
+            //   exists whether or not this request carried uploads. Its own
+            //   first line is the no-uploads fast path.
             $Request = $Response->Request;
-            if ($Request !== null && $Request->hasFiles) {
-               $Request->clean();
-            }
+            $Request?->clean();
 
             // @ Drop this job's locale binding before the Fiber is pooled
             Language::unbind();
