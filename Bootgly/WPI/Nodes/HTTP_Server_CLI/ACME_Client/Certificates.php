@@ -555,7 +555,10 @@ class Certificates
       }
       $normalized = [];
       foreach ($blocks as $block) {
-         $X509 = openssl_x509_read($block);
+         // ! An unparseable block is an expected input here — it is rejected
+         //   as a RuntimeException two lines below — so the warning OpenSSL
+         //   raises for it must not escalate into a throw of its own first.
+         $X509 = @openssl_x509_read($block);
          $exported = '';
          if ($X509 === false || openssl_x509_export($X509, $exported) === false) {
             throw new RuntimeException(

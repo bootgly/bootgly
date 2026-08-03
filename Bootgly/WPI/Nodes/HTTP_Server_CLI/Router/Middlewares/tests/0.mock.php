@@ -93,6 +93,10 @@ return function (
    $Request->address = '127.0.0.1';
    $Request->peer = '127.0.0.1'; // immutable transport peer (audit F-3)
    $Request->input = '';
+   // @ Always present on the real Request (a declared property with hooks), so
+   //   a middleware reading it — CSRF looks for its form field here — must not
+   //   depend on the caller having passed one in.
+   $Request->fields = [];
    $Request->scheme = 'http';
    // @ Override with provided values
    foreach ($requestProps as $prop => $value) {
