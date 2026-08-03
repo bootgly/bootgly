@@ -415,8 +415,11 @@ class File implements FS
    public protected(set) null|string $link {
       get {
          if (isSet($this->link) === false) {
+            // ! `null` for a non-link (or missing) file is this property's
+            //   contract, and that is exactly the case the call warns on —
+            //   silence it so the error handler cannot turn it into a throw.
             // @phpstan-ignore-next-line
-            $this->link = new SplFileInfo($this->file)->getLinkTarget() ?: null;
+            $this->link = @new SplFileInfo($this->file)->getLinkTarget() ?: null;
          }
 
          return $this->link;

@@ -13,6 +13,7 @@ namespace Bootgly\ABI\Templates;
 
 use const BOOTGLY_STORAGE_DIR;
 use const BOOTGLY_VERSION;
+use const E_WARNING;
 use const EXTR_SKIP;
 use function array_key_exists;
 use function call_user_func;
@@ -37,9 +38,12 @@ use function preg_replace;
 use function preg_replace_callback;
 use function preg_replace_callback_array;
 use function rename;
+use function restore_error_handler;
+use function set_error_handler;
 use function sha1;
 use function str_contains;
 use function str_replace;
+use function str_starts_with;
 use function uniqid;
 use Throwable;
 
@@ -547,18 +551,46 @@ class Template implements Templates
       //   include target is func_get_arg(0) — a user `__file__` key cannot
       //   redirect it into arbitrary file inclusion. call_user_func (not an
       //   inline IIFE) keeps the two arguments explicit and formatter-safe.
-      call_user_func(
-         static function (): void { // @phpstan-ignore arguments.count
-            /** @var array<string,mixed> $__data__ */
-            $__data__ = func_get_arg(1);
-            extract($__data__, EXTR_SKIP);
-            unset($__data__);
+      // ! A parameter the caller did not pass renders as an empty string —
+      //   that is this engine's contract, and every `@> $var;` echo relies on
+      //   it. Under the framework error handler the warning PHP raises for it
+      //   would become a throw and abort the whole render, so it is answered
+      //   here. ONLY it: every other diagnostic is delegated to the handler
+      //   that was already installed, so nothing else goes quiet.
+      $Previous = set_error_handler(
+         static function (
+            int $severity,
+            string $message,
+            string $file = '',
+            int $line = 0
+         ) use (&$Previous): bool {
+            if ($severity === E_WARNING && str_starts_with($message, 'Undefined variable')) {
+               return true;
+            }
 
-            include func_get_arg(0); // @phpstan-ignore argument.type
-         },
-         $this->cache,
-         $parameters
+            /** @var null|callable $Previous */
+            return $Previous !== null
+               && (bool) ($Previous)($severity, $message, $file, $line);
+         }
       );
+
+      try {
+         call_user_func(
+            static function (): void { // @phpstan-ignore arguments.count
+               /** @var array<string,mixed> $__data__ */
+               $__data__ = func_get_arg(1);
+               extract($__data__, EXTR_SKIP);
+               unset($__data__);
+
+               include func_get_arg(0); // @phpstan-ignore argument.type
+            },
+            $this->cache,
+            $parameters
+         );
+      }
+      finally {
+         restore_error_handler();
+      }
 
       // :
       return (string) ob_get_clean();

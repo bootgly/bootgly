@@ -72,7 +72,10 @@ class Dir implements FS
             $this->pathify();
          }
 
-         $changed = chmod($this->dir, (int) $value);
+         // ! A refused chmod is part of this setter's contract — it reports
+         //   the refusal as `false` below — so the warning it raises must not
+         //   escalate into a throw under the error handler.
+         $changed = @chmod($this->dir, (int) $value);
 
          $value = intval($value, 8);
 
@@ -170,11 +173,12 @@ class Dir implements FS
       }
 
       if ($this->validate) {
+         // ? A rejected path is already empty — reading `[-1]` off it warns
+         //   ("Uninitialized string offset -1") instead of validating anything.
          if (is_dir($path) === false) {
             $path = '';
          }
-
-         if ($path[-1] !== DIRECTORY_SEPARATOR) {
+         else if ($path[-1] !== DIRECTORY_SEPARATOR) {
             $path = '';
          }
       }
