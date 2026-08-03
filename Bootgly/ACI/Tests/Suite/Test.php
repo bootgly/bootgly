@@ -137,8 +137,12 @@ class Test
          case "passed":
             $this->passed = array_reduce(
                array: $this->results,
+               // ! `null` is the marker a SKIPPED assertion pushes — only
+               //   `false` is a failure. Folding it with `&&` turned every
+               //   skip into a failed case with no AssertionError behind it
+               //   (a case reported red with a null message).
                callback: function ($accumulator, $assertion) {
-                  return $accumulator && $assertion;
+                  return $accumulator && ($assertion ?? true);
                },
                initial: true
             );
@@ -325,10 +329,16 @@ class Test
 
             $Assertions = match (gettype($Assertions)) {
                'boolean', 'string' => [$Assertions],
-               'object' => 
+               // ! `A || B ?: throw` evaluates to the BOOLEAN of the check, and
+               //   the elvis then keeps that `true` — so the object was thrown
+               //   away and `foreach (true)` iterated nothing. A returned
+               //   Assertion (a `->skip()`, typically) recorded no result at
+               //   all and the case reported green with zero assertions.
+               'object' =>
                   $Assertions instanceof Assertion
                   || $Assertions instanceof Assertions
-                  ?: throw new AssertionError($message),
+                     ? [$Assertions]
+                     : throw new AssertionError($message),
                'NULL' => [null],
                default => throw new AssertionError($message)
             };
